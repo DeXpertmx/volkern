@@ -1,0 +1,3084 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-arm64-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id                      String                     @id @default(cuid())
+  name                    String?
+  email                   String                     @unique
+  emailVerified           DateTime?
+  image                   String?
+  password                String?
+  createdAt               DateTime                   @default(now())
+  updatedAt               DateTime                   @updatedAt
+  estado                  String                     @default("activo")
+  fechaAceptacion         DateTime?
+  fechaInvitacion         DateTime?
+  invitadoPor             String?
+  roleId                  String?
+  telefono                String?
+  tenantId                String?
+  timezone                String                     @default("America/Mexico_City")
+  tokenInvitacion         String?                    @unique
+  metadata                Json?                      @default("{}")
+  resetToken              String?                    @unique
+  resetTokenExpiry        DateTime?
+  bookingBio              String?
+  bookingEnabled          Boolean                    @default(false)
+  bookingSlug             String?                    @unique
+  bookingTitle            String?
+  accounts                Account[]
+  auditLogs               AuditLog[]
+  citasAsignadas          Cita[]                     @relation("CitaAssignee")
+  interaccionesCreadas    Interaction[]              @relation("InteractionCreator")
+  leadsAsignados          Lead[]                     @relation("LeadAssignee")
+  notasCreadas            Note[]                     @relation("NoteCreator")
+  sessions                Session[]
+  tareasAsignadas         Task[]                     @relation("TaskAssignee")
+  role                    Role?                      @relation(fields: [roleId], references: [id])
+  tenant                  Tenant?                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  whatsappInstances       UserWhatsAppInstance[]     @relation("UserWhatsAppInstances")
+  apiKeys                 ApiKey[]
+  comisiones              Comision[]                 @relation("Comisiones")
+  contratosCreadoPor      Contrato[]                 @relation("ContratosCreadoPor")
+  contratosFirmadoPor     Contrato[]                 @relation("ContratosFirmadoPor")
+  cotizacionesCreadaPor   Cotizacion[]               @relation("CotizacionesCreadaPor")
+  actividadesDeals        DealActivity[]             @relation("DealActivities")
+  archivosDeals           DealAttachment[]           @relation("DealAttachments")
+  dealsAsignados          Deal[]                     @relation("DealsAsignados")
+  digitalCard             DigitalCard?               @relation("UserDigitalCard")
+  googleCalendar          GoogleCalendarIntegration? @relation("UserGoogleCalendar")
+  inAppNotifications      InAppNotification[]
+  incomingWebhooks        IncomingWebhook[]
+  metasVenta              MetaVenta[]                @relation("MetasVenta")
+  ordenesVentaCreadoPor   OrdenVenta[]               @relation("OrdenVentaCreadoPor")
+  outgoingWebhooks        OutgoingWebhook[]
+  componentesCreados      PageComponent[]            @relation("ComponentCreator")
+  paginasCreadas          Page[]                     @relation("PageCreator")
+  plaudernAutoAssignments PlaudernIntegration[]      @relation("PlaudernAutoAssignUser")
+
+  @@index([tenantId])
+  @@index([roleId])
+  @@index([email])
+  @@index([estado])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model UserWhatsAppInstance {
+  id            String    @id @default(cuid())
+  userId        String
+  tenantId      String
+  instanceName  String    @unique
+  phoneNumber   String?
+  status        String    @default("disconnected")
+  qrCode        String?
+  qrCodeExpiry  DateTime?
+  profileName   String?
+  profilePicUrl String?
+  totalMensajes Int       @default(0)
+  ultimoMensaje DateTime?
+  fechaConexion DateTime?
+  fechaCreacion DateTime  @default(now())
+  fechaEdicion  DateTime  @updatedAt
+  tenant        Tenant    @relation("TenantWhatsAppInstances", fields: [tenantId], references: [id], onDelete: Cascade)
+  user          User      @relation("UserWhatsAppInstances", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tenantId])
+  @@index([instanceName])
+  @@index([status])
+}
+
+model Tenant {
+  id                         String                      @id @default(cuid())
+  nombre                     String
+  slug                       String                      @unique
+  plan                       String                      @default("basico")
+  estado                     String                      @default("activo")
+  configuracion              Json?
+  limites                    Json?
+  fechaCreacion              DateTime                    @default(now())
+  fechaActualizacion         DateTime                    @updatedAt
+  fechaVencimiento           DateTime?
+  billingEmail               String?
+  dominio                    String?
+  fechaTrialFin              DateTime?
+  fechaTrialInicio           DateTime?
+  moneda                     String                      @default("MXN")
+  mrr                        Float                       @default(0)
+  stripeCustomerId           String?
+  nexusEnabled               Boolean                     @default(true)
+  dbUrl                      String? // URL de conexión dedicada para este tenant
+  auditLogs                  AuditLog[]
+  automations                Automation[]
+  bundles                    Bundle[]
+  campaigns                  Campaign[]
+  chatbotConfig              ChatbotConfig?
+  citas                      Cita[]
+  configuraciones            Configuracion[]
+  conversations              Conversation[]
+  cupones                    Cupon[]
+  cursos                     Curso[]
+  estudiantes                Estudiante[]
+  leads                      Lead[]
+  quizzes                    Quiz[]
+  roles                      Role[]
+  servicios                  Servicio[]
+  tareas                     Tarea[]
+  tasks                      Task[]
+  users                      User[]
+  whatsappInstances          UserWhatsAppInstance[]      @relation("TenantWhatsAppInstances")
+  abTestResults              ABTestResult[]
+  anytimebotIntegration      AnytimebotIntegration?
+  apiKeys                    ApiKey[]
+  audiences                  Audience[]
+  businessDomains            BusinessDomain[]
+  campaignRecipients         CampaignRecipient[]
+  catalogoFieldDefinitions   CatalogoFieldDefinition[]   @relation("TenantCatalogoFieldDefinitions")
+  catalogoItems              CatalogoItem[]
+  channels                   Channel[]
+  comisiones                 Comision[]
+  configuracionesFiscales    ConfiguracionFiscalEmisor[]
+  contacts                   Contact[]
+  contratoPagos              ContratoPago[]
+  contratos                  Contrato[]
+  cotizaciones               Cotizacion[]
+  dealActivities             DealActivity[]
+  dealAttachments            DealAttachment[]
+  deals                      Deal[]
+  digitalCards               DigitalCard[]               @relation("TenantDigitalCards")
+  emailCampaigns             EmailCampaign[]
+  emailTemplates             EmailTemplate[]
+  externalLeadSearches       ExternalLeadSearch[]
+  googleCalendarIntegrations GoogleCalendarIntegration[] @relation("TenantGoogleCalendars")
+  inAppNotifications         InAppNotification[]
+  incomingWebhookDeliveries  IncomingWebhookDelivery[]
+  incomingWebhooks           IncomingWebhook[]
+  integrations               Integration[]
+  messagingHubConfig         MessagingHubConfig?
+  metasVenta                 MetaVenta[]
+  n8nWorkflows               N8nWorkflow[]               @relation("TenantN8nWorkflows")
+  notificationLogs           NotificationLog[]
+  notifications              Notification[]
+  ordenesVenta               OrdenVenta[]
+  outgoingWebhookDeliveries  OutgoingWebhookDelivery[]
+  outgoingWebhooks           OutgoingWebhook[]
+  pages                      Page[]
+  perfilesFiscalesClientes   PerfilFiscalCliente[]
+  pipelineStages             PipelineStage[]
+  plaudernIntegration        PlaudernIntegration?        @relation("TenantPlaudernIntegration")
+  savedSearches              SavedSearch[]
+  scannedCards               ScannedCard[]               @relation("TenantScannedCards")
+  subscriptions              Subscription[]
+  tasasImpuesto              TasaImpuesto[]
+  tenantFeatures             TenantFeature[]
+  tenantWorkflows            TenantWorkflow[]            @relation("TenantWorkflows")
+  unsubscribeList            UnsubscribeList[]
+  invoices                   Invoice[]
+
+  @@index([slug])
+  @@index([estado])
+  @@index([stripeCustomerId])
+}
+
+model OnboardingProgress {
+  id                    String    @id @default(cuid())
+  tenantId              String    @unique
+  configuracionBasica   Boolean   @default(false)
+  primerLead            Boolean   @default(false)
+  primerServicio        Boolean   @default(false)
+  configuracionCanales  Boolean   @default(false)
+  primeraAutomatizacion Boolean   @default(false)
+  invitacionEquipo      Boolean   @default(false)
+  completado            Boolean   @default(false)
+  omitido               Boolean   @default(false)
+  pasoActual            Int       @default(0)
+  fechaInicio           DateTime  @default(now())
+  fechaCompletado       DateTime?
+  ultimaActualizacion   DateTime  @updatedAt
+  primeraPagina         Boolean   @default(false)
+
+  @@index([tenantId])
+}
+
+model Role {
+  id                 String   @id @default(cuid())
+  tenantId           String?
+  nombre             String
+  descripcion        String?
+  permisos           Json
+  esPersonalizado    Boolean  @default(false)
+  orden              Int      @default(0)
+  fechaCreacion      DateTime @default(now())
+  fechaActualizacion DateTime @updatedAt
+  tenant             Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  users              User[]
+
+  @@unique([tenantId, nombre])
+  @@index([tenantId])
+}
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  tenantId       String?
+  userId         String
+  accion         String
+  entidad        String
+  entidadId      String
+  descripcion    String
+  cambiosAntes   Json?
+  cambiosDespues Json?
+  ipAddress      String?
+  userAgent      String?
+  fechaCreacion  DateTime @default(now())
+  tenant         Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([entidad])
+  @@index([entidadId])
+  @@index([fechaCreacion])
+}
+
+model Lead {
+  id                   String               @id @default(cuid())
+  nombre               String
+  email                String
+  telefono             String?
+  notas                String?
+  estado               String               @default("nuevo")
+  fechaCreacion        DateTime             @default(now())
+  fechaActualizacion   DateTime             @updatedAt
+  asignadoA            String?
+  tiempoEnEstado       DateTime             @default(now())
+  tenantId             String?
+  cargo                String?
+  empresa              String?
+  fuente               String?
+  linkedin             String?
+  metadataExterna      Json?
+  ubicacion            String?
+  fechaUltimaActividad DateTime             @default(now())
+  scoreValue           Int                  @default(0)
+  tags                 String?
+  convertedAt          DateTime?
+  convertedToContactId String?
+  status               String               @default("new")
+  contextoProyecto     String?
+  fechaPrimeraVista    DateTime?
+  tokenPublico         String?              @unique
+  ultimaVista          DateTime?
+  vecesVista           Int                  @default(0)
+  chatwootAccountId    Int?
+  externalContactRef   String?
+  citas                Cita[]
+  conversaciones       Conversation[]
+  interacciones        Interaction[]
+  asignadoUsuario      User?                @relation("LeadAssignee", fields: [asignadoA], references: [id])
+  convertedToContact   Contact?             @relation("LeadConversion", fields: [convertedToContactId], references: [id])
+  tenant               Tenant?              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  score                LeadScore?
+  notasTimestamp       Note[]
+  scoreHistory         ScoreHistory[]
+  tareas               Task[]
+  campaignLeads        CampaignLead[]
+  campaignRecipients   CampaignRecipient[]
+  contratos            Contrato[]
+  cotizaciones         Cotizacion[]
+  deals                Deal[]
+  ordenesVenta         OrdenVenta[]         @relation("LeadOrdenesVenta")
+  perfilFiscal         PerfilFiscalCliente? @relation("LeadPerfilFiscal")
+  scannedCards         ScannedCard[]        @relation("LeadFromScannedCard")
+  unsubscribes         UnsubscribeList[]
+  invoices             Invoice[]
+
+  @@index([tenantId])
+  @@index([email])
+  @@index([estado])
+  @@index([status])
+  @@index([asignadoA])
+  @@index([fuente])
+  @@index([convertedToContactId])
+  @@index([externalContactRef])
+  @@index([chatwootAccountId, externalContactRef])
+}
+
+model Contact {
+  id                 String               @id @default(cuid())
+  tenantId           String
+  nombre             String
+  email              String
+  telefono           String?
+  tipo               String               @default("person")
+  companyId          String?
+  cargo              String?
+  ubicacion          String?
+  linkedin           String?
+  notas              String?
+  tags               String?
+  fechaCreacion      DateTime             @default(now())
+  fechaActualizacion DateTime             @updatedAt
+  convertedFromLeads Lead[]               @relation("LeadConversion")
+  company            Contact?             @relation("CompanyPersons", fields: [companyId], references: [id])
+  persons            Contact[]            @relation("CompanyPersons")
+  tenant             Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  dealsAsCompany     Deal[]               @relation("CompanyDeals")
+  deals              Deal[]               @relation("ContactDeals")
+  ordenesVenta       OrdenVenta[]         @relation("ContactOrdenesVenta")
+  perfilFiscal       PerfilFiscalCliente? @relation("ContactPerfilFiscal")
+  invoices           Invoice[]
+
+  @@index([tenantId])
+  @@index([email])
+  @@index([tipo])
+  @@index([companyId])
+  @@map("contacts")
+}
+
+model Servicio {
+  id                 String        @id @default(cuid())
+  nombre             String
+  descripcion        String?
+  duracionMinutos    Int
+  precio             Float
+  moneda             String        @default("EUR")
+  activo             Boolean       @default(true)
+  fechaCreacion      DateTime      @default(now())
+  fechaActualizacion DateTime      @updatedAt
+  tenantId           String?
+  modalidad          String        @default("presencial")
+  catalogoItemId     String?
+  citas              Cita[]
+  catalogoItem       CatalogoItem? @relation(fields: [catalogoItemId], references: [id])
+  tenant             Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([catalogoItemId])
+}
+
+model Cita {
+  id                       String        @id @default(cuid())
+  leadId                   String
+  servicioId               String?
+  fechaHora                DateTime
+  estado                   String        @default("pendiente")
+  montoPagado              Float?
+  stripePaymentId          String?
+  fechaCreacion            DateTime      @default(now())
+  fechaActualizacion       DateTime      @updatedAt
+  tenantId                 String?
+  descripcion              String?
+  duracion                 Int           @default(60)
+  titulo                   String?
+  linkReunion              String?
+  tipo                     String        @default("reunion")
+  ubicacion                String?
+  googleCalendarEventId    String?
+  emailConfirmacionEnviado Boolean       @default(false)
+  fechaEmailConfirmacion   DateTime?
+  hashDatosEmail           String?
+  origenCita               String        @default("volkern")
+  catalogoItemId           String?
+  usuarioAsignadoId        String?
+  catalogoItem             CatalogoItem? @relation(fields: [catalogoItemId], references: [id])
+  lead                     Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  servicio                 Servicio?     @relation(fields: [servicioId], references: [id])
+  tenant                   Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  usuarioAsignado          User?         @relation("CitaAssignee", fields: [usuarioAsignadoId], references: [id])
+
+  @@index([tenantId])
+  @@index([usuarioAsignadoId])
+  @@index([fechaHora])
+  @@index([estado])
+  @@index([tipo])
+  @@index([googleCalendarEventId])
+  @@index([origenCita])
+  @@index([catalogoItemId])
+}
+
+model Configuracion {
+  id                 String   @id @default(cuid())
+  clave              String
+  valor              String
+  fechaActualizacion DateTime @updatedAt
+  tenantId           String?
+  tenant             Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, clave])
+  @@index([tenantId])
+  @@index([clave])
+}
+
+model Automation {
+  id                 String                    @id @default(cuid())
+  nombre             String
+  descripcion        String?
+  activo             Boolean                   @default(false)
+  trigger            String
+  flowData           Json
+  fechaCreacion      DateTime                  @default(now())
+  fechaActualizacion DateTime                  @updatedAt
+  estadisticas       Json?
+  version            Int                       @default(1)
+  tenantId           String?
+  tenant             Tenant?                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  executions         AutomationExecution[]
+  scheduledTasks     ScheduledAutomationTask[]
+  incomingWebhooks   IncomingWebhook[]
+
+  @@index([tenantId])
+  @@index([activo])
+  @@index([trigger])
+}
+
+model AutomationExecution {
+  id            String                   @id @default(cuid())
+  automationId  String
+  estado        String                   @default("ejecutando")
+  contextData   Json?
+  errorMessage  String?
+  fechaInicio   DateTime                 @default(now())
+  fechaFin      DateTime?
+  currentNodeId String?
+  automation    Automation               @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  logs          AutomationExecutionLog[]
+
+  @@index([automationId])
+  @@index([estado])
+  @@index([fechaInicio])
+}
+
+model AutomationExecutionLog {
+  id                 String              @id @default(cuid())
+  executionId        String
+  nodeId             String
+  nodeType           String
+  status             String
+  message            String?
+  data               Json?
+  fechaCreacion      DateTime            @default(now())
+  externalWorkflowId String?
+  externalStatus     String?
+  externalResponse   Json?
+  duration           Int?
+  execution          AutomationExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@index([executionId])
+  @@index([externalWorkflowId])
+}
+
+model ScheduledAutomationTask {
+  id             String     @id @default(cuid())
+  automationId   String
+  executionId    String?
+  nodeId         String
+  contextData    Json
+  scheduledFor   DateTime
+  estado         String     @default("pendiente")
+  fechaCreacion  DateTime   @default(now())
+  fechaEjecucion DateTime?
+  automation     Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+
+  @@index([automationId])
+  @@index([scheduledFor])
+  @@index([estado])
+}
+
+model N8nWorkflow {
+  id                  String    @id @default(cuid())
+  tenantId            String
+  n8nWorkflowId       String
+  nombre              String
+  descripcion         String?
+  trigger             String
+  configPayload       Json?
+  webhookUrl          String?
+  activo              Boolean   @default(true)
+  ultimaEjecucion     DateTime?
+  totalEjecuciones    Int       @default(0)
+  ejecucionesExitosas Int       @default(0)
+  ejecucionesFallidas Int       @default(0)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  tenant              Tenant    @relation("TenantN8nWorkflows", fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, n8nWorkflowId])
+  @@index([tenantId])
+  @@index([trigger])
+  @@index([activo])
+  @@map("n8n_workflows")
+}
+
+model AutomationTemplate {
+  id                 String   @id @default(cuid())
+  nombre             String
+  descripcion        String
+  categoria          String
+  icono              String?
+  color              String?
+  flowData           Json
+  trigger            String
+  tags               String[]
+  popularidad        Int      @default(0)
+  esOficial          Boolean  @default(true)
+  fechaCreacion      DateTime @default(now())
+  fechaActualizacion DateTime @updatedAt
+
+  @@index([categoria])
+  @@index([esOficial])
+}
+
+model WorkflowTemplate {
+  id              String           @id @default(cuid())
+  name            String           @unique
+  displayName     String
+  description     String
+  n8nTemplateId   String
+  category        String
+  icon            String?
+  color           String?
+  isPremium       Boolean          @default(false)
+  isActive        Boolean          @default(true)
+  requiredConfig  Json?
+  defaultPayload  Json?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  tenantWorkflows TenantWorkflow[]
+
+  @@index([category])
+  @@index([isActive])
+  @@map("workflow_templates")
+}
+
+model TenantWorkflow {
+  id                   String           @id @default(cuid())
+  tenantId             String
+  templateId           String
+  n8nWorkflowId        String
+  webhookUrl           String?
+  customConfig         Json?
+  isActive             Boolean          @default(true)
+  lastExecutedAt       DateTime?
+  totalExecutions      Int              @default(0)
+  successfulExecutions Int              @default(0)
+  failedExecutions     Int              @default(0)
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  template             WorkflowTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  tenant               Tenant           @relation("TenantWorkflows", fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, templateId])
+  @@index([tenantId])
+  @@index([templateId])
+  @@index([isActive])
+  @@map("tenant_workflows")
+}
+
+model Estudiante {
+  id              String  @id @default(cuid())
+  nombre          String
+  primerNombre    String?
+  apellidoPaterno String?
+  apellidoMaterno String?
+  email           String
+  telefono        String?
+  pais            String?
+  region          String?
+  zonaHoraria     String?
+
+  metadatosAcademicos  Json?
+  historialCompletitud Json?
+
+  tipoAcceso             String    @default("free")
+  metodoPagoToken        String?
+  historialTransacciones Json?
+  fechaRenovacion        DateTime?
+  cuponesAplicados       Json?
+
+  ultimoAcceso             DateTime?
+  dispositivosUsados       Json?
+  interaccionesChatbot     Json?
+  preferenciasNotificacion Json?
+  tags                     String[]  @default([])
+
+  consentimientoGDPR      Boolean   @default(false)
+  fechaConsentimiento     DateTime?
+  fechaAceptacionTerminos DateTime?
+  preferenciasDatos       Json?
+  registroAccesos         Json?
+
+  metadataTecnica Json?
+
+  fechaCreacion      DateTime          @default(now())
+  fechaActualizacion DateTime          @updatedAt
+  tenantId           String?
+  certificados       Certificado[]
+  comentarios        Comentario[]
+  conversaciones     Conversation[]
+  entregas           EntregaTarea[]
+  tenant             Tenant?           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  inscripciones      Inscripcion[]
+  intentosQuiz       IntentoQuiz[]
+  progreso           ProgresoLeccion[]
+  reviews            Review[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([email])
+}
+
+model Curso {
+  id                        String        @id @default(cuid())
+  titulo                    String
+  descripcion               String?
+  precio                    Float         @default(0)
+  moneda                    String        @default("EUR")
+  duracionEstimadaHoras     Int?
+  nivel                     String        @default("principiante")
+  publicado                 Boolean       @default(false)
+  fechaCreacion             DateTime      @default(now())
+  fechaActualizacion        DateTime      @updatedAt
+  tenantId                  String?
+  categoria                 String?
+  certificadoHabilitado     Boolean       @default(true)
+  descripcionLarga          String?
+  diasExpiracion            Int?
+  faq                       Json?
+  fechaInicio               DateTime?
+  imagenDestacada           String?
+  instructorBio             String?
+  instructorFirma           String?
+  instructorImagen          String?
+  instructorNombre          String?
+  metaDescripcion           String?
+  nivelMembresia            String?
+  permiteCalificaciones     Boolean       @default(true)
+  permiteComentarios        Boolean       @default(true)
+  permiteCupones            Boolean       @default(true)
+  precioSuscripcion         Float?
+  puntuajeMinimoCertificado Int           @default(80)
+  subtitulo                 String?
+  testimonios               Json?
+  tipoAcceso                String        @default("immediate")
+  tipoMonetizacion          String        @default("one_time")
+  urlSlug                   String?       @unique
+  catalogoItemId            String?
+  comunidadActiva           Boolean       @default(false)
+  gamificacionActiva        Boolean       @default(false)
+  puntosPorLeccion          Int           @default(10)
+  bundlesIncluidos          BundleCurso[]
+  certificados              Certificado[]
+  cupones                   Cupon[]
+  catalogoItem              CatalogoItem? @relation(fields: [catalogoItemId], references: [id])
+  tenant                    Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  inscripciones             Inscripcion[]
+  modulos                   Modulo[]
+  reviews                   Review[]
+  comentarios               Comentario[]
+
+  @@index([tenantId])
+  @@index([publicado])
+  @@index([categoria])
+  @@index([urlSlug])
+  @@index([catalogoItemId])
+}
+
+model Modulo {
+  id                 String    @id @default(cuid())
+  cursoId            String
+  titulo             String
+  descripcion        String?
+  orden              Int
+  fechaCreacion      DateTime  @default(now())
+  fechaActualizacion DateTime  @updatedAt
+  diasDespues        Int?
+  fechaLanzamiento   DateTime?
+  moduloPrevioId     String?
+  tipoDrip           String    @default("none")
+  lecciones          Leccion[]
+  curso              Curso     @relation(fields: [cursoId], references: [id], onDelete: Cascade)
+
+  @@index([cursoId])
+  @@index([orden])
+}
+
+model Leccion {
+  id                 String            @id @default(cuid())
+  moduloId           String
+  titulo             String
+  descripcion        String?
+  contenido          String?
+  videoUrl           String?
+  duracionMinutos    Int?
+  materialesUrl      Json?
+  orden              Int
+  tipoContenido      String            @default("video")
+  fechaCreacion      DateTime          @default(now())
+  fechaActualizacion DateTime          @updatedAt
+  diasDespues        Int?
+  fechaLanzamiento   DateTime?
+  leccionPreviaId    String?
+  pdfUrl             String?
+  permitirDescarga   Boolean           @default(true)
+  quizId             String?
+  tareaId            String?
+  tipoDrip           String            @default("none")
+  transcripcion      String?
+  videoTipo          String?
+  comentarios        Comentario[]
+  modulo             Modulo            @relation(fields: [moduloId], references: [id], onDelete: Cascade)
+  quiz               Quiz?             @relation(fields: [quizId], references: [id])
+  tarea              Tarea?            @relation(fields: [tareaId], references: [id])
+  progreso           ProgresoLeccion[]
+
+  @@index([moduloId])
+  @@index([orden])
+  @@index([quizId])
+  @@index([tareaId])
+}
+
+model Inscripcion {
+  id                   String     @id @default(cuid())
+  estudianteId         String
+  cursoId              String
+  fechaInscripcion     DateTime   @default(now())
+  fechaExpiracion      DateTime?
+  estado               String     @default("activo")
+  montoPagado          Float?
+  stripePaymentId      String?
+  progresoPorcentaje   Float      @default(0)
+  fechaUltimoAcceso    DateTime?
+  certificadoGenerado  Boolean    @default(false)
+  cuponUsado           String?
+  fechaActualizacion   DateTime   @default(now()) @updatedAt
+  fechaCompletado      DateTime?
+  leccionesCompletadas Int        @default(0)
+  puntuacionFinal      Float?
+  stripeSubscriptionId String?
+  tipoAcceso           String     @default("compra")
+  totalLecciones       Int        @default(0)
+  ultimaLeccionId      String?
+  insigniasGanadas     String[]
+  puntosObtenidos      Int        @default(0)
+  curso                Curso      @relation(fields: [cursoId], references: [id], onDelete: Cascade)
+  estudiante           Estudiante @relation(fields: [estudianteId], references: [id], onDelete: Cascade)
+
+  @@unique([estudianteId, cursoId])
+  @@index([estudianteId])
+  @@index([cursoId])
+  @@index([estado])
+}
+
+model ProgresoLeccion {
+  id              String     @id @default(cuid())
+  estudianteId    String
+  leccionId       String
+  completado      Boolean    @default(false)
+  tiempoVisto     Int        @default(0)
+  fechaInicio     DateTime   @default(now())
+  fechaCompletado DateTime?
+  estudiante      Estudiante @relation(fields: [estudianteId], references: [id], onDelete: Cascade)
+  leccion         Leccion    @relation(fields: [leccionId], references: [id], onDelete: Cascade)
+
+  @@unique([estudianteId, leccionId])
+  @@index([estudianteId])
+  @@index([leccionId])
+}
+
+model Certificado {
+  id           String     @id @default(cuid())
+  estudianteId String
+  cursoId      String
+  codigoUnico  String     @unique
+  fechaEmision DateTime   @default(now())
+  pdfUrl       String?
+  curso        Curso      @relation(fields: [cursoId], references: [id], onDelete: Cascade)
+  estudiante   Estudiante @relation(fields: [estudianteId], references: [id], onDelete: Cascade)
+
+  @@unique([estudianteId, cursoId])
+  @@index([estudianteId])
+  @@index([cursoId])
+  @@index([codigoUnico])
+}
+
+model Quiz {
+  id                  String        @id @default(cuid())
+  tenantId            String?
+  titulo              String
+  descripcion         String?
+  tipoQuiz            String        @default("quiz")
+  puntuajeMinimo      Int           @default(70)
+  intentosPermitidos  Int           @default(-1)
+  tiempoLimiteMinutos Int?
+  mostrarRespuestas   Boolean       @default(true)
+  barajarPreguntas    Boolean       @default(false)
+  fechaCreacion       DateTime      @default(now())
+  fechaActualizacion  DateTime      @updatedAt
+  intentos            IntentoQuiz[]
+  lecciones           Leccion[]
+  preguntas           Pregunta[]
+  tenant              Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+model Pregunta {
+  id            String                @id @default(cuid())
+  quizId        String
+  pregunta      String
+  tipoPregunta  String                @default("multiple_choice")
+  orden         Int
+  puntaje       Int                   @default(1)
+  opciones      Json?
+  explicacion   String?
+  fechaCreacion DateTime              @default(now())
+  quiz          Quiz                  @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  respuestas    RespuestaEstudiante[]
+
+  @@index([quizId])
+  @@index([orden])
+}
+
+model IntentoQuiz {
+  id                  String                @id @default(cuid())
+  estudianteId        String
+  quizId              String
+  numeroIntento       Int                   @default(1)
+  puntuacionObtenida  Float
+  puntuacionMaxima    Float
+  porcentaje          Float
+  aprobado            Boolean
+  tiempoTomadoMinutos Int?
+  fechaInicio         DateTime              @default(now())
+  fechaCompletado     DateTime?
+  estudiante          Estudiante            @relation(fields: [estudianteId], references: [id], onDelete: Cascade)
+  quiz                Quiz                  @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  respuestas          RespuestaEstudiante[]
+
+  @@index([estudianteId])
+  @@index([quizId])
+}
+
+model RespuestaEstudiante {
+  id              String      @id @default(cuid())
+  intentoId       String
+  preguntaId      String
+  respuesta       String
+  esCorrecta      Boolean
+  puntajeObtenido Float
+  fechaRespuesta  DateTime    @default(now())
+  intento         IntentoQuiz @relation(fields: [intentoId], references: [id], onDelete: Cascade)
+  pregunta        Pregunta    @relation(fields: [preguntaId], references: [id], onDelete: Cascade)
+
+  @@index([intentoId])
+  @@index([preguntaId])
+}
+
+model Tarea {
+  id                 String         @id @default(cuid())
+  tenantId           String?
+  titulo             String
+  descripcion        String
+  instrucciones      String?
+  tipoEntrega        String         @default("file")
+  archivoPermitido   String?
+  tamanoMaxMB        Int            @default(10)
+  fechaLimite        DateTime?
+  puntuajeMaximo     Int            @default(100)
+  fechaCreacion      DateTime       @default(now())
+  fechaActualizacion DateTime       @updatedAt
+  entregas           EntregaTarea[]
+  lecciones          Leccion[]
+  tenant             Tenant?        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+model EntregaTarea {
+  id                 String     @id @default(cuid())
+  tareaId            String
+  estudianteId       String
+  contenido          String?
+  archivoUrl         String?
+  enlaceUrl          String?
+  fechaEntrega       DateTime   @default(now())
+  estado             String     @default("pendiente")
+  puntuacion         Float?
+  retroalimentacion  String?
+  calificadoPor      String?
+  fechaCalificacion  DateTime?
+  fechaActualizacion DateTime   @updatedAt
+  estudiante         Estudiante @relation(fields: [estudianteId], references: [id], onDelete: Cascade)
+  tarea              Tarea      @relation(fields: [tareaId], references: [id], onDelete: Cascade)
+
+  @@unique([tareaId, estudianteId])
+  @@index([tareaId])
+  @@index([estudianteId])
+  @@index([estado])
+}
+
+model Review {
+  id                 String     @id @default(cuid())
+  cursoId            String
+  estudianteId       String
+  calificacion       Int
+  titulo             String?
+  comentario         String?
+  aprobado           Boolean    @default(false)
+  fechaCreacion      DateTime   @default(now())
+  fechaActualizacion DateTime   @updatedAt
+  curso              Curso      @relation(fields: [cursoId], references: [id], onDelete: Cascade)
+  estudiante         Estudiante @relation(fields: [estudianteId], references: [id], onDelete: Cascade)
+
+  @@unique([cursoId, estudianteId])
+  @@index([cursoId])
+  @@index([estudianteId])
+  @@index([aprobado])
+}
+
+model Comentario {
+  id                 String       @id @default(cuid())
+  leccionId          String?
+  cursoId            String?
+  estudianteId       String
+  comentario         String
+  comentarioPadreId  String?
+  aprobado           Boolean      @default(true)
+  fechaCreacion      DateTime     @default(now())
+  fechaActualizacion DateTime     @updatedAt
+  votosPositivos     Int          @default(0)
+  padre              Comentario?  @relation("ComentarioRespuestas", fields: [comentarioPadreId], references: [id])
+  respuestas         Comentario[] @relation("ComentarioRespuestas")
+  estudiante         Estudiante   @relation(fields: [estudianteId], references: [id], onDelete: Cascade)
+  leccion            Leccion?     @relation(fields: [leccionId], references: [id], onDelete: Cascade)
+  curso              Curso?       @relation(fields: [cursoId], references: [id], onDelete: Cascade)
+
+  @@index([leccionId])
+  @@index([cursoId])
+  @@index([estudianteId])
+  @@index([comentarioPadreId])
+}
+
+model Cupon {
+  id              String    @id @default(cuid())
+  tenantId        String?
+  cursoId         String
+  codigo          String    @unique
+  descripcion     String?
+  tipoDescuento   String    @default("porcentaje")
+  valorDescuento  Float
+  usosMaximos     Int       @default(-1)
+  usosActuales    Int       @default(0)
+  fechaInicio     DateTime?
+  fechaExpiracion DateTime?
+  activo          Boolean   @default(true)
+  fechaCreacion   DateTime  @default(now())
+  curso           Curso     @relation(fields: [cursoId], references: [id], onDelete: Cascade)
+  tenant          Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([cursoId])
+  @@index([codigo])
+}
+
+model Bundle {
+  id                 String        @id @default(cuid())
+  tenantId           String?
+  titulo             String
+  descripcion        String?
+  imagenUrl          String?
+  precio             Float
+  precioOriginal     Float
+  moneda             String        @default("MXN")
+  activo             Boolean       @default(true)
+  fechaCreacion      DateTime      @default(now())
+  fechaActualizacion DateTime      @updatedAt
+  tenant             Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cursos             BundleCurso[]
+
+  @@index([tenantId])
+}
+
+model BundleCurso {
+  id       String @id @default(cuid())
+  bundleId String
+  cursoId  String
+  orden    Int    @default(0)
+  bundle   Bundle @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  curso    Curso  @relation(fields: [cursoId], references: [id], onDelete: Cascade)
+
+  @@unique([bundleId, cursoId])
+  @@index([bundleId])
+  @@index([cursoId])
+}
+
+model Conversation {
+  id                 String      @id @default(cuid())
+  contactoNombre     String
+  contactoEmail      String?
+  contactoTelefono   String?
+  canal              String
+  estado             String      @default("abierta")
+  leadId             String?
+  estudianteId       String?
+  ultimoMensaje      String?
+  fechaUltimoMensaje DateTime?
+  noLeidos           Int         @default(0)
+  fechaCreacion      DateTime    @default(now())
+  fechaActualizacion DateTime    @updatedAt
+  tenantId           String?
+  chatwootAccountId  Int?
+  chatwootInboxId    Int?
+  externalRef        String?     @unique
+  hubMetadata        Json?
+  estudiante         Estudiante? @relation(fields: [estudianteId], references: [id])
+  lead               Lead?       @relation(fields: [leadId], references: [id])
+  tenant             Tenant?     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  mensajes           Message[]
+
+  @@index([tenantId])
+  @@index([canal])
+  @@index([estado])
+  @@index([leadId])
+  @@index([estudianteId])
+  @@index([fechaUltimoMensaje])
+  @@index([externalRef])
+  @@index([chatwootAccountId, externalRef])
+}
+
+model Message {
+  id                String       @id @default(cuid())
+  conversationId    String
+  contenido         String
+  direccion         String
+  canal             String
+  estado            String       @default("enviado")
+  errorMensaje      String?
+  metadatos         Json?
+  fechaCreacion     DateTime     @default(now())
+  chatwootMessageId Int?
+  externalRef       String?      @unique
+  hubMetadata       Json?
+  conversation      Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([canal])
+  @@index([direccion])
+  @@index([fechaCreacion])
+  @@index([externalRef])
+}
+
+model MessageTemplate {
+  id                 String   @id @default(cuid())
+  nombre             String
+  canal              String
+  asunto             String?
+  contenido          String
+  variables          Json?
+  categoria          String?
+  activo             Boolean  @default(true)
+  fechaCreacion      DateTime @default(now())
+  fechaActualizacion DateTime @updatedAt
+
+  @@index([canal])
+  @@index([categoria])
+  @@index([activo])
+}
+
+model ChannelConfiguration {
+  id                 String   @id @default(cuid())
+  canal              String   @unique
+  configuracion      Json
+  activo             Boolean  @default(true)
+  fechaActualizacion DateTime @updatedAt
+
+  @@index([canal])
+}
+
+model LeadScore {
+  id                       String   @id @default(cuid())
+  leadId                   String   @unique
+  puntuacion               Int      @default(0)
+  categoria                String?
+  ultimaActualizacion      DateTime @updatedAt
+  puntuacionDemografica    Int      @default(0)
+  puntuacionComportamiento Int      @default(0)
+  puntuacionInteraccion    Int      @default(0)
+  puntuacionEngagement     Int      @default(0)
+  lead                     Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@index([puntuacion])
+  @@index([categoria])
+}
+
+model ScoreHistory {
+  id                 String   @id @default(cuid())
+  leadId             String
+  puntuacionAnterior Int
+  puntuacionNueva    Int
+  cambio             Int
+  razon              String
+  categoria          String?
+  detalles           Json?
+  fechaCreacion      DateTime @default(now())
+  lead               Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@index([fechaCreacion])
+}
+
+model ScoringRule {
+  id                 String   @id @default(cuid())
+  nombre             String
+  descripcion        String?
+  categoria          String
+  evento             String
+  puntos             Int
+  condiciones        Json?
+  activo             Boolean  @default(true)
+  orden              Int      @default(0)
+  fechaCreacion      DateTime @default(now())
+  fechaActualizacion DateTime @updatedAt
+
+  @@index([categoria])
+  @@index([evento])
+  @@index([activo])
+  @@index([orden])
+}
+
+model ScoreCategory {
+  id                 String   @id @default(cuid())
+  nombre             String
+  etiqueta           String
+  descripcion        String?
+  puntuacionMin      Int
+  puntuacionMax      Int
+  color              String
+  icono              String?
+  orden              Int
+  fechaCreacion      DateTime @default(now())
+  fechaActualizacion DateTime @updatedAt
+
+  @@index([orden])
+  @@index([puntuacionMin])
+}
+
+model Campaign {
+  id                 String              @id @default(cuid())
+  nombre             String
+  descripcion        String?
+  tipo               String              @default("manual")
+  estado             String              @default("borrador")
+  canales            String[]
+  targetType         String              @default("todos")
+  targetConfig       Json?
+  fechaProgramada    DateTime?
+  frecuencia         String?
+  fechaFin           DateTime?
+  totalDestinatarios Int                 @default(0)
+  totalEnviados      Int                 @default(0)
+  totalEntregados    Int                 @default(0)
+  totalAbiertos      Int                 @default(0)
+  totalClicks        Int                 @default(0)
+  totalConversiones  Int                 @default(0)
+  totalErrores       Int                 @default(0)
+  fechaCreacion      DateTime            @default(now())
+  fechaActualizacion DateTime            @updatedAt
+  fechaInicio        DateTime?
+  fechaCompletado    DateTime?
+  tenantId           String?
+  tenant             Tenant?             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  executions         CampaignExecution[]
+  mensajes           CampaignMessage[]
+  metrics            CampaignMetrics[]
+  campaignLeads      CampaignLead[]
+
+  @@index([tenantId])
+  @@index([estado])
+  @@index([tipo])
+  @@index([fechaProgramada])
+  @@index([fechaCreacion])
+}
+
+model CampaignMessage {
+  id                 String   @id @default(cuid())
+  campaignId         String
+  canal              String
+  asunto             String?
+  contenido          String
+  mediaUrl           String?
+  plantillaId        String?
+  orden              Int      @default(0)
+  delayMinutos       Int?
+  variante           String?
+  porcentajeTrafico  Float?
+  fechaCreacion      DateTime @default(now())
+  fechaActualizacion DateTime @updatedAt
+  campaign           Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@index([canal])
+  @@index([orden])
+}
+
+model CampaignExecution {
+  id                   String    @id @default(cuid())
+  campaignId           String
+  destinatarioTipo     String
+  destinatarioId       String
+  destinatarioNombre   String
+  destinatarioEmail    String?
+  destinatarioTelefono String?
+  canal                String
+  variante             String?
+  estado               String    @default("pendiente")
+  intentos             Int       @default(0)
+  errorMensaje         String?
+  fechaEnviado         DateTime?
+  fechaEntregado       DateTime?
+  fechaAbierto         DateTime?
+  fechaClick           DateTime?
+  fechaConversion      DateTime?
+  metadatos            Json?
+  fechaCreacion        DateTime  @default(now())
+  fechaActualizacion   DateTime  @updatedAt
+  campaign             Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@index([destinatarioTipo])
+  @@index([destinatarioId])
+  @@index([estado])
+  @@index([canal])
+  @@index([fechaCreacion])
+}
+
+model CampaignMetrics {
+  id             String   @id @default(cuid())
+  campaignId     String
+  fecha          DateTime @default(now())
+  canal          String?
+  variante       String?
+  enviados       Int      @default(0)
+  entregados     Int      @default(0)
+  abiertos       Int      @default(0)
+  clicks         Int      @default(0)
+  conversiones   Int      @default(0)
+  errores        Int      @default(0)
+  tasaEntrega    Float    @default(0)
+  tasaApertura   Float    @default(0)
+  tasaClick      Float    @default(0)
+  tasaConversion Float    @default(0)
+  campaign       Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@index([fecha])
+  @@index([canal])
+}
+
+model Task {
+  id               String    @id @default(cuid())
+  leadId           String
+  tipo             String
+  titulo           String
+  descripcion      String?
+  fechaVencimiento DateTime
+  completada       Boolean   @default(false)
+  asignadoA        String?
+  fechaCreacion    DateTime  @default(now())
+  fechaCompletado  DateTime?
+  tenantId         String?
+  googleTaskId     String?
+  googleTaskListId String?
+  asignadoUsuario  User?     @relation("TaskAssignee", fields: [asignadoA], references: [id])
+  lead             Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  tenant           Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([leadId])
+  @@index([asignadoA])
+  @@index([fechaVencimiento])
+  @@index([completada])
+  @@index([googleTaskId])
+}
+
+model Interaction {
+  id            String   @id @default(cuid())
+  leadId        String
+  tipo          String
+  contenido     String
+  resultado     String?
+  creadoPor     String?
+  metadatos     Json?
+  fechaCreacion DateTime @default(now())
+  creador       User?    @relation("InteractionCreator", fields: [creadoPor], references: [id])
+  lead          Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@index([tipo])
+  @@index([creadoPor])
+  @@index([fechaCreacion])
+}
+
+model Note {
+  id            String   @id @default(cuid())
+  leadId        String
+  contenido     String
+  creadoPor     String?
+  fechaCreacion DateTime @default(now())
+  creador       User?    @relation("NoteCreator", fields: [creadoPor], references: [id])
+  lead          Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@index([creadoPor])
+  @@index([fechaCreacion])
+}
+
+model WhitelabelConfig {
+  id                 String   @id @default(cuid())
+  nombreEmpresa      String   @default("Volkern CRM")
+  logoUrl            String?
+  iconoUrl           String?
+  colorPrimario      String   @default("#3b82f6")
+  colorSecundario    String   @default("#8b5cf6")
+  colorAcento        String   @default("#10b981")
+  emailRemitente     String?
+  nombreRemitente    String?
+  dominio            String?
+  eslogan            String?
+  descripcion        String?
+  urlFacebook        String?
+  urlInstagram       String?
+  urlTwitter         String?
+  urlLinkedIn        String?
+  urlWebsite         String?
+  metadatos          Json?
+  fechaCreacion      DateTime @default(now())
+  fechaActualizacion DateTime @updatedAt
+
+  @@map("whitelabel_config")
+}
+
+model Page {
+  id                      String    @id @default(cuid())
+  titulo                  String
+  slug                    String    @unique
+  descripcion             String?
+  contenido               Json
+  tipo                    String    @default("landing")
+  plantillaId             String?
+  estado                  String    @default("draft")
+  metaTitulo              String?
+  metaDescripcion         String?
+  metaImagen              String?
+  metaKeywords            String?
+  configuracionBranding   Json?
+  cssPersonalizado        String?
+  configuracionResponsive Json?
+  vistas                  Int       @default(0)
+  conversiones            Int       @default(0)
+  publicadoEn             DateTime?
+  subdomain               String?
+  dominioPersonalizado    String?
+  formularioLeadId        String?
+  servicioId              String?
+  cursoId                 String?
+  creadoPor               String?
+  fechaCreacion           DateTime  @default(now())
+  fechaActualizacion      DateTime  @updatedAt
+  tenantId                String?
+  scriptsBody             String?
+  scriptsHead             String?
+  creador                 User?     @relation("PageCreator", fields: [creadoPor], references: [id])
+  tenant                  Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([slug])
+  @@index([estado])
+  @@index([tipo])
+  @@index([creadoPor])
+  @@map("pages")
+}
+
+model PageTemplate {
+  id                   String   @id @default(cuid())
+  nombre               String
+  descripcion          String?
+  categoria            String
+  imagenPreview        String?
+  contenido            Json
+  configuracionDefecto Json?
+  esPublica            Boolean  @default(true)
+  ordenamiento         Int      @default(0)
+  etiquetas            String[]
+  fechaCreacion        DateTime @default(now())
+  fechaActualizacion   DateTime @updatedAt
+
+  @@index([categoria])
+  @@map("page_templates")
+}
+
+model PageComponent {
+  id                 String   @id @default(cuid())
+  nombre             String
+  descripcion        String?
+  tipo               String
+  contenido          Json
+  imagenPreview      String?
+  creadoPor          String?
+  esPublico          Boolean  @default(false)
+  fechaCreacion      DateTime @default(now())
+  fechaActualizacion DateTime @updatedAt
+  creador            User?    @relation("ComponentCreator", fields: [creadoPor], references: [id])
+
+  @@index([tipo])
+  @@index([creadoPor])
+  @@map("page_components")
+}
+
+model PagePublishing {
+  id                   String   @id @default(cuid())
+  paginaId             String   @unique
+  subdominio           String?  @unique
+  subdomainActivo      Boolean  @default(false)
+  dominioPersonalizado String?  @unique
+  dominioVerificado    Boolean  @default(false)
+  dnsConfiguracion     Json?
+  codigoEmbed          String?
+  embedActivo          Boolean  @default(false)
+  sslActivo            Boolean  @default(false)
+  certificadoSSL       String?
+  googleAnalyticsId    String?
+  facebookPixelId      String?
+  fechaCreacion        DateTime @default(now())
+  fechaActualizacion   DateTime @updatedAt
+
+  @@index([subdominio])
+  @@index([dominioPersonalizado])
+  @@map("page_publishing")
+}
+
+model SubscriptionPlan {
+  id                             String         @id @default(cuid())
+  nombre                         String
+  descripcion                    String?
+  slug                           String         @unique
+  precio                         Float
+  moneda                         String         @default("MXN")
+  intervalo                      String         @default("mensual")
+  precioSetup                    Float?
+  limiteUsuarios                 Int            @default(5)
+  limiteLeads                    Int            @default(1000)
+  limiteCursos                   Int            @default(10)
+  limiteEstudiantes              Int            @default(100)
+  limiteStorage                  Int            @default(10)
+  whatsappHabilitado             Boolean        @default(false)
+  emailHabilitado                Boolean        @default(true)
+  smsHabilitado                  Boolean        @default(false)
+  telegramHabilitado             Boolean        @default(false)
+  facebookHabilitado             Boolean        @default(false)
+  instagramHabilitado            Boolean        @default(false)
+  lmsHabilitado                  Boolean        @default(false)
+  pageBuilderHabilitado          Boolean        @default(false)
+  automationsHabilitado          Boolean        @default(false)
+  campaignsHabilitado            Boolean        @default(false)
+  whitelabelHabilitado           Boolean        @default(false)
+  dominioPersonalizadoHabilitado Boolean        @default(false)
+  apiAccessHabilitado            Boolean        @default(false)
+  features                       Json?
+  activo                         Boolean        @default(true)
+  esPublico                      Boolean        @default(true)
+  esPopular                      Boolean        @default(false)
+  ordenamiento                   Int            @default(0)
+  fechaCreacion                  DateTime       @default(now())
+  fechaActualizacion             DateTime       @updatedAt
+  subscriptions                  Subscription[]
+
+  @@index([slug])
+  @@index([activo])
+  @@index([esPublico])
+  @@map("subscription_plans")
+}
+
+model Subscription {
+  id                   String           @id @default(cuid())
+  tenantId             String
+  planId               String
+  estado               String           @default("activa")
+  stripeSubscriptionId String?          @unique
+  stripePriceId        String?
+  montoPagado          Float?
+  moneda               String           @default("MXN")
+  fechaInicio          DateTime         @default(now())
+  fechaRenovacion      DateTime?
+  fechaCancelacion     DateTime?
+  fechaVencimiento     DateTime?
+  esTrial              Boolean          @default(false)
+  diasTrialRestantes   Int?
+  descuentoAplicado    Float            @default(0)
+  codigoDescuento      String?
+  metadata             Json?
+  fechaCreacion        DateTime         @default(now())
+  fechaActualizacion   DateTime         @updatedAt
+  plan                 SubscriptionPlan @relation(fields: [planId], references: [id])
+  tenant               Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([planId])
+  @@index([estado])
+  @@index([stripeSubscriptionId])
+  @@index([fechaRenovacion])
+  @@map("subscriptions")
+}
+
+model TenantFeature {
+  id                  String    @id @default(cuid())
+  tenantId            String
+  feature             String
+  habilitado          Boolean   @default(true)
+  limitePersonalizado Int?
+  configuracion       Json?
+  habilitadoPor       String?
+  razon               String?
+  fechaExpiracion     DateTime?
+  fechaCreacion       DateTime  @default(now())
+  fechaActualizacion  DateTime  @updatedAt
+  tenant              Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, feature])
+  @@index([tenantId])
+  @@index([feature])
+  @@index([habilitado])
+  @@map("tenant_features")
+}
+
+model PlatformSettings {
+  id                  String   @id @default(cuid())
+  stripePublicKey     String?
+  stripePriceKey      String?
+  twilioAccountSid    String?
+  twilioAuthToken     String?
+  dialog360ApiKey     String?
+  resendApiKey        String?
+  defaultUserLimit    Int      @default(5)
+  defaultLeadLimit    Int      @default(1000)
+  defaultStorageLimit Int      @default(10)
+  maintenanceMode     Boolean  @default(false)
+  signupEnabled       Boolean  @default(true)
+  trialDaysDefault    Int      @default(14)
+  emailFrom           String   @default("noreply@volkern.app")
+  emailReplyTo        String?
+  globalCompanyName   String?  @default("Volkern AI")
+  globalPrimaryColor  String?  @default("#4F46E5")
+  configuracion       Json?
+  fechaActualizacion  DateTime @updatedAt
+
+  @@map("platform_settings")
+}
+
+model Integration {
+  id                        String       @id @default(cuid())
+  tenantId                  String
+  tipo                      String
+  nombre                    String
+  conectado                 Boolean      @default(false)
+  activo                    Boolean      @default(true)
+  credenciales              Json
+  configuracion             Json?
+  ultimaSincronizacion      DateTime?
+  errorUltimaSincronizacion String?
+  estadisticas              Json?
+  fechaCreacion             DateTime     @default(now())
+  fechaActualizacion        DateTime     @updatedAt
+  tenant                    Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  webhookLogs               WebhookLog[]
+
+  @@unique([tenantId, tipo])
+  @@index([tenantId])
+  @@index([tipo])
+  @@index([conectado])
+  @@map("integrations")
+}
+
+model GoogleCalendarIntegration {
+  id                      String    @id @default(cuid())
+  tenantId                String
+  accessToken             String
+  refreshToken            String
+  expiresAt               DateTime
+  calendarId              String    @default("primary")
+  activo                  Boolean   @default(true)
+  ultimaSync              DateTime?
+  totalCitasSincronizadas Int       @default(0)
+  errorUltimaSync         String?
+  channelId               String?
+  resourceId              String?
+  channelExpiration       DateTime?
+  syncToken               String?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  userId                  String    @unique
+  tenant                  Tenant    @relation("TenantGoogleCalendars", fields: [tenantId], references: [id], onDelete: Cascade)
+  user                    User      @relation("UserGoogleCalendar", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tenantId])
+  @@map("google_calendar_integrations")
+}
+
+model WebhookLog {
+  id            String       @id @default(cuid())
+  tenantId      String
+  integrationId String?
+  direccion     String
+  metodo        String
+  url           String
+  headers       Json?
+  payload       Json         @db.Json
+  statusCode    Int?
+  respuesta     Json?        @db.Json
+  estado        String       @default("pendiente")
+  intentos      Int          @default(1)
+  errorMensaje  String?
+  procesadoEn   DateTime?
+  fechaCreacion DateTime     @default(now())
+  integration   Integration? @relation(fields: [integrationId], references: [id])
+
+  @@index([tenantId])
+  @@index([integrationId])
+  @@index([estado])
+  @@index([fechaCreacion])
+  @@map("webhook_logs")
+}
+
+model IncomingWebhook {
+  id             String                    @id @default(uuid())
+  tenantId       String
+  userId         String
+  nombre         String
+  descripcion    String?
+  activo         Boolean                   @default(true)
+  accion         String                    @default("crear_lead")
+  config         Json?                     @db.Json
+  mapeoNombre    String?
+  mapeoEmail     String?
+  mapeoTelefono  String?
+  mapeoEmpresa   String?
+  mapeoNotas     String?
+  mapeoCustom    Json?                     @db.Json
+  automationId   String?
+  secretKey      String?
+  totalRecibidos Int                       @default(0)
+  ultimoRecibido DateTime?
+  fechaCreacion  DateTime                  @default(now())
+  fechaEdicion   DateTime                  @updatedAt
+  entregas       IncomingWebhookDelivery[]
+  automation     Automation?               @relation(fields: [automationId], references: [id])
+  tenant         Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user           User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([activo])
+  @@index([automationId])
+  @@map("incoming_webhooks")
+}
+
+model IncomingWebhookDelivery {
+  id             String          @id @default(cuid())
+  webhookId      String
+  tenantId       String
+  metodo         String          @default("POST")
+  headers        Json?           @db.Json
+  payload        Json            @db.Json
+  ipAddress      String?
+  userAgent      String?
+  estado         String          @default("exitoso")
+  errorMensaje   String?
+  leadCreado     String?
+  tareaCreada    String?
+  automationRun  String?
+  fechaRecepcion DateTime        @default(now())
+  procesadoEn    DateTime        @default(now())
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  webhook        IncomingWebhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId])
+  @@index([tenantId])
+  @@index([estado])
+  @@index([fechaRecepcion])
+  @@map("incoming_webhook_deliveries")
+}
+
+model SavedSearch {
+  id                             String    @id @default(cuid())
+  tenantId                       String
+  userId                         String
+  nombre                         String
+  descripcion                    String?
+  criterios                      Json      @db.Json
+  fuente                         String    @default("hunter")
+  autoActualizar                 Boolean   @default(false)
+  ultimaActualizacion            DateTime?
+  frecuenciaActualizar           String?   @default("diaria")
+  totalResultados                Int       @default(0)
+  nuevosDesdeUltimaActualizacion Int       @default(0)
+  activa                         Boolean   @default(true)
+  fechaCreacion                  DateTime  @default(now())
+  fechaActualizacion             DateTime  @updatedAt
+  tenant                         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([activa])
+  @@index([fechaCreacion])
+  @@map("saved_searches")
+}
+
+model ExternalLeadSearch {
+  id              String   @id @default(cuid())
+  tenantId        String
+  userId          String
+  criterios       Json     @db.Json
+  fuente          String
+  totalResultados Int      @default(0)
+  resultados      Json     @db.Json
+  leadsImportados Int      @default(0)
+  fechaCreacion   DateTime @default(now())
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([fechaCreacion])
+  @@map("external_lead_searches")
+}
+
+model Deal {
+  id                   String           @id @default(cuid())
+  tenantId             String
+  leadId               String?
+  titulo               String
+  descripcion          String?
+  valor                Float
+  moneda               String           @default("MXN")
+  etapa                String
+  probabilidad         Int              @default(25)
+  estado               String           @default("activo")
+  fechaCreacion        DateTime         @default(now())
+  fechaEstimadaCierre  DateTime?
+  fechaCierre          DateTime?
+  fechaActualizacion   DateTime         @updatedAt
+  razonPerdida         String?
+  competidor           String?
+  campanaId            String?
+  descuento            Float?
+  diasEnPipeline       Int              @default(0)
+  fechaUltimaActividad DateTime?
+  notasInternas        String?
+  numeroActividades    Int              @default(0)
+  origen               String?
+  prioridad            String           @default("media")
+  tags                 String?
+  usuarioAsignadoId    String?
+  valorReal            Float?
+  companyId            String?
+  contactId            String?
+  comisiones           Comision[]
+  contratos            Contrato[]
+  cotizaciones         Cotizacion[]
+  actividades          DealActivity[]
+  archivos             DealAttachment[]
+  company              Contact?         @relation("CompanyDeals", fields: [companyId], references: [id])
+  contact              Contact?         @relation("ContactDeals", fields: [contactId], references: [id], onDelete: Restrict)
+  lead                 Lead?            @relation(fields: [leadId], references: [id])
+  tenant               Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  usuarioAsignado      User?            @relation("DealsAsignados", fields: [usuarioAsignadoId], references: [id])
+  ordenesVenta         OrdenVenta[]     @relation("DealOrdenesVenta")
+
+  @@index([tenantId])
+  @@index([leadId])
+  @@index([contactId])
+  @@index([companyId])
+  @@index([usuarioAsignadoId])
+  @@index([etapa])
+  @@index([estado])
+  @@index([fechaEstimadaCierre])
+  @@index([fechaCreacion])
+  @@map("deals")
+}
+
+model Notification {
+  id            String    @id @default(cuid())
+  tenantId      String
+  userId        String
+  titulo        String
+  mensaje       String
+  tipo          String    @default("info")
+  link          String?
+  leido         Boolean   @default(false)
+  archivado     Boolean   @default(false)
+  metadata      Json?     @db.Json
+  fechaCreacion DateTime  @default(now())
+  fechaLeido    DateTime?
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([leido])
+  @@index([fechaCreacion])
+  @@map("notifications")
+}
+
+model CampaignLead {
+  id                 String    @id @default(cuid())
+  campanaId          String
+  leadId             String
+  estado             String    @default("activo")
+  emailAbierto       Boolean   @default(false)
+  emailClicado       Boolean   @default(false)
+  respondio          Boolean   @default(false)
+  fechaAgregado      DateTime  @default(now())
+  fechaUltimoEmail   DateTime?
+  fechaAperturaEmail DateTime?
+  fechaClickEmail    DateTime?
+  fechaRespuesta     DateTime?
+  campana            Campaign  @relation(fields: [campanaId], references: [id], onDelete: Cascade)
+  lead               Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([campanaId, leadId])
+  @@index([campanaId])
+  @@index([leadId])
+  @@index([estado])
+  @@map("campaign_leads")
+}
+
+model PipelineStage {
+  id                 String   @id @default(cuid())
+  tenantId           String
+  nombre             String
+  descripcion        String?
+  orden              Int
+  probabilidad       Int      @default(50)
+  color              String   @default("#3b82f6")
+  requiereAprobacion Boolean  @default(false)
+  esEtapaFinal       Boolean  @default(false)
+  tipoEtapaFinal     String?
+  fechaCreacion      DateTime @default(now())
+  activo             Boolean  @default(true)
+  tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, nombre])
+  @@index([tenantId])
+  @@index([orden])
+  @@map("pipeline_stages")
+}
+
+model DealActivity {
+  id             String    @id @default(cuid())
+  dealId         String
+  tenantId       String
+  userId         String?
+  tipo           String
+  titulo         String?
+  descripcion    String?
+  resultado      String?
+  duracion       Int?
+  metadata       Json?     @db.Json
+  fechaCreacion  DateTime  @default(now())
+  fechaActividad DateTime?
+  deal           Deal      @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  usuario        User?     @relation("DealActivities", fields: [userId], references: [id])
+
+  @@index([dealId])
+  @@index([tenantId])
+  @@index([userId])
+  @@index([fechaCreacion])
+  @@map("deal_activities")
+}
+
+model DealAttachment {
+  id                 String   @id @default(cuid())
+  dealId             String
+  tenantId           String
+  userId             String?
+  nombre             String
+  tipoArchivo        String
+  tamano             Int
+  cloud_storage_path String
+  descripcion        String?
+  categoria          String?
+  fechaSubida        DateTime @default(now())
+  deal               Deal     @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  usuario            User?    @relation("DealAttachments", fields: [userId], references: [id])
+
+  @@index([dealId])
+  @@index([tenantId])
+  @@map("deal_attachments")
+}
+
+model Cotizacion {
+  id                  String                     @id @default(cuid())
+  tenantId            String
+  dealId              String?
+  leadId              String?
+  numero              String
+  titulo              String
+  descripcion         String?
+  estado              String                     @default("borrador")
+  subtotal            Float
+  descuentoPorcentaje Float                      @default(0)
+  descuentoMonto      Float                      @default(0)
+  impuestos           Float                      @default(0)
+  total               Float
+  moneda              String                     @default("MXN")
+  validezDias         Int                        @default(30)
+  terminosPago        String?
+  notasInternas       String?
+  notasCliente        String?
+  fechaCreacion       DateTime                   @default(now())
+  fechaEnvio          DateTime?
+  fechaAceptacion     DateTime?
+  fechaVencimiento    DateTime?
+  fechaActualizacion  DateTime                   @updatedAt
+  firmadoPorCliente   Boolean                    @default(false)
+  fechaFirma          DateTime?
+  ipFirma             String?
+  clienteEmail        String?
+  clienteEmpresa      String?
+  clienteNombre       String?
+  clienteTelefono     String?
+  creadoPorId         String?
+  fechaPrimeraVista   DateTime?
+  tokenPublico        String?                    @unique
+  ultimaVista         DateTime?
+  vecesVista          Int                        @default(0)
+  emisorId            String?
+  contratos           Contrato[]
+  items               CotizacionItem[]
+  creadoPor           User?                      @relation("CotizacionesCreadaPor", fields: [creadoPorId], references: [id])
+  deal                Deal?                      @relation(fields: [dealId], references: [id])
+  emisor              ConfiguracionFiscalEmisor? @relation("EmisorCotizacion", fields: [emisorId], references: [id])
+  lead                Lead?                      @relation(fields: [leadId], references: [id])
+  tenant              Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ordenesVenta        OrdenVenta[]               @relation("CotizacionOrdenesVenta")
+
+  @@unique([tenantId, numero])
+  @@index([tenantId])
+  @@index([dealId])
+  @@index([leadId])
+  @@index([estado])
+  @@index([fechaCreacion])
+  @@map("cotizaciones")
+}
+
+model CotizacionItem {
+  id                  String        @id @default(cuid())
+  cotizacionId        String
+  concepto            String
+  descripcion         String?
+  cantidad            Float
+  precioUnitario      Float
+  descuento           Float         @default(0)
+  impuestos           Float         @default(0)
+  total               Float
+  orden               Int
+  categoria           String?
+  sku                 String?
+  aplicaRetencion     Boolean       @default(false)
+  montoImpuesto       Float         @default(0)
+  montoRetencion      Float         @default(0)
+  porcentajeImpuesto  Float         @default(0)
+  porcentajeRetencion Float         @default(0)
+  subtotal            Float         @default(0)
+  tasaImpuestoId      String?
+  catalogoItemId      String?
+  catalogoItem        CatalogoItem? @relation(fields: [catalogoItemId], references: [id])
+  cotizacion          Cotizacion    @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
+  tasaImpuesto        TasaImpuesto? @relation("ImpuestoCotizacion", fields: [tasaImpuestoId], references: [id])
+
+  @@index([cotizacionId])
+  @@index([catalogoItemId])
+  @@map("cotizacion_items")
+}
+
+model Contrato {
+  id                  String                     @id @default(cuid())
+  tenantId            String
+  dealId              String?
+  leadId              String?
+  cotizacionId        String?
+  numero              String
+  titulo              String
+  descripcion         String?
+  tipo                String                     @default("servicio")
+  estado              String                     @default("borrador")
+  subtotal            Float
+  descuentoPorcentaje Float                      @default(0)
+  descuentoMonto      Float                      @default(0)
+  impuestos           Float                      @default(0)
+  total               Float
+  moneda              String                     @default("MXN")
+  metodoPago          String?
+  condicionesPago     String?
+  frecuenciaPago      String?
+  diaPago             Int?
+  clausulas           String?
+  templateData        Json?                    @db.Json
+  notasInternas       String?
+  notasCliente        String?
+  fechaCreacion       DateTime                   @default(now())
+  fechaEnvio          DateTime?
+  fechaFirmaCliente   DateTime?
+  fechaFirmaEmpresa   DateTime?
+  fechaInicio         DateTime?
+  fechaFin            DateTime?
+  fechaActualizacion  DateTime                   @updatedAt
+  firmadoPorCliente   Boolean                    @default(false)
+  nombreFirmaCliente  String?
+  ipFirmaCliente      String?
+  firmadoPorEmpresa   Boolean                    @default(false)
+  firmadoPorUserId    String?
+  nombreFirmaEmpresa  String?
+  tokenPublico        String?                    @unique
+  fechaPrimeraVista   DateTime?
+  vecesVista          Int                        @default(0)
+  ultimaVista         DateTime?
+  clienteNombre       String?
+  clienteEmail        String?
+  clienteTelefono     String?
+  clienteEmpresa      String?
+  clienteRfc          String?
+  clienteDireccion    String?
+  creadoPorId         String?
+  emisorId            String?
+  items               ContratoItem[]
+  pagos               ContratoPago[]
+  cotizacion          Cotizacion?                @relation(fields: [cotizacionId], references: [id])
+  creadoPor           User?                      @relation("ContratosCreadoPor", fields: [creadoPorId], references: [id])
+  deal                Deal?                      @relation(fields: [dealId], references: [id])
+  emisor              ConfiguracionFiscalEmisor? @relation("EmisorContrato", fields: [emisorId], references: [id])
+  firmadoPor          User?                      @relation("ContratosFirmadoPor", fields: [firmadoPorUserId], references: [id])
+  lead                Lead?                      @relation(fields: [leadId], references: [id])
+  tenant              Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ordenesVenta        OrdenVenta[]               @relation("ContratoOrdenesVenta")
+
+  @@unique([tenantId, numero])
+  @@index([tenantId])
+  @@index([dealId])
+  @@index([leadId])
+  @@index([cotizacionId])
+  @@index([estado])
+  @@index([fechaCreacion])
+  @@map("contratos")
+}
+
+model ContratoItem {
+  id                  String        @id @default(cuid())
+  contratoId          String
+  concepto            String
+  descripcion         String?
+  cantidad            Float
+  precioUnitario      Float
+  descuento           Float         @default(0)
+  impuestos           Float         @default(0)
+  total               Float
+  orden               Int
+  categoria           String?
+  sku                 String?
+  aplicaRetencion     Boolean       @default(false)
+  montoImpuesto       Float         @default(0)
+  montoRetencion      Float         @default(0)
+  porcentajeImpuesto  Float         @default(0)
+  porcentajeRetencion Float         @default(0)
+  subtotal            Float         @default(0)
+  tasaImpuestoId      String?
+  catalogoItemId      String?
+  catalogoItem        CatalogoItem? @relation(fields: [catalogoItemId], references: [id])
+  contrato            Contrato      @relation(fields: [contratoId], references: [id], onDelete: Cascade)
+  tasaImpuesto        TasaImpuesto? @relation("ImpuestoContrato", fields: [tasaImpuestoId], references: [id])
+
+  @@index([contratoId])
+  @@index([catalogoItemId])
+  @@map("contrato_items")
+}
+
+model ContratoPago {
+  id              String    @id @default(cuid())
+  contratoId      String
+  tenantId        String
+  numero          String
+  monto           Float
+  moneda          String    @default("MXN")
+  estado          String    @default("pendiente")
+  metodoPago      String?
+  referencia      String?
+  fechaProgramada DateTime
+  fechaPago       DateTime?
+  fechaCreacion   DateTime  @default(now())
+  notas           String?
+  contrato        Contrato  @relation(fields: [contratoId], references: [id], onDelete: Cascade)
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([contratoId])
+  @@index([tenantId])
+  @@index([estado])
+  @@map("contrato_pagos")
+}
+
+model Comision {
+  id              String    @id @default(cuid())
+  tenantId        String
+  dealId          String
+  userId          String
+  tipo            String
+  porcentaje      Float?
+  montoFijo       Float?
+  montoCalculado  Float
+  moneda          String    @default("MXN")
+  estado          String    @default("pendiente")
+  metodoCalculo   String?
+  fechaCreacion   DateTime  @default(now())
+  fechaAprobacion DateTime?
+  fechaPago       DateTime?
+  referenciaPago  String?
+  notasPago       String?
+  deal            Deal      @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  usuario         User      @relation("Comisiones", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([dealId])
+  @@index([userId])
+  @@index([estado])
+  @@index([fechaCreacion])
+  @@map("comisiones")
+}
+
+model MetaVenta {
+  id                   String   @id @default(cuid())
+  tenantId             String
+  userId               String?
+  nombre               String
+  descripcion          String?
+  tipo                 String
+  metrica              String
+  valorObjetivo        Float
+  moneda               String   @default("MXN")
+  periodo              String
+  fechaInicio          DateTime
+  fechaFin             DateTime
+  valorActual          Float    @default(0)
+  porcentajeCompletado Float    @default(0)
+  estado               String   @default("activa")
+  fechaCreacion        DateTime @default(now())
+  fechaActualizacion   DateTime @updatedAt
+  tenant               Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  usuario              User?    @relation("MetasVenta", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([estado])
+  @@index([fechaInicio])
+  @@index([fechaFin])
+  @@map("metas_venta")
+}
+
+model EmailCampaign {
+  id                 String              @id @default(cuid())
+  tenantId           String
+  nombre             String
+  asunto             String
+  remitente          String
+  remitenteEmail     String
+  responderA         String?
+  contenidoHTML      String
+  contenidoTexto     String?
+  plantillaId        String?
+  audienciaId        String?
+  filtrosJSON        String?
+  estado             String              @default("borrador")
+  tipoProgramacion   String              @default("inmediato")
+  fechaEnvio         DateTime?
+  totalDestinatarios Int                 @default(0)
+  totalEnviados      Int                 @default(0)
+  totalFallidos      Int                 @default(0)
+  totalPendientes    Int                 @default(0)
+  esABTest           Boolean             @default(false)
+  varianteA          String?
+  varianteB          String?
+  porcentajeA        Float?              @default(50)
+  creadoPor          String?
+  fechaCreacion      DateTime            @default(now())
+  fechaActualizacion DateTime            @updatedAt
+  costoTotal         Float?
+  fechaFinAB         DateTime?
+  ganadorAB          String?
+  objetivoConversion String?
+  roiCalculado       Float?
+  totalAbiertos      Int                 @default(0)
+  totalClics         Int                 @default(0)
+  totalConversiones  Int                 @default(0)
+  valorConversion    Float?
+  resultadoAB        ABTestResult?
+  destinatarios      CampaignRecipient[]
+  audiencia          Audience?           @relation(fields: [audienciaId], references: [id])
+  plantilla          EmailTemplate?      @relation(fields: [plantillaId], references: [id])
+  tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([estado])
+  @@index([fechaEnvio])
+  @@index([plantillaId])
+  @@index([audienciaId])
+  @@map("email_campaigns")
+}
+
+model EmailTemplate {
+  id                   String          @id @default(cuid())
+  tenantId             String
+  nombre               String
+  descripcion          String?
+  categoria            String          @default("general")
+  asuntoPorDefecto     String
+  contenidoHTML        String
+  contenidoJSON        Json?                   @db.Json
+  contenidoTexto       String?
+  variablesDisponibles String?
+  esOficial            Boolean         @default(false)
+  vecesUtilizada       Int             @default(0)
+  creadoPor            String?
+  fechaCreacion        DateTime        @default(now())
+  fechaActualizacion   DateTime        @updatedAt
+  campanasUsadas       EmailCampaign[]
+  tenant               Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([categoria])
+  @@index([esOficial])
+  @@map("email_templates")
+}
+
+model CampaignRecipient {
+  id                 String        @id @default(cuid())
+  campanaId          String
+  leadId             String
+  tenantId           String
+  emailDestinatario  String
+  nombreDestinatario String?
+  estado             String        @default("pendiente")
+  errorMensaje       String?
+  fechaProgramada    DateTime?
+  fechaEnviado       DateTime?
+  abierto            Boolean       @default(false)
+  fechaApertura      DateTime?
+  clicado            Boolean       @default(false)
+  fechaClic          DateTime?
+  metadataJSON       String?
+  convertido         Boolean       @default(false)
+  fechaConversion    DateTime?
+  numeroClics        Int           @default(0)
+  valorConversion    Float?
+  varianteAsignada   String?
+  campana            EmailCampaign @relation(fields: [campanaId], references: [id], onDelete: Cascade)
+  lead               Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  tenant             Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([campanaId])
+  @@index([leadId])
+  @@index([tenantId])
+  @@index([estado])
+  @@index([emailDestinatario])
+  @@map("campaign_recipients")
+}
+
+model ABTestResult {
+  id                       String        @id @default(cuid())
+  campanaId                String        @unique
+  tenantId                 String
+  varianteA_enviados       Int           @default(0)
+  varianteA_abiertos       Int           @default(0)
+  varianteA_clics          Int           @default(0)
+  varianteA_conversiones   Int           @default(0)
+  varianteA_tasaApertura   Float         @default(0)
+  varianteA_tasaClic       Float         @default(0)
+  varianteA_tasaConversion Float         @default(0)
+  varianteB_enviados       Int           @default(0)
+  varianteB_abiertos       Int           @default(0)
+  varianteB_clics          Int           @default(0)
+  varianteB_conversiones   Int           @default(0)
+  varianteB_tasaApertura   Float         @default(0)
+  varianteB_tasaClic       Float         @default(0)
+  varianteB_tasaConversion Float         @default(0)
+  significanciaEstadistica Boolean       @default(false)
+  nivelConfianza           Float         @default(0)
+  ganador                  String?
+  mejoraPorcentaje         Float?
+  recomendacion            String?
+  fechaCalculo             DateTime      @default(now())
+  fechaActualizacion       DateTime      @updatedAt
+  campana                  EmailCampaign @relation(fields: [campanaId], references: [id], onDelete: Cascade)
+  tenant                   Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([ganador])
+  @@map("ab_test_results")
+}
+
+model Audience {
+  id                  String          @id @default(cuid())
+  tenantId            String
+  nombre              String
+  descripcion         String?
+  filtrosJSON         String
+  totalLeads          Int             @default(0)
+  ultimaActualizacion DateTime        @default(now())
+  esEstatica          Boolean         @default(false)
+  creadoPor           String?
+  fechaCreacion       DateTime        @default(now())
+  tenant              Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campanas            EmailCampaign[]
+
+  @@index([tenantId])
+  @@index([esEstatica])
+  @@map("audiences")
+}
+
+model UnsubscribeList {
+  id                String   @id @default(cuid())
+  tenantId          String
+  email             String
+  leadId            String?
+  motivo            String?
+  comentario        String?
+  campanaId         String?
+  tokenReactivacion String?  @unique
+  fechaBaja         DateTime @default(now())
+  lead              Lead?    @relation(fields: [leadId], references: [id])
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([email])
+  @@index([leadId])
+  @@map("unsubscribe_list")
+}
+
+model AnytimebotIntegration {
+  id                         String    @id @default(cuid())
+  tenantId                   String    @unique
+  username                   String
+  activo                     Boolean   @default(true)
+  sincronizarLeads           Boolean   @default(true)
+  sincronizarCitas           Boolean   @default(true)
+  fuenteLeads                String    @default("Anytimebot Chatbot")
+  estadoLeadsNuevos          String    @default("nuevo")
+  asignacionAutomatica       Boolean   @default(false)
+  usuarioAsignadoId          String?
+  whatsappIntegrado          Boolean   @default(false)
+  numeroWhatsApp             String?
+  totalLeadsCapturados       Int       @default(0)
+  totalCitasSincronizadas    Int       @default(0)
+  ultimaSincronizacion       DateTime?
+  configuracion              String?
+  fechaCreacion              DateTime  @default(now())
+  fechaActualizacion         DateTime  @updatedAt
+  sincronizarMensajes        Boolean   @default(true)
+  totalMensajesSincronizados Int       @default(0)
+  webhookSecret              String?
+  tenant                     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([username])
+  @@map("anytimebot_integrations")
+}
+
+model OutgoingWebhook {
+  id              String                    @id @default(cuid())
+  tenantId        String
+  userId          String
+  nombre          String
+  descripcion     String?
+  url             String
+  activo          Boolean                   @default(true)
+  eventos         Json                      @db.Json
+  metodoHttp      String                    @default("POST")
+  headers         Json?                     @db.Json
+  secretKey       String?
+  maxReintentos   Int                       @default(3)
+  timeoutSegundos Int                       @default(30)
+  totalEnviados   Int                       @default(0)
+  totalExitosos   Int                       @default(0)
+  totalFallidos   Int                       @default(0)
+  ultimoEnvio     DateTime?
+  fechaCreacion   DateTime                  @default(now())
+  fechaEdicion    DateTime                  @updatedAt
+  deliveries      OutgoingWebhookDelivery[]
+  tenant          Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user            User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([activo])
+  @@map("outgoing_webhooks")
+}
+
+model OutgoingWebhookDelivery {
+  id              String          @id @default(cuid())
+  webhookId       String
+  tenantId        String
+  evento          String
+  payload         Json            @db.Json
+  headers         Json            @db.Json
+  estadoHttp      Int?
+  respuesta       Json?           @db.Json
+  tiempoRespuesta Int?
+  estado          String
+  errorMensaje    String?
+  intentos        Int             @default(1)
+  entidadTipo     String?
+  entidadId       String?
+  fechaEnvio      DateTime        @default(now())
+  ultimoIntento   DateTime?
+  proximoIntento  DateTime?
+  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  webhook         OutgoingWebhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId])
+  @@index([tenantId])
+  @@index([evento])
+  @@index([estado])
+  @@index([fechaEnvio])
+  @@map("outgoing_webhook_deliveries")
+}
+
+model DigitalCard {
+  id                String        @id @default(cuid())
+  userId            String        @unique
+  tenantId          String
+  nombre            String
+  puesto            String?
+  empresa           String?
+  email             String?
+  sitioWeb          String?
+  redesSociales     Json?         @default("{}")
+  template          String        @default("modern")
+  colorPrimario     String        @default("#3B82F6")
+  colorSecundario   String        @default("#1E40AF")
+  logoUrl           String?
+  fotoPerfilUrl     String?
+  urlUnica          String        @unique
+  qrCodeData        String?
+  totalVistas       Int           @default(0)
+  totalCompartidos  Int           @default(0)
+  totalEscaneos     Int           @default(0)
+  activo            Boolean       @default(true)
+  fechaCreacion     DateTime      @default(now())
+  fechaEdicion      DateTime      @updatedAt
+  telefonoMovil     String?
+  telefonoOficina   String?
+  whatsapp          String?
+  telegram          String?
+  backgroundPattern String        @default("none")
+  bannerUrl         String?
+  colorFondo        String        @default("#FFFFFF")
+  colorTexto        String        @default("#1F2937")
+  fontFamily        String        @default("Inter")
+  layoutStyle       String        @default("standard")
+  tenant            Tenant        @relation("TenantDigitalCards", fields: [tenantId], references: [id], onDelete: Cascade)
+  user              User          @relation("UserDigitalCard", fields: [userId], references: [id], onDelete: Cascade)
+  leadsEscaneados   ScannedCard[] @relation("CardScannedLeads")
+
+  @@index([userId])
+  @@index([tenantId])
+  @@index([urlUnica])
+  @@index([activo])
+  @@map("digital_cards")
+}
+
+model ScannedCard {
+  id               String      @id @default(cuid())
+  digitalCardId    String
+  tenantId         String
+  leadId           String?
+  imagenUrl        String
+  datosExtraidos   Json
+  nombreExtraido   String?
+  empresaExtraida  String?
+  puestoExtraido   String?
+  telefonoExtraido String?
+  emailExtraido    String?
+  estado           String      @default("procesando")
+  errorMensaje     String?
+  fechaEscaneo     DateTime    @default(now())
+  digitalCard      DigitalCard @relation("CardScannedLeads", fields: [digitalCardId], references: [id], onDelete: Cascade)
+  lead             Lead?       @relation("LeadFromScannedCard", fields: [leadId], references: [id])
+  tenant           Tenant      @relation("TenantScannedCards", fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([digitalCardId])
+  @@index([tenantId])
+  @@index([leadId])
+  @@index([estado])
+  @@index([fechaEscaneo])
+  @@map("scanned_cards")
+}
+
+model PlaudernIntegration {
+  id                         String    @id @default(cuid())
+  tenantId                   String    @unique
+  apiKey                     String
+  botId                      String?
+  botName                    String?
+  activo                     Boolean   @default(true)
+  webhookSecret              String?
+  sincronizarConversaciones  Boolean   @default(true)
+  sincronizarMensajes        Boolean   @default(true)
+  crearLeadsAutomatico       Boolean   @default(true)
+  fuenteLeads                String    @default("Plaudern Chatbot")
+  estadoLeadsNuevos          String    @default("nuevo")
+  asignacionAutomatica       Boolean   @default(false)
+  usuarioAsignadoId          String?
+  knowledgeBaseActiva        Boolean   @default(false)
+  knowledgeBaseDocumentos    Int       @default(0)
+  totalMensajesSincronizados Int       @default(0)
+  totalConversaciones        Int       @default(0)
+  ultimaSincronizacion       DateTime?
+  fechaCreacion              DateTime  @default(now())
+  fechaEdicion               DateTime  @updatedAt
+  botsDesactivados           String[]  @default([])
+  tenant                     Tenant    @relation("TenantPlaudernIntegration", fields: [tenantId], references: [id], onDelete: Cascade)
+  usuarioAsignado            User?     @relation("PlaudernAutoAssignUser", fields: [usuarioAsignadoId], references: [id])
+
+  @@index([tenantId])
+  @@index([activo])
+  @@index([botId])
+  @@map("plaudern_integrations")
+}
+
+model ApiKey {
+  id          String    @id @default(cuid())
+  tenantId    String
+  userId      String
+  nombre      String
+  descripcion String?
+  keyHash     String    @unique
+  prefix      String
+  scopes      String[]  @default([])
+  activo      Boolean   @default(true)
+  expiraEn    DateTime?
+  ultimoUso   DateTime?
+  totalUsos   Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([keyHash])
+  @@index([activo])
+  @@map("api_keys")
+}
+
+model TasaImpuesto {
+  id                    String           @id @default(cuid())
+  tenantId              String
+  pais                  String
+  estado                String?
+  nombre                String
+  codigo                String
+  porcentaje            Float
+  tipo                  String           @default("iva")
+  aplicaRetencion       Boolean          @default(false)
+  porcentajeRetencion   Float?
+  inversionSujetoPasivo Boolean          @default(false)
+  descripcionRegla      String?
+  fechaInicioVigencia   DateTime         @default(now())
+  fechaFinVigencia      DateTime?
+  activo                Boolean          @default(true)
+  fechaCreacion         DateTime         @default(now())
+  fechaActualizacion    DateTime         @updatedAt
+  catalogoItems         CatalogoItem[]
+  contratoItems         ContratoItem[]   @relation("ImpuestoContrato")
+  cotizacionItems       CotizacionItem[] @relation("ImpuestoCotizacion")
+  ordenVentaItems       OrdenVentaItem[]
+  tenant                Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, codigo, fechaInicioVigencia])
+  @@index([tenantId])
+  @@index([pais])
+  @@index([pais, estado])
+  @@index([activo])
+  @@map("tasas_impuesto")
+}
+
+model CatalogoItem {
+  id                 String           @id @default(cuid())
+  tenantId           String
+  nombre             String
+  descripcion        String?
+  sku                String?
+  tipo               String           @default("servicio")
+  precioBase         Float
+  moneda             String           @default("EUR")
+  categoriaFiscal    String           @default("general")
+  tasaImpuestoId     String?
+  duracionMinutos    Int?
+  modalidad          String?
+  unidad             String           @default("unidad")
+  activo             Boolean          @default(true)
+  destacado          Boolean          @default(false)
+  fechaCreacion      DateTime         @default(now())
+  fechaActualizacion DateTime         @updatedAt
+  customFieldValues  Json?
+  categorias         String[]         @default([])
+  etiquetas          String[]         @default([])
+  metadata           Json?
+  media              Json?
+  pricing            Json?
+  citas              Cita[]
+  cursos             Curso[]
+  servicios          Servicio[]
+  tasaImpuesto       TasaImpuesto?    @relation(fields: [tasaImpuestoId], references: [id])
+  tenant             Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contratoItems      ContratoItem[]
+  cotizacionItems    CotizacionItem[]
+  ordenVentaItems    OrdenVentaItem[]
+
+  @@unique([tenantId, sku])
+  @@index([tenantId])
+  @@index([tipo])
+  @@index([activo])
+  @@index([categoriaFiscal])
+  @@map("catalogo_items")
+}
+
+model CatalogoFieldDefinition {
+  id           String   @id @default(cuid())
+  tenantId     String
+  fieldKey     String
+  label        String
+  type         String
+  options      Json?
+  required     Boolean  @default(false)
+  orden        Int      @default(0)
+  categoria    String?
+  placeholder  String?
+  unidad       String?
+  valorDefecto String?
+  activo       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  tenant       Tenant   @relation("TenantCatalogoFieldDefinitions", fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, fieldKey])
+  @@index([tenantId])
+  @@index([tenantId, categoria])
+  @@index([tenantId, activo])
+  @@map("catalogo_field_definitions")
+}
+
+model ConfiguracionFiscalEmisor {
+  id                   String       @id @default(cuid())
+  tenantId             String
+  razonSocial          String
+  nombreComercial      String?
+  pais                 String
+  tipoIdFiscal         String
+  idFiscal             String
+  regimenFiscal        String?
+  direccion            String
+  ciudad               String
+  estadoProvincia      String?
+  codigoPostal         String
+  telefono             String?
+  email                String
+  sitioWeb             String?
+  monedaPredeterminada String       @default("EUR")
+  serieFactura         String       @default("F")
+  siguienteNumero      Int          @default(1)
+  logoUrl              String?
+  colorPrimario        String?      @default("#1a56db")
+  esPrincipal          Boolean      @default(false)
+  activo               Boolean      @default(true)
+  fechaCreacion        DateTime     @default(now())
+  fechaActualizacion   DateTime     @updatedAt
+  tenant               Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contratos            Contrato[]   @relation("EmisorContrato")
+  cotizaciones         Cotizacion[] @relation("EmisorCotizacion")
+  ordenesVenta         OrdenVenta[]
+
+  @@unique([tenantId, idFiscal])
+  @@index([tenantId])
+  @@index([pais])
+  @@index([esPrincipal])
+  @@map("configuracion_fiscal_emisor")
+}
+
+model PerfilFiscalCliente {
+  id                 String    @id @default(cuid())
+  tenantId           String
+  leadId             String?   @unique
+  contactId          String?   @unique
+  razonSocial        String?
+  pais               String
+  tipoIdFiscal       String
+  idFiscal           String
+  regimenFiscal      String?
+  idIntracomunitario String?
+  direccionFiscal    String?
+  ciudadFiscal       String?
+  estadoFiscal       String?
+  codigoPostalFiscal String?
+  exentoImpuestos    Boolean   @default(false)
+  motivoExencion     String?
+  aplicaRetencion    Boolean   @default(false)
+  idFiscalValidado   Boolean   @default(false)
+  fechaValidacion    DateTime?
+  fechaCreacion      DateTime  @default(now())
+  fechaActualizacion DateTime  @updatedAt
+  contact            Contact?  @relation("ContactPerfilFiscal", fields: [contactId], references: [id], onDelete: Cascade)
+  lead               Lead?     @relation("LeadPerfilFiscal", fields: [leadId], references: [id], onDelete: Cascade)
+  tenant             Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([pais])
+  @@index([idFiscal])
+  @@map("perfil_fiscal_cliente")
+}
+
+model OrdenVenta {
+  id                 String                     @id @default(cuid())
+  tenantId           String
+  numero             String
+  leadId             String?
+  contactId          String?
+  contratoId         String?
+  cotizacionId       String?
+  dealId             String?
+  emisorId           String?
+  estado             String                     @default("borrador")
+  fechaOrden         DateTime                   @default(now())
+  fechaEntrega       DateTime?
+  fechaFacturacion   DateTime?
+  subtotal           Float                      @default(0)
+  descuentoGlobal    Float                      @default(0)
+  tipoDescuento      String                     @default("porcentaje")
+  totalImpuestos     Float                      @default(0)
+  totalRetenciones   Float                      @default(0)
+  total              Float                      @default(0)
+  moneda             String                     @default("EUR")
+  redondeoLinea      Boolean                    @default(true)
+  notas              String?
+  notasInternas      String?
+  condicionesVenta   String?
+  referenciaCliente  String?
+  creadoPorId        String?
+  fechaCreacion      DateTime                   @default(now())
+  fechaActualizacion DateTime                   @updatedAt
+  items              OrdenVentaItem[]
+  contact            Contact?                   @relation("ContactOrdenesVenta", fields: [contactId], references: [id])
+  contrato           Contrato?                  @relation("ContratoOrdenesVenta", fields: [contratoId], references: [id])
+  cotizacion         Cotizacion?                @relation("CotizacionOrdenesVenta", fields: [cotizacionId], references: [id])
+  creadoPor          User?                      @relation("OrdenVentaCreadoPor", fields: [creadoPorId], references: [id])
+  deal               Deal?                      @relation("DealOrdenesVenta", fields: [dealId], references: [id])
+  emisor             ConfiguracionFiscalEmisor? @relation(fields: [emisorId], references: [id])
+  lead               Lead?                      @relation("LeadOrdenesVenta", fields: [leadId], references: [id])
+  tenant             Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  invoice            Invoice?                   @relation(fields: [invoiceId], references: [id])
+  invoiceId          String?                    @unique
+
+  @@unique([tenantId, numero])
+  @@index([tenantId])
+  @@index([estado])
+  @@index([leadId])
+  @@index([contactId])
+  @@index([contratoId])
+  @@index([fechaOrden])
+  @@map("ordenes_venta")
+}
+
+model OrdenVentaItem {
+  id                  String        @id @default(cuid())
+  ordenVentaId        String
+  concepto            String
+  descripcion         String?
+  cantidad            Float         @default(1)
+  unidad              String        @default("unidad")
+  precioUnitario      Float
+  descuento           Float         @default(0)
+  tasaImpuestoId      String?
+  porcentajeImpuesto  Float         @default(0)
+  montoImpuesto       Float         @default(0)
+  aplicaRetencion     Boolean       @default(false)
+  porcentajeRetencion Float         @default(0)
+  montoRetencion      Float         @default(0)
+  subtotal            Float         @default(0)
+  total               Float         @default(0)
+  orden               Int           @default(0)
+  fechaCreacion       DateTime      @default(now())
+  fechaActualizacion  DateTime      @updatedAt
+  catalogoItemId      String?
+  catalogoItem        CatalogoItem? @relation(fields: [catalogoItemId], references: [id])
+  ordenVenta          OrdenVenta    @relation(fields: [ordenVentaId], references: [id], onDelete: Cascade)
+  tasaImpuesto        TasaImpuesto? @relation(fields: [tasaImpuestoId], references: [id])
+
+  @@index([ordenVentaId])
+  @@index([catalogoItemId])
+  @@map("orden_venta_items")
+}
+
+model ChatbotConfig {
+  id                         String   @id @default(cuid())
+  tenantId                   String   @unique
+  activo                     Boolean  @default(true)
+  nombreAsistente            String   @default("Asistente Virtual")
+  mensajeBienvenida          String?
+  mensajeFueraHorario        String?
+  personalidad               String?
+  contextoNegocio            String?
+  horarioInicio              Int      @default(9)
+  horarioFin                 Int      @default(18)
+  diasActivos                String   @default("1,2,3,4,5")
+  timezone                   String   @default("America/Mexico_City")
+  puedeAgendarCitas          Boolean  @default(true)
+  puedeMostrarServicios      Boolean  @default(true)
+  puedeTransferirHumano      Boolean  @default(true)
+  maxMensajesPorConversacion Int      @default(50)
+  tiempoEsperaTransferencia  Int      @default(300)
+  totalConversaciones        Int      @default(0)
+  totalCitasAgendadas        Int      @default(0)
+  totalTransferencias        Int      @default(0)
+  fechaCreacion              DateTime @default(now())
+  fechaActualizacion         DateTime @updatedAt
+  horariosPersonalizados     Json?
+  tenant                     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model MessagingHubConfig {
+  id                String    @id @default(cuid())
+  tenantId          String    @unique
+  isActive          Boolean   @default(false)
+  lastHealthCheck   DateTime?
+  hubBaseUrl        String    @default("https://volkern.dimension.expert")
+  hubApiToken       String
+  hubAccountId      String?
+  defaultEndpointId String?
+  webhookSecret     String    @unique
+  webhookUrl        String?
+  configVersion     String    @default("2.0")
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  autoProvisioned   Boolean   @default(false)
+  chatwootAccountId Int?
+  lastSyncAt        DateTime?
+  provisionedAt     DateTime?
+  telegramInboxId   Int?
+  whatsappInboxId   Int?
+  tenant            Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, isActive])
+  @@index([chatwootAccountId])
+  @@map("messaging_hub_config")
+}
+
+model Channel {
+  id              String   @id @default(cuid())
+  tenantId        String
+  type            String
+  name            String
+  config          Json
+  isActive        Boolean  @default(true)
+  isDefault       Boolean  @default(false)
+  chatwootInboxId Int?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, isDefault])
+  @@index([chatwootInboxId])
+  @@index([tenantId, type])
+  @@map("channels")
+}
+
+model BusinessDomain {
+  id            String                 @id @default(cuid())
+  tenantId      String
+  domain        String                 @unique
+  status        String                 @default("pending")
+  namecraneId   String?
+  diskLimit     Int?
+  userLimit     Int?
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  tenant        Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  emailAccounts BusinessEmailAccount[]
+
+  @@index([tenantId])
+  @@index([domain])
+  @@map("business_domains")
+}
+
+model BusinessEmailAccount {
+  id            String         @id @default(cuid())
+  domainId      String
+  email         String         @unique
+  displayName   String?
+  password      String?
+  status        String         @default("active")
+  smartermailId String?
+  diskUsed      Int            @default(0)
+  diskQuota     Int            @default(1024)
+  imapEnabled   Boolean        @default(true)
+  smtpEnabled   Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  domain        BusinessDomain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  @@index([domainId])
+  @@index([email])
+  @@map("business_email_accounts")
+}
+
+model IdempotencyRecord {
+  id            String   @id @default(cuid())
+  key           String   @unique
+  status        String   @default("processing")
+  result        Json?
+  correlationId String?
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([expiresAt])
+  @@index([status])
+  @@map("idempotency_records")
+}
+
+model NotificationLog {
+  id             String    @id @default(cuid())
+  tenantId       String
+  channel        String
+  recipientType  String
+  recipientId    String?
+  recipientEmail String?
+  recipientPhone String?
+  subject        String?
+  body           String
+  status         String    @default("pending")
+  priority       String    @default("normal")
+  scheduledFor   DateTime?
+  sentAt         DateTime?
+  deliveredAt    DateTime?
+  readAt         DateTime?
+  externalId     String?
+  errorMessage   String?
+  metadata       Json?
+  correlationId  String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([channel])
+  @@index([status])
+  @@index([recipientId])
+  @@index([createdAt])
+  @@map("notification_logs")
+}
+
+model InAppNotification {
+  id        String    @id @default(cuid())
+  tenantId  String
+  userId    String
+  title     String
+  body      String
+  type      String    @default("info")
+  read      Boolean   @default(false)
+  readAt    DateTime?
+  data      Json?
+  actionUrl String?
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([read])
+  @@index([createdAt])
+  @@map("in_app_notifications")
+}
+
+model Invoice {
+  id               String    @id @default(cuid())
+  tenantId         String
+  leadId           String?
+  contactId        String?
+  ordenVentaId     String?   @unique
+  externalId       String? // ID en Holded o Stripe
+  provider         String // 'holded' | 'stripe'
+  numero           String // Numero correlativo
+  monto            Float
+  moneda           String    @default("EUR")
+  estado           String    @default("pendiente") // pendiente, pagada, cancelada
+  urlPdf           String?
+  fechaEmision     DateTime  @default(now())
+  fechaVencimiento DateTime?
+  metadata         Json?     @default("{}")
+
+  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lead       Lead?       @relation(fields: [leadId], references: [id])
+  contact    Contact?    @relation(fields: [contactId], references: [id])
+  ordenVenta OrdenVenta? @relation
+
+  @@index([tenantId])
+  @@index([leadId])
+  @@index([contactId])
+  @@index([externalId])
+  @@index([provider])
+  @@map("invoices")
+}

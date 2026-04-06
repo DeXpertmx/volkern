@@ -1,0 +1,471 @@
+
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useSession } from 'next-auth/react'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Users, Search, Eye, Mail, Phone, UserCheck, Download, Loader2, Save, MessageSquare, Send } from 'lucide-react'
+import { format } from 'date-fns'
+import { es } from 'date-fns/locale'
+import Link from 'next/link'
+import { toast } from 'sonner'
+
+const estadoColors = {
+  'nuevo': 'bg-blue-100 text-blue-800',
+  'contactado': 'bg-yellow-100 text-yellow-800',
+  'convertido': 'bg-green-100 text-green-800',
+  'perdido': 'bg-red-100 text-red-800'
+}
+
+export function LeadsContent() {
+  const { data: session } = useSession() || {}
+  const [activeTab, setActiveTab] = useState('mis-leads')
+  
+  // Estado para leads del CRM
+  const [leads, setLeads] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [selectedEstado, setSelectedEstado] = useState('all')
+  const [selectedAssignment, setSelectedAssignment] = useState('all')
+  
+  // Estado para búsqueda externa
+  const [externalSearchLoading, setExternalSearchLoading] = useState(false)
+  const [externalResults, setExternalResults] = useState<any[]>([])
+  const [selectedLeads, setSelectedLeads] = useState<string[]>([])
+  const [showSaveSearchDialog, setShowSaveSearchDialog] = useState(false)
+  const [savedSearches, setSavedSearches] = useState<any[]>([])
+  
+  // Criterios de búsqueda externa
+  const [searchCriteria, setSearchCriteria] = useState({
+    source: 'hunter',
+    title: '',
+    company: '',
+    industry: '',
+    location: '',
+    companySize: '',
+    keywords: '',
+    limit: 20,
+  })
+  
+  // Estado para guardar búsqueda
+  const [saveSearchData, setSaveSearchData] = useState({
+    nombre: '',
+    descripcion: '',
+    autoActualizar: false,
+    frecuenciaActualizar: 'diaria',
+  })
+
+  useEffect(() => {
+    const fetchLeads = async () => {
+      try {
+        const params = new URLSearchParams()
+        if (selectedEstado !== 'all') {
+          params.append('estado', selectedEstado)
+        }
+        if (searchTerm) {
+          params.append('search', searchTerm)
+        }
+        if (selectedAssignment === 'my-leads') {
+          params.append('assignedToMe', 'true')
+        } else if (selectedAssignment === 'unassigned') {
+          params.append('unassigned', 'true')
+        }
+
+        const response = await fetch(`/api/leads?${params.toString()}`)
+        if (response.ok) {
+          const data = await response.json()
+          setLeads(data)
+        }
+      } catch (error) {
+        console.error('Error fetching leads:', error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchLeads()
+  }, [selectedEstado, searchTerm, selectedAssignment])
+
+  const handleSearch = () => {
+    setIsLoading(true)
+    // El useEffect se encargará de hacer el fetch
+  }
+  
+  // Cargar búsquedas guardadas
+  useEffect(() => {
+    const fetchSavedSearches = async () => {
+      try {
+        const response = await fetch('/api/leads/external/saved-searches')
+        if (response.ok) {
+          const data = await response.json()
+          setSavedSearches(data.savedSearches || [])
+        }
+      } catch (error) {
+        console.error('Error fetching saved searches:', error)
+      }
+    }
+    fetchSavedSearches()
+  }, [])
+  
+  // Buscar leads externos
+  const handleExternalSearch = async () => {
+    if (!searchCriteria.company && !searchCriteria.title) {
+      toast.error('Por favor ingresa al menos el nombre de la empresa o título')
+      return
+    }
+    
+    setExternalSearchLoading(true)
+    setExternalResults([])
+    setSelectedLeads([])
+    
+    try {
+      const params = new URLSearchParams()
+      Object.entries(searchCriteria).forEach(([key, value]) => {
+        if (value) {
+          params.append(key, value.toString())
+        }
+      })
+      
+      const response = await fetch(`/api/leads/external/search?${params.toString()}`)
+      const data = await response.json()
+      
+      if (response.ok) {
+        setExternalResults(data.results || [])
+        toast.success(`Se encontraron ${data.results?.length || 0} resultados`)
+      } else {
+        toast.error(data.error || 'Error al buscar leads')
+      }
+    } catch (error) {
+      console.error('Error searching external leads:', error)
+      toast.error('Error al buscar leads externos')
+    } finally {
+      setExternalSearchLoading(false)
+    }
+  }
+  
+  // Importar leads seleccionados
+  const handleImportLeads = async () => {
+    if (selectedLeads.length === 0) {
+      toast.error('Selecciona al menos un lead para importar')
+      return
+    }
+    
+    const leadsToImport = externalResults.filter((_, index) => 
+      selectedLeads.includes(index.toString())
+    )
+    
+    try {
+      const response = await fetch('/api/leads/external/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          leads: leadsToImport,
+          source: searchCriteria.source,
+          criterios: searchCriteria,
+        }),
+      })
+      
+      const data = await response.json()
+      
+      if (response.ok) {
+        toast.success(`${data.imported} leads importados correctamente`)
+        if (data.errors > 0) {
+          toast.warning(`${data.errors} leads no pudieron ser importados (duplicados o errores)`)
+        }
+        setSelectedLeads([])
+        // Recargar leads
+        const leadsResponse = await fetch('/api/leads')
+        if (leadsResponse.ok) {
+          const leadsData = await leadsResponse.json()
+          setLeads(leadsData)
+        }
+      } else {
+        toast.error(data.error || 'Error al importar leads')
+      }
+    } catch (error) {
+      console.error('Error importing leads:', error)
+      toast.error('Error al importar leads')
+    }
+  }
+  
+  // Guardar búsqueda
+  const handleSaveSearch = async () => {
+    if (!saveSearchData.nombre) {
+      toast.error('Por favor ingresa un nombre para la búsqueda')
+      return
+    }
+    
+    try {
+      const response = await fetch('/api/leads/external/saved-searches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...saveSearchData,
+          criterios: searchCriteria,
+          fuente: searchCriteria.source,
+        }),
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        setSavedSearches([...savedSearches, data.savedSearch])
+        toast.success('Búsqueda guardada correctamente')
+        setShowSaveSearchDialog(false)
+        setSaveSearchData({
+          nombre: '',
+          descripcion: '',
+          autoActualizar: false,
+          frecuenciaActualizar: 'diaria',
+        })
+      } else {
+        toast.error('Error al guardar búsqueda')
+      }
+    } catch (error) {
+      console.error('Error saving search:', error)
+      toast.error('Error al guardar búsqueda')
+    }
+  }
+  
+  // Cargar búsqueda guardada
+  const loadSavedSearch = (search: any) => {
+    setSearchCriteria(search.criterios)
+    toast.success('Búsqueda cargada')
+  }
+  
+  // Toggle selección de lead
+  const toggleLeadSelection = (index: string) => {
+    setSelectedLeads(prev => 
+      prev.includes(index) 
+        ? prev.filter(i => i !== index)
+        : [...prev, index]
+    )
+  }
+  
+  // Seleccionar todos
+  const toggleSelectAll = () => {
+    if (selectedLeads.length === externalResults.length) {
+      setSelectedLeads([])
+    } else {
+      setSelectedLeads(externalResults.map((_, index) => index.toString()))
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold flex items-center">
+              <Users className="h-8 w-8 mr-3 text-primary" />
+              Gestión de Leads
+            </h1>
+            <p className="text-muted-foreground">
+              Administra y da seguimiento a todos tus leads
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center justify-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold flex items-center">
+            <Users className="h-8 w-8 mr-3 text-primary" />
+            Gestión de Leads
+          </h1>
+          <p className="text-muted-foreground">
+            Administra y da seguimiento a todos tus leads
+          </p>
+        </div>
+      </div>
+
+      {/* Filtros */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Filtros</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 md:grid-cols-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Buscar</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por nombre o email..."
+                  className="pl-10"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Estado</label>
+              <select 
+                className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm"
+                value={selectedEstado}
+                onChange={(e) => setSelectedEstado(e.target.value)}
+              >
+                <option value="all">Todos los estados</option>
+                <option value="nuevo">Nuevo</option>
+                <option value="contactado">Contactado</option>
+                <option value="convertido">Convertido</option>
+                <option value="perdido">Perdido</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Asignación</label>
+              <select 
+                className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm"
+                value={selectedAssignment}
+                onChange={(e) => setSelectedAssignment(e.target.value)}
+              >
+                <option value="all">Todos los leads</option>
+                <option value="my-leads">Mis leads</option>
+                <option value="unassigned">Sin asignar</option>
+              </select>
+            </div>
+            <div className="flex items-end">
+              <Button className="w-full" onClick={handleSearch}>
+                <Search className="h-4 w-4 mr-2" />
+                Filtrar
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Estadísticas rápidas */}
+      <div className="grid gap-4 md:grid-cols-4">
+        {Object.entries({
+          'Total': leads.length,
+          'Nuevos': leads.filter((l: any) => l.estado === 'nuevo').length,
+          'Contactados': leads.filter((l: any) => l.estado === 'contactado').length,
+          'Convertidos': leads.filter((l: any) => l.estado === 'convertido').length,
+        }).map(([label, count]) => (
+          <Card key={label}>
+            <CardContent className="p-4">
+              <div className="text-2xl font-bold">{count}</div>
+              <p className="text-sm text-muted-foreground">{label}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Tabla de leads */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span>Leads ({leads.length})</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {leads.length === 0 ? (
+            <div className="text-center py-12">
+              <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-medium mb-2">No hay leads</h3>
+              <p className="text-muted-foreground mb-4">
+                Aún no tienes leads capturados. Comparte tu formulario de contacto para empezar a recibir leads.
+              </p>
+              <div className="space-x-2">
+                <Link href="/embed/contact" target="_blank">
+                  <Button variant="outline">
+                    Ver formulario
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nombre</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Teléfono</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead>Asignado a</TableHead>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead>Citas</TableHead>
+                    <TableHead>Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {leads.map((lead: any) => (
+                    <TableRow key={lead.id} className="hover:bg-muted/50">
+                      <TableCell className="font-medium">{lead.nombre}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center">
+                          <Mail className="h-4 w-4 mr-2 text-muted-foreground" />
+                          {lead.email}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {lead.telefono ? (
+                          <div className="flex items-center">
+                            <Phone className="h-4 w-4 mr-2 text-muted-foreground" />
+                            {lead.telefono}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge 
+                          className={estadoColors[lead.estado as keyof typeof estadoColors] || 'bg-gray-100 text-gray-800'}
+                        >
+                          {lead.estado}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {lead.asignadoUsuario ? (
+                          <div className="flex items-center">
+                            <UserCheck className="h-4 w-4 mr-2 text-muted-foreground" />
+                            <span className="text-sm">{lead.asignadoUsuario.name || lead.asignadoUsuario.email}</span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">Sin asignar</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {format(new Date(lead.fechaCreacion), 'dd MMM yyyy', { locale: es })}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {lead.citas?.length || 0} citas
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex space-x-2">
+                          <Link href={`/dashboard/leads/${lead.id}`}>
+                            <Button variant="ghost" size="sm">
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </Link>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}

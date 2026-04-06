@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="5.1114388mm"
+   height="4.8468552mm"
+   viewBox="0 0 5.1114388 4.8468552"
+   version="1.1"
+   id="svg5"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview7"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="mm"
+     showgrid="false" />
+  <defs
+     id="defs2" />
+  <g
+     inkscape:label="Capa 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(-39.230649,-101.88477)">
+    <rect
+       x="39.405117"
+       y="103.11757"
+       width="4.7624998"
+       height="3.4395833"
+       rx="0.52916664"
+       stroke="#2c3e50"
+       stroke-width="2"
+       stroke-linecap="round"
+       stroke-linejoin="round"
+       id="rect12014"
+       style="fill:none;stroke-width:0.348934;stroke-dasharray:none"
+       inkscape:export-filename="briefcase.svg"
+       inkscape:export-xdpi="96"
+       inkscape:export-ydpi="96" />
+    <path
+       d="m 40.728031,103.11757 v -0.52917 a 0.52916667,0.52916667 0 0 1 0.529167,-0.52916 h 1.058333 a 0.52916667,0.52916667 0 0 1 0.529167,0.52916 v 0.52917"
+       stroke="#2c3e50"
+       stroke-width="2"
+       stroke-linecap="round"
+       stroke-linejoin="round"
+       id="path12016"
+       style="fill:none;stroke-width:0.348934;stroke-dasharray:none" />
+    <rect
+       x="41.521782"
+       y="104.1759"
+       width="0.52916664"
+       height="0.52916664"
+       rx="0.13229166"
+       fill="#2c3e50"
+       id="rect12018"
+       style="fill:none;stroke-width:0.0461611;stroke-dasharray:none" />
+  </g>
+</svg>

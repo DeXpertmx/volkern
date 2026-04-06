@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="5.062501mm"
+   height="4.2687531mm"
+   viewBox="0 0 5.062501 4.2687531"
+   version="1.1"
+   id="svg5"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview7"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="mm"
+     showgrid="false" />
+  <defs
+     id="defs2" />
+  <g
+     inkscape:label="Capa 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(-6.5321495,-150.55329)">
+    <circle
+       cx="9.0633974"
+       cy="151.49704"
+       r="0.79374999"
+       stroke="#2c3e50"
+       stroke-width="2"
+       stroke-linecap="round"
+       stroke-linejoin="round"
+       id="circle4578"
+       style="fill:none;stroke-width:0.3;stroke-dasharray:none" />
+    <path
+       d="m 9.0633984,153.08455 c -0.873125,0 -1.5875,0.52916 -1.5875,1.05833 v 0.52917 h 3.1749996 v -0.52917 c 0,-0.52917 -0.7143746,-1.05833 -1.5874996,-1.05833 z"
+       stroke="#2c3e50"
+       stroke-width="2"
+       stroke-linecap="round"
+       stroke-linejoin="round"
+       id="path4580"
+       style="fill:none;stroke-width:0.3;stroke-dasharray:none" />
+    <circle
+       cx="7.2113161"
+       cy="152.02621"
+       r="0.52916664"
+       stroke="#2c3e50"
+       stroke-width="2"
+       stroke-linecap="round"
+       stroke-linejoin="round"
+       id="circle4582"
+       style="fill:none;stroke-width:0.3;stroke-dasharray:none" />
+    <circle
+       cx="10.915483"
+       cy="152.02621"
+       r="0.52916664"
+       stroke="#2c3e50"
+       stroke-width="2"
+       stroke-linecap="round"
+       stroke-linejoin="round"
+       id="circle4584"
+       style="fill:none;stroke-width:0.3;stroke-dasharray:none" />
+  </g>
+</svg>

@@ -1,0 +1,479 @@
+// Librería de íconos outline profesionales para Webcreator
+// Estilo: Heroicons/Lucide - Outline minimalista y moderno
+// Especificaciones:
+// - Tamaño: 24x24px viewBox
+// - Stroke: 1.5px (línea fina y elegante)
+// - Stroke-linecap: round
+// - Stroke-linejoin: round
+// - Fill: none
+// - Color: currentColor
+
+export interface IconDefinition {
+  name: string;
+  svg: string;
+  category: 'layout' | 'content' | 'media' | 'forms' | 'components' | 'navigation';
+  description: string;
+}
+
+export const MODERN_ICONS: Record<string, IconDefinition> = {
+  // ============================================
+  // LAYOUT - Estructura y disposición
+  // ============================================
+  
+  hero: {
+    name: 'Hero',
+    category: 'layout',
+    description: 'Sección principal destacada',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect width="7" height="9" x="3" y="3" rx="1" />
+      <rect width="7" height="5" x="14" y="3" rx="1" />
+      <rect width="7" height="9" x="14" y="12" rx="1" />
+      <rect width="7" height="5" x="3" y="16" rx="1" />
+    </svg>`
+  },
+  
+  section: {
+    name: 'Sección',
+    category: 'layout',
+    description: 'Contenedor de contenido',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect width="20" height="12" x="2" y="6" rx="2" />
+    </svg>`
+  },
+  
+  col1: {
+    name: '1 Columna',
+    category: 'layout',
+    description: 'Contenedor de una columna',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+    </svg>`
+  },
+  
+  col2: {
+    name: '2 Columnas',
+    category: 'layout',
+    description: 'Contenedor de dos columnas',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+      <path d="M12 3v18" />
+    </svg>`
+  },
+  
+  col3: {
+    name: '3 Columnas',
+    category: 'layout',
+    description: 'Contenedor de tres columnas',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+      <path d="M9 3v18" />
+      <path d="M15 3v18" />
+    </svg>`
+  },
+  
+  col37: {
+    name: '2 Columnas 3/7',
+    category: 'layout',
+    description: 'Contenedor con proporción 3/7',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+      <path d="M9 3v18" />
+    </svg>`
+  },
+  
+  // ============================================
+  // CONTENT - Texto y contenido
+  // ============================================
+  
+  heading: {
+    name: 'Título',
+    category: 'content',
+    description: 'Encabezado de texto',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 12h12" />
+      <path d="M6 20V4" />
+      <path d="M18 20V4" />
+    </svg>`
+  },
+  
+  text: {
+    name: 'Texto',
+    category: 'content',
+    description: 'Párrafo de texto',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 4v16" />
+      <path d="M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2" />
+      <path d="M9 20h6" />
+    </svg>`
+  },
+  
+  link: {
+    name: 'Enlace',
+    category: 'content',
+    description: 'Hipervínculo',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+    </svg>`
+  },
+  
+  // ============================================
+  // MEDIA - Imágenes y multimedia
+  // ============================================
+  
+  image: {
+    name: 'Imagen',
+    category: 'media',
+    description: 'Elemento de imagen',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+      <circle cx="9" cy="9" r="2" />
+      <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+    </svg>`
+  },
+  
+  video: {
+    name: 'Video',
+    category: 'media',
+    description: 'Elemento de video',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5" />
+      <rect x="2" y="6" width="14" height="12" rx="2" />
+    </svg>`
+  },
+  
+  map: {
+    name: 'Mapa',
+    category: 'media',
+    description: 'Mapa interactivo',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0" />
+      <circle cx="12" cy="10" r="3" />
+    </svg>`
+  },
+  
+  // ============================================
+  // FORMS - Formularios
+  // ============================================
+  
+  button: {
+    name: 'Botón',
+    category: 'forms',
+    description: 'Botón interactivo',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4.037 4.688a.495.495 0 0 1 .651-.651l16 6.5a.5.5 0 0 1-.063.947l-6.124 1.58a2 2 0 0 0-1.438 1.435l-1.579 6.126a.5.5 0 0 1-.947.063z" />
+    </svg>`
+  },
+  
+  form: {
+    name: 'Formulario',
+    category: 'forms',
+    description: 'Contenedor de formulario',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect width="7" height="9" x="3" y="3" rx="1" />
+      <rect width="7" height="5" x="14" y="3" rx="1" />
+      <rect width="7" height="9" x="14" y="12" rx="1" />
+      <rect width="7" height="5" x="3" y="16" rx="1" />
+    </svg>`
+  },
+  
+  input: {
+    name: 'Campo de texto',
+    category: 'forms',
+    description: 'Entrada de texto',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 20h-1a2 2 0 0 1-2-2 2 2 0 0 1-2 2H6" />
+      <path d="M13 8h7a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-7" />
+      <path d="M5 16H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h1" />
+      <path d="M6 4h1a2 2 0 0 1 2 2 2 2 0 0 1 2-2h1" />
+      <path d="M9 6v12" />
+    </svg>`
+  },
+  
+  textarea: {
+    name: 'Área de texto',
+    category: 'forms',
+    description: 'Entrada de texto multilinea',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z" />
+    </svg>`
+  },
+  
+  select: {
+    name: 'Selector',
+    category: 'forms',
+    description: 'Lista desplegable',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 5h.01" />
+      <path d="M3 12h.01" />
+      <path d="M3 19h.01" />
+      <path d="M8 5h13" />
+      <path d="M8 12h13" />
+      <path d="M8 19h13" />
+    </svg>`
+  },
+  
+  checkbox: {
+    name: 'Checkbox',
+    category: 'forms',
+    description: 'Casilla de verificación',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+      <path d="m9 12 2 2 4-4" />
+    </svg>`
+  },
+  
+  radio: {
+    name: 'Radio',
+    category: 'forms',
+    description: 'Botón de opción',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10" />
+    </svg>`
+  },
+  
+  label: {
+    name: 'Etiqueta',
+    category: 'forms',
+    description: 'Etiqueta de campo',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 4v16" />
+      <path d="M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2" />
+      <path d="M9 20h6" />
+    </svg>`
+  },
+  
+  // ============================================
+  // COMPONENTS - Componentes especiales
+  // ============================================
+  
+  countdown: {
+    name: 'Contador',
+    category: 'components',
+    description: 'Cuenta regresiva',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 6v6l4 2" />
+    </svg>`
+  },
+  
+  customCode: {
+    name: 'Código',
+    category: 'components',
+    description: 'Código personalizado',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m16 18 6-6-6-6" />
+      <path d="m8 6-6 6 6 6" />
+    </svg>`
+  },
+  
+  tooltip: {
+    name: 'Tooltip',
+    category: 'components',
+    description: 'Información emergente',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 16v-4" />
+      <path d="M12 8h.01" />
+    </svg>`
+  },
+  
+  typed: {
+    name: 'Texto animado',
+    category: 'components',
+    description: 'Efecto de escritura',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M15.707 21.293a1 1 0 0 1-1.414 0l-1.586-1.586a1 1 0 0 1 0-1.414l5.586-5.586a1 1 0 0 1 1.414 0l1.586 1.586a1 1 0 0 1 0 1.414z" />
+      <path d="m18 13-1.375-6.874a1 1 0 0 0-.746-.776L3.235 2.028a1 1 0 0 0-1.207 1.207L5.35 15.879a1 1 0 0 0 .776.746L13 18" />
+      <path d="m2.3 2.3 7.286 7.286" />
+      <circle cx="11" cy="11" r="2" />
+    </svg>`
+  },
+  
+  // ============================================
+  // NAVIGATION - Navegación
+  // ============================================
+  
+  navbar: {
+    name: 'Navegación',
+    category: 'navigation',
+    description: 'Barra de navegación',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 5h16" />
+      <path d="M4 12h16" />
+      <path d="M4 19h16" />
+    </svg>`
+  },
+  
+  menu: {
+    name: 'Menú',
+    category: 'navigation',
+    description: 'Menú de navegación',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 5h16" />
+      <path d="M4 12h16" />
+      <path d="M4 19h16" />
+    </svg>`
+  },
+  
+  // ============================================
+  // PREMIUM BLOCKS - Bloques premium
+  // ============================================
+  
+  features: {
+    name: 'Características',
+    category: 'layout',
+    description: 'Sección de características',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" />
+    </svg>`
+  },
+  
+  testimonials: {
+    name: 'Testimonios',
+    category: 'content',
+    description: 'Sección de testimonios',
+    svg: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M8 12h.01M16 12h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+    </svg>`
+  },
+  
+  cta: {
+    name: 'CTA',
+    category: 'components',
+    description: 'Llamada a la acción',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4.037 4.688a.495.495 0 0 1 .651-.651l16 6.5a.5.5 0 0 1-.063.947l-6.124 1.58a2 2 0 0 0-1.438 1.435l-1.579 6.126a.5.5 0 0 1-.947.063z" />
+    </svg>`
+  },
+  
+  pricing: {
+    name: 'Precios',
+    category: 'layout',
+    description: 'Tabla de precios',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect width="20" height="14" x="2" y="5" rx="2" />
+      <line x1="2" x2="22" y1="10" y2="10" />
+    </svg>`
+  },
+  
+  team: {
+    name: 'Equipo',
+    category: 'content',
+    description: 'Sección de equipo',
+    svg: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="12" cy="7" r="3" stroke="currentColor" stroke-width="2"/>
+      <path d="M12 13c-3.3 0-6 2-6 4v2h12v-2c0-2-2.7-4-6-4z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="5" cy="9" r="2" stroke="currentColor" stroke-width="2"/>
+      <circle cx="19" cy="9" r="2" stroke="currentColor" stroke-width="2"/>
+    </svg>`
+  },
+  
+  faq: {
+    name: 'FAQ',
+    category: 'content',
+    description: 'Preguntas frecuentes',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+      <circle cx="12" cy="17" r=".5" />
+    </svg>`
+  },
+  
+  stats: {
+    name: 'Estadísticas',
+    category: 'components',
+    description: 'Números y métricas',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 3v16a2 2 0 0 0 2 2h16" />
+      <path d="M7 16h8" />
+      <path d="M7 11h12" />
+      <path d="M7 6h3" />
+    </svg>`
+  },
+  
+  footer: {
+    name: 'Footer',
+    category: 'layout',
+    description: 'Pie de página',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect width="20" height="12" x="2" y="6" rx="2" />
+    </svg>`
+  },
+  
+  contact: {
+    name: 'Contacto',
+    category: 'forms',
+    description: 'Formulario de contacto',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect width="20" height="16" x="2" y="4" rx="2" />
+      <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+    </svg>`
+  },
+  
+  services: {
+    name: 'Servicios',
+    category: 'layout',
+    description: 'Sección de servicios',
+    svg: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="3" y="7" width="18" height="13" rx="2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <rect x="11" y="11" width="2" height="2" rx="0.5" fill="currentColor"/>
+    </svg>`
+  },
+  
+  booking: {
+    name: 'Reservas',
+    category: 'components',
+    description: 'Sistema de reservas',
+    svg: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M16 2v4M8 2v4M3 10h18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="12" cy="14" r="3" stroke="currentColor" stroke-width="2"/>
+      <path d="M12 12v2l1.5 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>`
+  },
+  
+  blog: {
+    name: 'Blog',
+    category: 'content',
+    description: 'Artículos de blog',
+    svg: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M14 2v6h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M16 13l-5 5M11 18l-3 1 1-3 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`
+  },
+};
+
+// Funciones de utilidad
+export const getIconByName = (name: string): IconDefinition | undefined => {
+  return MODERN_ICONS[name] || MODERN_ICONS.text;
+};
+
+export const getIconsByCategory = (category: string): IconDefinition[] => {
+  return Object.values(MODERN_ICONS).filter(icon => icon.category === category);
+};
+
+export const getAllIconCategories = (): string[] => {
+  const categories = new Set(Object.values(MODERN_ICONS).map(icon => icon.category));
+  return Array.from(categories);
+};
+
+export const getIconSvg = (name: string): string => {
+  const icon = getIconByName(name);
+  return icon?.svg || MODERN_ICONS.text.svg;
+};
+
+// Categorías con nombres legibles
+export const CATEGORY_LABELS: Record<string, { name: string; icon: string; color: string }> = {
+  layout: { name: 'Diseño', icon: '📐', color: '#3b82f6' },
+  content: { name: 'Contenido', icon: '📝', color: '#10b981' },
+  media: { name: 'Multimedia', icon: '🎬', color: '#8b5cf6' },
+  forms: { name: 'Formularios', icon: '📋', color: '#f59e0b' },
+  components: { name: 'Componentes', icon: '📦', color: '#ec4899' },
+  navigation: { name: 'Navegación', icon: '🧭', color: '#06b6d4' },
+};
+
+export default MODERN_ICONS;
