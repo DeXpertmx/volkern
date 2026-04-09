@@ -1,0 +1,185 @@
+export const dynamic = 'force-dynamic';
+
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/db'
+import { withTenantAuth } from '@/lib/api-key-auth'
+import { sendWhatsAppMessage, sendWhatsAppMessageWithMedia } from '@/lib/whatsapp'
+import { sendEmail, replaceTemplateVariables } from '@/lib/resend-email'
+import { sendSMS } from '@/lib/sms'
+import { sendTelegramMessage } from '@/lib/telegram'
+import { sendFacebookMessage, sendInstagramMessage } from '@/lib/meta-messenger'
+import { getDownloadUrl } from '@/lib/s3'
+
+// POST /api/mensajes/enviar - Enviar un mensaje multicanal
+export const POST = withTenantAuth(async (request, auth) => {
+  try {
+    const tenantId = auth.tenant!.id;
+    const userId = auth.user?.id;
+
+    const body = await request.json()
+    const {
+      conversationId,
+      contenido,
+      canal,
+      destinatario, // { nombre, email?, telefono? }
+      asunto, // Solo para emails
+      templateId, // ID del template (opcional)
+      variables, // Variables para reemplazar en el template
+      mediaUrl, // URL de la imagen/archivo (opcional)
+      mediaType, // Tipo de media: 'image' | 'video' | 'document' (opcional)
+    } = body
+
+    let contenidoFinal = contenido
+
+    // 1. Manejo de Templates (Intelligent Proxy redirige a la DB del Tenant si es necesario)
+    // Nota: MessageTemplate debe ser un modelo de Tenant.
+    if (templateId) {
+      const template = await prisma.messageTemplate.findFirst({
+        where: { id: templateId } as any,
+      })
+
+      if (!template) {
+        return NextResponse.json({ error: 'Template no encontrado' }, { status: 404 })
+      }
+
+      contenidoFinal = replaceTemplateVariables(template.contenido, variables || {})
+    } else if (variables) {
+      contenidoFinal = replaceTemplateVariables(contenido, variables)
+    }
+
+    let conversacion
+    
+    // 2. Obtener o crear conversación en la DB física del Tenant
+    if (!conversationId) {
+      // Validación básica para creación
+      if (!destinatario?.nombre || !canal) {
+         return NextResponse.json({ error: 'Datos de destinatario y canal requeridos' }, { status: 400 })
+      }
+
+      conversacion = await prisma.conversation.create({
+        data: {
+          tenantId,
+          contactoNombre: destinatario.nombre,
+          contactoEmail: destinatario.email,
+          contactoTelefono: destinatario.telefono,
+          canal,
+          estado: 'abierta',
+          ultimoMensaje: contenidoFinal.substring(0, 100),
+          fechaUltimoMensaje: new Date(),
+        },
+      })
+    } else {
+      conversacion = await prisma.conversation.findFirst({
+        where: { id: conversationId, tenantId },
+      })
+
+      if (!conversacion) {
+        return NextResponse.json({ error: 'Conversación no encontrada' }, { status: 404 })
+      }
+    }
+
+    // 3. Enviar mensaje según el canal
+    let resultado: any
+    let estado = 'enviado'
+    let errorMensaje: string | undefined
+
+    if (canal === 'whatsapp') {
+      if (!conversacion.contactoTelefono) {
+        return NextResponse.json({ error: 'No hay número de teléfono para WhatsApp' }, { status: 400 })
+      }
+
+      if (mediaUrl) {
+        let finalMediaUrl = mediaUrl
+        if (mediaUrl.includes('mensajes/') && !mediaUrl.startsWith('http')) {
+          finalMediaUrl = await getDownloadUrl(mediaUrl)
+        }
+        
+        resultado = await sendWhatsAppMessageWithMedia(
+          conversacion.contactoTelefono,
+          contenidoFinal,
+          finalMediaUrl,
+          (mediaType as 'image' | 'video' | 'document') || 'image',
+          tenantId
+        )
+      } else {
+        resultado = await sendWhatsAppMessage(conversacion.contactoTelefono, contenidoFinal, tenantId)
+      }
+      
+      if (!resultado.success) {
+        estado = 'error'
+        errorMensaje = resultado.error
+      }
+    } else if (canal === 'email') {
+      if (!conversacion.contactoEmail) {
+        return NextResponse.json({ error: 'No hay email para enviar' }, { status: 400 })
+      }
+
+      resultado = await sendEmail({
+        to: conversacion.contactoEmail,
+        subject: asunto || 'Mensaje de Volkern CRM',
+        html: contenidoFinal.replace(/\n/g, '<br>'),
+        text: contenidoFinal,
+      })
+      
+      if (!resultado.success) {
+        estado = 'error'
+        errorMensaje = resultado.error
+      }
+    } else if (['sms', 'telegram', 'facebook', 'instagram'].includes(canal)) {
+        // Implementación simplificada para otros canales (Siguen usando librerías existentes)
+        try {
+            if (canal === 'sms') await sendSMS(conversacion.contactoTelefono!, contenidoFinal);
+            else if (canal === 'telegram') await sendTelegramMessage(conversacion.contactoTelefono!, contenidoFinal);
+            else if (canal === 'facebook') await sendFacebookMessage(conversacion.contactoTelefono!, contenidoFinal);
+            else if (canal === 'instagram') await sendInstagramMessage(conversacion.contactoTelefono!, contenidoFinal);
+            resultado = { success: true, messageId: `${canal}-${Date.now()}` }
+        } catch (e: any) {
+            estado = 'error';
+            errorMensaje = e.message;
+            resultado = { success: false, error: e.message };
+        }
+    } else {
+      return NextResponse.json({ error: 'Canal no soportado' }, { status: 400 })
+    }
+
+    // 4. Guardar registro del mensaje en la DB física del Tenant
+    const mensaje = await prisma.message.create({
+      data: {
+        conversationId: conversacion.id,
+        contenido: contenidoFinal,
+        direccion: 'saliente',
+        canal,
+        estado,
+        errorMensaje,
+        metadatos: {
+          messageId: resultado.messageId,
+          asunto: asunto,
+          mediaUrl: mediaUrl || undefined,
+          mediaType: mediaType || undefined,
+        },
+      },
+    })
+
+    // Actualizar metadata de conversación
+    await prisma.conversation.update({
+      where: { id: conversacion.id },
+      data: {
+        ultimoMensaje: contenidoFinal.substring(0, 100),
+        fechaUltimoMensaje: new Date(),
+      },
+    })
+
+    return NextResponse.json({
+      success: true,
+      mensaje,
+      conversacion,
+      resultado,
+    })
+  } catch (error: any) {
+    console.error('Error enviando mensaje:', error)
+    return NextResponse.json(
+      { error: error.message || 'Error enviando mensaje' },
+      { status: 500 }
+    )
+  }
+}, ['messages:write'])

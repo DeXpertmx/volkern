@@ -1,0 +1,31 @@
+version: "1.0"
+
+# 🔌 Conexión API (DashScope compatible OpenAI)
+api:
+  provider: openai_compatible
+  base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+  api_key_env: "DASHSCOPE_API_KEY"
+  model: "qwen-plus"
+
+# 🛑 RATE LIMITING (Crítico para evitar el error de Alibaba)
+rate_limit:
+  enabled: true
+  requests_per_minute: 12          # Seguro para planes free/basic
+  delay_between_requests_ms: 3500  # 3.5s de pausa entre calls
+  retry_on_429: true
+  max_retries: 3
+  backoff_multiplier: 2.0
+  jitter: true                     # Evita picos sincronizados
+
+# ⚙️ Defaults
+defaults:
+  temperature: 0.3
+  max_tokens: 4096
+  context_window: 32768
+  stream: true
+
+# 🧠 Skills & Router
+skills:
+  directory: "./skills"
+  auto_load: true
+  router_config: "./router.yaml"

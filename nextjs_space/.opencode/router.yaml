@@ -1,0 +1,48 @@
+version: "1.0"
+default_skill: "senior_developer"
+match_mode: "best_score"  # Usa el skill con más keywords coincidentes
+
+rules:
+  - id: "senior_architect"
+    file: "senior_architect.yaml"
+    keywords: 
+      - arquitectura
+      - escalabilidad
+      - microservicios
+      - ADR
+      - patrones
+      - diseño de sistema
+      - trade-off
+      - hexagonal
+      - C4
+    priority: 10
+
+  - id: "senior_developer"
+    file: "senior_developer.yaml"
+    keywords:
+      - implementa
+      - código
+      - tests
+      - refactoring
+      - TDD
+      - bug
+      - fix
+      - función
+      - clase
+      - endpoint
+    priority: 5
+
+  - id: "uiux_expert"
+    file: "uiux_expert.yaml"
+    keywords:
+      - UI
+      - UX
+      - accesible
+      - componente
+      - dark mode
+      - a11y
+      - frontend
+      - diseño visual
+      - tailwind
+      - react
+    priority: 5
