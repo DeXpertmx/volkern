@@ -218,7 +218,7 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>(({ initialDa
               traits: type === 'v-signer-field' ? [
                 {
                   name: 'data-signer-id',
-                  label: 'ID del Firmante (LibreSign)',
+                  label: 'ID del Firmante (VolkernSign)',
                   placeholder: 'ej: cliente_1, representante_legal',
                 },
                 {

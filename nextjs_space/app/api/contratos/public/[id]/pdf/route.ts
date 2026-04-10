@@ -17,168 +17,116 @@ function formatDate(date: Date | string): string {
   });
 }
 
-function generateContratoHTML(contrato: any, tenant: any): string {
+function hydrateTemplate(html: string, contrato: any, tenant: any): string {
   const items = contrato.items as any[];
-
-  return `
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <title>Contrato ${contrato.numero}</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11px; color: #333; line-height: 1.6; }
-    .container { max-width: 800px; margin: 0 auto; padding: 40px; }
-    .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; border-bottom: 3px solid #1e40af; padding-bottom: 20px; }
-    .company-info h1 { font-size: 22px; color: #1e40af; margin-bottom: 5px; }
-    .company-info p { color: #666; font-size: 10px; }
-    .contract-info { text-align: right; }
-    .contract-number { font-size: 18px; font-weight: bold; color: #1e40af; }
-    .contract-dates { margin-top: 8px; font-size: 10px; color: #666; }
-    .contract-dates span { display: block; }
-    .status-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 9px; font-weight: 600; text-transform: uppercase; margin-top: 8px; }
-    .status-borrador { background: #e5e7eb; color: #374151; }
-    .status-enviado { background: #dbeafe; color: #1d4ed8; }
-    .status-firmado { background: #d1fae5; color: #065f46; }
-    .status-vigente { background: #dcfce7; color: #166534; }
-    .status-completado { background: #f3f4f6; color: #6b7280; }
-    .status-cancelado { background: #fee2e2; color: #991b1b; }
-    .parties-section { display: flex; gap: 30px; margin-bottom: 25px; }
-    .party-box { flex: 1; background: #f8fafc; border-radius: 8px; padding: 15px; }
-    .party-box h3 { font-size: 11px; color: #64748b; text-transform: uppercase; margin-bottom: 8px; }
-    .party-name { font-size: 14px; font-weight: 600; color: #1e293b; }
-    .party-details { color: #64748b; font-size: 10px; margin-top: 4px; }
-    .section { margin-bottom: 25px; }
-    .section-title { font-size: 12px; color: #1e40af; margin-bottom: 10px; text-transform: uppercase; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; }
-    .items-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-    .items-table th { background: #1e40af; color: white; padding: 10px 12px; text-align: left; font-size: 10px; text-transform: uppercase; }
-    .items-table th:first-child { border-radius: 6px 0 0 0; }
-    .items-table th:last-child { border-radius: 0 6px 0 0; text-align: right; }
-    .items-table td { padding: 12px; border-bottom: 1px solid #e5e7eb; }
-    .items-table tr:last-child td { border-bottom: none; }
-    .items-table .item-name { font-weight: 500; color: #1e293b; }
-    .items-table .item-desc { font-size: 9px; color: #64748b; margin-top: 2px; }
-    .items-table .text-right { text-align: right; }
-    .totals-section { display: flex; justify-content: flex-end; margin-bottom: 25px; }
-    .totals-box { width: 280px; }
-    .total-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #e5e7eb; }
-    .total-row:last-child { border-bottom: none; }
-    .total-row.grand-total { background: #1e40af; color: white; padding: 10px 12px; border-radius: 6px; margin-top: 8px; font-size: 14px; font-weight: bold; }
-    .total-label { color: #64748b; }
-    .total-row.grand-total .total-label { color: white; }
-    .terms-box { background: #f8fafc; border-radius: 8px; padding: 15px; font-size: 10px; color: #64748b; white-space: pre-wrap; }
-    .signatures-section { display: flex; gap: 40px; margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; }
-    .signature-box { flex: 1; text-align: center; }
-    .signature-line { border-bottom: 1px solid #333; margin-bottom: 8px; height: 50px; }
-    .signature-label { font-size: 10px; color: #64748b; }
-    .signature-name { font-size: 11px; font-weight: 600; margin-top: 4px; }
-    .signature-date { font-size: 9px; color: #64748b; margin-top: 2px; }
-    .signed-badge { color: #059669; font-size: 10px; margin-top: 4px; }
-    .footer { border-top: 1px solid #e5e7eb; padding-top: 15px; margin-top: 30px; text-align: center; color: #94a3b8; font-size: 9px; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <div class="company-info">
-        <h1>${tenant?.nombre || 'Empresa'}</h1>
-        ${tenant?.direccion ? `<p>${tenant.direccion}</p>` : ''}
-        ${tenant?.telefono ? `<p>Tel: ${tenant.telefono}</p>` : ''}
-      </div>
-      <div class="contract-info">
-        <div class="contract-number">${contrato.numero}</div>
-        <div class="contract-dates">
-          <span>Fecha: ${formatDate(contrato.fechaCreacion)}</span>
-          ${contrato.fechaInicio ? `<span>Vigencia: ${formatDate(contrato.fechaInicio)}${contrato.fechaFin ? ` - ${formatDate(contrato.fechaFin)}` : ''}</span>` : ''}
-        </div>
-        <span class="status-badge status-${contrato.estado.toLowerCase()}">${contrato.estado}</span>
-      </div>
-    </div>
-    
-    <h2 style="font-size: 16px; color: #1e293b; margin-bottom: 20px;">${contrato.titulo}</h2>
-    ${contrato.descripcion ? `<p style="color: #64748b; margin-bottom: 20px;">${contrato.descripcion}</p>` : ''}
-    
-    <div class="parties-section">
-      <div class="party-box">
-        <h3>Prestador</h3>
-        <div class="party-name">${tenant?.nombre || 'Empresa'}</div>
-      </div>
-      <div class="party-box">
-        <h3>Cliente</h3>
-        <div class="party-name">${contrato.clienteNombre || 'Sin nombre'}</div>
-        <div class="party-details">
-          ${contrato.clienteEmpresa ? `${contrato.clienteEmpresa}<br>` : ''}
-          ${contrato.clienteEmail || ''}
-        </div>
-      </div>
-    </div>
-    
-    <div class="section">
-      <div class="section-title">Objeto del Contrato</div>
-      <table class="items-table">
-        <thead>
-          <tr>
-            <th style="width: 45%">Descripción</th>
-            <th style="width: 15%; text-align: center;">Cantidad</th>
-            <th style="width: 20%; text-align: right;">Precio Unit.</th>
-            <th style="width: 20%; text-align: right;">Subtotal</th>
+  
+  // 1. Table Generation
+  const itemsTableHTML = `
+    <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+      <thead>
+        <tr style="border-bottom: 2px solid #333;">
+          <th style="padding: 10px; text-align: left;">Descripción</th>
+          <th style="padding: 10px; text-align: center; width: 60px;">Cant.</th>
+          <th style="padding: 10px; text-align: right; width: 100px;">Precio</th>
+          <th style="padding: 10px; text-align: right; width: 100px;">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${items.map(item => `
+          <tr style="border-bottom: 1px solid #eee;">
+            <td style="padding: 10px;">
+              <div style="font-weight: bold;">${item.concepto}</div>
+              <div style="font-size: 10px; color: #666;">${item.descripcion || ''}</div>
+            </td>
+            <td style="padding: 10px; text-align: center;">${item.cantidad}</td>
+            <td style="padding: 10px; text-align: right;">${formatCurrency(item.precioUnitario, contrato.moneda)}</td>
+            <td style="padding: 10px; text-align: right;">${formatCurrency(item.cantidad * item.precioUnitario, contrato.moneda)}</td>
           </tr>
-        </thead>
-        <tbody>
-          ${items.map(item => `
-            <tr>
-              <td>
-                <div class="item-name">${item.concepto}</div>
-                ${item.descripcion ? `<div class="item-desc">${item.descripcion}</div>` : ''}
-              </td>
-              <td style="text-align: center;">${item.cantidad}</td>
-              <td class="text-right">${formatCurrency(item.precioUnitario, contrato.moneda)}</td>
-              <td class="text-right">${formatCurrency(item.cantidad * item.precioUnitario, contrato.moneda)}</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-      
-      <div class="totals-section">
-        <div class="totals-box">
-          <div class="total-row">
-            <span class="total-label">Subtotal</span>
-            <span>${formatCurrency(contrato.subtotal, contrato.moneda)}</span>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+
+  // 2. Totals Summary Generation
+  const totalsSummaryHTML = `
+    <div style="display: flex; justify-content: flex-end; margin: 20px 0;">
+      <div style="width: 250px;">
+        <div style="display: flex; justify-content: space-between; padding: 5px 0;">
+          <span>Subtotal</span>
+          <span>${formatCurrency(contrato.subtotal, contrato.moneda)}</span>
+        </div>
+        ${contrato.descuentoMonto > 0 ? `
+          <div style="display: flex; justify-content: space-between; padding: 5px 0; color: #dc2626;">
+            <span>Descuento</span>
+            <span>-${formatCurrency(contrato.descuentoMonto, contrato.moneda)}</span>
           </div>
-          ${contrato.descuentoMonto > 0 ? `
-            <div class="total-row">
-              <span class="total-label">Descuento</span>
-              <span>-${formatCurrency(contrato.descuentoMonto, contrato.moneda)}</span>
-            </div>
-          ` : ''}
-          ${contrato.impuestos > 0 ? `
-            <div class="total-row">
-              <span class="total-label">IVA (16%)</span>
-              <span>${formatCurrency(contrato.impuestos, contrato.moneda)}</span>
-            </div>
-          ` : ''}
-          <div class="total-row grand-total">
-            <span class="total-label">Total ${contrato.moneda}</span>
-            <span>${formatCurrency(contrato.total, contrato.moneda)}</span>
+        ` : ''}
+        ${contrato.impuestos > 0 ? `
+          <div style="display: flex; justify-content: space-between; padding: 5px 0;">
+            <span>Impuestos (IVA)</span>
+            <span>${formatCurrency(contrato.impuestos, contrato.moneda)}</span>
           </div>
+        ` : ''}
+        <div style="display: flex; justify-content: space-between; padding: 10px 0; border-top: 2px solid #333; font-weight: bold; font-size: 14px;">
+          <span>TOTAL</span>
+          <span>${formatCurrency(contrato.total, contrato.moneda)}</span>
         </div>
       </div>
     </div>
-    
-    ${contrato.condicionesPago ? `
-      <div class="section">
-        <div class="section-title">Condiciones de Pago</div>
-        <div class="terms-box">${contrato.condicionesPago}</div>
-      </div>
-    ` : ''}
-    
-    ${contrato.clausulas ? `
-      <div class="section">
-        <div class="section-title">Términos y Condiciones</div>
-        <div class="terms-box">${contrato.clausulas}</div>
-      </div>
-    ` : ''}
+  `;
+
+  // 3. Token Dictionary
+  const tokens: Record<string, string> = {
+    '{{lead.nombre}}': contrato.clienteNombre || 'Cliente',
+    '{{lead.email}}': contrato.clienteEmail || '',
+    '{{lead.empresa}}': contrato.clienteEmpresa || '',
+    '{{empresa.nombre}}': tenant?.nombre || 'Nuestra Empresa',
+    '{{empresa.direccion}}': tenant?.direccion || '',
+    '{{contrato.numero}}': contrato.numero || '',
+    '{{fecha.hoy}}': formatDate(new Date()),
+    '{{items.tabla}}': itemsTableHTML,
+    '{{totales.resumen}}': totalsSummaryHTML,
+    '{{totales.total}}': formatCurrency(contrato.total, contrato.moneda),
+    '{{totales.subtotal}}': formatCurrency(contrato.subtotal, contrato.moneda),
+  };
+
+  let hydrated = html;
+  Object.entries(tokens).forEach(([token, value]) => {
+    // Escape regex special chars in token if any
+    const escapedToken = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    hydrated = hydrated.replace(new RegExp(escapedToken, 'g'), value);
+  });
+
+  return hydrated;
+}
+
+function generateContratoHTML(contrato: any, tenant: any): string {
+  // Check if we have a customized GrapesJS template in 'clausulas'
+  const isCustomTemplate = contrato.clausulas && contrato.clausulas.includes('<div') && !contrato.clausulas.includes('terms-box');
+  
+  if (isCustomTemplate) {
+    const css = contrato.templateData?.css || '';
+    return `
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="UTF-8">
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: 'Inter', 'Segoe UI', Arial, sans-serif; font-size: 11px; color: #333; line-height: 1.5; padding: 20mm; }
+          ${css}
+          @page { size: A4; margin: 0; }
+        </style>
+      </head>
+      <body>
+        ${hydrateTemplate(contrato.clausulas, contrato, tenant)}
+      </body>
+      </html>
+    `;
+  }
+
+  // Fallback to legacy static template
+  const items = contrato.items as any[];
     
     <div class="signatures-section">
       <div class="signature-box">

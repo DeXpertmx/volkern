@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { SignatureService } from '@/lib/signatures/SignatureService';
 
 /**
- * Public Webhook endpoint for LibreSign callbacks.
- * This endpoint should be registered in each client's LibreSign instance.
+ * Public Webhook endpoint for VolkernSign callbacks.
+ * This endpoint should be registered in each client's VolkernSign instance.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     const settings = await SignatureService.getTenantSettings(tenantId);
     
     // TODO: Verify payload signature using settings.webhookSecret
-    // (LibreSign usually sends a header to verify the source)
+    // (VolkernSign usually sends a header to verify the source)
     // const signature = req.headers.get('x-libresign-signature');
     // if (!verify(payload, signature, settings.webhookSecret)) { ... }
 

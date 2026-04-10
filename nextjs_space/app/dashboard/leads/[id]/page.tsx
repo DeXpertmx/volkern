@@ -19,7 +19,8 @@ import {
   Save,
   X,
   Trash2,
-  UserCheck
+  UserCheck,
+  PhoneCall
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -78,6 +79,7 @@ export default function LeadDetailPage({
     empresa: '',
     contextoProyecto: ''
   });
+  const [calling, setCalling] = useState(false);
 
   useEffect(() => {
     fetchLead();
@@ -180,6 +182,31 @@ export default function LeadDetailPage({
       toast.error(error.message || 'Error al convertir lead');
     } finally {
       setIsConverting(false);
+    }
+  };
+
+  const initiateCall = async () => {
+    if (!lead?.telefono) return;
+    
+    setCalling(true);
+    try {
+      const res = await fetch('/api/integrations/telephony/callback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ destination: lead.telefono })
+      });
+      
+      const data = await res.json();
+      if (res.ok && data.success) {
+        toast.success(data.message || 'Llamada iniciada');
+      } else {
+        toast.error(data.error || 'Error al iniciar llamada');
+      }
+    } catch (error) {
+      console.error('Call error:', error);
+      toast.error('Error de conexión al iniciar llamada');
+    } finally {
+      setCalling(false);
     }
   };
 
@@ -381,12 +408,28 @@ export default function LeadDetailPage({
                       <Phone className="h-4 w-4 mr-1" />
                       Teléfono
                     </p>
-                    <a
-                      href={`tel:${lead.telefono}`}
-                      className="text-primary hover:underline"
-                    >
-                      {lead.telefono}
-                    </a>
+                    <div className="flex items-center gap-3">
+                      <a
+                        href={`tel:${lead.telefono}`}
+                        className="text-primary hover:underline font-semibold"
+                      >
+                        {lead.telefono}
+                      </a>
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="h-8 bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100 gap-2 font-bold transition-all active:scale-95"
+                        onClick={initiateCall}
+                        disabled={calling}
+                      >
+                        {calling ? (
+                          <div className="h-3 w-3 animate-spin rounded-full border-2 border-blue-600/30 border-t-blue-600" />
+                        ) : (
+                          <PhoneCall className="h-3.5 w-3.5" />
+                        )}
+                        {calling ? 'Llamando...' : 'Llamar (VoIP)'}
+                      </Button>
+                    </div>
                   </div>
                 )}
                 {lead.empresa && (

@@ -39,7 +39,8 @@ export const GET = withTenantAuth(async (req, auth) => {
             nombre: true,
             slug: true
           }
-        }
+        },
+        metadata: true
       }
     });
 
@@ -78,7 +79,7 @@ export const PATCH = withTenantAuth(async (req, auth) => {
   try {
     const currentUser = auth.user!;
     const body = await req.json();
-    const { name, telefono, bookingSlug, bookingTitle, bookingBio, bookingEnabled } = body;
+    const { name, telefono, bookingSlug, bookingTitle, bookingBio, bookingEnabled, metadata } = body;
 
     // Si se está cambiando el slug, verificar que sea único en la DB Global
     if (bookingSlug) {
@@ -102,7 +103,8 @@ export const PATCH = withTenantAuth(async (req, auth) => {
         bookingSlug,
         bookingTitle,
         bookingBio,
-        bookingEnabled: typeof bookingEnabled === 'boolean' ? bookingEnabled : undefined
+        bookingEnabled: typeof bookingEnabled === 'boolean' ? bookingEnabled : undefined,
+        metadata: metadata ? metadata : undefined
       }
     });
 

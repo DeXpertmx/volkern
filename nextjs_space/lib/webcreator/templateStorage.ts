@@ -12,6 +12,7 @@ export interface TemplateRecord {
   css: string;
   projectData: Record<string, unknown>;
   thumbnail: string;
+  category?: string;
   createdAt: number;
 }
 
@@ -69,6 +70,7 @@ export async function loadTemplates(page: number = 1, limit: number = 20): Promi
         css: item.css || '',
         projectData: item.contenido || {},
         thumbnail: item.imagenPreview || '',
+        category: item.categoria || item.tipo || 'general',
         createdAt: item.fechaCreacion ? new Date(item.fechaCreacion).getTime() : Date.now()
       })),
       total: data.length,

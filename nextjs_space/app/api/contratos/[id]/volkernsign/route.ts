@@ -19,7 +19,7 @@ function formatDate(date: Date | string): string {
 }
 
 /**
- * Generates the HTML specifically designed for PDF conversion with LibreSign placeholders.
+ * Generates the HTML specifically designed for PDF conversion with VolkernSign placeholders.
  */
 function generateContratoHTML(contrato: any, tenant: any): string {
   const items = contrato.items as any[];
@@ -47,7 +47,7 @@ function generateContratoHTML(contrato: any, tenant: any): string {
     .text-right { text-align: right; }
     .grand-total { background: #6366f1; color: white; padding: 10px 12px; border-radius: 6px; margin-top: 8px; font-size: 14px; font-weight: bold; }
     
-    /* LibreSign Visual Anchors */
+    /* VolkernSign Visual Anchors */
     .signature-slot { margin-top: 60px; padding: 20px; border: 2px dashed #6366f1; border-radius: 12px; text-align: center; background: #f5f3ff; }
     .signature-badge { display: inline-block; background: #6366f1; color: white; padding: 4px 12px; border-radius: 20px; font-size: 9px; font-weight: 800; text-transform: uppercase; margin-bottom: 10px; }
   </style>
@@ -166,7 +166,7 @@ export const POST = withTenantAuth(async (request, auth, params) => {
 
     if (!pdfBuffer) throw new Error('PDF conversion timeout');
 
-    // 4. Create LibreSign Request
+    // 4. Create VolkernSign Request
     const signatureRequest = await SignatureService.createSignatureRequest({
       tenantId,
       contratoId,
@@ -187,7 +187,7 @@ export const POST = withTenantAuth(async (request, auth, params) => {
     });
 
   } catch (error: any) {
-    console.error('[LibreSignProcess] Error:', error.message);
+    console.error('[VolkernSignProcess] Error:', error.message);
     return NextResponse.json({ error: 'Error al procesar solicitud de firma', details: error.message }, { status: 500 });
   }
 }, ['contratos:write']);

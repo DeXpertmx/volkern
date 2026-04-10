@@ -225,6 +225,16 @@ const LeftPanelContent: React.FC<LeftPanelContentProps> = ({
           </div>
         </div>
       )}
+
+      {activePanel === "variables" && (
+        <div className="flex-1 flex flex-col h-full bg-white dark:bg-slate-950">
+           {/* Lazy loading VariableDocumentationPanel */}
+           {(() => {
+              const { VariableDocumentationPanel } = require("./VariableDocumentationPanel");
+              return <VariableDocumentationPanel />;
+           })()}
+        </div>
+      )}
     </div>
   );
 };

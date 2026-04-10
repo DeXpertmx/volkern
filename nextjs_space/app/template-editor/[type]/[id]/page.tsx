@@ -67,7 +67,7 @@ export default function TemplateEditorPage() {
     loadTemplate();
   }, [loadTemplate]);
 
-  const handleSave = async (data: { projectData: any; html?: string; css?: string }) => {
+  const handleSave = async (data: { projectData: any; html?: string; css?: string; category?: string }) => {
     try {
       const payload = {
         type,
@@ -76,6 +76,7 @@ export default function TemplateEditorPage() {
         projectData: data.projectData,
         html: data.html,
         css: data.css,
+        category: data.category
       };
 
       const response = await fetch(`/api/cms/templates`, {
@@ -141,7 +142,7 @@ export default function TemplateEditorPage() {
     );
   }
 
-  const backUrl = type === 'email' ? "/dashboard/email-campanas" : "/dashboard/contratos";
+  const backUrl = type === 'email' ? "/dashboard/email-campanas" : "/dashboard/configuracion?tab=documentos";
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-white">

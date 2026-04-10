@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Users, Search, Eye, Mail, Phone, UserCheck, Download, Upload, HelpCircle, Loader2, Save, MessageSquare, Send, RefreshCw, TrendingUp, BarChart3, Clock, Trash2, Flame, Sparkles } from 'lucide-react'
+import { Users, Search, Eye, Mail, Phone, UserCheck, Download, Upload, HelpCircle, Loader2, Save, MessageSquare, Send, RefreshCw, TrendingUp, BarChart3, Clock, Trash2, Flame, Sparkles, PhoneCall } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import Link from 'next/link'
@@ -43,6 +43,7 @@ export function LeadsContent() {
   const [stats, setStats] = useState<any>(null)
   const [statsLoading, setStatsLoading] = useState(false)
   const [importing, setImporting] = useState(false)
+  const [callingLeadId, setCallingLeadId] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchLeads = async () => {
@@ -149,6 +150,31 @@ export function LeadsContent() {
       setStatsLoading(false)
     }
   }
+
+  const initiateCall = async (phoneNumber: string, leadId: string) => {
+    if (!phoneNumber) return;
+    
+    setCallingLeadId(leadId);
+    try {
+      const res = await fetch('/api/integrations/telephony/callback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ destination: phoneNumber })
+      });
+      
+      const data = await res.json();
+      if (res.ok && data.success) {
+        toast.success(data.message || 'Llamada iniciada');
+      } else {
+        toast.error(data.error || 'Error al iniciar llamada');
+      }
+    } catch (error) {
+      console.error('Call error:', error);
+      toast.error('Error de conexión al iniciar llamada');
+    } finally {
+      setCallingLeadId(null);
+    }
+  };
 
   // Cargar estadísticas al cambiar a la tab de estadísticas
   useEffect(() => {
@@ -449,10 +475,26 @@ export function LeadsContent() {
                           <TableCell>
                             <div className="flex space-x-2">
                               <Link href={`/dashboard/leads/${lead.id}`}>
-                                <Button variant="ghost" size="sm">
+                                <Button variant="ghost" size="sm" title="Ver ficha">
                                   <Eye className="h-4 w-4" />
                                 </Button>
                               </Link>
+                              {lead.telefono && (
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                  title="Llamar (VoIP)"
+                                  onClick={() => initiateCall(lead.telefono, lead.id)}
+                                  disabled={callingLeadId !== null}
+                                >
+                                  {callingLeadId === lead.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <PhoneCall className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>

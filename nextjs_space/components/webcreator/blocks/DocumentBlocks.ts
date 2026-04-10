@@ -17,6 +17,8 @@ export const setupDocumentBlocks = (editor: Editor) => {
     { id: 'tk-company-name', label: 'Empresa', content: '{{empresa.nombre}}' },
     { id: 'tk-date-today', label: 'Fecha Hoy', content: '{{fecha.hoy}}' },
     { id: 'tk-contract-id', label: 'ID Contrato', content: '{{contrato.numero}}' },
+    { id: 'tk-items-table', label: 'Tabla Dinámica', content: '{{items.tabla}}' },
+    { id: 'tk-totals-summary', label: 'Resumen Totales', content: '{{totales.resumen}}' },
   ];
 
   tokens.forEach(token => {
@@ -222,8 +224,8 @@ export const setupDocumentBlocks = (editor: Editor) => {
   });
 
 
-  // 3. SIGANATURE / LIBRESIGN CATEGORY
-  const signCategory = 'Firma Digital 🖋️';
+  // 3. SIGANATURE / VOLKERNSIGN CATEGORY
+  const signCategory = 'Firma Digital (VolkernSign) 🖋️';
 
   bm.add('v-signer-field', {
     label: 'Campo de Firma',

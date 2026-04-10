@@ -49,8 +49,8 @@ export class SignatureService {
   }
 
   /**
-   * Main entry point to send a document to LibreSign.
-   * Note: This is a placeholder for the actual HTTP call to the LibreSign API.
+   * Main entry point to send a document to VolkernSign.
+   * Note: This is a placeholder for the actual HTTP call to the VolkernSign API.
    */
   static async createSignatureRequest(options: SignatureOptions) {
     const { tenantId, documentBuffer, signers, title, leadId, contratoId } = options;
@@ -61,7 +61,7 @@ export class SignatureService {
     // 2. Calculate initial integrity hash
     const documentHash = this.calculateDocumentHash(documentBuffer);
 
-    // 3. Prepare LibreSign Payload (Conceptual based on usual REST patterns)
+    // 3. Prepare VolkernSign Payload (Conceptual based on usual REST patterns)
     const payload = {
       title,
       document_hash: documentHash,
@@ -93,7 +93,7 @@ export class SignatureService {
             },
             body: JSON.stringify({
               ...payload,
-              // Convert Buffer to base64 if required by LibreSign API
+              // Convert Buffer to base64 if required by VolkernSign API
               file_base64: documentBuffer.toString('base64'),
               file_name: options.fileName
             })
@@ -101,14 +101,14 @@ export class SignatureService {
           
           if (!apiRes.ok) {
             const errorText = await apiRes.text();
-            console.warn('[SignatureService] LibreSign API error:', errorText);
+            console.warn('[SignatureService] VolkernSign API error:', errorText);
             // We continue with mock if it fails in dev, or throw in prod
           } else {
             const result = await apiRes.json();
             libreSignUuid = result.uuid || libreSignUuid;
           }
         } catch (fetchError) {
-          console.warn('[SignatureService] Could not reach LibreSign server, using mock UUID.');
+          console.warn('[SignatureService] Could not reach VolkernSign server, using mock UUID.');
         }
       }
       
@@ -147,7 +147,7 @@ export class SignatureService {
   }
 
   /**
-   * Handles incoming webhooks from LibreSign to update document status.
+   * Handles incoming webhooks from VolkernSign to update document status.
    */
   static async handleWebhook(tenantId: string, payload: any) {
     const { uuid, event, signer_email } = payload;

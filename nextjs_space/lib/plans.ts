@@ -47,6 +47,8 @@ export type CrmModule =
   | 'google_calendar'
   | 'api_access'
   | 'builder_premium'
+  | 'telefonia'
+
 
 export interface ModuleDefinition {
   id: CrmModule
@@ -99,6 +101,7 @@ export const ALL_MODULES: ModuleDefinition[] = [
   { id: 'sms', label: 'SMS Gateway', description: 'Envío de notificaciones por SMS', icon: '💬', group: 'Integraciones' },
   { id: 'google_calendar', label: 'Google Calendar', description: 'Sincronización de citas y eventos', icon: '📅', group: 'Integraciones' },
   { id: 'api_access', label: 'Acceso a la API', description: 'Tokens de API para desarrolladores', icon: '🔑', group: 'Integraciones' },
+  { id: 'telefonia', label: 'Telefonía Inteligente', description: 'Integración con Zadarma para llamadas VoIP', icon: '📞', group: 'Comunicación' },
 ]
 
 // ============== MÓDULOS POR PLAN ==============
@@ -111,6 +114,7 @@ export const PLAN_MODULES: Record<string, CrmModule[]> = {
     'campanas', 'email_marketing',
     'mi_tarjeta',
     'equipo', 'configuracion',
+    'telefonia',
   ],
   [PLANS.STARTER]: [
     'leads', 'contactos', 'empresas', 'pipeline', 'tareas', 'analytics',
@@ -118,6 +122,7 @@ export const PLAN_MODULES: Record<string, CrmModule[]> = {
     'campanas', 'email_marketing',
     'mi_tarjeta',
     'equipo', 'configuracion',
+    'telefonia',
   ],
   [PLANS.GROWTH]: [
     'leads', 'contactos', 'empresas', 'pipeline', 'tareas', 'analytics',
@@ -128,6 +133,7 @@ export const PLAN_MODULES: Record<string, CrmModule[]> = {
     'cursos', 'estudiantes',
     'mi_tarjeta',
     'integraciones', 'equipo', 'configuracion',
+    'telefonia',
   ],
   [PLANS.PRO]: [
     'leads', 'contactos', 'empresas', 'pipeline', 'tareas', 'analytics',
@@ -138,6 +144,7 @@ export const PLAN_MODULES: Record<string, CrmModule[]> = {
     'cursos', 'estudiantes',
     'mi_tarjeta',
     'integraciones', 'equipo', 'configuracion',
+    'telefonia',
   ],
 }
 

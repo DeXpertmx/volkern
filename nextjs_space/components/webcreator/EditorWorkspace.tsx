@@ -78,6 +78,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; componentId: string } | null>(null);
   const [showCanvaModal, setShowCanvaModal] = useState(false);
   const [canvaTargetComponentId, setCanvaTargetComponentId] = useState<string | null>(null);
+  const [category, setCategory] = useState<string>(mode === 'email' ? 'EMAIL' : 'CONTRATO');
 
   const editorRef = useRef<GrapesEditorRef>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -313,6 +314,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
       css: editor.getCss() || "",
       projectData,
       thumbnail,
+      category,
       createdAt: Date.now()
     };
 
@@ -471,7 +473,8 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
           projectData: projectData || {},
           html: fullHtml,
           css,
-          estado: "draft"
+          estado: "draft",
+          category
         });
       } else {
         console.warn('[EditorWorkspace] No onSave callback provided');
@@ -503,7 +506,8 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
           projectData: projectData || {},
           html: fullHtml,
           css,
-          estado: "published"
+          estado: "published",
+          category
         });
       }
 
@@ -578,6 +582,8 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
           const url = slug === 'home' ? '/' : `/${slug}`;
           window.open(url, '_blank');
         }}
+        category={category}
+        onCategoryChange={setCategory}
       />
 
       <div className="flex flex-1 overflow-hidden">

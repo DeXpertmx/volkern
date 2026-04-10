@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await request.json();
-    const { type, nombre, projectData, html, css, id } = data;
+    const { type, nombre, projectData, html, css, id, category } = data;
 
     if (type === 'email') {
       if (id && id !== 'new') {
@@ -97,6 +97,7 @@ export async function POST(request: NextRequest) {
           where: { id },
           data: {
             nombre,
+            categoria: category || 'general',
             contenidoHTML: html,
             contenidoJSON: projectData as any,
             fechaActualizacion: new Date()
@@ -109,6 +110,7 @@ export async function POST(request: NextRequest) {
           data: {
             tenantId: user.tenantId,
             nombre: nombre || 'Nueva Plantilla Email',
+            categoria: category || 'general',
             asuntoPorDefecto: 'Nueva Campaña',
             contenidoHTML: html,
             contenidoJSON: projectData as any,
@@ -124,6 +126,7 @@ export async function POST(request: NextRequest) {
                 where: { id },
                 data: {
                     titulo: nombre,
+                    tipo: category || 'CONTRATO',
                     clausulas: html,
                     templateData: projectData as any,
                     fechaActualizacion: new Date()
@@ -136,6 +139,7 @@ export async function POST(request: NextRequest) {
                 data: {
                     tenantId: user.tenantId,
                     titulo: nombre || 'Nueva Plantilla Documento',
+                    tipo: category || 'CONTRATO',
                     numero: `TPL-${Date.now()}`,
                     estado: 'template',
                     clausulas: html,
@@ -157,5 +161,46 @@ export async function POST(request: NextRequest) {
         details: error.message,
         code: error.code
     }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { tenantId: true }
+    });
+
+    if (!user?.tenantId) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+    const type = searchParams.get('type') || 'document';
+
+    if (!id) {
+      return NextResponse.json({ error: 'ID de plantilla requerido' }, { status: 400 });
+    }
+
+    if (type === 'email') {
+      await prisma.emailTemplate.delete({
+        where: { id, tenantId: user.tenantId }
+      });
+    } else {
+      await prisma.contrato.delete({
+        where: { id, tenantId: user.tenantId }
+      });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error('[CMS Templates] DELETE Error:', error);
+    return NextResponse.json({ error: 'Error al eliminar plantilla', details: error.message }, { status: 500 });
   }
 }

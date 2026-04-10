@@ -56,6 +56,7 @@ function isPublicPath(path: string): boolean {
     '/api/signup',
     '/api/webhooks/',
     '/api/integrations/webhook/',  // Integration Layer webhooks
+    '/api/integrations/telephony/webhook', // Telephony webhooks
     '/api/integraciones/google-calendar/sync-all',  // Endpoint para sincronización automática programada
     '/payment/',
     '/_next/',

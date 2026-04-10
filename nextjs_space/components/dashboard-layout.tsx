@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { DashboardHeader } from '@/components/dashboard-header'
 import { PushPrompt } from '@/components/notifications/PushPrompt'
+import { IncomingCallPopup } from '@/components/dashboard/IncomingCallPopup'
 import { usePathname } from 'next/navigation'
 
 interface DashboardLayoutProps {
@@ -41,25 +42,27 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   }, [])
 
   const isPipeline = pathname === '/dashboard/pipeline'
+  const isMessaging = pathname?.startsWith('/dashboard/mensajes')
 
   return (
     <div className="flex h-screen bg-background overflow-hidden font-sans">
-      <Sidebar />
+      {!isMessaging && <Sidebar />}
       <main className={cn(
         "flex-1 flex flex-col min-w-0 transition-all duration-300 relative bg-slate-50/50",
-        isCollapsed ? "md:ml-20" : "md:ml-64"
+        isMessaging ? "ml-0" : (isCollapsed ? "md:ml-20" : "md:ml-64")
       )}>
         <DashboardHeader />
         <div className="flex-1 overflow-y-auto relative scroll-smooth overflow-x-hidden">
           <TrialBanner />
           <div className={cn(
-            "animate-in fade-in duration-700",
-            isPipeline ? "w-full min-h-full" : "container mx-auto p-6 max-w-7xl"
+            "animate-in fade-in duration-700 h-full",
+            (isPipeline || isMessaging) ? "w-full min-h-full" : "container mx-auto p-6 max-w-7xl"
           )}>
             {children}
           </div>
         </div>
         <PushPrompt />
+        <IncomingCallPopup />
       </main>
     </div>
   )

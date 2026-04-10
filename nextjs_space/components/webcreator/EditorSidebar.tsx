@@ -11,6 +11,7 @@ import {
   Code2,
   X,
   RefreshCw,
+  Tags,
 } from "lucide-react";
 
 interface EditorSidebarProps {
@@ -36,6 +37,7 @@ const EditorSidebar: React.FC<EditorSidebarProps> = ({
         { id: "cms", icon: <Database size={20} />, label: "CMS" },
         { id: "history", icon: <History size={20} />, label: "Historial" },
         { id: "versions", icon: <RefreshCw size={20} />, label: "Versiones" },
+        { id: "variables", icon: <Tags size={20} />, label: "Guía de Variables" },
         { id: "code", icon: <Code2 size={20} />, label: "Código" },
       ].map(item => (
         <button

@@ -42,7 +42,8 @@ import {
   ShoppingCart,
   ListTodo,
   Sparkles,
-  HelpCircle
+  HelpCircle,
+  Phone
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useWhitelabel } from '@/hooks/use-whitelabel'
@@ -185,6 +186,13 @@ const navigationGroups: NavigationGroup[] = [
         icon: Bot,
         module: 'mensajes',
         planModule: 'chatbot_whatsapp'
+      },
+      {
+        name: 'Telefonía',
+        href: '/dashboard/telefonia',
+        icon: Phone,
+        module: 'mensajes',
+        planModule: 'telefonia'
       },
     ]
   },

@@ -178,7 +178,7 @@ export default function ContratoDetailPage() {
     }
   }
 
-  const requestLibreSign = async () => {
+  const requestVolkernSign = async () => {
     if (!contrato) return
     setSending(true)
     try {
@@ -277,7 +277,7 @@ export default function ContratoDetailPage() {
             </Button>
           )}
           {['borrador', 'enviado'].includes(contrato.estado) && (
-            <Button variant="default" className="bg-indigo-600 hover:bg-indigo-700" onClick={requestLibreSign} disabled={sending}>
+            <Button variant="default" className="bg-indigo-600 hover:bg-indigo-700" onClick={requestVolkernSign} disabled={sending}>
               {sending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <PenLine className="h-4 w-4 mr-2" />}
               Firma eIDAS
             </Button>

@@ -28,6 +28,8 @@ interface EditorToolbarProps {
   preview: boolean;
   onBack: () => void;
   onSave: () => void;
+  category: string;
+  onCategoryChange: (category: string) => void;
   onPublish: () => void;
   onSaveAsTemplate: () => void;
   onDownloadProject: () => void;
@@ -65,6 +67,8 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
   onRedo,
   onTogglePreview,
   onViewLive,
+  category,
+  onCategoryChange,
 }) => {
   return (
     <header className="h-auto min-h-[56px] border-b border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-950 px-3 py-2 flex items-center justify-between shadow-sm z-50 gap-y-2 gap-x-4 overflow-visible">
@@ -87,6 +91,25 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
           <span className="font-bold text-sm tracking-tight text-gray-900 dark:text-white hidden xl:inline">
             Volkern <span className="text-purple-600">Creator</span>
           </span>
+        </div>
+
+        <div className="h-5 w-px bg-gray-200 dark:bg-slate-700 shrink-0" />
+
+        {/* Category Selector */}
+        <div className="flex items-center gap-2 shrink-0">
+          <select
+            value={category}
+            onChange={(e) => onCategoryChange(e.target.value)}
+            className="h-9 px-3 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg text-xs font-bold text-gray-700 dark:text-gray-300 focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
+          >
+            <option value="CONTRATO">CONTRATO</option>
+            <option value="ORDEN_VENTA">ORDEN DE VENTA</option>
+            <option value="ORDEN_COMPRA">ORDEN DE COMPRA</option>
+            <option value="COTIZACION">COTIZACIÓN</option>
+            <option value="CERTIFICADO">CERTIFICADO ACADEMIA</option>
+            <option value="EMAIL">PLANTILLA EMAIL</option>
+            <option value="GENERAL">GENERAL</option>
+          </select>
         </div>
 
         <div className="h-5 w-px bg-gray-200 dark:bg-slate-700 shrink-0" />
