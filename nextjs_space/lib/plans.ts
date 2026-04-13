@@ -48,6 +48,15 @@ export type CrmModule =
   | 'api_access'
   | 'builder_premium'
   | 'telefonia'
+  | 'social_manager'
+  | 'rrhh'
+  | 'finanzas'
+  | 'finanzas_consolidado'
+  | 'calidad'
+  | 'produccion'
+  | 'inventario'
+  | 'proyectos'
+
 
 
 export interface ModuleDefinition {
@@ -81,6 +90,7 @@ export const ALL_MODULES: ModuleDefinition[] = [
   { id: 'email_marketing', label: 'Email Marketing', description: 'Campañas de email', icon: '✉️', group: 'Marketing' },
   { id: 'cms', label: 'Constructor Web (CMS)', description: 'Constructor básico de páginas y blogs', icon: '🌐', group: 'Marketing' },
   { id: 'builder_premium', label: 'Constructor Premium', description: 'WebCreator avanzado con GrapesJS y funciones pro', icon: '🏗️', group: 'Marketing' },
+  { id: 'social_manager', label: 'Hub Social', description: 'Gestión y programación de redes sociales', icon: '📱', group: 'Marketing' },
   // Academia
   { id: 'cursos', label: 'Cursos', description: 'Gestión de cursos', icon: '📚', group: 'Academia' },
   { id: 'estudiantes', label: 'Estudiantes', description: 'Gestión de estudiantes', icon: '🎓', group: 'Academia' },
@@ -102,7 +112,16 @@ export const ALL_MODULES: ModuleDefinition[] = [
   { id: 'google_calendar', label: 'Google Calendar', description: 'Sincronización de citas y eventos', icon: '📅', group: 'Integraciones' },
   { id: 'api_access', label: 'Acceso a la API', description: 'Tokens de API para desarrolladores', icon: '🔑', group: 'Integraciones' },
   { id: 'telefonia', label: 'Telefonía Inteligente', description: 'Integración con Zadarma para llamadas VoIP', icon: '📞', group: 'Comunicación' },
+  // ERP Industrial
+  { id: 'rrhh', label: 'RRHH', description: 'Gestión de talento y nóminas', icon: '👥', group: 'ERP' },
+  { id: 'finanzas', label: 'Finanzas', description: 'Gestión de gastos e ingresos', icon: '💰', group: 'ERP' },
+  { id: 'finanzas_consolidado', label: 'Consolidado Financiero', description: 'Vista multi-tenant financiera', icon: '📊', group: 'ERP' },
+  { id: 'calidad', label: 'Calidad', description: 'Control de calidad industrial', icon: '✅', group: 'ERP' },
+  { id: 'produccion', label: 'Producción', description: 'Gestión de manufactura y BoM', icon: '🏭', group: 'ERP' },
+  { id: 'inventario', label: 'Inventario', description: 'Gestión de almacenes y stock', icon: '📦', group: 'ERP' },
+  { id: 'proyectos', label: 'Proyectos', description: 'Gestión de obras y proyectos', icon: '🏗️', group: 'ERP' },
 ]
+
 
 // ============== MÓDULOS POR PLAN ==============
 // Define qué módulos incluye cada plan
@@ -115,6 +134,8 @@ export const PLAN_MODULES: Record<string, CrmModule[]> = {
     'mi_tarjeta',
     'equipo', 'configuracion',
     'telefonia',
+    'social_manager',
+    'rrhh', 'finanzas', 'calidad', 'produccion', 'inventario', 'proyectos'
   ],
   [PLANS.STARTER]: [
     'leads', 'contactos', 'empresas', 'pipeline', 'tareas', 'analytics',
@@ -123,6 +144,7 @@ export const PLAN_MODULES: Record<string, CrmModule[]> = {
     'mi_tarjeta',
     'equipo', 'configuracion',
     'telefonia',
+    'social_manager',
   ],
   [PLANS.GROWTH]: [
     'leads', 'contactos', 'empresas', 'pipeline', 'tareas', 'analytics',
@@ -134,6 +156,8 @@ export const PLAN_MODULES: Record<string, CrmModule[]> = {
     'mi_tarjeta',
     'integraciones', 'equipo', 'configuracion',
     'telefonia',
+    'social_manager',
+    'rrhh', 'finanzas', 'calidad', 'produccion', 'inventario', 'proyectos', 'finanzas_consolidado'
   ],
   [PLANS.PRO]: [
     'leads', 'contactos', 'empresas', 'pipeline', 'tareas', 'analytics',
@@ -145,6 +169,8 @@ export const PLAN_MODULES: Record<string, CrmModule[]> = {
     'mi_tarjeta',
     'integraciones', 'equipo', 'configuracion',
     'telefonia',
+    'social_manager',
+    'rrhh', 'finanzas', 'calidad', 'produccion', 'inventario', 'proyectos', 'finanzas_consolidado'
   ],
 }
 
@@ -467,6 +493,13 @@ export async function getActiveModules(
       // Desactivado por admin
       planModules.delete(moduleId)
     }
+  }
+
+  // FORCE: Asegurar que social_manager esté presente si el plan lo soporta según código
+  // Esto soluciona problemas de sincronización con la base de datos de planes antigua.
+  const hardcodedModules = PLAN_MODULES[plan] || [];
+  if (hardcodedModules.includes('social_manager')) {
+    planModules.add('social_manager');
   }
 
   return Array.from(planModules)

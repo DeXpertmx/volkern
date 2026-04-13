@@ -14,7 +14,9 @@ import {
   Hash,
   ChevronDown,
   Inbox,
-  ArrowLeft
+  ArrowLeft,
+  Bot,
+  PhoneCall
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -38,9 +40,15 @@ export function SidebarFilters({ activeFilter, onFilterChange }: SidebarFiltersP
   ];
 
   const categories = [
-    { id: 'users', name: 'Usuarios', icon: Users },
-    { id: 'channels', name: 'Canales', icon: Hash },
-    { id: 'attributes', name: 'Atributos', icon: Plus },
+    { id: 'users', name: 'Usuarios (Equipo)', icon: Users, path: '/dashboard/equipo' },
+    { id: 'channels', name: 'Canales (Inbox)', icon: Hash, path: '/dashboard/integraciones' },
+    { id: 'attributes', name: 'Atributos', icon: Plus, path: '/dashboard/configuracion' },
+  ];
+
+  const modules = [
+    { id: 'telefonia', name: 'Telefonía Central', icon: PhoneCall, path: '/dashboard/telefonia' },
+    { id: 'chatbot', name: 'Chatbot (Flows)', icon: Bot, path: '/dashboard/chatbot' },
+    { id: 'live-chat', name: 'Chat en Vivo', icon: MessageSquare, path: '/dashboard/live-chat' },
   ];
 
   return (
@@ -49,10 +57,10 @@ export function SidebarFilters({ activeFilter, onFilterChange }: SidebarFiltersP
         <Button 
           variant="ghost" 
           size="sm" 
-          className="w-full justify-start gap-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-all font-bold"
+          className="w-full justify-start gap-2 hover:bg-slate-100 transition-all font-bold p-0 h-auto"
           onClick={() => router.push('/dashboard')}
         >
-          <ArrowLeft size={16} /> Volver al CRM
+          <img src="/volkern-logo.png" alt="Volkern" className="h-8 object-contain" />
         </Button>
       </div>
       <div className="p-4 flex-1 overflow-y-auto space-y-6">
@@ -82,28 +90,59 @@ export function SidebarFilters({ activeFilter, onFilterChange }: SidebarFiltersP
           ))}
         </div>
 
-        {/* Groups */}
-        {categories.map((cat) => (
-          <div key={cat.id} className="pt-2">
-            <div className="flex items-center justify-between px-3 mb-2 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-              <span>{cat.name}</span>
-              <Button variant="ghost" size="icon" className="h-4 w-4 text-slate-400">
-                <Plus size={12} />
-              </Button>
-            </div>
+        {/* Modules */}
+        <div className="pt-4 border-t border-slate-100">
+          <div className="px-3 mb-2 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+            Módulos de Comunicación
           </div>
-        ))}
+          <div className="space-y-1">
+            {modules.map((mod) => (
+              <button
+                key={mod.id}
+                onClick={() => router.push(mod.path)}
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-slate-600 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+              >
+                <mod.icon size={16} />
+                <span className="font-medium">{mod.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Groups */}
+        <div className="pt-4 border-t border-slate-100">
+           <div className="px-3 mb-2 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+            Administración Central
+          </div>
+          <div className="space-y-1">
+            {categories.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => router.push(cat.path)}
+                className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm text-slate-600 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <cat.icon size={16} />
+                  <span className="font-medium">{cat.name}</span>
+                </div>
+                <ArrowLeft size={12} className="rotate-135 opacity-50" />
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Settings Section */}
       <div className="p-4 border-t bg-slate-100/50">
         <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Gestión</div>
-        <button className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-200/50 transition-colors">
+        <button 
+          onClick={() => router.push('/dashboard/configuracion')}
+          className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-200/50 hover:text-blue-600 transition-colors font-medium">
           <div className="flex items-center gap-3">
-            <Clock size={18} className="text-slate-400" />
+            <Clock size={16} />
             <span>Configuraciones</span>
           </div>
-          <ChevronDown size={14} className="text-slate-400" />
+          <ChevronDown size={14} />
         </button>
       </div>
     </div>

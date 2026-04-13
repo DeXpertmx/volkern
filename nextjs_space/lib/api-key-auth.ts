@@ -235,7 +235,7 @@ export async function authenticateRequest(
       plan: user.tenant.plan
     };
 
-    if (user.role?.nombre === 'Superadmin') {
+    if (user.role?.nombre === 'Superadmin' || user.role?.nombre === 'Administrador') {
       const cookieStore = cookies();
       const impersonatedId = cookieStore.get('volkern_impersonate_id')?.value;
       

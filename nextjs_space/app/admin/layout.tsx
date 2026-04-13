@@ -13,6 +13,8 @@ import {
   DollarSign,
   Settings,
   Building2,
+  ShieldAlert,
+  ShieldCheck,
   LogOut,
   Menu,
   X,
@@ -38,7 +40,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     fetch('/api/users/me')
       .then((res) => res.json())
       .then((data) => {
-        if (data.role?.nombre !== 'Superadmin') {
+        const roleName = data.role?.nombre;
+        if (roleName !== 'Superadmin' && roleName !== 'Admin' && roleName !== 'Administrador') {
           router.replace('/dashboard');
         } else {
           setIsAuthorized(true);
@@ -63,35 +66,37 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { name: 'Marketing', href: '/admin/marketing', icon: Sparkles },
     { name: 'Planes', href: '/admin/planes', icon: CreditCard },
     { name: 'Billing Global', href: '/admin/billing', icon: DollarSign },
+    { name: 'Seguridad', href: '/admin/seguridad', icon: ShieldAlert },
+    { name: 'Auditoría IA', href: '/admin/auditoria', icon: ShieldCheck },
     { name: 'Configuración', href: '/admin/settings', icon: Settings }
   ];
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      {/* Sidebar */}
+    <div className="flex h-screen bg-[#F7FAFC]">
+      {/* Sidebar - VOLKERN ENTERPRISE WHITE */}
       <div
         className={`${
           isSidebarOpen ? 'w-64' : 'w-20'
-        } bg-gradient-to-b from-indigo-900 to-indigo-800 text-white transition-all duration-300 flex flex-col`}
+        } bg-white border-r border-[#E2E8F0] text-[#2D3748] transition-all duration-300 flex flex-col z-50`}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-indigo-700">
+        <div className="flex items-center justify-between p-6 border-b border-[#E2E8F0]">
           {isSidebarOpen && (
             <div>
-              <h1 className="text-xl font-bold">Volkern Admin</h1>
-              <p className="text-xs text-indigo-300">Backoffice Global</p>
+              <h1 className="text-xl font-black tracking-tighter italic text-[#1A365D] uppercase">Volkern Admin</h1>
+              <p className="text-[9px] font-black text-[#4A5568] uppercase tracking-widest opacity-60">Backoffice Global</p>
             </div>
           )}
           <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="p-2 rounded-lg hover:bg-indigo-700 transition-colors"
+            className="p-2 rounded-lg hover:bg-slate-50 transition-colors text-slate-400"
           >
-            {isSidebarOpen ? <X size={20} /> : <Menu size={20} />}
+            {isSidebarOpen ? <X size={18} /> : <Menu size={18} />}
           </button>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 p-4 space-y-2">
+        <nav className="flex-1 p-4 space-y-1">
           {navigation.map((item) => {
             const isActive = pathname === item.href;
             const Icon = item.icon;
@@ -100,38 +105,45 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <Link
                 key={item.name}
                 href={item.href}
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all group relative overflow-hidden ${
                   isActive
-                    ? 'bg-indigo-700 text-white'
-                    : 'text-indigo-100 hover:bg-indigo-700/50'
+                    ? 'bg-[#F8FAFC] text-[#1A365D]'
+                    : 'text-[#4A5568] hover:bg-[#F8FAFC] hover:text-[#1A365D]'
                 }`}
               >
-                <Icon size={20} />
-                {isSidebarOpen && <span>{item.name}</span>}
+                {isActive && (
+                  <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-[#1A365D]" />
+                )}
+                <Icon size={18} className={isActive ? 'text-[#1A365D]' : 'text-[#4A5568] group-hover:text-[#1A365D]'} />
+                {isSidebarOpen && (
+                  <span className={`text-sm font-bold tracking-tight ${isActive ? 'text-[#1A365D]' : 'text-[#4A5568] group-hover:text-[#1A365D]'}`}>
+                    {item.name}
+                  </span>
+                )}
               </Link>
             );
           })}
         </nav>
 
         {/* User */}
-        <div className="p-4 border-t border-indigo-700">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center">
-              <Users size={20} />
+        <div className="p-4 border-t border-[#E2E8F0] bg-slate-50/50">
+          <div className="flex items-center gap-3 px-2">
+            <div className="w-9 h-9 rounded-xl bg-[#1A365D] flex items-center justify-center text-white shadow-inner">
+              <Users size={16} />
             </div>
             {isSidebarOpen && (
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{session?.user?.name || 'Admin'}</p>
-                <p className="text-xs text-indigo-300 truncate">{session?.user?.email}</p>
+                <p className="text-xs font-black text-[#1A365D] truncate">{session?.user?.name || 'Admin'}</p>
+                <p className="text-[10px] text-[#4A5568] font-bold truncate opacity-70">{session?.user?.email}</p>
               </div>
             )}
           </div>
           {isSidebarOpen && (
             <button
               onClick={() => router.push('/api/auth/signout')}
-              className="mt-3 flex items-center gap-2 text-sm text-indigo-300 hover:text-white transition-colors w-full"
+              className="mt-4 flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest text-[#4A5568] hover:text-[#1A365D] transition-colors w-full py-2 border border-slate-200 rounded-xl bg-white"
             >
-              <LogOut size={16} />
+              <LogOut size={12} />
               <span>Cerrar sesión</span>
             </button>
           )}
@@ -140,7 +152,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="flex-1 overflow-auto p-8">{children}</div>
+        <div className="flex-1 overflow-auto px-10 py-8">{children}</div>
       </div>
     </div>
   );

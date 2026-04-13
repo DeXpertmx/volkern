@@ -91,12 +91,12 @@ export const GET = withTenantAuth(async (request, auth, params) => {
 
     if (!contact) {
       return NextResponse.json(
-        { error: 'Contacto no encontrado' },
+        { success: false, error: 'Contacto no encontrado' },
         { status: 404 }
       );
     }
 
-    return NextResponse.json(contact);
+    return NextResponse.json({ success: true, data: contact });
   } catch (error) {
     console.error('Error al obtener contacto:', error);
     return NextResponse.json(
@@ -168,7 +168,7 @@ export const PATCH = withTenantAuth(async (request, auth, params) => {
       }
     });
 
-    return NextResponse.json(updatedContact);
+    return NextResponse.json({ success: true, data: updatedContact });
   } catch (error) {
     console.error('Error al actualizar contacto:', error);
     return NextResponse.json(
@@ -234,6 +234,7 @@ export const DELETE = withTenantAuth(async (request, auth, params) => {
     });
 
     return NextResponse.json({
+      success: true,
       message: 'Contacto eliminado correctamente'
     });
   } catch (error) {

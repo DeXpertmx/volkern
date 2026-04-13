@@ -803,6 +803,77 @@ const tools: Tool[] = [
       required: ["cotizacionId"]
     }
   },
+  
+  // === FINANCE (ERP) ===
+  {
+    name: "volkern_get_financial_dashboard",
+    description: "Get the global financial summary (P&L, Cash Flow, and Health) for the business. Restricted to authorized users.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        months: { type: "number", description: "Period in months (default: 1)" }
+      }
+    }
+  },
+  {
+    name: "volkern_verify_vault_integrity",
+    description: "Verify the SHA-256 integrity chain of the financial audit vault to detect manipulations.",
+    inputSchema: {
+      type: "object",
+      properties: {}
+    }
+  },
+  {
+    name: "volkern_calculate_tax_provisions",
+    description: "Calculate tax liability projections based on localized rules (MX, ES, US-LLC).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        country: { type: "string", enum: ["MX", "ES", "USA_LLC"], description: "Country code (default: ES)" }
+      },
+      required: ["country"]
+    }
+  },
+  {
+    name: "volkern_process_inventory_consumption",
+    description: "Process inventory consumption for a product. If the product has a Bill of Materials (BoM), it will automatically deduct components.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        productId: { type: "string", description: "The ID of the product being consumed" },
+        quantity: { type: "number", description: "The quantity to consume" },
+        warehouseId: { type: "string", description: "Optional warehouse ID (defaults to main warehouse)" }
+      },
+      required: ["productId", "quantity"]
+    }
+  },
+  {
+    name: "volkern_get_inventory_health",
+    description: "Analyze inventory health, detecting items below their reorder points and predicting supply ruptures.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        itemId: { type: "string", description: "Optional item ID to check specific health" }
+      }
+    }
+  },
+  {
+    name: "volkern_report_production_scrap",
+    description: "Report production waste (scrap) with Vision-Lock verification. Requires evidence image and location data.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        workOrderId: { type: "string", description: "The ID of the work order" },
+        itemId: { type: "string", description: "The ID of the item being scrapped" },
+        quantity: { type: "number", description: "Quantity of waste" },
+        evidenceUrl: { type: "string", description: "URL of the photographic evidence" },
+        lat: { type: "number", description: "GPS Latitude of the report" },
+        lng: { type: "number", description: "GPS Longitude of the report" },
+        timestamp: { type: "string", description: "ISO timestamp of the capture" }
+      },
+      required: ["workOrderId", "itemId", "quantity", "evidenceUrl"]
+    }
+  },
 ];
 
 // ============================================
@@ -993,6 +1064,33 @@ async function handleToolCall(
     // CONTRATOS
     case "volkern_create_contrato_from_cotizacion":
       return volkernRequest("/contratos/from-cotizacion", "POST", args);
+
+    // FINANCE (ERP)
+    case "volkern_get_financial_dashboard": {
+      const params = new URLSearchParams();
+      if (args.months) params.append("months", String(args.months));
+      return volkernRequest(`/erp/finance/consolidation?${params.toString()}`);
+    }
+    case "volkern_verify_vault_integrity":
+      return volkernRequest("/erp/finance/integrity");
+    case "volkern_calculate_tax_provisions": {
+      const params = new URLSearchParams();
+      params.append("country", String(args.country));
+      return volkernRequest(`/erp/finance/taxes?${params.toString()}`);
+    }
+
+    // INVENTORY (MRP)
+    case "volkern_process_inventory_consumption":
+      return volkernRequest("/erp/inventory/consumption", "POST", args);
+    case "volkern_get_inventory_health": {
+      const params = new URLSearchParams();
+      if (args.itemId) params.append("catalogoItemId", String(args.itemId));
+      return volkernRequest(`/erp/inventory?${params.toString()}`);
+    }
+
+    // PRODUCTION
+    case "volkern_report_production_scrap":
+      return volkernRequest("/erp/production/scrap", "POST", args);
 
     default:
       throw new Error(`Unknown tool: ${name}`);

@@ -43,6 +43,16 @@ export interface UpdateDealInput {
   source?: 'api' | 'app' | 'automation' | 'mcp' | 'webhook';
 }
 
+export interface PrequalifyLeadInput {
+  tenantId: string;
+  leadId: string;
+  noteText: string;
+  dealValue?: number;
+  catalogSearch?: string;
+  userId?: string;
+  source?: 'api' | 'app' | 'automation' | 'mcp' | 'webhook';
+}
+
 // ============== SKILLS ==============
 
 export async function createDeal(input: CreateDealInput) {
@@ -192,4 +202,82 @@ export async function listDeals(tenantId: string, filters?: { etapa?: string; pr
   ]);
 
   return { deals, total, page, limit };
+}
+
+/**
+ * Escucha Activa & Pre-calificación
+ * Orquesta: Nota inteligante + Actualización de Valor + Búsqueda en Catálogo
+ */
+export async function prequalifyLead(input: PrequalifyLeadInput) {
+  const { tenantId, leadId, noteText, dealValue, catalogSearch, userId, source = 'app' } = input;
+
+  // 1. Registrar Nota (Escucha Activa)
+  const note = await prisma.note.create({
+    data: {
+      tenantId,
+      leadId,
+      contenido: noteText,
+      creadoPor: userId,
+      metadata: {
+        fuente: 'Gemma4-ActiveListening',
+        sentimiento: 'urgente',
+        fechaProcesamiento: new Date().toISOString()
+      }
+    }
+  });
+
+  // 2. Actualizar Valor del Negocio (Ventas)
+  let deal = null;
+  if (dealValue) {
+    const existingDeal = await prisma.deal.findFirst({
+      where: { leadId, tenantId },
+      orderBy: { fechaCreacion: 'desc' }
+    });
+
+    if (existingDeal) {
+      deal = await prisma.deal.update({
+        where: { id: existingDeal.id },
+        data: { valor: dealValue }
+      });
+      
+      // Emitir evento de actualización
+      eventBus.emitEvent(EVENTS.DEAL_UPDATED, {
+        tenantId,
+        timestamp: new Date(),
+        source,
+        dealId: deal.id,
+        valor: deal.valor
+      });
+    }
+  }
+
+  // 3. Consultar Catálogo
+  let catalogItems = [];
+  if (catalogSearch) {
+    catalogItems = await prisma.catalogoItem.findMany({
+      where: {
+        tenantId,
+        activo: true,
+        OR: [
+          { nombre: { contains: catalogSearch, mode: 'insensitive' } },
+          { descripcion: { contains: catalogSearch, mode: 'insensitive' } },
+        ]
+      },
+      take: 3,
+      select: {
+        id: true,
+        nombre: true,
+        precioBase: true,
+        sku: true
+      }
+    });
+  }
+
+  return {
+    success: true,
+    noteId: note.id,
+    dealUpdated: !!deal,
+    catalogMatches: catalogItems,
+    summary: `Nota registrada. ${deal ? 'Valor de negocio actualizado a ' + dealValue : ''} Encontrados ${catalogItems.length} ítems relevantes en catálogo.`
+  };
 }

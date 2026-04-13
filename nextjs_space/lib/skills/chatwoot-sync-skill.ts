@@ -29,12 +29,35 @@ export async function syncIncomingChatwootMessage(payload: {
     if (!conversation) {
       console.log(`[🔄 ChatwootSync] Creando nueva conversación local para externalRef: ${externalRef}`);
       
-      // Intentar encontrar un lead relacionado por el contacto de Chatwoot si viniera en el metadata
-      // Por ahora creamos una básica
+      let leadIdFound: string | undefined = undefined;
+      let existingLeadEmail: string | undefined = undefined;
+
+      // Intentar encontrar un lead relacionado si es canal email o telegram
+      const senderEmail = metadata?.sender?.email || metadata?.contact?.email;
+      
+      if (senderEmail && tenantId) {
+        console.log(`[🔄 ChatwootSync] Buscando lead por email: ${senderEmail}`);
+        const lead = await prisma.lead.findFirst({
+          where: { 
+            email: senderEmail,
+            tenantId: tenantId
+          },
+          select: { id: true, email: true }
+        });
+
+        if (lead) {
+          console.log(`[🔄 ChatwootSync] Lead encontrado: ${lead.id}`);
+          leadIdFound = lead.id;
+          existingLeadEmail = lead.email;
+        }
+      }
+      
       conversation = await prisma.conversation.create({
         data: {
           tenantId,
-          contactoNombre: metadata?.sender_name || 'Usuario Chatwoot',
+          leadId: leadIdFound, // Vincular automáticamente si se encontró
+          contactoNombre: metadata?.sender_name || metadata?.sender?.name || 'Usuario',
+          contactoEmail: existingLeadEmail || senderEmail,
           canal: 'chatwoot',
           externalRef,
           chatwootAccountId: metadata?.accountId,
@@ -60,14 +83,41 @@ export async function syncIncomingChatwootMessage(payload: {
         conversationId: conversation.id,
         contenido: content,
         direccion: metadata?.sender_type === 'contact' ? 'entrada' : 'salida',
-        canal: 'chatwoot',
+        canal: metadata?.channel_type === 'email' ? 'email' : 'chatwoot',
         externalRef: `chatwoot_msg_${messageId}`,
         chatwootMessageId: typeof messageId === 'number' ? messageId : undefined,
         metadatos: metadata ? JSON.parse(JSON.stringify(metadata)) : undefined,
       }
     });
 
-    // 4. Actualizar puntero de último mensaje en la conversación
+    // 4. Actualizar puntero de último mensaje en la conversación y Score del Lead
+    if (metadata?.sender_type === 'contact' && conversation.leadId) {
+        // Incrementar score (+10 puntos por interacción de email/mensaje)
+        console.log(`[🔄 ChatwootSync] Incrementando score del lead ${conversation.leadId}`);
+        await prisma.lead.update({
+            where: { id: conversation.leadId },
+            data: {
+                scoreValue: { increment: 10 },
+                fechaUltimaActividad: new Date(),
+            }
+        });
+
+        // Registrar interacción en el timeline
+        await prisma.interaction.create({
+            data: {
+                tenantId: tenantId,
+                leadId: conversation.leadId,
+                tipo: ['email', 'facebook', 'instagram', 'whatsapp', 'telegram'].includes(metadata?.channel_type) ? metadata.channel_type : 'conversacion',
+                descripcion: `Mensaje recibido vía ${metadata?.channel_type || 'chatwoot'}: ${content.substring(0, 50)}...`,
+                metadata: {
+                    messageId: message.id,
+                    externalRef: message.externalRef,
+                    is_social: ['facebook', 'instagram'].includes(metadata?.channel_type)
+                }
+            }
+        });
+    }
+
     await prisma.conversation.update({
       where: { id: conversation.id },
       data: {

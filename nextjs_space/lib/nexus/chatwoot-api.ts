@@ -303,6 +303,49 @@ class ChatwootApiClient {
     }
 
     /**
+     * Crear inbox de Email (IMAP/SMTP)
+     */
+    async createEmailInbox(
+        accountId: number,
+        name: string,
+        email: string,
+        config: {
+            imap: { address: string; port: number; user: string; pass: string; ssl: boolean };
+            smtp: { address: string; port: number; user: string; pass: string; protocol: string };
+        },
+        accountToken: string
+    ): Promise<ChatwootInbox> {
+        console.log('[ChatwootAPI] Creating Email inbox for account:', accountId, email);
+        
+        return this.request<ChatwootInbox>(
+            `/api/v1/accounts/${accountId}/inboxes`,
+            {
+                method: 'POST',
+                body: JSON.stringify({
+                    name: `Email - ${name}`,
+                    channel: {
+                        type: 'email',
+                        email: email,
+                        imap_enabled: true,
+                        imap_address: config.imap.address,
+                        imap_port: config.imap.port,
+                        imap_email: config.imap.user,
+                        imap_password: config.imap.pass,
+                        imap_enable_ssl: config.imap.ssl,
+                        smtp_enabled: true,
+                        smtp_address: config.smtp.address,
+                        smtp_port: config.smtp.port,
+                        smtp_email: config.smtp.user,
+                        smtp_password: config.smtp.pass,
+                        smtp_protocol: config.smtp.protocol,
+                    },
+                }),
+            },
+            accountToken
+        );
+    }
+
+    /**
      * Listar inboxes de una cuenta
      */
     async listInboxes(accountId: number, accountToken: string): Promise<{ payload: ChatwootInbox[] }> {

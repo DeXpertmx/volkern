@@ -3,13 +3,14 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { globalPrisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
+import { upgradeOnboarding } from '@/lib/onboarding-service';
 
 // GET /api/admin/tenants - Listar todos los tenants con filtrado y paginación (Control Plane)
 export const GET = withTenantAuth(async (req, auth) => {
   try {
-    // 1. Verificar si el usuario es superadmin
-    if (auth.user?.role?.nombre !== 'Superadmin') {
-      return NextResponse.json({ error: 'Acceso denegado: requiere rol de Superadmin' }, { status: 403 });
+    // 1. Verificar si el usuario es superadmin o admin
+    if (auth.user?.role?.nombre !== 'Superadmin' && auth.user?.role?.nombre !== 'Admin' && auth.user?.role?.nombre !== 'Administrador') {
+      return NextResponse.json({ error: 'Acceso denegado: requiere privilegios administrativos' }, { status: 403 });
     }
 
     const { searchParams } = new URL(req.url);
@@ -45,7 +46,10 @@ export const GET = withTenantAuth(async (req, auth) => {
       globalPrisma.tenant.findMany({
         where,
         include: {
-          // Solo incluimos conteos de modelos globales (como usuarios)
+          tenantFeatures: {
+            where: { feature: 'produccion' },
+            select: { habilitado: true }
+          },
           _count: {
             select: {
               users: true,
@@ -146,21 +150,26 @@ export const POST = withTenantAuth(async (req, auth) => {
       }
     });
 
-    // Auditoría
-    await globalPrisma.auditLog.create({
-      data: {
-        userId: auth.user!.id,
-        accion: 'crear',
-        entidad: 'tenant',
-        entidadId: tenant.id,
-        descripcion: `Tenant ${tenant.nombre} creado con Base de Datos aislada: ${dbName}`,
-        cambiosDespues: JSON.stringify(tenant)
       }
     });
 
+    // --- ONBOARDING 2.0: PROCESO GÉNESIS ---
+    let genesisResult = null;
+    if (autoProvision) {
+      try {
+        genesisResult = await upgradeOnboarding(tenant.id, plan);
+      } catch (genesisError) {
+        console.error('[Genesis] Failed during onboarding:', genesisError);
+        // No fallamos toda la creación por esto, pero lo logueamos
+      }
+    }
+
     return NextResponse.json({
       tenant,
-      message: 'Tenant creado exitosamente. Recuerda ejecutar el provisionamiento de DB si autoProvision no estaba activado.'
+      genesis: genesisResult,
+      message: autoProvision 
+        ? 'Tenant creado e infraestructura provisionada (Génesis completa)' 
+        : 'Tenant creado exitosamente. Provisionamiento manual requerido.'
     }, { status: 201 });
 
   } catch (error: any) {

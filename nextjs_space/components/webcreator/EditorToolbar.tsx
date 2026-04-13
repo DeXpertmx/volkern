@@ -42,6 +42,7 @@ interface EditorToolbarProps {
   onRedo: () => void;
   onTogglePreview: () => void;
   onViewLive: () => void;
+  onOpenAIGenerator: () => void;
 }
 
 const EditorToolbar: React.FC<EditorToolbarProps> = ({
@@ -69,6 +70,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
   onViewLive,
   category,
   onCategoryChange,
+  onOpenAIGenerator,
 }) => {
   return (
     <header className="h-auto min-h-[56px] border-b border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-950 px-3 py-2 flex items-center justify-between shadow-sm z-50 gap-y-2 gap-x-4 overflow-visible">
@@ -92,6 +94,17 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
             Volkern <span className="text-purple-600">Creator</span>
           </span>
         </div>
+
+        <div className="h-5 w-px bg-gray-200 dark:bg-slate-700 shrink-0" />
+        
+        {/* AI Magic Button */}
+        <button
+          onClick={onOpenAIGenerator}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg text-xs font-black shadow-lg shadow-indigo-500/20 hover:scale-105 active:scale-95 transition-all"
+        >
+          <Sparkles size={14} className="animate-pulse" />
+          <span className="hidden sm:inline">Magia con IA</span>
+        </button>
 
         <div className="h-5 w-px bg-gray-200 dark:bg-slate-700 shrink-0" />
 

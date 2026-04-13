@@ -1,4 +1,3 @@
-
 'use client'
 
 import Link from 'next/link'
@@ -9,629 +8,283 @@ import { Button } from '@/components/ui/button'
 import { signOut, useSession } from 'next-auth/react'
 import {
   LayoutDashboard,
-  Users,
-  Calendar,
-  Settings,
-  Package,
-  LogOut,
   Menu,
   X,
-  Workflow,
-  BookOpen,
-  GraduationCap,
-  MessageCircle,
-  Award,
-  Send,
-  BarChart3,
+  LogOut,
   ChevronLeft,
   ChevronRight,
-  FileEdit,
-  FileText,
-  UserCog,
-  Plug,
-  TrendingUp,
-  Mail,
-  UserCheck,
-  Building2,
-  Smartphone,
-  CreditCard,
-  ChevronDown,
-  Bot,
-  ScrollText,
-  Tag,
-  ShoppingCart,
-  ListTodo,
-  Sparkles,
-  HelpCircle,
-  Phone
+  ArrowLeft
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useWhitelabel } from '@/hooks/use-whitelabel'
-import type { PermissionModule } from '@/lib/permissions'
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible'
-import { NotificationCenter } from '@/components/notifications/NotificationCenter'
-
-interface NavigationItem {
-  name: string
-  href: string
-  icon: any
-  module?: PermissionModule
-  /** CrmModule ID for plan-based visibility filtering */
-  planModule?: string
-}
-
-interface NavigationGroup {
-  name: string
-  icon: any
-  items: NavigationItem[]
-}
-
-// Secciones agrupadas para mejor organización
-const navigationGroups: NavigationGroup[] = [
-  {
-    name: 'Ventas & Leads',
-    icon: TrendingUp,
-    items: [
-      {
-        name: 'Analytics',
-        href: '/dashboard/analytics',
-        icon: BarChart3,
-        module: 'analytics',
-        planModule: 'analytics'
-      },
-      {
-        name: 'Tareas',
-        href: '/dashboard/tareas',
-        icon: ListTodo,
-        module: 'leads',
-        planModule: 'tareas'
-      },
-      {
-        name: 'Leads',
-        href: '/dashboard/leads',
-        icon: Users,
-        module: 'leads',
-        planModule: 'leads'
-      },
-      {
-        name: 'Contactos',
-        href: '/dashboard/contactos',
-        icon: UserCheck,
-        module: 'leads',
-        planModule: 'contactos'
-      },
-      {
-        name: 'Empresas',
-        href: '/dashboard/empresas',
-        icon: Building2,
-        module: 'leads',
-        planModule: 'empresas'
-      },
-      {
-        name: 'Pipeline',
-        href: '/dashboard/pipeline',
-        icon: TrendingUp,
-        module: 'leads',
-        planModule: 'pipeline'
-      },
-      {
-        name: 'Cotizaciones',
-        href: '/dashboard/cotizaciones',
-        icon: FileText,
-        module: 'leads',
-        planModule: 'cotizaciones'
-      },
-      {
-        name: 'Contratos',
-        href: '/dashboard/contratos',
-        icon: ScrollText,
-        module: 'leads',
-        planModule: 'contratos'
-      },
-      {
-        name: 'Órdenes de Venta',
-        href: '/dashboard/ventas/ordenes',
-        icon: ShoppingCart,
-        module: 'leads',
-        planModule: 'ordenes_venta'
-      },
-      {
-        name: 'Pronósticos',
-        href: '/dashboard/ventas/pronosticos',
-        icon: BarChart3,
-        module: 'leads',
-        planModule: 'pronosticos'
-      },
-      {
-        name: 'Scoring',
-        href: '/dashboard/scoring',
-        icon: Award,
-        module: 'leads',
-        planModule: 'scoring'
-      },
-    ]
-  },
-  {
-    name: 'Comunicación',
-    icon: MessageCircle,
-    items: [
-      {
-        name: 'Mensajes',
-        href: '/dashboard/mensajes',
-        icon: MessageCircle,
-        module: 'mensajes',
-        planModule: 'mensajes'
-      },
-      {
-        name: 'Citas',
-        href: '/dashboard/citas',
-        icon: Calendar,
-        module: 'citas',
-        planModule: 'citas'
-      },
-      {
-        name: 'Catálogo',
-        href: '/dashboard/catalogo',
-        icon: Tag,
-        module: 'configuracion',
-        planModule: 'catalogo'
-      },
-      {
-        name: 'Chatbot WhatsApp',
-        href: '/dashboard/chatbot',
-        icon: Bot,
-        module: 'mensajes',
-        planModule: 'chatbot_whatsapp'
-      },
-      {
-        name: 'Telefonía',
-        href: '/dashboard/telefonia',
-        icon: Phone,
-        module: 'mensajes',
-        planModule: 'telefonia'
-      },
-    ]
-  },
-  {
-    name: 'Marketing',
-    icon: Send,
-    items: [
-      {
-        name: 'Campañas',
-        href: '/dashboard/campanas',
-        icon: Send,
-        module: 'campanas',
-        planModule: 'campanas'
-      },
-      {
-        name: 'Constructor Web',
-        href: '/dashboard/webcreator',
-        icon: Sparkles,
-        module: 'pages',
-        planModule: 'cms'
-      },
-    ]
-  },
-  {
-    name: 'Academia',
-    icon: GraduationCap,
-    items: [
-      {
-        name: 'Cursos',
-        href: '/dashboard/cursos',
-        icon: BookOpen,
-        module: 'cursos',
-        planModule: 'cursos'
-      },
-      {
-        name: 'Cuestionarios',
-        href: '/dashboard/quizzes',
-        icon: HelpCircle,
-        module: 'cursos',
-        planModule: 'cursos'
-      },
-      {
-        name: 'Estudiantes',
-        href: '/dashboard/estudiantes',
-        icon: GraduationCap,
-        module: 'estudiantes',
-        planModule: 'estudiantes'
-      },
-      {
-        name: 'Comunidad',
-        href: '/dashboard/comunidad',
-        icon: MessageCircle,
-        module: 'cursos',
-        planModule: 'cursos'
-      },
-    ]
-  },
-  {
-    name: 'Automatización',
-    icon: Workflow,
-    items: [
-      {
-        name: 'Automatizaciones',
-        href: '/dashboard/automatizaciones',
-        icon: Workflow,
-        module: 'automatizaciones',
-        planModule: 'automatizaciones'
-      },
-    ]
-  },
-  {
-    name: 'Personal',
-    icon: CreditCard,
-    items: [
-      {
-        name: 'Mi Tarjeta',
-        href: '/dashboard/mi-tarjeta',
-        icon: CreditCard,
-        planModule: 'mi_tarjeta'
-      },
-    ]
-  },
-  {
-    name: 'Administración',
-    icon: Settings,
-    items: [
-      {
-        name: 'Equipo',
-        href: '/dashboard/equipo',
-        icon: UserCog,
-        module: 'equipo',
-        planModule: 'equipo'
-      },
-      {
-        name: 'Integraciones',
-        href: '/dashboard/integraciones',
-        icon: Plug,
-        planModule: 'integraciones'
-      },
-      {
-        name: 'Configuración',
-        href: '/dashboard/configuracion',
-        icon: Settings,
-        module: 'configuracion'
-      },
-    ]
-  },
-]
+import { HUBS, type NavigationItem } from '@/lib/navigation-config'
+import { PunchClock } from '@/components/attendance/PunchClock'
 
 export function Sidebar() {
   const pathname = usePathname()
-  const { data: session, status } = useSession() || {}
+  const { data: session } = useSession() || {}
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [userPermissions, setUserPermissions] = useState<any>(null)
-  const [activeModules, setActiveModules] = useState<string[] | null>(null)
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({})
+  const [activeModules, setActiveModules] = useState<string[]>([])
+  const [isLoadingModules, setIsLoadingModules] = useState(true)
   const { config: whitelabelConfig } = useWhitelabel()
 
   useEffect(() => {
     setMounted(true)
-    // Cargar estado guardado del sidebar
     const saved = localStorage.getItem('sidebar-collapsed')
-    if (saved) {
-      setIsCollapsed(saved === 'true')
-    }
-
-    // Cargar estado de grupos abiertos
-    const savedGroups = localStorage.getItem('sidebar-open-groups')
-    if (savedGroups) {
-      setOpenGroups(JSON.parse(savedGroups))
-    } else {
-      // Por defecto, abrir todos los grupos
-      const defaultOpen: Record<string, boolean> = {}
-      navigationGroups.forEach(group => {
-        defaultOpen[group.name] = true
-      })
-      setOpenGroups(defaultOpen)
-    }
+    if (saved) setIsCollapsed(saved === 'true')
   }, [])
 
-  // Cargar permisos del usuario y módulos activos del plan
   useEffect(() => {
     if (session?.user) {
-      fetch('/api/users/me')
-        .then(res => res.json())
-        .then(data => {
-          if (data.role?.permisos) {
-            setUserPermissions(data.role.permisos)
-          }
-        })
-        .catch(err => console.error('Error loading permissions:', err))
-
-      // Cargar módulos activos según plan del tenant
-      fetch('/api/tenant/modules')
-        .then(res => res.json())
-        .then(data => {
-          if (data.modules && Array.isArray(data.modules)) {
-            setActiveModules(data.modules)
-          }
-        })
-        .catch(err => console.error('Error loading tenant modules:', err))
+      setIsLoadingModules(true)
+      const fetchModules = async () => {
+        try {
+          const [userRes, modulesRes] = await Promise.all([
+            fetch('/api/users/me').then(res => res.json()),
+            fetch('/api/tenant/modules').then(res => res.json())
+          ]);
+          
+          if (userRes.role?.permisos) setUserPermissions(userRes.role.permisos);
+          if (modulesRes.modules) setActiveModules(modulesRes.modules);
+        } catch (error) {
+          console.error('Error loading permissions:', error);
+        } finally {
+          setIsLoadingModules(false);
+        }
+      };
+      
+      fetchModules();
     }
   }, [session])
+
+  const isModuleVisible = (item: NavigationItem): boolean => {
+    // Si todavía estamos cargando los módulos reales, NO mostramos módulos opcionales (gateados)
+    // para evitar el parpadeo de ítems que luego desaparecen.
+    if (isLoadingModules && item.planModule) return false
+
+    if (item.planModule && !activeModules.includes(item.planModule)) return false
+    
+    if (item.module && userPermissions) {
+      const modulePerms = userPermissions[item.module]
+      if (modulePerms && modulePerms.ver === false) return false
+    }
+    return true
+  }
+
+  // Detect current active hub based on path
+  const activeHub = HUBS.find(hub => 
+    pathname === hub.href || 
+    pathname.startsWith(hub.href + '/') ||
+    hub.basePaths?.some(path => pathname === path || pathname.startsWith(path + '/'))
+  )
 
   const toggleCollapsed = () => {
     const newState = !isCollapsed
     setIsCollapsed(newState)
     localStorage.setItem('sidebar-collapsed', String(newState))
-    // Disparar evento personalizado para que el DashboardLayout se actualice
-    window.dispatchEvent(new CustomEvent('sidebar-toggle', {
-      detail: { isCollapsed: newState }
-    }))
-  }
-
-  const toggleGroup = (groupName: string) => {
-    const newOpenGroups = { ...openGroups, [groupName]: !openGroups[groupName] }
-    setOpenGroups(newOpenGroups)
-    localStorage.setItem('sidebar-open-groups', JSON.stringify(newOpenGroups))
+    window.dispatchEvent(new CustomEvent('sidebar-toggle', { detail: { isCollapsed: newState } }))
   }
 
   const handleSignOut = async () => {
     await signOut({ callbackUrl: '/auth/login' })
   }
 
-  // Función para verificar si un módulo es visible según permisos de rol Y plan del tenant
-  const isModuleVisible = (item: NavigationItem): boolean => {
-    // 1. Verificar módulo del plan (si tiene planModule especificado)
-    if (item.planModule) {
-      if (!activeModules) return false
-      if (!activeModules.includes(item.planModule)) return false
-    }
-
-    // 2. Verificar permisos de rol (si tiene module especificado)
-    // Solo bloquear si el permiso existe explícitamente con ver=false
-    // Si el módulo no existe en permisos del rol, permitir acceso (el plan ya controla disponibilidad)
-    if (item.module && userPermissions) {
-      const modulePerms = userPermissions[item.module]
-      if (modulePerms && modulePerms.ver === false) return false
-    }
-
-    return true
+  // Contextual back button href
+  const getBackHref = () => {
+    if (!activeHub) return '/dashboard'
+    if (pathname === activeHub.href) return '/dashboard'
+    return activeHub.href
   }
 
-  // Filtrar grupos según permisos - solo mostrar grupos que tengan al menos un item visible
-  const visibleGroups = navigationGroups
-    .map(group => ({
-      ...group,
-      items: group.items.filter(isModuleVisible)
-    }))
-    .filter(group => group.items.length > 0)
-
-  // Verificar si hay algún item activo en el grupo
-  const isGroupActive = (group: NavigationGroup): boolean => {
-    return group.items.some(item =>
-      pathname === item.href || pathname?.startsWith(item.href + '/')
-    )
+  const getBackText = () => {
+    if (!activeHub || pathname === activeHub.href) return 'VOLVER AL MENÚ'
+    return `VOLVER A ${activeHub.name.toUpperCase()}`
   }
 
-  if (!mounted) {
-    return null // Prevent hydration mismatch
-  }
+  if (!mounted) return null
 
   return (
     <>
-      {/* Mobile menu button */}
       <Button
         variant="ghost"
         size="icon"
-        className="fixed top-4 left-4 z-50 md:hidden"
+        className="fixed top-4 left-4 z-50 md:hidden text-foreground"
         onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
       >
-        {isMobileMenuOpen ? (
-          <X className="h-5 w-5" />
-        ) : (
-          <Menu className="h-5 w-5" />
-        )}
+        {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
       </Button>
 
-      {/* Overlay for mobile */}
       {isMobileMenuOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-40 md:hidden"
-          onClick={() => setIsMobileMenuOpen(false)}
-        />
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden" onClick={() => setIsMobileMenuOpen(false)} />
       )}
 
-      {/* Sidebar */}
       <aside
         className={cn(
-          "dashboard-sidebar fixed left-0 top-0 z-50 h-screen transform border-r bg-background transition-all duration-300 ease-in-out md:translate-x-0 shadow-lg",
+          "dashboard-sidebar fixed left-0 top-0 z-50 h-screen transform border-r bg-background/80 backdrop-blur-xl transition-all duration-300 ease-in-out md:translate-x-0 shadow-2xl",
           isMobileMenuOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
-          isCollapsed ? "w-20" : "w-64"
+          isCollapsed ? "w-24" : "w-72"
         )}
       >
         <div className="flex h-full flex-col">
-          {/* Header */}
-          <div className="flex h-16 items-center justify-between border-b px-4">
+          {/* Persistent Logo Header */}
+          <div className="flex h-20 items-center justify-between border-b px-6">
             <Link href="/dashboard" className={cn("flex items-center", isCollapsed && "justify-center w-full")}>
-              {!isCollapsed ? (
-                <div className="relative w-40 h-10">
-                  <Image
-                    src={whitelabelConfig.logoUrl || '/volkern-logo.png'}
-                    alt={`${whitelabelConfig.nombreEmpresa || 'Volkern'} - Full Logo`}
-                    fill
-                    className="object-contain"
-                    priority
-                  />
-                </div>
-              ) : (
-                <div className="relative w-8 h-8">
-                  <Image
-                    src={whitelabelConfig.iconoUrl || '/volkern-icon.png'}
-                    alt={`${whitelabelConfig.nombreEmpresa || 'Volkern'} - Icon`}
-                    fill
-                    className="object-contain"
-                    priority
-                  />
-                </div>
-              )}
+              <div className="relative transition-transform duration-300 hover:scale-105">
+                <Image
+                  src={isCollapsed ? (whitelabelConfig.iconoUrl || '/volkern-icon.png') : (whitelabelConfig.logoUrl || '/volkern-logo.png')}
+                  alt="Volkern"
+                  width={isCollapsed ? 40 : 160}
+                  height={40}
+                  className="object-contain"
+                  priority
+                />
+              </div>
             </Link>
-            {/* Collapse toggle button - solo visible en desktop */}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleCollapsed}
-              className="hidden md:flex h-8 w-8 shrink-0"
-            >
-              {isCollapsed ? (
-                <ChevronRight className="h-4 w-4" />
-              ) : (
-                <ChevronLeft className="h-4 w-4" />
-              )}
-            </Button>
           </div>
 
-          {/* Navigation */}
-          <nav className="flex-1 overflow-y-auto p-4 space-y-1">
-            {/* Dashboard - siempre visible y fuera de grupos */}
-            <Link
-              href="/dashboard"
-              onClick={() => setIsMobileMenuOpen(false)}
-              title={isCollapsed ? 'Dashboard' : undefined}
-              className={cn(
-                "flex items-center rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground",
-                pathname === '/dashboard' ? "bg-accent text-accent-foreground" : "text-muted-foreground",
-                isCollapsed ? "justify-center" : "space-x-3"
-              )}
-            >
-              <LayoutDashboard className="h-5 w-5 shrink-0" />
-              {!isCollapsed && <span>Dashboard</span>}
-            </Link>
-
-            {/* Separador */}
-            <div className="h-px bg-border my-2" />
-
-            {/* Grupos colapsables */}
-            {visibleGroups.map((group) => {
-              const groupActive = isGroupActive(group)
-
-              if (isCollapsed) {
-                // Cuando el sidebar está colapsado, mostrar items sin agrupar
-                return (
-                  <div key={group.name} className="space-y-1">
-                    {group.items.map((item) => {
-                      const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
-                      return (
-                        <Link
-                          key={item.name}
-                          href={item.href}
-                          onClick={() => setIsMobileMenuOpen(false)}
-                          title={item.name}
-                          className={cn(
-                            "flex items-center justify-center rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground",
-                            isActive ? "bg-accent text-accent-foreground" : "text-muted-foreground"
-                          )}
-                        >
-                          <item.icon className="h-5 w-5 shrink-0" />
-                        </Link>
-                      )
-                    })}
+          <nav className="flex-1 overflow-y-auto p-4 space-y-2">
+            {/* Global Context or Hub Context */}
+            {activeHub ? (
+              <>
+                {/* Hub Header & Back Button */}
+                {!isCollapsed && (
+                  <div className="px-2 py-4 mb-4 border-b border-border/50">
+                    <Link href={getBackHref()} className="flex items-center text-xs font-bold text-primary hover:opacity-80 transition-opacity mb-4">
+                      <ArrowLeft className="h-3 w-3 mr-1" />
+                      {getBackText()}
+                    </Link>
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-xl bg-primary/10 text-primary">
+                        <activeHub.icon className="h-5 w-5" />
+                      </div>
+                      <h2 className="text-xl font-black uppercase tracking-tighter">{activeHub.name}</h2>
+                    </div>
                   </div>
-                )
-              }
+                )}
+                {isCollapsed && (
+                  <Link href={getBackHref()} className="flex justify-center mb-6">
+                    <div className="p-2 rounded-full bg-primary text-white shadow-lg hover:rotate-12 transition-transform">
+                      <ArrowLeft className="h-5 w-5" />
+                    </div>
+                  </Link>
+                )}
 
-              return (
-                <Collapsible
-                  key={group.name}
-                  open={openGroups[group.name]}
-                  onOpenChange={() => toggleGroup(group.name)}
-                  className="space-y-1"
-                >
-                  <CollapsibleTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
+                {/* Hub Specific Items */}
+                {activeHub.items.filter(isModuleVisible).map((item) => {
+                  const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+                  const Icon = item.icon
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      title={isCollapsed ? item.name : undefined}
                       className={cn(
-                        "w-full justify-between px-3 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground",
-                        groupActive && "bg-accent/50 text-accent-foreground"
+                        "flex items-center rounded-xl transition-all duration-300 px-4 py-3 group",
+                        isActive 
+                          ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20 font-bold scale-[1.02]" 
+                          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                        isCollapsed ? "justify-center" : "space-x-4"
                       )}
                     >
-                      <div className="flex items-center space-x-2">
-                        <group.icon className="h-4 w-4 shrink-0" />
-                        <span>{group.name}</span>
+                      <Icon className={cn("h-5 w-5 shrink-0 transition-transform group-hover:scale-110", isActive ? "text-white" : "text-muted-foreground")} />
+                      {!isCollapsed && <span className="text-sm tracking-tight">{item.name}</span>}
+                    </Link>
+                  )
+                })}
+              </>
+            ) : (
+              <>
+                {/* Global Menu: Hubs Only */}
+                {!isCollapsed && <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-4 mb-4">Módulos Principales</p>}
+                
+                <Link
+                  href="/dashboard"
+                  className={cn(
+                    "flex items-center rounded-xl transition-all duration-300 px-4 py-3 mb-2",
+                    pathname === '/dashboard' ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20 font-bold" : "text-muted-foreground hover:bg-accent",
+                    isCollapsed ? "justify-center" : "space-x-4"
+                  )}
+                >
+                  <LayoutDashboard className="h-5 w-5" />
+                  {!isCollapsed && <span className="text-sm">Global Dashboard</span>}
+                </Link>
+
+                <div className="h-px bg-border/50 my-6 mx-4" />
+
+                {HUBS.map((hub) => {
+                  const HubIcon = hub.icon
+                  return (
+                    <Link
+                      key={hub.id}
+                      href={hub.href}
+                      className={cn(
+                        "flex items-center rounded-xl transition-all duration-300 px-4 py-4 group hover:bg-accent",
+                        isCollapsed ? "justify-center" : "space-x-4"
+                      )}
+                    >
+                      <div className={cn(
+                        "p-2.5 rounded-xl transition-all duration-500 group-hover:scale-110 group-hover:rotate-3 shadow-inner",
+                        "bg-background border border-border group-hover:border-primary/30 group-hover:bg-primary/5"
+                      )}>
+                        <HubIcon className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
                       </div>
-                      <ChevronDown
-                        className={cn(
-                          "h-4 w-4 shrink-0 transition-transform duration-200",
-                          openGroups[group.name] && "rotate-180"
-                        )}
-                      />
-                    </Button>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="space-y-1 pl-2">
-                    {group.items.map((item) => {
-                      const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
-                      return (
-                        <Link
-                          key={item.name}
-                          href={item.href}
-                          onClick={() => setIsMobileMenuOpen(false)}
-                          className={cn(
-                            "flex items-center space-x-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground",
-                            isActive ? "bg-accent text-accent-foreground font-medium" : "text-muted-foreground"
-                          )}
-                        >
-                          <item.icon className="h-4 w-4 shrink-0" />
-                          <span>{item.name}</span>
-                        </Link>
-                      )
-                    })}
-                  </CollapsibleContent>
-                </Collapsible>
-              )
-            })}
+                      {!isCollapsed && (
+                        <div className="flex flex-col">
+                          <span className="text-sm font-bold tracking-tight">{hub.name}</span>
+                          <span className="text-[10px] text-muted-foreground line-clamp-1">{hub.description}</span>
+                        </div>
+                      )}
+                    </Link>
+                  )
+                })}
+              </>
+            )}
           </nav>
 
-          {/* Footer */}
-          <div className="border-t p-4">
+          {/* ⌚ VISION-LOCK ATTENDANCE (Punch Clock) */}
+          <div className="px-4 py-4 border-t border-dashed bg-accent/5">
+            <PunchClock isCollapsed={isCollapsed} />
+          </div>
+
+          {/* Premium Footer */}
+          <div className="border-t bg-accent/5 p-6">
             {!isCollapsed && (
-              <div className="flex items-center space-x-3 mb-4">
-                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                  <span className="text-sm font-medium text-primary">
-                    {session?.user?.name?.charAt(0)?.toUpperCase() || 'A'}
-                  </span>
+              <div className="flex items-center space-x-3 mb-6 p-2 rounded-2xl bg-background/50 border border-border/50">
+                <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center text-white shadow-lg">
+                  <span className="text-sm font-black">{session?.user?.name?.charAt(0)?.toUpperCase() || 'A'}</span>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium truncate">
-                    {session?.user?.name || 'Admin'}
-                  </p>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {session?.user?.email || ''}
-                  </p>
+                  <p className="text-sm font-bold truncate leading-none mb-1">{session?.user?.name || 'Admin'}</p>
+                  <p className="text-[10px] text-muted-foreground truncate">{session?.user?.email || ''}</p>
                 </div>
               </div>
             )}
-            {isCollapsed && (
-              <div className="flex items-center justify-center mb-4">
-                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                  <span className="text-sm font-medium text-primary">
-                    {session?.user?.name?.charAt(0)?.toUpperCase() || 'A'}
-                  </span>
-                </div>
-              </div>
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              className={cn(
-                "w-full",
-                isCollapsed ? "justify-center px-2" : "justify-start"
-              )}
-              onClick={handleSignOut}
-              title={isCollapsed ? "Cerrar sesión" : undefined}
-            >
-              <LogOut className="h-4 w-4" />
-              {!isCollapsed && <span className="ml-2">Cerrar sesión</span>}
-            </Button>
+            
+            <div className="flex gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={toggleCollapsed}
+                className="hidden md:flex h-10 w-10 rounded-xl border hover:bg-background"
+              >
+                {isCollapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
+              </Button>
+              <Button
+                variant="ghost"
+                className={cn(
+                  "flex-1 h-10 rounded-xl border border-destructive/20 text-destructive hover:bg-destructive hover:text-destructive-foreground transition-all",
+                  isCollapsed ? "px-0" : "px-4 justify-start"
+                )}
+                onClick={handleSignOut}
+              >
+                <LogOut className="h-5 w-5" />
+                {!isCollapsed && <span className="ml-2 font-bold text-xs uppercase tracking-wider">Salir</span>}
+              </Button>
+            </div>
           </div>
         </div>
       </aside>

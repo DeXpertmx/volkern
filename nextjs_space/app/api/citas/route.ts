@@ -64,10 +64,10 @@ export const GET = withTenantAuth(async (request, auth) => {
     })
 
     return NextResponse.json(citas)
-  } catch (error) {
-    console.error('Error fetching citas:', error)
+  } catch (error: any) {
+    console.error('CRITICAL ERROR fetching citas:', error?.message || error)
     return NextResponse.json(
-      { error: 'Error al obtener citas' },
+      { error: 'Error al obtener citas', details: error?.message },
       { status: 500 }
     )
   }

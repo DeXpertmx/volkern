@@ -6,6 +6,7 @@ import { triggerAutomation } from '@/lib/automation-engine'
 import { ScoringEngine } from '@/lib/scoring-engine'
 import { validateLimit } from '@/lib/limits'
 import { withTenantAuth } from '@/lib/api-key-auth'
+import { assignLeadAutomatically } from '@/lib/leads/assignment'
 import crypto from 'crypto'
 
 /**
@@ -83,7 +84,8 @@ export const POST = withTenantAuth(async (request, auth) => {
       linkedin,
       scoreValue,
       fuente,
-      etapa
+      etapa,
+      metadataExterna
     } = body
 
     // 1. Verificar límites de recursos (Usa globalPrisma internamente cuando es necesario)
@@ -124,6 +126,7 @@ export const POST = withTenantAuth(async (request, auth) => {
       if (scoreValue !== undefined) updateData.scoreValue = scoreValue
       if (fuente) updateData.fuente = fuente
       if (etapa) updateData.estado = etapa
+      if (metadataExterna) updateData.metadataExterna = metadataExterna
       if (notas) {
         updateData.notas = notas
       }
@@ -165,6 +168,7 @@ export const POST = withTenantAuth(async (request, auth) => {
           fuente: fuente || null,
           estado: etapa || 'nuevo',
           tenantId: auth.tenant!.id,
+          metadataExterna: metadataExterna || {},
           tokenPublico: crypto.randomUUID(),
           fechaCreacion: new Date(),
           fechaUltimaActividad: new Date(),
@@ -184,6 +188,18 @@ export const POST = withTenantAuth(async (request, auth) => {
         } catch (noteError) {
           console.error('[POST /api/leads] Error al crear Note inicial:', noteError)
         }
+      }
+    }
+
+    // 2.5 Asignación automática inteligente
+    if (!existingLead && lead) {
+      try {
+        await assignLeadAutomatically(lead.id, auth.tenant!.id)
+        // Recargar el lead si fue asignado para que las notificaciones tengan el dato correcto
+        const updatedLead = await prisma.lead.findUnique({ where: { id: lead.id } })
+        if (updatedLead) lead = updatedLead
+      } catch (assignError) {
+        console.error('Error in auto-assignment:', assignError)
       }
     }
 

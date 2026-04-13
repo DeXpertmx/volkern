@@ -35,6 +35,11 @@ export const setupVolkernBlocksAsync = async (editor: Editor) => {
     premiumBlocksModule.createStatsPremiumBlock(editor);
     premiumBlocksModule.createFooterPremiumBlock(editor);
     premiumBlocksModule.createContactPremiumBlock(editor);
+    premiumBlocksModule.createMediaPremiumBlocks(editor);
+    premiumBlocksModule.createInteractivePremiumBlocks(editor);
+    premiumBlocksModule.createCommercePremiumBlocks(editor);
+    premiumBlocksModule.createElementPremiumBlocks(editor);
+    premiumBlocksModule.createTestimonialsCarouselBlock(editor);
   } catch (e) {
     console.error("Error loading premium blocks:", e);
   }

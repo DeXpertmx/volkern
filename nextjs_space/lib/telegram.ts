@@ -78,7 +78,8 @@ export async function loadTelegramCredentials(tenantId: string): Promise<Telegra
 export async function sendTelegramMessage(
   chatId: string, 
   message: string, 
-  botToken?: string
+  botToken?: string,
+  replyMarkup?: any
 ): Promise<boolean> {
   try {
     let finalToken = botToken;
@@ -100,6 +101,7 @@ export async function sendTelegramMessage(
         chat_id: chatId,
         text: message,
         parse_mode: 'HTML',
+        reply_markup: replyMarkup
       }),
     });
 

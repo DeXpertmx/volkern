@@ -121,3 +121,24 @@ export async function notifyAdminsPush(
     return { success: false, error: error.message };
   }
 }
+
+/**
+ * Envía una notificación push a TODOS los usuarios activos de un tenant. (SOCIAL HIGH-FIVES)
+ */
+export async function broadcastPushNotification(tenantId: string, payload: PushNotificationPayload) {
+  if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY) return { success: false };
+
+  try {
+    const users = await prisma.user.findMany({
+      where: { tenantId, estado: 'activo' },
+      select: { id: true }
+    });
+
+    const promises = users.map(user => sendPushNotification(user.id, payload));
+    await Promise.allSettled(promises);
+    return { success: true, count: users.length };
+  } catch (err) {
+    console.error('Error in broadcastPushNotification:', err);
+    return { success: false };
+  }
+}

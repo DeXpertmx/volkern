@@ -8,3 +8,8 @@ export * from './FAQPremiumBlock';
 export * from './StatsPremiumBlock';
 export * from './FooterPremiumBlock';
 export * from './ContactPremiumBlock';
+export * from './MediaPremiumBlocks';
+export * from './InteractivePremiumBlocks';
+export * from './CommercePremiumBlocks';
+export * from './ElementPremiumBlocks';
+export * from './TestimonialsCarouselPremiumBlock';

@@ -17,7 +17,7 @@ import { useFiscalConfig } from '@/hooks/use-fiscal-config';
 import {
   Plus, Search, Package, Briefcase, Calendar, GraduationCap, Edit2, Trash2,
   Star, Clock, Euro, DollarSign, Tag, Filter, Loader2, Image as ImageIcon,
-  Video, FileText, X, Percent, Layers, Settings2, Upload
+  Video, FileText, X, Percent, Layers, Settings2, Upload, ShieldCheck
 } from 'lucide-react';
 import { ImageUploader } from '@/components/ui/image-uploader';
 
@@ -85,6 +85,25 @@ interface CatalogoItem {
   metadata: Record<string, any> | null;
   media: MediaData | null;
   pricing: PricingData | null;
+  isManufactured: boolean;
+  costOfAcquisition: number;
+  integrityHash: string | null;
+  inventoryConfig: {
+    minStock: number;
+    reorderPoint: number;
+    valuationMethod: string;
+    storageLocation: string | null;
+  } | null;
+  billOfMaterials: {
+    laborCost: number;
+    overheadCost: number;
+    components: {
+      componentId: string;
+      quantityRequired: number;
+      unit: string;
+      component?: { nombre: string, sku: string };
+    }[];
+  } | null;
   tasaImpuesto?: {
     id: string;
     nombre: string;
@@ -103,8 +122,10 @@ interface TasaImpuesto {
 
 // ============== CONSTANTES ==============
 const TIPOS_ITEM = [
-  { value: 'producto', label: 'Producto', icon: Package },
   { value: 'servicio', label: 'Servicio', icon: Briefcase },
+  { value: 'materia_prima', label: 'Materia Prima', icon: Package },
+  { value: 'producto_terminado', label: 'Producto Terminado', icon: Layers },
+  { value: 'insumo', label: 'Insumo/Consumible', icon: Tag },
   { value: 'cita', label: 'Cita', icon: Calendar },
   { value: 'academia', label: 'Academia', icon: GraduationCap },
 ];
@@ -172,6 +193,22 @@ export default function CatalogoPage() {
     unidad: 'unidad',
     activo: true,
     destacado: false,
+    isManufactured: false,
+    costOfAcquisition: '',
+  });
+
+  // Estado para Inventario y Producción
+  const [inventoryForm, setInventoryForm] = useState({
+    minStock: '0',
+    reorderPoint: '0',
+    valuationMethod: 'AVERAGE_COST',
+    storageLocation: '',
+  });
+
+  const [bomForm, setBomForm] = useState({
+    laborCost: '0',
+    overheadCost: '0',
+    components: [] as any[],
   });
 
   // Estados para nuevos campos
@@ -260,6 +297,8 @@ export default function CatalogoPage() {
     setMedia({ imagenes: [] });
     setPricing({ tipo: 'unico', descuentos: [], impuestos: { iva: 0.21, incluido: false } });
     setMetadata({});
+    setInventoryForm({ minStock: '0', reorderPoint: '0', valuationMethod: 'AVERAGE_COST', storageLocation: '' });
+    setBomForm({ laborCost: '0', overheadCost: '0', components: [] });
     setActiveTab('basico');
   };
 
@@ -287,6 +326,28 @@ export default function CatalogoPage() {
     setMedia(item.media || { imagenes: [] });
     setPricing(item.pricing || { tipo: 'unico', descuentos: [], impuestos: { iva: 0.21, incluido: false } });
     setMetadata(item.metadata || {});
+    // Onboarding 2.0 / MRP
+    if (item.inventoryConfig) {
+      setInventoryForm({
+        minStock: item.inventoryConfig.minStock.toString(),
+        reorderPoint: item.inventoryConfig.reorderPoint.toString(),
+        valuationMethod: item.inventoryConfig.valuationMethod,
+        storageLocation: item.inventoryConfig.storageLocation || '',
+      });
+    } else {
+      setInventoryForm({ minStock: '0', reorderPoint: '0', valuationMethod: 'AVERAGE_COST', storageLocation: '' });
+    }
+
+    if (item.billOfMaterials) {
+      setBomForm({
+        laborCost: item.billOfMaterials.laborCost.toString(),
+        overheadCost: item.billOfMaterials.overheadCost.toString(),
+        components: item.billOfMaterials.components || [],
+      });
+    } else {
+      setBomForm({ laborCost: '0', overheadCost: '0', components: [] });
+    }
+
     setActiveTab('basico');
     setDialogOpen(true);
   };
@@ -336,6 +397,24 @@ export default function CatalogoPage() {
         media: media.imagenes.length > 0 || media.video_tour || media.documento_tecnico || media.tour_360 ? media : null,
         pricing: pricing.tipo !== 'unico' || pricing.descuentos.length > 0 ? pricing : null,
         metadata: Object.keys(metadata).length > 0 ? metadata : null,
+        // Onboarding 2.0 / MRP
+        isManufactured: form.isManufactured,
+        costOfAcquisition: parseFloat(form.costOfAcquisition || '0'),
+        inventoryConfig: {
+          minStock: parseFloat(inventoryForm.minStock),
+          reorderPoint: parseFloat(inventoryForm.reorderPoint),
+          valuationMethod: inventoryForm.valuationMethod,
+          storageLocation: inventoryForm.storageLocation || null,
+        },
+        bom: form.isManufactured ? {
+          laborCost: parseFloat(bomForm.laborCost),
+          overheadCost: parseFloat(bomForm.overheadCost),
+          components: bomForm.components.map(c => ({
+            componentId: c.componentId,
+            quantityRequired: parseFloat(c.quantityRequired),
+            unit: c.unit || 'unit'
+          }))
+        } : null
       };
 
       const res = await fetch(url, {
@@ -709,16 +788,18 @@ export default function CatalogoPage() {
           </DialogHeader>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-5">
-              <TabsTrigger value="basico" className="text-xs">Básico</TabsTrigger>
-              <TabsTrigger value="campos" className="text-xs">Campos</TabsTrigger>
-              <TabsTrigger value="categorias" className="text-xs">Categorías</TabsTrigger>
-              <TabsTrigger value="media" className="text-xs">Media</TabsTrigger>
-              <TabsTrigger value="precios" className="text-xs">Precios</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-7">
+              <TabsTrigger value="basico" className="text-[10px] uppercase font-bold">Básico</TabsTrigger>
+              <TabsTrigger value="campos" className="text-[10px] uppercase font-bold">Campos</TabsTrigger>
+              <TabsTrigger value="logistica" className="text-[10px] uppercase font-bold">Logística</TabsTrigger>
+              <TabsTrigger value="ingenieria" className="text-[10px] uppercase font-bold" disabled={!form.isManufactured}>Ingeniería</TabsTrigger>
+              <TabsTrigger value="categorias" className="text-[10px] uppercase font-bold">Tags</TabsTrigger>
+              <TabsTrigger value="media" className="text-[10px] uppercase font-bold">Media</TabsTrigger>
+              <TabsTrigger value="precios" className="text-[10px] uppercase font-bold">Precios</TabsTrigger>
             </TabsList>
 
             {/* Tab Básico */}
-            <TabsContent value="basico" className="space-y-4 mt-4">
+            <TabsContent value="basico" className="space-y-4 mt-4 animate-in fade-in duration-300">
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
                   <Label>Nombre *</Label>
@@ -758,32 +839,6 @@ export default function CatalogoPage() {
                 </div>
 
                 <div>
-                  <Label>Precio Base *</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={form.precioBase}
-                    onChange={(e) => setForm({ ...form, precioBase: e.target.value })}
-                    placeholder="0.00"
-                  />
-                </div>
-
-                <div>
-                  <Label>Moneda</Label>
-                  <Select value={form.moneda} onValueChange={(v) => setForm({ ...form, moneda: v })}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="EUR">EUR - Euro</SelectItem>
-                      <SelectItem value="USD">USD - Dólar</SelectItem>
-                      <SelectItem value="MXN">MXN - Peso Mexicano</SelectItem>
-                      <SelectItem value="GBP">GBP - Libra</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
                   <Label>Unidad</Label>
                   <Select value={form.unidad} onValueChange={(v) => setForm({ ...form, unidad: v })}>
                     <SelectTrigger>
@@ -795,6 +850,24 @@ export default function CatalogoPage() {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-center space-x-2 pt-2">
+                    <Switch
+                      checked={form.isManufactured}
+                      onCheckedChange={(v) => setForm({ ...form, isManufactured: v })}
+                    />
+                    <Label className="font-bold text-primary">Se puede fabricar (Habilitar BoM)</Label>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      checked={form.activo}
+                      onCheckedChange={(v) => setForm({ ...form, activo: v })}
+                    />
+                    <Label>Activo</Label>
+                  </div>
                 </div>
 
                 <div>
@@ -811,53 +884,6 @@ export default function CatalogoPage() {
                   </Select>
                 </div>
 
-                {tasas.length > 0 && (
-                  <div>
-                    <Label>Tasa de Impuesto</Label>
-                    <Select value={form.tasaImpuestoId} onValueChange={(v) => setForm({ ...form, tasaImpuestoId: v === 'none' ? '' : v })}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar tasa" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Sin tasa específica</SelectItem>
-                        {tasas.map(t => (
-                          <SelectItem key={t.id} value={t.id}>
-                            {t.nombre} ({t.porcentaje}%)
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
-                {showDuracion && (
-                  <div>
-                    <Label>Duración (minutos)</Label>
-                    <Input
-                      type="number"
-                      value={form.duracionMinutos}
-                      onChange={(e) => setForm({ ...form, duracionMinutos: e.target.value })}
-                      placeholder="60"
-                    />
-                  </div>
-                )}
-
-                {showModalidad && (
-                  <div>
-                    <Label>Modalidad</Label>
-                    <Select value={form.modalidad} onValueChange={(v) => setForm({ ...form, modalidad: v })}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {MODALIDADES.map(m => (
-                          <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
                 <div className="col-span-2">
                   <Label>Descripción</Label>
                   <Textarea
@@ -867,67 +893,150 @@ export default function CatalogoPage() {
                     rows={3}
                   />
                 </div>
+              </div>
+            </TabsContent>
 
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      checked={form.activo}
-                      onCheckedChange={(v) => setForm({ ...form, activo: v })}
-                    />
-                    <Label>Activo</Label>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      checked={form.destacado}
-                      onCheckedChange={(v) => setForm({ ...form, destacado: v })}
-                    />
-                    <Label>Destacado</Label>
-                  </div>
+            {/* Tab Logística */}
+            <TabsContent value="logistica" className="space-y-4 mt-4 animate-in fade-in duration-300">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Stock Mínimo (Alerta IA)</Label>
+                  <Input
+                    type="number"
+                    value={inventoryForm.minStock}
+                    onChange={(e) => setInventoryForm({ ...inventoryForm, minStock: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>Punto de Reorden</Label>
+                  <Input
+                    type="number"
+                    value={inventoryForm.reorderPoint}
+                    onChange={(e) => setInventoryForm({ ...inventoryForm, reorderPoint: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>Método de Valoración</Label>
+                  <Select value={inventoryForm.valuationMethod} onValueChange={(v) => setInventoryForm({ ...inventoryForm, valuationMethod: v })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="AVERAGE_COST">Costo Promedio (AVG)</SelectItem>
+                      <SelectItem value="FIFO">Primero en entrar - Primero en salir (FIFO)</SelectItem>
+                      <SelectItem value="LIFO">Último en entrar - Primero en salir (LIFO)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Ubicación (Almacén/Estante)</Label>
+                  <Input
+                    value={inventoryForm.storageLocation}
+                    onChange={(e) => setInventoryForm({ ...inventoryForm, storageLocation: e.target.value })}
+                    placeholder="Ejem: Pasillo A, Estante 4"
+                  />
                 </div>
               </div>
+            </TabsContent>
+
+            {/* Tab Ingeniería (BoM) */}
+            <TabsContent value="ingenieria" className="space-y-4 mt-4 animate-in fade-in duration-300">
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-4">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <Label className="text-xs uppercase font-bold text-slate-500">Costo Mano de Obra</Label>
+                            <Input
+                                type="number"
+                                value={bomForm.laborCost}
+                                onChange={(e) => setBomForm({ ...bomForm, laborCost: e.target.value })}
+                            />
+                        </div>
+                        <div>
+                            <Label className="text-xs uppercase font-bold text-slate-500">Costos Indirectos (Overhead)</Label>
+                            <Input
+                                type="number"
+                                value={bomForm.overheadCost}
+                                onChange={(e) => setBomForm({ ...bomForm, overheadCost: e.target.value })}
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                        <Label className="font-bold">Componentes / Receta</Label>
+                        <Button variant="outline" size="sm" onClick={() => setBomForm({
+                            ...bomForm,
+                            components: [...bomForm.components, { componentId: '', quantityRequired: '1', unit: 'unit' }]
+                        })}>
+                            <Plus className="h-3 w-3 mr-1" /> Añadir Componente
+                        </Button>
+                    </div>
+
+                    <div className="space-y-2">
+                        {bomForm.components.map((comp: any, idx: number) => (
+                            <div key={idx} className="flex gap-2 items-end bg-white p-3 rounded-lg border border-slate-100 shadow-sm">
+                                <div className="flex-1">
+                                    <Label className="text-[10px] uppercase font-bold">Item del Catálogo</Label>
+                                    <Select value={comp.componentId} onValueChange={(v) => {
+                                        const updated = [...bomForm.components];
+                                        updated[idx].componentId = v;
+                                        setBomForm({ ...bomForm, components: updated });
+                                    }}>
+                                        <SelectTrigger className="h-9">
+                                            <SelectValue placeholder="Seleccionar material..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {items.filter(i => i.id !== editing?.id).map(i => (
+                                                <SelectItem key={i.id} value={i.id}>{i.sku ? `[${i.sku}] ` : ''}{i.nombre}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="w-24">
+                                    <Label className="text-[10px] uppercase font-bold">Cant.</Label>
+                                    <Input
+                                        className="h-9"
+                                        type="number"
+                                        value={comp.quantityRequired}
+                                        onChange={(e) => {
+                                            const updated = [...bomForm.components];
+                                            updated[idx].quantityRequired = e.target.value;
+                                            setBomForm({ ...bomForm, components: updated });
+                                        }}
+                                    />
+                                </div>
+                                <Button variant="ghost" size="icon" className="h-9 w-9 text-rose-500" onClick={() => {
+                                    setBomForm({ ...bomForm, components: bomForm.components.filter((_: any, i: number) => i !== idx) });
+                                }}>
+                                    <Trash2 className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        ))}
+                    </div>
+                </div>
             </TabsContent>
 
             {/* Tab Campos Personalizados */}
             <TabsContent value="campos" className="space-y-4 mt-4">
               <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="font-medium">Campos Personalizados</h4>
-                  <p className="text-sm text-muted-foreground">
-                    Completa los campos definidos para tu catálogo
-                  </p>
-                </div>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => window.open('/dashboard/catalogo/campos', '_blank')}
-                >
-                  <Settings2 className="h-4 w-4 mr-1" /> Configurar Campos
+                <h4 className="font-medium">Campos Personalizados</h4>
+                <Button variant="ghost" size="sm" className="h-8 text-xs underline" onClick={() => setActiveTab('basico')}>
+                  Configurar campos en Ajustes
                 </Button>
               </div>
-
-              {getApplicableFields().length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
-                  <Settings2 className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p>No hay campos personalizados definidos</p>
-                  <p className="text-sm mt-1">
-                    <Button 
-                      variant="link" 
-                      className="p-0 h-auto text-sm"
-                      onClick={() => window.open('/dashboard/catalogo/campos', '_blank')}
-                    >
-                      Configurar campos globales
-                    </Button>
-                    {' '}para tu catálogo (ej: superficie, habitaciones, marca)
-                  </p>
+              
+              {fieldDefinitions.length === 0 ? (
+                <div className="text-center py-8 bg-slate-50 rounded-xl border-2 border-dashed">
+                  <p className="text-sm text-muted-foreground">No hay campos personalizados definidos para el tipo {form.tipo}</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-4">
-                  {getApplicableFields().map((field) => (
+                  {fieldDefinitions.map((field) => (
                     <div key={field.id} className="space-y-1.5">
-                      <Label className="text-sm flex items-center gap-1">
-                        {field.label}
-                        {field.required && <span className="text-destructive">*</span>}
-                        {field.unidad && <span className="text-muted-foreground text-xs">({field.unidad})</span>}
+                      <Label className="flex items-center gap-1">
+                        {field.nombre}
+                        {field.requerido && <span className="text-rose-500">*</span>}
                       </Label>
                       
                       {field.type === 'boolean' ? (
@@ -952,7 +1061,7 @@ export default function CatalogoPage() {
                             <SelectValue placeholder={field.placeholder || 'Seleccionar...'} />
                           </SelectTrigger>
                           <SelectContent>
-                            {field.options.map((opt) => (
+                            {field.options.map((opt: any) => (
                               <SelectItem key={opt} value={opt}>{opt}</SelectItem>
                             ))}
                           </SelectContent>
@@ -964,12 +1073,6 @@ export default function CatalogoPage() {
                           placeholder={field.placeholder || ''}
                           rows={3}
                         />
-                      ) : field.type === 'date' ? (
-                        <Input
-                          type="date"
-                          value={customFieldValues[field.fieldKey]?.toString() || field.valorDefecto || ''}
-                          onChange={(e) => updateCustomFieldValue(field.fieldKey, e.target.value)}
-                        />
                       ) : (
                         <Input
                           type={field.type === 'number' ? 'number' : field.type === 'url' ? 'url' : 'text'}
@@ -980,12 +1083,6 @@ export default function CatalogoPage() {
                           )}
                           placeholder={field.placeholder || ''}
                         />
-                      )}
-                      
-                      {field.categoria && (
-                        <p className="text-xs text-muted-foreground">
-                          Solo para: {field.categoria}
-                        </p>
                       )}
                     </div>
                   ))}
@@ -999,7 +1096,7 @@ export default function CatalogoPage() {
                 <div className="flex items-center justify-between mb-3">
                   <div>
                     <h4 className="font-medium">Categorías</h4>
-                    <p className="text-sm text-muted-foreground">Organiza jerárquicamente (ej: Inmuebles › Oficina › Lujo)</p>
+                    <p className="text-sm text-muted-foreground">Organiza jerárquicamente</p>
                   </div>
                 </div>
                 <div className="flex gap-2 mb-2">
@@ -1018,19 +1115,11 @@ export default function CatalogoPage() {
                     <Badge key={cat} variant="secondary" className="gap-1 pr-1">
                       <Layers className="h-3 w-3" />
                       {cat}
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="h-4 w-4 ml-1 hover:bg-destructive/20"
-                        onClick={() => removeCategoria(cat)}
-                      >
+                      <Button variant="ghost" size="icon" className="h-4 w-4 ml-1" onClick={() => removeCategoria(cat)}>
                         <X className="h-3 w-3" />
                       </Button>
                     </Badge>
                   ))}
-                  {categorias.length === 0 && (
-                    <span className="text-sm text-muted-foreground">Sin categorías asignadas</span>
-                  )}
                 </div>
               </div>
 
@@ -1038,7 +1127,7 @@ export default function CatalogoPage() {
                 <div className="flex items-center justify-between mb-3">
                   <div>
                     <h4 className="font-medium">Etiquetas</h4>
-                    <p className="text-sm text-muted-foreground">Tags para filtrado rápido (ej: vip, oportunidad, nuevo)</p>
+                    <p className="text-sm text-muted-foreground">Tags para filtrado rápido</p>
                   </div>
                 </div>
                 <div className="flex gap-2 mb-2">
@@ -1057,19 +1146,11 @@ export default function CatalogoPage() {
                     <Badge key={tag} variant="outline" className="gap-1 pr-1">
                       <Tag className="h-3 w-3" />
                       {tag}
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="h-4 w-4 ml-1 hover:bg-destructive/20"
-                        onClick={() => removeEtiqueta(tag)}
-                      >
+                      <Button variant="ghost" size="icon" className="h-4 w-4 ml-1" onClick={() => removeEtiqueta(tag)}>
                         <X className="h-3 w-3" />
                       </Button>
                     </Badge>
                   ))}
-                  {etiquetas.length === 0 && (
-                    <span className="text-sm text-muted-foreground">Sin etiquetas asignadas</span>
-                  )}
                 </div>
               </div>
 
@@ -1084,17 +1165,6 @@ export default function CatalogoPage() {
                       placeholder="real-estate, consultoria, etc."
                     />
                   </div>
-                  <div>
-                    <Label>Prioridad (1-10)</Label>
-                    <Input
-                      type="number"
-                      min="1"
-                      max="10"
-                      value={metadata.prioridad || ''}
-                      onChange={(e) => setMetadata({ ...metadata, prioridad: parseInt(e.target.value) || null })}
-                      placeholder="3"
-                    />
-                  </div>
                 </div>
               </div>
             </TabsContent>
@@ -1103,8 +1173,6 @@ export default function CatalogoPage() {
             <TabsContent value="media" className="space-y-4 mt-4">
               <div>
                 <h4 className="font-medium mb-3">Galería Multimedia</h4>
-                <p className="text-sm text-muted-foreground mb-4">Sube imágenes y agrega enlaces de videos y documentos</p>
-
                 <div className="space-y-4">
                   <div>
                     <Label className="flex items-center gap-2 mb-3">
@@ -1112,22 +1180,10 @@ export default function CatalogoPage() {
                     </Label>
                     <ImageUploader
                       images={media.imagenes || []}
-                      onChange={(newImages) => setMedia({ ...media, imagenes: newImages })}
+                      onChange={(newImages: any) => setMedia({ ...media, imagenes: newImages })}
                       maxImages={10}
                     />
                   </div>
-
-                  <div>
-                    <Label className="flex items-center gap-2">
-                      <Video className="h-4 w-4" /> Video Tour (YouTube/Vimeo)
-                    </Label>
-                    <Input
-                      value={media.video_tour || ''}
-                      onChange={(e) => setMedia({ ...media, video_tour: e.target.value })}
-                      placeholder="https://youtube.com/watch?v=..."
-                    />
-                  </div>
-
                   <div>
                     <Label className="flex items-center gap-2">
                       <FileText className="h-4 w-4" /> Documento Técnico (PDF)
@@ -1138,26 +1194,54 @@ export default function CatalogoPage() {
                       placeholder="https://ejemplo.com/ficha-tecnica.pdf"
                     />
                   </div>
-
-                  <div>
-                    <Label className="flex items-center gap-2">
-                      <Layers className="h-4 w-4" /> Tour 360°
-                    </Label>
-                    <Input
-                      value={media.tour_360 || ''}
-                      onChange={(e) => setMedia({ ...media, tour_360: e.target.value })}
-                      placeholder="https://tour360.com/propiedad"
-                    />
-                  </div>
                 </div>
               </div>
             </TabsContent>
 
-            {/* Tab Precios Flexibles */}
+            {/* Tab Precios */}
             <TabsContent value="precios" className="space-y-4 mt-4">
-              <div>
-                <h4 className="font-medium mb-3">Motor de Precios Flexible</h4>
-                <p className="text-sm text-muted-foreground mb-4">Configura tipo de precio, descuentos por volumen e impuestos</p>
+              <div className="grid grid-cols-2 gap-4">
+                <Card className="bg-slate-50/50">
+                  <CardContent className="pt-4 space-y-4">
+                    <div>
+                      <Label>Precio de Venta Base *</Label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={form.precioBase}
+                          onChange={(e) => setForm({ ...form, precioBase: e.target.value })}
+                          className="font-bold text-lg"
+                        />
+                        <span className="font-bold">{form.moneda}</span>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <Label>Costo de Adquisición / Producción</Label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={form.costOfAcquisition}
+                          onChange={(e) => setForm({ ...form, costOfAcquisition: e.target.value })}
+                          placeholder="0.00"
+                        />
+                        <span className="text-muted-foreground">{form.moneda}</span>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        Utilizado para el cálculo de margen neto por la IA.
+                      </p>
+                    </div>
+
+                    {editing?.integrityHash && (
+                        <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-lg flex items-center gap-2">
+                            <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                            <span className="text-[10px] uppercase font-bold text-emerald-700">Integridad Criptográfica Verificada</span>
+                        </div>
+                    )}
+                  </CardContent>
+                </Card>
 
                 <div className="space-y-4">
                   <div>
@@ -1179,23 +1263,9 @@ export default function CatalogoPage() {
 
                   <div className="p-4 bg-muted/50 rounded-lg space-y-3">
                     <div className="flex items-center justify-between">
-                      <Label>Impuestos</Label>
+                      <Label>Impuestos Flexibles</Label>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label className="text-xs">IVA (%)</Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={(pricing.impuestos.iva * 100).toFixed(0)}
-                          onChange={(e) => setPricing({ 
-                            ...pricing, 
-                            impuestos: { ...pricing.impuestos, iva: parseFloat(e.target.value) / 100 || 0 } 
-                          })}
-                          placeholder="21"
-                        />
-                      </div>
-                      <div className="flex items-end">
                         <div className="flex items-center gap-2">
                           <Switch
                             checked={pricing.impuestos.incluido}
@@ -1206,73 +1276,69 @@ export default function CatalogoPage() {
                           />
                           <Label>IVA Incluido</Label>
                         </div>
-                      </div>
                     </div>
-                  </div>
-
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <Label>Descuentos por Volumen</Label>
-                      <Button variant="outline" size="sm" onClick={addDiscount}>
-                        <Plus className="h-4 w-4 mr-1" /> Añadir
-                      </Button>
-                    </div>
-                    {pricing.descuentos.length === 0 ? (
-                      <div className="text-center py-4 text-muted-foreground border-2 border-dashed rounded-lg">
-                        <Percent className="h-6 w-6 mx-auto mb-1 opacity-50" />
-                        <p className="text-sm">Sin descuentos configurados</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        {pricing.descuentos.map((desc, index) => (
-                          <div key={index} className="flex gap-2 items-center p-2 bg-muted/50 rounded-lg">
-                            <div className="flex-1 grid grid-cols-3 gap-2">
-                              <div>
-                                <Label className="text-xs">Tipo</Label>
-                                <Select 
-                                  value={desc.tipo} 
-                                  onValueChange={(v) => updateDiscount(index, { tipo: v })}
-                                >
-                                  <SelectTrigger className="text-sm">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="volumen">Por Volumen</SelectItem>
-                                    <SelectItem value="temporada">Temporada</SelectItem>
-                                    <SelectItem value="promocion">Promoción</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div>
-                                <Label className="text-xs">Mínimo Unidades</Label>
-                                <Input
-                                  type="number"
-                                  value={desc.min || ''}
-                                  onChange={(e) => updateDiscount(index, { min: parseInt(e.target.value) || 0 })}
-                                  placeholder="3"
-                                  className="text-sm"
-                                />
-                              </div>
-                              <div>
-                                <Label className="text-xs">Descuento (%)</Label>
-                                <Input
-                                  type="number"
-                                  value={desc.descuento}
-                                  onChange={(e) => updateDiscount(index, { descuento: parseFloat(e.target.value) || 0 })}
-                                  placeholder="10"
-                                  className="text-sm"
-                                />
-                              </div>
-                            </div>
-                            <Button variant="ghost" size="icon" onClick={() => removeDiscount(index)}>
-                              <X className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 </div>
+              </div>
+
+              <div className="mt-6">
+                <div className="flex items-center justify-between mb-3">
+                  <Label className="font-bold">Descuentos por Volumen</Label>
+                  <Button variant="outline" size="sm" onClick={addDiscount}>
+                    <Plus className="h-4 w-4 mr-1" /> Añadir Rango
+                  </Button>
+                </div>
+                {pricing.descuentos.length === 0 ? (
+                  <div className="text-center py-4 text-muted-foreground border-2 border-dashed rounded-lg">
+                    <Percent className="h-6 w-6 mx-auto mb-1 opacity-50" />
+                    <p className="text-sm">Sin descuentos configurados</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {pricing.descuentos.map((desc, index) => (
+                      <div key={index} className="flex gap-2 items-center p-2 bg-muted/50 rounded-lg">
+                        <div className="flex-1 grid grid-cols-3 gap-2">
+                          <div>
+                            <Select 
+                              value={desc.tipo} 
+                              onValueChange={(v) => updateDiscount(index, { tipo: v })}
+                            >
+                              <SelectTrigger className="text-sm">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="volumen">Por Volumen</SelectItem>
+                                <SelectItem value="temporada">Temporada</SelectItem>
+                                <SelectItem value="promocion">Promoción</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Input
+                              type="number"
+                              value={desc.min || ''}
+                              onChange={(e) => updateDiscount(index, { min: parseInt(e.target.value) || 0 })}
+                              placeholder="Mínimo Unidades"
+                              className="text-sm"
+                            />
+                          </div>
+                          <div>
+                            <Input
+                              type="number"
+                              value={desc.descuento}
+                              onChange={(e) => updateDiscount(index, { descuento: parseFloat(e.target.value) || 0 })}
+                              placeholder="Descuento %"
+                              className="text-sm"
+                            />
+                          </div>
+                        </div>
+                        <Button variant="ghost" size="icon" onClick={() => removeDiscount(index)}>
+                          <X className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </TabsContent>
           </Tabs>

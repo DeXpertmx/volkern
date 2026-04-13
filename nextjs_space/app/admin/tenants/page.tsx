@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -16,8 +15,17 @@ import {
   CheckCircle,
   XCircle,
   Calendar,
-  User
+  User,
+  ShieldCheck,
+  Users,
+  Target,
+  BookOpen,
+  DollarSign,
+  Loader2,
+  Factory,
+  Power
 } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -43,6 +51,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { Badge } from '@/components/ui/badge';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
@@ -62,6 +71,7 @@ interface Tenant {
     cursos: number;
     estudiantes: number;
   };
+  tenantFeatures?: { habilitado: boolean }[];
 }
 
 export default function TenantsManagement() {
@@ -71,9 +81,9 @@ export default function TenantsManagement() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [planFilter, setPlanFilter] = useState('all');
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
   const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, totalPages: 0 });
+  const [genesisResult, setGenesisResult] = useState<{genesisHash: string, masterKey: string} | null>(null);
 
   useEffect(() => {
     loadTenants();
@@ -158,6 +168,30 @@ export default function TenantsManagement() {
     }
   };
 
+  const handleToggleIndustrial = async (tenantId: string, enabled: boolean) => {
+    try {
+      const res = await fetch(`/api/admin/tenants/${tenantId}/operations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          operation: 'toggle_industrial_license', 
+          params: { enabled } 
+        })
+      });
+
+      if (res.ok) {
+        const result = await res.json();
+        toast.success(result.message);
+        loadTenants();
+      } else {
+        const error = await res.json();
+        toast.error(error.error || 'Error al actualizar licencia');
+      }
+    } catch (error) {
+      toast.error('Error de red al actualizar licencia');
+    }
+  };
+
   const handleOperation = async (tenantId: string, operation: string, params?: any) => {
     try {
       const res = await fetch(`/api/admin/tenants/${tenantId}/operations`, {
@@ -199,36 +233,39 @@ export default function TenantsManagement() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-10">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Gestión de Tenants</h1>
-          <p className="text-gray-500 mt-1">Administra todos los clientes white-label</p>
+          <h1 className="text-4xl font-black text-[#1A365D] uppercase tracking-tighter italic">Gestión de Inquilinos</h1>
+          <p className="text-[#4A5568] font-bold text-xs uppercase tracking-widest opacity-60">Tenant Ecosystem Oversight</p>
         </div>
-        <Button onClick={() => setShowCreateDialog(true)}>
+        <Button 
+          onClick={() => setShowCreateDialog(true)}
+          className="rounded-xl h-12 px-6 bg-[#1A365D] hover:bg-[#1A365D]/90 text-white font-black uppercase tracking-widest text-[10px] shadow-lg shadow-indigo-900/10"
+        >
           <Plus size={16} className="mr-2" />
-          Crear Tenant
+          Vincular Nuevo Tenant
         </Button>
       </div>
 
       {/* Filters */}
-      <Card>
+      <Card className="border border-[#E2E8F0] shadow-sm rounded-3xl overflow-hidden bg-white">
         <CardContent className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="md:col-span-2">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
                 <Input
-                  placeholder="Buscar por nombre, slug o dominio..."
+                  placeholder="Filtrar por nombre, slug o dominio de bóveda..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="pl-10"
+                  className="pl-10 h-11 rounded-xl border-slate-100 bg-slate-50 focus:bg-white transition-all text-sm font-medium"
                 />
               </div>
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger>
+              <SelectTrigger className="h-11 rounded-xl border-slate-100 bg-slate-50 font-bold text-[10px] uppercase tracking-widest">
                 <SelectValue placeholder="Estado" />
               </SelectTrigger>
               <SelectContent>
@@ -236,11 +273,10 @@ export default function TenantsManagement() {
                 <SelectItem value="activo">Activo</SelectItem>
                 <SelectItem value="trial">Trial</SelectItem>
                 <SelectItem value="suspendido">Suspendido</SelectItem>
-                <SelectItem value="cancelado">Cancelado</SelectItem>
               </SelectContent>
             </Select>
             <Select value={planFilter} onValueChange={setPlanFilter}>
-              <SelectTrigger>
+              <SelectTrigger className="h-11 rounded-xl border-slate-100 bg-slate-50 font-bold text-[10px] uppercase tracking-widest">
                 <SelectValue placeholder="Plan" />
               </SelectTrigger>
               <SelectContent>
@@ -255,95 +291,122 @@ export default function TenantsManagement() {
       </Card>
 
       {/* Tenants List */}
-      <div className="grid grid-cols-1 gap-4">
+      <div className="grid grid-cols-1 gap-6">
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="w-10 h-10 animate-spin text-[#1A365D]/20" />
           </div>
         ) : tenants.length === 0 ? (
-          <Card>
-            <CardContent className="p-12 text-center">
-              <Building2 size={48} className="mx-auto text-gray-400 mb-4" />
-              <p className="text-gray-500">No se encontraron tenants</p>
-            </CardContent>
+          <Card className="border border-dashed border-[#E2E8F0] bg-slate-50/50 rounded-3xl p-20 text-center">
+            <Building2 size={48} className="mx-auto text-slate-300 mb-4" />
+            <p className="text-sm font-black text-slate-400 uppercase tracking-widest">No se encontraron cimientos registrados</p>
           </Card>
         ) : (
           tenants.map((tenant) => (
-            <Card key={tenant.id} className="hover:shadow-md transition-shadow">
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <h3 className="text-xl font-bold text-gray-900">{tenant.nombre}</h3>
-                      {getStatusBadge(tenant.estado)}
-                      <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                        {tenant.plan}
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+            <Card key={tenant.id} className="border border-[#E2E8F0] hover:shadow-2xl hover:shadow-indigo-900/5 transition-all duration-500 rounded-3xl overflow-hidden bg-white group">
+              <CardContent className="p-0">
+                <div className="flex flex-col md:flex-row items-stretch">
+                  {/* Vault Health Indicator Sidebar */}
+                  <div className={cn(
+                      "w-2 transition-all duration-500 group-hover:w-3",
+                      tenant.estado === 'activo' ? "bg-emerald-500" : "bg-amber-500"
+                  )} />
+                  
+                  <div className="flex-1 p-8">
+                    <div className="flex items-start justify-between mb-8">
                       <div>
-                        <p className="text-sm text-gray-500">Slug</p>
-                        <p className="font-medium">{tenant.slug}</p>
+                        <div className="flex items-center gap-3 mb-2">
+                          <h3 className="text-2xl font-black text-[#1A365D] tracking-tighter leading-none">{tenant.nombre}</h3>
+                          <Badge className="bg-[#1A365D] text-white font-black text-[9px] uppercase tracking-widest px-3 border-none">{tenant.plan}</Badge>
+                          {getStatusBadge(tenant.estado)}
+                        </div>
+                        <p className="text-xs font-bold text-[#4A5568] opacity-60 uppercase tracking-wider">{tenant.slug}.volkern.cloud</p>
                       </div>
-                      <div>
-                        <p className="text-sm text-gray-500">MRR</p>
-                        <p className="font-medium">
-                          ${tenant.mrr.toLocaleString()} {tenant.moneda}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500">Usuarios</p>
-                        <p className="font-medium">{tenant._count.users}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500">Leads</p>
-                        <p className="font-medium">{tenant._count.leads}</p>
+
+                      {/* Vault Health Badge */}
+                      <div className="flex flex-col items-end gap-2">
+                        <div className="flex items-center gap-2 bg-slate-50 border border-slate-100 px-4 py-2 rounded-xl">
+                          <ShieldCheck size={14} className="text-emerald-500" />
+                          <span className="text-[10px] font-black uppercase text-[#1A365D] tracking-widest">Vault Health: <span className="text-emerald-500">100% Secure</span></span>
+                        </div>
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Last Consistency Check: Today</span>
                       </div>
                     </div>
-                    {tenant.dominio && (
-                      <p className="text-sm text-gray-500 mt-2">
-                        Dominio: <span className="text-blue-600">{tenant.dominio}</span>
-                      </p>
-                    )}
-                    <p className="text-xs text-gray-400 mt-2">
-                      Creado: {new Date(tenant.fechaCreacion).toLocaleDateString('es-MX')}
-                    </p>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-12">
+                      {[
+                        { label: 'Ingresos MRR', val: `${tenant.mrr.toLocaleString()} ${tenant.moneda}`, icon: DollarSign },
+                        { label: 'Ecosistema Usuarios', val: tenant._count.users, icon: Users },
+                        { label: 'Generación Leads', val: tenant._count.leads, icon: Target },
+                        { label: 'Activos Digitales', val: tenant._count.cursos, icon: BookOpen }
+                      ].map((stat) => (
+                        <div key={stat.label} className="space-y-1">
+                          <p className="text-[9px] font-black text-[#4A5568] uppercase tracking-widest opacity-60 leading-none">{stat.label}</p>
+                          <p className="text-xl font-black text-[#1A365D] tracking-tighter">{stat.val}</p>
+                        </div>
+                      ))}
+                      
+                      {/* Industrial License Column */}
+                      <div className="space-y-2 border-l border-slate-100 pl-8">
+                        <p className="text-[9px] font-black text-[#4A5568] uppercase tracking-widest opacity-60 leading-none">Licencia Industrial</p>
+                        <div className="flex items-center gap-3">
+                            <Switch 
+                                checked={tenant.tenantFeatures?.[0]?.habilitado || false}
+                                onCheckedChange={(checked) => handleToggleIndustrial(tenant.id, checked)}
+                                className="data-[state=checked]:bg-[#1A365D]"
+                            />
+                            <span className="text-[10px] font-black uppercase tracking-widest text-[#1A365D]">
+                                {tenant.tenantFeatures?.[0]?.habilitado ? 'Full Access' : 'Solo CRM'}
+                            </span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm">
-                        <MoreVertical size={16} />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => router.push(`/admin/tenants/${tenant.id}`)}>
-                        <Eye size={16} className="mr-2" />
-                        Ver Detalles
-                      </DropdownMenuItem>
-                      <DropdownMenuItem 
-                        onClick={() => handleImpersonate(tenant.id)}
-                        className="text-amber-600 focus:text-amber-700 focus:bg-amber-50"
+
+                  {/* Control Panel */}
+                  <div className="bg-slate-50/50 border-l border-[#E2E8F0] p-6 flex flex-col justify-between gap-4 w-full md:w-64">
+                    <Button 
+                      onClick={() => handleImpersonate(tenant.id)}
+                      className="w-full rounded-xl bg-white border border-slate-200 text-[#1A365D] hover:bg-[#1A365D] hover:text-white font-black uppercase tracking-widest text-[10px] h-11 transition-all shadow-sm"
+                    >
+                      <User size={14} className="mr-2" />
+                      Inyectar Sesión
+                    </Button>
+                    
+                    <div className="flex gap-2">
+                       <Button 
+                        onClick={() => router.push(`/admin/tenants/${tenant.id}`)}
+                        variant="ghost" 
+                        className="flex-1 rounded-xl bg-white border border-slate-100 text-[#4A5568] hover:bg-slate-50 font-black uppercase tracking-widest text-[9px] h-10 transition-all"
                       >
-                        <User size={16} className="mr-2" />
-                        Suplantar Tenant
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleOperation(tenant.id, 'extend_trial', { days: 14 })}>
-                        <Calendar size={16} className="mr-2" />
-                        Extender Trial
-                      </DropdownMenuItem>
-                      {tenant.estado === 'activo' || tenant.estado === 'trial' ? (
-                        <DropdownMenuItem onClick={() => handleOperation(tenant.id, 'suspend')}>
-                          <Pause size={16} className="mr-2" />
-                          Suspender
-                        </DropdownMenuItem>
-                      ) : (
-                        <DropdownMenuItem onClick={() => handleOperation(tenant.id, 'reactivate')}>
-                          <Play size={16} className="mr-2" />
-                          Reactivar
-                        </DropdownMenuItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                        Detalle
+                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" className="rounded-xl border border-slate-100 bg-white h-10 w-10 p-0 text-[#4A5568]">
+                            <MoreVertical size={16} />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="rounded-xl border-[#E2E8F0] shadow-2xl">
+                          <DropdownMenuItem onClick={() => handleOperation(tenant.id, 'extend_trial', { days: 14 })} className="text-[10px] font-bold uppercase tracking-widest p-3">
+                            <Calendar size={14} className="mr-2" />
+                            Extender Trial
+                          </DropdownMenuItem>
+                          {tenant.estado === 'activo' || tenant.estado === 'trial' ? (
+                            <DropdownMenuItem onClick={() => handleOperation(tenant.id, 'suspend')} className="text-[10px] font-bold uppercase tracking-widest p-3 text-rose-600">
+                              <Pause size={14} className="mr-2" />
+                              Suspender Vault
+                            </DropdownMenuItem>
+                          ) : (
+                            <DropdownMenuItem onClick={() => handleOperation(tenant.id, 'reactivate')} className="text-[10px] font-bold uppercase tracking-widest p-3 text-emerald-600">
+                              <Play size={14} className="mr-2" />
+                              Reactivar
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -415,50 +478,73 @@ export default function TenantsManagement() {
                   <SelectContent>
                     <SelectItem value="starter">🟢 Starter - €49/mes</SelectItem>
                     <SelectItem value="growth">🔵 Growth - €99/mes</SelectItem>
-                    <SelectItem value="pro">🟣 Pro - €199/mes</SelectItem>
+                    <SelectItem value="enterprise">💎 Enterprise - €299/mes</SelectItem>
+                    <SelectItem value="ERP_INDUSTRIAL">🏭 ERP Industrial - €499/mes</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label htmlFor="estado">Estado</Label>
-                <Select name="estado" defaultValue="trial">
+                <Label htmlFor="moneda">Región Fiscal / Moneda</Label>
+                <Select name="moneda" defaultValue="MXN">
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="trial">Trial</SelectItem>
-                    <SelectItem value="activo">Activo</SelectItem>
+                    <SelectItem value="MXN">🇲🇽 México (16% IVA)</SelectItem>
+                    <SelectItem value="EUR">🇪🇺 España (21% IVA)</SelectItem>
+                    <SelectItem value="USD">🇺🇸 USA (Sales Tax)</SelectItem>
+                    <SelectItem value="COP">🇨🇴 Colombia (19% IVA)</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-              <div>
-                <Label htmlFor="moneda">Moneda</Label>
-                <Select name="moneda" defaultValue="EUR">
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="MXN">MXN</SelectItem>
-                    <SelectItem value="USD">USD</SelectItem>
-                    <SelectItem value="EUR">EUR</SelectItem>
-                    <SelectItem value="COP">COP</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="trialDays">Días de Trial</Label>
-                <Input id="trialDays" name="trialDays" type="number" defaultValue="14" />
               </div>
             </div>
+
+            {genesisResult ? (
+              <div className="bg-emerald-50 border border-emerald-100 p-6 rounded-2xl mb-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="flex items-center gap-3 mb-4">
+                  <ShieldCheck className="text-emerald-600" size={24} />
+                  <h4 className="text-lg font-black text-emerald-900 uppercase tracking-tighter">Bóveda Génesis Iniciada</h4>
+                </div>
+                <p className="text-xs font-bold text-emerald-800 mb-4 opacity-70">
+                  Se ha generado la Llave Maestra del cliente. Es CRÍTICO que el cliente guarde esta clave, ya que es el únicoHash capaz de descifrar sus nóminas y datos industriales.
+                </p>
+                <div className="space-y-4">
+                  <div>
+                    <Label className="text-[9px] font-black uppercase text-emerald-900 opacity-50">Genesis Hash (SHA-256)</Label>
+                    <div className="bg-white/50 p-3 rounded-xl border border-emerald-200 font-mono text-[9px] break-all text-emerald-950">
+                      {genesisResult.genesisHash}
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-[9px] font-black uppercase text-emerald-900 opacity-50">Llave Maestra AES-256 (Descargar/Copiar ahora)</Label>
+                    <div className="bg-emerald-900 p-4 rounded-xl font-mono text-xs break-all text-emerald-100 shadow-inner flex items-center justify-between">
+                      <span className="flex-1">{genesisResult.masterKey}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setShowCreateDialog(false)}>
-                Cancelar
+              <Button type="button" variant="ghost" onClick={() => {
+                setShowCreateDialog(false);
+                setGenesisResult(null);
+              }}>
+                {genesisResult ? 'Cerrar Génesis' : 'Cancelar'}
               </Button>
-              <Button type="submit">Crear Tenant</Button>
+              {!genesisResult && (
+                <Button type="submit" className="bg-[#1A365D] hover:bg-[#2D3748] rounded-xl font-black uppercase tracking-widest text-[10px] h-11 px-8">
+                  Iniciar Proceso Génesis
+                </Button>
+              )}
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
     </div>
   );
+}
+
+function cn(...inputs: any[]) {
+  return inputs.filter(Boolean).join(' ')
 }

@@ -37,7 +37,19 @@ export async function GET(
         },
         cotizaciones: true,
         contratos: true,
-        deals: true
+        deals: true,
+        attachments: {
+          include: {
+            usuario: {
+              select: {
+                name: true
+              }
+            }
+          },
+          orderBy: {
+            fechaSubida: 'desc'
+          }
+        }
       }
     })
 
@@ -60,7 +72,13 @@ export async function GET(
           },
           cotizaciones: true,
           contratos: true,
-          deals: true
+          deals: true,
+          attachments: {
+            include: {
+              usuario: { select: { name: true } }
+            },
+            orderBy: { fechaSubida: 'desc' }
+          }
         }
       })
     }
@@ -91,7 +109,7 @@ async function updateLeadHandler(
     }
 
     const body = await request.json()
-    const { nombre, email, telefono, empresa, contextoProyecto, notas, estado, scoreValue, tags, origen, ciudad, pais } = body
+    const { nombre, email, telefono, empresa, contextoProyecto, notas, estado, scoreValue, tags, origen, ciudad, pais, metadataExterna } = body
 
     // Verificar que el lead existe y pertenece al tenant
     const existingLead = await prisma.lead.findUnique({
@@ -124,6 +142,7 @@ async function updateLeadHandler(
         ...(origen !== undefined && { origen }),
         ...(ciudad !== undefined && { ciudad }),
         ...(pais !== undefined && { pais }),
+        ...(metadataExterna !== undefined && { metadataExterna }),
         fechaUltimaActividad: new Date(),
       }
     })

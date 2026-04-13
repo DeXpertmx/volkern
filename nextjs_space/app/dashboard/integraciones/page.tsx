@@ -345,7 +345,7 @@ const INTEGRACIONES_DISPONIBLES = [
     documentacion: 'https://www.twilio.com/docs/whatsapp',
     caracteristicas: [
       '✅ Envío y recepción de mensajes WhatsApp',
-      '✅ Integración automática con Chatwoot',
+      '✅ Integración automática con el Hub de Comunicaciones',
       '✅ Soporte para mensajes multimedia',
       '✅ Sandbox disponible para pruebas',
       '⚠️ Requiere cuenta activa de Twilio'

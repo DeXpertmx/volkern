@@ -12,6 +12,7 @@ interface LeftPanelContentProps {
   versionHistory: Array<{id: string; timestamp: string; description: string}> | null;
   currentVersionIndex: number;
   onRestoreVersion: (index: number) => void;
+  onOpenAIGenerator: () => void;
 }
 
 const LeftPanelContent: React.FC<LeftPanelContentProps> = ({
@@ -23,6 +24,7 @@ const LeftPanelContent: React.FC<LeftPanelContentProps> = ({
   versionHistory,
   currentVersionIndex,
   onRestoreVersion,
+  onOpenAIGenerator,
 }) => {
   return (
     <div className="flex-1 overflow-y-auto custom-scrollbar">
@@ -187,7 +189,10 @@ const LeftPanelContent: React.FC<LeftPanelContentProps> = ({
               <span className="font-bold text-sm uppercase tracking-tight">AI Content Generation</span>
             </div>
             <p className="text-xs text-purple-600/85 dark:text-purple-300/85 leading-relaxed mb-5">Genera textos, imágenes y secciones completas usando el contexto de tu CRM.</p>
-            <button className="w-full bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 dark:from-purple-600 dark:to-purple-700 dark:hover:from-purple-700 dark:hover:to-purple-800 text-white text-xs font-bold py-3 rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 group">
+            <button 
+              onClick={() => onOpenAIGenerator()}
+              className="w-full bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 dark:from-purple-600 dark:to-purple-700 dark:hover:from-purple-700 dark:hover:to-purple-800 text-white text-xs font-bold py-3 rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 group"
+            >
               <Type size={14} className="fill-white group-hover:scale-110 transition-transform" />
               Abrir Copiloto
             </button>

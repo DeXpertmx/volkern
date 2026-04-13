@@ -356,11 +356,25 @@ export class NotificationService {
       if (!chatId) {
         throw new Error('Telegram chat ID required (not in recipient nor in tenant config)');
       }
+
+      // Convertir acciones a inline_keyboard de Telegram
+      let replyMarkup = undefined;
+      if (content.actions && content.actions.length > 0) {
+        replyMarkup = {
+          inline_keyboard: [
+            content.actions.map(action => ({
+              text: action.label,
+              url: action.url
+            }))
+          ]
+        };
+      }
       
       const success = await sendTelegramMessage(
         chatId,
         content.body,
-        creds?.bot_token
+        creds?.bot_token,
+        replyMarkup
       );
       
       return {
@@ -722,7 +736,40 @@ export async function notifyUser(
   title: string,
   body: string,
   context: SkillContext
-): Promise<NotificationResult> {
+): Promise<NotificationResult | Record<NotificationChannel, NotificationResult>> {
+  // 1. Obtener datos del usuario para ver canales disponibles
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { metadata: true, email: true, telefono: true }
+  });
+
+  const metadata = (user?.metadata as any) || {};
+  const channels: NotificationChannel[] = ['in_app'];
+
+  // Si tiene Telegram configurado en metadata, añadirlo
+  if (metadata.telegram_chat_id) {
+    channels.push('telegram');
+  }
+
+  // Si no tiene telegram pero el contexto pide urgencia, podríamos añadir email,
+  // pero mantendremos la lógica simple solicitada: In-App + Telegram.
+
+  if (channels.length > 1) {
+    return notificationService.sendMultiChannel(
+      { 
+        type: 'user', 
+        id: userId, 
+        email: user?.email || undefined, 
+        phone: user?.telefono || undefined,
+        telegramChatId: metadata.telegram_chat_id 
+      },
+      { title, body },
+      channels,
+      context,
+      'high'
+    );
+  }
+
   return notificationService.send(
     { type: 'user', id: userId },
     { title, body },

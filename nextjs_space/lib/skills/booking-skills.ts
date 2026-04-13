@@ -16,6 +16,8 @@ import { createLead, findLeadByEmail } from './contact-skills';
 import { createTask } from './task-skills';
 import { createConversation } from './conversation-skills';
 import type { BookingCreatedEvent, BookingConfirmedEvent } from '@/lib/types/events';
+import { checkAvailability } from '@/lib/services/appointments';
+import { sendEmail } from '@/lib/resend-email';
 
 // ============== TIPOS ==============
 
@@ -54,6 +56,16 @@ export interface CancelBookingInput {
   bookingId: string;
   tenantId: string;
   motivo?: string;
+  userId?: string;
+  source?: 'api' | 'app' | 'automation' | 'mcp' | 'webhook';
+}
+
+export interface AutoScheduleInput {
+  tenantId: string;
+  leadId: string;
+  preferredDate: string; // YYYY-MM-DD
+  preferredTime?: string; // HH:mm
+  titulo: string;
   userId?: string;
   source?: 'api' | 'app' | 'automation' | 'mcp' | 'webhook';
 }
@@ -299,4 +311,88 @@ export async function getUpcomingBookings(tenantId: string, limit = 10) {
     },
   });
   return citas;
+}
+
+/**
+ * Agendamiento Zero-Touch
+ * Orquesta: Verificación de disponibilidad + Creación de Cita + Notificación Email
+ */
+export async function autoScheduleAppointment(input: AutoScheduleInput) {
+  const { tenantId, leadId, preferredDate, preferredTime, titulo, userId, source = 'app' } = input;
+
+  // 1. Obtener datos del lead
+  const lead = await prisma.lead.findFirst({ 
+    where: { id: leadId, tenantId } 
+  });
+  
+  if (!lead) throw new Error('Lead no encontrado o no pertenece al tenant');
+
+  // 2. Verificar disponibilidad
+  const availability = await checkAvailability({
+    tenantId,
+    fecha: preferredDate,
+    duracion: 30, // Default 30 min
+    avisoMinimo: 60 // 1 hora de margen
+  });
+
+  if (!availability.disponible || availability.slots.length === 0) {
+    return { 
+      success: false, 
+      error: 'No hay disponibilidad para esa fecha.',
+      recomendacion: 'Solicita otra fecha al cliente o revisa los horarios del tenant.'
+    };
+  }
+
+  // 3. Seleccionar Slot (si hay preferredTime, buscarlo, si no el primero)
+  let selectedSlot = availability.slots[0];
+  if (preferredTime) {
+    // Buscar el slot que más se acerque a HH:mm
+    const target = `${preferredDate}T${preferredTime}`.substring(0, 16);
+    const match = availability.slots.find(s => s.includes(target));
+    if (match) selectedSlot = match;
+  }
+
+  // 4. Crear cita usando el skill existente
+  const bookingResult = await createBooking({
+    tenantId,
+    leadId,
+    nombre: lead.nombre,
+    email: lead.email,
+    telefono: lead.telefono || undefined,
+    titulo,
+    fechaHora: new Date(selectedSlot),
+    userId,
+    source
+  });
+
+  // 5. Enviar email vía Resend (Notificación Zero-Touch)
+  if (lead.email) {
+    try {
+      await sendEmail({
+        to: lead.email,
+        subject: `📅 Cita confirmada: ${titulo}`,
+        html: `
+          <div style="font-family: sans-serif; padding: 20px;">
+            <h2>Hola ${lead.nombre},</h2>
+            <p>Tu cita ha sido agendada con éxito por nuestro asistente de IA.</p>
+            <div style="background: #f4f4f4; padding: 15px; border-radius: 8px; margin: 20px 0;">
+              <strong>Evento:</strong> ${titulo}<br>
+              <strong>Fecha y Hora:</strong> ${new Date(selectedSlot).toLocaleString('es-ES')}<br>
+            </div>
+            <p>Si necesitas realizar algún cambio, por favor responde a este correo.</p>
+            <p>Saludos,<br>El equipo de Volkern</p>
+          </div>
+        `
+      });
+    } catch (emailError) {
+      console.warn('[AutoSchedule] Error enviando email confirmation:', emailError);
+    }
+  }
+
+  return {
+    success: true,
+    bookingId: bookingResult.cita.id,
+    fechaAgendada: selectedSlot,
+    summary: `Agenda completada para el ${new Date(selectedSlot).toLocaleString()} y correo de confirmación enviado.`
+  };
 }

@@ -1,0 +1,6 @@
+// Borrador de la refactorización para withTenantAuth
+export const POST = withTenantAuth(async (req, auth) => {
+  const { action_name, payload } = await req.json();
+  const tenantId = auth.tenant!.id;
+  // ... resto de la lógica protegida
+});

@@ -29,6 +29,7 @@ import EditorSidebar from "./EditorSidebar";
 import LeftPanelContent from "./LeftPanelContent";
 import PropertiesPanel from "./PropertiesPanel";
 import TemplateManagerModal from "./TemplateManagerModal";
+import { AIGeneratorModal } from "./AIGeneratorModal";
 
 interface EditorWorkspaceProps {
   initialData?: Record<string, unknown>;
@@ -79,6 +80,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   const [showCanvaModal, setShowCanvaModal] = useState(false);
   const [canvaTargetComponentId, setCanvaTargetComponentId] = useState<string | null>(null);
   const [category, setCategory] = useState<string>(mode === 'email' ? 'EMAIL' : 'CONTRATO');
+  const [showAIGenerator, setShowAIGenerator] = useState(false);
 
   const editorRef = useRef<GrapesEditorRef>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -582,6 +584,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
           const url = slug === 'home' ? '/' : `/${slug}`;
           window.open(url, '_blank');
         }}
+        onOpenAIGenerator={() => setShowAIGenerator(true)}
         category={category}
         onCategoryChange={setCategory}
       />
@@ -640,6 +643,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
                   editorRef.current?.getEditor()?.runCommand?.('restore-version', { index });
                   setCurrentVersionIndex(index);
                 }}
+                onOpenAIGenerator={() => setShowAIGenerator(true)}
               />
             </motion.div>
           )}
@@ -695,6 +699,16 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
         onSelectTemplate={handleSelectSystemTemplate}
         selectedTemplateId={templateId}
         mode={mode}
+      />
+
+      <AIGeneratorModal 
+        isOpen={showAIGenerator}
+        onClose={() => setShowAIGenerator(false)}
+        onGenerate={(data) => {
+          if (editorRef.current && data) {
+            editorRef.current.importProject(data);
+          }
+        }}
       />
 
       {contextMenu && (

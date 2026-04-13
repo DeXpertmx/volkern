@@ -83,7 +83,30 @@ export const POST = withTenantAuth(async (request, auth) => {
     let estado = 'enviado'
     let errorMensaje: string | undefined
 
-    if (canal === 'whatsapp') {
+    // Prioridad: Si la conversación está vinculada a Chatwoot (Hub de Comunicaciones)
+    if (conversacion.externalRef?.startsWith('chatwoot_')) {
+      try {
+        const { syncOutgoingChatwootMessage } = await import('@/lib/skills/chatwoot-sync-skill');
+        const chatwootRes = await syncOutgoingChatwootMessage({
+          tenantId,
+          conversationId: conversacion.id,
+          content: contenidoFinal,
+          messageId: 'PENDING_SYNC' // Se manejará dentro o lo actualizaremos luego
+        });
+
+        if (chatwootRes.success) {
+          resultado = { success: true, messageId: chatwootRes.chatwootMessageId };
+        } else {
+          estado = 'error';
+          errorMensaje = chatwootRes.reason || 'Error al enviar a través del Hub';
+          resultado = { success: false, error: errorMensaje };
+        }
+      } catch (e: any) {
+        estado = 'error';
+        errorMensaje = e.message;
+        resultado = { success: false, error: e.message };
+      }
+    } else if (canal === 'whatsapp') {
       if (!conversacion.contactoTelefono) {
         return NextResponse.json({ error: 'No hay número de teléfono para WhatsApp' }, { status: 400 })
       }

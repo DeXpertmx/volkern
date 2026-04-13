@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { authenticateRequest } from '@/lib/api-key-auth'
+import { skills } from '@/lib/skills'
 
 // GET - Obtener orden de venta específica
 export async function GET(
@@ -151,6 +152,12 @@ export async function PATCH(
       if (body.estado === 'facturada') {
         updateData.fechaFacturacion = new Date()
       }
+
+      // 📦 INTEGRACIÓN MRP: Si la orden se confirma, procesar consumo de inventario
+      if (body.estado === 'confirmada' && ordenExistente.estado !== 'confirmada') {
+        // En un paso posterior ejecutaremos el consumo fuera de la transacción principal
+        // para evitar bloqueos largos, pero aquí marcamos la intención.
+      }
     }
 
     if (body.fechaEntrega !== undefined) {
@@ -245,6 +252,41 @@ export async function PATCH(
         items: { orderBy: { orden: 'asc' } }
       }
     })
+
+    // 📦 EJECUCIÓN DEL CONSUMO (Post-Update)
+    if (body.estado === 'confirmada' && ordenExistente.estado !== 'confirmada') {
+      try {
+        // Obtener los items de la orden que están vinculados al catálogo
+        const orderItems = await prisma.ordenVentaItem.findMany({
+          where: { 
+            ordenVentaId: params.id,
+            catalogoItemId: { not: null }
+          }
+        });
+
+        console.log(`[MRP-Integration] Processing consumption for ${orderItems.length} items from Order ${params.id}`);
+
+        for (const item of orderItems) {
+          if (item.catalogoItemId) {
+            await skills.process_inventory_consumption({
+              tenantId: auth.tenant!.id,
+              productId: item.catalogoItemId,
+              quantity: item.cantidad,
+              userId: auth.user!.id
+            });
+          }
+        }
+
+        // Activar Watchdog de salud de inventario
+        skills.inventory_watchdog({ tenantId: auth.tenant!.id }).catch(err => {
+          console.error('[InventoryWatchdog] Error in Post-Sale check:', err);
+        });
+
+      } catch (consumeError) {
+        console.error('[MRP-Integration] Error during automated inventory consumption:', consumeError);
+        // No bloqueamos la respuesta de la orden, pero logeamos el error crítico
+      }
+    }
 
     return NextResponse.json(orden)
   } catch (error) {

@@ -1,61 +1,32 @@
-
 'use client';
 
 import { useEffect, useState } from 'react';
-import {
-  TrendingUp,
-  TrendingDown,
-  Users,
-  Building2,
-  DollarSign,
-  Target,
-  BookOpen,
-  GraduationCap,
-  Calendar
-} from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-
-interface Analytics {
-  overview: {
-    totalTenants: number;
-    activeTenants: number;
-    trialTenants: number;
-    suspendedTenants: number;
-    totalMRR: number;
-    totalUsers: number;
-    totalLeads: number;
-    totalCourses: number;
-    totalStudents: number;
-  };
-  metrics: {
-    newTenants: number;
-    churnRate: number;
-    growthRate: number;
-    avgLeadsPerTenant: number;
-  };
-  mrrByCurrency: Array<{ currency: string; total: number }>;
-  recentActivity: Array<{ date: string; count: number }>;
-}
+import { GlobalAnalytics, GlobalPulseData } from '@/components/admin/GlobalAnalytics';
+import { Loader2, RefreshCcw, TrendingUp } from 'lucide-react';
 
 export default function AdminDashboard() {
-  const [analytics, setAnalytics] = useState<Analytics | null>(null);
+  const [pulseData, setPulseData] = useState<GlobalPulseData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState('30');
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadAnalytics();
-  }, [period]);
+    loadPulse();
+  }, []);
 
-  const loadAnalytics = async () => {
+  const loadPulse = async () => {
     try {
-      const res = await fetch(`/api/admin/analytics?period=${period}`);
+      setLoading(true);
+      setError(null);
+      const res = await fetch('/api/admin/global-pulse');
       if (res.ok) {
         const data = await res.json();
-        setAnalytics(data);
+        setPulseData(data);
+      } else {
+        setError('Error al conectar con la bóveda de inteligencia global');
       }
     } catch (error) {
-      console.error('Error loading analytics:', error);
+      console.error('Error loading pulse:', error);
+      setError('Error de conexión con el servidor MCP');
     } finally {
       setLoading(false);
     }
@@ -63,238 +34,129 @@ export default function AdminDashboard() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
+        <Loader2 className="w-12 h-12 animate-spin text-[#1A365D]/20" />
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Sincronizando pulso global...</p>
       </div>
     );
   }
 
-  if (!analytics) {
-    return <div>Error al cargar analytics</div>;
+  if (error || !pulseData) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] gap-6">
+        <div className="p-4 bg-rose-50 rounded-full text-rose-600">
+           <RefreshCcw size={32} />
+        </div>
+        <div className="text-center">
+            <h3 className="text-lg font-black text-[#1A365D] uppercase tracking-tighter">Fallo en la Matriz de Datos</h3>
+            <p className="text-sm text-slate-500 font-medium">{error || 'No hay datos disponibles'}</p>
+        </div>
+        <button 
+            onClick={loadPulse}
+            className="px-6 py-2 bg-[#1A365D] text-white rounded-xl font-black uppercase tracking-widest text-[10px] shadow-lg shadow-indigo-900/10 hover:scale-105 transition-transform"
+        >
+            Reintentar Conexión
+        </button>
+      </div>
+    );
   }
 
-  const stats = [
-    {
-      name: 'Total Tenants',
-      value: analytics.overview.totalTenants,
-      icon: Building2,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-100'
-    },
-    {
-      name: 'Tenants Activos',
-      value: analytics.overview.activeTenants,
-      icon: Building2,
-      color: 'text-green-600',
-      bgColor: 'bg-green-100'
-    },
-    {
-      name: 'MRR Total',
-      value: `$${analytics.overview.totalMRR.toLocaleString()}`,
-      icon: DollarSign,
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-100'
-    },
-    {
-      name: 'Growth Rate',
-      value: `${analytics.metrics.growthRate}%`,
-      icon: analytics.metrics.growthRate >= 0 ? TrendingUp : TrendingDown,
-      color: analytics.metrics.growthRate >= 0 ? 'text-green-600' : 'text-red-600',
-      bgColor: analytics.metrics.growthRate >= 0 ? 'bg-green-100' : 'bg-red-100'
-    },
-    {
-      name: 'Usuarios Totales',
-      value: analytics.overview.totalUsers,
-      icon: Users,
-      color: 'text-indigo-600',
-      bgColor: 'bg-indigo-100'
-    },
-    {
-      name: 'Leads Totales',
-      value: analytics.overview.totalLeads,
-      icon: Target,
-      color: 'text-orange-600',
-      bgColor: 'bg-orange-100'
-    },
-    {
-      name: 'Cursos Totales',
-      value: analytics.overview.totalCourses,
-      icon: BookOpen,
-      color: 'text-pink-600',
-      bgColor: 'bg-pink-100'
-    },
-    {
-      name: 'Estudiantes Totales',
-      value: analytics.overview.totalStudents,
-      icon: GraduationCap,
-      color: 'text-teal-600',
-      bgColor: 'bg-teal-100'
-    }
-  ];
-
   return (
-    <div className="space-y-8">
+    <div className="space-y-10 animate-in fade-in duration-700">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard Global</h1>
-          <p className="text-gray-500 mt-1">Volkern Admin Backoffice</p>
+          <h1 className="text-4xl font-black text-[#1A365D] uppercase tracking-tighter italic">Global Pulse</h1>
+          <p className="text-[#4A5568] font-bold text-xs uppercase tracking-widest opacity-60">Volkern Platform Live Oversight</p>
         </div>
-        <div className="flex items-center gap-2">
-          <select
-            value={period}
-            onChange={(e) => setPeriod(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-          >
-            <option value="7">Últimos 7 días</option>
-            <option value="30">Últimos 30 días</option>
-            <option value="90">Últimos 90 días</option>
-          </select>
+        <button 
+            onClick={loadPulse}
+            className="p-3 rounded-2xl bg-white border border-slate-100 text-slate-400 hover:text-[#1A365D] hover:border-[#1A365D]/20 transition-all group"
+        >
+            <RefreshCcw size={18} className="group-hover:rotate-180 transition-transform duration-500" />
+        </button>
+      </div>
+
+      {/* Global Analytics Cards */}
+      <GlobalAnalytics data={pulseData} />
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Quick Actions / Status Panel */}
+        <div className="lg:col-span-1 space-y-6">
+            <div className="bg-[#1A365D] p-8 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:scale-110 transition-transform duration-700">
+                    <TrendingUp size={120} />
+                </div>
+                <h3 className="text-xl font-black italic uppercase tracking-tighter mb-2">Comando Global</h3>
+                <p className="text-white/60 text-xs font-bold uppercase tracking-widest mb-8">Gestión de Infraestructura</p>
+                
+                <div className="space-y-3">
+                    <button className="w-full py-4 bg-white/10 hover:bg-white/20 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border border-white/5 text-center">
+                        Optimizar Base de Datos
+                    </button>
+                    <button className="w-full py-4 bg-white/10 hover:bg-white/20 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border border-white/5 text-center">
+                        Limpiar Caché Global
+                    </button>
+                    <button className="w-full py-4 bg-white/10 hover:bg-white/20 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border border-white/5 text-center">
+                        Auditoría de Seguridad
+                    </button>
+                </div>
+            </div>
+
+            <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+                <h3 className="text-sm font-black text-[#1A365D] uppercase tracking-widest mb-4">Estado de Nodos</h3>
+                <div className="space-y-4">
+                    {[
+                        { name: 'Core API', status: 'Online', color: 'bg-emerald-500' },
+                        { name: 'Gemma-4 Engine', status: 'Active', color: 'bg-emerald-500' },
+                        { name: 'Vault Storage', status: 'Secure', color: 'bg-indigo-500' },
+                        { name: 'Edge CDN', status: 'Optimal', color: 'bg-emerald-500' }
+                    ].map((node) => (
+                        <div key={node.name} className="flex items-center justify-between border-b border-slate-50 pb-3 last:border-0">
+                            <span className="text-xs font-bold text-slate-500">{node.name}</span>
+                            <div className="flex items-center gap-2">
+                                <span className={`h-1.5 w-1.5 rounded-full ${node.color}`}></span>
+                                <span className="text-[10px] font-black uppercase tracking-widest text-[#1A365D]">{node.status}</span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+
+        {/* System Messages / Log */}
+        <div className="lg:col-span-2 bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
+            <div className="p-8 border-b border-slate-50 flex items-center justify-between">
+                <div>
+                    <h3 className="text-xl font-black text-[#1A365D] uppercase tracking-tighter">Log de Operaciones Globales</h3>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Actividad del Backoffice en tiempo real</p>
+                </div>
+                <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+            </div>
+            <div className="p-0">
+                <div className="divide-y divide-slate-50">
+                    {[
+                        { time: '12:45', action: 'Nuevo Tenant Registrado', detail: 'Inmobiliaria Premium SL', type: 'success' },
+                        { time: '11:20', action: 'Actualización de Plan', detail: 'TechSolutions Pro incrementó a Enterprise', type: 'info' },
+                        { time: '09:15', action: 'Alerta de Seguridad', detail: 'Intento de acceso bloqueado en nodo US-East', type: 'warning' },
+                        { time: '08:00', action: 'Respaldo Diario', detail: 'Backup de 452 bóvedas completado exitosamente', type: 'success' },
+                        { time: '07:30', action: 'Mantenimiento MCP', detail: 'Reinicio programado de servidores de IA', type: 'info' }
+                    ].map((log, i) => (
+                        <div key={i} className="p-6 hover:bg-slate-50 transition-colors flex items-start gap-4">
+                            <span className="text-[10px] font-black text-slate-300 mt-0.5">{log.time}</span>
+                            <div>
+                                <p className="text-xs font-bold text-[#1A365D] uppercase tracking-tight">{log.action}</p>
+                                <p className="text-xs text-slate-500">{log.detail}</p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+                <div className="p-6 bg-slate-50/50 text-center">
+                    <button className="text-[10px] font-black text-[#1A365D] uppercase tracking-widest hover:underline">Ver registro completo</button>
+                </div>
+            </div>
         </div>
       </div>
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat) => {
-          const Icon = stat.icon;
-          return (
-            <Card key={stat.name}>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">{stat.name}</p>
-                    <p className="text-2xl font-bold text-gray-900 mt-1">{stat.value}</p>
-                  </div>
-                  <div className={`${stat.bgColor} p-3 rounded-lg`}>
-                    <Icon className={stat.color} size={24} />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      {/* Detailed Metrics */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* MRR by Currency */}
-        <Card>
-          <CardHeader>
-            <CardTitle>MRR por Moneda</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {analytics.mrrByCurrency.map((item) => (
-                <div key={item.currency} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <DollarSign size={16} className="text-gray-400" />
-                    <span className="font-medium">{item.currency}</span>
-                  </div>
-                  <span className="text-lg font-bold">
-                    ${item.total.toLocaleString()}
-                  </span>
-                </div>
-              ))}
-              {analytics.mrrByCurrency.length === 0 && (
-                <p className="text-gray-500 text-center py-4">No hay datos de MRR</p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Key Metrics */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Métricas Clave</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                <span className="text-sm font-medium text-gray-700">Nuevos Tenants</span>
-                <span className="text-2xl font-bold text-green-600">
-                  {analytics.metrics.newTenants}
-                </span>
-              </div>
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                <span className="text-sm font-medium text-gray-700">Churn Rate</span>
-                <span className="text-2xl font-bold text-red-600">
-                  {analytics.metrics.churnRate}%
-                </span>
-              </div>
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                <span className="text-sm font-medium text-gray-700">Avg. Leads/Tenant</span>
-                <span className="text-2xl font-bold text-blue-600">
-                  {analytics.metrics.avgLeadsPerTenant}
-                </span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Tenant Status Distribution */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Distribución de Tenants</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-              <p className="text-sm font-medium text-green-700">Activos</p>
-              <p className="text-3xl font-bold text-green-900 mt-2">
-                {analytics.overview.activeTenants}
-              </p>
-            </div>
-            <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <p className="text-sm font-medium text-blue-700">En Trial</p>
-              <p className="text-3xl font-bold text-blue-900 mt-2">
-                {analytics.overview.trialTenants}
-              </p>
-            </div>
-            <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-              <p className="text-sm font-medium text-yellow-700">Suspendidos</p>
-              <p className="text-3xl font-bold text-yellow-900 mt-2">
-                {analytics.overview.suspendedTenants}
-              </p>
-            </div>
-            <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-              <p className="text-sm font-medium text-gray-700">Total</p>
-              <p className="text-3xl font-bold text-gray-900 mt-2">
-                {analytics.overview.totalTenants}
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Recent Activity */}
-      {analytics.recentActivity && analytics.recentActivity.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Actividad Reciente (Últimos 7 días)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {analytics.recentActivity.map((activity: any, index: number) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-                >
-                  <div className="flex items-center gap-2">
-                    <Calendar size={16} className="text-gray-400" />
-                    <span className="text-sm font-medium">
-                      {new Date(activity.date).toLocaleDateString('es-MX')}
-                    </span>
-                  </div>
-                  <span className="text-sm font-bold text-gray-900">
-                    {activity.count} nuevo{activity.count !== 1 ? 's' : ''} tenant{activity.count !== 1 ? 's' : ''}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

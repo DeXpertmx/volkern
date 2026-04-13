@@ -52,7 +52,7 @@ function isPublicPath(path: string): boolean {
     '/api/citas',      // Agregado para autenticación dual (API Keys)
     '/api/catalogo',   // Catálogo - autenticación dual (API Keys)
     '/api/mcp',        // MCP Server - autenticación via API Key
-    '/api/skills',     // Skills API - autenticación dual
+    '/api/ai/',        // AI Skill Handler - autenticación via API Key
     '/api/signup',
     '/api/webhooks/',
     '/api/integrations/webhook/',  // Integration Layer webhooks

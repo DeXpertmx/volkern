@@ -76,6 +76,36 @@ export const POST = withTenantAuth(async (req, auth, params) => {
         result.message = 'Tenant reactivado';
         break;
 
+      case 'toggle_industrial_license':
+        const { enabled: industrialEnabled } = opParams;
+        const industrialFeatures = ['produccion', 'calidad', 'rrhh', 'inventario_industrial', 'mcp_industrial'];
+        
+        await Promise.all(industrialFeatures.map(f => 
+          globalPrisma.tenantFeature.upsert({
+            where: {
+              tenantId_feature: {
+                tenantId: params.id,
+                feature: f
+              }
+            },
+            update: {
+              habilitado: industrialEnabled,
+              habilitadoPor: auth.user!.id,
+              razon: 'Actualización manual de licencia industrial'
+            },
+            create: {
+              tenantId: params.id,
+              feature: f,
+              habilitado: industrialEnabled,
+              habilitadoPor: auth.user!.id,
+              razon: 'Activación inicial de licencia industrial'
+            }
+          })
+        ));
+
+        result.message = `Licencia industrial ${industrialEnabled ? 'activada' : 'desactivada'} (incluye ${industrialFeatures.join(', ')})`;
+        break;
+
       case 'toggle_feature':
         const { feature, enabled } = opParams;
         if (!feature) {

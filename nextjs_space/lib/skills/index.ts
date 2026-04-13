@@ -24,6 +24,17 @@ import * as catalogSkills from './catalog-skills';
 import * as dealSkills from './deal-skills';
 import * as chatbotSkills from './chatbot-skill';
 import * as chatwootSyncSkills from './chatwoot-sync-skill';
+import * as webCreatorSkills from './web-creator-skills';
+import * as proactivitySkills from './proactivity-skills';
+import * as trainingSkills from './training-skills';
+import * as financeSkills from './finance-skills';
+import * as inventorySkills from './inventory-skills';
+import * as inventoryWatchdogSkills from './inventory-watchdog';
+import * as projectSkills from './project-skills';
+import * as consolidationSkills from './financial-consolidation-skills';
+import * as productionSkills from './production-management-skills';
+import * as qualitySkills from './quality-management-skills';
+import * as hrSkills from './hr-management-skills';
 import { eventBus, EVENTS } from './event-bus';
 
 // ============== SKILL REGISTRY ==============
@@ -106,12 +117,14 @@ export const skills = {
   cancel_booking: bookingSkills.cancelBooking,
   get_bookings_by_lead: getBookingsByLeadWrapper,
   get_upcoming_bookings: getUpcomingBookingsWrapper,
+  auto_schedule: bookingSkills.autoScheduleAppointment,
   
   // Deals / Pipeline
   create_deal: dealSkills.createDeal,
   update_deal: dealSkills.updateDeal,
   get_deal: getDealWrapper,
   list_deals: listDealsWrapper,
+  prequalify_lead: dealSkills.prequalifyLead,
   
   // Catálogo
   export_catalog: catalogSkills.exportCatalog,
@@ -119,12 +132,55 @@ export const skills = {
   get_catalog_item: catalogSkills.getCatalogItem,
   search_catalog: catalogSkills.searchCatalog,
   
+  // WebCreator AI
+  generate_landing_draft: webCreatorSkills.generateLandingDraft,
+  
+  // Proactividad & Training
+  detect_ghosting: proactivitySkills.detectGhosting,
+  generate_success_path: proactivitySkills.generateSuccessPath,
+  generate_customer_response: trainingSkills.generateCustomerResponse,
+  generate_post_mortem: trainingSkills.generatePostMortem,
+  
   // AI & Chatbot
   execute_chatbot_response: chatbotSkills.executeChatbotResponse,
   
   // Sincronización Chatwoot
   sync_chatwoot_incoming: chatwootSyncSkills.syncIncomingChatwootMessage,
   sync_chatwoot_outgoing: chatwootSyncSkills.syncOutgoingChatwootMessage,
+  
+  // ERP Finanzas
+  create_supplier: financeSkills.createSupplier,
+  create_expense: financeSkills.createExpense,
+  register_expense_vision: financeSkills.registerExpenseVision,
+  analyze_burn_rate: financeSkills.analyzeBurnRate,
+  
+  // ERP Inventario
+  adjust_stock: inventorySkills.adjustStock,
+  get_inventory_health: inventorySkills.getInventoryHealth,
+  process_inventory_consumption: inventorySkills.processInventoryConsumption,
+  inventory_watchdog: inventoryWatchdogSkills.inventoryWatchdog,
+  
+  // ERP Proyectos
+  get_project_profitability: projectSkills.getProjectProfitability,
+  detect_project_drifting: projectSkills.detectProjectDrifting,
+  
+  // ERP Consolidación (The Financial Brain)
+  analyze_global_profitability: consolidationSkills.analyzeGlobalProfitability,
+  audit_expense_integrity: consolidationSkills.auditExpenseIntegrity,
+  project_financial_forecast: consolidationSkills.projectFinancialForecast,
+  tax_prospector: consolidationSkills.taxProspector,
+  
+  // ERP Producción (MRP)
+  calculate_production_cost: productionSkills.calculate_production_cost,
+  verify_waste_integrity: productionSkills.verify_waste_integrity,
+
+  // ERP Calidad (QC)
+  detect_quality_anomalies: qualitySkills.detect_quality_anomalies,
+  register_qc_inspection: qualitySkills.register_qc_inspection,
+
+  // ERP RRHH (HRM)
+  talent_retention_risk: hrSkills.talent_retention_risk,
+  get_employee_confidential_data: hrSkills.get_employee_confidential_data,
 } as const;
 
 export type SkillName = keyof typeof skills;
@@ -194,6 +250,42 @@ export function listSkills(): Array<{ name: SkillName; description: string; cate
     { name: 'search_catalog', description: 'Buscar en el catálogo con filtros', category: 'catalog' },
     // AI
     { name: 'execute_chatbot_response', description: 'Procesar mensaje del chatbot y responder', category: 'ai' },
+    // Advanced composite skills
+    { name: 'prequalify_lead', description: 'Registrar nota, actualizar deal y buscar en catálogo (Escucha Activa)', category: 'advanced' },
+    { name: 'auto_schedule', description: 'Agendar cita automáticamente verificando disponibilidad y notificando al cliente', category: 'advanced' },
+    { name: 'generate_landing_draft', description: 'Generar borrador de landing page personalizado con IA', category: 'advanced' },
+    // Proactivity & Training
+    { name: 'detect_ghosting', description: 'Detectar leads inactivos en etapas calientes', category: 'proactivity' },
+    { name: 'generate_success_path', description: 'Generar sugerencia estratégica para un lead basada en patrones de cierre', category: 'proactivity' },
+    { name: 'generate_customer_response', description: 'Simular respuesta de cliente en roleplay de negociación', category: 'training' },
+    { name: 'generate_post_mortem', description: 'Generar reporte de retroalimentación tras una sesión de roleplay', category: 'training' },
+    // ERP Finanzas
+    { name: 'create_supplier', description: 'Registrar un nuevo proveedor', category: 'finance' },
+    { name: 'create_expense', description: 'Registrar un nuevo gasto u egreso', category: 'finance' },
+    { name: 'register_expense_vision', description: 'Registrar gasto mediante procesamiento de visión', category: 'finance' },
+    { name: 'analyze_burn_rate', description: 'Analizar relación ingresos vs gastos y salud financiera', category: 'finance' },
+    // ERP Inventario
+    { name: 'adjust_stock', description: 'Ajustar niveles de stock (Entrada/Salida/Transferencia)', category: 'inventory' },
+    { name: 'get_inventory_health', description: 'Analizar salud del inventario y predicción de rupturas', category: 'inventory' },
+    { name: 'process_inventory_consumption', description: 'Descontar producto o componentes (BoM) automáticamente', category: 'inventory' },
+    { name: 'inventory_watchdog', description: 'Vigilante de IA para puntos de reorden y alertas de stock', category: 'inventory' },
+    // ERP Proyectos
+    { name: 'get_project_profitability', description: 'Calcular rentabilidad real de un proyecto vinculando ingresos y costos', category: 'projects' },
+    { name: 'detect_project_drifting', description: 'Detectar desviaciones presupuestarias o cronológicas vía IA', category: 'projects' },
+    // ERP Consolidación (The Financial Brain)
+    { name: 'analyze_global_profitability', description: 'Calcula el EBITDA, margen real y salud financiera cruzando ventas, gastos y proyectos', category: 'finance' },
+    { name: 'audit_expense_integrity', description: 'Verifica si los gastos registrados coinciden con los hashes de seguridad y detecta anomalías', category: 'finance' },
+    { name: 'project_financial_forecast', description: 'Predice el flujo de caja (Cash Flow) basado en el pipeline de ventas y gastos fijos', category: 'finance' },
+    { name: 'tax_prospector', description: 'Proyección fiscal regional (MX, ES, US-LLC)', category: 'finance' },
+    // ERP Producción (MRP)
+    { name: 'calculate_production_cost', description: 'Calcula el costo proyectado de fabricación (BoM + Mano de Obra)', category: 'production' },
+    { name: 'verify_waste_integrity', description: 'Auditoría visual de mermas e integridad de planta vía Gemma Vision', category: 'production' },
+    // ERP Calidad (QC)
+    { name: 'detect_quality_anomalies', description: 'Analizar anomalías de calidad cruzando materiales y proveedores', category: 'quality' },
+    { name: 'register_qc_inspection', description: 'Registrar inspección con firma criptográfica SHA-256', category: 'quality' },
+    // ERP RRHH (HRM)
+    { name: 'talent_retention_risk', description: 'Analizar riesgo de rotación cruzando carga de proyectos y compromiso', category: 'hr' },
+    { name: 'get_employee_confidential_data', description: 'Acceso auditado a datos cifrados de nómina en The Vault 2.0', category: 'hr' },
   ];
 }
 

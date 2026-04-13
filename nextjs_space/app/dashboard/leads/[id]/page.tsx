@@ -32,6 +32,18 @@ import { LeadTasks } from '@/components/lead-tasks';
 import { UnifiedTimeline } from '@/components/unified-timeline';
 import { EnhancedNotes } from '@/components/enhanced-notes';
 import { LeadAssignment } from '@/components/lead-assignment';
+import { LeadAttachments } from '@/components/dashboard/LeadAttachments';
+import { AISuggestionCard } from '@/components/ai/AISuggestionCard';
+import { RoleplaySimulator } from '@/components/training/RoleplaySimulator';
+
+interface FieldDefinition {
+  id: string;
+  fieldKey: string;
+  label: string;
+  type: string;
+  required: boolean;
+  options?: any;
+}
 
 interface Lead {
   id: string;
@@ -48,6 +60,9 @@ interface Lead {
   tiempoEnEstado: string;
   fechaCreacion: string;
   citas: Cita[];
+  metadataExterna?: any;
+  aiStrategy?: string | null;
+  riskLevel?: number;
 }
 
 interface Cita {
@@ -77,13 +92,29 @@ export default function LeadDetailPage({
     email: '',
     telefono: '',
     empresa: '',
-    contextoProyecto: ''
+    contextoProyecto: '',
+    metadataExterna: {} as any
   });
+  const [fieldDefinitions, setFieldDefinitions] = useState<FieldDefinition[]>([]);
   const [calling, setCalling] = useState(false);
+  const [isRoleplayOpen, setIsRoleplayOpen] = useState(false);
 
   useEffect(() => {
     fetchLead();
+    fetchFieldDefinitions();
   }, [params.id]);
+
+  const fetchFieldDefinitions = async () => {
+    try {
+      const res = await fetch('/api/leads/custom-fields');
+      if (res.ok) {
+        const data = await res.json();
+        setFieldDefinitions(data);
+      }
+    } catch (error) {
+      console.error('Error fetching field definitions:', error);
+    }
+  };
 
   const fetchLead = async () => {
     try {
@@ -103,7 +134,8 @@ export default function LeadDetailPage({
         email: data.email,
         telefono: data.telefono || '',
         empresa: data.empresa || '',
-        contextoProyecto: data.contextoProyecto || ''
+        contextoProyecto: data.contextoProyecto || '',
+        metadataExterna: data.metadataExterna || {}
       });
     } catch (error) {
       console.error('Error fetching lead:', error);
@@ -383,6 +415,68 @@ export default function LeadDetailPage({
                     rows={4}
                   />
                 </div>
+
+                {/* Campos Personalizados en Edición */}
+                {fieldDefinitions.length > 0 && (
+                  <div className="pt-4 border-t space-y-4">
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">Campos Personalizados</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {fieldDefinitions.map(field => (
+                        <div key={field.fieldKey} className="space-y-2">
+                          <Label>{field.label}</Label>
+                          {field.type === 'select' ? (
+                            <Select 
+                              value={formData.metadataExterna?.[field.fieldKey] || ''} 
+                              onValueChange={(val) => setFormData({
+                                ...formData, 
+                                metadataExterna: { ...formData.metadataExterna, [field.fieldKey]: val }
+                              })}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Seleccionar..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {(field.options as string[] || []).map(opt => (
+                                  <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : field.type === 'date' ? (
+                            <Input 
+                              type="date"
+                              value={formData.metadataExterna?.[field.fieldKey] || ''}
+                              onChange={(e) => setFormData({
+                                ...formData, 
+                                metadataExterna: { ...formData.metadataExterna, [field.fieldKey]: e.target.value }
+                              })}
+                            />
+                          ) : field.type === 'boolean' ? (
+                            <div className="flex items-center space-x-2 pt-2">
+                              <Switch 
+                                checked={formData.metadataExterna?.[field.fieldKey] === true || formData.metadataExterna?.[field.fieldKey] === 'true'}
+                                onCheckedChange={(val) => setFormData({
+                                  ...formData, 
+                                  metadataExterna: { ...formData.metadataExterna, [field.fieldKey]: val }
+                                })}
+                              />
+                              <span className="text-sm">{field.label}</span>
+                            </div>
+                          ) : (
+                            <Input 
+                              type={field.type === 'number' ? 'number' : 'text'}
+                              value={formData.metadataExterna?.[field.fieldKey] || ''}
+                              onChange={(e) => setFormData({
+                                ...formData, 
+                                metadataExterna: { ...formData.metadataExterna, [field.fieldKey]: e.target.value }
+                              })}
+                              placeholder={field.label}
+                            />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </>
             ) : (
               <>
@@ -444,6 +538,25 @@ export default function LeadDetailPage({
                     <p className="text-sm text-muted-foreground whitespace-pre-wrap">{lead.contextoProyecto}</p>
                   </div>
                 )}
+
+                {/* Campos Personalizados en Visualización */}
+                {fieldDefinitions.length > 0 && (
+                  <div className="pt-4 border-t">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4">Información Adicional</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {fieldDefinitions.map(field => (
+                        <div key={field.fieldKey}>
+                          <p className="text-sm font-medium text-muted-foreground mb-1">{field.label}</p>
+                          <p className="text-base font-semibold">
+                            {field.type === 'boolean' 
+                              ? (lead.metadataExterna?.[field.fieldKey] ? 'SÍ' : 'NO')
+                              : (lead.metadataExterna?.[field.fieldKey] || '—')}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="pt-2 border-t">
                   <LeadAssignment 
                     leadId={lead.id}
@@ -487,6 +600,16 @@ export default function LeadDetailPage({
 
           {/* Score del Lead */}
           <LeadScoreCard leadId={lead.id} />
+
+          {/* Sugerencia de Gemma 4 */}
+          <AISuggestionCard 
+            strategy={lead.aiStrategy} 
+            riskLevel={lead.riskLevel} 
+            onAction={() => setIsRoleplayOpen(true)}
+          />
+
+          {/* Documentos Adjuntos */}
+          <LeadAttachments leadId={lead.id} />
         </div>
       </div>
 
@@ -572,6 +695,15 @@ export default function LeadDetailPage({
           )}
         </CardContent>
       </Card>
+
+      {/* Simulador de Roleplay */}
+      {isRoleplayOpen && (
+        <RoleplaySimulator 
+          leadId={lead.id} 
+          leadName={lead.nombre} 
+          onClose={() => setIsRoleplayOpen(false)} 
+        />
+      )}
     </div>
   );
 }

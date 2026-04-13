@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
 import { getFiscalConfig } from '@/lib/fiscal-engine';
+import { ItemIntegrityService } from '@/lib/security/item-integrity';
 
 // GET - Listar ítems del catálogo
 export async function GET(req: NextRequest) {
@@ -112,13 +113,13 @@ export async function POST(req: NextRequest) {
       unidad = 'unidad',
       activo = true,
       destacado = false,
-      // Nuevos campos Fase 1
-      customFieldValues,
-      categorias,
-      etiquetas,
-      metadata,
       media,
       pricing,
+      // Onboarding 2.0 / MRP Fields
+      isManufactured = false,
+      costOfAcquisition = 0,
+      inventoryConfig, 
+      bom,
     } = data;
 
     if (!nombre || precioBase === undefined) {
@@ -172,11 +173,49 @@ export async function POST(req: NextRequest) {
         metadata: metadata || null,
         media: media || null,
         pricing: pricing || null,
+        isManufactured,
+        costOfAcquisition: parseFloat(costOfAcquisition || 0),
+        // 🛡️ Integrity Hash
+        integrityHash: ItemIntegrityService.calculateHash({
+          tenantId: auth.tenant!.id,
+          nombre,
+          sku: sku || '',
+          precioBase: parseFloat(precioBase),
+          costOfAcquisition: parseFloat(costOfAcquisition || 0),
+        }),
+        // 📦 Inventory Config
+        inventoryConfig: inventoryConfig ? {
+          create: inventoryConfig
+        } : undefined,
+        // 🏗️ BoM
+        billOfMaterials: (isManufactured && bom) ? {
+          create: {
+            tenantId: auth.tenant!.id,
+            laborCost: parseFloat(bom.laborCost || 0),
+            overheadCost: parseFloat(bom.overheadCost || 0),
+            components: {
+              create: bom.components?.map((c: any) => ({
+                componentId: c.componentId,
+                quantityRequired: parseFloat(c.quantityRequired),
+                unit: c.unit || 'unit'
+              })) || []
+            }
+          }
+        } : undefined
       },
       include: {
         tasaImpuesto: true,
+        inventoryConfig: true,
+        billOfMaterials: {
+          include: { components: true }
+        }
       },
     });
+    
+    // 🧠 AI Indexing Stub: Si hay documento técnico, solicitar indexación al MCP
+    if (media?.documento_tecnico) {
+      console.log(`[MCP] Requesting indexing for document: ${media.documento_tecnico} (Item: ${item.id})`);
+    }
 
     return NextResponse.json(item, { status: 201 });
   } catch (error) {

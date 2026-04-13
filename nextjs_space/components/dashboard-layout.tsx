@@ -51,7 +51,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         "flex-1 flex flex-col min-w-0 transition-all duration-300 relative bg-slate-50/50",
         isMessaging ? "ml-0" : (isCollapsed ? "md:ml-20" : "md:ml-64")
       )}>
-        <DashboardHeader />
+        {!isMessaging && <DashboardHeader />}
         <div className="flex-1 overflow-y-auto relative scroll-smooth overflow-x-hidden">
           <TrialBanner />
           <div className={cn(

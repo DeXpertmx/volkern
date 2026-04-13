@@ -95,6 +95,63 @@ export const PATCH = withTenantAuth(async (req, auth) => {
       }
     }
 
+    // Logica de auto-provisioning de email inbox en Chatwoot
+    if (metadata?.emailConfig?.user && metadata?.emailConfig?.pass && metadata?.emailConfig?.imapHost && metadata?.emailConfig?.smtpHost) {
+      try {
+        const userWithTenant = await prisma.user.findUnique({
+          where: { id: currentUser.id },
+          include: { tenant: true }
+        });
+
+        if (userWithTenant?.tenant && !userWithTenant.metadata?.chatwootEmailInboxId) {
+          console.log('[EmailProvisioning] Detectada configuración de email, creando inbox en Chatwoot...');
+          
+          // Buscar integración de comuniciones para el tenant
+          const integration = await prisma.integration.findFirst({
+            where: { tenantId: userWithTenant.tenantId as string, tipo: 'chatwoot', activo: true }
+          });
+
+          if (integration && (integration.configuracion as any)?.accountToken) {
+            const { chatwootApi } = await import('@/lib/nexus/chatwoot-api');
+            const accountId = (userWithTenant.tenant as any).chatwootAccountId;
+            const accountToken = (integration.configuracion as any).accountToken;
+
+            if (accountId) {
+              const inbox = await chatwootApi.createEmailInbox(
+                accountId,
+                userWithTenant.name || userWithTenant.email,
+                metadata.emailConfig.user,
+                {
+                  imap: {
+                    address: metadata.emailConfig.imapHost,
+                    port: parseInt(metadata.emailConfig.imapPort) || 993,
+                    user: metadata.emailConfig.user,
+                    pass: metadata.emailConfig.pass,
+                    ssl: true
+                  },
+                  smtp: {
+                    address: metadata.emailConfig.smtpHost,
+                    port: parseInt(metadata.emailConfig.smtpPort) || 465,
+                    user: metadata.emailConfig.user,
+                    pass: metadata.emailConfig.pass,
+                    protocol: 'smtp'
+                  }
+                },
+                accountToken
+              );
+
+              console.log('[EmailProvisioning] Inbox creado exitosamente:', inbox.id);
+              // Inyectar el ID de inbox en el metadata para persistirlo
+              metadata.chatwootEmailInboxId = inbox.id;
+            }
+          }
+        }
+      } catch (error) {
+        console.error('[EmailProvisioning] Error en auto-provisioning:', error);
+        // No bloqueamos el guardado del perfil si falla Chatwoot, pero lo logueamos
+      }
+    }
+
     const updatedUser = await prisma.user.update({
       where: { id: currentUser.id },
       data: {
@@ -104,7 +161,8 @@ export const PATCH = withTenantAuth(async (req, auth) => {
         bookingTitle,
         bookingBio,
         bookingEnabled: typeof bookingEnabled === 'boolean' ? bookingEnabled : undefined,
-        metadata: metadata ? metadata : undefined
+        metadata: metadata ? metadata : undefined,
+        image: body.image // Permitir actualizar imagen desde aquí también
       }
     });
 

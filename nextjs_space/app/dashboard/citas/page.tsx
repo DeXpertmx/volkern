@@ -147,7 +147,14 @@ export default function CitasPage() {
         fetch('/api/contacts'),
       ])
 
-      if (!citasRes.ok || !leadsRes.ok) throw new Error('Error al cargar datos')
+      let errorMessage = 'Error al cargar datos'
+      if (!citasRes.ok) {
+        const errDetails = await citasRes.text()
+        console.error('Detalles del backend para citas:', errDetails)
+        errorMessage = `Error cargando citas: ${citasRes.status}`
+        throw new Error(errorMessage)
+      }
+      if (!leadsRes.ok) throw new Error('Error al cargar leads')
 
       const [citasData, leadsData, contactsData] = await Promise.all([
         citasRes.json(),

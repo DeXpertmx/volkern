@@ -250,72 +250,27 @@ export default function BillingPage() {
         </Card>
       )}
 
-      {/* Plans */}
-      <div>
-        <h2 className="text-2xl font-bold mb-6">Planes Disponibles</h2>
-        <div className="grid md:grid-cols-3 gap-6">
-          {plans.map((plan) => {
-            const isCurrentPlan = status?.plan === plan.id
-            const canUpgrade = status?.status === 'trial' || (status?.status === 'activo' && !isCurrentPlan)
-
-            return (
-              <Card key={plan.id} className={`relative ${plan.popular ? 'border-purple-500 border-2' : ''}`}>
-                {plan.popular && (
-                  <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                    <Badge className="bg-purple-600">Más Popular</Badge>
-                  </div>
-                )}
-                <CardHeader>
-                  <CardTitle>{plan.name}</CardTitle>
-                  <div className="mt-4">
-                    <span className="text-4xl font-bold">{plan.price}</span>
-                    <span className="text-gray-600">/mes</span>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <ul className="space-y-3">
-                    {plan.features.map((feature) => (
-                      <li key={feature} className="flex items-start gap-2">
-                        <Check className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-                        <span className="text-sm">{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
-
-                  {isCurrentPlan ? (
-                    <Button className="w-full" disabled>
-                      Plan Actual
-                    </Button>
-                  ) : canUpgrade ? (
-                    <Button
-                      className={`w-full ${plan.popular ? 'bg-purple-600 hover:bg-purple-700' : ''}`}
-                      onClick={() => {
-                        if (status?.status === 'trial') {
-                          handleSubscribe(plan.id)
-                        } else {
-                          handleChangePlan(plan.id)
-                        }
-                      }}
-                      disabled={actionLoading && selectedPlan === plan.id}
-                    >
-                      {actionLoading && selectedPlan === plan.id ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Procesando...
-                        </>
-                      ) : status?.status === 'trial' ? (
-                        'Suscribirse'
-                      ) : (
-                        'Cambiar a este Plan'
-                      )}
-                    </Button>
-                  ) : null}
-                </CardContent>
-              </Card>
-            )
-          })}
+      {/* Upgrade Banner */}
+      <Card className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-xl shadow-blue-500/20 border-none rounded-2xl overflow-hidden relative">
+        <div className="absolute top-0 right-0 -m-8 opacity-10 pointer-events-none">
+           <TrendingUp className="w-64 h-64" />
         </div>
-      </div>
+        <CardContent className="p-8 md:p-12 relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
+          <div className="space-y-4 max-w-xl">
+             <h2 className="text-3xl md:text-4xl font-black tracking-tight">Lleva tu negocio al siguiente nivel</h2>
+             <p className="text-blue-100 text-lg leading-relaxed">
+               Haz un upgrade de tu suscripción para acceder a automatizaciones avanzadas, límites extendidos de envíos y atención prioritaria.
+             </p>
+          </div>
+          <Button 
+            size="lg" 
+            className="bg-white text-blue-600 hover:bg-slate-50 font-bold rounded-full px-8 py-6 h-auto text-lg shadow-2xl transition-transform hover:scale-105 shrink-0"
+            onClick={() => window.open('https://dexpert.mx/contacto', '_blank')}
+          >
+            Hacer Upgrade
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* Cancel Dialog */}
       <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>

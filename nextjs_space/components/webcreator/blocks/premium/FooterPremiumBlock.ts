@@ -18,30 +18,31 @@ export const createFooterPremiumBlock = (editor: Editor) => {
   editor.DomComponents.addType('footer-premium', {
     model: {
       defaults: {
+        traits: [
+          { type: 'text', label: 'Nombre Empresa', name: 'data-company' },
+          { type: 'text', label: 'Eslogan', name: 'data-tagline' },
+        ],
         components: `
           <footer class="premium-footer">
             <style>
               .premium-footer { padding: 8rem 2rem 4rem; background: #ffffff; color: #3D3D3D; font-family: 'Inter', sans-serif; border-top: 1px solid rgba(61, 61, 61, 0.05); }
               .premium-footer-grid { display: grid; grid-template-columns: 2fr repeat(3, 1fr); gap: 4rem; max-width: 1200px; margin: 0 auto 6rem; }
               .premium-footer-info { max-width: 320px; }
-              .premium-footer-logo { font-size: 1.75rem; font-weight: 900; letter-spacing: -0.05em; margin-bottom: 2rem; font-style: italic; color: #3D3D3D; }
+              .premium-footer-logo { font-size: 1.75rem; font-weight: 900; letter-spacing: -0.05em; margin-bottom: 2rem; font-style: italic; color: #3D3D3D; text-transform: uppercase; }
               .premium-footer-logo span { color: #6366f1; }
               .premium-footer-tagline { font-size: 1rem; color: #3D3D3D; opacity: 0.6; line-height: 1.6; font-weight: 500; margin-bottom: 2.5rem; }
-              .premium-footer-social { display: flex; gap: 1rem; }
               .premium-footer-col-title { font-size: 0.875rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.2em; color: #3D3D3D; margin-bottom: 2rem; }
               .premium-footer-links { list-style: none; padding: 0; margin: 0; }
               .premium-footer-links li { margin-bottom: 1.25rem; }
               .premium-footer-links a { color: #3D3D3D; opacity: 0.5; text-decoration: none; transition: all 0.3s; font-weight: 600; font-size: 0.9375rem; }
-              .premium-footer-links a:hover { color: #6366f1; opacity: 1; transform: translateX(5px); display: inline-block; }
               .premium-footer-bottom { border-top: 1px solid rgba(61, 61, 61, 0.05); max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; padding-top: 4rem; }
               .premium-copyright { font-size: 0.875rem; color: #3D3D3D; opacity: 0.4; font-weight: 500; }
-              @media (max-width: 1024px) { .premium-footer-grid { grid-template-columns: 1fr 1fr; gap: 4rem; } }
-              @media (max-width: 768px) { .premium-footer-grid { grid-template-columns: 1fr; gap: 3rem; } .premium-footer-bottom { flex-direction: column; gap: 2rem; text-align: center; } }
+              @media (max-width: 768px) { .premium-footer-grid { grid-template-columns: 1fr; } .premium-footer-bottom { flex-direction: column; gap: 2rem; } }
             </style>
             <div class="premium-footer-grid">
               <div class="premium-footer-info">
-                <div class="premium-footer-logo">VOLKERN<span>.</span></div>
-                <p class="premium-footer-tagline">Construyendo el futuro de la automatización empresarial con inteligencia artificial de vanguardia.</p>
+                <div class="premium-footer-logo" data-v-logo>VOLKERN<span>.</span></div>
+                <p class="premium-footer-tagline" data-v-tagline>Construyendo el futuro de la automatización empresarial.</p>
               </div>
               <div>
                 <h4 class="premium-footer-col-title">Producto</h4>
@@ -67,13 +68,25 @@ export const createFooterPremiumBlock = (editor: Editor) => {
               </div>
             </div>
             <div class="premium-footer-bottom">
-              <div class="premium-copyright">© 2026 Volkern Business Solutions. Todos los derechos reservados.</div>
-              <div class="premium-footer-social">
-                <a href="#" class="premium-social-link"><svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M24 4.557c-.883.392-1.832.656-2.828.775 1.017-.609 1.798-1.574 2.165-2.724-.951.564-2.005.974-3.127 1.195-.897-.957-2.178-1.555-3.594-1.555-3.179 0-5.515 2.966-4.797 6.045-4.091-.205-7.719-2.165-10.148-5.144-1.29 2.213-.669 5.108 1.523 6.574-.806-.026-1.566-.247-2.229-.616-.054 2.281 1.581 4.415 3.949 4.89-.693.188-1.452.232-2.224.084.626 1.956 2.444 3.379 4.6 3.419-2.07 1.623-4.678 2.348-7.29 2.04 2.179 1.397 4.768 2.212 7.548 2.212 9.142 0 14.307-7.721 13.995-14.646.962-.695 1.797-1.562 2.457-2.549z"/></svg></a>
-              </div>
+              <div class="premium-copyright" data-v-copy>© 2026 Volkern Business Solutions.</div>
             </div>
           </footer>
-        `
+        `,
+        script: function(this: any) {
+          const el = this;
+          const update = () => {
+            const company = el.getAttribute('data-company');
+            const tagline = el.getAttribute('data-tagline');
+            if (company) {
+                el.querySelector('[data-v-logo]').innerHTML = `${company}<span>.</span>`;
+                el.querySelector('[data-v-copy]').innerText = `© ${new Date().getFullYear()} ${company}. Todos los derechos reservados.`;
+            }
+            if (tagline) el.querySelector('[data-v-tagline]').innerText = tagline;
+          };
+          const observer = new MutationObserver(() => update());
+          observer.observe(el, { attributes: true });
+          update();
+        }
       }
     }
   });

@@ -164,7 +164,7 @@ export default function PlatformSettings() {
         </Button>
       </form>
 
-      {/* Sección Chatwoot - Hub de Mensajería */}
+      {/* Sección Hub de Mensajería - Infraestructura de Comunicaciones */}
       <Card className="border-2 border-primary/20">
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -173,7 +173,7 @@ export default function PlatformSettings() {
                 <MessageSquare className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <CardTitle>Hub de Mensajería (Chatwoot)</CardTitle>
+                <CardTitle>Hub de Mensajería</CardTitle>
                 <CardDescription>
                   Panel de administración centralizado para todos los canales de comunicación
                 </CardDescription>
@@ -191,7 +191,7 @@ export default function PlatformSettings() {
         <CardContent className="space-y-4">
           <div className="p-4 bg-muted rounded-lg">
             <p className="text-sm text-muted-foreground mb-3">
-              Chatwoot es el hub interno que gestiona las comunicaciones de todos los tenants. 
+              Este es el hub interno que gestiona las comunicaciones de todos los tenants de forma unificada. 
               Desde aquí puedes administrar cuentas, inboxes, conversaciones y configuraciones globales.
             </p>
             <div className="flex flex-wrap gap-2">
@@ -203,7 +203,7 @@ export default function PlatformSettings() {
                 }}
               >
                 <ExternalLink className="h-4 w-4 mr-2" />
-                Abrir Panel de Chatwoot
+                Abrir Panel de Control
               </Button>
               <Button 
                 variant="outline"
