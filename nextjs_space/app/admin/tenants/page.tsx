@@ -84,6 +84,7 @@ export default function TenantsManagement() {
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
   const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, totalPages: 0 });
   const [genesisResult, setGenesisResult] = useState<{genesisHash: string, masterKey: string} | null>(null);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
 
   useEffect(() => {
     loadTenants();
