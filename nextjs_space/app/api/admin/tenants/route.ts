@@ -150,9 +150,6 @@ export const POST = withTenantAuth(async (req, auth) => {
       }
     });
 
-      }
-    });
-
     // --- ONBOARDING 2.0: PROCESO GÉNESIS ---
     let genesisResult = null;
     if (autoProvision) {
