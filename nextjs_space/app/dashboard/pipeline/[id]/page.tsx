@@ -75,6 +75,7 @@ import {
   Filter,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { GemmaDealCoach } from '@/components/deals/GemmaDealCoach'
 import Link from 'next/link'
 import { formatDistanceToNow, format } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -749,6 +750,9 @@ export default function DealDetailPage() {
 
         {/* Right Column - Info & Links */}
         <div className="space-y-6">
+          {/* Gemma Deal Coach */}
+          <GemmaDealCoach dealId={deal.id} />
+
           {/* Lead/Contact Info */}
           {(deal.lead || deal.contact) && (
             <Card>

@@ -27,6 +27,7 @@ export function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [userPermissions, setUserPermissions] = useState<any>(null)
+  const [userAccountType, setUserAccountType] = useState<string | null>(null)
   const [activeModules, setActiveModules] = useState<string[]>([])
   const [isLoadingModules, setIsLoadingModules] = useState(true)
   const { config: whitelabelConfig } = useWhitelabel()
@@ -48,6 +49,7 @@ export function Sidebar() {
           ]);
           
           if (userRes.role?.permisos) setUserPermissions(userRes.role.permisos);
+          if (userRes.tenant?.accountType) setUserAccountType(userRes.tenant.accountType);
           if (modulesRes.modules) setActiveModules(modulesRes.modules);
         } catch (error) {
           console.error('Error loading permissions:', error);
@@ -215,7 +217,27 @@ export function Sidebar() {
 
                 <div className="h-px bg-border/50 my-6 mx-4" />
 
-                {HUBS.map((hub) => {
+                {HUBS.filter(hub => {
+                  if (!hub.requiredAccountType) return true;
+                  
+                  const sessionAccountType = (session?.user as any)?.accountType;
+                  const effectiveAccountType = sessionAccountType || userAccountType;
+                  const roleName = (session?.user as any)?.roleName;
+
+                  if (hub.requiredAccountType === 'SUPERADMIN') {
+                    return roleName === 'Superadmin' || roleName === 'Admin';
+                  }
+
+                  if (hub.requiredAccountType === 'AGENCY') {
+                    return effectiveAccountType === 'AGENCY';
+                  }
+
+                  if (hub.requiredAccountType === 'BUSINESS') {
+                    return effectiveAccountType === 'BUSINESS' || effectiveAccountType === 'AGENCY';
+                  }
+
+                  return true;
+                }).map((hub) => {
                   const HubIcon = hub.icon
                   return (
                     <Link

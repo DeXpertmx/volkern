@@ -35,6 +35,10 @@ import * as consolidationSkills from './financial-consolidation-skills';
 import * as productionSkills from './production-management-skills';
 import * as qualitySkills from './quality-management-skills';
 import * as hrSkills from './hr-management-skills';
+import * as auditSkills from './audit-skills';
+import * as vaultPayrollSkills from './vault-payroll-skills';
+import * as operationalSkills from './operational-skills';
+import * as marketingSkills from './marketing-skills';
 import { eventBus, EVENTS } from './event-bus';
 
 // ============== SKILL REGISTRY ==============
@@ -181,6 +185,27 @@ export const skills = {
   // ERP RRHH (HRM)
   talent_retention_risk: hrSkills.talent_retention_risk,
   get_employee_confidential_data: hrSkills.get_employee_confidential_data,
+  get_hr_daily_brief: hrSkills.get_hr_daily_brief,
+  authorize_bulk_expenses: hrSkills.authorize_bulk_expenses,
+  approve_vacation_voice: hrSkills.approve_vacation_voice,
+  orchestrate_asset_transfer: hrSkills.orchestrate_asset_transfer,
+  mcp_access_watchdog: hrSkills.mcp_access_watchdog,
+  generate_offboarding_security_kit: hrSkills.generate_offboarding_security_kit,
+  confirm_digital_seal: hrSkills.confirm_digital_seal,
+  access_security_audit: hrSkills.access_security_audit,
+
+  // Agentic Skills (Gemma 4 Optimized)
+  audit_finance_integrity: auditSkills.audit_finance_integrity,
+  orchestrate_secure_payroll: vaultPayrollSkills.orchestrate_secure_payroll,
+  get_field_activity: operationalSkills.get_field_activity,
+  audit_material_leaks: operationalSkills.audit_material_leaks,
+  
+  // Marketing Hub
+  generate_marketing_copy: marketingSkills.generate_marketing_copy,
+  analyze_marketing_sentiment: marketingSkills.analyze_marketing_sentiment,
+  suggest_campaign_optimization: marketingSkills.suggest_campaign_optimization,
+  generate_web_creator_block: marketingSkills.generate_web_creator_block,
+  advise_on_automation_rules: marketingSkills.advise_on_automation_rules,
 } as const;
 
 export type SkillName = keyof typeof skills;
@@ -286,6 +311,27 @@ export function listSkills(): Array<{ name: SkillName; description: string; cate
     // ERP RRHH (HRM)
     { name: 'talent_retention_risk', description: 'Analizar riesgo de rotación cruzando carga de proyectos y compromiso', category: 'hr' },
     { name: 'get_employee_confidential_data', description: 'Acceso auditado a datos cifrados de nómina en The Vault 2.0', category: 'hr' },
+    { name: 'get_hr_daily_brief', description: 'Resumen ejecutivo narrativo (Briefing Militar) del estado de RRHH', category: 'hr' },
+    { name: 'authorize_bulk_expenses', description: 'Autorización masiva con validación GPS VISION-LOCK', category: 'hr' },
+    { name: 'approve_vacation_voice', description: 'Aprobar vacaciones con nota personalizada vía voz', category: 'hr' },
+    { name: 'orchestrate_asset_transfer', description: 'Gestionar traspaso o devolución de activos críticos de personal', category: 'hr' },
+    { name: 'mcp_access_watchdog', description: 'Watchdog de seguridad: detecta silos de conocimiento y concentración de poder digital', category: 'hr' },
+    { name: 'generate_offboarding_security_kit', description: 'Generar roadmap de revocación de accesos (Kill-Switch) ante una baja', category: 'hr' },
+    { name: 'confirm_digital_seal', description: 'Autorizar y sellar digitalmente actas de entrega o vacaciones vía voz', category: 'hr' },
+    { name: 'access_security_audit', description: 'Auditoría de seguridad digital: detecta silos de conocimiento y riesgos de acceso', category: 'hr' },
+    
+    // Agentic Skills
+    { name: 'audit_finance_integrity', description: 'Auditoría forense automatizada: verifica brechas en Veri*factu y dispara el Protocolo de Desconfianza', category: 'advanced' },
+    { name: 'orchestrate_secure_payroll', description: 'Orquestación de nómina cruzando Vault y Veri*factu. Requiere rol OWNER.', category: 'advanced' },
+    { name: 'get_field_activity', description: 'Localiza técnicos y activos en campo mediante VISION-LOCK', category: 'advanced' },
+    { name: 'audit_material_leaks', description: 'Detecta desviaciones y mermas industriales cruzando stock y producción', category: 'advanced' },
+    
+    // Marketing Hub
+    { name: 'generate_marketing_copy', description: 'Generar copy publicitario o social con IA', category: 'marketing' },
+    { name: 'analyze_marketing_sentiment', description: 'Analizar sentimiento de feedback social', category: 'marketing' },
+    { name: 'suggest_campaign_optimization', description: 'Sugerencias de optimización basadas en datos', category: 'marketing' },
+    { name: 'generate_web_creator_block', description: 'Generar bloques HTML para Web Creator con IA', category: 'marketing' },
+    { name: 'advise_on_automation_rules', description: 'Analizar tenant y sugerir reglas de automatización', category: 'marketing' },
   ];
 }
 

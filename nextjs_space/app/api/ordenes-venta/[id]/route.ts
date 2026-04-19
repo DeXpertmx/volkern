@@ -135,7 +135,8 @@ export async function PATCH(
       // Validar transiciones de estado
       const transicionesValidas: Record<string, string[]> = {
         'borrador': ['confirmada', 'cancelada'],
-        'confirmada': ['facturada', 'cancelada'],
+        'confirmada': ['pendiente_finanzas', 'cancelada'],
+        'pendiente_finanzas': ['facturada', 'confirmada', 'cancelada'],
         'facturada': ['entregada'],
         'entregada': [],
         'cancelada': []

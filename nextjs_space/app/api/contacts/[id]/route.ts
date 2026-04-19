@@ -4,8 +4,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
 
-// GET /api/contacts/[id] - Obtener un contacto específico
+// GET /api/contacts/[id] - Obtener un contacto específico (Actualizado con historial unificado)
 export const GET = withTenantAuth(async (request, auth, params) => {
+  console.log(`[DEBUG] GET Contact ${params.id} at ${new Date().toISOString()} - Unified History V3`);
   try {
     const tenantId = auth.tenant!.id;
 
@@ -85,6 +86,48 @@ export const GET = withTenantAuth(async (request, auth, params) => {
             fuente: true,
             fechaCreacion: true
           }
+        },
+        perfilFiscal: true,
+        invoices: {
+          orderBy: {
+            fechaEmision: 'desc'
+          },
+          include: {
+            ordenVenta: {
+              select: {
+                numero: true
+              }
+            }
+          }
+        },
+        historialTareas: {
+          orderBy: { fechaVencimiento: 'asc' },
+          include: { asignadoUsuario: { select: { name: true, image: true } } }
+        },
+        historialNotas: {
+          orderBy: { fechaCreacion: 'desc' },
+          include: { creador: { select: { name: true, image: true } } }
+        },
+        historialInteracciones: {
+          orderBy: { fechaCreacion: 'desc' },
+          include: { creador: { select: { name: true, image: true } } }
+        },
+        historialCitas: {
+          orderBy: { fechaHora: 'desc' },
+          include: { servicio: true }
+        },
+        conversaciones: {
+          orderBy: { fechaUltimoMensaje: 'desc' }
+        },
+        historialDocumentos: {
+          orderBy: { fechaSubida: 'desc' },
+          include: { usuario: { select: { name: true } } }
+        },
+        historialCotizaciones: {
+          orderBy: { fechaCreacion: 'desc' }
+        },
+        historialContratos: {
+          orderBy: { fechaCreacion: 'desc' }
         }
       }
     });
@@ -111,9 +154,9 @@ export const PATCH = withTenantAuth(async (request, auth, params) => {
   try {
     const tenantId = auth.tenant!.id;
     const userId = auth.user?.id;
-
     const body = await request.json();
-    const { nombre, email, telefono, tipo, companyId, cargo, ubicacion, linkedin, notas, tags } = body;
+
+    const { nombre, email, telefono, tipo, companyId, cargo, ubicacion, linkedin, notas, tags, perfilFiscal } = body;
 
     const contact = await prisma.contact.findFirst({
       where: {
@@ -142,6 +185,25 @@ export const PATCH = withTenantAuth(async (request, auth, params) => {
     if (notas !== undefined) updateData.notas = notas;
     if (tags !== undefined) updateData.tags = tags;
 
+    // Soporte para Perfil Fiscal
+    if (perfilFiscal) {
+      updateData.perfilFiscal = {
+        upsert: {
+          create: {
+            ...perfilFiscal,
+            tenantId,
+            defaultIva: perfilFiscal.defaultIva ? parseFloat(perfilFiscal.defaultIva) : 21.0,
+            defaultIrpf: perfilFiscal.defaultIrpf ? parseFloat(perfilFiscal.defaultIrpf) : 0.0
+          },
+          update: {
+            ...perfilFiscal,
+            defaultIva: perfilFiscal.defaultIva ? parseFloat(perfilFiscal.defaultIva) : undefined,
+            defaultIrpf: perfilFiscal.defaultIrpf ? parseFloat(perfilFiscal.defaultIrpf) : undefined
+          }
+        }
+      };
+    }
+
     const updatedContact = await prisma.contact.update({
       where: { id: params.id },
       data: updateData,
@@ -151,7 +213,8 @@ export const PATCH = withTenantAuth(async (request, auth, params) => {
             id: true,
             nombre: true
           }
-        }
+        },
+        perfilFiscal: true
       }
     });
 

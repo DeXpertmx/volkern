@@ -35,12 +35,13 @@ interface Emisor {
   monedaPredeterminada?: string;
   serieFactura: string | null;
   esPrincipal: boolean;
+  verifactuEnabled: boolean;
   activo: boolean;
 }
 
 const PAISES = [
-  { code: 'MX', name: 'México', idType: 'RFC', regime: ['General de Ley', 'Personas Físicas', 'Régimen Simplificado de Confianza'] },
   { code: 'ES', name: 'España', idType: 'CIF/NIF', regime: ['General', 'Simplificado', 'Recargo de Equivalencia'] },
+  { code: 'MX', name: 'México', idType: 'RFC', regime: ['General de Ley', 'Personas Físicas', 'Régimen Simplificado de Confianza'] },
   { code: 'US', name: 'Estados Unidos', idType: 'EIN', regime: ['Corporation', 'LLC', 'Sole Proprietorship'] },
   { code: 'CL', name: 'Chile', idType: 'RUT', regime: ['Primera Categoría', 'Pyme', 'Pro Pyme'] },
   { code: 'AR', name: 'Argentina', idType: 'CUIT', regime: ['Responsable Inscripto', 'Monotributo', 'Exento'] },
@@ -73,18 +74,19 @@ export default function EmisoresFiscalesTab({ onUpdate }: Props) {
     razonSocial: '',
     nombreComercial: '',
     identificadorFiscal: '',
-    tipoIdentificador: 'RFC',
+    tipoIdentificador: 'CIF/NIF',
     regimenFiscal: '',
-    pais: 'MX',
+    pais: 'ES',
     direccionFiscal: '',
     codigoPostal: '',
     ciudad: '',
     estadoProvincia: '',
     telefono: '',
     email: '',
-    monedaPorDefecto: 'MXN',
+    monedaPorDefecto: 'EUR',
     serieFactura: '',
     esPrincipal: false,
+    verifactuEnabled: false,
     activo: true
   });
 
@@ -154,6 +156,7 @@ export default function EmisoresFiscalesTab({ onUpdate }: Props) {
         monedaPredeterminada: formData.monedaPorDefecto,
         serieFactura: formData.serieFactura || 'F',
         esPrincipal: formData.esPrincipal,
+        verifactuEnabled: formData.verifactuEnabled,
         activo: formData.activo
       };
 
@@ -217,6 +220,7 @@ export default function EmisoresFiscalesTab({ onUpdate }: Props) {
       monedaPorDefecto: emisor.monedaPredeterminada || emisor.monedaPorDefecto || 'MXN',
       serieFactura: emisor.serieFactura || '',
       esPrincipal: emisor.esPrincipal || false,
+      verifactuEnabled: emisor.verifactuEnabled || false,
       activo: emisor.activo !== false
     });
     setDialogOpen(true);
@@ -228,18 +232,19 @@ export default function EmisoresFiscalesTab({ onUpdate }: Props) {
       razonSocial: '',
       nombreComercial: '',
       identificadorFiscal: '',
-      tipoIdentificador: 'RFC',
+      tipoIdentificador: 'CIF/NIF',
       regimenFiscal: '',
-      pais: 'MX',
+      pais: 'ES',
       direccionFiscal: '',
       codigoPostal: '',
       ciudad: '',
       estadoProvincia: '',
       telefono: '',
       email: '',
-      monedaPorDefecto: 'MXN',
+      monedaPorDefecto: 'EUR',
       serieFactura: '',
       esPrincipal: false,
+      verifactuEnabled: false,
       activo: true
     });
   };
@@ -282,7 +287,7 @@ export default function EmisoresFiscalesTab({ onUpdate }: Props) {
                   <Input
                     value={formData.razonSocial}
                     onChange={(e) => setFormData({ ...formData, razonSocial: e.target.value })}
-                    placeholder="Mi Empresa S.A. de C.V."
+                    placeholder="Mi Empresa S.A."
                   />
                 </div>
 
@@ -314,7 +319,7 @@ export default function EmisoresFiscalesTab({ onUpdate }: Props) {
                   <Input
                     value={formData.identificadorFiscal}
                     onChange={(e) => setFormData({ ...formData, identificadorFiscal: e.target.value.toUpperCase() })}
-                    placeholder={formData.pais === 'MX' ? 'XAXX010101000' : 'Identificador fiscal'}
+                    placeholder={formData.pais === 'MX' ? 'XAXX010101000' : formData.pais === 'ES' ? 'B12345678' : 'Identificador fiscal'}
                   />
                 </div>
 
@@ -402,7 +407,7 @@ export default function EmisoresFiscalesTab({ onUpdate }: Props) {
                   <Input
                     value={formData.telefono}
                     onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
-                    placeholder="+52 55 1234 5678"
+                    placeholder="+34 600 000 000"
                   />
                 </div>
 
@@ -423,6 +428,17 @@ export default function EmisoresFiscalesTab({ onUpdate }: Props) {
                       onCheckedChange={(checked) => setFormData({ ...formData, esPrincipal: checked })}
                     />
                     <Label>Emisor Principal</Label>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={formData.verifactuEnabled}
+                      onCheckedChange={(checked) => setFormData({ ...formData, verifactuEnabled: checked })}
+                    />
+                    <div className="space-y-0.5">
+                      <Label>Activar Veri*factu</Label>
+                      <p className="text-[10px] text-muted-foreground">Sello legal (No obligatorio hasta 2027)</p>
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-2">

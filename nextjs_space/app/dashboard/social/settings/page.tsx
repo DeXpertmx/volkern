@@ -38,10 +38,8 @@ function SocialSettingsContent() {
           map[c.platform] = c
         }
         setConfigs(map)
+        setOauthEnabled(!!data.metaOauthConfigured)
       }
-
-      // Verificar si OAuth está disponible (FACEBOOK_APP_ID configurado en el servidor)
-      // Si el fetch de connect devuelve setup_required, deshabilitar OAuth
     } catch (err) {
       toast.error('Error cargando configuraciones')
     } finally {
@@ -74,6 +72,7 @@ function SocialSettingsContent() {
         db_error: 'Error guardando la conexión. Intenta de nuevo.',
         oauth_failed: message ? decodeURIComponent(message) : 'Error en el proceso OAuth',
         invalid_callback: 'Callback inválido de Meta',
+        setup_required: 'Configuración pendiente: FACEBOOK_APP_ID no encontrado en el servidor.',
       }
       toast.error(friendlyErrors[error] || `Error: ${error}`)
     }
@@ -107,26 +106,47 @@ function SocialSettingsContent() {
         </div>
       </div>
 
-      {/* Banner informativo de requisitos */}
-      <Card className="rounded-3xl border-indigo-100 bg-gradient-to-br from-indigo-50 to-purple-50 shadow-none">
-        <CardContent className="p-6 flex gap-4">
-          <div className="h-10 w-10 rounded-2xl bg-indigo-100 flex items-center justify-center shrink-0">
-            <ShieldCheck className="h-5 w-5 text-indigo-600" />
-          </div>
-          <div className="space-y-1">
-            <p className="text-sm font-black text-indigo-900 uppercase tracking-tight">
-              Autenticación OAuth Segura
-            </p>
-            <p className="text-xs text-indigo-700 leading-relaxed">
-              Volkern usa OAuth 2.0 oficial de Meta. Tus credenciales <strong>nunca</strong> se
-              almacenan en texto plano — se cifran con AES-256 antes de guardarlas.
-            </p>
-            <p className="text-[10px] text-indigo-500 font-bold uppercase tracking-widest mt-2">
-              Permisos solicitados: pages_manage_posts · instagram_content_publish · pages_read_engagement
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Banner informativo de requisitos o Alerta de Configuración */}
+      {!oauthEnabled ? (
+        <Card className="rounded-3xl border-rose-100 bg-gradient-to-br from-rose-50 to-amber-50 shadow-none">
+          <CardContent className="p-6 flex gap-5">
+            <div className="h-12 w-12 rounded-2xl bg-rose-500 flex items-center justify-center shrink-0 shadow-lg shadow-rose-200">
+              <AlertCircle className="h-6 w-6 text-white" />
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm font-black text-rose-900 uppercase tracking-tight">
+                Nexus Meta: Configuración Pendiente
+              </p>
+              <p className="text-xs text-rose-700 leading-relaxed font-medium">
+                El sistema de conexión automática (OAuth) está desactivado porque no se encuentra el <code className="bg-white/50 px-1 rounded">FACEBOOK_APP_ID</code> en el servidor.
+              </p>
+              <p className="text-[10px] text-rose-500 font-bold uppercase tracking-widest mt-2 flex items-center gap-2">
+                <Info className="h-3 w-3" /> Revisa la sección de "Configuración Avanzada" al final de esta página.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="rounded-3xl border-indigo-100 bg-gradient-to-br from-indigo-50 to-purple-50 shadow-none">
+          <CardContent className="p-6 flex gap-4">
+            <div className="h-10 w-10 rounded-2xl bg-indigo-100 flex items-center justify-center shrink-0">
+              <ShieldCheck className="h-5 w-5 text-indigo-600" />
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm font-black text-indigo-900 uppercase tracking-tight">
+                Autenticación OAuth Segura
+              </p>
+              <p className="text-xs text-indigo-700 leading-relaxed">
+                Volkern usa OAuth 2.0 oficial de Meta. Tus credenciales <strong>nunca</strong> se
+                almacenan en texto plano — se cifran con AES-256 antes de guardarlas.
+              </p>
+              <p className="text-[10px] text-indigo-500 font-bold uppercase tracking-widest mt-2">
+                Permisos solicitados: pages_manage_posts · instagram_content_publish · pages_read_engagement
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Grid de plataformas */}
       <div>
@@ -171,7 +191,7 @@ function SocialSettingsContent() {
       </div>
 
       {/* Sección de ayuda / configuración avanzada */}
-      <Card className="rounded-3xl border-slate-200/60 shadow-sm">
+      <Card id="advanced-config" className="rounded-3xl border-slate-200/60 shadow-sm scroll-mt-6">
         <CardHeader className="border-b border-slate-100 bg-slate-50/50 pb-4">
           <CardTitle className="text-sm font-black uppercase tracking-tighter flex items-center gap-2">
             <Info className="h-4 w-4 text-slate-400" />

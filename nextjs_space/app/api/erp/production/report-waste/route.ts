@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { withTenantAuth } from '@/lib/auth/withTenantAuth';
+import { withTenantAuth } from '@/lib/api-key-auth';
 import { ProductionService } from '@/lib/erp/production-service';
 
 export const POST = withTenantAuth(async (request, auth) => {
@@ -43,4 +43,4 @@ export const POST = withTenantAuth(async (request, auth) => {
       { status: 403 } // 403 para indicar rechazo de integridad
     );
   }
-});
+}, ['erp:write']);

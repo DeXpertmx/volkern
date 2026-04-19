@@ -58,6 +58,7 @@ export async function GET(req: NextRequest) {
           cotizacion: { select: { id: true, numero: true, titulo: true } },
           deal: { select: { id: true, titulo: true, valor: true } },
           emisor: { select: { id: true, razonSocial: true, idFiscal: true } },
+          invoice: { select: { id: true, isSealed: true, fingerprint: true, verifactuVersion: true } },
           _count: { select: { items: true } }
         },
         orderBy: { fechaOrden: 'desc' },
@@ -175,7 +176,7 @@ export async function POST(req: NextRequest) {
     const aplicaReverseCharge = emisor && perfilFiscalCliente 
       ? aplicaInversionSujetoPasivo(
           emisor.pais,
-          perfilFiscalCliente.pais,
+          perfilFiscalCliente.country || 'ES',
           !!perfilFiscalCliente.idIntracomunitario
         )
       : false
@@ -220,6 +221,8 @@ export async function POST(req: NextRequest) {
         }
       } else if (item.porcentajeImpuesto !== undefined) {
         porcentajeImpuesto = parseFloat(item.porcentajeImpuesto)
+      } else if (perfilFiscalCliente?.defaultIva) {
+        porcentajeImpuesto = Number(perfilFiscalCliente.defaultIva)
       }
 
       montoImpuesto = subtotalItem * (porcentajeImpuesto / 100)
@@ -228,12 +231,17 @@ export async function POST(req: NextRequest) {
       }
 
       // Calcular retención si aplica
-      let aplicaRetencion = item.aplicaRetencion || perfilFiscalCliente?.aplicaRetencion || false
+      let aplicaRetencion = item.aplicaRetencion || perfilFiscalCliente?.aplicaRetencion || (Number(perfilFiscalCliente?.defaultIrpf) > 0)
       let porcentajeRetencion = 0
       let montoRetencion = 0
 
-      if (aplicaRetencion && item.porcentajeRetencion) {
-        porcentajeRetencion = parseFloat(item.porcentajeRetencion)
+      if (aplicaRetencion) {
+        if (item.porcentajeRetencion !== undefined) {
+          porcentajeRetencion = parseFloat(item.porcentajeRetencion)
+        } else if (perfilFiscalCliente?.defaultIrpf) {
+          porcentajeRetencion = Number(perfilFiscalCliente.defaultIrpf)
+        }
+        
         montoRetencion = subtotalItem * (porcentajeRetencion / 100)
         if (redondeoLinea) {
           montoRetencion = Math.round(montoRetencion * 100) / 100

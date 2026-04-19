@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import { DashboardHeader } from '@/components/dashboard-header'
 import { PushPrompt } from '@/components/notifications/PushPrompt'
 import { IncomingCallPopup } from '@/components/dashboard/IncomingCallPopup'
+import { MorningBriefingModal } from '@/components/dashboard/MorningBriefingModal'
 import { usePathname } from 'next/navigation'
 
 interface DashboardLayoutProps {
@@ -53,6 +54,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       )}>
         {!isMessaging && <DashboardHeader />}
         <div className="flex-1 overflow-y-auto relative scroll-smooth overflow-x-hidden">
+          <MorningBriefingModal />
           <TrialBanner />
           <div className={cn(
             "animate-in fade-in duration-700 h-full",

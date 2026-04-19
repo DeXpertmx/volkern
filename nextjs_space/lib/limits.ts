@@ -62,14 +62,14 @@ export async function checkResourceLimit(
 
   switch (resourceType) {
     case 'leads':
-      currentUsage = await tenantDb.lead.count({ where: { tenantId } });
+      currentUsage = await tenantDb.client.lead.count({ where: { tenantId } });
       break;
     case 'users':
       // Los usuarios son globales (Control Plane)
       currentUsage = await globalPrisma.user.count({ where: { tenantId } });
       break;
     case 'emails_per_month':
-      currentUsage = await tenantDb.campaignRecipient.count({
+      currentUsage = await tenantDb.client.campaignRecipient.count({
         where: {
           tenantId,
           fechaEnviado: { gte: firstDayOfMonth }
@@ -77,17 +77,17 @@ export async function checkResourceLimit(
       });
       break;
     case 'automations':
-      currentUsage = await tenantDb.automation.count({ where: { tenantId } });
+      currentUsage = await tenantDb.client.automation.count({ where: { tenantId } });
       break;
     case 'storage_gb':
-      const storageBytes = await tenantDb.dealAttachment.aggregate({
+      const storageBytes = await tenantDb.client.dealAttachment.aggregate({
         where: { tenantId },
         _sum: { tamano: true }
       });
       currentUsage = Math.ceil((storageBytes._sum?.tamano || 0) / (1024 * 1024 * 1024));
       break;
     case 'pages':
-      currentUsage = await tenantDb.page.count({ where: { tenantId } });
+      currentUsage = await tenantDb.client.page.count({ where: { tenantId } });
       break;
   }
 
@@ -127,17 +127,17 @@ export async function getTenantUsage(tenantId: string) {
 
   // 3. Consultar uso en Tenant DB
   const [leadsCount, usersCount, emailsCount, automationsCount, pagesCount, storageBytes] = await Promise.all([
-    tenantDb.lead.count({ where: { tenantId } }),
+    tenantDb.client.lead.count({ where: { tenantId } }),
     globalPrisma.user.count({ where: { tenantId } }),
-    tenantDb.campaignRecipient.count({
+    tenantDb.client.campaignRecipient.count({
       where: {
         tenantId,
         fechaEnviado: { gte: firstDayOfMonth }
       }
     }),
-    tenantDb.automation.count({ where: { tenantId } }),
-    tenantDb.page.count({ where: { tenantId } }),
-    tenantDb.dealAttachment.aggregate({
+    tenantDb.client.automation.count({ where: { tenantId } }),
+    tenantDb.client.page.count({ where: { tenantId } }),
+    tenantDb.client.dealAttachment.aggregate({
       where: { tenantId },
       _sum: { tamano: true }
     })

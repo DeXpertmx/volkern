@@ -1,29 +1,18 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/db'
-import { authOptions } from '@/lib/auth'
+import { withTenantAuth } from '@/lib/api-key-auth'
 
 // GET - Obtener etapas del pipeline
-export async function GET(req: NextRequest) {
+export const GET = withTenantAuth(async (req, auth) => {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    })
-
-    if (!user?.tenantId) {
-      return NextResponse.json({ error: 'Usuario sin tenant' }, { status: 403 })
-    }
+    const tenantId = auth.tenant!.id;
+    const user = auth.user!;
 
     let stages = await prisma.pipelineStage.findMany({
       where: {
-        tenantId: user.tenantId,
+        tenantId: tenantId,
         activo: true,
       },
       orderBy: {
@@ -58,7 +47,7 @@ export async function GET(req: NextRequest) {
             orden: stage.orden,
             color: stage.color,
             esEtapaFinal: stage.esEtapaFinal,
-            tenantId: user.tenantId,
+            tenantId: tenantId,
           }
           
           if (stage.tipoEtapaFinal) {
@@ -78,23 +67,13 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+}, ['leads:read', 'deals:read'])
 
 // POST - Crear etapa personalizada
-export async function POST(req: NextRequest) {
+export const POST = withTenantAuth(async (req, auth) => {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    })
-
-    if (!user?.tenantId) {
-      return NextResponse.json({ error: 'Usuario sin tenant' }, { status: 403 })
-    }
+    const tenantId = auth.tenant!.id;
+    const user = auth.user!;
 
     const body = await req.json()
     const {
@@ -111,7 +90,7 @@ export async function POST(req: NextRequest) {
 
     // Obtener el último orden
     const ultimaEtapa = await prisma.pipelineStage.findFirst({
-      where: { tenantId: user.tenantId },
+      where: { tenantId: tenantId },
       orderBy: { orden: 'desc' },
     })
 
@@ -119,7 +98,7 @@ export async function POST(req: NextRequest) {
 
     const stage = await prisma.pipelineStage.create({
       data: {
-        tenantId: user.tenantId,
+        tenantId: tenantId,
         nombre,
         descripcion,
         orden,
@@ -137,4 +116,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+}, ['leads:write', 'configuracion:editar'])

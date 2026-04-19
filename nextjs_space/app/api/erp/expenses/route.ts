@@ -36,7 +36,18 @@ export const GET = withTenantAuth(async (request, auth) => {
       take: limit
     });
 
-    return NextResponse.json(expenses);
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: auth.tenant!.id },
+      select: { baseLatitude: true, baseLongitude: true }
+    });
+
+    return NextResponse.json({
+      expenses,
+      tenantConfig: {
+        baseLatitude: tenant?.baseLatitude || 40.416775,
+        baseLongitude: tenant?.baseLongitude || -3.703790
+      }
+    });
   } catch (error) {
     console.error('Error fetching expenses:', error);
     return NextResponse.json({ error: 'Error al cargar gastos' }, { status: 500 });

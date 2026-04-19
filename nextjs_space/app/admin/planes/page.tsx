@@ -106,11 +106,24 @@ export default function PlansManagement() {
     e.preventDefault();
     if (!editingPlan) return;
 
+    // 1. Validación local preventiva
+    if (!editingPlan.nombre.trim()) {
+      toast.error("El nombre del plan no puede estar vacío");
+      return;
+    }
+    
+    if (editingPlan.precio < 0) {
+      toast.error("El precio no puede ser negativo");
+      return;
+    }
+
     setSaving(true);
     try {
       const isNew = !editingPlan.dbId;
       const url = isNew ? '/api/admin/plans' : `/api/admin/plans/${editingPlan.dbId}`;
       const method = isNew ? 'POST' : 'PUT';
+
+      console.log(`[AdminUI] Enviando ${method} a ${url}...`);
 
       const res = await fetch(url, {
         method,
@@ -134,17 +147,20 @@ export default function PlansManagement() {
         })
       });
 
+      const data = await res.json();
+
       if (res.ok) {
         toast.success(isNew ? 'Plan creado correctamente' : 'Plan actualizado correctamente');
         setEditingPlan(null);
         setIsCreating(false);
         loadPlans();
       } else {
-        const error = await res.json();
-        toast.error(error.error || `Error al ${isNew ? 'crear' : 'actualizar'} plan`);
+        console.error('[AdminUI] Error del servidor:', data);
+        toast.error(data.error || `Error al ${isNew ? 'crear' : 'actualizar'} plan`);
       }
     } catch (error) {
-      toast.error('Error de red al actualizar plan');
+      console.error('[AdminUI] Error de Red:', error);
+      toast.error('Error de red al actualizar plan. Revisa la consola.');
     } finally {
       setSaving(false);
     }

@@ -35,7 +35,8 @@ interface Task {
 }
 
 interface LeadTasksProps {
-  leadId: string;
+  leadId?: string;
+  contactId?: string;
 }
 
 const taskTypes = [
@@ -45,7 +46,7 @@ const taskTypes = [
   { value: 'recordatorio', label: 'Recordatorio', icon: Bell }
 ];
 
-export function LeadTasks({ leadId }: LeadTasksProps) {
+export function LeadTasks({ leadId, contactId }: LeadTasksProps) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -56,13 +57,16 @@ export function LeadTasks({ leadId }: LeadTasksProps) {
     fechaVencimiento: ''
   });
 
+  const entityId = leadId || contactId;
+  const apiBase = leadId ? `/api/leads/${leadId}` : `/api/contacts/${contactId}`;
+
   useEffect(() => {
-    fetchTasks();
-  }, [leadId]);
+    if (entityId) fetchTasks();
+  }, [leadId, contactId]);
 
   const fetchTasks = async () => {
     try {
-      const res = await fetch(`/api/leads/${leadId}/tasks`);
+      const res = await fetch(`${apiBase}/tasks`);
       if (!res.ok) throw new Error('Error al cargar tareas');
       const data = await res.json();
       setTasks(data);
@@ -81,7 +85,7 @@ export function LeadTasks({ leadId }: LeadTasksProps) {
     }
 
     try {
-      const res = await fetch(`/api/leads/${leadId}/tasks`, {
+      const res = await fetch(`${apiBase}/tasks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)

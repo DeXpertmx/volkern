@@ -11,6 +11,11 @@ export type AuthenticatedHandler = (
   params?: any
 ) => Promise<Response>;
 
+export interface WithAuthOptions {
+  requiredScopes?: string[];
+  requiredModule?: string;
+}
+
 export interface ApiKeyAuthResult {
   valid: boolean;
   tenant?: {
@@ -26,6 +31,8 @@ export interface ApiKeyAuthResult {
     tenantId: string | null;
     roleId: string | null;
     role?: any;
+    accountType?: string;
+    parentId?: string | null;
   };
   apiKey?: {
     id: string;
@@ -43,259 +50,240 @@ export interface ApiKeyAuthResult {
  * @param requiredScopes - Scopes requeridos (opcional)
  * @returns Resultado de la autenticación
  */
+/**
+ * LÓGICA DE LA REGLA DE ORO (Aislamiento Hierárquico)
+ * Determina si el solicitante puede actuar sobre el tenant de destino.
+ */
+async function resolveHierarchicalContext(
+  requesterUser: any,
+  requesterTenant: any,
+  targetTenantId?: string | null
+): Promise<{ 
+  activeTenantId: string; 
+  targetTenant: any;
+  agencyContext: boolean;
+  error?: string;
+}> {
+  // Por defecto, operamos en el tenant del solicitante
+  let activeTenantId = requesterTenant.id;
+  let targetTenant = {
+    id: requesterTenant.id,
+    nombre: requesterTenant.nombre,
+    slug: requesterTenant.slug,
+    plan: requesterTenant.plan
+  };
+  let agencyContext = false;
+
+  // Si no hay targetTenantId, devolvemos el contexto nativo
+  if (!targetTenantId || targetTenantId === requesterTenant.id) {
+    return { activeTenantId, targetTenant, agencyContext };
+  }
+
+  // Si hay un target ID diferente, validamos permisos
+  const impTenant = await prisma.tenant.findUnique({
+    where: { id: targetTenantId },
+    select: { id: true, nombre: true, slug: true, plan: true, estado: true, parentId: true }
+  });
+
+  if (!impTenant) {
+    return { activeTenantId, targetTenant, agencyContext, error: 'Tenant de destino no encontrado' };
+  }
+
+  // REGLA DE ORO:
+  // 1. Superadmin puede entrar a cualquier tenant.
+  // 2. Agencia puede entrar SOLO a sus propios slots (parentId === agency.id).
+  const isSuperadmin = requesterUser.role?.nombre === 'Superadmin';
+  const isParentAgency = requesterTenant.accountType === 'AGENCY' && impTenant.parentId === requesterTenant.id;
+
+  if (isSuperadmin || isParentAgency) {
+    if (impTenant.estado !== 'activo' && impTenant.estado !== 'trial') {
+      return { activeTenantId, targetTenant, agencyContext, error: 'El tenant de destino está inactivo' };
+    }
+
+    activeTenantId = impTenant.id;
+    targetTenant = {
+      id: impTenant.id,
+      nombre: impTenant.nombre,
+      slug: impTenant.slug,
+      plan: impTenant.plan
+    };
+    agencyContext = true;
+  } else {
+    return { activeTenantId, targetTenant, agencyContext, error: 'Violación de jerarquía: No tienes permiso para acceder a este tenant' };
+  }
+
+  return { activeTenantId, targetTenant, agencyContext };
+}
+
+/**
+ * Valida una API key y devuelve información del tenant y usuario
+ */
 export async function validateApiKey(
   request: Request,
   requiredScopes?: string[]
 ): Promise<ApiKeyAuthResult> {
   try {
-    // Extraer API key del header
     const apiKey = extractApiKeyFromRequest(request);
-    
-    if (!apiKey) {
-      return {
-        valid: false,
-        error: 'API key no proporcionada. Use el header X-API-Key o Authorization: Bearer'
-      };
-    }
+    if (!apiKey) return { valid: false, error: 'API key no proporcionada' };
 
-    // Validar formato
-    if (!isValidApiKeyFormat(apiKey)) {
-      return {
-        valid: false,
-        error: 'Formato de API key inválido'
-      };
-    }
+    if (!isValidApiKeyFormat(apiKey)) return { valid: false, error: 'Formato de API key inválido' };
 
-    // Hashear la key para buscar en la base de datos
     const keyHash = hashApiKey(apiKey);
-
-    // Buscar la API key en la base de datos
     const dbApiKey = await prisma.apiKey.findUnique({
       where: { keyHash },
-      include: {
+      select: {
+        id: true,
+        nombre: true,
+        scopes: true,
+        activo: true,
+        expiraEn: true,
         tenant: {
-          select: {
-            id: true,
-            nombre: true,
-            slug: true,
-            plan: true,
-            estado: true
-          }
+          select: { id: true, nombre: true, slug: true, plan: true, accountType: true, parentId: true }
         },
         user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            tenantId: true,
-            roleId: true,
-            role: true
-          }
+          select: { id: true, name: true, email: true, tenantId: true, roleId: true, role: true }
         }
       }
     });
 
-    if (!dbApiKey) {
-      return {
-        valid: false,
-        error: 'API key inválida o revocada'
-      };
-    }
-
-    // Verificar que esté activa
-    if (!dbApiKey.activo) {
-      return {
-        valid: false,
-        error: 'API key desactivada'
-      };
-    }
-
+    if (!dbApiKey || !dbApiKey.activo) return { valid: false, error: 'API key inválida o inactiva' };
+    
     // Verificar expiración
     if (dbApiKey.expiraEn && dbApiKey.expiraEn < new Date()) {
-      return {
-        valid: false,
-        error: 'API key expirada'
-      };
+      return { valid: false, error: 'API key expirada' };
     }
 
-    // Verificar estado del tenant
-    if (dbApiKey.tenant.estado !== 'activo' && dbApiKey.tenant.estado !== 'trial') {
-      return {
-        valid: false,
-        error: 'Cuenta suspendida o cancelada'
-      };
+    // Verificar scopes
+    if (requiredScopes?.length && !hasAnyScope(dbApiKey.scopes, requiredScopes)) {
+      return { valid: false, error: `Permisos insuficientes (${requiredScopes.join(', ')})` };
     }
 
-    // Verificar scopes si se requieren
-    if (requiredScopes && requiredScopes.length > 0) {
-      const hasRequiredScopes = hasAnyScope(dbApiKey.scopes, requiredScopes);
-      if (!hasRequiredScopes) {
-        return {
-          valid: false,
-          error: `Permisos insuficientes. Se requiere: ${requiredScopes.join(' o ')}`
-        };
-      }
+    // --- APLICAR REGLA DE ORO ---
+    const url = new URL(request.url);
+    const targetId = request.headers.get('X-Impersonate-Tenant-Id') || url.searchParams.get('target_account_id');
+    
+    const context = await resolveHierarchicalContext(dbApiKey.user, dbApiKey.tenant, targetId);
+
+    if (context.error) {
+      return { valid: false, error: context.error };
     }
 
-    // Actualizar estadísticas de uso (en background)
+    // Actualizar estadísticas (async)
     prisma.apiKey.update({
       where: { id: dbApiKey.id },
-      data: {
-        ultimoUso: new Date(),
-        totalUsos: { increment: 1 }
-      }
-    }).catch(err => console.error('Error actualizando stats de API key:', err));
+      data: { ultimoUso: new Date(), totalUsos: { increment: 1 } }
+    }).catch(() => {});
 
-    // Devolver resultado exitoso
     return {
       valid: true,
       authMethod: 'apikey',
-      tenant: {
-        id: dbApiKey.tenant.id,
-        nombre: dbApiKey.tenant.nombre,
-        slug: dbApiKey.tenant.slug,
-        plan: dbApiKey.tenant.plan
-      },
+      tenant: context.targetTenant,
       user: {
         id: dbApiKey.user.id,
         name: dbApiKey.user.name,
         email: dbApiKey.user.email,
         tenantId: dbApiKey.user.tenantId,
         roleId: dbApiKey.user.roleId,
-        role: dbApiKey.user.role
+        role: dbApiKey.user.role,
+        accountType: dbApiKey.tenant.accountType,
+        parentId: dbApiKey.tenant.parentId
       },
-      apiKey: {
-        id: dbApiKey.id,
-        nombre: dbApiKey.nombre,
-        scopes: dbApiKey.scopes
-      },
-      db: await import('./db').then(m => m.getTenantDb(dbApiKey.tenant.id))
+      apiKey: { id: dbApiKey.id, nombre: dbApiKey.nombre, scopes: dbApiKey.scopes },
+      agencyContext: context.agencyContext,
+      db: (await import('./db').then(m => m.getTenantDb(context.activeTenantId))).client
     };
 
   } catch (error: any) {
     console.error('Error validando API key:', error);
-    return {
-      valid: false,
-      error: 'Error interno al validar API key'
-    };
+    return { valid: false, error: 'Error interno de autenticación' };
   }
 }
 
 /**
  * Autenticación dual: Intenta primero sesión, luego API Key
- * Útil para endpoints que aceptan ambos métodos
  */
 export async function authenticateRequest(
   request: Request,
   requiredScopes?: string[]
 ): Promise<ApiKeyAuthResult> {
-  // 1. Intentar autenticación por sesión primero
-  const session = await getServerSession(authOptions);
-  
-  if (session?.user?.id) {
-    // Usuario autenticado por sesión
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      include: { 
-        role: true,
-        tenant: {
-          select: {
-            id: true,
-            nombre: true,
-            slug: true,
-            plan: true,
-            estado: true
-          }
+  try {
+    // 1. Intentar sesión (Solo si NO estamos en un entorno de tests sin Request Store)
+    let session = null;
+    try {
+      session = await getServerSession(authOptions);
+    } catch (e) {
+      // Ignorar errores de context en tests
+    }
+    
+    if (session?.user?.id) {
+      const user = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          tenantId: true,
+          roleId: true,
+          role: { select: { id: true, nombre: true, permisos: true } },
+          tenant: { select: { id: true, nombre: true, slug: true, plan: true, accountType: true } }
         }
-      }
-    });
+      });
 
-    if (!user || !user.tenant) {
+      if (!user || !user.tenant) {
+        return { valid: false, error: 'Sesión inválida o expirada' };
+      }
+
+      // --- APLICAR REGLA DE ORO ---
+      let impersonatedId = null;
+      try {
+        const cookieStore = cookies();
+        impersonatedId = cookieStore.get('volkern_impersonate_id')?.value;
+      } catch (e) {}
+
+      const headerId = request.headers.get('X-Impersonate-Tenant-Id');
+      const targetId = headerId || impersonatedId;
+
+      const context = await resolveHierarchicalContext(user, user.tenant, targetId);
+
+      if (context.error) return { valid: false, error: context.error };
+
       return {
-        valid: false,
-        error: 'Usuario o tenant no encontrado'
+        valid: true,
+        authMethod: 'session',
+        tenant: context.targetTenant,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          tenantId: user.tenantId,
+          roleId: user.roleId,
+          role: user.role
+        },
+        agencyContext: context.agencyContext,
+        db: (await import('./db').then(m => m.getTenantDb(context.activeTenantId))).client
       };
     }
-
-    // Verificar estado del tenant
-    if (user.tenant.estado !== 'activo' && user.tenant.estado !== 'trial') {
-      return {
-        valid: false,
-        error: 'Cuenta de tenant inactiva o suspendida'
-      };
-    }
-
-    // --- LÓGICA DE SUPLANTACIÓN (IMPERSONATE) ---
-    // Si es Superadmin, revisar si tiene activa la suplantación de otro tenant
-    let activeTenantId = user.tenantId!;
-    let targetTenant = {
-      id: user.tenant.id,
-      nombre: user.tenant.nombre,
-      slug: user.tenant.slug,
-      plan: user.tenant.plan
-    };
-
-    if (user.role?.nombre === 'Superadmin' || user.role?.nombre === 'Administrador') {
-      const cookieStore = cookies();
-      const impersonatedId = cookieStore.get('volkern_impersonate_id')?.value;
-      
-      if (impersonatedId && impersonatedId !== user.tenantId) {
-        console.log(`[AUTH-SYSTEM] Admin ${user.email} -> Attempting switch to tenant: ${impersonatedId}`);
-        
-        // Buscar el tenant suplantado
-        const impTenant = await prisma.tenant.findUnique({
-          where: { id: impersonatedId },
-          select: { id: true, nombre: true, slug: true, plan: true, estado: true }
-        });
-        
-        if (impTenant) {
-          if (impTenant.estado === 'activo' || impTenant.estado === 'trial') {
-            console.log(`[AUTH-SYSTEM] SUCCESS: Switched to ${impTenant.nombre} (${impTenant.id})`);
-            activeTenantId = impTenant.id;
-            targetTenant = {
-              id: impTenant.id,
-              nombre: impTenant.nombre,
-              slug: impTenant.slug,
-              plan: impTenant.plan
-            };
-          } else {
-            console.warn(`[AUTH-SYSTEM] DENIED: Target tenant ${impTenant.nombre} is ${impTenant.estado}`);
-          }
-        } else {
-          console.error(`[AUTH-SYSTEM] ERROR: Impersonated tenant ${impersonatedId} not found in DB`);
-        }
-      }
-    }
-
-    return {
-      valid: true,
-      authMethod: 'session',
-      tenant: targetTenant,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        tenantId: user.tenantId,
-        roleId: user.roleId,
-        role: user.role
-      },
-      db: await import('./db').then(m => m.getTenantDb(activeTenantId))
-    };
+  } catch (e) {
+    console.warn('[auth] Falló intento de sesión:', e.message);
   }
 
-  // 2. Si no hay sesión, intentar autenticación por API Key
+  // 2. Si no hay sesión, intentar API Key
   return await validateApiKey(request, requiredScopes);
 }
+
 
 /**
  * Wrapper HOC para rutas de API que necesitan aislamiento por Tenant
  */
 export function withTenantAuth(
   handler: AuthenticatedHandler,
-  requiredScopes?: string[]
+  options: string[] | WithAuthOptions = []
 ) {
   return async (request: Request, context?: any) => {
     try {
+      const requiredScopes = Array.isArray(options) ? options : options.requiredScopes;
+      const requiredModule = Array.isArray(options) ? undefined : options.requiredModule;
+
       const auth = await authenticateRequest(request, requiredScopes);
 
       if (!auth.valid) {
@@ -303,6 +291,23 @@ export function withTenantAuth(
           { error: auth.error || 'No autorizado' },
           { status: 401 }
         );
+      }
+
+      // 1. Validar Módulo Habilitado (Gating de Backend)
+      if (requiredModule) {
+        const tenant = await prisma.tenant.findUnique({
+          where: { id: auth.tenant!.id },
+          select: { enabledModules: true, plan: true }
+        });
+
+        const isModuleEnabled = tenant?.enabledModules?.includes(requiredModule as any);
+        
+        if (!isModuleEnabled) {
+          return NextResponse.json(
+            { error: `El módulo '${requiredModule}' no está activo para esta cuenta.` }, 
+            { status: 403 }
+          );
+        }
       }
 
       // Ejecutar el handler dentro del contexto del tenant
@@ -356,7 +361,7 @@ export function withPublicTenant(
 
       // Ejecutar dentro del contexto del tenant
       return await dbContext.run(
-        { tenantId: tenantId!, client: db },
+        { tenantId: tenantId!, client: db.client },
         () => handler(request, tenantId!, context?.params)
       );
     } catch (error: any) {

@@ -25,7 +25,9 @@ export const GET = withTenantAuth(async (req, auth) => {
       },
     });
 
-    return NextResponse.json({ success: true, configs });
+    const metaOauthConfigured = !!process.env.FACEBOOK_APP_ID;
+
+    return NextResponse.json({ success: true, configs, metaOauthConfigured });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

@@ -36,6 +36,22 @@ interface OrdenVenta {
   items: ItemOrden[];
 }
 
+// UI Helpers (Moved to top to avoid hoisting issues)
+const Card = ({ className, children }: { className?: string, children: React.ReactNode }) => (
+  <div className={`rounded-xl border bg-card text-card-foreground shadow-sm ${className || ''}`}>
+    {children}
+  </div>
+);
+const CardHeader = ({ className, children }: { className?: string, children: React.ReactNode }) => (
+  <div className={`flex flex-col space-y-1.5 p-6 ${className || ''}`}>{children}</div>
+);
+const CardTitle = ({ className, children }: { className?: string, children: React.ReactNode }) => (
+  <h3 className={`font-semibold leading-none tracking-tight ${className || ''}`}>{children}</h3>
+);
+const CardContent = ({ className, children }: { className?: string, children: React.ReactNode }) => (
+  <div className={`p-6 pt-0 ${className || ''}`}>{children}</div>
+);
+
 export default function OrdenDetallePage() {
   const router = useRouter();
   const params = useParams();
@@ -64,6 +80,46 @@ export default function OrdenDetallePage() {
       router.push('/dashboard/ventas/ordenes');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleConfirmOrder = async () => {
+    try {
+      const res = await fetch(`/api/ordenes-venta/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estado: 'confirmada' }),
+      });
+
+      if (res.ok) {
+        toast.success('Orden confirmada correctamente');
+        fetchOrden();
+      } else {
+        const err = await res.json();
+        toast.error(err.error || 'Error al confirmar la orden');
+      }
+    } catch (error) {
+      toast.error('Error de red al procesar la solicitud');
+    }
+  };
+
+  const handleRequestInvoicing = async () => {
+    try {
+      const res = await fetch(`/api/ordenes-venta/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estado: 'pendiente_finanzas' }),
+      });
+
+      if (res.ok) {
+        toast.success('Orden enviada a revisión financiera');
+        fetchOrden();
+      } else {
+        const err = await res.json();
+        toast.error(err.error || 'Error al enviar a revisión');
+      }
+    } catch (error) {
+      toast.error('Error de red al procesar la solicitud');
     }
   };
 
@@ -105,6 +161,24 @@ export default function OrdenDetallePage() {
       });
     }
 
+    if (orden.estado === 'pendiente_finanzas') {
+      events.push({
+        id: '5',
+        type: 'viewed',
+        date: 'En Revisión',
+        description: 'Enviada al departamento de Finanzas para facturación',
+      });
+    }
+
+    if (orden.estado === 'facturada') {
+      events.push({
+        id: '6',
+        type: 'accepted',
+        date: 'Facturada',
+        description: 'Factura legal generada y sellada por Finanzas',
+      });
+    }
+
     return events.reverse();
   };
 
@@ -137,15 +211,33 @@ export default function OrdenDetallePage() {
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline">
-            <Edit className="h-4 w-4 mr-2" /> Editar
+          <Button variant="outline" className="border-primary text-primary hover:bg-primary/5">
+            <Send className="h-4 w-4 mr-2" /> Compartir / Email
           </Button>
-          <Button variant="outline">
-            <Download className="h-4 w-4 mr-2" /> PDF
-          </Button>
-          <Button className="premium-gradient-primary border-none shadow-md">
-            <Send className="h-4 w-4 mr-2" /> Enviar
-          </Button>
+
+          {orden.estado === 'borrador' && (
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md font-bold"
+              onClick={handleConfirmOrder}
+            >
+              <CheckCircle className="h-4 w-4 mr-2" /> Confirmar Orden
+            </Button>
+          )}
+
+          {orden.estado === 'confirmada' && (
+            <Button
+              className="bg-amber-600 hover:bg-amber-700 text-white shadow-md font-bold"
+              onClick={handleRequestInvoicing}
+            >
+              <FileText className="h-4 w-4 mr-2" /> Solicitar Facturación (Finanzas)
+            </Button>
+          )}
+
+          {orden.estado === 'pendiente_finanzas' && (
+            <Button variant="outline" disabled className="bg-amber-50 text-amber-600 border-amber-200">
+              <Clock className="h-4 w-4 mr-2" /> En Revisión Financiera
+            </Button>
+          )}
         </div>
       </div>
 
@@ -213,19 +305,3 @@ export default function OrdenDetallePage() {
     </div>
   );
 }
-
-// Re-using Card components implicitly
-const Card = ({ className, children }: { className?: string, children: React.ReactNode }) => (
-  <div className={`rounded-xl border bg-card text-card-foreground shadow-sm ${className || ''}`}>
-    {children}
-  </div>
-);
-const CardHeader = ({ className, children }: { className?: string, children: React.ReactNode }) => (
-  <div className={`flex flex-col space-y-1.5 p-6 ${className || ''}`}>{children}</div>
-);
-const CardTitle = ({ className, children }: { className?: string, children: React.ReactNode }) => (
-  <h3 className={`font-semibold leading-none tracking-tight ${className || ''}`}>{children}</h3>
-);
-const CardContent = ({ className, children }: { className?: string, children: React.ReactNode }) => (
-  <div className={`p-6 pt-0 ${className || ''}`}>{children}</div>
-);

@@ -29,13 +29,7 @@ export async function GET(
 
   // Verificar que las variables de entorno están configuradas
   if (!process.env.FACEBOOK_APP_ID) {
-    return NextResponse.json(
-      {
-        error: 'Meta App no configurada. El administrador debe añadir FACEBOOK_APP_ID en las variables de entorno.',
-        setup_required: true,
-      },
-      { status: 503 }
-    );
+    return NextResponse.redirect(new URL('/dashboard/social/settings?error=setup_required', request.url));
   }
 
   // Generar state CSRF único para este intento de conexión

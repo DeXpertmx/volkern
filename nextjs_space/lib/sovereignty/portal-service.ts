@@ -1,0 +1,187 @@
+import { prisma } from '@/lib/db';
+import { randomBytes } from 'crypto';
+
+/**
+ * PortalService
+ * Governs the sovereign customer portal logic, access control, and integrity verification.
+ */
+export class PortalService {
+  /**
+   * Generates or retrieves a unique public token for a SalesOrder.
+   * This token is used in the public URL: /portal/[token]
+   */
+  static async getOrCreatePortalToken(salesOrderId: string, tenantId: string) {
+    const order = await prisma.salesOrder.findUnique({
+      where: { id: salesOrderId },
+      select: { publicToken: true }
+    });
+
+    if (order?.publicToken) {
+      return order.publicToken;
+    }
+
+    // Generate a secure, non-guessable token
+    const newToken = randomBytes(24).toString('hex');
+
+    await prisma.salesOrder.update({
+      where: { id: salesOrderId },
+      data: { publicToken: newToken }
+    });
+
+    // Create a formal access record
+    await prisma.customerPortalAccess.create({
+      data: {
+        tenantId,
+        salesOrderId,
+        token: newToken,
+        isActive: true,
+        expiresAt: null, // Sovereignty doesn't expire by default unless revoked
+      }
+    });
+
+    return newToken;
+  }
+
+  /**
+   * Validates a public token and returns the sanitized order data.
+   */
+  static async getOrderDataByToken(token: string) {
+    const access = await prisma.customerPortalAccess.findUnique({
+      where: { token, isActive: true },
+      include: {
+        salesOrder: {
+          include: {
+            contact: {
+              select: {
+                nombre: true,
+                email: true,
+                ubicacion: true
+              }
+            },
+            items: {
+              include: {
+                catalogItem: {
+                  select: {
+                    sku: true,
+                    nombre: true,
+                    descripcion: true,
+                    tipo: true
+                  }
+                },
+                reservations: {
+                  where: { status: 'ACTIVE' },
+                  include: {
+                    lot: {
+                      include: {
+                        qualityChecks: {
+                          select: {
+                            status: true,
+                            measuredValue: true,
+                            integrityHash: true,
+                            createdAt: true
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            shipments: {
+              include: {
+                confirmations: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!access || !access.salesOrder) {
+      return null;
+    }
+
+    // Update last access
+    await prisma.customerPortalAccess.update({
+      where: { id: access.id },
+      data: { lastAccessAt: new Date() }
+    });
+
+    return access.salesOrder;
+  }
+
+  /**
+   * Verifies the cryptographic integrity of a record.
+   * Compares the stored integrityHash with the current object state fingerprint.
+   */
+  static async verifyIntegrity(entityType: 'LOT' | 'ORDER' | 'CHECK', entityId: string, providedHash: string) {
+    let storedHash: string | null = null;
+    let tenantId: string = '';
+
+    if (entityType === 'LOT') {
+      const lot = await prisma.inventoryLot.findUnique({ where: { id: entityId }, select: { integrityHash: true, tenantId: true } });
+      storedHash = lot?.integrityHash || null;
+      tenantId = lot?.tenantId || '';
+    } else if (entityType === 'ORDER') {
+      const order = await prisma.salesOrder.findUnique({ where: { id: entityId }, select: { integrityHash: true, tenantId: true } });
+      storedHash = order?.integrityHash || null;
+      tenantId = order?.tenantId || '';
+    } else if (entityType === 'CHECK') {
+      const check = await prisma.qualityCheck.findUnique({ where: { id: entityId }, select: { integrityHash: true, tenantId: true } });
+      storedHash = check?.integrityHash || null;
+      tenantId = check?.tenantId || '';
+    }
+
+    const isMatch = storedHash === providedHash;
+    const status = isMatch ? 'SUCCESS' : 'TAMPERED';
+
+    // Log the verification attempt for sovereignty audit
+    await prisma.portalVerificationLog.create({
+      data: {
+        tenantId,
+        salesOrderId: entityType === 'ORDER' ? entityId : undefined,
+        inventoryLotId: entityType === 'LOT' ? entityId : undefined,
+        verifiedHash: providedHash,
+        status,
+        verifiedAt: new Date()
+      }
+    });
+
+    return {
+      isValid: isMatch,
+      timestamp: new Date(),
+      status
+    };
+  }
+
+  /**
+   * Creates an incident/claim from the customer portal.
+   */
+  static async createClaim(data: {
+    token: string,
+    category: string,
+    title: string,
+    description: string,
+    evidenceUrl?: string
+  }) {
+    const access = await prisma.customerPortalAccess.findUnique({
+      where: { token: data.token, isActive: true },
+      include: { salesOrder: true }
+    });
+
+    if (!access) throw new Error('Acceso no válido');
+
+    return await prisma.customerClaim.create({
+      data: {
+        tenantId: access.tenantId,
+        contactId: access.salesOrder.contactId,
+        referenceId: access.salesOrderId,
+        category: data.category,
+        title: data.title,
+        description: data.description,
+        evidenceUrl: data.evidenceUrl,
+        status: 'OPEN'
+      }
+    });
+  }
+}

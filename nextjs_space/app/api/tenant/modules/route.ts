@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
 
     const tenant = await prisma.tenant.findUnique({
       where: { id: tenantId },
-      select: { plan: true }
+      select: { plan: true, enabledModules: true, accountType: true }
     });
 
     if (!tenant) {
@@ -34,9 +34,17 @@ export async function GET(req: NextRequest) {
       select: { feature: true, habilitado: true }
     });
 
-    const activeModules = await getActiveModules(tenant.plan, tenantFeatures);
+    // Si el tenant tiene modulos específicos habilitados (Modelo Agency), usamos esos.
+    // Si no, caemos en el comportamiento estándar basado en plan + add-ons.
+    const finalModules = tenant.enabledModules && tenant.enabledModules.length > 0
+      ? tenant.enabledModules
+      : await getActiveModules(tenant.plan, tenantFeatures);
 
-    return NextResponse.json({ modules: activeModules, plan: tenant.plan });
+    return NextResponse.json({ 
+      modules: finalModules, 
+      plan: tenant.plan,
+      accountType: tenant.accountType 
+    });
 
   } catch (error) {
     console.error('Error fetching tenant modules:', error);

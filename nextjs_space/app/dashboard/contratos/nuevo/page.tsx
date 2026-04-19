@@ -38,6 +38,7 @@ import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
 import { useFiscalConfig } from '@/hooks/use-fiscal-config'
 import { CatalogSearchSelect, CatalogoItemResult } from '@/components/catalogo/CatalogSearchSelect'
+import { ContactSearchSelect, ContactResult } from '@/components/ventas/ContactSearchSelect'
 
 interface Item {
   id: string
@@ -100,6 +101,7 @@ function NuevoContratoContent() {
   const [clienteEmpresa, setClienteEmpresa] = useState('')
   const [clienteIdFiscal, setClienteIdFiscal] = useState('')
   const [clienteDireccion, setClienteDireccion] = useState('')
+  const [selectedContact, setSelectedContact] = useState<ContactResult | null>(null)
 
   // Inicializar con la configuración fiscal del tenant
   useEffect(() => {
@@ -253,6 +255,7 @@ function NuevoContratoContent() {
           descripcion,
           tipo,
           moneda,
+          contactId: selectedContact?.id || null,
           items: items.map(item => ({
             catalogoItemId: item.catalogoItemId || null,
             concepto: item.concepto,
@@ -438,20 +441,45 @@ function NuevoContratoContent() {
                     </CardTitle>
                     <CardDescription>Información legal y de contacto</CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-4">
+                  <CardContent className="space-y-6">
+                    <div className="space-y-4">
+                      <Label className="text-sm font-semibold text-primary uppercase tracking-wider">Identidad Legal</Label>
+                      <ContactSearchSelect
+                        value={selectedContact}
+                        onSelect={(contact) => {
+                          setSelectedContact(contact);
+                          setClienteNombre(contact.nombre);
+                          setClienteEmail(contact.email);
+                          setClienteTelefono(contact.telefono || '');
+                          setClienteEmpresa(contact.company?.nombre || '');
+                          setClienteIdFiscal(contact.perfilFiscal?.nif || '');
+                          setClienteDireccion(contact.perfilFiscal?.direccion || contact.ubicacion || '');
+                        }}
+                        onClear={() => setSelectedContact(null)}
+                      />
+                      {!selectedContact?.perfilFiscal?.nif && selectedContact && (
+                        <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-xs flex items-center gap-2">
+                          <Settings2 className="h-4 w-4" />
+                          <span>Atención: Este contacto no tiene un NIF validado. El contrato podría ser rechazado por gobernanza fiscal.</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <Separator className="my-2" />
+
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>Nombre / Razón Social *</Label>
-                        <Input value={clienteNombre} onChange={(e) => setClienteNombre(e.target.value)} />
+                        <Input value={clienteNombre} onChange={(e) => setClienteNombre(e.target.value)} placeholder="Ej: Juan Pérez o Empresa S.L." />
                       </div>
                       <div className="space-y-2">
-                        <Label>Empresa</Label>
+                        <Label>Empresa / Marca</Label>
                         <Input value={clienteEmpresa} onChange={(e) => setClienteEmpresa(e.target.value)} />
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label>Email</Label>
+                        <Label>Email de contacto</Label>
                         <Input type="email" value={clienteEmail} onChange={(e) => setClienteEmail(e.target.value)} />
                       </div>
                       <div className="space-y-2">
@@ -461,11 +489,15 @@ function NuevoContratoContent() {
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label>{fiscalConfig?.fiscalIdLabel || 'ID Fiscal'}</Label>
-                        <Input value={clienteIdFiscal} onChange={(e) => setClienteIdFiscal(e.target.value)} />
+                        <Label>{fiscalConfig?.fiscalIdLabel || 'NIF / CIF'} *</Label>
+                        <Input 
+                          value={clienteIdFiscal} 
+                          onChange={(e) => setClienteIdFiscal(e.target.value)}
+                          className={cn(!clienteIdFiscal && "border-destructive/50")}
+                        />
                       </div>
                       <div className="space-y-2">
-                        <Label>Dirección Legal</Label>
+                        <Label>Dirección Fiscal / Legal</Label>
                         <Input value={clienteDireccion} onChange={(e) => setClienteDireccion(e.target.value)} />
                       </div>
                     </div>

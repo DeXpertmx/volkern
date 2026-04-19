@@ -8,6 +8,7 @@ import { createBlogBlock } from './components/BlogBlock';
 import { createCatalogBlock } from './components/CatalogBlock';
 import { createVolkernFormBlock } from './components/VolkernFormBlock';
 import { createCRMFieldBlock } from './components/CRMFieldBlock';
+import { createStockBlock } from './components/StockBlock';
 
 // Async function to setup all Volkern CRM blocks with static core registration
 export const setupVolkernBlocksAsync = async (editor: Editor) => {
@@ -21,6 +22,7 @@ export const setupVolkernBlocksAsync = async (editor: Editor) => {
   createCatalogBlock(editor);
   createVolkernFormBlock(editor);
   createCRMFieldBlock(editor);
+  createStockBlock(editor);
 
   // Load Premium blocks asynchronously (They are less critical during load)
   try {

@@ -3,6 +3,22 @@ import { stripe } from './stripe'
 import { SquareClient, SquareEnvironment } from 'square'
 import gocardless, { Environments as GoCardlessEnvironment } from 'gocardless-nodejs'
 import { v4 as uuidv4 } from 'uuid'
+import { generateInvoiceFingerprint, GENESIS_FINGERPRINT } from './crypto-utils'
+
+export interface ISignatureProvider {
+  sign(payload: string): Promise<{ signature: string; algorithm: string }>;
+}
+
+export class MockSignatureProvider implements ISignatureProvider {
+  async sign(payload: string): Promise<{ signature: string; algorithm: string }> {
+    // Simulación de procesamiento asíncrono externo (Vault)
+    await new Promise(resolve => setTimeout(resolve, 150));
+    return {
+      signature: `MOCK_SIG_${Buffer.from(payload).toString('base64').substring(0, 32).toUpperCase()}`,
+      algorithm: 'RSA-SHA256-MOCK'
+    };
+  }
+}
 
 export interface InvoiceItem {
   name: string
@@ -25,6 +41,15 @@ export interface CreateInvoiceOptions {
 }
 
 export class InvoicingService {
+  private static signatureProvider: ISignatureProvider = new MockSignatureProvider();
+
+  /**
+   * Permite inyectar un proveedor de firma diferente (ej. FNMT, Vault)
+   */
+  static setSignatureProvider(provider: ISignatureProvider) {
+    this.signatureProvider = provider;
+  }
+
   /**
    * Genera una factura usando el proveedor activo del tenant
    */
@@ -89,7 +114,7 @@ export class InvoicingService {
         units: item.quantity,
         subtotal: item.price,
         desc: item.description,
-        tax: item.taxRate || 21
+        tax: item.taxRate || cliente.taxRate // Usa el default del perfil fiscal
       })),
       applyContactDefaults: true,
       approveDoc: true // Aprovar automáticamente
@@ -111,9 +136,20 @@ export class InvoicingService {
     }
 
     const data = await response.json()
+    const numero = data.docNumber || `H-${Date.now()}`
+
+    // 4. Sello Veri*factu
+    const security = await this.sealInvoiceMetadata({
+      tenantId,
+      numero,
+      monto: amount,
+      moneda: currency || 'EUR',
+      fechaEmision: new Date().toISOString(),
+      receptorNif: cliente.idFiscal
+    })
 
     // Guardar en DB local
-    return await prisma.invoice.create({
+    const invoice = await prisma.invoice.create({
       data: {
         tenantId,
         leadId,
@@ -121,14 +157,22 @@ export class InvoicingService {
         ordenVentaId: options.ordenVentaId,
         externalId: data.id,
         provider: 'holded',
-        numero: data.docNumber || `H-${Date.now()}`,
+        numero,
         monto: amount,
         moneda: currency || 'EUR',
         estado: 'pendiente',
         urlPdf: data.downloadUrl || null,
-        metadata: data
+        metadata: data,
+        ...security
       }
     })
+
+    // 5. Bloquear perfil fiscal (Gobernanza)
+    if (contactId) {
+      await this.lockPerfilFiscal(contactId, tenantId)
+    }
+
+    return invoice
   }
 
   /**
@@ -162,9 +206,20 @@ export class InvoicingService {
 
     // 4. Finalizar y enviar (opcional, pero suele ser lo deseado)
     const finalizedInvoice = await stripe.invoices.finalizeInvoice(stripeInvoice.id)
+    const numero = finalizedInvoice.number || `S-${Date.now()}`
+
+    // 5. Sello Veri*factu
+    const security = await this.sealInvoiceMetadata({
+      tenantId,
+      numero,
+      monto: amount,
+      moneda: currency.toUpperCase(),
+      fechaEmision: new Date().toISOString(),
+      receptorNif: cliente.idFiscal
+    })
 
     // Guardar en DB local
-    return await prisma.invoice.create({
+    const invoice = await prisma.invoice.create({
       data: {
         tenantId,
         leadId,
@@ -172,14 +227,22 @@ export class InvoicingService {
         ordenVentaId: options.ordenVentaId,
         externalId: finalizedInvoice.id,
         provider: 'stripe',
-        numero: finalizedInvoice.number || `S-${Date.now()}`,
+        numero,
         monto: amount,
         moneda: currency.toUpperCase(),
         estado: 'pendiente',
         urlPdf: finalizedInvoice.invoice_pdf || null,
-        metadata: finalizedInvoice as any
+        metadata: finalizedInvoice as any,
+        ...security
       }
     })
+
+    // 6. Bloquear perfil fiscal (Gobernanza)
+    if (contactId) {
+      await this.lockPerfilFiscal(contactId, tenantId)
+    }
+
+    return invoice
   }
 
   /**
@@ -202,11 +265,20 @@ export class InvoicingService {
 
     if (!clienteData) throw new Error('Cliente no encontrado')
 
+    const p = clienteData.perfilFiscal;
+    let taxRate = 21; // Default
+    if (p?.regimenFiscal === 'RED') taxRate = 10;
+    else if (p?.regimenFiscal === 'SRE') taxRate = 4;
+    else if (p?.regimenFiscal === 'EXE') taxRate = 0;
+
     return {
-      nombre: clienteData.perfilFiscal?.razonSocial || clienteData.nombre,
+      nombre: p?.razonSocial || clienteData.nombre,
       email: clienteData.email,
-      idFiscal: clienteData.perfilFiscal?.idFiscal || '',
-      direccion: clienteData.perfilFiscal?.direccionFiscal || clienteData.ubicacion || ''
+      idFiscal: p?.idFiscal || '',
+      direccion: p?.direccionFiscal || clienteData.ubicacion || '',
+      taxRate,
+      retencionIrpf: p?.retencionIrpf || 0,
+      recargoEquivalencia: p?.recargoEquivalencia || false
     }
   }
 
@@ -300,10 +372,16 @@ export class InvoicingService {
       }
     })
 
-    // 4. Publicar Factura
-    const { invoice: publishedInvoice } = await client.invoices.publish({
-      invoiceId: invoice?.id!,
-      version: invoice?.version!
+    const numero = publishedInvoice?.invoiceNumber || `SQ-${Date.now()}`
+
+    // 5. Sello Veri*factu
+    const security = await (InvoicingService as any).sealInvoiceMetadata({
+      tenantId,
+      numero,
+      monto: amount,
+      moneda: currency,
+      fechaEmision: new Date().toISOString(),
+      receptorNif: cliente.idFiscal
     })
 
     // Guardar en DB local
@@ -315,12 +393,13 @@ export class InvoicingService {
         ordenVentaId: options.ordenVentaId,
         externalId: publishedInvoice?.id!,
         provider: 'square',
-        numero: publishedInvoice?.invoiceNumber || `SQ-${Date.now()}`,
+        numero,
         monto: amount,
         moneda: currency,
         estado: 'pendiente',
         urlPdf: publishedInvoice?.publicUrl || null,
-        metadata: JSON.parse(JSON.stringify(publishedInvoice, (_, v) => typeof v === 'bigint' ? v.toString() : v))
+        metadata: JSON.parse(JSON.stringify(publishedInvoice, (_, v) => typeof v === 'bigint' ? v.toString() : v)),
+        ...security
       }
     })
   }
@@ -359,6 +438,18 @@ export class InvoicingService {
       description: description || 'Cobro por domiciliación Volkern CRM'
     })
 
+    const numero = `GC-${payment.id}`
+
+    // 3. Sello Veri*factu
+    const security = await (InvoicingService as any).sealInvoiceMetadata({
+      tenantId,
+      numero,
+      monto: amount,
+      moneda: currency,
+      fechaEmision: new Date().toISOString(),
+      receptorNif: cliente.idFiscal
+    })
+
     // Guardar en DB local
     return await (prisma as any).invoice.create({
       data: {
@@ -368,12 +459,13 @@ export class InvoicingService {
         ordenVentaId: options.ordenVentaId,
         externalId: payment.id,
         provider: 'gocardless',
-        numero: `GC-${payment.id}`,
+        numero,
         monto: amount,
         moneda: currency,
         estado: 'pendiente',
         urlPdf: null,
-        metadata: payment as any
+        metadata: payment as any,
+        ...security
       }
     })
   }
@@ -411,6 +503,95 @@ export class InvoicingService {
     return {
       authorizationUrl: flow.authorisation_url,
       billingRequestId: billingRequest.id
+    }
+  }
+
+  /**
+   * Lógica de Sellado Veri*factu
+   */
+  private static async sealInvoiceMetadata(params: {
+    tenantId: string,
+    numero: string,
+    monto: number,
+    moneda: string,
+    fechaEmision: string,
+    receptorNif: string
+  }) {
+    const { tenantId, numero, monto, moneda, fechaEmision, receptorNif } = params;
+
+    // 1. Obtener Configuración del Emisor (usamos el principal como referencia para el sellado)
+    const configFiscal = await prisma.configuracionFiscalEmisor.findFirst({
+      where: { 
+        tenantId,
+        esPrincipal: true 
+      }
+    }) || await prisma.configuracionFiscalEmisor.findFirst({
+      where: { tenantId }
+    });
+
+    // 2. Si Veri*factu NO está activado, devolvemos versión Legacy
+    if (!configFiscal?.verifactuEnabled) {
+      return {
+        verifactuVersion: 1,
+        isSealed: false,
+        fingerprint: null,
+        signature: null
+      };
+    }
+
+    const emisorNif = configFiscal.idFiscal || 'NIF-PENDIENTE';
+
+    // 3. Obtener última factura Veri*factu para encadenar
+    const lastInvoice = await prisma.invoice.findFirst({
+      where: { 
+        tenantId,
+        verifactuVersion: 2
+      },
+      orderBy: { sequenceNumber: 'desc' }
+    });
+
+    const parentFingerprint = lastInvoice?.fingerprint || GENESIS_FINGERPRINT;
+    const nextSequence = (lastInvoice?.sequenceNumber || 0) + 1;
+
+    // 4. Generar Fingerprint (Hash base)
+    const fingerprint = generateInvoiceFingerprint({
+      tenantId,
+      emisorNif,
+      receptorNif,
+      numero,
+      fechaEmision,
+      monto,
+      moneda,
+      parentFingerprint
+    });
+
+    // 5. Firma Digital Externa (Integridad de Capa 2)
+    const { signature, algorithm } = await this.signatureProvider.sign(fingerprint);
+
+    return {
+      fingerprint,
+      parentFingerprint,
+      sequenceNumber: nextSequence,
+      verifactuVersion: 2,
+      isSealed: true,
+      signature,
+      signatureAlgorithm: algorithm
+    };
+  }
+
+  /**
+   * Bloquea el perfil fiscal para evitar ediciones que rompan la integridad
+   */
+  private static async lockPerfilFiscal(contactId: string, tenantId: string) {
+    try {
+      await prisma.perfilFiscalCliente.update({
+        where: { contactId },
+        data: { isLocked: true }
+      });
+    } catch (error) {
+      console.error('Error locking fiscal profile:', error);
+      // No lanzamos error para no interrumpir el flujo de facturación,
+      // pero el audit script lo detectará después si hubo cambios.
     }
   }
 }

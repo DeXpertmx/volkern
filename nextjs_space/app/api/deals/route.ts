@@ -72,15 +72,19 @@ export const GET = withTenantAuth(async (req, auth) => {
     })
 
     // Calcular métricas locales al tenant
+    const totalValor = deals.reduce((sum, deal) => sum + deal.valor, 0)
+    const valorPonderado = deals.reduce((sum, deal) => {
+      if (deal.estado === 'activo') {
+        return sum + (deal.valor * deal.probabilidad / 100)
+      }
+      return sum
+    }, 0)
+
     const metrics = {
       totalDeals: deals.length,
-      totalValor: deals.reduce((sum, deal) => sum + deal.valor, 0),
-      valorPonderado: deals.reduce((sum, deal) => {
-        if (deal.estado === 'activo') {
-          return sum + (deal.valor * deal.probabilidad / 100)
-        }
-        return sum
-      }, 0),
+      totalValor,
+      valorPonderado,
+      gapAnalysis: 100000 - valorPonderado, // Meta estática temporal
       porEtapa: deals.reduce((acc: any, deal) => {
         acc[deal.etapa] = (acc[deal.etapa] || 0) + 1
         return acc

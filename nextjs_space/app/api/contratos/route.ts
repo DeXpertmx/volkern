@@ -52,14 +52,48 @@ export const GET = withTenantAuth(async (request, auth) => {
   }
 }, ['contratos:read']);
 
-// POST /api/contratos - Crear contrato
+// POST /api/contratos - Crear contrato inviolable
 export const POST = withTenantAuth(async (request, auth) => {
   try {
     const tenantId = auth.tenant!.id;
     const userId = auth.user!.id;
     const body = await request.json();
 
-    // 1. Generar número secuencial (Específico del tenant en su DB física)
+    // 1. Validar Contacto y capturar Snapshot Fiscal (Gobernanza)
+    const contactId = body.contactId;
+    if (!contactId) {
+      return NextResponse.json({ error: 'El ID de contacto es obligatorio para contratos inviolables' }, { status: 400 });
+    }
+
+    const contact = await prisma.contact.findUnique({
+      where: { id: contactId },
+      include: { perfilFiscal: true }
+    });
+
+    if (!contact) {
+      return NextResponse.json({ error: 'Contacto no encontrado' }, { status: 404 });
+    }
+
+    // El NIF es obligatorio para la validez legal del contrato
+    const nif = contact.perfilFiscal?.nif || null;
+    if (!nif) {
+      return NextResponse.json({ 
+        error: 'El contacto debe tener un NIF/CIF validado en su perfil fiscal para generar un contrato legal.' 
+      }, { status: 400 });
+    }
+
+    const snapshotNombre = contact.nombre;
+    const snapshotNif = nif;
+    const snapshotDireccion = contact.perfilFiscal?.direccion || contact.ubicacion || '';
+    const snapshotMetadata = {
+      email: contact.email,
+      telefono: contact.telefono,
+      tipo: contact.tipo,
+      tenantId: tenantId,
+      timestamp: new Date().toISOString()
+    };
+
+    // 2. Generar número secuencial (Específico del tenant)
     const year = new Date().getFullYear();
     const lastContrato = await prisma.contrato.findFirst({
       where: {
@@ -76,21 +110,42 @@ export const POST = withTenantAuth(async (request, auth) => {
     }
     const numero = `CONT-${year}-${String(nextNum).padStart(4, '0')}`;
 
-    // 2. Generar token público
-    const tokenPublico = randomBytes(32).toString('hex');
+    // 3. Generar token público (UUID v4) para acceso externo inalterable
+    const tokenPublico = crypto.randomUUID();
 
-    // 3. Calcular totales
-    const items = body.items || [];
-    const subtotal = items.reduce((sum: number, item: any) => 
+    // 4. Importar de Cotización si aplica
+    let finalItems = body.items || [];
+    if (body.cotizacionId && finalItems.length === 0) {
+      const cotizacion = await prisma.cotizacion.findUnique({
+        where: { id: body.cotizacionId },
+        include: { items: true }
+      });
+      if (cotizacion) {
+        finalItems = cotizacion.items.map(i => ({
+          concepto: i.concepto,
+          descripcion: i.descripcion,
+          cantidad: i.cantidad,
+          precioUnitario: i.precioUnitario,
+          porcentajeImpuesto: i.porcentajeImpuesto || 0,
+          sku: i.sku
+        }));
+      }
+    }
+
+    // 5. Calcular totales
+    const subtotal = finalItems.reduce((sum: number, item: any) => 
       sum + (item.cantidad * item.precioUnitario), 0);
     const descuentoMonto = body.descuentoPorcentaje 
       ? subtotal * body.descuentoPorcentaje / 100 
       : (body.descuentoMonto || 0);
     const subtotalConDescuento = subtotal - descuentoMonto;
-    const impuestos = body.incluyeIva ? subtotalConDescuento * 0.16 : 0;
+    
+    // Tasa de IVA por defecto del tenant si no se especifica
+    const tasaIva = body.tasaIva !== undefined ? body.tasaIva : 0.16;
+    const impuestos = body.incluyeIva ? subtotalConDescuento * tasaIva : 0;
     const total = subtotalConDescuento + impuestos;
 
-    // 4. Crear contrato en la DB del Tenant
+    // 6. Crear contrato en la DB del Tenant con Snapshot Fiscal
     const contrato = await prisma.contrato.create({
       data: {
         tenantId,
@@ -100,6 +155,7 @@ export const POST = withTenantAuth(async (request, auth) => {
         descripcion: body.descripcion,
         tipo: body.tipo || 'servicio',
         estado: 'borrador',
+        contactId: contact.id,
         dealId: body.dealId || null,
         leadId: body.leadId || null,
         cotizacionId: body.cotizacionId || null,
@@ -118,24 +174,27 @@ export const POST = withTenantAuth(async (request, auth) => {
         notasCliente: body.notasCliente,
         fechaInicio: body.fechaInicio ? new Date(body.fechaInicio) : null,
         fechaFin: body.fechaFin ? new Date(body.fechaFin) : null,
-        clienteNombre: body.clienteNombre,
-        clienteEmail: body.clienteEmail,
-        clienteTelefono: body.clienteTelefono,
-        clienteEmpresa: body.clienteEmpresa,
-        clienteRfc: body.clienteRfc,
-        clienteDireccion: body.clienteDireccion,
+        // Snapshot Fiscal Inmutable
+        snapshotNombre,
+        snapshotNif,
+        snapshotDireccion,
+        snapshotMetadata,
+        // Datos de contacto para compatibilidad legacy UI
+        clienteNombre: snapshotNombre,
+        clienteEmail: contact.email,
+        clienteTelefono: contact.telefono,
+        clienteEmpresa: contact.company?.nombre || contact.clienteEmpresa,
         creadoPorId: userId,
         items: {
-          create: items.map((item: any, index: number) => ({
+          create: finalItems.map((item: any, index: number) => ({
             concepto: item.concepto || item.nombre,
             descripcion: item.descripcion,
             cantidad: item.cantidad,
             precioUnitario: item.precioUnitario,
             descuento: item.descuento || 0,
-            impuestos: item.impuestos || 0,
+            impuestos: item.porcentajeImpuesto || 0,
             total: item.cantidad * item.precioUnitario,
             orden: index,
-            categoria: item.categoria,
             sku: item.sku
           }))
         }
@@ -143,12 +202,12 @@ export const POST = withTenantAuth(async (request, auth) => {
       include: {
         items: true,
         deal: true,
-        lead: true,
+        contact: true,
         cotizacion: true
       }
     });
 
-    // Audit log (Proxied to tenant DB)
+    // 7. Audit Log
     await prisma.auditLog.create({
       data: {
         tenantId,
@@ -156,21 +215,31 @@ export const POST = withTenantAuth(async (request, auth) => {
         accion: 'crear',
         entidad: 'contrato',
         entidadId: contrato.id,
-        descripcion: `Contrato ${numero} creado para ${contrato.clienteNombre}`,
-        cambiosDespues: JSON.stringify(contrato)
+        descripcion: `Contrato Inviolable ${numero} generado para ${snapshotNombre} (NIF: ${snapshotNif})`,
+        cambiosDespues: JSON.stringify({
+          numero,
+          total,
+          snapshot: { snapshotNombre, snapshotNif }
+        })
       }
     });
 
-    // Notificación por Telegram al admin
+    // 8. Notificación a Telegram (Sales Channel)
     const { notifyByTelegram } = await import('@/lib/skills/notification-layer');
     notifyByTelegram(
-      `📄 *Nuevo Contrato*\n\n📋 *Número:* ${numero}\n👤 *Cliente:* ${contrato.clienteNombre}\n💰 *Total:* ${contrato.total} ${contrato.moneda}\n📝 *Servicios:* ${items.length}`,
+      `📑 *Contrato Inviolable Generado*\n\n` +
+      `📋 *Número:* \`${numero}\`\n` +
+      `👤 *Cliente:* ${snapshotNombre}\n` +
+      `🆔 *NIF:* \`${snapshotNif}\`\n` +
+      `💰 *Valor:* ${total.toLocaleString()} ${contrato.moneda}\n` +
+      `🛠️ *Tipo:* ${contrato.tipo.toUpperCase()}\n\n` +
+      `_Esperando firma del cliente vía VolkernSign._`,
       createSystemContext(tenantId)
-    ).catch(() => {})
+    ).catch(() => {});
 
     return NextResponse.json(contrato, { status: 201 });
   } catch (error) {
     console.error('Error creating contrato:', error);
-    return NextResponse.json({ error: 'Error interno' }, { status: 500 });
+    return NextResponse.json({ error: 'Error interno en la generación del contrato' }, { status: 500 });
   }
 }, ['contratos:write']);

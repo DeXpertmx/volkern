@@ -50,7 +50,8 @@ interface TimelineEvent {
 }
 
 interface UnifiedTimelineProps {
-  leadId: string;
+  leadId?: string;
+  contactId?: string;
 }
 
 const interactionTypes = [
@@ -67,7 +68,7 @@ const resultados = [
   { value: 'negativo', label: 'Negativo', icon: ThumbsDown, color: 'bg-red-100 text-red-800' }
 ];
 
-export function UnifiedTimeline({ leadId }: UnifiedTimelineProps) {
+export function UnifiedTimeline({ leadId, contactId }: UnifiedTimelineProps) {
   const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -78,20 +79,24 @@ export function UnifiedTimeline({ leadId }: UnifiedTimelineProps) {
     fechaCreacion: new Date().toISOString().slice(0, 16)
   });
 
+  const entityId = leadId || contactId;
+  const entityType = leadId ? 'Lead' : 'Contact';
+  const apiBase = leadId ? `/api/leads/${leadId}` : `/api/contacts/${contactId}`;
+
   useEffect(() => {
-    fetchTimelineData();
-  }, [leadId]);
+    if (entityId) fetchTimelineData();
+  }, [leadId, contactId]);
 
   const fetchTimelineData = async () => {
     try {
       // Cargar interacciones
-      const interactionsRes = await fetch(`/api/leads/${leadId}/interactions`);
+      const interactionsRes = await fetch(`${apiBase}/interactions`);
       const interactionsData = interactionsRes.ok ? await interactionsRes.json() : [];
       // Soportar tanto el formato antiguo (array) como el nuevo ({ interactions: [...] })
       const interactions: Interaction[] = Array.isArray(interactionsData) ? interactionsData : (interactionsData.interactions || []);
 
       // Cargar audit logs
-      const auditLogsRes = await fetch(`/api/audit-logs?entityId=${leadId}&entity=Lead`);
+      const auditLogsRes = await fetch(`/api/audit-logs?entityId=${entityId}&entity=${entityType}`);
       const auditData = auditLogsRes.ok ? await auditLogsRes.json() : { logs: [] };
       const auditLogs: AuditLog[] = auditData.logs || [];
 
@@ -127,7 +132,7 @@ export function UnifiedTimeline({ leadId }: UnifiedTimelineProps) {
     }
 
     try {
-      const res = await fetch(`/api/leads/${leadId}/interactions`, {
+      const res = await fetch(`${apiBase}/interactions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db';
 import { ProductionService } from '@/lib/erp/production-service';
+import { AutonomousMRP } from '@/lib/erp/autonomous-mrp';
 import { Decimal } from 'decimal.js';
 
 /**
@@ -71,4 +72,20 @@ export async function verify_waste_integrity({ tenantId, workOrderId, wasteImage
     riskLevel: analysis.riskLevel,
     isRecapture: analysis.isRecapture
   };
+}
+
+/**
+ * SKILL: detect_bottlenecks
+ * Analiza la planta en busca de retrasos críticos
+ */
+export async function detect_bottlenecks({ tenantId }: { tenantId: string }) {
+  return await AutonomousMRP.detectBottlenecks(tenantId);
+}
+
+/**
+ * SKILL: suggest_assembly_strategy
+ * Obtiene recomendaciones de la IA para optimizar la línea
+ */
+export async function suggest_assembly_strategy({ tenantId, workOrderId }: { tenantId: string, workOrderId?: string }) {
+  return await AutonomousMRP.suggestAssemblyStrategy(tenantId, workOrderId);
 }

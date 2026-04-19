@@ -81,8 +81,15 @@ export default function FinanzasDashboard() {
           <Button variant="outline" className="rounded-xl font-bold uppercase text-xs tracking-wider">
             <Filter className="w-4 h-4 mr-2" /> Filtros
           </Button>
-          <Button className="rounded-xl font-bold uppercase text-xs tracking-wider shadow-lg shadow-primary/20">
+          <Button className="rounded-xl font-bold uppercase text-xs tracking-wider shadow-lg shadow-primary/20" onClick={() => (window as any).location.href = '/dashboard/finanzas/gastos'}>
             <Plus className="w-4 h-4 mr-2" /> Nuevo Gasto
+          </Button>
+          <Button 
+            variant="outline" 
+            className="rounded-xl font-bold uppercase text-xs tracking-wider border-primary text-primary hover:bg-primary/5"
+            onClick={() => (window as any).location.href = '/dashboard/finanzas/facturacion'}
+          >
+            <Receipt className="w-4 h-4 mr-2" /> Mesa de Facturación
           </Button>
         </div>
       </div>

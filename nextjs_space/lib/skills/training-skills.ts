@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db';
 import { notifyUser } from './notification-layer';
 import { broadcastPushNotification } from '@/lib/services/push-notification';
+import { callGemma, GemmaMessage } from '@/lib/ai/gemma-client';
 
 export interface RoleplayMessage {
   role: 'agent' | 'customer';
@@ -42,53 +43,73 @@ export async function generateCustomerResponse(leadId: string, tenantId: string,
 
   // 3. Construir el "Prompt de Fidelidad de Negociación" solicitado por el usuario
   const systemPrompt = `
-Actúa estrictamente como el cliente ${lead.nombre}. Tu personalidad se basa en las notas históricas:
-${historialNotas || 'No hay notas previas, actúa como un cliente escéptico interesado en servicios de CRM.'}
+Eres ${lead.nombre}, un cliente potencial que está siendo contactado por un agente de ventas.
+TU PERSONALIDAD (Basada en historial):
+${historialNotas || 'No hay notas previas, actúas como un cliente escéptico interesado en servicios de CRM.'}
 
-MODO DE DIFICULTAD: ${isHardMode ? 'LEYENDA (Extremadamente difícil, no acepta excusas, cuestiona cada coma)' : 'ESTÁNDAR'}
+DIFICULTAD: ${isHardMode ? 'MODO LEYENDA' : 'ESTÁNDAR'}
 
-Reglas de Oro:
-1. No cedas rápido: Si el agente ofrece un descuento, no aceptes de inmediato. Cuestiona el valor.
-${isHardMode ? '1.1. Hostilidad de Presupuesto: Si el agente no justifica el ROI en 2 mensajes, corta la llamada.' : ''}
-2. Objeciones Específicas: Si en el pasado mencionaste el 'presupuesto' o la 'complejidad', vuelve a esos puntos constantemente.
-3. Detección de Técnica: Si el agente usa una pregunta de cierre, evalúa internamente si fue natural o forzada.
-4. Cierre de Sesión: Solo acepta el trato si el agente resuelve tus 2 principales 'Pain Points' detectados en el historial.
+INSTRUCCIONES DE COMPORTAMIENTO:
+1. Sé realista. No cedas ante argumentos genéricos.
+2. Si el agente es amable pero no aporta valor técnico o financiero, sé cortés pero mantén la distancia.
+${isHardMode ? `
+3. 🔥 REGLAS MODO LEYENDA (AGRESIVIDAD NIVEL 4):
+   - Estás extremadamente ocupado y de mal humor. No toleras "saludos cordiales" ni "esperamos que estés bien".
+   - Cuestiona el ROI de forma brutal: "¿Por qué debería gastar un centavo en ustedes cuando puedo invertir eso en leads directos? Demuéstralo o ya perdimos el tiempo".
+   - Tácticas de Shock: Interrumpe al agente. Escéptico absoluto sobre la "IA": "Todos dicen que tienen IA hoy en día, dime qué hay bajo el capó o deja de mentir".
+   - El Cronómetro: "Te doy 30 segundos. Si escucho algo genérico, te bloqueo de WhatsApp y LinkedIn ahora mismo".
+   - Comparativa Destructiva: "Hablé con un competidor ayer y me ofrecieron lo mismo a mitad de precio. ¿Por qué no debería irme con ellos? Convénceme".
+   - Desconfianza en Agencias: "Eres un Slot de una agencia. ¿Cómo sé que mañana no desaparecen y se llevan mi info?".
+` : '3. Sé un cliente difícil pero razonable. Plantea objeciones comunes sobre precio, tiempo e implementación.'}
+
+Responde de forma concisa (máximo 2 párrafos) tal como lo haría un cliente por chat o teléfono. No salgas del personaje.
+Responde ÚNICAMENTE con el mensaje del cliente en formato JSON:
+{
+  "customerResponse": "tu respuesta aquí",
+  "objectionType": "precio|valor|confianza|tiempo|tecnico",
+  "sentiment": "angry|neutral|skeptical|interested"
+}
   `.trim();
 
-  console.log(`[Roleplay] System Prompt constructed. HardMode: ${isHardMode}`);
+  console.log(`[Roleplay] Calling Gemma. HardMode: ${isHardMode}`);
 
-  // 4. Simulación de lógica avanzada de respuesta (Digital Twin)
-  // En una fase posterior, esto llamaría a: await openai.chat.completions.create(...)
-  const lowercaseMsg = agentMessage.toLowerCase();
-  let response = "";
-  let objectionType = "resistencia";
-  let sentiment = "skeptical";
+  const messages: GemmaMessage[] = [
+    { role: 'system', content: systemPrompt },
+    ...history.map(m => ({ 
+      role: m.role === 'agent' ? 'user' : 'model', 
+      content: m.content 
+    })) as any,
+    { role: 'user', content: agentMessage }
+  ];
 
-  // Simulación de las "Reglas de Oro"
-  if (lowercaseMsg.includes('descuento') || lowercaseMsg.includes('precio especial')) {
-    response = "Aprecio el gesto del descuento, pero no se trata solo del precio. Mi directiva me pregunta qué valor real aporta esto al día a día que no tengamos ya. Convénceme de que no es solo otro software más.";
-    objectionType = "valor";
-  } else if (lowercaseMsg.includes('presupuesto') || lowercaseMsg.includes('caro')) {
-    response = "Como te mencioné antes, el presupuesto está cerrado para este trimestre. Tendría que quitarle fondos a otra área para esto. ¿Por qué debería ser prioridad?";
-    objectionType = "presupuesto";
-  } else if (lowercaseMsg.includes('instalar') || lowercaseMsg.includes('configurar') || lowercaseMsg.includes('complejo')) {
-    response = "Me sigue preocupando la complejidad. Si mi equipo tarda semanas en aprender, habremos perdido dinero. ¿Cómo garantizas una transición sin fricción?";
-    objectionType = "complejidad";
-  } else if (lowercaseMsg.includes('¿cerramos?') || lowercaseMsg.includes('¿te parece bien?') || lowercaseMsg.includes('listo para empezar')) {
-    response = "Siento que me estás intentando cerrar muy rápido. Aún no me has resuelto cómo integra esto con mi ERP actual, que es mi mayor dolor de cabeza ahora mismo.";
-    objectionType = "cierre_forzado";
-  } else {
-    response = "Entiendo... pero sigo necesitando ver cómo esto impacta en la productividad real del equipo de ventas. Dame un ejemplo concreto de cómo resolviste un problema similar en mi industria.";
-    objectionType = "general";
+  const aiRes = await callGemma(messages, { 
+    temperature: isHardMode ? 0.9 : 0.7, 
+    responseMimeType: 'application/json' 
+  });
+
+  if (aiRes.error) {
+    throw new Error(`Error de IA: ${aiRes.error}`);
   }
 
-  return {
-    customerResponse: response,
-    objectionType,
-    sentiment,
-    leadName: lead.nombre,
-    systemPromptUsed: systemPrompt // Útil para debugging del "tono" de Gemma
-  };
+  try {
+    const parsed = JSON.parse(aiRes.content);
+    return {
+      customerResponse: parsed.customerResponse,
+      objectionType: parsed.objectionType,
+      sentiment: parsed.sentiment,
+      leadName: lead.nombre,
+      systemPromptUsed: systemPrompt
+    };
+  } catch (e) {
+    console.error('[Roleplay] Error parsing AI response:', aiRes.content);
+    return {
+      customerResponse: aiRes.content.substring(0, 200),
+      objectionType: 'general',
+      sentiment: 'neutral',
+      leadName: lead.nombre,
+      systemPromptUsed: systemPrompt
+    };
+  }
 }
 
 /**
@@ -96,50 +117,54 @@ ${isHardMode ? '1.1. Hostilidad de Presupuesto: Si el agente no justifica el ROI
  * Analiza el historial para dar feedback estructurado al agente y lo persiste.
  */
 export async function generatePostMortem(leadId: string, tenantId: string, userId: string, history: RoleplayMessage[]) {
-  // En una implementación real, enviaríamos todo el historial a Gemma 4 con un prompt de evaluación:
-  // "Evalúa el desempeño del agente en esta negociación. Puntos clave: manejo de objeciones,
-  // claridad en la propuesta, técnica de cierre, empatía."
+  const systemPrompt = `
+Eres un experto en entrenamiento de ventas de alto rendimiento.
+Tu tarea es evaluar el desempeño de un agente en una simulación de roleplay de negociación.
+Analiza el historial de mensajes adjunto.
 
-  // Análisis simulado basado en el historial
-  const numInteractions = history.length;
-  const mentionPrice = history.some(m => m.content.toLowerCase().includes('precio') || m.content.toLowerCase().includes('descuento'));
-  const solutionMentioned = history.some(m => m.content.toLowerCase().includes('solución') || m.content.toLowerCase().includes('volkern'));
-  
-  let score = 70;
-  let strongPoint = "Mantuvo un tono profesional durante toda la simulación";
-  let improvement = "Debería profundizar más en cómo la herramienta ahorra tiempo real en el día a día";
-  let technique = "Venta consultiva básica";
+CRITERIOS DE EVALUACIÓN:
+1. Manejo de Objeciones: ¿Resolvió las dudas o solo las evitó?
+2. Aportación de Valor: ¿Habló de beneficios o solo de características?
+3. Técnica de Cierre: ¿Fue natural o forzada?
+4. Escucha Activa: ¿Respondió a lo que el cliente realmente preguntaba?
 
-  if (numInteractions > 6) {
-    score += 15;
-    strongPoint = "Excelente persistencia y manejo de múltiples objeciones encadenadas";
-  }
+Responde ÚNICAMENTE en JSON con el siguiente formato:
+{
+  "puntuacion_cierre": 0-100,
+  "argumento_mas_fuerte": "resumen corto",
+  "punto_de_mejora": "consejo accionable",
+  "tecnica_detectada": "nombre de la técnica"
+}
+  `.trim();
 
-  if (mentionPrice) {
-    technique = "Negociación por valor/precio";
-  }
+  const messages: GemmaMessage[] = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: `HISTORIAL DE SESIÓN:\n${JSON.stringify(history)}` }
+  ];
 
-  if (history.some(m => m.content.toLowerCase().includes('migración') || m.content.toLowerCase().includes('datos'))) {
-    score += 10;
-    strongPoint = "La explicación técnica sobre la migración de datos fue muy convincente";
-  }
+  const aiRes = await callGemma(messages, { responseMimeType: 'application/json' });
 
-  if (history.some(m => m.content.toLowerCase().includes('¿cerramos?') || m.content.toLowerCase().includes('proceder'))) {
-    technique = "Cierre directo / Cierre de alternativa";
-    if (numInteractions < 4) {
-      score -= 20;
-      improvement = "Intentó cerrar el trato demasiado pronto, sin haber validado primero todos los puntos de dolor";
-    } else {
-      score += 5;
+  let postMortem;
+  if (aiRes.error) {
+    // Fallback en caso de error de IA
+    postMortem = {
+      puntuacion_cierre: 50,
+      argumento_mas_fuerte: "Conexión fallida con evaluador IA",
+      punto_de_mejora: "Reintentar evaluación más tarde",
+      tecnica_detectada: "N/A"
+    };
+  } else {
+    try {
+      postMortem = JSON.parse(aiRes.content);
+    } catch (e) {
+      postMortem = {
+        puntuacion_cierre: 60,
+        argumento_mas_fuerte: "Evaluación parcial",
+        punto_de_mejora: "El agente mantuvo el flujo pero la IA no pudo estructurar el reporte",
+        tecnica_detectada: "Venta estándar"
+      };
     }
   }
-
-  const postMortem = {
-    puntuacion_cierre: Math.min(score, 100),
-    argumento_mas_fuerte: strongPoint,
-    punto_de_mejora: improvement,
-    tecnica_detectada: technique
-  };
 
   // 4. Verificar si es un nuevo record personal para notificar
   try {

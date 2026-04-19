@@ -1,8 +1,11 @@
 import { PrismaClient } from '@prisma/client'
 import LRUCache from 'lru-cache'
+import { billingLockExtension } from './db/extensions/billing-lock'
+import { vaultExtension } from './db/extensions/vault'
 // 0. Contexto de base de datos (AsyncLocalStorage)
 export interface DbStore {
   tenantId: string;
+  vaultSeed?: string;
   client?: any;
 }
 
@@ -25,8 +28,8 @@ export const dbContext: any = _AsyncLocalStorage ? new _AsyncLocalStorage() : {
  * Helper para ejecutar una función dentro del contexto de un tenant
  */
 export async function runWithTenant<T>(tenantId: string, fn: () => Promise<T>): Promise<T> {
-  const client = await getTenantDb(tenantId);
-  return dbContext.run({ tenantId, client }, fn);
+  const { client, vaultSeed } = await getTenantDb(tenantId);
+  return dbContext.run({ tenantId, vaultSeed, client }, fn);
 }
 
 // Modelos que siempre deben consultarse en la Base de Datos Global (Control Plane)
@@ -42,53 +45,85 @@ const GLOBAL_MODELS = [
   'whitelabelConfig',
   'verificationToken',
   'pageTemplate',
-  'pageComponent'
+  'pageComponent',
+  'auditVault',
+  'systemAlert',
+  'trustProtocolLog',
+  'aiModuleControl',
+  'systemBackup',
+  'inAppNotification',
+  'customerUser',
+  'customerProfile',
+  'customerSession',
+  'customerOrgMember',
+  'customerPrivateDocument',
+  'academyUser',
+  'academySession',
+  'academyAuditLog'
 ];
 
-// Configuración del caché de clientes Prisma
-const clientCache = new LRUCache<string, any>({
-  max: 100,
-  dispose: (client) => {
-    client.$disconnect().catch(() => {});
-  }
-})
-
+// Configuración del objeto global para persistencia en desarrollo (Next.js hot-reload)
 const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined
+  prisma: any
+  tenantCache: LRUCache<string, any> | undefined
   skillsLayerInitialized?: boolean
 }
 
-// 1. Cliente Global (Control Plane)
-export const globalPrisma = globalForPrisma.prisma ?? new PrismaClient()
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = globalPrisma
+// 1. Caché de clientes Prisma (Optimizado para desarrollo local)
+if (!globalForPrisma.tenantCache) {
+  globalForPrisma.tenantCache = new LRUCache<string, any>({
+    max: 20, // Reducido para evitar agotar el pool de Postgres local (default 100)
+    dispose: (client) => {
+      if (client.$disconnect) client.$disconnect().catch(() => {});
+    }
+  });
+}
+const clientCacheV3 = globalForPrisma.tenantCache;
 
-// 2. Fábrica Dinámica de Clientes
+// 2. Cliente Global (Control Plane)
+const createGlobalPrisma = () => {
+  return new PrismaClient({
+    log: ['error'],
+    // Forzamos un límite bajo para evitar colisiones
+  }).$extends(billingLockExtension).$extends(vaultExtension) as any;
+};
+
+export const globalPrisma = globalForPrisma.prisma || createGlobalPrisma();
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = globalPrisma;
+}
+
+// 3. Fábrica Dinámica de Clientes
 export async function getTenantDb(tenantId: string) {
-  if (!tenantId) return globalPrisma;
+  if (!tenantId) return { client: globalPrisma };
 
-  const cachedClient = clientCache.get(tenantId);
+  const cachedClient = clientCacheV3.get(tenantId);
   if (cachedClient) return cachedClient;
 
-  // Los metadatos del tenant siempre se buscan en la global
   const tenant = await globalPrisma.tenant.findUnique({
     where: { id: tenantId },
-    select: { dbUrl: true, slug: true }
+    select: { dbUrl: true, vaultSeed: true }
   });
 
   if (!tenant?.dbUrl) {
-    return globalPrisma;
+    return { client: globalPrisma, vaultSeed: tenant?.vaultSeed };
   }
+
+  // Inyectar límite de conexión en la URL de forma segura
+  const dbUrl = tenant.dbUrl.includes('?') 
+    ? `${tenant.dbUrl}&connection_limit=5` 
+    : `${tenant.dbUrl}?connection_limit=5`;
 
   const tenantClient = new PrismaClient({
     datasources: {
-      db: {
-        url: tenant.dbUrl
-      }
+      db: { url: dbUrl }
     }
-  });
+  }).$extends(billingLockExtension).$extends(vaultExtension) as any;
 
-  clientCache.set(tenantId, tenantClient);
-  return tenantClient;
+  const result = { client: tenantClient, vaultSeed: tenant.vaultSeed };
+  clientCacheV3.set(tenantId, result);
+  return result;
 }
 
 // 3. Proxy de Prisma (Mágico y con Enrutamiento Inteligente)
@@ -113,8 +148,14 @@ export const prisma = new Proxy(globalPrisma, {
     }
     
     // Fallback al cliente global (para scripts, o si no hay contexto)
-    // ADVERTENCIA: En producción, casi siempre deberíamos tener un contexto
-    return Reflect.get(target, prop, receiver);
+    const result = Reflect.get(target, prop, receiver);
+    
+    // Diagnóstico para modelos críticos si fallan
+    if (!result && (prop.toLowerCase().includes('customer'))) {
+      console.warn(`[PrismaProxy] Propiedad '${prop}' no encontrada en el cliente. ¿Esquema actualizado?`);
+    }
+    
+    return result;
   }
 })
 
@@ -129,3 +170,4 @@ if (typeof window === 'undefined' && !globalForPrisma.skillsLayerInitialized) {
 }
 
 export default prisma
+// v2: Forzado de refresco de esquema para unificación de historial

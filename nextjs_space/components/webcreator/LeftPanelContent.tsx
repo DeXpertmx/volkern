@@ -1,7 +1,8 @@
 "use client";
 
 import React from "react";
-import { Search, Plus, Type, Database, Layout as LayoutIcon, Users, History } from "lucide-react";
+import { Search, Plus, Type, Database, Layout as LayoutIcon, Users, History, Sparkles } from "lucide-react";
+import { AiBlockGenerator } from "./AiBlockGenerator";
 
 interface LeftPanelContentProps {
   activePanel: string;
@@ -238,6 +239,41 @@ const LeftPanelContent: React.FC<LeftPanelContentProps> = ({
               const { VariableDocumentationPanel } = require("./VariableDocumentationPanel");
               return <VariableDocumentationPanel />;
            })()}
+        </div>
+      )}
+
+      {activePanel === "ai" && (
+        <div className="p-5 space-y-6">
+          <div className="flex items-center gap-3 text-indigo-600 dark:text-indigo-400">
+            <Sparkles className="w-5 h-5" />
+            <h2 className="font-bold text-lg">Gemma 4 AI Assistant</h2>
+          </div>
+          
+          <AiBlockGenerator 
+            onBlockGenerated={(block) => {
+              // Lógica para añadir el bloque al editor
+              window.dispatchEvent(new CustomEvent('editor:add-block', { detail: block }));
+            }} 
+          />
+          
+          <div className="space-y-4 pt-4 border-t border-gray-100 dark:border-slate-800">
+            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Sugerencias Rápidas</h3>
+            <div className="grid grid-cols-1 gap-2">
+              {[
+                "Generar Hero con formulario",
+                "Crear sección de Precios",
+                "Bloque de Testimonios dinámicos",
+                "FAQ con acordeón"
+              ].map(suggest => (
+                <button 
+                  key={suggest}
+                  className="text-left p-3 text-xs bg-slate-50 dark:bg-slate-900 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg border border-transparent hover:border-indigo-100 transition-all text-slate-600 dark:text-slate-400"
+                >
+                  {suggest}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -16,8 +16,62 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { toast } from "sonner"
+import { useState } from 'react'
 
 export default function MarketingAdminPage() {
+  const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const handleCreateTemplate = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    setIsSubmitting(true)
+
+    const formData = new FormData(e.currentTarget)
+    const data = {
+      nombre: formData.get('nombre'),
+      categoria: formData.get('categoria'),
+      descripcion: formData.get('descripcion'),
+      etiquetas: (formData.get('etiquetas') as string)?.split(',').map(s => s.trim()).filter(Boolean) || []
+    }
+
+    try {
+      const res = await fetch('/api/admin/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      })
+
+      if (res.ok) {
+        toast.success("Plantilla global creada exitosamente")
+        setShowCreateDialog(false)
+      } else {
+        const err = await res.json()
+        toast.error(err.error || "Error al crear la plantilla")
+      }
+    } catch (err) {
+      toast.error("Error de conexión con el servidor")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   return (
     <div className="space-y-10">
       <div className="flex justify-between items-end">
@@ -25,11 +79,65 @@ export default function MarketingAdminPage() {
           <h1 className="text-4xl font-black text-[#1A365D] uppercase tracking-tighter italic">Marketing Industrial</h1>
           <p className="text-[#4A5568] font-bold text-xs uppercase tracking-widest opacity-60">Smart Landing & Lead Gen Engine</p>
         </div>
-        <Button className="rounded-xl h-12 px-6 bg-[#1A365D] hover:bg-[#1A365D]/90 text-white font-black uppercase tracking-widest text-[10px] shadow-lg shadow-indigo-900/10">
+        <Button 
+          onClick={() => setShowCreateDialog(true)}
+          className="rounded-xl h-12 px-6 bg-[#1A365D] hover:bg-[#1A365D]/90 text-white font-black uppercase tracking-widest text-[10px] shadow-lg shadow-indigo-900/10"
+        >
           <Plus size={16} className="mr-2" />
           Nueva Plantilla Global
         </Button>
       </div>
+
+      {/* Modal de Creación */}
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent className="max-w-md rounded-3xl border-none shadow-2xl">
+          <DialogHeader className="space-y-3">
+            <DialogTitle className="text-2xl font-black text-[#1A365D] uppercase tracking-tighter italic">Nueva Estructura Global</DialogTitle>
+            <DialogDescription className="text-xs font-bold text-[#4A5568] opacity-60 uppercase tracking-widest">
+              Define los cimientos de una nueva plantilla para el ecosistema Volkern.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <form onSubmit={handleCreateTemplate} className="space-y-6 pt-4">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="nombre" className="text-[10px] font-black uppercase tracking-widest text-slate-400">Nombre de la Plantilla</Label>
+                <Input id="nombre" name="nombre" placeholder="Ej: Landing Industrial v2" required className="h-12 rounded-xl bg-slate-50 border-none shadow-inner text-sm font-bold" />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="categoria" className="text-[10px] font-black uppercase tracking-widest text-slate-400">Vertical Industrial</Label>
+                <Select name="categoria" required defaultValue="marketing">
+                  <SelectTrigger className="h-12 rounded-xl bg-slate-50 border-none shadow-inner text-xs font-bold uppercase tracking-widest">
+                    <SelectValue placeholder="Selecciona categoría" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl border-[#E2E8F0]">
+                    <SelectItem value="industrial">🏭 Industrial / Manufacturing</SelectItem>
+                    <SelectItem value="renewable">☀️ Energy / Solar</SelectItem>
+                    <SelectItem value="marketing">🚀 Marketing / Leads</SelectItem>
+                    <SelectItem value="academy">🎓 Education / Academy</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="descripcion" className="text-[10px] font-black uppercase tracking-widest text-slate-400">Descripción Estratégica</Label>
+                <Input id="descripcion" name="descripcion" placeholder="Explica el objetivo de esta plantilla..." className="h-12 rounded-xl bg-slate-50 border-none shadow-inner text-sm font-bold" />
+              </div>
+            </div>
+
+            <DialogFooter className="pt-4">
+              <Button 
+                type="submit" 
+                disabled={isSubmitting}
+                className="w-full h-12 bg-[#1A365D] hover:bg-slate-800 text-white rounded-xl font-black uppercase tracking-widest text-xs transition-all shadow-lg shadow-indigo-900/10"
+              >
+                {isSubmitting ? 'Provisionando...' : 'Generar Plantilla Global'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Métricas de Conversión - GRIS MATE STYLE */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">

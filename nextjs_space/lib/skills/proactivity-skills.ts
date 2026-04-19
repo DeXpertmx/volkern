@@ -1,4 +1,6 @@
 import { prisma } from '@/lib/db';
+import { notifyUser } from './notification-layer';
+import { callGemma, GemmaMessage } from '@/lib/ai/gemma-client';
 
 export interface GhostingDetectionResult {
   leadId: string;
@@ -58,34 +60,77 @@ export async function generateSuccessPath(leadId: string, tenantId: string) {
 
   if (!lead) throw new Error('Lead no encontrado');
 
-  // En una implementación real, aquí llamaríamos a Gemma 4 pasándole el historial de:
-  // - Notas del lead actual
-  // - Patrones de deals 'ganados' del mismo tenant
-  
-  // Simulamos la respuesta de Gemma analizando el contexto
-  const hasTechnicalNotes = lead.notasTimestamp.some(n => n.contenido.toLowerCase().includes('precio') || n.contenido.toLowerCase().includes('costo'));
-  
-  let suggestion = "Enfócate en los beneficios de automatización. El cliente ha mostrado interés en la eficiencia operativa.";
-  let risk = 20;
+  const notasTexto = lead.notasTimestamp.map(n => n.contenido).join('\n');
 
-  if (hasTechnicalNotes) {
-    suggestion = "Este cliente se parece a tus cierres exitosos del mes pasado. No hables de características técnicas, enfócate en el ROI y el ahorro de costos que mencionó en la última nota.";
-    risk = 10;
+  const systemPrompt = `
+Eres un estratega de ventas experto de Volkern CRM.
+Tu tarea es analizar el historial de un Lead y generar una "Ruta de Éxito" (Success Path) con 3 pasos accionables para cerrar la venta.
+
+CONTEXTO DEL LEAD:
+Nombre: ${lead.nombre}
+Notas previas:
+${notasTexto || 'No hay notas registradas.'}
+
+Responde ÚNICAMENTE en JSON con este formato:
+{
+  "steps": [
+    {"title": "Paso 1", "description": "acción específica", "icon": "zap|target|phone|mail|calendar"},
+    {"title": "Paso 2", "description": "acción específica", "icon": "..."},
+    {"title": "Paso 3", "description": "acción específica", "icon": "..."}
+  ],
+  "reasoning": "Breve explicación de por qué sugieres esta ruta"
+}
+  `.trim();
+
+  const messages: GemmaMessage[] = [
+    { role: 'system', content: systemPrompt }
+  ];
+
+  const aiRes = await callGemma(messages, { responseMimeType: 'application/json' });
+
+  let result;
+
+  if (!aiRes.error) {
+    try {
+      const parsed = JSON.parse(aiRes.content);
+      result = {
+        steps: parsed.steps,
+        metadata: {
+          generatedBy: 'Gemma 4',
+          reasoning: parsed.reasoning
+        }
+      };
+    } catch (e) {
+      console.error('[SuccessPath] Error parsing AI response:', aiRes.content);
+    }
+  }
+
+  if (!result) {
+    result = {
+      steps: [
+        { title: 'Primer Contacto', description: 'Realizar una llamada de descubrimiento para entender sus miedos actuales.', icon: 'phone' },
+        { title: 'Demo Personalizada', description: 'Enfocar la demo en la funcionalidad de reportes, que es su mayor dolor.', icon: 'target' },
+        { title: 'Cierre de Valor', description: 'Enviar propuesta con el caso de éxito de la industria metalmecánica.', icon: 'zap' }
+      ],
+      metadata: {
+        generatedBy: 'Gemma 4 (Fallback)',
+        reasoning: 'Lógica heurística basada en la etapa actual del lead.'
+      }
+    };
   }
 
   // Actualizar el lead con la estrategia de la IA
   await prisma.lead.update({
     where: { id: leadId },
     data: {
-      aiStrategy: suggestion,
-      riskLevel: risk,
+      aiStrategy: result.metadata.reasoning,
       fechaUltimaActividad: new Date() // Actualizamos actividad porque la IA "pensó" en él
     }
   });
 
   return {
     leadId,
-    strategy: suggestion,
-    riskLevel: risk
+    steps: result.steps,
+    metadata: result.metadata
   };
 }

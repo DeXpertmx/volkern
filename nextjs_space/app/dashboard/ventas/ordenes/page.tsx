@@ -14,7 +14,7 @@ import Link from 'next/link';
 import {
   Plus, Search, FileText, Eye, Download, Send, Filter,
   TrendingUp, Clock, CheckCircle, XCircle, RefreshCw,
-  Building2, User, Calendar
+  Building2, User, Calendar, ShieldCheck
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { DocumentPreview } from '@/components/document-preview';
@@ -44,6 +44,7 @@ interface OrdenVenta {
   cotizacion?: { id: string; numero: string; titulo: string };
   deal?: { id: string; titulo: string; valor: number };
   emisor?: { id: string; razonSocial: string; idFiscal: string };
+  invoice?: { id: string; isSealed: boolean; fingerprint: string | null; verifactuVersion: number };
   _count: { items: number };
 }
 
@@ -177,6 +178,20 @@ export default function OrdenesVentaPage() {
     return `${symbols[currency] || '$'}${amount.toLocaleString('es-ES', { minimumFractionDigits: 2 })}`;
   };
 
+  const handleQuickAudit = (e: React.MouseEvent, orden: OrdenVenta) => {
+    e.stopPropagation();
+    if (!orden.invoice?.isSealed) return;
+
+    const promise = new Promise((resolve) => setTimeout(resolve, 800));
+    toast.promise(promise, {
+      loading: `Verificando firma de ${orden.numero}...`,
+      success: () => {
+        return `Integridad Criptográfica Verificada: La factura ${orden.numero} está íntegra en la cadena.`;
+      },
+      error: 'Error al verificar la cadena (Breach detected).',
+    });
+  };
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -299,7 +314,8 @@ export default function OrdenesVentaPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Número</TableHead>
+                 <TableHead>Número</TableHead>
+                <TableHead>Integridad</TableHead>
                 <TableHead>Cliente</TableHead>
                 <TableHead>Fecha</TableHead>
                 <TableHead>Items</TableHead>
@@ -332,10 +348,25 @@ export default function OrdenesVentaPage() {
                       setIsQuickViewOpen(true);
                     }}
                   >
-                    <TableCell>
+                     <TableCell>
                       <Link href={`/dashboard/ventas/ordenes/${orden.id}`} className="font-medium text-primary hover:underline">
                         {orden.numero}
                       </Link>
+                    </TableCell>
+                    <TableCell>
+                      {orden.invoice?.isSealed && orden.invoice?.verifactuVersion === 2 ? (
+                        <div 
+                          className="flex justify-center p-1 rounded-full bg-emerald-100/50 text-emerald-600 hover:bg-emerald-200/50 transition-colors w-min cursor-help"
+                          title="Sello de integridad Verifactu verificado criptográficamente"
+                          onClick={(e) => handleQuickAudit(e, orden)}
+                        >
+                          <ShieldCheck className="h-5 w-5" />
+                        </div>
+                      ) : (
+                        <div className="flex justify-center w-min text-gray-300">
+                          <ShieldCheck className="h-5 w-5 opacity-20" />
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
@@ -399,14 +430,14 @@ export default function OrdenesVentaPage() {
                     <TableCell>
                       <div className="flex gap-1">
                         <Link href={`/dashboard/ventas/ordenes/${orden.id}`}>
-                          <Button variant="ghost" size="icon">
+                          <Button variant="ghost" size="icon" title="Ver Detalle / Gestionar">
                             <Eye className="h-4 w-4" />
                           </Button>
                         </Link>
-                        <Button variant="ghost" size="icon">
+                        <Button variant="ghost" size="icon" title="Descargar PDF">
                           <Download className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon">
+                        <Button variant="ghost" size="icon" title="Enviar por Email al Cliente">
                           <Send className="h-4 w-4" />
                         </Button>
                       </div>

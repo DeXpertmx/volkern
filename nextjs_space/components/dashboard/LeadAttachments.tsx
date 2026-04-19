@@ -34,20 +34,24 @@ interface Attachment {
 }
 
 interface LeadAttachmentsProps {
-  leadId: string;
+  leadId?: string;
+  contactId?: string;
 }
 
-export function LeadAttachments({ leadId }: LeadAttachmentsProps) {
+export function LeadAttachments({ leadId, contactId }: LeadAttachmentsProps) {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [fileToUpload, setFileToUpload] = useState<File | null>(null);
 
+  const entityId = leadId || contactId;
+  const apiBase = leadId ? `/api/leads/${leadId}` : `/api/contacts/${contactId}`;
+
   const fetchAttachments = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/leads/${leadId}/attachments`);
+      const res = await fetch(`${apiBase}/attachments`);
       if (res.ok) {
         const data = await res.json();
         setAttachments(data);
@@ -61,8 +65,8 @@ export function LeadAttachments({ leadId }: LeadAttachmentsProps) {
   };
 
   useEffect(() => {
-    if (leadId) fetchAttachments();
-  }, [leadId]);
+    if (entityId) fetchAttachments();
+  }, [leadId, contactId]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -96,8 +100,8 @@ export function LeadAttachments({ leadId }: LeadAttachmentsProps) {
       if (!uploadRes.ok) throw new Error('Error al subir a S3');
       const uploadData = await uploadRes.json();
 
-      // 2. Registrar en la base de datos de leads
-      const registRes = await fetch(`/api/leads/${leadId}/attachments`, {
+      // 2. Registrar en la base de datos
+      const registRes = await fetch(`${apiBase}/attachments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -129,7 +133,7 @@ export function LeadAttachments({ leadId }: LeadAttachmentsProps) {
     if (!confirm('¿Estás seguro de eliminar este documento?')) return;
 
     try {
-      const res = await fetch(`/api/leads/${leadId}/attachments?attachmentId=${id}`, {
+      const res = await fetch(`${apiBase}/attachments?attachmentId=${id}`, {
         method: 'DELETE'
       });
 

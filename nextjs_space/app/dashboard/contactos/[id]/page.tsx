@@ -20,8 +20,24 @@ import {
   DollarSign,
   Tag,
   Linkedin,
-  StickyNote
+  StickyNote,
+  ShieldCheck,
+  Verified,
+  Lock,
+  Unlock,
+  CheckCircle2,
+  AlertCircle,
+  History,
+  MessageSquare,
+  Paperclip,
+  Clock
 } from 'lucide-react'
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger
+} from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -59,6 +75,11 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { toast } from 'sonner'
+import { UnifiedTimeline } from '@/components/unified-timeline'
+import { LeadTasks } from '@/components/lead-tasks'
+import { EnhancedNotes } from '@/components/enhanced-notes'
+import { LeadAttachments } from '@/components/dashboard/LeadAttachments'
+import { ContactConversations } from '@/components/contact-conversations'
 
 interface Contact {
   id: string
@@ -80,6 +101,40 @@ interface Contact {
     nombre: string
     email: string
     cargo?: string | null
+  }[]
+  perfilFiscal?: {
+    tipo: string
+    nif: string
+    tipoIdFiscal: string
+    razonSocial: string
+    isLocked: boolean
+    idFiscalValidado: boolean
+    address: string
+    city: string
+    country: string
+    zipCode: string
+    defaultIva: number
+    defaultIrpf: number
+    recargoEquivalencia: boolean
+    aplicaRetencion: boolean
+  } | null
+  invoices?: {
+    id: string
+    numero: string
+    monto: number
+    moneda: string
+    fechaEmision: string
+    isSealed: boolean
+    verifactuVersion: number
+    fingerprint: string
+    ordenVenta?: { numero: string }
+  }[]
+  convertedFromLeads?: {
+    id: string
+    nombre: string
+    email: string
+    fuente: string
+    fechaCreacion: string
   }[]
   fechaCreacion: string
 }
@@ -116,6 +171,23 @@ export default function ContactoDetallePage() {
   })
 
   const [stages, setStages] = useState<any[]>([])
+  
+  // Fiscal Modal State
+  const [isFiscalModalOpen, setIsFiscalModalOpen] = useState(false)
+  const [fiscalForm, setFiscalForm] = useState({
+    tipo: 'EMPRESA',
+    razonSocial: '',
+    tipoIdFiscal: 'NIF',
+    nif: '',
+    address: '',
+    city: '',
+    country: 'España',
+    zipCode: '',
+    defaultIva: '21',
+    defaultIrpf: '0',
+    recargoEquivalencia: false,
+    aplicaRetencion: false
+  })
 
   useEffect(() => {
     if (contactId) {
@@ -165,6 +237,70 @@ export default function ContactoDetallePage() {
     } catch (error) {
       console.error('Error al cargar stages:', error)
     }
+  }
+
+  const handleUpdateFiscal = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try {
+      const res = await fetch(`/api/contacts/${contactId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          perfilFiscal: {
+            ...fiscalForm,
+            defaultIva: parseFloat(fiscalForm.defaultIva),
+            defaultIrpf: parseFloat(fiscalForm.defaultIrpf)
+          }
+        })
+      })
+
+      const data = await res.json()
+      if (data.success) {
+        toast.success('Perfil fiscal actualizado')
+        setIsFiscalModalOpen(false)
+        fetchContactData()
+      } else {
+        toast.error(data.error || 'Error al actualizar perfil fiscal')
+      }
+    } catch (error) {
+      console.error('Error:', error)
+      toast.error('Error al actualizar perfil fiscal')
+    }
+  }
+
+  const openFiscalModal = () => {
+    if (contact?.perfilFiscal) {
+      setFiscalForm({
+        tipo: contact.perfilFiscal.tipo || 'EMPRESA',
+        razonSocial: contact.perfilFiscal.razonSocial || '',
+        tipoIdFiscal: contact.perfilFiscal.tipoIdFiscal || 'NIF',
+        nif: contact.perfilFiscal.nif || '',
+        address: contact.perfilFiscal.address || '',
+        city: contact.perfilFiscal.city || '',
+        country: contact.perfilFiscal.country || 'España',
+        zipCode: contact.perfilFiscal.zipCode || '',
+        defaultIva: String(contact.perfilFiscal.defaultIva || '21'),
+        defaultIrpf: String(contact.perfilFiscal.defaultIrpf || '0'),
+        recargoEquivalencia: !!contact.perfilFiscal.recargoEquivalencia,
+        aplicaRetencion: !!contact.perfilFiscal.aplicaRetencion
+      })
+    } else {
+      setFiscalForm({
+        tipo: 'EMPRESA',
+        razonSocial: contact?.nombre || '',
+        tipoIdFiscal: 'NIF',
+        nif: '',
+        address: '',
+        city: '',
+        country: 'España',
+        zipCode: '',
+        defaultIva: '21',
+        defaultIrpf: '0',
+        recargoEquivalencia: false,
+        aplicaRetencion: false
+      })
+    }
+    setIsFiscalModalOpen(true)
   }
 
   const handleCreateDeal = async (e: React.FormEvent) => {
@@ -305,9 +441,9 @@ export default function ContactoDetallePage() {
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => router.push(`/dashboard/contactos`)}>
-            <Edit className="h-4 w-4 mr-2" />
-            Editar
+          <Button variant="outline" onClick={openFiscalModal}>
+            <ShieldCheck className="h-4 w-4 mr-2" />
+            Editar Datos Fiscales
           </Button>
           <Button variant="destructive" onClick={handleDeleteContact}>
             <Trash2 className="h-4 w-4 mr-2" />
@@ -316,7 +452,31 @@ export default function ContactoDetallePage() {
         </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-3">
+      <Tabs defaultValue="general" className="w-full">
+        <TabsList className="mb-4">
+          <TabsTrigger value="general">Visión General</TabsTrigger>
+          <TabsTrigger value="compliance" className="flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4" /> Cumplimiento Fiscal
+          </TabsTrigger>
+          <TabsTrigger value="timeline" className="flex items-center gap-2">
+            <History className="h-4 w-4" /> Historial
+          </TabsTrigger>
+          <TabsTrigger value="tasks" className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4" /> Tareas
+          </TabsTrigger>
+          <TabsTrigger value="notes" className="flex items-center gap-2">
+            <StickyNote className="h-4 w-4" /> Notas
+          </TabsTrigger>
+          <TabsTrigger value="documents" className="flex items-center gap-2">
+            <Paperclip className="h-4 w-4" /> Documentos
+          </TabsTrigger>
+          <TabsTrigger value="messages" className="flex items-center gap-2">
+            <MessageSquare className="h-4 w-4" /> Mensajería
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="general">
+          <div className="grid gap-6 md:grid-cols-3">
         {/* Información del Contacto */}
         <div className="md:col-span-2 space-y-6">
           {/* Información Básica */}
@@ -761,6 +921,374 @@ export default function ContactoDetallePage() {
           </Card>
         </div>
       </div>
+    </TabsContent>
+
+        {/* Tab de Cumplimiento Fiscal */}
+        <TabsContent value="compliance">
+          <div className="grid gap-6 md:grid-cols-3">
+            <div className="md:col-span-2 space-y-6">
+              {/* Perfil Fiscal Card */}
+              <Card className="border-emerald-100 shadow-sm">
+                <CardHeader className="bg-emerald-50/30">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-emerald-100 rounded-lg text-emerald-700">
+                        <ShieldCheck className="h-6 w-6" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-xl">Identidad Fiscal Validada</CardTitle>
+                        <CardDescription>Estado legal para facturación Veri*factu</CardDescription>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {contact.perfilFiscal && !contact.perfilFiscal.isLocked && (
+                        <Button variant="ghost" size="sm" onClick={openFiscalModal}>
+                          <Edit className="h-4 w-4 mr-1" /> Editar
+                        </Button>
+                      )}
+                      {contact.perfilFiscal?.isLocked ? (
+                        <Badge className="bg-emerald-600 text-white gap-1 flex items-center">
+                          <Lock className="h-3 w-3" /> Blindado
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-amber-600 border-amber-200 gap-1 flex items-center">
+                          <Unlock className="h-3 w-3" /> Editable
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-6 space-y-6">
+                  {contact.perfilFiscal ? (
+                    <>
+                      <div className="grid grid-cols-2 gap-6">
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium text-muted-foreground uppercase">Razón Social</p>
+                          <p className="text-lg font-bold">{contact.perfilFiscal.razonSocial}</p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium text-muted-foreground uppercase">NIF / CIF</p>
+                          <div className="flex items-center gap-2">
+                             <p className="text-lg font-mono font-bold">{contact.perfilFiscal.nif}</p>
+                             {contact.perfilFiscal.idFiscalValidado && (
+                               <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                             )}
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium text-muted-foreground uppercase">Tipo de Sujeto</p>
+                          <Badge variant="outline" className="text-sm">
+                            {contact.perfilFiscal.tipo}
+                          </Badge>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium text-muted-foreground uppercase">Jurisdicción</p>
+                          <p className="text-sm">{contact.perfilFiscal.city}, {contact.perfilFiscal.country}</p>
+                        </div>
+                      </div>
+                      
+                      <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-lg flex gap-3 italic text-sm text-blue-800">
+                        <AlertCircle className="h-5 w-5 flex-shrink-0" />
+                        <p>
+                          Este perfil ha sido validado para cumplir con la normativa de Hacienda. 
+                          Las facturas emitidas a este contacto se sellarán con un hash criptográfico.
+                        </p>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-center py-8">
+                       <ShieldCheck className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
+                      <Button onClick={openFiscalModal} className="mt-2">
+                        <Plus className="h-4 w-4 mr-2" />
+                        Configurar Perfil Fiscal
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Historial de Facturas Selladas */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Historial Forense de Facturación</CardTitle>
+                  <CardDescription>Facturas emitidas con integridad Veri*factu</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="rounded-md border overflow-hidden">
+                    <Table>
+                      <TableHeader className="bg-muted/50">
+                        <TableRow>
+                          <TableHead>Factura</TableHead>
+                          <TableHead>Fecha</TableHead>
+                          <TableHead>Sello Integridad</TableHead>
+                          <TableHead className="text-right">Monto</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {!contact.invoices || contact.invoices.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={4} className="text-center py-10 text-muted-foreground italic">
+                              No hay facturas registradas en la era Veri*factu.
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          contact.invoices.map((invoice) => (
+                            <TableRow key={invoice.id}>
+                              <TableCell className="font-bold">{invoice.numero}</TableCell>
+                              <TableCell>{formatDate(invoice.fechaEmision)}</TableCell>
+                              <TableCell>
+                                {invoice.isSealed ? (
+                                  <div className="flex items-center gap-2 text-emerald-600 font-medium">
+                                    <ShieldCheck className="h-4 w-4" /> Guardado
+                                    <span className="text-[10px] bg-emerald-100 px-1 rounded font-mono truncate max-w-[80px]">
+                                      {invoice.fingerprint.substring(0, 8)}...
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <Badge variant="outline">Draft / Legacy</Badge>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right font-bold">
+                                {formatCurrency(invoice.monto, invoice.moneda)}
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Sidebar Compliance */}
+            <div className="space-y-6">
+              <Card className="premium-gradient-primary text-white border-none shadow-md overflow-hidden">
+                <CardHeader className="relative z-10">
+                  <CardTitle className="text-lg">Salud Fiscal</CardTitle>
+                  <CardDescription className="text-white/80">Monitor de Cumplimiento</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4 relative z-10">
+                   <div className="flex items-center justify-between">
+                     <span className="text-sm opacity-90">Cadena de Facturas</span>
+                     <span className="font-bold">{contact.invoices?.filter(i => i.isSealed).length || 0} Verificadas</span>
+                   </div>
+                   <div className="flex items-center justify-between">
+                     <span className="text-sm opacity-90">Versión Protocolo</span>
+                     <span className="font-bold">Verifactu 2.0</span>
+                   </div>
+                   <div className="pt-4 mt-4 border-t border-white/20">
+                      <p className="text-xs italic opacity-80 text-center">
+                        Garantizamos que este contacto cumple con el "Reglamento que establece los requisitos de los sistemas informáticos de facturación".
+                      </p>
+                   </div>
+                </CardContent>
+                {/* Micro-animación sutil de fondo */}
+                <div className="absolute top-0 right-0 p-4 opacity-10">
+                  <ShieldCheck className="h-24 w-24 rotate-12" />
+                </div>
+              </Card>
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="timeline" className="mt-6 space-y-6">
+          <UnifiedTimeline contactId={contact.id} />
+        </TabsContent>
+
+        <TabsContent value="tasks" className="mt-6 space-y-6">
+          <LeadTasks contactId={contact.id} />
+        </TabsContent>
+
+        <TabsContent value="notes" className="mt-6 space-y-6">
+          <EnhancedNotes contactId={contact.id} />
+        </TabsContent>
+
+        <TabsContent value="documents" className="mt-6 space-y-6">
+          <LeadAttachments contactId={contact.id} />
+        </TabsContent>
+
+        <TabsContent value="messages" className="mt-6 space-y-6">
+          <ContactConversations contactId={contact.id} />
+        </TabsContent>
+      </Tabs>
+
+      {/* Modal de Edición Fiscal */}
+      <Dialog open={isFiscalModalOpen} onOpenChange={setIsFiscalModalOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Editar Perfil Fiscal</DialogTitle>
+            <DialogDescription>
+              Configura los datos legales para la facturación Veri*factu de este contacto.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleUpdateFiscal} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Tipo de Sujeto</Label>
+                <Select 
+                  value={fiscalForm.tipo} 
+                  onValueChange={(v) => setFiscalForm({ ...fiscalForm, tipo: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="EMPRESA">Empresa / SL / SA</SelectItem>
+                    <SelectItem value="AUTONOMO">Autónomo / Profesional</SelectItem>
+                    <SelectItem value="PARTICULAR">Particular / Cliente Final</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Razón Social / Nombre Legal</Label>
+                <Input 
+                  value={fiscalForm.razonSocial} 
+                  onChange={(e) => setFiscalForm({ ...fiscalForm, razonSocial: e.target.value })}
+                  placeholder="Nombre oficial para facturas"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Tipo ID Fiscal</Label>
+                <Select 
+                  value={fiscalForm.tipoIdFiscal} 
+                  onValueChange={(v) => setFiscalForm({ ...fiscalForm, tipoIdFiscal: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="NIF">NIF (España)</SelectItem>
+                    <SelectItem value="CIF">CIF (Empresas)</SelectItem>
+                    <SelectItem value="NIE">NIE (Extranjeros)</SelectItem>
+                    <SelectItem value="VAT">VAT Intra (UE)</SelectItem>
+                    <SelectItem value="OTHER">Otro</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Número ID (NIF/CIF)</Label>
+                <Input 
+                  value={fiscalForm.nif} 
+                  onChange={(e) => setFiscalForm({ ...fiscalForm, nif: e.target.value })}
+                  placeholder="A12345678"
+                />
+              </div>
+            </div>
+
+            <Separator />
+            <div className="space-y-4">
+              <Label className="text-base">Dirección Fiscal</Label>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2 space-y-2">
+                  <Label>Dirección</Label>
+                  <Input 
+                    value={fiscalForm.address} 
+                    onChange={(e) => setFiscalForm({ ...fiscalForm, address: e.target.value })}
+                    placeholder="Calle, número, piso..."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Ciudad</Label>
+                  <Input 
+                    value={fiscalForm.city} 
+                    onChange={(e) => setFiscalForm({ ...fiscalForm, city: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Código Postal</Label>
+                  <Input 
+                    value={fiscalForm.zipCode} 
+                    onChange={(e) => setFiscalForm({ ...fiscalForm, zipCode: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+            <div className="space-y-4">
+              <Label className="text-base">Configuración de Impuestos</Label>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>IVA Predeterminado (%)</Label>
+                  <Input 
+                    type="number"
+                    value={fiscalForm.defaultIva} 
+                    onChange={(e) => setFiscalForm({ ...fiscalForm, defaultIva: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>IRPF Predeterminado (%)</Label>
+                  <Input 
+                    type="number"
+                    value={fiscalForm.defaultIrpf} 
+                    onChange={(e) => setFiscalForm({ ...fiscalForm, defaultIrpf: e.target.value })}
+                  />
+                </div>
+                <div className="flex flex-col gap-4 pt-2">
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="checkbox" 
+                      id="retencion"
+                      checked={fiscalForm.aplicaRetencion}
+                      onChange={(e) => setFiscalForm({ ...fiscalForm, aplicaRetencion: e.target.checked, defaultIrpf: e.target.checked ? '15' : '0' })}
+                      className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                    />
+                    <Label htmlFor="retencion" className="font-bold">¿Aplica Retención de IRPF?</Label>
+                  </div>
+                  
+                  {fiscalForm.aplicaRetencion && (
+                    <div className="pl-6 space-y-3 border-l-2 border-primary/20 ml-2">
+                      <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Presets de Retención (España)</p>
+                      <div className="flex flex-wrap gap-2">
+                        <Button 
+                          type="button" 
+                          variant={fiscalForm.defaultIrpf === '7' ? 'default' : 'outline'} 
+                          size="sm" 
+                          className="h-8 text-xs"
+                          onClick={() => setFiscalForm({ ...fiscalForm, defaultIrpf: '7' })}
+                        >
+                          7% (Nuevos Autónomos)
+                        </Button>
+                        <Button 
+                          type="button" 
+                          variant={fiscalForm.defaultIrpf === '15' ? 'default' : 'outline'} 
+                          size="sm"
+                          className="h-8 text-xs"
+                          onClick={() => setFiscalForm({ ...fiscalForm, defaultIrpf: '15' })}
+                        >
+                          15% (Profesional Estándar)
+                        </Button>
+                      </div>
+                      <p className="text-[11px] text-blue-600 italic bg-blue-50 p-2 rounded border border-blue-100">
+                        * El 7% se aplica durante el año de inicio y los 2 siguientes. Asegúrate de que el contacto cumple los requisitos de la AEAT.
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="checkbox" 
+                      id="recargo"
+                      checked={fiscalForm.recargoEquivalencia}
+                      onChange={(e) => setFiscalForm({ ...fiscalForm, recargoEquivalencia: e.target.checked })}
+                      className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                    />
+                    <Label htmlFor="recargo">¿Aplica Recargo de Equivalencia?</Label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" type="button" onClick={() => setIsFiscalModalOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit">Guardar Cambios Fiscales</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

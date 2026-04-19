@@ -81,6 +81,8 @@ export const POST = withTenantAuth(async (req, auth) => {
     }
 
     const body = await req.json();
+    console.log('[AdminAPI] Recibida solicitud para crear plan:', JSON.stringify(body, null, 2));
+
     const { 
       nombre, 
       precio, 
@@ -99,20 +101,30 @@ export const POST = withTenantAuth(async (req, auth) => {
       modules
     } = body;
 
-    if (!nombre || precio === undefined) {
-      return NextResponse.json({ error: 'Nombre y precio son requeridos' }, { status: 400 });
+    // 2. Validaciones básicas
+    if (!nombre) {
+      return NextResponse.json({ error: 'El nombre del plan es obligatorio' }, { status: 400 });
+    }
+    if (precio === undefined || isNaN(Number(precio))) {
+      return NextResponse.json({ error: 'El precio debe ser un número válido' }, { status: 400 });
     }
 
     const slug = nombre.toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '');
 
+    if (!slug) {
+      return NextResponse.json({ error: 'El nombre del plan no genera un slug válido (use letras o números)' }, { status: 400 });
+    }
+
     const existingPlan = await globalPrisma.subscriptionPlan.findUnique({
       where: { slug }
     });
 
     if (existingPlan) {
-      return NextResponse.json({ error: 'Ya existe un plan con un nombre similar' }, { status: 400 });
+      return NextResponse.json({ 
+        error: `Ya existe un plan con el identificador '${slug}'. Use un nombre diferente.` 
+      }, { status: 400 });
     }
 
     // Mapear flags de módulos para la lógica de habilitación
@@ -131,43 +143,50 @@ export const POST = withTenantAuth(async (req, auth) => {
       apiAccessHabilitado: modules?.includes('api_access'),
     };
 
-    const newPlan = await globalPrisma.subscriptionPlan.create({
-      data: {
-        nombre,
-        slug,
-        precio: Number(precio),
-        moneda: moneda || 'MXN',
-        intervalo: intervalo || 'mensual',
-        limiteUsuarios: Number(limiteUsuarios) || 0,
-        limiteLeads: Number(limiteLeads) || 0,
-        limiteStorage: Number(limiteStorage) || 0,
-        limiteCursos: Number(limiteCursos) || 0,
-        limiteEstudiantes: Number(limiteEstudiantes) || 0,
-        activo: activo !== undefined ? activo : true,
-        esPublico: esPublico !== undefined ? esPublico : true,
-        esPopular: esPopular !== undefined ? esPopular : false,
-        features: {
-          ui_features: ui_features || [],
-          modules: modules || [],
-          stripePriceId: stripePriceId || ''
-        },
-        ...moduleFlags
-      }
+    // 4. Ejecutar creación en TRANSACCIÓN para asegurar consistencia
+    const result = await globalPrisma.$transaction(async (tx) => {
+      const newPlan = await tx.subscriptionPlan.create({
+        data: {
+          nombre,
+          slug,
+          precio: Number(precio),
+          moneda: moneda || 'MXN',
+          intervalo: intervalo || 'mensual',
+          limiteUsuarios: Number(limiteUsuarios) || 0,
+          limiteLeads: Number(limiteLeads) || 0,
+          limiteStorage: Number(limiteStorage) || 0,
+          limiteCursos: Number(limiteCursos) || 0,
+          limiteEstudiantes: Number(limiteEstudiantes) || 0,
+          activo: activo !== undefined ? activo : true,
+          esPublico: esPublico !== undefined ? esPublico : true,
+          esPopular: esPopular !== undefined ? esPopular : false,
+          features: {
+            ui_features: ui_features || [],
+            modules: modules || [],
+            stripePriceId: stripePriceId || ''
+          },
+          ...moduleFlags
+        }
+      });
+
+      // Auditoría global vinculada
+      await tx.auditLog.create({
+        data: {
+          userId: auth.user!.id,
+          accion: 'crear',
+          entidad: 'subscriptionPlan',
+          entidadId: newPlan.id,
+          descripcion: `Nuevo plan creado: ${nombre} (${slug})`,
+          cambiosDespues: JSON.stringify(newPlan),
+          ipAddress: req.headers.get('x-forwarded-for') || '127.0.0.1'
+        }
+      });
+
+      return newPlan;
     });
 
-    // Auditoría global
-    await globalPrisma.auditLog.create({
-      data: {
-        userId: auth.user!.id,
-        accion: 'crear',
-        entidad: 'subscriptionPlan',
-        entidadId: newPlan.id,
-        descripcion: `Nuevo plan creado: ${nombre} (${slug})`,
-        cambiosDespues: JSON.stringify(newPlan)
-      }
-    });
-
-    return NextResponse.json(newPlan);
+    console.log(`[AdminAPI] Plan creado y auditado exitosamente: ${result.slug}`);
+    return NextResponse.json(result);
   } catch (error) {
     console.error('Error creating plan:', error);
     return NextResponse.json({ error: 'Error al crear el plan' }, { status: 500 });

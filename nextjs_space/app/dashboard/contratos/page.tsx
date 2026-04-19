@@ -41,7 +41,10 @@ import {
   PenLine,
   Building2,
   DollarSign,
-  TrendingUp
+  TrendingUp,
+  TrendingDown,
+  ShieldCheck,
+  AlertTriangle
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -72,6 +75,7 @@ interface Contrato {
 export default function ContratosPage() {
   const router = useRouter()
   const [contratos, setContratos] = useState<Contrato[]>([])
+  const [analytics, setAnalytics] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [estadoFilter, setEstadoFilter] = useState('todos')
@@ -85,10 +89,19 @@ export default function ContratosPage() {
 
   const fetchContratos = async () => {
     try {
-      const res = await fetch('/api/contratos')
-      if (res.ok) {
-        const data = await res.json()
+      const [contractsRes, analyticsRes] = await Promise.all([
+        fetch('/api/contratos'),
+        fetch(`/api/analytics/contracts`)
+      ])
+
+      if (contractsRes.ok) {
+        const data = await contractsRes.json()
         setContratos(data)
+      }
+      
+      if (analyticsRes.ok) {
+        const analyticsData = await analyticsRes.json()
+        setAnalytics(analyticsData)
       }
     } catch (error) {
       toast.error('Error al cargar contratos')
@@ -214,8 +227,232 @@ export default function ContratosPage() {
         </div>
       </div>
 
-      {/* Métricas */}
-      {/* Métricas Premium */}
+      {/* Inteligencia de Retención (Fase 6) */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Widget: Salud de Cartera */}
+        <Card className="glass-card premium-shadow border-none overflow-hidden col-span-1">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-bold flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-emerald-500" /> Salud de Cartera
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col items-center justify-center pt-4">
+            <div className="relative h-24 w-24">
+              <svg className="h-full w-full" viewBox="0 0 36 36">
+                <path className="stroke-slate-100" strokeWidth="3" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                <path 
+                  className="stroke-emerald-500 transition-all duration-1000" 
+                  strokeWidth="3" 
+                  strokeDasharray={`${analytics?.health?.averageScore || 0}, 100`} 
+                  strokeLinecap="round" 
+                  fill="none" 
+                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" 
+                />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-xl font-black text-slate-900">{Math.round(analytics?.health?.averageScore || 0)}</span>
+                <span className="text-[8px] text-slate-400 font-bold uppercase">Score Avg</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 w-full mt-6 gap-2">
+              <div className="text-center">
+                <p className="text-[10px] font-bold text-emerald-600">{analytics?.health?.distribution?.low || 0}</p>
+                <p className="text-[8px] text-slate-400 uppercase">Sano</p>
+              </div>
+              <div className="text-center">
+                <p className="text-[10px] font-bold text-amber-600">{analytics?.health?.distribution?.medium || 0}</p>
+                <p className="text-[8px] text-slate-400 uppercase">Medio</p>
+              </div>
+              <div className="text-center">
+                <p className="text-[10px] font-bold text-red-600">{analytics?.health?.distribution?.high || 0}</p>
+                <p className="text-[8px] text-slate-400 uppercase">Riesgo</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Widget: Revenue at Risk */}
+        <Card className="glass-card premium-shadow border-none overflow-hidden col-span-1">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-bold flex items-center gap-2">
+              <TrendingDown className="h-4 w-4 text-red-500" /> Revenue at Risk
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="h-[140px] flex flex-col justify-between">
+            <div>
+              <p className="text-2xl font-black text-red-600 tracking-tighter">
+                {formatCurrency(analytics?.health?.revenueAtRisk || 0)}
+              </p>
+              <p className="text-[10px] text-slate-400 uppercase font-bold mt-1">Impacto Potencial Churn</p>
+            </div>
+            <div className="p-2 bg-red-50 rounded-lg border border-red-100">
+              <p className="text-[9px] text-red-700 leading-tight">
+                <strong>{analytics?.health?.distribution?.high || 0} contratos</strong> presentan anomalías de pago o expiración inminente.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Widget: Crecimiento YoY */}
+        <Card className="glass-card premium-shadow border-none overflow-hidden col-span-2">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-bold flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-primary" /> Crecimiento YoY (Interanual)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="h-[140px] flex gap-6 items-end">
+            <div className="flex-1 space-y-4">
+              <div className="flex items-center gap-2">
+                <div className={`p-1 rounded ${analytics?.growth?.growth >= 0 ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-600'}`}>
+                  {analytics?.growth?.growth >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+                </div>
+                <span className={`text-2xl font-black ${analytics?.growth?.growth >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                  {analytics?.growth?.growth >= 0 ? '+' : ''}{analytics?.growth?.growth?.toFixed(1)}%
+                </span>
+              </div>
+              <div className="space-y-1">
+                <div className="flex justify-between text-[10px]">
+                  <span className="text-slate-400 font-bold uppercase">Mes Actual</span>
+                  <span className="font-bold">{formatCurrency(analytics?.growth?.current || 0)}</span>
+                </div>
+                <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-primary" style={{ width: '100%' }} />
+                </div>
+                <div className="flex justify-between text-[10px] pt-1">
+                  <span className="text-slate-400 font-bold uppercase">Mismo Mes Año Anterior</span>
+                  <span className="font-bold">{formatCurrency(analytics?.growth?.previous || 0)}</span>
+                </div>
+                <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-slate-300" style={{ width: `${(analytics?.growth?.previous / analytics?.growth?.current) * 100 || 0}%` }} />
+                </div>
+              </div>
+            </div>
+            <div className="w-24 h-full bg-slate-50 rounded-xl border border-dashed border-slate-200 flex flex-col items-center justify-center p-2 text-center">
+              <p className="text-[10px] font-black text-slate-500 uppercase leading-tight">Salud Global</p>
+              <p className="text-xs font-bold text-emerald-600 mt-1">Óptima</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Métricas de Soberanía Comercial (Fase 4) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Widget 1: Concentración de Riesgo (Pareto) */}
+        <Card className="glass-card premium-shadow border-none overflow-hidden">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-bold flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-500" /> Concentración de Riesgo
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {contratos.length > 0 ? (
+                (() => {
+                  const clients = new Map<string, number>()
+                  contratos.forEach(c => {
+                    const name = c.clienteEmpresa || c.clienteNombre || 'Sin Identificar'
+                    clients.set(name, (clients.get(name) || 0) + c.total)
+                  })
+                  const sorted = Array.from(clients.entries())
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 3)
+                  
+                  return sorted.map(([name, amount], i) => {
+                    const percent = (amount / valorTotal) * 100
+                    return (
+                      <div key={name} className="space-y-1">
+                        <div className="flex justify-between text-xs">
+                          <span className="font-medium truncate max-w-[150px]">{name}</span>
+                          <span className="font-bold">{percent.toFixed(1)}%</span>
+                        </div>
+                        <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full ${i === 0 && percent > 30 ? 'bg-red-500' : 'bg-primary'}`} 
+                            style={{ width: `${percent}%` }} 
+                          />
+                        </div>
+                      </div>
+                    )
+                  })
+                })()
+              ) : (
+                <p className="text-xs text-muted-foreground text-center py-4">Sin datos suficientes</p>
+              )}
+              {valorTotal > 0 && Array.from(new Set(contratos.map(c => c.clienteNombre))).length < 3 && (
+                <div className="p-2 bg-red-50 rounded border border-red-100 flex items-start gap-2">
+                  <AlertTriangle className="h-3 w-3 text-red-500 mt-0.5" />
+                  <p className="text-[10px] text-red-700 leading-tight font-medium">
+                    ALERTA: Alta dependencia de pocos clientes detectada.
+                  </p>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Widget 2: Forecast de Flujo de Caja */}
+        <Card className="glass-card premium-shadow border-none overflow-hidden">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-bold flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-emerald-500" /> Forecast de Flujo Real
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col justify-between h-[140px]">
+            <div>
+              <p className="text-2xl font-black text-slate-900 tracking-tight">
+                {formatCurrency(valorTotal * 0.85)} {/* Simulación de cobro esperado */}
+              </p>
+              <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest mt-1">
+                Proyección a 30 días
+              </p>
+            </div>
+            <div className="mt-4 h-12 flex items-end gap-1">
+              {[40, 70, 45, 90, 65, 80, 100].map((h, i) => (
+                <div 
+                  key={i} 
+                  className="flex-1 bg-primary/20 rounded-t hover:bg-primary transition-colors cursor-pointer" 
+                  style={{ height: `${h}%` }}
+                />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Widget 3: Próximas Expiraciones */}
+        <Card className="glass-card premium-shadow border-none overflow-hidden">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-bold flex items-center gap-2">
+              <Clock className="h-4 w-4 text-blue-500" /> Expiración de Contratos
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {(() => {
+                const expiring = contratos
+                  .filter(c => c.fechaFin && new Date(c.fechaFin) > new Date() && 
+                    (new Date(c.fechaFin).getTime() - new Date().getTime()) < 30 * 24 * 60 * 60 * 1000)
+                  .slice(0, 3)
+                
+                if (expiring.length === 0) return <p className="text-xs text-muted-foreground text-center py-4">Sin renovaciones próximas</p>
+
+                return expiring.map(c => (
+                  <div key={c.id} className="flex justify-between items-center p-2 hover:bg-white rounded border border-transparent hover:border-slate-100 transition-all cursor-pointer" onClick={() => router.push(`/dashboard/contratos/${c.id}`)}>
+                    <div className="space-y-0.5">
+                      <p className="text-[11px] font-bold truncate max-w-[120px]">{c.titulo}</p>
+                      <p className="text-[9px] text-muted-foreground">Vence: {format(new Date(c.fechaFin!), 'dd MMM', { locale: es })}</p>
+                    </div>
+                    <Badge variant="outline" className="text-[9px] text-blue-600 bg-blue-50 border-blue-100">
+                      RENOVAR
+                    </Badge>
+                  </div>
+                ))
+              })()}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Métricas Tradicionales */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="glass-card hover:scale-105 transition-all duration-300 premium-shadow border-none">
           <CardContent className="pt-6">

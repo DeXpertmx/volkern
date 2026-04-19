@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db';
 import { skillsLogger, trackSkillExecution } from './observability';
 import { eventBus, EVENTS } from './event-bus';
+import { ExpenseIntegrityService } from '../finance/expense-integrity';
 
 /**
  * ERP Finance Skills
@@ -27,6 +28,8 @@ export interface CreateExpenseInput {
   category: string;
   receiptUrl?: string;
   status?: 'PENDING' | 'PAID' | 'VOID';
+  exifLat?: number;
+  exifLng?: number;
 }
 
 /**
@@ -52,38 +55,81 @@ export async function createSupplier(input: CreateSupplierInput) {
  */
 export async function createExpense(input: CreateExpenseInput) {
   return await trackSkillExecution('create_expense', async () => {
+    // 1. Obtener el último gasto para el encadenamiento (Chain-of-Trust)
+    const lastExpense = await prisma.expense.findFirst({
+      where: { tenantId: input.tenantId },
+      orderBy: { createdAt: 'desc' },
+      select: { fingerprint: true }
+    });
+
+    // 2. Obtener config del tenant para VISION-LOCK
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: input.tenantId },
+      select: { baseLatitude: true, baseLongitude: true }
+    });
+
+    // 3. Validar anomalía de ubicación
+    const { isAnomaly } = ExpenseIntegrityService.checkLocationAnomaly(
+      input.exifLat || null,
+      input.exifLng || null,
+      tenant?.baseLatitude || null,
+      tenant?.baseLongitude || null
+    );
+
     const expense = await prisma.expense.create({
       data: {
         ...input,
         date: input.date || new Date(),
-        status: input.status || 'PAID'
+        status: input.status || 'PAID',
+        parentFingerprint: lastExpense?.fingerprint || null,
+        isAnomaly
       },
       include: {
         supplier: true
       }
     });
 
+    // 4. Calcular y sellar la huella digital (Veri*factu)
+    const fingerprint = ExpenseIntegrityService.calculateFingerprint({
+      id: expense.id,
+      amount: expense.amount,
+      createdById: expense.createdById,
+      parentFingerprint: expense.parentFingerprint
+    });
+
+    const updatedExpense = await prisma.expense.update({
+      where: { id: expense.id },
+      data: { fingerprint },
+      include: { supplier: true }
+    });
+
     // Actualizar balance del proveedor si el gasto está pendiente (Cuentas por Pagar)
-    if (expense.status === 'PENDING') {
+    if (updatedExpense.status === 'PENDING') {
       await prisma.supplier.update({
         where: { id: input.supplierId },
         data: { balance: { increment: input.amount } }
       });
     }
 
-    skillsLogger.info(`Gasto registrado: ${expense.description} - ${expense.amount}${expense.currency}`, { 
+    skillsLogger.info(`Gasto registrado con Veri*factu: ${updatedExpense.description}`, { 
       tenantId: input.tenantId,
-      expenseId: expense.id 
+      expenseId: updatedExpense.id,
+      isAnomaly
     });
 
     eventBus.emit(EVENTS.RESOURCE_CREATED, {
       type: 'expense',
-      id: expense.id,
+      id: updatedExpense.id,
       tenantId: input.tenantId,
-      metadata: { amount: expense.amount, category: expense.category }
+      metadata: { 
+        amount: updatedExpense.amount, 
+        category: updatedExpense.category,
+        isAnomaly,
+        fingerprint
+      }
     });
 
-    return expense;
+    return updatedExpense;
   });
 }
 
@@ -139,7 +185,9 @@ export async function registerExpenseVision(input: {
       category: extractedData.category || 'General',
       receiptUrl,
       date: extractedData.date ? new Date(extractedData.date) : new Date(),
-      status: 'PAID'
+      status: 'PAID',
+      exifLat: (extractedData as any).exifLat,
+      exifLng: (extractedData as any).exifLng
     });
 
     return {

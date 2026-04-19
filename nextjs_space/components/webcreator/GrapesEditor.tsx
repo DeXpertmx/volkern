@@ -439,9 +439,29 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>(({ initialDa
       };
 
       // Listen for changes that should trigger version saves
-      editor.on('component:update', handleVersionSave);
       editor.on('style:property:update', handleVersionSave);
       editor.on('stack:change', handleVersionSave);
+
+      // Listener para bloques generados por IA
+      const handleAiBlock = (e: any) => {
+        const { html, css } = e.detail;
+        if (editorRef.current) {
+          const editor = editorRef.current;
+          // Añadir CSS globalmente
+          if (css) editor.Css.addRules(css);
+          
+          // Añadir HTML al componente seleccionado o al final del body
+          const selected = editor.getSelected();
+          if (selected) {
+            selected.append(html);
+          } else {
+            editor.addComponents(html);
+          }
+          
+          toast.success("IA: Bloque inyectado con éxito.");
+        }
+      };
+      window.addEventListener('editor:add-block', handleAiBlock);
 
     (window as any).editor = editor;
 
@@ -491,6 +511,7 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>(({ initialDa
         editor.off('component:update', handleVersionSave);
         editor.off('style:property:update', handleVersionSave);
         editor.off('stack:change', handleVersionSave);
+        window.removeEventListener('editor:add-block', handleAiBlock);
       };
    }, []);
 

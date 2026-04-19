@@ -53,8 +53,8 @@ interface Contact {
 }
 
 const PAISES = [
-  { code: 'MX', name: 'México', idType: 'RFC' },
   { code: 'ES', name: 'España', idType: 'CIF/NIF' },
+  { code: 'MX', name: 'México', idType: 'RFC' },
   { code: 'US', name: 'Estados Unidos', idType: 'EIN' },
   { code: 'CL', name: 'Chile', idType: 'RUT' },
   { code: 'AR', name: 'Argentina', idType: 'CUIT' },
@@ -86,11 +86,11 @@ export default function PerfilesFiscalesTab({ onUpdate }: Props) {
     leadId: '',
     contactId: '',
     identificadorFiscal: '',
-    tipoIdentificador: 'RFC',
+    tipoIdentificador: 'CIF/NIF',
     razonSocial: '',
     nombreComercial: '',
     regimenFiscal: '',
-    pais: 'MX',
+    pais: 'ES',
     direccionFiscal: '',
     codigoPostal: '',
     ciudad: '',
@@ -275,11 +275,11 @@ export default function PerfilesFiscalesTab({ onUpdate }: Props) {
       leadId: '',
       contactId: '',
       identificadorFiscal: '',
-      tipoIdentificador: 'RFC',
+      tipoIdentificador: 'CIF/NIF',
       razonSocial: '',
       nombreComercial: '',
       regimenFiscal: '',
-      pais: 'MX',
+      pais: 'ES',
       direccionFiscal: '',
       codigoPostal: '',
       ciudad: '',
@@ -409,7 +409,7 @@ export default function PerfilesFiscalesTab({ onUpdate }: Props) {
                         setFormData({ ...formData, identificadorFiscal: e.target.value.toUpperCase() });
                         setValidationResult(null);
                       }}
-                      placeholder={formData.pais === 'MX' ? 'XAXX010101000' : 'Identificador fiscal'}
+                      placeholder={formData.pais === 'MX' ? 'XAXX010101000' : formData.pais === 'ES' ? 'B12345678' : 'Identificador fiscal'}
                       className="flex-1"
                     />
                     <Button 

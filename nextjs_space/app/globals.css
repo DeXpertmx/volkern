@@ -1,4 +1,7 @@
 
+@import 'react-grid-layout/css/styles.css';
+@import 'react-resizable/css/styles.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -227,4 +230,74 @@ body.puck-editor-active [data-radix-portal] {
 body.puck-editor-active [role="dialog"],
 body.puck-editor-active [data-radix-portal] [data-state] {
   z-index: 200 !important;
+}
+/* React Grid Layout Styles */
+.react-grid-layout {
+  position: relative;
+  transition: height 200ms ease;
+}
+.react-grid-item {
+  transition: all 200ms ease;
+  transition-property: left, top;
+}
+.react-grid-item.cssTransforms {
+  transition-property: transform;
+}
+.react-grid-item.resizing {
+  z-index: 1;
+  will-change: width, height;
+}
+.react-grid-item.react-draggable-dragging {
+  transition: none;
+  z-index: 3;
+  will-change: transform;
+}
+.react-grid-item.dropping {
+  visibility: hidden;
+}
+.react-grid-placeholder {
+  background: rgba(var(--primary-rgb), 0.1);
+  border-radius: 0.75rem;
+  opacity: 0.5;
+  transition-duration: 100ms;
+  z-index: 2;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  -o-user-select: none;
+  user-select: none;
+}
+.react-grid-item > .react-resizable-handle {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  bottom: 0;
+  right: 0;
+  cursor: se-resize;
+  z-index: 50; /* Z-index alto para asegurar que sea 'agarrable' */
+}
+.react-grid-item > .react-resizable-handle::after {
+  content: "";
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 10px;
+  height: 10px;
+  border-right: 3px solid rgba(var(--primary-rgb), 0.6);
+  border-bottom: 3px solid rgba(var(--primary-rgb), 0.6);
+  border-radius: 1px;
+}
+
+/* Bento Card Move Handle */
+.bento-drag-handle {
+  cursor: grab;
+  padding: 4px;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+.bento-drag-handle:active {
+  cursor: grabbing;
+}
+.bento-drag-handle:hover {
+  background: rgba(var(--primary-rgb), 0.05);
 }

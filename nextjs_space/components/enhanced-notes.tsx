@@ -14,13 +14,17 @@ import { useNotes } from '@/lib/store/use-notes-store';
 import { SmartNoteCard } from '@/components/leads/SmartNoteCard';
 
 interface EnhancedNotesProps {
-  leadId: string;
+  leadId?: string;
+  contactId?: string;
 }
 
-export function EnhancedNotes({ leadId }: EnhancedNotesProps) {
-  const { notes, isLoading, refreshNotes } = useNotes(leadId);
+export function EnhancedNotes({ leadId, contactId }: EnhancedNotesProps) {
+  const { notes, isLoading, refreshNotes } = useNotes(leadId, contactId);
   const [newNote, setNewNote] = useState('');
   const [isAdding, setIsAdding] = useState(false);
+
+  const entityId = leadId || contactId;
+  const apiBase = leadId ? `/api/leads/${leadId}` : `/api/contacts/${contactId}`;
 
   const handleAddNote = async () => {
     if (!newNote.trim()) {
@@ -29,7 +33,7 @@ export function EnhancedNotes({ leadId }: EnhancedNotesProps) {
     }
 
     try {
-      const res = await fetch(`/api/leads/${leadId}/notes`, {
+      const res = await fetch(`${apiBase}/notes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contenido: newNote })

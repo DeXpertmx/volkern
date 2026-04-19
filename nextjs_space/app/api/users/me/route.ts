@@ -37,7 +37,8 @@ export const GET = withTenantAuth(async (req, auth) => {
           select: {
             id: true,
             nombre: true,
-            slug: true
+            slug: true,
+            accountType: true
           }
         },
         metadata: true
@@ -55,7 +56,8 @@ export const GET = withTenantAuth(async (req, auth) => {
       tenant: {
         id: activeTenant.id,
         nombre: activeTenant.nombre,
-        slug: activeTenant.slug
+        slug: activeTenant.slug,
+        accountType: activeTenant.accountType
       },
       // Marcar si es una sesión suplantada para lógica especial en UI si fuera necesaria
       isImpersonating: activeTenant.id !== user.tenant?.id

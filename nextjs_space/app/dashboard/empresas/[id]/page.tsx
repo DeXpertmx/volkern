@@ -100,7 +100,13 @@ export default function EmpresaDetailPage() {
       setLoading(true)
       const response = await fetch(`/api/contacts/${companyId}`)
       if (!response.ok) throw new Error('Error al cargar empresa')
-      const data = await response.json()
+      const result = await response.json()
+      
+      if (!result.success || !result.data) {
+        throw new Error(result.error || 'No se pudo encontrar la empresa')
+      }
+
+      const data = result.data
       setCompany(data)
       setFormData({
         nombre: data.nombre,
@@ -246,7 +252,7 @@ export default function EmpresaDetailPage() {
     setIsContactDialogOpen(true)
   }
 
-  const allDeals = company ? [...company.deals, ...company.dealsAsCompany] : []
+  const allDeals = company ? [...(company.deals || []), ...(company.dealsAsCompany || [])] : []
 
   if (loading) {
     return (

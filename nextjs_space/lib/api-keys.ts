@@ -4,19 +4,21 @@ import crypto from 'crypto';
  * Genera una API key única con formato: vk_prod_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
  * @returns Objeto con la key original y el hash
  */
-export function generateApiKey(): { key: string; keyHash: string; prefix: string } {
+export function generateApiKey(type: 'prod' | 'live' = 'prod'): { key: string; keyHash: string; prefix: string } {
   // Generar 32 bytes aleatorios y convertir a hex
   const randomBytes = crypto.randomBytes(32);
   const keyBody = randomBytes.toString('hex'); // 64 caracteres hex
   
-  // Formato: vk_prod_[64 caracteres hex]
-  const key = `vk_prod_${keyBody}`;
+  const prefixStr = type === 'prod' ? 'vk_prod_' : 'vk_live_';
+  
+  // Formato: vk_[type]_[64 caracteres hex]
+  const key = `${prefixStr}${keyBody}`;
   
   // Hash SHA256 de la key completa
   const keyHash = crypto.createHash('sha256').update(key).digest('hex');
   
-  // Prefix para identificación (primeros 8 caracteres después de vk_prod_)
-  const prefix = `vk_prod_${keyBody.substring(0, 8)}`;
+  // Prefix para identificación (primeros 8 caracteres después del prefix estructural)
+  const prefix = `${prefixStr}${keyBody.substring(0, 8)}`;
   
   return { key, keyHash, prefix };
 }
@@ -36,8 +38,8 @@ export function hashApiKey(key: string): string {
  * @returns true si el formato es válido
  */
 export function isValidApiKeyFormat(key: string): boolean {
-  // Debe empezar con vk_prod_ seguido de 64 caracteres hexadecimales
-  const regex = /^vk_prod_[0-9a-f]{64}$/i;
+  // Debe empezar con vk_prod_ o vk_live_ seguido de 64 caracteres hexadecimales
+  const regex = /^vk_(prod|live)_[0-9a-f]{64}$/i;
   return regex.test(key);
 }
 
@@ -94,6 +96,9 @@ export const AVAILABLE_SCOPES = [
   'webhooks:read',
   'webhooks:write',
   'webhooks:delete',
+
+  // Agent Skills
+  'agent:skill',
 ] as const;
 
 export type ApiKeyScope = typeof AVAILABLE_SCOPES[number];

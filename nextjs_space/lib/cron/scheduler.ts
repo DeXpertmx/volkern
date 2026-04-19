@@ -13,13 +13,83 @@ import { prisma } from '../db';
 export function initCronJobs() {
   console.log('🚀 [Scheduler] Inicializando tareas programadas de Volkern CRM...');
 
-  // 1. Radar de Ghosting - Ejecución diaria a las 09:00 AM
-  // Monitorea leads sin actividad y genera alertas/tasks para los agentes.
-  cron.schedule('0 9 * * *', async () => {
-    await runGhostingRadar();
+  // 1. Morning Briefing - Ejecución diaria a las 08:30 AM
+  cron.schedule('30 8 * * *', async () => {
+    console.log('[Cron] ☀️ Generando Morning Briefing...');
+    const { MorningBriefingService } = await import('../sales/morning-briefing-service');
+    await MorningBriefingService.sendGlobalBriefing();
+    console.log('[Cron] ✅ Morning Briefing enviado.');
+  });
+
+  // 2. Radar de Ghosting - Ejecución diaria a las 09:30 AM
+  // Audita la integridad de todas las cadenas de facturación.
+  cron.schedule('59 23 * * 0', async () => {
+    console.log('[Cron] 🏗️ Iniciando Ritual Dominical: Auditoría Fiscal Global...');
+    const { FiscalAuditService } = await import('../fiscal/audit-service');
+    await FiscalAuditService.auditAllTenants();
+    console.log('[Cron] ✅ Ritual Dominical completado.');
+  });
+
+  // 3. Recuperación Proactiva de Facturas (Veri*factu) - Cada 4 horas
+  cron.schedule('0 */4 * * *', async () => {
+    console.log('[Cron] 📡 Iniciando Recuperación Proactiva de Facturas...');
+    await runProactiveInvoiceRecovery();
   });
 
   console.log('✅ [Scheduler] Radar de Ghosting programado (09:00 AM daily)');
+  console.log('✅ [Scheduler] Ritual Dominical programado (Sun 23:59)');
+  console.log('✅ [Scheduler] Recuperación Proactiva programada (cada 4h)');
+}
+
+/**
+ * Lógica de Recuperación Proactiva
+ * Simula el polling a APIs externas (Nexus/Hacienda) para recolectar facturas recibidas.
+ */
+export async function runProactiveInvoiceRecovery() {
+  try {
+    const tenants = await prisma.tenant.findMany({ select: { id: true, nombre: true } });
+    const { InboundInvoiceService } = await import('../finance/inbound-invoice-service');
+    
+    let totalProcessed = 0;
+
+    for (const tenant of tenants) {
+      // Simulación de detección de facturas externas
+      // En un escenario real, aquí llamaríamos a una API externa (ej. Nexus)
+      const mockExternalInvoices = [
+        { 
+          invoiceNumber: `EXT-${Date.now()}`, 
+          supplierId: 'automatic-provider', 
+          totalAmount: Math.random() * 500, 
+          currency: 'EUR',
+          issueDate: new Date().toISOString()
+        }
+      ];
+
+      for (const inv of mockExternalInvoices) {
+        // En esta simulación solo procesamos si existe un proveedor mock
+        // En prod, el adapter buscaría por CIF/NIF
+        try {
+          // Solo procesar si hay un proveedor configurado (o usar uno por defecto)
+          const supplier = await prisma.supplier.findFirst({ where: { tenantId: tenant.id } });
+          if (supplier) {
+            await InboundInvoiceService.processInboundInvoice(tenant.id, 'volkern_json', {
+              ...inv,
+              supplierId: supplier.id
+            });
+            totalProcessed++;
+          }
+        } catch (e) {
+          console.error(`[Cron] Error procesando factura para ${tenant.nombre}:`, e);
+        }
+      }
+    }
+
+    console.log(`[Cron] ✅ Recuperación proactiva completa. ${totalProcessed} facturas procesadas.`);
+    return { success: true, totalProcessed };
+  } catch (err) {
+    console.error('[Cron] ❌ Error fatal en Recuperación Proactiva:', err);
+    return { success: false, error: err };
+  }
 }
 
 /**

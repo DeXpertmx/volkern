@@ -21,11 +21,17 @@ export async function POST(req: NextRequest) {
     // 2. Validar que el usuario sea Superadmin
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      include: { role: true }
+      include: { 
+        role: true,
+        tenant: { select: { id: true, accountType: true } }
+      }
     });
 
-    if (user?.role?.nombre !== 'Superadmin') {
-      return NextResponse.json({ error: 'Prohibido: Se requiere rol Superadmin' }, { status: 403 });
+    const isSuperadmin = user?.role?.nombre === 'Superadmin';
+    const isAgency = user?.tenant?.accountType === 'AGENCY';
+
+    if (!isSuperadmin && !isAgency) {
+      return NextResponse.json({ error: 'Prohibido: Se requiere rol Superadmin o cuenta de Agencia' }, { status: 403 });
     }
 
     const body = await req.json();
@@ -47,11 +53,16 @@ export async function POST(req: NextRequest) {
       // Validar que el tenant existe
       const targetTenant = await prisma.tenant.findUnique({
         where: { id: tenantId },
-        select: { id: true, nombre: true }
+        select: { id: true, nombre: true, parentId: true }
       });
 
       if (!targetTenant) {
         return NextResponse.json({ error: 'Tenant no encontrado' }, { status: 404 });
+      }
+
+      // Validar permisos de la agencia
+      if (isAgency && targetTenant.parentId !== user?.tenant?.id) {
+        return NextResponse.json({ error: 'Este tenant no pertenece a tu agencia' }, { status: 403 });
       }
 
       // Establecer cookie segura (HttpOnly por defecto en Next.js cookies())
@@ -92,16 +103,22 @@ export async function GET() {
     return NextResponse.json({ active: false });
   }
 
-  // Validar sesión de admin para devolver detalles
-  const session = await getServerSession(authOptions);
-  console.log(`[DEBUG-Impersonate-GET] Session Role: ${(session?.user as any)?.roleName}, CookieId: ${impersonatedId}`);
+  const user = await prisma.user.findUnique({
+    where: { id: (session?.user as any).id },
+    include: { tenant: { select: { id: true, accountType: true } } }
+  });
 
-  if ((session?.user as any)?.roleName === 'Superadmin') {
+  if ((session?.user as any)?.roleName === 'Superadmin' || user?.tenant?.accountType === 'AGENCY') {
     const tenant = await prisma.tenant.findUnique({
       where: { id: impersonatedId },
-      select: { id: true, nombre: true, slug: true }
+      select: { id: true, nombre: true, slug: true, parentId: true }
     });
     
+    // Si es Agencia, verificar que el tenant suplantado sea su hijo
+    if (user?.tenant?.accountType === 'AGENCY' && tenant?.parentId !== user.tenant.id) {
+      return NextResponse.json({ active: false });
+    }
+
     console.log(`[DEBUG-Impersonate-GET] Returning active: true for ${tenant?.nombre}`);
     return NextResponse.json({ active: true, tenant });
   }

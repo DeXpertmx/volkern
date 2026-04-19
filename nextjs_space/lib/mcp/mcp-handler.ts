@@ -522,6 +522,160 @@ export const MCP_TOOLS: MCPTool[] = [
       required: ['tenantId'],
     },
   },
+
+  // ========== AGENTIC SKILLS (Gemma 4 Optimized) ==========
+  {
+    name: 'audit_finance_integrity',
+    description: 'Realiza una auditoría forense de integridad fiscal (Veri*factu). Busca discrepancias en los hashes de facturas y gastos para detectar manipulaciones o errores de registro. Activa el PROTOCOLO DE DESCONFIANZA si se detectan brechas.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tenantId: { type: 'string', description: 'ID del tenant' },
+      },
+      required: ['tenantId'],
+    },
+  },
+  {
+    name: 'get_field_activity',
+    description: 'Localiza técnicos y activos en campo hoy. Extrae geolocalización (VISION-LOCK) y estado de actividad técnica.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tenantId: { type: 'string', description: 'ID del tenant' },
+      },
+      required: ['tenantId'],
+    },
+  },
+  {
+    name: 'audit_material_leaks',
+    description: 'Monitor de mermas e integridad de materiales. Compara stock contra consumo de producción para detectar robos o fugas.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tenantId: { type: 'string', description: 'ID del tenant' },
+      },
+      required: ['tenantId'],
+    },
+  },
+  // ========== RRHH VOICE OPS (Gemma Live) ==========
+  {
+    name: 'get_hr_daily_brief',
+    description: 'Obtener un resumen ejecutivo narrativo (estilo briefing militar) sobre el estado del personal, alertas de integridad y conflictos de hitos críticos.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tenantId: { type: 'string', description: 'ID del tenant' },
+      },
+      required: ['tenantId'],
+    },
+  },
+  {
+    name: 'authorize_bulk_expenses',
+    description: 'Autorizar masivamente gastos con validación GPS (VISION-LOCK) positiva. Requiere rol OWNER.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tenantId: { type: 'string', description: 'ID del tenant' },
+        userId: { type: 'string', description: 'ID del usuario operador' },
+      },
+      required: ['tenantId', 'userId'],
+    },
+  },
+  {
+    name: 'approve_vacation_voice',
+    description: 'Aprobar una solicitud de vacaciones mediante comando de voz, incluyendo una nota personalizada.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vacationRequestId: { type: 'string', description: 'ID de la solicitud' },
+        note: { type: 'string', description: 'Nota para el empleado' },
+        tenantId: { type: 'string', description: 'ID del tenant' },
+        userId: { type: 'string', description: 'ID del usuario' },
+      },
+      required: ['vacationRequestId', 'tenantId', 'userId'],
+    },
+  {
+    name: 'orchestrate_asset_transfer',
+    description: 'Gestionar el traspaso entre técnicos o la devolución al almacén de activos críticos. Requiere rol OWNER.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        assetId: { type: 'string', description: 'ID del activo (EmployeeAsset)' },
+        action: { type: 'string', description: 'Acción a realizar: TRANSFER | RETURN', enum: ['TRANSFER', 'RETURN'] },
+        targetEmployeeId: { type: 'string', description: 'ID del empleado destino (solo para TRANSFER)' },
+        tenantId: { type: 'string', description: 'ID del tenant' },
+        userId: { type: 'string', description: 'ID del usuario operador' },
+      },
+      required: ['assetId', 'action', 'tenantId', 'userId'],
+    },
+  },
+  {
+    name: 'confirm_digital_seal',
+    description: 'Autorizar y sellar digitalmente actas de entrega o vacaciones vía voz. Requiere rol OWNER.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tenantId: { type: 'string', description: 'ID del tenant' },
+        userId: { type: 'string', description: 'ID del usuario firmante (OWNER)' },
+        documentType: { type: 'string', enum: ['ACTA_ENTREGA', 'APROBACION_VACACIONES'] },
+        context: { type: 'object', description: 'Datos dinámicos para el acta (assetName, employeeName, etc.)' },
+      },
+      required: ['tenantId', 'userId', 'documentType', 'context'],
+    },
+  },
+  {
+    name: 'access_security_audit',
+    description: 'Auditoría forense de silos de conocimiento y riesgos de acceso digital. Requiere rol OWNER.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tenantId: { type: 'string', description: 'ID del tenant' },
+        employeeId: { type: 'string', description: 'Opcional: ID de un empleado específico para auditar su huella digital' },
+      },
+      required: ['tenantId'],
+    },
+  },
+  
+  // ========== MARKETING HUB ==========
+  {
+    name: 'generate_marketing_copy',
+    description: 'Generar contenido publicitario o para redes sociales usando IA (Gemma 4).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        topic: { type: 'string', description: 'Tema o producto del que hablar' },
+        platform: { type: 'string', enum: ['LINKEDIN', 'YOUTUBE', 'TIKTOK', 'EMAIL'], description: 'Plataforma destino' },
+        tone: { type: 'string', enum: ['professional', 'aggressive', 'friendly', 'educational'], description: 'Tono del mensaje' },
+        tenantId: { type: 'string', description: 'ID del tenant' },
+      },
+      required: ['topic', 'platform', 'tenantId'],
+    },
+  },
+  {
+    name: 'analyze_marketing_sentiment',
+    description: 'Analizar el sentimiento de un texto (comentarios, feedback, reviews).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        text: { type: 'string', description: 'Texto a analizar' },
+        platform: { type: 'string', description: 'Plataforma de origen (opcional)' },
+        tenantId: { type: 'string', description: 'ID del tenant' },
+      },
+      required: ['text', 'tenantId'],
+    },
+  },
+  {
+    name: 'suggest_campaign_optimization',
+    description: 'Sugerir mejoras para campañas de marketing basadas en datos históricos y analíticas.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        campaignId: { type: 'string', description: 'ID de la campaña (opcional)' },
+        tenantId: { type: 'string', description: 'ID del tenant' },
+      },
+      required: ['tenantId'],
+    },
+  },
 ];
 
 // ============== HANDLERS MCP ==============
@@ -571,9 +725,41 @@ export async function handleCallTool(request: MCPCallToolRequest): Promise<MCPCa
   }
 
   try {
+    // 1. Resolver el contexto del usuario para validación de roles de confianza
+    const user = await prisma.user.findUnique({
+      where: { id: args.userId as string },
+      include: { role: true }
+    });
+
+    // Validación de Rol OWNER para acciones sensibles
+    const sensitiveTools = ['authorize_bulk_expenses', 'orchestrate_secure_payroll'];
+    if (sensitiveTools.includes(name) && user?.role?.nombre !== 'OWNER') {
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({ 
+            error: 'Soberanía Denegada: Esta acción requiere privilegios de OWNER.',
+            requiredRole: 'OWNER',
+            currentRole: user?.role?.nombre || 'UNKNOWN'
+          }),
+        }],
+        isError: true,
+      };
+    }
+
+    const ctx = {
+      tenantId: args.tenantId as string,
+      user: user ? {
+        id: user.id,
+        email: user.email,
+        role: user.role?.nombre
+      } : undefined
+    };
+
     // Marcar source como 'mcp' si no está definido
     const enrichedArgs = {
       ...args,
+      ctx, // Pasamos el contexto de seguridad
       source: (args.source || 'mcp') as 'api' | 'app' | 'automation' | 'mcp' | 'webhook',
     };
 

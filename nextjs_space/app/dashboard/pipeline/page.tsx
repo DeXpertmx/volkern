@@ -113,6 +113,9 @@ interface Deal {
     cotizaciones: number
     actividades: number
   }
+  healthScore: number
+  healthStatus: string
+  tags?: string
 }
 
 interface Stage {
@@ -142,6 +145,7 @@ export default function PipelinePage() {
   const [activeId, setActiveId] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [filterPrioridad, setFilterPrioridad] = useState<string>('all')
+  const [filterSalud, setFilterSalud] = useState<string>('all')
   const [showNewDealDialog, setShowNewDealDialog] = useState(false)
   const [showConfigDialog, setShowConfigDialog] = useState(false)
   const [collapsedStages, setCollapsedStages] = useState<Set<string>>(new Set())
@@ -299,11 +303,24 @@ export default function PipelinePage() {
     const matchesPrioridad =
       filterPrioridad === 'all' || deal.prioridad === filterPrioridad
 
-    return matchesSearch && matchesPrioridad
+    const matchesSalud =
+      filterSalud === 'all' || deal.healthStatus === filterSalud
+
+    return matchesSearch && matchesPrioridad && matchesSalud
   })
 
+  const normalizeStageName = (name: string | null | undefined) => {
+    if (!name) return "";
+    try {
+      return name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+    } catch (e) {
+      console.error("Error normalizing stage name:", name, e);
+      return String(name).toLowerCase().trim();
+    }
+  };
+
   const getDealsByStage = (stageName: string) => {
-    return filteredDeals.filter((deal) => deal.etapa === stageName)
+    return filteredDeals.filter((deal) => normalizeStageName(deal.etapa) === normalizeStageName(stageName))
   }
 
   if (loading) {
@@ -334,6 +351,23 @@ export default function PipelinePage() {
           <Button variant="outline" onClick={() => setShowConfigDialog(true)}>
             <Settings className="h-4 w-4 mr-2" />
             Configurar Etapas
+          </Button>
+          <Button 
+            variant="outline" 
+            className="border-primary/20 hover:bg-primary/5 text-primary"
+            onClick={async () => {
+              toast.promise(fetch('/api/deals/sync', { method: 'POST' }), {
+                loading: 'Consultando Oráculo de Ventas...',
+                success: () => {
+                  fetchData()
+                  return 'Pipeline Sincronizado'
+                },
+                error: 'Error en la sincronización'
+              })
+            }}
+          >
+            <TrendingUp className="h-4 w-4 mr-2" />
+            Sincronizar Oráculo
           </Button>
           <Dialog open={showNewDealDialog} onOpenChange={setShowNewDealDialog}>
             <DialogTrigger asChild>
@@ -386,30 +420,30 @@ export default function PipelinePage() {
               <p className="text-xs text-muted-foreground">En pipeline</p>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="bg-primary/5 border-primary/20">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Valor Ponderado</CardTitle>
-              <DollarSign className="h-4 w-4 text-green-600" />
+              <CardTitle className="text-sm font-bold text-primary">Weighted Value</CardTitle>
+              <DollarSign className="h-4 w-4 text-primary" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600">
+              <div className="text-2xl font-black text-primary">
                 {formatCurrency(metrics.valorPonderado)}
               </div>
-              <p className="text-xs text-muted-foreground">Pronóstico</p>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Forecast Proyectado</p>
             </CardContent>
           </Card>
-          <Card>
+          <Card className={metrics.gapAnalysis > 0 ? 'bg-red-50 border-red-200' : 'bg-emerald-50 border-emerald-200'}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Tasa de Conversión</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className={`text-sm font-bold ${metrics.gapAnalysis > 0 ? 'text-red-600' : 'text-emerald-600'}`}>Gap vs Objetivo</CardTitle>
+              <ArrowUpDown className={`h-4 w-4 ${metrics.gapAnalysis > 0 ? 'text-red-600' : 'text-emerald-600'}`} />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
-                {metrics.totalDeals > 0
-                  ? `${Math.round((metrics.porEtapa['ganado'] || 0) / metrics.totalDeals * 100)}%`
-                  : '0%'}
+              <div className={`text-2xl font-black ${metrics.gapAnalysis > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                {formatCurrency(metrics.gapAnalysis)}
               </div>
-              <p className="text-xs text-muted-foreground">Deals ganados</p>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">
+                {metrics.gapAnalysis > 0 ? 'Restante para meta' : 'Objetivo superado'}
+              </p>
             </CardContent>
           </Card>
         </div>
@@ -441,6 +475,22 @@ export default function PipelinePage() {
             <SelectItem value="baja">Baja</SelectItem>
           </SelectContent>
         </Select>
+
+        <Select value={filterSalud} onValueChange={setFilterSalud}>
+          <SelectTrigger className="w-[180px]">
+            <div className="flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full bg-red-500" />
+              <SelectValue placeholder="Filtrar por Salud" />
+            </div>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas las saludes</SelectItem>
+            <SelectItem value="HEALTHY">Saludables</SelectItem>
+            <SelectItem value="WARNING">En Observación</SelectItem>
+            <SelectItem value="CRITICAL">Críticos</SelectItem>
+            <SelectItem value="ZOMBIE">Zombies</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Pipeline Kanban */}
@@ -466,7 +516,7 @@ export default function PipelinePage() {
             ))}
         </div>
         <DragOverlay>
-          {activeId ? (
+          {activeId && deals.find((d) => d.id === activeId) ? (
             <DealCard
               deal={deals.find((d) => d.id === activeId)!}
               formatCurrency={formatCurrency}
@@ -590,15 +640,17 @@ function DealCard({
   getPriorityColor,
   isDragging = false,
 }: {
-  deal: Deal
+  deal: Deal | undefined
   formatCurrency: (value: number, currency?: string) => string
   getPriorityColor: (prioridad: string) => string
   isDragging?: boolean
 }) {
   const router = useRouter()
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
-    id: deal.id,
+    id: deal?.id || 'unknown',
   })
+
+  if (!deal) return null;
 
   const style = transform
     ? {
@@ -644,6 +696,12 @@ function DealCard({
               <Badge variant={getPriorityColor(deal.prioridad) as any} className="flex-shrink-0 text-xs">
                 {deal.prioridad}
               </Badge>
+              {/* Indicador de Salud */}
+              <div className={`h-2 w-2 rounded-full ${
+                deal.healthStatus === 'HEALTHY' ? 'bg-emerald-500' :
+                deal.healthStatus === 'WARNING' ? 'bg-amber-500' :
+                deal.healthStatus === 'CRITICAL' ? 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]' : 'bg-slate-400'
+              }`} title={`Salud: ${deal.healthScore}/100`} />
             </div>
 
             <div className="flex items-center justify-between">
@@ -1140,10 +1198,11 @@ function NewDealForm({ stages, onSuccess }: { stages: Stage[]; onSuccess: () => 
   const fetchContacts = async () => {
     try {
       setLoadingContacts(true)
-      const response = await fetch('/api/contacts?tipo=person')
+      const response = await fetch('/api/contacts')
       if (response.ok) {
         const data = await response.json()
-        setContacts(data.data || [])
+        // El API retorna un array directo de contactos
+        setContacts(Array.isArray(data) ? data : (data.data || []))
       }
     } catch (error) {
       console.error('Error al cargar contactos:', error)
@@ -1259,9 +1318,18 @@ function NewDealForm({ stages, onSuccess }: { stages: Stage[]; onSuccess: () => 
                   ) : (
                     filteredContacts.map((contact) => (
                       <SelectItem key={contact.id} value={contact.id}>
-                        <div className="flex flex-col">
-                          <span className="font-medium">{contact.nombre}</span>
-                          <span className="text-xs text-muted-foreground">{contact.email}</span>
+                        <div className="flex items-center justify-between w-full">
+                          <div className="flex flex-col">
+                            <span className="font-medium">{contact.nombre}</span>
+                            <span className="text-xs text-muted-foreground">{contact.email}</span>
+                          </div>
+                          <Badge variant="outline" className={`ml-2 text-[10px] h-4 ${
+                            contact.tipo === 'company' 
+                              ? 'bg-blue-50 text-blue-700 border-blue-200' 
+                              : 'bg-purple-50 text-purple-700 border-purple-200'
+                          }`}>
+                            {contact.tipo === 'company' ? 'Empresa' : 'Persona'}
+                          </Badge>
                         </div>
                       </SelectItem>
                     ))

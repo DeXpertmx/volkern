@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db'
 import { uploadPublicFile } from '@/lib/s3'
 import { getPlanConfig } from '@/lib/plans'
 import { withTenantAuth } from '@/lib/api-key-auth'
+import { getEffectiveBranding } from '@/lib/branding'
 
 /**
  * GET - Obtener configuración de whitelabel
@@ -14,60 +15,36 @@ export const GET = withTenantAuth(async (request, auth) => {
   try {
     const tenantId = auth.tenant!.id;
 
-    // 1. Obtener configuración global como base
+    // 1. Obtener la configuración efectiva basada en la jerarquía (Slot > Agencia > Global)
+    const effectiveBranding = await getEffectiveBranding(tenantId);
+
+    // 2. Obtener la configuración global para campos extras (emails, redes sociales)
     let globalConfig = await prisma.whitelabelConfig.findFirst({
       orderBy: { fechaCreacion: 'desc' }
-    })
-
-    if (!globalConfig) {
-      globalConfig = await prisma.whitelabelConfig.create({
-        data: {
-          nombreEmpresa: 'Volkern CRM',
-          logoUrl: '/volkern-logo.png',
-          iconoUrl: '/volkern-icon.png',
-          colorPrimario: '#3b82f6',
-          colorSecundario: '#8b5cf6',
-          colorAcento: '#10b981',
-          emailRemitente: 'contacto@volkern.com',
-          nombreRemitente: 'Volkern CRM',
-          eslogan: 'Tu CRM todo en uno',
-          descripcion: 'Plataforma de CRM y automatización para emprendedores digitales',
-        }
-      })
-    }
-
-    // 2. Verificar si el tenant tiene Marca Blanca activa
-    const tenant = await prisma.tenant.findUnique({
-      where: { id: tenantId },
-      include: { 
-        tenantFeatures: {
-          where: { feature: 'white_label' }
-        }
-      }
     });
 
-    const planConfig = await getPlanConfig(tenant?.plan || 'starter');
-    const isWhiteLabelActive = tenant?.tenantFeatures?.[0]?.habilitado || planConfig.branding?.whitelabel;
-
-    let config = globalConfig;
-
-    // 3. Si tiene Marca Blanca, intentar obtener su configuración personalizada
-    if (isWhiteLabelActive && tenant?.tenantFeatures?.[0]?.configuracion) {
-      const customConfig = tenant.tenantFeatures[0].configuracion as any;
-      config = {
-        ...globalConfig,
-        ...customConfig,
-        id: `tenant-${tenantId}`,
-      } as any;
-    } else {
-      // Si no tiene marca blanca, al menos forzar el nombre del tenant como nombre de empresa
-      // para que el DashboardHeader muestre el nombre correcto durante la suplantación
-      config = {
-        ...globalConfig,
-        nombreEmpresa: tenant?.nombre || globalConfig.nombreEmpresa,
-        id: `tenant-${tenantId}`,
+    if (!globalConfig) {
+      // Fallback si no existe (raro en producción)
+      globalConfig = {
+        nombreEmpresa: 'Volkern CRM',
+        logoUrl: '/volkern-logo.png',
+        iconoUrl: '/volkern-icon.png',
+        colorPrimario: '#3b82f6',
+        colorSecundario: '#8b5cf6',
+        colorAcento: '#10b981',
       } as any;
     }
+
+    // 3. Mezclar configuraciones
+    const response = {
+      ...globalConfig,
+      id: `branding-${tenantId}`,
+      nombreEmpresa: effectiveBranding.companyName || globalConfig?.nombreEmpresa,
+      logoUrl: effectiveBranding.logoUrl,
+      iconoUrl: effectiveBranding.logoUrl, // Usamos logo como icono si no hay específico
+      colorPrimario: effectiveBranding.primaryColor,
+      showPoweredBy: effectiveBranding.showPoweredBy
+    };
 
     // Convertir S3 keys a URLs públicas
     const AWS_REGION = process.env.AWS_REGION || 'us-west-2'
@@ -82,13 +59,13 @@ export const GET = withTenantAuth(async (request, auth) => {
     }
 
     const configResponse = {
-      ...config,
-      logoUrl: config.logoUrl && isS3Key(config.logoUrl) 
-        ? getPublicUrl(config.logoUrl)
-        : config.logoUrl,
-      iconoUrl: config.iconoUrl && isS3Key(config.iconoUrl)
-        ? getPublicUrl(config.iconoUrl)
-        : config.iconoUrl,
+      ...response,
+      logoUrl: response.logoUrl && isS3Key(response.logoUrl) 
+        ? getPublicUrl(response.logoUrl)
+        : response.logoUrl,
+      iconoUrl: response.iconoUrl && isS3Key(response.iconoUrl)
+        ? getPublicUrl(response.iconoUrl)
+        : response.iconoUrl,
     }
 
     return NextResponse.json(configResponse)

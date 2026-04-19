@@ -66,6 +66,17 @@ interface SystemAlert {
   createdAt: string
 }
 
+interface SystemBackup {
+  id: string
+  timestamp: string
+  status: string
+  fileName?: string | null
+  fileSize?: string | null
+  storageProvider: string
+  checksum?: string | null
+  errorMessage?: string | null
+}
+
 interface ModuleControl {
   moduleKey: string
   isActive: boolean
@@ -126,6 +137,7 @@ export default function AuditoriaDashboard() {
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<any>(null)
   const [alerts, setAlerts] = useState<SystemAlert[]>([])
+  const [backups, setBackups] = useState<SystemBackup[]>([])
   const [module, setModule] = useState<ModuleControl | null>(null)
 
   // Modal de resolución de alerta
@@ -146,19 +158,22 @@ export default function AuditoriaDashboard() {
   const fetchAll = useCallback(async () => {
     try {
       setLoading(true)
-      const [auditRes, alertsRes, moduleRes] = await Promise.all([
+      const [auditRes, alertsRes, moduleRes, backupRes] = await Promise.all([
         fetch('/api/admin/audit'),
         fetch('/api/admin/audit/alerts'),
         fetch('/api/admin/audit/module'),
+        fetch('/api/admin/backup'),
       ])
-      const [auditData, alertsData, moduleData] = await Promise.all([
+      const [auditData, alertsData, moduleData, backupData] = await Promise.all([
         auditRes.json(),
         alertsRes.json(),
         moduleRes.json(),
+        backupRes.json(),
       ])
       if (auditData.success) setData(auditData)
       if (alertsData.success) setAlerts(alertsData.alerts)
       if (moduleData.success) setModule(moduleData.control)
+      if (backupData.success) setBackups(backupData.backups)
     } catch {
       toast.error('Error cargando datos de auditoría')
     } finally {
@@ -375,6 +390,19 @@ export default function AuditoriaDashboard() {
           sub={unresolvedCount > 0 ? 'Requieren revisión manual' : 'Sin alertas pendientes'}
           color={unresolvedCount > 0 ? 'bg-amber-500' : 'bg-emerald-600'}
           borderColor={unresolvedCount > 0 ? 'border-l-amber-400' : 'border-l-emerald-500'}
+        />
+
+        <KpiCard
+          icon={backups.length > 0 && backups[0].status === 'SUCCESS' ? CheckCircle2 : ShieldOff}
+          label="Salud de Backups"
+          value={
+            <span className={backups.length > 0 && backups[0].status === 'SUCCESS' ? 'text-emerald-600' : 'text-red-600'}>
+              {backups.length > 0 ? backups[0].status : 'Sin definir'}
+            </span>
+          }
+          sub={backups.length > 0 ? `Último: ${new Date(backups[0].timestamp).toLocaleDateString()}` : 'Configurar backup cron'}
+          color={backups.length > 0 && backups[0].status === 'SUCCESS' ? 'bg-emerald-600' : 'bg-red-600'}
+          borderColor={backups.length > 0 && backups[0].status === 'SUCCESS' ? 'border-l-emerald-500' : 'border-l-red-500'}
         />
       </div>
 
@@ -617,6 +645,65 @@ export default function AuditoriaDashboard() {
                     </tr>
                   )
                 })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Tabla de historial de backups */}
+      <div className="bg-white rounded-3xl border border-slate-200/60 shadow-sm overflow-hidden mt-8">
+        <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-slate-50/50">
+          <div>
+            <h2 className="text-sm font-black uppercase tracking-tighter">Historial de Resguardos (Backup 3-2-1)</h2>
+            <p className="text-xs text-slate-400 font-bold mt-0.5">Integridad de copias de seguridad en nube/local</p>
+          </div>
+        </div>
+
+        {backups.length === 0 ? (
+          <div className="p-12 text-center text-slate-400 text-sm italic">
+            Sin historial de backups detectado. El auditor emitirá alertas si no encuentra respaldos diarios.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-[10px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100 bg-slate-50/30">
+                  <th className="text-left p-4 pl-6">Timestamp</th>
+                  <th className="text-left p-4">Estado</th>
+                  <th className="text-left p-4">Archivo</th>
+                  <th className="text-right p-4">Tamaño</th>
+                  <th className="text-left p-4">Proveedor</th>
+                  <th className="text-left p-4 pr-6">Checksum (SHA-256)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {backups.map((b) => (
+                  <tr key={b.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="p-4 pl-6 font-bold text-slate-700">
+                      {new Date(b.timestamp).toLocaleString('es-ES')}
+                    </td>
+                    <td className="p-4">
+                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${
+                        b.status === 'SUCCESS' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+                      }`}>
+                        {b.status}
+                      </span>
+                    </td>
+                    <td className="p-4 text-slate-600 italic">
+                      {b.fileName || '—'}
+                    </td>
+                    <td className="p-4 text-right font-mono">
+                      {b.fileSize ? `${(Number(b.fileSize) / (1024 * 1024)).toFixed(2)} MB` : '—'}
+                    </td>
+                    <td className="p-4 font-bold text-indigo-600">
+                      {b.storageProvider}
+                    </td>
+                    <td className="p-4 pr-6 font-mono text-[10px] text-slate-400">
+                      {b.checksum ? `${b.checksum.slice(0, 16)}…` : '—'}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

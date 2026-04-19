@@ -9,6 +9,75 @@ export async function POST(request: NextRequest) {
     
     // Telegram envía actualizaciones en este formato
     // https://core.telegram.org/bots/api#update
+    // ============================================
+    // Manejo de Interacciones (Callbacks) - WATCHDOG
+    // ============================================
+    if (body.callback_query) {
+      const { callback_query } = body;
+      const chatId = callback_query.message.chat.id.toString();
+      const data = callback_query.data; // Formato: "accion:itemId:tenantId"
+      
+      const [action, itemId, tenantId] = data.split(':');
+
+      // 1. Verificar Seguridad: ¿Es el remitente un ADMIN legítimo de ese tenant?
+      const admin = await prisma.user.findFirst({
+        where: { 
+          tenantId,
+          role: { nombre: 'ADMIN' },
+          metadata: { contains: { telegram_chat_id: chatId } }
+        }
+      });
+
+      if (!admin) {
+        return NextResponse.json({
+          method: 'answerCallbackQuery',
+          callback_query_id: callback_query.id,
+          text: '❌ ERROR: No tienes permisos para autorizar acciones en este Tenant.',
+          show_alert: true
+        });
+      }
+
+      if (action === 'reject_buy') {
+        return NextResponse.json({
+          method: 'editMessageText',
+          chat_id: chatId,
+          message_id: callback_query.message.message_id,
+          text: `${callback_query.message.text}\n\n❌ <b>COMPRA RECHAZADA</b> por ${admin.name}.`
+        });
+      }
+
+      if (action === 'auth_buy') {
+        const { skills } = await import('@/lib/skills');
+        
+        // Obtener datos del item para el gasto
+        const item = await prisma.catalogoItem.findUnique({
+          where: { id: itemId },
+          select: { nombre: true, sku: true, precio: true }
+        });
+
+        // REGLA: Crear gasto con status PENDING_RECEIPT
+        const expense = await skills.create_expense({
+          tenantId,
+          createdById: admin.id,
+          description: `COMPRA PROACTIVA (Watchdog): ${item?.nombre || 'Item'} - SKU: ${item?.sku}`,
+          amount: item?.precio || 0,
+          category: 'Proactivo',
+          status: 'PENDING_RECEIPT' as any,
+          supplierId: 'watchdog-system', // O un ID de proveedor genérico
+        });
+
+        return NextResponse.json({
+          method: 'editMessageText',
+          chat_id: chatId,
+          message_id: callback_query.message.message_id,
+          text: `${callback_query.message.text}\n\n✅ <b>COMPRA AUTORIZADA</b> por ${admin.name}.\nGasto: <b>€${expense.amount}</b> registrado como <i>PENDIENTE DE RECIBO</i>.`
+        });
+      }
+    }
+
+    // ============================================
+    // Manejo de Mensajes Directos
+    // ============================================
     if (body.message) {
       const { message } = body
       const chatId = message.chat.id.toString()

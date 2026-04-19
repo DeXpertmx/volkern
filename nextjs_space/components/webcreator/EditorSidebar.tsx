@@ -12,6 +12,7 @@ import {
   X,
   RefreshCw,
   Tags,
+  Sparkles,
 } from "lucide-react";
 
 interface EditorSidebarProps {
@@ -38,6 +39,7 @@ const EditorSidebar: React.FC<EditorSidebarProps> = ({
         { id: "history", icon: <History size={20} />, label: "Historial" },
         { id: "versions", icon: <RefreshCw size={20} />, label: "Versiones" },
         { id: "variables", icon: <Tags size={20} />, label: "Guía de Variables" },
+        { id: "ai", icon: <Sparkles size={20} />, label: "Gemma 4 AI" },
         { id: "code", icon: <Code2 size={20} />, label: "Código" },
       ].map(item => (
         <button

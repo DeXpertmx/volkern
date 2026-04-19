@@ -36,8 +36,8 @@ interface TasaImpuesto {
 }
 
 const PAISES = [
-  { code: 'MX', name: 'México' },
   { code: 'ES', name: 'España' },
+  { code: 'MX', name: 'México' },
   { code: 'US', name: 'Estados Unidos' },
   { code: 'CL', name: 'Chile' },
   { code: 'AR', name: 'Argentina' },
@@ -80,7 +80,7 @@ export default function TasasImpuestoTab({ onUpdate }: Props) {
     codigo: '',
     porcentaje: 0,
     tipo: 'IVA',
-    pais: 'MX',
+    pais: 'ES',
     estado: '',
     esRetencion: false,
     aplicaReverseCharge: false,
@@ -198,7 +198,7 @@ export default function TasasImpuestoTab({ onUpdate }: Props) {
       codigo: '',
       porcentaje: 0,
       tipo: 'IVA',
-      pais: 'MX',
+      pais: 'ES',
       estado: '',
       esRetencion: false,
       aplicaReverseCharge: false,

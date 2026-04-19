@@ -12,6 +12,7 @@ import {
   Send,
   BarChart3,
   FileText,
+  Receipt,
   UserCog,
   Plug,
   TrendingUp,
@@ -72,9 +73,28 @@ export interface HubConfig {
   items: NavigationItem[]
   description: string
   basePaths?: string[]
+  requiredAccountType?: 'AGENCY' | 'BUSINESS' | 'SUPERADMIN'
 }
 
 export const HUBS: HubConfig[] = [
+  {
+    id: 'agencia',
+    name: 'Agencia',
+    icon: Building,
+    href: '/dashboard/agencia',
+    description: 'Gestión de clientes (slots), marca blanca y analítica global.',
+    requiredAccountType: 'AGENCY',
+    basePaths: [
+      '/dashboard/agencia/slots',
+      '/dashboard/agencia/branding'
+    ],
+    items: [
+      { name: 'Dashboard Agencia', href: '/dashboard/agencia', icon: LayoutDashboard, description: 'Resumen de clientes y slots' },
+      { name: 'Gestión de Clientes', href: '/dashboard/agencia/slots', icon: Users, description: 'Alta y baja de subcuentas' },
+      { name: 'Mi Marca Blanca', href: '/dashboard/agencia/branding', icon: Palette, description: 'Configuración visual para clientes' },
+      { name: 'Métricas de Uso', href: '/dashboard/agencia/usage', icon: BarChart3, description: 'Consumo IA y almacenamiento' },
+    ]
+  },
   {
     id: 'ventas',
     name: 'Ventas',
@@ -176,6 +196,8 @@ export const HUBS: HubConfig[] = [
     ],
     items: [
       { name: 'Plantilla', href: '/dashboard/rrhh', icon: Users, planModule: 'rrhh', description: 'Directorio de colaboradores' },
+      { name: 'Gastos', href: '/dashboard/rrhh?section=gastos', icon: Receipt, planModule: 'rrhh', description: 'Autorización y control de reembolsos' },
+      { name: 'Vacaciones', href: '/dashboard/rrhh?section=vacaciones', icon: Calendar, planModule: 'rrhh', description: 'Cuadrante y solicitudes de ausencia' },
       { name: 'Nóminas (Vault)', href: '/dashboard/rrhh?section=nominas', icon: Wallet, planModule: 'rrhh', description: 'Gestión de pagos con cifrado 2.0' },
       { name: 'Retención IA', href: '/dashboard/rrhh?section=ia', icon: Heart, planModule: 'rrhh', description: 'Analítica de clima y rotación' },
     ]
@@ -188,11 +210,13 @@ export const HUBS: HubConfig[] = [
     description: 'Gestión de gastos, proveedores y salud financiera.',
     basePaths: [
       '/dashboard/gastos',
-      '/dashboard/proveedores'
+      '/dashboard/proveedores',
+      '/dashboard/finanzas/facturacion'
     ],
     items: [
       { name: 'Global Cockpit', href: '/dashboard/finanzas/global', icon: LineChart, planModule: 'finanzas_consolidado', description: 'Consolidación financiera y cash flow' },
       { name: 'Financial Cockpit', href: '/dashboard/finanzas', icon: BarChart3, planModule: 'finanzas', description: 'Vista general de salud financiera' },
+      { name: 'Facturación', href: '/dashboard/finanzas/facturacion', icon: Receipt, planModule: 'finanzas', description: 'Facturas emitidas y punto de venta' },
       { name: 'Gastos', href: '/dashboard/finanzas/gastos', icon: ListTodo, planModule: 'finanzas', description: 'Listado de egresos y facturas' },
       { name: 'Proveedores', href: '/dashboard/finanzas/proveedores', icon: Building2, planModule: 'finanzas', description: 'Directorio de proveedores' },
       { name: 'Reportes P&L', href: '/dashboard/finanzas/reportes', icon: FileText, planModule: 'finanzas', description: 'Balance de pérdidas y ganancias' },
@@ -225,8 +249,8 @@ export const HUBS: HubConfig[] = [
     items: [
       { name: 'Órdenes Activas', href: '/dashboard/produccion', icon: Factory, planModule: 'produccion', description: 'Monitor de planta en tiempo real' },
       { name: 'Recetas (BoM)', href: '/dashboard/produccion?section=bom', icon: LayoutGrid, planModule: 'produccion', description: 'Gestión de listas de materiales' },
-      { name: 'Control de Costos', href: '/dashboard/produccion/costos', icon: BarChart3, planModule: 'produccion', description: 'Análisis de costos de fabricación' },
-      { name: 'Gemma Fab-Control', href: '/dashboard/produccion/ai', icon: Cpu, planModule: 'produccion', description: 'Optimización industrial vía IA' },
+      { name: 'Control de Costos', href: '/dashboard/produccion?section=costos', icon: BarChart3, planModule: 'produccion', description: 'Análisis de costos de fabricación' },
+      { name: 'Gemma Fab-Control', href: '/dashboard/produccion?section=ai', icon: Cpu, planModule: 'produccion', description: 'Optimización industrial vía IA' },
     ]
   },
   {
@@ -258,9 +282,9 @@ export const HUBS: HubConfig[] = [
     ],
     items: [
       { name: 'Tablero Proyectos', href: '/dashboard/proyectos', icon: LayoutGrid, planModule: 'proyectos', description: 'Vista general de proyectos activos' },
-      { name: 'Cronograma Gantt', href: '/dashboard/proyectos/gantt', icon: Calendar, planModule: 'proyectos', description: 'Línea de tiempo y dependencias' },
-      { name: 'Control de Costos', href: '/dashboard/proyectos/costos', icon: DollarSign, planModule: 'proyectos', description: 'Margen real vs presupuesto' },
-      { name: 'Hitos Pendientes', href: '/dashboard/proyectos/hitos', icon: CheckCircle2, planModule: 'proyectos', description: 'Gestión de entregables' },
+      { name: 'Cronograma Gantt', href: '/dashboard/proyectos?section=gantt', icon: Calendar, planModule: 'proyectos', description: 'Línea de tiempo y dependencias' },
+      { name: 'Control de Costos', href: '/dashboard/proyectos?section=costos', icon: DollarSign, planModule: 'proyectos', description: 'Margen real vs presupuesto' },
+      { name: 'Hitos Pendientes', href: '/dashboard/proyectos?section=hitos', icon: CheckCircle2, planModule: 'proyectos', description: 'Gestión de entregables' },
     ]
   },
   {
@@ -304,6 +328,7 @@ export const HUBS: HubConfig[] = [
       { name: 'Agendamiento', href: '/dashboard/perfil?section=agendamiento', icon: Calendar, description: 'Links de reserva y disponibilidad' },
       { name: 'Telefonía (Zadarma)', href: '/dashboard/perfil?section=zadarma', icon: Phone, description: 'Configuración de extensión Zadarma' },
       { name: 'Notificaciones', href: '/dashboard/perfil?section=notificaciones', icon: Bell, description: 'Alertas del navegador' },
+      { name: 'IA Agent Skills', href: '/dashboard/perfil?section=agent-skills', icon: Cpu, description: 'Conecta tu asistente IA (Gemma/Gemma local)' },
       { name: 'Mi Tarjeta', href: '/dashboard/mi-tarjeta', icon: CreditCard, planModule: 'mi_tarjeta', description: 'Tarjeta de presentación digital' },
     ]
   }

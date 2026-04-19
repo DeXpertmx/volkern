@@ -29,12 +29,13 @@ export interface FiscalConfig {
     id: string;
     nombre: string;
     email: string;
-    idFiscal: string | null;
-    tipoIdFiscal: string;
-    razonSocial: string | null;
+    nif: string | null;
+    tipo: string | null;
     pais: string;
+    defaultIva: number;
+    defaultIrpf: number;
+    isLocked: boolean;
     esExento: boolean;
-    idIntracomunitario: string | null;
   } | null;
   esOperacionExtranjera: boolean;
   aplicaReverseCharge: boolean;

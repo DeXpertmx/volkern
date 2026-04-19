@@ -1,5 +1,8 @@
 import { prisma } from '@/lib/db';
 import { StockService } from '@/lib/erp/stock-service';
+import { AuditLogService } from '@/lib/erp/audit-log-service';
+import { MaintenanceService } from '@/lib/erp/maintenance-service';
+import { CostingService } from '@/lib/erp/costing-service';
 import { Decimal } from 'decimal.js';
 
 export class ProductionService {
@@ -26,42 +29,55 @@ export class ProductionService {
   }
 
   /**
-   * Iniciar producción: Reserva/Consume componentes según el BoM
+   * Iniciar producción: Reserva/Consume componentes según el BoM y los lotes asignados
    */
-  static async startProduction(workOrderId: string, tenantId: string) {
+  static async startProduction(workOrderId: string, tenantId: string, userId?: string) {
+    // 🛡️ SKILL GUARD: Validación de competencias académicas
+    if (userId) {
+      const { SkillGuard } = await import('@/lib/academy/skill-guard');
+      const validation = await SkillGuard.canStartWorkOrder(workOrderId, tenantId, userId);
+      
+      if (!validation.allowed) {
+        throw new Error(validation.message);
+      }
+    }
+
     const wo = await prisma.workOrder.findUnique({
       where: { id: workOrderId, tenantId },
-      include: { bom: true }
+      include: { 
+        bom: true,
+        materialRequirements: { include: { lot: true } }
+      }
     });
 
     if (!wo) throw new Error('Orden de producción no encontrada');
     if (wo.status !== 'PLANNED') throw new Error('La orden ya ha sido iniciada o cancelada');
 
-    const components = wo.bom.components as any[]; // [{ itemId, quantity }]
-
-    // Registrar consumo en logs y ajustar stock
-    for (const comp of components) {
-      await prisma.productionLog.create({
+    // Registrar consumo por lote
+    for (const req of wo.materialRequirements) {
+      const pLog = await prisma.productionLog.create({
         data: {
           tenantId,
           workOrderId,
           action: 'CONSUMPTION',
-          itemId: comp.itemId,
-          quantity: comp.quantity * wo.quantityToMake
+          catalogoItemId: req.catalogItemId,
+          quantity: req.reservedQty,
+          lotId: req.lotId
         }
       });
+      
+      await AuditLogService.signProductionLog(pLog.id, tenantId);
 
-      // Descontar del stock global (Almacén por defecto o asignado)
-      // Nota: Aquí se podría integrar lógica de selección de almacén específica
-      await prisma.stockMovement.create({
-        data: {
-          tenantId,
-          itemId: comp.itemId,
-          quantity: -(comp.quantity * wo.quantityToMake),
-          type: 'CONSUMPTION',
-          reference: `WO-${wo.id}`,
-          description: `Consumo para producción OP #${wo.batchNumber}`
-        }
+      // Descontar del stock por lote
+      await StockService.registerMovement({
+        tenantId,
+        warehouseId: 'MAIN_WH', // Por simplificar para demo, en real vendría de la reserva
+        catalogoItemId: req.catalogItemId,
+        lotId: req.lotId || undefined,
+        quantity: -req.reservedQty,
+        type: 'CONSUMPTION',
+        referenceId: `WO-${wo.id}`,
+        reason: `Consumo para producción OP #${wo.batchNumber}`
       });
     }
 
@@ -72,39 +88,63 @@ export class ProductionService {
   }
 
   /**
-   * Finalizar producción: Registra el producto terminado y cierra la orden
+   * Finalizar producción: Registra el producto terminado en un nuevo lote y cierra la orden
    */
   static async completeProduction(workOrderId: string, tenantId: string, quantityProduced: number) {
     const wo = await prisma.workOrder.findUnique({
       where: { id: workOrderId, tenantId },
-      include: { bom: true }
+      include: { 
+        bom: true,
+        qualityChecks: { include: { point: true } }
+      }
     });
 
     if (!wo || wo.status !== 'IN_PROGRESS') throw new Error('Estado de orden inválido para finalizar');
 
-    // Registrar salida de producto terminado
-    await prisma.productionLog.create({
+    // 🛡️ VALIDACIÓN DE CALIDAD: Bloqueo si hay inspecciones obligatorias pendientes o fallidas
+    const mandatoryChecks = wo.qualityChecks.filter(qc => qc.point.mandatory);
+    const hasFailed = mandatoryChecks.some(qc => qc.status === 'FAILED');
+    const isPending = mandatoryChecks.length === 0; // Si no hay registros de puntos obligatorios
+
+    if (hasFailed) throw new Error('No se puede cerrar la orden: Existen controles de calidad fallidos.');
+    if (isPending) throw new Error('No se puede cerrar la orden: Se requieren inspecciones de calidad obligatorias.');
+
+    // 1. Crear el nuevo Lote de Inventario (Entra en QUARANTINE)
+    const newLot = await prisma.inventoryLot.create({
+      data: {
+        tenantId,
+        catalogItemId: wo.bom.productId,
+        batchNumber: wo.batchNumber,
+        status: 'QUARANTINE'
+      }
+    });
+
+    // 2. Registrar salida de producto terminado vinculado al nuevo lote
+    const pLog = await prisma.productionLog.create({
       data: {
         tenantId,
         workOrderId,
         action: 'OUTPUT',
-        itemId: wo.bom.productId,
-        quantity: quantityProduced
-      }
-    });
-
-    await prisma.stockMovement.create({
-      data: {
-        tenantId,
-        itemId: wo.bom.productId,
+        catalogoItemId: wo.bom.productId,
         quantity: quantityProduced,
-        type: 'PRODUCTION_OUTPUT',
-        reference: `WO-${wo.id}`,
-        description: `Entrada por producción finalizada OP #${wo.batchNumber}`
+        lotId: newLot.id
       }
     });
 
-    return await prisma.workOrder.update({
+    await AuditLogService.signProductionLog(pLog.id, tenantId);
+
+    await StockService.registerMovement({
+      tenantId,
+      warehouseId: 'MAIN_WH',
+      catalogoItemId: wo.bom.productId,
+      lotId: newLot.id,
+      quantity: quantityProduced,
+      type: 'PRODUCTION_OUTPUT',
+      referenceId: `WO-${wo.id}`,
+      reason: `Entrada por producción finalizada OP #${wo.batchNumber}`
+    });
+
+    const updatedWO = await prisma.workOrder.update({
       where: { id: workOrderId },
       data: { 
         status: 'COMPLETED', 
@@ -112,6 +152,30 @@ export class ProductionService {
         quantityProduced 
       }
     });
+
+    // Actualizar horas del activo si está vinculado
+    if (wo.assetId && wo.startDate) {
+      const hoursWorked = (updatedWO.endDate!.getTime() - wo.startDate.getTime()) / (1000 * 60 * 60);
+      await MaintenanceService.updateAssetUsage(wo.assetId, hoursWorked, tenantId);
+    }
+
+    // Calcular costos finales de la orden
+    await CostingService.calculateRealCost(workOrderId, tenantId);
+
+    // 🔗 VINCULACIÓN COMERCIAL: Si esta orden nació de un pedido (MTO)
+    const reservations = await prisma.orderReservation.findMany({
+      where: { workOrderId, tenantId, status: 'ACTIVE' },
+      include: { salesOrderItem: true }
+    });
+
+    for (const res of reservations) {
+      await prisma.salesOrderItem.update({
+        where: { id: res.salesOrderItemId },
+        data: { status: 'READY' }
+      });
+    }
+
+    return updatedWO;
   }
 
   /**
@@ -200,6 +264,8 @@ export class ProductionService {
         clientTimestamp: data.clientTimestamp ? new Date(data.clientTimestamp) : null
       }
     });
+    
+    await AuditLogService.signProductionLog(log.id, data.tenantId);
 
     await prisma.workOrder.update({
       where: { id: data.workOrderId },

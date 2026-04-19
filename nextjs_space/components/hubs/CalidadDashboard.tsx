@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { 
   ShieldCheck, 
   Search, 
@@ -13,14 +14,27 @@ import {
   Zap,
   Filter,
   MoreVertical,
-  Activity
+  Activity,
+  ClipboardCheck,
+  History,
+  AlertTriangle,
+  Microscope,
+  FileText,
+  Settings,
+  Download,
+  ShieldAlert
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
+import { motion, AnimatePresence } from 'framer-motion'
 
 export default function CalidadDashboard() {
+  const searchParams = useSearchParams()
+  const section = searchParams.get('section') || 'inspecciones'
+  const [isInspectorActive, setIsInspectorActive] = useState(false)
+
   const stats = [
     { label: 'Inspecciones Hoy', value: '45', icon: ShieldCheck, color: 'text-blue-500', bg: 'bg-blue-500/10' },
     { label: 'No Conformidades', value: '3', icon: AlertOctagon, color: 'text-rose-500', bg: 'bg-rose-500/10' },
@@ -28,23 +42,37 @@ export default function CalidadDashboard() {
     { label: 'Reportes Firmados', value: '1,240', icon: Fingerprint, color: 'text-purple-500', bg: 'bg-purple-500/10' },
   ]
 
-  const recentChecks = [
-    { id: 'QC-7821', point: 'Resistencia Estructural', target: 'Work Order #1024', status: 'PASSED', time: 'Hace 10 min' },
-    { id: 'QC-7820', point: 'Voltaje Salida DC', target: 'Work Order #1024', status: 'PASSED', time: 'Hace 25 min' },
-    { id: 'QC-7819', point: 'Acabado Estético', target: 'Project: Villa Marina', status: 'FAILED', time: 'Hace 1 hora' },
-  ]
+  const handleTabChange = (tabId: string) => {
+    const url = new URL(window.location.href);
+    if (tabId === 'inspecciones') url.searchParams.delete('section');
+    else url.searchParams.set('section', tabId);
+    window.history.pushState({}, '', url);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }
 
   return (
-    <div className="space-y-8 pb-10">
-      {/* Header */}
+    <div className="space-y-8 pb-20">
+      {/* Header Dinámico */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-4xl font-black tracking-tight uppercase">Garantía de Calidad (QC)</h1>
-          <p className="text-muted-foreground font-medium text-sm">Trazabilidad criptográfica y auditoría industrial.</p>
+          <h1 className="text-4xl font-black tracking-tight uppercase">
+            {section === 'incidencias' ? 'No Conformidades' : section === 'ia' ? 'QC Intelligence IA' : section === 'config' ? 'Puntos de Control' : 'Garantía de Calidad (QC)'}
+          </h1>
+          <p className="text-muted-foreground font-medium text-sm">
+            {section === 'incidencias' ? 'Gestión de fallos críticos y acciones correctivas industriales.' : 
+             section === 'ia' ? 'Analítica avanzada de anomalías y predicción de fallos por Gemma.' : 
+             section === 'config' ? 'Configuración de reglas de aceptación y parámetros técnicos.' : 
+             'Trazabilidad criptográfica y auditoría industrial de alta fidelidad.'}
+          </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" className="rounded-xl font-bold uppercase text-[10px] h-10 px-4">
-            <FileSearch className="w-4 h-4 mr-2" /> Puntos Control
+          <Button 
+             variant="outline" 
+             onClick={() => handleTabChange('config')}
+             className="rounded-xl font-bold uppercase text-[10px] h-10 px-4"
+          >
+            <Settings className="w-4 h-4 mr-2" />
+            Configurar Reglas
           </Button>
           <Button className="rounded-xl font-bold uppercase text-[10px] h-10 px-4 shadow-lg shadow-primary/20">
             <Plus className="w-4 h-4 mr-2" /> Nueva Inspección
@@ -52,6 +80,56 @@ export default function CalidadDashboard() {
         </div>
       </div>
 
+      {/* Selector Visual de Pestana */}
+      <div className="flex bg-slate-100 p-1 rounded-2xl w-fit">
+        {[
+          { id: 'inspecciones', label: 'Inspecciones', icon: ShieldCheck },
+          { id: 'incidencias', label: 'Incidencias', icon: AlertOctagon },
+          { id: 'ia', label: 'Auditoría IA', icon: Zap },
+          { id: 'config', label: 'Criterios', icon: FileSearch }
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => handleTabChange(tab.id)}
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${
+              section === tab.id ? 'bg-white shadow-md text-primary' : 'text-muted-foreground hover:bg-white/50'
+            }`}
+          >
+            <tab.icon className="w-4 h-4" />
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Renderizado de Secciones */}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={section}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.2 }}
+        >
+          {section === 'inspecciones' && <InspectionsList stats={stats} />}
+          {section === 'incidencias' && <NonConformities />}
+          {section === 'ia' && <AIAuditory />}
+          {section === 'config' && <ControlPoints />}
+        </motion.div>
+      </AnimatePresence>
+    </div>
+  )
+}
+
+function InspectionsList({ stats }: { stats: any[] }) {
+  const recentChecks = [
+    { id: 'QC-7821', point: 'Resistencia Estructural', target: 'Work Order #1024', status: 'PASSED', time: 'Hace 10 min' },
+    { id: 'QC-7820', point: 'Voltaje Salida DC', target: 'Work Order #1024', status: 'PASSED', time: 'Hace 25 min' },
+    { id: 'QC-7819', point: 'Acabado Estético', target: 'Project: Villa Marina', status: 'FAILED', time: 'Hace 1 hora' },
+    { id: 'QC-7818', point: 'Presión Hidráulica', target: 'Work Order #1022', status: 'PASSED', time: 'Hace 2 horas' },
+  ]
+
+  return (
+    <div className="space-y-8">
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat, i) => (
@@ -73,16 +151,18 @@ export default function CalidadDashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Recent Quality Checks */}
         <Card className="lg:col-span-8 border-none shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <div>
               <CardTitle className="text-lg font-bold uppercase">Registro de Inspecciones</CardTitle>
               <CardDescription>Reportes vinculados a producción y proyectos.</CardDescription>
             </div>
-            <Button variant="ghost" size="icon" className="rounded-full">
-              <Filter className="w-4 h-4 text-muted-foreground" />
-            </Button>
+            <div className="flex items-center gap-2">
+               <div className="relative w-48 hidden md:block">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <input className="w-full pl-9 pr-3 py-2 bg-slate-50 border-none rounded-xl text-xs font-bold" placeholder="Filtrar por ID..." />
+               </div>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
@@ -105,7 +185,7 @@ export default function CalidadDashboard() {
                     <Badge className={`${check.status === 'PASSED' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'} border-none px-3 font-black uppercase text-[9px]`}>
                       {check.status}
                     </Badge>
-                    <div className="p-1 px-2 rounded-lg bg-slate-100 text-[8px] font-black text-slate-400 flex items-center gap-1">
+                    <div className="hidden sm:flex p-1 px-2 rounded-lg bg-slate-100/50 text-[8px] font-black text-slate-400 items-center gap-1 border border-slate-100">
                        <Fingerprint className="w-3 h-3" /> HASH SECURE
                     </div>
                     <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
@@ -115,57 +195,193 @@ export default function CalidadDashboard() {
                 </div>
               ))}
             </div>
-            <Button variant="link" className="w-full mt-4 text-[10px] font-black uppercase text-muted-foreground">Ver historial completo</Button>
           </CardContent>
         </Card>
 
-        {/* AI Quality Insights */}
         <div className="lg:col-span-4 space-y-6">
           <Card className="border-none shadow-sm bg-indigo-950 text-white overflow-hidden group">
             <CardHeader className="relative z-10 pb-2">
               <div className="flex items-center gap-2 mb-1">
                 <Zap className="w-4 h-4 text-indigo-400" />
-                <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400">Gemma QC Intelligence</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400">Gemma Insights</span>
               </div>
-              <CardTitle className="text-xl font-bold tracking-tight">Análisis de Anomalías</CardTitle>
+              <CardTitle className="text-xl font-bold tracking-tight">Anomalía Detectada</CardTitle>
             </CardHeader>
             <CardContent className="relative z-10 space-y-4 pt-2">
-              <div className="p-4 rounded-xl bg-indigo-900/40 border border-white/10 text-xs text-indigo-100 leading-relaxed">
-                "Detectado patrón de fallo en <span className="text-white font-bold underline">Paneles Solares X1</span>. Los reportes QA indican que el lote de <span className="text-white font-bold">SolarTech Inc</span> presenta un 15% más de no conformidades."
-              </div>
-              <Button className="w-full rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white text-[10px] font-black uppercase tracking-widest h-12">
-                Generar Auditoría de Lote
+              <p className="text-xs text-indigo-200 leading-relaxed">
+                "Detectado patrón de fallo del 15% en Lote SolarTech #442. Se recomienda pausar producción."
+              </p>
+              <Button className="w-full rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white text-[10px] font-black uppercase tracking-widest h-12 shadow-lg shadow-indigo-500/20">
+                Auditar Lote
               </Button>
             </CardContent>
-            {/* Subtle light effect */}
-            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/20 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-indigo-500/30 transition-all opacity-50" />
-          </Card>
-
-          <Card className="border-none shadow-sm overflow-hidden">
-             <CardHeader className="pb-3 border-b border-slate-50">
-                <CardTitle className="text-sm font-black uppercase">No Conformidades Críticas</CardTitle>
-             </CardHeader>
-             <CardContent className="p-0">
-                <div className="divide-y divide-slate-50">
-                   {[1, 2].map((i) => (
-                     <div key={i} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                        <div className="flex items-start gap-3">
-                           <div className="mt-1 h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
-                           <div>
-                              <p className="text-xs font-bold leading-tight">Fisura en soldadura de soporte</p>
-                              <p className="text-[10px] text-muted-foreground font-black uppercase mt-1">Nivel: Crítico • OP #1021</p>
-                           </div>
-                        </div>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
-                           <MoreVertical className="w-4 h-4" />
-                        </Button>
-                     </div>
-                   ))}
-                </div>
-             </CardContent>
           </Card>
         </div>
       </div>
     </div>
+  )
+}
+
+function NonConformities() {
+  const issues = [
+    { id: 'NC-2024-001', title: 'Fisura en Soldadura', level: 'CRITICAL', status: 'OPEN', date: '12 ABR' },
+    { id: 'NC-2024-002', title: 'Desviación de Voltaje', level: 'WARNING', status: 'IN_REVIEW', date: '14 ABR' },
+    { id: 'NC-2024-003', title: 'Error de Lacado', level: 'LOW', status: 'RESOLVED', date: '15 ABR' },
+  ]
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+         <Card className="border-none bg-rose-500 text-white">
+            <CardContent className="p-6">
+               <p className="text-[10px] font-black uppercase opacity-60 tracking-widest">Abiertas y Críticas</p>
+               <p className="text-3xl font-black mt-1">12</p>
+            </CardContent>
+         </Card>
+         <Card className="border-none bg-amber-500 text-white">
+            <CardContent className="p-6">
+               <p className="text-[10px] font-black uppercase opacity-60 tracking-widest">En Análisis</p>
+               <p className="text-3xl font-black mt-1">24</p>
+            </CardContent>
+         </Card>
+         <Card className="border-none bg-emerald-500 text-white">
+            <CardContent className="p-6">
+               <p className="text-[10px] font-black uppercase opacity-60 tracking-widest">Resueltas (30d)</p>
+               <p className="text-3xl font-black mt-1">142</p>
+            </CardContent>
+         </Card>
+      </div>
+
+      <Card className="border-none shadow-sm">
+         <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-lg font-bold uppercase">Gestión de No Conformidades</CardTitle>
+            <Button variant="outline" className="text-[10px] font-black uppercase h-8 px-4 border-2">
+               Nueva Incidencia
+            </Button>
+         </CardHeader>
+         <CardContent>
+            <div className="space-y-3">
+               {issues.map((issue) => (
+                  <div key={issue.id} className="p-4 rounded-2xl bg-slate-50 flex items-center justify-between border border-transparent hover:border-slate-200 transition-all">
+                     <div className="flex items-center gap-4">
+                        <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${
+                           issue.level === 'CRITICAL' ? 'bg-rose-100 text-rose-600' : 
+                           issue.level === 'WARNING' ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'
+                        }`}>
+                           <AlertOctagon className="w-5 h-5" />
+                        </div>
+                        <div>
+                           <h4 className="font-bold text-sm tracking-tight">{issue.title}</h4>
+                           <p className="text-[10px] text-muted-foreground font-black uppercase">{issue.id} • Detectada {issue.date}</p>
+                        </div>
+                     </div>
+                     <div className="flex items-center gap-4">
+                        <Badge className={`${
+                           issue.status === 'OPEN' ? 'bg-rose-50 text-rose-600' :
+                           issue.status === 'IN_REVIEW' ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'
+                        } border-none font-black text-[8px] px-2`}>
+                           {issue.status}
+                        </Badge>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
+                           <MoreVertical className="w-4 h-4" />
+                        </Button>
+                     </div>
+                  </div>
+               ))}
+            </div>
+         </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function AIAuditory() {
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+       <Card className="lg:col-span-8 border-none shadow-sm overflow-hidden">
+          <CardHeader>
+             <CardTitle className="text-lg font-bold uppercase">Auditoría de Anomalías Gemma QC</CardTitle>
+             <CardDescription>Escaneo autónomo de materiales y procesos en tiempo real.</CardDescription>
+          </CardHeader>
+          <CardContent className="p-10 flex flex-col items-center justify-center space-y-6">
+             <div className="relative">
+                <div className="absolute inset-0 bg-primary/20 rounded-full animate-ping" />
+                <div className="h-24 w-24 bg-primary text-white rounded-3xl flex items-center justify-center relative shadow-2xl">
+                   <Microscope className="w-10 h-10" />
+                </div>
+             </div>
+             <div className="text-center space-y-2">
+                <h3 className="text-lg font-black uppercase">Escaneo Activo</h3>
+                <p className="text-xs text-muted-foreground max-w-sm font-medium">
+                   Gemma está analizando los descriptores de imagen de la línea de producción #4.
+                </p>
+             </div>
+             <div className="w-full max-w-md space-y-2">
+                <div className="flex justify-between text-[10px] font-black uppercase">
+                   <span className="flex items-center gap-1"><Activity className="w-3 h-3" /> Integridad de Datos</span>
+                   <span>99.9%</span>
+                </div>
+                <Progress value={99.9} className="h-1" />
+             </div>
+          </CardContent>
+       </Card>
+
+       <div className="lg:col-span-4 space-y-6">
+          <Card className="border-none shadow-sm bg-rose-600 text-white">
+             <CardHeader>
+                <div className="flex items-center gap-2 mb-2">
+                   <ShieldAlert className="w-4 h-4" />
+                   <span className="text-[10px] font-black uppercase tracking-widest text-white/70">Alerta de Integridad</span>
+                </div>
+                <CardTitle className="text-xl font-bold tracking-tight">Fallo de Trazabilidad</CardTitle>
+             </CardHeader>
+             <CardContent className="space-y-4">
+                <p className="text-xs text-rose-100 leading-relaxed font-medium">
+                   "Se ha detectado una discrepancia en el HASH del reporte QC-7819. La firma digital no coincide con la base de datos de origen."
+                </p>
+                <Button className="w-full bg-white text-rose-600 hover:bg-white/90 font-black uppercase text-[10px] h-12 rounded-xl">
+                   Investigar Brecha
+                </Button>
+             </CardContent>
+          </Card>
+       </div>
+    </div>
+  )
+}
+
+function ControlPoints() {
+  const rules = [
+    { category: 'Mecánico', point: 'Tolerancia de Fisura', limit: '0.05mm', criticity: 'HIGH' },
+    { category: 'Eléctrico', point: 'Rango de Voltaje', limit: '220V +/- 5%', criticity: 'CRITICAL' },
+    { category: 'Estético', point: 'Uniformidad Lacado', limit: 'Grade A', criticity: 'LOW' },
+  ]
+
+  return (
+    <Card className="border-none shadow-sm">
+       <CardHeader>
+          <CardTitle className="text-lg font-bold uppercase">Criterios de Aceptación</CardTitle>
+          <CardDescription>Reglas de negocio aplicadas automáticamente en las inspecciones.</CardDescription>
+       </CardHeader>
+       <CardContent>
+          <div className="space-y-4">
+             {rules.map((rule, i) => (
+                <div key={i} className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+                   <div>
+                      <span className="text-[9px] font-black text-primary uppercase bg-primary/10 px-2 py-0.5 rounded-full mb-2 inline-block">
+                         {rule.category}
+                      </span>
+                      <h4 className="font-bold text-sm">{rule.point}</h4>
+                      <p className="text-xs text-muted-foreground mt-1">Límite Aceptable: <span className="text-slate-900 font-black">{rule.limit}</span></p>
+                   </div>
+                   <Badge className={`${
+                      rule.criticity === 'CRITICAL' ? 'bg-rose-500 hover:bg-rose-500' : 'bg-slate-900 hover:bg-slate-900'
+                   } text-white border-none font-black text-[8px] px-3`}>
+                      {rule.criticity}
+                   </Badge>
+                </div>
+             ))}
+          </div>
+       </CardContent>
+    </Card>
   )
 }

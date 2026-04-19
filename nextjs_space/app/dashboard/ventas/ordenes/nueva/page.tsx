@@ -105,6 +105,22 @@ export default function NuevaOrdenVentaPage() {
     clientePais: clientePais || undefined,
   });
 
+  // EFECTO: Auto-relleno fiscal cuando cambia el cliente
+  useEffect(() => {
+    if (config.cliente && items.length > 0) {
+      setItems(prev => prev.map(item => ({
+        ...item,
+        // Si el item no tiene un impuesto manual o del catálogo, usamos el default del cliente
+        tasaImpuesto: item.tasaImpuesto ?? config.cliente?.defaultIva ?? config.taxRate,
+        tasaRetencion: item.tasaRetencion ?? config.cliente?.defaultIrpf ?? 0,
+      })));
+      
+      if (config.cliente.defaultIrpf > 0) {
+        toast.info(`Aplicada Retención IRPF del ${config.cliente.defaultIrpf}% (Gobernanza)`);
+      }
+    }
+  }, [config.cliente?.id, config.cliente?.defaultIva, config.cliente?.defaultIrpf]);
+
   // Cargar datos iniciales
   useEffect(() => {
     const fetchData = async () => {
@@ -149,7 +165,7 @@ export default function NuevaOrdenVentaPage() {
     }
   }, [selectedLeadId, clientType, leads]);
 
-  // Calcular totales en tiempo real
+  // CALCULO DE TOTALES: Actualizado para incluir retención
   const totals = useMemo(() => {
     const lineItems = items.map(item => ({
       concepto: item.concepto,
@@ -157,6 +173,7 @@ export default function NuevaOrdenVentaPage() {
       precioUnitario: item.precioUnitario,
       descuento: item.descuento,
       tasaImpuesto: item.tasaImpuesto,
+      tasaRetencion: item.tasaRetencion,
     }));
     return calculateTotals(lineItems, descuentoGlobal);
   }, [items, descuentoGlobal, calculateTotals]);
@@ -252,6 +269,7 @@ export default function NuevaOrdenVentaPage() {
           precioUnitario: item.precioUnitario,
           descuento: item.descuento,
           porcentajeImpuesto: item.tasaImpuesto !== undefined ? item.tasaImpuesto : config.taxRate,
+          porcentajeRetencion: item.tasaRetencion || 0,
         })),
       };
 
@@ -420,10 +438,22 @@ export default function NuevaOrdenVentaPage() {
                       )}
 
                       {config.cliente && (
-                        <div className="p-4 rounded-xl bg-primary/5 border border-primary/10 space-y-2 text-sm">
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">{config.fiscalIdLabel}:</span>
-                            <span className="font-bold">{config.cliente.idFiscal || 'N/A'}</span>
+                        <div className="p-4 rounded-xl bg-primary/5 border border-primary/10 space-y-2 text-sm relative overflow-hidden">
+                          {config.cliente.isLocked && (
+                            <div className="absolute top-0 right-0 bg-amber-500 text-white text-[10px] px-2 py-0.5 font-bold uppercase tracking-tighter shadow-sm flex items-center gap-1 z-10">
+                              <ShieldCheck className="h-3 w-3" /> Fiscalmente Bloqueado
+                            </div>
+                          )}
+                          <div className="flex justify-between items-center">
+                            <span className="text-muted-foreground flex items-center gap-1.5">
+                              {config.fiscalIdLabel}:
+                              {config.cliente.nif && <Badge variant="outline" className="text-[10px] py-0 border-emerald-500/30 bg-emerald-500/5 text-emerald-700 h-4 px-1 gap-1">
+                                <CheckCircle2 className="h-2.5 w-2.5" /> Validado
+                              </Badge>}
+                            </span>
+                            <span className={cn("font-bold", config.cliente.isLocked && "text-muted-foreground")}>
+                              {config.cliente.nif || 'N/A'}
+                            </span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">País:</span>
@@ -582,19 +612,22 @@ export default function NuevaOrdenVentaPage() {
                               />
                             </div>
                             <div className="space-y-1">
-                              <Label className="text-[10px] uppercase text-muted-foreground font-bold">Dto %</Label>
+                              <Label className="text-[10px] uppercase text-muted-foreground font-bold">IVA %</Label>
                               <Input
                                 type="number"
-                                value={item.descuento}
-                                onChange={(e) => updateItem(item.id, 'descuento', parseFloat(e.target.value) || 0)}
+                                value={item.tasaImpuesto}
+                                onChange={(e) => updateItem(item.id, 'tasaImpuesto', parseFloat(e.target.value) || 0)}
                                 className="h-8 bg-background"
                               />
                             </div>
-                            <div className="space-y-1 flex flex-col justify-end">
-                              <Label className="text-[10px] uppercase text-muted-foreground font-bold text-right">Subtotal</Label>
-                              <p className="text-sm font-bold text-right h-8 flex items-center justify-end">
-                                {formatCurrency(item.cantidad * item.precioUnitario * (1 - item.descuento / 100))}
-                              </p>
+                            <div className="space-y-1">
+                              <Label className="text-[10px] uppercase text-muted-foreground font-bold">IRPF %</Label>
+                              <Input
+                                type="number"
+                                value={item.tasaRetencion}
+                                onChange={(e) => updateItem(item.id, 'tasaRetencion', parseFloat(e.target.value) || 0)}
+                                className="h-8 bg-background text-primary font-bold"
+                              />
                             </div>
                           </div>
                         </div>
@@ -719,6 +752,12 @@ export default function NuevaOrdenVentaPage() {
                   <span className="text-muted-foreground font-medium uppercase text-[10px]">{config.taxName} ({config.taxRate}%)</span>
                   <span className="font-semibold">{formatCurrency(totals.impuesto)}</span>
                 </div>
+                {totals.retencion > 0 && (
+                  <div className="flex justify-between text-sm text-primary">
+                    <span className="font-medium uppercase text-[10px]">Retención IRPF</span>
+                    <span className="font-bold">-{formatCurrency(totals.retencion)}</span>
+                  </div>
+                )}
               </div>
 
               <div className="pt-4 border-t space-y-3">

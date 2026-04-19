@@ -304,7 +304,19 @@ export function ConnectPlatformCard({
                 {isExpired ? `Reconectar ${meta.name}` : `Conectar con ${meta.name}`}
                 <ExternalLink className="h-3 w-3 opacity-50" />
               </Button>
-            ) : null}
+            ) : (
+              <Button
+                onClick={() => {
+                  const el = document.getElementById('advanced-config')
+                  if (el) el.scrollIntoView({ behavior: 'smooth' })
+                  else toast.info('Revisa la sección de Configuración Avanzada al final de la página')
+                }}
+                className="rounded-xl h-9 text-[10px] font-black uppercase tracking-widest gap-2 w-full bg-slate-100 text-slate-500 hover:bg-slate-200 border border-slate-200"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                Configurar Meta App
+              </Button>
+            )}
 
             {/* Opción de token manual como alternativa */}
             <button

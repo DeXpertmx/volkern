@@ -10,7 +10,18 @@ export interface FiscalConfig {
   currencyCode: string;
   currencySymbol: string;
   emisor: any;
-  cliente: any;
+  cliente: {
+    id: string;
+    nombre: string;
+    email: string;
+    nif: string | null;
+    tipo: string | null;
+    pais: string;
+    defaultIva: number;
+    defaultIrpf: number;
+    isLocked: boolean;
+    esExento: boolean;
+  } | null;
   esOperacionExtranjera: boolean;
   aplicaReverseCharge: boolean;
   esClienteExento: boolean;
@@ -86,9 +97,45 @@ export async function getFiscalConfig(
     const esOperacionExtranjera = paisEmisor !== paisCliente;
     const aplicaReverseCharge = esOperacionExtranjera && EU_COUNTRIES.includes(paisEmisor) && EU_COUNTRIES.includes(paisCliente);
     
-    // Buscar tasa de IVA: primero la configurada, luego la predeterminada del país
+    // Buscar PerfilFiscalCliente para obtener defaults
+    let perfilFiscal = null;
+    let clienteData = null;
+
+    if (options?.contactId) {
+      perfilFiscal = await prisma.perfilFiscalCliente.findUnique({
+        where: { contactId: options.contactId },
+        include: { contact: true }
+      });
+      if (perfilFiscal?.contact) {
+        clienteData = {
+          id: perfilFiscal.contact.id,
+          nombre: perfilFiscal.contact.nombre,
+          email: perfilFiscal.contact.email,
+        };
+      }
+    } else if (options?.leadId) {
+      perfilFiscal = await prisma.perfilFiscalCliente.findUnique({
+        where: { leadId: options.leadId },
+        include: { lead: true }
+      });
+      if (perfilFiscal?.lead) {
+        clienteData = {
+          id: perfilFiscal.lead.id,
+          nombre: perfilFiscal.lead.nombre,
+          email: perfilFiscal.lead.email,
+        };
+      }
+    }
+
+    // Buscar tasa de IVA: primero la configurada en el perfil, luego la predeterminada del país
     const tasaPais = tasas.find(t => t.pais === paisEmisor && t.tipo?.toLowerCase() === 'iva');
     let taxRate = tasaPais?.porcentaje ?? TASAS_IVA_PREDETERMINADAS[paisEmisor]?.general ?? 21;
+    
+    // PRIORIDAD: Si el cliente tiene un IVA predeterminado, lo usamos (siempre que no sea extranjero exento)
+    if (perfilFiscal && !esOperacionExtranjera) {
+      taxRate = Number(perfilFiscal.defaultIva);
+    }
+
     if (esOperacionExtranjera || aplicaReverseCharge) taxRate = 0;
 
     const currency = CURRENCY_BY_COUNTRY[paisEmisor] || { code: 'USD', symbol: '$', name: 'Dólar' };
@@ -103,15 +150,26 @@ export async function getFiscalConfig(
         id: emisor.id,
         razonSocial: emisor.razonSocial,
         nombreComercial: emisor.nombreComercial,
-        idFiscal: (emisor as any).idFiscal || '',
+        idFiscal: (emisor as any).idFiscal || (emisor as any).nif || '',
         pais: emisor.pais,
         email: emisor.email,
         telefono: emisor.telefono,
       } : null,
-      cliente: null,
+      cliente: perfilFiscal ? {
+        id: clienteData?.id || '',
+        nombre: clienteData?.nombre || perfilFiscal.razonSocial || '',
+        email: clienteData?.email || '',
+        nif: perfilFiscal.nif,
+        tipo: perfilFiscal.tipo,
+        pais: perfilFiscal.country || 'ES',
+        defaultIva: Number(perfilFiscal.defaultIva),
+        defaultIrpf: Number(perfilFiscal.defaultIrpf),
+        isLocked: perfilFiscal.isLocked,
+        esExento: perfilFiscal.exentoImpuestos,
+      } : null,
       esOperacionExtranjera,
       aplicaReverseCharge,
-      esClienteExento: false,
+      esClienteExento: perfilFiscal?.exentoImpuestos || false,
       tasasDisponibles: tasas.map(t => ({
         id: t.id, nombre: t.nombre, codigo: t.codigo, porcentaje: t.porcentaje, tipo: t.tipo,
       })),

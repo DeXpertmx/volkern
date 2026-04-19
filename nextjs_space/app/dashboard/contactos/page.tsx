@@ -344,7 +344,7 @@ export default function ContactosPage() {
   // Estadísticas
   const totalPersons = contacts.filter((c) => c.tipo === 'person').length
   const totalCompanies = contacts.filter((c) => c.tipo === 'company').length
-  const totalDeals = contacts.reduce((acc, c) => acc + c._count.deals, 0)
+  const totalDeals = contacts.reduce((acc, c) => acc + (c._count?.deals || 0), 0)
 
   if (loading) {
     return (

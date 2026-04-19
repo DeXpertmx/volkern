@@ -16,17 +16,18 @@ export const useNotesStore = create<NotesState>((set) => ({
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
-export function useNotes(leadId: string) {
+export function useNotes(leadId?: string, contactId?: string) {
   const { setNotes } = useNotesStore();
+  const entityId = leadId || contactId;
+  const apiBase = leadId ? `/api/leads/${leadId}` : `/api/contacts/${contactId}`;
 
   const { data, error, mutate, isLoading } = useSWR(
-    leadId ? `/api/leads/${leadId}/notes` : null,
+    entityId ? `${apiBase}/notes` : null,
     fetcher,
     {
-      refreshInterval: 5000, // Polling cada 5 segundos para tiempo real simulado
+      refreshInterval: 5000,
       onSuccess: (data) => {
         const notesArray = Array.isArray(data) ? data : (data.notes || []);
-        // Ordenar por fecha descendente
         const sortedNotes = [...notesArray].sort((a, b) => 
           new Date(b.fechaCreacion).getTime() - new Date(a.fechaCreacion).getTime()
         );

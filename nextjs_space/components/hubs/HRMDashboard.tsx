@@ -1,177 +1,273 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { 
   Users, 
   Wallet, 
-  TrendingDown, 
-  Heart, 
-  Search, 
-  Plus, 
-  UserPlus, 
-  Calendar, 
-  ArrowRight,
-  ShieldAlert,
-  GraduationCap,
-  Briefcase,
-  MoreVertical,
-  Lock,
-  Eye
+  Lock, 
+  Unlock, 
+  Umbrella,
+  GripVertical,
+  ShieldCheck,
+  Rocket
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
+import { motion, AnimatePresence } from 'framer-motion'
+import { ResponsiveGridLayout, useContainerWidth, Layout } from 'react-grid-layout'
+import 'react-grid-layout/css/styles.css'
+import 'react-resizable/css/styles.css'
+import debounce from 'lodash.debounce'
+import { mutate } from 'swr'
+
+// HR Widgets
+import { VacationCalendar } from '@/components/hr/vacation-calendar'
+import { ExpenseApprovalFeed } from '@/components/hr/expense-approval-feed'
+import { VacationRequestModal } from '@/components/hr/vacation-request-modal'
+import { IATeamAnalytics } from '@/components/hr/ia-team-analytics'
+import { SecurityKillSwitch } from '@/components/hr/SecurityKillSwitch'
+import { TrustProtocolLogs } from '@/components/sovereignty/trust-protocol-logs'
+import { PayrollVault } from '@/components/hr/PayrollVault'
+
+// Layout Inicial de RRHH (12 columnas)
+const HR_DEFAULT_LAYOUTS: { lg: Layout[] } = {
+  lg: [
+    { i: 'tinder', x: 0, y: 0, w: 4, h: 6 },
+    { i: 'ia-analytics', x: 4, y: 0, w: 8, h: 6 },
+    { i: 'calendar', x: 0, y: 6, w: 8, h: 6, minW: 6, minH: 4 },
+    { i: 'kill-switch', x: 8, y: 6, w: 4, h: 6 },
+    { i: 'audit', x: 0, y: 12, w: 12, h: 4 },
+  ]
+}
 
 export default function HRMDashboard() {
-  const stats = [
-    { label: 'Total Empleados', value: '124', icon: Users, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-    { label: 'Nómina Mensual', value: '••••••', icon: Wallet, color: 'text-emerald-500', bg: 'bg-emerald-500/10', encrypted: true },
-    { label: 'Riesgo Rotación', value: '4.2%', icon: TrendingDown, color: 'text-rose-500', bg: 'bg-rose-500/10' },
-    { label: 'Engagement Score', value: '88/100', icon: Heart, color: 'text-purple-500', bg: 'bg-purple-500/10' },
-  ]
+  const searchParams = useSearchParams()
+  const activeOffboardingId = searchParams.get('offboarding')
 
-  const employees = [
-    { name: 'Carlos Mendoza', role: 'Ingeniero Sr.', dept: 'Operaciones', risk: 'LOW', status: 'Active' },
-    { name: 'Ana García', role: 'Project Manager', dept: 'Comercial', risk: 'HIGH', status: 'On Leave' },
-    { name: 'Roberto Jasso', role: 'Técnico Campo', dept: 'Instalaciones', risk: 'MEDIUM', status: 'Active' },
-  ]
+  const [activeTab, setActiveTab] = useState<'overview' | 'nominas'>('overview')
+  const [isVacationModalOpen, setIsVacationModalOpen] = useState(false)
+  const [vacationInitialData, setVacationInitialData] = useState<any>(null)
+  
+  // Grid Context
+  const [layouts, setLayouts] = useState(HR_DEFAULT_LAYOUTS)
+  const [isLocked, setIsLocked] = useState(true)
+  const [mounted, setMounted] = useState(false)
+  const { width, containerRef } = useContainerWidth()
+
+  useEffect(() => { setMounted(true) }, [])
+
+  // Cargar Layout de RRHH
+  useEffect(() => {
+    if (!mounted) return
+    const fetchLayout = async () => {
+      try {
+        const res = await fetch('/api/v1/user/layout?type=hr')
+        if (res.ok) {
+          const { layout } = await res.json()
+          if (layout) setLayouts(layout)
+        }
+      } catch (e) {
+        console.error('Error fetching HR layout:', e)
+      }
+    }
+    fetchLayout()
+  }, [mounted])
+
+  // Persistir Layout de RRHH (Debounced)
+  const persistLayout = useMemo(() => debounce(async (newLayouts: any) => {
+    try {
+      await fetch('/api/v1/user/layout?type=hr', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ layout: newLayouts })
+      })
+    } catch (e) {
+      console.error('Error persisting HR layout:', e)
+    }
+  }, 2000), [])
+
+  const onLayoutChange = (currentLayout: Layout[], allLayouts: { [key: string]: Layout[] }) => {
+    if (!isLocked) {
+      setLayouts(allLayouts)
+      persistLayout(allLayouts)
+    }
+  }
+
+  const WidgetWrapper = ({ id, children }: { id: string, children: React.ReactNode }) => (
+    <div key={id} className="group relative h-full w-full">
+      {!isLocked && (
+        <div className="drag-handle absolute top-4 left-4 z-[100] bg-white shadow-2xl border-2 border-primary/20 rounded-xl p-2 cursor-grab active:cursor-grabbing hover:scale-110 transition-all opacity-0 group-hover:opacity-100">
+          <GripVertical className="h-4 w-4 text-primary" />
+        </div>
+      )}
+      {children}
+    </div>
+  )
+
+  if (!mounted) return null
 
   return (
-    <div className="space-y-8 pb-10">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="space-y-8 pb-20" ref={containerRef}>
+      <VacationRequestModal 
+        open={isVacationModalOpen} 
+        setOpen={setIsVacationModalOpen}
+        initialData={vacationInitialData}
+        onSuccess={() => mutate('/api/erp/hr/vacations')}
+      />
+
+      {/* Header con Soberanía */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h1 className="text-4xl font-black tracking-tight uppercase">Talento & Nómina (HRM)</h1>
-          <p className="text-muted-foreground font-medium text-sm">Gestión de capital humano y bóveda de seguridad Vault 2.0.</p>
+          <h1 className="text-4xl font-black uppercase tracking-tight">RRHH Dynamic Canvas</h1>
+          <p className="text-muted-foreground font-medium text-sm flex items-center gap-2 mt-1">
+             <ShieldCheck className="h-4 w-4 text-emerald-500" />
+             Gestión adaptativa de capital humano y soberanía operacional.
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" className="rounded-xl font-bold uppercase text-[10px] h-10 px-4">
-            <Lock className="w-4 h-4 mr-2" /> Desbloquear Bóveda
+        <div className="flex items-center gap-3">
+          <div className="flex bg-slate-100 p-1 rounded-2xl border mr-4">
+             <button 
+               onClick={() => setActiveTab('overview')}
+               className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'overview' ? 'bg-white shadow-sm text-slate-900 border' : 'text-slate-400 hover:text-slate-600'}`}
+             >
+                Global View
+             </button>
+             <button 
+               onClick={() => setActiveTab('nominas')}
+               className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'nominas' ? 'bg-white shadow-sm text-slate-900 border' : 'text-slate-400 hover:text-slate-600'}`}
+             >
+                Payroll Vault
+             </button>
+          </div>
+          
+          <Button 
+            className="rounded-2xl font-black uppercase text-[10px] h-11 px-6 shadow-xl bg-slate-900 hover:bg-slate-800 text-white border border-slate-700 transition-all group"
+            onClick={async () => {
+              const res = await fetch('/api/v1/sovereignty/batch-sign', { method: 'POST', body: JSON.stringify({ category: 'hr' }) });
+              if (res.ok) mutate('/api/v1/sovereignty/audit-logs');
+            }}
+          >
+            <ShieldCheck className="w-4 h-4 mr-2 text-emerald-400 group-hover:scale-125 transition-transform" />
+            Sello del CEO (Firma Digital)
           </Button>
-          <Button className="rounded-xl font-bold uppercase text-[10px] h-10 px-4 shadow-lg shadow-primary/20">
-            <UserPlus className="w-4 h-4 mr-2" /> Nuevo Empleado
+          <Button 
+            onClick={() => setIsVacationModalOpen(true)}
+            className="rounded-2xl font-black uppercase text-[10px] h-11 px-6 shadow-xl shadow-primary/20"
+          >
+            <Umbrella className="w-4 h-4 mr-2" /> Solicitar Vacaciones
           </Button>
         </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((stat, i) => (
-          <Card key={i} className="border-none shadow-sm hover:shadow-md transition-all">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className={`p-2.5 rounded-xl ${stat.bg} ${stat.color}`}>
-                  <stat.icon className="w-5 h-5" />
-                </div>
-                {stat.encrypted && <Badge className="bg-slate-100 text-slate-500 border-none font-black text-[8px] uppercase">Vault 2.0</Badge>}
-              </div>
-              <div className="space-y-1">
-                <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">{stat.label}</p>
-                <div className="flex items-center gap-2">
-                   <p className="text-2xl font-black tracking-tighter">{stat.value}</p>
-                   {stat.encrypted && <Eye className="w-4 h-4 text-slate-300 cursor-pointer" />}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Employee Directory */}
-        <Card className="lg:col-span-8 border-none shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <div>
-              <CardTitle className="text-lg font-bold uppercase">Directorio de Talento</CardTitle>
-              <CardDescription>Gestión activa de la plantilla industrial.</CardDescription>
+      <AnimatePresence mode="wait">
+        {activeTab === 'overview' ? (
+          <motion.div
+            key="overview"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.2 }}
+          >
+            <div className="flex justify-end mb-6">
+               <Button 
+                  variant={isLocked ? "outline" : "default"}
+                  onClick={() => setIsLocked(!isLocked)}
+                  className="rounded-xl font-bold uppercase text-[9px] h-9 px-4 transition-all"
+               >
+                  {isLocked ? <Lock className="w-3 h-3 mr-2" /> : <Unlock className="w-3 h-3 mr-2" />}
+                  {isLocked ? "Ajustar Bento" : "Bloquear"}
+               </Button>
             </div>
-            <div className="relative w-48">
-               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-               <input className="w-full pl-9 pr-3 py-2 bg-slate-50 border-none rounded-xl text-xs" placeholder="Buscar..." />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {employees.map((emp, i) => (
-                <div key={i} className="group p-4 rounded-2xl bg-slate-50 border border-transparent hover:border-slate-200 hover:bg-white transition-all flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="h-10 w-10 bg-indigo-100 rounded-xl flex items-center justify-center font-bold text-indigo-600 text-xs">
-                       {emp.name.split(' ').map(n => n[0]).join('')}
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-sm tracking-tight">{emp.name}</h4>
-                      <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">{emp.role} • {emp.dept}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-8">
-                    <div className="hidden md:block w-24">
-                       <span className="text-[9px] font-black text-muted-foreground uppercase">Retención</span>
-                       <div className="flex items-center gap-2 mt-1">
-                          <Progress value={emp.risk === 'HIGH' ? 30 : (emp.risk === 'MEDIUM' ? 60 : 95)} className="h-1" />
-                       </div>
-                    </div>
-                    <Badge className={`${emp.risk === 'LOW' ? 'bg-emerald-50 text-emerald-600' : (emp.risk === 'MEDIUM' ? 'bg-amber-50 text-amber-600' : 'bg-rose-50 text-rose-600')} border-none px-3 font-black uppercase text-[9px]`}>
-                      RIESGO {emp.risk}
-                    </Badge>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
-                      <ArrowRight className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* AI HR Insights */}
-        <div className="lg:col-span-4 space-y-6">
-          <Card className="border-none shadow-sm bg-rose-950 text-white overflow-hidden group">
-            <CardHeader className="relative z-10 pb-2">
-              <div className="flex items-center gap-2 mb-1">
-                <ShieldAlert className="w-4 h-4 text-rose-400" />
-                <span className="text-[10px] font-black uppercase tracking-widest text-rose-400">Gemma Talent Lookout</span>
+            
+            <ResponsiveGridLayout
+              className="layout"
+              layouts={layouts}
+              breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
+              cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
+              rowHeight={100}
+              width={width || 1200}
+              draggableHandle=".drag-handle"
+              isDraggable={!isLocked}
+              isResizable={!isLocked}
+              onLayoutChange={onLayoutChange}
+              margin={[24, 24]}
+              compactType="vertical"
+            >
+              <div key="tinder">
+                <WidgetWrapper id="tinder">
+                  <motion.div whileHover={{ scale: 1.01 }} className="h-full">
+                    <Card className="h-full border-none shadow-2xl rounded-[2.5rem] bg-white overflow-hidden p-6">
+                      <CardHeader className="p-0 mb-6">
+                          <CardTitle className="text-lg font-black uppercase tracking-tight flex items-center gap-2">
+                            <Wallet className="w-5 h-5 text-primary" />
+                            Gastos Proactivos
+                          </CardTitle>
+                          <CardDescription className="text-[10px] font-bold uppercase tracking-widest">Feed de Aprobación Rápida</CardDescription>
+                      </CardHeader>
+                      <div className="h-[calc(100%-80px)]">
+                        <ExpenseApprovalFeed />
+                      </div>
+                    </Card>
+                  </motion.div>
+                </WidgetWrapper>
               </div>
-              <CardTitle className="text-xl font-bold tracking-tight">Retención Crítica</CardTitle>
-            </CardHeader>
-            <CardContent className="relative z-10 space-y-4 pt-2">
-              <div className="p-4 rounded-xl bg-rose-900/40 border border-white/10 text-xs text-rose-100 leading-relaxed shadow-inner">
-                "Detectado aumento de carga del 22% en <span className="text-white font-bold">Instalaciones</span>. Ana García muestra señales de burnout debido a la asignación en 3 proyectos paralelos."
-              </div>
-              <Button className="w-full rounded-xl bg-rose-500 hover:bg-rose-400 text-white text-[10px] font-black uppercase tracking-widest h-12 shadow-lg shadow-rose-500/20">
-                Ver Plan de Mitigación
-              </Button>
-            </CardContent>
-          </Card>
 
-          <Card className="border-none shadow-sm">
-             <CardHeader className="pb-3 flex flex-row items-center justify-between">
-                <CardTitle className="text-xs font-black uppercase flex items-center gap-2">
-                   <GraduationCap className="w-4 h-4 text-primary" />
-                   Training Maturity
-                </CardTitle>
-                <span className="text-[10px] font-bold text-primary">82% Global</span>
-             </CardHeader>
-             <CardContent className="space-y-4">
-                <div className="space-y-1">
-                   <div className="flex justify-between text-[9px] font-bold uppercase">
-                      <span>Procesos Planta</span>
-                      <span>95%</span>
-                   </div>
-                   <Progress value={95} className="h-1" />
-                </div>
-                <div className="space-y-1">
-                   <div className="flex justify-between text-[9px] font-bold uppercase">
-                      <span>Seguridad Industrial</span>
-                      <span>68%</span>
-                   </div>
-                   <Progress value={68} className="h-1 bg-amber-100" />
-                </div>
-             </CardContent>
-          </Card>
-        </div>
-      </div>
+              <div key="ia-analytics">
+                <WidgetWrapper id="ia-analytics">
+                  <IATeamAnalytics />
+                </WidgetWrapper>
+              </div>
+
+              <div key="calendar">
+                <WidgetWrapper id="calendar">
+                  <VacationCalendar 
+                    onRequestClick={(data) => {
+                      setVacationInitialData(data)
+                      setIsVacationModalOpen(true)
+                    }} 
+                  />
+                </WidgetWrapper>
+              </div>
+
+              <div key="kill-switch">
+                <WidgetWrapper id="kill-switch">
+                  <SecurityKillSwitch 
+                      tenantId="default" 
+                      employeeId={activeOffboardingId || undefined}
+                      onCompleteAction={(item) => {
+                        fetch('/api/v1/sovereignty/audit-logs', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              level: 'INFO',
+                              message: `[SECURITY_OFFBOARDING] Revocación completada: ${item.resource} (${item.env}). Acción: ${item.action}.`,
+                            })
+                        });
+                      }}
+                  />
+                </WidgetWrapper>
+              </div>
+
+              <div key="audit">
+                <WidgetWrapper id="audit">
+                  <TrustProtocolLogs category="hr" />
+                </WidgetWrapper>
+              </div>
+            </ResponsiveGridLayout>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="nominas"
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            transition={{ duration: 0.2 }}
+          >
+             <PayrollVault />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

@@ -64,6 +64,7 @@ export const POST = withTenantAuth(async (req, auth) => {
       logoUrl,
       colorPrimario,
       esPrincipal = false,
+      verifactuEnabled = false,
     } = body
 
     // 1. Validaciones requeridas
@@ -125,6 +126,7 @@ export const POST = withTenantAuth(async (req, auth) => {
         logoUrl,
         colorPrimario,
         esPrincipal,
+        verifactuEnabled,
         activo: true
       }
     })

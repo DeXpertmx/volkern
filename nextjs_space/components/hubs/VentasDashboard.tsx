@@ -1,280 +1,402 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import React, { useState } from 'react'
+import { 
+  ShoppingCart, 
+  Package, 
+  Truck, 
+  CheckCircle2, 
+  Clock, 
+  AlertTriangle, 
+  Plus, 
+  Search, 
+  Filter, 
+  ArrowRight, 
+  MoreVertical,
+  Cpu,
+  ShieldCheck,
+  User,
+  Calendar,
+  DollarSign,
+  Loader2,
+  FileText,
+  MapPin,
+  Barcode
+} from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Users, Target, DollarSign, TrendingUp, Calendar, CheckSquare, Clock, Phone, Video, MoreHorizontal, CheckCircle2, Trophy, Bot } from 'lucide-react'
-import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Progress } from '@/components/ui/progress'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { format } from 'date-fns'
-import { es } from 'date-fns/locale'
-import { TrainingLeaderboard } from '@/components/analytics/TrainingLeaderboard'
+import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import useSWR from 'swr'
+import { toast } from 'sonner'
+import { motion, AnimatePresence } from 'framer-motion'
 
-export function VentasDashboard() {
-  const [metrics, setMetrics] = useState<any>(null)
-  const [appointments, setAppointments] = useState<any[]>([])
-  const [tasks, setTasks] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
+const fetcher = (url: string) => fetch(url).then(res => res.json())
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true)
-      try {
-        const [analyticsRes, dashboardRes, tasksRes] = await Promise.all([
-          fetch('/api/analytics/dashboard'),
-          fetch('/api/dashboard'),
-          fetch('/api/tasks?status=pending&limit=5')
-        ])
+export default function VentasDashboard() {
+  const [section, setSection] = useState('pedidos')
+  const { data: orders, mutate } = useSWR('/api/erp/sales/orders', fetcher)
 
-        const analyticsData = await analyticsRes.json()
-        const dashboardData = await dashboardRes.json()
-        const tasksData = await tasksRes.json()
-
-        setMetrics(analyticsData)
-        setAppointments(dashboardData.proximasCitas || [])
-        // Asegurarse de que tasks sea siempre un array incluso si hay error o campos vacíos
-        setTasks(Array.isArray(tasksData) ? tasksData : [])
-      } catch (error) {
-        console.error('Error fetching dashboard data:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchData()
-  }, [])
-
-  if (loading) return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 animate-pulse">
-      {[1, 2, 3, 4].map(i => <div key={i} className="h-32 bg-muted rounded-3xl" />)}
-    </div>
-  )
+  const stats = [
+    { label: 'Pedidos Hoy', value: '14', icon: ShoppingCart, color: 'text-blue-600', bg: 'bg-blue-50' },
+    { label: 'En Producción', value: '8', icon: Cpu, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+    { label: 'Listos Despacho', value: '12', icon: Package, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+    { label: 'En Ruta', value: '5', icon: Truck, color: 'text-amber-600', bg: 'bg-amber-50' },
+  ]
 
   return (
-    <div className="space-y-6">
-      {/* KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="rounded-3xl border-none shadow-lg bg-gradient-to-br from-blue-600 to-blue-800 text-white transform hover:-translate-y-1 transition-all duration-300">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-bold uppercase tracking-widest opacity-80 flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              Leads Totales
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-black tracking-tight">{metrics?.leads?.total?.toLocaleString() || '1,248'}</div>
-            <div className="text-[11px] font-bold mt-2 opacity-90 flex items-center gap-1 bg-white/20 w-max px-2 py-0.5 rounded-full">
-              <TrendingUp className="h-3 w-3" /> +{metrics?.leads?.nuevosEsteMes || '124'} este mes
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-3xl border-none shadow-lg bg-white border border-border/50 hover:shadow-xl transition-all duration-300">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-              <Target className="h-4 w-4 text-purple-500" />
-              Conversiones
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-black text-foreground tracking-tight">{metrics?.conversiones?.total?.toLocaleString() || '342'}</div>
-            <div className="text-[11px] font-bold mt-2 text-purple-600 flex items-center gap-1 bg-purple-100 w-max px-2 py-0.5 rounded-full">
-              <TrendingUp className="h-3 w-3" /> TASA 27.4%
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-3xl border-none shadow-lg bg-white border border-border/50 hover:shadow-xl transition-all duration-300">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-              <DollarSign className="h-4 w-4 text-emerald-500" />
-              Ingresos Mensuales
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-black text-foreground tracking-tight">${metrics?.ingresos?.total?.toLocaleString() || '45,290'}</div>
-            <div className="flex items-center gap-2 mt-2">
-                <Progress value={75} className="h-2 bg-emerald-100" />
-                <span className="text-[10px] font-bold text-emerald-600">75% M2</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-3xl border-none shadow-lg bg-slate-950 text-white hover:shadow-2xl transition-all duration-300">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-bold uppercase tracking-widest opacity-80 flex items-center gap-2">
-              <TrendingUp className="h-4 w-4" />
-              Crecimiento
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-black tracking-tight">+{metrics?.leads?.cambio?.toFixed(1) || '18.4'}%</div>
-            <div className="text-[11px] font-bold mt-2 text-emerald-400 uppercase flex items-center gap-1 bg-emerald-400/20 w-max px-2 py-0.5 rounded-full">
-               TENDENCIA POSITIVA
-            </div>
-          </CardContent>
-        </Card>
+    <div className="p-6 space-y-8 bg-[#f8fafc] min-h-screen">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-black tracking-tight text-slate-900 uppercase">Hub de Ventas y Orquestación</h1>
+          <p className="text-slate-500 font-medium">Gestión E2E: Desde el pedido hasta la entrega final.</p>
+        </div>
+        <div className="flex items-center gap-3">
+           <Button className="rounded-xl font-black uppercase text-[10px] bg-white text-slate-900 border-slate-200 hover:bg-slate-50 shadow-sm">
+             <FileText className="w-4 h-4 mr-2" />
+             Reporte Margen
+           </Button>
+           <Button className="rounded-xl font-black uppercase text-[10px] bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200">
+             <Plus className="w-4 h-4 mr-2" />
+             Nuevo Pedido
+           </Button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Gráfico Principal */}
-        <Card className="col-span-1 lg:col-span-2 rounded-3xl border-none shadow-xl bg-background overflow-hidden relative">
-            <div className="absolute top-0 right-0 p-6 flex gap-2 z-10">
-                <Badge variant="secondary" className="bg-white/80 backdrop-blur">Esta Semana</Badge>
-            </div>
-            <CardHeader className="pb-0 pt-6 px-6 z-10 relative">
-                <CardTitle className="text-lg font-black tracking-tighter">Prospección Semanal</CardTitle>
-                <CardDescription>Crecimiento de leads nuevos por día</CardDescription>
-            </CardHeader>
-            <CardContent className="p-0 h-[280px]">
-                <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={metrics?.leadsPorDia || [
-                        { name: 'Lun', count: 0 },
-                        { name: 'Mar', count: 0 },
-                        { name: 'Mie', count: 0 },
-                        { name: 'Jue', count: 0 },
-                        { name: 'Vie', count: 0 },
-                        { name: 'Sab', count: 0 },
-                        { name: 'Dom', count: 0 },
-                    ]} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                        <defs>
-                            <linearGradient id="colorLeads" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4}/>
-                                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                            </linearGradient>
-                        </defs>
-                        <Tooltip 
-                          contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                          labelFormatter={(label) => `Día: ${label}`}
-                        />
-                        <Area type="monotone" dataKey="count" name="Leads" stroke="#3b82f6" fillOpacity={1} fill="url(#colorLeads)" strokeWidth={4} />
-                    </AreaChart>
-                </ResponsiveContainer>
-            </CardContent>
-        </Card>
-
-        {/* Citas de Hoy */}
-        <Card className="rounded-3xl border-none shadow-xl bg-white flex flex-col h-full">
-            <CardHeader className="bg-slate-50 border-b border-border/50 pb-4">
-                <div className="flex items-center justify-between">
-                    <CardTitle className="text-md font-bold flex items-center gap-2">
-                        <Calendar className="h-5 w-5 text-primary" /> 
-                        Agenda de Hoy
-                    </CardTitle>
-                    <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {stats.map((stat, i) => (
+          <Card key={i} className="border-none shadow-sm hover:shadow-md transition-all">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className={`p-2.5 rounded-xl ${stat.bg} ${stat.color}`}>
+                  <stat.icon className="w-5 h-5" />
                 </div>
-            </CardHeader>
-            <CardContent className="p-0 flex-1 overflow-auto">
-                <div className="divide-y divide-border/50">
-                    {appointments.length > 0 ? appointments.map((apt, i) => (
-                        <div key={i} className="p-4 hover:bg-slate-50 transition-colors flex items-start gap-4">
-                            <div className="flex flex-col items-center justify-center p-2 bg-primary/10 rounded-xl text-primary font-bold min-w-[60px] text-center">
-                                <span className="text-xs">{format(new Date(apt.fechaHora), 'HH:mm')}</span>
-                                <span className="text-[9px] uppercase">{format(new Date(apt.fechaHora), 'aaa')}</span>
-                            </div>
-                            <div className="flex-1 space-y-1">
-                                <h4 className="font-bold text-sm leading-none">{apt.servicio?.nombre || 'Cita'}</h4>
-                                <p className="text-xs text-muted-foreground flex items-center gap-1">
-                                    <Avatar className="h-4 w-4">
-                                      <AvatarFallback>{apt.lead?.nombre?.charAt(0)}</AvatarFallback>
-                                    </Avatar>
-                                    {apt.lead?.nombre} • {apt.servicio?.duracion || 30}m
-                                </p>
-                            </div>
-                            <div>
-                                {apt.servicio?.modalidad === 'video' ? <Video className="h-4 w-4 text-blue-500" /> : <Phone className="h-4 w-4 text-green-500" />}
-                            </div>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">{stat.label}</p>
+                <p className="text-2xl font-black tracking-tighter">{stat.value}</p>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <div className="flex bg-slate-100 p-1 rounded-2xl w-fit">
+        {[
+          { id: 'pedidos', label: 'Pedidos Activos', icon: ShoppingCart },
+          { id: 'orquestacion', label: 'Orquestador IA', icon: Cpu },
+          { id: 'logistica', label: 'Despachos', icon: Truck },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setSection(tab.id)}
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${
+              section === tab.id ? 'bg-white shadow-md text-primary' : 'text-muted-foreground hover:bg-white/50'
+            }`}
+          >
+            <tab.icon className="w-4 h-4" />
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={section}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.2 }}
+        >
+          {section === 'pedidos' && <SalesOrderList orders={orders} />}
+          {section === 'orquestacion' && <OrchestrationMonitor orders={orders} />}
+          {section === 'logistica' && <LogisticsMonitor />}
+        </motion.div>
+      </AnimatePresence>
+    </div>
+  )
+}
+
+function SalesOrderList({ orders }: { orders: any[] }) {
+  const displayOrders = orders || [
+    { 
+      id: '1', 
+      batchNumber: 'SO-8921', 
+      contact: { nombre: 'TechCorp Solutions' }, 
+      totalPrice: 12500, 
+      status: 'PROCESSING', 
+      priority: 'URGENT', 
+      createdAt: new Date().toISOString(), 
+      grossMargin: 24.5,
+      marginAlert: false,
+      promise: { promisedDate: new Date(Date.now() + 259200000).toISOString(), confidenceScore: 0.98 } 
+    },
+    { 
+      id: '2', 
+      batchNumber: 'SO-8922', 
+      contact: { nombre: 'Solar Dynamics' }, 
+      totalPrice: 4500, 
+      status: 'QUOTED', 
+      priority: 'NORMAL', 
+      createdAt: new Date().toISOString(), 
+      grossMargin: 8.2,
+      marginAlert: true,
+      promise: { promisedDate: new Date(Date.now() + 86400000).toISOString(), confidenceScore: 0.92 } 
+    },
+  ]
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <Card className="lg:col-span-8 border-none shadow-sm">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-lg font-bold uppercase">Cartera de Pedidos</CardTitle>
+              <CardDescription>Seguimiento de cumplimiento y compromisos.</CardDescription>
+            </div>
+            <div className="flex gap-2">
+              <Input placeholder="Buscar pedido..." className="w-64 h-9 rounded-xl text-xs" />
+              <Button variant="outline" size="icon" className="h-9 w-9 rounded-xl"><Filter className="w-4 h-4" /></Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {displayOrders.map((order: any) => (
+              <div key={order.id} className="p-5 rounded-2xl bg-white border border-slate-100 group hover:border-indigo-200 hover:shadow-lg hover:shadow-indigo-50/50 transition-all">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="h-12 w-12 rounded-xl bg-slate-50 flex items-center justify-center text-primary font-black border border-slate-100 shadow-sm">
+                      {order.batchNumber.split('-')[1]}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-bold text-sm tracking-tight">{order.contact?.nombre}</h4>
+                        <Badge className={`text-[8px] font-black uppercase ${
+                          order.priority === 'URGENT' ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'
+                        }`}>{order.priority}</Badge>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest mt-0.5">
+                        Pedido #{order.batchNumber} • {new Date(order.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-8">
+                    {order.promise && (
+                      <div className="hidden xl:block">
+                        <p className="text-[9px] font-black text-slate-400 uppercase">Promesa Entrega</p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-[10px] font-black text-slate-900">{new Date(order.promise.promisedDate).toLocaleDateString()}</span>
+                          <Badge className="bg-emerald-50 text-emerald-600 border-none text-[8px] h-4">
+                            {(order.promise.confidenceScore * 100).toFixed(0)}% CONF.
+                          </Badge>
                         </div>
-                    )) : (
-                      <div className="p-8 text-center text-muted-foreground flex flex-col items-center gap-2">
-                        <Calendar className="h-8 w-8 opacity-20" />
-                        <p className="text-sm font-medium">No hay citas para hoy</p>
                       </div>
                     )}
-                </div>
-            </CardContent>
-            <div className="p-4 border-t border-border/50 bg-slate-50 mt-auto rounded-b-3xl">
-                <Button className="w-full premium-gradient-primary rounded-xl" variant="outline">Ver Calendario Completo</Button>
-            </div>
-        </Card>
-      </div>
-
-      {/* Lista de Tareas */}
-      <Card className="rounded-3xl border-none shadow-xl overflow-hidden">
-        <CardHeader className="bg-slate-50 border-b border-border/50 flex flex-row items-center justify-between py-4">
-            <div className="flex items-center gap-3">
-                <div className="h-10 w-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
-                    <CheckSquare className="h-5 w-5" />
-                </div>
-                <div>
-                    <CardTitle className="text-lg font-bold">Tareas Pendientes</CardTitle>
-                    <CardDescription>Tienes {Array.isArray(tasks) ? tasks.filter(t => !t.completada).length : 0} tareas urgentes hoy.</CardDescription>
-                </div>
-            </div>
-            <Button size="sm" className="rounded-xl"><CheckSquare className="h-4 w-4 mr-2" /> Nueva Tarea</Button>
-        </CardHeader>
-        <CardContent className="p-0">
-            <div className="divide-y divide-border/50">
-                {tasks.length > 0 ? tasks.map((task, i) => (
-                    <div key={i} className={`p-4 flex items-center gap-4 hover:bg-slate-50 transition-colors ${task.completada ? 'opacity-60' : ''}`}>
-                        <button className="text-muted-foreground hover:text-primary transition-colors focus:outline-none">
-                            {task.completada ? <CheckCircle2 className="h-6 w-6 text-green-500" /> : <div className="h-6 w-6 rounded-full border-2 border-muted-foreground/30 hover:border-primary" />}
-                        </button>
-                        <div className="flex-1">
-                            <h4 className={`text-sm font-semibold ${task.completada ? 'line-through text-muted-foreground' : 'text-foreground'}`}>{task.titulo}</h4>
-                            <div className="flex items-center gap-3 mt-1">
-                                <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{task.lead?.nombre || 'General'}</span>
-                                <span className={`text-xs flex items-center gap-1 ${task.fechaVencimiento && new Date(task.fechaVencimiento) < new Date() ? 'text-red-500 font-bold' : 'text-muted-foreground'}`}>
-                                    <Clock className="h-3 w-3" /> {task.fechaVencimiento ? format(new Date(task.fechaVencimiento), 'dd MMM, HH:mm', { locale: es }) : 'Sin fecha'}
-                                </span>
-                            </div>
-                        </div>
-                        <Badge variant="outline" className={task.prioridad === 'alta' ? 'border-red-200 text-red-600 bg-red-50' : task.prioridad === 'media' ? 'border-yellow-200 text-yellow-600 bg-yellow-50' : 'border-slate-200 text-slate-600 bg-slate-50'}>
-                            {task.prioridad === 'alta' ? 'Alta' : task.prioridad === 'media' ? 'Media' : 'Baja'}
-                        </Badge>
+                    <div className="text-right">
+                       <p className="text-[9px] font-black text-slate-400 uppercase">Margen Est.</p>
+                       <div className="flex items-center gap-2">
+                          <p className={`text-sm font-black ${order.marginAlert ? 'text-rose-500' : 'text-emerald-500'}`}>
+                             {order.grossMargin?.toFixed(1)}%
+                          </p>
+                          {order.marginAlert && (
+                            <AlertTriangle className="w-3.5 h-3.5 text-rose-500 animate-pulse" />
+                          )}
+                       </div>
                     </div>
-                )) : (
-                  <div className="p-8 text-center text-muted-foreground flex flex-col items-center gap-2">
-                    <CheckSquare className="h-8 w-8 opacity-20" />
-                    <p className="text-sm font-medium">Todo al día. No hay tareas pendientes.</p>
+                    <div className="text-right min-w-[100px]">
+                       <p className="text-[9px] font-black text-slate-400 uppercase">Total Pedido</p>
+                       <p className="text-sm font-black text-slate-900">${order.totalPrice.toLocaleString()}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                       <Badge className={`rounded-full px-3 py-1 font-black text-[9px] uppercase border-none ${
+                         order.status === 'SHIPPED' ? 'bg-emerald-50 text-emerald-600' : 'bg-indigo-50 text-indigo-600'
+                       }`}>
+                         {order.status === 'SHIPPED' ? <Truck className="w-3 h-3 mr-1" /> : <Clock className="w-3 h-3 mr-1" />}
+                         {order.status}
+                       </Badge>
+                       <Button variant="ghost" size="icon" className="rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                         <MoreVertical className="w-4 h-4" />
+                       </Button>
+                    </div>
                   </div>
-                )}
-            </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </CardContent>
       </Card>
 
-      {/* Analytics Adicionales / Leaderboard */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="rounded-3xl border-none shadow-xl overflow-hidden h-full">
-          <CardHeader className="bg-gradient-to-r from-slate-900 to-slate-800 text-white flex flex-row items-center justify-between py-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 bg-yellow-400/20 rounded-xl flex items-center justify-center text-yellow-500">
-                <Trophy className="h-5 w-5" />
-              </div>
-              <div>
-                <CardTitle className="text-lg font-bold">Mejores Cerradores</CardTitle>
-                <CardDescription className="text-slate-400">Ranking basado en simulaciones de IA</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="p-6">
-            <TrainingLeaderboard />
-          </CardContent>
-        </Card>
-
-        {/* Placeholder para más métricas o tips de IA */}
-        <Card className="rounded-3xl border-none shadow-xl bg-blue-600 text-white p-8 flex flex-col justify-center relative overflow-hidden">
-          <div className="relative z-10">
-            <Badge className="bg-white/20 text-white border-none mb-4 tracking-widest font-black">VOLKERN COACH</Badge>
-            <h3 className="text-2xl font-black leading-tight mb-4">¿Sabías que el 80% de los negocios se cierran tras el 5to seguimiento?</h3>
-            <p className="text-blue-100 text-sm mb-6">Gemma 4 ha detectado que los agentes que usan el simulador de roleplay aumentan su tasa de cierre en un 15% semanal.</p>
-            <Button variant="secondary" className="w-max rounded-xl font-bold">Ver Tips Estratégicos</Button>
+      <div className="lg:col-span-4 space-y-6">
+        <Card className="border-none shadow-sm bg-indigo-950 text-white overflow-hidden relative">
+          <div className="absolute top-0 right-0 p-4 opacity-10">
+            <Cpu className="w-24 h-24" />
           </div>
-          <Bot className="absolute -bottom-10 -right-10 w-64 h-64 text-white/10" />
+          <CardHeader>
+             <div className="flex items-center gap-2 mb-2">
+                <Cpu className="h-4 w-4 text-primary" />
+                <span className="text-[10px] font-black uppercase tracking-widest text-primary">Gemma Sales Orchestrator</span>
+             </div>
+             <CardTitle className="text-xl font-bold tracking-tight">Análisis de Demanda</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+             <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+                <p className="text-xs text-slate-300 leading-relaxed italic">
+                   "He detectado un pico de demanda en Inversores Smart. Sugiero adelantar la producción de 20 unidades antes del viernes para evitar retrasos en SO-8921."
+                </p>
+             </div>
+             <div className="space-y-3">
+                <div className="flex items-center justify-between text-[10px] font-black uppercase">
+                   <span className="text-slate-400">Nivel de Servicio Est.</span>
+                   <span className="text-emerald-400">98.2%</span>
+                </div>
+                <div className="flex items-center justify-between text-[10px] font-black uppercase">
+                   <span className="text-slate-400">Riesgo de Quiebre</span>
+                   <span className="text-red-400">BAJO</span>
+                </div>
+             </div>
+          </CardContent>
         </Card>
       </div>
     </div>
-  );
+  )
+}
+
+function OrchestrationMonitor({ orders }: { orders: any[] }) {
+  const allItems = (orders || []).flatMap(order => 
+    (order.items || []).map((item: any) => ({
+      ...item,
+      orderBatch: order.batchNumber
+    }))
+  ).filter((item: any) => item.orchestrationStrategy);
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <Card className="lg:col-span-2 border-none shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-lg font-bold uppercase">Motor de Decisión Operativa</CardTitle>
+          <CardDescription>Visualización de la estrategia de cumplimiento por ítem.</CardDescription>
+        </CardHeader>
+        <CardContent>
+           <div className="space-y-6">
+              {allItems.length === 0 ? (
+                <p className="text-sm text-slate-500">No hay ítems con orquestación activa.</p>
+              ) : allItems.map((item: any, i: number) => (
+                <div key={item.id || i} className="relative pl-8 border-l-2 border-slate-100 pb-6 last:pb-0">
+                  <div className="absolute left-[-9px] top-0 h-4 w-4 rounded-full bg-white border-2 border-indigo-600 shadow-sm" />
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex items-center justify-between">
+                    <div>
+                      <h4 className="font-bold text-sm">{item.catalogItem?.nombre || 'Ítem'}</h4>
+                      <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                        Pedido {item.orderBatch} • Cantidad: {item.quantity} unidades
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <p className="text-[9px] font-black text-slate-400 uppercase">Estrategia</p>
+                        <Badge className={`text-[9px] font-black ${
+                          item.orchestrationStrategy === 'STOCK' ? 'bg-emerald-50 text-emerald-600' : 'bg-indigo-50 text-indigo-600'
+                        } border-none`}>{item.orchestrationStrategy}</Badge>
+                      </div>
+                      <div className="h-10 w-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center">
+                        {item.orchestrationStrategy === 'STOCK' ? <Barcode className="w-5 h-5 text-emerald-600" /> : <Cpu className="w-5 h-5 text-indigo-600" />}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+           </div>
+        </CardContent>
+      </Card>
+      
+      <div className="space-y-6">
+        <Card className="border-none shadow-sm bg-slate-950 text-white p-6">
+           <div className="flex items-center gap-3 mb-6">
+              <ShieldCheck className="w-8 h-8 text-primary" />
+              <div>
+                <h4 className="font-bold text-sm">Garantía de Suministro</h4>
+                <p className="text-[10px] text-slate-400 font-black uppercase">Filtro de integridad</p>
+              </div>
+           </div>
+           <p className="text-xs text-slate-300 leading-relaxed mb-6">
+             El orquestador solo permite prometer ítems que tienen lotes en estado <b>AVAILABLE</b> o capacidad de línea confirmada para la semana en curso.
+           </p>
+           <div className="space-y-4">
+              <div className="flex items-center gap-2 text-[10px] font-black uppercase text-emerald-400">
+                <CheckCircle2 className="w-3 h-3" /> Bloqueo Atómico Activo
+              </div>
+              <div className="flex items-center gap-2 text-[10px] font-black uppercase text-emerald-400">
+                <CheckCircle2 className="w-3 h-3" /> Validación Calidad E2E
+              </div>
+           </div>
+        </Card>
+      </div>
+    </div>
+  )
+}
+
+function LogisticsMonitor() {
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <Card className="lg:col-span-2 border-none shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-lg font-bold uppercase">Monitor de Despachos</CardTitle>
+          <CardDescription>Preparación de salida y seguimiento de ruta.</CardDescription>
+        </CardHeader>
+        <CardContent>
+           <div className="space-y-4">
+              {[
+                { id: 'SHP-1234', order: 'SO-8921', carrier: 'Volkern Fleet', status: 'SHIPPED', dest: 'Veracruz, MX' },
+                { id: 'SHP-1235', order: 'SO-8922', carrier: 'DHL Express', status: 'DELIVERED', dest: 'Madrid, ES' },
+              ].map((shp, i) => (
+                <div key={i} className="p-4 rounded-2xl bg-white border border-slate-100 flex items-center justify-between group">
+                  <div className="flex items-center gap-4">
+                    <div className="h-10 w-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400">
+                       <Truck className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-sm tracking-tight">{shp.id}</h4>
+                      <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest">Pedido {shp.order} • {shp.dest}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-6">
+                    <div className="text-right hidden md:block">
+                       <p className="text-[9px] font-black text-slate-400 uppercase">Transportista</p>
+                       <p className="text-[10px] font-bold text-slate-900">{shp.carrier}</p>
+                    </div>
+                    <Badge className={`text-[9px] font-black uppercase ${
+                      shp.status === 'DELIVERED' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'
+                    }`}>{shp.status}</Badge>
+                    <Button variant="ghost" size="icon" className="rounded-full"><ArrowRight className="w-4 h-4" /></Button>
+                  </div>
+                </div>
+              ))}
+           </div>
+        </CardContent>
+      </Card>
+      
+      <div className="space-y-6">
+        <Card className="border-none shadow-sm overflow-hidden">
+           <div className="h-32 bg-slate-200 relative">
+              <div className="absolute inset-0 flex items-center justify-center text-slate-400 flex-col gap-2">
+                 <MapPin className="w-6 h-6" />
+                 <span className="text-[9px] font-black uppercase">Mapa de Entregas Activo</span>
+              </div>
+           </div>
+           <CardContent className="p-6">
+              <h4 className="font-bold text-sm mb-2">Zonas de Mayor Actividad</h4>
+              <div className="space-y-3">
+                 <div className="flex items-center justify-between text-[10px] font-black uppercase">
+                    <span className="text-slate-400">Ciudad de México</span>
+                    <span>42%</span>
+                 </div>
+                 <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                    <div className="h-full bg-indigo-500 w-[42%]" />
+                 </div>
+              </div>
+           </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
 }

@@ -6,9 +6,7 @@
  * y proporciona funciones de verificación de permisos.
  */
 
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/db';
 
 // Tipos de permisos
 export type PermissionModule = 

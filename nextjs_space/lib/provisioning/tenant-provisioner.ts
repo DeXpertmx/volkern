@@ -142,6 +142,7 @@ export async function provisionTenant(input: TenantProvisioningInput): Promise<T
                 plan: 'starter',
                 estado: 'trial',
                 nexusEnabled: true,
+                vaultSeed: crypto.randomBytes(32).toString('hex'),
                 fechaTrialInicio: new Date(),
                 fechaTrialFin: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 días
             },

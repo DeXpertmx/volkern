@@ -8,6 +8,7 @@ import { skills, listSkills } from '@/lib/skills';
 const SkillRequestSchema = z.object({
   action_name: z.string(),
   payload: z.record(z.any()),
+  target_account_id: z.string().optional(),
 });
 
 /**
@@ -38,7 +39,6 @@ export const GET = withTenantAuth(async (req, auth) => {
 
 export const POST = withTenantAuth(async (req, auth) => {
   try {
-    // 1. Validar cuerpo de la petición (el auth ya fue validado por el wrapper)
     const body = await req.json();
     const result = SkillRequestSchema.safeParse(body);
 
@@ -49,9 +49,36 @@ export const POST = withTenantAuth(async (req, auth) => {
       }, { status: 400 });
     }
 
-    const { action_name, payload } = result.data;
-    const tenantId = auth.tenant!.id;
+    const { action_name, payload, target_account_id } = result.data;
+    let tenantId = auth.tenant!.id;
     const userId = auth.user?.id || null;
+
+    // --- LÓGICA DE AGENCIA: REGLA DE ORO (GOLDEN RULE) ---
+    // Si hay un target_account_id, validamos que sea hijo de la agencia
+    if (target_account_id && target_account_id !== tenantId) {
+      const isSuperadmin = auth.user?.role?.nombre === 'Superadmin';
+      const isAgency = auth.user?.accountType === 'AGENCY' || (auth.user as any)?.tenant?.accountType === 'AGENCY';
+
+      if (!isSuperadmin && !isAgency) {
+        return NextResponse.json({ error: 'Permisos insuficientes para ejecutar skills en otros tenants' }, { status: 403 });
+      }
+
+      if (!isSuperadmin) {
+        // Regla de Oro: Solo se puede operar en hijos directos
+        const isChild = await prisma.tenant.findFirst({
+          where: { id: target_account_id, parentId: tenantId }
+        });
+        
+        if (!isChild) {
+          return NextResponse.json({ 
+            error: 'Violación de jerarquía: El tenant destino no pertenece a tu agencia.' 
+          }, { status: 403 });
+        }
+      }
+
+      tenantId = target_account_id;
+      console.log(`[Skill-Handler] Rerouting skill '${action_name}' to child tenant ${target_account_id}`);
+    }
 
     // 2. Procesar acciones
     switch (action_name) {
@@ -208,6 +235,23 @@ export const POST = withTenantAuth(async (req, auth) => {
 
       default:
         return NextResponse.json({ error: `Acción '${action_name}' no soportada.` }, { status: 404 });
+    }
+
+    // --- AUDITORÍA DE USO (PHASE 2) ---
+    // Registramos el uso en el tenant destino para facturación y auditoría de la agencia
+    try {
+      await prisma.agentSkillLog.create({
+        data: {
+          userId: auth.user?.id || 'system',
+          tenantId: tenantId, // El tenant donde ocurrió la acción
+          apiKeyId: auth.apiKey?.id || null,
+          toolExecuted: action_name,
+          statusCode: 200,
+          payloadSummary: { action: action_name, timestamp: new Date().toISOString() }
+        }
+      });
+    } catch (logError) {
+      console.error('[Skill-Handler] Failed to log usage:', logError);
     }
 
   } catch (error: any) {

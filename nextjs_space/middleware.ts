@@ -9,6 +9,24 @@ export default withAuth(
 
     // Si no hay token, redirigir al login
     if (!token && !isPublicPath(path)) {
+      // Si es una ruta de miembro, verificar cookie propia
+      if (path.startsWith('/member')) {
+        const customerToken = req.cookies.get('customer_token')
+        if (!customerToken) {
+          return NextResponse.redirect(new URL('/member/login', req.url))
+        }
+        return NextResponse.next()
+      }
+
+      // Si es una ruta de academia, verificar cookie propia
+      if (path.startsWith('/academy')) {
+        const academyToken = req.cookies.get('academy_token')
+        if (!academyToken) {
+          return NextResponse.redirect(new URL('/academy/login', req.url))
+        }
+        return NextResponse.next()
+      }
+
       return NextResponse.redirect(new URL('/auth/login', req.url))
     }
 
@@ -53,18 +71,27 @@ function isPublicPath(path: string): boolean {
     '/api/catalogo',   // Catálogo - autenticación dual (API Keys)
     '/api/mcp',        // MCP Server - autenticación via API Key
     '/api/ai/',        // AI Skill Handler - autenticación via API Key
+    '/api/skills/',    // Agent Skills - manifest y ejecución via API Key
     '/api/signup',
     '/api/webhooks/',
     '/api/integrations/webhook/',  // Integration Layer webhooks
     '/api/integrations/telephony/webhook', // Telephony webhooks
     '/api/integraciones/google-calendar/sync-all',  // Endpoint para sincronización automática programada
+    '/api/admin/backup',                           // Backup automated reporting (API Key auth)
     '/payment/',
     '/_next/',
     '/favicon',
     '/robots',
     '/og-image',
     '/volkern',
+    '/api/v1/sovereignty/', // Canal de Soberanía e Integridad Graph
     '/p/',             // Public pages
+    '/portal/',        // Portal de Cliente Soberano
+    '/api/portal/',     // API del Portal de Cliente
+    '/member/login',   // Login del portal de cliente
+    '/api/customer/auth/', // API de auth de cliente
+    '/academy/login',  // Login de academia
+    '/api/academy/auth/', // API de auth de academia
     '/privacy',
     '/terms'
   ]

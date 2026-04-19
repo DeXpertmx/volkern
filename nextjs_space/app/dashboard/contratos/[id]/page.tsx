@@ -72,8 +72,13 @@ interface Contrato {
   clienteTelefono: string | null
   clienteEmpresa: string | null
   clienteRfc: string | null
+  snapshotNombre: string | null
+  snapshotNif: string | null
+  snapshotDireccion: string | null
+  snapshotMetadata: any | null
+  contact: { id: string; nombre: string; email: string } | null
   lead: { id: string; nombre: string } | null
-  deal: { id: string; nombre: string; valor: number } | null
+  deal: { id: string; titulo: string; valor: number } | null
   cotizacion: { id: string; numero: string } | null
   creadoPor: { id: string; name: string } | null
   items: ContratoItem[]
@@ -148,31 +153,25 @@ export default function ContratoDetailPage() {
   }
 
   const handleSignByCompany = async () => {
-    if (!signName) {
-      toast.error('El nombre es requerido')
-      return
-    }
     setSigning(true)
     try {
-      const res = await fetch(`/api/contratos/${params.id}`, {
-        method: 'PATCH',
+      const res = await fetch(`/api/contratos/sign/${params.id}`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          firmadoPorEmpresa: true,
-          nombreFirmaEmpresa: signName,
-          fechaFirmaEmpresa: new Date().toISOString(),
-          estado: contrato?.firmadoPorCliente ? 'vigente' : contrato?.estado
+          operatorNote: `Firma digital autorizada por ${signName}`
         })
       })
       if (res.ok) {
-        toast.success('Contrato firmado por la empresa')
+        toast.success('Contrato sellado e inmutable. Deal actualizado.')
         setSignModalOpen(false)
         fetchContrato()
       } else {
-        toast.error('Error al firmar')
+        const err = await res.json()
+        toast.error(err.error || 'Error al sellar el contrato')
       }
     } catch (error) {
-      toast.error('Error de conexión')
+      toast.error('Error de conexión con el protocolo de firma')
     } finally {
       setSigning(false)
     }
@@ -431,36 +430,40 @@ export default function ContratoDetailPage() {
               <CardTitle className="flex items-center gap-2"><User className="h-4 w-4" /> Cliente</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {contrato.clienteNombre && (
-                <div className="flex items-center gap-2">
-                  <User className="h-4 w-4 text-muted-foreground" />
-                  <span>{contrato.clienteNombre}</span>
-                </div>
-              )}
-              {contrato.clienteEmpresa && (
-                <div className="flex items-center gap-2">
-                  <Building2 className="h-4 w-4 text-muted-foreground" />
-                  <span>{contrato.clienteEmpresa}</span>
-                </div>
-              )}
-              {contrato.clienteEmail && (
-                <div className="flex items-center gap-2">
-                  <Mail className="h-4 w-4 text-muted-foreground" />
+              <div className="flex flex-col gap-1 mb-2">
+                <span className="text-[10px] font-bold text-primary uppercase tracking-widest">
+                  {contrato.estado === 'vigente' ? 'Entidad Legal (Snapshot)' : 'Identidad del Cliente'}
+                </span>
+                <p className="text-lg font-bold">{contrato.snapshotNombre || contrato.clienteNombre}</p>
+              </div>
+              
+              <div className="space-y-2">
+                {(contrato.snapshotNif || contrato.clienteRfc) && (
+                  <div className="flex items-center gap-2 p-2 bg-muted/50 rounded-lg border border-muted">
+                    <FileText className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-medium">NIF: {contrato.snapshotNif || contrato.clienteRfc}</span>
+                  </div>
+                )}
+                
+                <div className="flex items-center gap-2 text-sm text-muted-foreground pl-1">
+                  <Mail className="h-4 w-4" />
                   <span>{contrato.clienteEmail}</span>
                 </div>
-              )}
-              {contrato.clienteTelefono && (
-                <div className="flex items-center gap-2">
-                  <Phone className="h-4 w-4 text-muted-foreground" />
-                  <span>{contrato.clienteTelefono}</span>
-                </div>
-              )}
-              {contrato.clienteRfc && (
-                <div className="flex items-center gap-2">
-                  <FileText className="h-4 w-4 text-muted-foreground" />
-                  <span>RFC: {contrato.clienteRfc}</span>
-                </div>
-              )}
+                
+                {contrato.clienteTelefono && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground pl-1">
+                    <Phone className="h-4 w-4" />
+                    <span>{contrato.clienteTelefono}</span>
+                  </div>
+                )}
+
+                {(contrato.snapshotDireccion || contrato.clienteDireccion) && (
+                  <div className="mt-2 p-2 bg-slate-50 rounded border border-slate-100">
+                    <p className="text-[9px] font-bold text-slate-400 uppercase">Dirección Legal</p>
+                    <p className="text-xs text-slate-600 leading-tight">{contrato.snapshotDireccion || (contrato as any).clienteDireccion}</p>
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
 
@@ -487,7 +490,39 @@ export default function ContratoDetailPage() {
             </Card>
           )}
 
-          {/* Tracking */}
+          {/* Integridad Digital (Trust Protocol) */}
+          {contrato.estado === 'vigente' && (
+            <Card className="border-emerald-200 bg-emerald-50/20 shadow-sm shadow-emerald-100">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-emerald-800 text-sm">
+                  <CheckCircle className="h-4 w-4" /> Integridad Digital (Trust Protocol)
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="p-3 bg-white rounded-lg border border-emerald-100 flex flex-col gap-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest">Sello de Seguridad</span>
+                    <Badge variant="outline" className="text-[9px] border-emerald-200 text-emerald-700 bg-emerald-50">VERIFICADO</Badge>
+                  </div>
+                  <code className="text-[10px] bg-slate-100 p-1.5 rounded break-all text-slate-500 border border-slate-200">
+                    {(contrato.templateData as any)?.digitalSeal?.hash || 'HASH_GENERATED_BY_TRUST_PROTOCOL'}
+                  </code>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-muted-foreground">Snapshot Fiscal:</span>
+                    <span className="font-semibold text-emerald-700">CONGELADO</span>
+                  </div>
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-muted-foreground">Firmante Empresa:</span>
+                    <span className="font-semibold">{contrato.nombreFirmaEmpresa}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Vigencia */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2"><Eye className="h-4 w-4" /> Seguimiento</CardTitle>

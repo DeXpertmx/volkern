@@ -35,6 +35,7 @@ import { LeadAssignment } from '@/components/lead-assignment';
 import { LeadAttachments } from '@/components/dashboard/LeadAttachments';
 import { AISuggestionCard } from '@/components/ai/AISuggestionCard';
 import { RoleplaySimulator } from '@/components/training/RoleplaySimulator';
+import { FiscalOnboardingModal } from '@/components/modals/FiscalOnboardingModal';
 
 interface FieldDefinition {
   id: string;
@@ -98,6 +99,7 @@ export default function LeadDetailPage({
   const [fieldDefinitions, setFieldDefinitions] = useState<FieldDefinition[]>([]);
   const [calling, setCalling] = useState(false);
   const [isRoleplayOpen, setIsRoleplayOpen] = useState(false);
+  const [isFiscalModalOpen, setIsFiscalModalOpen] = useState(false);
 
   useEffect(() => {
     fetchLead();
@@ -184,15 +186,19 @@ export default function LeadDetailPage({
     }
   };
 
-  const handleConvert = async () => {
-    if (!confirm('¿Convertir este lead a contacto? Se creará un nuevo contacto y deal asociado.')) {
-      return;
-    }
+  const handleConvert = () => {
+    setIsFiscalModalOpen(true);
+  };
 
+  const handleFiscalConfirm = async (fiscalData: any) => {
     setIsConverting(true);
     try {
       const res = await fetch(`/api/leads/${params.id}/convert`, {
-        method: 'POST'
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ fiscalData })
       });
 
       const data = await res.json();
@@ -704,6 +710,14 @@ export default function LeadDetailPage({
           onClose={() => setIsRoleplayOpen(false)} 
         />
       )}
+
+      <FiscalOnboardingModal
+        isOpen={isFiscalModalOpen}
+        onClose={() => setIsFiscalModalOpen(false)}
+        leadName={lead.nombre}
+        onConfirm={handleFiscalConfirm}
+        isConverting={isConverting}
+      />
     </div>
   );
 }

@@ -63,7 +63,15 @@ export async function inventoryWatchdog(input: {
       if (users.length > 0) {
         const admin = users[0];
         
-        // Enviamos notificación multicanal (In-App + Telegram)
+        // Inline Keyboard para Telegram
+        const telegramButtons = {
+          inline_keyboard: [[
+            { text: '✅ Autorizar Compra', callback_data: `auth_buy:${item.catalogoItemId}:${tenantId}` },
+            { text: '❌ Rechazar', callback_data: `reject_buy:${item.catalogoItemId}:${tenantId}` }
+          ]]
+        };
+
+        // Enviamos notificación multicanal
         await notificationService.send(
           { 
             type: 'user', 
@@ -77,23 +85,20 @@ export async function inventoryWatchdog(input: {
             body: proactiveMessage,
             priority: 'urgent',
             actions: [
-              {
-                label: '🛒 Autorizar Compra',
-                url: actionUrl
-              }
+              { label: '🛒 Ver en Catálogo', url: actionUrl }
             ]
           },
-          { channel: 'in_app', priority: 'high' }, // Por defecto in_app, pero notificationService.send con 'urgent' y admin disparará Telegram si está configurado
+          { channel: 'in_app', priority: 'high' },
           context
-        );
+        ).catch(console.error);
 
-        // Intento forzado a Telegram si no se disparó por el dispatcher automático de email
-        notificationService.send(
-            { type: 'user', id: admin.id, telegramChatId: (admin.metadata as any)?.telegram_chat_id },
-            { body: proactiveMessage, actions: [{ label: '🛒 Autorizar Compra', url: actionUrl }] },
-            { channel: 'telegram', priority: 'urgent' },
-            context
-        ).catch(err => console.error('[Watchdog] Failed to dispatch urgent Telegram:', err));
+        // Disparo directo a Telegram con botones interactivos
+        const chatId = (admin.metadata as any)?.telegram_chat_id;
+        if (chatId) {
+          const { sendTelegramMessage } = await import('@/lib/telegram');
+          await sendTelegramMessage(chatId, proactiveMessage, undefined, telegramButtons)
+            .catch(err => console.error('[Watchdog] Failed to dispatch interactive Telegram:', err));
+        }
 
         notifications.push({
           itemId: item.catalogoItemId,

@@ -130,6 +130,12 @@ export default function CotizacionDetailPage() {
   const [sendMessage, setSendMessage] = useState('')
   const [downloadingPdf, setDownloadingPdf] = useState(false)
 
+  // Estados para conversión a orden
+  const [convertModalOpen, setConvertModalOpen] = useState(false)
+  const [converting, setConverting] = useState(false)
+  const [fechaEntrega, setFechaEntrega] = useState('')
+  const [notasOrden, setNotasOrden] = useState('')
+
   useEffect(() => {
     fetchCotizacion()
   }, [params.id])
@@ -242,6 +248,35 @@ export default function CotizacionDetailPage() {
     }
   }
 
+  const handleConvertOrder = async () => {
+    setConverting(true)
+    try {
+      const res = await fetch('/api/ordenes-venta/from-cotizacion', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cotizacionId: params.id,
+          fechaEntrega: fechaEntrega || undefined,
+          notas: notasOrden || undefined
+        })
+      })
+
+      const data = await res.json()
+      
+      if (res.ok && data.orden?.id) {
+        toast.success(data.mensaje || 'Orden de venta creada exitosamente')
+        setConvertModalOpen(false)
+        router.push(`/dashboard/ventas/ordenes/${data.orden.id}`)
+      } else {
+        toast.error(data.error || 'Error al convertir a orden')
+      }
+    } catch (error) {
+      toast.error('Error de red al convertir cotización')
+    } finally {
+      setConverting(false)
+    }
+  }
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('es-MX', {
       style: 'currency',
@@ -321,11 +356,21 @@ export default function CotizacionDetailPage() {
                 <CheckCircle className="h-4 w-4 mr-2" />
                 Marcar Aceptada
               </Button>
+              <Button onClick={() => setConvertModalOpen(true)} className="bg-emerald-600 hover:bg-emerald-700">
+                <FileText className="h-4 w-4 mr-2" />
+                Convertir a Orden
+              </Button>
               <Button variant="outline" onClick={() => handleUpdateEstado('rechazada')} className="text-red-600">
                 <XCircle className="h-4 w-4 mr-2" />
                 Marcar Rechazada
               </Button>
             </>
+          )}
+          {cotizacion.estado === 'aceptada' && (
+            <Button onClick={() => setConvertModalOpen(true)} className="bg-emerald-600 hover:bg-emerald-700">
+              <FileText className="h-4 w-4 mr-2" />
+              Convertir a Orden
+            </Button>
           )}
         </div>
       </div>
@@ -606,6 +651,56 @@ export default function CotizacionDetailPage() {
                 <Send className="h-4 w-4 mr-2" />
               )}
               Enviar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de conversión a orden */}
+      <Dialog open={convertModalOpen} onOpenChange={setConvertModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Convertir a Orden de Venta</DialogTitle>
+            <DialogDescription>
+              Esta acción creará una orden de venta formal heredando todos los items y precios de esta cotización ({cotizacion.numero}).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="fechaEntrega">Fecha de Entrega Estimada (Opcional)</Label>
+              <Input
+                id="fechaEntrega"
+                type="date"
+                value={fechaEntrega}
+                onChange={(e) => setFechaEntrega(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="notasOrden">Notas para la Orden (Opcional)</Label>
+              <Textarea
+                id="notasOrden"
+                value={notasOrden}
+                onChange={(e) => setNotasOrden(e.target.value)}
+                placeholder="Ej: Entrega urgente, requiere embalaje especial..."
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConvertModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleConvertOrder} 
+              disabled={converting}
+              className="bg-emerald-600 hover:bg-emerald-700"
+            >
+              {converting ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <CheckCircle className="h-4 w-4 mr-2" />
+              )}
+              Confirmar y Crear Orden
             </Button>
           </DialogFooter>
         </DialogContent>
