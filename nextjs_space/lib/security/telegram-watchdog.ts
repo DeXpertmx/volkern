@@ -88,4 +88,31 @@ ${icon} *VOLKERN SECURITY BRIEFING* ${icon}
       console.error('[Watchdog] Error al enviar Security Brief:', error);
     }
   }
+
+  /**
+   * Notifica sobre un nuevo LEAD capturado desde la web pública
+   */
+  static async sendLeadAlert(tenantId: string, lead: { name: string, email: string, source: string }) {
+    try {
+      const creds = await loadTelegramCredentials(tenantId);
+      if (!creds?.chatId) return;
+
+      const message = `
+🎯 *NUEVO LEAD CAPTURADO* 🎯
+*Nombre:* ${lead.name}
+*Email:* ${lead.email}
+*Fuente:* ${lead.source}
+
+_Acción Requerida: Inicia secuencia de Nurturing en el Marketing Hub._
+`.trim();
+
+      await sendTelegramMessage({
+        tenantId,
+        text: message,
+        parseMode: 'Markdown'
+      });
+    } catch (error) {
+      console.error('[Watchdog] Error al enviar alerta de lead:', error);
+    }
+  }
 }
