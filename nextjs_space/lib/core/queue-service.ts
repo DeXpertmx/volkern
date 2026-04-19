@@ -3,9 +3,9 @@ import { redisConnection } from './redis';
 
 // Definición de las colas principales del Hub de Marketing
 export const marketingQueues = {
-  SOCIAL_POSTS: new Queue('marketing:social-posts', { connection: redisConnection }),
-  CAMPAIGN_EMAILS: new Queue('marketing:campaign-emails', { connection: redisConnection }),
-  LEAD_NURTURING: new Queue('marketing:lead-nurturing', { connection: redisConnection }),
+  SOCIAL_POSTS: new Queue('marketing-social-posts', { connection: redisConnection }),
+  CAMPAIGN_EMAILS: new Queue('marketing-campaign-emails', { connection: redisConnection }),
+  LEAD_NURTURING: new Queue('marketing-lead-nurturing', { connection: redisConnection }),
 };
 
 /**

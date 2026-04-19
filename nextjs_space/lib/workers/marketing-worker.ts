@@ -7,7 +7,7 @@ import { prisma } from '../db';
  * Worker para procesar publicaciones sociales
  */
 export const socialWorker = new Worker(
-  'marketing:social-posts',
+  'marketing-social-posts',
   async (job: Job) => {
     const { postId } = job.data;
     console.log(`[Worker] Procesando publicación social: ${postId}`);
@@ -35,7 +35,7 @@ export const socialWorker = new Worker(
  * Worker para Nutrición de Leads (Nurturing)
  */
 export const leadWorker = new Worker(
-  'marketing:lead-nurturing',
+  'marketing-lead-nurturing',
   async (job: Job) => {
     // Lógica para enviar emails secuenciales, etc.
     console.log(`[Worker] Procesando nurturing para:`, job.data);
