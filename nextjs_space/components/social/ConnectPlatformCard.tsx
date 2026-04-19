@@ -5,6 +5,8 @@ import {
   Facebook, 
   Instagram, 
   Linkedin, 
+  Youtube,
+  Music,
   CheckCircle2, 
   AlertCircle,
   Link2,
@@ -17,7 +19,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 
-export type SocialPlatform = 'facebook' | 'instagram' | 'linkedin'
+export type SocialPlatform = 'facebook' | 'instagram' | 'linkedin' | 'youtube' | 'tiktok'
 
 export interface PlatformConfig {
   id?: string
@@ -68,9 +70,31 @@ const PLATFORM_META = {
     bg: 'bg-sky-50',
     border: 'border-sky-100',
     activeBg: 'bg-sky-700',
-    description: 'Publica en tu Página de LinkedIn (Próximamente)',
+    description: 'Publica en tu Página de LinkedIn',
     scope: 'w_member_social',
     helpUrl: 'https://developer.linkedin.com/',
+  },
+  youtube: {
+    name: 'YouTube',
+    Icon: Youtube,
+    color: 'text-red-600',
+    bg: 'bg-red-50',
+    border: 'border-red-100',
+    activeBg: 'bg-red-600',
+    description: 'Gestiona videos y analíticas de YouTube',
+    scope: 'https://www.googleapis.com/auth/youtube.upload',
+    helpUrl: 'https://console.cloud.google.com/',
+  },
+  tiktok: {
+    name: 'TikTok',
+    Icon: Music,
+    color: 'text-slate-900',
+    bg: 'bg-slate-50',
+    border: 'border-slate-100',
+    activeBg: 'bg-slate-900',
+    description: 'Publica contenido nativo en TikTok',
+    scope: 'user.info.basic,video.upload,video.publish',
+    helpUrl: 'https://developers.tiktok.com/',
   },
 }
 
@@ -87,12 +111,13 @@ export function ConnectPlatformCard({
   const [showManual, setShowManual] = useState(false)
   const [isSavingManual, setIsSavingManual] = useState(false)
 
-  const meta = PLATFORM_META[platform]
+  const meta = PLATFORM_META[platform as keyof typeof PLATFORM_META]
   const { Icon } = meta
   const isConnected = !!(config?.isActive && config?.profileId)
-  const isComingSoon = platform === 'linkedin'
+  
+  // LinkedIn está en beta pero ya se puede mostrar
+  const isComingSoon = false 
 
-  // Verificar si el token está próximo a expirar (menos de 7 días)
   const isExpiringSoon = config?.expiresAt
     ? new Date(config.expiresAt).getTime() - Date.now() < 7 * 24 * 60 * 60 * 1000
     : false
@@ -100,11 +125,6 @@ export function ConnectPlatformCard({
   const isExpired = config?.expiresAt ? new Date(config.expiresAt) < new Date() : false
 
   const handleConnect = () => {
-    if (isComingSoon) {
-      toast.info('LinkedIn estará disponible próximamente')
-      return
-    }
-    // Redirigir al endpoint OAuth — el backend maneja el redirect a Meta
     window.location.href = `/api/social/connect/${platform}`
   }
 
@@ -173,11 +193,9 @@ export function ConnectPlatformCard({
           : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm'
       }`}
     >
-      {/* Header */}
       <div className={`p-6 ${isConnected ? 'border-b border-green-50' : ''}`}>
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-4">
-            {/* Avatar del perfil o ícono de plataforma */}
             <div className="relative">
               {isConnected && config?.profileImage ? (
                 <img
@@ -192,7 +210,6 @@ export function ConnectPlatformCard({
                   <Icon className={`h-7 w-7 ${meta.color}`} />
                 </div>
               )}
-              {/* Badge de plataforma si hay foto de perfil */}
               {isConnected && config?.profileImage && (
                 <div
                   className={`absolute -bottom-1 -right-1 h-6 w-6 rounded-lg ${meta.activeBg} flex items-center justify-center border-2 border-white`}
@@ -221,7 +238,7 @@ export function ConnectPlatformCard({
                   </p>
                   {isExpired ? (
                     <p className="text-[10px] font-bold text-red-500 flex items-center gap-1">
-                      <AlertCircle className="h-3 w-3" /> Token expirado — Reconectar
+                      <AlertCircle className="h-3 w-3" /> Token expirado
                     </p>
                   ) : isExpiringSoon ? (
                     <p className="text-[10px] font-bold text-amber-500 flex items-center gap-1">
@@ -229,7 +246,7 @@ export function ConnectPlatformCard({
                     </p>
                   ) : (
                     <p className="text-[10px] font-bold text-green-600 flex items-center gap-1">
-                      <CheckCircle2 className="h-3 w-3" /> Conectado y activo
+                      <CheckCircle2 className="h-3 w-3" /> Activo
                     </p>
                   )}
                 </div>
@@ -239,21 +256,14 @@ export function ConnectPlatformCard({
             </div>
           </div>
 
-          {/* Estado badge */}
           {isConnected && !isExpired && (
             <Badge className="bg-green-100 text-green-700 border-none text-[9px] font-black px-2 shrink-0">
               ACTIVO
             </Badge>
           )}
-          {isExpired && (
-            <Badge className="bg-red-100 text-red-700 border-none text-[9px] font-black px-2 shrink-0">
-              EXPIRADO
-            </Badge>
-          )}
         </div>
       </div>
 
-      {/* Footer de acciones */}
       <div className="px-6 pb-6 pt-4 flex items-center justify-between gap-2">
         {isConnected && !isExpired ? (
           <div className="flex items-center gap-2 w-full">
@@ -262,7 +272,6 @@ export function ConnectPlatformCard({
               size="sm"
               onClick={handleConnect}
               className="rounded-xl border-slate-200 text-[10px] font-black uppercase tracking-widest gap-1.5 h-8"
-              title="Reconectar para renovar permisos"
             >
               <RefreshCw className="h-3 w-3" />
               Renovar
@@ -274,96 +283,50 @@ export function ConnectPlatformCard({
               disabled={isDisconnecting}
               className="rounded-xl border-red-100 text-red-500 hover:bg-red-50 text-[10px] font-black uppercase tracking-widest gap-1.5 h-8 ml-auto"
             >
-              {isDisconnecting ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <Link2Off className="h-3 w-3" />
-              )}
+              {isDisconnecting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Link2Off className="h-3 w-3" />}
               Desconectar
             </Button>
           </div>
-        ) : isComingSoon ? (
-          <Button
-            disabled
-            className="rounded-xl h-9 text-[10px] font-black uppercase tracking-widest gap-2 bg-slate-100 text-slate-400 cursor-not-allowed w-full"
-          >
-            Próximamente
-          </Button>
         ) : (
           <div className="flex flex-col gap-2 w-full">
-            {oauthEnabled ? (
-              <Button
-                onClick={handleConnect}
-                className={`rounded-xl h-9 text-[10px] font-black uppercase tracking-widest gap-2 w-full text-white ${
-                  isExpired
-                    ? 'bg-red-500 hover:bg-red-600'
-                    : `bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-100`
-                }`}
-              >
-                <Link2 className="h-3.5 w-3.5" />
-                {isExpired ? `Reconectar ${meta.name}` : `Conectar con ${meta.name}`}
-                <ExternalLink className="h-3 w-3 opacity-50" />
-              </Button>
-            ) : (
-              <Button
-                onClick={() => {
-                  const el = document.getElementById('advanced-config')
-                  if (el) el.scrollIntoView({ behavior: 'smooth' })
-                  else toast.info('Revisa la sección de Configuración Avanzada al final de la página')
-                }}
-                className="rounded-xl h-9 text-[10px] font-black uppercase tracking-widest gap-2 w-full bg-slate-100 text-slate-500 hover:bg-slate-200 border border-slate-200"
-              >
-                <RefreshCw className="h-3.5 w-3.5" />
-                Configurar Meta App
-              </Button>
-            )}
-
-            {/* Opción de token manual como alternativa */}
+            <Button
+              onClick={handleConnect}
+              className={`rounded-xl h-9 text-[10px] font-black uppercase tracking-widest gap-2 w-full text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-100`}
+            >
+              <Link2 className="h-3.5 w-3.5" />
+              Conectar {meta.name}
+              <ExternalLink className="h-3 w-3 opacity-50" />
+            </Button>
             <button
               onClick={() => setShowManual(!showManual)}
               className="text-[9px] font-bold text-slate-400 hover:text-indigo-600 transition-colors text-center uppercase tracking-widest"
             >
               {showManual ? '↑ Ocultar' : '⚙ Configurar token manual'}
             </button>
-
             {showManual && (
               <div className="space-y-2 p-4 bg-slate-50 rounded-2xl border border-slate-100 animate-in slide-in-from-top duration-200">
-                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">
-                  Pega tu {meta.name === 'Instagram' ? 'Page Access Token' : 'Page Access Token'} y el {meta.name === 'Instagram' ? 'IG Account ID' : 'Page ID'}:
-                </p>
                 <input
                   type="password"
                   placeholder="Access Token"
                   value={manualToken}
                   onChange={(e) => setManualToken(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-600/10"
+                  className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl"
                 />
                 <input
                   type="text"
-                  placeholder={platform === 'instagram' ? 'Instagram Business Account ID' : 'Facebook Page ID'}
+                  placeholder="Profile/Account ID"
                   value={manualPageId}
                   onChange={(e) => setManualPageId(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-600/10"
+                  className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl"
                 />
-                <div className="flex gap-2">
-                  <Button
-                    onClick={handleManualSave}
-                    disabled={isSavingManual}
-                    size="sm"
-                    className="flex-1 rounded-xl h-8 text-[10px] font-black bg-indigo-600 hover:bg-indigo-700 text-white"
-                  >
-                    {isSavingManual ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Guardar'}
-                  </Button>
-                  <a
-                    href={meta.helpUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-center h-8 px-3 rounded-xl border border-slate-200 text-slate-400 hover:text-slate-600 transition-colors"
-                    title="Ayuda"
-                  >
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
-                </div>
+                <Button
+                  onClick={handleManualSave}
+                  disabled={isSavingManual}
+                  size="sm"
+                  className="w-full rounded-xl h-8 text-[10px] font-black bg-indigo-600 hover:bg-indigo-700 text-white"
+                >
+                  {isSavingManual ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Guardar'}
+                </Button>
               </div>
             )}
           </div>

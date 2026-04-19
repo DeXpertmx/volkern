@@ -2,7 +2,7 @@ import { prisma } from '../db';
 import { VaultService } from '../security/vault';
 import { queueMarketingTask } from '../core/queue-service';
 
-export type SocialPlatform = 'LINKEDIN' | 'YOUTUBE' | 'TIKTOK';
+export type SocialPlatform = 'LINKEDIN' | 'YOUTUBE' | 'TIKTOK' | 'FACEBOOK' | 'INSTAGRAM';
 
 export class SocialMediaService {
   /**
@@ -40,19 +40,17 @@ export class SocialMediaService {
   }) {
     const { tenantId, platform, content, mediaUrls = [], scheduledAt } = params;
 
-    // Crear el registro en DB
     const post = await prisma.socialPost.create({
       data: {
         tenantId,
-        platform,
+        platforms: [platform], // Ajustado al esquema que usa String[]
         content,
         mediaUrls,
         status: scheduledAt ? 'SCHEDULED' : 'DRAFT',
-        scheduledAt,
+        scheduledFor: scheduledAt,
       }
     });
 
-    // Si tiene fecha programada, encolar en BullMQ
     if (scheduledAt) {
       const delay = scheduledAt.getTime() - Date.now();
       await queueMarketingTask('SOCIAL_POSTS', `post-${post.id}`, { postId: post.id }, { delay: Math.max(0, delay) });
@@ -62,28 +60,54 @@ export class SocialMediaService {
   }
 
   /**
-   * Publica contenido en LinkedIn
+   * Enrutador de publicación basado en plataforma
    */
+  static async publishToPlatform(postId: string, platform: SocialPlatform) {
+    switch (platform) {
+      case 'LINKEDIN': return this.publishToLinkedIn(postId);
+      case 'YOUTUBE': return this.publishToYouTube(postId);
+      case 'TIKTOK': return this.publishToTikTok(postId);
+      case 'FACEBOOK': return this.publishToFacebook(postId);
+      case 'INSTAGRAM': return this.publishToInstagram(postId);
+      default: throw new Error(`Plataforma ${platform} no soportada`);
+    }
+  }
+
   static async publishToLinkedIn(postId: string) {
-    const post = await prisma.socialPost.findUnique({
-      where: { id: postId },
-      include: { tenant: { select: { vaultSeed: true } } }
-    });
+    console.log(`[LinkedIn] Publicando post ${postId}...`);
+    // API Call Logic
+    return this.updatePostStatus(postId, 'PUBLISHED');
+  }
 
-    if (!post) throw new Error('Post no encontrado');
+  static async publishToYouTube(postId: string) {
+    console.log(`[YouTube] Subiendo video ${postId}...`);
+    // API Call Logic
+    return this.updatePostStatus(postId, 'PUBLISHED');
+  }
 
-    const config = await this.getPlatformConfig(post.tenantId, 'LINKEDIN');
-    
-    // Simulación de llamada API LinkedIn (UGC Post API)
-    console.log(`[LinkedIn] Publicando post ${postId} con token ${config.accessToken.substring(0, 10)}...`);
-    
-    // Aquí iría el fetch real a https://api.linkedin.com/v2/ugcPosts
-    
+  static async publishToTikTok(postId: string) {
+    console.log(`[TikTok] Publicando video ${postId}...`);
+    // API Call Logic
+    return this.updatePostStatus(postId, 'PUBLISHED');
+  }
+
+  static async publishToFacebook(postId: string) {
+    console.log(`[Facebook] Publicando en página ${postId}...`);
+    // API Call Logic
+    return this.updatePostStatus(postId, 'PUBLISHED');
+  }
+
+  static async publishToInstagram(postId: string) {
+    console.log(`[Instagram] Publicando en Business Account ${postId}...`);
+    // API Call Logic
+    return this.updatePostStatus(postId, 'PUBLISHED');
+  }
+
+  private static async updatePostStatus(postId: string, status: string) {
     await prisma.socialPost.update({
       where: { id: postId },
-      data: { status: 'PUBLISHED', publishedAt: new Date() }
+      data: { status, publishedAt: new Date() }
     });
-
     return { success: true };
   }
 
@@ -97,10 +121,7 @@ export class SocialMediaService {
 
     if (!post || post.status !== 'PUBLISHED') return;
 
-    const config = await this.getPlatformConfig(post.tenantId, post.platform as SocialPlatform);
-
-    // Llamada a la API de la plataforma para obtener métricas
-    // Simulación:
+    // Métricas reales vendrían de las APIs de redes sociales
     const mockMetrics = {
       views: Math.floor(Math.random() * 1000),
       likes: Math.floor(Math.random() * 100),

@@ -1,6 +1,7 @@
 import { Worker, Job } from 'bullmq';
 import { redisConnection } from '../core/redis';
 import { SocialMediaService } from '../marketing/social-media-service';
+import { prisma } from '../db';
 
 /**
  * Worker para procesar publicaciones sociales
@@ -12,8 +13,16 @@ export const socialWorker = new Worker(
     console.log(`[Worker] Procesando publicación social: ${postId}`);
     
     try {
-      await SocialMediaService.publishToLinkedIn(postId);
-      // Aquí se podrían añadir más plataformas (YouTube, TikTok)
+      const post = await prisma.socialPost.findUnique({
+        where: { id: postId }
+      });
+
+      if (!post) throw new Error('Post no encontrado');
+
+      // Publicar en cada plataforma configurada para este post
+      for (const platform of post.platforms) {
+        await SocialMediaService.publishToPlatform(postId, platform as any);
+      }
     } catch (error) {
       console.error(`[Worker] Error publicando post ${postId}:`, error);
       throw error;

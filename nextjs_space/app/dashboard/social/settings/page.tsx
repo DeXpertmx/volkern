@@ -18,7 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { toast } from 'sonner'
 import { ConnectPlatformCard, type PlatformConfig, type SocialPlatform } from '@/components/social/ConnectPlatformCard'
 
-const PLATFORMS: SocialPlatform[] = ['facebook', 'instagram', 'linkedin']
+const PLATFORMS: SocialPlatform[] = ['facebook', 'instagram', 'linkedin', 'youtube', 'tiktok']
 
 function SocialSettingsContent() {
   const searchParams = useSearchParams()
@@ -51,44 +51,29 @@ function SocialSettingsContent() {
     fetchConfigs()
   }, [fetchConfigs])
 
-  // Mostrar toasts según el resultado del callback OAuth
   useEffect(() => {
     const connected = searchParams.get('connected')
     const error = searchParams.get('error')
-    const message = searchParams.get('message')
-    const platform = searchParams.get('platform')
-
+    
     if (connected) {
-      const names: Record<string, string> = { facebook: 'Facebook', instagram: 'Instagram', linkedin: 'LinkedIn' }
-      toast.success(`✅ ${names[connected] || connected} conectado correctamente`)
-      fetchConfigs() // Refrescar datos
+      toast.success(`✅ Conexión exitosa`)
+      fetchConfigs()
     }
 
     if (error) {
-      const friendlyErrors: Record<string, string> = {
-        cancelled: 'Cancelaste la autorización',
-        csrf_mismatch: 'Error de seguridad CSRF. Intenta de nuevo.',
-        no_tenant: 'No se encontró tu cuenta. Inicia sesión.',
-        db_error: 'Error guardando la conexión. Intenta de nuevo.',
-        oauth_failed: message ? decodeURIComponent(message) : 'Error en el proceso OAuth',
-        invalid_callback: 'Callback inválido de Meta',
-        setup_required: 'Configuración pendiente: FACEBOOK_APP_ID no encontrado en el servidor.',
-      }
-      toast.error(friendlyErrors[error] || `Error: ${error}`)
+      toast.error(`Error: ${error}`)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [searchParams, fetchConfigs])
 
   return (
     <div className="flex flex-col gap-8 p-2 md:p-6 max-w-4xl mx-auto animate-in fade-in duration-700">
-      {/* Header */}
       <div className="flex flex-col gap-4">
         <Link
-          href="/dashboard/social"
+          href="/dashboard/marketing"
           className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-indigo-600 transition-colors w-fit"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          Volver al Hub Social
+          Volver al Hub de Marketing
         </Link>
 
         <div className="flex items-center gap-4 bg-white p-6 rounded-3xl border border-slate-200/60 shadow-sm">
@@ -97,62 +82,19 @@ function SocialSettingsContent() {
           </div>
           <div>
             <h1 className="text-2xl font-black text-slate-900 tracking-tighter uppercase">
-              Canales Sociales
+              Configuración Social
             </h1>
             <p className="text-xs font-bold text-slate-400 tracking-widest uppercase">
-              Conecta tus redes sociales para publicar automáticamente
+              Activa tus canales de publicación y monitoriza la salud de tus tokens
             </p>
           </div>
         </div>
       </div>
 
-      {/* Banner informativo de requisitos o Alerta de Configuración */}
-      {!oauthEnabled ? (
-        <Card className="rounded-3xl border-rose-100 bg-gradient-to-br from-rose-50 to-amber-50 shadow-none">
-          <CardContent className="p-6 flex gap-5">
-            <div className="h-12 w-12 rounded-2xl bg-rose-500 flex items-center justify-center shrink-0 shadow-lg shadow-rose-200">
-              <AlertCircle className="h-6 w-6 text-white" />
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm font-black text-rose-900 uppercase tracking-tight">
-                Nexus Meta: Configuración Pendiente
-              </p>
-              <p className="text-xs text-rose-700 leading-relaxed font-medium">
-                El sistema de conexión automática (OAuth) está desactivado porque no se encuentra el <code className="bg-white/50 px-1 rounded">FACEBOOK_APP_ID</code> en el servidor.
-              </p>
-              <p className="text-[10px] text-rose-500 font-bold uppercase tracking-widest mt-2 flex items-center gap-2">
-                <Info className="h-3 w-3" /> Revisa la sección de "Configuración Avanzada" al final de esta página.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card className="rounded-3xl border-indigo-100 bg-gradient-to-br from-indigo-50 to-purple-50 shadow-none">
-          <CardContent className="p-6 flex gap-4">
-            <div className="h-10 w-10 rounded-2xl bg-indigo-100 flex items-center justify-center shrink-0">
-              <ShieldCheck className="h-5 w-5 text-indigo-600" />
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm font-black text-indigo-900 uppercase tracking-tight">
-                Autenticación OAuth Segura
-              </p>
-              <p className="text-xs text-indigo-700 leading-relaxed">
-                Volkern usa OAuth 2.0 oficial de Meta. Tus credenciales <strong>nunca</strong> se
-                almacenan en texto plano — se cifran con AES-256 antes de guardarlas.
-              </p>
-              <p className="text-[10px] text-indigo-500 font-bold uppercase tracking-widest mt-2">
-                Permisos solicitados: pages_manage_posts · instagram_content_publish · pages_read_engagement
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Grid de plataformas */}
       <div>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">
-            Plataformas Disponibles
+            Canales Disponibles
           </h2>
           <Button
             onClick={fetchConfigs}
@@ -161,17 +103,14 @@ function SocialSettingsContent() {
             className="text-xs font-bold text-slate-400 gap-1.5 hover:text-indigo-600 h-7 rounded-lg"
           >
             <CheckCircle2 className="h-3.5 w-3.5" />
-            Actualizar estado
+            Sincronizar Estado
           </Button>
         </div>
 
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {PLATFORMS.map((p) => (
-              <div
-                key={p}
-                className="h-52 rounded-3xl bg-slate-100/60 animate-pulse border border-slate-100"
-              />
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-48 rounded-3xl bg-slate-100 animate-pulse" />
             ))}
           </div>
         ) : (
@@ -190,85 +129,26 @@ function SocialSettingsContent() {
         )}
       </div>
 
-      {/* Sección de ayuda / configuración avanzada */}
-      <Card id="advanced-config" className="rounded-3xl border-slate-200/60 shadow-sm scroll-mt-6">
-        <CardHeader className="border-b border-slate-100 bg-slate-50/50 pb-4">
-          <CardTitle className="text-sm font-black uppercase tracking-tighter flex items-center gap-2">
-            <Info className="h-4 w-4 text-slate-400" />
-            Configuración Avanzada
+      <Card className="rounded-3xl border-slate-200 bg-slate-900 text-white shadow-sm overflow-hidden">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-indigo-400" />
+            Seguridad y Soberanía
           </CardTitle>
-          <CardDescription className="text-xs">
-            Requisitos y pasos para que el administrador de Volkern configure las credenciales de Meta
-          </CardDescription>
         </CardHeader>
-        <CardContent className="p-6 space-y-4">
-          <div className="space-y-3 text-xs text-slate-600 leading-relaxed">
-            <div className="flex gap-3">
-              <span className="h-5 w-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px] font-black shrink-0">1</span>
-              <p>
-                Crear una <strong>Meta App</strong> en{' '}
-                <a href="https://developers.facebook.com" target="_blank" rel="noopener noreferrer" className="text-indigo-600 underline decoration-dotted hover:decoration-solid">
-                  developers.facebook.com
-                </a>{' '}
-                y habilitarla en modo <em>Live</em>.
-              </p>
-            </div>
-            <div className="flex gap-3">
-              <span className="h-5 w-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px] font-black shrink-0">2</span>
-              <p>
-                Agregar los permisos: <code className="bg-slate-100 px-1 rounded">pages_manage_posts</code>,{' '}
-                <code className="bg-slate-100 px-1 rounded">instagram_content_publish</code>,{' '}
-                <code className="bg-slate-100 px-1 rounded">pages_show_list</code>
-              </p>
-            </div>
-            <div className="flex gap-3">
-              <span className="h-5 w-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px] font-black shrink-0">3</span>
-              <p>
-                Configurar la <strong>Redirect URI</strong> en la Meta App:{' '}
-                <code className="bg-slate-100 px-1 rounded text-[10px]">
-                  YOUR_DOMAIN/api/social/callback/facebook
-                </code>
-              </p>
-            </div>
-            <div className="flex gap-3">
-              <span className="h-5 w-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px] font-black shrink-0">4</span>
-              <p>
-                Añadir en las variables de entorno del servidor:{' '}
-                <code className="bg-slate-100 px-1 rounded">FACEBOOK_APP_ID</code> y{' '}
-                <code className="bg-slate-100 px-1 rounded">FACEBOOK_APP_SECRET</code>
-              </p>
-            </div>
-          </div>
-
-          <div className="flex gap-2 pt-2">
-            <a
-              href="https://developers.facebook.com/docs/pages/getting-started"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <Button
-                variant="outline"
-                size="sm"
-                className="rounded-xl border-slate-200 text-[10px] font-black uppercase tracking-widest gap-1.5 h-8"
-              >
-                <ExternalLink className="h-3 w-3" />
-                Documentación Meta
-              </Button>
-            </a>
-            <a
-              href="https://business.facebook.com/settings"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <Button
-                variant="outline"
-                size="sm"
-                className="rounded-xl border-slate-200 text-[10px] font-black uppercase tracking-widest gap-1.5 h-8"
-              >
-                <ExternalLink className="h-3 w-3" />
-                Meta Business Suite
-              </Button>
-            </a>
+        <CardContent className="space-y-4">
+          <p className="text-xs text-slate-400 leading-relaxed">
+            Volkern utiliza protocolos de autenticación oficiales de cada plataforma. Tus llaves de acceso se almacenan en el <strong>Third-Party Vault</strong>, cifradas con una semilla única por tenant. Ningún agente externo tiene acceso a tus tokens.
+          </p>
+          <div className="flex gap-4">
+             <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-bold text-slate-500 uppercase">Encriptación</span>
+                <span className="text-xs font-mono text-indigo-300">AES-256-GCM</span>
+             </div>
+             <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-bold text-slate-500 uppercase">Auth Mode</span>
+                <span className="text-xs font-mono text-indigo-300">OAuth 2.0 PKCE</span>
+             </div>
           </div>
         </CardContent>
       </Card>
@@ -278,11 +158,7 @@ function SocialSettingsContent() {
 
 export default function SocialSettingsPage() {
   return (
-    <Suspense fallback={
-      <div className="flex items-center justify-center h-64 text-slate-400 text-sm italic">
-        Cargando configuraciones...
-      </div>
-    }>
+    <Suspense fallback={<div className="p-8 text-center text-slate-400 italic">Iniciando plataforma social...</div>}>
       <SocialSettingsContent />
     </Suspense>
   )
