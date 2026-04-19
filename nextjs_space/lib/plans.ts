@@ -480,7 +480,8 @@ export async function getActiveModules(
   plan: string,
   tenantFeatures: Array<{ feature: string; habilitado: boolean }>
 ): Promise<CrmModule[]> {
-  const config = await getPlanConfig(plan);
+  const normalizedPlan = plan.toLowerCase();
+  const config = await getPlanConfig(normalizedPlan);
   const planModules = new Set<CrmModule>(config.modules);
 
   // Procesar overrides de TenantFeature
@@ -495,11 +496,17 @@ export async function getActiveModules(
     }
   }
 
-  // FORCE: Asegurar que social_manager esté presente si el plan lo soporta según código
+  // FORCE: Asegurar que social_manager y cms estén presentes si el plan lo soporta según código
   // Esto soluciona problemas de sincronización con la base de datos de planes antigua.
-  const hardcodedModules = PLAN_MODULES[plan] || [];
+  const hardcodedModules = PLAN_MODULES[normalizedPlan] || [];
   if (hardcodedModules.includes('social_manager')) {
     planModules.add('social_manager');
+  }
+  if (hardcodedModules.includes('cms')) {
+    planModules.add('cms');
+  }
+  if (hardcodedModules.includes('builder_premium')) {
+    planModules.add('builder_premium');
   }
 
   return Array.from(planModules)
