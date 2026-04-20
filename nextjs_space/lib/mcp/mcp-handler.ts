@@ -594,6 +594,7 @@ export const MCP_TOOLS: MCPTool[] = [
       },
       required: ['vacationRequestId', 'tenantId', 'userId'],
     },
+  },
   {
     name: 'orchestrate_asset_transfer',
     description: 'Gestionar el traspaso entre técnicos o la devolución al almacén de activos críticos. Requiere rol OWNER.',
