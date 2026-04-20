@@ -2,8 +2,9 @@ import { Editor } from "grapesjs";
 import { getIconSvg } from "../../icons/BlockIcons";
 
 const BLOCK_STYLES = `
-  .dyn-plans-wrapper { padding: 4rem 1rem; font-family: Inter, sans-serif; }
+  .dyn-plans-wrapper { padding: 4rem 1rem; font-family: Inter, sans-serif; min-height: 200px; }
   .dyn-plans-loading { text-align: center; color: #64748b; font-weight: 500; padding: 2rem; }
+  .dyn-plans-error { text-align: center; color: #ef4444; padding: 2rem; border: 1px dashed #fee2e2; border-radius: 1rem; font-size: 0.875rem; }
   .dyn-plans-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem; max-width: 1200px; margin: 0 auto; }
   .dyn-plan-card { background: white; border: 1px solid #e2e8f0; border-radius: 2rem; padding: 3rem 2rem; display: flex; flex-direction: column; transition: all 0.4s; position: relative; }
   .dyn-plan-card:hover { transform: translateY(-8px); border-color: #6366f1; box-shadow: 0 25px 50px -12px rgba(99,102,241,0.15); }
@@ -21,72 +22,6 @@ const BLOCK_STYLES = `
   .dyn-plan-cta:hover { opacity: 0.85; }
 `;
 
-function buildBlockHtml() {
-  // NOTE: uid is intentionally static per session because GrapesJS stores
-  // the content string at block-add time. The script uses getElementById
-  // which reliably finds elements by their literal id attribute.
-  const uid = 'vpb';
-  return `
-<div class="dyn-plans-wrapper" data-uid="${uid}">
-  <div class="dyn-plans-loading" id="dyn-loading-${uid}">Cargando planes...</div>
-  <div class="dyn-plans-grid" id="dyn-grid-${uid}"></div>
-  <style>${BLOCK_STYLES}</style>
-  <script>
-    (function volkernLoadPlans() {
-      /* Resolve origin: works both inside GrapesJS iframe and on published page */
-      var origin;
-      try {
-        origin = (window.top && window.top.location.origin !== 'null')
-          ? window.top.location.origin
-          : window.location.origin;
-      } catch(e) {
-        origin = window.location.origin;
-      }
-
-      var uid = "${uid}";
-      var loading = document.getElementById("dyn-loading-" + uid);
-      var grid    = document.getElementById("dyn-grid-"    + uid);
-
-      if (!grid) {
-        /* DOM not ready yet, retry in 300ms */
-        setTimeout(volkernLoadPlans, 300);
-        return;
-      }
-
-      fetch(origin + "/api/public/plans")
-        .then(function(r) { return r.json(); })
-        .then(function(plans) {
-          if (loading) loading.style.display = "none";
-          if (!plans || !plans.length) {
-            grid.innerHTML = "<p style='text-align:center;padding:2rem;color:#94a3b8;'>No hay planes configurados.</p>";
-            return;
-          }
-          grid.innerHTML = plans.map(function(p) {
-            var feats = (p.features || []).map(function(f) {
-              return "<li><svg width='16' height='16' fill='none' stroke='#10b981' stroke-width='3' viewBox='0 0 24 24'><path d='M20 6L9 17l-5-5'></path></svg>" + f + "</li>";
-            }).join("");
-            return "<div class='dyn-plan-card" + (p.popular ? " popular" : "") + "'>" +
-              (p.popular ? "<div class='dyn-popular-badge'>M\u00e1s Popular</div>" : "") +
-              "<div class='dyn-plan-name'>" + p.name + "</div>" +
-              "<div class='dyn-plan-price'>" +
-                "<span class='dyn-plan-currency'>" + p.currency + "</span>" + p.price +
-                "<span class='dyn-plan-period'>/" + p.period + "</span>" +
-              "</div>" +
-              "<div class='dyn-plan-desc'>" + (p.description || "") + "</div>" +
-              "<ul class='dyn-plan-features'>" + feats + "</ul>" +
-              "<a href='/auth/register?plan=" + p.slug + "' class='dyn-plan-cta'>Elegir Plan</a>" +
-            "</div>";
-          }).join("");
-        })
-        .catch(function(err) {
-          console.error("[VolkernPlans] Error:", err);
-          if (loading) loading.innerText = "Error al cargar los planes (" + origin + ").";
-        });
-    })();
-  </script>
-</div>`;
-}
-
 export const createPricingDynamicBlock = (editor: Editor) => {
   editor.BlockManager.add("pricing-dynamic", {
     label: `
@@ -96,6 +31,78 @@ export const createPricingDynamicBlock = (editor: Editor) => {
       </div>
     `,
     category: "Volkern CRM 🚀",
-    content: buildBlockHtml()
+    content: () => {
+      const uid = 'vpb' + Math.random().toString(36).substring(2, 9);
+      return `
+        <div class="dyn-plans-wrapper" id="root-${uid}">
+          <div class="dyn-plans-loading" id="loading-${uid}">Cargando planes del sistema...</div>
+          <div class="dyn-plans-grid" id="grid-${uid}"></div>
+          <style>${BLOCK_STYLES}</style>
+          <script>
+            (function initVolkernPlans() {
+              var id = "${uid}";
+              var loadingEl = document.getElementById("loading-" + id);
+              var gridEl = document.getElementById("grid-" + id);
+              
+              if (!gridEl) {
+                setTimeout(initVolkernPlans, 200);
+                return;
+              }
+
+              function showError(msg) {
+                if (loadingEl) {
+                  loadingEl.className = "dyn-plans-error";
+                  loadingEl.innerHTML = "<b>Error:</b> " + msg;
+                }
+              }
+
+              // Determinar la URL correcta
+              var apiUrl = "/api/public/plans";
+              
+              // Si estamos en un iframe (editor), intentar usar el origin del padre para evitar bloqueos
+              try {
+                if (window.self !== window.top) {
+                   apiUrl = window.top.location.origin + apiUrl;
+                }
+              } catch(e) {
+                console.warn("Volkern: No se pudo acceder a window.top, usando ruta relativa");
+              }
+
+              fetch(apiUrl)
+                .then(function(res) {
+                  if (!res.ok) throw new Error("Servidor respondió con status " + res.status);
+                  return res.json();
+                })
+                .then(function(plans) {
+                  if (loadingEl) loadingEl.style.display = "none";
+                  if (!plans || plans.length === 0) {
+                    gridEl.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 3rem; border: 2px dashed #e2e8f0; border-radius: 2rem; color: #94a3b8;">No se encontraron planes activos en el sistema.</div>';
+                    return;
+                  }
+                  
+                  gridEl.innerHTML = plans.map(function(p) {
+                    var feats = (p.features || []).map(function(f) {
+                      return '<li><svg width="16" height="16" fill="none" stroke="#10b981" stroke-width="3" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"></path></svg>' + f + '</li>';
+                    }).join('');
+                    
+                    return '<div class="dyn-plan-card' + (p.popular ? ' popular' : '') + '">' +
+                      (p.popular ? '<div class="dyn-popular-badge">Más Popular</div>' : '') +
+                      '<div class="dyn-plan-name">' + p.name + '</div>' +
+                      '<div class="dyn-plan-price"><span class="dyn-plan-currency">' + p.currency + '</span>' + p.price + '<span class="dyn-plan-period">/' + p.period + '</span></div>' +
+                      '<div class="dyn-plan-desc">' + (p.description || "") + '</div>' +
+                      '<ul class="dyn-plan-features">' + feats + '</ul>' +
+                      '<a href="/auth/register?plan=' + p.slug + '" class="dyn-plan-cta">Elegir Plan</a>' +
+                    '</div>';
+                  }).join('');
+                })
+                .catch(function(err) {
+                  showError(err.message || "Error de conexión");
+                  console.error("Volkern Plans Error:", err);
+                });
+            })();
+          </script>
+        </div>
+      `;
+    }
   });
 };
