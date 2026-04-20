@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '../../../../../lib/db';
-import { FiscalAuditService } from '../../../../../lib/fiscal/audit-service';
+import { prisma } from '@/lib/db';
+import { FiscalAuditService } from '@/lib/fiscal/audit-service';
 
 /**
  * API para la Torre de Control Fiscal (Agencia)
@@ -38,7 +38,7 @@ export async function GET() {
         tenants: summary,
         totalSummary: {
             total: tenants.length,
-            integros: summary.filter(t => t.status === 'ÍGTEGRA').length,
+            integros: summary.filter(t => t.status === 'ÍNTEGRA').length,
             comprometidos: summary.filter(t => t.status === 'COMPROMETIDA').length
         }
     });

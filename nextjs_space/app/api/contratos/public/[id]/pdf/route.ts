@@ -127,35 +127,46 @@ function generateContratoHTML(contrato: any, tenant: any): string {
 
   // Fallback to legacy static template
   const items = contrato.items as any[];
-    
-    <div class="signatures-section">
-      <div class="signature-box">
-        <div class="signature-line"></div>
-        <div class="signature-label">Por ${tenant?.nombre || 'la Empresa'}</div>
-        ${contrato.firmadoPorEmpresa ? `
-          <div class="signature-name">${contrato.nombreFirmaEmpresa}</div>
-          <div class="signature-date">${formatDate(contrato.fechaFirmaEmpresa!)}</div>
-          <div class="signed-badge">✓ Firmado</div>
-        ` : ''}
+  return `
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="UTF-8">
+      <style>
+        body { font-family: sans-serif; padding: 40px; }
+        .signatures-section { display: flex; justify-content: space-between; margin-top: 50px; }
+        .signature-box { width: 45%; text-align: center; }
+        .signature-line { border-top: 1px solid #000; margin-bottom: 10px; }
+      </style>
+    </head>
+    <body>
+      <div class="signatures-section">
+        <div class="signature-box">
+          <div class="signature-line"></div>
+          <div class="signature-label">Por ${tenant?.nombre || 'la Empresa'}</div>
+          ${contrato.firmadoPorEmpresa ? `
+            <div class="signature-name">${contrato.nombreFirmaEmpresa}</div>
+            <div class="signature-date">${formatDate(contrato.fechaFirmaEmpresa!)}</div>
+            <div class="signed-badge">✓ Firmado</div>
+          ` : ''}
+        </div>
+        <div class="signature-box">
+          <div class="signature-line"></div>
+          <div class="signature-label">Por el Cliente</div>
+          ${contrato.firmadoPorCliente ? `
+            <div class="signature-name">${contrato.nombreFirmaCliente}</div>
+            <div class="signature-date">${formatDate(contrato.fechaFirmaCliente!)}</div>
+            <div class="signed-badge">✓ Firmado</div>
+          ` : ''}
+        </div>
       </div>
-      <div class="signature-box">
-        <div class="signature-line"></div>
-        <div class="signature-label">Por el Cliente</div>
-        ${contrato.firmadoPorCliente ? `
-          <div class="signature-name">${contrato.nombreFirmaCliente}</div>
-          <div class="signature-date">${formatDate(contrato.fechaFirmaCliente!)}</div>
-          <div class="signed-badge">✓ Firmado</div>
-        ` : ''}
+      
+      <div class="footer">
+        <p>Contrato generado por ${tenant?.nombre || 'Volkern CRM'}</p>
+        <p>Documento generado el ${formatDate(new Date())}</p>
       </div>
-    </div>
-    
-    <div class="footer">
-      <p>Contrato generado por ${tenant?.nombre || 'Volkern CRM'}</p>
-      <p>Documento generado el ${formatDate(new Date())}</p>
-    </div>
-  </div>
-</body>
-</html>
+    </body>
+    </html>
   `;
 }
 
