@@ -21,24 +21,44 @@ const BLOCK_STYLES = `
   .dyn-plan-cta:hover { opacity: 0.85; }
 `;
 
-function buildBlockHtml(uid: string) {
+function buildBlockHtml() {
+  // NOTE: uid is intentionally static per session because GrapesJS stores
+  // the content string at block-add time. The script uses getElementById
+  // which reliably finds elements by their literal id attribute.
+  const uid = 'vpb';
   return `
-<div class="dyn-plans-wrapper" data-dyn-id="${uid}">
+<div class="dyn-plans-wrapper" data-uid="${uid}">
   <div class="dyn-plans-loading" id="dyn-loading-${uid}">Cargando planes...</div>
   <div class="dyn-plans-grid" id="dyn-grid-${uid}"></div>
   <style>${BLOCK_STYLES}</style>
   <script>
-    (function volkernPlans() {
+    (function volkernLoadPlans() {
+      /* Resolve origin: works both inside GrapesJS iframe and on published page */
+      var origin;
+      try {
+        origin = (window.top && window.top.location.origin !== 'null')
+          ? window.top.location.origin
+          : window.location.origin;
+      } catch(e) {
+        origin = window.location.origin;
+      }
+
       var uid = "${uid}";
       var loading = document.getElementById("dyn-loading-" + uid);
       var grid    = document.getElementById("dyn-grid-"    + uid);
-      if (!grid) { setTimeout(volkernPlans, 200); return; }
-      fetch("/api/public/plans")
-        .then(function(r){ return r.json(); })
+
+      if (!grid) {
+        /* DOM not ready yet, retry in 300ms */
+        setTimeout(volkernLoadPlans, 300);
+        return;
+      }
+
+      fetch(origin + "/api/public/plans")
+        .then(function(r) { return r.json(); })
         .then(function(plans) {
           if (loading) loading.style.display = "none";
           if (!plans || !plans.length) {
-            grid.innerHTML = "<p style='text-align:center;color:#94a3b8;'>No hay planes configurados.</p>";
+            grid.innerHTML = "<p style='text-align:center;padding:2rem;color:#94a3b8;'>No hay planes configurados.</p>";
             return;
           }
           grid.innerHTML = plans.map(function(p) {
@@ -48,15 +68,19 @@ function buildBlockHtml(uid: string) {
             return "<div class='dyn-plan-card" + (p.popular ? " popular" : "") + "'>" +
               (p.popular ? "<div class='dyn-popular-badge'>M\u00e1s Popular</div>" : "") +
               "<div class='dyn-plan-name'>" + p.name + "</div>" +
-              "<div class='dyn-plan-price'><span class='dyn-plan-currency'>" + p.currency + "</span>" + p.price + "<span class='dyn-plan-period'>/" + p.period + "</span></div>" +
+              "<div class='dyn-plan-price'>" +
+                "<span class='dyn-plan-currency'>" + p.currency + "</span>" + p.price +
+                "<span class='dyn-plan-period'>/" + p.period + "</span>" +
+              "</div>" +
               "<div class='dyn-plan-desc'>" + (p.description || "") + "</div>" +
               "<ul class='dyn-plan-features'>" + feats + "</ul>" +
               "<a href='/auth/register?plan=" + p.slug + "' class='dyn-plan-cta'>Elegir Plan</a>" +
             "</div>";
           }).join("");
         })
-        .catch(function() {
-          if (loading) loading.innerText = "Error al cargar los planes.";
+        .catch(function(err) {
+          console.error("[VolkernPlans] Error:", err);
+          if (loading) loading.innerText = "Error al cargar los planes (" + origin + ").";
         });
     })();
   </script>
@@ -64,9 +88,7 @@ function buildBlockHtml(uid: string) {
 }
 
 export const createPricingDynamicBlock = (editor: Editor) => {
-  const bm = editor.BlockManager;
-
-  bm.add("pricing-dynamic", {
+  editor.BlockManager.add("pricing-dynamic", {
     label: `
       <div class="custom-block-layout">
         <div class="custom-block-icon">${getIconSvg('pricing')}</div>
@@ -74,9 +96,6 @@ export const createPricingDynamicBlock = (editor: Editor) => {
       </div>
     `,
     category: "Volkern CRM 🚀",
-    // Each time the block is dragged, generate a unique ID so
-    // getElementById lookups never collide between multiple instances.
-    activate: true,
-    content: buildBlockHtml('vp' + Date.now())
+    content: buildBlockHtml()
   });
 };
