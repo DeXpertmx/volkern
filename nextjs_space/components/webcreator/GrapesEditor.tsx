@@ -50,7 +50,7 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>(({ initialDa
     stopCommand: (cmd, opt) => editorRef.current?.stopCommand(cmd, opt),
     getEditor: () => editorRef.current,
     getUndoManager: () => editorRef.current?.UndoManager ?? null,
-    getHtml: () => editorRef.current?.getHtml({ cleanId: false }),
+    getHtml: () => editorRef.current?.getHtml({ cleanId: false, addScripts: true }),
     getCss: () => editorRef.current?.getCss() || '',
     getAutoSaveStatus: () => autoSaveStatus,
   }));
