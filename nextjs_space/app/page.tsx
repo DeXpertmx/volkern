@@ -84,34 +84,35 @@ export default async function LandingPage() {
 
   // Si existe una página dinámica configurada (ya sea global o tenant)
   if (dynamicPage && (isGrapesjs || pageComponents)) {
-    // Reparar CSS para que las clases de GrapesJS que aplican al body se apliquen a nuestro contenedor
-    let scopedCss = '';
-    if (isGrapesjs && dynamicPage.cssPersonalizado) {
-      scopedCss = dynamicPage.cssPersonalizado
-        .replace(/\bbody\b/g, '.grapesjs-compiled-content')
-        .replace(/\.zephyr-wrapper\b/g, '.grapesjs-compiled-content');
-    }
 
+    // The CSS is already embedded inside htmlContent as a <style> tag.
+    // cssPersonalizado is the same CSS stored separately — avoid duplicating it.
+    // We just render the HTML as-is (which includes its own <style>).
+    // The only transformation needed: prevent body{} rules from bleeding into the host page.
     if (isGrapesjs && htmlContent) {
-      // Si el HTML contiene etiquetas <style> internas (común en exportaciones parciales), 
-      // también las sanitizamos para que no fuercen el fondo blanco del body real.
-      htmlContent = htmlContent.replace(/<style>([\s\S]*?)<\/style>/gi, (match, css) => {
-        const sanitized = css
-          .replace(/\bbody\b/g, '.grapesjs-compiled-content')
-          .replace(/\.zephyr-wrapper\b/g, '.grapesjs-compiled-content');
-        return `<style>${sanitized}</style>`;
+      htmlContent = htmlContent.replace(/<style>([\s\S]*?)<\/style>/gi, (match: string, css: string) => {
+        const fixed = css
+          .replace(/\bbody\s*\{([^}]*)\}/g, (_m: string, rules: string) => {
+            // Remove margin/padding from body rules to prevent layout bleed
+            const filtered = rules
+              .replace(/margin\s*:\s*0[^;]*;?/g, '')
+              .replace(/padding\s*:\s*0[^;]*;?/g, '')
+              .trim();
+            return filtered ? `.grapesjs-page{${filtered}}` : '';
+          });
+        return `<style>${fixed}</style>`;
       });
     }
 
     return (
-      <div suppressHydrationWarning className="w-full min-h-screen grapesjs-compiled-content">
-        <link href="https://cdn.jsdelivr.net/npm/tailwindcss@3.4.1/dist/tailwind.min.css" rel="stylesheet" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap" rel="stylesheet" />
+      <div suppressHydrationWarning className="w-full min-h-screen grapesjs-page" style={{margin:0, padding:0}}>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+        <style dangerouslySetInnerHTML={{ __html: `
+          .grapesjs-page { margin: 0; padding: 0; }
+          .grapesjs-page *, .grapesjs-page *::before, .grapesjs-page *::after { box-sizing: border-box; }
+        `}} />
         {isGrapesjs ? (
           <>
-            {scopedCss && (
-              <style dangerouslySetInnerHTML={{ __html: scopedCss }} />
-            )}
             <div 
               suppressHydrationWarning 
               dangerouslySetInnerHTML={{ __html: htmlContent }} 
