@@ -105,12 +105,37 @@ export default async function LandingPage() {
 
     return (
       <div suppressHydrationWarning className="w-full min-h-screen grapesjs-compiled-content">
+        <link href="https://cdn.jsdelivr.net/npm/tailwindcss@3.4.1/dist/tailwind.min.css" rel="stylesheet" />
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap" rel="stylesheet" />
         {isGrapesjs ? (
           <>
             {scopedCss && (
               <style dangerouslySetInnerHTML={{ __html: scopedCss }} />
             )}
-            <div suppressHydrationWarning dangerouslySetInnerHTML={{ __html: htmlContent }} />
+            <div 
+              suppressHydrationWarning 
+              dangerouslySetInnerHTML={{ __html: htmlContent }} 
+              id="grapesjs-root"
+            />
+            <script 
+              dangerouslySetInnerHTML={{ 
+                __html: `
+                  (function() {
+                    var root = document.getElementById('grapesjs-root');
+                    if (!root) return;
+                    var scripts = root.querySelectorAll('script');
+                    scripts.forEach(function(oldScript) {
+                      var newScript = document.createElement('script');
+                      Array.from(oldScript.attributes).forEach(function(attr) {
+                        newScript.setAttribute(attr.name, attr.value);
+                      });
+                      newScript.appendChild(document.createTextNode(oldScript.innerHTML));
+                      oldScript.parentNode.replaceChild(newScript, oldScript);
+                    });
+                  })();
+                ` 
+              }} 
+            />
           </>
         ) : (
           <PublicPageRenderer
