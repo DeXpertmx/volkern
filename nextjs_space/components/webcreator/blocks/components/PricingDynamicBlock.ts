@@ -56,6 +56,10 @@ export const createPricingDynamicBlock = (editor: Editor) => {
               
               if (loading) loading.style.display = 'none';
               if (grid) {
+                if (plans.length === 0) {
+                  grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 3rem; border: 2px dashed #e2e8f0; border-radius: 2rem; color: #94a3b8;">No hay planes de suscripción configurados en el sistema.</div>';
+                  return;
+                }
                 grid.innerHTML = plans.map((plan: any) => `
                   <div class="plan-card ${plan.popular ? 'popular' : ''}">
                     ${plan.popular ? '<div class="popular-badge">Más Popular</div>' : ''}
