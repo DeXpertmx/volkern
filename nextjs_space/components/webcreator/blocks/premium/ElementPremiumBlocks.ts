@@ -181,4 +181,66 @@ export const createElementPremiumBlocks = (editor: Editor) => {
       }
     }
   });
+  
+  // 4. Divider Block
+  bm.add("divider-premium", {
+    label: `
+      <div class="custom-block-layout">
+        <div class="custom-block-icon">${getIconSvg('divider')}</div>
+        <div class="gjs-block-label">Separador</div>
+      </div>
+    `,
+    category: "Elementos Premium",
+    content: { type: 'divider-premium' }
+  });
+
+  editor.DomComponents.addType('divider-premium', {
+    model: {
+      defaults: {
+        traits: [
+          { type: 'color', label: 'Color', name: 'data-color', value: '#e2e8f0' },
+          { type: 'number', label: 'Grosor (px)', name: 'data-height', min: 1, max: 20, value: 1 },
+          { type: 'number', label: 'Ancho (%)', name: 'data-width', min: 1, max: 100, value: 100 },
+          { type: 'select', label: 'Estilo', name: 'data-style', options: [
+            { id: 'solid', name: 'Sólido' },
+            { id: 'dashed', name: 'Guiones' },
+            { id: 'dotted', name: 'Puntos' },
+          ], value: 'solid' },
+          { type: 'number', label: 'Margen V (px)', name: 'data-margin', min: 0, max: 100, value: 20 },
+        ],
+        components: `
+          <div class="premium-divider-container">
+            <style>
+              .premium-divider-container { display: flex; justify-content: center; width: 100%; }
+              .premium-divider-line { transition: all 0.3s; }
+            </style>
+            <div class="premium-divider-line" data-v-line></div>
+          </div>
+        `,
+        script: function(this: any) {
+          const el = this;
+          const line = el.querySelector('[data-v-line]');
+
+          const update = () => {
+             const color = el.getAttribute('data-color') || '#e2e8f0';
+             const height = el.getAttribute('data-height') || '1';
+             const width = el.getAttribute('data-width') || '100';
+             const style = el.getAttribute('data-style') || 'solid';
+             const margin = el.getAttribute('data-margin') || '20';
+             
+             if (line) {
+                line.style.borderTop = `${height}px ${style} ${color}`;
+                line.style.width = `${width}%`;
+                line.style.marginTop = `${margin}px`;
+                line.style.marginBottom = `${margin}px`;
+             }
+          };
+          
+          const obs = new MutationObserver(() => update());
+          obs.observe(el, { attributes: true });
+          update();
+        }
+      }
+    }
+  });
 };

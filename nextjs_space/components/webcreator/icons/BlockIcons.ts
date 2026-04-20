@@ -150,6 +150,11 @@ export const MODERN_ICONS: Record<string, IconDefinition> = {
            </g>`,
     viewBox: "0 0 5.0625 5.0625",
     strokeWidth: "0.35"
+  },
+  divider: {
+    path: `<line x1="0.5" y1="2.5" x2="4.5" y2="2.5"/>`,
+    viewBox: "0 0 5 5",
+    strokeWidth: "0.5"
   }
 };
 
