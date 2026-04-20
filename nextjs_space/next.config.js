@@ -19,8 +19,26 @@ const nextConfig = {
       config.output.filename = 'static/chunks/[name]-[contenthash:8].js';
       config.output.chunkFilename = 'static/chunks/[contenthash:16].js';
     }
+
+    // Suprimir warning de "Critical dependency" de gocardless-nodejs → keyv
+    // Es un false-positive conocido del patrón de require dinámico de keyv
+    config.plugins = config.plugins || [];
+    const { IgnorePlugin } = require('webpack');
+    config.ignoreWarnings = [
+      ...(config.ignoreWarnings || []),
+      {
+        module: /node_modules\/keyv\/src\/index\.js/,
+        message: /Critical dependency/,
+      },
+      {
+        module: /node_modules\/cacheable-request/,
+        message: /Critical dependency/,
+      },
+    ];
+
     return config;
   },
+
 };
 
 module.exports = nextConfig;

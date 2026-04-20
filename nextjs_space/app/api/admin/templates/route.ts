@@ -57,3 +57,23 @@ export const POST = withTenantAuth(async (req, auth) => {
     );
   }
 }, ['admin:write', 'cms:write']);
+
+/**
+ * GET /api/admin/templates - Listar todas las plantillas globales
+ */
+export const GET = withTenantAuth(async (req, auth) => {
+  try {
+    const templates = await globalPrisma.pageTemplate.findMany({
+      orderBy: { fechaCreacion: 'desc' }
+    });
+
+    return NextResponse.json(templates);
+  } catch (error: any) {
+    console.error('Error obteniendo plantillas globales:', error);
+    return NextResponse.json(
+      { error: 'Error al cargar plantillas' },
+      { status: 500 }
+    );
+  }
+}, ['admin:read', 'cms:read']);
+

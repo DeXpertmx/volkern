@@ -31,7 +31,10 @@ import useSWR from 'swr'
 import { toast } from 'sonner'
 import { motion, AnimatePresence } from 'framer-motion'
 
-const fetcher = (url: string) => fetch(url).then(res => res.json())
+const fetcher = (url: string) => fetch(url).then(res => {
+  if (!res.ok) throw new Error('Failed to fetch')
+  return res.json()
+})
 
 export default function VentasDashboard() {
   const [section, setSection] = useState('pedidos')
@@ -118,7 +121,7 @@ export default function VentasDashboard() {
 }
 
 function SalesOrderList({ orders }: { orders: any[] }) {
-  const displayOrders = orders || [
+  const displayOrders = Array.isArray(orders) ? orders : [
     { 
       id: '1', 
       batchNumber: 'SO-8921', 
@@ -263,7 +266,7 @@ function SalesOrderList({ orders }: { orders: any[] }) {
 }
 
 function OrchestrationMonitor({ orders }: { orders: any[] }) {
-  const allItems = (orders || []).flatMap(order => 
+  const allItems = (Array.isArray(orders) ? orders : []).flatMap(order => 
     (order.items || []).map((item: any) => ({
       ...item,
       orderBatch: order.batchNumber

@@ -38,6 +38,7 @@ interface EditorWorkspaceProps {
   slug?: string;
   templateId?: string;
   backUrl?: string;
+  previewUrl?: string;
   mode?: 'webpage' | 'email' | 'document';
   onSave?: (data: { projectData: Record<string, unknown>; html?: string; css?: string; estado?: string }) => void;
 }
@@ -49,6 +50,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   slug,
   templateId,
   backUrl,
+  previewUrl,
   onSave,
   mode = 'webpage'
 }) => {
@@ -581,6 +583,14 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
         onRedo={() => editorRef.current?.runCommand('core:redo')}
         onTogglePreview={() => setPreview(prev => !prev)}
         onViewLive={() => {
+          if (previewUrl) {
+            window.open(previewUrl, '_blank');
+            return;
+          }
+          if (!slug) {
+            toast.info("Las plantillas no tienen una URL 'en vivo'. Crea una página basada en esta plantilla para verla publicada.");
+            return;
+          }
           const url = slug === 'home' ? '/' : `/${slug}`;
           window.open(url, '_blank');
         }}

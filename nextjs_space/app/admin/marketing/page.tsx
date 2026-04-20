@@ -10,8 +10,12 @@ import {
   Plus,
   Search,
   CheckCircle2,
-  PieChart
+  PieChart,
+  Trash2,
+  Edit2,
+  Rocket
 } from 'lucide-react'
+import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -34,10 +38,14 @@ import {
 } from "@/components/ui/select"
 import { toast } from "sonner"
 import { useState } from 'react'
+import useSWR from 'swr'
+
+const fetcher = (url: string) => fetch(url).then(res => res.json())
 
 export default function MarketingAdminPage() {
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const { data: templates, mutate } = useSWR('/api/admin/templates', fetcher)
 
   const handleCreateTemplate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -61,6 +69,7 @@ export default function MarketingAdminPage() {
       if (res.ok) {
         toast.success("Plantilla global creada exitosamente")
         setShowCreateDialog(false)
+        mutate() // Refrescar la lista
       } else {
         const err = await res.json()
         toast.error(err.error || "Error al crear la plantilla")
@@ -69,6 +78,38 @@ export default function MarketingAdminPage() {
       toast.error("Error de conexión con el servidor")
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  const handleDeleteTemplate = async (id: string) => {
+    if (!confirm('¿Estás seguro de eliminar esta plantilla global?')) return;
+
+    try {
+      const res = await fetch(`/api/admin/templates/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        toast.success("Plantilla eliminada");
+        mutate();
+      } else {
+        toast.error("Error al eliminar");
+      }
+    } catch (err) {
+      toast.error("Error de conexión");
+    }
+  }
+
+  const handlePublishGlobal = async (id: string) => {
+    if (!confirm('¿Estás seguro de convertir esta plantilla en la LANDING OFICIAL de Volkern? Esto reemplazará la página de inicio actual.')) return;
+
+    try {
+      const res = await fetch(`/api/admin/templates/${id}/publish-global`, { method: 'POST' });
+      if (res.ok) {
+        toast.success("¡Landing global actualizada exitosamente!");
+      } else {
+        const err = await res.json();
+        toast.error(err.error || "Error al publicar");
+      }
+    } catch (err) {
+      toast.error("Error de conexión");
     }
   }
 
@@ -124,6 +165,11 @@ export default function MarketingAdminPage() {
                 <Label htmlFor="descripcion" className="text-[10px] font-black uppercase tracking-widest text-slate-400">Descripción Estratégica</Label>
                 <Input id="descripcion" name="descripcion" placeholder="Explica el objetivo de esta plantilla..." className="h-12 rounded-xl bg-slate-50 border-none shadow-inner text-sm font-bold" />
               </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="etiquetas" className="text-[10px] font-black uppercase tracking-widest text-slate-400">Etiquetas (separadas por coma)</Label>
+                <Input id="etiquetas" name="etiquetas" placeholder="Ej: industrial, high-conv, mobile" className="h-12 rounded-xl bg-slate-50 border-none shadow-inner text-sm font-bold" />
+              </div>
             </div>
 
             <DialogFooter className="pt-4">
@@ -169,39 +215,107 @@ export default function MarketingAdminPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {[
-            { name: 'Campaña Solar Premium', tenant: 'SolarTech Mexico', conv: '5.8%', img: 'indigo' },
-            { name: 'Lead Gen Maquinaria', tenant: 'Energia Vital', conv: '3.1%', img: 'slate' },
-            { name: 'Inscripción Cursos v4', tenant: 'Volkern Academy', conv: '8.4%', img: 'blue' }
-          ].map((item, i) => (
-            <Card key={i} className="border border-[#E2E8F0] shadow-sm rounded-3xl overflow-hidden bg-white group hover:shadow-2xl transition-all duration-500">
-              <div className={cn("h-48 relative overflow-hidden bg-slate-100 flex items-center justify-center")}>
-                {/* Mock Preview Miniatura */}
-                <div className="absolute inset-0 opacity-10 group-hover:opacity-20 transition-opacity bg-gradient-to-br from-[#1A365D] to-indigo-500" />
-                <Layout className="text-[#1A365D]/20 group-hover:scale-110 transition-transform duration-700" size={64} />
-                <div className="absolute top-4 right-4 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform">
-                  <div className="bg-white p-2 rounded-xl shadow-lg">
-                    <ArrowUpRight size={14} className="text-[#1A365D]" />
+          {Array.isArray(templates) && templates.length > 0 ? (
+            templates.map((template: any) => (
+              <Card key={template.id} className="border border-[#E2E8F0] shadow-sm rounded-3xl overflow-hidden bg-white group hover:shadow-2xl transition-all duration-500 relative">
+                <Link href={`/marketing-template-editor/${template.id}`} className="block">
+                  <div className={cn("h-48 relative overflow-hidden bg-slate-100 flex items-center justify-center")}>
+                    <div className="absolute inset-0 opacity-10 group-hover:opacity-20 transition-opacity bg-gradient-to-br from-[#1A365D] to-indigo-500" />
+                    <Layout className="text-[#1A365D]/20 group-hover:scale-110 transition-transform duration-700" size={64} />
+                    <div className="absolute top-4 right-4 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform">
+                      <div className="bg-white p-2 rounded-xl shadow-lg">
+                        <ArrowUpRight size={14} className="text-[#1A365D]" />
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+
+                <div className="absolute top-4 left-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Button 
+                    variant="destructive" 
+                    size="icon" 
+                    className="h-8 w-8 rounded-lg shadow-lg"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleDeleteTemplate(template.id);
+                    }}
+                  >
+                    <Trash2 size={14} />
+                  </Button>
+                  <Button 
+                    size="icon" 
+                    className="h-8 w-8 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg"
+                    title="Establecer como Landing Global Volkern"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handlePublishGlobal(template.id);
+                    }}
+                  >
+                    <Rocket size={14} />
+                  </Button>
+                </div>
+
+                <CardContent className="p-6 space-y-4">
+                  <Link href={`/marketing-template-editor/${template.id}`} className="block space-y-4">
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-[10px] font-black text-[#4A5568] uppercase tracking-widest opacity-60">{template.categoria}</p>
+                        <div className="flex gap-2">
+                          {template.esPublica ? (
+                            <Badge className="bg-emerald-50 text-emerald-600 border-none font-black text-[9px] px-2">LIVE / GLOBAL</Badge>
+                          ) : (
+                            <Badge className="bg-amber-50 text-amber-600 border-none font-black text-[9px] px-2">DRAFT</Badge>
+                          )}
+                          <Badge className="bg-indigo-50 text-indigo-600 border-none font-black text-[9px] px-2">TEMPLATE</Badge>
+                        </div>
+                      </div>
+                      <h3 className="text-lg font-black text-[#1A365D] tracking-tight">{template.nombre}</h3>
+                      <p className="text-xs text-slate-500 line-clamp-2 mt-1">{template.descripcion}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {template.etiquetas?.map((tag: string) => (
+                        <Badge key={tag} variant="outline" className="text-[8px] font-bold uppercase">{tag}</Badge>
+                      ))}
+                    </div>
+                  </Link>
+                </CardContent>
+              </Card>
+            ))
+          ) : (
+            [
+              { name: 'Campaña Solar Premium', tenant: 'SolarTech Mexico', conv: '5.8%', img: 'indigo' },
+              { name: 'Lead Gen Maquinaria', tenant: 'Energia Vital', conv: '3.1%', img: 'slate' },
+              { name: 'Inscripción Cursos v4', tenant: 'Volkern Academy', conv: '8.4%', img: 'blue' }
+            ].map((item, i) => (
+              <Card key={i} className="border border-[#E2E8F0] shadow-sm rounded-3xl overflow-hidden bg-white group hover:shadow-2xl transition-all duration-500">
+                <div className={cn("h-48 relative overflow-hidden bg-slate-100 flex items-center justify-center")}>
+                  {/* Mock Preview Miniatura */}
+                  <div className="absolute inset-0 opacity-10 group-hover:opacity-20 transition-opacity bg-gradient-to-br from-[#1A365D] to-indigo-500" />
+                  <Layout className="text-[#1A365D]/20 group-hover:scale-110 transition-transform duration-700" size={64} />
+                  <div className="absolute top-4 right-4 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform">
+                    <div className="bg-white p-2 rounded-xl shadow-lg">
+                      <ArrowUpRight size={14} className="text-[#1A365D]" />
+                    </div>
                   </div>
                 </div>
-              </div>
-              <CardContent className="p-6 space-y-4">
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="text-[10px] font-black text-[#4A5568] uppercase tracking-widest opacity-60">{item.tenant}</p>
-                    <Badge className="bg-emerald-50 text-emerald-600 border-none font-black text-[9px] px-2">{item.conv} CR</Badge>
+                <CardContent className="p-6 space-y-4">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-[10px] font-black text-[#4A5568] uppercase tracking-widest opacity-60">{item.tenant}</p>
+                      <Badge className="bg-emerald-50 text-emerald-600 border-none font-black text-[9px] px-2">{item.conv} CR</Badge>
+                    </div>
+                    <h3 className="text-lg font-black text-[#1A365D] tracking-tight">{item.name}</h3>
                   </div>
-                  <h3 className="text-lg font-black text-[#1A365D] tracking-tight">{item.name}</h3>
-                </div>
-                <div className="flex items-center gap-2 pt-2">
-                  <div className="h-1.5 flex-1 bg-slate-50 rounded-full overflow-hidden border border-slate-100">
-                    <div className="h-full bg-[#1A365D] rounded-full" style={{ width: '75%' }} />
+                  <div className="flex items-center gap-2 pt-2">
+                    <div className="h-1.5 flex-1 bg-slate-50 rounded-full overflow-hidden border border-slate-100">
+                      <div className="h-full bg-[#1A365D] rounded-full" style={{ width: '75%' }} />
+                    </div>
+                    <span className="text-[9px] font-black text-[#1A365D] uppercase tracking-widest">75% Goal</span>
                   </div>
-                  <span className="text-[9px] font-black text-[#1A365D] uppercase tracking-widest">75% Goal</span>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            ))
+          )}
         </div>
       </div>
 

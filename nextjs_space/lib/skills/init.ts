@@ -16,6 +16,10 @@ import { eventBus } from './event-bus';
 import { BillingService } from '@/lib/finance/billing-service';
 import { setupMarketingEventBridge } from '@/lib/marketing/automation/event-bridge';
 import { setupWorkflowWorker } from '@/lib/marketing/automation/workflow-worker';
+import { initMarketingQueues } from '@/lib/core/queue-service';
+import { initMarketingWorkers } from '@/lib/workers/marketing-worker';
+import { AutomationRuleEngine } from '@/lib/marketing/automation/rule-engine';
+import { QueueMonitorService } from '@/lib/marketing/queues/queue-monitor-service';
 
 // Evitar múltiples inicializaciones
 let initialized = false;
@@ -82,11 +86,23 @@ export function initializeSkillsLayer(): void {
   // 3. Inicializar servicios de negocio (Finanzas)
   BillingService.init();
 
-  // 4. Inicializar automatización de Marketing
+  // 4. Inicializar automatización de Marketing (EventBridge es síncrono, Redis-deps son async)
   setupMarketingEventBridge();
-  setupWorkflowWorker();
 
-  // 4. Log estado final
+  // Las siguientes inicializaciones son async y tolerantes a Redis offline
+  Promise.all([
+    initMarketingQueues(),
+    setupWorkflowWorker(),
+    initMarketingWorkers(),
+    AutomationRuleEngine.initialize(),
+    QueueMonitorService.init(),
+  ]).then(() => {
+    console.log('📬 [SkillsLayer] Subsistemas de colas revisados.');
+  }).catch((err) => {
+    console.warn('[SkillsLayer] Error al inicializar subsistemas de colas:', err?.message);
+  });
+
+  // 5. Log estado final
   const status = getAutomationListenerStatus();
   console.log('\n📊 [SkillsLayer] Estado:');
   console.log(`   - Eventos mapeados: ${status.mappedEvents.length}`);
