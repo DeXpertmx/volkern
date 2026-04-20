@@ -9,6 +9,7 @@ import { createCatalogBlock } from './components/CatalogBlock';
 import { createVolkernFormBlock } from './components/VolkernFormBlock';
 import { createCRMFieldBlock } from './components/CRMFieldBlock';
 import { createStockBlock } from './components/StockBlock';
+import { createPricingDynamicBlock } from './components/PricingDynamicBlock';
 
 // Import Premium blocks statically for maximum stability
 import { 
@@ -47,6 +48,7 @@ export const setupVolkernBlocksAsync = (editor: Editor) => {
     createVolkernFormBlock(editor);
     createCRMFieldBlock(editor);
     createStockBlock(editor);
+    createPricingDynamicBlock(editor);
 
     console.log('[Webcreator] Registrando bloques Premium...');
     // Initialize Premium blocks
