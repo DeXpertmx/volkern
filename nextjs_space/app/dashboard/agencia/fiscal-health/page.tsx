@@ -82,8 +82,8 @@ export default function FiscalHealthPage() {
                     <div className="text-xs text-slate-500">/{tenant.slug}</div>
                   </td>
                   <td className="px-6 py-4">
-                    <div className={\`flex items-center gap-2 \${tenant.status === 'ÍGTEGRA' ? 'text-emerald-400' : 'text-rose-400'}\`}>
-                      {tenant.status === 'ÍGTEGRA' ? <ShieldCheck size={18} /> : <ShieldAlert size={18} />}
+                    <div className={`flex items-center gap-2 ${tenant.status === 'ÍNTEGRA' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {tenant.status === 'ÍNTEGRA' ? <ShieldCheck size={18} /> : <ShieldAlert size={18} />}
                       <span className="text-sm font-bold tracking-tight">{tenant.status}</span>
                     </div>
                   </td>
@@ -120,7 +120,7 @@ function StatCard({ icon, label, value, color = "text-white" }: any) {
         </div>
       </div>
       <div className="text-slate-400 text-sm font-medium">{label}</div>
-      <div className={\`text-3xl font-bold mt-1 \${color}\`}>{value}</div>
+      <div className={`text-3xl font-bold mt-1 ${color}`}>{value}</div>
     </div>
   );
 }
