@@ -13,6 +13,7 @@ import gjsCustomCode from "grapesjs-custom-code"
 import gjsNavbar from "grapesjs-navbar"
 import gjsTyped from "grapesjs-typed"
 import gjsTooltip from "grapesjs-tooltip"
+import gjsMaterialIcons from "grapesjs-google-material-icons"
 import { setupVolkernBlocksAsync } from "./blocks/dynamicBlocks"
 import { setupDocumentBlocks } from "./blocks/DocumentBlocks"
 import { getTemplateData } from "./templates"
@@ -119,7 +120,7 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>(({ initialDa
       traitManager: { appendTo: "#gjs-tm-container" },
       layerManager: { appendTo: "#layers-container" },
       selectorManager: { appendTo: "#gjs-sm-selectors" },
-      plugins: [gjsBlocksBasic, gjsPluginForms, gjsComponentCountdown, gjsCustomCode, gjsNavbar, gjsTyped, gjsTooltip],
+      plugins: [gjsBlocksBasic, gjsPluginForms, gjsComponentCountdown, gjsCustomCode, gjsNavbar, gjsTyped, gjsTooltip, gjsMaterialIcons],
       pluginsOpts: {
         [gjsBlocksBasic.toString()]: {
           blocks: ['column1', 'column2', 'column3', 'column3-7', 'text', 'heading', 'link', 'image', 'video', 'map'],
@@ -127,6 +128,13 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>(({ initialDa
         },
         'gjs-plugin-forms': {
           category: 'Forms'
+        },
+        'gjs-google-material-icons': {
+          icon_fonts: [
+            'https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200',
+            'https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200',
+            'https://fonts.googleapis.com/css2?family=Material+Symbols+Sharp:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200'
+          ]
         }
       },
       canvas: {
@@ -138,6 +146,9 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>(({ initialDa
         styles: [
           "https://cdn.jsdelivr.net/npm/tailwindcss@3.4.1/dist/tailwind.min.css",
           "https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap",
+          "https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200",
+          "https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200",
+          "https://fonts.googleapis.com/css2?family=Material+Symbols+Sharp:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200",
             ...(mode === 'document' ? [
                 `
                 body { 

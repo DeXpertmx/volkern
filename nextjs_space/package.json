@@ -110,6 +110,7 @@
     "grapesjs-blocks-basic": "^1.0.2",
     "grapesjs-component-countdown": "^1.0.2",
     "grapesjs-custom-code": "^1.0.2",
+    "grapesjs-google-material-icons": "^1.0.9",
     "grapesjs-navbar": "^1.0.2",
     "grapesjs-plugin-forms": "^2.0.6",
     "grapesjs-template-manager": "^1.0.7",
