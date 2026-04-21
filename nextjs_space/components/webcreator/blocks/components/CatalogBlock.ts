@@ -66,36 +66,6 @@ export const createCatalogBlock = (editor: Editor) => {
           'data-s6-label': ''
         },
         components: `
-          <style>
-            .volkern-catalog-section { padding: 8rem 2rem; background: #ffffff; font-family: 'Inter', sans-serif; position: relative; }
-            .volkern-catalog-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 3rem; max-width: 1400px; margin: 0 auto; }
-            
-            .v-catalog-card { background: #ffffff; border: 1px solid rgba(0,0,0,0.06); border-radius: 2rem; overflow: hidden; transition: all 0.4s ease; display: flex; flex-direction: column; height: 100%; position: relative; box-shadow: 0 4px 20px rgba(0,0,0,0.02); }
-            .v-catalog-card:hover { transform: translateY(-8px); box-shadow: 0 30px 60px -12px rgba(0,0,0,0.08); }
-            
-            .v-img-container { width: 100%; height: 280px; position: relative; background: #f1f5f9; overflow: hidden; }
-            .v-img { width: 100%; height: 100%; object-fit: cover; }
-            
-            .v-badges-top { position: absolute; top: 1.25rem; left: 1.25rem; display: flex; gap: 0.5rem; z-index: 10; }
-            .v-badge-pill { padding: 0.4rem 1rem; border-radius: 2rem; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: white; display: flex; align-items: center; justify-content: center; }
-            .v-badge-destacado { background: #fbbf24; color: #000; }
-            .v-badge-operacion { background: #ef4444; }
-            
-            .v-content { padding: 2rem; flex-grow: 1; display: flex; flex-direction: column; }
-            .v-title { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.5rem; color: #111827; letter-spacing: -0.02em; }
-            .v-location { font-size: 0.9rem; color: #6b7280; display: flex; align-items: center; gap: 0.4rem; margin-bottom: 1.5rem; font-weight: 500; }
-            
-            .v-price-box { font-size: 2.25rem; font-weight: 700; color: #1e40af; margin-bottom: 2rem; display: flex; align-items: baseline; gap: 0.5rem; }
-            .v-currency { font-size: 1.25rem; opacity: 0.8; }
-            
-            .v-stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem 2rem; margin-bottom: 2rem; padding-top: 1.5rem; border-top: 1px solid #f3f4f6; }
-            .v-stat-item { display: flex; align-items: center; gap: 0.75rem; color: #4b5563; font-size: 0.95rem; font-weight: 500; }
-            .v-stat-item svg { color: #9ca3af; flex-shrink: 0; }
-            
-            .v-catalog-btn { width: 100%; padding: 1.15rem; background-color: #f8fafc; color: #1e40af; border: 1px solid #e2e8f0; border-radius: 1rem; font-weight: 700; font-size: 1rem; cursor: pointer; transition: all 0.2s; text-align: center; margin-top: auto; }
-            .v-catalog-btn:hover { background-color: #eff6ff; border-color: #1e40af; }
-          </style>
-          
           <div class="volkern-catalog-grid" data-gjs-selectable="false" data-gjs-hoverable="false">
             <div class="v-catalog-card" data-v-template="catalog" data-gjs-selectable="false" data-gjs-hoverable="false">
               <div class="v-img-container">

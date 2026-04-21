@@ -37,30 +37,6 @@ export const createCommercePremiumBlocks = (editor: Editor) => {
         ],
         components: `
           <div class="premium-payment-wrap">
-            <style>
-              .premium-payment-wrap { padding: 1rem; display: flex; justify-content: center; }
-              .premium-payment-btn { 
-                display: flex; 
-                align-items: center; 
-                gap: 1.5rem; 
-                padding: 1.25rem 2.5rem; 
-                border-radius: 1.5rem; 
-                border: none; 
-                font-weight: 900; 
-                text-transform: uppercase; 
-                letter-spacing: 0.1em; 
-                cursor: pointer; 
-                transition: all 0.4s;
-                font-family: 'Inter', sans-serif;
-                box-shadow: 0 10px 20px rgba(0,0,0,0.1);
-              }
-              .payment-stripe { background: #635bff; color: white; }
-              .payment-square { background: #2b2b2b; color: white; }
-              .payment-gocardless { background: #242525; color: white; }
-              .payment-custom { background: #3D3D3D; color: white; }
-              .premium-payment-btn:hover { transform: scale(1.02) translateY(-3px); box-shadow: 0 15px 30px rgba(0,0,0,0.2); }
-              .payment-logo { height: 20px; filter: brightness(100); }
-            </style>
             <button class="premium-payment-btn payment-stripe" data-v-btn>
               <span data-v-text>Pagar 49.00 EUR</span>
               <img class="payment-logo" data-v-logo src="https://upload.wikimedia.org/wikipedia/commons/b/ba/Stripe_Logo%2C_revised_2016.svg">

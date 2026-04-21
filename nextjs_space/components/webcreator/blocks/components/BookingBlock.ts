@@ -22,42 +22,6 @@ export const createBookingBlock = (editor: Editor) => {
       defaults: {
         components: `
           <section class="volkern-booking-section">
-            <style>
-              .volkern-booking-section { padding: 8rem 2rem; background: transparent; font-family: 'Inter', sans-serif; position: relative; overflow: hidden; }
-              .v-booking-card { max-width: 900px; margin: 0 auto; background: #ffffff; border: 1px solid rgba(61, 61, 61, 0.1); border-radius: 4rem; padding: 4rem; min-height: 600px; display: flex; flex-direction: column; position: relative; box-shadow: 0 60px 150px -40px rgba(0,0,0,0.05); }
-              
-              .v-step { display: none; }
-              .v-step.active { display: block; animation: vFadeIn 0.6s ease; }
-              @keyframes vFadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-              
-              .v-indicator { display: flex; gap: 1rem; margin-bottom: 4rem; }
-              .v-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(61, 61, 61, 0.1); transition: all 0.3s ease; }
-              .v-dot.active { background: #6366f1; transform: scale(1.5); box-shadow: 0 0 15px #6366f1; }
-              
-              .v-step-title { font-size: 2.5rem; font-weight: 900; margin-bottom: 2rem; letter-spacing: -0.05em; font-style: italic; color: #3D3D3D; }
-              .v-step-desc { font-size: 11px; font-weight: 900; text-transform: uppercase; color: #6366f1; letter-spacing: 0.3em; margin-bottom: 1rem; display: block; }
-              
-              .v-booking-item { background: #f8fafc; border: 1px solid #3D3D3D; padding: 2rem; border-radius: 2rem; margin-bottom: 1.5rem; cursor: pointer; transition: all 0.3s ease; display: flex; justify-content: space-between; align-items: center; color: #3D3D3D; }
-              .v-booking-item:hover { background: #ffffff; transform: translateX(10px); border-color: #6366f1; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
-              
-              .v-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.75rem; }
-              .v-cal-header { font-size: 9px; font-weight: 900; text-transform: uppercase; color: #6366f1; text-align: center; margin-bottom: 1.5rem; }
-              .v-cal-day { aspect-ratio: 1; background: #f8fafc; border: 1px solid rgba(61,61,61,0.05); border-radius: 1.25rem; color: #3D3D3D; font-weight: 900; font-size: 0.875rem; cursor: pointer; transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; }
-              .v-cal-day:hover { background: #6366f1; color: white; transform: scale(1.1); }
-              .v-cal-day.selected { background: #3D3D3D; color: white; box-shadow: 0 0 30px rgba(61, 61, 61, 0.2); }
-              
-              .v-slots-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 1rem; }
-              .v-slot-btn { background: #f8fafc; border: 1px solid #3D3D3D; padding: 1.5rem; border-radius: 1.5rem; text-align: center; font-weight: 900; cursor: pointer; transition: all 0.3s ease; color: #3D3D3D; }
-              .v-slot-btn:hover { background: #6366f1; color: white; transform: scale(1.05); }
-              .v-slot-btn.selected { background: #3D3D3D; color: white; }
-              
-              .v-book-input { width: 100%; padding: 1.25rem; background: #f8fafc; border: 1px solid #3D3D3D; border-radius: 1.25rem; color: #3D3D3D; margin-bottom: 1.5rem; outline: none; transition: all 0.3s; }
-              .v-book-input::placeholder { color: #3D3D3D; opacity: 0.4; }
-              .v-book-input:focus { border-color: #6366f1; background: #ffffff; }
-              .v-confirm-btn { width: 100%; padding: 1.5rem; background-color: #3D3D3D; color: #ffffff; border-radius: 1.5rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.4em; border: none; cursor: pointer; margin-top: 1rem; text-align: center; transition: all 0.3s; }
-              .v-back-link { margin-top: auto; color: #3D3D3D; opacity: 0.4; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.2em; cursor: pointer; background: none; border: none; padding: 1rem 0; }
-            </style>
-            
             <div class="v-booking-card">
               <div class="v-indicator">
                 <div class="v-dot active"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div>

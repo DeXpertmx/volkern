@@ -90,39 +90,6 @@ export const createStandardBlocks = (editor: Editor) => {
             editable: true,
           }
         ],
-        styles: `
-          .v-btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 12px;
-            padding: 12px 24px;
-            background-color: #6366f1;
-            color: white;
-            border-radius: 12px;
-            text-decoration: none;
-            font-family: 'Inter', sans-serif;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            cursor: pointer;
-            border: none;
-            min-width: 160px;
-          }
-          .v-btn:hover {
-            background-color: #4f46e5;
-            transform: translateY(-2px);
-            box-shadow: 0 10px 15px -3px rgba(99, 102, 241, 0.3);
-          }
-          .v-icon {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.3s ease;
-          }
-          .v-btn.icon-right {
-            flex-direction: row-reverse;
-          }
-        `,
         traits: [
           {
             type: 'select',

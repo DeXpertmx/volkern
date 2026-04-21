@@ -20,25 +20,6 @@ export const createTeamPremiumBlock = (editor: Editor) => {
       defaults: {
         components: `
           <section class="premium-team-section">
-            <style>
-              .premium-team-section { padding: 10rem 2rem; background: #ffffff; color: #3D3D3D; font-family: 'Inter', sans-serif; }
-              .premium-team-header { text-align: center; max-width: 800px; margin: 0 auto 6rem; }
-              .premium-team-badge { display: inline-block; padding: 0.5rem 1rem; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 100px; color: #6366f1; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 2rem; }
-              .premium-team-title { font-size: 4rem; font-weight: 900; letter-spacing: -0.05em; margin-bottom: 1.5rem; line-height: 1.1; font-style: italic; color: #3D3D3D; }
-              .premium-team-desc { font-size: 1.125rem; color: #3D3D3D; opacity: 0.6; line-height: 1.6; font-weight: 500; }
-              .premium-team-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2.5rem; max-width: 1200px; margin: 0 auto; }
-              .premium-team-card { background: #ffffff; border: 1px solid rgba(61, 61, 61, 0.1); border-radius: 3rem; padding: 2rem; transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1); text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.02); }
-              .premium-team-card:hover { transform: translateY(-10px); background: #ffffff; border-color: #6366f1; box-shadow: 0 20px 50px rgba(0,0,0,0.05); }
-              .premium-member-photo { width: 100%; aspect-ratio: 1; border-radius: 2rem; object-fit: cover; margin-bottom: 2rem; filter: grayscale(0.5); transition: all 0.5s; }
-              .premium-team-card:hover .premium-member-photo { filter: grayscale(0); transform: scale(1.02); }
-              .premium-member-name { font-size: 1.5rem; font-weight: 800; margin-bottom: 0.5rem; letter-spacing: -0.03em; color: #3D3D3D; }
-              .premium-member-role { font-size: 0.875rem; color: #6366f1; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 1.5rem; display: block; }
-              .premium-member-bio { font-size: 0.9375rem; color: #3D3D3D; opacity: 0.6; line-height: 1.6; margin-bottom: 2rem; font-weight: 500; }
-              .premium-member-social { display: flex; justify-content: center; gap: 1rem; }
-              .premium-social-link { color: #3D3D3D; opacity: 0.3; transition: all 0.3s; }
-              .premium-social-link:hover { color: #6366f1; opacity: 1; }
-              @media (max-width: 768px) { .premium-team-title { font-size: 2.5rem; } }
-            </style>
             <div class="premium-team-header">
               <div class="premium-team-badge" data-gjs-editable="true" data-gjs-selectable="true">Nuestra Élite</div>
               <h2 class="premium-team-title" data-gjs-editable="true" data-gjs-selectable="true">Mentes brillantes detrás del código.</h2>

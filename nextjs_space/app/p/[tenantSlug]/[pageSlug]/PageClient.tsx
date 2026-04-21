@@ -78,6 +78,7 @@ export default function PageClient({ page }: PageClientProps) {
           ref={grapesContainerRef}
           className="grapesjs-compiled-content"
           dangerouslySetInnerHTML={{ __html: grapesHtml }}
+          suppressHydrationWarning
         />
       ) : isPuckContent ? (
         <PuckRenderer data={page.contenido as Data} />

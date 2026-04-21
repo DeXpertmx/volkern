@@ -30,18 +30,6 @@ export const createFeaturesPremiumBlock = (editor: Editor) => {
         ],
         components: `
           <section class="premium-features-section">
-            <style>
-              .premium-features-section { padding: 10rem 2rem; background: #ffffff; color: #3D3D3D; font-family: 'Inter', sans-serif; }
-              .premium-features-header { text-align: center; max-width: 800px; margin: 0 auto 6rem; }
-              .premium-features-badge { display: inline-block; padding: 0.5rem 1rem; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 100px; color: #6366f1; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 2rem; }
-              .premium-features-title { font-size: 3.5rem; font-weight: 900; letter-spacing: -0.05em; margin-bottom: 1.5rem; line-height: 1.1; color: #3D3D3D; }
-              .premium-features-desc { font-size: 1.125rem; color: #3D3D3D; opacity: 0.6; line-height: 1.6; font-weight: 500; }
-              .premium-features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem; max-width: 1200px; margin: 0 auto; }
-              .premium-feature-card { background: #ffffff; border: 1px solid rgba(61, 61, 61, 0.1); border-radius: 2.5rem; padding: 3rem; transition: all 0.5s; }
-              .premium-feature-icon { width: 56px; height: 56px; background: rgba(61, 61, 61, 0.05); border-radius: 18px; display: flex; align-items: center; justify-content: center; margin-bottom: 2rem; color: #6366f1; }
-              .premium-feature-title { font-size: 1.5rem; font-weight: 800; margin-bottom: 1rem; color: #3D3D3D; }
-              .premium-feature-text { color: #3D3D3D; opacity: 0.6; line-height: 1.7; font-weight: 500; }
-            </style>
             <div class="premium-features-header">
               <div class="premium-features-badge">Capacidades Elite</div>
               <h2 class="premium-features-title" data-v-title>Potencia sin límites para equipos modernos.</h2>

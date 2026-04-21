@@ -24,21 +24,6 @@ export const createFooterPremiumBlock = (editor: Editor) => {
         ],
         components: `
           <footer class="premium-footer">
-            <style>
-              .premium-footer { padding: 8rem 2rem 4rem; background: #ffffff; color: #3D3D3D; font-family: 'Inter', sans-serif; border-top: 1px solid rgba(61, 61, 61, 0.05); }
-              .premium-footer-grid { display: grid; grid-template-columns: 2fr repeat(3, 1fr); gap: 4rem; max-width: 1200px; margin: 0 auto 6rem; }
-              .premium-footer-info { max-width: 320px; }
-              .premium-footer-logo { font-size: 1.75rem; font-weight: 900; letter-spacing: -0.05em; margin-bottom: 2rem; font-style: italic; color: #3D3D3D; text-transform: uppercase; }
-              .premium-footer-logo span { color: #6366f1; }
-              .premium-footer-tagline { font-size: 1rem; color: #3D3D3D; opacity: 0.6; line-height: 1.6; font-weight: 500; margin-bottom: 2.5rem; }
-              .premium-footer-col-title { font-size: 0.875rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.2em; color: #3D3D3D; margin-bottom: 2rem; }
-              .premium-footer-links { list-style: none; padding: 0; margin: 0; }
-              .premium-footer-links li { margin-bottom: 1.25rem; }
-              .premium-footer-links a { color: #3D3D3D; opacity: 0.5; text-decoration: none; transition: all 0.3s; font-weight: 600; font-size: 0.9375rem; }
-              .premium-footer-bottom { border-top: 1px solid rgba(61, 61, 61, 0.05); max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; padding-top: 4rem; }
-              .premium-copyright { font-size: 0.875rem; color: #3D3D3D; opacity: 0.4; font-weight: 500; }
-              @media (max-width: 768px) { .premium-footer-grid { grid-template-columns: 1fr; } .premium-footer-bottom { flex-direction: column; gap: 2rem; } }
-            </style>
             <div class="premium-footer-grid">
               <div class="premium-footer-info">
                 <div class="premium-footer-logo" data-v-logo>VOLKERN<span>.</span></div>

@@ -29,17 +29,6 @@ export const createLeadFormBlock = (editor: Editor) => {
         ],
         components: `
           <section class="volkern-lead-section">
-            <style>
-              .volkern-lead-section { padding: 8rem 2rem; background: transparent; color: #3D3D3D; font-family: 'Inter', sans-serif; }
-              .volkern-lead-card { max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid rgba(61, 61, 61, 0.1); border-radius: 3rem; padding: 4rem; box-shadow: 0 40px 100px -30px rgba(0,0,0,0.05); }
-              .volkern-lead-title { font-size: 2.5rem; font-weight: 900; margin-bottom: 1rem; letter-spacing: -0.05em; text-align: center; color: #3D3D3D; }
-              .volkern-lead-subtitle { color: #3D3D3D; opacity: 0.6; text-align: center; margin-bottom: 3rem; font-weight: 500; }
-              .volkern-lead-input { width: 100%; padding: 1.25rem; background: #f8fafc; border: 1px solid rgba(61,61,61,0.1); border-radius: 1.25rem; color: #3D3D3D; margin-bottom: 1.5rem; outline: none; transition: all 0.3s; font-family: inherit; }
-              .volkern-lead-input:focus { border-color: #6366f1; background: #ffffff; }
-              .volkern-file-label { display: block; margin-bottom: 0.5rem; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: #6366f1; }
-              .volkern-lead-btn { width: 100%; padding: 1.5rem; background: #3D3D3D; color: #ffffff; border-radius: 1.5rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.4em; border: none; cursor: pointer; transition: all 0.3s; margin-top: 1rem; }
-              .volkern-lead-btn:hover { background: #6366f1; transform: translateY(-3px); box-shadow: 0 20px 40px -10px rgba(99, 102, 241, 0.4); }
-            </style>
             <div class="volkern-lead-card">
               <h2 class="volkern-lead-title" data-v-title>Impulsa tu Crecimiento</h2>
               <p class="volkern-lead-subtitle" data-v-subtitle>Déjanos tus datos y un estratega senior te contactará pronto.</p>

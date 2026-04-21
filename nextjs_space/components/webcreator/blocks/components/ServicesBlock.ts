@@ -54,22 +54,6 @@ export const createServicesBlock = (editor: Editor) => {
         ],
         components: `
           <section class="volkern-services-section">
-            <style>
-              .volkern-services-section { padding: 8rem 2rem; background: transparent; font-family: 'Inter', sans-serif; position: relative; }
-              .volkern-services-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 2.5rem; max-width: 1200px; margin: 0 auto; }
-              
-              /* Clases para los sub-componentes registrados */
-              .v-service-card { background: #ffffff; border: 1px solid rgba(61, 61, 61, 0.1); border-radius: 3rem; padding: 3.5rem; transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1); position: relative; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.03); }
-              .v-service-card:hover { transform: translateY(-15px); border-color: #6366f1; box-shadow: 0 40px 100px -30px rgba(99, 102, 241, 0.1); }
-              .v-icon-box { width: 56px; height: 56px; background: #6366f1; border-radius: 1.5rem; display: flex; align-items: center; justify-content: center; color: white; margin-bottom: 2.5rem; box-shadow: 0 15px 30px rgba(99, 102, 241, 0.3); }
-              .v-service-title { font-size: 1.85rem; font-weight: 900; color: #3D3D3D; margin-bottom: 1.25rem; letter-spacing: -0.04em; }
-              .v-service-desc { font-size: 1rem; color: rgba(61, 61, 61, 0.6); line-height: 1.8; margin-bottom: 2.5rem; flex-grow: 1; }
-              .v-service-price { font-size: 1.5rem; font-weight: 900; color: #3D3D3D; display: flex; align-items: baseline; gap: 0.5rem; }
-              .v-service-price span { font-size: 0.875rem; opacity: 0.4; }
-              .v-service-btn { margin-top: 2.5rem; padding: 1.25rem; background: #3D3D3D; border: 1px solid #3D3D3D; border-radius: 1.25rem; color: white; font-weight: 900; text-transform: uppercase; letter-spacing: 0.2em; text-align: center; cursor: pointer; transition: all 0.3s; }
-              .v-service-btn:hover { background: #6366f1; border-color: #6366f1; }
-            </style>
-            
             <div class="volkern-services-grid">
               <div class="v-service-card" data-v-template="service">
                 <div class="v-icon-box">

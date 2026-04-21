@@ -155,6 +155,21 @@ export const MODERN_ICONS: Record<string, IconDefinition> = {
     path: `<line x1="0.5" y1="2.5" x2="4.5" y2="2.5"/>`,
     viewBox: "0 0 5 5",
     strokeWidth: "0.5"
+  },
+  check: {
+    path: `<path d="M20 6L9 17l-5-5"/>`,
+    viewBox: "0 0 24 24",
+    strokeWidth: "3"
+  },
+  arrow: {
+    path: `<path d="M5 12h14M12 5l7 7-7 7"/>`,
+    viewBox: "0 0 24 24",
+    strokeWidth: "3"
+  },
+  star: {
+    path: `<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>`,
+    viewBox: "0 0 24 24",
+    strokeWidth: "2"
   }
 };
 

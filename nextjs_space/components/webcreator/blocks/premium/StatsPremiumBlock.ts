@@ -20,15 +20,6 @@ export const createStatsPremiumBlock = (editor: Editor) => {
       defaults: {
         components: `
           <section class="premium-stats-section">
-            <style>
-              .premium-stats-section { padding: 10rem 2rem; background: #ffffff; color: #3D3D3D; font-family: 'Inter', sans-serif; position: relative; }
-              .premium-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 4rem; max-width: 1200px; margin: 0 auto; text-align: center; }
-              .premium-stat-item { position: relative; }
-              .premium-stat-value { font-size: 6rem; font-weight: 900; letter-spacing: -0.05em; margin-bottom: 0.5rem; line-height: 1; font-style: italic; background: linear-gradient(to bottom, #3D3D3D, rgba(61,61,61,0.2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-              .premium-stat-label { font-size: 0.875rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.2em; color: #6366f1; }
-              .premium-stat-plus { font-size: 3rem; vertical-align: super; -webkit-text-fill-color: #6366f1; }
-              @media (max-width: 768px) { .premium-stat-value { font-size: 4rem; } .premium-stats-grid { gap: 3rem; } }
-            </style>
             <div class="premium-stats-grid">
               <div class="premium-stat-item">
                 <div class="premium-stat-value">98<span class="premium-stat-plus">%</span></div>

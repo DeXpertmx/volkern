@@ -470,7 +470,22 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
       const html = editorRef.current.getHtml() || "";
       const css = editorRef.current.getCss() || "";
 
-      const fullHtml = css ? `<style>${css}</style>${html}` : html;
+      const runtimeScript = `
+<script>
+document.addEventListener('click', function(e) {
+  var el = e.target.closest('[href]');
+  if (el && el.tagName !== 'A' && !el.closest('a')) {
+    var url = el.getAttribute('href');
+    var target = el.getAttribute('target');
+    if (url) {
+      if (target === '_blank') window.open(url);
+      else window.location.href = url;
+    }
+  }
+});
+</script>`;
+
+      const fullHtml = css ? `<style>${css}</style>${html}${runtimeScript}` : `${html}${runtimeScript}`;
 
       if (onSave) {
         await onSave({
@@ -503,7 +518,22 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
       const html = editorRef.current.getHtml() || "";
       const css = editorRef.current.getCss() || "";
 
-      const fullHtml = css ? `<style>${css}</style>${html}` : html;
+      const runtimeScript = `
+<script>
+document.addEventListener('click', function(e) {
+  var el = e.target.closest('[href]');
+  if (el && el.tagName !== 'A' && !el.closest('a')) {
+    var url = el.getAttribute('href');
+    var target = el.getAttribute('target');
+    if (url) {
+      if (target === '_blank') window.open(url);
+      else window.location.href = url;
+    }
+  }
+});
+</script>`;
+
+      const fullHtml = css ? `<style>${css}</style>${html}${runtimeScript}` : `${html}${runtimeScript}`;
 
       if (onSave) {
         await onSave({

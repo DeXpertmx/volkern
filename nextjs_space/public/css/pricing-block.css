@@ -1,0 +1,17 @@
+.dynamic-plans-wrapper { padding: 4rem 1rem; font-family: Inter, sans-serif; min-height: 250px; }
+.plans-loading { text-align: center; color: #64748b; font-weight: 500; padding: 2rem; }
+.plans-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem; max-width: 1200px; margin: 0 auto; }
+.plan-card { background: white; border: 1px solid #e2e8f0; border-radius: 2rem; padding: 3rem 2rem; display: flex; flex-direction: column; transition: all 0.4s; position: relative; }
+.plan-card:hover { transform: translateY(-8px); border-color: #6366f1; box-shadow: 0 25px 50px -12px rgba(99,102,241,0.15); }
+.plan-card.popular { border-color: #6366f1; border-width: 2px; }
+.popular-badge { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: #6366f1; color: white; padding: 4px 16px; border-radius: 100px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; white-space: nowrap; }
+.plan-name { font-size: 0.875rem; font-weight: 800; text-transform: uppercase; color: #64748b; letter-spacing: 0.1em; margin-bottom: 0.5rem; }
+.plan-price { font-size: 3.5rem; font-weight: 900; color: #1e293b; margin-bottom: 1rem; display: flex; align-items: baseline; }
+.plan-currency { font-size: 1.5rem; margin-right: 2px; }
+.plan-period { font-size: 1rem; color: #94a3b8; margin-left: 4px; }
+.plan-desc { font-size: 0.875rem; color: #64748b; margin-bottom: 2rem; min-height: 3em; line-height: 1.6; }
+.plan-features { list-style: none; padding: 0; margin: 0 0 2.5rem 0; flex-grow: 1; }
+.plan-features li { display: flex; align-items: flex-start; gap: 0.75rem; margin-bottom: 0.75rem; font-size: 0.875rem; color: #334155; font-weight: 500; }
+.plan-cta { display: block; width: 100%; padding: 1rem; border-radius: 1rem; background: #1e293b; color: white; border: none; font-weight: 700; cursor: pointer; text-align: center; text-decoration: none; transition: opacity 0.2s; }
+.plan-card.popular .plan-cta { background: #6366f1; }
+.plan-cta:hover { opacity: 0.85; }

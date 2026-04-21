@@ -20,27 +20,6 @@ export const createContactPremiumBlock = (editor: Editor) => {
       defaults: {
         components: `
           <section class="premium-contact-section">
-            <style>
-              .premium-contact-section { padding: 10rem 2rem; background: #ffffff; color: #3D3D3D; font-family: 'Inter', sans-serif; }
-              .premium-contact-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6rem; max-width: 1200px; margin: 0 auto; align-items: center; }
-              .premium-contact-info h2 { font-size: 4rem; font-weight: 900; letter-spacing: -0.05em; margin-bottom: 2rem; line-height: 1.1; font-style: italic; color: #3D3D3D; }
-              .premium-contact-info p { font-size: 1.125rem; color: #3D3D3D; opacity: 0.6; line-height: 1.6; margin-bottom: 4rem; font-weight: 500; }
-              .premium-contact-details { list-style: none; padding: 0; margin: 0; }
-              .premium-contact-item { display: flex; align-items: center; gap: 1.5rem; margin-bottom: 2.5rem; }
-              .premium-contact-icon { width: 56px; height: 56px; background: rgba(61, 61, 61, 0.05); border: 1px solid rgba(61, 61, 61, 0.1); border-radius: 1.25rem; display: flex; align-items: center; justify-content: center; color: #6366f1; }
-              .premium-contact-label { display: block; font-size: 0.75rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; color: #3D3D3D; opacity: 0.4; margin-bottom: 0.25rem; }
-              .premium-contact-val { font-size: 1.125rem; font-weight: 700; color: #3D3D3D; }
-              .premium-contact-form { background: #ffffff; border: 1px solid rgba(61, 61, 61, 0.1); border-radius: 3.5rem; padding: 4rem; box-shadow: 0 40px 100px -30px rgba(0,0,0,0.05); }
-              .premium-form-group { margin-bottom: 2rem; }
-              .premium-form-label { display: block; font-size: 0.75rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.15em; color: #3D3D3D; opacity: 0.5; margin-bottom: 1rem; }
-              .premium-input { width: 100%; background: #f8fafc; border: 1px solid #3D3D3D; border-radius: 1.25rem; padding: 1.25rem; color: #3D3D3D; font-family: inherit; font-size: 1rem; transition: all 0.3s; }
-              .premium-input::placeholder { color: #3D3D3D; opacity: 0.3; }
-              .premium-input:focus { outline: none; border-color: #6366f1; background: #ffffff; }
-              .premium-submit-btn { width: 100%; padding: 1.5rem; background: #3D3D3D; color: white; border: none; border-radius: 1.5rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.3em; cursor: pointer; transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1); box-shadow: 0 15px 30px -10px rgba(0,0,0,0.1); }
-              .premium-submit-btn:hover { background: #6366f1; transform: translateY(-5px); box-shadow: 0 20px 40px -10px rgba(99, 102, 241, 0.4); }
-              @media (max-width: 1024px) { .premium-contact-grid { grid-template-columns: 1fr; gap: 4rem; } .premium-contact-info { text-align: center; } .premium-contact-item { justify-content: center; } .premium-contact-info h2 { font-size: 3rem; } }
-              @media (max-width: 768px) { .premium-contact-form { padding: 2rem; border-radius: 2.5rem; } }
-            </style>
             <div class="premium-contact-grid">
               <div class="premium-contact-info">
                 <h2 data-gjs-editable="true" data-gjs-selectable="true">HABLEMOS DE<br>TU FUTURO.</h2>

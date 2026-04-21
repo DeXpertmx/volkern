@@ -25,11 +25,6 @@ export const createElementPremiumBlocks = (editor: Editor) => {
         ],
         components: `
           <div class="premium-rating-wrap">
-            <style>
-              .premium-rating-wrap { padding: 1rem; display: flex; flex-direction: column; align-items: center; gap: 0.5rem; font-family: 'Inter', sans-serif; }
-              .premium-stars { display: flex; gap: 0.25rem; color: #fbbf24; }
-              .premium-rating-text { font-size: 0.875rem; font-weight: 700; color: #3D3D3D; opacity: 0.6; }
-            </style>
             <div class="premium-stars" data-v-stars>
             </div>
             <div class="premium-rating-text" data-v-text>4.9/5 basado en 2k reseñas</div>
@@ -76,41 +71,72 @@ export const createElementPremiumBlocks = (editor: Editor) => {
   editor.DomComponents.addType('icon-list-premium', {
     model: {
       defaults: {
+        attributes: {
+          'data-items': 'Beneficio principal 1, Soporte premium 24/7, Acceso ilimitado',
+          'data-icon': 'check',
+          'data-color': '#6366f1',
+        },
         traits: [
-          { type: 'textarea', label: 'Items (coma)', name: 'data-items' },
-          { type: 'color', label: 'Color Icono', name: 'data-color', value: '#10b981' },
+          { 
+            type: 'textarea', 
+            label: 'Items (separados por coma)', 
+            name: 'data-items',
+          },
+          { 
+            type: 'select', 
+            label: 'Icono', 
+            name: 'data-icon',
+            options: [
+              { id: 'check', name: 'Check' },
+              { id: 'arrow', name: 'Flecha' },
+              { id: 'star', name: 'Estrella' },
+              { id: 'features', name: 'Cuadrados' },
+            ],
+          },
+          { type: 'color', label: 'Color Icono', name: 'data-color' },
         ],
         components: `
           <ul class="premium-icon-list">
-            <style>
-              .premium-icon-list { list-style: none; padding: 2rem; margin: 0; display: flex; flex-direction: column; gap: 1rem; font-family: 'Inter', sans-serif; }
-              .premium-list-item { display: flex; align-items: center; gap: 1rem; font-weight: 600; color: #3D3D3D; }
-              .premium-list-icon { flex-shrink: 0; display: flex; align-items: center; }
-            </style>
             <div data-v-items>
-               <li class="premium-list-item"><span class="premium-list-icon"><svg width="20" height="20" fill="none" stroke="#10b981" stroke-width="3" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"></path></svg></span> Punto de control 1</li>
             </div>
           </ul>
         `,
         script: function(this: any) {
           const el = this;
-          const itemsWrap = el.querySelector('[data-v-items]');
+          
+          const getIcon = (name, color) => {
+            const icons = {
+              check: '<path d="M20 6L9 17l-5-5"/>',
+              arrow: '<path d="M5 12h14M12 5l7 7-7 7"/>',
+              star: '<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>',
+              features: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>'
+            };
+            const path = icons[name] || icons.check;
+            const strokeWidth = name === 'star' ? '2' : '3';
+            return `<svg width="20" height="20" fill="none" stroke="${color}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">${path}</svg>`;
+          };
 
           const update = () => {
-             const items = el.getAttribute('data-items');
-             const color = el.getAttribute('data-color') || '#10b981';
+             const itemsWrap = el.querySelector('[data-v-items]');
+             if (!itemsWrap) return;
+
+             const itemsRaw = el.getAttribute('data-items') || '';
+             const color = el.getAttribute('data-color') || '#6366f1';
+             const iconName = el.getAttribute('data-icon') || 'check';
              
-             if (items && itemsWrap) {
-                const list = items.split(',').map((s) => s.trim());
-                itemsWrap.innerHTML = list.map(i => `
-                  <li class="premium-list-item">
-                    <span class="premium-list-icon">
-                      <svg width="20" height="20" fill="none" stroke="${color}" stroke-width="3" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"></path></svg>
-                    </span> 
-                    ${i}
-                  </li>
-                `).join('');
+             const list = itemsRaw.split(',').map((s) => s.trim()).filter(s => s.length > 0);
+             if (list.length === 0) {
+                itemsWrap.innerHTML = '<li class="premium-list-item" style="opacity:0.5;">Añade items en la configuración (gear icon)</li>';
+                return;
              }
+             
+             const iconSvg = getIcon(iconName, color);
+             itemsWrap.innerHTML = list.map(i => `
+                <li class="premium-list-item">
+                  <span class="premium-list-icon">${iconSvg}</span> 
+                  <span class="premium-list-text">${i}</span>
+                </li>
+             `).join('');
           };
           
           const obs = new MutationObserver(() => update());
@@ -143,14 +169,6 @@ export const createElementPremiumBlocks = (editor: Editor) => {
         ],
         components: `
           <div class="premium-image-box">
-            <style>
-              .premium-image-box { border-radius: 2.5rem; overflow: hidden; background: #ffffff; border: 1px solid rgba(61,61,61,0.1); transition: all 0.5s; font-family: 'Inter', sans-serif; }
-              .premium-image-box:hover { transform: translateY(-10px); box-shadow: 0 40px 80px -20px rgba(0,0,0,0.1); }
-              .premium-box-img { width: 100%; height: 300px; object-fit: cover; }
-              .premium-box-content { padding: 2.5rem; }
-              .premium-box-title { font-size: 1.5rem; font-weight: 800; margin-bottom: 1rem; color: #3D3D3D; }
-              .premium-box-desc { font-size: 1rem; opacity: 0.6; line-height: 1.6; color: #3D3D3D; }
-            </style>
             <img class="premium-box-img" data-v-img src="https://images.unsplash.com/photo-1542744173-8e7e53415bb0?auto=format&fit=crop&w=800&q=80">
             <div class="premium-box-content">
               <h3 class="premium-box-title" data-v-title>Nombre del Proyecto</h3>
@@ -210,10 +228,6 @@ export const createElementPremiumBlocks = (editor: Editor) => {
         ],
         components: `
           <div class="premium-divider-container">
-            <style>
-              .premium-divider-container { display: flex; justify-content: center; width: 100%; }
-              .premium-divider-line { transition: all 0.3s; }
-            </style>
             <div class="premium-divider-line" data-v-line></div>
           </div>
         `,

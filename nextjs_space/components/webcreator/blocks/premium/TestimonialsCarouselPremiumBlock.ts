@@ -24,17 +24,6 @@ export const createTestimonialsCarouselBlock = (editor: Editor) => {
         ],
         components: `
           <section class="premium-testimonial-carousel">
-            <style>
-              .premium-testimonial-carousel { padding: 8rem 2rem; background: #f8fafc; overflow: hidden; position: relative; font-family: 'Inter', sans-serif; }
-              .premium-testimonial-track { display: flex; transition: transform 0.6s cubic-bezier(0.23, 1, 0.32, 1); }
-              .premium-testimonial-slide { min-width: 100%; display: flex; flex-direction: column; align-items: center; text-align: center; padding: 2rem; }
-              .premium-testimonial-quote { font-size: 2.5rem; font-weight: 800; line-height: 1.2; color: #3D3D3D; margin-bottom: 3rem; max-width: 800px; }
-              .premium-testimonial-author { font-size: 1.125rem; font-weight: 700; color: #6366f1; text-transform: uppercase; letter-spacing: 0.1em; }
-              .premium-testimonial-nav { position: absolute; bottom: 3rem; left: 50%; transform: translateX(-50%); display: flex; gap: 0.75rem; }
-              .premium-testimonial-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(0,0,0,0.1); border: none; cursor: pointer; }
-              .premium-testimonial-dot.active { background: #6366f1; transform: scale(1.5); }
-              @media (max-width: 768px) { .premium-testimonial-quote { font-size: 1.5rem; } }
-            </style>
             <div class="premium-testimonial-track" data-v-track>
               <div class="premium-testimonial-slide">
                 <blockquote class="premium-testimonial-quote">"La mejor inversión tecnológica que hemos hecho este año. Absolutamente impecable."</blockquote>

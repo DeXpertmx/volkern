@@ -130,6 +130,11 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>(({ initialDa
         }
       },
       canvas: {
+        scripts: [
+          "https://cdn.jsdelivr.net/npm/tailwindcss@3.4.1/dist/tailwind.min.css",
+          "https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap",
+          "data:text/javascript;base64,ZG9jdW1lbnQuYWRkRXZlbnRMaXN0ZW5lcignY2xpY2snLCBmdW5jdGlvbihlKSB7CiAgdmFyIGVsID0gZS50YXJnZXQuY2xvc2VzdCgnW2hyZWZdJyk7CiAgaWYgKGVsICYmIGVsLnRhZ05hbWUgIT09ICdBJyAmJiAhZWwuY2xvc2VzdCgnYScpKSB7CiAgICB2YXIgdXJsID0gZWwuZ2V0QXR0cmlidXRlKCdocmVmJyk7CiAgICB2YXIgdGFyZ2V0ID0gZWwuZ2V0QXR0cmlidXRlKCd0YXJnZXQnKTsKICAgIGlmICh1cmwpIHsKICAgICAgaWYgKHRhcmdldCA9PT0gJ19ibGFuaycpIHdpbmRvdy5vcGVuKHVybCk7CiAgICAgIGVsc2Ugd2luZG93LmxvY2F0aW9uLmhyZWYgPSB1cmw7CiAgICB9CiAgfQp9KTs="
+        ],
         styles: [
           "https://cdn.jsdelivr.net/npm/tailwindcss@3.4.1/dist/tailwind.min.css",
           "https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap",
@@ -252,59 +257,78 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>(({ initialDa
       });
 
       // Global fix for Buttons and Links to ensure their text is ALWAYS editable
-      ['button', 'a'].forEach(tag => {
+      // Global fix for Buttons and Links to ensure their text is ALWAYS editable and have URL traits
+      const urlTraits = [
+        {
+          name: 'href',
+          label: 'Enlace (URL)',
+          placeholder: 'ej: /contacto o https://google.com',
+        },
+        {
+          type: 'select',
+          name: 'target',
+          label: 'Abrir en',
+          options: [
+            { value: '', name: 'Misma ventana' },
+            { value: '_blank', name: 'Nueva pestaña' },
+          ]
+        }
+      ];
+
+      ['button', 'a', 'link'].forEach(tag => {
+        const type = editor.DomComponents.getType(tag);
+        const existingTraits = type?.model.prototype.defaults.traits || [];
+        
         editor.DomComponents.addType(tag, {
           model: {
             defaults: {
               editable: true,
               selectable: true,
               // If it's a link, we don't want to follow it in the editor
-              ...(tag === 'a' ? { 'data-gjs-clickable': false } : {})
+              ...(tag === 'a' || tag === 'link' ? { 'data-gjs-clickable': false } : {}),
+              traits: [...existingTraits, ...urlTraits.filter(t => !existingTraits.some((et: any) => (et.name || et) === t.name))]
             }
           }
         });
       });
 
-      // Global fix for Input buttons (Submit/Button) - since they can't be edited inline easily,
-      // we ensure they have a clear trait for the button text.
+      // Global fix for Input buttons (Submit/Button)
       ['input', 'textarea'].forEach(tag => {
+        const type = editor.DomComponents.getType(tag);
+        const existingTraits = type?.model.prototype.defaults.traits || [];
+        
+        const inputTraits = [
+          {
+            name: 'data-volkern-map',
+            label: 'Vincular con CRM',
+            placeholder: 'ej: nombre, email, telefono',
+          },
+          ...urlTraits,
+          {
+            name: 'value',
+            label: 'Texto del Botón / Valor',
+          },
+          {
+            name: 'placeholder',
+            label: 'Placeholder',
+          },
+          {
+            type: 'select',
+            name: 'name', // Using name as type select for mapping
+            label: 'Tipo Campo',
+            options: [
+              { value: 'text', name: 'Texto' },
+              { value: 'email', name: 'Email' },
+              { value: 'tel', name: 'Teléfono' },
+              { value: 'submit', name: 'Botón Enviar' },
+            ]
+          }
+        ];
+
         editor.DomComponents.addType(tag, {
           model: {
             defaults: {
-              traits: [
-                {
-                  name: 'data-volkern-map',
-                  label: 'Vincular con CRM',
-                  placeholder: 'ej: nombre, email, telefono',
-                },
-                {
-                  name: 'value',
-                  label: 'Texto del Botón / Valor',
-                },
-                {
-                  name: 'placeholder',
-                  label: 'Placeholder',
-                },
-                {
-                  type: 'select',
-                  name: 'type',
-                  label: 'Tipo',
-                  options: [
-                    { value: 'text', name: 'Texto' },
-                    { value: 'email', name: 'Email' },
-                    { value: 'password', name: 'Contraseña' },
-                    { value: 'number', name: 'Número' },
-                    { value: 'submit', name: 'Enviar (Botón)' },
-                    { value: 'button', name: 'Botón' },
-                    { value: 'tel', name: 'Teléfono' },
-                    { value: 'date', name: 'Fecha' },
-                  ]
-                },
-                {
-                  name: 'name',
-                  label: 'Nombre del Campo HTML',
-                }
-              ]
+              traits: [...existingTraits, ...inputTraits.filter(t => !existingTraits.some((et: any) => (et.name || et) === t.name))]
             }
           }
         });
