@@ -55,6 +55,9 @@ model User {
   metadata                Json?                      @default("{}")
   resetToken              String?                    @unique
   resetTokenExpiry        DateTime?
+  twoFactorCode           String?
+  twoFactorExpires        DateTime?
+  isTwoFactorEnabled      Boolean                    @default(false)
   bookingBio              String?
   bookingEnabled          Boolean                    @default(false)
   bookingSlug             String?                    @unique
@@ -5293,10 +5296,13 @@ model BankConnection {
   id              String   @id @default(cuid())
   tenantId        String
   provider        String   // Ej: "Gocardless", "SaltEdge"
-  providerId      String   // ID externo de la conexión
+  providerId      String   // ID externo de la conexión (Plaid Item ID)
+  accessToken     String?  // Token de acceso (encriptado idealmente)
+  institutionId   String?  // ID de la institución bancaria
   bankName        String
   lastSync        DateTime?
   status          String   // ACTIVE, DISCONNECTED
+  metadata        Json?    @default("{}")
   
   transactions    BankTransaction[]
   tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)

@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import { 
   ShieldCheck, 
   Camera, 
@@ -263,6 +264,41 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
           icon={ShieldCheck}
         >
           <Card className="border-none shadow-xl ring-1 ring-border/50 p-8 space-y-8">
+            <div className="flex items-center justify-between p-6 bg-indigo-50/50 border border-indigo-100 rounded-3xl">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-black text-lg text-slate-900">Autenticación de Dos Factores (MFA)</h3>
+                  <Badge variant={userData?.isTwoFactorEnabled ? "default" : "secondary"} className="rounded-full">
+                    {userData?.isTwoFactorEnabled ? "Activado" : "Desactivado"}
+                  </Badge>
+                </div>
+                <p className="text-xs text-slate-500 font-medium">Añade una capa extra de seguridad enviando un código único a tu email al iniciar sesión.</p>
+              </div>
+              <Switch 
+                checked={userData?.isTwoFactorEnabled || false} 
+                onCheckedChange={async (checked) => {
+                  setSaving(true);
+                  try {
+                    const res = await fetch("/api/users/me/2fa", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ enabled: checked })
+                    });
+                    if (res.ok) {
+                      toast.success(`2FA ${checked ? 'activado' : 'desactivado'} correctamente`);
+                      fetchUser();
+                    } else {
+                      toast.error("Error al cambiar configuración de 2FA");
+                    }
+                  } catch (error) {
+                    toast.error("Error de conexión");
+                  } finally {
+                    setSaving(false);
+                  }
+                }} 
+              />
+            </div>
+
             <div className="grid grid-cols-1 gap-8">
               <div className="space-y-2 max-w-md">
                 <Label className="text-[11px] font-black uppercase text-slate-400 tracking-wider">Contraseña Actual</Label>

@@ -41,6 +41,7 @@ export const GET = withTenantAuth(async (req, auth) => {
             accountType: true
           }
         },
+        isTwoFactorEnabled: true,
         metadata: true
       }
     });
