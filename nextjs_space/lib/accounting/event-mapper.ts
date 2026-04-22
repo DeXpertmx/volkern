@@ -110,7 +110,15 @@ export class AccountingEventMapper {
         { accountId: accounts[expenseAccount], debit: subtotal, credit: 0 },
         { accountId: accounts['472'], debit: vat, credit: 0 },
         { accountId: accounts['410'], debit: 0, credit: total }
-      ]
+      ],
+      taxImpact: {
+        type: 'IVA_SOPORTADO',
+        baseAmount: subtotal,
+        taxRate: 21,
+        taxAmount: vat,
+        periodMonth: expense.createdAt.getMonth() + 1,
+        periodYear: expense.createdAt.getFullYear()
+      }
     });
   }
 

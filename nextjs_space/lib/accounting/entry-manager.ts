@@ -76,7 +76,7 @@ export class EntryManager {
               credit: l.credit
             }))
           },
-          taxRecord: data.taxImpact ? {
+          taxImpact: data.taxImpact ? {
             create: {
               tenantId: data.tenantId,
               type: data.taxImpact.type as any,
@@ -88,7 +88,7 @@ export class EntryManager {
             }
           } : undefined
         },
-        include: { lines: true, taxRecord: true }
+        include: { lines: true, taxImpact: true }
       });
 
       // Update Account balances (Operational denormalization for faster reporting)
