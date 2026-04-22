@@ -23,6 +23,12 @@ export default function WebcreatorEditorPage({ params }: EditorPageProps) {
     contenido: any;
     estado: string;
     tenantId?: string | null;
+    metaTitulo?: string;
+    metaDescripcion?: string;
+    metaKeywords?: string;
+    metaImagen?: string;
+    scriptsHead?: string;
+    scriptsBody?: string;
   } | null>(null);
 
   // Get template from URL query params or determine based on page content
@@ -73,6 +79,12 @@ export default function WebcreatorEditorPage({ params }: EditorPageProps) {
         contenido: projectData,
         estado: data.page.estado || "draft",
         tenantId: data.page.tenantId,
+        metaTitulo: data.page.metaTitulo || "",
+        metaDescripcion: data.page.metaDescripcion || "",
+        metaKeywords: data.page.metaKeywords || "",
+        metaImagen: data.page.metaImagen || "",
+        scriptsHead: data.page.scriptsHead || "",
+        scriptsBody: data.page.scriptsBody || "",
       });
     } catch (err) {
       console.error('[WebcreatorEditor] Error loading page:', err);
@@ -86,7 +98,20 @@ export default function WebcreatorEditorPage({ params }: EditorPageProps) {
     loadPage();
   }, [loadPage]);
 
-  const handleSave = async (data: { projectData: any; html?: string; css?: string; estado?: string }) => {
+  const handleSave = async (data: { 
+    projectData: any; 
+    html?: string; 
+    css?: string; 
+    estado?: string;
+    seo?: {
+      metaTitulo?: string;
+      metaDescripcion?: string;
+      metaKeywords?: string;
+      metaImagen?: string;
+      scriptsHead?: string;
+      scriptsBody?: string;
+    };
+  }) => {
     try {
       console.log('[WebcreatorEditor] Saving project data:', {
         hasProjectData: !!data.projectData,
@@ -103,6 +128,12 @@ export default function WebcreatorEditorPage({ params }: EditorPageProps) {
         },
         cssPersonalizado: data.css,
         estado: data.estado || pageData?.estado,
+        metaTitulo: data.seo?.metaTitulo,
+        metaDescripcion: data.seo?.metaDescripcion,
+        metaKeywords: data.seo?.metaKeywords,
+        metaImagen: data.seo?.metaImagen,
+        scriptsHead: data.seo?.scriptsHead,
+        scriptsBody: data.seo?.scriptsBody,
       };
 
       const response = await fetch(`/api/cms/pages/${params.id}`, {
@@ -126,6 +157,12 @@ export default function WebcreatorEditorPage({ params }: EditorPageProps) {
           ...prev,
           contenido: data.projectData,
           estado: data.estado || prev.estado,
+          metaTitulo: data.seo?.metaTitulo || prev.metaTitulo,
+          metaDescripcion: data.seo?.metaDescripcion || prev.metaDescripcion,
+          metaKeywords: data.seo?.metaKeywords || prev.metaKeywords,
+          metaImagen: data.seo?.metaImagen || prev.metaImagen,
+          scriptsHead: data.seo?.scriptsHead || prev.scriptsHead,
+          scriptsBody: data.seo?.scriptsBody || prev.scriptsBody,
         } : prev);
       }
 
@@ -175,6 +212,14 @@ export default function WebcreatorEditorPage({ params }: EditorPageProps) {
         pageTitle={pageData.titulo}
         slug={pageData.slug}
         initialData={pageData.contenido}
+        initialSeo={{
+          metaTitulo: pageData.metaTitulo,
+          metaDescripcion: pageData.metaDescripcion,
+          metaKeywords: pageData.metaKeywords,
+          metaImagen: pageData.metaImagen,
+          scriptsHead: pageData.scriptsHead,
+          scriptsBody: pageData.scriptsBody,
+        }}
         templateId={templateId}
         backUrl={backUrl}
         onSave={handleSave}

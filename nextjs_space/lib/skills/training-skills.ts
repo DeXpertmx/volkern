@@ -92,7 +92,9 @@ Responde ÚNICAMENTE con el mensaje del cliente en formato JSON:
   }
 
   try {
-    const parsed = JSON.parse(aiRes.content);
+    // Limpiar posibles bloques de código markdown antes de parsear
+    const cleanedContent = aiRes.content.replace(/```json/g, '').replace(/```/g, '').trim();
+    const parsed = JSON.parse(cleanedContent);
     return {
       customerResponse: parsed.customerResponse,
       objectionType: parsed.objectionType,
@@ -102,8 +104,10 @@ Responde ÚNICAMENTE con el mensaje del cliente en formato JSON:
     };
   } catch (e) {
     console.error('[Roleplay] Error parsing AI response:', aiRes.content);
+    
+    // Fallback: Intentar extraer el mensaje si el JSON falló
     return {
-      customerResponse: aiRes.content.substring(0, 200),
+      customerResponse: aiRes.content.length > 500 ? aiRes.content.substring(0, 500) + '...' : aiRes.content,
       objectionType: 'general',
       sentiment: 'neutral',
       leadName: lead.nombre,
@@ -155,12 +159,13 @@ Responde ÚNICAMENTE en JSON con el siguiente formato:
     };
   } else {
     try {
-      postMortem = JSON.parse(aiRes.content);
+      const cleanedContent = aiRes.content.replace(/```json/g, '').replace(/```/g, '').trim();
+      postMortem = JSON.parse(cleanedContent);
     } catch (e) {
       postMortem = {
         puntuacion_cierre: 60,
         argumento_mas_fuerte: "Evaluación parcial",
-        punto_de_mejora: "El agente mantuvo el flujo pero la IA no pudo estructurar el reporte",
+        punto_de_mejora: "El agente mantuvo el flujo pero la IA no pudo estructurar el reporte. Detalles: " + (aiRes.content.substring(0, 100)),
         tecnica_detectada: "Venta estándar"
       };
     }

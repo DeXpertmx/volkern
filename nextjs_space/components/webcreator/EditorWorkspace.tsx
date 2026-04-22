@@ -40,7 +40,28 @@ interface EditorWorkspaceProps {
   backUrl?: string;
   previewUrl?: string;
   mode?: 'webpage' | 'email' | 'document';
-  onSave?: (data: { projectData: Record<string, unknown>; html?: string; css?: string; estado?: string }) => void;
+  onSave?: (data: { 
+    projectData: Record<string, unknown>; 
+    html?: string; 
+    css?: string; 
+    estado?: string;
+    seo?: {
+      metaTitulo?: string;
+      metaDescripcion?: string;
+      metaKeywords?: string;
+      metaImagen?: string;
+      scriptsHead?: string;
+      scriptsBody?: string;
+    };
+  }) => void;
+  initialSeo?: {
+    metaTitulo?: string;
+    metaDescripcion?: string;
+    metaKeywords?: string;
+    metaImagen?: string;
+    scriptsHead?: string;
+    scriptsBody?: string;
+  };
 }
 
 const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
@@ -52,10 +73,19 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   backUrl,
   previewUrl,
   onSave,
-  mode = 'webpage'
+  mode = 'webpage',
+  initialSeo
 }) => {
   const [activePanel, setActivePanel] = useState<string>("blocks");
   const [activePropertyTab, setActivePropertyTab] = useState<string>("styles");
+  
+  // SEO State
+  const [metaTitulo, setMetaTitulo] = useState(initialSeo?.metaTitulo || "");
+  const [metaDescripcion, setMetaDescripcion] = useState(initialSeo?.metaDescripcion || "");
+  const [metaKeywords, setMetaKeywords] = useState(initialSeo?.metaKeywords || "");
+  const [metaImagen, setMetaImagen] = useState(initialSeo?.metaImagen || "");
+  const [scriptsHead, setScriptsHead] = useState(initialSeo?.scriptsHead || "");
+  const [scriptsBody, setScriptsBody] = useState(initialSeo?.scriptsBody || "");
   const [device, setDevice] = useState<string>("desktop");
   const [preview, setPreview] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
@@ -493,7 +523,14 @@ document.addEventListener('click', function(e) {
           html: fullHtml,
           css,
           estado: "draft",
-          category
+          seo: {
+            metaTitulo,
+            metaDescripcion,
+            metaKeywords,
+            metaImagen,
+            scriptsHead,
+            scriptsBody
+          }
         });
       } else {
         console.warn('[EditorWorkspace] No onSave callback provided');
@@ -541,7 +578,14 @@ document.addEventListener('click', function(e) {
           html: fullHtml,
           css,
           estado: "published",
-          category
+          seo: {
+            metaTitulo,
+            metaDescripcion,
+            metaKeywords,
+            metaImagen,
+            scriptsHead,
+            scriptsBody
+          }
         });
       }
 
@@ -586,6 +630,37 @@ document.addEventListener('click', function(e) {
     link.download = `${template.id.replace(/\s+/g, '_')}_template.grapesjs`;
     link.click();
     toast.success("Plantilla exportada correctamente");
+  };
+
+  const handleGenerateSeo = async () => {
+    try {
+      setIsSaving(true);
+      const editor = editorRef.current?.getEditor();
+      const contentSnippet = editor?.getHtml({ cleanId: true }).replace(/<[^>]*>?/gm, '').substring(0, 500) || "";
+      
+      const response = await fetch('/api/marketing/ai/generate-seo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pageTitle: pageTitle || "Página",
+          contentSnippet
+        })
+      });
+
+      if (!response.ok) throw new Error("Error generating SEO");
+      
+      const data = await response.json();
+      setMetaTitulo(data.metaTitulo);
+      setMetaDescripcion(data.metaDescripcion);
+      setMetaKeywords(data.metaKeywords);
+      
+      toast.success("SEO generado con IA exitosamente");
+    } catch (err) {
+      console.error(err);
+      toast.error("Error al generar SEO con IA");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -684,6 +759,24 @@ document.addEventListener('click', function(e) {
                   setCurrentVersionIndex(index);
                 }}
                 onOpenAIGenerator={() => setShowAIGenerator(true)}
+                seoData={{
+                  metaTitulo,
+                  metaDescripcion,
+                  metaKeywords,
+                  metaImagen,
+                  scriptsHead,
+                  scriptsBody
+                }}
+                setSeoData={{
+                  setMetaTitulo,
+                  setMetaDescripcion,
+                  setMetaKeywords,
+                  setMetaImagen,
+                  setScriptsHead,
+                  setScriptsBody
+                }}
+                onGenerateSeo={handleGenerateSeo}
+                isGeneratingSeo={isSaving}
               />
             </motion.div>
           )}

@@ -13,6 +13,7 @@ import {
   RefreshCw,
   Tags,
   Sparkles,
+  Search,
 } from "lucide-react";
 
 interface EditorSidebarProps {
@@ -36,6 +37,7 @@ const EditorSidebar: React.FC<EditorSidebarProps> = ({
         { id: "assets", icon: <ImageIcon size={20} />, label: "Media" },
         { id: "styles", icon: <Palette size={20} />, label: "Estilos" },
         { id: "cms", icon: <Database size={20} />, label: "CMS" },
+        { id: "seo", icon: <Search size={20} />, label: "SEO y Meta" },
         { id: "history", icon: <History size={20} />, label: "Historial" },
         { id: "versions", icon: <RefreshCw size={20} />, label: "Versiones" },
         { id: "variables", icon: <Tags size={20} />, label: "Guía de Variables" },

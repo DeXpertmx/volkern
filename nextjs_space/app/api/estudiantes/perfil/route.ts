@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { AcademyAuthService } from '@/lib/auth/academy-auth';
 import { prisma } from '@/lib/db';
 
 /**
@@ -10,14 +11,34 @@ import { prisma } from '@/lib/db';
  */
 export async function GET(request: NextRequest) {
   try {
+    let email: string | undefined;
+    let estudianteId: string | undefined;
+
+    // Intentar obtener sesión de next-auth
     const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    if (session?.user?.email) {
+      email = session.user.email;
+    } else {
+      // Intentar obtener token de la academia
+      const academyToken = request.cookies.get('academy_token')?.value;
+      if (academyToken) {
+        const academySession = await AcademyAuthService.validateToken(academyToken);
+        if (academySession) {
+          estudianteId = academySession.estudianteId;
+        }
+      }
+    }
+
+    if (!email && !estudianteId) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
 
     const estudiante = await prisma.estudiante.findFirst({
       where: {
-        email: session.user.email,
+        OR: [
+          { email: email },
+          { id: estudianteId }
+        ]
       },
       include: {
         _count: {

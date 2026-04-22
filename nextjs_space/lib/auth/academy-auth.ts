@@ -22,7 +22,7 @@ export class AcademyAuthService {
   }) {
     const hashedPassword = await bcrypt.hash(data.password, 12);
 
-    const user = await prisma.academyUser.create({
+    const user = await prisma.erp_academy_users.create({
       data: {
         tenantId: data.tenantId,
         email: data.email.toLowerCase(),
@@ -50,9 +50,9 @@ export class AcademyAuthService {
    * Authenticates a Learner.
    */
   static async login(email: string, password: string, deviceInfo?: string, ipAddress?: string) {
-    const user = await prisma.academyUser.findUnique({
+    const user = await prisma.erp_academy_users.findUnique({
       where: { email: email.toLowerCase(), status: 'ACTIVE' },
-      include: { estudiante: true }
+      include: { Estudiante: true }
     });
 
     if (!user) throw new Error('Credenciales inválidas');
@@ -61,7 +61,7 @@ export class AcademyAuthService {
     if (!isValid) throw new Error('Credenciales inválidas');
 
     // Update last login
-    await prisma.academyUser.update({
+    await prisma.erp_academy_users.update({
       where: { id: user.id },
       data: { lastLoginAt: new Date() }
     });
@@ -82,7 +82,7 @@ export class AcademyAuthService {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 30);
 
-    await prisma.academySession.create({
+    await prisma.erp_academy_sessions.create({
       data: {
         userId: user.id,
         token: token,
@@ -102,7 +102,7 @@ export class AcademyAuthService {
         firstName: user.firstName,
         lastName: user.lastName,
         role: user.role,
-        estudianteId: user.estudiante?.id
+        estudianteId: user.Estudiante?.id
       },
       token
     };
@@ -115,7 +115,7 @@ export class AcademyAuthService {
     try {
       const decoded: any = jwt.verify(token, JWT_SECRET);
       
-      const session = await prisma.academySession.findUnique({
+      const session = await prisma.erp_academy_sessions.findUnique({
         where: { token, revoked: false },
         include: { user: true }
       });
@@ -141,7 +141,7 @@ export class AcademyAuthService {
   private static async logEvent(tenantId: string, userId: string, eventType: string, entityType: string, entityId: string, payload?: any) {
     const integrityHash = jwt.sign({ tenantId, userId, eventType, timestamp: Date.now() }, JWT_SECRET);
     
-    return await prisma.academyAuditLog.create({
+    return await prisma.erp_academy_audit_logs.create({
       data: {
         tenantId,
         userId,

@@ -113,6 +113,7 @@
     "grapesjs-google-material-icons": "^1.0.9",
     "grapesjs-navbar": "^1.0.2",
     "grapesjs-plugin-forms": "^2.0.6",
+    "grapesjs-style-easing": "^1.0.1",
     "grapesjs-template-manager": "^1.0.7",
     "grapesjs-tooltip": "^0.1.8",
     "grapesjs-typed": "^2.0.1",

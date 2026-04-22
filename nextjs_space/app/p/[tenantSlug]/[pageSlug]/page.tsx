@@ -24,10 +24,17 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title: page.metaTitulo || page.titulo,
     description: page.metaDescripcion || page.descripcion,
+    keywords: page.metaKeywords,
     openGraph: {
       title: page.metaTitulo || page.titulo,
       description: page.metaDescripcion || page.descripcion,
       images: page.metaImagen ? [{ url: page.metaImagen }] : [],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: page.metaTitulo || page.titulo,
+      description: page.metaDescripcion || page.descripcion,
+      images: page.metaImagen ? [page.metaImagen] : [],
     },
   };
 }
@@ -43,8 +50,8 @@ async function getPageData(tenantSlug: string, pageSlug: string) {
 
   if (!tenant) return null;
 
-  const tenantClient = await getTenantDb(tenant.id);
-
+  const { client: tenantClient } = await getTenantDb(tenant.id);
+  
   return await dbContext.run({ tenantId: tenant.id, client: tenantClient }, async () => {
     return await tenantClient.page.findFirst({
       where: {

@@ -205,6 +205,7 @@ export const skills = {
   analyze_marketing_sentiment: marketingSkills.analyze_marketing_sentiment,
   suggest_campaign_optimization: marketingSkills.suggest_campaign_optimization,
   generate_web_creator_block: marketingSkills.generate_web_creator_block,
+  generate_seo_metadata: marketingSkills.generate_seo_metadata,
   advise_on_automation_rules: marketingSkills.advise_on_automation_rules,
 } as const;
 
@@ -331,6 +332,7 @@ export function listSkills(): Array<{ name: SkillName; description: string; cate
     { name: 'analyze_marketing_sentiment', description: 'Analizar sentimiento de feedback social', category: 'marketing' },
     { name: 'suggest_campaign_optimization', description: 'Sugerencias de optimización basadas en datos', category: 'marketing' },
     { name: 'generate_web_creator_block', description: 'Generar bloques HTML para Web Creator con IA', category: 'marketing' },
+    { name: 'generate_seo_metadata', description: 'Generar metadatos SEO con IA', category: 'marketing' },
     { name: 'advise_on_automation_rules', description: 'Analizar tenant y sugerir reglas de automatización', category: 'marketing' },
   ];
 }

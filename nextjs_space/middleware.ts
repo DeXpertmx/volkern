@@ -88,10 +88,12 @@ function isPublicPath(path: string): boolean {
     '/p/',             // Public pages
     '/portal/',        // Portal de Cliente Soberano
     '/api/portal/',     // API del Portal de Cliente
+    '/api/estudiantes/perfil', // Perfil de Estudiante (autenticación dual)
     '/member/login',   // Login del portal de cliente
     '/api/customer/auth/', // API de auth de cliente
     '/academy/login',  // Login de academia
     '/api/academy/auth/', // API de auth de academia
+    '/api/academy/auth/me', // Verificación de sesión de academia
     '/privacy',
     '/terms'
   ]

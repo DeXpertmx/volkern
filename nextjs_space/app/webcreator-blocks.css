@@ -3,6 +3,10 @@
    Separated from block definitions to avoid hydration mismatches in Next.js 
 */
 
+html {
+  scroll-behavior: smooth;
+}
+
 /* --- Pricing Dynamic Block --- */
 .dynamic-plans-wrapper { padding: 4rem 1rem; font-family: 'Inter', sans-serif; min-height: 250px; }
 .plans-loading { text-align: center; color: #64748b; font-weight: 500; padding: 2rem; }

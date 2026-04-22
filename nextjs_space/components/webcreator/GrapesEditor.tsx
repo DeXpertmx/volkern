@@ -14,6 +14,7 @@ import gjsNavbar from "grapesjs-navbar"
 import gjsTyped from "grapesjs-typed"
 import gjsTooltip from "grapesjs-tooltip"
 import gjsMaterialIcons from "grapesjs-google-material-icons"
+import gjsStyleEasing from "grapesjs-style-easing"
 import { setupVolkernBlocksAsync } from "./blocks/dynamicBlocks"
 import { setupDocumentBlocks } from "./blocks/DocumentBlocks"
 import { getTemplateData } from "./templates"
@@ -120,7 +121,7 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>(({ initialDa
       traitManager: { appendTo: "#gjs-tm-container" },
       layerManager: { appendTo: "#layers-container" },
       selectorManager: { appendTo: "#gjs-sm-selectors" },
-      plugins: [gjsBlocksBasic, gjsPluginForms, gjsComponentCountdown, gjsCustomCode, gjsNavbar, gjsTyped, gjsTooltip, gjsMaterialIcons],
+      plugins: [gjsBlocksBasic, gjsPluginForms, gjsComponentCountdown, gjsCustomCode, gjsNavbar, gjsTyped, gjsTooltip, gjsMaterialIcons, gjsStyleEasing],
       pluginsOpts: {
         [gjsBlocksBasic.toString()]: {
           blocks: ['column1', 'column2', 'column3', 'column3-7', 'text', 'heading', 'link', 'image', 'video', 'map'],
@@ -141,7 +142,7 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>(({ initialDa
         scripts: [
           "https://cdn.jsdelivr.net/npm/tailwindcss@3.4.1/dist/tailwind.min.css",
           "https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap",
-          "data:text/javascript;base64,ZG9jdW1lbnQuYWRkRXZlbnRMaXN0ZW5lcignY2xpY2snLCBmdW5jdGlvbihlKSB7CiAgdmFyIGVsID0gZS50YXJnZXQuY2xvc2VzdCgnW2hyZWZdJyk7CiAgaWYgKGVsICYmIGVsLnRhZ05hbWUgIT09ICdBJyAmJiAhZWwuY2xvc2VzdCgnYScpKSB7CiAgICB2YXIgdXJsID0gZWwuZ2V0QXR0cmlidXRlKCdocmVmJyk7CiAgICB2YXIgdGFyZ2V0ID0gZWwuZ2V0QXR0cmlidXRlKCd0YXJnZXQnKTsKICAgIGlmICh1cmwpIHsKICAgICAgaWYgKHRhcmdldCA9PT0gJ19ibGFuaycpIHdpbmRvdy5vcGVuKHVybCk7CiAgICAgIGVsc2Ugd2luZG93LmxvY2F0aW9uLmhyZWYgPSB1cmw7CiAgICB9CiAgfQp9KTs="
+          "data:text/javascript;base64,ZG9jdW1lbnQuYWRkRXZlbnRMaXN0ZW5lcignY2xpY2snLCBmdW5jdGlvbihlKSB7CiAgdmFyIGVsID0gZS50YXJnZXQuY2xvc2VzdCgnW2hyZWZdJyk7CiAgaWYgKGVsKSB7CiAgICB2YXIgdXJsID0gZWwuZ2V0QXR0cmlidXRlKCdocmVmJyk7CiAgICBpZiAodXJsICYmIHVybC5zdGFydHNXaXRoKCcjJykpIHsKICAgICAgdmFyIHRhcmdldEVsID0gZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQodXJsLnN1YnN0cigxKSk7CiAgICAgIGlmICh0YXJnZXRFbCkgewogICAgICAgIHRhcmdldEVsLnNjcm9sbEludG9WaWV3eyBiZWhhdmlvcjogJ3Ntb290aCcgfSk7CiAgICAgICAgZS5wcmV2ZW50RGVmYXVsdCgpOwogICAgICAgIGUuc3RvcFByb3BhZ2F0aW9uKCk7CiAgICAgIH0KICAgIH0gZWxzZSBpZiAoZWwudGFnTmFtZSAhPT0gJ0EnICYmICFlbC5jbG9zZXN0KCdhJykgJiYgdXJsKSB7CiAgICAgICAgdmFyIHRhcmdldCA9IGVsLmdldEF0dHJpYnV0ZSgndGFyZ2V0Jyk7CiAgICAgICAgaWYgKHRhcmdldCA9PT0gJ19ibGFuaycpIHdpbmRvdy5vcGVuKHVybCk7CiAgICAgICAgZWxzZSB3aW5kb3cubG9jYXRpb24uaHJlZiA9IHVybDsKICAgIH0KICB9Cn0sIHRydWUpOw=="
         ],
         styles: [
           "https://cdn.jsdelivr.net/npm/tailwindcss@3.4.1/dist/tailwind.min.css",
@@ -149,6 +150,7 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>(({ initialDa
           "https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200",
           "https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200",
           "https://fonts.googleapis.com/css2?family=Material+Symbols+Sharp:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200",
+          "html { scroll-behavior: smooth; }",
             ...(mode === 'document' ? [
                 `
                 body { 

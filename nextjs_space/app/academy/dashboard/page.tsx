@@ -33,15 +33,29 @@ export default function AcademyDashboardPage() {
     async function checkAuth() {
       try {
         const response = await fetch('/api/academy/auth/me');
-        if (!response.ok) throw new Error('No autorizado');
-        const data = await response.json();
-        setUser({
-          firstName: 'Estudiante',
-          lastName: 'Operativo',
-          role: 'LEARNER',
-          progress: 65,
-          certificates: 3
-        });
+        const { session } = await response.json();
+        
+        // Cargar perfil real del estudiante
+        const profileRes = await fetch('/api/estudiantes/perfil');
+        if (profileRes.ok) {
+          const studentData = await profileRes.json();
+          setUser({
+            ...studentData,
+            firstName: studentData.primerNombre || studentData.nombre.split(' ')[0],
+            lastName: studentData.apellidoPaterno || '',
+            role: session.role,
+            progress: studentData.progresoGlobal || 0,
+            certificates: studentData._count?.certificados || 0
+          });
+        } else {
+          setUser({
+            firstName: 'Estudiante',
+            lastName: 'Operativo',
+            role: session.role,
+            progress: 0,
+            certificates: 0
+          });
+        }
       } catch (error) {
         router.push('/academy/login');
       } finally {
@@ -111,14 +125,14 @@ export default function AcademyDashboardPage() {
               Academia de Operaciones
             </Badge>
             <h1 className="text-5xl font-black text-slate-900 tracking-tight mb-2">
-              ¡Hola, {user.firstName}!
+              ¡Hola, {user?.firstName || 'Estudiante'}!
             </h1>
             <p className="text-slate-500 font-medium text-lg">Tienes 2 certificaciones próximas a vencer. <span className="text-emerald-600 font-bold cursor-pointer underline underline-offset-4">Renovar ahora</span></p>
           </div>
 
           <div className="flex gap-4">
             <StatCard icon={<Clock />} label="Tiempo de Estudio" value="12h 45m" />
-            <StatCard icon={<Award />} label="Certificados" value={user.certificates.toString()} />
+            <StatCard icon={<Award />} label="Certificados" value={(user?.certificates || 0).toString()} />
           </div>
         </header>
 
@@ -131,20 +145,27 @@ export default function AcademyDashboardPage() {
                 <Button variant="link" className="text-emerald-600 font-bold">Ver todos</Button>
               </div>
               <div className="grid grid-cols-1 gap-6">
-                <CourseProgressCard 
-                  title="Seguridad en Planta Industrial" 
-                  instructor="Ing. Alberto Ruiz"
-                  progress={75}
-                  image="https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&q=80&w=800"
-                  nextLesson="Protocolo de Evacuación Nivel 3"
-                />
-                <CourseProgressCard 
-                  title="Mantenimiento Preventivo de Maquinaria" 
-                  instructor="Dpto. Técnico Volkern"
-                  progress={30}
-                  image="https://images.unsplash.com/photo-1537462715879-360eeb61a0ad?auto=format&fit=crop&q=80&w=800"
-                  nextLesson="Lubricación de Ejes Cónicos"
-                />
+                {user?.inscripciones && user.inscripciones.length > 0 ? (
+                  user.inscripciones.map((insc: any) => (
+                    <CourseProgressCard 
+                      key={insc.id}
+                      title={insc.curso.titulo} 
+                      instructor={insc.curso.instructorNombre || "Instructor Volkern"}
+                      progress={insc.progresoPorcentaje}
+                      image={insc.curso.imagenDestacada || "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&q=80&w=800"}
+                      nextLesson={insc.ultimaLeccionId ? "Continuar donde lo dejaste" : "Comenzar primera lección"}
+                    />
+                  ))
+                ) : (
+                  <Card className="p-12 text-center border-dashed border-2 border-slate-100 rounded-[2rem]">
+                    <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <BookOpen className="w-8 h-8 text-slate-200" />
+                    </div>
+                    <h3 className="text-lg font-black text-slate-900">Aún no tienes cursos</h3>
+                    <p className="text-sm text-slate-500 font-medium mt-1">Explora el catálogo para comenzar tu aprendizaje.</p>
+                    <Button className="mt-6 bg-emerald-600 hover:bg-emerald-700 rounded-xl font-bold">Explorar Catálogo</Button>
+                  </Card>
+                )}
               </div>
             </section>
 

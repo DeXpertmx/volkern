@@ -122,3 +122,22 @@ export async function advise_on_automation_rules(params: {
 
   return { suggestions };
 }
+
+/**
+ * Genera metadatos SEO (título, descripción, keywords) basados en el contenido de la página
+ */
+export async function generate_seo_metadata(params: {
+  pageTitle: string;
+  contentSnippet: string;
+  tenantId: string;
+}) {
+  const { pageTitle, contentSnippet } = params;
+
+  // Simulación de generación de SEO por Gemma 4
+  // En producción esto llamaría a un LLM analizando el contenido
+  const metaTitulo = `${pageTitle} | Volkern Experiencia Premium`;
+  const metaDescripcion = `Descubre cómo ${pageTitle} puede transformar tu negocio. ${contentSnippet.substring(0, 100)}... Optimizado para conversión y rendimiento con Volkern CRM.`;
+  const metaKeywords = `${pageTitle.toLowerCase().replace(/\s+/g, ', ')}, volkern, crm, marketing digital, conversión`;
+
+  return { metaTitulo, metaDescripcion, metaKeywords };
+}
