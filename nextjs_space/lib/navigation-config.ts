@@ -212,12 +212,15 @@ export const HUBS: HubConfig[] = [
     basePaths: [
       '/dashboard/gastos',
       '/dashboard/proveedores',
-      '/dashboard/finanzas/facturacion'
+      '/dashboard/finanzas/facturacion',
+      '/dashboard/finanzas/contabilidad'
     ],
     items: [
       { name: 'Global Cockpit', href: '/dashboard/finanzas/global', icon: LineChart, planModule: 'finanzas_consolidado', description: 'Consolidación financiera y cash flow' },
       { name: 'Financial Cockpit', href: '/dashboard/finanzas', icon: BarChart3, planModule: 'finanzas', description: 'Vista general de salud financiera' },
       { name: 'Facturación', href: '/dashboard/finanzas/facturacion', icon: Receipt, planModule: 'finanzas', description: 'Facturas emitidas y punto de venta' },
+      { name: 'Hub Contable', href: '/dashboard/finanzas/contabilidad', icon: BookOpen, planModule: 'finanzas', description: 'Libro diario inmutable y sellado' },
+      { name: 'Conciliación Bancaria', href: '/dashboard/finanzas/contabilidad/reconciliacion', icon: Calculator, planModule: 'finanzas', description: 'Sincronización con bancos e IA' },
       { name: 'Gastos', href: '/dashboard/finanzas/gastos', icon: ListTodo, planModule: 'finanzas', description: 'Listado de egresos y facturas' },
       { name: 'Proveedores', href: '/dashboard/finanzas/proveedores', icon: Building2, planModule: 'finanzas', description: 'Directorio de proveedores' },
       { name: 'Reportes P&L', href: '/dashboard/finanzas/reportes', icon: FileText, planModule: 'finanzas', description: 'Balance de pérdidas y ganancias' },

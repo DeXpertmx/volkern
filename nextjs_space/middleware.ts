@@ -66,6 +66,7 @@ function isPublicPath(path: string): boolean {
     '/tarjeta/',
     '/booking/',       // Calendario público de agendamiento
     '/api/public/',    // Endpoints públicos para embeds (servicios, leads, citas)
+    '/api/tarjetas-digitales/public/', // API pública de tarjetas
     '/api/leads',
     '/api/citas',      // Agregado para autenticación dual (API Keys)
     '/api/catalogo',   // Catálogo - autenticación dual (API Keys)

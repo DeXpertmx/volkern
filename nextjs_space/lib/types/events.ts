@@ -49,9 +49,10 @@ export const EVENTS = {
   DEAL_WON: 'deal_won',
   DEAL_LOST: 'deal_lost',
   
-  // Pagos
+  // Pagos e Invoicing
   PAYMENT_RECEIVED: 'payment_received',
   PAYMENT_FAILED: 'payment_failed',
+  INVOICE_CREATED: 'invoice_created',
   
   // n8n / Workflows
   WORKFLOW_EXECUTED: 'workflow_executed',
@@ -218,6 +219,16 @@ export interface PaymentFailedEvent extends BaseEventPayload {
   contactId?: string;
 }
 
+// Invoicing
+export interface InvoiceCreatedEvent extends BaseEventPayload {
+  invoiceId: string;
+  monto: number;
+  moneda: string;
+  numero: string;
+  leadId?: string;
+  contactId?: string;
+}
+
 // Workflows
 export interface WorkflowExecutedEvent extends BaseEventPayload {
   workflowId: string;
@@ -257,6 +268,7 @@ export type EventPayloadMap = {
   [EVENTS.DEAL_STAGE_CHANGED]: DealStageChangedEvent;
   [EVENTS.PAYMENT_RECEIVED]: PaymentReceivedEvent;
   [EVENTS.PAYMENT_FAILED]: PaymentFailedEvent;
+  [EVENTS.INVOICE_CREATED]: InvoiceCreatedEvent;
   [EVENTS.WORKFLOW_EXECUTED]: WorkflowExecutedEvent;
   [EVENTS.WORKFLOW_FAILED]: WorkflowFailedEvent;
 };

@@ -253,6 +253,11 @@ model Tenant {
   expenses                       Expense[]
   financialAudits                FinancialAudit[]
   financialSummaries             FinancialSummary[]
+  accountingAccounts             AccountingAccount[]
+  accountingEntries              AccountingEntry[]
+  bankConnections                BankConnection[]
+  taxRecords                     TaxRecord[]
+  accountingPeriods              AccountingPeriod[]
   erp_industrial_assets          erp_industrial_assets[]
   erp_inventory_lots             erp_inventory_lots[]
   erp_maintenance_logs           erp_maintenance_logs[]
@@ -5218,4 +5223,141 @@ enum FiscalType {
   AUTONOMO
   EMPRESA
   CLIENTE_EXTRANJERO
+}
+
+// --- VOLKERN HUB CONTABLE E INMUTABILIDAD ---
+
+enum AccountingEntryStatus {
+  DRAFT
+  POSTED      // Asiento firme
+  RECONCILED  // Conciliado con banco
+  VOIDED      // Anulado (los asientos nunca se borran, se anulan con un contra-asiento)
+}
+
+enum TaxType {
+  IVA_REPERCUTIDO
+  IVA_SOPORTADO
+  IRPF_RETENCION
+  IS_PAGO_CUENTA
+}
+
+model AccountingAccount {
+  id          String   @id @default(cuid())
+  tenantId    String
+  code        String   // Ej: "430001"
+  name        String   // Ej: "Clientes Nacionales"
+  type        String   // Activo, Pasivo, Gasto, Ingreso
+  balance     Decimal  @default(0)
+  entries     AccountingLine[]
+  
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@unique([tenantId, code])
+  @@map("accounting_accounts")
+}
+
+model AccountingEntry {
+  id              String                @id @default(cuid())
+  tenantId        String
+  date            DateTime              @default(now())
+  description     String
+  reference       String?               // ID de la Factura, Nómina o Gasto que originó esto
+  status          AccountingEntryStatus @default(POSTED)
+  
+  // Seguridad e Inmutabilidad (Protocolo Trust)
+  previousHash    String?               // Hash del asiento anterior para cadena inalterable
+  entryHash       String                // HMAC-SHA256(date + lines + previousHash)
+  sealedBy        String?               // Firma digital del usuario/sistema que cerró el asiento
+  
+  lines           AccountingLine[]
+  taxImpact       TaxRecord[]
+  reconciliations BankReconciliation[]
+
+  tenant          Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@index([tenantId, date])
+  @@map("accounting_entries")
+}
+
+model AccountingLine {
+  id          String   @id @default(cuid())
+  entryId     String
+  accountId   String
+  debit       Decimal  @default(0)
+  credit      Decimal  @default(0)
+  
+  entry       AccountingEntry   @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  account     AccountingAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  @@map("accounting_lines")
+}
+
+model BankConnection {
+  id              String   @id @default(cuid())
+  tenantId        String
+  provider        String   // Ej: "Gocardless", "SaltEdge"
+  providerId      String   // ID externo de la conexión
+  bankName        String
+  lastSync        DateTime?
+  status          String   // ACTIVE, DISCONNECTED
+  
+  transactions    BankTransaction[]
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@map("accounting_bank_connections")
+}
+
+model BankTransaction {
+  id                String   @id @default(cuid())
+  bankConnectionId  String
+  date              DateTime
+  description       String
+  amount            Decimal
+  reference         String?  // Referencia bancaria original
+  isReconciled      Boolean  @default(false)
+  
+  reconciliations   BankReconciliation[]
+  bankConnection    BankConnection @relation(fields: [bankConnectionId], references: [id], onDelete: Cascade)
+  @@unique([bankConnectionId, reference])
+  @@map("accounting_bank_transactions")
+}
+
+model BankReconciliation {
+  id                String   @id @default(cuid())
+  entryId           String
+  transactionId     String
+  matchedBy         String   // "SYSTEM", "GEMMA_AI", "USER_ID"
+  confidenceScore   Float?   // Score de confianza de Gemma
+  createdAt         DateTime @default(now())
+  
+  entry             AccountingEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  transaction       BankTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  @@map("accounting_reconciliations")
+}
+
+model TaxRecord {
+  id              String   @id @default(cuid())
+  tenantId        String
+  entryId         String
+  type            TaxType
+  baseAmount      Decimal
+  taxRate         Decimal
+  taxAmount       Decimal
+  periodMonth     Int
+  periodYear      Int
+  isFiled         Boolean  @default(false) // Si se ha presentado ya el modelo oficial
+  
+  entry           AccountingEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@map("accounting_tax_records")
+}
+
+model AccountingPeriod {
+  id              String   @id @default(cuid())
+  tenantId        String
+  year            Int
+  month           Int     // 1-12 o 0 para cierre anual
+  isClosed        Boolean  @default(false)
+  closedAt        DateTime?
+  closingHash     String?  // Hash final del periodo (Snapshot de integridad)
+  
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@unique([tenantId, year, month])
+  @@map("accounting_periods")
 }

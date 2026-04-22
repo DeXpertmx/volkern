@@ -24,6 +24,22 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Validación de seguridad de contraseña
+    if (password.length < 8) {
+      return NextResponse.json(
+        { error: 'La contraseña debe tener al menos 8 caracteres' },
+        { status: 400 }
+      )
+    }
+
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[!@#$%^&*(),.?":{}|<>]).{8,}$/
+    if (!passwordRegex.test(password)) {
+      return NextResponse.json(
+        { error: 'La contraseña debe incluir mayúsculas, minúsculas y al menos un carácter especial' },
+        { status: 400 }
+      )
+    }
+
     // Verificar si el usuario ya existe
     const existingUser = await prisma.user.findUnique({
       where: { email }

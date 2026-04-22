@@ -105,6 +105,12 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
       return;
     }
 
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[!@#$%^&*(),.?":{}|<>]).{8,}$/;
+    if (!passwordRegex.test(newPassword)) {
+      toast.error("La contraseña debe incluir mayúsculas, minúsculas y un carácter especial");
+      return;
+    }
+
     setUpdatingPassword(true);
     try {
       const res = await fetch("/api/users/cambiar-password", {
@@ -280,7 +286,7 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
               </div>
             </div>
             <div className="pt-4 flex items-center justify-between">
-              <p className="text-xs text-slate-500 font-medium max-w-md">La contraseña debe tener al menos 8 caracteres e incluir letras y números para mayor seguridad.</p>
+              <p className="text-xs text-slate-500 font-medium max-w-md">La contraseña debe tener al menos 8 caracteres e incluir mayúsculas, minúsculas y caracteres especiales para mayor seguridad.</p>
               <Button 
                 className="rounded-full px-10 h-12 premium-gradient-primary shadow-xl shadow-primary/20" 
                 onClick={handleUpdatePassword}

@@ -4,6 +4,7 @@ import { SquareClient, SquareEnvironment } from 'square'
 import gocardless, { Environments as GoCardlessEnvironment } from 'gocardless-nodejs'
 import { v4 as uuidv4 } from 'uuid'
 import { generateInvoiceFingerprint, GENESIS_FINGERPRINT } from './crypto-utils'
+import { eventBus, EVENTS } from './skills/event-bus'
 
 export interface ISignatureProvider {
   sign(payload: string): Promise<{ signature: string; algorithm: string }>;
@@ -172,6 +173,19 @@ export class InvoicingService {
       await this.lockPerfilFiscal(contactId, tenantId)
     }
 
+    // Emitir evento
+    eventBus.emitEvent(EVENTS.INVOICE_CREATED, {
+      tenantId,
+      invoiceId: invoice.id,
+      monto: invoice.monto,
+      moneda: invoice.moneda,
+      numero: invoice.numero,
+      leadId: invoice.leadId || undefined,
+      contactId: invoice.contactId || undefined,
+      source: 'api',
+      timestamp: new Date()
+    })
+
     return invoice
   }
 
@@ -241,6 +255,19 @@ export class InvoicingService {
     if (contactId) {
       await this.lockPerfilFiscal(contactId, tenantId)
     }
+
+    // Emitir evento
+    eventBus.emitEvent(EVENTS.INVOICE_CREATED, {
+      tenantId,
+      invoiceId: invoice.id,
+      monto: invoice.monto,
+      moneda: invoice.moneda,
+      numero: invoice.numero,
+      leadId: invoice.leadId || undefined,
+      contactId: invoice.contactId || undefined,
+      source: 'api',
+      timestamp: new Date()
+    })
 
     return invoice
   }
@@ -359,7 +386,7 @@ export class InvoicingService {
     })
 
     // 3. Crear Factura
-    const { invoice } = await client.invoices.create({
+    const { invoice: squareInvoice } = await client.invoices.create({
       invoice: {
         orderId: order?.id,
         primaryRecipient: { customerId: squareCustomerId },
@@ -372,7 +399,7 @@ export class InvoicingService {
       }
     })
 
-    const numero = publishedInvoice?.invoiceNumber || `SQ-${Date.now()}`
+    const numero = squareInvoice?.invoiceNumber || `SQ-${Date.now()}`
 
     // 5. Sello Veri*factu
     const security = await (InvoicingService as any).sealInvoiceMetadata({
@@ -385,23 +412,38 @@ export class InvoicingService {
     })
 
     // Guardar en DB local
-    return await (prisma as any).invoice.create({
+    const invoice = await (prisma as any).invoice.create({
       data: {
         tenantId,
         leadId,
         contactId,
         ordenVentaId: options.ordenVentaId,
-        externalId: publishedInvoice?.id!,
+        externalId: squareInvoice?.id!,
         provider: 'square',
         numero,
         monto: amount,
         moneda: currency,
         estado: 'pendiente',
-        urlPdf: publishedInvoice?.publicUrl || null,
-        metadata: JSON.parse(JSON.stringify(publishedInvoice, (_, v) => typeof v === 'bigint' ? v.toString() : v)),
+        urlPdf: squareInvoice?.publicUrl || null,
+        metadata: JSON.parse(JSON.stringify(squareInvoice, (_, v) => typeof v === 'bigint' ? v.toString() : v)),
         ...security
       }
     })
+
+    // Emitir evento
+    eventBus.emitEvent(EVENTS.INVOICE_CREATED, {
+      tenantId,
+      invoiceId: invoice.id,
+      monto: invoice.monto,
+      moneda: invoice.moneda,
+      numero: invoice.numero,
+      leadId: invoice.leadId || undefined,
+      contactId: invoice.contactId || undefined,
+      source: 'api',
+      timestamp: new Date()
+    })
+
+    return invoice
   }
 
   /**
@@ -451,7 +493,7 @@ export class InvoicingService {
     })
 
     // Guardar en DB local
-    return await (prisma as any).invoice.create({
+    const invoice = await (prisma as any).invoice.create({
       data: {
         tenantId,
         leadId,
@@ -468,6 +510,21 @@ export class InvoicingService {
         ...security
       }
     })
+
+    // Emitir evento
+    eventBus.emitEvent(EVENTS.INVOICE_CREATED, {
+      tenantId,
+      invoiceId: invoice.id,
+      monto: invoice.monto,
+      moneda: invoice.moneda,
+      numero: invoice.numero,
+      leadId: invoice.leadId || undefined,
+      contactId: invoice.contactId || undefined,
+      source: 'api',
+      timestamp: new Date()
+    })
+
+    return invoice
   }
 
   /**

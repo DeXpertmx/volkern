@@ -20,6 +20,7 @@ import { initMarketingQueues } from '@/lib/core/queue-service';
 import { initMarketingWorkers } from '@/lib/workers/marketing-worker';
 import { AutomationRuleEngine } from '@/lib/marketing/automation/rule-engine';
 import { QueueMonitorService } from '@/lib/marketing/queues/queue-monitor-service';
+import { initializeAccountingListeners } from '@/lib/accounting/accounting-listener';
 
 // Evitar múltiples inicializaciones
 let initialized = false;
@@ -83,8 +84,9 @@ export function initializeSkillsLayer(): void {
   // 2. Inicializar listeners de automatización
   initializeAutomationListeners();
 
-  // 3. Inicializar servicios de negocio (Finanzas)
+  // 3. Inicializar servicios de negocio (Finanzas y Contabilidad)
   BillingService.init();
+  initializeAccountingListeners();
 
   // 4. Inicializar automatización de Marketing (EventBridge es síncrono, Redis-deps son async)
   setupMarketingEventBridge();

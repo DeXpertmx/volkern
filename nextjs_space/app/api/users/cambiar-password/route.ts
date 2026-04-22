@@ -35,6 +35,15 @@ export async function POST(req: Request) {
       )
     }
 
+    // Validación de complejidad: Mayúsculas, minúsculas y caracteres especiales
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[!@#$%^&*(),.?":{}|<>]).{8,}$/
+    if (!passwordRegex.test(newPassword)) {
+      return NextResponse.json(
+        { error: 'La contraseña debe incluir mayúsculas, minúsculas y al menos un carácter especial' },
+        { status: 400 }
+      )
+    }
+
     // Buscar el usuario
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
