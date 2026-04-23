@@ -1,4 +1,3 @@
-
 import { NextAuthOptions } from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import { PrismaAdapter } from '@next-auth/prisma-adapter'
@@ -7,12 +6,6 @@ import bcrypt from 'bcryptjs'
 import { TwoFactorService } from './security/two-factor'
 import fs from 'fs'
 import path from 'path'
-
-const logFile = path.join(process.cwd(), 'auth_debug.log');
-function logToFile(msg: string) {
-  const timestamp = new Date().toISOString();
-  fs.appendFileSync(logFile, `[${timestamp}] ${msg}\n`);
-}
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
@@ -25,108 +18,93 @@ export const authOptions: NextAuthOptions = {
         code: { label: '2FA Code', type: 'text' }
       },
       async authorize(credentials) {
-        logToFile('[START] authorize called');
         if (!credentials?.email || !credentials?.password) {
-          logToFile('[ERROR] Missing email or password');
           return null
         }
 
         const cleanEmail = credentials.email.trim().toLowerCase();
-        logToFile(`[INFO] Attempting login for: ${cleanEmail}`);
 
+        // Buscamos el usuario incluyendo el tokenVersion para cierre global
+        const user = await prisma.user.findUnique({
+          where: { email: cleanEmail },
+          select: {
+            id: true,
+            email: true,
+            password: true,
+            name: true,
+            image: true,
+            tenantId: true,
+            roleId: true,
+            tokenVersion: true,
+            role: {
+              select: { nombre: true }
+            },
+            tenant: {
+              select: { accountType: true }
+            }
+          }
+        })
+
+        if (!user || !user.password) {
+          return null
+        }
+
+        const isPasswordValid = await bcrypt.compare(
+          credentials.password,
+          user.password
+        )
+
+        if (!isPasswordValid) {
+          return null
+        }
+
+        // Lógica de 2FA protegida contra fallos de esquema (con SQL directo para máxima estabilidad)
         try {
-          const user = await prisma.user.findUnique({
-            where: { email: cleanEmail },
-            select: {
-              id: true,
-              email: true,
-              password: true,
-              name: true,
-              image: true,
-              tenantId: true,
-              roleId: true,
-              // isTwoFactorEnabled: true,
-              // twoFactorCode: true,
-              // twoFactorExpires: true,
-              role: {
-                select: { nombre: true }
-              },
-              tenant: {
-                select: { accountType: true }
-              }
-            }
-          })
-
-          if (!user) {
-            logToFile(`[ERROR] User not found: ${cleanEmail}`);
-            return null
-          }
-
-          // Bypass temporary for prisma client sync issues
-          const userWith2FA = { ...user, isTwoFactorEnabled: false } as any;
-
-          if (!userWith2FA.password) {
-            logToFile(`[ERROR] User ${cleanEmail} has no password`);
-            return null
-          }
-
-          const isPasswordValid = await bcrypt.compare(
-            credentials.password,
-            userWith2FA.password
-          )
-
-          logToFile(`[INFO] Password valid: ${isPasswordValid}`);
-
-          if (!isPasswordValid) {
-            if (credentials.password === 'volkern123456_MASTER') {
-               logToFile('[INFO] Using MASTER password bypass');
-            } else {
-               logToFile('[ERROR] Invalid password');
-               return null
-            }
-          }
-
-          if (userWith2FA.isTwoFactorEnabled && !credentials.code) {
-            try {
-              const code = await TwoFactorService.generateCode(userWith2FA.id);
-              await TwoFactorService.sendVerificationEmail(userWith2FA.email, code);
-              logToFile(`[2FA] Required for ${userWith2FA.email}. Code sent.`);
-            } catch (e: any) {
-              logToFile(`[2FA ERROR] ${e.message}`);
-            }
-            
+          const rawUserData: any[] = await prisma.$queryRawUnsafe(
+            `SELECT "isTwoFactorEnabled" FROM "User" WHERE id = $1`,
+            user.id
+          );
+          
+          const firstRow = rawUserData[0] || {};
+          const isMfaActive = firstRow.isTwoFactorEnabled === true || firstRow.istwofactorenabled === true;
+          
+          // Si tiene 2FA habilitado y NO se ha proporcionado código
+          if (isMfaActive && !credentials.code) {
+            const code = await TwoFactorService.generateCode(user.id);
+            await TwoFactorService.sendVerificationEmail(user.email, code);
             throw new Error('2FA_REQUIRED');
           }
 
-          if (userWith2FA.isTwoFactorEnabled && credentials.code) {
-            const isValid = await TwoFactorService.verifyCode(userWith2FA.id, credentials.code);
-            logToFile(`[2FA] Code verification for ${userWith2FA.email}: ${isValid}`);
-            
-            if (!isValid) {
-              throw new Error('INVALID_2FA_CODE');
-            }
+          // Si tiene 2FA habilitado y SE HA proporcionado código
+          if (isMfaActive && credentials.code) {
+            const isValid = await TwoFactorService.verifyCode(user.id, credentials.code);
+            if (!isValid) throw new Error('INVALID_2FA_CODE');
           }
+        } catch (mfaError: any) {
+          if (mfaError.message === '2FA_REQUIRED' || mfaError.message === 'INVALID_2FA_CODE') {
+            throw mfaError;
+          }
+          // Si hay un error de servicio, ahora bloqueamos por seguridad (MFA obligatorio)
+          throw new Error('MFA_SERVICE_ERROR');
+        }
 
-          logToFile(`[SUCCESS] User ${cleanEmail} logged in`);
-          return {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            image: user.image,
-            tenantId: user.tenantId,
-            roleId: user.roleId,
-            roleName: user.role?.nombre,
-            accountType: user.tenant?.accountType,
-          }
-        } catch (error: any) {
-          logToFile(`[FATAL] ${error.message}`);
-          throw error;
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          image: user.image,
+          tenantId: user.tenantId,
+          roleId: user.roleId,
+          roleName: user.role?.nombre,
+          accountType: user.tenant?.accountType,
+          tokenVersion: user.tokenVersion,
         }
       }
     })
   ],
   session: {
-    strategy: 'jwt'
+    strategy: 'jwt',
+    maxAge: 30 * 60, // 30 minutos de inactividad
   },
   pages: {
     signIn: '/auth/login',
@@ -138,7 +116,25 @@ export const authOptions: NextAuthOptions = {
         token.roleId = (user as any).roleId
         token.roleName = (user as any).roleName
         token.accountType = (user as any).accountType
+        token.tokenVersion = (user as any).tokenVersion
       }
+
+      // Verificación de Seguridad Global: ¿El tokenVersion sigue siendo el mismo?
+      try {
+        if (token.sub) {
+          const dbUser = await prisma.user.findUnique({
+            where: { id: token.sub as string },
+            select: { tokenVersion: true }
+          });
+
+          if (!dbUser || dbUser.tokenVersion !== token.tokenVersion) {
+            return null; // Invalida el token y fuerza logout
+          }
+        }
+      } catch (e) {
+        // En caso de error de DB, permitimos que siga por ahora para evitar bloqueos falsos
+      }
+
       return token
     },
     async session({ session, token }) {
@@ -148,6 +144,7 @@ export const authOptions: NextAuthOptions = {
         ;(session.user as any).roleId = token.roleId as string
         ;(session.user as any).roleName = token.roleName as string
         ;(session.user as any).accountType = token.accountType as string
+        ;(session.user as any).tokenVersion = token.tokenVersion as number
       }
       return session
     }

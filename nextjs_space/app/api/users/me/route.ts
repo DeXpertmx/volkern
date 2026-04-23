@@ -41,7 +41,6 @@ export const GET = withTenantAuth(async (req, auth) => {
             accountType: true
           }
         },
-        isTwoFactorEnabled: true,
         metadata: true
       }
     });
@@ -50,10 +49,19 @@ export const GET = withTenantAuth(async (req, auth) => {
       return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 });
     }
 
+    // Bypass para campos nuevos (v3)
+    const rawData: any[] = await prisma.$queryRawUnsafe(
+      `SELECT "isTwoFactorEnabled" FROM "User" WHERE id = $1`,
+      user.id
+    );
+    const firstRow = rawData[0] || {};
+    const isTwoFactorEnabled = firstRow.isTwoFactorEnabled === true || firstRow.istwofactorenabled === true;
+
     // SI el usuario está suplantando a un tenant (Superadmin), 
     // sobreescribimos la información del tenant en la respuesta para que la UI se actualice.
     const responseUser = {
       ...user,
+      isTwoFactorEnabled,
       tenant: {
         id: activeTenant.id,
         nombre: activeTenant.nombre,

@@ -81,7 +81,7 @@ export class PayrollService {
       }
     });
 
-    const approvedVacations = await prisma.vacationRequest.findMany({
+    const approvedVacations = await (prisma as any).erp_vacation_requests.findMany({
       where: {
         employeeId,
         status: 'APPROVED',
@@ -92,13 +92,13 @@ export class PayrollService {
     });
 
     // 3.1 Obtener Comisiones del CRM
-    const approvedCommissions = await prisma.comision.findMany({
+    const approvedCommissions = employee?.userId ? await prisma.comision.findMany({
       where: {
-        userId: employee?.userId,
+        userId: employee.userId,
         estado: 'aprobada', // Estado exacto según schema
         fechaAprobacion: { gte: start, lte: end }
       }
-    });
+    }) : [];
 
     const commissionAmount = approvedCommissions.reduce((sum, c) => sum + c.montoCalculado, 0);
     const commissionsDetails = approvedCommissions.map(c => ({
@@ -230,7 +230,7 @@ export class PayrollService {
    */
   static async getPendingPayrolls(month: number, year: number) {
     const employees = await prisma.employee.findMany({
-      where: { active: true },
+      where: { isActive: true },
       include: { user: true }
     });
 
@@ -241,7 +241,7 @@ export class PayrollService {
         results.push({
           id: `pending_${emp.id}_${month}_${year}`,
           employeeId: emp.id,
-          employeeName: emp.name || emp.user.name,
+          employeeName: emp.fullName || emp.user?.name,
           role: emp.role || 'Empleado',
           salary: Number(emp.salary || 0),
           absences: attendanceAudit.absentDays,

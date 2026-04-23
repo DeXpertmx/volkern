@@ -39,21 +39,26 @@ export const vaultExtension = Prisma.defineExtension((client) => {
           const tenantId = store?.tenantId;
           const vaultSeed = store?.vaultSeed;
 
-          // Check de Pánico
-          if (!vaultSeed) {
-            console.error(`[Vault Extension] ERROR CRÍTICO: Bloqueada actualización en Employee para tenant ${tenantId}. vaultSeed ausente.`);
+          const data = args.data as any;
+          
+          // Solo bloquear si se están actualizando campos sensibles Y no hay vaultSeed
+          const hasSensitiveFields = data.salaryEncrypted || data.bankDetailsEncrypted || data.governmentIdEncrypted;
+          
+          if (hasSensitiveFields && !vaultSeed) {
+            console.error(`[Vault Extension] ERROR CRÍTICO: Bloqueada actualización de datos sensibles en Employee para tenant ${tenantId}. vaultSeed ausente.`);
             throw new Error('SECURITY_VIOLATION: No se puede actualizar información sensible sin una semilla de cifrado válida (vaultSeed).');
           }
 
-          const data = args.data as any;
-          if (data.salaryEncrypted) {
-            data.salaryEncrypted = VaultService.encrypt(data.salaryEncrypted, tenantId!, vaultSeed);
-          }
-          if (data.bankDetailsEncrypted) {
-            data.bankDetailsEncrypted = VaultService.encrypt(data.bankDetailsEncrypted, tenantId!, vaultSeed);
-          }
-          if (data.governmentIdEncrypted) {
-            data.governmentIdEncrypted = VaultService.encrypt(data.governmentIdEncrypted, tenantId!, vaultSeed);
+          if (vaultSeed) {
+            if (data.salaryEncrypted) {
+              data.salaryEncrypted = VaultService.encrypt(data.salaryEncrypted, tenantId!, vaultSeed);
+            }
+            if (data.bankDetailsEncrypted) {
+              data.bankDetailsEncrypted = VaultService.encrypt(data.bankDetailsEncrypted, tenantId!, vaultSeed);
+            }
+            if (data.governmentIdEncrypted) {
+              data.governmentIdEncrypted = VaultService.encrypt(data.governmentIdEncrypted, tenantId!, vaultSeed);
+            }
           }
 
           return query(args);

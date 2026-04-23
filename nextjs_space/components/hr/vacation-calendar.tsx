@@ -333,11 +333,11 @@ export function VacationCalendar({ onRequestClick }: VacationCalendarProps) {
                     </div>
 
                     {/* Physical/Logistics Alert List */}
-                    {insightData?.data_snapshot?.employeeAssets?.length > 0 && (
+                    {insightData?.data_snapshot?.erp_employee_assets?.length > 0 && (
                       <div className="space-y-4">
                         <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Activos Físicos (Bloqueadores)</h4>
                         <div className="grid grid-cols-1 gap-2">
-                          {insightData.data_snapshot.employeeAssets.map((asset: any) => (
+                          {insightData.data_snapshot.erp_employee_assets.map((asset: any) => (
                             <div key={asset.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
                               <div className="flex items-center gap-3">
                                 <div className="h-8 w-8 rounded-lg bg-white shadow-sm flex items-center justify-center">
@@ -356,11 +356,11 @@ export function VacationCalendar({ onRequestClick }: VacationCalendarProps) {
                     )}
 
                     {/* Digital Footprint Alert List */}
-                    {insightData?.data_snapshot?.digitalAccess?.length > 0 && (
+                    {insightData?.data_snapshot?.erp_digital_access?.length > 0 && (
                       <div className="space-y-4">
                         <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Huella Digital (The Vault)</h4>
                         <div className="grid grid-cols-1 gap-2">
-                          {insightData.data_snapshot.digitalAccess.map((access: any) => (
+                          {insightData.data_snapshot.erp_digital_access.map((access: any) => (
                             <div key={access.id} className="p-4 rounded-[1.5rem] bg-indigo-50 border border-indigo-100 flex items-center justify-between">
                               <div className="flex items-center gap-3">
                                 <div className="h-8 w-8 rounded-lg bg-white shadow-sm flex items-center justify-center">

@@ -13,9 +13,9 @@ export async function GET(req: NextRequest) {
   const tenantId = (session.user as any).tenantId
   const status = req.nextUrl.searchParams.get('status') || 'PENDING'
   
-  const claims = await prisma.expenseClaim.findMany({
+  const claims = await (prisma as any).erp_expense_claims.findMany({
     where: { tenantId, status },
-    include: { employee: true },
+    include: { erp_employees: true },
     orderBy: { createdAt: 'desc' }
   })
 

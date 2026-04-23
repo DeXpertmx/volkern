@@ -178,7 +178,7 @@ function ExpenseCard({ claim, isFront, onAction }: { claim: any, isFront: boolea
                  <div className="h-6 w-6 rounded-lg bg-primary/10 flex items-center justify-center">
                     <User className="h-3 w-3 text-primary" />
                  </div>
-                 <p className="text-sm font-bold text-slate-900">{claim.employee.fullName}</p>
+                 <p className="text-sm font-bold text-slate-900">{claim.erp_employees?.fullName || claim.employee?.fullName || 'Colaborador'}</p>
                </div>
              </div>
              <div className="text-right">

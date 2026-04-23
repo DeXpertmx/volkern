@@ -11,9 +11,9 @@ export async function GET(req: NextRequest) {
   }
 
   const tenantId = (session.user as any).tenantId
-  const vacations = await prisma.vacationRequest.findMany({
+  const vacations = await (prisma as any).erp_vacation_requests.findMany({
     where: { tenantId },
-    include: { employee: true },
+    include: { erp_employees: true },
     orderBy: { startDate: 'desc' }
   })
 

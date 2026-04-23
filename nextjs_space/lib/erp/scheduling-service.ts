@@ -18,7 +18,7 @@ export class SchedulingService {
     if (workOrders.length === 0) return null;
 
     // 2. Obtener líneas de producción activas
-    const lines = await prisma.productionLine.findMany({
+    const lines = await (prisma as any).erp_production_lines.findMany({
       where: { tenantId, active: true }
     });
 
@@ -38,7 +38,7 @@ export class SchedulingService {
     scoredOrders.sort((a, b) => b.priorityScore - a.priorityScore);
 
     // 4. Crear Plan de Scheduling
-    const plan = await prisma.schedulingPlan.create({
+    const plan = await (prisma as any).erp_scheduling_plans.create({
       data: {
         tenantId,
         date: new Date(),
@@ -54,7 +54,7 @@ export class SchedulingService {
       const line = lines[assignments.length % lines.length];
       const durationHours = wo.quantityToMake * 0.5; // 30 min por unidad
 
-      const assignment = await prisma.scheduleAssignment.create({
+      const assignment = await (prisma as any).erp_schedule_assignments.create({
         data: {
           tenantId,
           planId: plan.id,

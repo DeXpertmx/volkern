@@ -3,10 +3,12 @@
 
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
+import { cn } from '@/lib/utils'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import {
   Dialog,
   DialogContent,
@@ -33,8 +35,9 @@ import {
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { UserPlus, Mail, Phone, Clock, Shield, Pencil, Trash2 } from 'lucide-react'
+import { UserPlus, Mail, Phone, Clock, Shield, Pencil, Trash2, FileText, ChevronLeft } from 'lucide-react'
 import { toast } from 'sonner'
+import { EmployeeExpedient } from '@/components/hr/EmployeeExpedient'
 
 interface User {
   id: string
@@ -43,6 +46,12 @@ interface User {
   role: {
     id: string
     nombre: string
+  }
+  employee?: {
+    id: string
+    employeeId: string
+    department: string
+    jobTitle: string
   }
   estado: string
   telefono?: string | null
@@ -65,12 +74,24 @@ export function TeamManagement() {
   const [inviteOpen, setInviteOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
+  const [viewingExpedientId, setViewingExpedientId] = useState<string | null>(null)
 
   // Form states
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteName, setInviteName] = useState('')
   const [inviteRole, setInviteRole] = useState('')
+  const [inviteDepartment, setInviteDepartment] = useState('')
+  const [isDeptAdmin, setIsDeptAdmin] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+
+  const DEPARTMENTS = [
+    { id: 'VENTAS', name: 'Ventas' },
+    { id: 'FINANZAS', name: 'Finanzas / Contabilidad' },
+    { id: 'RRHH', name: 'Recursos Humanos' },
+    { id: 'PRODUCCION', name: 'Producción' },
+    { id: 'INVENTARIO', name: 'Inventario / Almacén' },
+    { id: 'SOPORTE', name: 'Soporte al Cliente' },
+  ]
 
   // Edit form states
   const [editName, setEditName] = useState('')
@@ -123,18 +144,22 @@ export function TeamManagement() {
         body: JSON.stringify({
           email: inviteEmail,
           name: inviteName,
-          roleId: inviteRole,
+          roleId: inviteRole || undefined,
+          department: inviteDepartment,
+          isDepartmentAdmin: isDeptAdmin,
         }),
       })
 
       const data = await response.json()
 
       if (response.ok) {
-        toast.success('Usuario invitado exitosamente')
+        toast.success('Usuario invitado exitosamente con auto-perfilado')
         setInviteOpen(false)
         setInviteEmail('')
         setInviteName('')
         setInviteRole('')
+        setInviteDepartment('')
+        setIsDeptAdmin(false)
         fetchUsers()
       } else {
         toast.error(data.error || 'Error al invitar usuario')
@@ -246,28 +271,46 @@ export function TeamManagement() {
     )
   }
 
+  if (viewingExpedientId) {
+    return (
+      <div className="space-y-6">
+        <Button 
+          variant="ghost" 
+          onClick={() => setViewingExpedientId(null)}
+          className="rounded-xl font-bold mb-4"
+        >
+          <ChevronLeft className="w-4 h-4 mr-2" /> Volver al Listado
+        </Button>
+        <EmployeeExpedient 
+          employeeId={viewingExpedientId} 
+          onClose={() => setViewingExpedientId(null)} 
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Equipo</h1>
           <p className="text-muted-foreground">
-            Gestiona tu equipo y permisos de usuarios
+            Gestiona tu equipo y expedientes profesionales
           </p>
         </div>
         <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button className="rounded-xl h-11 px-6 shadow-lg shadow-primary/10">
               <UserPlus className="mr-2 h-4 w-4" />
               Invitar Usuario
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-w-md rounded-3xl">
             <form onSubmit={handleInvite}>
               <DialogHeader>
-                <DialogTitle>Invitar Nuevo Usuario</DialogTitle>
-                <DialogDescription>
-                  Envía una invitación por correo electrónico para unirse a tu equipo
+                <DialogTitle className="text-2xl font-black uppercase tracking-tight">Invitar Nuevo Usuario</DialogTitle>
+                <DialogDescription className="font-medium text-slate-500">
+                  Envía una invitación para unirse a tu equipo con perfilado automático.
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
@@ -278,6 +321,7 @@ export function TeamManagement() {
                     value={inviteName}
                     onChange={(e) => setInviteName(e.target.value)}
                     placeholder="Juan Pérez"
+                    className="rounded-xl h-11 border-slate-100"
                     required
                   />
                 </div>
@@ -289,14 +333,55 @@ export function TeamManagement() {
                     value={inviteEmail}
                     onChange={(e) => setInviteEmail(e.target.value)}
                     placeholder="juan@ejemplo.com"
+                    className="rounded-xl h-11 border-slate-100"
                     required
                   />
                 </div>
+                
+                <div className="grid gap-2 border-t pt-4 mt-2">
+                  <Label className="text-[10px] font-bold uppercase text-primary">Perfilado por Departamento</Label>
+                  <div className="grid gap-2">
+                    <Label htmlFor="dept">Departamento</Label>
+                    <Select value={inviteDepartment} onValueChange={setInviteDepartment}>
+                      <SelectTrigger className="rounded-xl h-11 border-slate-100">
+                        <SelectValue placeholder="Seleccionar departamento" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {DEPARTMENTS.map((dept) => (
+                          <SelectItem key={dept.id} value={dept.id}>
+                            {dept.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center space-x-2 mt-2 p-3 bg-slate-50 rounded-xl border">
+                    <Switch 
+                      id="dept-admin" 
+                      checked={isDeptAdmin} 
+                      onCheckedChange={setIsDeptAdmin} 
+                    />
+                    <div className="grid gap-0.5">
+                      <Label htmlFor="dept-admin" className="font-bold text-sm">Administrador del Área</Label>
+                      <p className="text-[10px] text-muted-foreground">Otorga permisos totales de gestión en este departamento.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="relative my-4">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-background px-2 text-muted-foreground">O asignar Rol específico</span>
+                  </div>
+                </div>
+
                 <div className="grid gap-2">
-                  <Label htmlFor="role">Rol</Label>
-                  <Select value={inviteRole} onValueChange={setInviteRole} required>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar rol" />
+                  <Label htmlFor="role">Rol Directo (Opcional)</Label>
+                  <Select value={inviteRole} onValueChange={setInviteRole}>
+                    <SelectTrigger className="rounded-xl h-11 border-slate-100">
+                      <SelectValue placeholder="Seleccionar rol manual" />
                     </SelectTrigger>
                     <SelectContent>
                       {roles.map((role) => (
@@ -312,12 +397,13 @@ export function TeamManagement() {
                 <Button
                   type="button"
                   variant="outline"
+                  className="rounded-xl h-11"
                   onClick={() => setInviteOpen(false)}
                   disabled={submitting}
                 >
                   Cancelar
                 </Button>
-                <Button type="submit" disabled={submitting}>
+                <Button type="submit" className="rounded-xl h-11 px-8 premium-gradient-primary shadow-xl shadow-primary/20 font-black uppercase text-[10px]" disabled={submitting}>
                   {submitting ? 'Enviando...' : 'Enviar Invitación'}
                 </Button>
               </DialogFooter>
@@ -326,73 +412,90 @@ export function TeamManagement() {
         </Dialog>
       </div>
 
-      <Card>
-        <CardHeader>
+      <Card className="rounded-[2rem] border-none shadow-2xl overflow-hidden">
+        <CardHeader className="bg-slate-50/50 border-b">
           <CardTitle>Miembros del Equipo</CardTitle>
           <CardDescription>
             {users.length} {users.length === 1 ? 'miembro' : 'miembros'} en total
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           <Table>
-            <TableHeader>
+            <TableHeader className="bg-slate-50">
               <TableRow>
-                <TableHead>Usuario</TableHead>
-                <TableHead>Rol</TableHead>
+                <TableHead className="px-8 py-4">Usuario</TableHead>
+                <TableHead>Rol & Departamento</TableHead>
                 <TableHead>Contacto</TableHead>
                 <TableHead>Estado</TableHead>
-                <TableHead className="text-right">Acciones</TableHead>
+                <TableHead className="text-right px-8">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {users.map((user) => (
-                <TableRow key={user.id}>
-                  <TableCell>
+                <TableRow key={user.id} className="hover:bg-slate-50/50 transition-colors">
+                  <TableCell className="px-8 py-4">
                     <div className="flex items-center gap-3">
-                      <Avatar>
+                      <Avatar className="h-10 w-10 rounded-xl shadow-sm">
                         <AvatarImage src={user.image || undefined} />
-                        <AvatarFallback>
+                        <AvatarFallback className="bg-primary/10 text-primary font-bold">
                           {getInitials(user.name, user.email)}
                         </AvatarFallback>
                       </Avatar>
                       <div>
-                        <div className="font-medium">{user.name || 'Sin nombre'}</div>
-                        <div className="text-sm text-muted-foreground">{user.email}</div>
+                        <div className="font-bold text-slate-900">{user.name || 'Sin nombre'}</div>
+                        <div className="text-xs text-muted-foreground">{user.email}</div>
                       </div>
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge className={getRoleBadgeColor(user.role?.nombre)}>
-                      <Shield className="mr-1 h-3 w-3" />
-                      {user.role?.nombre || 'Sin rol'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="space-y-1 text-sm">
-                      {user.telefono && (
-                        <div className="flex items-center gap-1 text-muted-foreground">
-                          <Phone className="h-3 w-3" />
-                          {user.telefono}
-                        </div>
-                      )}
-                      {user.timezone && (
-                        <div className="flex items-center gap-1 text-muted-foreground">
-                          <Clock className="h-3 w-3" />
-                          {user.timezone}
-                        </div>
-                      )}
+                    <div className="space-y-1">
+                      <Badge className={getRoleBadgeColor(user.role?.nombre)}>
+                        <Shield className="mr-1 h-3 w-3" />
+                        {user.role?.nombre || 'Sin rol'}
+                      </Badge>
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">
+                        {user.employee?.department || 'GENERAL'}
+                      </div>
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={user.estado === 'activo' ? 'default' : 'secondary'}>
+                    <div className="space-y-1 text-xs">
+                      {user.telefono && (
+                        <div className="flex items-center gap-1 text-muted-foreground font-medium">
+                          <Phone className="h-3 w-3 text-primary" />
+                          {user.telefono}
+                        </div>
+                      )}
+                      <div className="flex items-center gap-1 text-muted-foreground font-medium">
+                        <Clock className="h-3 w-3 text-primary" />
+                        {user.timezone || 'America/Mexico_City'}
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className={cn(
+                      "rounded-lg px-2 py-0.5 font-bold uppercase text-[9px]",
+                      user.estado === 'activo' ? "border-emerald-200 text-emerald-600" : "border-slate-200 text-slate-400"
+                    )}>
                       {user.estado === 'activo' ? 'Activo' : user.estado === 'invitado' ? 'Invitado' : 'Inactivo'}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right px-8">
                     <div className="flex justify-end gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="rounded-xl border-slate-100 hover:bg-slate-50 font-bold text-xs"
+                        onClick={() => user.employee?.id && setViewingExpedientId(user.employee.id)}
+                        disabled={!user.employee?.id}
+                      >
+                        <FileText className="mr-2 h-4 w-4 text-primary" />
+                        Expediente
+                      </Button>
                       <Button
                         variant="ghost"
                         size="sm"
+                        className="rounded-xl h-9 w-9 p-0 hover:bg-slate-100"
                         onClick={() => handleEdit(user)}
                       >
                         <Pencil className="h-4 w-4" />
@@ -400,6 +503,7 @@ export function TeamManagement() {
                       <Button
                         variant="ghost"
                         size="sm"
+                        className="rounded-xl h-9 w-9 p-0 hover:bg-red-50 text-red-500"
                         onClick={() => handleDelete(user.id)}
                         disabled={user.email === session?.user?.email}
                       >

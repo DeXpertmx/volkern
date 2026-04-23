@@ -11,7 +11,7 @@ export class PlanningService {
 
     // 1. Obtener turnos activos para el día de la semana
     const dayOfWeek = date.getDay();
-    const shifts = await prisma.shiftPlan.findMany({
+    const shifts = await (prisma as any).erp_shift_plans.findMany({
       where: { tenantId, dayOfWeek, active: true }
     });
 
@@ -24,7 +24,7 @@ export class PlanningService {
     }
 
     // 2. Obtener mantenimiento programado (bloqueos)
-    const maintenanceOrders = await prisma.maintenanceOrder.findMany({
+    const maintenanceOrders = await (prisma as any).erp_maintenance_orders.findMany({
       where: {
         tenantId,
         asset: { lineId },
@@ -54,7 +54,7 @@ export class PlanningService {
     const effectiveHours = Math.max(0, availableHours - plannedLoad);
     const utilizationRate = theoreticalHours > 0 ? ((theoreticalHours - effectiveHours) / theoreticalHours) * 100 : 0;
 
-    return await prisma.productionCapacity.create({
+    return await (prisma as any).erp_production_capacity.create({
       data: {
         tenantId,
         lineId,
@@ -73,7 +73,7 @@ export class PlanningService {
    * Genera un forecast a 7 días
    */
   static async generate7DayForecast(tenantId: string) {
-    const lines = await prisma.productionLine.findMany({ where: { tenantId, active: true } });
+    const lines = await (prisma as any).erp_production_lines.findMany({ where: { tenantId, active: true } });
     const forecast = [];
 
     for (let i = 0; i < 7; i++) {

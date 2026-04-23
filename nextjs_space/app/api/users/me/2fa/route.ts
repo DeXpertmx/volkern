@@ -5,29 +5,35 @@ import { prisma } from '@/lib/db';
 
 export async function POST(req: NextRequest) {
   try {
+    const { enabled } = await req.json();
     const session = await getServerSession(authOptions);
+    
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
 
-    const { enabled } = await req.json();
+    try {
+      // Usamos executeRawUnsafe para saltarnos la validación de campos del cliente de Prisma
+      // que está desincronizado. La base de datos SI tiene estos campos.
+      const userId = session.user.id;
+      const isEnabled = enabled ? 1 : 0; // Para PostgreSQL/SQLite compatible
 
-    const user = await prisma.user.update({
-      where: { id: session.user.id },
-      data: {
-        isTwoFactorEnabled: enabled,
-        // Limpiar códigos si se desactiva
-        twoFactorCode: null,
-        twoFactorExpires: null,
-      },
-    });
+      // Nota: Usamos queryRawUnsafe para asegurar que escribimos en los campos nuevos
+      await prisma.$executeRawUnsafe(
+        `UPDATE "User" SET "isTwoFactorEnabled" = $1, "twoFactorCode" = NULL, "twoFactorExpires" = NULL WHERE id = $2`,
+        enabled,
+        userId
+      );
 
-    return NextResponse.json({ 
-      success: true, 
-      isTwoFactorEnabled: user.isTwoFactorEnabled 
-    });
-  } catch (error) {
-    console.error('Error toggling 2FA:', error);
-    return NextResponse.json({ error: 'Error al actualizar configuración' }, { status: 500 });
+      return NextResponse.json({ 
+        success: true, 
+        isTwoFactorEnabled: enabled 
+      });
+    } catch (prismaError: any) {
+      console.error('[2FA API] Raw SQL Error:', prismaError.message);
+      return NextResponse.json({ error: 'Error de base de datos (SQL): ' + prismaError.message }, { status: 500 });
+    }
+  } catch (error: any) {
+    return NextResponse.json({ error: 'Error crítico: ' + error.message }, { status: 500 });
   }
 }

@@ -284,11 +284,12 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({ enabled: checked })
                     });
+                    const data = await res.json();
                     if (res.ok) {
                       toast.success(`2FA ${checked ? 'activado' : 'desactivado'} correctamente`);
                       fetchUser();
                     } else {
-                      toast.error("Error al cambiar configuración de 2FA");
+                      toast.error(data.error || "Error al cambiar configuración de 2FA");
                     }
                   } catch (error) {
                     toast.error("Error de conexión");
@@ -330,6 +331,34 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
               >
                 {updatingPassword ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                 {updatingPassword ? "Actualizando..." : "Actualizar Contraseña"}
+              </Button>
+            </div>
+
+            <div className="pt-8 mt-8 border-t border-slate-100 space-y-6">
+              <div className="space-y-1">
+                <h3 className="font-black text-lg text-slate-900">Sesiones Activas</h3>
+                <p className="text-xs text-slate-500 font-medium">Si sospechas que alguien ha accedido a tu cuenta o has dejado tu sesión abierta en otro equipo, puedes cerrarla en todos los dispositivos.</p>
+              </div>
+              <Button 
+                variant="outline" 
+                className="rounded-full px-8 h-12 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 hover:border-red-300 transition-all font-bold"
+                onClick={async () => {
+                  if (confirm("¿Estás seguro de que quieres cerrar sesión en todos los dispositivos? Tendrás que volver a entrar incluso en este equipo.")) {
+                    try {
+                      const res = await fetch("/api/auth/logout-all", { method: "POST" });
+                      if (res.ok) {
+                        toast.success("Todas las sesiones han sido cerradas");
+                        window.location.href = "/auth/login";
+                      } else {
+                        toast.error("Error al invalidar sesiones");
+                      }
+                    } catch (e) {
+                      toast.error("Error de conexión");
+                    }
+                  }
+                }}
+              >
+                Cerrar sesión en todos los dispositivos
               </Button>
             </div>
           </Card>

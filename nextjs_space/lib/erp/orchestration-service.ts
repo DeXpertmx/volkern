@@ -8,7 +8,7 @@ export class OrchestrationService {
    */
   static async processOrderItem(itemId: string, tenantId: string) {
     return await prisma.$transaction(async (tx) => {
-      const item = await tx.salesOrderItem.findUnique({
+      const item = await (tx as any).erp_sales_order_items.findUnique({
         where: { id: itemId, tenantId },
         include: { catalogItem: true }
       });
@@ -23,7 +23,7 @@ export class OrchestrationService {
         if (stock.available >= item.quantity) {
           // ESTRATEGIA: CUMPLIMIENTO DESDE STOCK
           // Reservar lotes específicos (FIFO por simplicidad)
-          const lots = await tx.inventoryLot.findMany({
+          const lots = await (tx as any).erp_inventory_lots.findMany({
             where: { catalogItemId: item.catalogItemId, tenantId, status: 'AVAILABLE' },
             orderBy: { createdAt: 'asc' }
           });
@@ -34,7 +34,7 @@ export class OrchestrationService {
             
             // En una implementación real, aquí cruzaríamos con StockLevel por lote
             // Por ahora simulamos reserva del lote completo o parcial
-            await tx.orderReservation.create({
+            await (tx as any).erp_order_reservations.create({
               data: {
                 tenantId,
                 salesOrderItemId: itemId,
@@ -46,7 +46,7 @@ export class OrchestrationService {
             remainingToReserve = 0;
           }
 
-          await tx.salesOrderItem.update({
+          await (tx as any).erp_sales_order_items.update({
             where: { id: itemId },
             data: { 
               status: 'RESERVED',
@@ -76,7 +76,7 @@ export class OrchestrationService {
         });
 
         // Reservar desde la futura producción
-        await tx.orderReservation.create({
+        await (tx as any).erp_order_reservations.create({
           data: {
             tenantId,
             salesOrderItemId: itemId,
@@ -86,7 +86,7 @@ export class OrchestrationService {
           }
         });
 
-        await tx.salesOrderItem.update({
+        await (tx as any).erp_sales_order_items.update({
           where: { id: itemId },
           data: { 
             status: 'PRODUCING',
@@ -105,7 +105,7 @@ export class OrchestrationService {
    * Confirma un pedido completo disparando la orquestación de todos sus ítems
    */
   static async confirmSalesOrder(orderId: string, tenantId: string) {
-    const order = await prisma.salesOrder.findUnique({
+    const order = await (prisma as any).erp_sales_orders.findUnique({
       where: { id: orderId, tenantId },
       include: { items: true }
     });
@@ -124,11 +124,11 @@ export class OrchestrationService {
     promisedDate.setDate(promisedDate.getDate() + (hasProduction ? 3 : 1));
 
     await prisma.$transaction([
-      prisma.salesOrder.update({
+      (prisma as any).erp_sales_orders.update({
         where: { id: orderId },
         data: { status: 'PROCESSING' }
       }),
-      prisma.deliveryPromise.create({
+      (prisma as any).erp_delivery_promises.create({
         data: {
           tenantId,
           salesOrderId: orderId,

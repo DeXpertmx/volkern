@@ -40,6 +40,7 @@ export interface ApiKeyAuthResult {
     scopes: string[];
   };
   db?: any; // PrismaClient (Global or Tenant)
+  vaultSeed?: string;
   error?: string;
   authMethod?: 'session' | 'apikey';
 }
@@ -174,6 +175,9 @@ export async function validateApiKey(
       data: { ultimoUso: new Date(), totalUsos: { increment: 1 } }
     }).catch(() => {});
 
+    const { getTenantDb } = await import('./db');
+    const tDb = await getTenantDb(context.activeTenantId);
+
     return {
       valid: true,
       authMethod: 'apikey',
@@ -190,7 +194,8 @@ export async function validateApiKey(
       },
       apiKey: { id: dbApiKey.id, nombre: dbApiKey.nombre, scopes: dbApiKey.scopes },
       agencyContext: context.agencyContext,
-      db: (await import('./db').then(m => m.getTenantDb(context.activeTenantId))).client
+      db: tDb.client,
+      vaultSeed: tDb.vaultSeed
     };
 
   } catch (error: any) {
@@ -247,6 +252,9 @@ export async function authenticateRequest(
 
       if (context.error) return { valid: false, error: context.error };
 
+      const { getTenantDb } = await import('./db');
+      const tDb = await getTenantDb(context.activeTenantId);
+
       return {
         valid: true,
         authMethod: 'session',
@@ -260,11 +268,12 @@ export async function authenticateRequest(
           role: user.role
         },
         agencyContext: context.agencyContext,
-        db: (await import('./db').then(m => m.getTenantDb(context.activeTenantId))).client
+        db: tDb.client,
+        vaultSeed: tDb.vaultSeed
       };
     }
-  } catch (e) {
-    console.warn('[auth] Falló intento de sesión:', e.message);
+  } catch (e: any) {
+    console.warn('[auth] Falló intento de sesión:', e?.message || e);
   }
 
   // 2. Si no hay sesión, intentar API Key
@@ -313,7 +322,7 @@ export function withTenantAuth(
       // Ejecutar el handler dentro del contexto del tenant
       // Esto hace que 'import { prisma }' use automáticamente la DB del tenant
       return await dbContext.run(
-        { tenantId: auth.tenant!.id, client: auth.db },
+        { tenantId: auth.tenant!.id, client: auth.db, vaultSeed: auth.vaultSeed },
         () => handler(request, auth, context?.params)
       );
     } catch (error: any) {

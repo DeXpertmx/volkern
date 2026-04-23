@@ -6,7 +6,7 @@ import { VaultService } from '@/lib/security/vault';
  * Analiza carga de trabajo en proyectos y progreso en training rooms para detectar riesgos.
  */
 export async function talent_retention_risk({ tenantId, employeeId }: { tenantId: string, employeeId: string }) {
-  const employee = await prisma.employee.findUnique({
+  const employee = await (prisma as any).employee.findUnique({
     where: { id: employeeId, tenantId },
     include: { user: true }
   });
@@ -14,7 +14,7 @@ export async function talent_retention_risk({ tenantId, employeeId }: { tenantId
   if (!employee) throw new Error('Empleado no encontrado');
 
   // 1. Analizar carga de proyectos
-  const activeTasks = employee.userId ? await prisma.task.count({
+  const activeTasks = employee.userId ? await (prisma as any).task.count({
     where: { tenantId, assignedTo: employee.userId, status: 'PENDING' }
   }) : 0;
 
@@ -41,7 +41,7 @@ export async function talent_retention_risk({ tenantId, employeeId }: { tenantId
  * SKILL: get_employee_confidential_data
  */
 export async function get_employee_confidential_data({ tenantId, employeeId, userId }: { tenantId: string, employeeId: string, userId: string }) {
-  await prisma.financialAudit.create({
+  await (prisma as any).financialAudit.create({
     data: {
       tenantId,
       userId,
@@ -52,7 +52,7 @@ export async function get_employee_confidential_data({ tenantId, employeeId, use
     }
   });
 
-  const employee = await prisma.employee.findUnique({
+  const employee = await (prisma as any).employee.findUnique({
     where: { id: employeeId, tenantId }
   });
 
@@ -70,9 +70,9 @@ export async function get_employee_confidential_data({ tenantId, employeeId, use
  * Permite a Gemma leer el resumen de gastos pendientes de autorizar.
  */
 export async function summarize_pending_expenses({ tenantId }: { tenantId: string }) {
-  const pendingClaims = await prisma.expenseClaim.findMany({
+  const pendingClaims = await (prisma as any).erp_expense_claims.findMany({
     where: { tenantId, status: 'PENDING' },
-    include: { employee: true },
+    include: { erp_employees: true },
     orderBy: { createdAt: 'desc' }
   });
 
@@ -83,11 +83,11 @@ export async function summarize_pending_expenses({ tenantId }: { tenantId: strin
     };
   }
 
-  const totalAmount = pendingClaims.reduce((acc, claim) => acc + claim.amount, 0);
-  const employeeCount = new Set(pendingClaims.map(c => c.employeeId)).size;
+  const totalAmount = pendingClaims.reduce((acc: any, claim: any) => acc + claim.amount, 0);
+  const employeeCount = new Set(pendingClaims.map((c: any) => c.employeeId)).size;
 
-  const summary = pendingClaims.map(c => 
-    `- ${c.employee.fullName}: ${c.amount} ${c.currency} por ${c.category} (${c.description || 'Sin descripción'})`
+  const summary = pendingClaims.map((c: any) => 
+    `- ${c.erp_employees.fullName}: ${c.amount} ${c.currency} por ${c.category} (${c.description || 'Sin descripción'})`
   ).join('\n');
 
   return {
@@ -97,7 +97,7 @@ export async function summarize_pending_expenses({ tenantId }: { tenantId: strin
     total: totalAmount,
     affectedEmployees: employeeCount,
     hasPending: true,
-    speechHint: `Tienes ${pendingClaims.length} solicitudes de gastos que suman ${totalAmount.toFixed(2)} euros. Los empleados ${pendingClaims.slice(0, 3).map(c => c.employee.fullName).join(', ')} están esperando tu aprobación.`
+    speechHint: `Tienes ${pendingClaims.length} solicitudes de gastos que suman ${totalAmount.toFixed(2)} euros. Los empleados ${pendingClaims.slice(0, 3).map((c: any) => c.erp_employees.fullName).join(', ')} están esperando tu aprobación.`
   };
 }
 
@@ -110,8 +110,8 @@ export async function analyze_vacation_impact(data: any) {
     requestedDays, 
     remainingDays, 
     criticalMilestones, 
-    employeeAssets, 
-    digitalAccess,
+    erp_employee_assets, 
+    erp_digital_access,
     hasLogisticsConflict,
     hasDigitalRisk 
   } = data;
@@ -122,12 +122,12 @@ export async function analyze_vacation_impact(data: any) {
     analysis += `ATENCIÓN: Su ausencia solapa con ${criticalMilestones.length} hitos críticos. `;
   }
 
-  if (employeeAssets && employeeAssets.length > 0) {
-    analysis += `Físico: El técnico posee ${employeeAssets.length} activos críticos asignados. `;
+  if (erp_employee_assets && erp_employee_assets.length > 0) {
+    analysis += `Físico: El técnico posee ${erp_employee_assets.length} activos críticos asignados. `;
   }
 
-  if (digitalAccess && digitalAccess.length > 0) {
-    analysis += `Digital: Posee ${digitalAccess.length} accesos críticos activos. `;
+  if (erp_digital_access && erp_digital_access.length > 0) {
+    analysis += `Digital: Posee ${erp_digital_access.length} accesos críticos activos. `;
     if (hasDigitalRisk) {
       analysis += `ALERTA DE SEGURIDAD: Se requiere handover de credenciales o revocación temporal (Kill Switch). `;
     }
@@ -139,7 +139,7 @@ export async function analyze_vacation_impact(data: any) {
       ? "CONSIDERAR RE-PROGRAMACIÓN" 
       : (hasDigitalRisk || hasLogisticsConflict ? "APROBAR CON HANDOVER DE SEGURIDAD" : "APROBACIÓN VIABLE"),
     data_snapshot: data,
-    hasLogisticsConflict: hasLogisticsConflict || (employeeAssets && employeeAssets.length > 0) || hasDigitalRisk
+    hasLogisticsConflict: hasLogisticsConflict || (erp_employee_assets && erp_employee_assets.length > 0) || hasDigitalRisk
   };
 }
 
@@ -149,22 +149,22 @@ export async function analyze_vacation_impact(data: any) {
  * Versión SaaS Multitenant con analítica predictiva.
  */
 export async function mcp_access_watchdog(payload: { tenantId: string, employeeId?: string }) {
-  const accesses = await prisma.digitalAccess.findMany({
+  const accesses = await (prisma as any).erp_digital_access.findMany({
     where: { 
       tenantId: payload.tenantId,
       ...(payload.employeeId ? { employeeId: payload.employeeId } : {}),
       status: 'ACTIVE'
     },
-    include: { employee: true }
+    include: { erp_employees: true }
   });
 
   // 1. Detección de Silos de Conocimiento (SPOF)
   const resourceMap: Record<string, string[]> = {};
-  accesses.forEach(a => {
+  accesses.forEach((a: any) => {
     if (a.isCritical) {
       const key = `${a.resourceName} (${a.environment})`;
       if (!resourceMap[key]) resourceMap[key] = [];
-      resourceMap[key].push(a.employee.fullName);
+      resourceMap[key].push(a.erp_employees.fullName);
     }
   });
 
@@ -174,8 +174,8 @@ export async function mcp_access_watchdog(payload: { tenantId: string, employeeI
 
   // 2. Detección de Concentración de Poder (Super-Usuarios)
   const powerMap: Record<string, number> = {};
-  accesses.forEach(a => {
-    powerMap[a.employee.fullName] = (powerMap[a.employee.fullName] || 0) + (a.isCritical ? 3 : 1);
+  accesses.forEach((a: any) => {
+    powerMap[a.erp_employees.fullName] = (powerMap[a.erp_employees.fullName] || 0) + (a.isCritical ? 3 : 1);
   });
 
   const highRiskAgents = Object.entries(powerMap)
@@ -202,24 +202,24 @@ import { TelegramWatchdog } from '../security/telegram-watchdog';
  * Genera un roadmap de revocación de accesos digitales ante una baja de personal.
  */
 export async function generate_offboarding_security_kit(payload: { tenantId: string, employeeId: string }) {
-  const employee = await prisma.employee.findUnique({
+  const employee = await (prisma as any).employee.findUnique({
     where: { id: payload.employeeId, tenantId: payload.tenantId },
-    include: { digitalAccess: { where: { status: 'ACTIVE' } } }
+    include: { erp_digital_access: { where: { status: 'ACTIVE' } } }
   });
 
   if (!employee) throw new Error('Empleado no encontrado para el protocolo Kill-Switch');
 
-  const roadmap = employee.digitalAccess.map(access => ({
+  const roadmap = employee.erp_digital_access.map((access: any) => ({
     resource: access.resourceName,
     env: access.environment,
     identifier: access.identifier,
     priority: access.isCritical ? 'CRITICAL' : 'MEDIUM',
     action: 'REVOKE_ACCESS',
     instruction: `Revocar acceso ${access.accessLevel} en ${access.resourceName}.`
-  })).sort((a, b) => a.priority === 'CRITICAL' ? -1 : 1);
+  })).sort((a: any, b: any) => a.priority === 'CRITICAL' ? -1 : 1);
 
   // 1. Filtrar accesos críticos para el informe de emergencia
-  const criticalCount = roadmap.filter(r => r.priority === 'CRITICAL').length;
+  const criticalCount = roadmap.filter((r: any) => r.priority === 'CRITICAL').length;
 
   // 2. Disparar Security Brief vía Telegram Watchdog
   if (criticalCount > 0) {
@@ -232,8 +232,9 @@ export async function generate_offboarding_security_kit(payload: { tenantId: str
   }
 
   // 3. Registrar en el Trust Protocol
-  await prisma.systemAlert.create({
+  await (prisma as any).systemAlert.create({
     data: {
+      tenantId: payload.tenantId,
       level: 'URGENT',
       message: `[KILL-SWITCH] Iniciado protocolo de offboarding para ${employee.fullName}. Generado roadmap con ${roadmap.length} puntos de revocación.`,
     }
@@ -305,7 +306,7 @@ export async function approve_vacation_voice({ vacationRequestId, note, tenantId
   const vacation = await HRService.approveVacation(vacationRequestId, tenantId, userId);
   
   // Auditoría Forense con tag [VOICE_CMD]
-  await prisma.systemAlert.create({
+  await (prisma as any).systemAlert.create({
     data: {
       tenantId,
       level: 'INFO',
@@ -332,7 +333,7 @@ export async function confirm_digital_seal(payload: {
   documentType: 'ACTA_ENTREGA' | 'APROBACION_VACACIONES',
   context: any 
 }) {
-  const user = await prisma.employee.findFirst({
+  const user = await (prisma as any).employee.findFirst({
     where: { userId: payload.userId, tenantId: payload.tenantId }
   });
 
@@ -362,8 +363,9 @@ export async function confirm_digital_seal(payload: {
   });
 
   // Registrar alerta en el Trust Protocol
-  await prisma.systemAlert.create({
+  await (prisma as any).systemAlert.create({
     data: {
+      tenantId: payload.tenantId,
       level: 'INFO',
       message: `[SIGNATURE] Documento sellado y firmado por ${user.fullName}: ${title} (Hash: ${result.documentHash.substring(0, 8)}...).`,
     }
@@ -385,9 +387,9 @@ export async function orchestrate_asset_transfer(payload: {
   tenantId: string,
   userId: string 
 }) {
-  const asset = await prisma.employeeAsset.findUnique({
+  const asset = await (prisma as any).erp_employee_assets.findUnique({
     where: { id: payload.assetId, tenantId: payload.tenantId },
-    include: { catalogoItem: true, employee: true }
+    include: { catalogoItem: true, erp_employees: true }
   });
 
   if (!asset) throw new Error('Activo no encontrado');
@@ -396,7 +398,7 @@ export async function orchestrate_asset_transfer(payload: {
   const integrityData = {
     assetId: asset.id,
     serialNumber: asset.serialNumber,
-    fromEmployee: asset.employee.fullName,
+    fromEmployee: (asset as any).erp_employees.fullName,
     action: payload.action,
     timestamp: new Date().toISOString()
   };
@@ -406,8 +408,9 @@ export async function orchestrate_asset_transfer(payload: {
 
   if (payload.action === 'RETURN') {
     // La devolución requiere validación VISION-LOCK en el cierre, aquí solo iniciamos el proceso
-    await prisma.systemAlert.create({
+    await (prisma as any).systemAlert.create({
       data: {
+        tenantId: payload.tenantId,
         level: 'WARNING',
         message: `[LOGISTICS_CMD] Orden de devolución emitida para ${asset.catalogoItem.nombre} (S/N: ${asset.serialNumber}). Esperando confirmación GPS en Almacén.`,
       }
@@ -418,16 +421,17 @@ export async function orchestrate_asset_transfer(payload: {
       integrityHash
     };
   } else if (payload.action === 'TRANSFER' && payload.targetEmployeeId) {
-    const target = await prisma.employee.findUnique({
+    const target = await (prisma as any).employee.findUnique({
       where: { id: payload.targetEmployeeId, tenantId: payload.tenantId }
     });
 
     if (!target) throw new Error('Empleado destino no encontrado');
 
-    await prisma.systemAlert.create({
+    await (prisma as any).systemAlert.create({
       data: {
+        tenantId: payload.tenantId,
         level: 'INFO',
-        message: `[LOGISTICS_CMD] Transferencia iniciada: ${asset.catalogoItem.nombre} de ${asset.employee.fullName} a ${target.fullName}. Hash: ${integrityHash.substring(0, 8)}...`,
+        message: `[LOGISTICS_CMD] Transferencia iniciada: ${asset.catalogoItem.nombre} de ${(asset as any).erp_employees.fullName} a ${target.fullName}. Hash: ${integrityHash.substring(0, 8)}...`,
       }
     });
 

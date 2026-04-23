@@ -105,7 +105,7 @@ export class HRService {
     type?: string;
     reason?: string;
   }) {
-    return await prisma.vacationRequest.create({
+    return await prisma.erp_vacation_requests.create({
       data
     });
   }
@@ -137,8 +137,8 @@ export class HRService {
 
     // 3. Verificar Hitos Críticos y Activos (Sniffer)
     let criticalMilestones: any[] = [];
-    let employeeAssets: any[] = [];
-    let digitalAccess: any[] = [];
+    let erp_employee_assets: any[] = [];
+    let erp_digital_access: any[] = [];
 
     if (isSnifferEnabled) {
       criticalMilestones = await prisma.projectMilestone.findMany({
@@ -154,7 +154,7 @@ export class HRService {
         include: { project: true }
       });
 
-      employeeAssets = await prisma.employeeAsset.findMany({
+      erp_employee_assets = await (prisma as any).erp_employee_assets.findMany({
         where: {
           employeeId,
           tenantId,
@@ -164,7 +164,7 @@ export class HRService {
         include: { catalogoItem: true }
       });
 
-      digitalAccess = await prisma.digitalAccess.findMany({
+      erp_digital_access = await (prisma as any).erp_digital_access.findMany({
         where: {
           employeeId,
           tenantId,
@@ -174,8 +174,8 @@ export class HRService {
       });
     }
 
-    const hasDigitalRisk = digitalAccess.length > 0;
-    const hasLogisticsConflict = (criticalMilestones.length > 0 && employeeAssets.length > 0) || hasDigitalRisk;
+    const hasDigitalRisk = erp_digital_access.length > 0;
+    const hasLogisticsConflict = (criticalMilestones.length > 0 && erp_employee_assets.length > 0) || hasDigitalRisk;
 
     return {
       employeeName: employee.fullName,
@@ -188,28 +188,28 @@ export class HRService {
         projectName: m.project.name,
         date: m.dueDate
       })),
-      employeeAssets: employeeAssets.map(a => ({
+      erp_employee_assets: erp_employee_assets.map(a => ({
         id: a.id,
         name: a.catalogoItem.nombre,
         sku: a.catalogoItem.sku,
         serialNumber: a.serialNumber
       })),
-      digitalAccess: digitalAccess.map(d => ({
+      erp_digital_access: erp_digital_access.map(d => ({
         id: d.id,
         resource: d.resourceName,
         level: d.accessLevel,
         env: d.environment
       })),
       isViable: hasEnoughDays && criticalMilestones.length === 0,
-      logisticsAlert: employeeAssets.length > 0 ? `Atención: El colaborador tiene ${employeeAssets.length} activos físicos críticos asignados.` : null,
-      digitalFootprintAlert: hasDigitalRisk ? `ALERTA DE SEGURIDAD: El colaborador posee ${digitalAccess.length} accesos críticos activos (Átomos y Bits).` : null,
+      logisticsAlert: erp_employee_assets.length > 0 ? `Atención: El colaborador tiene ${erp_employee_assets.length} activos físicos críticos asignados.` : null,
+      digitalFootprintAlert: hasDigitalRisk ? `ALERTA DE SEGURIDAD: El colaborador posee ${erp_digital_access.length} accesos críticos activos (Átomos y Bits).` : null,
       hasLogisticsConflict,
       hasDigitalRisk
     };
   }
 
   static async approveVacation(id: string, tenantId: string, approvedById: string) {
-    return await prisma.vacationRequest.update({
+    return await prisma.erp_vacation_requests.update({
       where: { id, tenantId },
       data: {
         status: 'APPROVED',
@@ -231,7 +231,7 @@ export class HRService {
     receiptUrl?: string;
     visionLockData?: any;
   }) {
-    return await prisma.expenseClaim.create({
+    return await prisma.erp_expense_claims.create({
       data
     });
   }
@@ -240,16 +240,16 @@ export class HRService {
    * Autorizar Gasto y vincular a la cadena de hashes de Integridad
    */
   static async authorizeExpense(claimId: string, tenantId: string, authorizerId: string) {
-    const claim = await prisma.expenseClaim.findUnique({
+    const claim = await prisma.erp_expense_claims.findUnique({
       where: { id: claimId, tenantId },
-      include: { employee: true }
+      include: { erp_employees: true }
     });
 
     if (!claim) throw new Error('Solicitud de gasto no encontrada');
     if (claim.status !== 'PENDING') throw new Error('Este gasto ya ha sido procesado');
 
     // 1. Marcar como autorizado
-    await prisma.expenseClaim.update({
+    await prisma.erp_expense_claims.update({
       where: { id: claimId },
       data: { status: 'APPROVED' }
     });
@@ -259,7 +259,7 @@ export class HRService {
       claimId: claim.id,
       amount: claim.amount,
       currency: claim.currency,
-      employee: claim.employee.fullName,
+      employee: (claim as any).erp_employees.fullName,
       category: claim.category,
       timestamp: new Date().toISOString()
     };
@@ -282,7 +282,7 @@ export class HRService {
         verificationStatus: 'VERIFIED',
         metadata: {
           claimId: claim.id,
-          employeeId: claim.employeeId,
+          employeeId: (claim as any).employeeId,
           visionLock: claim.visionLockData
         }
       }
@@ -304,7 +304,7 @@ export class HRService {
   }
 
   static async rejectExpense(claimId: string, tenantId: string) {
-    return await prisma.expenseClaim.update({
+    return await prisma.erp_expense_claims.update({
       where: { id: claimId, tenantId },
       data: { status: 'REJECTED' }
     });
@@ -318,7 +318,7 @@ export class HRService {
     
     // 1. Estado de Fuerza (Activos vs Ausentes)
     const totalEmployees = await prisma.employee.count({ where: { tenantId, isActive: true } });
-    const absentToday = await prisma.vacationRequest.count({
+    const absentToday = await prisma.erp_vacation_requests.count({
       where: {
         tenantId,
         status: 'APPROVED',
@@ -328,7 +328,7 @@ export class HRService {
     });
 
     // 2. Alertas de Integridad (Gastos sin VISION-LOCK)
-    const pendingExpenses = await prisma.expenseClaim.findMany({
+    const pendingExpenses = await prisma.erp_expense_claims.findMany({
       where: { tenantId, status: 'PENDING' }
     });
     const integrityAlerts = pendingExpenses.filter(e => !e.visionLockData || !(e.visionLockData as any).exif_verified).length;
@@ -365,7 +365,7 @@ export class HRService {
    * Autorización masiva filtrada por GPS (VISION-LOCK)
    */
   static async authorizeBulkExpenses(tenantId: string, authorizerId: string) {
-    const pending = await prisma.expenseClaim.findMany({
+    const pending = await prisma.erp_expense_claims.findMany({
       where: { tenantId, status: 'PENDING' }
     });
 

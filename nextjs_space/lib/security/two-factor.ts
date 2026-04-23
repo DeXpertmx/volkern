@@ -1,6 +1,5 @@
 import { prisma } from '@/lib/db';
 import { sendEmail } from '@/lib/resend-email';
-import { crypto } from 'crypto';
 
 export class TwoFactorService {
   /**
@@ -10,13 +9,13 @@ export class TwoFactorService {
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutos
 
-    await prisma.user.update({
-      where: { id: userId },
-      data: {
-        twoFactorCode: code,
-        twoFactorExpires: expires,
-      },
-    });
+    // Usamos SQL directo para evitar errores de desincronización de Prisma
+    await prisma.$executeRawUnsafe(
+      `UPDATE "User" SET "twoFactorCode" = $1, "twoFactorExpires" = $2 WHERE id = $3`,
+      code,
+      expires,
+      userId
+    );
 
     return code;
   }
@@ -49,32 +48,34 @@ export class TwoFactorService {
    * Verifica si el código es válido
    */
   static async verifyCode(userId: string, code: string) {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { twoFactorCode: true, twoFactorExpires: true },
-    });
+    // Usamos SQL directo para leer los campos de seguridad
+    const rawData: any[] = await prisma.$queryRawUnsafe(
+      `SELECT "twoFactorCode", "twoFactorExpires" FROM "User" WHERE id = $1`,
+      userId
+    );
 
-    if (!user || !user.twoFactorCode || !user.twoFactorExpires) {
+    const firstRow = rawData[0] || {};
+    const dbCode = firstRow.twoFactorCode || firstRow.twofactorcode;
+    const dbExpires = firstRow.twoFactorExpires || firstRow.twofactorexpires;
+
+    if (!dbCode || !dbExpires) {
       return false;
     }
 
     const now = new Date();
-    if (now > user.twoFactorExpires) {
+    if (now > new Date(dbExpires)) {
       return false;
     }
 
-    if (user.twoFactorCode !== code) {
+    if (dbCode !== code) {
       return false;
     }
 
-    // Limpiar código tras verificación exitosa
-    await prisma.user.update({
-      where: { id: userId },
-      data: {
-        twoFactorCode: null,
-        twoFactorExpires: null,
-      },
-    });
+    // Limpiar código tras verificación exitosa con SQL directo
+    await prisma.$executeRawUnsafe(
+      `UPDATE "User" SET "twoFactorCode" = NULL, "twoFactorExpires" = NULL WHERE id = $1`,
+      userId
+    );
 
     return true;
   }

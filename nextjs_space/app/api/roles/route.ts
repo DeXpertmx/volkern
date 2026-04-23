@@ -44,3 +44,43 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Error al obtener roles' }, { status: 500 });
   }
 }
+
+// POST /api/roles - Crear nuevo rol
+export async function POST(req: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
+
+    const currentUser = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      include: { role: true },
+    });
+
+    if (!currentUser) {
+      return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 });
+    }
+
+    if (!hasPermission(currentUser, 'equipo', 'crear')) {
+      return NextResponse.json({ error: 'Sin permiso para crear roles' }, { status: 403 });
+    }
+
+    const { nombre, descripcion, permisos } = await req.json();
+
+    const role = await prisma.role.create({
+      data: {
+        nombre,
+        descripcion,
+        permisos: permisos || {},
+        tenantId: currentUser.tenantId,
+        orden: (await prisma.role.count({ where: { tenantId: currentUser.tenantId } })) + 1,
+      },
+    });
+
+    return NextResponse.json(role);
+  } catch (error: any) {
+    console.error('Error al crear rol:', error);
+    return NextResponse.json({ error: 'Error al crear rol' }, { status: 500 });
+  }
+}

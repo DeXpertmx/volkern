@@ -196,11 +196,22 @@ export const HUBS: HubConfig[] = [
       '/dashboard/rrhh'
     ],
     items: [
-      { name: 'Plantilla', href: '/dashboard/rrhh', icon: Users, planModule: 'rrhh', description: 'Directorio de colaboradores' },
+      { name: 'Gestión de Plantilla', href: '/dashboard/equipo', icon: Users, description: 'Alta y baja de colaboradores' },
+      { name: 'Dashboard RRHH', href: '/dashboard/rrhh', icon: BarChart3, planModule: 'rrhh', description: 'Métricas de talento' },
       { name: 'Gastos', href: '/dashboard/rrhh?section=gastos', icon: Receipt, planModule: 'rrhh', description: 'Autorización y control de reembolsos' },
       { name: 'Vacaciones', href: '/dashboard/rrhh?section=vacaciones', icon: Calendar, planModule: 'rrhh', description: 'Cuadrante y solicitudes de ausencia' },
       { name: 'Nóminas (Vault)', href: '/dashboard/rrhh?section=nominas', icon: Wallet, planModule: 'rrhh', description: 'Gestión de pagos con cifrado 2.0' },
-      { name: 'Retención IA', href: '/dashboard/rrhh?section=ia', icon: Heart, planModule: 'rrhh', description: 'Analítica de clima y rotación' },
+    ]
+  },
+  {
+    id: 'equipo',
+    name: 'Equipo',
+    icon: UserCog,
+    href: '/dashboard/equipo',
+    description: 'Gestión de colaboradores, roles y permisos de acceso.',
+    items: [
+      { name: 'Miembros', href: '/dashboard/equipo', icon: Users, description: 'Directorio y alta de personal' },
+      { name: 'Roles y Permisos', href: '/dashboard/equipo/roles', icon: ShieldCheck, description: 'Configuración de niveles de acceso' },
     ]
   },
   {

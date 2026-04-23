@@ -3,7 +3,11 @@ import { withAuth } from 'next-auth/middleware'
 import { NextResponse } from 'next/server'
 
 export default withAuth(
-  function middleware(req) {
+  async function middleware(req) {
+    // 1. Manejo de CORS para rutas públicas y API
+    const response = await handleCors(req);
+    if (response) return response;
+
     const token = req.nextauth.token
     const path = req.nextUrl.pathname
 
@@ -105,6 +109,41 @@ function isPublicPath(path: string): boolean {
   }
   
   return publicPaths.some(publicPath => path.startsWith(publicPath))
+}
+
+/**
+ * Helper para manejar políticas CORS
+ */
+async function handleCors(req: any) {
+  const path = req.nextUrl.pathname;
+  const isApiRoute = path.startsWith('/api/');
+  const isPublicApi = path.startsWith('/api/public/') || path.startsWith('/api/leads') || path.startsWith('/api/citas');
+
+  if (isApiRoute) {
+    // Si es una petición OPTIONS (preflight), respondemos directamente
+    if (req.method === 'OPTIONS') {
+      return new NextResponse(null, {
+        status: 204,
+        headers: {
+          'Access-Control-Allow-Origin': '*', // En producción, restringir a dominios conocidos
+          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-api-key',
+          'Access-Control-Max-Age': '86400',
+        },
+      });
+    }
+
+    // Para rutas públicas, permitimos CORS
+    if (isPublicApi) {
+      const res = NextResponse.next();
+      res.headers.set('Access-Control-Allow-Origin', '*');
+      res.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-api-key');
+      return res;
+    }
+  }
+
+  return null;
 }
 
 export const config = {

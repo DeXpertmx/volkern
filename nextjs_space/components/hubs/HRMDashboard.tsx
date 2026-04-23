@@ -29,6 +29,8 @@ import { IATeamAnalytics } from '@/components/hr/ia-team-analytics'
 import { SecurityKillSwitch } from '@/components/hr/SecurityKillSwitch'
 import { TrustProtocolLogs } from '@/components/sovereignty/trust-protocol-logs'
 import { PayrollVault } from '@/components/hr/PayrollVault'
+import { HRConfig } from '@/components/hr/HRConfig'
+import { OrgChart } from '@/components/hr/OrgChart'
 
 // Layout Inicial de RRHH (12 columnas)
 const HR_DEFAULT_LAYOUTS: { lg: Layout[] } = {
@@ -45,7 +47,7 @@ export default function HRMDashboard() {
   const searchParams = useSearchParams()
   const activeOffboardingId = searchParams.get('offboarding')
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'nominas'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'nominas' | 'config' | 'org'>('overview')
   const [isVacationModalOpen, setIsVacationModalOpen] = useState(false)
   const [vacationInitialData, setVacationInitialData] = useState<any>(null)
   
@@ -139,6 +141,18 @@ export default function HRMDashboard() {
              >
                 Payroll Vault
              </button>
+              <button 
+                onClick={() => setActiveTab('org')}
+                className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'org' ? 'bg-white shadow-sm text-slate-900 border' : 'text-slate-400 hover:text-slate-600'}`}
+              >
+                 Organigrama
+              </button>
+              <button 
+                onClick={() => setActiveTab('config')}
+                className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'config' ? 'bg-white shadow-sm text-slate-900 border' : 'text-slate-400 hover:text-slate-600'}`}
+              >
+                 Templates & Config
+              </button>
           </div>
           
           <Button 
@@ -256,7 +270,7 @@ export default function HRMDashboard() {
               </div>
             </ResponsiveGridLayout>
           </motion.div>
-        ) : (
+        ) : activeTab === 'nominas' ? (
           <motion.div
             key="nominas"
             initial={{ opacity: 0, scale: 0.98 }}
@@ -265,6 +279,26 @@ export default function HRMDashboard() {
             transition={{ duration: 0.2 }}
           >
              <PayrollVault />
+          </motion.div>
+        ) : activeTab === 'config' ? (
+          <motion.div
+            key="config"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            transition={{ duration: 0.2 }}
+          >
+             <HRConfig />
+          </motion.div>
+        ) : (
+          <motion.div
+            key="org"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.2 }}
+          >
+             <OrgChart />
           </motion.div>
         )}
       </AnimatePresence>

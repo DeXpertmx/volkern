@@ -58,6 +58,7 @@ model User {
   twoFactorCode           String?
   twoFactorExpires        DateTime?
   isTwoFactorEnabled      Boolean                    @default(false)
+  tokenVersion            Int                        @default(0)
   bookingBio              String?
   bookingEnabled          Boolean                    @default(false)
   bookingSlug             String?                    @unique
@@ -4015,6 +4016,55 @@ model Employee {
   email                  String?
   role                   String                   @default("OPERATOR")
   department             String                   @default("GENERAL")
+  isDepartmentAdmin      Boolean                  @default(false)
+  employeeId             String?                  @unique // Ej: 0139
+  jobTitle               String?                  @default("Colaborador")
+  workPhone              String?
+  mobilePhone            String?
+  tags                   String?
+  managerId              String?
+  isInstructor           Boolean                  @default(false)
+  
+  // Currículum
+  experience             Json?                    @default("[]")
+  skills                 Json?                    @default("[]")
+  educationLevel         String?
+  fieldOfStudy           String?
+  school                 String?
+  
+  // Información Privada
+  privateEmail           String?
+  privatePhone           String?
+  homeAddress            String?
+  bankAccount            String?
+  distanceToWork         Float?
+  carPlate               String?
+  emergencyContactName   String?
+  emergencyContactPhone  String?
+  maritalStatus          String?
+  childrenCount          Int                      @default(0)
+  
+  // Ciudadanía y Legal
+  nationality            String?
+  identificationNumber   String?                  // RFC
+  curp                   String?
+  socialSecurityNumber   String?                  // NSS
+  passportNumber         String?
+  gender                 String?
+  birthDate              DateTime?
+  birthPlace             String?
+  birthCountry           String?
+  
+  // Permisos de Trabajo
+  visaNumber             String?
+  workPermitNumber       String?
+  visaExpiry             DateTime?
+  
+  // Ajustes de Sistema
+  employeeType           String                   @default("EMPLOYEE") // EMPLOYEE, STUDENT, TRAINEE
+  pinCode                String?                  // Para asistencia en tablet
+  badgeId                String?                  @unique
+  
   hiringDate             DateTime                 @default(now())
   salaryEncrypted        String?
   contractUrlEncrypted   String?
@@ -4022,6 +4072,10 @@ model Employee {
   isActive               Boolean                  @default(true)
   createdAt              DateTime                 @default(now())
   updatedAt              DateTime                 @updatedAt
+  
+  // Relaciones
+  manager                Employee?                @relation("EmployeeHierarchy", fields: [managerId], references: [id])
+  subordinates           Employee[]               @relation("EmployeeHierarchy")
   allowedTeleworkLat     Float?
   allowedTeleworkLng     Float?
   isTeleworkAllowed      Boolean                  @default(false)

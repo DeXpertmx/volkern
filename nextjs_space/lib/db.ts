@@ -64,7 +64,7 @@ const GLOBAL_MODELS = [
 
 // Configuración del objeto global para persistencia en desarrollo (Next.js hot-reload)
 const globalForPrisma = globalThis as unknown as {
-  prisma: any
+  prisma_v4: any
   tenantCache: LRUCache<string, any> | undefined
   skillsLayerInitialized?: boolean
 }
@@ -88,10 +88,11 @@ const createGlobalPrisma = () => {
   }).$extends(billingLockExtension).$extends(vaultExtension) as any;
 };
 
-export const globalPrisma = globalForPrisma.prisma || createGlobalPrisma();
+export const globalPrisma = globalForPrisma.prisma_v4 || createGlobalPrisma();
 
+// Forzar limpieza del cliente global si el esquema ha cambiado (v3)
 if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = globalPrisma;
+  globalForPrisma.prisma_v4 = globalPrisma;
 }
 
 // 3. Fábrica Dinámica de Clientes
@@ -144,18 +145,12 @@ export const prisma = new Proxy(globalPrisma, {
     
     // Si tenemos un cliente en el contexto (inyectado por el middleware/auth), lo usamos
     if (store?.client) {
-      return Reflect.get(store.client, prop, receiver);
+      const clientProp = Reflect.get(store.client, prop, receiver);
+      if (clientProp) return clientProp;
     }
     
     // Fallback al cliente global (para scripts, o si no hay contexto)
-    const result = Reflect.get(target, prop, receiver);
-    
-    // Diagnóstico para modelos críticos si fallan
-    if (!result && (prop.toLowerCase().includes('customer'))) {
-      console.warn(`[PrismaProxy] Propiedad '${prop}' no encontrada en el cliente. ¿Esquema actualizado?`);
-    }
-    
-    return result;
+    return Reflect.get(target, prop, receiver);
   }
 })
 

@@ -12,43 +12,68 @@ import bcrypt from 'bcryptjs';
 export const GET = withTenantAuth(async (req, auth) => {
   try {
     const tenantId = auth.tenant!.id;
-    const currentUser = auth.user!;
+    let currentUser = auth.user!;
 
-    // Verificar permiso (usa el rol ya incluido en auth.user)
+    // Asegurar que el rol esté cargado para la validación de permisos
+    if (!currentUser.role) {
+      const dbUser = await prisma.user.findUnique({
+        where: { id: currentUser.id },
+        include: { role: true }
+      });
+      if (dbUser) currentUser = dbUser as any;
+    }
+
+    // Verificar permiso
     if (!hasPermission(currentUser, 'equipo', 'ver')) {
+      console.log(`Permiso denegado para usuario ${currentUser.email} en modulo equipo`);
       return NextResponse.json({ error: 'Sin permiso para ver el equipo' }, { status: 403 });
     }
 
-    // El proxy de prisma redirige 'user' y 'role' a la base de datos global.
-    // Obtenemos los usuarios asociados a este tenant.
-    const users = await prisma.user.findMany({
+    // Obtenemos todos los empleados (Plantilla) asociados a este tenant.
+    const employees = await prisma.employee.findMany({
       where: {
         tenantId: tenantId,
       },
       include: {
-        role: {
-          select: {
-            id: true,
-            nombre: true,
-            descripcion: true,
-          },
+        user: {
+          include: {
+            role: {
+              select: {
+                id: true,
+                nombre: true,
+                descripcion: true,
+              },
+            },
+          }
         },
       },
       orderBy: {
-        createdAt: 'desc',
+        fullName: 'asc',
       },
     });
 
-    const usersWithoutPasswords = users.map(({ password, ...user }) => ({
-      ...user,
-      role: user.role ? {
-        id: user.role.id,
-        nombre: user.role.nombre,
-        descripcion: user.role.descripcion
-      } : null
+    const staff = employees.map((emp) => ({
+      id: emp.user?.id || emp.id, // ID del usuario si tiene, si no del empleado
+      name: emp.fullName,
+      email: emp.email || emp.user?.email,
+      role: emp.user?.role ? {
+        id: emp.user.role.id,
+        nombre: emp.user.role.nombre,
+      } : { id: 'no-user', nombre: 'Sin acceso' },
+      employee: {
+        id: emp.id,
+        employeeId: emp.employeeId,
+        department: emp.department,
+        jobTitle: emp.jobTitle,
+      },
+      estado: emp.user?.estado || (emp.isActive ? 'activo' : 'inactivo'),
+      telefono: emp.mobilePhone || emp.user?.telefono,
+      timezone: emp.user?.timezone,
+      image: emp.user?.image,
+      createdAt: emp.createdAt,
     }));
 
-    return NextResponse.json({ users: usersWithoutPasswords });
+    return NextResponse.json({ users: staff });
   } catch (error: any) {
     console.error('Error al obtener usuarios:', error);
     return NextResponse.json({ error: 'Error al obtener usuarios' }, { status: 500 });
@@ -73,13 +98,63 @@ export const POST = withTenantAuth(async (req, auth) => {
     }
 
     const body = await req.json();
-    const { name, email, roleId, telefono, timezone } = body;
+    const { name, email, roleId, telefono, timezone, department, isDepartmentAdmin } = body;
 
-    if (!name || !email || !roleId) {
+    if (!name || !email) {
       return NextResponse.json(
-        { error: 'Nombre, email y rol son requeridos' },
+        { error: 'Nombre y email son requeridos' },
         { status: 400 }
       );
+    }
+
+    // Lógica de Auto-Rol por Departamento
+    let effectiveRoleId = roleId;
+    
+    if (!effectiveRoleId && department) {
+      const roleName = isDepartmentAdmin ? `Director de ${department}` : `Operador de ${department}`;
+      
+      // Buscar si el rol ya existe para este tenant
+      let role = await prisma.role.findFirst({
+        where: { 
+          nombre: roleName,
+          tenantId: tenantId
+        }
+      });
+
+      // Si no existe, crear el rol con permisos automáticos
+      if (!role) {
+        const defaultPerms: any = {};
+        const deptKey = department.toLowerCase();
+        
+        // Permisos base
+        defaultPerms[deptKey] = {
+          ver: true,
+          crear: true,
+          editar: isDepartmentAdmin,
+          eliminar: isDepartmentAdmin,
+          exportar: isDepartmentAdmin
+        };
+
+        // Si es Admin de departamento, también le damos permisos de dashboard/analytics
+        if (isDepartmentAdmin) {
+          defaultPerms['analytics'] = { ver: true };
+          if (deptKey === 'rrhh') defaultPerms['equipo'] = { ver: true, invitar: true };
+        }
+
+        role = await prisma.role.create({
+          data: {
+            nombre: roleName,
+            tenantId: tenantId,
+            permisos: defaultPerms,
+            descripcion: `Rol generado automáticamente para el departamento de ${department}`
+          }
+        });
+      }
+      effectiveRoleId = role.id;
+    }
+
+    if (!effectiveRoleId) {
+      return NextResponse.json({ error: 'Debes seleccionar un Rol o un Departamento' }, { status: 400 });
     }
 
     // El proxy redirige 'user' y 'role' a la base de datos global.
@@ -91,25 +166,17 @@ export const POST = withTenantAuth(async (req, auth) => {
       return NextResponse.json({ error: 'El email ya está registrado' }, { status: 400 });
     }
 
-    const role = await prisma.role.findUnique({
-      where: { id: roleId },
-    });
-
-    if (!role || (role.tenantId && role.tenantId !== tenantId)) {
-      return NextResponse.json({ error: 'Rol inválido para este tenant' }, { status: 400 });
-    }
-
     const tempPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8).toUpperCase();
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
     const inviteToken = Math.random().toString(36).substring(2) + Date.now().toString(36);
 
-    // Crear usuario en el Control Plane (Global DB)
+    // Crear usuario y su registro de empleado atómico
     const newUser = await prisma.user.create({
       data: {
         name,
         email,
         password: hashedPassword,
-        roleId,
+        roleId: effectiveRoleId,
         tenantId,
         telefono: telefono || undefined,
         timezone: timezone || 'America/Mexico_City',
@@ -117,26 +184,31 @@ export const POST = withTenantAuth(async (req, auth) => {
         invitadoPor: currentUser.id,
         tokenInvitacion: inviteToken,
         fechaInvitacion: new Date(),
+        employee: {
+          create: {
+            fullName: name,
+            email: email,
+            tenantId: tenantId,
+            department: department || 'GENERAL',
+            isDepartmentAdmin: isDepartmentAdmin || false,
+            role: isDepartmentAdmin ? 'MANAGER' : 'OPERATOR'
+          }
+        }
       },
       include: {
-        role: {
-          select: {
-            id: true,
-            nombre: true,
-            descripcion: true,
-          },
-        },
+        role: true,
+        employee: true
       },
     });
 
-    // Registrar en audit log (se guarda en la DB del Tenant para trazabilidad operativa)
+    // Registrar en audit log
     await logAuditAction(
       currentUser.id,
       tenantId,
       'crear',
       'usuario',
       newUser.id,
-      `${currentUser.name} invitó a ${newUser.name} (${newUser.email})`
+      `${currentUser.name} invitó a ${newUser.name} al departamento de ${department || 'General'}`
     );
 
     // Notificación por Telegram al admin
