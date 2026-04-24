@@ -6,6 +6,7 @@ import { stripe } from '@/lib/stripe'
 import { prisma } from '@/lib/db'
 import { sendPaymentConfirmation } from '@/lib/email'
 import { triggerAutomation } from '@/lib/automation-engine'
+import { StripeMXService } from '@/lib/finance/mexico/stripe-mx-service'
 
 export async function POST(request: NextRequest) {
   try {
@@ -231,6 +232,24 @@ export async function POST(request: NextRequest) {
       case 'payment_intent.payment_failed':
         console.log('Payment failed:', event.data.object.id)
         break
+
+      case 'invoice.finalized': {
+        const invoice = event.data.object
+        const tenantId = invoice.metadata?.volkern_tenant_id
+        if (tenantId) {
+          await StripeMXService.syncFiscalFiles(invoice.id, tenantId)
+        }
+        break
+      }
+
+      case 'invoice.paid': {
+        const invoice = event.data.object
+        const tenantId = invoice.metadata?.volkern_tenant_id
+        if (tenantId) {
+          await StripeMXService.syncFiscalFiles(invoice.id, tenantId)
+        }
+        break
+      }
 
       default:
         console.log('Unhandled event type:', event.type)

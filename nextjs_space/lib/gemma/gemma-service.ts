@@ -114,4 +114,45 @@ export class GemmaService {
       return { success: true };
     });
   }
+
+  /**
+   * Genera una respuesta contextual para el Volkern Guide (IA RAG)
+   */
+  static async getContextualGuideResponse(tenantId: string, userId: string, hub: string, query: string) {
+    // 1. Obtener artículos relevantes del Knowledge Hub
+    const contextArticles = await prisma.knowledgeArticle.findMany({
+      where: {
+        tenantId,
+        OR: [
+          { content: { contains: query, mode: 'insensitive' } },
+          { tags: { hasSome: [hub.toUpperCase()] } }
+        ]
+      },
+      take: 2
+    });
+
+    const knowledgeContext = contextArticles.map(a => `[Fuente: ${a.title}]: ${a.content}`).join('\n');
+
+    // 2. Simulación de llamada a Gemma con RAG
+    const gemmaResponse = `Basado en el Hub de ${hub} y nuestras políticas internas: ${
+      knowledgeContext ? 'He encontrado información relevante en el Knowledge Hub.' : 'No he encontrado un SOP específico, pero puedo asistirte con el flujo general.'
+    } Tu consulta sobre "${query}" se resuelve siguiendo estos pasos... [Respuesta Generada por Gemma]`;
+
+    // 3. Registrar en Trust Protocol (UserGuidanceLog)
+    const log = await prisma.userGuidanceLog.create({
+      data: {
+        tenantId,
+        userId,
+        hub,
+        query,
+        response: gemmaResponse
+      }
+    });
+
+    return {
+      id: log.id,
+      response: gemmaResponse,
+      sources: contextArticles.map(a => ({ id: a.id, title: a.title }))
+    };
+  }
 }

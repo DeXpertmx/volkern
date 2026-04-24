@@ -66,7 +66,11 @@ export function FiscalOnboardingModal({
     defaultIrpf: '0.0',
     recargoEquivalencia: false,
     emailFacturacion: '',
-    iban: ''
+    iban: '',
+    // Campos México
+    rfc: '',
+    regimenFiscal: '601', // General de Ley Personas Morales
+    usoCFDI: 'G03' // Gastos en general
   })
 
   const [viesStatus, setViesStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
@@ -94,6 +98,15 @@ export function FiscalOnboardingModal({
         }
       }
       if (!formData.razonSocial) newErrors.razonSocial = 'Requerido'
+      
+      if (formData.country === 'MX') {
+        const rfcRegex = /^[A-Z&Ñ]{3,4}[0-9]{2}(0[1-9]|1[012])(0[1-9]|[12][0-9]|3[01])[A-Z0-9]{2}[0-9A]$/
+        if (!formData.rfc) {
+          newErrors.rfc = 'RFC Requerido'
+        } else if (!rfcRegex.test(formData.rfc.toUpperCase())) {
+          newErrors.rfc = 'Formato de RFC inválido'
+        }
+      }
     }
 
     if (step === 2) {
@@ -263,6 +276,30 @@ export function FiscalOnboardingModal({
                 {viesStatus === 'success' && <p className="text-[10px] text-emerald-600 font-bold uppercase">Formato verificado en Censo AEAT (Simulado)</p>}
               </div>
 
+              {formData.country === 'MX' && (
+                <div className="space-y-2 animate-in fade-in duration-300">
+                  <Label htmlFor="rfc">RFC (México)</Label>
+                  <div className="relative">
+                    <Input
+                      id="rfc"
+                      required
+                      placeholder="ABCD123456XYZ"
+                      className={cn(
+                        "h-11 uppercase font-mono tracking-wider",
+                        errors.rfc ? "border-destructive" : ""
+                      )}
+                      value={formData.rfc}
+                      onChange={(e) => {
+                        setFormData({ ...formData, rfc: e.target.value.toUpperCase() })
+                        setErrors({ ...errors, rfc: '' })
+                      }}
+                    />
+                    {errors.rfc && <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-destructive" />}
+                  </div>
+                  {errors.rfc && <p className="text-[10px] text-destructive font-bold uppercase">{errors.rfc}</p>}
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label htmlFor="razonSocial">Nombre o Razón Social</Label>
                 <div className="relative">
@@ -386,23 +423,58 @@ export function FiscalOnboardingModal({
                   {formData.tipo === 'EMPRESA' && <p className="text-[10px] text-muted-foreground italic">IRPF bloqueado al 0% para Empresas</p>}
                 </div>
                 
-                <div className="flex flex-col justify-center space-y-2 pb-1">
-                  <Label htmlFor="recargo">Recargo de Equivalencia</Label>
-                  <div className="flex items-center space-x-2 pt-2">
-                    <Checkbox 
-                      id="recargo" 
-                      checked={formData.recargoEquivalencia}
-                      onCheckedChange={(checked) => setFormData({ ...formData, recargoEquivalencia: !!checked })}
-                    />
-                    <label 
-                      htmlFor="recargo"
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                    >
-                      Sí, aplica recargo
-                    </label>
                   </div>
                 </div>
               </div>
+
+              {formData.country === 'MX' && (
+                <div className="pt-4 border-t space-y-4 animate-in fade-in duration-300">
+                  <h3 className="text-sm font-bold text-emerald-800 flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4" /> Datos SAT (CFDI 4.0)
+                  </h3>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="regimenFiscal">Régimen Fiscal</Label>
+                    <Select 
+                      value={formData.regimenFiscal} 
+                      onValueChange={(v) => setFormData({ ...formData, regimenFiscal: v })}
+                    >
+                      <SelectTrigger id="regimenFiscal" className="h-11">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="601">601 - General de Ley Personas Morales</SelectItem>
+                        <SelectItem value="603">603 - Personas Morales con Fines no Lucrativos</SelectItem>
+                        <SelectItem value="605">605 - Sueldos y Salarios e Ingresos Asimilados a Salarios</SelectItem>
+                        <SelectItem value="606">606 - Arrendamiento</SelectItem>
+                        <SelectItem value="612">612 - Personas Físicas con Actividades Empresariales y Profesionales</SelectItem>
+                        <SelectItem value="626">626 - Régimen Simplificado de Confianza (RESICO)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="usoCFDI">Uso de CFDI</Label>
+                    <Select 
+                      value={formData.usoCFDI} 
+                      onValueChange={(v) => setFormData({ ...formData, usoCFDI: v })}
+                    >
+                      <SelectTrigger id="usoCFDI" className="h-11">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="G01">G01 - Adquisición de mercancías</SelectItem>
+                        <SelectItem value="G03">G03 - Gastos en general</SelectItem>
+                        <SelectItem value="I01">I01 - Construcciones</SelectItem>
+                        <SelectItem value="I02">I02 - Mobiliario y equipo de oficina</SelectItem>
+                        <SelectItem value="I04">I04 - Equipo de transporte</SelectItem>
+                        <SelectItem value="I08">I08 - Otros activos</SelectItem>
+                        <SelectItem value="P01">P01 - Por definir</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

@@ -5,6 +5,7 @@ import gocardless, { Environments as GoCardlessEnvironment } from 'gocardless-no
 import { v4 as uuidv4 } from 'uuid'
 import { generateInvoiceFingerprint, GENESIS_FINGERPRINT } from './crypto-utils'
 import { eventBus, EVENTS } from './skills/event-bus'
+import { StripeMXService } from './finance/mexico/stripe-mx-service'
 
 export interface ISignatureProvider {
   sign(payload: string): Promise<{ signature: string; algorithm: string }>;
@@ -194,6 +195,57 @@ export class InvoicingService {
    */
   private static async createStripeInvoice(options: CreateInvoiceOptions) {
     const { tenantId, leadId, contactId, amount, currency = 'eur', items = [], description } = options
+
+    // --- INTEGRACIÓN VOLKERN MX (STRIPE NATIVE) ---
+    if (currency.toUpperCase() === 'MXN') {
+      const stripeMxInvoice = await StripeMXService.createAndEmitInvoice({
+        tenantId,
+        targetId: contactId || leadId!,
+        type: contactId ? 'contact' : 'lead',
+        amount,
+        currency,
+        description: description || 'Factura Volkern MX',
+        items
+      })
+
+      const numero = stripeMxInvoice.number || `MX-${Date.now()}`
+
+      // Guardar en DB local
+      const invoice = await prisma.invoice.create({
+        data: {
+          tenantId,
+          leadId,
+          contactId,
+          ordenVentaId: options.ordenVentaId,
+          externalId: stripeMxInvoice.id,
+          stripeInvoiceId: stripeMxInvoice.id,
+          provider: 'stripe_mx',
+          numero,
+          monto: amount,
+          moneda: 'MXN',
+          estado: 'pendiente',
+          urlPdf: stripeMxInvoice.invoice_pdf || null,
+          fiscalStatus: 'pendiente_timbrado',
+          metadata: stripeMxInvoice as any,
+        }
+      })
+
+      // Emitir evento
+      eventBus.emitEvent(EVENTS.INVOICE_CREATED, {
+        tenantId,
+        invoiceId: invoice.id,
+        monto: invoice.monto,
+        moneda: invoice.moneda,
+        numero: invoice.numero,
+        leadId: invoice.leadId || undefined,
+        contactId: invoice.contactId || undefined,
+        source: 'api_mx',
+        timestamp: new Date()
+      })
+
+      return invoice
+    }
+    // --- FIN INTEGRACIÓN MX ---
 
     const cliente = await this.getClienteFiscal(leadId, contactId, tenantId)
 

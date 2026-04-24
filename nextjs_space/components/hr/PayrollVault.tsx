@@ -16,7 +16,13 @@ import {
   PlusCircle,
   TrendingUp,
   History,
-  Trash2
+  Trash2,
+  ShieldCheck, 
+  Lock, 
+  Filter, 
+  Download, 
+  Calculator, 
+  UserCog
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -31,6 +37,9 @@ import {
   DialogDescription,
   DialogFooter
 } from '@/components/ui/dialog'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { EmployeePayrollConfig } from './EmployeePayrollConfig'
+import { PayrollExecutionConsole } from './PayrollExecutionConsole'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { toast } from 'sonner'
 
@@ -143,82 +152,101 @@ export function PayrollVault() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between mb-8">
-         <div className="relative w-full max-w-md">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input 
-              type="text" 
-              placeholder="Buscar colaborador..." 
-              className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm focus:ring-2 focus:ring-primary/20 transition-all outline-none"
-            />
-         </div>
-         <div className="flex gap-2">
-            <Badge variant="outline" className="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-slate-50 border-slate-200">
-               Abril 2026
-            </Badge>
-         </div>
-      </div>
+      <Tabs defaultValue="vault" className="w-full">
+        <div className="flex items-center justify-between mb-8">
+           <div className="relative w-full max-w-md">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input 
+                type="text" 
+                placeholder="Buscar colaborador..." 
+                className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+              />
+           </div>
+           
+           <TabsList className="bg-slate-100 p-1 rounded-2xl w-full md:w-auto">
+             <TabsTrigger value="vault" className="rounded-xl px-6 data-[state=active]:bg-white">Caja de Nóminas</TabsTrigger>
+             <TabsTrigger value="execution" className="rounded-xl px-6 data-[state=active]:bg-white">Mesa de Nóminas (ES)</TabsTrigger>
+             <TabsTrigger value="config" className="rounded-xl px-6 data-[state=active]:bg-white">Configuración Laboral</TabsTrigger>
+           </TabsList>
 
-      <div className="grid grid-cols-1 gap-4">
-        {payrolls.map((p) => (
-          <Card key={p.id} className="group border shadow-sm hover:shadow-xl hover:border-primary/20 transition-all rounded-[1.5rem] bg-white overflow-hidden">
-            <CardContent className="p-0">
-               <div className="flex items-center justify-between p-6">
-                  <div className="flex items-center gap-4">
-                     <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-500 group-hover:bg-primary/10 group-hover:text-primary transition-all">
-                        <FileText className="w-6 h-6" />
-                     </div>
-                     <div>
-                        <h4 className="font-bold text-slate-900">{p.employeeName || p.employee}</h4>
-                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{p.role}</p>
-                     </div>
-                  </div>
+           <div className="flex gap-2">
+              <Badge variant="outline" className="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-slate-50 border-slate-200">
+                 Abril 2026
+              </Badge>
+           </div>
+        </div>
 
-                  <div className="flex items-center gap-12">
-                     <div className="text-right">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Estado</p>
-                        {p.status === 'SIGNED' ? (
-                           <Badge className="bg-emerald-500/10 text-emerald-600 border-none shadow-none rounded-lg font-bold">
-                              SELLADO QR
-                           </Badge>
-                        ) : (
-                           <Badge variant="outline" className="text-amber-500 border-amber-200 bg-amber-50 rounded-lg font-bold">
-                              BORRADOR
-                           </Badge>
-                        )}
-                     </div>
+        <TabsContent value="vault">
+          <div className="grid grid-cols-1 gap-4">
+            {payrolls.map((p) => (
+              <Card key={p.id} className="group border shadow-sm hover:shadow-xl hover:border-primary/20 transition-all rounded-[1.5rem] bg-white overflow-hidden">
+                <CardContent className="p-0">
+                   <div className="flex items-center justify-between p-6">
+                      <div className="flex items-center gap-4">
+                         <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-500 group-hover:bg-primary/10 group-hover:text-primary transition-all">
+                            <FileText className="w-6 h-6" />
+                         </div>
+                         <div>
+                            <h4 className="font-bold text-slate-900">{p.employeeName || p.employee}</h4>
+                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{p.role}</p>
+                         </div>
+                      </div>
 
-                     <div className="text-right">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Neto</p>
-                        <span className="text-lg font-black text-slate-900">
-                           {p.status === 'SIGNED' ? p.salary : calculateTotal(p.salary, p.absences).total.toFixed(0)}€
-                        </span>
-                     </div>
+                      <div className="flex items-center gap-12">
+                         <div className="text-right">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Estado</p>
+                            {p.status === 'SIGNED' ? (
+                               <Badge className="bg-emerald-500/10 text-emerald-600 border-none shadow-none rounded-lg font-bold">
+                                  SELLADO QR
+                               </Badge>
+                            ) : (
+                               <Badge variant="outline" className="text-amber-500 border-amber-200 bg-amber-50 rounded-lg font-bold">
+                                  BORRADOR
+                               </Badge>
+                            )}
+                         </div>
 
-                     <div className="flex gap-2">
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          onClick={() => handlePreview(p)}
-                          className="w-10 h-10 rounded-xl hover:bg-slate-100 transition-all"
-                        >
-                           <Eye className="w-4 h-4 text-slate-600" />
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          disabled={p.status === 'SIGNED'}
-                          onClick={() => handlePreview(p)}
-                          className="h-10 px-6 rounded-xl font-bold text-[10px] border-slate-200 hover:bg-slate-900 hover:text-white transition-all"
-                        >
-                           AUDITAR & FIRMAR
-                        </Button>
-                     </div>
-                  </div>
-               </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                         <div className="text-right">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Neto</p>
+                            <span className="text-lg font-black text-slate-900">
+                               {p.status === 'SIGNED' ? p.salary : calculateTotal(p.salary, p.absences).total.toFixed(0)}€
+                            </span>
+                         </div>
+
+                         <div className="flex gap-2">
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => handlePreview(p)}
+                              className="w-10 h-10 rounded-xl hover:bg-slate-100 transition-all"
+                            >
+                               <Eye className="w-4 h-4 text-slate-600" />
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              disabled={p.status === 'SIGNED'}
+                              onClick={() => handlePreview(p)}
+                              className="h-10 px-6 rounded-xl font-bold text-[10px] border-slate-200 hover:bg-slate-900 hover:text-white transition-all"
+                            >
+                               AUDITAR & FIRMAR
+                            </Button>
+                         </div>
+                      </div>
+                   </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="execution" className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <PayrollExecutionConsole />
+        </TabsContent>
+
+        <TabsContent value="config" className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <EmployeePayrollConfig />
+        </TabsContent>
+      </Tabs>
 
       {/* MODAL DE VISTA PREVIA & FIRMA */}
       <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>

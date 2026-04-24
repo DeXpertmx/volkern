@@ -98,11 +98,25 @@ export async function POST(
             defaultIva: fiscalData.defaultIva ? parseFloat(fiscalData.defaultIva) : 21.0,
             defaultIrpf: fiscalData.defaultIrpf ? parseFloat(fiscalData.defaultIrpf) : 0.0,
             recargoEquivalencia: !!fiscalData.recargoEquivalencia,
-            emailFacturacion: fiscalData.emailFacturacion,
             iban: fiscalData.iban,
             regimenFiscal: fiscalData.regimenFiscal
           }
         });
+
+        // Crear Datos Fiscales México (Roadmap Stripe MX)
+        if (fiscalData.country === 'MX' || fiscalData.rfc) {
+          await prisma.customerFiscalData.create({
+            data: {
+              tenantId: user.tenantId,
+              contactId: contact.id,
+              rfc: fiscalData.rfc,
+              razonSocial: fiscalData.razonSocial || lead.nombre,
+              regimenFiscal: fiscalData.regimenFiscal,
+              usoCFDI: fiscalData.usoCFDI,
+              cp: fiscalData.zipCode
+            }
+          });
+        }
       }
     }
 

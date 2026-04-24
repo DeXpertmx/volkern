@@ -367,6 +367,14 @@ model Tenant {
   competitiveInsights            CompetitiveInsight[]
   knowledgeArticles              KnowledgeArticle[]
   userGuidanceLogs               UserGuidanceLog[]
+  stripeFiscalLinks              StripeFiscalLink[]
+  customerFiscalData             CustomerFiscalData[]
+  payrollProfilesES              EmployeePayrollProfileES[]
+  collectiveAgreements           CollectiveAgreement[]
+  employeeAbsencesES             EmployeeAbsenceES[]
+  payrollRecordsES               PayrollRecordES[]
+  proposedActions                ProposedAction[]
+  strategicThresholds            StrategicThreshold[]
 }
 
 model AttendanceRules {
@@ -518,6 +526,7 @@ model Lead {
   signatureRequests    SignatureRequest[]
   TrainingSession      TrainingSession[]
   unsubscribes         UnsubscribeList[]
+  customerFiscalData   CustomerFiscalData?
 
   @@index([tenantId])
   @@index([email])
@@ -609,6 +618,7 @@ model Contact {
   lead_attachments               LeadAttachment[]
   ordenesVenta                   OrdenVenta[]                     @relation("ContactOrdenesVenta")
   perfilFiscal                   PerfilFiscalCliente?             @relation("ContactPerfilFiscal")
+  customerFiscalData             CustomerFiscalData?
 
   @@index([tenantId])
   @@index([email])
@@ -3398,6 +3408,10 @@ model Invoice {
   lead               Lead?       @relation(fields: [leadId], references: [id])
   tenant             Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   ordenVenta         OrdenVenta?
+  xmlUrl             String?
+  stripeInvoiceId    String?
+  fiscalStatus       String?     @default("pendiente")
+  fiscalDetails      Json?       @default("{}")
 
   @@unique([tenantId, sequenceNumber])
   @@index([tenantId])
@@ -4140,6 +4154,9 @@ model Employee {
   user                   User?                    @relation(fields: [userId], references: [id])
   erp_expense_claims     erp_expense_claims[]
   payrollRecords         PayrollRecord[]
+  payrollProfileES       EmployeePayrollProfileES?
+  absencesES             EmployeeAbsenceES[]
+  payrollRecordsES       PayrollRecordES[]
   erp_vacation_requests  erp_vacation_requests[]
 
   @@index([userId])
@@ -5912,4 +5929,228 @@ model UserGuidanceLog {
   tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   @@index([tenantId])
   @@map("erp_user_guidance_logs")
+}
+
+model StripeFiscalLink {
+  id              String   @id @default(cuid())
+  tenantId        String   @unique
+  stripeAccountId String   // Stripe Account ID (MX)
+  settings        Json?    // Specific settings for MX invoicing
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("erp_stripe_fiscal_links")
+}
+
+model CustomerFiscalData {
+  id            String   @id @default(cuid())
+  tenantId      String
+  contactId     String?  @unique
+  leadId        String?  @unique
+  rfc           String?  @unique
+  razonSocial   String?
+  regimenFiscal String?  // Código SAT (ej: 601)
+  cp            String?  // Código Postal
+  usoCFDI       String?  // Código SAT (ej: G03)
+  stripeTaxId   String?  // ID del TaxID en Stripe
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  contact       Contact? @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  lead          Lead?    @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([rfc])
+  @@map("erp_customer_fiscal_data")
+}
+
+// --- VOLKERN PAYROLL ES (España) ---
+
+model EmployeePayrollProfileES {
+  id                    String   @id @default(cuid())
+  employeeId            String   @unique
+  tenantId              String
+  groupCotizacion       Int      // 1-11
+  contractTypeCode      String   // '100', '400', etc.
+  workingDayPercent     Decimal  @default(100.00) @db.Decimal(5, 2)
+  extraPaysMode         String   @default("PRORRATED") // PRORRATED, SEMI_ANNUAL
+  salaryBase            Decimal  @db.Decimal(10, 2)
+  salaryComplement      Decimal  @default(0.0) @db.Decimal(10, 2)
+  irpfSituation         Int      @default(1) // 1, 2, 3
+  irpfChildrenCount     Int      @default(0)
+  voluntaryIrpfRate     Decimal? @db.Decimal(5, 2)
+  socialSecurityRegime  String   @default("GENERAL")
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  employee              Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  tenant                Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  versions              EmployeePayrollVersionES[]
+  absences              EmployeeAbsenceES[]
+
+  @@index([tenantId])
+  @@map("erp_payroll_profiles_es")
+}
+
+model EmployeePayrollVersionES {
+  id          String   @id @default(cuid())
+  profileId   String
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  
+  data        Json     // Snapshot de los datos en esta vigencia
+  changedBy   String
+  reason      String?
+  createdAt   DateTime @default(now())
+
+  profile     EmployeePayrollProfileES @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId])
+  @@map("erp_payroll_profile_versions_es")
+}
+
+model CollectiveAgreement {
+  id              String   @id @default(cuid())
+  tenantId        String
+  name            String
+  sector          String?
+  salaryTables    Json?    // Tablas salariales por categoría
+  overtimeRules   Json?
+  extraPayRules   Json?
+  validFrom       DateTime
+  validTo         DateTime?
+  
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("erp_collective_agreements")
+}
+
+model EmployeeAbsenceES {
+  id              String   @id @default(cuid())
+  employeeId      String
+  tenantId        String
+  type            String   // IT_COMMON, IT_WORK, UNPAID_LEAVE, STRIKE, etc.
+  startDate       DateTime
+  endDate         DateTime?
+  percentageAffected Float   @default(100.0)
+  paymentDelegated Boolean  @default(true)
+  notes           String?  @db.Text
+  profileId       String?
+  createdAt       DateTime @default(now())
+
+  employee        Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  profile         EmployeePayrollProfileES? @relation(fields: [profileId], references: [id], onDelete: SetNull)
+
+  @@index([employeeId])
+  @@map("erp_employee_absences_es")
+}
+
+model PayrollRecordES {
+  id                String   @id @default(cuid())
+  tenantId          String
+  employeeId        String
+  period            String   // 'YYYY-MM'
+  status            String   // 'DRAFT' | 'LOCKED' | 'SEALED'
+  
+  grossTotal        Decimal  @db.Decimal(10, 2)
+  netTotal          Decimal  @db.Decimal(10, 2)
+  socialSecurityEmp Decimal  @db.Decimal(10, 2) // Aportación empresa
+  socialSecurityWorker Decimal @db.Decimal(10, 2) // Aportación trabajador
+  irpfTotal         Decimal  @db.Decimal(10, 2)
+  
+  calculationSnapshot Json   // Datos legales y del empleado usados
+  operatorNote        String? @db.Text
+  auditHash           String?  @unique
+  createdAt           DateTime @default(now())
+
+  employee           Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lines              PayrollLineES[]
+
+  @@index([tenantId])
+  @@index([employeeId])
+  @@index([period])
+  @@map("erp_payroll_records_es")
+}
+
+model PayrollLineES {
+  id              String   @id @default(cuid())
+  payrollRecordId String
+  conceptCode     String   
+  conceptType     String   
+  amount          Decimal  @db.Decimal(10, 2)
+  taxable         Boolean  @default(true)
+  cotizable       Boolean  @default(true)
+  isOverride      Boolean  @default(false)
+  notes           String?
+  
+  payrollRecord   PayrollRecordES @relation(fields: [payrollRecordId], references: [id], onDelete: Cascade)
+
+  @@index([payrollRecordId])
+  @@map("erp_payroll_line_es")
+}
+
+model LegalTaxTable {
+  id              String   @id @default(cuid())
+  name            String   // Ej: IRPF_2025, SS_BASES_2024
+  type            String   // IRPF_BRACKETS, SS_BASES, MEI_RATES, etc.
+  data            Json
+  validFrom       DateTime
+  validTo         DateTime?
+  version         String
+  source          String?
+  notes           String?  @db.Text
+  createdAt       DateTime @default(now())
+
+  @@index([name])
+  @@map("erp_legal_tax_tables")
+}
+
+model ProposedAction {
+  id              String   @id @default(cuid())
+  tenantId        String
+  category        String   // 'FINANCE', 'SALES', 'SUPPLY', 'HR'
+  title           String
+  description     String   @db.Text
+  triggerEvent    String   // Evento que disparó la propuesta
+  actionPayload   Json     // Datos para la ejecución (ej: correo, orden compra)
+  status          String   @default("DRAFT") // DRAFT, APPROVED, REJECTED, EXECUTED
+  priority        String   @default("MEDIUM") // LOW, MEDIUM, HIGH, CRITICAL
+  
+  confidence      Float    @default(0.0)
+  evidence        Json?    // Datos analíticos que sustentan la propuesta
+  
+  approvedById    String?
+  executedAt      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@index([tenantId])
+  @@index([status])
+  @@map("erp_proposed_actions")
+}
+
+model StrategicThreshold {
+  id              String   @id @default(cuid())
+  tenantId        String
+  metric          String   // 'MARGIN', 'CASHFLOW', 'CHURN', 'ADOPTION'
+  operator        String   // 'LT', 'GT', 'LTE', 'GTE'
+  value           Float
+  severity        String   // 'INFO', 'WARNING', 'CRITICAL'
+  isActive        Boolean  @default(true)
+  
+  alertMessage    String   @db.Text
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@index([tenantId])
+  @@map("erp_strategic_thresholds")
 }
