@@ -27,7 +27,7 @@ export class PlanningService {
     const maintenanceOrders = await (prisma as any).erp_maintenance_orders.findMany({
       where: {
         tenantId,
-        asset: { lineId },
+        erp_industrial_assets: { lineId },
         status: 'PLANNED',
         plannedDate: { gte: start, lte: end }
       }
@@ -56,6 +56,7 @@ export class PlanningService {
 
     return await (prisma as any).erp_production_capacity.create({
       data: {
+        id: `CAP-${lineId}-${date.getTime()}`,
         tenantId,
         lineId,
         periodStart: start,

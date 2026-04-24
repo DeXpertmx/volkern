@@ -54,7 +54,7 @@ export default function AlmacenesPage() {
                         <Box className="w-4 h-4 text-primary" />
                         <span className="text-sm font-black italic">SKUs Vinculados</span>
                      </div>
-                     <span className="text-sm font-black text-slate-900 tracking-tighter">0 Items</span>
+                     <span className="text-sm font-black text-slate-900 tracking-tighter">{wh._count?.stockLevels || 0} Items</span>
                   </div>
                   
                   <div className="flex gap-2 pt-2">

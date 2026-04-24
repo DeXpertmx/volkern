@@ -1,15 +1,17 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { EntryManager } from '@/lib/accounting/entry-manager';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { withTenantAuth } from '@/lib/api-key-auth';
+import { AdoptionTelemetry } from '@/lib/telemetry/adoption-kpis';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: NextRequest) {
+export const GET = withTenantAuth(async (request, auth) => {
   try {
-    const session = await getServerSession(authOptions);
-    const tenantId = session?.user?.tenantId || request.nextUrl.searchParams.get('tenantId') || 'cmo09jrkc0000mf0ebul7xe9q';
+    const tenantId = auth.tenant!.id;
+    // Telemetry
+    AdoptionTelemetry.trackHubView(tenantId, auth.user!.id, 'FINANCE').catch(() => {});
+
 
     // 1. Get account balances
     const accounts = await prisma.accountingAccount.findMany({
@@ -49,6 +51,14 @@ export async function GET(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('Error fetching accounting dashboard:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    // Fallback pattern
+    return NextResponse.json({ 
+      summary: { assets: 0, liabilities: 0, expenses: 0, income: 0 },
+      recentEntries: [],
+      integrity: { status: 'UNKNOWN' },
+      bankConnections: [],
+      fallback: true,
+      error: error.message 
+    });
   }
-}
+}, ['accounting:read']);

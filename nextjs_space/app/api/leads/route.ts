@@ -7,13 +7,18 @@ import { ScoringEngine } from '@/lib/scoring-engine'
 import { validateLimit } from '@/lib/limits'
 import { withTenantAuth } from '@/lib/api-key-auth'
 import { assignLeadAutomatically } from '@/lib/leads/assignment'
-import crypto from 'crypto'
+import { AdoptionTelemetry } from '@/lib/telemetry/adoption-kpis';
+import * as crypto from 'crypto'
 
 /**
  * Handle GET leads - Ahora usando withTenantAuth para aislamiento mágico
  */
 export const GET = withTenantAuth(async (request, auth) => {
   try {
+    const tenantId = auth.tenant!.id;
+    // Telemetry
+    AdoptionTelemetry.trackHubView(tenantId, auth.user!.id, 'LEADS').catch(() => {});
+
     const { searchParams } = new URL(request.url)
     const query = searchParams.get('q')
     const etapa = searchParams.get('etapa')
@@ -62,9 +67,13 @@ export const GET = withTenantAuth(async (request, auth) => {
     return NextResponse.json(leads)
   } catch (error: any) {
     console.error('[GET /api/leads] Error:', error)
-    return NextResponse.json({ error: 'Error al obtener leads' }, { status: 500 })
+    return NextResponse.json({ 
+      data: [], 
+      fallback: true, 
+      error: 'Error al obtener leads' 
+    })
   }
-})
+}, ['leads:read'])
 
 /**
  * Handle POST leads - Aislamiento mágico también aquí
@@ -237,4 +246,4 @@ export const POST = withTenantAuth(async (request, auth) => {
     console.error('[POST /api/leads] Error:', error)
     return NextResponse.json({ error: 'Error al procesar lead' }, { status: 500 })
   }
-})
+}, ['leads:write'])

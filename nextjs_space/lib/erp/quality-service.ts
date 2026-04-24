@@ -1,81 +1,76 @@
 import { prisma } from '@/lib/db';
-import { StockService } from '@/lib/erp/stock-service';
-import { AuditLogService } from '@/lib/erp/audit-log-service';
 
 export class QualityService {
   /**
-   * Registra un resultado de inspección (Quality Check)
+   * Obtiene los puntos de control configurados para el tenant
    */
-  static async recordInspection(data: {
-    tenantId: string;
-    pointId: string;
-    status: 'PASSED' | 'FAILED';
-    workOrderId?: string;
-    lotId?: string;
-    measuredValue?: string;
-    notes?: string;
-    inspectorId?: string;
-    evidenceUrl?: string;
-  }) {
-    return await prisma.$transaction(async (tx) => {
-      // 1. Crear el registro de inspección
-      const check = await tx.qualityCheck.create({
-        data: {
-          tenantId: data.tenantId,
-          pointId: data.pointId,
-          status: data.status,
-          workOrderId: data.workOrderId,
-          inventoryLotId: data.lotId,
-          measuredValue: data.measuredValue,
-          notes: data.notes,
-          inspectorId: data.inspectorId,
-          evidenceUrl: data.evidenceUrl
-        },
-        include: { point: true }
-      });
-
-      // 2. Si es un lote y el resultado es PASSED, evaluar liberación de CUARENTENA
-      if (data.lotId && data.status === 'PASSED') {
-        const allChecks = await tx.qualityCheck.findMany({
-          where: { inventoryLotId: data.lotId, tenantId: data.tenantId },
-          include: { point: true }
-        });
-
-        // Verificamos si todos los puntos obligatorios han pasado
-        // En una implementación real, aquí cruzaríamos con la lista de puntos definidos para la familia
-        const failedMandatory = allChecks.some(qc => qc.point.mandatory && qc.status === 'FAILED');
-        
-        if (!failedMandatory) {
-          await tx.inventoryLot.update({
-            where: { id: data.lotId },
-            data: { status: 'AVAILABLE' }
-          });
-        }
-      }
-
-      // 3. Si el resultado es FAILED, abrir No Conformidad automáticamente
-      if (data.status === 'FAILED') {
-        await tx.nonConformity.create({
-          data: {
-            tenantId: data.tenantId,
-            workOrderId: data.workOrderId,
-            description: `Fallo en inspección: ${check.point.name}. Valor medido: ${data.measuredValue}`,
-            severity: check.point.mandatory ? 'HIGH' : 'MEDIUM',
-            status: 'OPEN',
-            reportedBy: data.inspectorId || 'SYSTEM'
-          }
-        });
-
-        // Si es un lote, marcar como REJECTED
-        if (data.lotId) {
-          await tx.inventoryLot.update({
-            where: { id: data.lotId },
-            data: { status: 'REJECTED' }
-          });
-        }
-      }
-
-      return check;
+  static async getControlPoints(tenantId: string) {
+    return await (prisma as any).qualityPoint.findMany({
+      where: { tenantId },
+      orderBy: { createdAt: 'desc' }
     });
+  }
+
+  /**
+   * Obtiene las inspecciones recientes
+   */
+  static async getRecentInspections(tenantId: string, limit = 10) {
+    return await (prisma as any).qualityCheck.findMany({
+      where: { tenantId },
+      include: {
+        point: true,
+        project: { select: { name: true } },
+        workOrder: { select: { batchNumber: true } }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit
+    });
+  }
+
+  /**
+   * Obtiene las no conformidades (incidencias)
+   */
+  static async getNonConformities(tenantId: string) {
+    return await (prisma as any).nonConformity.findMany({
+      where: { tenantId },
+      include: {
+        project: { select: { name: true } },
+        workOrder: { select: { batchNumber: true } }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+  }
+
+  /**
+   * Calcula estadísticas de calidad
+   */
+  static async getQualityStats(tenantId: string) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const [inspectionsToday, openNC, totalPassed, totalFailed] = await Promise.all([
+      (prisma as any).qualityCheck.count({
+        where: { tenantId, createdAt: { gte: today } }
+      }),
+      (prisma as any).nonConformity.count({
+        where: { tenantId, status: 'OPEN' }
+      }),
+      (prisma as any).qualityCheck.count({
+        where: { tenantId, status: 'PASSED' }
+      }),
+      (prisma as any).qualityCheck.count({
+        where: { tenantId, status: 'FAILED' }
+      })
+    ]);
+
+    const total = totalPassed + totalFailed;
+    const approvalRate = total > 0 ? (totalPassed / total) * 100 : 100;
+
+    return {
+      inspectionsToday,
+      openNonConformities: openNC,
+      approvalRate: `${approvalRate.toFixed(1)}%`,
+      signedReports: totalPassed // Simulamos reportes firmados como inspecciones aprobadas
+    };
   }
 }

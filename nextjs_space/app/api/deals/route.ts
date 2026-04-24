@@ -5,12 +5,16 @@ import { prisma, getTenantDb, dbContext } from '@/lib/db'
 import { createSystemContext } from '@/lib/skills/context';
 import { withTenantAuth } from '@/lib/api-key-auth'
 import { hasPermission, canOnlySeeOwnLeads } from '@/lib/permissions'
+import { AdoptionTelemetry } from '@/lib/telemetry/adoption-kpis';
 
 // GET /api/deals - Listar deals con filtros (Base de Datos aislada del Tenant)
 export const GET = withTenantAuth(async (req, auth) => {
   try {
     const tenantId = auth.tenant!.id;
     const currentUser = auth.user!;
+
+    // Telemetry: Track Hub View
+    AdoptionTelemetry.trackHubView(tenantId, currentUser.id, 'SALES').catch(() => {});
 
     // Verificar permiso de ver deals (pipeline)
     if (!hasPermission(currentUser, 'leads', 'ver')) {
@@ -98,7 +102,12 @@ export const GET = withTenantAuth(async (req, auth) => {
     return NextResponse.json({ deals, metrics })
   } catch (error: any) {
     console.error('Error al obtener deals:', error)
-    return NextResponse.json({ error: 'Error al obtener deals' }, { status: 500 })
+    return NextResponse.json({ 
+      deals: [], 
+      metrics: { totalDeals: 0, totalValor: 0, valorPonderado: 0 },
+      fallback: true,
+      error: error.message 
+    })
   }
 }, ['deals:read', 'leads:read'])
 

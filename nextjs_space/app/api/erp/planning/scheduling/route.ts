@@ -9,17 +9,17 @@ import { SchedulingService } from '@/lib/erp/scheduling-service';
 export const GET = withTenantAuth(async (request, auth) => {
   try {
     const tenantId = auth.tenant!.id;
-    const plan = await prisma.schedulingPlan.findFirst({
+    const plan = await (prisma as any).erp_scheduling_plans.findFirst({
       where: { tenantId, status: { in: ['ACTIVE', 'DRAFT'] } },
       include: {
-        assignments: {
+        erp_schedule_assignments: {
           include: {
-            workOrder: {
+            erp_work_orders: {
               include: {
                 bom: { include: { catalogoItem: true } }
               }
             },
-            line: true
+            erp_production_lines: true
           },
           orderBy: { estimatedStart: 'asc' }
         }

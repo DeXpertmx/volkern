@@ -11,7 +11,7 @@ export class CostingService {
       include: { 
         bom: { include: { components: true } },
         productionLogs: true,
-        asset: true
+        erp_industrial_assets: true
       }
     });
 
@@ -66,9 +66,10 @@ export class CostingService {
     const revenue = estimatedCost * 1.4;
     const margin = ((revenue - totalCost) / revenue) * 100;
 
-    return await prisma.productionCosting.upsert({
+    return await (prisma as any).erp_production_costing.upsert({
       where: { workOrderId },
       create: {
+        id: `COST-${workOrderId}`,
         tenantId,
         workOrderId,
         materialCost,
@@ -78,7 +79,8 @@ export class CostingService {
         totalCost,
         estimatedCost,
         variance,
-        margin
+        margin,
+        updatedAt: new Date()
       },
       update: {
         materialCost,
@@ -88,7 +90,8 @@ export class CostingService {
         totalCost,
         estimatedCost,
         variance,
-        margin
+        margin,
+        updatedAt: new Date()
       }
     });
   }

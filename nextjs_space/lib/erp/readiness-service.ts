@@ -34,7 +34,7 @@ export class ReadinessService {
       const availableQty = Math.min(requiredQty, stock.available);
       const missingQty = Math.max(0, requiredQty - availableQty);
       
-      const req = await prisma.materialRequirement.upsert({
+      const req = await (prisma as any).erp_material_requirements.upsert({
         where: { id: `req_${workOrderId}_${component.catalogItemId}` },
         update: {
           requiredQty,
@@ -59,8 +59,9 @@ export class ReadinessService {
       itemsAvailable += availableQty;
 
       if (missingQty > 0) {
-        await prisma.materialShortage.create({
+        await (prisma as any).erp_material_shortages.create({
           data: {
+            id: `short_${Date.now()}_${component.catalogItemId}`,
             tenantId,
             catalogItemId: component.catalogItemId,
             missingQty,
@@ -73,7 +74,7 @@ export class ReadinessService {
     const coveragePercent = (itemsAvailable / totalItems) * 100;
     const readyToProduce = coveragePercent >= 100;
 
-    const readiness = await prisma.productionReadiness.upsert({
+    const readiness = await (prisma as any).erp_production_readiness.upsert({
       where: { workOrderId },
       update: {
         readyToProduce,
@@ -82,6 +83,7 @@ export class ReadinessService {
         checkedAt: new Date()
       },
       create: {
+        id: `READ-${workOrderId}`,
         tenantId,
         workOrderId,
         readyToProduce,
@@ -91,9 +93,9 @@ export class ReadinessService {
     });
 
     // Calcular cuántos lotes hay en cuarentena para estos requerimientos
-    const quarantineLots = await prisma.inventoryLot.count({
+    const quarantineLots = await (prisma as any).erp_inventory_lots.count({
       where: {
-        catalogItemId: { in: workOrder.bom.components.map(c => c.catalogItemId) },
+        catalogItemId: { in: workOrder.bom.components.map((c: any) => c.catalogItemId) },
         tenantId,
         status: 'QUARANTINE'
       }
@@ -107,14 +109,12 @@ export class ReadinessService {
    */
   static async reserveMaterials(workOrderId: string, tenantId: string) {
     return await prisma.$transaction(async (tx) => {
-      const requirements = await tx.materialRequirement.findMany({
+      const requirements = await (tx as any).erp_material_requirements.findMany({
         where: { workOrderId, tenantId, status: 'PENDING' }
       });
 
       for (const req of requirements) {
-        // En un sistema real, aquí buscaríamos el stock físico en inventario
-        // con un bloqueo (SELECT ... FOR UPDATE) si fuera necesario.
-        await tx.materialRequirement.update({
+        await (tx as any).erp_material_requirements.update({
           where: { id: req.id },
           data: { 
             reservedQty: req.requiredQty,

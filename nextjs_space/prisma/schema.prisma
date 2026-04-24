@@ -8,6 +8,14 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum ChatChannelType {
+  system
+  public
+  private
+  project
+  deal
+}
+
 model Account {
   id                String  @id @default(cuid())
   userId            String
@@ -101,6 +109,10 @@ model User {
   salesPlaybookEntries    SalesPlaybookEntry[]
   trainingSessions        TrainingSession[]
   marketingAuditLogs      MarketingAuditLog[]
+  chatMessages            ChatMessage[]
+  chatSubscriptions       ChatSubscription[]
+  createdTickets          SupportTicket[]            @relation("TicketCreator")
+  assignedTickets         SupportTicket[]            @relation("TicketAssignee")
 
   @@index([tenantId])
   @@index([roleId])
@@ -333,6 +345,28 @@ model Tenant {
   contentAssets                  ContentAsset[]
   webForms                       WebForm[]
   webFormSubmissions             WebFormSubmission[]
+  chatChannels                   ChatChannel[]
+  chatMessages                   ChatMessage[]
+  chatSubscriptions              ChatSubscription[]
+  gemmaRequests                  GemmaRequest[]
+  gemmaResponses                 GemmaResponse[]
+  ChatAttribution                ChatAttribution[]
+  supportTickets                 SupportTicket[]
+  strategySnapshots              StrategySnapshot[]
+  profitabilityRecords           ProfitabilityRecord[]
+  cashflowProjections            CashflowProjection[]
+  strategicRecommendations       StrategicRecommendation[]
+  executiveAlerts                ExecutiveAlert[]
+  assets                         Asset[]
+  assetAssignments               AssetAssignment[]
+  assetMaintenance               AssetMaintenance[]
+  assetEvents                    AssetEvent[]
+  discoverySignals               DiscoverySignal[]
+  marketObservations             MarketObservation[]
+  externalLeads                  ExternalLead[]
+  competitiveInsights            CompetitiveInsight[]
+  knowledgeArticles              KnowledgeArticle[]
+  userGuidanceLogs               UserGuidanceLog[]
 }
 
 model AttendanceRules {
@@ -403,7 +437,7 @@ model Role {
 model AuditLog {
   id             String   @id @default(cuid())
   tenantId       String?
-  userId         String
+  userId         String?
   accion         String
   entidad        String
   entidadId      String
@@ -412,9 +446,11 @@ model AuditLog {
   cambiosDespues Json?
   ipAddress      String?
   userAgent      String?
+  metadata       Json?    @default("{}")
+  hash           String?
   fechaCreacion  DateTime @default(now())
   tenant         Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user           User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([userId])
@@ -798,7 +834,6 @@ model WorkflowTemplate {
 
   @@index([category])
   @@index([isActive])
-  @@map("workflow_templates")
 }
 
 model TenantWorkflow {
@@ -3477,17 +3512,17 @@ model SocialPlatformConfig {
 }
 
 model AutomationRule {
-  id          String   @id @default(cuid())
+  id          String                  @id @default(cuid())
   tenantId    String
   name        String
   description String?
   triggerType String
-  conditions  Json     @default("{}")
-  actions     Json     @default("[]")
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conditions  Json                    @default("{}")
+  actions     Json                    @default("[]")
+  isActive    Boolean                 @default(true)
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+  tenant      Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   logs        AutomationLog[]
   versions    AutomationRuleVersion[]
 
@@ -3497,16 +3532,16 @@ model AutomationRule {
 }
 
 model AutomationLog {
-  id           String   @id @default(cuid())
-  ruleId       String
-  tenantId     String
-  entityId     String?
-  status       String
-  result       Json?
-  error        String?
-  executedAt   DateTime @default(now())
-  rule         AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
-  tenant       Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id         String         @id @default(cuid())
+  ruleId     String
+  tenantId   String
+  entityId   String?
+  status     String
+  result     Json?
+  error      String?
+  executedAt DateTime       @default(now())
+  rule       AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  tenant     Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([ruleId])
   @@index([tenantId])
@@ -3514,13 +3549,13 @@ model AutomationLog {
 }
 
 model AutomationRuleVersion {
-  id        String   @id @default(cuid())
+  id        String         @id @default(cuid())
   ruleId    String
   tenantId  String
   version   Int
-  config    Json     // Snapshot of conditions and actions
+  config    Json // Snapshot of conditions and actions
   createdBy String?
-  createdAt DateTime @default(now())
+  createdAt DateTime       @default(now())
   rule      AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
   tenant    Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -3530,20 +3565,20 @@ model AutomationRuleVersion {
 }
 
 model MarketingAuditLog {
-  id          String   @id @default(cuid())
-  tenantId    String
-  userId      String?
-  action      String   // e.g., "SOCIAL_PUBLISH", "RULE_UPDATE", "CAMPAIGN_START"
-  category    String   // "SOCIAL", "AUTOMATION", "CAMPAIGN", "AI"
-  entityType  String?  // "SocialPost", "AutomationRule", etc.
-  entityId    String?
-  details     Json?
-  ipAddress   String?
-  userAgent   String?
-  status      String   @default("SUCCESS")
-  timestamp   DateTime @default(now())
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  user        User?    @relation(fields: [userId], references: [id])
+  id         String   @id @default(cuid())
+  tenantId   String
+  userId     String?
+  action     String // e.g., "SOCIAL_PUBLISH", "RULE_UPDATE", "CAMPAIGN_START"
+  category   String // "SOCIAL", "AUTOMATION", "CAMPAIGN", "AI"
+  entityType String? // "SocialPost", "AutomationRule", etc.
+  entityId   String?
+  details    Json?
+  ipAddress  String?
+  userAgent  String?
+  status     String   @default("SUCCESS")
+  timestamp  DateTime @default(now())
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user       User?    @relation(fields: [userId], references: [id])
 
   @@index([tenantId])
   @@index([category])
@@ -4009,70 +4044,70 @@ model NonConformity {
 }
 
 model Employee {
-  id                     String                   @id @default(cuid())
-  tenantId               String
-  userId                 String?                  @unique
-  fullName               String
-  email                  String?
-  role                   String                   @default("OPERATOR")
-  department             String                   @default("GENERAL")
-  isDepartmentAdmin      Boolean                  @default(false)
-  employeeId             String?                  @unique // Ej: 0139
-  jobTitle               String?                  @default("Colaborador")
-  workPhone              String?
-  mobilePhone            String?
-  tags                   String?
-  managerId              String?
-  isInstructor           Boolean                  @default(false)
-  
+  id                String  @id @default(cuid())
+  tenantId          String
+  userId            String? @unique
+  fullName          String
+  email             String?
+  role              String  @default("OPERATOR")
+  department        String  @default("GENERAL")
+  isDepartmentAdmin Boolean @default(false)
+  employeeId        String? @unique // Ej: 0139
+  jobTitle          String? @default("Colaborador")
+  workPhone         String?
+  mobilePhone       String?
+  tags              String?
+  managerId         String?
+  isInstructor      Boolean @default(false)
+
   // Currículum
-  experience             Json?                    @default("[]")
-  skills                 Json?                    @default("[]")
-  educationLevel         String?
-  fieldOfStudy           String?
-  school                 String?
-  
+  experience     Json?   @default("[]")
+  skills         Json?   @default("[]")
+  educationLevel String?
+  fieldOfStudy   String?
+  school         String?
+
   // Información Privada
-  privateEmail           String?
-  privatePhone           String?
-  homeAddress            String?
-  bankAccount            String?
-  distanceToWork         Float?
-  carPlate               String?
-  emergencyContactName   String?
-  emergencyContactPhone  String?
-  maritalStatus          String?
-  childrenCount          Int                      @default(0)
-  
+  privateEmail          String?
+  privatePhone          String?
+  homeAddress           String?
+  bankAccount           String?
+  distanceToWork        Float?
+  carPlate              String?
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  maritalStatus         String?
+  childrenCount         Int     @default(0)
+
   // Ciudadanía y Legal
-  nationality            String?
-  identificationNumber   String?                  // RFC
-  curp                   String?
-  socialSecurityNumber   String?                  // NSS
-  passportNumber         String?
-  gender                 String?
-  birthDate              DateTime?
-  birthPlace             String?
-  birthCountry           String?
-  
+  nationality          String?
+  identificationNumber String? // RFC
+  curp                 String?
+  socialSecurityNumber String? // NSS
+  passportNumber       String?
+  gender               String?
+  birthDate            DateTime?
+  birthPlace           String?
+  birthCountry         String?
+
   // Permisos de Trabajo
-  visaNumber             String?
-  workPermitNumber       String?
-  visaExpiry             DateTime?
-  
+  visaNumber       String?
+  workPermitNumber String?
+  visaExpiry       DateTime?
+
   // Ajustes de Sistema
-  employeeType           String                   @default("EMPLOYEE") // EMPLOYEE, STUDENT, TRAINEE
-  pinCode                String?                  // Para asistencia en tablet
-  badgeId                String?                  @unique
-  
-  hiringDate             DateTime                 @default(now())
-  salaryEncrypted        String?
-  contractUrlEncrypted   String?
-  encryptionKeyId        String?
-  isActive               Boolean                  @default(true)
-  createdAt              DateTime                 @default(now())
-  updatedAt              DateTime                 @updatedAt
-  
+  employeeType String  @default("EMPLOYEE") // EMPLOYEE, STUDENT, TRAINEE
+  pinCode      String? // Para asistencia en tablet
+  badgeId      String? @unique
+
+  hiringDate           DateTime @default(now())
+  salaryEncrypted      String?
+  contractUrlEncrypted String?
+  encryptionKeyId      String?
+  isActive             Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
   // Relaciones
   manager                Employee?                @relation("EmployeeHierarchy", fields: [managerId], references: [id])
   subordinates           Employee[]               @relation("EmployeeHierarchy")
@@ -4089,6 +4124,8 @@ model Employee {
   bankDetailsEncrypted   String?
   governmentIdEncrypted  String?
   vacationQuota          Int                      @default(22)
+  assetAssignments       AssetAssignment[]
+
   vacationUsed           Int                      @default(0)
   irpfrate               Float?                   @default(15)
   salary                 Decimal?                 @default(0) @db.Decimal(10, 2)
@@ -5286,9 +5323,9 @@ enum FiscalType {
 
 enum AccountingEntryStatus {
   DRAFT
-  POSTED      // Asiento firme
-  RECONCILED  // Conciliado con banco
-  VOIDED      // Anulado (los asientos nunca se borran, se anulan con un contra-asiento)
+  POSTED // Asiento firme
+  RECONCILED // Conciliado con banco
+  VOIDED // Anulado (los asientos nunca se borran, se anulan con un contra-asiento)
 }
 
 enum TaxType {
@@ -5299,125 +5336,580 @@ enum TaxType {
 }
 
 model AccountingAccount {
-  id          String   @id @default(cuid())
-  tenantId    String
-  code        String   // Ej: "430001"
-  name        String   // Ej: "Clientes Nacionales"
-  type        String   // Activo, Pasivo, Gasto, Ingreso
-  balance     Decimal  @default(0)
-  entries     AccountingLine[]
-  
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String           @id @default(cuid())
+  tenantId String
+  code     String // Ej: "430001"
+  name     String // Ej: "Clientes Nacionales"
+  type     String // Activo, Pasivo, Gasto, Ingreso
+  balance  Decimal          @default(0)
+  entries  AccountingLine[]
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
   @@unique([tenantId, code])
   @@map("accounting_accounts")
 }
 
 model AccountingEntry {
-  id              String                @id @default(cuid())
-  tenantId        String
-  date            DateTime              @default(now())
-  description     String
-  reference       String?               // ID de la Factura, Nómina o Gasto que originó esto
-  status          AccountingEntryStatus @default(POSTED)
-  
+  id          String                @id @default(cuid())
+  tenantId    String
+  date        DateTime              @default(now())
+  description String
+  reference   String? // ID de la Factura, Nómina o Gasto que originó esto
+  status      AccountingEntryStatus @default(POSTED)
+
   // Seguridad e Inmutabilidad (Protocolo Trust)
-  previousHash    String?               // Hash del asiento anterior para cadena inalterable
-  entryHash       String                // HMAC-SHA256(date + lines + previousHash)
-  sealedBy        String?               // Firma digital del usuario/sistema que cerró el asiento
-  
+  previousHash String? // Hash del asiento anterior para cadena inalterable
+  entryHash    String // HMAC-SHA256(date + lines + previousHash)
+  sealedBy     String? // Firma digital del usuario/sistema que cerró el asiento
+
   lines           AccountingLine[]
   taxImpact       TaxRecord[]
   reconciliations BankReconciliation[]
 
-  tenant          Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
   @@index([tenantId, date])
   @@map("accounting_entries")
 }
 
 model AccountingLine {
-  id          String   @id @default(cuid())
-  entryId     String
-  accountId   String
-  debit       Decimal  @default(0)
-  credit      Decimal  @default(0)
-  
-  entry       AccountingEntry   @relation(fields: [entryId], references: [id], onDelete: Cascade)
-  account     AccountingAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  id        String  @id @default(cuid())
+  entryId   String
+  accountId String
+  debit     Decimal @default(0)
+  credit    Decimal @default(0)
+
+  entry   AccountingEntry   @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  account AccountingAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
   @@map("accounting_lines")
 }
 
 model BankConnection {
-  id              String   @id @default(cuid())
-  tenantId        String
-  provider        String   // Ej: "Gocardless", "SaltEdge"
-  providerId      String   // ID externo de la conexión (Plaid Item ID)
-  accessToken     String?  // Token de acceso (encriptado idealmente)
-  institutionId   String?  // ID de la institución bancaria
-  bankName        String
-  lastSync        DateTime?
-  status          String   // ACTIVE, DISCONNECTED
-  metadata        Json?    @default("{}")
-  
-  transactions    BankTransaction[]
-  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id            String    @id @default(cuid())
+  tenantId      String
+  provider      String // Ej: "Gocardless", "SaltEdge"
+  providerId    String // ID externo de la conexión (Plaid Item ID)
+  accessToken   String? // Token de acceso (encriptado idealmente)
+  institutionId String? // ID de la institución bancaria
+  bankName      String
+  lastSync      DateTime?
+  status        String // ACTIVE, DISCONNECTED
+  metadata      Json?     @default("{}")
+
+  transactions BankTransaction[]
+  tenant       Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
   @@map("accounting_bank_connections")
 }
 
 model BankTransaction {
-  id                String   @id @default(cuid())
-  bankConnectionId  String
-  date              DateTime
-  description       String
-  amount            Decimal
-  reference         String?  // Referencia bancaria original
-  isReconciled      Boolean  @default(false)
-  
-  reconciliations   BankReconciliation[]
-  bankConnection    BankConnection @relation(fields: [bankConnectionId], references: [id], onDelete: Cascade)
+  id               String   @id @default(cuid())
+  bankConnectionId String
+  date             DateTime
+  description      String
+  amount           Decimal
+  reference        String? // Referencia bancaria original
+  isReconciled     Boolean  @default(false)
+
+  reconciliations BankReconciliation[]
+  bankConnection  BankConnection       @relation(fields: [bankConnectionId], references: [id], onDelete: Cascade)
+
   @@unique([bankConnectionId, reference])
   @@map("accounting_bank_transactions")
 }
 
 model BankReconciliation {
-  id                String   @id @default(cuid())
-  entryId           String
-  transactionId     String
-  matchedBy         String   // "SYSTEM", "GEMMA_AI", "USER_ID"
-  confidenceScore   Float?   // Score de confianza de Gemma
-  createdAt         DateTime @default(now())
-  
-  entry             AccountingEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
-  transaction       BankTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  id              String   @id @default(cuid())
+  entryId         String
+  transactionId   String
+  matchedBy       String // "SYSTEM", "GEMMA_AI", "USER_ID"
+  confidenceScore Float? // Score de confianza de Gemma
+  createdAt       DateTime @default(now())
+
+  entry       AccountingEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  transaction BankTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
   @@map("accounting_reconciliations")
 }
 
 model TaxRecord {
-  id              String   @id @default(cuid())
-  tenantId        String
-  entryId         String
-  type            TaxType
-  baseAmount      Decimal
-  taxRate         Decimal
-  taxAmount       Decimal
-  periodMonth     Int
-  periodYear      Int
-  isFiled         Boolean  @default(false) // Si se ha presentado ya el modelo oficial
-  
-  entry           AccountingEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
-  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id          String  @id @default(cuid())
+  tenantId    String
+  entryId     String
+  type        TaxType
+  baseAmount  Decimal
+  taxRate     Decimal
+  taxAmount   Decimal
+  periodMonth Int
+  periodYear  Int
+  isFiled     Boolean @default(false) // Si se ha presentado ya el modelo oficial
+
+  entry  AccountingEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  tenant Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
   @@map("accounting_tax_records")
 }
 
 model AccountingPeriod {
-  id              String   @id @default(cuid())
-  tenantId        String
-  year            Int
-  month           Int     // 1-12 o 0 para cierre anual
-  isClosed        Boolean  @default(false)
-  closedAt        DateTime?
-  closingHash     String?  // Hash final del periodo (Snapshot de integridad)
-  
-  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id          String    @id @default(cuid())
+  tenantId    String
+  year        Int
+  month       Int // 1-12 o 0 para cierre anual
+  isClosed    Boolean   @default(false)
+  closedAt    DateTime?
+  closingHash String? // Hash final del periodo (Snapshot de integridad)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
   @@unique([tenantId, year, month])
   @@map("accounting_periods")
+}
+
+model ChatChannel {
+  id            String             @id @default(cuid())
+  tenantId      String
+  name          String
+  type          ChatChannelType    @default(public)
+  isLocked      Boolean            @default(false)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  tenant        Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  messages      ChatMessage[]
+  subscriptions ChatSubscription[]
+
+  @@index([tenantId])
+  @@index([type])
+}
+
+model ChatMessage {
+  id              String            @id @default(cuid())
+  tenantId        String
+  channelId       String
+  senderId        String? // Null for system messages
+  content         String
+  isSystemMessage Boolean           @default(false)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  editedAt        DateTime?
+  deletedAt       DateTime?
+  metadata        Json?             @default("{}")
+  channel         ChatChannel       @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  sender          User?             @relation(fields: [senderId], references: [id])
+  tenant          Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  attributions    ChatAttribution[]
+
+  @@index([tenantId])
+  @@index([channelId])
+  @@index([senderId])
+  @@index([createdAt])
+}
+
+model ChatSubscription {
+  id         String      @id @default(cuid())
+  tenantId   String
+  userId     String
+  channelId  String
+  lastReadAt DateTime    @default(now())
+  isPinned   Boolean     @default(false)
+  createdAt  DateTime    @default(now())
+  channel    ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, channelId])
+  @@index([tenantId])
+  @@index([userId])
+  @@index([channelId])
+}
+
+model ChatAttribution {
+  id         String      @id @default(cuid())
+  tenantId   String
+  messageId  String
+  entityType String // Invoice, Deal, Project, Ticket, GemmaAlert
+  entityId   String
+  createdAt  DateTime    @default(now())
+  message    ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([messageId])
+  @@index([entityType, entityId])
+}
+
+model GemmaRequest {
+  id        String          @id @default(cuid())
+  tenantId  String
+  event     String          @default("system.event")
+  payload   Json
+  createdAt DateTime        @default(now())
+  responses GemmaResponse[]
+  tenant    Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([event])
+}
+
+model GemmaResponse {
+  id               String       @id @default(cuid())
+  tenantId         String
+  gemmaRequestId   String
+  suggestionId     String?      @unique
+  type             String // reconciliation_suggestion, integrity_alert, summary, action_recommendation
+  message          String
+  confidence       Float        @default(0)
+  evidence         Json?
+  suggestedActions Json?
+  payload          Json // Raw output from Gemma
+  status           String       @default("pending") // pending, executed, dismissed
+  createdAt        DateTime     @default(now())
+  request          GemmaRequest @relation(fields: [gemmaRequestId], references: [id], onDelete: Cascade)
+  tenant           Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([gemmaRequestId])
+  @@index([type])
+}
+
+enum SupportTicketStatus {
+  OPEN
+  IN_PROGRESS
+  PENDING_CLIENT
+  RESOLVED
+  CLOSED
+}
+
+enum SupportTicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum SlaState {
+  ON_TIME
+  AT_RISK
+  BREACHED
+}
+
+model SupportTicket {
+  id              String               @id @default(cuid())
+  tenantId        String
+  subject         String
+  description     String               @db.Text
+  status          SupportTicketStatus  @default(OPEN)
+  priority        SupportTicketPriority @default(MEDIUM)
+  creatorId       String
+  assignedId      String?
+  source          String               // 'MANUAL', 'CHAT', 'GEMMA', 'SYSTEM'
+  
+  // Relaciones Connect
+  channelId       String?  // Canal de Connect vinculado a este ticket
+  entityType      String?  // Ej: 'INVOICE'
+  entityId        String?
+  
+  // SLA Management
+  slaPriority     SupportTicketPriority? 
+  slaStartedAt    DateTime?            @default(now())
+  slaDueAt        DateTime?
+  slaBreachAt     DateTime?
+  slaState        SlaState?            @default(ON_TIME)
+  escalatedTo     String?              // userId o role
+  acknowledgeAt   DateTime?            // Para medir MTTD
+  
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  resolvedAt      DateTime?
+
+  tenant          Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  creator         User                 @relation("TicketCreator", fields: [creatorId], references: [id])
+  assignee        User?                @relation("TicketAssignee", fields: [assignedId], references: [id])
+  timeline        TicketTimeline[]
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([priority])
+  @@map("support_tickets")
+}
+
+model TicketTimeline {
+  id        String   @id @default(cuid())
+  ticketId  String
+  actorId   String?  // ID de Usuario o null si es GEMMA/SYSTEM
+  actorType String   @default("USER") // 'USER', 'GEMMA', 'SYSTEM'
+  action    String   // 'STATUS_CHANGE', 'COMMENT', 'ASSIGNMENT', 'SLA_WARNING', 'SLA_BREACH'
+  note      String?  @db.Text
+  metadata  Json?    @default("{}") // SLA capture, etc.
+  slaState  SlaState?  // Captura el estado del SLA en el momento del evento
+  createdAt DateTime @default(now())
+
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  @@index([ticketId, createdAt])
+  @@map("support_ticket_timelines")
+}
+
+model StrategySnapshot {
+  id              String   @id @default(cuid())
+  tenantId        String
+  periodStart     DateTime
+  periodEnd       DateTime
+  metrics         Json     // { mrr, churn, totalRevenue, totalExpenses, margin, customerAcquisitionCost, ltv }
+  confidence      Float    @default(1.0)
+  generatedBy     String   @default("SYSTEM")
+  createdAt       DateTime @default(now())
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@index([tenantId])
+}
+
+model ProfitabilityRecord {
+  id              String   @id @default(cuid())
+  tenantId        String
+  entityType      String   // 'CLIENT', 'PROJECT', 'SERVICE'
+  entityId        String
+  revenue         Float
+  directCosts     Float
+  operationalCost Float    // Derived from Support/Taskforce hours
+  margin          Float
+  roi             Float
+  score           Float    // 0-100 rating
+  recommendation  String?  @db.Text
+  period          String   // '2024-Q1', '2024-04'
+  createdAt       DateTime @default(now())
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@index([tenantId])
+  @@index([entityId])
+}
+
+model CashflowProjection {
+  id              String   @id @default(cuid())
+  tenantId        String
+  targetDate      DateTime
+  expectedInflow  Float
+  expectedOutflow Float
+  netBalance      Float
+  riskLevel       String   // 'LOW', 'MEDIUM', 'HIGH'
+  confidence      Float
+  metadata        Json?    // { scenarios: [], drivers: [] }
+  createdAt       DateTime @default(now())
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@index([tenantId])
+  @@index([targetDate])
+}
+
+model StrategicRecommendation {
+  id              String   @id @default(cuid())
+  tenantId        String
+  type            String   // 'UPSELL', 'CHURN_RISK', 'COST_REDUCTION', 'PIVOT'
+  title           String
+  description     String   @db.Text
+  impact          String   // 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'
+  priority        Int      @default(1)
+  status          String   @default("PENDING") // 'PENDING', 'ACCEPTED', 'REJECTED', 'IMPLEMENTED'
+  evidence        Json?    // { dataPoints: [] }
+  createdAt       DateTime @default(now())
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@index([tenantId])
+}
+
+model ExecutiveAlert {
+  id              String   @id @default(cuid())
+  tenantId        String
+  severity        String   // 'INFO', 'WARNING', 'CRITICAL'
+  message         String   @db.Text
+  category        String   // 'PROFITABILITY', 'CASHFLOW', 'SLA', 'GROWTH'
+  isRead          Boolean  @default(false)
+  actionLink      String?
+  createdAt       DateTime @default(now())
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@index([tenantId])
+}
+
+model Asset {
+  id              String   @id @default(cuid())
+  tenantId        String
+  name            String
+  category        String   // 'HARDWARE', 'SOFTWARE', 'VEHICLE', 'LICENSE', 'OTHER'
+  model           String?
+  serialNumber    String?  @unique
+  status          String   @default("AVAILABLE") // 'AVAILABLE', 'ASSIGNED', 'MAINTENANCE', 'RETIRED'
+  purchaseDate    DateTime?
+  purchasePrice   Float?
+  warrantyEnd     DateTime?
+  renewalDate     DateTime?
+  metadata        Json?    @default("{}") // Specs, details
+  
+  assignments     AssetAssignment[]
+  maintenanceLogs AssetMaintenance[]
+  events          AssetEvent[]
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@index([tenantId])
+  @@index([category])
+  @@map("erp_assets")
+}
+
+model AssetAssignment {
+  id              String   @id @default(cuid())
+  assetId         String
+  employeeId      String
+  tenantId        String
+  assignedAt      DateTime @default(now())
+  returnedAt      DateTime?
+  conditionOn     String?  // 'NEW', 'GOOD', 'DAMAGED'
+  conditionOff    String?
+  note            String?  @db.Text
+
+  asset           Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  employee        Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([assetId])
+  @@index([employeeId])
+  @@map("erp_asset_assignments")
+}
+
+model AssetMaintenance {
+  id              String   @id @default(cuid())
+  assetId         String
+  tenantId        String
+  date            DateTime @default(now())
+  type            String   // 'PREVENTIVE', 'CORRECTIVE', 'UPGRADE'
+  description     String   @db.Text
+  cost            Float?
+  provider        String?
+  ticketId        String?  // Linked to SupportTicket if any
+
+  asset           Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([assetId])
+  @@map("erp_asset_maintenance")
+}
+
+model AssetEvent {
+  id              String   @id @default(cuid())
+  assetId         String
+  tenantId        String
+  eventType       String   // 'CREATION', 'ASSIGNMENT', 'RETURN', 'MAINTENANCE', 'LOSS', 'RETIREMENT'
+  description     String   @db.Text
+  actorId         String?  // User ID
+  metadata        Json?
+  hash            String?  // For Trust Protocol sealing
+  createdAt       DateTime @default(now())
+
+  asset           Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([assetId])
+  @@map("erp_asset_events")
+}
+
+model DiscoverySignal {
+  id              String   @id @default(cuid())
+  tenantId        String
+  source          String   // 'GOOGLE_SEARCH', 'NEWS_FEED', 'LINKEDIN', 'CUSTOM_MCP'
+  entityType      String   // 'COMPETITOR', 'MARKET_TREND', 'POTENTIAL_LEAD'
+  headline        String   @db.Text
+  summary         String   @db.Text
+  url             String?
+  score           Float    @default(0)
+  confidence      Float    @default(0)
+  status          String   @default("NEW") // 'NEW', 'ANALYZED', 'CONVERTED', 'REJECTED'
+  metadata        Json?    @default("{}")
+  createdAt       DateTime @default(now())
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@index([tenantId])
+  @@index([source])
+  @@map("erp_discovery_signals")
+}
+
+model ExternalLead {
+  id              String   @id @default(cuid())
+  tenantId        String
+  name            String
+  company         String?
+  sourceUrl       String?
+  industry        String?
+  signals         Json?    @default("[]") // IDs of signals that triggered this lead
+  aiScore         Float
+  aiReasoning     String?  @db.Text
+  convertedLeadId String?  // ID of the CRM Lead if converted
+  status          String   @default("DISCOVERED") // 'DISCOVERED', 'QUALIFIED', 'CONVERTED', 'ARCHIVED'
+  createdAt       DateTime @default(now())
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@index([tenantId])
+  @@map("erp_external_leads")
+}
+
+model CompetitiveInsight {
+  id              String   @id @default(cuid())
+  tenantId        String
+  competitorName  String
+  type            String   // 'PRICING_CHANGE', 'NEW_PRODUCT', 'MARKET_EXPANSION'
+  insight         String   @db.Text
+  evidenceUrl     String?
+  impactLevel     String   @default("MEDIUM") // 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'
+  metadata        Json?
+  createdAt       DateTime @default(now())
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@index([tenantId])
+  @@map("erp_competitive_insights")
+}
+
+model MarketObservation {
+  id              String   @id @default(cuid())
+  tenantId        String
+  category        String   // 'TECHNOLOGY', 'REGULATION', 'CONSUMER_BEHAVIOR'
+  observation     String   @db.Text
+  trendDirection  String   // 'RISING', 'STABLE', 'DECLINING'
+  confidence      Float
+  createdAt       DateTime @default(now())
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@index([tenantId])
+  @@map("erp_market_observations")
+}
+
+model KnowledgeArticle {
+  id          String   @id @default(cuid())
+  tenantId    String
+  title       String
+  content     String   @db.Text
+  category    String   // 'POLICY', 'SOP', 'CULTURE', 'TECHNICAL'
+  tags        String[]
+  vectorId    String?  // Referencia externa para búsqueda semántica si aplica
+  isPublic    Boolean  @default(false) // Para base de conocimiento de clientes
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  authorId    String
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@index([tenantId])
+  @@map("erp_knowledge_articles")
+}
+
+model UserGuidanceLog {
+  id          String   @id @default(cuid())
+  tenantId    String
+  userId      String
+  hub         String   // El módulo donde pidió ayuda
+  query       String
+  response    String   @db.Text
+  wasHelpful  Boolean?
+  createdAt   DateTime @default(now())
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@index([tenantId])
+  @@map("erp_user_guidance_logs")
 }

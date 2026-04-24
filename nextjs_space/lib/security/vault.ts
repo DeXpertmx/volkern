@@ -20,13 +20,13 @@ export class VaultService {
     // HKDF: Extract-and-Expand
     // Salt: Combinación de vaultSeed y TENANT_PEPPER
     // Info: tenantId + domain separation
-    return crypto.hkdfSync(
+    return Buffer.from(crypto.hkdfSync(
       'sha256',
       MASTER_KEY,
       Buffer.from(vaultSeed + pepper), // Salt combinado
       Buffer.from(`${tenantId}:finance-vault-v2`), // Info (Domain Separation)
       32
-    );
+    ));
   }
 
   /**

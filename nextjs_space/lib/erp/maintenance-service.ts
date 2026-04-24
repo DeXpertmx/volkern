@@ -7,7 +7,7 @@ export class MaintenanceService {
    * Actualiza las horas trabajadas de un activo
    */
   static async updateAssetUsage(assetId: string, hours: number, tenantId: string) {
-    const asset = await prisma.industrialAsset.findUnique({
+    const asset = await (prisma as any).erp_industrial_assets.findUnique({
       where: { id: assetId, tenantId }
     });
 
@@ -24,7 +24,7 @@ export class MaintenanceService {
       await this.createPreventiveOrder(assetId, tenantId, 'Alerta Preventiva: El activo ha alcanzado el 80% de su ciclo operativo.');
     }
 
-    return await prisma.industrialAsset.update({
+    return await (prisma as any).erp_industrial_assets.update({
       where: { id: assetId },
       data: { totalHoursWorked: newTotalHours }
     });
@@ -35,7 +35,7 @@ export class MaintenanceService {
    */
   static async createPreventiveOrder(assetId: string, tenantId: string, description: string) {
     // Evitar duplicados si ya hay una orden planeada para este activo
-    const existing = await prisma.maintenanceOrder.findFirst({
+    const existing = await (prisma as any).erp_maintenance_orders.findFirst({
       where: { 
         assetId, 
         tenantId, 
@@ -46,8 +46,9 @@ export class MaintenanceService {
 
     if (existing) return;
 
-    const order = await prisma.maintenanceOrder.create({
+    const order = await (prisma as any).erp_maintenance_orders.create({
       data: {
+        id: `MO-${Math.random().toString(36).substring(2, 9).toUpperCase()}`, // ID manual para erp_ models si no tienen cuid
         tenantId,
         assetId,
         type: 'PREVENTIVE',
@@ -55,13 +56,13 @@ export class MaintenanceService {
         description,
         plannedDate: new Date(Date.now() + 1000 * 60 * 60 * 24 * 2) // +2 días
       },
-      include: { asset: true }
+      include: { erp_industrial_assets: true }
     });
 
     // Notificar vía Telegram
     await notifyByTelegram(
       `🛠️ <b>ALERTA DE MANTENIMIENTO</b>\n\n` +
-      `Activo: <b>${order.asset.name}</b>\n` +
+      `Activo: <b>${order.erp_industrial_assets.name}</b>\n` +
       `Motivo: ${description}\n` +
       `Estado: PLANNED\n` +
       `Fecha sugerida: ${order.plannedDate.toLocaleDateString()}`,
@@ -75,16 +76,16 @@ export class MaintenanceService {
    * Obtiene la salud de los activos para el dashboard
    */
   static async getAssetsHealth(tenantId: string) {
-    const assets = await prisma.industrialAsset.findMany({
+    const assets = await (prisma as any).erp_industrial_assets.findMany({
       where: { tenantId },
       include: {
-        maintenanceOrders: {
+        erp_maintenance_orders: {
           where: { status: 'PLANNED' }
         }
       }
     });
 
-    return assets.map(asset => {
+    return assets.map((asset: any) => {
       const usagePercentage = (asset.totalHoursWorked % 1000) / 10;
       return {
         ...asset,

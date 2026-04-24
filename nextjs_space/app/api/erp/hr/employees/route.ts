@@ -1,26 +1,33 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/db'
+import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
+import { withTenantAuth } from '@/lib/api-key-auth';
+import { AdoptionTelemetry } from '@/lib/telemetry/adoption-kpis';
 
-export async function GET(req: NextRequest) {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.id || !(session.user as any).tenantId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+export const GET = withTenantAuth(async (request, auth) => {
+  try {
+    const tenantId = auth.tenant!.id;
+    // Telemetry
+    AdoptionTelemetry.trackHubView(tenantId, auth.user!.id, 'HR').catch(() => {});
+
+    const employees = await prisma.employee.findMany({
+      where: { tenantId },
+      select: {
+        id: true,
+        fullName: true,
+        role: true,
+        department: true,
+        isActive: true
+      },
+      orderBy: { fullName: 'asc' }
+    });
+
+    return NextResponse.json(employees);
+  } catch (error: any) {
+    console.error('Error fetching employees:', error);
+    return NextResponse.json({ 
+      data: [], 
+      fallback: true, 
+      error: error.message 
+    });
   }
-
-  const tenantId = (session.user as any).tenantId
-  const employees = await prisma.employee.findMany({
-    where: { tenantId },
-    select: {
-      id: true,
-      fullName: true,
-      role: true,
-      department: true,
-      isActive: true
-    },
-    orderBy: { fullName: 'asc' }
-  })
-
-  return NextResponse.json(employees)
-}
+}, ['hr:read']);

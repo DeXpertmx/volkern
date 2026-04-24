@@ -99,6 +99,7 @@ function isPublicPath(path: string): boolean {
     '/academy/login',  // Login de academia
     '/api/academy/auth/', // API de auth de academia
     '/api/academy/auth/me', // Verificación de sesión de academia
+    '/api/gemma/',      // Gemma AI integration
     '/privacy',
     '/terms'
   ]

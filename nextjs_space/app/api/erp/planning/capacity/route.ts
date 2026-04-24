@@ -12,11 +12,11 @@ export const GET = withTenantAuth(async (request, auth) => {
     const forecast = await PlanningService.generate7DayForecast(tenantId);
     
     // También obtener líneas para el dashboard
-    const lines = await prisma.productionLine.findMany({
+    const lines = await (prisma as any).erp_production_lines.findMany({
       where: { tenantId },
       include: {
-        assets: true,
-        workOrders: {
+        erp_industrial_assets: true,
+        erp_work_orders: {
           where: { status: 'IN_PROGRESS' }
         }
       }

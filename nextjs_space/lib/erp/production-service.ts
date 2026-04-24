@@ -46,7 +46,7 @@ export class ProductionService {
       where: { id: workOrderId, tenantId },
       include: { 
         bom: true,
-        materialRequirements: { include: { lot: true } }
+        erp_material_requirements: { include: { erp_inventory_lots: true } }
       }
     });
 
@@ -54,7 +54,7 @@ export class ProductionService {
     if (wo.status !== 'PLANNED') throw new Error('La orden ya ha sido iniciada o cancelada');
 
     // Registrar consumo por lote
-    for (const req of wo.materialRequirements) {
+    for (const req of (wo as any).erp_material_requirements) {
       const pLog = await prisma.productionLog.create({
         data: {
           tenantId,
@@ -110,12 +110,14 @@ export class ProductionService {
     if (isPending) throw new Error('No se puede cerrar la orden: Se requieren inspecciones de calidad obligatorias.');
 
     // 1. Crear el nuevo Lote de Inventario (Entra en QUARANTINE)
-    const newLot = await prisma.inventoryLot.create({
+    const newLot = await (prisma as any).erp_inventory_lots.create({
       data: {
+        id: `LOT-${wo.batchNumber}-${Date.now()}`,
         tenantId,
         catalogItemId: wo.bom.productId,
         batchNumber: wo.batchNumber,
-        status: 'QUARANTINE'
+        status: 'QUARANTINE',
+        updatedAt: new Date()
       }
     });
 
@@ -163,13 +165,13 @@ export class ProductionService {
     await CostingService.calculateRealCost(workOrderId, tenantId);
 
     // 🔗 VINCULACIÓN COMERCIAL: Si esta orden nació de un pedido (MTO)
-    const reservations = await prisma.orderReservation.findMany({
+    const reservations = await (prisma as any).erp_order_reservations.findMany({
       where: { workOrderId, tenantId, status: 'ACTIVE' },
       include: { salesOrderItem: true }
     });
 
     for (const res of reservations) {
-      await prisma.salesOrderItem.update({
+      await (prisma as any).erp_sales_order_items.update({
         where: { id: res.salesOrderItemId },
         data: { status: 'READY' }
       });

@@ -12,6 +12,11 @@ export const GET = withTenantAuth(async (request, auth) => {
         tenantId: auth.tenant!.id,
         active: true
       },
+      include: {
+        _count: {
+          select: { stockLevels: true }
+        }
+      },
       orderBy: { name: 'asc' }
     });
 

@@ -25,8 +25,9 @@ export const POST = withTenantAuth(async (request, auth) => {
     const tenantId = auth.tenant!.id;
     const data = await request.json();
 
-    const asset = await prisma.industrialAsset.create({
+    const asset = await (prisma as any).erp_industrial_assets.create({
       data: {
+        id: `AST-${Math.random().toString(36).substring(2, 9).toUpperCase()}`,
         ...data,
         tenantId
       }

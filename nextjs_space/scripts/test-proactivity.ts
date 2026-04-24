@@ -25,8 +25,8 @@ async function main() {
   for (const lead of leads) {
     console.log(`🔍 Generando estrategia para: ${lead.nombre}`);
     try {
-      const result = await (skills as any).generate_success_path(lead.id, tenant.id);
-      console.log(`✅ Éxito: ${result.strategy.substring(0, 50)}...`);
+      const result = await skills.generate_success_path({ leadId: lead.id, tenantId: tenant.id });
+      console.log(`✅ Éxito: ${result.metadata.reasoning.substring(0, 50)}...`);
     } catch (err) {
       console.error(`❌ Error en lead ${lead.id}:`, err);
     }

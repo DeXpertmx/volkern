@@ -32,7 +32,7 @@ export const GET = withTenantAuth(async (request, auth) => {
       where,
       include: {
         warehouse: { select: { id: true, name: true } },
-        catalogoItem: { select: { id: true, nombre: true, sku: true, unidad: true } }
+        catalogoItem: { select: { id: true, nombre: true, sku: true, unidad: true, precioBase: true } }
       },
       orderBy: { catalogoItem: { nombre: 'asc' } }
     });

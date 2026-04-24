@@ -9,13 +9,13 @@ import { ReadinessService } from '@/lib/erp/readiness-service';
 export const GET = withTenantAuth(async (request, auth) => {
   try {
     const tenantId = auth.tenant!.id;
-    const readiness = await prisma.productionReadiness.findMany({
+    const readiness = await (prisma as any).erp_production_readiness.findMany({
       where: { tenantId },
       include: {
-        workOrder: {
+        erp_work_orders: {
           include: {
             bom: { include: { catalogoItem: true } },
-            materialRequirements: {
+            erp_material_requirements: {
               include: { catalogItem: true }
             }
           }

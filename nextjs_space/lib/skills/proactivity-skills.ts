@@ -14,7 +14,8 @@ export interface GhostingDetectionResult {
  * Radar de Ghosting
  * Detecta leads que no han tenido interacción en más de X horas y genera un draft de rescate.
  */
-export async function detectGhosting(tenantId: string, hours: number = 48): Promise<GhostingDetectionResult[]> {
+export async function detectGhosting(input: { tenantId: string; hours?: number }): Promise<GhostingDetectionResult[]> {
+  const { tenantId, hours = 48 } = input;
   const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000);
 
   // 1. Buscar leads en etapas calientes que estén inactivos
@@ -49,7 +50,8 @@ export async function detectGhosting(tenantId: string, hours: number = 48): Prom
 /**
  * Genera una sugerencia estratégica ("Success Path") para un lead.
  */
-export async function generateSuccessPath(leadId: string, tenantId: string) {
+export async function generateSuccessPath(input: { leadId: string; tenantId: string }) {
+  const { leadId, tenantId } = input;
   const lead = await prisma.lead.findUnique({
     where: { id: leadId },
     include: {
@@ -92,7 +94,8 @@ Responde ÚNICAMENTE en JSON con este formato:
 
   if (!aiRes.error) {
     try {
-      const parsed = JSON.parse(aiRes.content);
+      const cleaned = aiRes.content.replace(/```json/g, '').replace(/```/g, '').trim();
+      const parsed = JSON.parse(cleaned);
       result = {
         steps: parsed.steps,
         metadata: {

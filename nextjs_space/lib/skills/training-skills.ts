@@ -18,7 +18,8 @@ export interface RoleplaySession {
  * Simulador de Negociación (Training Room)
  * Gemma 4 adopta el Digital Twin del cliente basado en su historial real.
  */
-export async function generateCustomerResponse(leadId: string, tenantId: string, agentMessage: string, history: RoleplayMessage[] = []) {
+export async function generateCustomerResponse(input: { leadId: string; tenantId: string; agentMessage: string; history?: RoleplayMessage[] }) {
+  const { leadId, tenantId, agentMessage, history = [] } = input;
   const lead = await prisma.lead.findUnique({
     where: { id: leadId },
     include: {
@@ -120,7 +121,8 @@ Responde ÚNICAMENTE con el mensaje del cliente en formato JSON:
  * Genera el Reporte Post-Mortem de la sesión de entrenamiento.
  * Analiza el historial para dar feedback estructurado al agente y lo persiste.
  */
-export async function generatePostMortem(leadId: string, tenantId: string, userId: string, history: RoleplayMessage[]) {
+export async function generatePostMortem(input: { leadId: string; tenantId: string; userId: string; history: RoleplayMessage[] }) {
+  const { leadId, tenantId, userId, history } = input;
   const systemPrompt = `
 Eres un experto en entrenamiento de ventas de alto rendimiento.
 Tu tarea es evaluar el desempeño de un agente en una simulación de roleplay de negociación.
@@ -213,7 +215,7 @@ Responde ÚNICAMENTE en JSON con el siguiente formato:
         argumentoMasFuerte: postMortem.argumento_mas_fuerte,
         puntoDeMejora: postMortem.punto_de_mejora,
         tecnicaDetectada: postMortem.tecnica_detectada,
-        interacciones: numInteractions
+        interacciones: history.length
       }
     });
     console.log(`[Roleplay] Session persisted for user ${userId} with score ${postMortem.puntuacion_cierre}`);

@@ -159,7 +159,7 @@ export default function ExpenseVerificationDetails({ expense, tenantConfig }: Ex
                   <AlertTriangle className="w-5 h-5 shrink-0" />
                   <div className="space-y-1">
                      <p className="text-xs font-black uppercase tracking-tight">Alerta de Proximidad</p>
-                     <p className="text-xs font-medium">El ticket fue capturado fuera del perímetro permitido (>500m). Posible duplicidad o uso indebido de recursos del Tenant.</p>
+                     <p className="text-xs font-medium">El ticket fue capturado fuera del perímetro permitido (&gt;500m). Posible duplicidad o uso indebido de recursos del Tenant.</p>
                   </div>
                </div>
             )}

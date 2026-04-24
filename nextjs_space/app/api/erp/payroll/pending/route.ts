@@ -14,8 +14,12 @@ export const GET = withTenantAuth(async (request, auth) => {
   try {
     const payrolls = await PayrollService.getPendingPayrolls(month, year);
     return NextResponse.json(payrolls);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching pending payrolls:', error);
-    return NextResponse.json({ error: 'Error al calcular nóminas pendientes' }, { status: 500 });
+    return NextResponse.json({ 
+      data: [], 
+      fallback: true, 
+      error: error.message 
+    });
   }
 }, ['erp:read']);

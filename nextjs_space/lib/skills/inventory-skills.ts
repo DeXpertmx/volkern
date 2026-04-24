@@ -58,9 +58,10 @@ export async function adjustStock(input: AdjustStockInput) {
       // 2. Actualizar o Crear StockLevel
       const stockLevel = await tx.stockLevel.upsert({
         where: {
-          warehouseId_catalogoItemId: {
+          warehouseId_catalogoItemId_lotId: {
             warehouseId: warehouse.id,
-            catalogoItemId
+            catalogoItemId,
+            lotId: null as any
           }
         },
         update: {
@@ -71,6 +72,7 @@ export async function adjustStock(input: AdjustStockInput) {
           tenantId,
           warehouseId: warehouse.id,
           catalogoItemId,
+          lotId: null,
           quantity: type === 'IN' ? quantity : -quantity
         }
       });
@@ -93,9 +95,10 @@ export async function adjustStock(input: AdjustStockInput) {
       if (type === 'TRANSFER' && input.targetWarehouseId) {
          await tx.stockLevel.upsert({
             where: {
-              warehouseId_catalogoItemId: {
+              warehouseId_catalogoItemId_lotId: {
                 warehouseId: input.targetWarehouseId,
-                catalogoItemId
+                catalogoItemId,
+                lotId: null as any
               }
             },
             update: {
@@ -106,6 +109,7 @@ export async function adjustStock(input: AdjustStockInput) {
               tenantId,
               warehouseId: input.targetWarehouseId,
               catalogoItemId,
+              lotId: null,
               quantity
             }
          });
@@ -178,9 +182,10 @@ export async function processInventoryConsumption(input: {
           
           const stock = await tx.stockLevel.upsert({
             where: {
-              warehouseId_catalogoItemId: {
+              warehouseId_catalogoItemId_lotId: {
                 warehouseId: warehouse.id,
-                catalogoItemId: item.componentId
+                catalogoItemId: item.componentId,
+                lotId: null as any
               }
             },
             update: {
@@ -191,6 +196,7 @@ export async function processInventoryConsumption(input: {
               tenantId,
               warehouseId: warehouse.id,
               catalogoItemId: item.componentId,
+              lotId: null,
               quantity: -quantityToReduce
             }
           });
@@ -216,9 +222,10 @@ export async function processInventoryConsumption(input: {
         // --- ESCENARIO SIMPLE: CONSUMIR PRODUCTO DIRECTO ---
         const stock = await tx.stockLevel.upsert({
           where: {
-            warehouseId_catalogoItemId: {
+            warehouseId_catalogoItemId_lotId: {
               warehouseId: warehouse.id,
-              catalogoItemId: productId
+              catalogoItemId: productId,
+              lotId: null as any
             }
           },
           update: {
@@ -229,6 +236,7 @@ export async function processInventoryConsumption(input: {
             tenantId,
             warehouseId: warehouse.id,
             catalogoItemId: productId,
+            lotId: null,
             quantity: -quantity
           }
         });
@@ -264,10 +272,19 @@ export async function getInventoryHealth(input: { tenantId: string, catalogoItem
   return await trackSkillExecution('get_inventory_health', async () => {
      // Aquí integraríamos lógica histórica para predecir agotamiento.
      // Por ahora, devolvemos un resumen de existencias críticas.
+     // Prisma no soporta comparación entre columnas directamente en findMany
+     // Usamos queryRaw para identificar los IDs y luego findMany para hidratar
+     const criticalItemsIds = await prisma.$queryRaw<{ id: string }[]>`
+       SELECT id FROM erp_stock_levels 
+       WHERE "tenantId" = ${input.tenantId} 
+       AND quantity <= "minStock"
+     `;
+
+     const ids = criticalItemsIds.map(i => i.id);
+
      const criticalItems = await prisma.stockLevel.findMany({
        where: {
-         tenantId: input.tenantId,
-         quantity: { lte: prisma.stockLevel.fields.minStock }
+         id: { in: ids }
        },
        include: {
          catalogoItem: { select: { nombre: true, sku: true } },

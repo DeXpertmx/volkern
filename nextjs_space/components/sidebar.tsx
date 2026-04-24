@@ -13,7 +13,8 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
-  ArrowLeft
+  ArrowLeft,
+  Activity
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useWhitelabel } from '@/hooks/use-whitelabel'
@@ -144,6 +145,29 @@ export function Sidebar() {
                   priority
                 />
               </div>
+            </Link>
+          </div>
+          
+          {/* Global Quick Access: Connect Hub */}
+          <div className="px-4 py-4 border-b border-dashed bg-primary/5">
+            <Link 
+              href="/dashboard/connect"
+              className={cn(
+                "flex items-center gap-3 p-3 rounded-2xl transition-all group",
+                "bg-primary/10 border border-primary/20 hover:bg-primary/20",
+                isCollapsed && "justify-center"
+              )}
+            >
+              <div className="relative">
+                <Activity className="h-5 w-5 text-primary group-hover:scale-110 transition-transform" />
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-500 border-2 border-background rounded-full animate-pulse" />
+              </div>
+              {!isCollapsed && (
+                <div className="flex flex-col">
+                  <span className="text-xs font-black uppercase tracking-tighter text-primary">Volkern Connect</span>
+                  <span className="text-[10px] font-bold text-primary/60">HUB EN VIVO</span>
+                </div>
+              )}
             </Link>
           </div>
 

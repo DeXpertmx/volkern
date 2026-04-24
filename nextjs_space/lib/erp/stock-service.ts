@@ -62,7 +62,7 @@ export class StockService {
    * Cambia el estado de un lote (Calidad)
    */
   static async updateLotStatus(lotId: string, status: 'QUARANTINE' | 'AVAILABLE' | 'REJECTED', tenantId: string) {
-    return await prisma.inventoryLot.update({
+    return await (prisma as any).erp_inventory_lots.update({
       where: { id: lotId, tenantId },
       data: { status }
     });
@@ -77,15 +77,15 @@ export class StockService {
         catalogoItemId, 
         tenantId,
         OR: [
-          { lot: null },
-          { lot: { status: 'AVAILABLE' } }
+          { erp_inventory_lots: null },
+          { erp_inventory_lots: { status: 'AVAILABLE' } }
         ]
       }
     });
 
     const totalPhysical = stockLevels.reduce((acc, curr) => acc + curr.quantity, 0);
     
-    const reservations = await prisma.materialRequirement.aggregate({
+    const reservations = await (prisma as any).erp_material_requirements.aggregate({
       where: { catalogItemId: catalogoItemId, tenantId, status: 'RESERVED' },
       _sum: { reservedQty: true }
     });

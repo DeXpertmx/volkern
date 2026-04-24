@@ -8,10 +8,10 @@ import { withTenantAuth } from '@/lib/api-key-auth';
 export const GET = withTenantAuth(async (request, auth) => {
   try {
     const tenantId = auth.tenant!.id;
-    const costingData = await prisma.productionCosting.findMany({
+    const costingData = await (prisma as any).erp_production_costing.findMany({
       where: { tenantId },
       include: {
-        workOrder: {
+        erp_work_orders: {
           include: {
             bom: { include: { catalogoItem: true } }
           }

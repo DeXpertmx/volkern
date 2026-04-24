@@ -11,7 +11,7 @@ export class SchedulingService {
       where: { tenantId, status: 'PLANNED' },
       include: { 
         bom: { include: { catalogoItem: true } },
-        costing: true
+        erp_production_costing: true
       }
     });
 
@@ -25,9 +25,9 @@ export class SchedulingService {
     if (lines.length === 0) throw new Error('No hay líneas de producción activas');
 
     // 3. Algoritmo de Priorización (Weighted Score)
-    const scoredOrders = workOrders.map(wo => {
+    const scoredOrders = workOrders.map((wo: any) => {
       // Puntuación base: Margen (30%) + Urgencia (fecha, 40%) + Criticidad (30%)
-      const marginScore = wo.costing ? (wo.costing.margin / 100) * 30 : 15;
+      const marginScore = wo.erp_production_costing ? (wo.erp_production_costing.margin / 100) * 30 : 15;
       const urgencyScore = 20; // Simplificado: 20 puntos base
       const priorityScore = marginScore + urgencyScore;
 
@@ -40,6 +40,7 @@ export class SchedulingService {
     // 4. Crear Plan de Scheduling
     const plan = await (prisma as any).erp_scheduling_plans.create({
       data: {
+        id: `PLAN-${Date.now()}`,
         tenantId,
         date: new Date(),
         status: 'DRAFT'
@@ -56,6 +57,7 @@ export class SchedulingService {
 
       const assignment = await (prisma as any).erp_schedule_assignments.create({
         data: {
+          id: `ASG-${wo.id}-${Date.now()}`,
           tenantId,
           planId: plan.id,
           workOrderId: wo.id,

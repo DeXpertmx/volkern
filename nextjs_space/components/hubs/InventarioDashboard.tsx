@@ -27,14 +27,20 @@ import useSWR from 'swr'
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
 export default function InventarioDashboard() {
-  const { data: stockLevels, isLoading: loadingStock } = useSWR('/api/erp/inventory', fetcher)
+  const { data: stockLevels, isLoading: loadingStock, error: stockError } = useSWR('/api/erp/inventory', fetcher)
   const [filter, setFilter] = useState('')
 
-  // Mock de datos para el dashboard de inventario
+  // Cálculo de estadísticas dinámicas
+  const isStockArray = Array.isArray(stockLevels)
+  const totalUnits = isStockArray ? stockLevels.reduce((acc: number, item: any) => acc + item.quantity, 0) : 0
+  const totalValue = isStockArray ? stockLevels.reduce((acc: number, item: any) => acc + (item.quantity * (item.catalogoItem?.precioBase || 0)), 0) : 0
+  const activeWarehouses = isStockArray ? new Set(stockLevels.map((item: any) => item.warehouseId)).size : 0
+  const lowStockCount = isStockArray ? stockLevels.filter((item: any) => item.quantity <= (item.minStock || 0)).length : 0
+
   const stats = [
     { 
       label: 'Existencias Totales', 
-      value: '14,250', 
+      value: totalUnits.toLocaleString(), 
       detail: 'Unidades físicas',
       icon: Box, 
       color: 'text-blue-500', 
@@ -42,23 +48,23 @@ export default function InventarioDashboard() {
     },
     { 
       label: 'Valor de Inventario', 
-      value: '€182,400.00', 
-      detail: 'Costo total',
+      value: `€${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 
+      detail: 'Costo total estimado',
       icon: TrendingUp, 
       color: 'text-emerald-500', 
       bg: 'bg-emerald-500/10' 
     },
     { 
       label: 'Almacenes Activos', 
-      value: '3', 
-      detail: 'Locations',
+      value: activeWarehouses.toString(), 
+      detail: 'Sedes operativas',
       icon: WarehouseIcon, 
       color: 'text-purple-500', 
       bg: 'bg-purple-500/10' 
     },
     { 
       label: 'Ruptura de Stock', 
-      value: '12', 
+      value: lowStockCount.toString(), 
       detail: 'Items críticos',
       icon: AlertTriangle, 
       color: 'text-rose-500', 
@@ -66,11 +72,15 @@ export default function InventarioDashboard() {
     },
   ]
 
-  const criticalAlerts = [
-    { name: 'iPhone 15 Pro Max', sku: 'IPH15-PM-256', current: 2, min: 5, warehouse: 'Almacén Central' },
-    { name: 'MacBook Air M3', sku: 'MBA-M3-13', current: 0, min: 3, warehouse: 'Tienda Norte' },
-    { name: 'AirPods Pro 2', sku: 'APP2-USB-C', current: 1, min: 10, warehouse: 'Almacén Central' },
-  ]
+  const criticalAlerts = isStockArray ? stockLevels.filter((item: any) => item.quantity <= (item.minStock || 0))
+    .slice(0, 3)
+    .map((item: any) => ({
+      name: item.catalogoItem.nombre,
+      sku: item.catalogoItem.sku,
+      current: item.quantity,
+      min: item.minStock || 0,
+      warehouse: item.warehouse.name
+    })) : []
 
   return (
     <div className="space-y-8 pb-10">
@@ -144,8 +154,15 @@ export default function InventarioDashboard() {
                 <tbody className="divide-y">
                    {loadingStock ? (
                       <tr><td colSpan={4} className="px-4 py-10 text-center text-xs font-bold uppercase text-muted-foreground">Cargando existencias...</td></tr>
-                   ) : (stockLevels && stockLevels.length > 0) ? (
-                     stockLevels.map((item: any) => (
+                   ) : stockError ? (
+                      <tr><td colSpan={4} className="px-4 py-10 text-center text-xs font-bold uppercase text-rose-500">Error al cargar existencias</td></tr>
+                   ) : (isStockArray && stockLevels.length > 0) ? (
+                     stockLevels
+                       .filter((item: any) => 
+                         (item.catalogoItem?.nombre?.toLowerCase() || '').includes(filter.toLowerCase()) || 
+                         (item.catalogoItem?.sku?.toLowerCase() || '').includes(filter.toLowerCase())
+                       )
+                       .map((item: any) => (
                        <tr key={item.id} className="hover:bg-slate-50 transition-colors">
                          <td className="px-4 py-4">
                            <div className="flex flex-col">

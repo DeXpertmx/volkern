@@ -52,7 +52,8 @@ import {
   Wallet,
   Heart,
   Lock,
-  AlertOctagon
+  AlertOctagon,
+  LifeBuoy
 } from 'lucide-react'
 import type { PermissionModule } from '@/lib/permissions'
 
@@ -139,9 +140,11 @@ export const HUBS: HubConfig[] = [
     basePaths: [
       '/dashboard/telefonia',
       '/dashboard/automatizaciones',
-      '/dashboard/chatbot'
+      '/dashboard/chatbot',
+      '/dashboard/connect'
     ],
     items: [
+      { name: 'Volkern Connect', href: '/dashboard/connect', icon: Activity, planModule: 'mensajes', description: 'Chat operativo y eventos de sistema' },
       { name: 'Mensajes', href: '/dashboard/mensajes', icon: MessageCircle, planModule: 'mensajes', description: 'Bandeja de entrada omnicanal' },
       { name: 'Telefonía', href: '/dashboard/telefonia', icon: Phone, planModule: 'telefonia', description: 'Central telefónica VoIP' },
       { name: 'Automatizaciones', href: '/dashboard/automatizaciones', icon: Workflow, planModule: 'automatizaciones', description: 'Flujos de trabajo automáticos' },
@@ -326,6 +329,47 @@ export const HUBS: HubConfig[] = [
       { name: 'Equipo', href: '/dashboard/equipo', icon: UserCog, planModule: 'equipo', description: 'Gestión de usuarios' },
       { name: 'Integraciones', href: '/dashboard/integraciones', icon: Plug, planModule: 'integraciones', description: 'Conexión con apps externas' },
       { name: 'Mi Suscripción', href: '/dashboard/configuracion/billing', icon: CreditCard, description: 'Suscripción y pagos' },
+    ]
+  },
+  {
+    id: 'taskforce',
+    name: 'Taskforce',
+    icon: LifeBuoy,
+    href: '/dashboard/support',
+    description: 'Gestión de soporte, incidencias y excepciones operativas.',
+    basePaths: ['/dashboard/support'],
+    items: [
+      { name: 'Bandeja de Entrada', href: '/dashboard/support', icon: LifeBuoy, description: 'Tickets activos y por asignar' },
+      { name: 'SLA Dashboard', href: '/dashboard/support/analytics', icon: BarChart3, description: 'Métricas de tiempo de respuesta' },
+      { name: 'Incidencias Críticas', href: '/dashboard/support?status=CRITICAL', icon: AlertOctagon, description: 'Problemas de alta prioridad' },
+    ]
+  },
+  {
+    id: 'strategy',
+    name: 'Estrategia',
+    icon: LineChart,
+    href: '/dashboard/strategy',
+    description: 'Inteligencia de negocio, proyecciones y análisis de rentabilidad.',
+    basePaths: ['/dashboard/strategy'],
+    items: [
+      { name: 'Executive Snapshot', href: '/dashboard/strategy', icon: LayoutDashboard, description: 'Vista general estratégica' },
+      { name: 'Cashflow Forecast', href: '/dashboard/strategy/cashflow', icon: TrendingUp, description: 'Proyección de caja a 90 días' },
+      { name: 'Profitability Sniffer', href: '/dashboard/strategy/profitability', icon: Activity, description: 'Análisis de rentabilidad de clientes y proyectos' },
+      { name: 'Recomendaciones IA', href: '/dashboard/strategy/recommendations', icon: Sparkles, description: 'Sugerencias estratégicas de Gemma' },
+    ]
+  },
+  {
+    id: 'assets',
+    name: 'Activos',
+    icon: Package,
+    href: '/dashboard/assets',
+    description: 'Gestión de activos internos, hardware, licencias y vehículos.',
+    basePaths: ['/dashboard/assets'],
+    items: [
+      { name: 'Inventario de Activos', href: '/dashboard/assets', icon: Package, description: 'Listado global de equipos y licencias' },
+      { name: 'Asignaciones', href: '/dashboard/assets/assignments', icon: Users, description: 'Control de equipos por empleado' },
+      { name: 'Mantenimiento', href: '/dashboard/assets/maintenance', icon: Activity, description: 'Historial y alertas preventivas' },
+      { name: 'Trazabilidad (Trust)', href: '/dashboard/assets/trust', icon: ShieldCheck, description: 'Registro inmutable de movimientos' },
     ]
   },
   {

@@ -9,6 +9,7 @@ import { PushPrompt } from '@/components/notifications/PushPrompt'
 import { IncomingCallPopup } from '@/components/dashboard/IncomingCallPopup'
 import { MorningBriefingModal } from '@/components/dashboard/MorningBriefingModal'
 import { usePathname } from 'next/navigation'
+import { VolkernGuide } from '@/components/guide/VolkernGuide'
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -65,6 +66,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         </div>
         <PushPrompt />
         <IncomingCallPopup />
+        <VolkernGuide />
       </main>
     </div>
   )

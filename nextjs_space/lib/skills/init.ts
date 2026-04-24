@@ -21,6 +21,7 @@ import { initMarketingWorkers } from '@/lib/workers/marketing-worker';
 import { AutomationRuleEngine } from '@/lib/marketing/automation/rule-engine';
 import { QueueMonitorService } from '@/lib/marketing/queues/queue-monitor-service';
 import { initializeAccountingListeners } from '@/lib/accounting/accounting-listener';
+import { initConnectEventBridge } from '@/lib/connect/connect-event-bridge';
 
 // Evitar múltiples inicializaciones
 let initialized = false;
@@ -90,6 +91,7 @@ export function initializeSkillsLayer(): void {
 
   // 4. Inicializar automatización de Marketing (EventBridge es síncrono, Redis-deps son async)
   setupMarketingEventBridge();
+  initConnectEventBridge();
 
   // Las siguientes inicializaciones son async y tolerantes a Redis offline
   Promise.all([

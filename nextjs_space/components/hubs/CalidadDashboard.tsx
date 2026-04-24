@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { 
   ShieldCheck, 
@@ -35,11 +35,34 @@ export default function CalidadDashboard() {
   const section = searchParams.get('section') || 'inspecciones'
   const [isInspectorActive, setIsInspectorActive] = useState(false)
 
-  const stats = [
-    { label: 'Inspecciones Hoy', value: '45', icon: ShieldCheck, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-    { label: 'No Conformidades', value: '3', icon: AlertOctagon, color: 'text-rose-500', bg: 'bg-rose-500/10' },
-    { label: 'Tasa de Aprobación', value: '98.2%', icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-    { label: 'Reportes Firmados', value: '1,240', icon: Fingerprint, color: 'text-purple-500', bg: 'bg-purple-500/10' },
+  const [loading, setLoading] = useState(true)
+  const [data, setData] = useState<any>(null)
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const res = await fetch('/api/erp/qc/data')
+        const json = await res.json()
+        setData(json)
+      } catch (error) {
+        console.error('Error loading QC data:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchData()
+  }, [])
+
+  const stats = data ? [
+    { label: 'Inspecciones Hoy', value: data.stats.inspectionsToday.toString(), icon: ShieldCheck, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+    { label: 'No Conformidades', value: data.stats.openNonConformities.toString(), icon: AlertOctagon, color: 'text-rose-500', bg: 'bg-rose-500/10' },
+    { label: 'Tasa de Aprobación', value: data.stats.approvalRate, icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+    { label: 'Reportes Firmados', value: data.stats.signedReports.toLocaleString(), icon: Fingerprint, color: 'text-purple-500', bg: 'bg-purple-500/10' },
+  ] : [
+    { label: 'Inspecciones Hoy', value: '...', icon: ShieldCheck, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+    { label: 'No Conformidades', value: '...', icon: AlertOctagon, color: 'text-rose-500', bg: 'bg-rose-500/10' },
+    { label: 'Tasa de Aprobación', value: '...', icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+    { label: 'Reportes Firmados', value: '...', icon: Fingerprint, color: 'text-purple-500', bg: 'bg-purple-500/10' },
   ]
 
   const handleTabChange = (tabId: string) => {
@@ -110,23 +133,24 @@ export default function CalidadDashboard() {
           exit={{ opacity: 0, y: -10 }}
           transition={{ duration: 0.2 }}
         >
-          {section === 'inspecciones' && <InspectionsList stats={stats} />}
-          {section === 'incidencias' && <NonConformities />}
+          {section === 'inspecciones' && <InspectionsList stats={stats} inspections={data?.inspections || []} loading={loading} />}
+          {section === 'incidencias' && <NonConformities issues={data?.issues || []} loading={loading} />}
           {section === 'ia' && <AIAuditory />}
-          {section === 'config' && <ControlPoints />}
+          {section === 'config' && <ControlPoints points={data?.points || []} loading={loading} />}
         </motion.div>
       </AnimatePresence>
     </div>
   )
 }
 
-function InspectionsList({ stats }: { stats: any[] }) {
-  const recentChecks = [
-    { id: 'QC-7821', point: 'Resistencia Estructural', target: 'Work Order #1024', status: 'PASSED', time: 'Hace 10 min' },
-    { id: 'QC-7820', point: 'Voltaje Salida DC', target: 'Work Order #1024', status: 'PASSED', time: 'Hace 25 min' },
-    { id: 'QC-7819', point: 'Acabado Estético', target: 'Project: Villa Marina', status: 'FAILED', time: 'Hace 1 hora' },
-    { id: 'QC-7818', point: 'Presión Hidráulica', target: 'Work Order #1022', status: 'PASSED', time: 'Hace 2 horas' },
-  ]
+function InspectionsList({ stats, inspections, loading }: { stats: any[], inspections: any[], loading: boolean }) {
+  const recentChecks = inspections.map(i => ({
+    id: i.id.substring(i.id.length - 4).toUpperCase(),
+    point: i.point.name,
+    target: i.project?.name || i.workOrder?.batchNumber || 'General',
+    status: i.status,
+    time: new Date(i.createdAt).toLocaleDateString()
+  }))
 
   return (
     <div className="space-y-8">
@@ -222,12 +246,14 @@ function InspectionsList({ stats }: { stats: any[] }) {
   )
 }
 
-function NonConformities() {
-  const issues = [
-    { id: 'NC-2024-001', title: 'Fisura en Soldadura', level: 'CRITICAL', status: 'OPEN', date: '12 ABR' },
-    { id: 'NC-2024-002', title: 'Desviación de Voltaje', level: 'WARNING', status: 'IN_REVIEW', date: '14 ABR' },
-    { id: 'NC-2024-003', title: 'Error de Lacado', level: 'LOW', status: 'RESOLVED', date: '15 ABR' },
-  ]
+function NonConformities({ issues, loading }: { issues: any[], loading: boolean }) {
+  const formattedIssues = issues.map(i => ({
+    id: `NC-${i.id.substring(i.id.length - 4).toUpperCase()}`,
+    title: i.description,
+    level: i.severity,
+    status: i.status,
+    date: new Date(i.createdAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'SHORT' }).toUpperCase()
+  }))
 
   return (
     <div className="space-y-6">
@@ -261,12 +287,12 @@ function NonConformities() {
          </CardHeader>
          <CardContent>
             <div className="space-y-3">
-               {issues.map((issue) => (
+               {formattedIssues.map((issue) => (
                   <div key={issue.id} className="p-4 rounded-2xl bg-slate-50 flex items-center justify-between border border-transparent hover:border-slate-200 transition-all">
                      <div className="flex items-center gap-4">
                         <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${
-                           issue.level === 'CRITICAL' ? 'bg-rose-100 text-rose-600' : 
-                           issue.level === 'WARNING' ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'
+                           issue.level === 'CRITICAL' || issue.level === 'HIGH' ? 'bg-rose-100 text-rose-600' : 
+                           issue.level === 'WARNING' || issue.level === 'MEDIUM' ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'
                         }`}>
                            <AlertOctagon className="w-5 h-5" />
                         </div>
@@ -288,6 +314,9 @@ function NonConformities() {
                      </div>
                   </div>
                ))}
+               {formattedIssues.length === 0 && !loading && (
+                 <div className="text-center py-10 text-muted-foreground text-xs font-bold uppercase tracking-widest">No hay incidencias registradas</div>
+               )}
             </div>
          </CardContent>
       </Card>
@@ -349,12 +378,13 @@ function AIAuditory() {
   )
 }
 
-function ControlPoints() {
-  const rules = [
-    { category: 'Mecánico', point: 'Tolerancia de Fisura', limit: '0.05mm', criticity: 'HIGH' },
-    { category: 'Eléctrico', point: 'Rango de Voltaje', limit: '220V +/- 5%', criticity: 'CRITICAL' },
-    { category: 'Estético', point: 'Uniformidad Lacado', limit: 'Grade A', criticity: 'LOW' },
-  ]
+function ControlPoints({ points, loading }: { points: any[], loading: boolean }) {
+  const rules = points.map(p => ({
+    category: p.description || 'Calidad',
+    point: p.name,
+    limit: p.targetValue || p.tolerance || 'N/A',
+    criticity: p.mandatory ? 'HIGH' : 'LOW'
+  }))
 
   return (
     <Card className="border-none shadow-sm">
