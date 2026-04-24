@@ -3,6 +3,7 @@ import { withTenantAuth } from '@/lib/api-key-auth';
 import { prisma } from '@/lib/db';
 import { SupportService } from '@/lib/support/support-service';
 import { GemmaSupportService } from '@/lib/support/gemma-support-service';
+import { AdoptionTelemetry } from '@/lib/telemetry/adoption-kpis';
 
 /**
  * GET /api/support/tickets - Listar tickets del tenant
@@ -13,6 +14,9 @@ export const GET = withTenantAuth(async (request, auth) => {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
     const priority = searchParams.get('priority');
+    
+    // Telemetry
+    AdoptionTelemetry.trackHubView(tenantId, auth.user!.id, 'SUPPORT').catch(() => {});
 
     const tickets = await prisma.supportTicket.findMany({
       where: {

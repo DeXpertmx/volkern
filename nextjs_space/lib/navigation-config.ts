@@ -373,6 +373,19 @@ export const HUBS: HubConfig[] = [
     ]
   },
   {
+    id: 'knowledge',
+    name: 'Conocimiento',
+    icon: BookOpen,
+    href: '/dashboard/knowledge',
+    description: 'Memoria organizacional, procesos SOP y políticas internas.',
+    basePaths: ['/dashboard/knowledge'],
+    items: [
+      { name: 'Base de Conocimiento', href: '/dashboard/knowledge', icon: BookOpen, description: 'Listado global de artículos y políticas' },
+      { name: 'Mis Favoritos', href: '/dashboard/knowledge?filter=favs', icon: Award, description: 'Artículos guardados para acceso rápido' },
+      { name: 'Cosecha de Soporte', href: '/dashboard/knowledge?filter=harvest', icon: RotateCw, description: 'Lecciones aprendidas desde tickets' },
+    ]
+  },
+  {
     id: 'perfil',
     name: 'Perfil',
     icon: UserCog,

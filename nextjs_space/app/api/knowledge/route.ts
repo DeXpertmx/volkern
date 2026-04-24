@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { withTenantAuth } from '@/lib/api-key-auth';
 import { KnowledgeService } from '@/lib/knowledge/knowledge-service';
+import { AdoptionTelemetry } from '@/lib/telemetry/adoption-kpis';
 
 /**
  * GET /api/knowledge - Listar artículos o buscar semánticamente
@@ -11,6 +12,9 @@ export const GET = withTenantAuth(async (request, auth) => {
     const category = searchParams.get('category') as any;
     const query = searchParams.get('q');
     const semantic = searchParams.get('semantic') === 'true';
+
+    // Telemetry
+    AdoptionTelemetry.trackHubView(auth.tenant!.id, auth.user!.id, 'KNOWLEDGE').catch(() => {});
 
     let articles;
     if (semantic && query) {
