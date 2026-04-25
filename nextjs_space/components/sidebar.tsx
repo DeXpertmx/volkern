@@ -29,6 +29,7 @@ export function Sidebar() {
   const [mounted, setMounted] = useState(false)
   const [userPermissions, setUserPermissions] = useState<any>(null)
   const [userAccountType, setUserAccountType] = useState<string | null>(null)
+  const [tenantCountry, setTenantCountry] = useState<string>('ES')
   const [activeModules, setActiveModules] = useState<string[]>([])
   const [isLoadingModules, setIsLoadingModules] = useState(true)
   const { config: whitelabelConfig } = useWhitelabel()
@@ -52,6 +53,7 @@ export function Sidebar() {
           if (userRes.role?.permisos) setUserPermissions(userRes.role.permisos);
           if (userRes.tenant?.accountType) setUserAccountType(userRes.tenant.accountType);
           if (modulesRes.modules) setActiveModules(modulesRes.modules);
+          if (modulesRes.country) setTenantCountry(modulesRes.country);
         } catch (error) {
           console.error('Error loading permissions:', error);
         } finally {
@@ -68,8 +70,13 @@ export function Sidebar() {
     // para evitar el parpadeo de ítems que luego desaparecen.
     if (isLoadingModules && item.planModule) return false
 
+    // 1. Filtro por Región (Tenant Country - obtenido de la API)
+    if (item.requiredRegion && item.requiredRegion !== tenantCountry) return false
+
+    // 2. Filtro por Plan/Módulos Activos
     if (item.planModule && !activeModules.includes(item.planModule)) return false
     
+    // 3. Filtro por Permisos de Rol
     if (item.module && userPermissions) {
       const modulePerms = userPermissions[item.module]
       if (modulePerms && modulePerms.ver === false) return false

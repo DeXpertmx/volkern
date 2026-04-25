@@ -1,28 +1,22 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { getActiveModules, type CrmModule } from '@/lib/plans';
+import { withTenantAuth } from '@/lib/api-key-auth';
+import { getActiveModules } from '@/lib/plans';
 
 /**
  * GET /api/tenant/modules
- * Returns the list of active modules for the current tenant.
- * Used by the sidebar and other UI components to show/hide features.
+ * Devuelve la lista de módulos activos para el tenant actual.
+ * Refactorizado con withTenantAuth para soportar aislamiento multi-db e impersonación.
  */
-export async function GET(req: NextRequest) {
+export const GET = withTenantAuth(async (request, auth) => {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user || !(session.user as any).tenantId) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    }
-
-    const tenantId = (session.user as any).tenantId;
+    const tenantId = auth.tenant!.id;
 
     const tenant = await prisma.tenant.findUnique({
       where: { id: tenantId },
-      select: { plan: true, enabledModules: true, accountType: true }
+      select: { plan: true, enabledModules: true, accountType: true, pais: true }
     });
 
     if (!tenant) {
@@ -34,8 +28,7 @@ export async function GET(req: NextRequest) {
       select: { feature: true, habilitado: true }
     });
 
-    // Si el tenant tiene modulos específicos habilitados (Modelo Agency), usamos esos.
-    // Si no, caemos en el comportamiento estándar basado en plan + add-ons.
+    // Determinar módulos finales basados en plan, add-ons y habilitación manual
     const finalModules = tenant.enabledModules && tenant.enabledModules.length > 0
       ? tenant.enabledModules
       : await getActiveModules(tenant.plan, tenantFeatures);
@@ -43,11 +36,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ 
       modules: finalModules, 
       plan: tenant.plan,
-      accountType: tenant.accountType 
+      accountType: tenant.accountType,
+      country: tenant.pais || 'ES'
     });
 
   } catch (error) {
-    console.error('Error fetching tenant modules:', error);
-    return NextResponse.json({ error: 'Error interno' }, { status: 500 });
+    console.error('[TenantModulesAPI] Error:', error);
+    return NextResponse.json({ error: 'Error al obtener módulos del tenant' }, { status: 500 });
   }
-}
+});

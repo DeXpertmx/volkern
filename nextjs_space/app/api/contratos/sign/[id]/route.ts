@@ -1,7 +1,8 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma, createSystemContext } from '@/lib/db';
+import { prisma } from '@/lib/db';
+import { createSystemContext } from '@/lib/skills/context';
 import { withTenantAuth } from '@/lib/api-key-auth';
 import { SignatureService } from '@/lib/security/signature-service';
 import { eventBus, EVENTS } from '@/lib/skills/event-bus';

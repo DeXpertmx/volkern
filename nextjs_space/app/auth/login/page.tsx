@@ -81,22 +81,6 @@ export default function LoginPage() {
     }
   }
 
-  if (status === 'loading') {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    )
-  }
-
-  if (status === 'authenticated') {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    )
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -107,8 +91,10 @@ export default function LoginPage() {
                 <Image
                   src="/volkern-logo.png"
                   alt="Volkern CRM"
-                  fill
+                  width={192}
+                  height={64}
                   className="object-contain"
+                  style={{ width: 'auto', height: 'auto' }}
                   priority
                 />
               </div>

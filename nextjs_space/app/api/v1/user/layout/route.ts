@@ -1,45 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { withTenantAuth } from '@/lib/api-key-auth';
 
 /**
- * API: Gestión de Layouts Dinámicos (Dashboard & RRHH)
- * Soporta persistencia estanca basada en el parámetro 'type'
+ * API: Gestión de Layouts Dinámicos (Dashboard, HR, Strategy)
+ * Soporta persistencia estanca basada en el parámetro 'type' y tenant actual.
+ * Refactorizado con withTenantAuth para asegurar aislamiento y soporte de impersonación.
  */
 
-export async function PATCH(request: NextRequest) {
+export const PATCH = withTenantAuth(async (request, auth) => {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    }
-
     const { searchParams } = new URL(request.url);
-    const type = searchParams.get('type') || 'dashboard'; // 'dashboard' o 'hr'
+    const type = searchParams.get('type') || 'dashboard';
     
-    // Validación estricta del tipo
-    if (!['dashboard', 'hr'].includes(type)) {
+    // Validación de tipos permitidos
+    const validTypes = ['dashboard', 'hr', 'strategy'];
+    if (!validTypes.includes(type)) {
       return NextResponse.json({ error: 'Tipo de layout no válido' }, { status: 400 });
     }
 
     const body = await request.json();
-    const { layout, tenantId } = body;
+    const { layout } = body;
 
-    if (!layout || !tenantId) {
-      return NextResponse.json({ error: 'Layout o tenantId no proporcionado' }, { status: 400 });
+    if (!layout) {
+      return NextResponse.json({ error: 'Layout no proporcionado' }, { status: 400 });
     }
 
+    const tenantId = auth.tenant!.id;
+    const userId = auth.user!.id;
+
+    // Recuperar metadata actual del usuario
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email! },
+      where: { id: userId },
       select: { metadata: true }
     });
 
     const currentMetadata = (user?.metadata as Record<string, any>) || {};
-    const layoutKey = type === 'hr' ? `hrLayout_${tenantId}` : `dashboardLayout_${tenantId}`;
+    const layoutKey = `${type}Layout_${tenantId}`;
     
     await prisma.user.update({
-      where: { email: session.user.email! },
+      where: { id: userId },
       data: {
         metadata: {
           ...currentMetadata,
@@ -51,43 +51,39 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ success: true, type, key: layoutKey });
 
   } catch (error: any) {
-    console.error('[UserLayoutAPI] Error:', error);
+    console.error('[UserLayoutAPI PATCH] Error:', error);
     return NextResponse.json({ error: 'Error al persistir el layout' }, { status: 500 });
   }
-}
+});
 
-export async function GET(request: NextRequest) {
+export const GET = withTenantAuth(async (request, auth) => {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    }
-
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type') || 'dashboard';
-    let tenantId = searchParams.get('tenantId');
-    
-    // Fallback al tenantId de la sesión si no viene en la URL
-    if (!tenantId) {
-      tenantId = (session.user as any).tenantId;
-    }
+    const tenantId = auth.tenant!.id;
+    const userId = auth.user!.id;
 
-    if (!['dashboard', 'hr'].includes(type) || !tenantId) {
-      return NextResponse.json({ error: 'Parámetros no válidos (se requiere tenantId)' }, { status: 400 });
+    const validTypes = ['dashboard', 'hr', 'strategy'];
+    if (!validTypes.includes(type)) {
+      return NextResponse.json({ error: 'Tipo de layout no válido' }, { status: 400 });
     }
 
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email! },
+      where: { id: userId },
       select: { metadata: true }
     });
 
     const metadata = (user?.metadata as Record<string, any>) || {};
-    const layoutKey = type === 'hr' ? `hrLayout_${tenantId}` : `dashboardLayout_${tenantId}`;
+    const layoutKey = `${type}Layout_${tenantId}`;
 
-    return NextResponse.json({ layout: metadata[layoutKey] || null, type });
+    return NextResponse.json({ 
+      layout: metadata[layoutKey] || null, 
+      type,
+      tenantId 
+    });
 
   } catch (error: any) {
     console.error('[UserLayoutAPI GET] Error:', error);
     return NextResponse.json({ error: 'Error al recuperar el layout' }, { status: 500 });
   }
-}
+});

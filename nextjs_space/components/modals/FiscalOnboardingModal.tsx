@@ -422,9 +422,6 @@ export function FiscalOnboardingModal({
                   </Select>
                   {formData.tipo === 'EMPRESA' && <p className="text-[10px] text-muted-foreground italic">IRPF bloqueado al 0% para Empresas</p>}
                 </div>
-                
-                  </div>
-                </div>
               </div>
 
               {formData.country === 'MX' && (

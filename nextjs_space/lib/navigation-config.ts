@@ -53,7 +53,8 @@ import {
   Heart,
   Lock,
   AlertOctagon,
-  LifeBuoy
+  LifeBuoy,
+  Zap
 } from 'lucide-react'
 import type { PermissionModule } from '@/lib/permissions'
 
@@ -64,6 +65,7 @@ export interface NavigationItem {
   module?: PermissionModule
   planModule?: string
   description?: string
+  requiredRegion?: 'MX' | 'ES' | 'CO' | 'US' // Regiones soportadas
 }
 
 export interface HubConfig {
@@ -126,7 +128,7 @@ export const HUBS: HubConfig[] = [
       { name: 'Cotizaciones', href: '/dashboard/cotizaciones', icon: FileText, planModule: 'cotizaciones', description: 'Propuestas comerciales' },
       { name: 'Contratos', href: '/dashboard/contratos', icon: ScrollText, planModule: 'contratos', description: 'Gestión documental' },
       { name: 'Órdenes de Venta', href: '/dashboard/ventas/ordenes', icon: ShoppingCart, planModule: 'ordenes_venta', description: 'Pedidos y ventas' },
-      { name: 'Facturación Directa (MX)', href: '/dashboard/sales/billing', icon: Zap, description: 'Emisión Zero-Stripe de CFDI 4.0' },
+      { name: 'Facturación Directa (MX)', href: '/dashboard/sales/billing', icon: Zap, requiredRegion: 'MX', description: 'Emisión Zero-Stripe de CFDI 4.0' },
       { name: 'Citas', href: '/dashboard/citas', icon: Calendar, planModule: 'citas', description: 'Agenda y reuniones' },
       { name: 'Pronósticos', href: '/dashboard/ventas/pronosticos', icon: BarChart3, planModule: 'pronosticos', description: 'Predicción de ventas' },
       { name: 'Scoring', href: '/dashboard/scoring', icon: Award, planModule: 'scoring', description: 'Calificación de leads' },
@@ -233,11 +235,11 @@ export const HUBS: HubConfig[] = [
     items: [
       { name: 'Global Cockpit', href: '/dashboard/finanzas/global', icon: LineChart, planModule: 'finanzas_consolidado', description: 'Consolidación financiera y cash flow' },
       { name: 'Financial Cockpit', href: '/dashboard/finanzas', icon: BarChart3, planModule: 'finanzas', description: 'Vista general de salud financiera' },
-      { name: 'Mesa de Facturación', href: '/dashboard/finanzas/facturacion', icon: Receipt, planModule: 'finanzas', description: 'Revisión y emisión legal Veri*factu' },
-      { name: 'Facturación Directa (MX)', href: '/dashboard/sales/billing', icon: Zap, description: 'Emisión rápida Zero-Stripe' },
+      { name: 'Mesa de Facturación', href: '/dashboard/finanzas/facturacion', icon: Receipt, planModule: 'finanzas', requiredRegion: 'ES', description: 'Revisión y emisión legal Veri*factu' },
+      { name: 'Facturación Directa (MX)', href: '/dashboard/sales/billing', icon: Zap, requiredRegion: 'MX', description: 'Emisión rápida Zero-Stripe' },
       { name: 'Hub Contable', href: '/dashboard/finanzas/contabilidad', icon: BookOpen, planModule: 'finanzas', description: 'Libro diario inmutable y sellado' },
       { name: 'Conciliación Bancaria', href: '/dashboard/finanzas/contabilidad/reconciliacion', icon: Calculator, planModule: 'finanzas', description: 'Sincronización con bancos e IA' },
-      { name: 'Impuestos (Modelo 303)', href: '/dashboard/finanzas/contabilidad/impuestos', icon: FileText, planModule: 'finanzas', description: 'Automatización de IVA trimestral' },
+      { name: 'Impuestos (Modelo 303)', href: '/dashboard/finanzas/contabilidad/impuestos', icon: FileText, planModule: 'finanzas', requiredRegion: 'ES', description: 'Automatización de IVA trimestral' },
       { name: 'Gastos', href: '/dashboard/finanzas/gastos', icon: ListTodo, planModule: 'finanzas', description: 'Listado de egresos y facturas' },
       { name: 'Proveedores', href: '/dashboard/finanzas/proveedores', icon: Building2, planModule: 'finanzas', description: 'Directorio de proveedores' },
       { name: 'Reportes P&L', href: '/dashboard/finanzas/reportes', icon: FileText, planModule: 'finanzas', description: 'Balance de pérdidas y ganancias' },

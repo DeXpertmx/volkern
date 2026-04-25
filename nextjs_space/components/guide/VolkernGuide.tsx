@@ -23,6 +23,8 @@ import { cn } from '@/lib/utils';
 export function VolkernGuide() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [context, setContext] = useState<string>('General');
   const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant', content: string }>>([
     { role: 'assistant', content: '¡Hola! Soy tu Volkern Guide. Detecto que estás explorando el sistema. ¿En qué puedo ayudarte hoy?' }
@@ -36,6 +38,48 @@ export function VolkernGuide() {
     else if (pathname.includes('/strategy')) setContext('Estrategia');
     else setContext('Dashboard General');
   }, [pathname]);
+
+  const handleSendMessage = async (e?: React.FormEvent, directMsg?: string) => {
+    e?.preventDefault();
+    const messageToSend = directMsg || input;
+    if (!messageToSend.trim() || isLoading) return;
+
+    const userMsg = messageToSend.trim();
+    setInput('');
+    setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
+    setIsLoading(true);
+
+    try {
+      const response = await fetch('/api/guide', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantId: 'default-tenant', // En producción vendría de una sesión
+          userId: 'admin',
+          hub: context,
+          query: userMsg
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.response) {
+        setMessages(prev => [...prev, { 
+          role: 'assistant', 
+          content: data.response 
+        }]);
+      } else {
+        throw new Error('No response');
+      }
+    } catch (error) {
+      setMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: "Lo siento, he tenido un problema conectando con el Knowledge Hub. Por favor, inténtalo de nuevo en un momento." 
+      }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const suggestions = {
     'Ventas': ['¿Cómo convierto un lead?', 'Ver política de comisiones', 'Siguiente acción recomendada'],
@@ -82,33 +126,60 @@ export function VolkernGuide() {
                 {messages.map((m, i) => (
                   <div key={i} className={cn(
                     "max-w-[85%] p-4 rounded-2xl text-sm leading-relaxed",
-                    m.role === 'user' ? "ml-auto bg-primary text-white font-medium" : "mr-auto bg-slate-100 text-slate-700 font-medium"
+                    m.role === 'user' ? "ml-auto bg-primary text-white font-medium shadow-lg shadow-primary/20" : "mr-auto bg-slate-100 text-slate-700 font-medium"
                   )}>
                     {m.content}
                   </div>
                 ))}
+                {isLoading && (
+                  <div className="mr-auto bg-slate-100 text-slate-400 p-4 rounded-2xl text-sm font-bold animate-pulse">
+                    Gemma está pensando...
+                  </div>
+                )}
              </div>
 
              {/* Sugerencias Contextuales */}
              <div className="p-6 space-y-3 bg-slate-50/50">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-1">Preguntas sugeridas</p>
-                <div className="flex flex-wrap gap-2">
-                   {currentSuggestions.map((s: string, i: number) => (
-                     <button key={i} className="text-xs font-bold bg-white border border-slate-200 px-4 py-2 rounded-xl hover:border-primary hover:text-primary transition-all shadow-sm">
-                        {s}
-                     </button>
-                   ))}
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-1 text-center">Preguntas sugeridas</p>
+                <div className="flex flex-wrap gap-2 justify-center">
+                    {currentSuggestions.map((s: string, i: number) => (
+                      <button 
+                        key={i} 
+                        onClick={() => { 
+                          setInput(s);
+                          // Usar un pequeño timeout para asegurar que el estado de input se actualice antes del envío si es necesario, 
+                          // o pasar el string directamente a una versión modificada de handleSendMessage.
+                          // Para simplicidad y robustez, modificamos handleSendMessage para aceptar un mensaje opcional.
+                          handleSendMessage(undefined, s);
+                        }}
+                        className="text-[10px] font-bold bg-white border border-slate-200 px-3 py-2 rounded-xl hover:border-primary hover:text-primary transition-all shadow-sm"
+                      >
+                         {s}
+                      </button>
+                    ))}
                 </div>
              </div>
 
              <div className="p-6 border-t bg-white">
-                <div className="relative">
-                   <Input 
-                     placeholder="Pregunta algo sobre este Hub..." 
-                     className="h-12 bg-slate-100 border-none rounded-2xl pl-12 pr-4 text-sm font-medium"
-                   />
-                   <MessageSquare className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-                </div>
+                <form onSubmit={handleSendMessage} className="relative flex items-center gap-2">
+                   <div className="relative flex-1">
+                      <Input 
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        placeholder="Pregunta algo sobre este Hub..." 
+                        className="h-12 bg-slate-100 border-none rounded-2xl pl-12 pr-4 text-sm font-medium focus-visible:ring-primary/20"
+                      />
+                      <MessageSquare className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                   </div>
+                   <Button 
+                     type="submit" 
+                     size="icon" 
+                     disabled={!input.trim() || isLoading}
+                     className="h-12 w-12 rounded-2xl bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 shrink-0"
+                   >
+                      <ArrowRight className="h-5 w-5" />
+                   </Button>
+                </form>
              </div>
           </CardContent>
         </Card>
