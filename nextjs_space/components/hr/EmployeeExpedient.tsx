@@ -128,7 +128,7 @@ export function EmployeeExpedient({ employeeId, onClose }: EmployeeExpedientProp
       const pColor = typeof badgeSettings.primaryColor === 'string' ? hexToRgb(badgeSettings.primaryColor) : [15, 23, 42]
       const sColor = typeof badgeSettings.secondaryColor === 'string' ? hexToRgb(badgeSettings.secondaryColor) : [59, 130, 246]
 
-      const { jsPDF } = await import('jspdf')
+      const { jsPDF } = await import(/* webpackChunkName: "jspdf" */ 'jspdf')
       const isLandscape = badgeSettings.layout === 'landscape'
       const doc = new jsPDF({
         orientation: isLandscape ? 'landscape' : 'portrait',
