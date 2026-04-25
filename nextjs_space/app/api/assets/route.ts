@@ -31,7 +31,7 @@ export const GET = withTenantAuth(async (request, auth) => {
           include: { employee: true }
         }
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { name: 'asc' },
       take: 50
     });
     
