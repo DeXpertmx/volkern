@@ -311,31 +311,6 @@ export const HUBS: HubConfig[] = [
     ]
   },
   {
-    id: 'configuracion',
-    name: 'Configuración',
-    icon: Settings,
-    href: '/dashboard/configuracion',
-    description: 'Ajustes del sistema, marca blanca e integraciones.',
-    basePaths: [
-      '/dashboard/equipo',
-      '/dashboard/integraciones'
-    ],
-    items: [
-      { name: 'Empresa', href: '/dashboard/configuracion?section=empresa', icon: Building, description: 'Datos empresariales' },
-      { name: 'Horarios', href: '/dashboard/configuracion?section=horarios', icon: Clock, description: 'Disponibilidad' },
-      { name: 'Notificaciones', href: '/dashboard/configuracion?section=notificaciones', icon: Bell, description: 'Alertas y correos' },
-      { name: 'Config. Fiscal', href: '/dashboard/configuracion?section=fiscal', icon: Calculator, description: 'Facturación e impuestos' },
-      { name: 'Telefonía', href: '/dashboard/configuracion?section=telefonia', icon: PhoneCall, description: 'Líneas y desvíos' },
-      { name: 'Reparto Leads', href: '/dashboard/configuracion?section=reparto', icon: RotateCw, description: 'Asignación de ejecutivos' },
-      { name: 'Campos de Leads', href: '/dashboard/configuracion?section=leads', icon: ListTodo, description: 'Personalización de campos' },
-      { name: 'Documentos', href: '/dashboard/configuracion?section=documentos', icon: FileText, description: 'Ajustes de contratos' },
-      { name: 'Marca Blanca', href: '/dashboard/configuracion?section=whitelabel', icon: Palette, description: 'Personalización gráfica' },
-      { name: 'Equipo', href: '/dashboard/equipo', icon: UserCog, planModule: 'equipo', description: 'Gestión de usuarios' },
-      { name: 'Integraciones', href: '/dashboard/integraciones', icon: Plug, planModule: 'integraciones', description: 'Conexión con apps externas' },
-      { name: 'Mi Suscripción', href: '/dashboard/configuracion/billing', icon: CreditCard, description: 'Suscripción y pagos' },
-    ]
-  },
-  {
     id: 'taskforce',
     name: 'Taskforce',
     icon: LifeBuoy,
@@ -407,6 +382,31 @@ export const HUBS: HubConfig[] = [
       { name: 'Notificaciones', href: '/dashboard/perfil?section=notificaciones', icon: Bell, description: 'Alertas del navegador' },
       { name: 'IA Agent Skills', href: '/dashboard/perfil?section=agent-skills', icon: Cpu, description: 'Conecta tu asistente IA (Gemma/Gemma local)' },
       { name: 'Mi Tarjeta', href: '/dashboard/mi-tarjeta', icon: CreditCard, planModule: 'mi_tarjeta', description: 'Tarjeta de presentación digital' },
+    ]
+  },
+  {
+    id: 'configuracion',
+    name: 'Configuración',
+    icon: Settings,
+    href: '/dashboard/configuracion',
+    description: 'Ajustes del sistema, marca blanca e integraciones.',
+    basePaths: [
+      '/dashboard/equipo',
+      '/dashboard/integraciones'
+    ],
+    items: [
+      { name: 'Empresa', href: '/dashboard/configuracion?section=empresa', icon: Building, description: 'Datos empresariales' },
+      { name: 'Horarios', href: '/dashboard/configuracion?section=horarios', icon: Clock, description: 'Disponibilidad' },
+      { name: 'Notificaciones', href: '/dashboard/configuracion?section=notificaciones', icon: Bell, description: 'Alertas y correos' },
+      { name: 'Config. Fiscal', href: '/dashboard/configuracion?section=fiscal', icon: Calculator, description: 'Facturación e impuestos' },
+      { name: 'Telefonía', href: '/dashboard/configuracion?section=telefonia', icon: PhoneCall, description: 'Líneas y desvíos' },
+      { name: 'Reparto Leads', href: '/dashboard/configuracion?section=reparto', icon: RotateCw, description: 'Asignación de ejecutivos' },
+      { name: 'Campos de Leads', href: '/dashboard/configuracion?section=leads', icon: ListTodo, description: 'Personalización de campos' },
+      { name: 'Documentos', href: '/dashboard/configuracion?section=documentos', icon: FileText, description: 'Ajustes de contratos' },
+      { name: 'Marca Blanca', href: '/dashboard/configuracion?section=whitelabel', icon: Palette, description: 'Personalización gráfica' },
+      { name: 'Equipo', href: '/dashboard/equipo', icon: UserCog, planModule: 'equipo', description: 'Gestión de usuarios' },
+      { name: 'Integraciones', href: '/dashboard/integraciones', icon: Plug, planModule: 'integraciones', description: 'Conexión con apps externas' },
+      { name: 'Mi Suscripción', href: '/dashboard/configuracion/billing', icon: CreditCard, description: 'Suscripción y pagos' },
     ]
   }
 ]
