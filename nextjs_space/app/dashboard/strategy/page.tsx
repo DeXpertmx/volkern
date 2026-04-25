@@ -2,6 +2,8 @@
 
 import React from 'react';
 import useSWR from 'swr';
+import { cn } from '@/lib/utils';
+
 import { Card } from '@/components/ui/card';
 import { 
   LineChart as ReLineChart, 
