@@ -9,18 +9,19 @@ import { OrchestrationService } from '@/lib/erp/orchestration-service';
 export const GET = withTenantAuth(async (request, auth) => {
   try {
     const tenantId = auth.tenant!.id;
-    const orders = await prisma.salesOrder.findMany({
+    const orders = await prisma.erp_sales_orders.findMany({
       where: { tenantId },
       include: {
-        contact: true,
-        items: { include: { catalogItem: true } },
-        shipments: true
+        contacts: true,
+        erp_sales_order_items: { include: { catalogo_items: true } },
+        erp_shipments: true
       },
       orderBy: { createdAt: 'desc' }
     });
 
     return NextResponse.json(orders);
   } catch (error) {
+    console.error('[SalesOrders GET] Error:', error);
     return NextResponse.json({ error: 'Error al cargar pedidos' }, { status: 500 });
   }
 }, ['erp:read']);
@@ -37,8 +38,9 @@ export const POST = withTenantAuth(async (request, auth) => {
 
     const order = await prisma.$transaction(async (tx) => {
       // 1. Crear el pedido
-      const newOrder = await tx.salesOrder.create({
+      const newOrder = await (tx as any).erp_sales_orders.create({
         data: {
+          id: `so_${Date.now()}`,
           tenantId,
           contactId,
           batchNumber: `SO-${Date.now()}`,
@@ -46,14 +48,16 @@ export const POST = withTenantAuth(async (request, auth) => {
           deliveryPromise: deliveryPromise ? new Date(deliveryPromise) : null,
           shippingAddress,
           status: 'DRAFT',
+          updatedAt: new Date(),
           totalPrice: items.reduce((acc: number, item: any) => acc + (item.quantity * item.unitPrice), 0)
         }
       });
 
       // 2. Crear las líneas
       for (const item of items) {
-        await tx.salesOrderItem.create({
+        await (tx as any).erp_sales_order_items.create({
           data: {
+            id: `soi_${Date.now()}_${Math.random()}`,
             tenantId,
             salesOrderId: newOrder.id,
             catalogItemId: item.catalogItemId,
@@ -73,6 +77,7 @@ export const POST = withTenantAuth(async (request, auth) => {
 
     return NextResponse.json({ order, orchestration });
   } catch (error: any) {
+    console.error('[SalesOrders POST] Error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }, ['erp:write']);

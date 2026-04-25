@@ -16,7 +16,7 @@ export const GET = withTenantAuth(async (request, auth) => {
 
     const tenant = await prisma.tenant.findUnique({
       where: { id: tenantId },
-      select: { plan: true, enabledModules: true, accountType: true, pais: true }
+      select: { plan: true, enabledModules: true, accountType: true, moneda: true }
     });
 
     if (!tenant) {
@@ -37,7 +37,7 @@ export const GET = withTenantAuth(async (request, auth) => {
       modules: finalModules, 
       plan: tenant.plan,
       accountType: tenant.accountType,
-      country: tenant.pais || 'ES'
+      country: tenant.moneda === 'MXN' ? 'MX' : 'ES'
     });
 
   } catch (error) {
