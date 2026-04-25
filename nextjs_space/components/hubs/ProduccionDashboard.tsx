@@ -952,15 +952,15 @@ export default function ProduccionDashboard() {
                     <div className="space-y-4">
                       {(workOrders || [1, 2, 3]).map((wo: any, i: number) => (
                         <div key={wo.id || i} className="p-4 rounded-2xl bg-slate-50 border border-transparent hover:border-slate-200 hover:bg-white transition-all flex flex-col md:flex-row md:items-center justify-between gap-4">
-                          <div className="flex items-center gap-4">
-                            <div className="h-12 w-12 bg-white rounded-xl shadow-sm flex items-center justify-center text-primary font-bold">
-                               #{wo.batchNumber || (1024 + i)}
+                            <div className="flex flex-col">
+                              <h4 className="font-bold text-sm text-slate-900">{wo.bom?.catalogoItem?.nombre || 'Producto Industrial XZ-1'}</h4>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <Badge variant="outline" className="bg-white border-slate-200 text-slate-500 text-[9px] font-black uppercase px-2 py-0 h-4">
+                                   Lote: {wo.batchNumber || `B-${2024+i}`}
+                                </Badge>
+                              </div>
                             </div>
-                            <div>
-                              <h4 className="font-bold text-sm">{wo.bom?.catalogoItem?.nombre || 'Producto Industrial XZ-1'}</h4>
-                              <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest">Batch: {wo.batchNumber || `B-${2024+i}`}</p>
-                            </div>
-                          </div>
+
                           
                           <div className="flex-1 max-w-xs px-4">
                              <div className="flex justify-between mb-1 text-[10px] font-bold uppercase">
@@ -972,26 +972,27 @@ export default function ProduccionDashboard() {
 
                           <div className="flex items-center gap-3">
                             {wo.status === 'PLANNED' && (
-                              <Button 
-                                size="sm" 
-                                className="bg-slate-900 hover:bg-slate-800 text-white font-black uppercase text-[9px] h-8 rounded-lg"
-                                onClick={async () => {
-                                  try {
-                                    const res = await fetch(`/api/erp/production/work-orders/${wo.id}/start`, { method: 'POST' });
-                                    const data = await res.json();
-                                    if (!res.ok) throw new Error(data.error);
-                                    toast.success('Orden iniciada exitosamente');
-                                    mutate();
-                                  } catch (error: any) {
-                                    toast.error(error.message, {
-                                      description: 'Se requiere validación académica.',
-                                      duration: 5000,
-                                    });
-                                  }
-                                }}
-                              >
-                                <Play className="w-3 h-3 mr-1" /> Iniciar Orden
-                              </Button>
+                                <Button 
+                                  size="sm" 
+                                  className="premium-gradient-primary hover:opacity-90 text-white font-black uppercase text-[9px] h-9 px-4 rounded-xl shadow-lg shadow-primary/20"
+                                  onClick={async () => {
+                                    try {
+                                      const res = await fetch(`/api/erp/production/work-orders/${wo.id}/start`, { method: 'POST' });
+                                      const data = await res.json();
+                                      if (!res.ok) throw new Error(data.error);
+                                      toast.success('Orden iniciada exitosamente');
+                                      mutate();
+                                    } catch (error: any) {
+                                      toast.error(error.message, {
+                                        description: 'Se requiere validación académica.',
+                                        duration: 5000,
+                                      });
+                                    }
+                                  }}
+                                >
+                                  <Play className="w-3 h-3 mr-1.5" /> Iniciar Orden
+                                </Button>
+
                             )}
                             <Badge className={`px-3 font-black uppercase text-[9px] tracking-widest border-none ${
                               wo.status === 'IN_PROGRESS' ? 'bg-blue-50 text-blue-600' : 
@@ -1024,7 +1025,7 @@ export default function ProduccionDashboard() {
                        <CardTitle className="text-xl font-bold tracking-tight">IA Sugerencia</CardTitle>
                     </CardHeader>
                     <CardContent className="relative z-10 space-y-4 pt-2">
-                       <div className="p-4 rounded-xl bg-white/5 border border-white/10 text-xs text-slate-300 leading-relaxed italic border-l-4 border-l-primary">
+                       <div className="p-6 rounded-2xl bg-white/5 border border-white/10 text-sm text-indigo-100 leading-relaxed italic border-l-4 border-l-primary shadow-inner">
                           "Optimiza la línea 4: El lote SolarTech #442 tiene una probabilidad del 82% de cuello de botella si no se incrementa el flujo de montaje."
                        </div>
                     </CardContent>
