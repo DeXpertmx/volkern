@@ -40,6 +40,10 @@ import type {
   EvaluationCompletedEvent,
   InvoiceDueEvent,
   ExpenseSubmittedEvent,
+  InspectionCompletedEvent,
+  NonConformityCreatedEvent,
+  MilestoneReachedEvent,
+  ProjectStartedEvent,
 } from '@/lib/types/events';
 
 /**
@@ -106,6 +110,23 @@ const EVENT_TO_TRIGGER_MAP: Record<string, string> = {
   [EVENTS.EXPENSE_APPROVED]: 'gasto_aprobado',
   [EVENTS.PAYROLL_GENERATED]: 'nomina_generada',
   [EVENTS.BUDGET_ALERT]: 'presupuesto_alerta',
+
+  // Calidad (Fase 4)
+  [EVENTS.INSPECTION_COMPLETED]: 'inspeccion_completada',
+  [EVENTS.INSPECTION_FAILED]: 'inspeccion_fallida',
+  [EVENTS.NON_CONFORMITY_CREATED]: 'no_conformidad',
+  [EVENTS.NON_CONFORMITY_RESOLVED]: 'no_conformidad_resuelta',
+  [EVENTS.QUALITY_ALERT]: 'alerta_calidad',
+  [EVENTS.CALIBRATION_DUE]: 'calibracion_pendiente',
+
+  // Proyectos (Fase 4)
+  [EVENTS.MILESTONE_REACHED]: 'milestone_alcanzado',
+  [EVENTS.MILESTONE_DUE]: 'milestone_pendiente',
+  [EVENTS.PROJECT_STARTED]: 'proyecto_iniciado',
+  [EVENTS.PROJECT_COMPLETED]: 'proyecto_completado',
+  [EVENTS.PROJECT_DELAYED]: 'proyecto_retrasado',
+  [EVENTS.TASK_COMPLETED]: 'tarea_completada',
+  [EVENTS.DELIVERABLE_UPLOADED]: 'entregable_subido',
 };
 
 /**
@@ -553,6 +574,121 @@ function eventToAutomationContext(event: EventType, payload: BaseEventPayload): 
         departmentId: budgetPayload.evaluationId,
         departmentNombre: budgetPayload.employeeNombre,
         presupuestoUsado: budgetPayload.puntuacion,
+      };
+    }
+
+    // === FASE 4: CALIDAD ===
+    case EVENTS.INSPECTION_COMPLETED: {
+      const inspPayload = payload as InspectionCompletedEvent;
+      return {
+        ...baseContext,
+        inspectionId: inspPayload.inspectionId,
+        inspectionNumero: inspPayload.inspectionNumero,
+        resultado: inspPayload.resultado,
+        itemsVerificados: inspPayload.itemsVerificados,
+        itemsFallidos: inspPayload.itemsFallidos,
+      };
+    }
+
+    case EVENTS.NON_CONFORMITY_CREATED: {
+      const ncPayload = payload as NonConformityCreatedEvent;
+      return {
+        ...baseContext,
+        nonConformityId: ncPayload.nonConformityId,
+        ncNumero: ncPayload.ncNumero,
+        tipo: ncPayload.tipo,
+        gravedad: ncPayload.gravedad,
+        causa: ncPayload.causa,
+        proyectoId: ncPayload.proyectoId,
+      };
+    }
+
+    case EVENTS.QUALITY_ALERT: {
+      const qualityPayload = payload as NonConformityCreatedEvent;
+      return {
+        ...baseContext,
+        alertType: qualityPayload.alertType,
+        mensaje: qualityPayload.causa,
+        severity: qualityPayload.gravedad,
+        entityId: qualityPayload.proyectoId,
+      };
+    }
+
+    // === FASE 4: PROYECTOS ===
+    case EVENTS.MILESTONE_REACHED: {
+      const milestonePayload = payload as MilestoneReachedEvent;
+      return {
+        ...baseContext,
+        milestoneId: milestonePayload.milestoneId,
+        milestoneNombre: milestonePayload.milestoneNombre,
+        projectId: milestonePayload.projectId,
+        projectNombre: milestonePayload.projectNombre,
+        fechaCompletado: milestonePayload.fechaCompletado,
+      };
+    }
+
+    case EVENTS.MILESTONE_DUE: {
+      const milestonePayload = payload as MilestoneReachedEvent;
+      return {
+        ...baseContext,
+        milestoneId: milestonePayload.milestoneId,
+        milestoneNombre: milestonePayload.milestoneNombre,
+        projectId: milestonePayload.projectId,
+        diasRestantes: 7,
+      };
+    }
+
+    case EVENTS.PROJECT_STARTED: {
+      const projPayload = payload as ProjectStartedEvent;
+      return {
+        ...baseContext,
+        projectId: projPayload.projectId,
+        projectNombre: projPayload.projectNombre,
+        fechaInicio: projPayload.fechaInicio,
+        fechaFinEstimada: projPayload.fechaFinEstimada,
+        managerId: projPayload.managerId,
+      };
+    }
+
+    case EVENTS.PROJECT_COMPLETED: {
+      const projPayload = payload as ProjectStartedEvent;
+      return {
+        ...baseContext,
+        projectId: projPayload.projectId,
+        projectNombre: projPayload.projectNombre,
+        presupuestoActual: projPayload.fechaFin?.getTime() || 0,
+      };
+    }
+
+    case EVENTS.PROJECT_DELAYED: {
+      const projPayload = payload as MilestoneReachedEvent;
+      return {
+        ...baseContext,
+        projectId: projPayload.projectId,
+        projectNombre: projPayload.projectNombre,
+        diasRetraso: 5,
+        causa: 'Retraso en entregas',
+      };
+    }
+
+    case EVENTS.TASK_COMPLETED: {
+      const taskPayload = payload as TaskCompletedEvent2;
+      return {
+        ...baseContext,
+        taskId: taskPayload.taskId,
+        taskNombre: taskPayload.taskNombre,
+        projectId: taskPayload.projectId,
+        completedBy: taskPayload.completedBy,
+      };
+    }
+
+    case EVENTS.DELIVERABLE_UPLOADED: {
+      const deliverPayload = payload as MilestoneReachedEvent;
+      return {
+        ...baseContext,
+        milestoneId: deliverPayload.milestoneId,
+        projectId: deliverPayload.projectId,
+        proyectoId: deliverPayload.projectId,
       };
     }
 

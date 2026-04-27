@@ -118,6 +118,23 @@ const triggerLabels: Record<string, string> = {
   gasto_aprobado: 'Gasto Aprobado',
   nomina_generada: 'Nómina Generada',
   presupuesto_alerta: 'Alerta de Presupuesto',
+
+  // === FASE 4: CALIDAD ===
+  inspeccion_completada: 'Inspección Completada',
+  inspeccion_fallida: 'Inspección Fallida',
+  no_conformidad: 'No Conformidad',
+  no_conformidad_resuelta: 'No Conformidad Resuelta',
+  alerta_calidad: 'Alerta de Calidad',
+  calibracion_pendiente: 'Calibración Pendiente',
+
+  // === FASE 4: PROYECTOS ===
+  milestone_alcanzado: 'Milestone Alcanzado',
+  milestone_pendiente: 'Milestone Pendiente',
+  proyecto_iniciado: 'Proyecto Iniciado',
+  proyecto_completado: 'Proyecto Completado',
+  proyecto_retrasado: 'Proyecto Retrasado',
+  tarea_completada: 'Tarea Completada',
+  entregable_subido: 'Entregable Subido',
 }
 
 const categoriaLabels: Record<string, string> = {

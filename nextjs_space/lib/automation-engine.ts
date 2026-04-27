@@ -377,6 +377,38 @@ export class AutomationEngine {
       case 'generar_reporte_financiero':
         return await this.generateFinancialReport(config)
 
+      // ============== FASE 4: CALIDAD ==============
+      case 'crear_inspeccion':
+        return await this.createInspection(config)
+      case 'registrar_no_conformidad':
+        return await this.registerNonConformity(config)
+      case 'cerrar_no_conformidad':
+        return await this.closeNonConformity(config)
+      case 'notificar_alerta_calidad':
+        return await this.notifyQualityAlert(config)
+      case 'generar_informe_calidad':
+        return await this.generateQualityReport(config)
+      case 'programar_calibracion':
+        return await this.scheduleCalibration(config)
+
+      // ============== FASE 4: PROYECTOS ==============
+      case 'crear_proyecto':
+        return await this.createProject(config)
+      case 'notificar_equipo_proyecto':
+        return await this.notifyProjectTeam(config)
+      case 'actualizar_progreso':
+        return await this.updateProgress(config)
+      case 'crear_milestone':
+        return await this.createMilestone(config)
+      case 'notificar_milestone':
+        return await this.notifyMilestone(config)
+      case 'generar_reporte_proyecto':
+        return await this.generateProjectReport(config)
+      case 'crear_tarea_proyecto':
+        return await this.createProjectTask(config)
+      case 'asignar_entregable':
+        return await this.assignDeliverable(config)
+
       default:
         return true
     }
@@ -3085,5 +3117,318 @@ private async generateFinancialReport(config: any): Promise<boolean> {
   }
 
   await this.log('generate_financial_report', 'action', 'success', `Reporte financiero generado`)
+  return true
+}
+
+// ============== FASE 4: ACCIONES DE CALIDAD ==============
+
+private async createInspection(config: any): Promise<boolean> {
+  const { projectId, ordenId, tipo, fechaProgramada } = config
+
+  const inspection = await prisma.qualityCheck.create({
+    data: {
+      tenantId: this.context.tenantId,
+      projectId: projectId || this.context.projectId,
+      ordenId: ordenId || this.context.orderId,
+      tipo: tipo || 'final',
+      estado: 'pendiente',
+      fechaInspeccion: fechaProgramada || new Date(),
+      inspectorId: this.context.userId || 'system',
+    }
+  })
+
+  await this.log('create_inspection', 'action', 'success', `Inspección creada: ${inspection.id}`)
+  return true
+}
+
+private async registerNonConformity(config: any): Promise<boolean> {
+  const { projectId, ordenId, tipo, gravedad, causa, descripcion } = config
+
+  const nc = await prisma.nonConformity.create({
+    data: {
+      tenantId: this.context.tenantId,
+      projectId: projectId || this.context.projectId,
+      ordenId: ordenId || this.context.orderId,
+      tipo: tipo || 'producto',
+      gravedad: gravedad || 'media',
+      causa: causa || 'Por determinar',
+      descripcion: descripcion || 'No conformidad registrada automáticamente',
+      estado: 'abierta',
+      fechaDeteccion: new Date(),
+    }
+  })
+
+  const { notifyByTelegram } = await import('@/lib/skills/notification-layer')
+  const context = createSystemContext(this.context.tenantId)
+  
+  notifyByTelegram(
+    `⚠️ *Nueva No Conformidad*\n\n📋 *NC:* ${nc.id}\n🔴 *Gravedad:* ${gravedad || 'media'}\n📝 *Causa:* ${causa || 'Por determinar'}`,
+    context
+  ).catch(() => {})
+
+  await this.log('register_nc', 'action', 'success', `No conformidad registrada: ${nc.id}`)
+  return true
+}
+
+private async closeNonConformity(config: any): Promise<boolean> {
+  const { ncId, solucion, evidencia } = config
+
+  await prisma.nonConformity.update({
+    where: { id: ncId || config.nonConformityId },
+    data: {
+      estado: 'cerrada',
+      solucion: solucion,
+      evidencia: evidencia,
+      fechaCierre: new Date(),
+    }
+  })
+
+  await this.log('close_nc', 'action', 'success', `No conformidad cerrada`)
+  return true
+}
+
+private async notifyQualityAlert(config: any): Promise<boolean> {
+  const { tipoAlerta, mensaje, severity } = config
+
+  const { notifyByTelegram, notifyByEmail } = await import('@/lib/skills/notification-layer')
+  const context = createSystemContext(this.context.tenantId)
+
+  const message = `🚨 *Alerta de Calidad*\n\n📊 *Tipo:* ${tipoAlerta || 'general'}\n📝 *Mensaje:* ${mensaje || this.context.mensaje || 'Alerta de calidad'}\n⚠️ *Severidad:* ${severity || this.context.severity || 'medium'}`
+
+  notifyByTelegram(message, context).catch(() => {})
+
+  if (config.enviarEmail && this.context.userEmail) {
+    notifyByEmail(this.context.userEmail, 'Alerta de Calidad', message, context).catch(() => {})
+  }
+
+  await this.log('notify_quality_alert', 'action', 'success', `Alerta de calidad enviada`)
+  return true
+}
+
+private async generateQualityReport(config: any): Promise<boolean> {
+  const { projectId, tipo, fechaInicio, fechaFin } = config
+
+  const checks = await prisma.qualityCheck.findMany({
+    where: {
+      tenantId: this.context.tenantId,
+      projectId: projectId || this.context.projectId,
+      ...(fechaInicio && fechaFin && {
+        fechaInspeccion: { gte: fechaInicio, lte: fechaFin }
+      })
+    }
+  })
+
+  const total = checks.length
+  const aprobadas = checks.filter(c => c.resultado === 'aprobado').length
+  const rechazadas = checks.filter(c => c.resultado === 'rechazado').length
+
+  const { notifyByTelegram } = await import('@/lib/skills/notification-layer')
+  const context = createSystemContext(this.context.tenantId)
+
+  notifyByTelegram(
+    `📊 *Informe de Calidad*\n\n✅ *Aprobadas:* ${aprobadas}/${total}\n❌ *Rechazadas:* ${rechazadas}/${total}\n📈 *Tasa:* ${total > 0 ? ((aprobadas / total) * 100).toFixed(1) : 0}%`,
+    context
+  ).catch(() => {})
+
+  await this.log('generate_quality_report', 'action', 'success', `Informe de calidad generado`)
+  return true
+}
+
+private async scheduleCalibration(config: any): Promise<boolean> {
+  const { equipoId, fechaProgramada, periodicidad } = config
+
+  await prisma.calibrationSchedule.create({
+    data: {
+      tenantId: this.context.tenantId,
+      equipoId: equipoId,
+      fechaProgramada: fechaProgramada || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      periodicidad: periodicidad || 'mensual',
+      estado: 'programada',
+    }
+  })
+
+  await this.log('schedule_calibration', 'action', 'success', `Calibración programada`)
+  return true
+}
+
+// ============== FASE 4: ACCIONES DE PROYECTOS ==============
+
+private async createProject(config: any): Promise<boolean> {
+  const { nombre, descripcion, fechaInicio, fechaFin, managerId } = config
+
+  const project = await prisma.project.create({
+    data: {
+      tenantId: this.context.tenantId,
+      nombre: nombre || `Proyecto ${new Date().toISOString()}`,
+      descripcion: descripcion,
+      startDate: fechaInicio || new Date(),
+      endDate: fechaFin,
+      status: 'active',
+      progress: 0,
+      leadId: this.context.leadId,
+      budget: config.presupuesto || 0,
+    }
+  })
+
+  const { eventBus, EVENTS } = await import('@/lib/skills/event-bus')
+  eventBus.emitEvent(EVENTS.PROJECT_STARTED, {
+    tenantId: this.context.tenantId,
+    timestamp: new Date(),
+    source: 'automation',
+    projectId: project.id,
+    projectNombre: project.nombre,
+    fechaInicio: project.startDate,
+    fechaFinEstimada: project.endDate,
+    managerId: managerId || this.context.userId,
+  })
+
+  await this.log('create_project', 'action', 'success', `Proyecto creado: ${project.nombre}`)
+  return true
+}
+
+private async notifyProjectTeam(config: any): Promise<boolean> {
+  const { projectId, mensaje } = config
+  const targetProjectId = projectId || this.context.projectId
+
+  const project = await prisma.project.findUnique({
+    where: { id: targetProjectId },
+    include: { members: true }
+  })
+
+  const { notifyByTelegram } = await import('@/lib/skills/notification-layer')
+  const context = createSystemContext(this.context.tenantId)
+
+  const message = mensaje || `📢 *Actualización de Proyecto*\n\n📁 *Proyecto:* ${project?.nombre || 'N/A'}\n💬 *Nuevo hito alcanzado*`
+
+  for (const member of project?.members || []) {
+    notifyByTelegram(message, { ...context, userId: member.id }).catch(() => {})
+  }
+
+  await this.log('notify_project_team', 'action', 'success', `Equipo del proyecto notificado`)
+  return true
+}
+
+private async updateProgress(config: any): Promise<boolean> {
+  const { projectId, progreso, estado } = config
+  const targetProjectId = projectId || this.context.projectId
+
+  await prisma.project.update({
+    where: { id: targetProjectId },
+    data: {
+      progress: progreso || 50,
+      status: estado,
+    }
+  })
+
+  await this.log('update_progress', 'action', 'success', `Progreso actualizado: ${progreso || 50}%`)
+  return true
+}
+
+private async createMilestone(config: any): Promise<boolean> {
+  const { projectId, nombre, descripcion, fechaVencimiento, esCritico } = config
+  const targetProjectId = projectId || this.context.projectId
+
+  const milestone = await prisma.projectMilestone.create({
+    data: {
+      tenantId: this.context.tenantId,
+      projectId: targetProjectId,
+      nombre: nombre || `Hito ${new Date().toISOString()}`,
+      descripcion: descripcion,
+      dueDate: fechaVencimiento,
+      status: 'pending',
+      isCritical: esCritico || false,
+    }
+  })
+
+  await this.log('create_milestone', 'action', 'success', `Milestone creado: ${milestone.nombre}`)
+  return true
+}
+
+private async notifyMilestone(config: any): Promise<boolean> {
+  const { milestoneId, tipo } = config
+
+  const milestone = milestoneId ? await prisma.projectMilestone.findUnique({ where: { id: milestoneId } }) : null
+
+  const { notifyByTelegram } = await import('@/lib/skills/notification-layer')
+  const context = createSystemContext(this.context.tenantId)
+
+  const message = tipo === 'completado' 
+    ? `🎉 *Milestone Completado*\n\n📋 *Hito:* ${milestone?.nombre || this.context.milestoneNombre}`
+    : `⏰ *Milestone Próximo*\n\n📋 *Hito:* ${milestone?.nombre || this.context.milestoneNombre}\n📅 *Vence:* ${milestone?.dueDate?.toLocaleDateString()}`
+
+  notifyByTelegram(message, context).catch(() => {})
+
+  await this.log('notify_milestone', 'action', 'success', `Notificación de milestone enviada`)
+  return true
+}
+
+private async generateProjectReport(config: any): Promise<boolean> {
+  const { projectId, tipo, enviarCliente } = config
+  const targetProjectId = projectId || this.context.projectId
+
+  const project = await prisma.project.findUnique({
+    where: { id: targetProjectId },
+    include: { milestones: true, tasks: true }
+  })
+
+  const milestonesCompletados = project?.milestones.filter(m => m.status === 'completed').length || 0
+  const totalMilestones = project?.milestones.length || 0
+  const progreso = project?.progress || 0
+
+  const { notifyByTelegram, notifyByEmail } = await import('@/lib/skills/notification-layer')
+  const context = createSystemContext(this.context.tenantId)
+
+  const message = `📊 *Reporte de Proyecto*\n\n📁 *Proyecto:* ${project?.nombre}\n📈 *Progreso:* ${progreso}%\n🎯 *Hitos:* ${milestonesCompletados}/${totalMilestones}\n📅 *Inicio:* ${project?.startDate?.toLocaleDateString()}`
+
+  notifyByTelegram(message, context).catch(() => {})
+
+  if (this.context.userEmail) {
+    notifyByEmail(this.context.userEmail, `Reporte: ${project?.nombre}`, message, context).catch(() => {})
+  }
+
+  await this.log('generate_project_report', 'action', 'success', `Reporte de proyecto generado`)
+  return true
+}
+
+private async createProjectTask(config: any): Promise<boolean> {
+  const { projectId, titulo, descripcion, asignarA, fechaVencimiento, prioridad } = config
+  const targetProjectId = projectId || this.context.projectId
+
+  await prisma.task.create({
+    data: {
+      tenantId: this.context.tenantId,
+      title: titulo || `Tarea de proyecto`,
+      description: descripcion,
+      status: 'pending',
+      priority: prioridad || 'medium',
+      dueDate: fechaVencimiento,
+      assignedTo: asignarA || this.context.userId,
+      userId: this.context.userId || 'system',
+      projectId: targetProjectId,
+    }
+  })
+
+  await this.log('create_project_task', 'action', 'success', `Tarea de proyecto creada`)
+  return true
+}
+
+private async assignDeliverable(config: any): Promise<boolean> {
+  const { projectId, milestoneId, nombre, descripcion, asignarA, fechaEntrega } = config
+  const targetProjectId = projectId || this.context.projectId
+
+  await prisma.deliverable.create({
+    data: {
+      tenantId: this.context.tenantId,
+      projectId: targetProjectId,
+      milestoneId: milestoneId || this.context.milestoneId,
+      nombre: nombre || 'Entregable',
+      descripcion: descripcion,
+      estado: 'asignado',
+      fechaEntrega: fechaEntrega || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      asignadoA: asignarA || this.context.userId,
+    }
+  })
+
+  await this.log('assign_deliverable', 'action', 'success', `Entregable asignado`)
   return true
 }

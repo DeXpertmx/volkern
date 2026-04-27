@@ -106,6 +106,24 @@ export const EVENTS = {
   EXPENSE_APPROVED: 'expense_approved',
   PAYROLL_GENERATED: 'payroll_generated',
   BUDGET_ALERT: 'budget_alert',
+
+  // Calidad (Fase 4)
+  INSPECTION_COMPLETED: 'inspection_completed',
+  INSPECTION_FAILED: 'inspection_failed',
+  NON_CONFORMITY_CREATED: 'non_conformity_created',
+  NON_CONFORMITY_RESOLVED: 'non_conformity_resolved',
+  QUALITY_ALERT: 'quality_alert',
+  CALIBRATION_DUE: 'calibration_due',
+
+  // Proyectos (Fase 4)
+  MILESTONE_REACHED: 'milestone_reached',
+  MILESTONE_DUE: 'milestone_due',
+  PROJECT_STARTED: 'project_started',
+  PROJECT_COMPLETED: 'project_completed',
+  PROJECT_DELAYED: 'project_delayed',
+  TASK_ASSIGNED: 'task_assigned',
+  TASK_COMPLETED: 'task_completed',
+  DELIVERABLE_UPLOADED: 'deliverable_uploaded',
 } as const;
 
 export type EventType = typeof EVENTS[keyof typeof EVENTS];
@@ -509,6 +527,84 @@ export interface BudgetAlertEvent extends BaseEventPayload {
   porcentajeUsado: number;
 }
 
+// ============== CALIDAD (Fase 4) ==============
+export interface InspectionCompletedEvent extends BaseEventPayload {
+  inspectionId: string;
+  inspectionNumero: string;
+  resultado: 'aprobado' | 'rechazado' | 'observacion';
+  itemsVerificados: number;
+  itemsFallidos: number;
+  inspectorId?: string;
+}
+
+export interface NonConformityCreatedEvent extends BaseEventPayload {
+  nonConformityId: string;
+  ncNumero: string;
+  tipo: string;
+  gravedad: 'baja' | 'media' | 'alta' | 'critica';
+  causa: string;
+  proyectoId?: string;
+  ordenId?: string;
+}
+
+export interface QualityAlertEvent extends BaseEventPayload {
+  alertType: string;
+  mensaje: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  entityId?: string;
+  entityType?: string;
+}
+
+// ============== PROYECTOS (Fase 4) ==============
+export interface MilestoneReachedEvent extends BaseEventPayload {
+  milestoneId: string;
+  milestoneNombre: string;
+  projectId: string;
+  projectNombre: string;
+  fechaCompletado: Date;
+}
+
+export interface MilestoneDueEvent extends BaseEventPayload {
+  milestoneId: string;
+  milestoneNombre: string;
+  projectId: string;
+  fechaVencimiento: Date;
+  diasRestantes: number;
+}
+
+export interface ProjectStartedEvent extends BaseEventPayload {
+  projectId: string;
+  projectNombre: string;
+  fechaInicio: Date;
+  fechaFinEstimada: Date;
+  managerId?: string;
+}
+
+export interface ProjectCompletedEvent extends BaseEventPayload {
+  projectId: string;
+  projectNombre: string;
+  fechaFin: Date;
+  presupuestoActual: number;
+  presupuestoInicial: number;
+}
+
+export interface ProjectDelayedEvent extends BaseEventPayload {
+  projectId: string;
+  projectNombre: string;
+  diasRetraso: number;
+  nuevaFechaFin: Date;
+  causa: string;
+}
+
+export interface TaskCompletedEvent2 extends BaseEventPayload {
+  taskId: string;
+  taskNombre: string;
+  projectId: string;
+  completedBy: string;
+  tiempoEstimado?: number;
+  tiempoReal?: number;
+}
+
 // ============== MAPA DE EVENTOS ==============
 
 export type EventPayloadMap = {
@@ -571,4 +667,17 @@ export type EventPayloadMap = {
   [EVENTS.EXPENSE_APPROVED]: ExpenseApprovedEvent;
   [EVENTS.PAYROLL_GENERATED]: PayrollGeneratedEvent;
   [EVENTS.BUDGET_ALERT]: BudgetAlertEvent;
+
+  // Calidad (Fase 4)
+  [EVENTS.INSPECTION_COMPLETED]: InspectionCompletedEvent;
+  [EVENTS.NON_CONFORMITY_CREATED]: NonConformityCreatedEvent;
+  [EVENTS.QUALITY_ALERT]: QualityAlertEvent;
+
+  // Proyectos (Fase 4)
+  [EVENTS.MILESTONE_REACHED]: MilestoneReachedEvent;
+  [EVENTS.MILESTONE_DUE]: MilestoneDueEvent;
+  [EVENTS.PROJECT_STARTED]: ProjectStartedEvent;
+  [EVENTS.PROJECT_COMPLETED]: ProjectCompletedEvent;
+  [EVENTS.PROJECT_DELAYED]: ProjectDelayedEvent;
+  [EVENTS.TASK_COMPLETED]: TaskCompletedEvent2;
 };
