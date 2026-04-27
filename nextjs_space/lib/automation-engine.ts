@@ -275,6 +275,40 @@ export class AutomationEngine {
       case 'activar_automatizacion':
         return await this.activateAutomation(config)
 
+      // ============== FASE 1: INVENTARIO ==============
+      case 'notificar_stock':
+        return await this.notifyLowStock(config)
+      case 'actualizar_inventario':
+        return await this.updateInventory(config)
+      case 'crear_orden_compra':
+        return await this.createPurchaseOrder(config)
+      case 'ajustar_stock':
+        return await this.adjustStock(config)
+
+      // ============== FASE 1: PRODUCCIÓN ==============
+      case 'crear_orden_produccion':
+        return await this.createProductionOrder(config)
+      case 'actualizar_estado_orden':
+        return await this.updateProductionOrderStatus(config)
+      case 'notificar_produccion':
+        return await this.notifyProduction(config)
+      case 'registrar_produccion':
+        return await this.registerProduction(config)
+
+      // ============== FASE 1: SOPORTE ==============
+      case 'crear_ticket':
+        return await this.createSupportTicket(config)
+      case 'asignar_ticket':
+        return await this.assignTicket(config)
+      case 'escalar_ticket':
+        return await this.escalateTicket(config)
+      case 'notificar_sla':
+        return await this.notifySLA(config)
+      case 'cerrar_ticket':
+        return await this.closeTicket(config)
+      case 'crear_tarea_desde_ticket':
+        return await this.createTaskFromTicket(config)
+
       default:
         return true
     }
@@ -1996,4 +2030,309 @@ export async function processPaymentReminders() {
 
   console.log(`💳 Total notificaciones de pagos enviadas: ${totalSent}`)
   return totalSent
+}
+
+// ============== FASE 1: ACCIONES DE INVENTARIO ==============
+
+private async notifyLowStock(config: any): Promise<boolean> {
+  const { itemId, itemNombre, cantidadActual, cantidadMinima, almacenNombre } = config
+  const message = `⚠️ *Alerta de Stock Bajo*\n\n📦 *Producto:* ${itemNombre || this.context.itemNombre}\n📊 *Stock Actual:* ${cantidadActual || this.context.cantidadActual}\n📉 *Mínimo:* ${cantidadMinima || this.context.cantidadMinima}\n🏭 *Almacén:* ${almacenNombre || this.context.almacenNombre || 'Principal'}`
+  
+  const { notifyByTelegram, notifyByEmail } = await import('@/lib/skills/notification-layer')
+  const context = createSystemContext(this.context.tenantId)
+  
+  if (config.enviarTelegram) {
+    notifyByTelegram(message, context).catch(() => {})
+  }
+  if (config.enviarEmail && this.context.userEmail) {
+    notifyByEmail(this.context.userEmail, 'Alerta de Stock Bajo', message, context).catch(() => {})
+  }
+  
+  await this.log('notify_low_stock', 'action', 'success', `Notificación de stock bajo enviada para ${itemNombre || this.context.itemNombre}`)
+  return true
+}
+
+private async updateInventory(config: any): Promise<boolean> {
+  const { itemId, cantidad, tipoAjuste, razon } = config
+  const targetItemId = itemId || this.context.itemId
+  
+  if (!targetItemId) {
+    await this.log('update_inventory', 'action', 'error', 'No se especificó el ID del producto')
+    return false
+  }
+
+  const updateData: any = {}
+  if (cantidad) {
+    if (tipoAjuste === 'set') {
+      updateData.cantidad = cantidad
+    } else if (tipoAjuste === 'add') {
+      updateData.cantidad = { increment: cantidad }
+    } else if (tipoAjuste === 'subtract') {
+      updateData.cantidad = { decrement: cantidad }
+    }
+  }
+
+  await prisma.inventarioItem.update({
+    where: { id: targetItemId },
+    data: updateData
+  })
+
+  await this.log('update_inventory', 'action', 'success', `Inventario actualizado: ${cantidad} (${tipoAjuste})`)
+  return true
+}
+
+private async createPurchaseOrder(config: any): Promise<boolean> {
+  const { proveedorId, items, prioridad } = config
+  
+  const orden = await prisma.purchaseOrder.create({
+    data: {
+      tenantId: this.context.tenantId,
+      proveedorId,
+      estado: 'pendiente',
+      prioridad: prioridad || 'normal',
+      items: items || [],
+      fechaEsperada: config.fechaEsperada,
+    }
+  })
+
+  await this.log('create_purchase_order', 'action', 'success', `Orden de compra creada: ${orden.id}`)
+  return true
+}
+
+private async adjustStock(config: any): Promise<boolean> {
+  const { itemId, cantidad, tipo, razon } = config
+  const targetItemId = itemId || this.context.itemId
+  
+  const ajuste = await prisma.stockAdjustment.create({
+    data: {
+      tenantId: this.context.tenantId,
+      itemId: targetItemId,
+      cantidad,
+      tipo: tipo || 'correccion',
+      razon: razon || 'Ajuste automático por automatización',
+      userId: this.context.userId || 'system',
+    }
+  })
+
+  // Actualizar inventario
+  await prisma.inventarioItem.update({
+    where: { id: targetItemId },
+    data: { cantidad: { increment: tipo === 'aumento' ? cantidad : -cantidad } }
+  })
+
+  await this.log('adjust_stock', 'action', 'success', `Stock ajustado: ${cantidad} unidades (${tipo})`)
+  return true
+}
+
+// ============== FASE 1: ACCIONES DE PRODUCCIÓN ==============
+
+private async createProductionOrder(config: any): Promise<boolean> {
+  const { productoId, cantidad, prioridad, bomId } = config
+  const productId = productoId || this.context.productId
+  const qty = cantidad || this.context.cantidad
+
+  const orderNumber = `OP-${Date.now().toString(36).toUpperCase()}`
+
+  const order = await prisma.workOrder.create({
+    data: {
+      tenantId: this.context.tenantId,
+      batchNumber: orderNumber,
+      bomId: bomId || this.context.bomId,
+      productId,
+      cantidadPlanificada: qty,
+      cantidadProducida: 0,
+      estado: 'pendiente',
+      prioridad: prioridad || this.context.prioridad || 'normal',
+      fechaInicioEstimada: config.fechaInicio,
+      fechaFinEstimada: config.fechaFin,
+    }
+  })
+
+  await this.log('create_production_order', 'action', 'success', `Orden de producción creada: ${orderNumber}`)
+  return true
+}
+
+private async updateProductionOrderStatus(config: any): Promise<boolean> {
+  const { orderId, estado } = config
+  const targetOrderId = orderId || this.context.orderId
+
+  await prisma.workOrder.update({
+    where: { id: targetOrderId },
+    data: { 
+      estado,
+      ...(estado === 'en_proceso' ? { fechaInicioReal: new Date() } : {}),
+      ...(estado === 'completada' ? { fechaFinReal: new Date() } : {}),
+    }
+  })
+
+  await this.log('update_production_status', 'action', 'success', `Orden actualizada a: ${estado}`)
+  return true
+}
+
+private async notifyProduction(config: any): Promise<boolean> {
+  const { orderNumber, estado, message } = config
+  const msg = message || `📦 *Actualización de Producción*\n\nOrden: ${orderNumber || this.context.orderNumber}\nEstado: ${estado || 'Actualizado'}\nProducto: ${this.context.productNombre || 'N/A'}`
+  
+  const { notifyByTelegram } = await import('@/lib/skills/notification-layer')
+  const context = createSystemContext(this.context.tenantId)
+  
+  notifyByTelegram(msg, context).catch(() => {})
+  
+  await this.log('notify_production', 'action', 'success', `Notificación de producción enviada`)
+  return true
+}
+
+private async registerProduction(config: any): Promise<boolean> {
+  const { orderId, cantidadProducida, cantidadRechazada, observaciones } = config
+  const targetOrderId = orderId || this.context.orderId
+  const qty = cantidadProducida || this.context.cantidadProducida
+
+  await prisma.workOrder.update({
+    where: { id: targetOrderId },
+    data: {
+      cantidadProducida: qty,
+      cantidadRechazada: cantidadRechazada || 0,
+      estado: 'completada',
+      fechaFinReal: new Date(),
+      observaciones,
+    }
+  })
+
+  await this.log('register_production', 'action', 'success', `Producción registrada: ${qty} unidades`)
+  return true
+}
+
+// ============== FASE 1: ACCIONES DE SOPORTE ==============
+
+private async createSupportTicket(config: any): Promise<boolean> {
+  const { subject, descripcion, prioridad, categoria, asignarA } = config
+  
+  const ticketNumero = `TKT-${Date.now().toString(36).toUpperCase()}`
+  
+  const ticket = await prisma.supportTicket.create({
+    data: {
+      tenantId: this.context.tenantId,
+      subject: subject || this.context.ticketSubject || 'Ticket automático',
+      description: descripcion || 'Creado por automatización',
+      prioridad: prioridad || this.context.ticketPrioridad || 'medium',
+      categoria: categoria,
+      status: 'open',
+      creatorId: this.context.userId || 'system',
+      assignedId: asignarA,
+      entityType: config.entityType || 'lead',
+      entityId: this.context.leadId || this.context.itemId || this.context.orderId,
+    }
+  })
+
+  // Emitir evento de ticket creado
+  const { eventBus, EVENTS } = await import('@/lib/skills/event-bus')
+  eventBus.emitEvent(EVENTS.SUPPORT_TICKET_CREATED, {
+    tenantId: this.context.tenantId,
+    timestamp: new Date(),
+    source: 'automation',
+    ticketId: ticket.id,
+    ticketNumero,
+    subject: ticket.subject,
+    prioridad: ticket.prioridad,
+    categoria: ticket.categoria,
+  })
+
+  await this.log('create_ticket', 'action', 'success', `Ticket creado: ${ticketNumero}`)
+  return true
+}
+
+private async assignTicket(config: any): Promise<boolean> {
+  const { ticketId, assigneeId } = config
+  const targetTicketId = ticketId || this.context.ticketId
+
+  await prisma.supportTicket.update({
+    where: { id: targetTicketId },
+    data: { assignedId: assigneeId || this.context.userId }
+  })
+
+  await this.log('assign_ticket', 'action', 'success', `Ticket asignado a usuario`)
+  return true
+}
+
+private async escalateTicket(config: any): Promise<boolean> {
+  const { ticketId, nivel, razon } = config
+  const targetTicketId = ticketId || this.context.ticketId
+
+  await prisma.supportTicket.update({
+    where: { id: targetTicketId },
+    data: { 
+      escalatedTo: nivel || 'supervisor',
+      priority: 'high'
+    }
+  })
+
+  const { notifyByTelegram } = await import('@/lib/skills/notification-layer')
+  const context = createSystemContext(this.context.tenantId)
+  
+  notifyByTelegram(
+    `🚨 *Ticket Escalado*\n\nTicket: ${this.context.ticketNumero}\nNivel: ${nivel || 'supervisor'}\nRazón: ${razon || 'SLA vencido'}`,
+    context
+  ).catch(() => {})
+
+  await this.log('escalate_ticket', 'action', 'success', `Ticket escalado a ${nivel || 'supervisor'}`)
+  return true
+}
+
+private async notifySLA(config: any): Promise<boolean> {
+  const { ticketId, tiempoRestante, message } = config
+  const ticketNum = this.context.ticketNumero || ticketId
+  
+  const msg = message || `⏰ *Alerta SLA*\n\nTicket: ${ticketNum}\nTiempo restante: ${tiempoRestante || this.context.tiempoRestanteMinutos} minutos\nPrioridad: ${this.context.ticketPrioridad}`
+  
+  const { notifyByTelegram, notifyByEmail } = await import('@/lib/skills/notification-layer')
+  const context = createSystemContext(this.context.tenantId)
+  
+  notifyByTelegram(msg, context).catch(() => {})
+  
+  if (config.enviarEmail && this.context.userEmail) {
+    notifyByEmail(this.context.userEmail, 'Alerta SLA', msg, context).catch(() => {})
+  }
+
+  await this.log('notify_sla', 'action', 'success', `Notificación SLA enviada`)
+  return true
+}
+
+private async closeTicket(config: any): Promise<boolean> {
+  const { ticketId, resolucion } = config
+  const targetTicketId = ticketId || this.context.ticketId
+
+  await prisma.supportTicket.update({
+    where: { id: targetTicketId },
+    data: { 
+      status: 'closed',
+      resolvedAt: new Date(),
+      description: resolucion ? `${resolucion}\n\n[Automatización: cerrado automáticamente]` : '[Automatización: cerrado automáticamente]'
+    }
+  })
+
+  await this.log('close_ticket', 'action', 'success', `Ticket cerrado`)
+  return true
+}
+
+private async createTaskFromTicket(config: any): Promise<boolean> {
+  const { ticketId, titulo, descripcion, asignarA, fechaVencimiento } = config
+  const targetTicketId = ticketId || this.context.ticketId
+
+  const ticket = await prisma.supportTicket.findUnique({ where: { id: targetTicketId } })
+
+  await prisma.task.create({
+    data: {
+      tenantId: this.context.tenantId,
+      title: titulo || `Seguimiento: ${ticket?.subject || 'Ticket'}`,
+      description: descripcion || `衍生 del ticket ${ticket?.id}`,
+      status: 'pending',
+      priority: ticket?.priority || 'medium',
+      dueDate: fechaVencimiento,
+      assignedTo: asignarA || ticket?.assignedId,
+      userId: this.context.userId || 'system',
+    }
+  })
+
+  await this.log('create_task_from_ticket', 'action', 'success', `Tarea creada desde ticket`)
+  return true
 }

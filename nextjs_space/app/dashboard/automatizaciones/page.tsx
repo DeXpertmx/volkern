@@ -61,14 +61,35 @@ interface AutomationTemplate {
 }
 
 const triggerLabels: Record<string, string> = {
+  // Triggers Originales
   nuevo_lead: 'Nuevo Lead',
   cita_agendada: 'Cita Agendada',
   cita_confirmada: 'Cita Confirmada',
   pago_recibido: 'Pago Recibido',
   lead_sin_respuesta: 'Lead Sin Respuesta',
+  lead_actualizado: 'Lead Actualizado',
+  lead_etiquetado: 'Lead Etiquetado',
+  cita_cancelada: 'Cita Cancelada',
+  pago_fallido: 'Pago Fallido',
+  n8n_workflow_completado: 'Workflow n8n Completado',
+  n8n_workflow_fallido: 'Workflow n8n Fallido',
   estudiante_inscrito: 'Estudiante Inscrito',
   estudiante_completa_curso: 'Estudiante Completa Curso',
   leccion_completada: 'Lección Completada',
+
+  // === FASE 1: INVENTARIO ===
+  stock_bajo: 'Stock Bajo',
+  stock_agotado: 'Stock Agotado',
+  stock_reabastecido: 'Stock Reabastecido',
+
+  // === FASE 1: PRODUCCIÓN ===
+  orden_produccion: 'Orden de Producción',
+  produccion_completada: 'Producción Completada',
+
+  // === FASE 1: SOPORTE ===
+  ticket_creado: 'Ticket Creado',
+  sla_por_vencer: 'SLA por Vencer',
+  sla_incumplido: 'SLA Incumplido',
 }
 
 const categoriaLabels: Record<string, string> = {

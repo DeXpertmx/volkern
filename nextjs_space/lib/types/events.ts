@@ -57,6 +57,24 @@ export const EVENTS = {
   // n8n / Workflows
   WORKFLOW_EXECUTED: 'workflow_executed',
   WORKFLOW_FAILED: 'workflow_failed',
+
+  // Inventario (Fase 1)
+  INVENTORY_LOW_STOCK: 'inventory_low_stock',
+  INVENTORY_OUT_OF_STOCK: 'inventory_out_of_stock',
+  INVENTORY_RESTOCKED: 'inventory_restocked',
+
+  // Producción (Fase 1)
+  PRODUCTION_ORDER_CREATED: 'production_order_created',
+  PRODUCTION_ORDER_STARTED: 'production_order_started',
+  PRODUCTION_ORDER_COMPLETED: 'production_order_completed',
+  PRODUCTION_ORDER_CANCELLED: 'production_order_cancelled',
+
+  // Soporte (Fase 1)
+  SUPPORT_TICKET_CREATED: 'support_ticket_created',
+  SUPPORT_TICKET_ASSIGNED: 'support_ticket_assigned',
+  SUPPORT_TICKET_RESOLVED: 'support_ticket_resolved',
+  SUPPORT_SLA_WARNING: 'support_sla_warning',
+  SUPPORT_SLA_BREACHED: 'support_sla_breached',
 } as const;
 
 export type EventType = typeof EVENTS[keyof typeof EVENTS];
@@ -230,21 +248,82 @@ export interface InvoiceCreatedEvent extends BaseEventPayload {
 }
 
 // Workflows
-export interface WorkflowExecutedEvent extends BaseEventPayload {
-  workflowId: string;
-  workflowName?: string;
-  templateId?: string;
-  executionId: string;
-  result?: Record<string, unknown>;
-  resultado?: Record<string, unknown>;
-}
-
 export interface WorkflowFailedEvent extends BaseEventPayload {
   workflowId: string;
   workflowName?: string;
   templateId?: string;
   executionId?: string;
   error: string;
+}
+
+// ============== INVENTARIO (Fase 1) ==============
+export interface InventoryLowStockEvent extends BaseEventPayload {
+  itemId: string;
+  itemNombre: string;
+  itemSku: string;
+  cantidadActual: number;
+  cantidadMinima: number;
+  almacenId?: string;
+  almacenNombre?: string;
+}
+
+export interface InventoryOutOfStockEvent extends BaseEventPayload {
+  itemId: string;
+  itemNombre: string;
+  itemSku: string;
+  cantidadActual: number;
+  almacenId?: string;
+}
+
+export interface InventoryRestockedEvent extends BaseEventPayload {
+  itemId: string;
+  itemNombre: string;
+  cantidadAnterior: number;
+  cantidadNueva: number;
+  cantidadAgregada: number;
+  almacenId?: string;
+}
+
+// ============== PRODUCCIÓN (Fase 1) ==============
+export interface ProductionOrderCreatedEvent extends BaseEventPayload {
+  orderId: string;
+  orderNumber: string;
+  productId: string;
+  productNombre: string;
+  cantidad: number;
+  prioridad?: string;
+  fechaEstimadaInicio?: Date;
+  fechaEstimadaFin?: Date;
+  bomId?: string;
+}
+
+export interface ProductionOrderCompletedEvent extends BaseEventPayload {
+  orderId: string;
+  orderNumber: string;
+  productId: string;
+  cantidadProducida: number;
+  cantidadRechazada?: number;
+  tiempoTotalHoras?: number;
+}
+
+// ============== SOPORTE (Fase 1) ==============
+export interface SupportTicketCreatedEvent extends BaseEventPayload {
+  ticketId: string;
+  ticketNumero: string;
+  subject: string;
+  prioridad: string;
+  categoria?: string;
+  clienteId?: string;
+  clienteNombre?: string;
+  assigneeId?: string;
+}
+
+export interface SupportSlaWarningEvent extends BaseEventPayload {
+  ticketId: string;
+  ticketNumero: string;
+  slaDueAt: Date;
+  tiempoRestanteMinutos: number;
+  prioridad: string;
 }
 
 // ============== MAPA DE EVENTOS ==============
@@ -271,4 +350,17 @@ export type EventPayloadMap = {
   [EVENTS.INVOICE_CREATED]: InvoiceCreatedEvent;
   [EVENTS.WORKFLOW_EXECUTED]: WorkflowExecutedEvent;
   [EVENTS.WORKFLOW_FAILED]: WorkflowFailedEvent;
+
+  // Inventario (Fase 1)
+  [EVENTS.INVENTORY_LOW_STOCK]: InventoryLowStockEvent;
+  [EVENTS.INVENTORY_OUT_OF_STOCK]: InventoryOutOfStockEvent;
+  [EVENTS.INVENTORY_RESTOCKED]: InventoryRestockedEvent;
+
+  // Producción (Fase 1)
+  [EVENTS.PRODUCTION_ORDER_CREATED]: ProductionOrderCreatedEvent;
+  [EVENTS.PRODUCTION_ORDER_COMPLETED]: ProductionOrderCompletedEvent;
+
+  // Soporte (Fase 1)
+  [EVENTS.SUPPORT_TICKET_CREATED]: SupportTicketCreatedEvent;
+  [EVENTS.SUPPORT_SLA_WARNING]: SupportSlaWarningEvent;
 };

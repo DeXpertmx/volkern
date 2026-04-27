@@ -26,6 +26,10 @@ import type {
   PaymentFailedEvent,
   WorkflowExecutedEvent,
   WorkflowFailedEvent,
+  InventoryLowStockEvent,
+  ProductionOrderCreatedEvent,
+  SupportTicketCreatedEvent,
+  SupportSlaWarningEvent,
 } from '@/lib/types/events';
 
 /**
@@ -50,6 +54,20 @@ const EVENT_TO_TRIGGER_MAP: Record<string, string> = {
   // Workflows externos
   [EVENTS.WORKFLOW_EXECUTED]: 'n8n_workflow_completado',
   [EVENTS.WORKFLOW_FAILED]: 'n8n_workflow_fallido',
+
+  // Inventario (Fase 1)
+  [EVENTS.INVENTORY_LOW_STOCK]: 'stock_bajo',
+  [EVENTS.INVENTORY_OUT_OF_STOCK]: 'stock_agotado',
+  [EVENTS.INVENTORY_RESTOCKED]: 'stock_reabastecido',
+
+  // Producción (Fase 1)
+  [EVENTS.PRODUCTION_ORDER_CREATED]: 'orden_produccion',
+  [EVENTS.PRODUCTION_ORDER_COMPLETED]: 'produccion_completada',
+
+  // Soporte (Fase 1)
+  [EVENTS.SUPPORT_TICKET_CREATED]: 'ticket_creado',
+  [EVENTS.SUPPORT_SLA_WARNING]: 'sla_por_vencer',
+  [EVENTS.SUPPORT_SLA_BREACHED]: 'sla_incumplido',
 };
 
 /**
@@ -192,6 +210,92 @@ function eventToAutomationContext(event: EventType, payload: BaseEventPayload): 
         workflowName: wfPayload.workflowName,
         executionId: wfPayload.executionId,
         error: wfPayload.error,
+      };
+    }
+
+    // === FASE 1: INVENTARIO ===
+    case EVENTS.INVENTORY_LOW_STOCK: {
+      const invPayload = payload as InventoryLowStockEvent;
+      return {
+        ...baseContext,
+        itemId: invPayload.itemId,
+        itemNombre: invPayload.itemNombre,
+        itemSku: invPayload.itemSku,
+        cantidadActual: invPayload.cantidadActual,
+        cantidadMinima: invPayload.cantidadMinima,
+        almacenId: invPayload.almacenId,
+      };
+    }
+
+    case EVENTS.INVENTORY_OUT_OF_STOCK: {
+      const invPayload = payload as InventoryLowStockEvent;
+      return {
+        ...baseContext,
+        itemId: invPayload.itemId,
+        itemNombre: invPayload.itemNombre,
+        itemSku: invPayload.itemSku,
+        cantidadActual: 0,
+      };
+    }
+
+    case EVENTS.INVENTORY_RESTOCKED: {
+      const invPayload = payload as InventoryLowStockEvent;
+      return {
+        ...baseContext,
+        itemId: invPayload.itemId,
+        itemNombre: invPayload.itemNombre,
+        cantidadAgregada: invPayload.cantidadActual,
+      };
+    }
+
+    // === FASE 1: PRODUCCIÓN ===
+    case EVENTS.PRODUCTION_ORDER_CREATED: {
+      const prodPayload = payload as ProductionOrderCreatedEvent;
+      return {
+        ...baseContext,
+        orderId: prodPayload.orderId,
+        orderNumber: prodPayload.orderNumber,
+        productId: prodPayload.productId,
+        productNombre: prodPayload.productNombre,
+        cantidad: prodPayload.cantidad,
+        prioridad: prodPayload.prioridad,
+      };
+    }
+
+    case EVENTS.PRODUCTION_ORDER_COMPLETED: {
+      const prodPayload = payload as ProductionOrderCreatedEvent;
+      return {
+        ...baseContext,
+        orderId: prodPayload.orderId,
+        orderNumber: prodPayload.orderNumber,
+        cantidadProducida: prodPayload.cantidad,
+      };
+    }
+
+    // === FASE 1: SOPORTE ===
+    case EVENTS.SUPPORT_TICKET_CREATED: {
+      const ticketPayload = payload as SupportTicketCreatedEvent;
+      return {
+        ...baseContext,
+        ticketId: ticketPayload.ticketId,
+        ticketNumero: ticketPayload.ticketNumero,
+        ticketSubject: ticketPayload.subject,
+        ticketPrioridad: ticketPayload.prioridad,
+        ticketCategoria: ticketPayload.categoria,
+        clienteId: ticketPayload.clienteId,
+      };
+    }
+
+    case EVENTS.SUPPORT_SLA_WARNING:
+    case EVENTS.SUPPORT_SLA_BREACHED: {
+      const slaPayload = payload as SupportSlaWarningEvent;
+      return {
+        ...baseContext,
+        ticketId: slaPayload.ticketId,
+        ticketNumero: slaPayload.ticketNumero,
+        slaDueAt: slaPayload.slaDueAt,
+        tiempoRestanteMinutos: slaPayload.tiempoRestanteMinutos,
+        ticketPrioridad: slaPayload.prioridad,
       };
     }
 
