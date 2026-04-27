@@ -1699,6 +1699,1258 @@ export class AutomationEngine {
       },
     })
   }
+
+  // ============== FASE 1: ACCIONES DE INVENTARIO ==============
+
+  private async notifyLowStock(config: any): Promise<boolean> {
+    const { itemId, itemNombre, cantidadActual, cantidadMinima, almacenNombre } = config
+    const message = `⚠️ *Alerta de Stock Bajo*\n\n📦 *Producto:* ${itemNombre || this.context.itemNombre}\n📊 *Stock Actual:* ${cantidadActual || this.context.cantidadActual}\n📉 *Mínimo:* ${cantidadMinima || this.context.cantidadMinima}\n🏭 *Almacén:* ${almacenNombre || this.context.almacenNombre || 'Principal'}`
+    
+    const { notifyByTelegram, notifyByEmail } = await import('@/lib/skills/notification-layer')
+    const context = createSystemContext(this.context.tenantId)
+    
+    if (config.enviarTelegram) {
+      notifyByTelegram(message, context).catch(() => {})
+    }
+    if (config.enviarEmail && this.context.userEmail) {
+      notifyByEmail(this.context.userEmail, 'Alerta de Stock Bajo', message, context).catch(() => {})
+    }
+    
+    await this.log('notify_low_stock', 'action', 'success', `Notificación de stock bajo enviada para ${itemNombre || this.context.itemNombre}`)
+    return true
+  }
+
+  private async updateInventory(config: any): Promise<boolean> {
+    const { itemId, cantidad, tipo, motivo } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    const updateData: any = {}
+    if (tipo === 'aumentar') {
+      updateData.cantidad = { increment: cantidad }
+    } else if (tipo === 'disminuir') {
+      updateData.cantidad = { decrement: cantidad }
+    } else if (tipo === 'set') {
+      updateData.cantidad = cantidad
+    }
+    
+    if (motivo) updateData.ultimaActualizacion = motivo
+    
+    await tenantClient.inventarioItem.update({
+      where: { id: itemId || this.context.itemId },
+      data: updateData,
+    })
+    
+    await this.log('update_inventory', 'action', 'success', `Inventario actualizado: ${tipo} ${cantidad}`)
+    return true
+  }
+
+  private async createPurchaseOrder(config: any): Promise<boolean> {
+    const { proveedorId, items, notas } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    const order = await tenantClient.compra.create({
+      data: {
+        tenantId: this.context.tenantId,
+        proveedorId,
+        estado: 'pendiente',
+        notas,
+        fechaEntrega: config.fechaEntrega,
+        items: {
+          create: items.map((item: any) => ({
+            itemId: item.itemId,
+            cantidad: item.cantidad,
+            precioUnitario: item.precio,
+          })),
+        },
+      },
+    })
+    
+    await this.log('create_purchase_order', 'action', 'success', `Orden de compra ${order.id} creada`)
+    return true
+  }
+
+  private async adjustStock(config: any): Promise<boolean> {
+    const { itemId, cantidad, tipo, motivo } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    const adjustment = await tenantClient.inventarioMovimiento.create({
+      data: {
+        tenantId: this.context.tenantId,
+        itemId: itemId || this.context.itemId,
+        tipo: tipo || 'ajuste',
+        cantidad,
+        motivo: motivo || 'Ajuste manual',
+        usuarioId: this.context.userId,
+      },
+    })
+    
+    await this.log('adjust_stock', 'action', 'success', `Ajuste de stock registrado: ${cantidad}`)
+    return true
+  }
+
+  // ============== FASE 2: PRODUCCIÓN ==============
+
+  private async createProductionOrder(config: any): Promise<boolean> {
+    const { productoId, cantidad, prioridad, fechaEntrega } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    const order = await tenantClient.produccionOrden.create({
+      data: {
+        tenantId: this.context.tenantId,
+        productoId,
+        cantidad: cantidad || 1,
+        prioridad: prioridad || 'normal',
+        estado: 'pendiente',
+        fechaInicio: new Date(),
+        fechaEntrega: fechaEntrega,
+      },
+    })
+    
+    await this.log('create_production_order', 'action', 'success', `Orden de producción ${order.id} creada`)
+    return true
+  }
+
+  private async updateProductionOrderStatus(config: any): Promise<boolean> {
+    const { orderId, estado, notas } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    await tenantClient.produccionOrden.update({
+      where: { id: orderId || this.context.productionOrderId },
+      data: {
+        estado,
+        notas,
+        fechaFin: estado === 'completada' ? new Date() : undefined,
+      },
+    })
+    
+    await this.log('update_production_status', 'action', 'success', `Estado de producción actualizado: ${estado}`)
+    return true
+  }
+
+  private async notifyProduction(config: any): Promise<boolean> {
+    const { orderId, message, tipo } = config
+    const { notifyByTelegram } = await import('@/lib/skills/notification-layer')
+    const context = createSystemContext(this.context.tenantId)
+    
+    const msg = message || `📦 *Actualización de Producción*\n\nEstado: ${tipo || 'Actualización'}`
+    notifyByTelegram(msg, context).catch(() => {})
+    
+    await this.log('notify_production', 'action', 'success', 'Notificación de producción enviada')
+    return true
+  }
+
+  private async registerProduction(config: any): Promise<boolean> {
+    const { orderId, cantidadProducida, calidad, notas } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    await tenantClient.produccionRegistro.create({
+      data: {
+        tenantId: this.context.tenantId,
+        ordenId: orderId || this.context.productionOrderId,
+        cantidad: cantidadProducida,
+        calidad,
+        notas,
+        fecha: new Date(),
+      },
+    })
+    
+    await this.log('register_production', 'action', 'success', `Producción registrada: ${cantidadProducida} unidades`)
+    return true
+  }
+
+  // ============== FASE 3: SOPORTE ==============
+
+  private async createSupportTicket(config: any): Promise<boolean> {
+    const { titulo, descripcion, prioridad, categoria } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    const ticket = await tenantClient.soporteTicket.create({
+      data: {
+        tenantId: this.context.tenantId,
+        titulo,
+        descripcion,
+        prioridad: prioridad || 'media',
+        categoria: categoria || 'general',
+        estado: 'abierto',
+        solicitanteId: this.context.leadId || this.context.userId,
+      },
+    })
+    
+    await this.log('create_support_ticket', 'action', 'success', `Ticket ${ticket.id} creado`)
+    return true
+  }
+
+  private async assignTicket(config: any): Promise<boolean> {
+    const { ticketId, asignadoA } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    await tenantClient.soporteTicket.update({
+      where: { id: ticketId || this.context.ticketId },
+      data: {
+        asignadoA,
+        estado: 'asignado',
+      },
+    })
+    
+    await this.log('assign_ticket', 'action', 'success', `Ticket asignado a ${asignadoA}`)
+    return true
+  }
+
+  private async escalateTicket(config: any): Promise<boolean> {
+    const { ticketId, nivel, motivo } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    await tenantClient.soporteTicket.update({
+      where: { id: ticketId || this.context.ticketId },
+      data: {
+        nivelEscalacion: nivel,
+        estado: 'escalado',
+        notas: motivo,
+      },
+    })
+    
+    await this.log('escalate_ticket', 'action', 'success', `Ticket escalado a nivel ${nivel}`)
+    return true
+  }
+
+  private async notifySLA(config: any): Promise<boolean> {
+    const { ticketId, tipoAlerta } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    const ticket = await tenantClient.soporteTicket.findUnique({
+      where: { id: ticketId || this.context.ticketId },
+      include: { asignadoA: true },
+    })
+    
+    if (ticket) {
+      const { notifyByTelegram, notifyByEmail } = await import('@/lib/skills/notification-layer')
+      const context = createSystemContext(this.context.tenantId)
+      const message = `⚠️ *Alerta SLA ${tipoAlerta}*\n\nTicket: ${ticket.titulo}\nAsignado a: ${ticket.asignadoA?.nombre || 'Sin asignar'}`
+      
+      notifyByTelegram(message, context).catch(() => {})
+      if (ticket.asignadoA?.email) {
+        notifyByEmail(ticket.asignadoA.email, 'Alerta SLA', message, context).catch(() => {})
+      }
+    }
+    
+    await this.log('notify_sla', 'action', 'success', 'Alerta SLA enviada')
+    return true
+  }
+
+  private async closeTicket(config: any): Promise<boolean> {
+    const { ticketId, solucion, satisfaccion } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    await tenantClient.soporteTicket.update({
+      where: { id: ticketId || this.context.ticketId },
+      data: {
+        estado: 'cerrado',
+        solucion,
+        satisfaccionCliente: satisfaccion,
+        fechaCierre: new Date(),
+      },
+    })
+    
+    await this.log('close_ticket', 'action', 'success', 'Ticket cerrado')
+    return true
+  }
+
+  private async createTaskFromTicket(config: any): Promise<boolean> {
+    const { ticketId, titulo, asignadoA, fechaVencimiento } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    const ticket = await tenantClient.soporteTicket.findUnique({
+      where: { id: ticketId || this.context.ticketId },
+    })
+    
+    await tenantClient.tarea.create({
+      data: {
+        tenantId: this.context.tenantId,
+        titulo: titulo || `Tarea desde ticket: ${ticket?.titulo}`,
+        descripcion: `Derivado del ticket ${ticketId || this.context.ticketId}`,
+        asignadoA,
+        fechaVencimiento,
+        estado: 'pendiente',
+        prioridad: ticket?.prioridad || 'media',
+      },
+    })
+    
+    await this.log('create_task_from_ticket', 'action', 'success', 'Tarea creada desde ticket')
+    return true
+  }
+
+  // ============== FASE 4: MARKETING ==============
+
+  private async createCampaign(config: any): Promise<boolean> {
+    const { nombre, tipo, fechaInicio, fechaFin, presupuesto } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    const campaign = await tenantClient.campana.create({
+      data: {
+        tenantId: this.context.tenantId,
+        nombre,
+        tipo: tipo || 'email',
+        estado: 'borrador',
+        fechaInicio,
+        fechaFin,
+        presupuesto,
+      },
+    })
+    
+    await this.log('create_campaign', 'action', 'success', `Campaña ${campaign.id} creada`)
+    return true
+  }
+
+  private async addContactToList(config: any): Promise<boolean> {
+    const { listaId, leadId } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    await tenantClient.listaContacto.create({
+      data: {
+        tenantId: this.context.tenantId,
+        listaId,
+        leadId: leadId || this.context.leadId,
+      },
+    })
+    
+    await this.log('add_contact_to_list', 'action', 'success', 'Contacto agregado a lista')
+    return true
+  }
+
+  private async removeContactFromList(config: any): Promise<boolean> {
+    const { listaId, leadId } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    await tenantClient.listaContacto.deleteMany({
+      where: {
+        listaId,
+        leadId: leadId || this.context.leadId,
+      },
+    })
+    
+    await this.log('remove_contact_from_list', 'action', 'success', 'Contacto removido de lista')
+    return true
+  }
+
+  private async segmentAudience(config: any): Promise<boolean> {
+    const { nombre, criterios } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    let whereClause: any = { tenantId: this.context.tenantId }
+    
+    if (criterios?.etiquetas?.length) {
+      whereClause.etiquetas = { hasSome: criterios.etiquetas }
+    }
+    if (criterios?.origen) {
+      whereClause.origen = criterios.origen
+    }
+    if (criterios?.fechaCreacionDespues) {
+      whereClause.createdAt = { gte: new Date(criterios.fechaCreacionDespues) }
+    }
+    
+    const leads = await tenantClient.lead.findMany({ where: whereClause, select: { id: true } })
+    
+    const lista = await tenantClient.lista.create({
+      data: {
+        tenantId: this.context.tenantId,
+        nombre,
+        tipo: 'segmento',
+        criterio: JSON.stringify(criterios),
+      },
+    })
+    
+    await tenantClient.listaContacto.createMany({
+      data: leads.map(l => ({
+        tenantId: this.context.tenantId,
+        listaId: lista.id,
+        leadId: l.id,
+      })),
+    })
+    
+    await this.log('segment_audience', 'action', 'success', `Segmento creado con ${leads.length} contactos`)
+    return true
+  }
+
+  private async scheduleSocialPost(config: any): Promise<boolean> {
+    const { plataforma, contenido, fechaPublicacion, medios } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    await tenantClient.publicacionProgramada.create({
+      data: {
+        tenantId: this.context.tenantId,
+        plataforma,
+        contenido,
+        fechaPublicacion: fechaPublicacion || new Date(),
+        estado: 'programada',
+        medios: medios || [],
+      },
+    })
+    
+    await this.log('schedule_social_post', 'action', 'success', `Publicación programada para ${plataforma}`)
+    return true
+  }
+
+  private async publishSocialPost(config: any): Promise<boolean> {
+    const { publicacionId } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    await tenantClient.publicacionProgramada.update({
+      where: { id: publicacionId || this.context.publicacionId },
+      data: {
+        estado: 'publicada',
+        fechaPublicacion: new Date(),
+      },
+    })
+    
+    await this.log('publish_social_post', 'action', 'success', 'Publicación social publicada')
+    return true
+  }
+
+  private async sendFollowUp(config: any): Promise<boolean> {
+    const { leadId, tipo, templateId } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    const lead = await tenantClient.lead.findUnique({
+      where: { id: leadId || this.context.leadId },
+    })
+    
+    if (lead?.email) {
+      const { sendEmail } = await import('@/lib/resend-email')
+      const subject = tipo === 'bienvenida' ? '¡Bienvenido!' : 'Seguimiento'
+      const body = templateId || 'Gracias por tu interés. Te contactaremos pronto.'
+      
+      await sendEmail(lead.email, subject, body, this.context.tenantId)
+    }
+    
+    await this.log('send_follow_up', 'action', 'success', `Follow-up enviado al lead`)
+    return true
+  }
+
+  private async updateNurturing(config: any): Promise<boolean> {
+    const { leadId, etapa, diasEnEtapa } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    await tenantClient.lead.update({
+      where: { id: leadId || this.context.leadId },
+      data: {
+        etapaNurturing: etapa,
+        diasEnEtapa: diasEnEtapa || 0,
+      },
+    })
+    
+    await this.log('update_nurturing', 'action', 'success', `Etapa de nurturing actualizada: ${etapa}`)
+    return true
+  }
+
+  private async calculateEngagement(config: any): Promise<boolean> {
+    const { leadId, periodo } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    const startDate = new Date()
+    startDate.setDate(startDate.getDate() - (periodo || 30))
+    
+    const actividades = await tenantClient.actividad.count({
+      where: {
+        leadId: leadId || this.context.leadId,
+        createdAt: { gte: startDate },
+      },
+    })
+    
+    const engagement = Math.min(100, actividades * 10)
+    
+    await tenantClient.lead.update({
+      where: { id: leadId || this.context.leadId },
+      data: { puntuacionEngagement: engagement },
+    })
+    
+    await this.log('calculate_engagement', 'action', 'success', `Engagement calculado: ${engagement}%`)
+    return true
+  }
+
+  private async generateCampaignReport(config: any): Promise<boolean> {
+    const { campaignId, tipoReporte } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    const campaign = await tenantClient.campana.findUnique({
+      where: { id: campaignId || this.context.campaignId },
+      include: { envios: true },
+    })
+    
+    const totalEnviados = campaign?.envios.length || 0
+    const abiertos = campaign?.envios.filter((e: any) => e.abierto).length || 0
+    const clicks = campaign?.envios.filter((e: any) => e.clic).length || 0
+    
+    const reporte = {
+      campaignId: campaign?.id,
+      nombre: campaign?.nombre,
+      totalEnviados,
+      tasaApertura: totalEnviados > 0 ? (abiertos / totalEnviados) * 100 : 0,
+      tasaClics: totalEnviados > 0 ? (clicks / totalEnviados) * 100 : 0,
+      fecha: new Date(),
+    }
+    
+    await tenantClient.reporteCampana.create({
+      data: {
+        tenantId: this.context.tenantId,
+        campanaId: campaign?.id,
+        tipo: tipoReporte || 'resumen',
+        datos: JSON.stringify(reporte),
+      },
+    })
+    
+    await this.log('generate_campaign_report', 'action', 'success', 'Reporte de campaña generado')
+    return true
+  }
+
+  private async sendMarketingEmail(config: any): Promise<boolean> {
+    const { leadId, templateId, asunto, contenido } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    const lead = await tenantClient.lead.findUnique({
+      where: { id: leadId || this.context.leadId },
+    })
+    
+    if (lead?.email) {
+      const { sendEmail } = await import('@/lib/resend-email')
+      await sendEmail(lead.email, asunto || 'Información', contenido || 'Contenido del email marketing', this.context.tenantId)
+      
+      await tenantClient.campanaEnvio.create({
+        data: {
+          tenantId: this.context.tenantId,
+          campanaId: this.context.campaignId,
+          leadId: lead.id,
+          estado: 'enviado',
+          fechaEnvio: new Date(),
+        },
+      })
+    }
+    
+    await this.log('send_marketing_email', 'action', 'success', 'Email marketing enviado')
+    return true
+  }
+
+  private async createEmailSequence(config: any): Promise<boolean> {
+    const { nombre, emails, intervaloDias } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    const secuencia = await tenantClient.secuenciaEmail.create({
+      data: {
+        tenantId: this.context.tenantId,
+        nombre,
+        intervaloDias: intervaloDias || 1,
+        estado: 'activa',
+        pasos: {
+          create: emails.map((email: any, index: number) => ({
+            orden: index + 1,
+            asunto: email.asunto,
+            contenido: email.contenido,
+            diasDespues: index * (intervaloDias || 1),
+          })),
+        },
+      },
+    })
+    
+    await this.log('create_email_sequence', 'action', 'success', `Secuencia de email "${nombre}" creada`)
+    return true
+  }
+
+  private async pauseEmailSequence(config: any): Promise<boolean> {
+    const { secuenciaId } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    await tenantClient.secuenciaEmail.update({
+      where: { id: secuenciaId || this.context.secuenciaId },
+      data: { estado: 'pausada' },
+    })
+    
+    await this.log('pause_email_sequence', 'action', 'success', 'Secuencia de email pausada')
+    return true
+  }
+
+  // ============== ACADEMIA / LMS ==============
+
+  private async sendOnboarding(config: any): Promise<boolean> {
+    const { estudianteId, cursoId } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    const estudiante = await tenantClient.estudiante.findUnique({
+      where: { id: estudianteId || this.context.estudianteId },
+      include: { usuario: true },
+    })
+    
+    if (estudiante?.usuario?.email) {
+      const { sendEmail } = await import('@/lib/resend-email')
+      const mensaje = `¡Bienvenido al curso! Estamos emocionados de tenerte. Comienza tu viaje de aprendizaje hoy.`
+      await sendEmail(estudiante.usuario.email, '¡Bienvenido a tu nuevo curso!', mensaje, this.context.tenantId)
+    }
+    
+    await this.log('send_onboarding', 'action', 'success', 'Onboarding de estudiante enviado')
+    return true
+  }
+
+  private async createEvaluation(config: any): Promise<boolean> {
+    const { estudianteId, cursoId, tipo, titulo } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    await tenantClient.evaluacion.create({
+      data: {
+        tenantId: this.context.tenantId,
+        estudianteId: estudianteId || this.context.estudianteId,
+        cursoId: cursoId || this.context.cursoId,
+        tipo: tipo || 'examen',
+        titulo: titulo || 'Evaluación',
+        estado: 'pendiente',
+      },
+    })
+    
+    await this.log('create_evaluation', 'action', 'success', 'Evaluación creada')
+    return true
+  }
+
+  private async sendSurvey(config: any): Promise<boolean> {
+    const { inscripcionId, tipoEncuesta } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    const inscripcion = await tenantClient.inscripcion.findUnique({
+      where: { id: inscripcionId || this.context.inscripcionId },
+      include: { estudiante: { include: { usuario: true } } },
+    })
+    
+    if (inscripcion?.estudiante?.usuario?.email) {
+      const { sendEmail } = await import('@/lib/resend-email')
+      const subject = tipoEncuesta === 'satisfaccion' ? 'Encuesta de Satisfacción' : 'Evaluación del Curso'
+      const body = 'Tu opinión es importante. Por favor, toma unos minutos para completar esta encuesta.'
+      await sendEmail(inscripcion.estudiante.usuario.email, subject, body, this.context.tenantId)
+    }
+    
+    await this.log('send_survey', 'action', 'success', 'Encuesta enviada')
+    return true
+  }
+
+  private async registerTraining(config: any): Promise<boolean> {
+    const { estudianteId, cursoId, tipoParticipacion } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    await tenantClient.registroCapacitacion.create({
+      data: {
+        tenantId: this.context.tenantId,
+        estudianteId: estudianteId || this.context.estudianteId,
+        cursoId: cursoId || this.context.cursoId,
+        tipo: tipoParticipacion || 'presencial',
+        fecha: new Date(),
+        asistencia: true,
+      },
+    })
+    
+    await this.log('register_training', 'action', 'success', 'Capacitación registrada')
+    return true
+  }
+
+  private async notifyCertification(config: any): Promise<boolean> {
+    const { estudianteId, cursoId } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    const inscripcion = await tenantClient.inscripcion.findFirst({
+      where: {
+        estudianteId: estudianteId || this.context.estudianteId,
+        cursoId: cursoId || this.context.cursoId,
+        estado: 'completada',
+      },
+    })
+    
+    if (inscripcion) {
+      const { notifyByTelegram, sendEmail } = await import('@/lib/skills/notification-layer')
+      const context = createSystemContext(this.context.tenantId)
+      
+      const message = `🎓 *¡Felicitaciones!*\n\nHas completado el curso y puedes descargar tu certificado.`
+      notifyByTelegram(message, context).catch(() => {})
+      
+      const estudiante = await tenantClient.estudiante.findUnique({
+        where: { id: estudianteId || this.context.estudianteId },
+        include: { usuario: true },
+      })
+      
+      if (estudiante?.usuario?.email) {
+        await sendEmail(estudiante.usuario.email, '¡Felicidades por completar el curso!', message, this.context.tenantId)
+      }
+    }
+    
+    await this.log('notify_certification', 'action', 'success', 'Notificación de certificación enviada')
+    return true
+  }
+
+  // ============== RECURSOS HUMANOS ==============
+
+  private async updateEmployee(config: any): Promise<boolean> {
+    const { employeeId, datos } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    await tenantClient.empleado.update({
+      where: { id: employeeId || this.context.employeeId },
+      data: datos,
+    })
+    
+    await this.log('update_employee', 'action', 'success', 'Datos de empleado actualizados')
+    return true
+  }
+
+  private async assignRole(config: any): Promise<boolean> {
+    const { employeeId, rolId } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    await tenantClient.empleadoRol.create({
+      data: {
+        tenantId: this.context.tenantId,
+        empleadoId: employeeId || this.context.employeeId,
+        rolId,
+        estado: 'activo',
+      },
+    })
+    
+    await this.log('assign_role', 'action', 'success', 'Rol asignado al empleado')
+    return true
+  }
+
+  // ============== FINANZAS ==============
+
+  private async generateInvoice(config: any): Promise<boolean> {
+    const { invoiceId, tipo } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    const invoice = await tenantClient.factura.findUnique({
+      where: { id: invoiceId || this.context.invoiceId },
+    })
+    
+    if (invoice && tipo === 'pdf') {
+      const { InvoicingService } = await import('@/lib/invoicing-service')
+      const invoicingService = new InvoicingService(this.context.tenantId)
+      await invoicingService.generarPDF(invoice.id)
+    }
+    
+    await this.log('generate_invoice', 'action', 'success', `Factura ${invoice?.id} generada`)
+    return true
+  }
+
+  private async registerExpense(config: any): Promise<boolean> {
+    const { categoria, monto, descripcion, fecha } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    await tenantClient.gasto.create({
+      data: {
+        tenantId: this.context.tenantId,
+        categoria,
+        monto,
+        descripcion,
+        fecha: fecha || new Date(),
+        estado: 'pendiente',
+        usuarioId: this.context.userId,
+      },
+    })
+    
+    await this.log('register_expense', 'action', 'success', `Gasto registrado: ${monto}`)
+    return true
+  }
+
+  private async approveExpense(config: any): Promise<boolean> {
+    const { expenseId, approve } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    await tenantClient.gasto.update({
+      where: { id: expenseId || this.context.expenseId },
+      data: {
+        estado: approve ? 'aprobado' : 'rechazado',
+        fechaAprobacion: new Date(),
+        aprobadorId: this.context.userId,
+      },
+    })
+    
+    await this.log('approve_expense', 'action', 'success', `Gasto ${approve ? 'aprobado' : 'rechazado'}`)
+    return true
+  }
+
+  private async rejectExpense(config: any): Promise<boolean> {
+    return this.approveExpense({ ...config, approve: false })
+  }
+
+  private async notifyPayment(config: any): Promise<boolean> {
+    const { paymentId, tipoNotificacion } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    const pago = await tenantClient.pago.findUnique({
+      where: { id: paymentId || this.context.paymentId },
+      include: { contrato: { include: { lead: true } } },
+    })
+    
+    if (pago) {
+      const { notifyByTelegram } = await import('@/lib/skills/notification-layer')
+      const context = createSystemContext(this.context.tenantId)
+      
+      const message = tipoNotificacion === 'recibo' 
+        ? `💳 *Recibo de Pago*\n\nMonto: ${pago.monto} ${pago.moneda}\nConcepto: ${pago.concepto}`
+        : `✅ *Pago Confirmado*\n\nMonto: ${pago.monto} ${pago.moneda}`
+      
+      notifyByTelegram(message, context).catch(() => {})
+    }
+    
+    await this.log('notify_payment', 'action', 'success', 'Notificación de pago enviada')
+    return true
+  }
+
+  private async createPayroll(config: any): Promise<boolean> {
+    const { periodoInicio, periodoFin, empleados } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    const nomina = await tenantClient.nomina.create({
+      data: {
+        tenantId: this.context.tenantId,
+        periodoInicio,
+        periodoFin,
+        estado: 'borrador',
+        detalles: {
+          create: empleados.map((emp: any) => ({
+            empleadoId: emp.employeeId,
+            diasTrabajados: emp.dias || 30,
+            sueldoBase: emp.sueldo,
+            bonificaciones: emp.bonificaciones || 0,
+            deducciones: emp.deducciones || 0,
+          })),
+        },
+      },
+    })
+    
+    await this.log('create_payroll', 'action', 'success', `Nómina ${nomina.id} creada`)
+    return true
+  }
+
+  private async notifyInvoiceOverdue(config: any): Promise<boolean> {
+    const { invoiceId, diasVencido } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    const factura = await tenantClient.factura.findUnique({
+      where: { id: invoiceId || this.context.invoiceId },
+      include: { cliente: true },
+    })
+    
+    if (factura?.cliente?.email) {
+      const { sendEmail } = await import('@/lib/resend-email')
+      const subject = `Factura vencida - ${diasVencido} días`
+      const body = `Tu factura #${factura.numero} está vencida. Por favor, regulariza tu pago.`
+      await sendEmail(factura.cliente.email, subject, body, this.context.tenantId)
+    }
+    
+    await this.log('notify_invoice_overdue', 'action', 'success', 'Notificación de factura vencida enviada')
+    return true
+  }
+
+  private async sendPaymentReminder(config: any): Promise<boolean> {
+    const { paymentId, diasAntes } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    const pago = await tenantClient.pago.findUnique({
+      where: { id: paymentId || this.context.paymentId },
+      include: { contrato: { include: { lead: true } } },
+    })
+    
+    if (pago?.contrato?.lead?.email) {
+      const { sendEmail } = await import('@/lib/resend-email')
+      const subject = `Recordatorio de pago - Vence en ${diasAntes} días`
+      const body = `Te recordamos que tienes un pago pendiente de ${pago.monto} ${pago.moneda}.`
+      await sendEmail(pago.contrato.lead.email, subject, body, this.context.tenantId)
+    }
+    
+    await this.log('send_payment_reminder', 'action', 'success', 'Recordatorio de pago enviado')
+    return true
+  }
+
+  private async adjustBudget(config: any): Promise<boolean> {
+    const { budgetId, monto, tipo } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    const presupuesto = await presupuesto.findUnique({
+      where: { id: budgetId || this.context.budgetId },
+    })
+    
+    const nuevoMonto = tipo === 'aumentar' 
+      ? (presupuesto?.monto || 0) + monto
+      : (presupuesto?.monto || 0) - monto
+    
+    await tenantClient.presupuesto.update({
+      where: { id: budgetId || this.context.budgetId },
+      data: { monto: nuevoMonto },
+    })
+    
+    await this.log('adjust_budget', 'action', 'success', `Presupuesto ajustado: ${tipo} ${monto}`)
+    return true
+  }
+
+  private async generateFinancialReport(config: any): Promise<boolean> {
+    const { tipo, periodoInicio, periodoFin } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    const ingresos = await tenantClient.pago.aggregate({
+      where: {
+        tenantId: this.context.tenantId,
+        estado: 'completado',
+        fechaPago: { gte: periodoInicio, lte: periodoFin },
+      },
+      _sum: { monto: true },
+    })
+    
+    const gastos = await tenantClient.gasto.aggregate({
+      where: {
+        tenantId: this.context.tenantId,
+        fecha: { gte: periodoInicio, lte: periodoFin },
+      },
+      _sum: { monto: true },
+    })
+    
+    const reporte = {
+      periodo: { inicio: periodoInicio, fin: periodoFin },
+      ingresos: ingresos._sum.monto || 0,
+      gastos: gastos._sum.monto || 0,
+      balance: (ingresos._sum.monto || 0) - (gastos._sum.monto || 0),
+      tipo,
+      fechaGeneracion: new Date(),
+    }
+    
+    await tenantClient.reporteFinanciero.create({
+      data: {
+        tenantId: this.context.tenantId,
+        tipo,
+        periodoInicio,
+        periodoFin,
+        datos: JSON.stringify(reporte),
+      },
+    })
+    
+    await this.log('generate_financial_report', 'action', 'success', 'Reporte financiero generado')
+    return true
+  }
+
+  // ============== CALIDAD ==============
+
+  private async createInspection(config: any): Promise<boolean> {
+    const { area, tipo, criterios } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    await tenantClient.inspeccion.create({
+      data: {
+        tenantId: this.context.tenantId,
+        area,
+        tipo: tipo || 'rutina',
+        estado: 'programada',
+        fechaProgramada: new Date(),
+        criterios: criterios || [],
+      },
+    })
+    
+    await this.log('create_inspection', 'action', 'success', `Inspección creada para ${area}`)
+    return true
+  }
+
+  private async registerNonConformity(config: any): Promise<boolean> {
+    const { inspeccionId, descripcion, severidad } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    await tenantClient.noConformidad.create({
+      data: {
+        tenantId: this.context.tenantId,
+        inspeccionId: inspeccionId || this.context.inspeccionId,
+        descripcion,
+        severidad: severidad || 'media',
+        estado: 'abierta',
+        fechaDeteccion: new Date(),
+      },
+    })
+    
+    await this.log('register_non_conformity', 'action', 'success', 'No conformidad registrada')
+    return true
+  }
+
+  private async closeNonConformity(config: any): Promise<boolean> {
+    const { nonConformityId, solucion, eficacia } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    await tenantClient.noConformidad.update({
+      where: { id: nonConformityId || this.context.nonConformityId },
+      data: {
+        estado: 'cerrada',
+        solucion,
+        eficaciaVerificacion: eficacia,
+        fechaCierre: new Date(),
+      },
+    })
+    
+    await this.log('close_non_conformity', 'action', 'success', 'No conformidad cerrada')
+    return true
+  }
+
+  private async notifyQualityAlert(config: any): Promise<boolean> {
+    const { nonConformityId, tipoAlerta } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    const nc = await tenantClient.noConformidad.findUnique({
+      where: { id: nonConformityId || this.context.nonConformityId },
+    })
+    
+    const { notifyByTelegram } = await import('@/lib/skills/notification-layer')
+    const context = createSystemContext(this.context.tenantId)
+    
+    const message = `🔴 *Alerta de Calidad*\n\nTipo: ${tipoAlerta || 'No Conformidad'}\nSeveridad: ${nc?.severidad}\nDescripción: ${nc?.descripcion}`
+    notifyByTelegram(message, context).catch(() => {})
+    
+    await this.log('notify_quality_alert', 'action', 'success', 'Alerta de calidad enviada')
+    return true
+  }
+
+  private async generateQualityReport(config: any): Promise<boolean> {
+    const { tipo, periodo } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    const startDate = new Date()
+    startDate.setDate(startDate.getDate() - (periodo || 30))
+    
+    const inspecciones = await tenantClient.inspeccion.count({
+      where: {
+        tenantId: this.context.tenantId,
+        createdAt: { gte: startDate },
+      },
+    })
+    
+    const noConformidades = await tenantClient.noConformidad.count({
+      where: {
+        tenantId: this.context.tenantId,
+        createdAt: { gte: startDate },
+      },
+    })
+    
+    const reporte = {
+      tipo: tipo || 'mensual',
+      periodo: periodo || 30,
+      inspeccionesRealizadas: inspecciones,
+      noConformidadesDetectadas: noConformidades,
+      tasaConformidad: inspecciones > 0 ? ((inspecciones - noConformidades) / inspecciones) * 100 : 0,
+      fecha: new Date(),
+    }
+    
+    await tenantClient.reporteCalidad.create({
+      data: {
+        tenantId: this.context.tenantId,
+        tipo,
+        datos: JSON.stringify(reporte),
+      },
+    })
+    
+    await this.log('generate_quality_report', 'action', 'success', 'Reporte de calidad generado')
+    return true
+  }
+
+  // ============== MANTENIMIENTO ==============
+
+  private async scheduleCalibration(config: any): Promise<boolean> {
+    const { equipoId, frecuenciaDias, fechaInicio } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    await tenantClient.calibracionProgramada.create({
+      data: {
+        tenantId: this.context.tenantId,
+        equipoId: equipoId || this.context.equipoId,
+        frecuenciaDias: frecuenciaDias || 180,
+        fechaUltimaCalibracion: new Date(),
+        fechaProximaCalibracion: fechaInicio || new Date(Date.now() + (frecuenciaDias || 180) * 24 * 60 * 60 * 1000),
+        estado: 'programada',
+      },
+    })
+    
+    await this.log('schedule_calibration', 'action', 'success', 'Calibración programada')
+    return true
+  }
+
+  // ============== PROYECTOS ==============
+
+  private async createProject(config: any): Promise<boolean> {
+    const { nombre, descripcion, fechaInicio, fechaFin, presupuesto } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    const proyecto = await tenantClient.proyecto.create({
+      data: {
+        tenantId: this.context.tenantId,
+        nombre,
+        descripcion,
+        fechaInicio: fechaInicio || new Date(),
+        fechaFin,
+        presupuesto,
+        estado: 'planificacion',
+      },
+    })
+    
+    await this.log('create_project', 'action', 'success', `Proyecto "${nombre}" creado`)
+    return true
+  }
+
+  private async notifyProjectTeam(config: any): Promise<boolean> {
+    const { projectId, mensaje, tipoNotificacion } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    const proyecto = await tenantClient.proyecto.findUnique({
+      where: { id: projectId || this.context.projectId },
+      include: { miembros: { include: { usuario: true } } },
+    })
+    
+    const { notifyByTelegram, sendEmail } = await import('@/lib/skills/notification-layer')
+    const context = createSystemContext(this.context.tenantId)
+    
+    for (const miembro of proyecto?.miembros || []) {
+      if (miembro.usuario?.email) {
+        await sendEmail(miembro.usuario.email, `Actualización del proyecto: ${proyecto?.nombre}`, mensaje, this.context.tenantId)
+      }
+    }
+    
+    notifyByTelegram(mensaje, context).catch(() => {})
+    
+    await this.log('notify_project_team', 'action', 'success', 'Notificación al equipo del proyecto enviada')
+    return true
+  }
+
+  private async updateProgress(config: any): Promise<boolean> {
+    const { projectId, progreso, notas } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    await tenantClient.proyecto.update({
+      where: { id: projectId || this.context.projectId },
+      data: {
+        progreso: progreso || 0,
+        notasActualizacion: notas,
+        ultimaActualizacion: new Date(),
+      },
+    })
+    
+    await this.log('update_progress', 'action', 'success', `Progreso actualizado: ${progreso}%`)
+    return true
+  }
+
+  private async createMilestone(config: any): Promise<boolean> {
+    const { projectId, nombre, descripcion, fechaEntrega } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    const hito = await tenantClient.proyectoHito.create({
+      data: {
+        tenantId: this.context.tenantId,
+        proyectoId: projectId || this.context.projectId,
+        nombre,
+        descripcion,
+        fechaEntrega: fechaEntrega || new Date(),
+        estado: 'pendiente',
+      },
+    })
+    
+    await this.log('create_milestone', 'action', 'success', `Hito "${nombre}" creado`)
+    return true
+  }
+
+  private async notifyMilestone(config: any): Promise<boolean> {
+    const { milestoneId, tipoNotificacion } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    const hito = await tenantClient.proyectoHito.findUnique({
+      where: { id: milestoneId || this.context.milestoneId },
+      include: { proyecto: true },
+    })
+    
+    const { notifyByTelegram } = await import('@/lib/skills/notification-layer')
+    const context = createSystemContext(this.context.tenantId)
+    
+    const message = tipoNotificacion === 'proximamente'
+      ? `📌 *Hito Próximo*\n\nProyecto: ${hito?.proyecto?.nombre}\nHito: ${hito?.nombre}\nFecha: ${new Date(hito?.fechaEntrega).toLocaleDateString()}`
+      : `✅ *Hito Completado*\n\nProyecto: ${hito?.proyecto?.nombre}\nHito: ${hito?.nombre}`
+    
+    notifyByTelegram(message, context).catch(() => {})
+    
+    await this.log('notify_milestone', 'action', 'success', 'Notificación de hito enviada')
+    return true
+  }
+
+  private async generateProjectReport(config: any): Promise<boolean> {
+    const { projectId, tipoReporte } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    const proyecto = await tenantClient.proyecto.findUnique({
+      where: { id: projectId || this.context.projectId },
+      include: { hitos: true, tareas: true, miembros: true },
+    })
+    
+    const hitosCompletados = proyecto?.hitos.filter((h: any) => h.estado === 'completado').length || 0
+    const totalHitos = proyecto?.hitos.length || 0
+    const tareasCompletadas = proyecto?.tareas.filter((t: any) => t.estado === 'completada').length || 0
+    const totalTareas = proyecto?.tareas.length || 0
+    
+    const reporte = {
+      projectId: proyecto?.id,
+      nombre: proyecto?.nombre,
+      progreso: proyecto?.progreso || 0,
+      hitos: { completados: hitosCompletados, total: totalHitos },
+      tareas: { completadas: tareasCompletadas, total: totalTareas },
+      miembros: proyecto?.miembros.length || 0,
+      tipo: tipoReporte || 'general',
+      fecha: new Date(),
+    }
+    
+    await tenantClient.reporteProyecto.create({
+      data: {
+        tenantId: this.context.tenantId,
+        proyectoId: proyecto?.id,
+        tipo: tipoReporte,
+        datos: JSON.stringify(reporte),
+      },
+    })
+    
+    await this.log('generate_project_report', 'action', 'success', 'Reporte de proyecto generado')
+    return true
+  }
+
+  private async createProjectTask(config: any): Promise<boolean> {
+    const { projectId, titulo, descripcion, asignadoA, fechaVencimiento, prioridad } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    await tenantClient.proyectoTarea.create({
+      data: {
+        tenantId: this.context.tenantId,
+        proyectoId: projectId || this.context.projectId,
+        titulo,
+        descripcion,
+        asignadoA,
+        fechaVencimiento,
+        prioridad: prioridad || 'media',
+        estado: 'pendiente',
+      },
+    })
+    
+    await this.log('create_project_task', 'action', 'success', `Tarea "${titulo}" creada en proyecto`)
+    return true
+  }
+
+  private async assignDeliverable(config: any): Promise<boolean> {
+    const { projectId, milestoneId, nombre, descripcion, asignarA, fechaEntrega } = config
+    const tenantClient = await getTenantDb(this.context.tenantId)
+    
+    const targetProjectId = projectId || this.context.projectId
+    
+    await tenantClient.proyectoEntregable.create({
+      data: {
+        tenantId: this.context.tenantId,
+        projectId: targetProjectId,
+        milestoneId: milestoneId || this.context.milestoneId,
+        nombre: nombre || 'Entregable',
+        descripcion: descripcion,
+        estado: 'asignado',
+        fechaEntrega: fechaEntrega || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        asignadoA: asignarA || this.context.userId,
+      },
+    })
+    
+    await this.log('assign_deliverable', 'action', 'success', `Entregable asignado`)
+    return true
+  }
 }
 
 /**
@@ -2128,1307 +3380,6 @@ export async function processPaymentReminders() {
     }
   }
 
-  console.log(`💳 Total notificaciones de pagos enviadas: ${totalSent}`)
+console.log(`💳 Total notificaciones de pagos enviadas: ${totalSent}`)
   return totalSent
-}
-
-// ============== FASE 1: ACCIONES DE INVENTARIO ==============
-
-private async notifyLowStock(config: any): Promise<boolean> {
-  const { itemId, itemNombre, cantidadActual, cantidadMinima, almacenNombre } = config
-  const message = `⚠️ *Alerta de Stock Bajo*\n\n📦 *Producto:* ${itemNombre || this.context.itemNombre}\n📊 *Stock Actual:* ${cantidadActual || this.context.cantidadActual}\n📉 *Mínimo:* ${cantidadMinima || this.context.cantidadMinima}\n🏭 *Almacén:* ${almacenNombre || this.context.almacenNombre || 'Principal'}`
-  
-  const { notifyByTelegram, notifyByEmail } = await import('@/lib/skills/notification-layer')
-  const context = createSystemContext(this.context.tenantId)
-  
-  if (config.enviarTelegram) {
-    notifyByTelegram(message, context).catch(() => {})
-  }
-  if (config.enviarEmail && this.context.userEmail) {
-    notifyByEmail(this.context.userEmail, 'Alerta de Stock Bajo', message, context).catch(() => {})
-  }
-  
-  await this.log('notify_low_stock', 'action', 'success', `Notificación de stock bajo enviada para ${itemNombre || this.context.itemNombre}`)
-  return true
-}
-
-private async updateInventory(config: any): Promise<boolean> {
-  const { itemId, cantidad, tipoAjuste, razon } = config
-  const targetItemId = itemId || this.context.itemId
-  
-  if (!targetItemId) {
-    await this.log('update_inventory', 'action', 'error', 'No se especificó el ID del producto')
-    return false
-  }
-
-  const updateData: any = {}
-  if (cantidad) {
-    if (tipoAjuste === 'set') {
-      updateData.cantidad = cantidad
-    } else if (tipoAjuste === 'add') {
-      updateData.cantidad = { increment: cantidad }
-    } else if (tipoAjuste === 'subtract') {
-      updateData.cantidad = { decrement: cantidad }
-    }
-  }
-
-  await prisma.inventarioItem.update({
-    where: { id: targetItemId },
-    data: updateData
-  })
-
-  await this.log('update_inventory', 'action', 'success', `Inventario actualizado: ${cantidad} (${tipoAjuste})`)
-  return true
-}
-
-private async createPurchaseOrder(config: any): Promise<boolean> {
-  const { proveedorId, items, prioridad } = config
-  
-  const orden = await prisma.purchaseOrder.create({
-    data: {
-      tenantId: this.context.tenantId,
-      proveedorId,
-      estado: 'pendiente',
-      prioridad: prioridad || 'normal',
-      items: items || [],
-      fechaEsperada: config.fechaEsperada,
-    }
-  })
-
-  await this.log('create_purchase_order', 'action', 'success', `Orden de compra creada: ${orden.id}`)
-  return true
-}
-
-private async adjustStock(config: any): Promise<boolean> {
-  const { itemId, cantidad, tipo, razon } = config
-  const targetItemId = itemId || this.context.itemId
-  
-  const ajuste = await prisma.stockAdjustment.create({
-    data: {
-      tenantId: this.context.tenantId,
-      itemId: targetItemId,
-      cantidad,
-      tipo: tipo || 'correccion',
-      razon: razon || 'Ajuste automático por automatización',
-      userId: this.context.userId || 'system',
-    }
-  })
-
-  // Actualizar inventario
-  await prisma.inventarioItem.update({
-    where: { id: targetItemId },
-    data: { cantidad: { increment: tipo === 'aumento' ? cantidad : -cantidad } }
-  })
-
-  await this.log('adjust_stock', 'action', 'success', `Stock ajustado: ${cantidad} unidades (${tipo})`)
-  return true
-}
-
-// ============== FASE 1: ACCIONES DE PRODUCCIÓN ==============
-
-private async createProductionOrder(config: any): Promise<boolean> {
-  const { productoId, cantidad, prioridad, bomId } = config
-  const productId = productoId || this.context.productId
-  const qty = cantidad || this.context.cantidad
-
-  const orderNumber = `OP-${Date.now().toString(36).toUpperCase()}`
-
-  const order = await prisma.workOrder.create({
-    data: {
-      tenantId: this.context.tenantId,
-      batchNumber: orderNumber,
-      bomId: bomId || this.context.bomId,
-      productId,
-      cantidadPlanificada: qty,
-      cantidadProducida: 0,
-      estado: 'pendiente',
-      prioridad: prioridad || this.context.prioridad || 'normal',
-      fechaInicioEstimada: config.fechaInicio,
-      fechaFinEstimada: config.fechaFin,
-    }
-  })
-
-  await this.log('create_production_order', 'action', 'success', `Orden de producción creada: ${orderNumber}`)
-  return true
-}
-
-private async updateProductionOrderStatus(config: any): Promise<boolean> {
-  const { orderId, estado } = config
-  const targetOrderId = orderId || this.context.orderId
-
-  await prisma.workOrder.update({
-    where: { id: targetOrderId },
-    data: { 
-      estado,
-      ...(estado === 'en_proceso' ? { fechaInicioReal: new Date() } : {}),
-      ...(estado === 'completada' ? { fechaFinReal: new Date() } : {}),
-    }
-  })
-
-  await this.log('update_production_status', 'action', 'success', `Orden actualizada a: ${estado}`)
-  return true
-}
-
-private async notifyProduction(config: any): Promise<boolean> {
-  const { orderNumber, estado, message } = config
-  const msg = message || `📦 *Actualización de Producción*\n\nOrden: ${orderNumber || this.context.orderNumber}\nEstado: ${estado || 'Actualizado'}\nProducto: ${this.context.productNombre || 'N/A'}`
-  
-  const { notifyByTelegram } = await import('@/lib/skills/notification-layer')
-  const context = createSystemContext(this.context.tenantId)
-  
-  notifyByTelegram(msg, context).catch(() => {})
-  
-  await this.log('notify_production', 'action', 'success', `Notificación de producción enviada`)
-  return true
-}
-
-private async registerProduction(config: any): Promise<boolean> {
-  const { orderId, cantidadProducida, cantidadRechazada, observaciones } = config
-  const targetOrderId = orderId || this.context.orderId
-  const qty = cantidadProducida || this.context.cantidadProducida
-
-  await prisma.workOrder.update({
-    where: { id: targetOrderId },
-    data: {
-      cantidadProducida: qty,
-      cantidadRechazada: cantidadRechazada || 0,
-      estado: 'completada',
-      fechaFinReal: new Date(),
-      observaciones,
-    }
-  })
-
-  await this.log('register_production', 'action', 'success', `Producción registrada: ${qty} unidades`)
-  return true
-}
-
-// ============== FASE 1: ACCIONES DE SOPORTE ==============
-
-private async createSupportTicket(config: any): Promise<boolean> {
-  const { subject, descripcion, prioridad, categoria, asignarA } = config
-  
-  const ticketNumero = `TKT-${Date.now().toString(36).toUpperCase()}`
-  
-  const ticket = await prisma.supportTicket.create({
-    data: {
-      tenantId: this.context.tenantId,
-      subject: subject || this.context.ticketSubject || 'Ticket automático',
-      description: descripcion || 'Creado por automatización',
-      prioridad: prioridad || this.context.ticketPrioridad || 'medium',
-      categoria: categoria,
-      status: 'open',
-      creatorId: this.context.userId || 'system',
-      assignedId: asignarA,
-      entityType: config.entityType || 'lead',
-      entityId: this.context.leadId || this.context.itemId || this.context.orderId,
-    }
-  })
-
-  // Emitir evento de ticket creado
-  const { eventBus, EVENTS } = await import('@/lib/skills/event-bus')
-  eventBus.emitEvent(EVENTS.SUPPORT_TICKET_CREATED, {
-    tenantId: this.context.tenantId,
-    timestamp: new Date(),
-    source: 'automation',
-    ticketId: ticket.id,
-    ticketNumero,
-    subject: ticket.subject,
-    prioridad: ticket.prioridad,
-    categoria: ticket.categoria,
-  })
-
-  await this.log('create_ticket', 'action', 'success', `Ticket creado: ${ticketNumero}`)
-  return true
-}
-
-private async assignTicket(config: any): Promise<boolean> {
-  const { ticketId, assigneeId } = config
-  const targetTicketId = ticketId || this.context.ticketId
-
-  await prisma.supportTicket.update({
-    where: { id: targetTicketId },
-    data: { assignedId: assigneeId || this.context.userId }
-  })
-
-  await this.log('assign_ticket', 'action', 'success', `Ticket asignado a usuario`)
-  return true
-}
-
-private async escalateTicket(config: any): Promise<boolean> {
-  const { ticketId, nivel, razon } = config
-  const targetTicketId = ticketId || this.context.ticketId
-
-  await prisma.supportTicket.update({
-    where: { id: targetTicketId },
-    data: { 
-      escalatedTo: nivel || 'supervisor',
-      priority: 'high'
-    }
-  })
-
-  const { notifyByTelegram } = await import('@/lib/skills/notification-layer')
-  const context = createSystemContext(this.context.tenantId)
-  
-  notifyByTelegram(
-    `🚨 *Ticket Escalado*\n\nTicket: ${this.context.ticketNumero}\nNivel: ${nivel || 'supervisor'}\nRazón: ${razon || 'SLA vencido'}`,
-    context
-  ).catch(() => {})
-
-  await this.log('escalate_ticket', 'action', 'success', `Ticket escalado a ${nivel || 'supervisor'}`)
-  return true
-}
-
-private async notifySLA(config: any): Promise<boolean> {
-  const { ticketId, tiempoRestante, message } = config
-  const ticketNum = this.context.ticketNumero || ticketId
-  
-  const msg = message || `⏰ *Alerta SLA*\n\nTicket: ${ticketNum}\nTiempo restante: ${tiempoRestante || this.context.tiempoRestanteMinutos} minutos\nPrioridad: ${this.context.ticketPrioridad}`
-  
-  const { notifyByTelegram, notifyByEmail } = await import('@/lib/skills/notification-layer')
-  const context = createSystemContext(this.context.tenantId)
-  
-  notifyByTelegram(msg, context).catch(() => {})
-  
-  if (config.enviarEmail && this.context.userEmail) {
-    notifyByEmail(this.context.userEmail, 'Alerta SLA', msg, context).catch(() => {})
-  }
-
-  await this.log('notify_sla', 'action', 'success', `Notificación SLA enviada`)
-  return true
-}
-
-private async closeTicket(config: any): Promise<boolean> {
-  const { ticketId, resolucion } = config
-  const targetTicketId = ticketId || this.context.ticketId
-
-  await prisma.supportTicket.update({
-    where: { id: targetTicketId },
-    data: { 
-      status: 'closed',
-      resolvedAt: new Date(),
-      description: resolucion ? `${resolucion}\n\n[Automatización: cerrado automáticamente]` : '[Automatización: cerrado automáticamente]'
-    }
-  })
-
-  await this.log('close_ticket', 'action', 'success', `Ticket cerrado`)
-  return true
-}
-
-private async createTaskFromTicket(config: any): Promise<boolean> {
-  const { ticketId, titulo, descripcion, asignarA, fechaVencimiento } = config
-  const targetTicketId = ticketId || this.context.ticketId
-
-  const ticket = await prisma.supportTicket.findUnique({ where: { id: targetTicketId } })
-
-  await prisma.task.create({
-    data: {
-      tenantId: this.context.tenantId,
-      title: titulo || `Seguimiento: ${ticket?.subject || 'Ticket'}`,
-      description: descripcion || `衍生 del ticket ${ticket?.id}`,
-      status: 'pending',
-      priority: ticket?.priority || 'medium',
-      dueDate: fechaVencimiento,
-      assignedTo: asignarA || ticket?.assignedId,
-      userId: this.context.userId || 'system',
-    }
-  })
-
-  await this.log('create_task_from_ticket', 'action', 'success', `Tarea creada desde ticket`)
-  return true
-}
-
-// ============== FASE 2: ACCIONES DE MARKETING ==============
-
-private async createCampaign(config: any): Promise<boolean> {
-  const { nombre, tipo, objetivo, segmento, fechaInicio, fechaFin } = config
-
-  const campaign = await prisma.campaign.create({
-    data: {
-      tenantId: this.context.tenantId,
-      nombre: nombre || `Campaña Automática ${new Date().toLocaleDateString()}`,
-      tipo: tipo || 'email',
-      objetivo: objetivo,
-      estado: 'planificada',
-      fechaInicio: fechaInicio,
-      fechaFin: fechaFin,
-      objetivoSegmento: segmento,
-      createdBy: this.context.userId || 'system',
-    }
-  })
-
-  // Emitir evento de campaña iniciada
-  const { eventBus, EVENTS } = await import('@/lib/skills/event-bus')
-  eventBus.emitEvent(EVENTS.CAMPAIGN_STARTED, {
-    tenantId: this.context.tenantId,
-    timestamp: new Date(),
-    source: 'automation',
-    campaignId: campaign.id,
-    campaignNombre: campaign.nombre,
-    campaignTipo: campaign.tipo,
-    destinatariosCount: 0,
-  })
-
-  await this.log('create_campaign', 'action', 'success', `Campaña creada: ${campaign.nombre}`)
-  return true
-}
-
-private async addContactToList(config: any): Promise<boolean> {
-  const { listaId, contactId, leadId, email } = config
-  const targetContactId = contactId || this.context.contactId || this.context.leadId
-
-  await prisma.emailListMember.create({
-    data: {
-      listaId: listaId || config.listaId,
-      contactId: targetContactId,
-      email: email || this.context.email,
-      subscribedAt: new Date(),
-      source: 'automation',
-    }
-  })
-
-  await this.log('add_to_list', 'action', 'success', `Contacto agregado a lista`)
-  return true
-}
-
-private async removeContactFromList(config: any): Promise<boolean> {
-  const { listaId, contactId } = config
-  const targetContactId = contactId || this.context.contactId || this.context.leadId
-
-  await prisma.emailListMember.deleteMany({
-    where: {
-      listaId: listaId,
-      contactId: targetContactId,
-    }
-  })
-
-  await this.log('remove_from_list', 'action', 'success', `Contacto removido de lista`)
-  return true
-}
-
-private async segmentAudience(config: any): Promise<boolean> {
-  const { nombre, criterios } = config
-
-  // Criterios de segmentación
-  const whereClause: any = {
-    tenantId: this.context.tenantId,
-  }
-
-  if (criterios?.scoreMin) {
-    whereClause.score = { gte: criterios.scoreMin }
-  }
-  if (criterios?.scoreMax) {
-    whereClause.score = { ...whereClause.score, lte: criterios.scoreMax }
-  }
-  if (criterios?.estado) {
-    whereClause.estado = criterios.estado
-  }
-  if (criterios?.fuente) {
-    whereClause.fuente = criterios.fuente
-  }
-
-  const leadsCount = await prisma.lead.count({ where: whereClause })
-
-  // Crear segmento
-  const segmento = await prisma.audienceSegment.create({
-    data: {
-      tenantId: this.context.tenantId,
-      nombre: nombre || `Segmento ${new Date().toISOString()}`,
-      criterios: criterios || {},
-      leadsCount,
-      createdBy: this.context.userId || 'system',
-    }
-  })
-
-  await this.log('segment_audience', 'action', 'success', `Segmento creado: ${leadsCount} leads`)
-  return true
-}
-
-private async scheduleSocialPost(config: any): Promise<boolean> {
-  const { plataforma, contenido, fechaPublicacion, medios } = config
-
-  const post = await prisma.socialPost.create({
-    data: {
-      tenantId: this.context.tenantId,
-      plataforma: plataforma || config.plataforma || 'twitter',
-      contenido: contenido || this.context.contenido,
-      scheduledFor: fechaPublicacion || config.scheduledFor,
-      estado: 'programada',
-      medios: medios || [],
-      createdBy: this.context.userId || 'system',
-    }
-  })
-
-  const { eventBus, EVENTS } = await import('@/lib/skills/event-bus')
-  eventBus.emitEvent(EVENTS.SOCIAL_POST_SCHEDULED, {
-    tenantId: this.context.tenantId,
-    timestamp: new Date(),
-    source: 'automation',
-    postId: post.id,
-    plataforma: post.plataforma,
-    contenido: post.contenido,
-    scheduledFor: post.scheduledFor,
-  })
-
-  await this.log('schedule_post', 'action', 'success', `Post programado para ${post.scheduledFor}`)
-  return true
-}
-
-private async publishSocialPost(config: any): Promise<boolean> {
-  const { plataforma, contenido, postId } = config
-
-  const post = await prisma.socialPost.update({
-    where: { id: postId || config.postId },
-    data: {
-      estado: 'publicada',
-      publishedAt: new Date(),
-    }
-  })
-
-  const { eventBus, EVENTS } = await import('@/lib/skills/event-bus')
-  eventBus.emitEvent(EVENTS.SOCIAL_POST_PUBLISHED, {
-    tenantId: this.context.tenantId,
-    timestamp: new Date(),
-    source: 'automation',
-    postId: post.id,
-    plataforma: post.plataforma,
-    contenido: post.contenido,
-  })
-
-  await this.log('publish_post', 'action', 'success', `Post publicado en ${post.plataforma}`)
-  return true
-}
-
-private async sendFollowUp(config: any): Promise<boolean> {
-  const { templateId, asunto, leadId, delayMinutes } = config
-  const targetLeadId = leadId || this.context.leadId
-
-  // Programar follow-up
-  const fechaEnvio = delayMinutes 
-    ? new Date(Date.now() + delayMinutes * 60 * 1000)
-    : new Date()
-
-  await prisma.emailCampaign.create({
-    data: {
-      tenantId: this.context.tenantId,
-      nombre: `Follow-up automático - ${new Date().toISOString()}`,
-      tipo: 'follow_up',
-      templateId,
-      asunto: asunto || 'Seguimiento',
-      estado: 'programada',
-      fechaProgramada: fechaEnvio,
-      segmentoId: undefined,
-      leadIds: [targetLeadId],
-      createdBy: 'system',
-    }
-  })
-
-  await this.log('send_follow_up', 'action', 'success', `Follow-up programado para ${targetLeadId}`)
-  return true
-}
-
-private async updateNurturing(config: any): Promise<boolean> {
-  const { leadId, etapa, score, daysInStage } = config
-  const targetLeadId = leadId || this.context.leadId
-
-  const updateData: any = {}
-  if (etapa) updateData.etapa = etapa
-  if (score) updateData.score = score
-
-  await prisma.lead.update({
-    where: { id: targetLeadId },
-    data: updateData
-  })
-
-  await this.log('update_nurturing', 'action', 'success', `Nurturing actualizado para lead ${targetLeadId}`)
-  return true
-}
-
-private async calculateEngagement(config: any): Promise<boolean> {
-  const { campaignId } = config
-  const targetCampaignId = campaignId || this.context.campaignId
-
-  const campaign = await prisma.campaign.findUnique({
-    where: { id: targetCampaignId },
-    include: {
-      emails: true,
-    }
-  })
-
-  if (!campaign) {
-    await this.log('calculate_engagement', 'action', 'error', 'Campaña no encontrada')
-    return false
-  }
-
-  const totalEnviados = campaign.emails?.length || 0
-  // Simulación de métricas - en producción vendrían de EmailService
-  const metricas = {
-    tasaApertura: totalEnviados > 0 ? Math.random() * 40 + 20 : 0,
-    tasaClick: totalEnviados > 0 ? Math.random() * 15 + 5 : 0,
-    tasaConversion: totalEnviados > 0 ? Math.random() * 5 + 1 : 0,
-  }
-
-  await prisma.campaignMetric.create({
-    data: {
-      campaignId: targetCampaignId,
-      metricType: 'engagement',
-      metricValue: JSON.stringify(metricas),
-      recordedAt: new Date(),
-    }
-  })
-
-  await this.log('calculate_engagement', 'action', 'success', `Engagement calculado: ${JSON.stringify(metricas)}`)
-  return true
-}
-
-private async generateCampaignReport(config: any): Promise<boolean> {
-  const { campaignId, formato } = config
-  const targetCampaignId = campaignId || this.context.campaignId
-
-  const campaign = await prisma.campaign.findUnique({
-    where: { id: targetCampaignId },
-    include: {
-      emails: true,
-      metrics: true,
-    }
-  })
-
-  if (!campaign) {
-    await this.log('generate_report', 'action', 'error', 'Campaña no encontrada')
-    return false
-  }
-
-  const report = {
-    campaign: campaign.nombre,
-    estado: campaign.estado,
-    fechaInicio: campaign.fechaInicio,
-    fechaFin: campaign.fechaFin,
-    metricas: campaign.metrics,
-    generatedAt: new Date().toISOString(),
-  }
-
-  // Notificar al usuario
-  const { notifyByTelegram, notifyByEmail } = await import('@/lib/skills/notification-layer')
-  const context = createSystemContext(this.context.tenantId)
-
-  const message = `📊 *Reporte de Campaña*\n\n📧 *Campaña:* ${campaign.nombre}\n📈 *Estado:* ${campaign.estado}\n📅 *Período:* ${campaign.fechaInicio?.toLocaleDateString()} - ${campaign.fechaFin?.toLocaleDateString()}`
-
-  notifyByTelegram(message, context).catch(() => {})
-
-  if (this.context.userEmail && config.enviarEmail) {
-    notifyByEmail(
-      this.context.userEmail,
-      `Reporte: ${campaign.nombre}`,
-      message,
-      context
-    ).catch(() => {})
-  }
-
-  await this.log('generate_report', 'action', 'success', `Reporte generado para campaña ${campaign.nombre}`)
-  return true
-}
-
-// ============== FASE 2: ACCIONES DE EMAIL MARKETING ==============
-
-private async sendMarketingEmail(config: any): Promise<boolean> {
-  const { templateId, asunto, contenido, listaId, leadIds } = config
-
-  const campaign = await prisma.emailCampaign.create({
-    data: {
-      tenantId: this.context.tenantId,
-      nombre: `Email Marketing - ${new Date().toISOString()}`,
-      tipo: 'marketing',
-      templateId,
-      asunto: asunto,
-      contenido: contenido,
-      estado: 'enviada',
-      fechaEnvio: new Date(),
-      listaId: listaId,
-      leadIds: leadIds || (this.context.leadId ? [this.context.leadId] : []),
-      createdBy: 'automation',
-    }
-  })
-
-  await this.log('send_marketing_email', 'action', 'success', `Email marketing enviado: ${campaign.id}`)
-  return true
-}
-
-private async createEmailSequence(config: any): Promise<boolean> {
-  const { nombre, pasos, listaId } = config
-
-  const sequence = await prisma.emailSequence.create({
-    data: {
-      tenantId: this.context.tenantId,
-      nombre: nombre || `Secuencia automática`,
-      estado: 'activa',
-      listaId: listaId,
-      pasos: pasos || [],
-      createdBy: this.context.userId || 'system',
-    }
-  })
-
-  await this.log('create_sequence', 'action', 'success', `Secuencia de email creada: ${sequence.nombre}`)
-  return true
-}
-
-private async pauseEmailSequence(config: any): Promise<boolean> {
-  const { sequenceId } = config
-
-  await prisma.emailSequence.update({
-    where: { id: sequenceId },
-    data: { estado: 'pausada' }
-  })
-
-  await this.log('pause_sequence', 'action', 'success', `Secuencia pausada`)
-  return true
-}
-
-// ============== FASE 3: ACCIONES DE RRHH ==============
-
-private async sendOnboarding(config: any): Promise<boolean> {
-  const { employeeId, templateId, email, nombre } = config
-  const targetEmployeeId = employeeId || this.context.employeeId
-  const targetEmail = email || this.context.employeeEmail
-  const targetNombre = nombre || this.context.employeeNombre
-
-  await prisma.emailCampaign.create({
-    data: {
-      tenantId: this.context.tenantId,
-      nombre: `Onboarding - ${targetNombre}`,
-      tipo: 'onboarding',
-      templateId,
-      asunto: 'Bienvenido a nuestro equipo',
-      contenido: `Hola ${targetNombre}, te damos la bienvenida...`,
-      estado: 'enviada',
-      fechaEnvio: new Date(),
-      leadIds: [targetEmployeeId],
-      createdBy: 'automation',
-    }
-  })
-
-  await this.log('send_onboarding', 'action', 'success', `Onboarding enviado a ${targetEmail}`)
-  return true
-}
-
-private async createEvaluation(config: any): Promise<boolean> {
-  const { employeeId, tipo, periodo } = config
-  const targetEmployeeId = employeeId || this.context.employeeId
-
-  const evaluation = await prisma.evaluation.create({
-    data: {
-      tenantId: this.context.tenantId,
-      employeeId: targetEmployeeId,
-      tipo: tipo || 'performance',
-      periodo: periodo || `${new Date().getFullYear()}-Q${Math.floor(new Date().getMonth() / 3) + 1}`,
-      estado: 'pendiente',
-      fechaEvaluacion: config.fechaEvaluacion || new Date(),
-      createdBy: this.context.userId || 'system',
-    }
-  })
-
-  await this.log('create_evaluation', 'action', 'success', `Evaluación creada: ${evaluation.id}`)
-  return true
-}
-
-private async sendSurvey(config: any): Promise<boolean> {
-  const { employeeId, tipoEncuesta } = config
-  const targetEmployeeId = employeeId || this.context.employeeId
-
-  await prisma.emailCampaign.create({
-    data: {
-      tenantId: this.context.tenantId,
-      nombre: `Encuesta - ${tipoEncuesta || 'satisfacción'}`,
-      tipo: 'survey',
-      asunto: 'Tu opinión nos importa',
-      contenido: 'Por favor填写 esta encuesta...',
-      estado: 'programada',
-      fechaProgramada: new Date(),
-      leadIds: [targetEmployeeId],
-      createdBy: 'automation',
-    }
-  })
-
-  await this.log('send_survey', 'action', 'success', `Encuesta enviada a empleado`)
-  return true
-}
-
-private async registerTraining(config: any): Promise<boolean> {
-  const { employeeId, cursoId, fechaInicio, fechaFin } = config
-  const targetEmployeeId = employeeId || this.context.employeeId
-
-  await prisma.trainingEnrollment.create({
-    data: {
-      tenantId: this.context.tenantId,
-      employeeId: targetEmployeeId,
-      cursoId: cursoId,
-      estado: 'en_progreso',
-      fechaInicio: fechaInicio || new Date(),
-      fechaFin: fechaFin,
-      enrolledAt: new Date(),
-    }
-  })
-
-  await this.log('register_training', 'action', 'success', `Capacitación registrada para empleado`)
-  return true
-}
-
-private async notifyCertification(config: any): Promise<boolean> {
-  const { employeeId, certificacion, fechaVencimiento } = config
-  const targetEmployeeId = employeeId || this.context.employeeId
-
-  const employee = await prisma.employee.findUnique({ where: { id: targetEmployeeId } })
-
-  const { notifyByTelegram, notifyByEmail } = await import('@/lib/skills/notification-layer')
-  const context = createSystemContext(this.context.tenantId)
-
-  const message = `📜 *Certificación por Vencer*\n\n👤 *Empleado:* ${employee?.nombre || 'N/A'}\n📜 *Certificación:* ${certificacion || this.context.certificacion}\n📅 *Vence:* ${new Date(fechaVencimiento || this.context.fechaVencimiento).toLocaleDateString()}`
-
-  notifyByTelegram(message, context).catch(() => {})
-
-  if (employee?.email) {
-    notifyByEmail(employee.email, 'Certificación por vencer', message, context).catch(() => {})
-  }
-
-  await this.log('notify_certification', 'action', 'success', `Notificación de certificación enviada`)
-  return true
-}
-
-private async updateEmployee(config: any): Promise<boolean> {
-  const { employeeId, datos } = config
-  const targetEmployeeId = employeeId || this.context.employeeId
-
-  await prisma.employee.update({
-    where: { id: targetEmployeeId },
-    data: datos || {}
-  })
-
-  await this.log('update_employee', 'action', 'success', `Empleado actualizado`)
-  return true
-}
-
-private async assignRole(config: any): Promise<boolean> {
-  const { employeeId, rolId } = config
-  const targetEmployeeId = employeeId || this.context.employeeId
-
-  await prisma.userRole.create({
-    data: {
-      userId: targetEmployeeId,
-      roleId: rolId,
-      assignedAt: new Date(),
-      assignedBy: this.context.userId || 'system',
-    }
-  })
-
-  await this.log('assign_role', 'action', 'success', `Rol asignado a empleado`)
-  return true
-}
-
-// ============== FASE 3: ACCIONES DE FINANZAS ==============
-
-private async generateInvoice(config: any): Promise<boolean> {
-  const { leadId, contactId, items, fechaVencimiento } = config
-
-  const invoiceNumber = `INV-${Date.now().toString(36).toUpperCase()}`
-
-  const invoice = await prisma.invoice.create({
-    data: {
-      tenantId: this.context.tenantId,
-      leadId: leadId || this.context.leadId,
-      contactId: contactId,
-      provider: 'volkern',
-      numero: invoiceNumber,
-      monto: config.monto || 0,
-      moneda: config.moneda || 'EUR',
-      estado: 'pendiente',
-      fechaEmision: new Date(),
-      fechaVencimiento: fechaVencimiento || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      metadata: { items: items || [] },
-    }
-  })
-
-  await this.log('generate_invoice', 'action', 'success', `Factura generada: ${invoiceNumber}`)
-  return true
-}
-
-private async registerExpense(config: any): Promise<boolean> {
-  const { employeeId, monto, categoria, descripcion, fecha } = config
-  const targetEmployeeId = employeeId || this.context.employeeId
-
-  const expense = await prisma.expense.create({
-    data: {
-      tenantId: this.context.tenantId,
-      employeeId: targetEmployeeId,
-      amount: monto || config.monto,
-      category: categoria || 'general',
-      description: descripcion,
-      status: 'pending',
-      fecha: fecha || new Date(),
-      createdAt: new Date(),
-    }
-  })
-
-  await this.log('register_expense', 'action', 'success', `Gasto registrado: ${expense.id}`)
-  return true
-}
-
-private async approveExpense(config: any): Promise<boolean> {
-  const { expenseId, comentarios } = config
-
-  await prisma.expense.update({
-    where: { id: expenseId || config.expenseId },
-    data: {
-      status: 'approved',
-      approvedAt: new Date(),
-      approvedBy: this.context.userId || 'system',
-      comments: comentarios,
-    }
-  })
-
-  await this.log('approve_expense', 'action', 'success', `Gasto aprobado`)
-  return true
-}
-
-private async rejectExpense(config: any): Promise<boolean> {
-  const { expenseId, motivo } = config
-
-  await prisma.expense.update({
-    where: { id: expenseId || config.expenseId },
-    data: {
-      status: 'rejected',
-      rejectedAt: new Date(),
-      rejectedBy: this.context.userId || 'system',
-      reason: motivo,
-    }
-  })
-
-  await this.log('reject_expense', 'action', 'success', `Gasto rechazado`)
-  return true
-}
-
-private async notifyPayment(config: any): Promise<boolean> {
-  const { invoiceId, leadId, metodoPago } = config
-  const targetInvoiceId = invoiceId || this.context.invoiceId
-  const targetLeadId = leadId || this.context.leadId
-
-  const invoice = await prisma.invoice.findUnique({ where: { id: targetInvoiceId } })
-  const lead = targetLeadId ? await prisma.lead.findUnique({ where: { id: targetLeadId } }) : null
-
-  const { notifyByTelegram, notifyByEmail } = await import('@/lib/skills/notification-layer')
-  const context = createSystemContext(this.context.tenantId)
-
-  const message = `✅ *Pago Recibido*\n\n📄 *Factura:* ${invoice?.numero || 'N/A'}\n💰 *Monto:* ${invoice?.monto || 0} ${invoice?.moneda || 'EUR'}\n👤 *Cliente:* ${lead?.nombre || 'N/A'}`
-
-  notifyByTelegram(message, context).catch(() => {})
-
-  await this.log('notify_payment', 'action', 'success', `Notificación de pago enviada`)
-  return true
-}
-
-private async createPayroll(config: any): Promise<boolean> {
-  const { periodo, empleados, fechaPago } = config
-
-  const payrollPeriod = periodo || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
-
-  const payroll = await prisma.payroll.create({
-    data: {
-      tenantId: this.context.tenantId,
-      periodo: payrollPeriod,
-      estado: 'borrador',
-      fechaPago: fechaPago || new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
-      totalEmpleados: empleados?.length || 0,
-      montoTotal: config.montoTotal || 0,
-      createdBy: this.context.userId || 'system',
-    }
-  })
-
-  await this.log('create_payroll', 'action', 'success', `Nómina creada: ${payroll.id}`)
-  return true
-}
-
-private async notifyInvoiceOverdue(config: any): Promise<boolean> {
-  const { invoiceId, diasRetraso } = config
-  const targetInvoiceId = invoiceId || this.context.invoiceId
-
-  const invoice = await prisma.invoice.findUnique({ where: { id: targetInvoiceId } })
-  const lead = invoice?.leadId ? await prisma.lead.findUnique({ where: { id: invoice.leadId } }) : null
-
-  const { notifyByTelegram, notifyByEmail } = await import('@/lib/skills/notification-layer')
-  const context = createSystemContext(this.context.tenantId)
-
-  const message = `⚠️ *Factura Vencida*\n\n📄 *Factura:* ${invoice?.numero}\n💰 *Monto:* ${invoice?.monto} ${invoice?.moneda}\n⏰ *Días de retraso:* ${diasRetraso || this.context.diasRetraso || 1}\n👤 *Cliente:* ${lead?.nombre || 'N/A'}`
-
-  notifyByTelegram(message, context).catch(() => {})
-
-  if (lead?.email) {
-    notifyByEmail(lead.email, 'Factura vencida', message, context).catch(() => {})
-  }
-
-  await this.log('notify_invoice_overdue', 'action', 'success', `Notificación de factura vencida enviada`)
-  return true
-}
-
-private async sendPaymentReminder(config: any): Promise<boolean> {
-  const { invoiceId, diasAntes } = config
-  const targetInvoiceId = invoiceId || this.context.invoiceId
-
-  const invoice = await prisma.invoice.findUnique({ where: { id: targetInvoiceId } })
-  const lead = invoice?.leadId ? await prisma.lead.findUnique({ where: { id: invoice.leadId } }) : null
-
-  const { notifyByEmail } = await import('@/lib/skills/notification-layer')
-  const context = createSystemContext(this.context.tenantId)
-
-  const message = `📧 *Recordatorio de Pago*\n\nEstimado cliente, le recordamos que su factura ${invoice?.numero} vence pronto.`
-
-  if (lead?.email) {
-    notifyByEmail(lead.email, 'Recordatorio de pago', message, context).catch(() => {})
-  }
-
-  await this.log('send_payment_reminder', 'action', 'success', `Recordatorio de pago enviado`)
-  return true
-}
-
-private async adjustBudget(config: any): Promise<boolean> {
-  const { departmentId, nuevoPresupuesto } = config
-  const targetDepartmentId = departmentId || this.context.departmentId
-
-  await prisma.departmentBudget.update({
-    where: { id: targetDepartmentId },
-    data: {
-      presupuesto: nuevoPresupuesto,
-      updatedAt: new Date(),
-    }
-  })
-
-  await this.log('adjust_budget', 'action', 'success', `Presupuesto ajustado`)
-  return true
-}
-
-private async generateFinancialReport(config: any): Promise<boolean> {
-  const { tipo, periodo, enviarEmail } = config
-
-  const { notifyByTelegram, notifyByEmail } = await import('@/lib/skills/notification-layer')
-  const context = createSystemContext(this.context.tenantId)
-
-  const message = `📊 *Reporte Financiero*\n\n📅 *Período:* ${periodo || 'último mes'}\n📋 *Tipo:* ${tipo || 'general'}\n\n Generado automáticamente por Volkern CRM`
-
-  notifyByTelegram(message, context).catch(() => {})
-
-  if (enviarEmail && this.context.userEmail) {
-    notifyByEmail(this.context.userEmail, 'Reporte Financiero', message, context).catch(() => {})
-  }
-
-  await this.log('generate_financial_report', 'action', 'success', `Reporte financiero generado`)
-  return true
-}
-
-// ============== FASE 4: ACCIONES DE CALIDAD ==============
-
-private async createInspection(config: any): Promise<boolean> {
-  const { projectId, ordenId, tipo, fechaProgramada } = config
-
-  const inspection = await prisma.qualityCheck.create({
-    data: {
-      tenantId: this.context.tenantId,
-      projectId: projectId || this.context.projectId,
-      ordenId: ordenId || this.context.orderId,
-      tipo: tipo || 'final',
-      estado: 'pendiente',
-      fechaInspeccion: fechaProgramada || new Date(),
-      inspectorId: this.context.userId || 'system',
-    }
-  })
-
-  await this.log('create_inspection', 'action', 'success', `Inspección creada: ${inspection.id}`)
-  return true
-}
-
-private async registerNonConformity(config: any): Promise<boolean> {
-  const { projectId, ordenId, tipo, gravedad, causa, descripcion } = config
-
-  const nc = await prisma.nonConformity.create({
-    data: {
-      tenantId: this.context.tenantId,
-      projectId: projectId || this.context.projectId,
-      ordenId: ordenId || this.context.orderId,
-      tipo: tipo || 'producto',
-      gravedad: gravedad || 'media',
-      causa: causa || 'Por determinar',
-      descripcion: descripcion || 'No conformidad registrada automáticamente',
-      estado: 'abierta',
-      fechaDeteccion: new Date(),
-    }
-  })
-
-  const { notifyByTelegram } = await import('@/lib/skills/notification-layer')
-  const context = createSystemContext(this.context.tenantId)
-  
-  notifyByTelegram(
-    `⚠️ *Nueva No Conformidad*\n\n📋 *NC:* ${nc.id}\n🔴 *Gravedad:* ${gravedad || 'media'}\n📝 *Causa:* ${causa || 'Por determinar'}`,
-    context
-  ).catch(() => {})
-
-  await this.log('register_nc', 'action', 'success', `No conformidad registrada: ${nc.id}`)
-  return true
-}
-
-private async closeNonConformity(config: any): Promise<boolean> {
-  const { ncId, solucion, evidencia } = config
-
-  await prisma.nonConformity.update({
-    where: { id: ncId || config.nonConformityId },
-    data: {
-      estado: 'cerrada',
-      solucion: solucion,
-      evidencia: evidencia,
-      fechaCierre: new Date(),
-    }
-  })
-
-  await this.log('close_nc', 'action', 'success', `No conformidad cerrada`)
-  return true
-}
-
-private async notifyQualityAlert(config: any): Promise<boolean> {
-  const { tipoAlerta, mensaje, severity } = config
-
-  const { notifyByTelegram, notifyByEmail } = await import('@/lib/skills/notification-layer')
-  const context = createSystemContext(this.context.tenantId)
-
-  const message = `🚨 *Alerta de Calidad*\n\n📊 *Tipo:* ${tipoAlerta || 'general'}\n📝 *Mensaje:* ${mensaje || this.context.mensaje || 'Alerta de calidad'}\n⚠️ *Severidad:* ${severity || this.context.severity || 'medium'}`
-
-  notifyByTelegram(message, context).catch(() => {})
-
-  if (config.enviarEmail && this.context.userEmail) {
-    notifyByEmail(this.context.userEmail, 'Alerta de Calidad', message, context).catch(() => {})
-  }
-
-  await this.log('notify_quality_alert', 'action', 'success', `Alerta de calidad enviada`)
-  return true
-}
-
-private async generateQualityReport(config: any): Promise<boolean> {
-  const { projectId, tipo, fechaInicio, fechaFin } = config
-
-  const checks = await prisma.qualityCheck.findMany({
-    where: {
-      tenantId: this.context.tenantId,
-      projectId: projectId || this.context.projectId,
-      ...(fechaInicio && fechaFin && {
-        fechaInspeccion: { gte: fechaInicio, lte: fechaFin }
-      })
-    }
-  })
-
-  const total = checks.length
-  const aprobadas = checks.filter(c => c.resultado === 'aprobado').length
-  const rechazadas = checks.filter(c => c.resultado === 'rechazado').length
-
-  const { notifyByTelegram } = await import('@/lib/skills/notification-layer')
-  const context = createSystemContext(this.context.tenantId)
-
-  notifyByTelegram(
-    `📊 *Informe de Calidad*\n\n✅ *Aprobadas:* ${aprobadas}/${total}\n❌ *Rechazadas:* ${rechazadas}/${total}\n📈 *Tasa:* ${total > 0 ? ((aprobadas / total) * 100).toFixed(1) : 0}%`,
-    context
-  ).catch(() => {})
-
-  await this.log('generate_quality_report', 'action', 'success', `Informe de calidad generado`)
-  return true
-}
-
-private async scheduleCalibration(config: any): Promise<boolean> {
-  const { equipoId, fechaProgramada, periodicidad } = config
-
-  await prisma.calibrationSchedule.create({
-    data: {
-      tenantId: this.context.tenantId,
-      equipoId: equipoId,
-      fechaProgramada: fechaProgramada || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      periodicidad: periodicidad || 'mensual',
-      estado: 'programada',
-    }
-  })
-
-  await this.log('schedule_calibration', 'action', 'success', `Calibración programada`)
-  return true
-}
-
-// ============== FASE 4: ACCIONES DE PROYECTOS ==============
-
-private async createProject(config: any): Promise<boolean> {
-  const { nombre, descripcion, fechaInicio, fechaFin, managerId } = config
-
-  const project = await prisma.project.create({
-    data: {
-      tenantId: this.context.tenantId,
-      nombre: nombre || `Proyecto ${new Date().toISOString()}`,
-      descripcion: descripcion,
-      startDate: fechaInicio || new Date(),
-      endDate: fechaFin,
-      status: 'active',
-      progress: 0,
-      leadId: this.context.leadId,
-      budget: config.presupuesto || 0,
-    }
-  })
-
-  const { eventBus, EVENTS } = await import('@/lib/skills/event-bus')
-  eventBus.emitEvent(EVENTS.PROJECT_STARTED, {
-    tenantId: this.context.tenantId,
-    timestamp: new Date(),
-    source: 'automation',
-    projectId: project.id,
-    projectNombre: project.nombre,
-    fechaInicio: project.startDate,
-    fechaFinEstimada: project.endDate,
-    managerId: managerId || this.context.userId,
-  })
-
-  await this.log('create_project', 'action', 'success', `Proyecto creado: ${project.nombre}`)
-  return true
-}
-
-private async notifyProjectTeam(config: any): Promise<boolean> {
-  const { projectId, mensaje } = config
-  const targetProjectId = projectId || this.context.projectId
-
-  const project = await prisma.project.findUnique({
-    where: { id: targetProjectId },
-    include: { members: true }
-  })
-
-  const { notifyByTelegram } = await import('@/lib/skills/notification-layer')
-  const context = createSystemContext(this.context.tenantId)
-
-  const message = mensaje || `📢 *Actualización de Proyecto*\n\n📁 *Proyecto:* ${project?.nombre || 'N/A'}\n💬 *Nuevo hito alcanzado*`
-
-  for (const member of project?.members || []) {
-    notifyByTelegram(message, { ...context, userId: member.id }).catch(() => {})
-  }
-
-  await this.log('notify_project_team', 'action', 'success', `Equipo del proyecto notificado`)
-  return true
-}
-
-private async updateProgress(config: any): Promise<boolean> {
-  const { projectId, progreso, estado } = config
-  const targetProjectId = projectId || this.context.projectId
-
-  await prisma.project.update({
-    where: { id: targetProjectId },
-    data: {
-      progress: progreso || 50,
-      status: estado,
-    }
-  })
-
-  await this.log('update_progress', 'action', 'success', `Progreso actualizado: ${progreso || 50}%`)
-  return true
-}
-
-private async createMilestone(config: any): Promise<boolean> {
-  const { projectId, nombre, descripcion, fechaVencimiento, esCritico } = config
-  const targetProjectId = projectId || this.context.projectId
-
-  const milestone = await prisma.projectMilestone.create({
-    data: {
-      tenantId: this.context.tenantId,
-      projectId: targetProjectId,
-      nombre: nombre || `Hito ${new Date().toISOString()}`,
-      descripcion: descripcion,
-      dueDate: fechaVencimiento,
-      status: 'pending',
-      isCritical: esCritico || false,
-    }
-  })
-
-  await this.log('create_milestone', 'action', 'success', `Milestone creado: ${milestone.nombre}`)
-  return true
-}
-
-private async notifyMilestone(config: any): Promise<boolean> {
-  const { milestoneId, tipo } = config
-
-  const milestone = milestoneId ? await prisma.projectMilestone.findUnique({ where: { id: milestoneId } }) : null
-
-  const { notifyByTelegram } = await import('@/lib/skills/notification-layer')
-  const context = createSystemContext(this.context.tenantId)
-
-  const message = tipo === 'completado' 
-    ? `🎉 *Milestone Completado*\n\n📋 *Hito:* ${milestone?.nombre || this.context.milestoneNombre}`
-    : `⏰ *Milestone Próximo*\n\n📋 *Hito:* ${milestone?.nombre || this.context.milestoneNombre}\n📅 *Vence:* ${milestone?.dueDate?.toLocaleDateString()}`
-
-  notifyByTelegram(message, context).catch(() => {})
-
-  await this.log('notify_milestone', 'action', 'success', `Notificación de milestone enviada`)
-  return true
-}
-
-private async generateProjectReport(config: any): Promise<boolean> {
-  const { projectId, tipo, enviarCliente } = config
-  const targetProjectId = projectId || this.context.projectId
-
-  const project = await prisma.project.findUnique({
-    where: { id: targetProjectId },
-    include: { milestones: true, tasks: true }
-  })
-
-  const milestonesCompletados = project?.milestones.filter(m => m.status === 'completed').length || 0
-  const totalMilestones = project?.milestones.length || 0
-  const progreso = project?.progress || 0
-
-  const { notifyByTelegram, notifyByEmail } = await import('@/lib/skills/notification-layer')
-  const context = createSystemContext(this.context.tenantId)
-
-  const message = `📊 *Reporte de Proyecto*\n\n📁 *Proyecto:* ${project?.nombre}\n📈 *Progreso:* ${progreso}%\n🎯 *Hitos:* ${milestonesCompletados}/${totalMilestones}\n📅 *Inicio:* ${project?.startDate?.toLocaleDateString()}`
-
-  notifyByTelegram(message, context).catch(() => {})
-
-  if (this.context.userEmail) {
-    notifyByEmail(this.context.userEmail, `Reporte: ${project?.nombre}`, message, context).catch(() => {})
-  }
-
-  await this.log('generate_project_report', 'action', 'success', `Reporte de proyecto generado`)
-  return true
-}
-
-private async createProjectTask(config: any): Promise<boolean> {
-  const { projectId, titulo, descripcion, asignarA, fechaVencimiento, prioridad } = config
-  const targetProjectId = projectId || this.context.projectId
-
-  await prisma.task.create({
-    data: {
-      tenantId: this.context.tenantId,
-      title: titulo || `Tarea de proyecto`,
-      description: descripcion,
-      status: 'pending',
-      priority: prioridad || 'medium',
-      dueDate: fechaVencimiento,
-      assignedTo: asignarA || this.context.userId,
-      userId: this.context.userId || 'system',
-      projectId: targetProjectId,
-    }
-  })
-
-  await this.log('create_project_task', 'action', 'success', `Tarea de proyecto creada`)
-  return true
-}
-
-private async assignDeliverable(config: any): Promise<boolean> {
-  const { projectId, milestoneId, nombre, descripcion, asignarA, fechaEntrega } = config
-  const targetProjectId = projectId || this.context.projectId
-
-  await prisma.deliverable.create({
-    data: {
-      tenantId: this.context.tenantId,
-      projectId: targetProjectId,
-      milestoneId: milestoneId || this.context.milestoneId,
-      nombre: nombre || 'Entregable',
-      descripcion: descripcion,
-      estado: 'asignado',
-      fechaEntrega: fechaEntrega || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      asignadoA: asignarA || this.context.userId,
-    }
-  })
-
-  await this.log('assign_deliverable', 'action', 'success', `Entregable asignado`)
-  return true
 }
