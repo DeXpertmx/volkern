@@ -90,6 +90,17 @@ const triggerLabels: Record<string, string> = {
   ticket_creado: 'Ticket Creado',
   sla_por_vencer: 'SLA por Vencer',
   sla_incumplido: 'SLA Incumplido',
+
+  // === FASE 2: MARKETING ===
+  campana_iniciada: 'Campaña Iniciada',
+  campana_completada: 'Campaña Completada',
+  email_abierto: 'Email Abierto',
+  link_clicado: 'Link Clicado',
+  email_bounce: 'Email Devuelto',
+  email_unsuscrito: 'Email Desuscrito',
+  lead_nurturing: 'Lead en Nurturing',
+  post_publicado: 'Post Publicado',
+  post_programado: 'Post Programado',
 }
 
 const categoriaLabels: Record<string, string> = {

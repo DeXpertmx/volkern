@@ -30,6 +30,12 @@ import type {
   ProductionOrderCreatedEvent,
   SupportTicketCreatedEvent,
   SupportSlaWarningEvent,
+  CampaignStartedEvent,
+  CampaignCompletedEvent,
+  EmailOpenedEvent,
+  EmailClickedEvent,
+  LeadNurturingTriggerEvent,
+  SocialPostPublishedEvent,
 } from '@/lib/types/events';
 
 /**
@@ -68,6 +74,17 @@ const EVENT_TO_TRIGGER_MAP: Record<string, string> = {
   [EVENTS.SUPPORT_TICKET_CREATED]: 'ticket_creado',
   [EVENTS.SUPPORT_SLA_WARNING]: 'sla_por_vencer',
   [EVENTS.SUPPORT_SLA_BREACHED]: 'sla_incumplido',
+
+  // Marketing (Fase 2)
+  [EVENTS.CAMPAIGN_STARTED]: 'campana_iniciada',
+  [EVENTS.CAMPAIGN_COMPLETED]: 'campana_completada',
+  [EVENTS.EMAIL_OPENED]: 'email_abierto',
+  [EVENTS.EMAIL_CLICKED]: 'link_clicado',
+  [EVENTS.EMAIL_BOUNCED]: 'email_bounce',
+  [EVENTS.EMAIL_UNSUBSCRIBED]: 'email_unsuscrito',
+  [EVENTS.LEAD_NURTURING_TRIGGER]: 'lead_nurturing',
+  [EVENTS.SOCIAL_POST_PUBLISHED]: 'post_publicado',
+  [EVENTS.SOCIAL_POST_SCHEDULED]: 'post_programado',
 };
 
 /**
@@ -296,6 +313,86 @@ function eventToAutomationContext(event: EventType, payload: BaseEventPayload): 
         slaDueAt: slaPayload.slaDueAt,
         tiempoRestanteMinutos: slaPayload.tiempoRestanteMinutos,
         ticketPrioridad: slaPayload.prioridad,
+      };
+    }
+
+    // === FASE 2: MARKETING ===
+    case EVENTS.CAMPAIGN_STARTED: {
+      const campPayload = payload as CampaignStartedEvent;
+      return {
+        ...baseContext,
+        campaignId: campPayload.campaignId,
+        campaignNombre: campPayload.campaignNombre,
+        campaignTipo: campPayload.campaignTipo,
+        destinatariosCount: campPayload.destinatariosCount,
+      };
+    }
+
+    case EVENTS.CAMPAIGN_COMPLETED: {
+      const campPayload = payload as CampaignCompletedEvent;
+      return {
+        ...baseContext,
+        campaignId: campPayload.campaignId,
+        campaignNombre: campPayload.campaignNombre,
+        enviadosCount: campPayload.enviadosCount,
+        abiertosCount: campPayload.abiertosCount,
+        clicksCount: campPayload.clicksCount,
+      };
+    }
+
+    case EVENTS.EMAIL_OPENED: {
+      const emailPayload = payload as EmailOpenedEvent;
+      return {
+        ...baseContext,
+        emailId: emailPayload.emailId,
+        campaignId: emailPayload.campaignId,
+        leadId: emailPayload.leadId,
+        email: emailPayload.email,
+        tipoInteraccion: 'apertura',
+      };
+    }
+
+    case EVENTS.EMAIL_CLICKED: {
+      const emailPayload = payload as EmailClickedEvent;
+      return {
+        ...baseContext,
+        emailId: emailPayload.emailId,
+        campaignId: emailPayload.campaignId,
+        leadId: emailPayload.leadId,
+        urlClickeada: emailPayload.url,
+        tipoInteraccion: 'click',
+      };
+    }
+
+    case EVENTS.LEAD_NURTURING_TRIGGER: {
+      const nurturingPayload = payload as LeadNurturingTriggerEvent;
+      return {
+        ...baseContext,
+        leadId: nurturingPayload.leadId,
+        triggerType: nurturingPayload.triggerType,
+        daysInStage: nurturingPayload.daysInStage,
+        leadScore: nurturingPayload.score,
+      };
+    }
+
+    case EVENTS.SOCIAL_POST_PUBLISHED: {
+      const socialPayload = payload as SocialPostPublishedEvent;
+      return {
+        ...baseContext,
+        postId: socialPayload.postId,
+        plataforma: socialPayload.plataforma,
+        contenido: socialPayload.contenido,
+      };
+    }
+
+    case EVENTS.SOCIAL_POST_SCHEDULED: {
+      const socialPayload = payload as SocialPostPublishedEvent;
+      return {
+        ...baseContext,
+        postId: socialPayload.postId,
+        plataforma: socialPayload.plataforma,
+        contenido: socialPayload.contenido,
+        scheduledFor: socialPayload.scheduledFor,
       };
     }
 

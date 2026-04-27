@@ -75,6 +75,18 @@ export const EVENTS = {
   SUPPORT_TICKET_RESOLVED: 'support_ticket_resolved',
   SUPPORT_SLA_WARNING: 'support_sla_warning',
   SUPPORT_SLA_BREACHED: 'support_sla_breached',
+
+  // Marketing (Fase 2)
+  CAMPAIGN_STARTED: 'campaign_started',
+  CAMPAIGN_PAUSED: 'campaign_paused',
+  CAMPAIGN_COMPLETED: 'campaign_completed',
+  EMAIL_OPENED: 'email_opened',
+  EMAIL_CLICKED: 'email_clicked',
+  EMAIL_BOUNCED: 'email_bounced',
+  EMAIL_UNSUBSCRIBED: 'email_unsubscribed',
+  LEAD_NURTURING_TRIGGER: 'lead_nurturing_trigger',
+  SOCIAL_POST_PUBLISHED: 'social_post_published',
+  SOCIAL_POST_SCHEDULED: 'social_post_scheduled',
 } as const;
 
 export type EventType = typeof EVENTS[keyof typeof EVENTS];
@@ -326,6 +338,59 @@ export interface SupportSlaWarningEvent extends BaseEventPayload {
   prioridad: string;
 }
 
+// ============== MARKETING (Fase 2) ==============
+export interface CampaignStartedEvent extends BaseEventPayload {
+  campaignId: string;
+  campaignNombre: string;
+  campaignTipo: string;
+  destinatariosCount: number;
+}
+
+export interface CampaignCompletedEvent extends BaseEventPayload {
+  campaignId: string;
+  campaignNombre: string;
+  enviadosCount: number;
+  abiertosCount: number;
+  clicksCount: number;
+}
+
+export interface EmailOpenedEvent extends BaseEventPayload {
+  emailId: string;
+  campaignId?: string;
+  leadId?: string;
+  contactId?: string;
+  email: string;
+}
+
+export interface EmailClickedEvent extends BaseEventPayload {
+  emailId: string;
+  campaignId?: string;
+  leadId?: string;
+  contactId?: string;
+  url: string;
+}
+
+export interface LeadNurturingTriggerEvent extends BaseEventPayload {
+  leadId: string;
+  triggerType: string;
+  daysInStage: number;
+  score: number;
+}
+
+export interface SocialPostPublishedEvent extends BaseEventPayload {
+  postId: string;
+  plataforma: string;
+  contenido: string;
+  scheduledFor?: Date;
+}
+
+export interface SocialPostScheduledEvent extends BaseEventPayload {
+  postId: string;
+  plataforma: string;
+  contenido: string;
+  scheduledFor: Date;
+}
+
 // ============== MAPA DE EVENTOS ==============
 
 export type EventPayloadMap = {
@@ -363,4 +428,13 @@ export type EventPayloadMap = {
   // Soporte (Fase 1)
   [EVENTS.SUPPORT_TICKET_CREATED]: SupportTicketCreatedEvent;
   [EVENTS.SUPPORT_SLA_WARNING]: SupportSlaWarningEvent;
+
+  // Marketing (Fase 2)
+  [EVENTS.CAMPAIGN_STARTED]: CampaignStartedEvent;
+  [EVENTS.CAMPAIGN_COMPLETED]: CampaignCompletedEvent;
+  [EVENTS.EMAIL_OPENED]: EmailOpenedEvent;
+  [EVENTS.EMAIL_CLICKED]: EmailClickedEvent;
+  [EVENTS.LEAD_NURTURING_TRIGGER]: LeadNurturingTriggerEvent;
+  [EVENTS.SOCIAL_POST_PUBLISHED]: SocialPostPublishedEvent;
+  [EVENTS.SOCIAL_POST_SCHEDULED]: SocialPostScheduledEvent;
 };

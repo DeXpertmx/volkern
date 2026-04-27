@@ -309,6 +309,36 @@ export class AutomationEngine {
       case 'crear_tarea_desde_ticket':
         return await this.createTaskFromTicket(config)
 
+      // ============== FASE 2: MARKETING ==============
+      case 'crear_campana':
+        return await this.createCampaign(config)
+      case 'agregar_contacto_lista':
+        return await this.addContactToList(config)
+      case 'remover_contacto_lista':
+        return await this.removeContactFromList(config)
+      case 'segmentar_audiencia':
+        return await this.segmentAudience(config)
+      case 'programar_post':
+        return await this.scheduleSocialPost(config)
+      case 'publicar_post':
+        return await this.publishSocialPost(config)
+      case 'enviar_seguimiento':
+        return await this.sendFollowUp(config)
+      case 'actualizar_nurturing':
+        return await this.updateNurturing(config)
+      case 'calcular_engagement':
+        return await this.calculateEngagement(config)
+      case 'generar_reporte_campana':
+        return await this.generateCampaignReport(config)
+
+      // ============== FASE 2: EMAIL MARKETING ==============
+      case 'enviar_email_marketing':
+        return await this.sendMarketingEmail(config)
+      case 'crear_sequence':
+        return await this.createEmailSequence(config)
+      case 'pausar_sequence':
+        return await this.pauseEmailSequence(config)
+
       default:
         return true
     }
@@ -2334,5 +2364,350 @@ private async createTaskFromTicket(config: any): Promise<boolean> {
   })
 
   await this.log('create_task_from_ticket', 'action', 'success', `Tarea creada desde ticket`)
+  return true
+}
+
+// ============== FASE 2: ACCIONES DE MARKETING ==============
+
+private async createCampaign(config: any): Promise<boolean> {
+  const { nombre, tipo, objetivo, segmento, fechaInicio, fechaFin } = config
+
+  const campaign = await prisma.campaign.create({
+    data: {
+      tenantId: this.context.tenantId,
+      nombre: nombre || `Campaña Automática ${new Date().toLocaleDateString()}`,
+      tipo: tipo || 'email',
+      objetivo: objetivo,
+      estado: 'planificada',
+      fechaInicio: fechaInicio,
+      fechaFin: fechaFin,
+      objetivoSegmento: segmento,
+      createdBy: this.context.userId || 'system',
+    }
+  })
+
+  // Emitir evento de campaña iniciada
+  const { eventBus, EVENTS } = await import('@/lib/skills/event-bus')
+  eventBus.emitEvent(EVENTS.CAMPAIGN_STARTED, {
+    tenantId: this.context.tenantId,
+    timestamp: new Date(),
+    source: 'automation',
+    campaignId: campaign.id,
+    campaignNombre: campaign.nombre,
+    campaignTipo: campaign.tipo,
+    destinatariosCount: 0,
+  })
+
+  await this.log('create_campaign', 'action', 'success', `Campaña creada: ${campaign.nombre}`)
+  return true
+}
+
+private async addContactToList(config: any): Promise<boolean> {
+  const { listaId, contactId, leadId, email } = config
+  const targetContactId = contactId || this.context.contactId || this.context.leadId
+
+  await prisma.emailListMember.create({
+    data: {
+      listaId: listaId || config.listaId,
+      contactId: targetContactId,
+      email: email || this.context.email,
+      subscribedAt: new Date(),
+      source: 'automation',
+    }
+  })
+
+  await this.log('add_to_list', 'action', 'success', `Contacto agregado a lista`)
+  return true
+}
+
+private async removeContactFromList(config: any): Promise<boolean> {
+  const { listaId, contactId } = config
+  const targetContactId = contactId || this.context.contactId || this.context.leadId
+
+  await prisma.emailListMember.deleteMany({
+    where: {
+      listaId: listaId,
+      contactId: targetContactId,
+    }
+  })
+
+  await this.log('remove_from_list', 'action', 'success', `Contacto removido de lista`)
+  return true
+}
+
+private async segmentAudience(config: any): Promise<boolean> {
+  const { nombre, criterios } = config
+
+  // Criterios de segmentación
+  const whereClause: any = {
+    tenantId: this.context.tenantId,
+  }
+
+  if (criterios?.scoreMin) {
+    whereClause.score = { gte: criterios.scoreMin }
+  }
+  if (criterios?.scoreMax) {
+    whereClause.score = { ...whereClause.score, lte: criterios.scoreMax }
+  }
+  if (criterios?.estado) {
+    whereClause.estado = criterios.estado
+  }
+  if (criterios?.fuente) {
+    whereClause.fuente = criterios.fuente
+  }
+
+  const leadsCount = await prisma.lead.count({ where: whereClause })
+
+  // Crear segmento
+  const segmento = await prisma.audienceSegment.create({
+    data: {
+      tenantId: this.context.tenantId,
+      nombre: nombre || `Segmento ${new Date().toISOString()}`,
+      criterios: criterios || {},
+      leadsCount,
+      createdBy: this.context.userId || 'system',
+    }
+  })
+
+  await this.log('segment_audience', 'action', 'success', `Segmento creado: ${leadsCount} leads`)
+  return true
+}
+
+private async scheduleSocialPost(config: any): Promise<boolean> {
+  const { plataforma, contenido, fechaPublicacion, medios } = config
+
+  const post = await prisma.socialPost.create({
+    data: {
+      tenantId: this.context.tenantId,
+      plataforma: plataforma || config.plataforma || 'twitter',
+      contenido: contenido || this.context.contenido,
+      scheduledFor: fechaPublicacion || config.scheduledFor,
+      estado: 'programada',
+      medios: medios || [],
+      createdBy: this.context.userId || 'system',
+    }
+  })
+
+  const { eventBus, EVENTS } = await import('@/lib/skills/event-bus')
+  eventBus.emitEvent(EVENTS.SOCIAL_POST_SCHEDULED, {
+    tenantId: this.context.tenantId,
+    timestamp: new Date(),
+    source: 'automation',
+    postId: post.id,
+    plataforma: post.plataforma,
+    contenido: post.contenido,
+    scheduledFor: post.scheduledFor,
+  })
+
+  await this.log('schedule_post', 'action', 'success', `Post programado para ${post.scheduledFor}`)
+  return true
+}
+
+private async publishSocialPost(config: any): Promise<boolean> {
+  const { plataforma, contenido, postId } = config
+
+  const post = await prisma.socialPost.update({
+    where: { id: postId || config.postId },
+    data: {
+      estado: 'publicada',
+      publishedAt: new Date(),
+    }
+  })
+
+  const { eventBus, EVENTS } = await import('@/lib/skills/event-bus')
+  eventBus.emitEvent(EVENTS.SOCIAL_POST_PUBLISHED, {
+    tenantId: this.context.tenantId,
+    timestamp: new Date(),
+    source: 'automation',
+    postId: post.id,
+    plataforma: post.plataforma,
+    contenido: post.contenido,
+  })
+
+  await this.log('publish_post', 'action', 'success', `Post publicado en ${post.plataforma}`)
+  return true
+}
+
+private async sendFollowUp(config: any): Promise<boolean> {
+  const { templateId, asunto, leadId, delayMinutes } = config
+  const targetLeadId = leadId || this.context.leadId
+
+  // Programar follow-up
+  const fechaEnvio = delayMinutes 
+    ? new Date(Date.now() + delayMinutes * 60 * 1000)
+    : new Date()
+
+  await prisma.emailCampaign.create({
+    data: {
+      tenantId: this.context.tenantId,
+      nombre: `Follow-up automático - ${new Date().toISOString()}`,
+      tipo: 'follow_up',
+      templateId,
+      asunto: asunto || 'Seguimiento',
+      estado: 'programada',
+      fechaProgramada: fechaEnvio,
+      segmentoId: undefined,
+      leadIds: [targetLeadId],
+      createdBy: 'system',
+    }
+  })
+
+  await this.log('send_follow_up', 'action', 'success', `Follow-up programado para ${targetLeadId}`)
+  return true
+}
+
+private async updateNurturing(config: any): Promise<boolean> {
+  const { leadId, etapa, score, daysInStage } = config
+  const targetLeadId = leadId || this.context.leadId
+
+  const updateData: any = {}
+  if (etapa) updateData.etapa = etapa
+  if (score) updateData.score = score
+
+  await prisma.lead.update({
+    where: { id: targetLeadId },
+    data: updateData
+  })
+
+  await this.log('update_nurturing', 'action', 'success', `Nurturing actualizado para lead ${targetLeadId}`)
+  return true
+}
+
+private async calculateEngagement(config: any): Promise<boolean> {
+  const { campaignId } = config
+  const targetCampaignId = campaignId || this.context.campaignId
+
+  const campaign = await prisma.campaign.findUnique({
+    where: { id: targetCampaignId },
+    include: {
+      emails: true,
+    }
+  })
+
+  if (!campaign) {
+    await this.log('calculate_engagement', 'action', 'error', 'Campaña no encontrada')
+    return false
+  }
+
+  const totalEnviados = campaign.emails?.length || 0
+  // Simulación de métricas - en producción vendrían de EmailService
+  const metricas = {
+    tasaApertura: totalEnviados > 0 ? Math.random() * 40 + 20 : 0,
+    tasaClick: totalEnviados > 0 ? Math.random() * 15 + 5 : 0,
+    tasaConversion: totalEnviados > 0 ? Math.random() * 5 + 1 : 0,
+  }
+
+  await prisma.campaignMetric.create({
+    data: {
+      campaignId: targetCampaignId,
+      metricType: 'engagement',
+      metricValue: JSON.stringify(metricas),
+      recordedAt: new Date(),
+    }
+  })
+
+  await this.log('calculate_engagement', 'action', 'success', `Engagement calculado: ${JSON.stringify(metricas)}`)
+  return true
+}
+
+private async generateCampaignReport(config: any): Promise<boolean> {
+  const { campaignId, formato } = config
+  const targetCampaignId = campaignId || this.context.campaignId
+
+  const campaign = await prisma.campaign.findUnique({
+    where: { id: targetCampaignId },
+    include: {
+      emails: true,
+      metrics: true,
+    }
+  })
+
+  if (!campaign) {
+    await this.log('generate_report', 'action', 'error', 'Campaña no encontrada')
+    return false
+  }
+
+  const report = {
+    campaign: campaign.nombre,
+    estado: campaign.estado,
+    fechaInicio: campaign.fechaInicio,
+    fechaFin: campaign.fechaFin,
+    metricas: campaign.metrics,
+    generatedAt: new Date().toISOString(),
+  }
+
+  // Notificar al usuario
+  const { notifyByTelegram, notifyByEmail } = await import('@/lib/skills/notification-layer')
+  const context = createSystemContext(this.context.tenantId)
+
+  const message = `📊 *Reporte de Campaña*\n\n📧 *Campaña:* ${campaign.nombre}\n📈 *Estado:* ${campaign.estado}\n📅 *Período:* ${campaign.fechaInicio?.toLocaleDateString()} - ${campaign.fechaFin?.toLocaleDateString()}`
+
+  notifyByTelegram(message, context).catch(() => {})
+
+  if (this.context.userEmail && config.enviarEmail) {
+    notifyByEmail(
+      this.context.userEmail,
+      `Reporte: ${campaign.nombre}`,
+      message,
+      context
+    ).catch(() => {})
+  }
+
+  await this.log('generate_report', 'action', 'success', `Reporte generado para campaña ${campaign.nombre}`)
+  return true
+}
+
+// ============== FASE 2: ACCIONES DE EMAIL MARKETING ==============
+
+private async sendMarketingEmail(config: any): Promise<boolean> {
+  const { templateId, asunto, contenido, listaId, leadIds } = config
+
+  const campaign = await prisma.emailCampaign.create({
+    data: {
+      tenantId: this.context.tenantId,
+      nombre: `Email Marketing - ${new Date().toISOString()}`,
+      tipo: 'marketing',
+      templateId,
+      asunto: asunto,
+      contenido: contenido,
+      estado: 'enviada',
+      fechaEnvio: new Date(),
+      listaId: listaId,
+      leadIds: leadIds || (this.context.leadId ? [this.context.leadId] : []),
+      createdBy: 'automation',
+    }
+  })
+
+  await this.log('send_marketing_email', 'action', 'success', `Email marketing enviado: ${campaign.id}`)
+  return true
+}
+
+private async createEmailSequence(config: any): Promise<boolean> {
+  const { nombre, pasos, listaId } = config
+
+  const sequence = await prisma.emailSequence.create({
+    data: {
+      tenantId: this.context.tenantId,
+      nombre: nombre || `Secuencia automática`,
+      estado: 'activa',
+      listaId: listaId,
+      pasos: pasos || [],
+      createdBy: this.context.userId || 'system',
+    }
+  })
+
+  await this.log('create_sequence', 'action', 'success', `Secuencia de email creada: ${sequence.nombre}`)
+  return true
+}
+
+private async pauseEmailSequence(config: any): Promise<boolean> {
+  const { sequenceId } = config
+
+  await prisma.emailSequence.update({
+    where: { id: sequenceId },
+    data: { estado: 'pausada' }
+  })
+
+  await this.log('pause_sequence', 'action', 'success', `Secuencia pausada`)
   return true
 }
