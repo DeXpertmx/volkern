@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Análisis Automatizaciones Volkern CRM</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            line-height: 1.5;
+            color: #1e293b;
+            background: #fff;
+            padding: 40px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        .header {
+            background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+            color: white;
+            padding: 40px;
+            border-radius: 16px;
+            margin-bottom: 30px;
+        }
+        .header h1 { font-size: 28px; margin-bottom: 8px; }
+        .header p { opacity: 0.9; font-size: 14px; }
+        
+        .section { margin-bottom: 25px; }
+        .section-title {
+            font-size: 16px;
+            color: #2563eb;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 8px;
+            margin-bottom: 15px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-bottom: 25px;
+        }
+        .stat-box {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+        }
+        .stat-number {
+            font-size: 32px;
+            font-weight: 800;
+            color: #2563eb;
+        }
+        .stat-label { font-size: 11px; color: #64748b; }
+
+        .priority-high {
+            background: #fef2f2;
+            border-left: 4px solid #dc2626;
+        }
+        .priority-medium {
+            background: #fffbeb;
+            border-left: 4px solid #f59e0b;
+        }
+        .priority-low {
+            background: #f0fdf4;
+            border-left: 4px solid #22c55e;
+        }
+
+        .module-list {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+        .module-item {
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .module-item .icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            color: white;
+        }
+        .icon-red { background: #dc2626; }
+        .icon-amber { background: #f59e0b; }
+        .icon-green { background: #22c55e; }
+        .icon-blue { background: #2563eb; }
+
+        .agent-card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+        .agent-name {
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 4px;
+        }
+        .agent-role {
+            font-size: 12px;
+            color: #2563eb;
+            margin-bottom: 8px;
+        }
+        .agent-modules {
+            font-size: 11px;
+            color: #64748b;
+        }
+
+        .phase-card {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+        .phase-number {
+            width: 36px;
+            height: 36px;
+            background: #2563eb;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+        .phase-info h4 {
+            font-size: 14px;
+            margin-bottom: 2px;
+        }
+        .phase-info p {
+            font-size: 11px;
+            color: #64748b;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        th {
+            background: #f8fafc;
+            font-weight: 600;
+            color: #475569;
+        }
+        .status-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 6px;
+        }
+        .status-complete { background: #22c55e; }
+        .status-progress { background: #f59e0b; }
+        .status-pending { background: #94a3b8; }
+
+        .footer {
+            margin-top: 30px;
+            text-align: center;
+            color: #94a3b8;
+            font-size: 11px;
+            padding-top: 20px;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        @media print {
+            body { padding: 20px; }
+            .module-list { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>🔧 Análisis de Automatizaciones</h1>
+    <p>Volkern CRM - Plan de Desarrollo y Mejoras | 27 Abril 2026</p>
+</div>
+
+<div class="section">
+    <h2 class="section-title">📊 Estado Actual del Sistema</h2>
+    <div class="stats-row">
+        <div class="stat-box">
+            <div class="stat-number">14</div>
+            <div class="stat-label">Triggers</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-number">26</div>
+            <div class="stat-label">Acciones</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-number">8</div>
+            <div class="stat-label">Módulos Integrados</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-number">54</div>
+            <div class="stat-label">Total Módulos</div>
+        </div>
+    </div>
+    <p style="font-size: 13px; color: #64748b;">
+        <strong>Cobertura actual:</strong> 15% de módulos automatizados. 
+        El sistema tiene arquitectura sólida pero necesita expandir triggers y acciones.
+    </p>
+</div>
+
+<div class="section">
+    <h2 class="section-title">🎯 Módulos por Prioridad de Automatización</h2>
+    
+    <h3 style="font-size: 13px; color: #dc2626; margin-bottom: 10px;">🔴 ALTA PRIORIDAD (8 módulos)</h3>
+    <div class="module-list">
+        <div class="module-item priority-high">
+            <span class="icon icon-red">1</span>
+            <span>Marketing (Campañas, Email, Social)</span>
+        </div>
+        <div class="module-item priority-high">
+            <span class="icon icon-red">2</span>
+            <span>RRHH (Onboarding, Evaluaciones)</span>
+        </div>
+        <div class="module-item priority-high">
+            <span class="icon icon-red">3</span>
+            <span>Finanzas (Facturación, Nóminas)</span>
+        </div>
+        <div class="module-item priority-high">
+            <span class="icon icon-red">4</span>
+            <span>Support (Tickets, SLA)</span>
+        </div>
+        <div class="module-item priority-high">
+            <span class="icon icon-red">5</span>
+            <span>Inventario (Stock, Alertas)</span>
+        </div>
+        <div class="module-item priority-high">
+            <span class="icon icon-red">6</span>
+            <span>Producción (Órdenes, BoM)</span>
+        </div>
+        <div class="module-item priority-high">
+            <span class="icon icon-red">7</span>
+            <span>Proyectos (Milestones)</span>
+        </div>
+        <div class="module-item priority-high">
+            <span class="icon icon-red">8</span>
+            <span>Calidad (Inspecciones, NC)</span>
+        </div>
+    </div>
+
+    <h3 style="font-size: 13px; color: #f59e0b; margin: 15px 0 10px;">🟡 MEDIA PRIORIDAD (4 módulos)</h3>
+    <div class="module-list">
+        <div class="module-item priority-medium">
+            <span class="icon icon-amber">1</span>
+            <span>Social (Programación posts)</span>
+        </div>
+        <div class="module-item priority-medium">
+            <span class="icon icon-amber">2</span>
+            <span>Empresas (Corporativo)</span>
+        </div>
+        <div class="module-item priority-medium">
+            <span class="icon icon-amber">3</span>
+            <span>Contratos (Renovaciones)</span>
+        </div>
+        <div class="module-item priority-medium">
+            <span class="icon icon-amber">4</span>
+            <span>Quizzes (Evaluaciones)</span>
+        </div>
+    </div>
+</div>
+
+<div class="section">
+    <h2 class="section-title">👥 Agentes IA Propuestos</h2>
+    
+    <div class="agent-card">
+        <div class="agent-name">🤖 Gemma Marketing Orchestrator</div>
+        <div class="agent-role">Marketing Automation Agent - Orquestar automatizaciones de marketing</div>
+        <div class="agent-modules"><strong>Módulos:</strong> Campañas, Email Marketing, Social, Leads, Scoring IA</div>
+    </div>
+    
+    <div class="agent-card">
+        <div class="agent-name">🏭 Gemma Operations Coordinator</div>
+        <div class="agent-role">Operations Automation Agent - Orquestar producción, inventario y RRHH</div>
+        <div class="agent-modules"><strong>Módulos:</strong> Producción, Inventario, RRHH, Calidad, Proyectos</div>
+    </div>
+    
+    <div class="agent-card">
+        <div class="agent-name">💰 Gemma Finance Controller</div>
+        <div class="agent-role">Finance Automation Agent - Orquestar automatizaciones financieras</div>
+        <div class="agent-modules"><strong>Módulos:</strong> Finanzas, Contabilidad, Facturación, Proveedores, Nóminas</div>
+    </div>
+    
+    <div class="agent-card">
+        <div class="agent-name">🎧 Gemma Customer Champion</div>
+        <div class="agent-role">Customer Success Agent - Orquestar soporte y relación cliente</div>
+        <div class="agent-modules"><strong>Módulos:</strong> Support, Citas, Mensajes, Live Chat, Contratos</div>
+    </div>
+    
+    <div class="agent-card">
+        <div class="agent-name">🌐 Gemma Web Curator</div>
+        <div class="agent-role">Web & Content Agent - Orquestar contenido y presencia digital</div>
+        <div class="agent-modules"><strong>Módulos:</strong> CMS, Pages, WebCreator, Mi Tarjeta</div>
+    </div>
+</div>
+
+<div class="section">
+    <h2 class="section-title">📅 Hoja de Ruta (16 Semanas)</h2>
+    
+    <div class="phase-card">
+        <div class="phase-number">1</div>
+        <div class="phase-info">
+            <h4>FASE 1: Core - Inventario, Production, Support (Semanas 1-4)</h4>
+            <p>8 automatizaciones: stock_bajo, orden_produccion, ticket_creado, crear_orden, notificar_stock</p>
+        </div>
+    </div>
+    
+    <div class="phase-card">
+        <div class="phase-number">2</div>
+        <div class="phase-info">
+            <h4>FASE 2: Marketing Automation (Semanas 5-8)</h4>
+            <p>8 automatizaciones: campana_iniciada, email_abierto, crear_campana, segmentar_audiencia</p>
+        </div>
+    </div>
+    
+    <div class="phase-card">
+        <div class="phase-number">3</div>
+        <div class="phase-info">
+            <h4>FASE 3: RRHH y Finanzas (Semanas 9-12)</h4>
+            <p>8 automatizaciones: empleado_nuevo, factura_vencida, crear_nomina, generar_factura</p>
+        </div>
+    </div>
+    
+    <div class="phase-card">
+        <div class="phase-number">4</div>
+        <div class="phase-info">
+            <h4>FASE 4: Calidad y Proyectos (Semanas 13-16)</h4>
+            <p>8 automatizaciones: inspeccion_completada, milestone_alcanzar, registrar_no_conformidad</p>
+        </div>
+    </div>
+</div>
+
+<div class="section">
+    <h2 class="section-title">📋 Resumen de Triggers y Acciones a Implementar</h2>
+    
+    <table>
+        <thead>
+            <tr>
+                <th>Fase</th>
+                <th>Triggers Nuevos</th>
+                <th>Acciones Nuevas</th>
+                <th>Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Fase 1</strong></td>
+                <td>stock_bajo, orden_produccion, ticket_creado, sla_por_vencer</td>
+                <td>crear_orden_produccion, notificar_stock, crear_ticket, actualizar_inventario</td>
+                <td>8</td>
+            </tr>
+            <tr>
+                <td><strong>Fase 2</strong></td>
+                <td>campana_iniciada, email_abierto, link_clicado</td>
+                <td>crear_campana, agregar_contacto_lista, segmentar_audiencia, programar_post</td>
+                <td>8</td>
+            </tr>
+            <tr>
+                <td><strong>Fase 3</strong></td>
+                <td>empleado_nuevo, evaluacion_completada, factura_vencida</td>
+                <td>enviar_onboarding, crear_nomina, generar_factura, registrar_gasto</td>
+                <td>8</td>
+            </tr>
+            <tr>
+                <td><strong>Fase 4</strong></td>
+                <td>inspeccion_completada, no_conformidad, milestone_alcanzado</td>
+                <td>crear_inspeccion, registrar_no_conformidad, actualizar_progreso</td>
+                <td>8</td>
+            </tr>
+            <tr style="background: #f0fdf4;">
+                <td><strong>TOTAL</strong></td>
+                <td>14 nuevos triggers</td>
+                <td>20 nuevas acciones</td>
+                <td><strong>32</strong></td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<div class="section">
+    <h2 class="section-title">🎯 Impacto Esperado</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Métrica</th>
+                <th>Antes</th>
+                <th>Después (6 meses)</th>
+                <th>Mejora</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Tiempo en tareas manuales</td>
+                <td>8 hrs/día</td>
+                <td>3 hrs/día</td>
+                <td>-60%</td>
+            </tr>
+            <tr>
+                <td>Respuesta a leads</td>
+                <td>4 horas</td>
+                <td>5 minutos</td>
+                <td>-98%</td>
+            </tr>
+            <tr>
+                <td>Facturación automatizada</td>
+                <td>40%</td>
+                <td>80%</td>
+                <td>+40%</td>
+            </tr>
+            <tr>
+                <td>Módulos integrados</td>
+                <td>8 (15%)</td>
+                <td>30 (56%)</td>
+                <td>+275%</td>
+            </tr>
+            <tr>
+                <td>Triggers disponibles</td>
+                <td>14</td>
+                <td>40</td>
+                <td>+185%</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<div class="footer">
+    <p>Volkern CRM v14.2.28 | Documento de Análisis Estratégico</p>
+    <p>Generado: 27 de Abril de 2026</p>
+</div>
+
+</body>
+</html>

@@ -14,36 +14,34 @@ export class StrategyService {
     const projects = await prisma.project.findMany({
       where: { tenantId },
       include: { 
-        tasks: true // Asumiendo que las tareas tienen horas o vinculación
+        milestones: true,
+        expenses: true
       }
     });
 
     const results = [];
 
     for (const project of projects) {
-      // Obtener facturación vinculada al proyecto (asumiendo relación en Invoice)
+      // Obtener facturación vinculada al proyecto vía Lead
       const invoices = await prisma.invoice.findMany({
-        where: { tenantId, entityId: project.id, entityType: 'PROJECT', status: 'PAID' }
+        where: { tenantId, leadId: project.leadId, estado: 'pagado' },
+        select: { monto: true }
       });
-      const revenue = invoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
+      const revenue = invoices.reduce((sum, inv) => sum + (inv.monto || 0), 0);
 
       // Obtener tickets de soporte vinculados al proyecto
       const tickets = await prisma.supportTicket.findMany({
-        where: { tenantId, entityId: project.id, entityType: 'PROJECT' },
-        include: { timeline: true }
+        where: { tenantId },
+        select: { id: true }
       });
 
-      // Calcular coste operativo (asumiendo un coste por hora de soporte)
-      // En un sistema real, mediríamos el tiempo real en el timeline
-      const supportHours = tickets.length * 2; // Mock: 2h por ticket
-      const hourlyRate = 50; // Mock: 50 USD/h de coste interno
+      // Calcular coste operativo
+      const supportHours = tickets.length * 2;
+      const hourlyRate = 50;
       const operationalCost = supportHours * hourlyRate;
 
-      // Otros costes (asumiendo que hay gastos vinculados)
-      const expenses = await prisma.expense.findMany({
-        where: { tenantId, entityId: project.id, entityType: 'PROJECT' }
-      });
-      const directCosts = expenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
+      // Los gastos ya están incluidos en el proyecto via include
+      const directCosts = (project.expenses || []).reduce((sum, exp) => sum + (exp.amount || 0), 0);
 
       const margin = revenue - directCosts - operationalCost;
       const roi = directCosts + operationalCost > 0 ? (margin / (directCosts + operationalCost)) * 100 : 0;

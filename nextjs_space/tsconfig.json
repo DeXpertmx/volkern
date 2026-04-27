@@ -32,13 +32,19 @@
   },
   "include": [
     "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
-    ".next/types/**/*.ts",
-    ".build/types/**/*.ts"
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "lib/**/*.ts",
+    "components/**/*.ts",
+    "components/**/*.tsx",
+    ".next/types/**/*.ts"
   ],
   "exclude": [
     "mcp-server",
-    "node_modules"
+    "node_modules",
+    "scripts",
+    "tests",
+    "hooks",
+    "types"
   ]
 }

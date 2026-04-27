@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Volkern CRM - Reporte de Módulos</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #fff;
+            padding: 40px;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #2563eb;
+        }
+        .header h1 {
+            font-size: 32px;
+            color: #1e293b;
+            margin-bottom: 10px;
+        }
+        .header p {
+            color: #64748b;
+            font-size: 14px;
+        }
+        .section {
+            margin-bottom: 30px;
+        }
+        .section-title {
+            font-size: 18px;
+            color: #2563eb;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #e2e8f0;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .module-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+        .module-card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 15px;
+            transition: all 0.2s;
+        }
+        .module-card:hover {
+            border-color: #2563eb;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.1);
+        }
+        .module-name {
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 5px;
+            font-size: 15px;
+        }
+        .module-route {
+            font-size: 11px;
+            color: #2563eb;
+            background: #dbeafe;
+            padding: 2px 8px;
+            border-radius: 4px;
+            display: inline-block;
+            margin-bottom: 8px;
+        }
+        .submodules {
+            margin-top: 8px;
+        }
+        .submodule {
+            display: inline-block;
+            font-size: 11px;
+            background: #f1f5f9;
+            color: #475569;
+            padding: 3px 8px;
+            border-radius: 4px;
+            margin: 2px;
+        }
+        .stats {
+            background: #f0f9ff;
+            border: 1px solid #bae6fd;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        .stats h3 {
+            color: #0369a1;
+            margin-bottom: 10px;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            text-align: center;
+        }
+        .stat-item {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .stat-number {
+            font-size: 28px;
+            font-weight: 800;
+            color: #2563eb;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #64748b;
+        }
+        .footer {
+            margin-top: 40px;
+            text-align: center;
+            color: #94a3b8;
+            font-size: 12px;
+            padding-top: 20px;
+            border-top: 1px solid #e2e8f0;
+        }
+        @media print {
+            body { padding: 20px; }
+            .module-card { break-inside: avoid; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Volkern CRM</h1>
+        <p>Reporte de Módulos y Submódulos</p>
+        <p>Fecha: 27 de Abril de 2026</p>
+    </div>
+
+    <div class="stats">
+        <h3>Resumen del Sistema</h3>
+        <div class="stats-grid">
+            <div class="stat-item">
+                <div class="stat-number">54</div>
+                <div class="stat-label">Módulos</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number">89</div>
+                <div class="stat-label">Submódulos</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number">253</div>
+                <div class="stat-label">Modelos DB</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number">39</div>
+                <div class="stat-label">Skills IA</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2 class="section-title">🎯 Ventas & CRM</h2>
+        <div class="module-grid">
+            <div class="module-card">
+                <div class="module-name">Leads</div>
+                <span class="module-route">/dashboard/leads</span>
+                <div class="submodules">
+                    <span class="submodule">[id]</span>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Contactos</div>
+                <span class="module-route">/dashboard/contactos</span>
+                <div class="submodules">
+                    <span class="submodule">[id]</span>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Empresas</div>
+                <span class="module-route">/dashboard/empresas</span>
+                <div class="submodules">
+                    <span class="submodule">[id]</span>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Pipeline</div>
+                <span class="module-route">/dashboard/pipeline</span>
+                <div class="submodules">
+                    <span class="submodule">[id]</span>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Cotizaciones</div>
+                <span class="module-route">/dashboard/cotizaciones</span>
+                <div class="submodules">
+                    <span class="submodule">[id]</span>
+                    <span class="submodule">nueva</span>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Contratos</div>
+                <span class="module-route">/dashboard/contratos</span>
+                <div class="submodules">
+                    <span class="submodule">[id]</span>
+                    <span class="submodule">nuevo</span>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Scoring IA</div>
+                <span class="module-route">/dashboard/scoring</span>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Ventas</div>
+                <span class="module-route">/dashboard/ventas</span>
+                <div class="submodules">
+                    <span class="submodule">ordenes</span>
+                    <span class="submodule">pronosticos</span>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Tareas</div>
+                <span class="module-route">/dashboard/tareas</span>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Servicios</div>
+                <span class="module-route">/dashboard/servicios</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2 class="section-title">📞 Comunicación</h2>
+        <div class="module-grid">
+            <div class="module-card">
+                <div class="module-name">Mensajes</div>
+                <span class="module-route">/dashboard/mensajes</span>
+                <div class="submodules">
+                    <span class="submodule">[id]</span>
+                    <span class="submodule">templates</span>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Chatbot</div>
+                <span class="module-route">/dashboard/chatbot</span>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Citas</div>
+                <span class="module-route">/dashboard/citas</span>
+                <div class="submodules">
+                    <span class="submodule">[id]</span>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Telefonía</div>
+                <span class="module-route">/dashboard/telefonia</span>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Plaudern</div>
+                <span class="module-route">/dashboard/plaudern</span>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Live Chat</div>
+                <span class="module-route">/dashboard/live-chat</span>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Emails</div>
+                <span class="module-route">/dashboard/emails</span>
+                <div class="submodules">
+                    <span class="submodule">accounts</span>
+                    <span class="submodule">config</span>
+                    <span class="submodule">domains</span>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Comunicaciones</div>
+                <span class="module-route">/dashboard/comunicaciones</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2 class="section-title">📣 Marketing</h2>
+        <div class="module-grid">
+            <div class="module-card">
+                <div class="module-name">Campañas</div>
+                <span class="module-route">/dashboard/campanas</span>
+                <div class="submodules">
+                    <span class="submodule">[id]</span>
+                    <span class="submodule">nueva</span>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Email Marketing</div>
+                <span class="module-route">/dashboard/email-campanas</span>
+                <div class="submodules">
+                    <span class="submodule">audiencias</span>
+                    <span class="submodule">[id]</span>
+                    <span class="submodule">nueva</span>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-name">CMS</div>
+                <span class="module-route">/dashboard/cms</span>
+                <div class="submodules">
+                    <span class="submodule">editor</span>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Social</div>
+                <span class="module-route">/dashboard/social</span>
+                <div class="submodules">
+                    <span class="submodule">settings</span>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Catálogo</div>
+                <span class="module-route">/dashboard/catalogo</span>
+                <div class="submodules">
+                    <span class="submodule">campos</span>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Marketing</div>
+                <span class="module-route">/dashboard/marketing</span>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Pages</div>
+                <span class="module-route">/dashboard/pages</span>
+                <div class="submodules">
+                    <span class="submodule">[id]</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2 class="section-title">🎓 Academia & LMS</h2>
+        <div class="module-grid">
+            <div class="module-card">
+                <div class="module-name">Academia</div>
+                <span class="module-route">/dashboard/academia</span>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Cursos</div>
+                <span class="module-route">/dashboard/cursos</span>
+                <div class="submodules">
+                    <span class="submodule">[id]</span>
+                    <span class="submodule">nuevo</span>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Estudiantes</div>
+                <span class="module-route">/dashboard/estudiantes</span>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Comunidad</div>
+                <span class="module-route">/dashboard/comunidad</span>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Quizzes</div>
+                <span class="module-route">/dashboard/quizzes</span>
+                <div class="submodules">
+                    <span class="submodule">[id]</span>
+                    <span class="submodule">nuevo</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2 class="section-title">⚙️ Automatización & IA</h2>
+        <div class="module-grid">
+            <div class="module-card">
+                <div class="module-name">Automatizaciones</div>
+                <span class="module-route">/dashboard/automatizaciones</span>
+                <div class="submodules">
+                    <span class="submodule">builder</span>
+                    <span class="submodule">[id]</span>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Strategy</div>
+                <span class="module-route">/dashboard/strategy</span>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Knowledge</div>
+                <span class="module-route">/dashboard/knowledge</span>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Discover</div>
+                <span class="module-route">/dashboard/discover</span>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Agencia</div>
+                <span class="module-route">/dashboard/agencia</span>
+                <div class="submodules">
+                    <span class="submodule">branding</span>
+                    <span class="submodule">fiscal-health</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2 class="section-title">🏭 Industrial (MRP)</h2>
+        <div class="module-grid">
+            <div class="module-card">
+                <div class="module-name">Producción</div>
+                <span class="module-route">/dashboard/produccion</span>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Calidad</div>
+                <span class="module-route">/dashboard/calidad</span>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Inventario</div>
+                <span class="module-route">/dashboard/inventario</span>
+                <div class="submodules">
+                    <span class="submodule">alertas</span>
+                    <span class="submodule">almacenes</span>
+                    <span class="submodule">movimientos</span>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Proyectos</div>
+                <span class="module-route">/dashboard/proyectos</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2 class="section-title">👥 RRHH</h2>
+        <div class="module-grid">
+            <div class="module-card">
+                <div class="module-name">RRHH</div>
+                <span class="module-route">/dashboard/rrhh</span>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Equipo</div>
+                <span class="module-route">/dashboard/equipo</span>
+                <div class="submodules">
+                    <span class="submodule">roles</span>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Onboarding</div>
+                <span class="module-route">/dashboard/onboarding</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2 class="section-title">💰 Finanzas</h2>
+        <div class="module-grid">
+            <div class="module-card">
+                <div class="module-name">Finanzas</div>
+                <span class="module-route">/dashboard/finanzas</span>
+                <div class="submodules">
+                    <span class="submodule">contabilidad</span>
+                    <span class="submodule">facturacion</span>
+                    <span class="submodule">gastos</span>
+                    <span class="submodule">global</span>
+                    <span class="submodule">nominas</span>
+                    <span class="submodule">proveedores</span>
+                    <span class="submodule">reportes</span>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Billing</div>
+                <span class="module-route">/dashboard/sales/billing</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2 class="section-title">🔌 Configuración</h2>
+        <div class="module-grid">
+            <div class="module-card">
+                <div class="module-name">Configuración</div>
+                <span class="module-route">/dashboard/configuracion</span>
+                <div class="submodules">
+                    <span class="submodule">api-keys</span>
+                    <span class="submodule">billing</span>
+                    <span class="submodule">logs</span>
+                    <span class="submodule">mi-whatsapp</span>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Integraciones</div>
+                <span class="module-route">/dashboard/integraciones</span>
+                <div class="submodules">
+                    <span class="submodule">gocardless</span>
+                    <span class="submodule">n8n</span>
+                    <span class="submodule">webhooks</span>
+                    <span class="submodule">webhooks-salientes</span>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Analytics</div>
+                <span class="module-route">/dashboard/analytics</span>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Support</div>
+                <span class="module-route">/dashboard/support</span>
+                <div class="submodules">
+                    <span class="submodule">[id]</span>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Assets</div>
+                <span class="module-route">/dashboard/assets</span>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Connect</div>
+                <span class="module-route">/dashboard/connect</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2 class="section-title">🌍 Otros Módulos</h2>
+        <div class="module-grid">
+            <div class="module-card">
+                <div class="module-name">Mi Tarjeta</div>
+                <span class="module-route">/dashboard/mi-tarjeta</span>
+                <div class="submodules">
+                    <span class="submodule">escanear</span>
+                </div>
+            </div>
+            <div class="module-card">
+                <div class="module-name">WebCreator</div>
+                <span class="module-route">/dashboard/webcreator</span>
+            </div>
+            <div class="module-card">
+                <div class="module-name">Perfil</div>
+                <span class="module-route">/dashboard/perfil</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>Volkern CRM v14.2.28 | Generado el 27 de Abril de 2026</p>
+        <p>Technologies: Next.js, TypeScript, Prisma (253 models), 39 AI Skills, React 18, Tailwind CSS</p>
+    </div>
+</body>
+</html>

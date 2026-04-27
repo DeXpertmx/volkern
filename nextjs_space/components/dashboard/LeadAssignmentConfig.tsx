@@ -56,7 +56,7 @@ export function LeadAssignmentConfig() {
       const usersData = await usersRes.json();
       const configData = await configRes.json();
 
-      if (usersRes.ok) setUsers(usersData);
+      if (usersRes.ok) setUsers(usersData.users || []);
       if (configRes.ok) setConfig(configData);
     } catch (error) {
       console.error('Error fetching data:', error);
