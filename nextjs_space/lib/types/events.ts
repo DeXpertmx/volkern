@@ -87,6 +87,25 @@ export const EVENTS = {
   LEAD_NURTURING_TRIGGER: 'lead_nurturing_trigger',
   SOCIAL_POST_PUBLISHED: 'social_post_published',
   SOCIAL_POST_SCHEDULED: 'social_post_scheduled',
+
+  // RRHH (Fase 3)
+  EMPLOYEE_CREATED: 'employee_created',
+  EMPLOYEE_UPDATED: 'employee_updated',
+  EMPLOYEE_TERMINATED: 'employee_terminated',
+  EVALUATION_COMPLETED: 'evaluation_completed',
+  EVALUATION_DUE: 'evaluation_due',
+  TRAINING_COMPLETED: 'training_completed',
+  CERTIFICATION_EXPIRED: 'certification_expired',
+
+  // Finanzas (Fase 3)
+  INVOICE_DUE: 'invoice_due',
+  INVOICE_OVERDUE: 'invoice_overdue',
+  INVOICE_PAID: 'invoice_paid',
+  PAYMENT_TO_SUPPLIER: 'payment_to_supplier',
+  EXPENSE_SUBMITTED: 'expense_submitted',
+  EXPENSE_APPROVED: 'expense_approved',
+  PAYROLL_GENERATED: 'payroll_generated',
+  BUDGET_ALERT: 'budget_alert',
 } as const;
 
 export type EventType = typeof EVENTS[keyof typeof EVENTS];
@@ -391,6 +410,105 @@ export interface SocialPostScheduledEvent extends BaseEventPayload {
   scheduledFor: Date;
 }
 
+// ============== RRHH (Fase 3) ==============
+export interface EmployeeCreatedEvent extends BaseEventPayload {
+  employeeId: string;
+  employeeNombre: string;
+  employeeEmail: string;
+  puesto: string;
+  departamento?: string;
+  fechaIngreso: Date;
+}
+
+export interface EmployeeTerminatedEvent extends BaseEventPayload {
+  employeeId: string;
+  employeeNombre: string;
+  motivo: string;
+  fechaTerminacion: Date;
+}
+
+export interface EvaluationCompletedEvent extends BaseEventPayload {
+  evaluationId: string;
+  employeeId: string;
+  employeeNombre: string;
+  puntuacion: number;
+  feedback?: string;
+}
+
+export interface EvaluationDueEvent extends BaseEventPayload {
+  evaluationId: string;
+  employeeId: string;
+  employeeNombre: string;
+  fechaEvaluacion: Date;
+  tipo: string;
+}
+
+export interface TrainingCompletedEvent extends BaseEventPayload {
+  trainingId: string;
+  employeeId: string;
+  employeeNombre: string;
+  cursoNombre: string;
+  puntuacion?: number;
+  certificadoEmitido: boolean;
+}
+
+export interface CertificationExpiredEvent extends BaseEventPayload {
+  certificationId: string;
+  employeeId: string;
+  employeeNombre: string;
+  certificacion: string;
+  fechaExpiracion: Date;
+}
+
+// ============== FINANZAS (Fase 3) ==============
+export interface InvoiceDueEvent extends BaseEventPayload {
+  invoiceId: string;
+  invoiceNumero: string;
+  monto: number;
+  moneda: string;
+  fechaVencimiento: Date;
+  clienteNombre?: string;
+}
+
+export interface InvoiceOverdueEvent extends BaseEventPayload {
+  invoiceId: string;
+  invoiceNumero: string;
+  monto: number;
+  diasRetraso: number;
+  clienteNombre?: string;
+}
+
+export interface ExpenseSubmittedEvent extends BaseEventPayload {
+  expenseId: string;
+  employeeId: string;
+  employeeNombre: string;
+  monto: number;
+  categoria: string;
+  descripcion: string;
+}
+
+export interface ExpenseApprovedEvent extends BaseEventPayload {
+  expenseId: string;
+  employeeId: string;
+  monto: number;
+  aprobadoPor: string;
+}
+
+export interface PayrollGeneratedEvent extends BaseEventPayload {
+  payrollId: string;
+  periodo: string;
+  totalEmpleados: number;
+  montoTotal: number;
+}
+
+export interface BudgetAlertEvent extends BaseEventPayload {
+  departmentId: string;
+  departmentNombre: string;
+  presupuestoActual: number;
+  presupuestoUsado: number;
+  porcentajeUsado: number;
+}
+
 // ============== MAPA DE EVENTOS ==============
 
 export type EventPayloadMap = {
@@ -437,4 +555,20 @@ export type EventPayloadMap = {
   [EVENTS.LEAD_NURTURING_TRIGGER]: LeadNurturingTriggerEvent;
   [EVENTS.SOCIAL_POST_PUBLISHED]: SocialPostPublishedEvent;
   [EVENTS.SOCIAL_POST_SCHEDULED]: SocialPostScheduledEvent;
+
+  // RRHH (Fase 3)
+  [EVENTS.EMPLOYEE_CREATED]: EmployeeCreatedEvent;
+  [EVENTS.EMPLOYEE_TERMINATED]: EmployeeTerminatedEvent;
+  [EVENTS.EVALUATION_COMPLETED]: EvaluationCompletedEvent;
+  [EVENTS.EVALUATION_DUE]: EvaluationDueEvent;
+  [EVENTS.TRAINING_COMPLETED]: TrainingCompletedEvent;
+  [EVENTS.CERTIFICATION_EXPIRED]: CertificationExpiredEvent;
+
+  // Finanzas (Fase 3)
+  [EVENTS.INVOICE_DUE]: InvoiceDueEvent;
+  [EVENTS.INVOICE_OVERDUE]: InvoiceOverdueEvent;
+  [EVENTS.EXPENSE_SUBMITTED]: ExpenseSubmittedEvent;
+  [EVENTS.EXPENSE_APPROVED]: ExpenseApprovedEvent;
+  [EVENTS.PAYROLL_GENERATED]: PayrollGeneratedEvent;
+  [EVENTS.BUDGET_ALERT]: BudgetAlertEvent;
 };

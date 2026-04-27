@@ -339,6 +339,44 @@ export class AutomationEngine {
       case 'pausar_sequence':
         return await this.pauseEmailSequence(config)
 
+      // ============== FASE 3: RRHH ==============
+      case 'enviar_onboarding':
+        return await this.sendOnboarding(config)
+      case 'crear_evaluacion':
+        return await this.createEvaluation(config)
+      case 'enviar_encuesta':
+        return await this.sendSurvey(config)
+      case 'registrar_capacitacion':
+        return await this.registerTraining(config)
+      case 'notificar_certificacion':
+        return await this.notifyCertification(config)
+      case 'actualizar_empleado':
+        return await this.updateEmployee(config)
+      case 'asignar_rol':
+        return await this.assignRole(config)
+
+      // ============== FASE 3: FINANZAS ==============
+      case 'generar_factura':
+        return await this.generateInvoice(config)
+      case 'registrar_gasto':
+        return await this.registerExpense(config)
+      case 'aprobar_gasto':
+        return await this.approveExpense(config)
+      case 'rechazar_gasto':
+        return await this.rejectExpense(config)
+      case 'notificar_pago':
+        return await this.notifyPayment(config)
+      case 'crear_nomina':
+        return await this.createPayroll(config)
+      case 'notificar_factura_vencida':
+        return await this.notifyInvoiceOverdue(config)
+      case 'enviar_recordatorio_pago':
+        return await this.sendPaymentReminder(config)
+      case 'ajustar_presupuesto':
+        return await this.adjustBudget(config)
+      case 'generar_reporte_financiero':
+        return await this.generateFinancialReport(config)
+
       default:
         return true
     }
@@ -2709,5 +2747,343 @@ private async pauseEmailSequence(config: any): Promise<boolean> {
   })
 
   await this.log('pause_sequence', 'action', 'success', `Secuencia pausada`)
+  return true
+}
+
+// ============== FASE 3: ACCIONES DE RRHH ==============
+
+private async sendOnboarding(config: any): Promise<boolean> {
+  const { employeeId, templateId, email, nombre } = config
+  const targetEmployeeId = employeeId || this.context.employeeId
+  const targetEmail = email || this.context.employeeEmail
+  const targetNombre = nombre || this.context.employeeNombre
+
+  await prisma.emailCampaign.create({
+    data: {
+      tenantId: this.context.tenantId,
+      nombre: `Onboarding - ${targetNombre}`,
+      tipo: 'onboarding',
+      templateId,
+      asunto: 'Bienvenido a nuestro equipo',
+      contenido: `Hola ${targetNombre}, te damos la bienvenida...`,
+      estado: 'enviada',
+      fechaEnvio: new Date(),
+      leadIds: [targetEmployeeId],
+      createdBy: 'automation',
+    }
+  })
+
+  await this.log('send_onboarding', 'action', 'success', `Onboarding enviado a ${targetEmail}`)
+  return true
+}
+
+private async createEvaluation(config: any): Promise<boolean> {
+  const { employeeId, tipo, periodo } = config
+  const targetEmployeeId = employeeId || this.context.employeeId
+
+  const evaluation = await prisma.evaluation.create({
+    data: {
+      tenantId: this.context.tenantId,
+      employeeId: targetEmployeeId,
+      tipo: tipo || 'performance',
+      periodo: periodo || `${new Date().getFullYear()}-Q${Math.floor(new Date().getMonth() / 3) + 1}`,
+      estado: 'pendiente',
+      fechaEvaluacion: config.fechaEvaluacion || new Date(),
+      createdBy: this.context.userId || 'system',
+    }
+  })
+
+  await this.log('create_evaluation', 'action', 'success', `Evaluación creada: ${evaluation.id}`)
+  return true
+}
+
+private async sendSurvey(config: any): Promise<boolean> {
+  const { employeeId, tipoEncuesta } = config
+  const targetEmployeeId = employeeId || this.context.employeeId
+
+  await prisma.emailCampaign.create({
+    data: {
+      tenantId: this.context.tenantId,
+      nombre: `Encuesta - ${tipoEncuesta || 'satisfacción'}`,
+      tipo: 'survey',
+      asunto: 'Tu opinión nos importa',
+      contenido: 'Por favor填写 esta encuesta...',
+      estado: 'programada',
+      fechaProgramada: new Date(),
+      leadIds: [targetEmployeeId],
+      createdBy: 'automation',
+    }
+  })
+
+  await this.log('send_survey', 'action', 'success', `Encuesta enviada a empleado`)
+  return true
+}
+
+private async registerTraining(config: any): Promise<boolean> {
+  const { employeeId, cursoId, fechaInicio, fechaFin } = config
+  const targetEmployeeId = employeeId || this.context.employeeId
+
+  await prisma.trainingEnrollment.create({
+    data: {
+      tenantId: this.context.tenantId,
+      employeeId: targetEmployeeId,
+      cursoId: cursoId,
+      estado: 'en_progreso',
+      fechaInicio: fechaInicio || new Date(),
+      fechaFin: fechaFin,
+      enrolledAt: new Date(),
+    }
+  })
+
+  await this.log('register_training', 'action', 'success', `Capacitación registrada para empleado`)
+  return true
+}
+
+private async notifyCertification(config: any): Promise<boolean> {
+  const { employeeId, certificacion, fechaVencimiento } = config
+  const targetEmployeeId = employeeId || this.context.employeeId
+
+  const employee = await prisma.employee.findUnique({ where: { id: targetEmployeeId } })
+
+  const { notifyByTelegram, notifyByEmail } = await import('@/lib/skills/notification-layer')
+  const context = createSystemContext(this.context.tenantId)
+
+  const message = `📜 *Certificación por Vencer*\n\n👤 *Empleado:* ${employee?.nombre || 'N/A'}\n📜 *Certificación:* ${certificacion || this.context.certificacion}\n📅 *Vence:* ${new Date(fechaVencimiento || this.context.fechaVencimiento).toLocaleDateString()}`
+
+  notifyByTelegram(message, context).catch(() => {})
+
+  if (employee?.email) {
+    notifyByEmail(employee.email, 'Certificación por vencer', message, context).catch(() => {})
+  }
+
+  await this.log('notify_certification', 'action', 'success', `Notificación de certificación enviada`)
+  return true
+}
+
+private async updateEmployee(config: any): Promise<boolean> {
+  const { employeeId, datos } = config
+  const targetEmployeeId = employeeId || this.context.employeeId
+
+  await prisma.employee.update({
+    where: { id: targetEmployeeId },
+    data: datos || {}
+  })
+
+  await this.log('update_employee', 'action', 'success', `Empleado actualizado`)
+  return true
+}
+
+private async assignRole(config: any): Promise<boolean> {
+  const { employeeId, rolId } = config
+  const targetEmployeeId = employeeId || this.context.employeeId
+
+  await prisma.userRole.create({
+    data: {
+      userId: targetEmployeeId,
+      roleId: rolId,
+      assignedAt: new Date(),
+      assignedBy: this.context.userId || 'system',
+    }
+  })
+
+  await this.log('assign_role', 'action', 'success', `Rol asignado a empleado`)
+  return true
+}
+
+// ============== FASE 3: ACCIONES DE FINANZAS ==============
+
+private async generateInvoice(config: any): Promise<boolean> {
+  const { leadId, contactId, items, fechaVencimiento } = config
+
+  const invoiceNumber = `INV-${Date.now().toString(36).toUpperCase()}`
+
+  const invoice = await prisma.invoice.create({
+    data: {
+      tenantId: this.context.tenantId,
+      leadId: leadId || this.context.leadId,
+      contactId: contactId,
+      provider: 'volkern',
+      numero: invoiceNumber,
+      monto: config.monto || 0,
+      moneda: config.moneda || 'EUR',
+      estado: 'pendiente',
+      fechaEmision: new Date(),
+      fechaVencimiento: fechaVencimiento || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      metadata: { items: items || [] },
+    }
+  })
+
+  await this.log('generate_invoice', 'action', 'success', `Factura generada: ${invoiceNumber}`)
+  return true
+}
+
+private async registerExpense(config: any): Promise<boolean> {
+  const { employeeId, monto, categoria, descripcion, fecha } = config
+  const targetEmployeeId = employeeId || this.context.employeeId
+
+  const expense = await prisma.expense.create({
+    data: {
+      tenantId: this.context.tenantId,
+      employeeId: targetEmployeeId,
+      amount: monto || config.monto,
+      category: categoria || 'general',
+      description: descripcion,
+      status: 'pending',
+      fecha: fecha || new Date(),
+      createdAt: new Date(),
+    }
+  })
+
+  await this.log('register_expense', 'action', 'success', `Gasto registrado: ${expense.id}`)
+  return true
+}
+
+private async approveExpense(config: any): Promise<boolean> {
+  const { expenseId, comentarios } = config
+
+  await prisma.expense.update({
+    where: { id: expenseId || config.expenseId },
+    data: {
+      status: 'approved',
+      approvedAt: new Date(),
+      approvedBy: this.context.userId || 'system',
+      comments: comentarios,
+    }
+  })
+
+  await this.log('approve_expense', 'action', 'success', `Gasto aprobado`)
+  return true
+}
+
+private async rejectExpense(config: any): Promise<boolean> {
+  const { expenseId, motivo } = config
+
+  await prisma.expense.update({
+    where: { id: expenseId || config.expenseId },
+    data: {
+      status: 'rejected',
+      rejectedAt: new Date(),
+      rejectedBy: this.context.userId || 'system',
+      reason: motivo,
+    }
+  })
+
+  await this.log('reject_expense', 'action', 'success', `Gasto rechazado`)
+  return true
+}
+
+private async notifyPayment(config: any): Promise<boolean> {
+  const { invoiceId, leadId, metodoPago } = config
+  const targetInvoiceId = invoiceId || this.context.invoiceId
+  const targetLeadId = leadId || this.context.leadId
+
+  const invoice = await prisma.invoice.findUnique({ where: { id: targetInvoiceId } })
+  const lead = targetLeadId ? await prisma.lead.findUnique({ where: { id: targetLeadId } }) : null
+
+  const { notifyByTelegram, notifyByEmail } = await import('@/lib/skills/notification-layer')
+  const context = createSystemContext(this.context.tenantId)
+
+  const message = `✅ *Pago Recibido*\n\n📄 *Factura:* ${invoice?.numero || 'N/A'}\n💰 *Monto:* ${invoice?.monto || 0} ${invoice?.moneda || 'EUR'}\n👤 *Cliente:* ${lead?.nombre || 'N/A'}`
+
+  notifyByTelegram(message, context).catch(() => {})
+
+  await this.log('notify_payment', 'action', 'success', `Notificación de pago enviada`)
+  return true
+}
+
+private async createPayroll(config: any): Promise<boolean> {
+  const { periodo, empleados, fechaPago } = config
+
+  const payrollPeriod = periodo || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
+
+  const payroll = await prisma.payroll.create({
+    data: {
+      tenantId: this.context.tenantId,
+      periodo: payrollPeriod,
+      estado: 'borrador',
+      fechaPago: fechaPago || new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
+      totalEmpleados: empleados?.length || 0,
+      montoTotal: config.montoTotal || 0,
+      createdBy: this.context.userId || 'system',
+    }
+  })
+
+  await this.log('create_payroll', 'action', 'success', `Nómina creada: ${payroll.id}`)
+  return true
+}
+
+private async notifyInvoiceOverdue(config: any): Promise<boolean> {
+  const { invoiceId, diasRetraso } = config
+  const targetInvoiceId = invoiceId || this.context.invoiceId
+
+  const invoice = await prisma.invoice.findUnique({ where: { id: targetInvoiceId } })
+  const lead = invoice?.leadId ? await prisma.lead.findUnique({ where: { id: invoice.leadId } }) : null
+
+  const { notifyByTelegram, notifyByEmail } = await import('@/lib/skills/notification-layer')
+  const context = createSystemContext(this.context.tenantId)
+
+  const message = `⚠️ *Factura Vencida*\n\n📄 *Factura:* ${invoice?.numero}\n💰 *Monto:* ${invoice?.monto} ${invoice?.moneda}\n⏰ *Días de retraso:* ${diasRetraso || this.context.diasRetraso || 1}\n👤 *Cliente:* ${lead?.nombre || 'N/A'}`
+
+  notifyByTelegram(message, context).catch(() => {})
+
+  if (lead?.email) {
+    notifyByEmail(lead.email, 'Factura vencida', message, context).catch(() => {})
+  }
+
+  await this.log('notify_invoice_overdue', 'action', 'success', `Notificación de factura vencida enviada`)
+  return true
+}
+
+private async sendPaymentReminder(config: any): Promise<boolean> {
+  const { invoiceId, diasAntes } = config
+  const targetInvoiceId = invoiceId || this.context.invoiceId
+
+  const invoice = await prisma.invoice.findUnique({ where: { id: targetInvoiceId } })
+  const lead = invoice?.leadId ? await prisma.lead.findUnique({ where: { id: invoice.leadId } }) : null
+
+  const { notifyByEmail } = await import('@/lib/skills/notification-layer')
+  const context = createSystemContext(this.context.tenantId)
+
+  const message = `📧 *Recordatorio de Pago*\n\nEstimado cliente, le recordamos que su factura ${invoice?.numero} vence pronto.`
+
+  if (lead?.email) {
+    notifyByEmail(lead.email, 'Recordatorio de pago', message, context).catch(() => {})
+  }
+
+  await this.log('send_payment_reminder', 'action', 'success', `Recordatorio de pago enviado`)
+  return true
+}
+
+private async adjustBudget(config: any): Promise<boolean> {
+  const { departmentId, nuevoPresupuesto } = config
+  const targetDepartmentId = departmentId || this.context.departmentId
+
+  await prisma.departmentBudget.update({
+    where: { id: targetDepartmentId },
+    data: {
+      presupuesto: nuevoPresupuesto,
+      updatedAt: new Date(),
+    }
+  })
+
+  await this.log('adjust_budget', 'action', 'success', `Presupuesto ajustado`)
+  return true
+}
+
+private async generateFinancialReport(config: any): Promise<boolean> {
+  const { tipo, periodo, enviarEmail } = config
+
+  const { notifyByTelegram, notifyByEmail } = await import('@/lib/skills/notification-layer')
+  const context = createSystemContext(this.context.tenantId)
+
+  const message = `📊 *Reporte Financiero*\n\n📅 *Período:* ${periodo || 'último mes'}\n📋 *Tipo:* ${tipo || 'general'}\n\n Generado automáticamente por Volkern CRM`
+
+  notifyByTelegram(message, context).catch(() => {})
+
+  if (enviarEmail && this.context.userEmail) {
+    notifyByEmail(this.context.userEmail, 'Reporte Financiero', message, context).catch(() => {})
+  }
+
+  await this.log('generate_financial_report', 'action', 'success', `Reporte financiero generado`)
   return true
 }

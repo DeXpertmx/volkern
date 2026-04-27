@@ -36,6 +36,10 @@ import type {
   EmailClickedEvent,
   LeadNurturingTriggerEvent,
   SocialPostPublishedEvent,
+  EmployeeCreatedEvent,
+  EvaluationCompletedEvent,
+  InvoiceDueEvent,
+  ExpenseSubmittedEvent,
 } from '@/lib/types/events';
 
 /**
@@ -85,6 +89,23 @@ const EVENT_TO_TRIGGER_MAP: Record<string, string> = {
   [EVENTS.LEAD_NURTURING_TRIGGER]: 'lead_nurturing',
   [EVENTS.SOCIAL_POST_PUBLISHED]: 'post_publicado',
   [EVENTS.SOCIAL_POST_SCHEDULED]: 'post_programado',
+
+  // RRHH (Fase 3)
+  [EVENTS.EMPLOYEE_CREATED]: 'empleado_nuevo',
+  [EVENTS.EMPLOYEE_TERMINATED]: 'empleado_retirado',
+  [EVENTS.EVALUATION_COMPLETED]: 'evaluacion_completada',
+  [EVENTS.EVALUATION_DUE]: 'evaluacion_pendiente',
+  [EVENTS.TRAINING_COMPLETED]: 'capacitacion_completada',
+  [EVENTS.CERTIFICATION_EXPIRED]: 'certificacion_vencida',
+
+  // Finanzas (Fase 3)
+  [EVENTS.INVOICE_DUE]: 'factura_por_vencer',
+  [EVENTS.INVOICE_OVERDUE]: 'factura_vencida',
+  [EVENTS.INVOICE_PAID]: 'factura_pagada',
+  [EVENTS.EXPENSE_SUBMITTED]: 'gasto_enviado',
+  [EVENTS.EXPENSE_APPROVED]: 'gasto_aprobado',
+  [EVENTS.PAYROLL_GENERATED]: 'nomina_generada',
+  [EVENTS.BUDGET_ALERT]: 'presupuesto_alerta',
 };
 
 /**
@@ -393,6 +414,145 @@ function eventToAutomationContext(event: EventType, payload: BaseEventPayload): 
         plataforma: socialPayload.plataforma,
         contenido: socialPayload.contenido,
         scheduledFor: socialPayload.scheduledFor,
+      };
+    }
+
+    // === FASE 3: RRHH ===
+    case EVENTS.EMPLOYEE_CREATED: {
+      const empPayload = payload as EmployeeCreatedEvent;
+      return {
+        ...baseContext,
+        employeeId: empPayload.employeeId,
+        employeeNombre: empPayload.employeeNombre,
+        employeeEmail: empPayload.employeeEmail,
+        puesto: empPayload.puesto,
+        departamento: empPayload.departamento,
+        fechaIngreso: empPayload.fechaIngreso,
+      };
+    }
+
+    case EVENTS.EMPLOYEE_TERMINATED: {
+      const empPayload = payload as EmployeeCreatedEvent;
+      return {
+        ...baseContext,
+        employeeId: empPayload.employeeId,
+        employeeNombre: empPayload.employeeNombre,
+        motivoTerminacion: empPayload.motivo,
+      };
+    }
+
+    case EVENTS.EVALUATION_COMPLETED: {
+      const evalPayload = payload as EvaluationCompletedEvent;
+      return {
+        ...baseContext,
+        evaluationId: evalPayload.evaluationId,
+        employeeId: evalPayload.employeeId,
+        employeeNombre: evalPayload.employeeNombre,
+        puntuacion: evalPayload.puntuacion,
+        feedback: evalPayload.feedback,
+      };
+    }
+
+    case EVENTS.EVALUATION_DUE: {
+      const evalPayload = payload as EvaluationCompletedEvent;
+      return {
+        ...baseContext,
+        evaluationId: evalPayload.evaluationId,
+        employeeId: evalPayload.employeeId,
+        employeeNombre: evalPayload.employeeNombre,
+        fechaEvaluacion: evalPayload.fechaEvaluacion,
+      };
+    }
+
+    case EVENTS.TRAINING_COMPLETED: {
+      const trainPayload = payload as EvaluationCompletedEvent;
+      return {
+        ...baseContext,
+        trainingId: trainPayload.evaluationId,
+        employeeId: trainPayload.employeeId,
+        employeeNombre: trainPayload.employeeNombre,
+        puntuacion: trainPayload.puntuacion,
+      };
+    }
+
+    case EVENTS.CERTIFICATION_EXPIRED: {
+      const certPayload = payload as EvaluationCompletedEvent;
+      return {
+        ...baseContext,
+        certificationId: certPayload.evaluationId,
+        employeeId: certPayload.employeeId,
+        employeeNombre: certPayload.employeeNombre,
+        certificacion: certPayload.feedback,
+      };
+    }
+
+    // === FASE 3: FINANZAS ===
+    case EVENTS.INVOICE_DUE: {
+      const invPayload = payload as InvoiceDueEvent;
+      return {
+        ...baseContext,
+        invoiceId: invPayload.invoiceId,
+        invoiceNumero: invPayload.invoiceNumero,
+        monto: invPayload.monto,
+        moneda: invPayload.moneda,
+        fechaVencimiento: invPayload.fechaVencimiento,
+        clienteNombre: invPayload.clienteNombre,
+      };
+    }
+
+    case EVENTS.INVOICE_OVERDUE: {
+      const invPayload = payload as InvoiceDueEvent;
+      return {
+        ...baseContext,
+        invoiceId: invPayload.invoiceId,
+        invoiceNumero: invPayload.invoiceNumero,
+        monto: invPayload.monto,
+        diasRetraso: 30,
+        clienteNombre: invPayload.clienteNombre,
+      };
+    }
+
+    case EVENTS.EXPENSE_SUBMITTED: {
+      const expPayload = payload as ExpenseSubmittedEvent;
+      return {
+        ...baseContext,
+        expenseId: expPayload.expenseId,
+        employeeId: expPayload.employeeId,
+        employeeNombre: expPayload.employeeNombre,
+        monto: expPayload.monto,
+        categoria: expPayload.categoria,
+        descripcion: expPayload.descripcion,
+      };
+    }
+
+    case EVENTS.EXPENSE_APPROVED: {
+      const expPayload = payload as ExpenseSubmittedEvent;
+      return {
+        ...baseContext,
+        expenseId: expPayload.expenseId,
+        employeeId: expPayload.employeeId,
+        monto: expPayload.monto,
+        aprobado: true,
+      };
+    }
+
+    case EVENTS.PAYROLL_GENERATED: {
+      const payrollPayload = payload as EvaluationCompletedEvent;
+      return {
+        ...baseContext,
+        payrollId: payrollPayload.evaluationId,
+        periodo: payrollPayload.feedback,
+        totalEmpleados: payrollPayload.puntuacion,
+      };
+    }
+
+    case EVENTS.BUDGET_ALERT: {
+      const budgetPayload = payload as EvaluationCompletedEvent;
+      return {
+        ...baseContext,
+        departmentId: budgetPayload.evaluationId,
+        departmentNombre: budgetPayload.employeeNombre,
+        presupuestoUsado: budgetPayload.puntuacion,
       };
     }
 

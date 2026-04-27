@@ -101,6 +101,23 @@ const triggerLabels: Record<string, string> = {
   lead_nurturing: 'Lead en Nurturing',
   post_publicado: 'Post Publicado',
   post_programado: 'Post Programado',
+
+  // === FASE 3: RRHH ===
+  empleado_nuevo: 'Empleado Nuevo',
+  empleado_retirado: 'Empleado Retirado',
+  evaluacion_completada: 'Evaluación Completada',
+  evaluacion_pendiente: 'Evaluación Pendiente',
+  capacitacion_completada: 'Capacitación Completada',
+  certificacion_vencida: 'Certificación Vencida',
+
+  // === FASE 3: FINANZAS ===
+  factura_por_vencer: 'Factura por Vencer',
+  factura_vencida: 'Factura Vencida',
+  factura_pagada: 'Factura Pagada',
+  gasto_enviado: 'Gasto Enviado',
+  gasto_aprobado: 'Gasto Aprobado',
+  nomina_generada: 'Nómina Generada',
+  presupuesto_alerta: 'Alerta de Presupuesto',
 }
 
 const categoriaLabels: Record<string, string> = {
