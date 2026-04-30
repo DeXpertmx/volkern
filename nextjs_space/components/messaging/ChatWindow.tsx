@@ -14,7 +14,8 @@ import {
   User, 
   FileText,
   Lock,
-  Globe
+  Globe,
+  Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -25,6 +26,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
+import { toast } from 'sonner';
 
 interface Message {
   id: string;
@@ -47,6 +49,7 @@ interface ChatWindowProps {
 export function ChatWindow({ conversation, messages, onSendMessage, onResolve, loading }: ChatWindowProps) {
   const [text, setText] = useState('');
   const [isNote, setIsNote] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -57,6 +60,32 @@ export function ChatWindow({ conversation, messages, onSendMessage, onResolve, l
     if (!text.trim()) return;
     onSendMessage(text, isNote);
     setText('');
+  };
+
+  const handleSuggest = async () => {
+    if (!conversation?.id) return;
+    
+    setSuggesting(true);
+    try {
+      const response = await fetch('/api/mensajes/suggest-reply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversationId: conversation.id })
+      });
+      
+      const data = await response.json();
+      if (response.ok && data.suggestion) {
+        setText(data.suggestion);
+        toast.success('Sugerencia generada');
+      } else {
+        toast.error(data.error || 'No se pudo generar la sugerencia');
+      }
+    } catch (error) {
+      console.error('Error suggesting reply:', error);
+      toast.error('Error al conectar con la IA');
+    } finally {
+      setSuggesting(false);
+    }
   };
 
   if (!conversation) {
@@ -185,7 +214,15 @@ export function ChatWindow({ conversation, messages, onSendMessage, onResolve, l
             <div className="flex items-center gap-1">
               <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 rounded-lg hover:bg-white hover:shadow-sm"><Paperclip size={18} /></Button>
               <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 rounded-lg hover:bg-white hover:shadow-sm"><Smile size={18} /></Button>
-              <Button variant="ghost" size="icon" className={cn("h-8 w-8 rounded-lg hover:bg-white hover:shadow-sm transition-colors", isNote ? "text-amber-500" : "text-blue-500")}><Sparkles size={18} /></Button>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                disabled={suggesting}
+                onClick={handleSuggest}
+                className={cn("h-8 w-8 rounded-lg hover:bg-white hover:shadow-sm transition-colors", isNote ? "text-amber-500" : "text-blue-500")}
+              >
+                {suggesting ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
+              </Button>
               <div className="w-px h-6 bg-slate-200 mx-1" />
               <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 rounded-lg hover:bg-white hover:shadow-sm"><FileText size={18} /></Button>
             </div>

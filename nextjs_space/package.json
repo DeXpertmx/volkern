@@ -138,6 +138,7 @@
     "node-cron": "^4.2.1",
     "nordigen-node": "^1.4.1",
     "openai": "^6.16.0",
+    "opencode-lmstudio": "^0.3.0",
     "pg": "^8.20.0",
     "plaid": "^42.1.0",
     "plotly.js": "2.35.3",

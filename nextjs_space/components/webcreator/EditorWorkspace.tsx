@@ -457,14 +457,60 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
 
         console.log(`[EditorWorkspace] Content read from ${file.name}, length: ${result.length}`);
         
-        const data = JSON.parse(result);
+        let data = JSON.parse(result);
         
         if (!editorRef.current) {
           throw new Error("El editor no está inicializado.");
         }
 
-        editorRef.current.importProject(data);
-        toast.success("Proyecto importado correctamente", { id: toastId });
+        // Detectar formato GrapesJS Studio y convertir al formato estándar
+        if (data.dataSources && data.pages && data.pages[0]?.frames) {
+          console.log('[EditorWorkspace] Detectado formato GrapesJS Studio, convirtiendo...');
+          data = convertStudioToStandard(data);
+          console.log('[EditorWorkspace] Data convertida, keys:', Object.keys(data));
+        } else if (data.pages && data.pages[0]?.frames && data.pages[0].frames[0]?.component) {
+          // Ya parece ser formato estándar de GrapesJS
+          console.log('[EditorWorkspace] Formato estándar GrapesJS detectado');
+        }
+
+        try {
+          // Intentar importar el proyecto
+          editorRef.current.importProject(data);
+          
+          // Forzar recarga del canvas
+          setTimeout(() => {
+            const editor = editorRef.current?.getEditor();
+            if (editor) {
+              editor.refresh();
+            }
+          }, 100);
+          
+          toast.success("Proyecto importado correctamente", { id: toastId });
+        } catch (importError) {
+          console.error('[EditorWorkspace] Import error:', importError);
+          
+          // Si falla importProject, intentar cargar solo los componentes
+          try {
+            const mainPage = data.pages?.[0];
+            const mainFrame = mainPage?.frames?.[0];
+            const component = mainFrame?.component;
+            
+            if (component) {
+              const editor = editorRef.current?.getEditor();
+              if (editor?.setComponents) {
+                editor.setComponents(component.components || []);
+                if (component.styles) {
+                  editor.addComponents(component.styles);
+                }
+                toast.success("Plantilla importada (modo compatibilidad)", { id: toastId });
+              }
+            } else {
+              throw new Error('No se pudieron extraer los componentes');
+            }
+          } catch (fallbackError) {
+            throw importError;
+          }
+        }
       } catch (err) {
         console.error("[EditorWorkspace] Import Error:", err);
         const errorMessage = err instanceof SyntaxError 
@@ -485,6 +531,61 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     };
 
     reader.readAsText(file);
+  };
+
+  // Función para convertir formato GrapesJS Studio al formato estándar
+  const convertStudioToStandard = (studioData: any): any => {
+    try {
+      // El formato Studio ya tiene una estructura similar a GrapesJS
+      // Solo necesitamos asegurarnos de que tenga la estructura correcta
+      
+      const studioPages = studioData.pages;
+      if (!studioPages || studioPages.length === 0) {
+        return studioData;
+      }
+
+      // Buscar el frame principal
+      let mainFrame = null;
+      
+      for (const page of studioPages) {
+        if (page.frames && page.frames.length > 0) {
+          // Preferir frames que no sean de vista previa
+          mainFrame = page.frames.find((f: any) => 
+            f.id && !f.id.includes('preview') && !f.id.includes('device')
+          ) || page.frames[0];
+          break;
+        }
+      }
+
+      if (!mainFrame) {
+        console.warn('[EditorWorkspace] No se encontró frame principal');
+        return studioData;
+      }
+
+      // Intentar mantener la mayor parte de la estructura original
+      // solo asegurar que el componente principal esté bien formateado
+      const convertedData = {
+        pages: [{
+          frames: [{
+            component: mainFrame.component || { type: 'wrapper', components: [] },
+            ...(mainFrame.styles && { styles: mainFrame.styles }),
+            ...(mainFrame.assets && { assets: mainFrame.assets }),
+            ...(mainFrame.head && { head: mainFrame.head }),
+            id: mainFrame.id
+          }]
+        }],
+        styles: studioData.styles || [],
+        assets: studioData.assets || []
+      };
+
+      console.log('[EditorWorkspace] Conversion completed, component type:', mainFrame.component?.type);
+      console.log('[EditorWorkspace] Component has components:', !!mainFrame.component?.components);
+      
+      return convertedData;
+    } catch (error) {
+      console.error('[EditorWorkspace] Error al convertir formato Studio:', error);
+      return studioData;
+    }
   };
 
   const handleManualSave = async () => {

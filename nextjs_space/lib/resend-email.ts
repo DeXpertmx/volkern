@@ -5,7 +5,22 @@ interface ResendCredentials {
   api_key: string
 }
 
+// Mapeo de subdominios a direcciones from
+const FROM_ADDRESSES: Record<string, string> = {
+  admin: 'noreply@admin.volkern.app',
+  demo: 'noreply@demo.volkern.app',
+  default: 'noreply@volkern.app'
+}
+
 let credentials: ResendCredentials | null = null
+
+// Obtener dirección FROM basada en el subdomain del tenant
+export function getFromAddress(tenantSubdomain?: string): string {
+  if (tenantSubdomain && FROM_ADDRESSES[tenantSubdomain]) {
+    return FROM_ADDRESSES[tenantSubdomain]
+  }
+  return FROM_ADDRESSES.default
+}
 
 // Cargar credenciales desde variables de entorno
 function loadCredentials(): ResendCredentials {
@@ -28,6 +43,7 @@ interface SendEmailParams {
   text?: string
   from?: string
   replyTo?: string
+  tenantSubdomain?: string // NEW: para enviar desde el email del tenant
 }
 
 export async function sendEmail({
@@ -35,9 +51,12 @@ export async function sendEmail({
   subject,
   html,
   text,
-  from = 'Volkern CRM <noreply@volkern.com>',
+  from, // Ahora este from tiene prioridad sobre el automático
   replyTo,
+  tenantSubdomain, // NEW
 }: SendEmailParams) {
+  // Si no se especifica from, usar el del tenant subdomain
+  const fromAddress = from || getFromAddress(tenantSubdomain)
   try {
     const creds = loadCredentials()
     
@@ -47,9 +66,9 @@ export async function sendEmail({
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${creds.api_key}`,
       },
-      body: JSON.stringify({
-        from,
-        to: Array.isArray(to) ? to : [to],
+body: JSON.stringify({
+          from: fromAddress,
+          to: Array.isArray(to) ? to : [to],
         subject,
         html,
         text,

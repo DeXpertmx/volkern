@@ -72,6 +72,7 @@ export async function POST(req: NextRequest) {
       invitacionEquipo,
       omitido,
       pasoActual,
+      packSeleccionado,
     } = body;
 
     // Obtener progreso actual
@@ -91,6 +92,17 @@ export async function POST(req: NextRequest) {
     if (invitacionEquipo !== undefined) updateData.invitacionEquipo = invitacionEquipo;
     if (omitido !== undefined) updateData.omitido = omitido;
     if (pasoActual !== undefined) updateData.pasoActual = pasoActual;
+
+    // Si se selecciona un pack, aplicarlo
+    if (packSeleccionado) {
+      const { getPackTemplate } = await import('@/lib/event-engine/pack-templates');
+      const template = getPackTemplate(packSeleccionado);
+      if (template) {
+        const { PackSystem } = await import('@/lib/event-engine');
+        await PackSystem.savePack(user.tenantId, template);
+        updateData.packAplicado = packSeleccionado;
+      }
+    }
 
     // Verificar si todos los pasos están completados
     // Combinar valores actuales con los nuevos para verificar completitud

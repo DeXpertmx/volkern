@@ -149,6 +149,7 @@ model Tenant {
   id                             String                           @id @default(cuid())
   nombre                         String
   slug                           String                           @unique
+  subdomain                      String?                          @unique
   plan                           String                           @default("basico")
   estado                         String                           @default("activo")
   configuracion                  Json?
@@ -413,6 +414,8 @@ model OnboardingProgress {
   gpsConfigurado        Boolean   @default(false)
   masterKeyConfigurado  Boolean   @default(false)
   watchdogConectado     Boolean   @default(false)
+  packSeleccionado      String?   @default("basic")
+  packAplicado         Boolean   @default(false)
 
   @@index([tenantId])
 }

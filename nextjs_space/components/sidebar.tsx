@@ -99,7 +99,13 @@ export function Sidebar() {
   }
 
   const handleSignOut = async () => {
-    await signOut({ callbackUrl: '/auth/login' })
+    console.log('handleSignOut called')
+    try {
+      await signOut({ callbackUrl: '/auth/login' })
+      console.log('signOut completed')
+    } catch (e) {
+      console.error('signOut error:', e)
+    }
   }
 
   // Contextual back button href

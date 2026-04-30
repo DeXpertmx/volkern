@@ -12,6 +12,9 @@ export interface DealCoachAdvice {
   ghostingRisk: number;
   inventoryAlert?: string;
   drafts?: any[];
+  rationale?: string;
+  confidenceScore?: number;
+  evidencePoints?: string[];
 }
 
 export class DealCoachService {
@@ -27,7 +30,7 @@ export class DealCoachService {
         lead: { include: { notasTimestamp: { orderBy: { fechaCreacion: 'desc' }, take: 10 } } },
         contact: true,
         company: true,
-        messageDrafts: { take: 3, orderBy: { fechaCreacion: 'desc' } }
+        MessageDraft: { take: 3, orderBy: { fechaCreacion: 'desc' } }
       }
     });
 
@@ -73,58 +76,84 @@ RESPONDE ÚNICAMENTE EN JSON CON ESTE FORMATO:
 }
     `.trim();
 
-    const messages: GemmaMessage[] = [{ role: 'system', content: systemPrompt }];
+    const messages: GemmaMessage[] = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: 'Analiza este trato y proporciona tu asesoría estratégica en el formato JSON solicitado.' }
+    ];
+    
     const aiRes = await callGemma(messages, { responseMimeType: 'application/json' });
 
     if (aiRes.error) throw new Error(`Error de IA: ${aiRes.error}`);
 
-    const advice = JSON.parse(aiRes.content);
+    let advice: any;
+    try {
+      advice = JSON.parse(aiRes.content);
+    } catch (e) {
+      console.error('[DealCoach] Fallo al parsear JSON de Gemma:', aiRes.content);
+      throw new Error('Gemma devolvió un formato no válido');
+    }
 
     // 3. Sincronizar Salud Técnica
-    const healthResult = await PipelineHealthService.updateDealHealth(dealId);
+    let healthResult;
+    try {
+      healthResult = await PipelineHealthService.updateDealHealth(dealId);
+    } catch (e) {
+      console.error('[DealCoach] Error actualizando salud:', e);
+    }
 
     // 4. Modo Autopiloto: Ejecutar acciones si está activado Y confianza es alta
-    const autopilot = await ActionOrchestrator.isAutopilotEnabled(tenantId);
-    if (autopilot) {
-      for (const step of advice.successPath) {
-        if (step.action) {
-          await ActionOrchestrator.executeAction(step.action.type, dealId, tenantId, step.action.payload, {
+    try {
+      const autopilot = await ActionOrchestrator.isAutopilotEnabled(tenantId);
+      if (autopilot) {
+        for (const step of advice.successPath || []) {
+          if (step.action && step.action.payload?.titulo) {
+            await ActionOrchestrator.executeAction(step.action.type, dealId, tenantId, step.action.payload, {
+              rationale: advice.rationale,
+              confidence: advice.confidenceScore || 0.5,
+              evidence: advice.evidencePoints || []
+            });
+          }
+        }
+        if (advice.suggestedDraft) {
+          await ActionOrchestrator.executeAction('GENERATE_DRAFT', dealId, tenantId, advice.suggestedDraft, {
             rationale: advice.rationale,
-            confidence: advice.confidenceScore,
-            evidence: advice.evidencePoints
+            confidence: advice.confidenceScore || 0.5,
+            evidence: advice.evidencePoints || []
           });
         }
       }
-      if (advice.suggestedDraft) {
-        await ActionOrchestrator.executeAction('GENERATE_DRAFT', dealId, tenantId, advice.suggestedDraft, {
-          rationale: advice.rationale,
-          confidence: advice.confidenceScore,
-          evidence: advice.evidencePoints
-        });
-      }
+    } catch (e) {
+      console.error('[DealCoach] Error en Autopiloto:', e);
     }
 
     // 5. Persistir Sabiduría en el Deal
-    await prisma.deal.update({
-      where: { id: dealId },
-      data: {
-        aiStrategy: JSON.stringify(advice.successPath),
-        aiSentiment: advice.sentiment,
-        aiDetectedPain: advice.detectedPains.join(','),
-        aiNextBestAction: advice.successPath[0],
-        aiGhostingRisk: advice.ghostingRisk,
-        lastAiConsult: new Date()
-      }
-    });
+    try {
+      await prisma.deal.update({
+        where: { id: dealId },
+        data: {
+          aiStrategy: JSON.stringify(advice.successPath),
+          aiSentiment: advice.sentiment,
+          aiDetectedPain: advice.detectedPains?.join(','),
+          aiNextBestAction: advice.successPath?.[0] || null,
+          aiGhostingRisk: advice.ghostingRisk,
+          lastAiConsult: new Date()
+        }
+      });
+    } catch (e) {
+      console.error('[DealCoach] Error persistiendo estrategia:', e);
+    }
 
     return {
       healthScore: healthResult?.healthScore || 0,
-      sentiment: advice.sentiment,
-      detectedPains: advice.detectedPains,
-      successPath: advice.successPath,
-      objections: advice.objections,
-      ghostingRisk: advice.ghostingRisk,
-      drafts: deal.messageDrafts
+      sentiment: advice.sentiment || 'NEUTRAL',
+      detectedPains: advice.detectedPains || [],
+      successPath: advice.successPath || [],
+      objections: advice.objections || [],
+      ghostingRisk: advice.ghostingRisk || 0,
+      drafts: (deal as any).MessageDraft || [],
+      rationale: advice.rationale,
+      confidenceScore: advice.confidenceScore,
+      evidencePoints: advice.evidencePoints
     };
   }
 }

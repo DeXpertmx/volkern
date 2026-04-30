@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/db';
+import { callGemma, GemmaMessage } from '@/lib/ai/gemma-client';
 
 
 export async function POST(request: NextRequest) {
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest) {
 
         const servicesInfo = services.map(s => `- ${s.nombre}: ${s.descripcion} ($${s.precio})`).join('\n');
 
-        // 3. Llamar al LLM
+        // 3. Llamar a Gemma/Gemini via standardized client
         const systemPrompt = `Eres un asesor de ventas experto. Tu tarea es sugerir la respuesta más adecuada y profesional para el cliente.
 CONTEXTO DEL NEGOCIO (Servicios):
 ${servicesInfo}
@@ -59,36 +60,23 @@ REGLAS:
 - Mantén la respuesta concisa (máximo 3 párrafos cortos).
 - Responde SIEMPRE en español.`;
 
-        const response = await fetch('https://apps.abacus.ai/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${process.env.ABACUSAI_API_KEY}`,
-            },
-            body: JSON.stringify({
-                model: 'gpt-4.1-mini',
-                messages: [
-                    { role: 'system', content: systemPrompt },
-                    { role: 'user', content: `Basado en este historial, ¿cuál debería ser mi siguiente respuesta como asesor?:\n\n${historyText}` },
-                ],
-                max_tokens: 500,
-                temperature: 0.7,
-            }),
-        });
+        const messages: GemmaMessage[] = [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: `Basado en este historial, ¿cuál debería ser mi siguiente respuesta como asesor?:\n\n${historyText}` },
+        ];
 
-        if (!response.ok) {
-            throw new Error(`Error de API: ${response.status}`);
+        const aiRes = await callGemma(messages, { temperature: 0.7 });
+
+        if (aiRes.error) {
+            throw new Error(`Error de IA: ${aiRes.error}`);
         }
 
-        const data = await response.json();
-        const suggestion = data.choices?.[0]?.message?.content || '';
+        return NextResponse.json({ suggestion: aiRes.content });
 
-        return NextResponse.json({ suggestion });
-
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error al generar sugerencia:', error);
         return NextResponse.json(
-            { error: 'Error al procesar la sugerencia con IA' },
+            { error: error.message || 'Error al procesar la sugerencia con IA' },
             { status: 500 }
         );
     }

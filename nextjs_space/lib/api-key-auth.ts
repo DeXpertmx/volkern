@@ -212,6 +212,9 @@ export async function authenticateRequest(
   requiredScopes?: string[]
 ): Promise<ApiKeyAuthResult> {
   try {
+    // 🔒 VALIDACIÓN CRUZADA: Verificar que el subdominio coincida con el tenant
+    const headerSubdomain = request.headers.get('x-tenant-subdomain');
+    
     // 1. Intentar sesión (Solo si NO estamos en un entorno de tests sin Request Store)
     let session = null;
     try {
@@ -221,6 +224,12 @@ export async function authenticateRequest(
     }
     
     if (session?.user?.id) {
+      // Si hay subdominio en header, verificar que coincida con el tenant del usuario
+      if (headerSubdomain && (session.user as any).tenantSubdomain !== headerSubdomain) {
+        console.warn(`[Seguridad] Usuario ${session.user.email} solicitó API de ${headerSubdomain} pero su tenant es ${(session.user as any).tenantSubdomain}`)
+        return { valid: false, error: 'Acceso denegado: subdominio no coincide con tu cuenta' };
+      }
+      
       const user = await prisma.user.findUnique({
         where: { id: session.user.id },
         select: {

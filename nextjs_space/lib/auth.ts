@@ -17,12 +17,25 @@ export const authOptions: NextAuthOptions = {
         password: { label: 'Password', type: 'password' },
         code: { label: '2FA Code', type: 'text' }
       },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         if (!credentials?.email || !credentials?.password) {
           return null
         }
 
         const cleanEmail = credentials.email.trim().toLowerCase();
+
+        // 🔴 CRÍTICO: Detectar subdominio desde el hostname de la request
+        const hostname = req.headers?.host || ''
+        let requestSubdomain: string | null = null
+        
+        if (hostname.includes('localhost')) {
+          const cleanHost = hostname.replace(/:.*$/, '')
+          if (cleanHost !== 'localhost' && cleanHost.includes('.')) {
+            requestSubdomain = cleanHost.split('.')[0]
+          }
+        } else if (hostname.includes('.')) {
+          requestSubdomain = hostname.split('.')[0]
+        }
 
         // Buscamos el usuario incluyendo el tokenVersion para cierre global
         const user = await prisma.user.findUnique({
@@ -40,13 +53,19 @@ export const authOptions: NextAuthOptions = {
               select: { nombre: true }
             },
             tenant: {
-              select: { accountType: true }
+              select: { accountType: true, subdomain: true }
             }
           }
         })
 
         if (!user || !user.password) {
           return null
+        }
+
+        // 🔴 VALIDACIÓN CRUZADA: Si hay subdominio en request, el usuario debe pertenecer a ese tenant
+        if (requestSubdomain && user.tenant?.subdomain !== requestSubdomain) {
+          console.warn(`[Seguridad] Usuario ${cleanEmail} intentó login en ${requestSubdomain} pero pertenece a ${user.tenant?.subdomain}`)
+          return null  // Credenciales inválidas para este tenant
         }
 
         const isPasswordValid = await bcrypt.compare(
@@ -97,6 +116,7 @@ export const authOptions: NextAuthOptions = {
           roleId: user.roleId,
           roleName: user.role?.nombre,
           accountType: user.tenant?.accountType,
+          tenantSubdomain: user.tenant?.subdomain,  // NEW
           tokenVersion: user.tokenVersion,
         }
       }
@@ -117,24 +137,8 @@ export const authOptions: NextAuthOptions = {
         token.roleName = (user as any).roleName
         token.accountType = (user as any).accountType
         token.tokenVersion = (user as any).tokenVersion
+        token.tenantSubdomain = (user as any).tenantSubdomain
       }
-
-      // Verificación de Seguridad Global: ¿El tokenVersion sigue siendo el mismo?
-      try {
-        if (token.sub) {
-          const dbUser = await prisma.user.findUnique({
-            where: { id: token.sub as string },
-            select: { tokenVersion: true }
-          });
-
-          if (!dbUser || dbUser.tokenVersion !== token.tokenVersion) {
-            return null; // Invalida el token y fuerza logout
-          }
-        }
-      } catch (e) {
-        // En caso de error de DB, permitimos que siga por ahora para evitar bloqueos falsos
-      }
-
       return token
     },
     async session({ session, token }) {
@@ -145,6 +149,7 @@ export const authOptions: NextAuthOptions = {
         ;(session.user as any).roleName = token.roleName as string
         ;(session.user as any).accountType = token.accountType as string
         ;(session.user as any).tokenVersion = token.tokenVersion as number
+        ;(session.user as any).tenantSubdomain = token.tenantSubdomain as string  // NEW
       }
       return session
     }

@@ -1,164 +1,78 @@
-
-import { withAuth } from 'next-auth/middleware'
 import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+import { getToken } from 'next-auth/jwt'
 
-export default withAuth(
-  async function middleware(req) {
-    // 1. Manejo de CORS para rutas públicas y API
-    const response = await handleCors(req);
-    if (response) return response;
+const RESERVED = new Set(['www', 'app', 'api', 'auth', 'login', 'register', 'dashboard', 'webcreator'])
 
-    const token = req.nextauth.token
-    const path = req.nextUrl.pathname
-
-    // Si no hay token, redirigir al login
-    if (!token && !isPublicPath(path)) {
-      // Si es una ruta de miembro, verificar cookie propia
-      if (path.startsWith('/member')) {
-        const customerToken = req.cookies.get('customer_token')
-        if (!customerToken) {
-          return NextResponse.redirect(new URL('/member/login', req.url))
-        }
-        return NextResponse.next()
-      }
-
-      // Si es una ruta de academia, verificar cookie propia
-      if (path.startsWith('/academy')) {
-        const academyToken = req.cookies.get('academy_token')
-        if (!academyToken) {
-          return NextResponse.redirect(new URL('/academy/login', req.url))
-        }
-        return NextResponse.next()
-      }
-
-      return NextResponse.redirect(new URL('/auth/login', req.url))
-    }
-
-    // Rutas que requieren permisos específicos (solo para UI, no API)
-    // Las rutas de API verifican permisos en sus propios handlers
-    if ((path.startsWith('/dashboard') || path.startsWith('/webcreator')) && token) {
-      // Aquí podrías agregar lógica adicional si necesitas verificar permisos a nivel de middleware
-      // Por ahora, solo verificamos que el usuario esté autenticado
-      // Los permisos específicos se verifican en cada página/API
-    }
-
-    return NextResponse.next()
-  },
-  {
-    callbacks: {
-      authorized: ({ token, req }) => {
-        const path = req.nextUrl.pathname
-        
-        // Permitir acceso a rutas públicas
-        if (isPublicPath(path)) {
-          return true
-        }
-        
-        // Requiere autenticación para todas las demás rutas
-        return !!token
-      },
-    },
-  }
-)
-
-// Helper para identificar rutas públicas
-function isPublicPath(path: string): boolean {
-  const publicPaths = [
-    '/auth/',
-    '/signup',
-    '/embed/',
-    '/tarjeta/',
-    '/booking/',       // Calendario público de agendamiento
-    '/api/public/',    // Endpoints públicos para embeds (servicios, leads, citas)
-    '/api/tarjetas-digitales/public/', // API pública de tarjetas
-    '/api/leads',
-    '/api/citas',      // Agregado para autenticación dual (API Keys)
-    '/api/catalogo',   // Catálogo - autenticación dual (API Keys)
-    '/api/mcp',        // MCP Server - autenticación via API Key
-    '/api/ai/',        // AI Skill Handler - autenticación via API Key
-    '/api/skills/',    // Agent Skills - manifest y ejecución via API Key
-    '/api/signup',
-    '/api/webhooks/',
-    '/api/integrations/webhook/',  // Integration Layer webhooks
-    '/api/integrations/telephony/webhook', // Telephony webhooks
-    '/api/integraciones/google-calendar/sync-all',  // Endpoint para sincronización automática programada
-    '/api/admin/backup',                           // Backup automated reporting (API Key auth)
-    '/payment/',
-    '/_next/',
-    '/favicon',
-    '/robots',
-    '/og-image',
-    '/volkern',
-    '/api/v1/sovereignty/', // Canal de Soberanía e Integridad Graph
-    '/p/',             // Public pages
-    '/portal/',        // Portal de Cliente Soberano
-    '/api/portal/',     // API del Portal de Cliente
-    '/api/estudiantes/perfil', // Perfil de Estudiante (autenticación dual)
-    '/member/login',   // Login del portal de cliente
-    '/api/customer/auth/', // API de auth de cliente
-    '/academy/login',  // Login de academia
-    '/api/academy/auth/', // API de auth de academia
-    '/api/academy/auth/me', // Verificación de sesión de academia
-    '/api/gemma/',      // Gemma AI integration
-    '/privacy',
-    '/terms'
-  ]
+function getSubdomain(host: string): string | null {
+  if (!host) return null
+  const h = host.replace(/:.*/, '')
   
-  // Permitir la landing page (ruta raíz exacta)
-  if (path === '/') {
-    return true
-  }
-  
-  return publicPaths.some(publicPath => path.startsWith(publicPath))
+  if (h === 'localhost') return null
+  if (h.endsWith('localhost')) return h.split('.')[0]
+  if (h.includes('.volkern.app')) return h.split('.')[0]
+  return null
 }
 
-/**
- * Helper para manejar políticas CORS
- */
-async function handleCors(req: any) {
-  const path = req.nextUrl.pathname;
-  const isApiRoute = path.startsWith('/api/');
-  const isPublicApi = path.startsWith('/api/public/') || path.startsWith('/api/leads') || path.startsWith('/api/citas');
+const PUBLIC = new Set(['/', '/pricing', '/features', '/about', '/contact'])
 
-  if (isApiRoute) {
-    // Si es una petición OPTIONS (preflight), respondemos directamente
-    if (req.method === 'OPTIONS') {
-      return new NextResponse(null, {
-        status: 204,
-        headers: {
-          'Access-Control-Allow-Origin': '*', // En producción, restringir a dominios conocidos
-          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-api-key',
-          'Access-Control-Max-Age': '86400',
-        },
-      });
-    }
+export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl
+  const host = request.headers.get('host') || ''
+  const subdomain = getSubdomain(host)
 
-    // Para rutas públicas, permitimos CORS
-    if (isPublicApi) {
-      const res = NextResponse.next();
-      res.headers.set('Access-Control-Allow-Origin', '*');
-      res.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-      res.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-api-key');
-      return res;
-    }
+  // Rutas que no necesitan tenant
+  if (pathname.startsWith('/admin') || pathname.startsWith('/api/')) {
+    return NextResponse.next()
   }
 
-  return null;
+  // Sin subdominio = landing pública
+  if (!subdomain) {
+    if (PUBLIC.has(pathname)) return NextResponse.next()
+    if (pathname.startsWith('/dashboard') || pathname.startsWith('/auth/')) {
+      return NextResponse.redirect(new URL('/', request.url))
+    }
+    return NextResponse.next()
+  }
+
+  // subdominios reservados
+  if (RESERVED.has(subdomain)) {
+    return NextResponse.next()
+  }
+
+  // Pages que siempre permiten acceso
+  const isAuthOrRoot = pathname === '/' || pathname.startsWith('/auth/')
+
+  // Solo verificar token si no es auth page
+  const token = isAuthOrRoot ? null : await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET })
+
+  // No autenticado → login
+  if (!token && !pathname.startsWith('/auth/')) {
+    return NextResponse.redirect(new URL('/auth/login', request.url))
+  }
+
+  // Autenticado en auth page → dashboard
+  if (token && pathname.startsWith('/auth/')) {
+    return NextResponse.redirect(new URL('/dashboard', request.url))
+  }
+
+  // Autenticado en raíz → dashboard
+  if (token && pathname === '/') {
+    return NextResponse.redirect(new URL('/dashboard', request.url))
+  }
+
+  // Validar cruzadasimplificada (solo si hay token)
+  if (token && (token.tenantSubdomain as string) !== subdomain) {
+    console.warn(`[Seguridad] ${token.email} de ${token.tenantSubdomain} → ${subdomain}`)
+    return NextResponse.redirect(new URL('/auth/login?error=tenant_mismatch', request.url))
+  }
+
+  // Continuar con header
+  const res = NextResponse.next()
+  res.headers.set('x-tenant-subdomain', subdomain)
+  return res
 }
 
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api/auth (authentication routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public (public files)
-     */
-    '/((?!api/auth|_next/static|_next/image).*)',
-    '/dashboard/:path*',
-    '/webcreator/:path*',
-  ],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 }
