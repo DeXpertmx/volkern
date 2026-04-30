@@ -22,7 +22,9 @@ export function NotificationCenter() {
     refreshInterval: 30000 // Refrescar cada 30 segundos
   });
 
-  const unreadCount = notifications?.filter((n: any) => !n.read).length || 0;
+  const unreadCount = Array.isArray(notifications) 
+    ? notifications.filter((n: any) => !n.read).length 
+    : 0;
 
   const markAsRead = async (id?: string) => {
     try {
@@ -68,7 +70,7 @@ export function NotificationCenter() {
           )}
         </div>
         <ScrollArea className="h-96">
-          {!notifications || notifications.length === 0 ? (
+          {!Array.isArray(notifications) || notifications.length === 0 ? (
             <div className="p-12 text-center">
               <div className="h-12 w-12 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
                 <Bell className="h-6 w-6 text-slate-200" />
@@ -77,7 +79,7 @@ export function NotificationCenter() {
             </div>
           ) : (
             <div className="grid divide-y divide-slate-50">
-              {notifications?.map((n: any) => (
+              {notifications.map((n: any) => (
                 <div 
                   key={n.id} 
                   className={`p-4 transition-all hover:bg-slate-50 relative group ${!n.read ? 'bg-blue-50/30' : ''}`}
