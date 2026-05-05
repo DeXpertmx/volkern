@@ -83,9 +83,9 @@ export default function TareasPage() {
             if (filter.tipo !== 'all') params.append('tipo', filter.tipo);
             if (filter.search) params.append('search', filter.search);
 
-const res = await apiFetch(`/api/tasks?${params.toString()}`);
-            const res = await apiFetch(`/api/tasks/${taskId}`, {
-            const res = await apiFetch(`/api/tasks/${taskId}`, {
+const tasksRes = await apiFetch(`/api/tasks?${params.toString()}`);
+            const updateRes = await apiFetch(`/api/tasks/${taskId}`, {
+            const patchRes = await apiFetch(`/api/tasks/${taskId}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ completada: !completed })

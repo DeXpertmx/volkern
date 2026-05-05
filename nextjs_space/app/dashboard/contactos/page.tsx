@@ -125,15 +125,15 @@ export default function ContactosPage() {
 
   const fetchContacts = async () => {
     try {
-const res = await apiFetch('/api/contacts')
-      const res = await apiFetch('/api/contacts?tipo=company')
-      const response = await apiFetch('/api/contacts/import', {
+      const contactsRes = await apiFetch('/api/contacts')
+      const companiesRes = await apiFetch('/api/contacts?tipo=company')
+      const importRes = await apiFetch('/api/contacts/import', {
         method: 'POST',
         body: formData,
       })
 
-      const data = await response.json()
-      if (response.ok) {
+      const data = await importRes.json()
+      if (importRes.ok) {
         toast.success(`Importación finalizada: ${data.imported} contactos importados, ${data.errors} errores.`)
         fetchContacts()
       } else {

@@ -125,9 +125,9 @@ export default function CitasPage() {
 
   const checkGCalConnection = async () => {
     try {
-      const res = await apiFetch('/api/integraciones/google-calendar/status')
-      if (res.ok) {
-        const data = await res.json()
+      const gcalRes = await apiFetch('/api/integraciones/google-calendar/status')
+      if (gcalRes.ok) {
+        const data = await gcalRes.json()
         setGcalConnected(data.connected)
       }
     } catch (e) {

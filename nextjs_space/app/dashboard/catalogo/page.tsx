@@ -235,10 +235,10 @@ export default function CatalogoPage() {
 
   const fetchFieldDefinitions = async () => {
     try {
-const res = await apiFetch('/api/catalogo/field-definitions');
-const res = await apiFetch(`/api/catalogo?${params.toString()}`);
-const res = await apiFetch('/api/configuracion/fiscal/tasas?activo=true');
-const res = await apiFetch(url, {
+      const fieldDefRes = await apiFetch('/api/catalogo/field-definitions');
+      const catalogoRes = await apiFetch(`/api/catalogo?${params.toString()}`);
+      const tasasRes = await apiFetch('/api/configuracion/fiscal/tasas?activo=true');
+      const res = await apiFetch(url, {
 const res = await apiFetch(`/api/catalogo/${item.id}`, { method: 'DELETE' });
       if (res.ok) {
         toast.success('Ítem eliminado');
