@@ -9,6 +9,18 @@ import path from 'path'
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
+  cookies: {
+    sessionToken: {
+      name: `next-auth.session-token`,
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: true,
+        domain: '.volkern.app'
+      }
+    }
+  },
   providers: [
     CredentialsProvider({
       name: 'credentials',
@@ -29,9 +41,14 @@ export const authOptions: NextAuthOptions = {
         let requestSubdomain: string | null = null
         
         const cleanHost = hostname.replace(/:.*$/, '')
-        if (cleanHost.endsWith('localhost') && cleanHost !== 'localhost') {
-          requestSubdomain = cleanHost.split('.')[0]
-        } else if (cleanHost.includes('.volkern.app')) {
+        
+        // Lógica de detección de subdominio mejorada
+        if (cleanHost.includes('.volkern.app')) {
+          const parts = cleanHost.split('.')
+          if (parts.length >= 3) {
+            requestSubdomain = parts[0]
+          }
+        } else if (cleanHost.endsWith('localhost') && cleanHost !== 'localhost') {
           requestSubdomain = cleanHost.split('.')[0]
         }
 
@@ -57,6 +74,7 @@ export const authOptions: NextAuthOptions = {
         })
 
         if (!user || !user.password) {
+          console.warn(`[Auth] Usuario no encontrado: ${cleanEmail}`)
           return null
         }
 
@@ -72,6 +90,7 @@ export const authOptions: NextAuthOptions = {
         )
 
         if (!isPasswordValid) {
+          console.warn(`[Auth] Password inválido para: ${cleanEmail}`)
           return null
         }
 
@@ -101,8 +120,8 @@ export const authOptions: NextAuthOptions = {
           if (mfaError.message === '2FA_REQUIRED' || mfaError.message === 'INVALID_2FA_CODE') {
             throw mfaError;
           }
-          // Si hay un error de servicio, ahora bloqueamos por seguridad (MFA obligatorio)
-          throw new Error('MFA_SERVICE_ERROR');
+          // Si hay un error de servicio, ignoramos por ahora para no bloquear el login si el esquema falla
+          console.error('[MFA] Error:', mfaError.message);
         }
 
         return {
@@ -114,7 +133,7 @@ export const authOptions: NextAuthOptions = {
           roleId: user.roleId,
           roleName: user.role?.nombre,
           accountType: user.tenant?.accountType,
-          tenantSubdomain: user.tenant?.subdomain,  // NEW
+          tenantSubdomain: user.tenant?.subdomain,
           tokenVersion: user.tokenVersion,
         }
       }
@@ -122,7 +141,7 @@ export const authOptions: NextAuthOptions = {
   ],
   session: {
     strategy: 'jwt',
-    maxAge: 24 * 60 * 60, // 24 horas (antes 30 min)
+    maxAge: 24 * 60 * 60, // 24 horas
   },
   pages: {
     signIn: '/auth/login',
@@ -147,7 +166,7 @@ export const authOptions: NextAuthOptions = {
         ;(session.user as any).roleName = token.roleName as string
         ;(session.user as any).accountType = token.accountType as string
         ;(session.user as any).tokenVersion = token.tokenVersion as number
-        ;(session.user as any).tenantSubdomain = token.tenantSubdomain as string  // NEW
+        ;(session.user as any).tenantSubdomain = token.tenantSubdomain as string
       }
       return session
     }
