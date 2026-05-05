@@ -28,13 +28,11 @@ export const authOptions: NextAuthOptions = {
         const hostname = req.headers?.host || ''
         let requestSubdomain: string | null = null
         
-        if (hostname.includes('localhost')) {
-          const cleanHost = hostname.replace(/:.*$/, '')
-          if (cleanHost !== 'localhost' && cleanHost.includes('.')) {
-            requestSubdomain = cleanHost.split('.')[0]
-          }
-        } else if (hostname.includes('.')) {
-          requestSubdomain = hostname.split('.')[0]
+        const cleanHost = hostname.replace(/:.*$/, '')
+        if (cleanHost.endsWith('localhost') && cleanHost !== 'localhost') {
+          requestSubdomain = cleanHost.split('.')[0]
+        } else if (cleanHost.includes('.volkern.app')) {
+          requestSubdomain = cleanHost.split('.')[0]
         }
 
         // Buscamos el usuario incluyendo el tokenVersion para cierre global

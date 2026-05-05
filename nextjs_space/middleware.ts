@@ -15,6 +15,8 @@ function getSubdomain(host: string): string | null {
 
 const PUBLIC = new Set(['/', '/pricing', '/features', '/about', '/contact', '/login', '/signup'])
 
+import { getToken } from 'next-auth/jwt'
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const host = request.headers.get('host') || ''
@@ -25,7 +27,7 @@ export async function middleware(request: NextRequest) {
   const apiKey = request.headers.get('x-api-key');
 
   // Public paths - allow through
-  if (PUBLIC.has(pathname) || pathname.startsWith('/public/')) {
+  if (PUBLIC.has(pathname) || pathname.startsWith('/public/') || pathname.startsWith('/auth/')) {
     return NextResponse.next()
   }
 
@@ -74,9 +76,14 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Allow dashboard paths
+  // Allow dashboard paths but require auth
   if (pathname.startsWith('/dashboard') || pathname.startsWith('/app') || pathname.startsWith('/admin')) {
-    // Continue to auth
+    const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET })
+    if (!token) {
+      const loginUrl = new URL('/auth/login', request.url)
+      loginUrl.searchParams.set('callbackUrl', pathname)
+      return NextResponse.redirect(loginUrl)
+    }
   }
 
   // Set headers for downstream
