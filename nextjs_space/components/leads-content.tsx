@@ -17,6 +17,7 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import Link from 'next/link'
 import { toast } from 'sonner'
+import { apiFetch } from '@/lib/api-client'
 
 const estadoColors: Record<string, string> = {
   'nuevo': 'bg-blue-100 text-blue-800',
@@ -61,7 +62,7 @@ export function LeadsContent() {
           params.append('unassigned', 'true')
         }
 
-        const response = await fetch(`/api/leads?${params.toString()}`)
+        const response = await apiFetch(`/api/leads?${params.toString()}`)
         if (response.ok) {
           const data = await response.json()
           setLeads(data)
@@ -93,7 +94,7 @@ export function LeadsContent() {
     formData.append('file', file)
 
     try {
-      const response = await fetch('/api/leads/import', {
+      const response = await apiFetch('/api/leads/import', {
         method: 'POST',
         body: formData,
       })
@@ -102,7 +103,7 @@ export function LeadsContent() {
       if (response.ok) {
         toast.success(`Importación finalizada: ${data.imported} leads importados, ${data.errors} errores.`)
         // Recargar leads
-        const leadsResponse = await fetch('/api/leads')
+        const leadsResponse = await apiFetch('/api/leads')
         if (leadsResponse.ok) {
           const leadsData = await leadsResponse.json()
           setLeads(leadsData)
@@ -139,7 +140,7 @@ export function LeadsContent() {
   const loadStats = async () => {
     setStatsLoading(true)
     try {
-      const response = await fetch('/api/leads/stats?periodo=30')
+      const response = await apiFetch('/api/leads/stats?periodo=30')
       if (response.ok) {
         const data = await response.json()
         setStats(data.stats)
@@ -156,7 +157,7 @@ export function LeadsContent() {
     
     setCallingLeadId(leadId);
     try {
-      const res = await fetch('/api/integrations/telephony/callback', {
+      const res = await apiFetch('/api/integrations/telephony/callback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ destination: phoneNumber })

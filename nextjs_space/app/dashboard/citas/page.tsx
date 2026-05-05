@@ -10,6 +10,7 @@ import { toast } from 'sonner'
 import dynamic from 'next/dynamic'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
+import { apiFetch } from '@/lib/api-client'
 
 // Importar calendario dinámicamente para evitar SSR
 const CalendarView = dynamic(() => import('@/components/calendar-view'), {
@@ -124,7 +125,7 @@ export default function CitasPage() {
 
   const checkGCalConnection = async () => {
     try {
-      const res = await fetch('/api/integraciones/google-calendar/status')
+      const res = await apiFetch('/api/integraciones/google-calendar/status')
       if (res.ok) {
         const data = await res.json()
         setGcalConnected(data.connected)
@@ -142,9 +143,9 @@ export default function CitasPage() {
     try {
       setLoading(true)
       const [citasRes, leadsRes, contactsRes] = await Promise.all([
-        fetch('/api/citas'),
-        fetch('/api/leads'),
-        fetch('/api/contacts'),
+        apiFetch('/api/citas'),
+        apiFetch('/api/leads'),
+        apiFetch('/api/contacts'),
       ])
 
       let errorMessage = 'Error al cargar datos'
@@ -245,7 +246,7 @@ export default function CitasPage() {
                     onClick={async () => {
                       setGcalSyncing(true)
                       try {
-                        const res = await fetch('/api/integraciones/google-calendar/sync', { method: 'POST' })
+                        const res = await apiFetch('/api/integraciones/google-calendar/sync', { method: 'POST' })
                         if (res.ok) {
                           toast.success('Sincronización completada')
                         }

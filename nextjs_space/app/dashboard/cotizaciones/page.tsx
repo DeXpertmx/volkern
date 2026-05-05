@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { apiFetch } from '@/lib/api-client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -103,7 +104,7 @@ export default function CotizacionesPage() {
 
   const fetchCotizaciones = async () => {
     try {
-      const res = await fetch('/api/cotizaciones')
+      const res = await apiFetch('/api/cotizaciones')
       const data = await res.json()
 
       if (data.cotizaciones) {

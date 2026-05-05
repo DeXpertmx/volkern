@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Building2, Plus, Search, Users, TrendingUp, Mail, Phone, MapPin, Linkedin, Tag, Loader2, Download, Upload, HelpCircle } from 'lucide-react'
 import { toast } from 'sonner'
+import { apiFetch } from '@/lib/api-client'
 
 interface Company {
   id: string
@@ -54,7 +55,7 @@ export default function EmpresasPage() {
   const fetchCompanies = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/contacts?tipo=company')
+      const response = await apiFetch('/api/contacts?tipo=company')
       if (!response.ok) throw new Error('Error al cargar empresas')
       const data = await response.json()
       setCompanies(data)
@@ -76,7 +77,7 @@ export default function EmpresasPage() {
 
     try {
       setSaving(true)
-      const response = await fetch('/api/contacts', {
+      const response = await apiFetch('/api/contacts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -124,7 +125,7 @@ export default function EmpresasPage() {
     formData.append('file', file)
 
     try {
-      const response = await fetch('/api/contacts/import', {
+      const response = await apiFetch('/api/contacts/import', {
         method: 'POST',
         body: formData,
       })

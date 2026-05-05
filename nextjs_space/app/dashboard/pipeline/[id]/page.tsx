@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useParams, useRouter } from 'next/navigation'
+import { apiFetch } from '@/lib/api-client'
 import {
   Card,
   CardContent,
@@ -1098,7 +1099,7 @@ function NewTaskForm({
     setLoading(true)
 
     try {
-      const response = await fetch('/api/tasks', {
+      const response = await apiFetch('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1220,7 +1221,7 @@ function NewCitaForm({
     setLoading(true)
 
     try {
-      const response = await fetch('/api/citas', {
+      const response = await apiFetch('/api/citas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

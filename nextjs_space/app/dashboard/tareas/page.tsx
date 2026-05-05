@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
+import { apiFetch } from '@/lib/api-client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -82,21 +83,9 @@ export default function TareasPage() {
             if (filter.tipo !== 'all') params.append('tipo', filter.tipo);
             if (filter.search) params.append('search', filter.search);
 
-            const res = await fetch(`/api/tasks?${params.toString()}`);
-            if (!res.ok) throw new Error('Error al cargar tareas');
-            const data = await res.json();
-            setTasks(data);
-        } catch (error) {
-            console.error('Error fetching tasks:', error);
-            toast.error('Error al cargar las tareas');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleToggleComplete = async (taskId: string, completed: boolean) => {
-        try {
-            const res = await fetch(`/api/tasks/${taskId}`, {
+const res = await apiFetch(`/api/tasks?${params.toString()}`);
+            const res = await apiFetch(`/api/tasks/${taskId}`, {
+            const res = await apiFetch(`/api/tasks/${taskId}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ completada: !completed })

@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
+import { apiFetch } from '@/lib/api-client'
+import { apiPost } from '@/lib/api-client'
 import {
   DndContext,
   DragOverlay,
@@ -195,8 +197,8 @@ export default function PipelinePage() {
     try {
       setLoading(true)
       const [dealsRes, stagesRes] = await Promise.all([
-        fetch('/api/deals'),
-        fetch('/api/pipeline/stages'),
+        apiFetch('/api/deals'),
+        apiFetch('/api/pipeline/stages'),
       ])
 
       if (dealsRes.ok && stagesRes.ok) {
@@ -244,7 +246,7 @@ export default function PipelinePage() {
     try {
       const stage = stages.find((s) => s.nombre === newStageName)
       
-      const response = await fetch(`/api/deals/${dealId}`, {
+      const response = await apiFetch(`/api/deals/${dealId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -356,7 +358,7 @@ export default function PipelinePage() {
             variant="outline" 
             className="border-primary/20 hover:bg-primary/5 text-primary"
             onClick={async () => {
-              toast.promise(fetch('/api/deals/sync', { method: 'POST' }), {
+              toast.promise(apiFetch('/api/deals/sync', { method: 'POST' }), {
                 loading: 'Consultando Oráculo de Ventas...',
                 success: () => {
                   fetchData()
@@ -779,7 +781,7 @@ function StageConfigDialog({
   const handleCreateStage = async (data: { nombre: string; color: string; probabilidad: number }) => {
     try {
       setSaving(true)
-      const response = await fetch('/api/pipeline/stages', {
+      const response = await apiFetch('/api/pipeline/stages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -803,7 +805,7 @@ function StageConfigDialog({
   const handleUpdateStage = async (id: string, data: Partial<Stage>) => {
     try {
       setSaving(true)
-      const response = await fetch(`/api/pipeline/stages/${id}`, {
+      const response = await apiFetch(`/api/pipeline/stages/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -827,7 +829,7 @@ function StageConfigDialog({
   const handleDeleteStage = async (stage: Stage) => {
     try {
       setSaving(true)
-      const response = await fetch(`/api/pipeline/stages/${stage.id}`, {
+      const response = await apiFetch(`/api/pipeline/stages/${stage.id}`, {
         method: 'DELETE',
       })
 
@@ -868,7 +870,7 @@ function StageConfigDialog({
     setLocalStages(stagesWithNewOrder)
 
     try {
-      const response = await fetch('/api/pipeline/stages/reorder', {
+      const response = await apiFetch('/api/pipeline/stages/reorder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1198,7 +1200,7 @@ function NewDealForm({ stages, onSuccess }: { stages: Stage[]; onSuccess: () => 
   const fetchContacts = async () => {
     try {
       setLoadingContacts(true)
-      const response = await fetch('/api/contacts')
+      const response = await apiFetch('/api/contacts')
       if (response.ok) {
         const data = await response.json()
         // El API retorna un array directo de contactos
@@ -1248,7 +1250,7 @@ function NewDealForm({ stages, onSuccess }: { stages: Stage[]; onSuccess: () => 
         payload.newContact = newContactData
       }
 
-      const response = await fetch('/api/deals', {
+      const response = await apiFetch('/api/deals', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

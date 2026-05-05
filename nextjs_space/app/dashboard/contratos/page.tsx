@@ -48,6 +48,7 @@ import {
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
+import { apiFetch } from '@/lib/api-client'
 import { DocumentPreview } from '@/components/document-preview'
 import { DocumentTimeline, TimelineEvent } from '@/components/document-timeline'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -90,8 +91,8 @@ export default function ContratosPage() {
   const fetchContratos = async () => {
     try {
       const [contractsRes, analyticsRes] = await Promise.all([
-        fetch('/api/contratos'),
-        fetch(`/api/analytics/contracts`)
+        apiFetch('/api/contratos'),
+        apiFetch(`/api/analytics/contracts`)
       ])
 
       if (contractsRes.ok) {
