@@ -233,21 +233,24 @@ export default function CatalogoPage() {
     fetchFieldDefinitions();
   }, [filterTipo, filterActivo, filterCategoria, filterEtiqueta]);
 
-  const fetchFieldDefinitions = async () => {
+const fetchFieldDefinitions = async () => {
     try {
       const fieldDefRes = await apiFetch('/api/catalogo/field-definitions');
       const catalogoRes = await apiFetch(`/api/catalogo?${params.toString()}`);
       const tasasRes = await apiFetch('/api/configuracion/fiscal/tasas?activo=true');
-      const res = await apiFetch(url, {
-const res = await apiFetch(`/api/catalogo/${item.id}`, { method: 'DELETE' });
-      if (res.ok) {
+      const itemRes = await apiFetch(url, {
+        method: 'DELETE',
+      });
+
+      if (itemRes.ok) {
         toast.success('Ítem eliminado');
         fetchItems();
       } else {
-        const error = await res.json();
+        const error = await itemRes.json();
         toast.error(error.error || 'Error al eliminar');
       }
     } catch (error) {
+      console.error('Error deleting item:', error);
       toast.error('Error de conexión');
     }
   };
