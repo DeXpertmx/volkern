@@ -9,6 +9,7 @@ import { sendSMS } from '@/lib/sms'
 import { sendTelegramMessage } from '@/lib/telegram'
 import { sendFacebookMessage, sendInstagramMessage } from '@/lib/meta-messenger'
 import { getDownloadUrl } from '@/lib/s3'
+import { checkFeatureLimit, incrementUsage } from '@/lib/subscription'
 
 // POST /api/mensajes/enviar - Enviar un mensaje multicanal
 export const POST = withTenantAuth(async (request, auth) => {
@@ -191,6 +192,39 @@ export const POST = withTenantAuth(async (request, auth) => {
         fechaUltimoMensaje: new Date(),
       },
     })
+
+    // Track usage after successful message send
+    if (estado === 'enviado') {
+      try {
+        let featureName: 'whatsapp_messages' | 'emails_per_month' | 'sms_messages' | 'whatsapp_messages';
+        
+        if (canal === 'whatsapp') {
+          featureName = 'whatsapp_messages';
+        } else if (canal === 'email') {
+          featureName = 'emails_per_month';
+        } else if (canal === 'sms') {
+          featureName = 'sms_messages';
+        } else {
+          featureName = 'whatsapp_messages'; // Default for other channels
+        }
+
+        // Check limit before incrementing
+        const limitCheck = await checkFeatureLimit(tenantId, featureName, 1);
+        if (!limitCheck.allowed) {
+          return NextResponse.json(
+            { 
+              error: `Has alcanzado el límite de ${limitCheck.limit} mensajes para tu plan`,
+              code: 'LIMIT_REACHED'
+            },
+            { status: 403 }
+          );
+        }
+
+        await incrementUsage(tenantId, featureName, 1);
+      } catch (usageError) {
+        console.error('[POST /mensajes/enviar] Error tracking usage:', usageError);
+      }
+    }
 
     return NextResponse.json({
       success: true,

@@ -18,7 +18,9 @@ import {
   LogOut,
   Menu,
   X,
-  Sparkles
+  Sparkles,
+  TrendingUp,
+  BarChart3
 } from 'lucide-react';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -62,10 +64,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const navigation = [
     { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
-    { name: 'Tenants', href: '/admin/tenants', icon: Building2 },
+    { name: 'SaaS Metrics', href: '/admin/saas', icon: TrendingUp },
+    { name: 'Tenants', href: '/admin/saas/tenants', icon: Building2 },
+    { name: 'Churn', href: '/admin/saas/churn', icon: Users },
+    { name: 'Revenue', href: '/admin/saas/revenue', icon: DollarSign },
     { name: 'Marketing', href: '/admin/marketing', icon: Sparkles },
     { name: 'Planes', href: '/admin/planes', icon: CreditCard },
-    { name: 'Billing Global', href: '/admin/billing', icon: DollarSign },
+    { name: 'Billing Global', href: '/admin/billing', icon: BarChart3 },
     { name: 'Seguridad', href: '/admin/seguridad', icon: ShieldAlert },
     { name: 'Auditoría IA', href: '/admin/auditoria', icon: ShieldCheck },
     { name: 'Configuración', href: '/admin/settings', icon: Settings }

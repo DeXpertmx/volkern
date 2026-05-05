@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
+import { incrementUsage } from '@/lib/subscription';
 
 // GET /api/contacts - Listar todos los contactos
 export const GET = withTenantAuth(async (request, auth) => {
@@ -118,18 +119,28 @@ export const POST = withTenantAuth(async (request, auth) => {
       }
     });
 
-    // Audit log - Se crea en la DB del tenant
-    await prisma.auditLog.create({
-      data: {
-        tenantId,
-        userId: userId || 'api',
-        accion: 'crear',
-        entidad: 'contact',
-        entidadId: contact.id,
-        descripcion: `Contacto "${nombre}" creado`,
-        cambiosDespues: { nombre, email, tipo }
-      }
+    // Audit log
+    const { AuditService } = await import('@/lib/audit-service');
+    const requestIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || undefined;
+    const userAgent = request.headers.get('user-agent') || undefined;
+    await AuditService.log({
+      tenantId,
+      userId: userId || 'api',
+      action: 'crear',
+      entity: 'contact',
+      entityId: contact.id,
+      description: `Contacto "${nombre}" creado`,
+      changesAfter: { nombre, email, tipo },
+      ipAddress: requestIp,
+      userAgent
     });
+
+    // Track usage
+    try {
+      await incrementUsage(tenantId, 'contacts', 1);
+    } catch (usageError) {
+      console.error('[POST /contacts] Error tracking usage:', usageError);
+    }
 
     return NextResponse.json(contact);
   } catch (error) {

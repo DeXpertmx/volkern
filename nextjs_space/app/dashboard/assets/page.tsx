@@ -47,6 +47,9 @@ export default function AssetsPage() {
     }
   };
 
+  const assetList = assets?.data || (Array.isArray(assets) ? assets : null);
+  const displayAssets = (assetList && assetList.length > 0) ? assetList : Array(6).fill({});
+
   return (
     <div className="p-8 space-y-8 bg-[#fafafa] min-h-screen">
       {/* Header */}
@@ -75,10 +78,10 @@ export default function AssetsPage() {
       {/* Stats Summary */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         {[
-          { label: 'Total Activos', value: '124', sub: 'Valor: $42,500', color: 'slate' },
-          { label: 'En Uso', value: '98', sub: '79% ocupación', color: 'indigo' },
-          { label: 'Próximas Renovaciones', value: '12', sub: 'En los próximos 30 días', color: 'amber' },
-          { label: 'Garantías Vencidas', value: '3', sub: 'Acción requerida', color: 'rose' }
+          { label: 'Total Activos', value: assetList?.length || 0, sub: 'Valor en libros', color: 'slate' },
+          { label: 'En Uso', value: assetList?.filter((a:any) => a.status === 'ASSIGNED').length || 0, sub: 'Ocupación real', color: 'indigo' },
+          { label: 'Próximas Renovaciones', value: assetList?.filter((a:any) => a.renewalDate).length || 0, sub: 'Próximos 30 días', color: 'amber' },
+          { label: 'Garantías Vencidas', value: '0', sub: 'Acción requerida', color: 'rose' }
         ].map((stat, i) => (
           <Card key={i} className="p-6 rounded-[2.5rem] border-none shadow-sm bg-white">
             <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">{stat.label}</p>
@@ -107,8 +110,8 @@ export default function AssetsPage() {
 
       {/* Assets Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {(assets?.data || assets || Array(6).fill({})).map((asset: any, i: number) => (
-          <Card key={i} className="group overflow-hidden rounded-[2.5rem] border-none shadow-sm bg-white hover:shadow-2xl transition-all duration-500">
+        {displayAssets.map((asset: any, i: number) => (
+          <Card key={i} className={cn("group overflow-hidden rounded-[2.5rem] border-none shadow-sm bg-white hover:shadow-2xl transition-all duration-500", !asset.id && "opacity-40")}>
             <div className="p-8 space-y-6">
               <div className="flex justify-between items-start">
                 <div className="h-14 w-14 rounded-3xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-primary/5 group-hover:text-primary transition-colors">
@@ -121,10 +124,10 @@ export default function AssetsPage() {
 
               <div className="space-y-2">
                 <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight line-clamp-1">
-                  {asset.name || 'MacBook Pro 16"'}
+                  {asset.name || 'Sin nombre'}
                 </h3>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                  Serial: {asset.serialNumber || 'SN-29384-VOLK'}
+                  Serial: {asset.serialNumber || 'N/A'}
                 </p>
               </div>
 
@@ -151,10 +154,12 @@ export default function AssetsPage() {
               </div>
             </div>
             
-            <div className="px-8 py-4 bg-slate-50 flex justify-between items-center opacity-0 group-hover:opacity-100 transition-opacity">
-               <button className="text-[9px] font-black uppercase tracking-widest text-primary hover:underline">Ver Historial</button>
-               <button className="text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-900 transition-colors">Editar</button>
-            </div>
+            {asset.id && (
+              <div className="px-8 py-4 bg-slate-50 flex justify-between items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <button className="text-[9px] font-black uppercase tracking-widest text-primary hover:underline">Ver Historial</button>
+                <button className="text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-900 transition-colors">Editar</button>
+              </div>
+            )}
           </Card>
         ))}
       </div>

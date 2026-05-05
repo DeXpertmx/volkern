@@ -96,8 +96,13 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 // 3. Fábrica Dinámica de Clientes
-export async function getTenantDb(tenantId: string) {
+export async function getTenantDb(tenantId?: string) {
   if (!tenantId) return { client: globalPrisma };
+
+  const currentContext = getCurrentTenantId();
+  if (currentContext && currentContext !== tenantId) {
+    console.warn(`[db.ts] Tenant mismatch: requested ${tenantId}, using context ${currentContext}`);
+  }
 
   const cachedClient = clientCacheV3.get(tenantId);
   if (cachedClient) return cachedClient;
@@ -127,6 +132,24 @@ export async function getTenantDb(tenantId: string) {
   return result;
 }
 
+let currentTenantId: string | null = null;
+
+export function setCurrentTenantId(tenantId: string): void {
+  currentTenantId = tenantId;
+}
+
+export function getCurrentTenantId(): string | null {
+  const store = dbContext.getStore() as DbStore | undefined;
+  if (store?.tenantId) {
+    return store.tenantId;
+  }
+  return currentTenantId;
+}
+
+export function clearCurrentTenantId(): void {
+  currentTenantId = null;
+}
+
 // 3. Proxy de Prisma (Mágico y con Enrutamiento Inteligente)
 // Redirige al cliente global para modelos maestros y al del tenant para datos operativos
 export const prisma = new Proxy(globalPrisma, {
@@ -154,14 +177,12 @@ export const prisma = new Proxy(globalPrisma, {
   }
 })
 
-// Inicializar Skills Layer
-if (typeof window === 'undefined' && !globalForPrisma.skillsLayerInitialized) {
-  import('./skills/init').then(({ initializeSkillsLayer }) => {
-    initializeSkillsLayer();
-    globalForPrisma.skillsLayerInitialized = true;
-  }).catch(err => {
-    console.error('[db.ts] Error inicializando Skills Layer:', err);
-  });
+// Skills Layer initialization - called manually when needed
+// Usage: import { initializeSkillsOnDemand } from '@/lib/db';
+
+export async function initializeSkillsOnDemand() {
+  // This is now a no-op - call initializeSkillsLayer directly from lib/skills/init if needed
+  console.log('[db] Note: Use import { initializeSkillsLayer } from @/lib/skills/init for skills initialization');
 }
 
 export default prisma

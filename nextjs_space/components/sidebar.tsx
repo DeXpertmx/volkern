@@ -21,6 +21,13 @@ import { useWhitelabel } from '@/hooks/use-whitelabel'
 import { HUBS, type NavigationItem } from '@/lib/navigation-config'
 import { PunchClock } from '@/components/attendance/PunchClock'
 
+// Simple logger
+const log = (...args: any[]) => {
+  if (typeof window !== 'undefined' && window.location?.hostname === 'localhost') {
+    console.log('[Sidebar]', ...args)
+  }
+}
+
 export function Sidebar() {
   const pathname = usePathname()
   const { data: session } = useSession() || {}
@@ -36,6 +43,7 @@ export function Sidebar() {
 
   useEffect(() => {
     setMounted(true)
+    log('Sidebar mounted', pathname)
     const saved = localStorage.getItem('sidebar-collapsed')
     if (saved) setIsCollapsed(saved === 'true')
   }, [])
@@ -45,19 +53,44 @@ export function Sidebar() {
       setIsLoadingModules(true)
       const fetchModules = async () => {
         try {
-          const [userRes, modulesRes] = await Promise.all([
-            fetch('/api/users/me').then(res => res.json()),
-            fetch('/api/tenant/modules').then(res => res.json())
+          log('Fetching modules and permissions...')
+          const [userRes, modulesRes] = await Promise.allSettled([
+            fetch('/api/users/me'),
+            fetch('/api/tenant/modules')
           ]);
           
-          if (userRes.role?.permisos) setUserPermissions(userRes.role.permisos);
-          if (userRes.tenant?.accountType) setUserAccountType(userRes.tenant.accountType);
-          if (modulesRes.modules) setActiveModules(modulesRes.modules);
-          if (modulesRes.country) setTenantCountry(modulesRes.country);
+          const userData = userRes.status === 'fulfilled' && userRes.value.ok ? await userRes.value.json() : null;
+          const modulesData = modulesRes.status === 'fulfilled' && modulesRes.value.ok ? await modulesRes.value.json() : null;
+          
+          log('Fetch results:', { userData: !!userData, modulesData: !!modulesData })
+
+          if (userData) {
+            if (userData.role?.permisos) {
+              log('Setting permissions')
+              setUserPermissions(userData.role.permisos);
+            }
+            if (userData.tenant?.accountType) setUserAccountType(userData.tenant.accountType);
+          }
+          
+          if (modulesData?.modules) {
+            log('Modules received:', modulesData.modules.length)
+            setActiveModules(modulesData.modules);
+          } else {
+            log('No modules received, using fallback if available')
+            // Fallback: If we can't get modules but we are in a session, maybe we should show all?
+            // Or at least the ones from the plan in the session.
+            const sessionModules = (session.user as any).activeModules;
+            if (sessionModules && sessionModules.length > 0) {
+              setActiveModules(sessionModules);
+            }
+          }
+          
+          if (modulesData?.country) setTenantCountry(modulesData.country);
         } catch (error) {
           console.error('Error loading permissions:', error);
         } finally {
           setIsLoadingModules(false);
+          log('Module loading finished')
         }
       };
       
@@ -66,15 +99,15 @@ export function Sidebar() {
   }, [session])
 
   const isModuleVisible = (item: NavigationItem): boolean => {
-    // Si todavía estamos cargando los módulos reales, NO mostramos módulos opcionales (gateados)
-    // para evitar el parpadeo de ítems que luego desaparecen.
-    if (isLoadingModules && item.planModule) return false
-
     // 1. Filtro por Región (Tenant Country - obtenido de la API)
     if (item.requiredRegion && item.requiredRegion !== tenantCountry) return false
 
     // 2. Filtro por Plan/Módulos Activos
-    if (item.planModule && !activeModules.includes(item.planModule)) return false
+    // Si estamos cargando y el item tiene planModule, mostrarlo (fallback a mostrar todo)
+    // Si ya cargamos y no está en activeModules, ocultar
+    if (item.planModule) {
+      if (!isLoadingModules && !activeModules.includes(item.planModule)) return false
+    }
     
     // 3. Filtro por Permisos de Rol
     if (item.module && userPermissions) {

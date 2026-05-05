@@ -6,6 +6,7 @@ import { createSystemContext } from '@/lib/skills/context';
 import { withTenantAuth } from '@/lib/api-key-auth';
 import { hasPermission, logAuditAction } from '@/lib/permissions';
 import { validateLimit } from '@/lib/limits';
+import { incrementUsage } from '@/lib/subscription';
 import bcrypt from 'bcryptjs';
 
 // GET /api/users - Listar usuarios del tenant (Identidad Global - Control Plane)
@@ -200,6 +201,13 @@ export const POST = withTenantAuth(async (req, auth) => {
         employee: true
       },
     });
+
+    // Track usage after successful user creation
+    try {
+      await incrementUsage(tenantId, 'users', 1);
+    } catch (usageError) {
+      console.error('[POST /users] Error tracking usage:', usageError);
+    }
 
     // Registrar en audit log
     await logAuditAction(

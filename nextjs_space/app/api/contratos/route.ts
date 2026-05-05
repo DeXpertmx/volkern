@@ -208,20 +208,19 @@ export const POST = withTenantAuth(async (request, auth) => {
     });
 
     // 7. Audit Log
-    await prisma.auditLog.create({
-      data: {
-        tenantId,
-        userId,
-        accion: 'crear',
-        entidad: 'contrato',
-        entidadId: contrato.id,
-        descripcion: `Contrato Inviolable ${numero} generado para ${snapshotNombre} (NIF: ${snapshotNif})`,
-        cambiosDespues: JSON.stringify({
-          numero,
-          total,
-          snapshot: { snapshotNombre, snapshotNif }
-        })
-      }
+    const { AuditService } = await import('@/lib/audit-service');
+    const requestIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || undefined;
+    const userAgent = request.headers.get('user-agent') || undefined;
+    await AuditService.log({
+      tenantId,
+      userId,
+      action: 'crear',
+      entity: 'contrato',
+      entityId: contrato.id,
+      description: `Contrato Inviolable ${numero} generado para ${snapshotNombre} (NIF: ${snapshotNif})`,
+      changesAfter: { numero, total, snapshot: { snapshotNombre, snapshotNif } },
+      ipAddress: requestIp,
+      userAgent
     });
 
     // 8. Notificación a Telegram (Sales Channel)

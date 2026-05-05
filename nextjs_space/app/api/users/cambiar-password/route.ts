@@ -77,16 +77,19 @@ export async function POST(req: Request) {
     })
 
     // Registrar en audit log
-    await prisma.auditLog.create({
-      data: {
-        userId: user.id,
-        tenantId: user.tenantId,
-        accion: 'cambio_password',
-        entidad: 'User',
-        entidadId: user.id,
-        descripcion: `Contraseña cambiada por el usuario ${user.name || user.email}`,
-      }
-    })
+    const { AuditService } = await import('@/lib/audit-service');
+    const requestIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || undefined;
+    const userAgent = request.headers.get('user-agent') || undefined;
+    await AuditService.log({
+      tenantId: user.tenantId!,
+      userId: user.id,
+      action: 'cambio_password',
+      entity: 'User',
+      entityId: user.id,
+      description: `Contraseña cambiada por el usuario ${user.name || user.email}`,
+      ipAddress: requestIp,
+      userAgent
+    });
 
     console.log(`✅ Contraseña actualizada para: ${user.email}`)
 

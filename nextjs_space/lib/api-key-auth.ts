@@ -43,6 +43,7 @@ export interface ApiKeyAuthResult {
   vaultSeed?: string;
   error?: string;
   authMethod?: 'session' | 'apikey';
+  agencyContext?: boolean;
 }
 
 /**
@@ -219,13 +220,18 @@ export async function authenticateRequest(
     let session = null;
     try {
       session = await getServerSession(authOptions);
-    } catch (e) {
-      // Ignorar errores de context en tests
+    } catch (e: any) {
+      console.warn('[auth] getServerSession failed:', e?.message);
     }
     
+    if (!session?.user?.id) {
+      console.warn('[auth] No session found for:', new URL(request.url).pathname);
+    }
+
     if (session?.user?.id) {
-      // Si hay subdominio en header, verificar que coincida con el tenant del usuario
-      if (headerSubdomain && (session.user as any).tenantSubdomain !== headerSubdomain) {
+      // Si hay subdominio en header (y no es vacío), verificar que coincida con el tenant del usuario
+      // Solo aplicar validación estricta si hay un subdominio real (no localhost/vacío)
+      if (headerSubdomain && headerSubdomain !== '' && headerSubdomain !== 'null' && (session.user as any).tenantSubdomain !== headerSubdomain) {
         console.warn(`[Seguridad] Usuario ${session.user.email} solicitó API de ${headerSubdomain} pero su tenant es ${(session.user as any).tenantSubdomain}`)
         return { valid: false, error: 'Acceso denegado: subdominio no coincide con tu cuenta' };
       }
@@ -244,6 +250,7 @@ export async function authenticateRequest(
       });
 
       if (!user || !user.tenant) {
+        console.warn('[auth] User or tenant not found for session user:', session.user.id);
         return { valid: false, error: 'Sesión inválida o expirada' };
       }
 
@@ -259,7 +266,10 @@ export async function authenticateRequest(
 
       const context = await resolveHierarchicalContext(user, user.tenant, targetId);
 
-      if (context.error) return { valid: false, error: context.error };
+      if (context.error) {
+        console.warn('[auth] Hierarchical context error:', context.error);
+        return { valid: false, error: context.error };
+      }
 
       const { getTenantDb } = await import('./db');
       const tDb = await getTenantDb(context.activeTenantId);
@@ -332,7 +342,7 @@ export function withTenantAuth(
       // Esto hace que 'import { prisma }' use automáticamente la DB del tenant
       return await dbContext.run(
         { tenantId: auth.tenant!.id, client: auth.db, vaultSeed: auth.vaultSeed },
-        () => handler(request, auth, context?.params)
+        () => handler(request, auth, context)
       );
     } catch (error: any) {
       console.error('[withTenantAuth] Error fatal:', error);

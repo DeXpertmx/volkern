@@ -1707,6 +1707,57 @@ El equipo de Volkern CRM`,
   })
   console.log('✅ Configuración de Whitelabel creada')
 
+  // ========== KNOWLEDGE HUB ARTICLES ==========
+  console.log('📚 Creando artículos del Knowledge Hub...')
+  const knowledgeArticles = [
+    {
+      id: 'art-ventas-1',
+      title: 'Cómo convertir un Lead en Proyecto',
+      content: 'Para convertir un lead, primero asegúrate de que el estado sea "calificado". Desde el perfil del lead, haz clic en el botón "Convertir a Proyecto". Esto creará automáticamente un registro en el Hub de Proyectos y vinculará toda la actividad previa. Es obligatorio haber registrado al menos una interacción antes de la conversión.',
+      tags: ['VENTAS', 'LEADS', 'SOP'],
+      category: 'Procesos'
+    },
+    {
+      id: 'art-finanzas-1',
+      title: 'Procedimiento de Conciliación Bancaria',
+      content: 'La conciliación se realiza en el Hub Contable. El sistema importa automáticamente los movimientos de Stripe o bancos vinculados. Debes emparejar cada movimiento con una factura o gasto existente. Si la confianza de la IA es >90%, puedes usar la conciliación masiva con un solo clic.',
+      tags: ['FINANZAS', 'CONTABILIDAD'],
+      category: 'Finanzas'
+    },
+    {
+      id: 'art-general-1',
+      title: 'Tour por la plataforma Volkern',
+      content: 'Volkern se divide en Hubs especializados: 1. Dashboard General (Vista 360), 2. Ventas (Leads y CRM), 3. Proyectos (Operaciones), 4. RRHH (Talento), 5. Finanzas (Contabilidad), 6. Estrategia (BI y Rentabilidad). Usa la barra lateral izquierda para navegar.',
+      tags: ['GENERAL', 'ONBOARDING'],
+      category: 'Ayuda'
+    },
+    {
+      id: 'art-rrhh-1',
+      title: 'Uso del Punch Clock (Asistencia)',
+      content: 'Los colaboradores deben marcar entrada y salida desde el botón flotante de la barra lateral. Por políticas de privacidad, solo se requiere validación de Geofencing (GPS). Asegúrate de tener los permisos de ubicación activados en tu navegador.',
+      tags: ['TALENTO Y NÓMINAS', 'RRHH', 'ASISTENCIA'],
+      category: 'Recursos Humanos'
+    }
+  ];
+
+  for (const art of knowledgeArticles) {
+    await prisma.knowledgeArticle.upsert({
+      where: { id: art.id },
+      update: {
+        title: art.title,
+        content: art.content,
+        tags: art.tags,
+        category: art.category
+      },
+      create: {
+        ...art,
+        tenantId: defaultTenant.id,
+        authorId: adminUser.id
+      }
+    });
+  }
+  console.log(`✅ ${knowledgeArticles.length} artículos del Knowledge Hub creados`)
+
   const rulesCount = await prisma.scoringRule.count()
   console.log(`✅ ${rulesCount} reglas de scoring creadas`)
 

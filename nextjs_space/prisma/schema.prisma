@@ -1840,6 +1840,20 @@ model Subscription {
   @@map("subscriptions")
 }
 
+model ProcessedWebhook {
+  id              String    @id @default(cuid())
+  stripeEventId   String
+  eventType       String
+  tenantId        String?
+  processedAt     DateTime  @default(now())
+  processingError String?
+
+  @@unique([stripeEventId, tenantId])
+  @@index([stripeEventId])
+  @@index([tenantId])
+  @@index([eventType])
+}
+
 model TenantFeature {
   id                  String    @id @default(cuid())
   tenantId            String
@@ -6102,4 +6116,38 @@ enum SlaState {
   ON_TIME
   AT_RISK
   BREACHED
+}
+
+model SaaSMetric {
+  id                 String   @id @default(cuid())
+  tenantId           String?
+  date               DateTime @default(now()) @db.Date
+  mrr                Float    @default(0)
+  arr                Float    @default(0)
+  newCustomers       Int      @default(0)
+  churnedCustomers   Int      @default(0)
+  activeCustomers    Int      @default(0)
+  expansionRevenue   Float    @default(0)
+  contractionRevenue Float    @default(0)
+  trialConversions   Int      @default(0)
+  trialStarts        Int      @default(0)
+  trialConversionRate Float   @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([tenantId, date])
+  @@index([tenantId])
+  @@index([date])
+  @@map("saas_metrics")
+}
+
+model SaaSMetricSnapshot {
+  id          String   @id @default(cuid())
+  date        DateTime @default(now()) @db.Date
+  metrics     Json
+  generatedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([date])
+  @@map("saas_metric_snapshots")
 }

@@ -73,7 +73,7 @@ async function stressTest() {
     let item = await prisma.catalogoItem.findFirst({ where: { tenantId } });
     if (!item) {
       item = await prisma.catalogoItem.create({
-        data: { tenantId, nombre: 'Panel Solar 450W Premium', sku: 'SOL-450-P', costoBase: 120, precioVenta: 180, unidadMedida: 'UN' }
+        data: { tenantId, nombre: 'Panel Solar 450W Premium', sku: 'SOL-450-P', costOfAcquisition: 120, precioVenta: 180, unidadMedida: 'UN' }
       });
     }
 
@@ -89,7 +89,7 @@ async function stressTest() {
         type: 'OUT',
         quantity: -100,
         reason: 'Despacho inicial para montaje Megaplant',
-        metadata: { costAtMovement: item.costoBase }
+        metadata: { costAtMovement: item.costOfAcquisition }
       }
     });
     console.log('Consumo de 100 paneles registrado.');
@@ -121,7 +121,7 @@ async function stressTest() {
 
     // 5. Análisis Final de Rentabilidad
     console.log('5. Ejecutando análisis de auditoría...');
-    const itemCost = item.costoBase || 120;
+    const itemCost = item.costOfAcquisition || 120;
     const materialCost = 100 * itemCost;
     const invoiced = amount;
     const margin = invoiced - materialCost;

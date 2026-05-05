@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Camera, MapPin, Loader2, ShieldCheck, MapIcon } from 'lucide-react'
+import { MapPin, Loader2, ShieldCheck, MapIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface PunchClockModalProps {
@@ -38,10 +38,7 @@ export function PunchClockModal({ isOpen, onOpenChange, type, employeeId, onSucc
         })
       })
 
-      // 2. SIMULACION DE SELFIE (Vision-Lock)
-      const mockSelfie = `https://cdn.volkern.app/attendance/selfie_${employeeId}_${Date.now()}.jpg`
-
-      // 3. ENVIAR A API
+      // 2. ENVIAR A API
       const res = await fetch('/api/erp/attendance/punch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -51,7 +48,7 @@ export function PunchClockModal({ isOpen, onOpenChange, type, employeeId, onSucc
           method: 'WEB',
           locationLat: position.coords.latitude,
           locationLng: position.coords.longitude,
-          evidenceUrl: mockSelfie
+          evidenceUrl: null // Foto desactivada por políticas de privacidad
         })
       })
 
@@ -79,7 +76,7 @@ export function PunchClockModal({ isOpen, onOpenChange, type, employeeId, onSucc
           <DialogHeader>
             <div className="flex items-center gap-2 mb-2">
               <Badge className="bg-white/20 text-white border-none text-[9px] font-black uppercase px-2 py-0.5 tracking-widest">
-                Vision-Lock Attendance
+                Geofencing Attendance
               </Badge>
             </div>
             <DialogTitle className="text-3xl font-black uppercase italic tracking-tighter leading-none">
@@ -93,37 +90,17 @@ export function PunchClockModal({ isOpen, onOpenChange, type, employeeId, onSucc
 
         <form onSubmit={handlePunch} className="p-6 space-y-6">
           <div className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Validación de Identidad (Selfie)</label>
-              <div className="relative group cursor-pointer">
-                <input 
-                  type="file" 
-                  accept="image/*" 
-                  capture="camera"
-                  className="absolute inset-0 opacity-0 z-20 cursor-pointer"
-                  required
-                />
-                <div className="border-2 border-dashed border-slate-200 rounded-3xl p-10 flex flex-col items-center justify-center gap-3 group-hover:border-primary/50 transition-all bg-slate-50 group-hover:bg-white">
-                  <Camera className={cn(
-                    "w-12 h-12 transition-colors",
-                    type === 'IN' ? "text-emerald-400 group-hover:text-emerald-500" : "text-rose-400 group-hover:text-rose-500"
-                  )} />
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tómate una selfie</span>
-                </div>
+            <div className="bg-slate-50 rounded-2xl p-6 space-y-4 border border-slate-100 flex flex-col items-center text-center">
+              <div className="h-16 w-16 rounded-full bg-white flex items-center justify-center shadow-sm text-slate-400">
+                <MapPin className={cn("w-8 h-8", type === 'IN' ? "text-emerald-500" : "text-rose-500")} />
               </div>
-            </div>
-
-            <div className="bg-slate-50 rounded-2xl p-4 space-y-3 border border-slate-100">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <MapPin className="w-4 h-4 text-slate-400" />
-                  <span className="text-[10px] font-bold uppercase text-slate-600">Geofencing Activo</span>
-                </div>
-                <Badge variant="outline" className="text-[9px] border-slate-200 text-slate-500 font-black">Auditando...</Badge>
+              <div className="space-y-1">
+                <h4 className="text-xs font-black uppercase tracking-widest text-slate-900">Ubicación Verificada</h4>
+                <p className="text-[10px] text-slate-400 leading-tight max-w-[200px]">
+                  Se validará tu posición contra el radio autorizado de planta o zona de trabajo.
+                </p>
               </div>
-              <p className="text-[9px] text-slate-400 leading-tight">
-                Se validará tu ubicación actual contra el radio autorizado de planta o teletrabajo.
-              </p>
+              <Badge variant="outline" className="text-[9px] border-slate-200 text-slate-500 font-black px-3 py-1">Geofencing: Activo</Badge>
             </div>
           </div>
 

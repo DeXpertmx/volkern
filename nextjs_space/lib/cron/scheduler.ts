@@ -36,9 +36,36 @@ export function initCronJobs() {
     await runProactiveInvoiceRecovery();
   });
 
+  // 4. Daily MRR Calculation - Ejecución diaria a las 00:05 AM
+  cron.schedule('5 0 * * *', async () => {
+    console.log('[Cron] 💰 Calculando métricas SaaS diarias (MRR)...');
+    const { SaaSMetricsService } = await import('../saas-metrics');
+    await SaaSMetricsService.recordMetrics();
+    console.log('✅ [Cron] Métricas SaaS diarias registradas.');
+  });
+
+  // 5. Weekly Churn Calculation - Ejecución cada domingo a las 01:00 AM
+  cron.schedule('0 1 * * 0', async () => {
+    console.log('[Cron] 📉 Calculando churn rate semanal...');
+    const { SaaSMetricsService } = await import('../saas-metrics');
+    await SaaSMetricsService.recordMetrics();
+    console.log('✅ [Cron] Churn rate semanal calculado.');
+  });
+
+  // 6. Monthly Snapshot - Primer día de cada mes a las 02:00 AM
+  cron.schedule('0 2 1 * *', async () => {
+    console.log('[Cron] 📊 Generando snapshot mensual de métricas...');
+    const { SaaSMetricsService } = await import('../saas-metrics');
+    await SaaSMetricsService.createSnapshot();
+    console.log('✅ [Cron] Snapshot mensual generado.');
+  });
+
   console.log('✅ [Scheduler] Radar de Ghosting programado (09:00 AM daily)');
   console.log('✅ [Scheduler] Ritual Dominical programado (Sun 23:59)');
   console.log('✅ [Scheduler] Recuperación Proactiva programada (cada 4h)');
+  console.log('✅ [Scheduler] Métricas SaaS diarias programadas (00:05 AM)');
+  console.log('✅ [Scheduler] Churn rate semanal programado (Sun 01:00 AM)');
+  console.log('✅ [Scheduler] Snapshot mensual programado (1st of month 02:00 AM)');
 }
 
 /**

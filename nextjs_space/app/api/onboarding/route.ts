@@ -137,7 +137,6 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Registrar en audit log
     await prisma.auditLog.create({
       data: {
         tenantId: user.tenantId,
@@ -151,6 +150,23 @@ export async function POST(req: NextRequest) {
         cambiosDespues: updateData,
       },
     });
+
+    if (progress.completado || configuracionBasica || primerLead || primerServicio) {
+      try {
+        const { trackFirstAction } = await import('@/lib/trial-onboarding');
+        if (progress.completado) {
+          await trackFirstAction(user.tenantId, 'onboarding_completado');
+        }
+        if (primerLead) {
+          await trackFirstAction(user.tenantId, 'first_lead_created');
+        }
+        if (primerServicio) {
+          await trackFirstAction(user.tenantId, 'first_service_created');
+        }
+      } catch (error) {
+        console.error('[Onboarding] Error tracking trial activation:', error);
+      }
+    }
 
     return NextResponse.json(progress);
   } catch (error) {

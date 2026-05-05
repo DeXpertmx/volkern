@@ -244,18 +244,21 @@ export const POST = withTenantAuth(async (req, auth) => {
       },
     })
 
-    // Audit log (DB aislada)
-    await prisma.auditLog.create({
-      data: {
-        tenantId: tenantId,
-        userId: currentUser.id,
-        accion: 'crear',
-        entidad: 'deal',
-        entidadId: deal.id,
-        descripcion: `Usuario ${currentUser.name} creó el deal "${titulo}"`,
-        cambiosDespues: JSON.stringify(deal),
-      },
-    })
+    // Audit log
+    const { AuditService } = await import('@/lib/audit-service');
+    const requestIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || undefined;
+    const userAgent = request.headers.get('user-agent') || undefined;
+    await AuditService.log({
+      tenantId: tenantId,
+      userId: currentUser.id,
+      action: 'crear',
+      entity: 'deal',
+      entityId: deal.id,
+      description: `Usuario ${currentUser.name} creó el deal "${titulo}"`,
+      changesAfter: deal,
+      ipAddress: requestIp,
+      userAgent
+    });
 
     // Notificación por Telegram al admin
     const { notifyByTelegram } = await import('@/lib/skills/notification-layer');

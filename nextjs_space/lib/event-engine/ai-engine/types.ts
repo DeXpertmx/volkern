@@ -26,47 +26,50 @@ export interface AIFallback {
   reason: string
 }
 
-const MODEL_CONFIGS: Record<AIModel, {
+export interface ModelConfig {
   provider: 'abacus' | 'openai' | 'anthropic' | 'google'
-  max_tokens: number
-  supports_streaming: boolean
-  cost_per_1k_input: number
-  cost_per_1k_output: number
-}> = {
+  model: string
+  maxTokens: number
+  temperature: number
+}
+
+export interface AIModelConfig {
+  provider: 'abacus' | 'openai' | 'anthropic' | 'google'
+  model: string
+  maxTokens: number
+  temperature: number
+}
+
+export const MODEL_CONFIGS: Record<AIModel, AIModelConfig> = {
   gemma: {
     provider: 'abacus',
-    max_tokens: 4096,
-    supports_streaming: false,
-    cost_per_1k_input: 0,
-    cost_per_1k_output: 0
+    model: 'gemma',
+    maxTokens: 4096,
+    temperature: 0.7
   },
   gpt4: {
     provider: 'openai',
-    max_tokens: 8192,
-    supports_streaming: true,
-    cost_per_1k_input: 0.03,
-    cost_per_1k_output: 0.06
+    model: 'gpt-4',
+    maxTokens: 8192,
+    temperature: 0.7
   },
   gpt4o: {
     provider: 'openai',
-    max_tokens: 16384,
-    supports_streaming: true,
-    cost_per_1k_input: 0.005,
-    cost_per_1k_output: 0.015
+    model: 'gpt-4o',
+    maxTokens: 16384,
+    temperature: 0.7
   },
   claude: {
     provider: 'anthropic',
-    max_tokens: 4096,
-    supports_streaming: true,
-    cost_per_1k_input: 0.015,
-    cost_per_1k_output: 0.075
+    model: 'claude-3-opus',
+    maxTokens: 4096,
+    temperature: 0.7
   },
   gemini: {
     provider: 'google',
-    max_tokens: 8192,
-    supports_streaming: true,
-    cost_per_1k_input: 0,
-    cost_per_1k_output: 0
+    model: 'gemini-pro',
+    maxTokens: 8192,
+    temperature: 0.7
   }
 }
 

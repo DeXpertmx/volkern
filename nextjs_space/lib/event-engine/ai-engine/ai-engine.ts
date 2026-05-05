@@ -262,9 +262,9 @@ export class AIEngine {
     MODEL_ENABLED.set(tenantId, models)
   }
 
-  static async getUsage(tenantId: string): Promise<Record<AIModel, { daily: number; limit: number }> {
+  static async getUsage(tenantId: string): Promise<{[key: string]: { daily: number; limit: number }}> {
     const enabled = this.getEnabledModels(tenantId)
-    const usage: Record<string, { daily: number; limit: number }> = {}
+    const usage: {[key: string]: { daily: number; limit: number }} = {}
 
     for (const model of enabled) {
       const key = `${tenantId}_${model}`
@@ -279,6 +279,6 @@ export class AIEngine {
       }
     }
 
-    return usage as Record<AIModel, { daily: number; limit: number }>
+    return usage as {[key: string]: { daily: number; limit: number }}
   }
 }

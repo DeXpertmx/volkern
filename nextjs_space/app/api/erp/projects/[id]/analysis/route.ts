@@ -42,12 +42,12 @@ export const GET = withTenantAuth(async (request, auth, { params }) => {
     const stockMovements = await prisma.stockMovement.findMany({
       where: { projectId, tenantId: auth.tenant!.id, type: 'OUT' },
       include: {
-        catalogoItem: { select: { costoBase: true } }
+        catalogoItem: { select: { costOfAcquisition: true } }
       }
     });
 
     const materialCosts = stockMovements.reduce((acc, move) => {
-      const cost = move.catalogoItem?.costoBase || 0;
+      const cost = move.catalogoItem?.costOfAcquisition || 0;
       return acc + (Math.abs(move.quantity) * cost);
     }, 0);
 

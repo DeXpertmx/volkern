@@ -124,7 +124,7 @@ export const authOptions: NextAuthOptions = {
   ],
   session: {
     strategy: 'jwt',
-    maxAge: 30 * 60, // 30 minutos de inactividad
+    maxAge: 24 * 60 * 60, // 24 horas (antes 30 min)
   },
   pages: {
     signIn: '/auth/login',

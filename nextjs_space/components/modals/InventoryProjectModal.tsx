@@ -26,7 +26,7 @@ interface InventoryProjectModalProps {
 
 export default function InventoryProjectModal({ open, setOpen, project }: InventoryProjectModalProps) {
   const { data: catalogue } = useSWR('/api/erp/inventory', fetcher)
-  const { data: warehouses } = useSWR('/api/erp/inventory/warehouses', fetcher)
+  const { data: warehouses } = useSWR('/api/erp/warehouses', fetcher)
   const { data: consumption, mutate: mutateConsumption } = useSWR(project ? `/api/erp/projects/${project.id}/inventory` : null, fetcher)
   
   const [loading, setLoading] = useState(false)

@@ -1,11 +1,22 @@
 import { prisma } from './db'
 import { stripe } from './stripe'
 import { SquareClient, SquareEnvironment } from 'square'
-import gocardless, { Environments as GoCardlessEnvironment } from 'gocardless-nodejs'
 import { v4 as uuidv4 } from 'uuid'
 import { generateInvoiceFingerprint, GENESIS_FINGERPRINT } from './crypto-utils'
 import { eventBus, EVENTS } from './skills/event-bus'
 import { StripeMXService } from './finance/mexico/stripe-mx-service'
+
+// Dynamic import for gocardless-nodejs - only available on server
+let gocardlessModule: any;
+let GoCardlessEnvironment: any;
+async function getGoCardless() {
+  if (!gocardlessModule) {
+    const mod = await import('gocardless-nodejs');
+    gocardlessModule = mod.default;
+    GoCardlessEnvironment = mod.Environments;
+  }
+  return { client: gocardlessModule, Environment: GoCardlessEnvironment };
+}
 
 export interface ISignatureProvider {
   sign(payload: string): Promise<{ signature: string; algorithm: string }>;
@@ -504,7 +515,8 @@ export class InvoicingService {
   private static async createGoCardlessPayment(options: CreateInvoiceOptions, credentials: { accessToken: string, environment?: string }) {
     const { tenantId, leadId, contactId, amount, currency = 'EUR', description } = options
     
-    const gcEnvironment = credentials.environment === 'live' ? GoCardlessEnvironment.Live : GoCardlessEnvironment.Sandbox
+    const { client: gocardless, Environment: GCEnv } = await getGoCardless()
+    const gcEnvironment = credentials.environment === 'live' ? GCEnv.Live : GCEnv.Sandbox
     const client = gocardless(credentials.accessToken, gcEnvironment)
 
     const cliente = await this.getClienteFiscal(leadId, contactId, tenantId)

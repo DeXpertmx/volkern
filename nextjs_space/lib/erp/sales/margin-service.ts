@@ -54,7 +54,7 @@ export class MarginService {
         itemCost += bom.overheadCost || 0;
       } else {
         // Fallback al costo base del item si no hay BoM
-        itemCost = (item.catalogItem as any).costoBase || ((item.catalogItem as any).precioBase * 0.6) || 0;
+        itemCost = (item.catalogItem as any).costOfAcquisition || ((item.catalogItem as any).precioBase * 0.6) || 0;
       }
 
       totalOperationalCost += itemCost * item.quantity;

@@ -250,17 +250,20 @@ export const POST = withTenantAuth(async (req, auth) => {
       })
     }
 
-    await prisma.auditLog.create({
-      data: {
-        tenantId: tenantId,
-        userId: userId,
-        accion: 'crear',
-        entidad: 'cotizacion',
-        entidadId: cotizacion.id,
-        descripcion: `Cotización ${numero} creada`,
-        cambiosDespues: JSON.stringify(cotizacion),
-      },
-    })
+    const { AuditService } = await import('@/lib/audit-service');
+    const requestIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || undefined;
+    const userAgent = request.headers.get('user-agent') || undefined;
+    await AuditService.log({
+      tenantId: tenantId,
+      userId: userId,
+      action: 'crear',
+      entity: 'cotizacion',
+      entityId: cotizacion.id,
+      description: `Cotización ${numero} creada`,
+      changesAfter: cotizacion,
+      ipAddress: requestIp,
+      userAgent
+    });
 
     return NextResponse.json({ cotizacion }, { status: 201 })
   } catch (error: any) {

@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { getToken } from 'next-auth/jwt'
 
 const RESERVED = new Set(['www', 'app', 'api', 'auth', 'login', 'register', 'dashboard', 'webcreator', 'admin'])
 
@@ -14,65 +13,86 @@ function getSubdomain(host: string): string | null {
   return null
 }
 
-const PUBLIC = new Set(['/', '/pricing', '/features', '/about', '/contact'])
+const PUBLIC = new Set(['/', '/pricing', '/features', '/about', '/contact', '/login', '/signup'])
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const host = request.headers.get('host') || ''
   const subdomain = getSubdomain(host)
 
-  // Rutas que no necesitan tenant
-  if (pathname.startsWith('/admin') || pathname.startsWith('/api/')) {
+  // Extract tenant ID from header
+  const xTenantId = request.headers.get('x-tenant-id');
+  const apiKey = request.headers.get('x-api-key');
+
+  // Public paths - allow through
+  if (PUBLIC.has(pathname) || pathname.startsWith('/public/')) {
     return NextResponse.next()
   }
 
-  // Sin subdominio = landing pública
-  if (!subdomain) {
-    if (PUBLIC.has(pathname)) return NextResponse.next()
-    if (pathname.startsWith('/dashboard') || pathname.startsWith('/auth/')) {
-      return NextResponse.redirect(new URL('/', request.url))
+  // Check if it's an API route that requires no auth
+  if (pathname.startsWith('/api/')) {
+    // Allow webhooks, public API, and auth routes
+    if (
+      pathname.includes('/webhooks/') ||
+      pathname.includes('/public/') ||
+      pathname.startsWith('/api/auth/') ||
+      pathname.startsWith('/api/public/') ||
+      pathname.startsWith('/api/signup') ||
+      pathname.startsWith('/api/onboarding') ||
+      pathname.startsWith('/api/configuracion/fiscal') ||
+      pathname.startsWith('/api/cotizacion') ||
+      pathname.startsWith('/api/tarjeta') ||
+      pathname.startsWith('/api/plans') ||
+      pathname.startsWith('/api/subscriptions/status') ||
+      pathname.startsWith('/api/subscriptions/create') ||
+      pathname === '/api/subscriptions' ||
+      pathname.startsWith('/api/users/me') ||
+      pathname.startsWith('/api/tenant/modules') ||
+      pathname.startsWith('/api/notifications') ||
+      pathname.startsWith('/api/guide')
+    ) {
+      // Set headers for downstream even for public API routes
+      const res = NextResponse.next()
+      res.headers.set('x-tenant-subdomain', subdomain || '')
+      if (xTenantId) {
+        res.headers.set('x-tenant-id', xTenantId)
+      }
+      if (apiKey) {
+        res.headers.set('x-api-key', apiKey)
+      }
+      return res
     }
+    // Other API routes need auth - let them through to handler (headers will be set below)
+  }
+
+  // Static files and images - allow through
+  if (
+    pathname.startsWith('/_next/') ||
+    pathname.includes('.') ||
+    pathname.startsWith('/static/')
+  ) {
     return NextResponse.next()
   }
 
-  // subdominios reservados
-  if (RESERVED.has(subdomain)) {
-    return NextResponse.next()
+  // Allow dashboard paths
+  if (pathname.startsWith('/dashboard') || pathname.startsWith('/app') || pathname.startsWith('/admin')) {
+    // Continue to auth
   }
 
-  // Pages que siempre permiten acceso
-  const isAuthOrRoot = pathname === '/' || pathname.startsWith('/auth/')
-
-  // Solo verificar token si no es auth page
-  const token = isAuthOrRoot ? null : await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET })
-
-  // No autenticado → login
-  if (!token && !pathname.startsWith('/auth/')) {
-    return NextResponse.redirect(new URL('/auth/login', request.url))
-  }
-
-  // Autenticado en auth page → dashboard
-  if (token && pathname.startsWith('/auth/')) {
-    return NextResponse.redirect(new URL('/dashboard', request.url))
-  }
-
-  // Autenticado en raíz → dashboard
-  if (token && pathname === '/') {
-    return NextResponse.redirect(new URL('/dashboard', request.url))
-  }
-
-  // Validar cruzadasimplificada (solo si hay token)
-  if (token && (token.tenantSubdomain as string) !== subdomain) {
-    console.warn(`[Seguridad] ${token.email} de ${token.tenantSubdomain} → ${subdomain}`)
-    return NextResponse.redirect(new URL('/auth/login?error=tenant_mismatch', request.url))
-  }
-
-  // Continuar con header
+  // Set headers for downstream
   const res = NextResponse.next()
-  res.headers.set('x-tenant-subdomain', subdomain)
+  res.headers.set('x-tenant-subdomain', subdomain || '')
+  if (xTenantId) {
+    res.headers.set('x-tenant-id', xTenantId)
+  }
+  if (apiKey) {
+    res.headers.set('x-api-key', apiKey)
+  }
   return res
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|.*\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
 }

@@ -148,23 +148,22 @@ async function updateLeadHandler(
     })
 
     // Audit log
-    await prisma.auditLog.create({
-      data: {
-        tenantId: auth.tenant!.id,
-        userId: auth.user!.id,
-        accion: 'UPDATE',
-        entidad: 'Lead',
-        entidadId: lead.id,
-        descripcion: auth.authMethod === 'apikey'
-          ? `Lead actualizado vía API por ${auth.user!.name || auth.user!.email}`
-          : `Lead actualizado por ${auth.user!.name || auth.user!.email}`,
-        cambiosDespues: JSON.stringify({
-          nombre: lead.nombre,
-          email: lead.email,
-          estado: lead.estado
-        })
-      }
-    })
+    const { AuditService } = await import('@/lib/audit-service');
+    const requestIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || undefined;
+    const userAgent = request.headers.get('user-agent') || undefined;
+    await AuditService.log({
+      tenantId: auth.tenant!.id,
+      userId: auth.user!.id,
+      action: 'UPDATE',
+      entity: 'Lead',
+      entityId: lead.id,
+      description: auth.authMethod === 'apikey'
+        ? `Lead actualizado vía API por ${auth.user!.name || auth.user!.email}`
+        : `Lead actualizado por ${auth.user!.name || auth.user!.email}`,
+      changesAfter: { nombre: lead.nombre, email: lead.email, estado: lead.estado },
+      ipAddress: requestIp,
+      userAgent
+    });
 
     return NextResponse.json({
       success: true,

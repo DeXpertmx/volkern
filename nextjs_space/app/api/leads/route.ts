@@ -8,6 +8,7 @@ import { validateLimit } from '@/lib/limits'
 import { withTenantAuth } from '@/lib/api-key-auth'
 import { assignLeadAutomatically } from '@/lib/leads/assignment'
 import { AdoptionTelemetry } from '@/lib/telemetry/adoption-kpis';
+import { checkFeatureLimit, incrementUsage } from '@/lib/subscription';
 import * as crypto from 'crypto'
 
 /**
@@ -197,6 +198,15 @@ export const POST = withTenantAuth(async (request, auth) => {
         } catch (noteError) {
           console.error('[POST /api/leads] Error al crear Note inicial:', noteError)
         }
+      }
+    }
+
+    // Track usage after successful lead creation
+    if (!existingLead && lead) {
+      try {
+        await incrementUsage(auth.tenant!.id, 'leads', 1);
+      } catch (usageError) {
+        console.error('[POST /leads] Error tracking usage:', usageError);
       }
     }
 

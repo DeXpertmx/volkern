@@ -50,15 +50,24 @@ export default function StrategyDashboard() {
   const profitabilityData = snapshot?.profitability?.map((p: any) => ({
     name: p.entityId.substring(0, 8),
     margin: p.margin,
-    support: Math.floor(p.operationalCost / 50) || 10,
-  })) || [
-    { name: 'Proyecto A', margin: 45, support: 10 },
-    { name: 'Proyecto B', margin: -12, support: 45 },
-    { name: 'Proyecto C', margin: 28, support: 15 },
-    { name: 'Proyecto D', margin: 60, support: 5 },
-  ];
+    support: Math.floor(p.operationalCost / 50) || 0,
+    score: p.score
+  })) || [];
 
   const activeAlert = alerts?.[0] || null;
+
+  // KPIs dinámicos
+  const avgMargin = profitabilityData.length > 0 
+    ? (profitabilityData.reduce((sum: number, p: any) => sum + p.margin, 0) / profitabilityData.length).toFixed(1)
+    : "32.4";
+
+  const projectedCash = snapshot?.projections?.length > 0
+    ? `$${snapshot.projections[snapshot.projections.length - 1].netBalance.toLocaleString()}`
+    : "$65,000";
+
+  const avgHealth = profitabilityData.length > 0
+    ? Math.round(profitabilityData.reduce((sum: number, p: any) => sum + p.score, 0) / profitabilityData.length)
+    : 88;
 
   return (
     <div className="p-8 space-y-10 bg-[#fafafa] min-h-screen">
@@ -83,10 +92,10 @@ export default function StrategyDashboard() {
       {/* Main KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         {[
-          { label: 'Margen Global', value: '32.4%', sub: '+4.2%', icon: Target, color: 'indigo' },
-          { label: 'Caja Proyectada (90d)', value: '$65,000', sub: 'Tendencia estable', icon: DollarSign, color: 'emerald' },
+          { label: 'Margen Global', value: `${avgMargin}%`, sub: '+4.2%', icon: Target, color: 'indigo' },
+          { label: 'Caja Proyectada (90d)', value: projectedCash, sub: 'Tendencia estable', icon: DollarSign, color: 'emerald' },
           { label: 'Churn Rate', value: '1.2%', sub: '-0.5%', icon: TrendingDown, color: 'rose' },
-          { label: 'Health Score', value: '88/100', sub: 'Excelente', icon: Activity, color: 'violet' }
+          { label: 'Health Score', value: `${avgHealth}/100`, sub: avgHealth > 80 ? 'Excelente' : 'Revisión', icon: Activity, color: 'violet' }
         ].map((kpi, i) => (
           <Card key={i} className="p-6 rounded-[2.5rem] border-none shadow-sm bg-white hover:shadow-xl transition-all group">
             <div className={`h-12 w-12 rounded-2xl bg-${kpi.color}-50 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform`}>
@@ -192,7 +201,7 @@ export default function StrategyDashboard() {
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {profitabilityData.map((item, i) => (
+          {profitabilityData.length > 0 ? profitabilityData.map((item: any, i: number) => (
             <div key={i} className="p-6 rounded-[2rem] border border-slate-50 space-y-6">
               <div className="flex justify-between items-start">
                  <div className="h-10 w-10 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">
@@ -210,7 +219,20 @@ export default function StrategyDashboard() {
                  <p className="text-[8px] font-bold text-slate-400 uppercase mt-2">Uso Soporte: {item.support}h</p>
               </div>
             </div>
-          ))}
+          )) : (
+            Array(4).fill({}).map((_, i) => (
+              <div key={i} className="p-6 rounded-[2rem] border border-slate-50 space-y-6 opacity-40 grayscale">
+                <div className="flex justify-between items-start">
+                   <div className="h-10 w-10 rounded-2xl bg-slate-100" />
+                   <div className="h-4 w-16 bg-slate-100 rounded-full" />
+                </div>
+                <div className="space-y-2">
+                   <div className="h-3 w-24 bg-slate-100 rounded" />
+                   <div className="h-1.5 w-full bg-slate-100 rounded-full" />
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </Card>
     </div>

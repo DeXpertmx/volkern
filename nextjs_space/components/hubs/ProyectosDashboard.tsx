@@ -32,6 +32,8 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import useSWR from 'swr'
 import { motion, AnimatePresence } from 'framer-motion'
+import { toast } from 'react-hot-toast'
+import { mutate } from 'swr'
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
@@ -320,7 +322,12 @@ export default function ProyectosDashboard() {
           )}
 
           {section === 'gantt' && <GanttVisualizer projects={isProjectArray ? projects : []} />}
-          {section === 'costos' && <ProjectCosts projects={isProjectArray ? projects : []} />}
+          {section === 'costos' && (
+            <ProjectCosts 
+              projects={isProjectArray ? projects : []} 
+              initialProjectId={searchParams.get('projectId')} 
+            />
+          )}
           {section === 'hitos' && (
             <MilestoneTracker 
               projects={isProjectArray ? projects : []} 
@@ -388,8 +395,8 @@ function GanttVisualizer({ projects }: { projects: any[] }) {
   )
 }
 
-function ProjectCosts({ projects }: { projects: any[] }) {
-  const [selectedId, setSelectedId] = useState<string | null>(projects[0]?.id || null)
+function ProjectCosts({ projects, initialProjectId }: { projects: any[], initialProjectId?: string | null }) {
+  const [selectedId, setSelectedId] = useState<string | null>(initialProjectId || projects[0]?.id || null)
   const { data: analysis, isLoading } = useSWR(selectedId ? `/api/erp/projects/${selectedId}/analysis` : null, fetcher)
 
   if (!projects || projects.length === 0) return (
@@ -491,7 +498,43 @@ function ProjectCosts({ projects }: { projects: any[] }) {
                          "Basado en los consumos actuales, el margen final proyectado es del <span className="text-emerald-400 font-bold">28.5%</span>. Se recomienda facturar el hito de 'Instalación' para mantener flujo de caja positivo."
                       </p>
                       <div className="flex gap-2">
-                         <Button className="flex-1 rounded-xl bg-primary text-white font-black uppercase text-[10px] h-10">Generar PDF</Button>
+                         <Button 
+                           className="flex-1 rounded-xl bg-primary text-white font-black uppercase text-[10px] h-10 shadow-lg shadow-primary/20"
+                           onClick={async () => {
+                             try {
+                               const { jsPDF } = await import('jspdf');
+                               const doc = new jsPDF();
+                               
+                               doc.setFontSize(22);
+                               doc.text('REPORTE DE AUDITORÍA FINANCIERA', 20, 20);
+                               
+                               doc.setFontSize(12);
+                               doc.text(`Proyecto: ${analysis.projectName}`, 20, 35);
+                               doc.text(`Fecha: ${new Date().toLocaleString()}`, 20, 42);
+                               
+                               doc.line(20, 48, 190, 48);
+                               
+                               doc.text('RESUMEN FINANCIERO', 20, 60);
+                               doc.text(`Facturado: ${financials.totalInvoiced.toLocaleString()} EUR`, 20, 70);
+                               doc.text(`Costes Totales: ${financials.totalCosts.toLocaleString()} EUR`, 20, 77);
+                               doc.text(`Margen Neto: ${financials.netMargin.toLocaleString()} EUR`, 20, 84);
+                               doc.text(`Margen %: ${financials.marginPercentage.toFixed(2)}%`, 20, 91);
+                               
+                               doc.line(20, 100, 190, 100);
+                               
+                               doc.text('DESGLOSE DE COSTES', 20, 110);
+                               doc.text(`Materiales (Stock): ${financials.materialCosts.toLocaleString()} EUR`, 20, 120);
+                               doc.text(`Otros Gastos: ${financials.otherCosts.toLocaleString()} EUR`, 20, 127);
+                               
+                               doc.save(`Auditoria-${analysis.projectName}-${Date.now()}.pdf`);
+                               toast.success('PDF generado correctamente');
+                             } catch (e) {
+                               toast.error('Error al generar PDF');
+                             }
+                           }}
+                         >
+                           Generar PDF
+                         </Button>
                          <Button 
                            variant="outline" 
                            onClick={async () => {
@@ -499,12 +542,17 @@ function ProjectCosts({ projects }: { projects: any[] }) {
                                const res = await fetch(`/api/erp/projects/${selectedId}/reports`, {
                                  method: 'POST',
                                  headers: { 'Content-Type': 'application/json' },
-                                 body: JSON.stringify(analysis)
+                                 body: JSON.stringify({
+                                   financials,
+                                   projectName: analysis.projectName,
+                                   timestamp: new Date().toISOString()
+                                 })
                                })
                                if (!res.ok) throw new Error()
                                toast.success('Reporte de auditoría archivado correctamente')
                                mutate(`/api/erp/projects/${selectedId}/reports`)
                              } catch (e) {
+                               console.error(e)
                                toast.error('Error al archivar reporte')
                              }
                            }}

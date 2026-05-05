@@ -1,18 +1,17 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { withTenantAuth } from '@/lib/api-key-auth';
 import { prisma } from '@/lib/db';
 
 /**
  * GET /api/notifications - Recupera las últimas notificaciones del usuario.
+ * Refactorizado con withTenantAuth para soporte de suplantación.
  */
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+export const GET = withTenantAuth(async (req, auth) => {
+  const userId = auth.user!.id;
 
   try {
     const notifications = await prisma.inAppNotification.findMany({
-      where: { userId: (session.user as any).id },
+      where: { userId },
       orderBy: { createdAt: 'desc' },
       take: 50 // Recuperar más para el historial
     });
@@ -21,14 +20,14 @@ export async function GET() {
     console.error('Error fetching notifications:', error);
     return NextResponse.json({ error: 'Error al recuperar notificaciones' }, { status: 500 });
   }
-}
+});
 
 /**
  * PATCH /api/notifications - Marca notificaciones como leídas.
+ * Refactorizado con withTenantAuth para soporte de suplantación.
  */
-export async function PATCH(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+export const PATCH = withTenantAuth(async (req, auth) => {
+  const userId = auth.user!.id;
 
   try {
     const { id, all } = await req.json();
@@ -37,7 +36,7 @@ export async function PATCH(req: Request) {
       // Marcar todas como leídas
       await prisma.inAppNotification.updateMany({
         where: { 
-          userId: (session.user as any).id, 
+          userId, 
           read: false 
         },
         data: { 
@@ -50,7 +49,7 @@ export async function PATCH(req: Request) {
       await prisma.inAppNotification.update({
         where: { 
           id, 
-          userId: (session.user as any).id 
+          userId 
         },
         data: { 
           read: true, 
@@ -64,4 +63,4 @@ export async function PATCH(req: Request) {
     console.error('Error updating notifications:', error);
     return NextResponse.json({ error: 'Error al actualizar' }, { status: 500 });
   }
-}
+});
