@@ -116,7 +116,6 @@ export default function ContactosPage() {
 
   useEffect(() => {
     fetchContacts()
-    fetchCompanies()
   }, [])
 
   useEffect(() => {
@@ -127,6 +126,29 @@ export default function ContactosPage() {
     try {
       const contactsRes = await apiFetch('/api/contacts')
       const companiesRes = await apiFetch('/api/contacts?tipo=company')
+      
+      if (contactsRes.ok) {
+        const contactsData = await contactsRes.json()
+        setContacts(Array.isArray(contactsData) ? contactsData : (contactsData.data || []))
+      }
+      if (companiesRes.ok) {
+        const companiesData = await companiesRes.json()
+        setContacts(prev => [...prev, ...(Array.isArray(companiesData) ? companiesData : (companiesData.data || []))])
+      }
+    } catch (error) {
+      console.error('Error loading contacts:', error)
+      toast.error('Error al cargar contactos')
+    }
+  }
+
+  const handleImport = async () => {
+    if (!formData.get('file')) {
+      toast.error('Por favor selecciona un archivo')
+      return
+    }
+    
+    try {
+      setImporting(true)
       const importRes = await apiFetch('/api/contacts/import', {
         method: 'POST',
         body: formData,
