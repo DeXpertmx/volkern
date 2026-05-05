@@ -118,10 +118,6 @@ export default function ContactosPage() {
     fetchContacts()
   }, [])
 
-  useEffect(() => {
-    filterContacts()
-  }, [searchTerm, tipoFilter, contacts])
-
   const fetchContacts = async () => {
     try {
       const contactsRes = await apiFetch('/api/contacts')
