@@ -41,6 +41,7 @@ export const authOptions: NextAuthOptions = {
         let requestSubdomain: string | null = null
         
         const cleanHost = hostname.replace(/:.*$/, '')
+        console.log(`[DEBUG-AUTH] Hostname: ${cleanHost}`);
         
         // Lógica de detección de subdominio mejorada
         if (cleanHost.includes('.volkern.app')) {
@@ -51,6 +52,8 @@ export const authOptions: NextAuthOptions = {
         } else if (cleanHost.endsWith('localhost') && cleanHost !== 'localhost') {
           requestSubdomain = cleanHost.split('.')[0]
         }
+        
+        console.log(`[DEBUG-AUTH] Request Subdomain: ${requestSubdomain}`);
 
         // Buscamos el usuario incluyendo el tokenVersion para cierre global
         const user = await prisma.user.findUnique({
@@ -74,23 +77,26 @@ export const authOptions: NextAuthOptions = {
         })
 
         if (!user || !user.password) {
-          console.warn(`[Auth] Usuario no encontrado: ${cleanEmail}`)
+          console.warn(`[DEBUG-AUTH] Usuario no encontrado: ${cleanEmail}`);
           return null
         }
 
+        console.log(`[DEBUG-AUTH] User Tenant Subdomain: ${user.tenant?.subdomain}`);
+
         // 🔴 VALIDACIÓN CRUZADA: Si hay subdominio en request, el usuario debe pertenecer a ese tenant
         if (requestSubdomain && user.tenant?.subdomain !== requestSubdomain) {
-          console.warn(`[Seguridad] Usuario ${cleanEmail} intentó login en ${requestSubdomain} pero pertenece a ${user.tenant?.subdomain}`)
-          return null  // Credenciales inválidas para este tenant
+          console.warn(`[DEBUG-AUTH] Mismatch: Request=${requestSubdomain}, UserTenant=${user.tenant?.subdomain}`);
+          return null
         }
 
         const isPasswordValid = await bcrypt.compare(
           credentials.password,
           user.password
         )
+        
+        console.log(`[DEBUG-AUTH] Password Valid: ${isPasswordValid}`);
 
         if (!isPasswordValid) {
-          console.warn(`[Auth] Password inválido para: ${cleanEmail}`)
           return null
         }
 
