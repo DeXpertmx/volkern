@@ -20,7 +20,6 @@ import {
   DollarSign,
   Loader2,
   FileText,
-  MapPin,
   Barcode
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -30,8 +29,9 @@ import { Input } from '@/components/ui/input'
 import useSWR from 'swr'
 import { toast } from 'sonner'
 import { motion, AnimatePresence } from 'framer-motion'
+import { apiFetch } from '@/lib/api-client'
 
-const fetcher = (url: string) => fetch(url).then(res => {
+const fetcher = (url: string) => apiFetch(url).then(res => {
   if (!res.ok) throw new Error('Failed to fetch')
   return res.json()
 })
