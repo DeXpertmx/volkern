@@ -7,9 +7,9 @@ interface ResendCredentials {
 
 // Mapeo de subdominios a direcciones from
 const FROM_ADDRESSES: Record<string, string> = {
-  admin: 'noreply@admin.volkern.app',
-  demo: 'noreply@demo.volkern.app',
-  default: 'noreply@volkern.app'
+  admin: 'Volkern <noreply@volkern.app>',
+  demo: 'Volkern <noreply@volkern.app>',
+  default: 'Volkern <noreply@volkern.app>'
 }
 
 let credentials: ResendCredentials | null = null
