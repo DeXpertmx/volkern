@@ -83,15 +83,28 @@ export default function TareasPage() {
             if (filter.tipo !== 'all') params.append('tipo', filter.tipo);
             if (filter.search) params.append('search', filter.search);
 
-const tasksRes = await apiFetch(`/api/tasks?${params.toString()}`);
+            const tasksRes = await apiFetch(`/api/tasks?${params.toString()}`);
+            if (tasksRes.ok) {
+                const data = await tasksRes.json();
+                setTasks(Array.isArray(data) ? data : (data.tasks || []));
+            }
+        } catch (error) {
+            console.error('Error loading tasks:', error);
+            toast.error('Error al cargar tareas');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleToggleComplete = async (taskId: string, completed: boolean) => {
+        try {
             const updateRes = await apiFetch(`/api/tasks/${taskId}`, {
-            const patchRes = await apiFetch(`/api/tasks/${taskId}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ completada: !completed })
             });
 
-            if (!res.ok) throw new Error('Error al actualizar tarea');
+            if (!updateRes.ok) throw new Error('Error al actualizar tarea');
 
             toast.success(completed ? 'Tarea marcada como pendiente' : 'Tarea completada');
             fetchTasks();
