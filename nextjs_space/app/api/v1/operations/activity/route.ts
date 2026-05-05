@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { withTenantAuth } from '@/lib/api-key-auth';
 import { skills } from '@/lib/skills';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * API: Actividad Operativa (Dashboard)
  * Proxy hacia el skill get_field_activity

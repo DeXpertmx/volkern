@@ -65,7 +65,7 @@ export function DashboardHeader() {
                  whitelabelConfig?.nombreEmpresa || 'Volkern'
                )} 
                <span className="text-slate-300">/</span> 
-               <span className="text-slate-900 tracking-widest">{getPageTitle()}</span>
+               <span className="text-slate-400 tracking-widest">{getPageTitle()}</span>
              </h2>
           </div>
         </div>

@@ -33,6 +33,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import Link from 'next/link'
 import { toast } from 'sonner'
+import { apiFetch } from '@/lib/api-client'
 import { DashboardLayout } from '@/components/dashboard-layout'
 
 export default function QuizzesPage() {
@@ -46,12 +47,24 @@ export default function QuizzesPage() {
 
   const fetchQuizzes = async () => {
     try {
-      const res = await fetch('/api/quizzes')
+      setLoading(true)
+      const res = await apiFetch('/api/quizzes')
       const data = await res.json()
-      setQuizzes(data)
+      
+      if (Array.isArray(data)) {
+        setQuizzes(data)
+      } else if (data && data.quizzes && Array.isArray(data.quizzes)) {
+        setQuizzes(data.quizzes)
+      } else if (data && data.data && Array.isArray(data.data)) {
+        setQuizzes(data.data)
+      } else {
+        setQuizzes([])
+        if (data && data.error) toast.error(data.error)
+      }
     } catch (error) {
       console.error('Error fetching quizzes:', error)
       toast.error('Error al cargar cuestionarios')
+      setQuizzes([])
     } finally {
       setLoading(false)
     }
@@ -61,10 +74,13 @@ export default function QuizzesPage() {
     if (!confirm('¿Estás seguro de eliminar este cuestionario?')) return
 
     try {
-      const res = await fetch(`/api/quizzes/${id}`, { method: 'DELETE' })
+      const res = await apiFetch(`/api/quizzes/${id}`, { method: 'DELETE' })
       if (res.ok) {
         setQuizzes(quizzes.filter(q => q.id !== id))
         toast.success('Cuestionario eliminado')
+      } else {
+        const errorData = await res.json()
+        toast.error(errorData.error || 'Error al eliminar')
       }
     } catch (error) {
       toast.error('Error al eliminar')

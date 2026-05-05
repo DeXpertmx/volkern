@@ -233,24 +233,229 @@ export default function CatalogoPage() {
     fetchFieldDefinitions();
   }, [filterTipo, filterActivo, filterCategoria, filterEtiqueta]);
 
-const fetchFieldDefinitions = async () => {
+  const fetchFieldDefinitions = async () => {
     try {
-      const fieldDefRes = await apiFetch('/api/catalogo/field-definitions');
-      const catalogoRes = await apiFetch(`/api/catalogo?${params.toString()}`);
-      const tasasRes = await apiFetch('/api/configuracion/fiscal/tasas?activo=true');
-      const itemRes = await apiFetch(url, {
-        method: 'DELETE',
+      const res = await apiFetch('/api/catalogo/field-definitions');
+      if (res.ok) {
+        const data = await res.json();
+        setFieldDefinitions(data.fieldDefinitions || []);
+      }
+    } catch (error) {
+      console.error('Error loading field definitions:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (!loadingFiscal && fiscalConfig && !form.moneda) {
+      setForm(prev => ({ ...prev, moneda: fiscalConfig.currencyCode }));
+    }
+  }, [fiscalConfig, loadingFiscal, form.moneda]);
+
+  const fetchItems = async () => {
+    try {
+      setLoading(true);
+      const params = new URLSearchParams();
+      if (filterTipo && filterTipo !== 'all') params.set('tipo', filterTipo);
+      if (filterActivo && filterActivo !== 'all') params.set('activo', filterActivo);
+      if (filterCategoria && filterCategoria !== 'all') params.set('categoria', filterCategoria);
+      if (filterEtiqueta && filterEtiqueta !== 'all') params.set('etiqueta', filterEtiqueta);
+      if (search) params.set('search', search);
+
+      const res = await apiFetch(`/api/catalogo?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setItems(data.items);
+        setAvailableCategorias(data.filtros?.categorias || []);
+        setAvailableEtiquetas(data.filtros?.etiquetas || []);
+      }
+    } catch (error) {
+      console.error('Error loading catalog:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchTasas = async () => {
+    try {
+      const res = await apiFetch('/api/configuracion/fiscal/tasas?activo=true');
+      if (res.ok) {
+        const data = await res.json();
+        setTasas(data.tasas || []);
+      }
+    } catch (error) {
+      console.error('Error loading tax rates:', error);
+    }
+  };
+
+  const handleSearch = () => {
+    fetchItems();
+  };
+
+  const resetFormState = () => {
+    setCustomFieldValues({});
+    setCategorias([]);
+    setEtiquetas([]);
+    setMedia({ imagenes: [] });
+    setPricing({ tipo: 'unico', descuentos: [], impuestos: { iva: 0.21, incluido: false } });
+    setMetadata({});
+    setInventoryForm({ minStock: '0', reorderPoint: '0', valuationMethod: 'AVERAGE_COST', storageLocation: '' });
+    setBomForm({ laborCost: '0', overheadCost: '0', components: [] });
+    setActiveTab('basico');
+  };
+
+  const handleEdit = (item: CatalogoItem) => {
+    setEditing(item);
+    setForm({
+      nombre: item.nombre,
+      descripcion: item.descripcion || '',
+      sku: item.sku || '',
+      tipo: item.tipo,
+      precioBase: item.precioBase.toString(),
+      moneda: item.moneda,
+      categoriaFiscal: item.categoriaFiscal,
+      tasaImpuestoId: item.tasaImpuestoId || '',
+      duracionMinutos: item.duracionMinutos?.toString() || '',
+      modalidad: item.modalidad || '',
+      unidad: item.unidad,
+      activo: item.activo,
+      destacado: item.destacado,
+      isManufactured: item.isManufactured,
+      costOfAcquisition: item.costOfAcquisition?.toString() || '',
+    });
+    // Cargar nuevos campos
+    setCustomFieldValues(item.customFieldValues || {});
+    setCategorias(item.categorias || []);
+    setEtiquetas(item.etiquetas || []);
+    setMedia(item.media || { imagenes: [] });
+    setPricing(item.pricing || { tipo: 'unico', descuentos: [], impuestos: { iva: 0.21, incluido: false } });
+    setMetadata(item.metadata || {});
+    // Onboarding 2.0 / MRP
+    if (item.inventoryConfig) {
+      setInventoryForm({
+        minStock: item.inventoryConfig.minStock.toString(),
+        reorderPoint: item.inventoryConfig.reorderPoint.toString(),
+        valuationMethod: item.inventoryConfig.valuationMethod,
+        storageLocation: item.inventoryConfig.storageLocation || '',
+      });
+    } else {
+      setInventoryForm({ minStock: '0', reorderPoint: '0', valuationMethod: 'AVERAGE_COST', storageLocation: '' });
+    }
+
+    if (item.billOfMaterials) {
+      setBomForm({
+        laborCost: item.billOfMaterials.laborCost.toString(),
+        overheadCost: item.billOfMaterials.overheadCost.toString(),
+        components: item.billOfMaterials.components || [],
+      });
+    } else {
+      setBomForm({ laborCost: '0', overheadCost: '0', components: [] });
+    }
+
+    setActiveTab('basico');
+    setDialogOpen(true);
+  };
+
+  const handleNew = () => {
+    setEditing(null);
+    setForm({
+      nombre: '',
+      descripcion: '',
+      sku: '',
+      tipo: 'servicio',
+      precioBase: '',
+      moneda: fiscalConfig?.currencyCode || 'EUR',
+      categoriaFiscal: 'general',
+      tasaImpuestoId: '',
+      duracionMinutos: '',
+      modalidad: '',
+      unidad: 'unidad',
+      activo: true,
+      destacado: false,
+      isManufactured: false,
+      costOfAcquisition: '',
+    });
+    resetFormState();
+    setDialogOpen(true);
+  };
+
+  const handleSave = async () => {
+    if (!form.nombre || !form.precioBase) {
+      toast.error('Nombre y precio son requeridos');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const url = editing ? `/api/catalogo/${editing.id}` : '/api/catalogo';
+      const method = editing ? 'PATCH' : 'POST';
+
+      const payload = {
+        ...form,
+        precioBase: parseFloat(form.precioBase),
+        duracionMinutos: form.duracionMinutos ? parseInt(form.duracionMinutos) : null,
+        tasaImpuestoId: form.tasaImpuestoId || null,
+        modalidad: form.modalidad || null,
+        // Nuevos campos
+        customFieldValues: Object.keys(customFieldValues).length > 0 ? customFieldValues : null,
+        categorias,
+        etiquetas,
+        media: media.imagenes.length > 0 || media.video_tour || media.documento_tecnico || media.tour_360 ? media : null,
+        pricing: pricing.tipo !== 'unico' || pricing.descuentos.length > 0 ? pricing : null,
+        metadata: Object.keys(metadata).length > 0 ? metadata : null,
+        // Onboarding 2.0 / MRP
+        isManufactured: form.isManufactured,
+        costOfAcquisition: parseFloat(form.costOfAcquisition || '0'),
+        inventoryConfig: {
+          minStock: parseFloat(inventoryForm.minStock),
+          reorderPoint: parseFloat(inventoryForm.reorderPoint),
+          valuationMethod: inventoryForm.valuationMethod,
+          storageLocation: inventoryForm.storageLocation || null,
+        },
+        bom: form.isManufactured ? {
+          laborCost: parseFloat(bomForm.laborCost),
+          overheadCost: parseFloat(bomForm.overheadCost),
+          components: bomForm.components.map((c: any) => ({
+            componentId: c.componentId,
+            quantityRequired: parseFloat(c.quantityRequired),
+            unit: c.unit || 'unit'
+          }))
+        } : null
+      };
+
+      const res = await apiFetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       });
 
-      if (itemRes.ok) {
+      if (res.ok) {
+        toast.success(editing ? 'Ítem actualizado' : 'Ítem creado');
+        setDialogOpen(false);
+        fetchItems();
+      } else {
+        const error = await res.json();
+        toast.error(error.error || 'Error al guardar');
+      }
+    } catch (error) {
+      toast.error('Error de conexión');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (item: CatalogoItem) => {
+    if (!confirm(`¿Eliminar "${item.nombre}"?`)) return;
+
+    try {
+      const res = await apiFetch(`/api/catalogo/${item.id}`, { method: 'DELETE' });
+      if (res.ok) {
         toast.success('Ítem eliminado');
         fetchItems();
       } else {
-        const error = await itemRes.json();
+        const error = await res.json();
         toast.error(error.error || 'Error al eliminar');
       }
     } catch (error) {
-      console.error('Error deleting item:', error);
       toast.error('Error de conexión');
     }
   };

@@ -116,42 +116,198 @@ export default function ContactosPage() {
 
   useEffect(() => {
     fetchContacts()
+    fetchCompanies()
   }, [])
+
+  useEffect(() => {
+    filterContacts()
+  }, [searchTerm, tipoFilter, contacts])
 
   const fetchContacts = async () => {
     try {
-      const contactsRes = await apiFetch('/api/contacts')
-      const companiesRes = await apiFetch('/api/contacts?tipo=company')
-      
-      if (contactsRes.ok) {
-        const contactsData = await contactsRes.json()
-        setContacts(Array.isArray(contactsData) ? contactsData : (contactsData.data || []))
-      }
-      if (companiesRes.ok) {
-        const companiesData = await companiesRes.json()
-        setContacts(prev => [...prev, ...(Array.isArray(companiesData) ? companiesData : (companiesData.data || []))])
+      setLoading(true)
+      const res = await apiFetch('/api/contacts')
+      const data = await res.json()
+      if (Array.isArray(data)) {
+        setContacts(data)
+      } else if (data.error) {
+        toast.error(data.error)
       }
     } catch (error) {
-      console.error('Error loading contacts:', error)
+      console.error('Error al cargar contactos:', error)
       toast.error('Error al cargar contactos')
+    } finally {
+      setLoading(false)
     }
   }
 
-  const handleImport = async () => {
-    if (!formData.get('file')) {
-      toast.error('Por favor selecciona un archivo')
+  const fetchCompanies = async () => {
+    try {
+      const res = await apiFetch('/api/contacts?tipo=company')
+      const data = await res.json()
+      if (Array.isArray(data)) {
+        setCompanies(data)
+      }
+    } catch (error) {
+      console.error('Error al cargar empresas:', error)
+    }
+  }
+
+  const filterContacts = () => {
+    let filtered = contacts
+
+    // Filtrar por búsqueda
+    if (searchTerm) {
+      filtered = filtered.filter(
+        (contact) =>
+          contact.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          contact.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (contact.telefono && contact.telefono.toLowerCase().includes(searchTerm.toLowerCase()))
+      )
+    }
+
+    // Filtrar por tipo
+    if (tipoFilter !== 'all') {
+      filtered = filtered.filter((contact) => contact.tipo === tipoFilter)
+    }
+
+    setFilteredContacts(filtered)
+  }
+
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
+    
+    // Validación básica
+    if (!formData.nombre.trim()) {
+      toast.error('El nombre es obligatorio')
+      return
+    }
+    if (!formData.email.trim()) {
+      toast.error('El email es obligatorio')
       return
     }
     
     try {
-      setImporting(true)
-      const importRes = await apiFetch('/api/contacts/import', {
+      const url = editingContact
+        ? `/api/contacts/${editingContact.id}`
+        : '/api/contacts'
+      
+      const method = editingContact ? 'PUT' : 'POST'
+      
+      // Limpiar datos antes de enviar
+      const dataToSend = {
+        ...formData,
+        companyId: formData.companyId || null, // Enviar null si está vacío
+        telefono: formData.telefono || null,
+        cargo: formData.cargo || null,
+        ubicacion: formData.ubicacion || null,
+        linkedin: formData.linkedin || null,
+        notas: formData.notas || null,
+        tags: formData.tags || null,
+      }
+      
+      const res = await apiFetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dataToSend)
+      })
+
+      const data = await res.json()
+      
+      if (res.ok && data.id) {
+        toast.success(
+          editingContact
+            ? 'Contacto actualizado correctamente'
+            : 'Contacto creado correctamente'
+        )
+        setIsDialogOpen(false)
+        resetForm()
+        fetchContacts()
+      } else {
+        toast.error(data.error || 'Error al guardar contacto')
+      }
+    } catch (error) {
+      console.error('Error al guardar contacto:', error)
+      toast.error('Error al guardar contacto')
+    }
+  }
+
+  const handleEdit = (contact: Contact) => {
+    setEditingContact(contact)
+    setFormData({
+      nombre: contact.nombre,
+      email: contact.email,
+      telefono: contact.telefono || '',
+      tipo: contact.tipo,
+      companyId: contact.company?.id || '',
+      cargo: contact.cargo || '',
+      ubicacion: contact.ubicacion || '',
+      linkedin: contact.linkedin || '',
+      notas: contact.notas || '',
+      tags: contact.tags || ''
+    })
+    setIsDialogOpen(true)
+  }
+
+  const handleDelete = async (contactId: string) => {
+    if (!confirm('¿Estás seguro de eliminar este contacto?')) return
+
+    try {
+      const res = await apiFetch(`/api/contacts/${contactId}`, {
+        method: 'DELETE'
+      })
+
+      const data = await res.json()
+      
+      if (res.ok) {
+        toast.success('Contacto eliminado correctamente')
+        fetchContacts()
+      } else {
+        toast.error(data.error || 'Error al eliminar contacto')
+      }
+    } catch (error) {
+      console.error('Error al eliminar contacto:', error)
+      toast.error('Error al eliminar contacto')
+    }
+  }
+
+  const resetForm = () => {
+    setFormData({
+      nombre: '',
+      email: '',
+      telefono: '',
+      tipo: 'person',
+      companyId: '',
+      cargo: '',
+      ubicacion: '',
+      linkedin: '',
+      notas: '',
+      tags: ''
+    })
+    setEditingContact(null)
+  }
+
+  const handleExport = () => {
+    const url = `/api/contacts/export${tipoFilter !== 'all' ? `?tipo=${tipoFilter}` : ''}`
+    window.open(url, '_blank')
+  }
+
+  const handleImportCSV = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setImporting(true)
+    const formData = new FormData()
+    formData.append('file', file)
+
+    try {
+      const response = await apiFetch('/api/contacts/import', {
         method: 'POST',
         body: formData,
       })
 
-      const data = await importRes.json()
-      if (importRes.ok) {
+      const data = await response.json()
+      if (response.ok) {
         toast.success(`Importación finalizada: ${data.imported} contactos importados, ${data.errors} errores.`)
         fetchContacts()
       } else {

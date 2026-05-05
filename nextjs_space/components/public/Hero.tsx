@@ -55,9 +55,9 @@ export const Hero = () => {
         >
           <div className="aspect-[16/9] bg-slate-900 rounded-lg flex items-center justify-center">
              <img 
-               src="/assets/landing/dashboard-preview.png" 
+               src="/assets/landing/laptop-volkern-1.png" 
                alt="Volkern Dashboard Preview" 
-               className="w-full h-full object-cover rounded-lg opacity-80"
+               className="w-full h-full object-contain rounded-lg"
                onError={(e) => {
                  (e.target as any).src = "https://images.unsplash.com/photo-1551288049-bbbda5366391?q=80&w=2070&auto=format&fit=crop";
                }}

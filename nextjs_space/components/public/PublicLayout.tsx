@@ -1,28 +1,20 @@
-import React from 'react';
-import '@/app/globals.css';
-import { Inter } from 'next/font/google';
-import { Toaster } from '@/components/ui/sonner';
+import Image from 'next/image';
+import Link from 'next/link';
 
-const inter = Inter({ subsets: ['latin'] });
-
-export const metadata = {
-  title: 'Volkern | La Infraestructura Soberana para tu Empresa',
-  description: 'Unifica Marketing, Ventas y Operaciones con IA propia y datos protegidos.',
-};
-
-export default function PublicLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export function PublicLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className={`${inter.className} bg-slate-950 text-white selection:bg-blue-500/30`}>
+    <div className="bg-slate-950 text-white min-h-screen flex flex-col">
       <header className="fixed top-0 left-0 right-0 z-50 bg-slate-950/80 backdrop-blur-md border-b border-slate-900">
         <nav className="container mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center font-bold text-white">V</div>
-            <span className="text-xl font-bold tracking-tighter">VOLKERN</span>
-          </div>
+          <Link href="/" className="flex items-center gap-2">
+            <Image 
+              src="/volkern-logo.png" 
+              alt="Volkern CRM" 
+              width={120} 
+              height={32} 
+              className="h-8 w-auto brightness-0 invert"
+            />
+          </Link>
           
           <div className="hidden md:flex items-center gap-8">
             <a href="#pricing" className="text-sm text-slate-400 hover:text-white transition-colors">Precios</a>
@@ -35,9 +27,9 @@ export default function PublicLayout({
         </nav>
       </header>
 
-      <main>{children}</main>
+      <main className="flex-1">{children}</main>
 
-      <footer className="bg-slate-950 border-t border-slate-900 py-12">
+      <footer className="bg-slate-950 border-t border-slate-900 py-12 mt-auto">
         <div className="container mx-auto px-6 text-center">
           <p className="text-slate-500 text-sm mb-4">
             &copy; {new Date().getFullYear()} Volkern Nexus Core. Todos los derechos reservados.
@@ -49,7 +41,6 @@ export default function PublicLayout({
           </div>
         </div>
       </footer>
-      <Toaster position="top-center" theme="dark" />
     </div>
   );
 }

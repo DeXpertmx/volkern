@@ -4,7 +4,7 @@ import * as crypto from 'crypto'
 import { notificationService } from './skills/notification-layer'
 import { createSystemContext } from './skills/context'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+const resend = new Resend(process.env.RESEND_API_KEY || 're_dummy_key_for_build')
 
 // Configuración del remitente
 const EMAIL_FROM = 'Volkern <noreply@volkern.app>'

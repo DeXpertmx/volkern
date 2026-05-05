@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * API: Cadena de Integridad (Veri*factu + VISION-LOCK)
  * Retorna los últimos 50 registros financieros con sus hashes y geolocalización.

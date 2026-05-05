@@ -4,6 +4,7 @@ import { authOptions } from './auth';
 import { hashApiKey, isValidApiKeyFormat, hasScope, hasAnyScope, extractApiKeyFromRequest } from './api-keys';
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { unstable_noStore as noStore } from 'next/cache';
 
 export type AuthenticatedHandler = (
   req: Request,
@@ -221,11 +222,15 @@ export async function authenticateRequest(
     try {
       session = await getServerSession(authOptions);
     } catch (e: any) {
+      // IMPORTANTE: No capturar errores de Next.js que indican renderizado dinámico
+      if (e?.digest?.includes('DYNAMIC_SERVER_USAGE') || e?.message?.includes('dynamic-server-error')) {
+        throw e;
+      }
       console.warn('[auth] getServerSession failed:', e?.message);
     }
     
     if (!session?.user?.id) {
-      console.warn('[auth] No session found for:', new URL(request.url).pathname);
+      // No loguear warning durante el build si es un error de dynamic usage
     }
 
     if (session?.user?.id) {
@@ -345,6 +350,10 @@ export function withTenantAuth(
         () => handler(request, auth, context)
       );
     } catch (error: any) {
+      // IMPORTANTE: No capturar errores de Next.js que indican renderizado dinámico
+      if (error?.digest?.includes('DYNAMIC_SERVER_USAGE') || error?.message?.includes('dynamic-server-error')) {
+        throw error;
+      }
       console.error('[withTenantAuth] Error fatal:', error);
       return NextResponse.json(
         { error: 'Error interno del servidor' },
