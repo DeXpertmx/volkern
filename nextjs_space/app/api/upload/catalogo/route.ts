@@ -52,8 +52,8 @@ export async function POST(request: NextRequest) {
       size: file.size,
       type: file.type,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error al subir imagen de catálogo:', error);
-    return NextResponse.json({ error: 'Error al subir imagen' }, { status: 500 });
+    return NextResponse.json({ error: error?.message || 'Error al subir imagen' }, { status: 500 });
   }
 }

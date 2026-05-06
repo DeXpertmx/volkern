@@ -58,10 +58,10 @@ export async function POST(request: NextRequest) {
       downloadUrl: publicUrl,
       key,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error al subir avatar:', error);
     return NextResponse.json(
-      { error: 'Error al procesar la imagen' },
+      { error: error?.message || 'Error al procesar la imagen' },
       { status: 500 }
     );
   }
