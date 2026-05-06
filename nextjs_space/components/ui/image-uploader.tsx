@@ -35,7 +35,7 @@ export function ImageUploader({ images, onChange, maxImages = 10 }: ImageUploade
       const file = files[i];
 
       // Validar tipo
-      const isImage = file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(file.name);
+      const isImage = !file.type || file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(file.name);
       if (!isImage) {
         toast.error(`${file.name} no es una imagen válida`);
         continue;

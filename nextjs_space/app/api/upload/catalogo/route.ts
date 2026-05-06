@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validar que sea una imagen
-    const isImage = file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(file.name);
+    const isImage = !file.type || file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(file.name);
     if (!isImage) {
       return NextResponse.json({ error: 'Solo se permiten imágenes' }, { status: 400 });
     }
@@ -37,11 +37,14 @@ export async function POST(request: NextRequest) {
     
     // Generar el nombre del archivo con timestamp
     const timestamp = Date.now();
-    const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+    let sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+    if (!sanitizedFileName.includes('.')) {
+      sanitizedFileName += '.png';
+    }
     const fileName = `catalogo/${timestamp}-${sanitizedFileName}`;
 
     // Subir a S3 como archivo público
-    const { publicUrl } = await uploadPublicFile(buffer, fileName, file.type);
+    const { publicUrl } = await uploadPublicFile(buffer, fileName, file.type || 'image/png');
 
     return NextResponse.json({
       url: publicUrl,

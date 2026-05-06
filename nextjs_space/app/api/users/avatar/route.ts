@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validar tipo de archivo
-    const isImage = file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(file.name);
+    const isImage = !file.type || file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(file.name);
     if (!isImage) {
       return NextResponse.json({ error: 'El archivo debe ser una imagen' }, { status: 400 });
     }
@@ -37,11 +37,14 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(bytes);
 
     // Generar nombre único para el archivo
-    const fileExt = file.name.split('.').pop() || 'jpg';
+    let fileExt = 'png';
+    if (file.name.includes('.')) {
+      fileExt = file.name.split('.').pop() || 'png';
+    }
     const fileName = `avatars/user-${session.user.id}-${Date.now()}.${fileExt}`;
 
     // Subir a S3 como archivo público
-    const { key, publicUrl } = await uploadPublicFile(buffer, fileName, file.type);
+    const { key, publicUrl } = await uploadPublicFile(buffer, fileName, file.type || 'image/png');
 
     // Actualizar el usuario en la base de datos
     await prisma.user.update({
