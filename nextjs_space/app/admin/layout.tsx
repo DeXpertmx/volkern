@@ -43,7 +43,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       .then((res) => res.json())
       .then((data) => {
         const roleName = data.role?.nombre;
-        if (roleName !== 'Superadmin' && roleName !== 'Admin' && roleName !== 'Administrador') {
+        if (data.email === 'demo@volkern.app') {
+          router.replace('/dashboard');
+        } else if (roleName !== 'Superadmin' && roleName !== 'Admin' && roleName !== 'Administrador') {
           router.replace('/dashboard');
         } else {
           setIsAuthorized(true);

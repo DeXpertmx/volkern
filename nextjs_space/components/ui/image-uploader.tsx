@@ -20,8 +20,10 @@ export function ImageUploader({ images, onChange, maxImages = 10 }: ImageUploade
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    // Verificar límite
-    if (images.length + files.length > maxImages) {
+    const isSingleImageMode = maxImages === 1;
+
+    // Verificar límite si NO es modo de imagen única
+    if (!isSingleImageMode && images.length + files.length > maxImages) {
       toast.error(`Máximo ${maxImages} imágenes permitidas`);
       return;
     }
@@ -68,7 +70,11 @@ export function ImageUploader({ images, onChange, maxImages = 10 }: ImageUploade
     }
 
     if (newImages.length > 0) {
-      onChange([...images, ...newImages]);
+      if (isSingleImageMode) {
+        onChange([newImages[newImages.length - 1]]); // Reemplazar con la última
+      } else {
+        onChange([...images, ...newImages]);
+      }
       toast.success(`${newImages.length} imagen(es) subida(s)`);
     }
 
@@ -116,11 +122,11 @@ export function ImageUploader({ images, onChange, maxImages = 10 }: ImageUploade
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
-          multiple
+          accept="image/*, .png, .jpg, .jpeg, .webp"
+          multiple={maxImages > 1}
           onChange={handleFileSelect}
           className="hidden"
-          disabled={uploading || images.length >= maxImages}
+          disabled={uploading || (maxImages !== 1 && images.length >= maxImages)}
         />
         
         {uploading ? (
@@ -136,10 +142,10 @@ export function ImageUploader({ images, onChange, maxImages = 10 }: ImageUploade
               variant="outline"
               size="sm"
               onClick={() => fileInputRef.current?.click()}
-              disabled={images.length >= maxImages}
+              disabled={maxImages !== 1 && images.length >= maxImages}
             >
               <Upload className="h-4 w-4 mr-2" />
-              Subir imágenes
+              {maxImages === 1 && images.length > 0 ? 'Reemplazar imagen' : 'Subir imágenes'}
             </Button>
             <p className="text-xs text-muted-foreground mt-2">
               {images.length}/{maxImages} imágenes • Máx. 5MB por imagen
