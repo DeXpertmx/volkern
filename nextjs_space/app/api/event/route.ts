@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { NextResponse } from 'next/server'
 import { emit } from '@/lib/event-engine'
 import { getServerSession } from 'next-auth'

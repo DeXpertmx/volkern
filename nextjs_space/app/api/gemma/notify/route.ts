@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from 'next/server';
 import { GemmaService } from '@/lib/gemma/gemma-service';
 

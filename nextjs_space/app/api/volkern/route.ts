@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server"
 
 const VOLKERN_API_URL = process.env.VOLKERN_API_URL || "https://volkern.app/api"

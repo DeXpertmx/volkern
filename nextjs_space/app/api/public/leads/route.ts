@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { NextResponse } from 'next/server';
 import { prisma, globalPrisma } from '@/lib/db';
 import { eventBus, EVENTS } from '@/lib/skills/event-bus';
