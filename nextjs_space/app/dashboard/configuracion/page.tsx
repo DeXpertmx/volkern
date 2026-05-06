@@ -43,6 +43,7 @@ import { LeadFieldsConfig } from "@/components/dashboard/LeadFieldsConfig";
 import { Switch } from "@/components/ui/switch";
 import Image from "next/image";
 import Link from "next/link";
+import { ImageUploader } from "@/components/ui/image-uploader";
 
 interface Config {
   business_name?: string;
@@ -129,40 +130,62 @@ export default function ConfiguracionPage() {
 
 
               {activeSection === "empresa" && (
-                <Card className="shadow-xl">
-                  <CardHeader>
-                    <CardTitle>Datos de la Empresa</CardTitle>
-                    <CardDescription>Configuración global de tu negocio.</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-6">
+                  <Card className="shadow-xl">
+                    <CardHeader>
+                      <CardTitle>Datos de la Empresa</CardTitle>
+                      <CardDescription>Configuración global de tu negocio.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <Label>Nombre Comercial</Label>
+                          <Input 
+                            value={config.business_name || ""} 
+                            onChange={e => setConfig({...config, business_name: e.target.value})} 
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Correo de Soporte</Label>
+                          <Input 
+                            value={config.business_email || ""} 
+                            onChange={e => setConfig({...config, business_email: e.target.value})} 
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Zona Horaria</Label>
+                          <Input 
+                            value={config.timezone || ""} 
+                            onChange={e => setConfig({...config, timezone: e.target.value})} 
+                          />
+                        </div>
+                      </div>
+                      <Button onClick={handleSaveConfig} className="premium-gradient-primary rounded-full px-8">
+                        {saving ? "Guardando..." : "Guardar Cambios"}
+                      </Button>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="shadow-xl">
+                    <CardHeader>
+                      <CardTitle>Identidad Visual</CardTitle>
+                      <CardDescription>Configura el logotipo de tu empresa. (Diferente a la marca blanca para clientes)</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
                       <div className="space-y-2">
-                        <Label>Nombre Comercial</Label>
-                        <Input 
-                          value={config.business_name || ""} 
-                          onChange={e => setConfig({...config, business_name: e.target.value})} 
+                        <Label>Logo Corporativo</Label>
+                        <ImageUploader 
+                          images={config.logo_corporativo ? [config.logo_corporativo] : []}
+                          onChange={(imgs) => setConfig({...config, logo_corporativo: imgs[0] || ""})}
+                          maxImages={1}
                         />
                       </div>
-                      <div className="space-y-2">
-                        <Label>Correo de Soporte</Label>
-                        <Input 
-                          value={config.business_email || ""} 
-                          onChange={e => setConfig({...config, business_email: e.target.value})} 
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Zona Horaria</Label>
-                        <Input 
-                          value={config.timezone || ""} 
-                          onChange={e => setConfig({...config, timezone: e.target.value})} 
-                        />
-                      </div>
-                    </div>
-                    <Button onClick={handleSaveConfig} className="premium-gradient-primary rounded-full px-8">
-                      {saving ? "Guardando..." : "Guardar Cambios"}
-                    </Button>
-                  </CardContent>
-                </Card>
+                      <Button onClick={handleSaveConfig} className="premium-gradient-primary rounded-full px-8">
+                        {saving ? "Guardando..." : "Guardar Cambios"}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </div>
               )}
 
               {activeSection === "horarios" && (
