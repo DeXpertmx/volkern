@@ -12,7 +12,7 @@ export const metadata = {
   title: 'Volkern | La Infraestructura Soberana para tu Empresa',
   description: 'Unifica Marketing, Ventas y Operaciones con IA propia y datos protegidos.',
   icons: {
-    icon: '/favicon.svg',
+    icon: '/volkern-icon.png',
   },
 };
 
