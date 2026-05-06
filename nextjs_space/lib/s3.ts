@@ -51,7 +51,13 @@ export async function uploadPublicFile(
   await s3Client.send(command);
   
   // Construir URL pública directa
-  const publicUrl = `https://${bucketName}.s3.${AWS_REGION}.amazonaws.com/${key}`;
+  let publicUrl = '';
+  if (process.env.NEXT_PUBLIC_CDN_URL) {
+    // Si usan R2 o un CDN personalizado, deben proveer esta variable sin slash al final
+    publicUrl = `${process.env.NEXT_PUBLIC_CDN_URL}/${key}`;
+  } else {
+    publicUrl = `https://${bucketName}.s3.${AWS_REGION}.amazonaws.com/${key}`;
+  }
   
   return { key, publicUrl };
 }

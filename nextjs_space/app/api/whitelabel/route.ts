@@ -55,6 +55,9 @@ export const GET = withTenantAuth(async (request, auth) => {
     }
 
     const getPublicUrl = (s3Key: string) => {
+      if (process.env.NEXT_PUBLIC_CDN_URL) {
+        return `${process.env.NEXT_PUBLIC_CDN_URL}/${s3Key}`;
+      }
       return `https://${AWS_BUCKET_NAME}.s3.${AWS_REGION}.amazonaws.com/${s3Key}`
     }
 
