@@ -28,5 +28,9 @@ export function createS3Client() {
     };
   }
 
+  if (isR2) {
+    config.forcePathStyle = true;
+  }
+
   return new S3Client(config);
 }
