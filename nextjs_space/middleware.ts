@@ -78,7 +78,11 @@ export async function middleware(request: NextRequest) {
 
   // Allow dashboard paths but require auth
   if (pathname.startsWith('/dashboard') || pathname.startsWith('/app') || pathname.startsWith('/admin')) {
-    const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET })
+    const token = await getToken({ 
+      req: request, 
+      secret: process.env.NEXTAUTH_SECRET,
+      cookieName: 'next-auth.session-token'
+    })
     if (!token) {
       const loginUrl = new URL('/auth/login', request.url)
       loginUrl.searchParams.set('callbackUrl', pathname)
