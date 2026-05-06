@@ -47,7 +47,7 @@ export async function adjustStock(input: AdjustStockInput) {
   return await trackSkillExecution('adjust_stock', async () => {
     const { tenantId, catalogoItemId, type, quantity, reason, userId, referenceId } = input;
 
-    return await prisma.$transaction(async (tx) => {
+    return await prisma.$transaction(async (tx: any) => {
       // 1. Determinar Almacén
       const warehouse = input.warehouseId 
         ? await tx.warehouse.findUnique({ where: { id: input.warehouseId } })
@@ -161,7 +161,7 @@ export async function processInventoryConsumption(input: {
   return await trackSkillExecution('process_inventory_consumption', async () => {
     const { tenantId, productId, quantity, userId } = input;
 
-    return await prisma.$transaction(async (tx) => {
+    return await prisma.$transaction(async (tx: any) => {
       // 1. Determinar Almacén
       const warehouse = input.warehouseId 
         ? await tx.warehouse.findUnique({ where: { id: input.warehouseId } })
@@ -280,7 +280,7 @@ export async function getInventoryHealth(input: { tenantId: string, catalogoItem
        AND quantity <= "minStock"
      `;
 
-     const ids = criticalItemsIds.map(i => i.id);
+     const ids = criticalItemsIds.map((i: any) => i.id);
 
      const criticalItems = await prisma.stockLevel.findMany({
        where: {

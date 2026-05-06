@@ -44,8 +44,9 @@ export class SignatureService {
   /**
    * Calculates the SHA-256 hash of a document for eIDAS integrity verification.
    */
-  static calculateDocumentHash(buffer: Buffer): string {
-    return crypto.createHash('sha256').update(buffer).digest('hex');
+  static calculateDocumentHash(buffer: Buffer | Uint8Array): string {
+    const data = buffer instanceof Buffer ? buffer : Buffer.from(buffer);
+    return crypto.createHash('sha256').update(data).digest('hex');
   }
 
   /**

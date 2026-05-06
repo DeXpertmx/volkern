@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+export const dynamic = "force-dynamic";
 import { withTenantAuth } from '@/lib/api-key-auth';
 import { skills } from '@/lib/skills';
 

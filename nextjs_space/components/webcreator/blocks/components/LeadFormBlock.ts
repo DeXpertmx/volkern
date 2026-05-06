@@ -81,7 +81,7 @@ export const createLeadFormBlock = (editor: Editor) => {
 
           // Manejo de Formulario (Simplificado para la demo)
           const form = el.querySelector('form');
-          form.addEventListener('submit', (e) => {
+          form.addEventListener('submit', (e: any) => {
             e.preventDefault();
             const btn = form.querySelector('button');
             btn.innerText = 'ENVIADO ✓';

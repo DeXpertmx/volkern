@@ -148,31 +148,31 @@ class StructuredLogger {
     }
   }
   
-  debug(message: string, context?: SkillContext | null, data?: Record<string, unknown>): void {
+  debug(message: string, context?: any, data?: Record<string, unknown>): void {
     if (this.shouldLog('debug')) {
       this.output(this.formatLog('debug', message, context, data));
     }
   }
   
-  info(message: string, context?: SkillContext | null, data?: Record<string, unknown>): void {
+  info(message: string, context?: any, data?: Record<string, unknown>): void {
     if (this.shouldLog('info')) {
       this.output(this.formatLog('info', message, context, data));
     }
   }
   
-  warn(message: string, context?: SkillContext | null, data?: Record<string, unknown>): void {
+  warn(message: string, context?: any, data?: Record<string, unknown>): void {
     if (this.shouldLog('warn')) {
       this.output(this.formatLog('warn', message, context, data));
     }
   }
   
-  error(message: string, error?: Error, context?: SkillContext | null, data?: Record<string, unknown>): void {
+  error(message: string, error?: Error, context?: any, data?: Record<string, unknown>): void {
     if (this.shouldLog('error')) {
       this.output(this.formatLog('error', message, context, data, error));
     }
   }
   
-  fatal(message: string, error?: Error, context?: SkillContext | null, data?: Record<string, unknown>): void {
+  fatal(message: string, error?: Error, context?: any, data?: Record<string, unknown>): void {
     if (this.shouldLog('fatal')) {
       this.output(this.formatLog('fatal', message, context, data, error));
     }
@@ -461,23 +461,45 @@ export function createLogger(component: string, minLevel?: LogLevel): Structured
   return new StructuredLogger(component, minLevel);
 }
 
-// Skill execution tracking
-export function trackSkillExecution(
+// Skill execution tracking (Higher-Order Function)
+export async function trackSkillExecution<T>(
   skillName: string,
-  tenantId: string,
-  success: boolean,
-  durationMs: number
-): void {
-  metrics.counter('skill_execution_total', 1, {
-    skill: skillName,
-    tenant: tenantId,
-    status: success ? 'success' : 'error',
-  });
-  
-  metrics.histogram('skill_execution_duration_ms', durationMs, {
-    skill: skillName,
-    tenant: tenantId,
-  });
+  fn: () => Promise<T> | T,
+  tenantId?: string
+): Promise<T> {
+  const start = Date.now();
+  try {
+    const result = await fn();
+    const durationMs = Date.now() - start;
+    
+    metrics.counter('skill_execution_total', 1, {
+      skill: skillName,
+      tenant: tenantId || 'unknown',
+      status: 'success',
+    });
+    
+    metrics.histogram('skill_execution_duration_ms', durationMs, {
+      skill: skillName,
+      tenant: tenantId || 'unknown',
+    });
+    
+    return result;
+  } catch (error) {
+    const durationMs = Date.now() - start;
+    
+    metrics.counter('skill_execution_total', 1, {
+      skill: skillName,
+      tenant: tenantId || 'unknown',
+      status: 'error',
+    });
+    
+    metrics.histogram('skill_execution_duration_ms', durationMs, {
+      skill: skillName,
+      tenant: tenantId || 'unknown',
+    });
+    
+    throw error;
+  }
 }
 
 // Automation tracking

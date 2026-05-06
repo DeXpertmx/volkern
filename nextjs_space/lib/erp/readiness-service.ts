@@ -108,7 +108,7 @@ export class ReadinessService {
    * Reserva materiales de forma atómica para evitar sobre-asignación (Concurrencia)
    */
   static async reserveMaterials(workOrderId: string, tenantId: string) {
-    return await prisma.$transaction(async (tx) => {
+    return await prisma.$transaction(async (tx: any) => {
       const requirements = await (tx as any).erp_material_requirements.findMany({
         where: { workOrderId, tenantId, status: 'PENDING' }
       });

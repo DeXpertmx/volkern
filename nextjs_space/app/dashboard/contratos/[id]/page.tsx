@@ -72,10 +72,13 @@ interface Contrato {
   clienteTelefono: string | null
   clienteEmpresa: string | null
   clienteRfc: string | null
+  clienteDireccion: string | null
   snapshotNombre: string | null
   snapshotNif: string | null
   snapshotDireccion: string | null
   snapshotMetadata: any | null
+  templateData: any | null
+  signatureRequests: any[] | null
   contact: { id: string; nombre: string; email: string } | null
   lead: { id: string; nombre: string } | null
   deal: { id: string; titulo: string; valor: number } | null
@@ -598,7 +601,7 @@ export default function ContratoDetailPage() {
                 )}
                 {contrato.deal && (
                   <Button variant="link" className="p-0 h-auto" onClick={() => router.push(`/dashboard/pipeline/${contrato.deal!.id}`)}>
-                    Deal: {contrato.deal.nombre} <ExternalLink className="h-3 w-3 ml-1" />
+                    Deal: {contrato.deal.titulo} <ExternalLink className="h-3 w-3 ml-1" />
                   </Button>
                 )}
                 {contrato.lead && (

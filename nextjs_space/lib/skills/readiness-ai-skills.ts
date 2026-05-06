@@ -25,15 +25,15 @@ export async function analyze_production_readiness({ tenantId }: { tenantId: str
     return { status: 'OPTIMAL', message: 'Todas las órdenes planificadas tienen cobertura material completa.' };
   }
 
-  const criticalIssues = readinessReports.filter(r => r.coveragePercent < 70);
+  const criticalIssues = readinessReports.filter((r: any) => r.coveragePercent < 70);
 
   return {
     status: criticalIssues.length > 0 ? 'CRITICAL' : 'WARNING',
     message: `Se han detectado ${readinessReports.length} órdenes con faltantes de material.`,
-    details: readinessReports.map(r => ({
+    details: readinessReports.map((r: any) => ({
       order: r.workOrder.batchNumber,
       coverage: `${r.coveragePercent.toFixed(1)}%`,
-      missing: r.workOrder.materialRequirements.map(m => m.catalogItem.nombre).join(', ')
+      missing: r.workOrder.materialRequirements.map((m: any) => m.catalogItem.nombre).join(', ')
     })),
     recommendations: [
       'Priorizar la compra de los insumos marcados en rojo.',
@@ -55,7 +55,7 @@ export async function suggest_procurement_plan({ tenantId }: { tenantId: string 
 
   if (shortages.length === 0) return { status: 'OK', message: 'No hay sugerencias de abastecimiento pendientes.' };
 
-  const suggestions = shortages.map(s => ({
+  const suggestions = shortages.map((s: any) => ({
     item: s.catalogItem.nombre,
     suggestedAction: s.missingQty > 100 ? 'PURCHASE' : 'TRANSFER',
     quantity: s.missingQty,

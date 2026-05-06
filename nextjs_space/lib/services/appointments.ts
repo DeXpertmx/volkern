@@ -70,7 +70,13 @@ export async function checkAvailability(params: {
   const horarioDia = horariosConfig[nombreDia];
 
   if (!horarioDia || !horarioDia.activo || !horarioDia.rangos || horarioDia.rangos.length === 0) {
-    return { disponible: false, slots: [], motivo: 'Día no laboral' };
+    return { 
+      disponible: false, 
+      slots: [], 
+      motivo: 'Día no laboral',
+      dia: nombreDia,
+      totalSlots: 0
+    };
   }
 
   // 3. Obtener citas existentes
@@ -106,7 +112,7 @@ export async function checkAvailability(params: {
       if (slot <= ahora) continue;
 
       const slotFin = new Date(slot.getTime() + (duracion + buffer) * 60000);
-      const isOccupied = citas.some(cita => {
+      const isOccupied = citas.some((cita: any) => {
         const cInicio = new Date(cita.fechaHora);
         const cFin = new Date(cInicio.getTime() + (cita.duracion + buffer) * 60000);
         return (slot >= cInicio && slot < cFin) || (slotFin > cInicio && slotFin <= cFin);

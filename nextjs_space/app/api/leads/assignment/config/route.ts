@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from 'next/server'
 import { withTenantAuth } from '@/lib/api-key-auth'
 import { getLeadAssignmentConfig, saveLeadAssignmentConfig } from '@/lib/leads/assignment'

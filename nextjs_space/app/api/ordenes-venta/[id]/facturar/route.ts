@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+export const dynamic = "force-dynamic";
 import { prisma } from '@/lib/db'
 import { authenticateRequest } from '@/lib/api-key-auth'
 import { InvoicingService } from '@/lib/invoicing-service'

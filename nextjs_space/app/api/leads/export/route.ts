@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+export const dynamic = "force-dynamic";
 import { prisma } from '@/lib/db'
 import { withTenantAuth } from '@/lib/api-key-auth'
 import { stringify } from 'csv-stringify/sync'

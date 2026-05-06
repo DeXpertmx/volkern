@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from 'next/server';
 import { PayrollService } from '@/lib/erp/payroll-service';
 import { PDFService } from '@/lib/erp/pdf-service';

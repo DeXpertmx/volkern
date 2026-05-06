@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { globalPrisma } from '@/lib/db';
 import { getPlanConfig } from '@/lib/subscription';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const tenants = await globalPrisma.tenant.findMany({

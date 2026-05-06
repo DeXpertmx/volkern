@@ -78,6 +78,8 @@ export const authOptions: NextAuthOptions = {
 
         if (!user || !user.password) {
           console.warn(`[DEBUG-AUTH] Usuario no encontrado: ${cleanEmail}`);
+          // No podemos loguear a la tabla auditLog si no hay usuario ni tenantID claro, 
+          // pero al menos lo dejamos en el log de Vercel
           return null
         }
 
@@ -86,6 +88,16 @@ export const authOptions: NextAuthOptions = {
         // 🔴 VALIDACIÓN CRUZADA: Si hay subdominio en request, el usuario debe pertenecer a ese tenant
         if (requestSubdomain && user.tenant?.subdomain !== requestSubdomain) {
           console.warn(`[DEBUG-AUTH] Mismatch: Request=${requestSubdomain}, UserTenant=${user.tenant?.subdomain}`);
+          await prisma.auditLog.create({
+            data: {
+              accion: 'LOGIN_FAILURE',
+              entidad: 'User',
+              entidadId: user.id,
+              descripcion: `Mismatch de subdominio: Request=${requestSubdomain}, Tenant=${user.tenant?.subdomain}`,
+              tenantId: user.tenantId,
+              userId: user.id
+            }
+          }).catch(e => console.error('[DEBUG-AUTH] Error logging mismatch:', e))
           return null
         }
 
@@ -97,6 +109,16 @@ export const authOptions: NextAuthOptions = {
         console.log(`[DEBUG-AUTH] Password Valid: ${isPasswordValid}`);
 
         if (!isPasswordValid) {
+          await prisma.auditLog.create({
+            data: {
+              accion: 'LOGIN_FAILURE',
+              entidad: 'User',
+              entidadId: user.id,
+              descripcion: `Contraseña inválida para usuario ${cleanEmail}`,
+              tenantId: user.tenantId,
+              userId: user.id
+            }
+          }).catch(e => console.error('[DEBUG-AUTH] Error logging failure:', e))
           return null
         }
 

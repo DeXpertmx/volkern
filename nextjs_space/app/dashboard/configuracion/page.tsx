@@ -42,6 +42,7 @@ import { DocumentTemplatesList } from "@/components/dashboard/DocumentTemplatesL
 import { LeadFieldsConfig } from "@/components/dashboard/LeadFieldsConfig";
 import { Switch } from "@/components/ui/switch";
 import Image from "next/image";
+import Link from "next/link";
 
 interface Config {
   business_name?: string;
@@ -164,12 +165,17 @@ export default function ConfiguracionPage() {
                 </Card>
               )}
 
-              {activeSection === "horarios" && <HorariosMultiplesEditor />}
+              {activeSection === "horarios" && (
+                <HorariosMultiplesEditor 
+                  value={config.horariosAtencion} 
+                  onChange={(h) => setConfig({ ...config, horariosAtencion: h })} 
+                />
+              )}
               {activeSection === "fiscal" && <FiscalConfigSection />}
-              {activeSection === "telefonia" && <TelephonyConfigSection />}
+              {activeSection === "telefonia" && <TelephonyConfigSection tenantId={config._tenantId || ""} />}
               {activeSection === "reparto" && <LeadAssignmentConfig />}
               {activeSection === "leads" && <LeadFieldsConfig />}
-              {activeSection === "documentos" && <DocumentTemplatesList onPreview={() => {}} />}
+              {activeSection === "documentos" && <DocumentTemplatesList />}
               {activeSection === "whitelabel" && <WhitelabelConfig />}
               {activeSection === "integraciones" && (
                 <div className="space-y-6">

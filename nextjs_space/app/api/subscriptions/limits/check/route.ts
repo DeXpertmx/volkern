@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from 'next/server';
 import { checkFeatureLimit, FeatureName, FEATURE_LABELS } from '@/lib/subscription';
 import { withTenantAuth } from '@/lib/api-key-auth';

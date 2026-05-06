@@ -45,6 +45,7 @@ export const EVENTS = {
   
   // Deals
   DEAL_CREATED: 'deal_created',
+  DEAL_UPDATED: 'deal_updated',
   DEAL_STAGE_CHANGED: 'deal_stage_changed',
   DEAL_WON: 'deal_won',
   DEAL_LOST: 'deal_lost',
@@ -124,6 +125,11 @@ export const EVENTS = {
   TASK_ASSIGNED: 'task_assigned',
   TASK_COMPLETED: 'task_completed',
   DELIVERABLE_UPLOADED: 'deliverable_uploaded',
+
+  // Genéricos para extensibilidad
+  RESOURCE_CREATED: 'resource_created',
+  RESOURCE_UPDATED: 'resource_updated',
+  RESOURCE_DELETED: 'resource_deleted',
 } as const;
 
 export type EventType = typeof EVENTS[keyof typeof EVENTS];
@@ -261,6 +267,25 @@ export interface DealStageChangedEvent extends BaseEventPayload {
   dealId: string;
   previousStage: string;
   newStage: string;
+  valor: number;
+}
+
+export interface DealUpdatedEvent extends BaseEventPayload {
+  dealId: string;
+  valor?: number;
+  etapa?: string;
+  titulo?: string;
+}
+
+export interface DealWonEvent extends BaseEventPayload {
+  dealId: string;
+  titulo: string;
+  valor: number;
+}
+
+export interface DealLostEvent extends BaseEventPayload {
+  dealId: string;
+  titulo: string;
   valor: number;
 }
 
@@ -623,7 +648,10 @@ export type EventPayloadMap = {
   [EVENTS.BOOKING_CONFIRMED]: BookingConfirmedEvent;
   [EVENTS.BOOKING_CANCELLED]: BookingCreatedEvent;
   [EVENTS.DEAL_CREATED]: DealCreatedEvent;
+  [EVENTS.DEAL_UPDATED]: DealUpdatedEvent;
   [EVENTS.DEAL_STAGE_CHANGED]: DealStageChangedEvent;
+  [EVENTS.DEAL_WON]: DealWonEvent;
+  [EVENTS.DEAL_LOST]: DealLostEvent;
   [EVENTS.PAYMENT_RECEIVED]: PaymentReceivedEvent;
   [EVENTS.PAYMENT_FAILED]: PaymentFailedEvent;
   [EVENTS.INVOICE_CREATED]: InvoiceCreatedEvent;

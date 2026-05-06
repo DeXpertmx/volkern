@@ -62,7 +62,7 @@ export async function generateSuccessPath(input: { leadId: string; tenantId: str
 
   if (!lead) throw new Error('Lead no encontrado');
 
-  const notasTexto = lead.notasTimestamp.map(n => n.contenido).join('\n');
+  const notasTexto = lead.notasTimestamp.map((n: any) => n.contenido).join('\n');
 
   const systemPrompt = `
 Eres un estratega de ventas experto de Volkern CRM.

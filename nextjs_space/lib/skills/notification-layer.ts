@@ -100,9 +100,10 @@ export class NotificationService {
     recipient: NotificationRecipient,
     content: NotificationContent,
     options: NotificationOptions,
-    context: SkillContext
+    context: any
   ): Promise<NotificationResult> {
-    const logger = skillsLogger.withContext(context);
+    const ctx = context instanceof SkillContext ? context : new SkillContext(context);
+    const logger = skillsLogger.withContext(ctx);
     
     logger.info(`Sending ${options.channel} notification`, {
       recipientType: recipient.type,
@@ -735,7 +736,7 @@ export async function notifyUser(
   userId: string,
   title: string,
   body: string,
-  context: SkillContext
+  context: any
 ): Promise<NotificationResult | Record<NotificationChannel, NotificationResult>> {
   // 1. Obtener datos del usuario para ver canales disponibles
   const user = await prisma.user.findUnique({

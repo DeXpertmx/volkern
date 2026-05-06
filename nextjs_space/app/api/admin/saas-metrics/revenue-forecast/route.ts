@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { SaaSMetricsService } from '@/lib/saas-metrics';
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const currentMRR = await SaaSMetricsService.calculateMRR();

@@ -31,7 +31,7 @@ export async function generateCustomerResponse(input: { leadId: string; tenantId
   if (!lead) throw new Error('Lead no encontrado');
 
   // 1. Reconstruir el historial para el prompt
-  const historialNotas = lead.notasTimestamp.map(n => `- ${n.contenido}`).join('\n');
+  const historialNotas = lead.notasTimestamp.map((n: any) => `- ${n.contenido}`).join('\n');
   
   // 2. Determinar Nivel de Dificultad Personal (Basado en el mejor score histórico)
   const bestScore = await prisma.trainingSession.findFirst({
@@ -76,7 +76,7 @@ Responde ÚNICAMENTE con el mensaje del cliente en formato JSON:
 
   const messages: GemmaMessage[] = [
     { role: 'system', content: systemPrompt },
-    ...history.map(m => ({ 
+    ...history.map((m: any) => ({ 
       role: m.role === 'agent' ? 'user' : 'model', 
       content: m.content 
     })) as any,
