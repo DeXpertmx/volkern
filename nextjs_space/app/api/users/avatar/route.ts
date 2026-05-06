@@ -21,7 +21,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Validar tipo de archivo
-    if (!file.type.startsWith('image/')) {
+    const isImage = file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(file.name);
+    if (!isImage) {
       return NextResponse.json({ error: 'El archivo debe ser una imagen' }, { status: 400 });
     }
 

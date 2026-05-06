@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Card,
   CardContent,
@@ -42,6 +42,35 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
   const [currentPassword, setCurrentPassword] = useState("");
   const [updatingPassword, setUpdatingPassword] = useState(false);
   const [copying, setCopying] = useState(false);
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingAvatar(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/users/avatar", {
+        method: "POST",
+        body: formData,
+      });
+      if (res.ok) {
+        toast.success("Avatar actualizado");
+        fetchUser();
+      } else {
+        const error = await res.json();
+        toast.error(error.error || "Error al subir avatar");
+      }
+    } catch (err) {
+      toast.error("Error de conexión");
+    } finally {
+      setUploadingAvatar(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
 
   // States for new sections
   const [notifications, setNotifications] = useState({
@@ -210,10 +239,30 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
             <div className="h-32 bg-gradient-to-r from-blue-600 to-indigo-600 opacity-20" />
             <CardHeader className="-mt-16 relative px-8 flex flex-row items-end gap-6 pb-8">
               <div className="relative group">
-                <div className="h-32 w-32 rounded-3xl bg-background border-4 border-background shadow-2xl flex items-center justify-center text-5xl font-black text-primary overflow-hidden transition-transform group-hover:scale-[1.02]">
-                  {userData?.name?.charAt(0) || "U"}
+                <div className="h-32 w-32 rounded-3xl bg-background border-4 border-background shadow-2xl flex items-center justify-center text-5xl font-black text-primary overflow-hidden transition-transform group-hover:scale-[1.02] relative">
+                  {userData?.image ? (
+                    <img src={userData.image} alt="Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    userData?.name?.charAt(0) || "U"
+                  )}
+                  {uploadingAvatar && (
+                    <div className="absolute inset-0 bg-background/50 flex items-center justify-center">
+                      <Loader2 className="h-8 w-8 animate-spin" />
+                    </div>
+                  )}
                 </div>
-                <button className="absolute bottom-1 right-1 p-2.5 bg-primary text-white rounded-xl shadow-lg hover:scale-110 active:scale-95 transition-all border-2 border-background">
+                <input 
+                  type="file" 
+                  className="hidden" 
+                  ref={fileInputRef} 
+                  accept="image/png, image/jpeg, image/jpg, image/webp" 
+                  onChange={handleAvatarUpload} 
+                />
+                <button 
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingAvatar}
+                  className="absolute bottom-1 right-1 p-2.5 bg-primary text-white rounded-xl shadow-lg hover:scale-110 active:scale-95 transition-all border-2 border-background disabled:opacity-50"
+                >
                   <Camera className="h-4 w-4" />
                 </button>
               </div>

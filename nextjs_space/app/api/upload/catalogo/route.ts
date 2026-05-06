@@ -21,7 +21,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Validar que sea una imagen
-    if (!file.type.startsWith('image/')) {
+    const isImage = file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(file.name);
+    if (!isImage) {
       return NextResponse.json({ error: 'Solo se permiten imágenes' }, { status: 400 });
     }
 
