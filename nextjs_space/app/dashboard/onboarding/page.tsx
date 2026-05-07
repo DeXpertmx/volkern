@@ -22,7 +22,8 @@ import {
   Lock,
   Zap,
   CheckCircle2,
-  Sparkles
+  Sparkles,
+  Globe
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
