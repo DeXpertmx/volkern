@@ -23,6 +23,7 @@ export interface ApiKeyAuthResult {
     id: string;
     nombre: string;
     slug: string;
+    subdomain?: string | null;
     plan: string;
   };
   user?: {
@@ -73,6 +74,7 @@ async function resolveHierarchicalContext(
     id: requesterTenant.id,
     nombre: requesterTenant.nombre,
     slug: requesterTenant.slug,
+    subdomain: requesterTenant.subdomain,
     plan: requesterTenant.plan
   };
   let agencyContext = false;
@@ -85,7 +87,7 @@ async function resolveHierarchicalContext(
   // Si hay un target ID diferente, validamos permisos
   const impTenant = await prisma.tenant.findUnique({
     where: { id: targetTenantId },
-    select: { id: true, nombre: true, slug: true, plan: true, estado: true, parentId: true }
+    select: { id: true, nombre: true, slug: true, subdomain: true, plan: true, estado: true, parentId: true }
   });
 
   if (!impTenant) {
@@ -108,6 +110,7 @@ async function resolveHierarchicalContext(
       id: impTenant.id,
       nombre: impTenant.nombre,
       slug: impTenant.slug,
+      subdomain: impTenant.subdomain,
       plan: impTenant.plan
     };
     agencyContext = true;
@@ -141,7 +144,7 @@ export async function validateApiKey(
         activo: true,
         expiraEn: true,
         tenant: {
-          select: { id: true, nombre: true, slug: true, plan: true, accountType: true, parentId: true }
+          select: { id: true, nombre: true, slug: true, subdomain: true, plan: true, accountType: true, parentId: true }
         },
         user: {
           select: { id: true, name: true, email: true, tenantId: true, roleId: true, role: true }
@@ -250,7 +253,7 @@ export async function authenticateRequest(
           tenantId: true,
           roleId: true,
           role: { select: { id: true, nombre: true, permisos: true } },
-          tenant: { select: { id: true, nombre: true, slug: true, plan: true, accountType: true } }
+          tenant: { select: { id: true, nombre: true, slug: true, subdomain: true, plan: true, accountType: true } }
         }
       });
 
