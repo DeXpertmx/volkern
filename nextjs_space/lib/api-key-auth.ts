@@ -75,7 +75,8 @@ async function resolveHierarchicalContext(
     nombre: requesterTenant.nombre,
     slug: requesterTenant.slug,
     subdomain: requesterTenant.subdomain,
-    plan: requesterTenant.plan
+    plan: requesterTenant.plan,
+    accountType: requesterTenant.accountType
   };
   let agencyContext = false;
 
@@ -87,7 +88,7 @@ async function resolveHierarchicalContext(
   // Si hay un target ID diferente, validamos permisos
   const impTenant = await prisma.tenant.findUnique({
     where: { id: targetTenantId },
-    select: { id: true, nombre: true, slug: true, subdomain: true, plan: true, estado: true, parentId: true }
+    select: { id: true, nombre: true, slug: true, subdomain: true, plan: true, estado: true, parentId: true, accountType: true }
   });
 
   if (!impTenant) {
@@ -111,7 +112,8 @@ async function resolveHierarchicalContext(
       nombre: impTenant.nombre,
       slug: impTenant.slug,
       subdomain: impTenant.subdomain,
-      plan: impTenant.plan
+      plan: impTenant.plan,
+      accountType: impTenant.accountType
     };
     agencyContext = true;
   } else {
@@ -292,7 +294,8 @@ export async function authenticateRequest(
           email: user.email,
           tenantId: user.tenantId,
           roleId: user.roleId,
-          role: user.role
+          role: user.role,
+          accountType: user.tenant.accountType
         },
         agencyContext: context.agencyContext,
         db: tDb.client,
