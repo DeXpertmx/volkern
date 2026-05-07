@@ -94,8 +94,8 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
   });
 
   const [booking, setBooking] = useState({
-    url: "https://volkern.com/b/bruno-hess",
-    active: true
+    url: "",
+    active: false
   });
 
   const [telegramChatId, setTelegramChatId] = useState("");
@@ -471,7 +471,11 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
                 <Button variant="outline" className="h-12 w-12 rounded-xl border-slate-200" onClick={() => copyToClipboard(booking.url)}>
                   {copying ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
                 </Button>
-                <Button className="h-12 px-6 rounded-xl bg-slate-900 text-white hover:bg-slate-800">
+                <Button 
+                  className="h-12 px-6 rounded-xl bg-slate-900 text-white hover:bg-slate-800"
+                  onClick={() => booking.url && window.open(booking.url, '_blank')}
+                  disabled={!booking.url}
+                >
                   Probar Link
                 </Button>
               </div>

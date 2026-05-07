@@ -38,6 +38,7 @@ export const GET = withTenantAuth(async (req, auth) => {
             id: true,
             nombre: true,
             slug: true,
+            subdomain: true,
             accountType: true
           }
         },
@@ -66,6 +67,7 @@ export const GET = withTenantAuth(async (req, auth) => {
         id: activeTenant.id,
         nombre: activeTenant.nombre,
         slug: activeTenant.slug,
+        subdomain: activeTenant.subdomain,
         accountType: activeTenant.accountType
       },
       // Marcar si es una sesión suplantada para lógica especial en UI si fuera necesaria
