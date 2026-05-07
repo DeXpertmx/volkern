@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
 
-    const { dnaOperativo, masterKeyHash, lat, lng } = await req.json();
+    const { dnaOperativo, masterKeyHash, lat, lng, subdomain } = await req.json();
 
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
