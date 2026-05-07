@@ -13,6 +13,8 @@ export const metadata = {
   description: 'Unifica Marketing, Ventas y Operaciones con IA propia y datos protegidos.',
   icons: {
     icon: '/volkern-icon.png',
+    shortcut: '/volkern-icon.png',
+    apple: '/volkern-icon.png',
   },
 };
 

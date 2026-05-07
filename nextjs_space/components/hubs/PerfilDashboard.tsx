@@ -29,7 +29,8 @@ import {
   CreditCard,
   Smartphone,
   QrCode,
-  ExternalLink
+  ExternalLink,
+  Share2
 } from "lucide-react";
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "framer-motion";
@@ -120,8 +121,19 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
         if (data.tenant?.subdomain) {
           const protocol = window.location.protocol;
           const host = window.location.host;
-          const isLocalhost = host.includes('localhost');
-          const domain = isLocalhost ? 'localhost:3000' : 'volkern.app';
+          
+          let domain = "";
+          if (host.includes('localhost')) {
+            domain = 'localhost:3000';
+          } else {
+            // Extraer el dominio base (ej: volkern.com o volkern.app)
+            const parts = window.location.hostname.split('.');
+            if (parts.length >= 2) {
+              domain = parts.slice(-2).join('.');
+            } else {
+              domain = window.location.hostname;
+            }
+          }
           
           // El slug de booking puede ser el personalizado o el ID
           const bSlug = data.bookingSlug || data.id;

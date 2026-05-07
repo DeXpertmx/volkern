@@ -616,6 +616,9 @@ export async function getActiveModules(
   if (hardcodedModules.includes('builder_premium')) {
     planModules.add('builder_premium');
   }
+  if (hardcodedModules.includes('mi_tarjeta')) {
+    planModules.add('mi_tarjeta');
+  }
 
   return Array.from(planModules)
 }

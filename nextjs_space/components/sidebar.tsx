@@ -62,7 +62,11 @@ export function Sidebar() {
           const userData = userRes.status === 'fulfilled' && userRes.value.ok ? await userRes.value.json() : null;
           const modulesData = modulesRes.status === 'fulfilled' && modulesRes.value.ok ? await modulesRes.value.json() : null;
           
-          log('Fetch results:', { userData: !!userData, modulesData: !!modulesData })
+          log('Fetch results:', { 
+            userData: !!userData, 
+            modulesData: !!modulesData,
+            modulesCount: modulesData?.modules?.length || 0 
+          })
 
           if (userData) {
             if (userData.role?.permisos) {
@@ -72,22 +76,24 @@ export function Sidebar() {
             if (userData.tenant?.accountType) setUserAccountType(userData.tenant.accountType);
           }
           
-          if (modulesData?.modules) {
-            log('Modules received:', modulesData.modules.length)
+          if (modulesData?.modules && modulesData.modules.length > 0) {
+            log('Modules received and set:', modulesData.modules)
             setActiveModules(modulesData.modules);
           } else {
-            log('No modules received, using fallback if available')
+            log('No modules received from API, using fallback')
             // Fallback: If we can't get modules but we are in a session, maybe we should show all?
-            // Or at least the ones from the plan in the session.
-            const sessionModules = (session.user as any).activeModules;
-            if (sessionModules && sessionModules.length > 0) {
-              setActiveModules(sessionModules);
-            }
+            const sessionModules = (session.user as any).activeModules || [];
+            // Siempre asegurar que mi_tarjeta esté si no viene nada, es un módulo de perfil core
+            const finalFallback = Array.from(new Set([...sessionModules, 'mi_tarjeta', 'configuracion']));
+            log('Final fallback modules:', finalFallback)
+            setActiveModules(finalFallback);
           }
           
           if (modulesData?.country) setTenantCountry(modulesData.country);
         } catch (error) {
           console.error('Error loading permissions:', error);
+          // Fallback en caso de excepción total
+          setActiveModules(['mi_tarjeta', 'configuracion', 'leads', 'contactos']);
         } finally {
           setIsLoadingModules(false);
           log('Module loading finished')
