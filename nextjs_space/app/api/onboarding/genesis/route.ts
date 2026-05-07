@@ -56,8 +56,8 @@ export async function POST(req: NextRequest) {
         genesisHash,
         provisioningStatus: 'COMPLETED',
         // Upsell Check: Marcar para equipo de ventas
-        metadata: {
-            ...(user.tenant?.metadata as any || {}),
+        configuracion: {
+            ...(user.tenant?.configuracion as any || {}),
             upsell_candidate: dnaOperativo === 'ERP_INDUSTRIAL',
             onboarding_v2_completado: true
         }
