@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
       }
     });
 
-    // 2. ACTUALIZACIÓN DE TENANT (DNA, GPS, Master Key)
+    // 2. ACTUALIZACIÓN DE TENANT (DNA, GPS, Master Key, Subdomain)
     await prisma.tenant.update({
       where: { id: tenantId },
       data: {
@@ -54,6 +54,7 @@ export async function POST(req: NextRequest) {
         baseLatitude: lat,
         baseLongitude: lng,
         genesisHash,
+        subdomain: subdomain ? subdomain.toLowerCase() : undefined,
         provisioningStatus: 'COMPLETED',
         // Upsell Check: Marcar para equipo de ventas
         configuracion: {

@@ -57,6 +57,9 @@ export default function OnboardingGenesisPage() {
   const [botUsername, setBotUsername] = useState('');
   const [botConfigured, setBotConfigured] = useState(false);
   const [validatingBot, setValidatingBot] = useState(false);
+  const [subdomain, setSubdomain] = useState('');
+  const [isSubdomainAvailable, setIsSubdomainAvailable] = useState(true);
+  const [checkingSubdomain, setCheckingSubdomain] = useState(false);
 
   // Derivados
   const watchdogUrl = botUsername 
@@ -152,7 +155,8 @@ export default function OnboardingGenesisPage() {
           dnaOperativo: dna,
           masterKeyHash: masterKey ? 'ENCRYPTED_CLIENT_SIDE_STUB' : null, // Mantenemos la promesa de no subir la key real
           lat: location?.lat,
-          lng: location?.lng
+          lng: location?.lng,
+          subdomain
         })
       });
 
@@ -276,6 +280,45 @@ export default function OnboardingGenesisPage() {
 
               <Card className="border-2 border-slate-200 overflow-hidden shadow-xl">
                 <CardContent className="p-10 space-y-10">
+                  {/* DIGITAL IDENTITY (SUBDOMAIN) */}
+                  <div className="space-y-4">
+                    <Label className="text-md font-bold text-[#1A365D] flex items-center">
+                      <Globe className="h-4 w-4 mr-2" />
+                      Identidad Digital (Subdominio)
+                    </Label>
+                    <div className="flex gap-2 relative">
+                      <Input 
+                        placeholder="tu-empresa"
+                        value={subdomain}
+                        onChange={async (e) => {
+                          const val = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '');
+                          setSubdomain(val);
+                          if (val.length > 2) {
+                            setCheckingSubdomain(true);
+                            const res = await fetch(`/api/public/subdomain/check?subdomain=${val}`);
+                            const data = await res.json();
+                            setIsSubdomainAvailable(data.available);
+                            setCheckingSubdomain(false);
+                          }
+                        }}
+                        className={cn(
+                          "h-14 bg-slate-50 border-slate-200 focus:ring-[#1A365D] rounded-xl text-lg pr-32",
+                          !isSubdomainAvailable && subdomain.length > 2 && "border-red-300 bg-red-50"
+                        )}
+                      />
+                      <div className="absolute right-4 top-4 text-slate-400 font-bold flex items-center gap-2 pointer-events-none">
+                        {checkingSubdomain && <Loader2 className="h-4 w-4 animate-spin" />}
+                        .volkern.app
+                      </div>
+                    </div>
+                    {!isSubdomainAvailable && subdomain.length > 2 && (
+                      <p className="text-xs text-red-500 font-bold">⚠️ Este subdominio no está disponible o está reservado.</p>
+                    )}
+                    <p className="text-xs text-slate-400 italic">
+                      Este será el link oficial para tus tarjetas digitales y páginas web (ej: <strong>{subdomain || 'empresa'}.volkern.app</strong>).
+                    </p>
+                  </div>
+
                   {/* MASTER KEY */}
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
@@ -337,7 +380,7 @@ export default function OnboardingGenesisPage() {
                 </Button>
                 <Button 
                   onClick={() => setStep(3)}
-                  disabled={!masterKey}
+                  disabled={!masterKey || !subdomain || !isSubdomainAvailable || checkingSubdomain}
                   className="h-14 px-10 bg-[#1A365D] hover:bg-[#0F172A] text-white rounded-xl shadow-xl font-bold"
                 >
                   Siguiente paso
