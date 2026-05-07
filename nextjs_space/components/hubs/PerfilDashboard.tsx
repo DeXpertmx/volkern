@@ -51,6 +51,11 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -717,12 +722,12 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
                   <Label className="text-[11px] font-black uppercase text-slate-400 tracking-wider">Root Directory URL (Para App Móvil / Manage Skills)</Label>
                   <div className="flex gap-2">
                      <div className="flex-1 h-12 bg-slate-900 text-slate-300 border border-slate-800 rounded-xl flex items-center px-4 font-mono text-xs overflow-hidden truncate">
-                       {window.location.origin}/api/skills/user/{userData?.id}/
+                       {mounted ? window.location.origin : ''}/api/skills/user/{userData?.id}/
                      </div>
                      <Button 
                       variant="outline" 
                       className="h-12 w-12 rounded-xl border-slate-200" 
-                      onClick={() => copyToClipboard(`${window.location.origin}/api/skills/user/${userData?.id}/`)}
+                      onClick={() => copyToClipboard(`${mounted ? window.location.origin : ''}/api/skills/user/${userData?.id}/`)}
                      >
                        <Copy className="h-4 w-4" />
                      </Button>
@@ -768,9 +773,9 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
                           <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Root Directory URL</Label>
                           <div className="flex gap-2">
                              <div className="flex-1 h-12 bg-slate-50 border border-slate-200 rounded-xl flex items-center px-4 font-mono text-[10px] text-slate-600 truncate">
-                                {window.location.origin}/api/skills/user/{userData?.id}/
+                                {mounted ? window.location.origin : ''}/api/skills/user/{userData?.id}/
                              </div>
-                             <Button variant="outline" className="h-12 w-12 rounded-xl" onClick={() => copyToClipboard(`${window.location.origin}/api/skills/user/${userData?.id}/`)}>
+                             <Button variant="outline" className="h-12 w-12 rounded-xl" onClick={() => copyToClipboard(`${mounted ? window.location.origin : ''}/api/skills/user/${userData?.id}/`)}>
                                 <Copy className="h-4 w-4" />
                              </Button>
                           </div>

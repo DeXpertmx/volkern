@@ -108,7 +108,9 @@ export default function MiTarjetaPage() {
   const [logoDisplayUrl, setLogoDisplayUrl] = useState<string>('');
   const [fotoDisplayUrl, setFotoDisplayUrl] = useState<string>('');
 
+  const [mounted, setMounted] = useState(false);
   useEffect(() => {
+    setMounted(true);
     fetchCard();
   }, []);
 
@@ -935,7 +937,7 @@ return (
                       <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2 block">Copia este Enlace</Label>
                       <div className="mt-2 flex gap-2">
                         <Input
-                          value={`${window.location.origin}/tarjeta/${card.urlUnica}`}
+                          value={mounted ? `${window.location.origin}/tarjeta/${card.urlUnica}` : ''}
                           readOnly
                           className="bg-white dark:bg-slate-950 font-mono text-sm"
                         />
@@ -1112,7 +1114,7 @@ return (
                       </p>
                       <div className="flex items-center gap-2 p-2 bg-white dark:bg-slate-950 rounded-lg border border-indigo-200 dark:border-indigo-800 mb-4">
                         <code className="text-xs font-mono flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
-                          {`${window.location.origin}/tarjeta/${card.urlUnica}`}
+                          {mounted ? `${window.location.origin}/tarjeta/${card.urlUnica}` : ''}
                         </code>
                         <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={handleCopyUrl}>
                           <Copy className="h-4 w-4" />
