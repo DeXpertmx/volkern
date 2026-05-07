@@ -89,11 +89,17 @@ export function Sidebar() {
             setActiveModules(finalFallback);
           }
           
+          if (modulesData?.accountType) setUserAccountType(modulesData.accountType);
           if (modulesData?.country) setTenantCountry(modulesData.country);
         } catch (error) {
           console.error('Error loading permissions:', error);
           // Fallback en caso de excepción total
-          setActiveModules(['mi_tarjeta', 'configuracion', 'leads', 'contactos']);
+            const coreModules = [
+              'mi_tarjeta', 'configuracion', 'leads', 'contactos', 'empresas', 
+              'pipeline', 'tareas', 'analytics', 'mensajes', 'citas', 'catalogo',
+              'campanas', 'email_marketing', 'cms', 'social_manager'
+            ];
+            setActiveModules(coreModules);
         } finally {
           setIsLoadingModules(false);
           log('Module loading finished')
@@ -310,7 +316,7 @@ export function Sidebar() {
                   }
 
                   if (hub.requiredAccountType === 'AGENCY') {
-                    return effectiveAccountType === 'AGENCY' || roleName === 'Superadmin' || roleName === 'Admin';
+                    return effectiveAccountType === 'AGENCY' || roleName === 'Superadmin';
                   }
 
                   if (hub.requiredAccountType === 'BUSINESS') {

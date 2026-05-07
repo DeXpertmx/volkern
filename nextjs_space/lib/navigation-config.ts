@@ -403,7 +403,7 @@ export const HUBS: HubConfig[] = [
       { name: 'Reparto Leads', href: '/dashboard/configuracion?section=reparto', icon: RotateCw, description: 'Asignación de ejecutivos' },
       { name: 'Campos de Leads', href: '/dashboard/configuracion?section=leads', icon: ListTodo, description: 'Personalización de campos' },
       { name: 'Documentos', href: '/dashboard/configuracion?section=documentos', icon: FileText, description: 'Ajustes de contratos' },
-      { name: 'Marca Blanca', href: '/dashboard/configuracion?section=whitelabel', icon: Palette, description: 'Personalización gráfica' },
+      { name: 'Marca Blanca', href: '/dashboard/configuracion?section=whitelabel', icon: Palette, planModule: 'white_label', description: 'Personalización gráfica' },
       { name: 'Equipo', href: '/dashboard/equipo', icon: UserCog, planModule: 'equipo', description: 'Gestión de usuarios' },
       { name: 'Integraciones', href: '/dashboard/integraciones', icon: Plug, planModule: 'integraciones', description: 'Conexión con apps externas' },
       { name: 'Mi Suscripción', href: '/dashboard/configuracion/billing', icon: CreditCard, description: 'Suscripción y pagos' },

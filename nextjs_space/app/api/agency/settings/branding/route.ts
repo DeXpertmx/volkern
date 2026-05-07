@@ -8,8 +8,9 @@ import { withTenantAuth } from '@/lib/api-key-auth';
  * Actualiza la identidad visual de la agencia y sus hijos
  */
 export const PATCH = withTenantAuth(async (req, auth) => {
-  if (auth.user?.accountType !== 'AGENCY') {
-    return NextResponse.json({ error: 'Solo disponible para cuentas de Agencia' }, { status: 403 });
+  const isSuperadmin = auth.user?.role?.nombre === 'Superadmin';
+  if (auth.user?.accountType !== 'AGENCY' && !isSuperadmin) {
+    return NextResponse.json({ error: 'Solo disponible para cuentas de Agencia o Administradores' }, { status: 403 });
   }
 
   try {

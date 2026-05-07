@@ -8,8 +8,9 @@ import { withTenantAuth } from '@/lib/api-key-auth';
  * Lista todos los sub-tenants gestionados por la agencia
  */
 export const GET = withTenantAuth(async (req, auth) => {
-  if (auth.user?.accountType !== 'AGENCY') {
-    return NextResponse.json({ error: 'Solo disponible para cuentas de Agencia' }, { status: 403 });
+  const isSuperadmin = auth.user?.role?.nombre === 'Superadmin';
+  if (auth.user?.accountType !== 'AGENCY' && !isSuperadmin) {
+    return NextResponse.json({ error: 'Solo disponible para cuentas de Agencia o Administradores' }, { status: 403 });
   }
 
   const slots = await prisma.tenant.findMany({
@@ -39,8 +40,9 @@ export const GET = withTenantAuth(async (req, auth) => {
  * Provee un nuevo slot de cliente
  */
 export const POST = withTenantAuth(async (req, auth) => {
-  if (auth.user?.accountType !== 'AGENCY') {
-    return NextResponse.json({ error: 'Solo disponible para cuentas de Agencia' }, { status: 403 });
+  const isSuperadmin = auth.user?.role?.nombre === 'Superadmin';
+  if (auth.user?.accountType !== 'AGENCY' && !isSuperadmin) {
+    return NextResponse.json({ error: 'Solo disponible para cuentas de Agencia o Administradores' }, { status: 403 });
   }
 
   try {
