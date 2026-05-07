@@ -29,9 +29,20 @@ export const GET = withTenantAuth(async (request, auth) => {
     });
 
     // Determinar módulos finales basados en plan, add-ons y habilitación manual
-    const finalModules = tenant.enabledModules && tenant.enabledModules.length > 0
+    let finalModules = tenant.enabledModules && tenant.enabledModules.length > 0
       ? tenant.enabledModules
       : await getActiveModules(tenant.plan, tenantFeatures);
+
+    // SEGURIDAD: Asegurar que módulos core de perfil siempre estén presentes si el plan lo permite
+    if (!finalModules.includes('mi_tarjeta')) {
+       const planConfig = await getActiveModules(tenant.plan, tenantFeatures);
+       if (planConfig.includes('mi_tarjeta')) {
+         finalModules.push('mi_tarjeta');
+       }
+    }
+    
+    // Forzar configuración y perfil como básicos
+    if (!finalModules.includes('configuracion')) finalModules.push('configuracion');
 
     return NextResponse.json({ 
       modules: finalModules, 

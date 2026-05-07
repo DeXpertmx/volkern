@@ -459,7 +459,24 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
                 <h3 className="font-black text-lg text-slate-900">Estado del Link de Reserva</h3>
                 <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">{booking.active ? 'Activo y recibiendo citas' : 'Inactivo temporalmente'}</p>
               </div>
-              <Switch checked={booking.active} onCheckedChange={(val) => setBooking({...booking, active: val})} />
+              <Switch 
+                checked={booking.active} 
+                onCheckedChange={async (val) => {
+                  setBooking({...booking, active: val});
+                  try {
+                    const res = await fetch("/api/users/me", {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ bookingEnabled: val })
+                    });
+                    if (res.ok) {
+                      toast.success(val ? "Agendamiento activado" : "Agendamiento desactivado");
+                    }
+                  } catch (e) {
+                    toast.error("Error al guardar estado");
+                  }
+                }} 
+              />
             </div>
 
             <div className="space-y-4">
