@@ -381,7 +381,7 @@ export const HUBS: HubConfig[] = [
       { name: 'Telefonía (Zadarma)', href: '/dashboard/perfil?section=zadarma', icon: Phone, description: 'Configuración de extensión Zadarma' },
       { name: 'Notificaciones', href: '/dashboard/perfil?section=notificaciones', icon: Bell, description: 'Alertas del navegador' },
       { name: 'IA Agent Skills', href: '/dashboard/perfil?section=agent-skills', icon: Cpu, description: 'Conecta tu asistente IA (Gemma/Gemma local)' },
-      { name: 'Mi Tarjeta', href: '/dashboard/mi-tarjeta', icon: CreditCard, planModule: 'mi_tarjeta', description: 'Tarjeta de presentación digital' },
+      { name: 'Mi Tarjeta', href: '/dashboard/perfil?section=mi-tarjeta', icon: CreditCard, planModule: 'mi_tarjeta', description: 'Tarjeta de presentación digital' },
     ]
   },
   {

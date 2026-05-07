@@ -25,7 +25,11 @@ import {
   Loader2,
   Trash2,
   Cpu,
-  Zap
+  Zap,
+  CreditCard,
+  Smartphone,
+  QrCode,
+  ExternalLink
 } from "lucide-react";
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "framer-motion";
@@ -111,6 +115,21 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
         const data = await res.json();
         setUserData(data);
         setTelegramChatId(data.metadata?.telegram_chat_id || "");
+        
+        // Configurar link de agendamiento dinámico
+        if (data.tenant?.subdomain) {
+          const protocol = window.location.protocol;
+          const host = window.location.host;
+          const isLocalhost = host.includes('localhost');
+          const domain = isLocalhost ? 'localhost:3000' : 'volkern.app';
+          
+          // El slug de booking puede ser el personalizado o el ID
+          const bSlug = data.bookingSlug || data.id;
+          setBooking({
+            url: `${protocol}//${data.tenant.subdomain}.${domain}/booking/${bSlug}`,
+            active: data.bookingEnabled || false
+          });
+        }
       }
     } catch (error) {
       console.error("Error fetching user:", error);
@@ -721,6 +740,80 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
               </div>
             )}
           </AnimatePresence>
+        </SectionWrapper>
+      )}
+
+      {activeSection === "mi-tarjeta" && (
+        <SectionWrapper 
+          key="mi-tarjeta"
+          title="Mi Tarjeta Digital" 
+          description="Gestiona tu identidad profesional y tarjeta de presentación con QR."
+          icon={CreditCard}
+        >
+          <Card className="border-none shadow-xl ring-1 ring-border/50 p-8">
+            <div className="flex flex-col md:flex-row gap-10 items-center">
+              <div className="w-full md:w-64 aspect-[9/16] bg-slate-100 rounded-[2.5rem] border-8 border-slate-900 shadow-2xl relative overflow-hidden group">
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-transparent" />
+                <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center space-y-4">
+                  <div className="w-20 h-20 rounded-full bg-white shadow-lg flex items-center justify-center">
+                    <Smartphone className="h-10 w-10 text-slate-400" />
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="font-bold text-slate-900">{userData?.name}</h4>
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Identidad Digital</p>
+                  </div>
+                  <div className="w-24 h-24 bg-white p-2 rounded-xl shadow-sm">
+                    <QrCode className="w-full h-full text-slate-900" />
+                  </div>
+                </div>
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
+                   <Button variant="secondary" className="rounded-full font-bold" onClick={() => window.location.href='/dashboard/mi-tarjeta'}>
+                     <ExternalLink className="h-4 w-4 mr-2" /> Editar Tarjeta
+                   </Button>
+                </div>
+              </div>
+
+              <div className="flex-1 space-y-6">
+                <div className="space-y-2">
+                  <h3 className="text-xl font-black text-slate-900">Tu Hub de Identidad</h3>
+                  <p className="text-slate-500 text-sm">
+                    Personaliza cómo te ven tus clientes. Tu tarjeta digital incluye tus redes sociales, datos de contacto y un código QR único que puedes imprimir en tus tarjetas físicas.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                   <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-4">
+                      <div className="p-2 bg-white rounded-lg shadow-sm">
+                         <QrCode className="h-5 w-5 text-primary" />
+                      </div>
+                      <div className="text-xs">
+                         <p className="font-bold text-slate-900">QR Dinámico</p>
+                         <p className="text-slate-500">Siempre actualizado</p>
+                      </div>
+                   </div>
+                   <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-4">
+                      <div className="p-2 bg-white rounded-lg shadow-sm">
+                         <Share2 className="h-5 w-5 text-green-600" />
+                      </div>
+                      <div className="text-xs">
+                         <p className="font-bold text-slate-900">Compartir Fácil</p>
+                         <p className="text-slate-500">Vía WhatsApp o NFC</p>
+                      </div>
+                   </div>
+                </div>
+
+                <div className="pt-4">
+                  <Button 
+                    onClick={() => window.location.href='/dashboard/mi-tarjeta'}
+                    className="rounded-full px-10 h-14 premium-gradient-primary shadow-xl shadow-primary/20 w-full md:w-auto font-bold"
+                  >
+                    Abrir Editor de Tarjeta
+                    <ChevronRight className="h-5 w-5 ml-2" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </Card>
         </SectionWrapper>
       )}
     </div>
