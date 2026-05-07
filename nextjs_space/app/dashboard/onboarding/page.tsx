@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
+import { QRCodeSVG } from 'qrcode.react';
 import {
   Shield,
   MapPin,
@@ -35,6 +36,32 @@ export default function OnboardingGenesisPage() {
   const [masterKey, setMasterKey] = useState('');
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [detectingGps, setDetectingGps] = useState(false);
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const res = await fetch('/api/users/me');
+        if (res.ok) {
+          const data = await res.json();
+          setUser(data);
+        }
+      } catch (err) {
+        console.error('Error al cargar info de usuario:', err);
+      }
+    };
+    fetchUser();
+  }, []);
+
+  const watchdogUrl = user?.tenant?.id 
+    ? `tg://resolve?domain=VolkernWatchdogBot&start=${user.tenant.id}`
+    : `tg://resolve?domain=VolkernWatchdogBot`;
+
+  // Fallback para web si no tienen la app o para el QR
+  const qrUrl = user?.tenant?.id 
+    ? `https://t.me/VolkernWatchdogBot?start=${user.tenant.id}`
+    : `https://t.me/VolkernWatchdogBot`;
+
 
   // DNA Options Configuration
   const DNA_OPTIONS = [
@@ -305,17 +332,34 @@ export default function OnboardingGenesisPage() {
 
               <Card className="border-4 border-dashed border-slate-200 bg-white/50 p-12 text-center shadow-inner rounded-3xl">
                 <div className="space-y-8">
-                  <div className="mx-auto w-48 h-48 bg-white border-2 border-slate-100 rounded-2xl flex items-center justify-center shadow-2xl relative group">
-                    <QrCode className="h-40 w-40 text-slate-800 transition-transform group-hover:scale-95 duration-500" />
-                    <div className="absolute inset-0 bg-[#1A365D]/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl flex items-center justify-center">
-                      <span className="text-[10px] font-black uppercase tracking-tighter text-[#1A365D]">Escanear con Telegram</span>
-                    </div>
-                  </div>
+                  <a 
+                    href={watchdogUrl} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="mx-auto w-48 h-48 bg-white border-2 border-slate-100 rounded-2xl flex items-center justify-center shadow-2xl relative group p-4"
+                  >
+                    {!user ? (
+                      <Loader2 className="h-10 w-10 animate-spin text-slate-300" />
+                    ) : (
+                      <>
+                        <QRCodeSVG 
+                          value={qrUrl}
+                          size={160}
+                          level="H"
+                          includeMargin={false}
+                          className="transition-transform group-hover:scale-95 duration-500"
+                        />
+                        <div className="absolute inset-0 bg-[#1A365D]/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl flex items-center justify-center">
+                          <span className="text-[10px] font-black uppercase tracking-tighter text-[#1A365D]">Escanear o Tocar</span>
+                        </div>
+                      </>
+                    )}
+                  </a>
                   
                   <div className="space-y-4">
                     <p className="font-bold text-[#1A365D]">Instrucción Génesis:</p>
                     <p className="text-slate-500 text-sm leading-relaxed max-w-sm mx-auto">
-                      Escanea este código para recibir alertas de <strong>rupturas de stock</strong> y reportes de <strong>fraude Vision-Lock</strong> directamente en tu móvil.
+                      Escanea o toca el código y haz clic en <strong>"INICIAR"</strong> en Telegram para recibir alertas de <strong>rupturas de stock</strong> y reportes de <strong>fraude Vision-Lock</strong>.
                     </p>
                   </div>
                 </div>
