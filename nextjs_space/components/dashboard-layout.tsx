@@ -18,6 +18,7 @@ interface DashboardLayoutProps {
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [isCollapsed, setIsCollapsed] = useState(false)
   const pathname = usePathname()
+  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
     // Sincronizar con el estado del sidebar
@@ -26,6 +27,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       setIsCollapsed(saved === 'true')
     }
     
+    setMounted(true)
     checkCollapsed()
     
     // Escuchar cambios en el localStorage
@@ -45,6 +47,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const isPipeline = pathname === '/dashboard/pipeline'
   const isMessaging = pathname?.startsWith('/dashboard/mensajes')
+
+  if (!mounted) return null
 
   return (
     <div className="flex h-screen bg-background overflow-hidden font-sans">

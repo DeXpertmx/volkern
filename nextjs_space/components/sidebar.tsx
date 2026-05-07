@@ -304,12 +304,17 @@ export function Sidebar() {
                     return roleName === 'Superadmin' || roleName === 'Admin';
                   }
 
+                  // Mientras carga, permitir ver hubs si no hay accountType aún
+                  if (isLoadingModules && !effectiveAccountType) {
+                    return hub.requiredAccountType !== 'SUPERADMIN' || roleName === 'Superadmin' || roleName === 'Admin';
+                  }
+
                   if (hub.requiredAccountType === 'AGENCY') {
-                    return effectiveAccountType === 'AGENCY';
+                    return effectiveAccountType === 'AGENCY' || roleName === 'Superadmin' || roleName === 'Admin';
                   }
 
                   if (hub.requiredAccountType === 'BUSINESS') {
-                    return effectiveAccountType === 'BUSINESS' || effectiveAccountType === 'AGENCY';
+                    return effectiveAccountType === 'BUSINESS' || effectiveAccountType === 'AGENCY' || roleName === 'Superadmin' || roleName === 'Admin';
                   }
 
                   return true;
