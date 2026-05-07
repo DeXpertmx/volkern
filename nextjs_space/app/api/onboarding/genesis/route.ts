@@ -88,8 +88,12 @@ export async function POST(req: NextRequest) {
       message: 'Bóveda inicializada correctamente.' 
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error en el proceso Genesis:', error);
-    return NextResponse.json({ error: 'Fallo al inicializar la bóveda' }, { status: 500 });
+    return NextResponse.json({ 
+      error: 'Fallo al inicializar la bóveda',
+      message: error.message || 'Error desconocido',
+      code: error.code || 'UNKNOWN'
+    }, { status: 500 });
   }
 }

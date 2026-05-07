@@ -160,7 +160,8 @@ export default function OnboardingGenesisPage() {
         toast.success('¡Génesis completado con éxito!');
         router.push('/dashboard');
       } else {
-        toast.error('Error al inicializar la bóveda');
+        const errorData = await res.json();
+        toast.error(`Error: ${errorData.message || 'Error al inicializar la bóveda'}`);
       }
     } catch (error) {
        toast.error('Error de conexión');
