@@ -230,6 +230,7 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
         body: JSON.stringify({
           name: userData?.name,
           telefono: userData?.telefono,
+          bookingTitle: userData?.bookingTitle,
           metadata
         })
       });
@@ -315,7 +316,11 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="space-y-2">
                   <Label className="text-[11px] font-black uppercase text-slate-400 tracking-wider">Nombre Completo</Label>
-                  <Input value={userData?.name || ""} disabled className="bg-slate-50 border-slate-200 h-12 rounded-xl" />
+                  <Input 
+                    value={userData?.name || ""} 
+                    onChange={e => setUserData({...userData, name: e.target.value})}
+                    className="h-12 rounded-xl border-slate-200" 
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label className="text-[11px] font-black uppercase text-slate-400 tracking-wider">Correo Electrónico</Label>
@@ -323,11 +328,21 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
                 </div>
                 <div className="space-y-2">
                   <Label className="text-[11px] font-black uppercase text-slate-400 tracking-wider">Cargo / Título</Label>
-                  <Input placeholder="Ej. Director Comercial" className="h-12 rounded-xl border-slate-200" />
+                  <Input 
+                    value={userData?.bookingTitle || ""} 
+                    onChange={e => setUserData({...userData, bookingTitle: e.target.value})}
+                    placeholder="Ej. Director Comercial" 
+                    className="h-12 rounded-xl border-slate-200" 
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label className="text-[11px] font-black uppercase text-slate-400 tracking-wider">Teléfono Institucional</Label>
-                  <Input placeholder="+52 XXX XXX XXXX" className="h-12 rounded-xl border-slate-200" />
+                  <Input 
+                    value={userData?.telefono || ""} 
+                    onChange={e => setUserData({...userData, telefono: e.target.value})}
+                    placeholder="+52 XXX XXX XXXX" 
+                    className="h-12 rounded-xl border-slate-200" 
+                  />
                 </div>
               </div>
               <div className="pt-6 border-t border-slate-100 flex justify-end">
