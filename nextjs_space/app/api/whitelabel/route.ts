@@ -55,9 +55,17 @@ export const GET = withTenantAuth(async (request, auth) => {
     }
 
     const getPublicUrl = (s3Key: string) => {
-      if (process.env.NEXT_PUBLIC_CDN_URL) {
-        return `${process.env.NEXT_PUBLIC_CDN_URL}/${s3Key}`;
+      const cdnUrl = process.env.NEXT_PUBLIC_CDN_URL;
+      if (cdnUrl) {
+        const base = cdnUrl.endsWith('/') ? cdnUrl.slice(0, -1) : cdnUrl;
+        return `${base}/${s3Key}`;
       }
+      
+      const endpoint = process.env.AWS_ENDPOINT_URL || '';
+      if (endpoint.includes('r2.cloudflarestorage.com')) {
+         return `https://CONFIGURA_TU_CDN_EN_VERCEL_PARA_R2.com/${s3Key}`;
+      }
+
       return `https://${AWS_BUCKET_NAME}.s3.${AWS_REGION}.amazonaws.com/${s3Key}`
     }
 

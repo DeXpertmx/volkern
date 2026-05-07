@@ -52,9 +52,17 @@ export async function uploadPublicFile(
   
   // Construir URL pública directa
   let publicUrl = '';
-  if (process.env.NEXT_PUBLIC_CDN_URL) {
-    // Si usan R2 o un CDN personalizado, deben proveer esta variable sin slash al final
-    publicUrl = `${process.env.NEXT_PUBLIC_CDN_URL}/${key}`;
+  const cdnUrl = process.env.NEXT_PUBLIC_CDN_URL;
+  const endpoint = process.env.AWS_ENDPOINT_URL || '';
+  const isR2 = endpoint.includes('r2.cloudflarestorage.com');
+
+  if (cdnUrl) {
+    // Quitar slash final si existe para evitar dobles slashes
+    const base = cdnUrl.endsWith('/') ? cdnUrl.slice(0, -1) : cdnUrl;
+    publicUrl = `${base}/${key}`;
+  } else if (isR2) {
+    // Si no hay CDN configurado pero es R2, avisamos en la URL para debug
+    publicUrl = `https://CONFIGURA_TU_CDN_EN_VERCEL_PARA_R2.com/${key}`;
   } else {
     publicUrl = `https://${bucketName}.s3.${AWS_REGION}.amazonaws.com/${key}`;
   }
