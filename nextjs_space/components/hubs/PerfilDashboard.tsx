@@ -98,6 +98,8 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
     active: false
   });
 
+  const [cardUrl, setCardUrl] = useState("");
+
   const [telegramChatId, setTelegramChatId] = useState("");
   const [saving, setSaving] = useState(false);
   
@@ -118,30 +120,36 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
         setUserData(data);
         setTelegramChatId(data.metadata?.telegram_chat_id || "");
         
-        // Configurar link de agendamiento dinámico
+        const protocol = window.location.protocol;
+        const host = window.location.host;
+        let domain = "";
+        if (host.includes('localhost')) {
+          domain = 'localhost:3000';
+        } else {
+          const parts = window.location.hostname.split('.');
+          domain = parts.length >= 2 ? parts.slice(-2).join('.') : window.location.hostname;
+        }
+
+        // 1. Configurar link de agendamiento dinámico
         if (data.tenant?.subdomain) {
-          const protocol = window.location.protocol;
-          const host = window.location.host;
-          
-          let domain = "";
-          if (host.includes('localhost')) {
-            domain = 'localhost:3000';
-          } else {
-            // Extraer el dominio base (ej: volkern.com o volkern.app)
-            const parts = window.location.hostname.split('.');
-            if (parts.length >= 2) {
-              domain = parts.slice(-2).join('.');
-            } else {
-              domain = window.location.hostname;
-            }
-          }
-          
-          // El slug de booking puede ser el personalizado o el ID
           const bSlug = data.bookingSlug || data.id;
           setBooking({
             url: `${protocol}//${data.tenant.subdomain}.${domain}/booking/${bSlug}`,
             active: data.bookingEnabled || false
           });
+        }
+
+        // 2. Configurar link de tarjeta digital
+        try {
+          const cardRes = await fetch("/api/tarjetas-digitales");
+          if (cardRes.ok) {
+            const cardData = await cardRes.json();
+            if (cardData.digitalCard?.urlUnica && data.tenant?.subdomain) {
+              setCardUrl(`${protocol}//${data.tenant.subdomain}.${domain}/tarjeta/${cardData.digitalCard.urlUnica}`);
+            }
+          }
+        } catch (e) {
+          console.warn("Error fetching card data:", e);
         }
       }
     } catch (error) {
@@ -816,25 +824,47 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                   <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-4">
-                      <div className="p-2 bg-white rounded-lg shadow-sm">
-                         <QrCode className="h-5 w-5 text-primary" />
-                      </div>
-                      <div className="text-xs">
-                         <p className="font-bold text-slate-900">QR Dinámico</p>
-                         <p className="text-slate-500">Siempre actualizado</p>
-                      </div>
+                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-4">
+                       <div className="p-2 bg-white rounded-lg shadow-sm">
+                          <QrCode className="h-5 w-5 text-primary" />
+                       </div>
+                       <div className="text-xs">
+                          <p className="font-bold text-slate-900">QR Dinámico</p>
+                          <p className="text-slate-500">Siempre actualizado</p>
+                       </div>
+                    </div>
+                    <div 
+                      className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-4 cursor-pointer hover:bg-slate-100 transition-colors"
+                      onClick={() => cardUrl && copyToClipboard(cardUrl)}
+                    >
+                       <div className="p-2 bg-white rounded-lg shadow-sm">
+                          <Share2 className="h-5 w-5 text-green-600" />
+                       </div>
+                       <div className="text-xs">
+                          <p className="font-bold text-slate-900">Compartir Link</p>
+                          <p className="text-slate-500">{cardUrl ? 'Copiar link branding' : 'Vía WhatsApp o NFC'}</p>
+                       </div>
+                    </div>
+                 </div>
+
+                 {cardUrl && (
+                   <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-2xl space-y-2">
+                     <Label className="text-[10px] font-black uppercase text-blue-400 tracking-wider">Tu Link de Tarjeta Brandeado</Label>
+                     <div className="flex gap-2">
+                       <div className="flex-1 h-10 bg-white border border-blue-100 rounded-xl flex items-center px-4 font-mono text-[12px] text-blue-600 overflow-hidden truncate">
+                         {cardUrl}
+                       </div>
+                       <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-10 w-10 p-0 text-blue-600 hover:bg-blue-100"
+                        onClick={() => copyToClipboard(cardUrl)}
+                       >
+                         <Copy className="h-4 w-4" />
+                       </Button>
+                     </div>
                    </div>
-                   <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-4">
-                      <div className="p-2 bg-white rounded-lg shadow-sm">
-                         <Share2 className="h-5 w-5 text-green-600" />
-                      </div>
-                      <div className="text-xs">
-                         <p className="font-bold text-slate-900">Compartir Fácil</p>
-                         <p className="text-slate-500">Vía WhatsApp o NFC</p>
-                      </div>
-                   </div>
-                </div>
+                 )}
 
                 <div className="pt-4">
                   <Button 
