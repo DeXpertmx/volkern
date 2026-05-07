@@ -163,6 +163,21 @@ export default function OnboardingGenesisPage() {
 
       if (res.ok) {
         toast.success('¡Génesis completado con éxito!');
+        
+        // Redirigir al subdominio si se acaba de configurar
+        if (subdomain) {
+          const protocol = window.location.protocol;
+          const host = window.location.host;
+          const isLocalhost = host.includes('localhost');
+          const domain = isLocalhost ? 'localhost:3000' : 'volkern.app';
+          
+          // Prevenir bucle si ya estamos en el subdominio
+          if (!host.startsWith(`${subdomain}.`)) {
+            window.location.href = `${protocol}//${subdomain}.${domain}/dashboard`;
+            return;
+          }
+        }
+        
         router.push('/dashboard');
       } else {
         const errorData = await res.json();
