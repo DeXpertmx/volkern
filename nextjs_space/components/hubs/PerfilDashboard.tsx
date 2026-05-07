@@ -30,7 +30,8 @@ import {
   Smartphone,
   QrCode,
   ExternalLink,
-  Share2
+  Share2,
+  ChevronRight
 } from "lucide-react";
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "framer-motion";
