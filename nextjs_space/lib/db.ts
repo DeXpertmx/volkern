@@ -62,7 +62,9 @@ const GLOBAL_MODELS = [
   'customerPrivateDocument',
   'academyUser',
   'academySession',
-  'academyAuditLog'
+  'academyAuditLog',
+  'globalAuditCloud',
+  'onboardingProgress'
 ];
 
 // Configuración del objeto global para persistencia en desarrollo (Next.js hot-reload)
