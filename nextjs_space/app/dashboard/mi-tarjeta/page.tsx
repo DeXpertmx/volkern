@@ -325,16 +325,35 @@ const handleDownloadQR = () => {
   toast.success('QR Code descargado');
 };
 
+const getBrandedUrl = () => {
+  if (!card) return '';
+  const protocol = window.location.protocol;
+  const host = window.location.host;
+  let domain = "";
+  if (host.includes('localhost')) {
+    domain = 'localhost:3000';
+  } else {
+    const parts = window.location.hostname.split('.');
+    domain = parts.length >= 2 ? parts.slice(-2).join('.') : window.location.hostname;
+  }
+  
+  const subdomain = (session?.user as any)?.tenantSubdomain;
+  if (subdomain) {
+    return `${protocol}//${subdomain}.${domain}/tarjeta/${card.urlUnica}`;
+  }
+  return `${window.location.origin}/tarjeta/${card.urlUnica}`;
+};
+
 const handleCopyUrl = () => {
   if (!card) return;
-  const url = `${window.location.origin}/tarjeta/${card.urlUnica}`;
+  const url = getBrandedUrl();
   navigator.clipboard.writeText(url);
   toast.success('URL copiada al portapapeles');
 };
 
 const handleShareUrl = async () => {
   if (!card) return;
-  const url = `${window.location.origin}/tarjeta/${card.urlUnica}`;
+  const url = getBrandedUrl();
 
   if (navigator.share) {
     try {
@@ -421,7 +440,7 @@ return (
                     <Label htmlFor="urlUnica">Alias de tu enlace (URL Personalizada)</Label>
                     <div className="flex items-center gap-2 mt-1">
                       <div className="bg-slate-100 dark:bg-slate-800 px-3 py-2 rounded-lg text-sm font-mono text-slate-500 border border-slate-200">
-                        volkern.app/tarjeta/
+                        {(session?.user as any)?.tenantSubdomain || 'volkern'}.volkern.app/tarjeta/
                       </div>
                       <Input
                         id="urlUnica"

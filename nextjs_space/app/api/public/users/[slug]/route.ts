@@ -9,24 +9,35 @@ export async function GET(
     { params }: { params: { slug: string } }
 ) {
     try {
-        const user = await prisma.user.findUnique({
-            where: { bookingSlug: params.slug },
-            select: {
-                id: true,
-                name: true,
-                image: true,
-                bookingTitle: true,
-                bookingBio: true,
-                bookingEnabled: true,
-                tenantId: true,
-                tenant: {
-                    select: {
-                        id: true,
-                        nombre: true,
-                    }
+        const selectFields = {
+            id: true,
+            name: true,
+            image: true,
+            bookingTitle: true,
+            bookingBio: true,
+            bookingEnabled: true,
+            tenantId: true,
+            tenant: {
+                select: {
+                    id: true,
+                    nombre: true,
                 }
             }
-        })
+        };
+
+        // Intentar buscar por bookingSlug primero, luego por ID
+        let user = await prisma.user.findUnique({
+            where: { bookingSlug: params.slug },
+            select: selectFields
+        });
+
+        if (!user) {
+            // Fallback: buscar por ID del usuario
+            user = await prisma.user.findUnique({
+                where: { id: params.slug },
+                select: selectFields
+            });
+        }
 
         if (!user || !user.bookingEnabled) {
             return NextResponse.json({ error: 'Perfil de agendamiento no encontrado o inactivo' }, { status: 404 })
