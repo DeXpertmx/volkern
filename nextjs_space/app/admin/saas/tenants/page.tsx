@@ -376,7 +376,7 @@ export default function TenantsManagement() {
                     
                     <div className="flex gap-2">
                        <Button 
-                        onClick={() => router.push(`/admin/tenants/${tenant.id}`)}
+                        onClick={() => router.push(`/admin/saas/tenants/${tenant.id}`)}
                         variant="ghost" 
                         className="flex-1 rounded-xl bg-white border border-slate-100 text-[#4A5568] hover:bg-slate-50 font-black uppercase tracking-widest text-[9px] h-10 transition-all"
                       >

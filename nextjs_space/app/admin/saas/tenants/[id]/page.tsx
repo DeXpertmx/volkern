@@ -74,7 +74,7 @@ export default function TenantDetail() {
         setTenant(data);
       } else {
         toast.error('Tenant no encontrado');
-        router.push('/admin/tenants');
+        router.push('/admin/saas/tenants');
       }
     } catch (error) {
       console.error('Error loading tenant:', error);
