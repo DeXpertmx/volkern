@@ -65,13 +65,20 @@ export async function POST(req: NextRequest) {
     });
 
     // 3. ACTUALIZACIÓN DE PROGRESO
-    await prisma.onboardingProgress.update({
+    await prisma.onboardingProgress.upsert({
       where: { tenantId },
-      data: {
+      update: {
         dnaOperativo,
         completado: true,
         fechaCompletado: new Date(),
-        pasoActual: 3 // Asumimos que este es el trigger final
+        pasoActual: 3
+      },
+      create: {
+        tenantId,
+        dnaOperativo,
+        completado: true,
+        fechaCompletado: new Date(),
+        pasoActual: 3
       }
     });
 

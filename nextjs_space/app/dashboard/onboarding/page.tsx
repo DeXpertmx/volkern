@@ -53,14 +53,19 @@ export default function OnboardingGenesisPage() {
     fetchUser();
   }, []);
 
-  const watchdogUrl = user?.tenant?.id 
-    ? `tg://resolve?domain=VolkernWatchdogBot&start=${user.tenant.id}`
-    : `tg://resolve?domain=VolkernWatchdogBot`;
+  const [botToken, setBotToken] = useState('');
+  const [botUsername, setBotUsername] = useState('');
+  const [botConfigured, setBotConfigured] = useState(false);
+  const [validatingBot, setValidatingBot] = useState(false);
 
-  // Fallback para web si no tienen la app o para el QR
-  const qrUrl = user?.tenant?.id 
-    ? `https://t.me/VolkernWatchdogBot?start=${user.tenant.id}`
-    : `https://t.me/VolkernWatchdogBot`;
+  // Derivados
+  const watchdogUrl = botUsername 
+    ? `tg://resolve?domain=${botUsername.replace('@', '')}&start=${user?.tenant?.id}`
+    : null;
+
+  const qrUrl = botUsername 
+    ? `https://t.me/${botUsername.replace('@', '')}?start=${user?.tenant?.id}`
+    : null;
 
 
   // DNA Options Configuration
@@ -108,6 +113,33 @@ export default function OnboardingGenesisPage() {
         setDetectingGps(false);
       }
     );
+  };
+
+  const handleConfigureBot = async () => {
+    if (!botToken) {
+      toast.error('Proporciona el token del bot');
+      return;
+    }
+    setValidatingBot(true);
+    try {
+      const res = await fetch('/api/onboarding/telegram', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ botToken, botUsername: botUsername || 'WatchdogBot' })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setBotUsername(data.botInfo.username);
+        setBotConfigured(true);
+        toast.success(`Bot @${data.botInfo.username} vinculado correctamente`);
+      } else {
+        toast.error(data.error || 'Error al vincular bot');
+      }
+    } catch (err) {
+      toast.error('Error de conexión');
+    } finally {
+      setValidatingBot(false);
+    }
   };
 
   const handleFinalizeGenesis = async () => {
@@ -304,7 +336,7 @@ export default function OnboardingGenesisPage() {
                 </Button>
                 <Button 
                   onClick={() => setStep(3)}
-                  disabled={!masterKey || !location}
+                  disabled={!masterKey}
                   className="h-14 px-10 bg-[#1A365D] hover:bg-[#0F172A] text-white rounded-xl shadow-xl font-bold"
                 >
                   Siguiente paso
@@ -320,7 +352,7 @@ export default function OnboardingGenesisPage() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 1.05 }}
-              className="max-w-xl mx-auto space-y-12"
+              className="max-w-xl mx-auto space-y-8"
             >
               <div className="text-center space-y-4">
                 <div className="mx-auto w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 mb-4 animate-pulse">
@@ -330,68 +362,75 @@ export default function OnboardingGenesisPage() {
                 <p className="text-slate-500">Conecta tu móvil a la red neuronal de tu empresa.</p>
               </div>
 
-              <Card className="border-4 border-dashed border-slate-200 bg-white/50 p-12 text-center shadow-inner rounded-3xl">
-                <div className="space-y-8">
-                  <a 
-                    href={watchdogUrl} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="mx-auto w-48 h-48 bg-white border-2 border-slate-100 rounded-2xl flex items-center justify-center shadow-2xl relative group p-4"
-                  >
-                    {!user ? (
-                      <Loader2 className="h-10 w-10 animate-spin text-slate-300" />
-                    ) : (
-                      <>
-                        <QRCodeSVG 
-                          value={qrUrl}
-                          size={160}
-                          level="H"
-                          includeMargin={false}
-                          className="transition-transform group-hover:scale-95 duration-500"
-                        />
-                        <div className="absolute inset-0 bg-[#1A365D]/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl flex items-center justify-center">
-                          <span className="text-[10px] font-black uppercase tracking-tighter text-[#1A365D]">Escanear o Tocar</span>
-                        </div>
-                      </>
-                    )}
-                  </a>
-                  
-                  <div className="space-y-4">
-                    <p className="font-bold text-[#1A365D]">Instrucción Génesis:</p>
-                    <p className="text-slate-500 text-sm leading-relaxed max-w-sm mx-auto">
-                      Escanea o toca el código y haz clic en <strong>"INICIAR"</strong> en Telegram.
+              {!botConfigured ? (
+                <Card className="p-8 border-2 border-[#1A365D]/10 bg-white shadow-xl rounded-3xl space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-xs font-black uppercase text-slate-400 tracking-widest">Paso A: Crea tu Bot</label>
+                    <p className="text-sm text-slate-500">
+                      1. Ve a <a href="https://t.me/BotFather" target="_blank" className="text-blue-600 font-bold underline">@BotFather</a> en Telegram.<br/>
+                      2. Envía <code className="bg-slate-100 px-1 rounded">/newbot</code> y sigue los pasos.<br/>
+                      3. Copia el <strong>API Token</strong> que te proporcione.
                     </p>
-                    <div className="pt-4 border-t border-slate-100">
-                      <p className="text-[10px] text-slate-400 uppercase font-bold mb-2">Si el enlace no abre el chat:</p>
-                      <p className="text-xs text-slate-500">
-                        Busca <strong>@VolkernWatchdogBot</strong> en Telegram y envía:<br/>
-                        <code className="bg-slate-100 px-2 py-1 rounded mt-1 inline-block font-mono text-[#1A365D]">
-                          /start {user?.tenant?.id?.split('-')[0]}...
-                        </code>
-                      </p>
-                      {user?.tenant?.id && (
-                        <Button 
-                          variant="link" 
-                          size="sm" 
-                          className="text-[10px] h-auto p-0 mt-1"
-                          onClick={() => {
-                            navigator.clipboard.writeText(`/start ${user.tenant.id}`);
-                            toast.success('Comando copiado');
-                          }}
-                        >
-                          Copiar comando completo
-                        </Button>
-                      )}
+                  </div>
+
+                  <div className="space-y-4">
+                    <label className="text-xs font-black uppercase text-[#1A365D] tracking-widest">Paso B: Pega el API Token</label>
+                    <div className="flex gap-2">
+                      <Input 
+                        value={botToken}
+                        onChange={(e) => setBotToken(e.target.value)}
+                        placeholder="Ej: 123456789:ABCdefGhI..."
+                        className="h-12 bg-slate-50 border-slate-200 rounded-xl"
+                      />
+                      <Button 
+                        onClick={handleConfigureBot}
+                        disabled={validatingBot || !botToken}
+                        className="h-12 bg-[#1A365D] hover:bg-[#0F172A] text-white rounded-xl px-6 font-bold"
+                      >
+                        {validatingBot ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Vincular'}
+                      </Button>
                     </div>
                   </div>
-                </div>
-              </Card>
+                </Card>
+              ) : (
+                <Card className="border-4 border-dashed border-green-200 bg-green-50/30 p-12 text-center shadow-inner rounded-3xl">
+                  <div className="space-y-8">
+                    <a 
+                      href={watchdogUrl || '#'} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="mx-auto w-48 h-48 bg-white border-2 border-green-100 rounded-2xl flex items-center justify-center shadow-2xl relative group p-4"
+                    >
+                      <QRCodeSVG 
+                        value={qrUrl || ''}
+                        size={160}
+                        level="H"
+                        includeMargin={false}
+                        className="transition-transform group-hover:scale-95 duration-500"
+                      />
+                      <div className="absolute inset-0 bg-[#1A365D]/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl flex items-center justify-center">
+                        <span className="text-[10px] font-black uppercase tracking-tighter text-[#1A365D]">Escanear o Tocar</span>
+                      </div>
+                    </a>
+                    
+                    <div className="space-y-4">
+                      <p className="font-bold text-green-700">¡Bot @{botUsername} vinculado!</p>
+                      <p className="text-slate-500 text-sm leading-relaxed max-w-sm mx-auto">
+                        Haz clic en el QR o tócalo para abrir tu bot y presiona <strong>"INICIAR"</strong>.
+                      </p>
+                    </div>
+                  </div>
+                </Card>
+              )}
 
               <div className="flex flex-col gap-4">
                 <Button 
                   onClick={handleFinalizeGenesis}
-                  disabled={loading}
-                  className="h-16 w-full bg-[#1A365D] hover:bg-[#0F172A] text-white rounded-2xl shadow-2xl shadow-[#1A365D]/30 font-black text-xl tracking-wide transition-all active:scale-95"
+                  disabled={loading || !botConfigured}
+                  className={cn(
+                    "h-16 w-full rounded-2xl shadow-2xl font-black text-xl tracking-wide transition-all active:scale-95",
+                    botConfigured ? "bg-[#1A365D] hover:bg-[#0F172A] text-white shadow-[#1A365D]/30" : "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none"
+                  )}
                 >
                   {loading ? (
                     <div className="flex items-center gap-3">
@@ -402,9 +441,14 @@ export default function OnboardingGenesisPage() {
                     "Finalizar Activación Génesis →"
                   )}
                 </Button>
-                <p className="text-center text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em]">
-                  Audit Hash: {Math.random().toString(36).substring(7).toUpperCase()}
-                </p>
+                <div className="flex justify-between items-center px-2">
+                  <Button variant="link" onClick={() => setStep(2)} className="text-slate-400 text-xs font-bold uppercase">
+                    Volver a Seguridad
+                  </Button>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em]">
+                    Audit Hash: {Math.random().toString(36).substring(7).toUpperCase()}
+                  </p>
+                </div>
               </div>
             </motion.div>
           )}
