@@ -87,48 +87,72 @@ export async function POST(request: NextRequest) {
       // ============================================
       // Comando /start - Configurar notificaciones
       // ============================================
-      if (messageText === '/start') {
-        // Buscar integración de Telegram y guardar admin_chat_id
-        const tenants = await prisma.tenant.findMany({
-          where: { estado: 'activo' },
-          select: { id: true }
-        })
-        
-        for (const tenant of tenants) {
-          const integration = await prisma.integration.findFirst({
-            where: { tenantId: tenant.id, tipo: 'telegram', activo: true },
-            select: { id: true, credenciales: true, nombre: true }
-          })
+      // ============================================
+      // Comando /start - Configurar notificaciones
+      // ============================================
+      if (messageText.startsWith('/start')) {
+        const parts = messageText.split(' ');
+        const tenantIdParam = parts.length > 1 ? parts[1] : null;
+
+        // 1. Buscar integración de Telegram
+        let integration = null;
+
+        if (tenantIdParam) {
+          // Si tenemos el tenantId en el /start, buscamos directo
+          integration = await prisma.integration.findFirst({
+            where: { tenantId: tenantIdParam, tipo: 'telegram', activo: true },
+            select: { id: true, credenciales: true, nombre: true, tenantId: true }
+          });
+        }
+
+        // Si no hay parámetro o no se encontró por ID, intentar búsqueda global (fallback lento)
+        if (!integration) {
+          const tenants = await prisma.tenant.findMany({
+            where: { estado: 'activo' },
+            select: { id: true }
+          });
           
-          if (integration?.credenciales) {
-            const creds = integration.credenciales as any
-            // Actualizar admin_chat_id
-            await prisma.integration.update({
-              where: { id: integration.id },
-              data: {
-                credenciales: {
-                  ...creds,
-                  admin_chat_id: chatId
-                }
-              }
-            })
-            
-            console.log(`[Telegram] Admin chat_id configurado: ${chatId} para tenant ${tenant.id}`)
-            
-            return NextResponse.json({
-              method: 'sendMessage',
-              chat_id: chatId,
-              text: `✅ *¡Configuración completa!*\n\nAhora recibirás notificaciones de Volkern en este chat.\n\n📱 *Tu Chat ID:* \`${chatId}\``
-            })
+          for (const tenant of tenants) {
+            const found = await prisma.integration.findFirst({
+              where: { tenantId: tenant.id, tipo: 'telegram', activo: true },
+              select: { id: true, credenciales: true, nombre: true, tenantId: true }
+            });
+            if (found) {
+              integration = found;
+              break;
+            }
           }
+        }
+        
+        if (integration?.credenciales) {
+          const creds = integration.credenciales as any;
+          // Actualizar admin_chat_id
+          await prisma.integration.update({
+            where: { id: integration.id },
+            data: {
+              credenciales: {
+                ...creds,
+                admin_chat_id: chatId
+              }
+            }
+          });
+          
+          console.log(`[Telegram] Admin chat_id configurado: ${chatId} para tenant ${integration.tenantId}`);
+          
+          return NextResponse.json({
+            method: 'sendMessage',
+            chat_id: chatId,
+            text: `✅ *¡Configuración completa!*\n\nAhora recibirás notificaciones de Volkern en este chat.\n\n📱 *Tu Chat ID:* \`${chatId}\``,
+            parse_mode: 'Markdown'
+          });
         }
         
         // No se encontró ninguna integración
         return NextResponse.json({
           method: 'sendMessage',
           chat_id: chatId,
-          text: `⚠️ No se encontró una integración de Telegram configurada.`
-        })
+          text: `⚠️ No se encontró una integración de Telegram activa para vincular tu cuenta.`
+        });
       }
 
       // ============================================

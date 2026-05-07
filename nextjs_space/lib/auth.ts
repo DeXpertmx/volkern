@@ -197,6 +197,14 @@ export const authOptions: NextAuthOptions = {
         ;(session.user as any).tenantSubdomain = token.tenantSubdomain as string
       }
       return session
+    },
+    async redirect({ url, baseUrl }) {
+      // Si la URL empieza con /, es interna
+      if (url.startsWith("/")) return `${baseUrl}${url}`
+      // Si es una URL completa, verificamos si es del dominio volkern.app
+      else if (new URL(url).origin.endsWith(".volkern.app") || new URL(url).origin.endsWith(".localhost")) return url
+      return baseUrl
     }
+
   }
 }

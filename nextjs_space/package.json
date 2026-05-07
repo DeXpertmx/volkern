@@ -143,6 +143,7 @@
     "plaid": "^42.1.0",
     "plotly.js": "2.35.3",
     "qrcode": "^1.5.4",
+    "qrcode.react": "^4.2.0",
     "quill": "2.0.2",
     "react": "18.2.0",
     "react-big-calendar": "^1.19.4",

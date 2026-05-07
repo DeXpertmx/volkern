@@ -359,8 +359,30 @@ export default function OnboardingGenesisPage() {
                   <div className="space-y-4">
                     <p className="font-bold text-[#1A365D]">Instrucción Génesis:</p>
                     <p className="text-slate-500 text-sm leading-relaxed max-w-sm mx-auto">
-                      Escanea o toca el código y haz clic en <strong>"INICIAR"</strong> en Telegram para recibir alertas de <strong>rupturas de stock</strong> y reportes de <strong>fraude Vision-Lock</strong>.
+                      Escanea o toca el código y haz clic en <strong>"INICIAR"</strong> en Telegram.
                     </p>
+                    <div className="pt-4 border-t border-slate-100">
+                      <p className="text-[10px] text-slate-400 uppercase font-bold mb-2">Si el enlace no abre el chat:</p>
+                      <p className="text-xs text-slate-500">
+                        Busca <strong>@VolkernWatchdogBot</strong> en Telegram y envía:<br/>
+                        <code className="bg-slate-100 px-2 py-1 rounded mt-1 inline-block font-mono text-[#1A365D]">
+                          /start {user?.tenant?.id?.split('-')[0]}...
+                        </code>
+                      </p>
+                      {user?.tenant?.id && (
+                        <Button 
+                          variant="link" 
+                          size="sm" 
+                          className="text-[10px] h-auto p-0 mt-1"
+                          onClick={() => {
+                            navigator.clipboard.writeText(`/start ${user.tenant.id}`);
+                            toast.success('Comando copiado');
+                          }}
+                        >
+                          Copiar comando completo
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </Card>

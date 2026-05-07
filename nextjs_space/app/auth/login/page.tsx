@@ -24,11 +24,36 @@ export default function LoginPage() {
   const { data: session, status } = useSession() || {}
   const router = useRouter()
   const { toast } = useToast()
+  const [branding, setBranding] = useState<{ logoUrl: string; nombreEmpresa: string } | null>(null)
 
   useEffect(() => {
     if (status === 'authenticated') {
       router.push('/dashboard')
     }
+
+    // Detectar subdominio y cargar branding
+    const fetchBranding = async () => {
+      try {
+        const host = window.location.hostname;
+        if (host === 'localhost' || host === 'volkern.app') return;
+
+        const subdomain = host.split('.')[0];
+        if (['www', 'app', 'auth', 'login'].includes(subdomain)) return;
+
+        const res = await fetch(`/api/public/branding?subdomain=${subdomain}`);
+        if (res.ok) {
+          const data = await res.json();
+          setBranding(data);
+        } else if (res.status === 404) {
+          // Si el subdominio no existe, redirigir a la landing principal
+          window.location.href = process.env.NEXT_PUBLIC_APP_URL || 'https://volkern.app';
+        }
+      } catch (err) {
+        console.error('Error al cargar branding:', err);
+      }
+    };
+
+    fetchBranding();
   }, [status, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -89,8 +114,8 @@ export default function LoginPage() {
             <div className="flex items-center justify-center mb-4">
               <div className="relative w-48 h-16">
                 <Image
-                  src="/volkern-logo.png"
-                  alt="Volkern CRM"
+                  src={branding?.logoUrl || "/volkern-logo.png"}
+                  alt={branding?.nombreEmpresa || "Volkern CRM"}
                   width={192}
                   height={64}
                   className="object-contain"
@@ -100,7 +125,10 @@ export default function LoginPage() {
               </div>
             </div>
             <CardDescription className="text-center">
-              Inicia sesión para acceder a tu panel de administración
+              {branding?.nombreEmpresa 
+                ? `Inicia sesión en ${branding.nombreEmpresa}`
+                : "Inicia sesión para acceder a tu panel de administración"
+              }
             </CardDescription>
           </CardHeader>
           <CardContent>

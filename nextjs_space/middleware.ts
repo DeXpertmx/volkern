@@ -26,10 +26,31 @@ export async function middleware(request: NextRequest) {
   const xTenantId = request.headers.get('x-tenant-id');
   const apiKey = request.headers.get('x-api-key');
 
+  // Subdomain handling for root path
+  if (pathname === '/' && subdomain && !['www', 'app', 'api'].includes(subdomain)) {
+    const token = await getToken({ 
+      req: request, 
+      secret: process.env.NEXTAUTH_SECRET,
+      cookieName: 'next-auth.session-token'
+    })
+    
+    if (token) {
+      return NextResponse.redirect(new URL('/dashboard', request.url))
+    }
+    
+    return NextResponse.redirect(new URL('/auth/login', request.url))
+  }
+
   // Public paths - allow through
   if (PUBLIC.has(pathname) || pathname.startsWith('/public/') || pathname.startsWith('/auth/')) {
     return NextResponse.next()
   }
+
+
+
+  // Redirect root path without subdomain to landing (if needed) or landing page
+  // (Assuming / is already the landing page)
+
 
   // Check if it's an API route that requires no auth
   if (pathname.startsWith('/api/')) {
