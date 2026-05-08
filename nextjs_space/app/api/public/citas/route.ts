@@ -78,15 +78,38 @@ export const POST = withPublicTenant(async (request, tenantId) => {
 
     let duracion = 60
     let servicio = null
+    let isFromCatalogo = false
 
     if (servicioId) {
+      // 1. Intentar buscar en la tabla Servicio (Legacy)
       servicio = await prisma.servicio.findFirst({
         where: { id: servicioId, tenantId: tenantId }
       })
+
+      if (!servicio) {
+        // 2. Intentar buscar en la tabla CatalogoItem (Onboarding 2.0)
+        const catalogoItem = await prisma.catalogoItem.findFirst({
+          where: { id: servicioId, tenantId: tenantId, tipo: { in: ['servicio', 'cita'] } }
+        })
+
+        if (catalogoItem) {
+          servicio = {
+            id: catalogoItem.id,
+            nombre: catalogoItem.nombre,
+            duracionMinutos: catalogoItem.duracionMinutos || 60,
+            descripcion: catalogoItem.descripcion,
+            precio: catalogoItem.precioBase,
+            moneda: catalogoItem.moneda,
+            modalidad: catalogoItem.modalidad || 'virtual'
+          }
+          isFromCatalogo = true
+        }
+      }
+
       if (!servicio) {
         return NextResponse.json({ error: 'Servicio no encontrado' }, { status: 404 })
       }
-      duracion = servicio.duracionMinutos
+      duracion = (servicio as any).duracionMinutos
     }
 
     // Validar conflictos de horario
@@ -159,7 +182,8 @@ export const POST = withPublicTenant(async (request, tenantId) => {
         tenantId: tenantId,
         leadId: leadId,
         usuarioAsignadoId: usuarioAsignadoId || null,
-        servicioId: servicioId || null,
+        servicioId: isFromCatalogo ? null : (servicioId || null),
+        catalogoItemId: isFromCatalogo ? servicioId : null,
         fechaHora: new Date(fechaHora),
         duracion: duracion,
         titulo: titulo || servicio?.nombre || 'Cita',
@@ -194,16 +218,17 @@ export const POST = withPublicTenant(async (request, tenantId) => {
             generarMeet: necesitaMeet || undefined,
           })
 
-          if (calendarEvent?.hangoutLink) {
-            linkReunionGenerado = calendarEvent.hangoutLink
-            await prisma.cita.update({
-              where: { id: cita.id },
-              data: { 
-                linkReunion: calendarEvent.hangoutLink,
-                ubicacion: 'Google Meet (Virtual)'
-              }
-            })
-          }
+            if (calendarEvent?.id) {
+              linkReunionGenerado = calendarEvent.hangoutLink || null
+              await prisma.cita.update({
+                where: { id: cita.id },
+                data: { 
+                  linkReunion: calendarEvent.hangoutLink,
+                  googleCalendarEventId: calendarEvent.id,
+                  ubicacion: calendarEvent.hangoutLink ? 'Google Meet (Virtual)' : cita.ubicacion
+                }
+              })
+            }
         }
       } catch (gcalError) {
         console.error('Error Google Calendar:', gcalError)

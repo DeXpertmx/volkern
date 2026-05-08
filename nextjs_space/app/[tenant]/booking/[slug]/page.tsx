@@ -33,6 +33,7 @@ interface Servicio {
     duracionMinutos: number
     precio: number
     moneda: string
+    modalidad?: string
 }
 
 export default function UserBookingPage() {
@@ -132,6 +133,8 @@ export default function UserBookingPage() {
                     tenantId: userProfile.tenantId,
                     usuarioAsignadoId: userProfile.id,
                     servicioId: selectedServicio.id,
+                    tipo: selectedServicio.modalidad === 'virtual' ? 'llamada' : 
+                          selectedServicio.modalidad === 'presencial' ? 'reunion' : 'servicio',
                     fechaHora: fechaHora.toISOString(),
                     leadData: {
                         nombre: contactData.nombre,

@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/db'
 import { authOptions } from '@/lib/auth'
-import { sendEmail } from '@/lib/resend-email'
+import { sendEmail } from '@/lib/ses-email'
 
 export async function POST(
   req: NextRequest,
@@ -160,6 +160,7 @@ export async function POST(
       to: email,
       subject: `Cotización ${cotizacion.numero} - ${cotizacion.titulo}`,
       html: emailHtml,
+      tenantSubdomain: user.tenantId,
     })
 
     // Actualizar estado de la cotización

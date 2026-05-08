@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { prisma } from '@/lib/db';
 import { authOptions } from '@/lib/auth';
-import { sendEmail, replaceTemplateVariables } from '@/lib/resend-email';
+import { sendEmail, replaceTemplateVariables } from '@/lib/ses-email';
 import { checkResourceLimit } from '@/lib/limits';
 
 // POST /api/email-campanas/[id]/send - Enviar o programar campaña
@@ -323,7 +323,8 @@ async function procesarEnvios(
             subject: asunto,
             html: contenidoConUnsub,
             from: `${campana.remitente} <${campana.remitenteEmail}>`,
-            replyTo: campana.responderA
+            replyTo: campana.responderA,
+            tenantSubdomain: tenantId
           });
 
           if (resultado.success) {

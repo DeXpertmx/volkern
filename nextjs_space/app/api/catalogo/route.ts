@@ -115,6 +115,10 @@ export async function POST(req: NextRequest) {
       destacado = false,
       media,
       pricing,
+      customFieldValues,
+      categorias,
+      etiquetas,
+      metadata,
       // Onboarding 2.0 / MRP Fields
       isManufactured = false,
       costOfAcquisition = 0,

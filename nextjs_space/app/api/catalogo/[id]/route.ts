@@ -87,6 +87,10 @@ export async function PATCH(
       destacado,
       media,
       pricing,
+      customFieldValues,
+      categorias,
+      etiquetas,
+      metadata,
       // Onboarding 2.0 / MRP Fields
       isManufactured,
       costOfAcquisition,

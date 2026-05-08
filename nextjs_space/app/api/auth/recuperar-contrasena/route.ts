@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import crypto from 'crypto'
-import { sendEmail } from '@/lib/resend-email'
+import { sendEmail } from '@/lib/ses-email'
 
 export async function POST(request: NextRequest) {
   try {
@@ -92,6 +92,7 @@ export async function POST(request: NextRequest) {
       to: user.email,
       subject: 'Recuperación de contraseña - Volkern CRM',
       html: emailContent,
+      tenantSubdomain: user.tenantId,
     })
 
     // Registrar en audit log

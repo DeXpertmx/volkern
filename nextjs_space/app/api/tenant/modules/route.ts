@@ -16,7 +16,7 @@ export const GET = withTenantAuth(async (request, auth) => {
 
     const tenant = await prisma.tenant.findUnique({
       where: { id: tenantId },
-      select: { plan: true, enabledModules: true, accountType: true, moneda: true }
+      select: { plan: true, enabledModules: true, accountType: true, moneda: true, subdomain: true }
     });
 
     if (!tenant) {
@@ -28,21 +28,40 @@ export const GET = withTenantAuth(async (request, auth) => {
       select: { feature: true, habilitado: true }
     });
 
-    // Determinar módulos finales basados en plan, add-ons y habilitación manual
-    let finalModules = tenant.enabledModules && tenant.enabledModules.length > 0
-      ? tenant.enabledModules
-      : await getActiveModules(tenant.plan, tenantFeatures);
+    // 1. Obtener módulos según plan y overrides de TenantFeature
+    const planModules = await getActiveModules(tenant.plan, tenantFeatures);
+    
+    // 2. Obtener módulos habilitados manualmente (normalizados)
+    const manualModules = (tenant.enabledModules || []).map(m => m.toLowerCase());
+    
+    // 3. Unificar (Merge)
+    const mergedModules = new Set([...planModules, ...manualModules]);
 
-    // SEGURIDAD: Asegurar que módulos core de perfil siempre estén presentes si el plan lo permite
-    if (!finalModules.includes('mi_tarjeta')) {
-       const planConfig = await getActiveModules(tenant.plan, tenantFeatures);
-       if (planConfig.includes('mi_tarjeta')) {
-         finalModules.push('mi_tarjeta');
-       }
+    // BYPASS: Módulos ilimitados para Admin y Demo
+    if (tenant.subdomain === 'admin' || tenant.subdomain?.startsWith('demo')) {
+      const { ALL_MODULES } = await import('@/lib/plans');
+      ALL_MODULES.forEach(m => mergedModules.add(m.id));
+    }
+
+    // 4. Mapeo Legacy: Si tiene 'crm', asegurar módulos core
+    if (mergedModules.has('crm') || mergedModules.has('CRM')) {
+       ['leads', 'contactos', 'empresas', 'pipeline', 'tareas', 'analytics', 'mensajes', 'citas', 'catalogo'].forEach(m => mergedModules.add(m));
     }
     
-    // Forzar configuración y perfil como básicos
-    if (!finalModules.includes('configuracion')) finalModules.push('configuracion');
+    // 5. Mapeo Legacy: Si tiene 'ia_agencia', asegurar 'agency'
+    if (mergedModules.has('ia_agencia')) {
+       mergedModules.add('agency');
+    }
+
+    const finalModules = Array.from(mergedModules);
+
+    // SEGURIDAD: Asegurar que módulos core de perfil siempre estén presentes
+    if (!finalModules.includes('mi_tarjeta')) {
+       finalModules.push('mi_tarjeta');
+    }
+    if (!finalModules.includes('configuracion')) {
+       finalModules.push('configuracion');
+    }
 
     return NextResponse.json({ 
       modules: finalModules, 

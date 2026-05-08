@@ -11,7 +11,7 @@ import { eventBus, EVENTS } from '@/lib/skills/event-bus';
  * POST /api/contratos/sign/[id]
  * Ejecuta el protocolo de sellado digital del contrato (Firma de Empresa)
  */
-export const POST = withTenantAuth(async (request, auth, params) => {
+export const POST = withTenantAuth(async (request, auth, { params }) => {
   try {
     const tenantId = auth.tenant!.id;
     const userId = auth.user!.id;

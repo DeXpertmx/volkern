@@ -43,14 +43,26 @@ export async function GET(
             return NextResponse.json({ error: 'Perfil de agendamiento no encontrado o inactivo' }, { status: 404 })
         }
 
-        // Obtener servicios del tenant del usuario
-        const servicios = await prisma.servicio.findMany({
+        // Obtener servicios y citas del catálogo del tenant
+        const items = await prisma.catalogoItem.findMany({
             where: {
                 tenantId: user.tenantId,
-                activo: true
+                activo: true,
+                tipo: { in: ['servicio', 'cita'] }
             },
             orderBy: { nombre: 'asc' }
         })
+
+        // Mapear a la interfaz de Servicio que espera el frontend
+        const servicios = items.map(item => ({
+            id: item.id,
+            nombre: item.nombre,
+            descripcion: item.descripcion,
+            duracionMinutos: item.duracionMinutos || 60,
+            precio: item.precioBase,
+            moneda: item.moneda,
+            modalidad: item.modalidad
+        }))
 
         return NextResponse.json({
             user: {

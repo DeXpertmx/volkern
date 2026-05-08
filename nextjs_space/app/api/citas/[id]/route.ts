@@ -82,7 +82,7 @@ export async function PUT(
     const tenantId = auth.tenant.id
 
     const body = await request.json()
-    const { estado, fechaHora, montoPagado, stripePaymentId, titulo, descripcion, duracion } = body
+    const { estado, fechaHora, montoPagado, stripePaymentId, titulo, descripcion, duracion, tipo, catalogoItemId } = body
 
     // Obtener la cita antes de actualizar para comparar cambios
     const citaAnterior = await prisma.cita.findUnique({
@@ -104,6 +104,8 @@ export async function PUT(
         ...(titulo && { titulo }),
         ...(descripcion !== undefined && { descripcion }),
         ...(duracion && { duracion }),
+        ...(tipo && { tipo }),
+        ...(catalogoItemId && { catalogoItemId }),
       },
       include: {
         lead: true,
@@ -113,14 +115,15 @@ export async function PUT(
 
     // 📅 SINCRONIZACIÓN AUTOMÁTICA CON GOOGLE CALENDAR (en tiempo real)
     try {
+      // Sincronizar con el calendario del usuario asignado
       const googleIntegration = await prisma.googleCalendarIntegration.findFirst({
-        where: { tenantId },
+        where: { userId: cita.usuarioAsignadoId || auth.user?.id },
       })
 
       if (googleIntegration && googleIntegration.activo) {
         console.log('📅 Actualizando cita en Google Calendar...')
         
-        await updateCalendarEvent(tenantId, params.id, {
+        await updateCalendarEvent(googleIntegration.userId, params.id, {
           titulo: cita.titulo || 'Cita',
           descripcion: cita.descripcion || undefined,
           fechaHora: cita.fechaHora,
@@ -222,6 +225,8 @@ export async function PATCH(
         ...(titulo && { titulo }),
         ...(descripcion !== undefined && { descripcion }),
         ...(duracion && { duracion }),
+        ...(tipo && { tipo }),
+        ...(catalogoItemId && { catalogoItemId }),
       },
       include: {
         lead: true,
@@ -232,13 +237,13 @@ export async function PATCH(
     // 📅 SINCRONIZACIÓN AUTOMÁTICA CON GOOGLE CALENDAR (en tiempo real)
     try {
       const googleIntegration = await prisma.googleCalendarIntegration.findFirst({
-        where: { tenantId },
+        where: { userId: cita.usuarioAsignadoId || auth.user?.id },
       })
 
       if (googleIntegration && googleIntegration.activo) {
         console.log('📅 Actualizando cita en Google Calendar...')
         
-        await updateCalendarEvent(tenantId, params.id, {
+        await updateCalendarEvent(googleIntegration.userId, params.id, {
           titulo: cita.titulo || 'Cita',
           descripcion: cita.descripcion || undefined,
           fechaHora: cita.fechaHora,
@@ -284,19 +289,19 @@ export async function DELETE(
     // Obtener la cita primero para tener el googleCalendarEventId
     const citaExistente = await prisma.cita.findUnique({
       where: { id: params.id },
-      select: { googleCalendarEventId: true }
+      select: { googleCalendarEventId: true, usuarioAsignadoId: true }
     })
 
     // 📅 ELIMINAR DE GOOGLE CALENDAR PRIMERO (en tiempo real)
     try {
       const googleIntegration = await prisma.googleCalendarIntegration.findFirst({
-        where: { tenantId },
+        where: { userId: citaExistente?.usuarioAsignadoId || auth.user?.id },
       })
 
       if (googleIntegration && googleIntegration.activo) {
         console.log('📅 Eliminando cita de Google Calendar...')
         
-        await deleteCalendarEvent(tenantId, params.id, citaExistente?.googleCalendarEventId)
+        await deleteCalendarEvent(googleIntegration.userId, params.id, citaExistente?.googleCalendarEventId)
 
         console.log('✅ Cita eliminada de Google Calendar')
       }

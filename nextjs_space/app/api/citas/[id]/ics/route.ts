@@ -38,7 +38,7 @@ END:VCALENDAR}`
   return ics
 }
 
-export const GET = withTenantAuth(async (request, auth, params) => {
+export const GET = withTenantAuth(async (request, auth, { params }) => {
   try {
     const tenantId = auth.tenant!.id
     const tenantClient = await getTenantDb(tenantId)

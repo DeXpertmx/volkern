@@ -1,7 +1,7 @@
 import { NexusAdapter } from '@/lib/nexus/adapter';
 import { getMessagingStrategy, getNexusConfig, MessagingStrategy } from './strategy';
 import { sendWhatsAppMessage, sendWhatsAppMessageWithMedia } from '@/lib/whatsapp';
-import { sendEmail } from '@/lib/resend-email';
+import { sendEmail } from '@/lib/ses-email';
 import { sendSMS } from '@/lib/sms';
 import { sendTelegramMessage } from '@/lib/telegram';
 import { sendFacebookMessage, sendInstagramMessage } from '@/lib/meta-messenger';

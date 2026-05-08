@@ -5,7 +5,7 @@ import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
 
 // GET /api/contacts/[id] - Obtener un contacto específico (Actualizado con historial unificado)
-export const GET = withTenantAuth(async (request, auth, params) => {
+export const GET = withTenantAuth(async (request, auth, { params }) => {
   console.log(`[DEBUG] GET Contact ${params.id} at ${new Date().toISOString()} - Unified History V3`);
   try {
     const tenantId = auth.tenant!.id;
@@ -150,7 +150,7 @@ export const GET = withTenantAuth(async (request, auth, params) => {
 }, ['contacts:read']);
 
 // PATCH /api/contacts/[id] - Actualizar un contacto
-export const PATCH = withTenantAuth(async (request, auth, params) => {
+export const PATCH = withTenantAuth(async (request, auth, { params }) => {
   try {
     const tenantId = auth.tenant!.id;
     const userId = auth.user?.id;
@@ -245,7 +245,7 @@ export const PATCH = withTenantAuth(async (request, auth, params) => {
 export const PUT = PATCH;
 
 // DELETE /api/contacts/[id] - Eliminar un contacto
-export const DELETE = withTenantAuth(async (request, auth, params) => {
+export const DELETE = withTenantAuth(async (request, auth, { params }) => {
   try {
     const tenantId = auth.tenant!.id;
     const userId = auth.user?.id;

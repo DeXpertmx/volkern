@@ -31,8 +31,10 @@ import {
   QrCode,
   ExternalLink,
   Share2,
-  ChevronRight
+  ChevronRight,
+  FileWarning
 } from "lucide-react";
+import { ComplaintForm } from "@/components/equality/ComplaintForm";
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -117,6 +119,27 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
     fetchUser();
   }, []);
 
+  useEffect(() => {
+    if (!userData || !userData.tenant) return;
+
+    const protocol = window.location.protocol;
+    const host = window.location.host;
+    let domain = "";
+    if (host.includes('localhost')) {
+      domain = 'localhost:3000';
+    } else {
+      const parts = window.location.hostname.split('.');
+      domain = parts.length >= 2 ? parts.slice(-2).join('.') : window.location.hostname;
+    }
+
+    const bSlug = userData.bookingSlug || userData.id;
+    setBooking(prev => ({
+      ...prev,
+      url: `${protocol}//${userData.tenant.subdomain}.${domain}/booking/${bSlug}`,
+      active: userData.bookingEnabled || false
+    }));
+  }, [userData?.bookingSlug, userData?.bookingEnabled, userData?.id, userData?.tenant]);
+
   const fetchUser = async () => {
     try {
       const res = await fetch("/api/users/me");
@@ -125,27 +148,18 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
         setUserData(data);
         setTelegramChatId(data.metadata?.telegram_chat_id || "");
         
-        const protocol = window.location.protocol;
-        const host = window.location.host;
-        let domain = "";
-        if (host.includes('localhost')) {
-          domain = 'localhost:3000';
-        } else {
-          const parts = window.location.hostname.split('.');
-          domain = parts.length >= 2 ? parts.slice(-2).join('.') : window.location.hostname;
-        }
-
-        // 1. Configurar link de agendamiento dinámico
-        if (data.tenant?.subdomain) {
-          const bSlug = data.bookingSlug || data.id;
-          setBooking({
-            url: `${protocol}//${data.tenant.subdomain}.${domain}/booking/${bSlug}`,
-            active: data.bookingEnabled || false
-          });
-        }
-
         // 2. Configurar link de tarjeta digital
         try {
+          const protocol = window.location.protocol;
+          const host = window.location.host;
+          let domain = "";
+          if (host.includes('localhost')) {
+            domain = 'localhost:3000';
+          } else {
+            const parts = window.location.hostname.split('.');
+            domain = parts.length >= 2 ? parts.slice(-2).join('.') : window.location.hostname;
+          }
+
           const cardRes = await fetch("/api/tarjetas-digitales");
           if (cardRes.ok) {
             const cardData = await cardRes.json();
@@ -236,6 +250,8 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
           name: userData?.name,
           telefono: userData?.telefono,
           bookingTitle: userData?.bookingTitle,
+          bookingSlug: userData?.bookingSlug,
+          bookingBio: userData?.bookingBio,
           metadata
         })
       });
@@ -522,6 +538,38 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
                   disabled={!booking.url}
                 >
                   Probar Link
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-4 bg-slate-50/50 p-6 rounded-3xl border border-slate-100">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="h-8 w-8 bg-purple-100 text-purple-600 rounded-lg flex items-center justify-center">
+                  <Share2 className="h-4 w-4" />
+                </div>
+                <h4 className="font-bold text-slate-900">Personalizar URL</h4>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[11px] font-black uppercase text-slate-400 tracking-wider">Slug Personalizado</Label>
+                <div className="flex items-center gap-2">
+                  <div className="text-sm text-slate-400 font-mono hidden md:block">/booking/</div>
+                  <Input 
+                    value={userData?.bookingSlug || ""} 
+                    onChange={e => setUserData({...userData, bookingSlug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '')})}
+                    placeholder="ej. juan-perez"
+                    className="h-12 rounded-xl border-slate-200" 
+                  />
+                </div>
+                <p className="text-[10px] text-slate-500 italic">Si se deja vacío, se usará tu ID de usuario por defecto.</p>
+              </div>
+              <div className="pt-4 flex justify-end">
+                <Button 
+                  onClick={handleUpdateProfile}
+                  disabled={saving}
+                  className="rounded-full px-8 h-10 premium-gradient-primary shadow-lg shadow-primary/20 text-xs font-bold"
+                >
+                  {saving ? <Loader2 className="h-3 w-3 animate-spin mr-2" /> : null}
+                  Actualizar URL
                 </Button>
               </div>
             </div>
@@ -898,6 +946,19 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
               </div>
             </div>
           </Card>
+        </SectionWrapper>
+      )}
+
+      {activeSection === "denuncias" && (
+        <SectionWrapper 
+          key="denuncias"
+          title="Canal de Denuncias" 
+          description="Buzón seguro e inmutable para reportar irregularidades o casos de acoso/discriminación."
+          icon={FileWarning}
+        >
+          <div className="max-w-2xl mx-auto">
+            <ComplaintForm />
+          </div>
         </SectionWrapper>
       )}
     </div>

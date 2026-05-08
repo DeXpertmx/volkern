@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { withTenantAuth } from '@/lib/api-key-auth'
 import { sendWhatsAppMessage, sendWhatsAppMessageWithMedia } from '@/lib/whatsapp'
-import { sendEmail, replaceTemplateVariables } from '@/lib/resend-email'
+import { sendEmail, replaceTemplateVariables } from '@/lib/ses-email'
 import { sendSMS } from '@/lib/sms'
 import { sendTelegramMessage } from '@/lib/telegram'
 import { sendFacebookMessage, sendInstagramMessage } from '@/lib/meta-messenger'
@@ -143,6 +143,7 @@ export const POST = withTenantAuth(async (request, auth) => {
         subject: asunto || 'Mensaje de Volkern CRM',
         html: contenidoFinal.replace(/\n/g, '<br>'),
         text: contenidoFinal,
+        tenantSubdomain: tenantId,
       })
       
       if (!resultado.success) {

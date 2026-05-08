@@ -231,14 +231,6 @@ export default function LoginPage() {
               </Button>
             </form>
             
-            <div className="mt-6 pt-6 border-t">
-              <div className="text-center text-sm text-muted-foreground">
-                <p className="mb-2">Credenciales de demostración:</p>
-                <p className="font-mono bg-muted px-2 py-1 rounded text-xs">
-                  admin@volkern.app / volkern123456
-                </p>
-              </div>
-            </div>
           </CardContent>
         </Card>
       </div>

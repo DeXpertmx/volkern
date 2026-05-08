@@ -105,6 +105,7 @@ model User {
   assignedTickets         SupportTicket[]            @relation("TicketAssignee")
   createdTickets          SupportTicket[]            @relation("TicketCreator")
   trainingSessions        TrainingSession[]
+  equalityComplaints      EqualityComplaint[]
 
   @@index([tenantId])
   @@index([roleId])
@@ -368,6 +369,8 @@ model Tenant {
   unsubscribeList                UnsubscribeList[]
   webFormSubmissions             WebFormSubmission[]
   webForms                       WebForm[]
+  equalityComplaints             EqualityComplaint[]
+  equalityConfig                 EqualityConfig?
 }
 
 model AttendanceRules {
@@ -6150,4 +6153,39 @@ model SaaSMetricSnapshot {
 
   @@index([date])
   @@map("saas_metric_snapshots")
+}
+
+model EqualityComplaint {
+  id               String   @id @default(cuid())
+  tenantId         String
+  description      String
+  isAnonymous      Boolean  @default(false)
+  userId           String?  // Optional if not anonymous
+  category         String?  // e.g., Harassment, Discrimination, etc.
+  status           String   @default("OPEN") // OPEN, IN_PROGRESS, RESOLVED, DISMISSED
+  resolutionNote   String?  // Notes from the responsible person
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  hash             String   @unique // Immutable hash of (description + createdAt + tenantId)
+  attachments      Json?    // Optional evidence paths
+  
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user             User?    @relation(fields: [userId], references: [id])
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model EqualityConfig {
+  id               String   @id @default(cuid())
+  tenantId         String   @unique
+  responsibleId    String   // User ID responsible for complaints
+  telegramBotToken String?
+  telegramChatId   String?  // Chat or User ID to send notifications
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }

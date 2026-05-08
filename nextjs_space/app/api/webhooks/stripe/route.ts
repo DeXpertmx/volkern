@@ -5,7 +5,7 @@ import { headers } from 'next/headers'
 import { stripe } from '@/lib/stripe'
 import { prisma } from '@/lib/db'
 import { sendPaymentConfirmation } from '@/lib/email'
-import { sendEmail } from '@/lib/resend-email'
+import { sendEmail } from '@/lib/ses-email'
 import { triggerAutomation } from '@/lib/automation-engine'
 import { StripeMXService } from '@/lib/finance/mexico/stripe-mx-service'
 
@@ -66,7 +66,8 @@ async function handleTrialExpiration(tenantId: string): Promise<void> {
         <p>Tu período de prueba en Volkern ha terminado. Para continuar usando el servicio, por favor renueva tu suscripción.</p>
         <p>Plan actual: ${tenant.plan}</p>
         <p><a href="${process.env.NEXT_PUBLIC_APP_URL}/settings/billing">Renovar ahora</a></p>
-      `
+      `,
+      tenantSubdomain: tenantId,
     })
   }
 }
@@ -94,7 +95,8 @@ async function sendDunningEmail(tenantId: string, daysSinceFailure: number, invo
       <p>Por favor actualiza tu método de pago para evitar la suspensión del servicio.</p>
       <p><a href="${process.env.NEXT_PUBLIC_APP_URL}/settings/billing">Actualizar método de pago</a></p>
       ${isFinalNotice ? '<p><strong>Después de 14 días, tu cuenta será suspendida.</strong></p>' : ''}
-    `
+    `,
+    tenantSubdomain: tenantId,
   })
 }
 

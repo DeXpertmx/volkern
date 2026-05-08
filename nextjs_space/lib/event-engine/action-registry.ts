@@ -1,7 +1,7 @@
 import { ActionContext, ActionResult } from './types'
 import { prisma } from '../db'
 import { sendWhatsAppMessage } from '../whatsapp'
-import { sendEmail as sendResendEmail } from '../resend-email'
+import { sendEmail } from '@/lib/ses-email'
 import { sendTelegramMessage, loadTelegramCredentials } from '../telegram'
 import { callGemma } from '../ai/gemma-client'
 import { CostControl } from './cost-control'
@@ -110,7 +110,13 @@ export class VolkernActionRegistry {
       return { success: false, error: 'email required' }
     }
 
-    await sendResendEmail({ to, subject, html: body, text: body })
+    await sendEmail({ 
+      to, 
+      subject, 
+      html: body, 
+      text: body,
+      tenantSubdomain: context.tenant_id 
+    })
 
     return { success: true, data: { to, subject } }
   }

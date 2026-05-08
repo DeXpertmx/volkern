@@ -2,7 +2,7 @@
 import { prisma } from './db'
 import { Node, Edge } from 'reactflow'
 import { sendWhatsAppMessage } from './whatsapp'
-import { sendEmail as sendResendEmail } from './resend-email'
+import { sendEmail as sendSESEmail } from './ses-email'
 import { sendSMS as sendTwilioSMS } from './sms'
 import { sendTelegramMessage, loadTelegramCredentials } from './telegram'
 import { getFiscalConfig, getFiscalConfigForWebhook } from './fiscal-engine'
@@ -618,10 +618,11 @@ export class AutomationEngine {
     const processedSubject = this.replaceVariables(subject)
 
     try {
-      await sendResendEmail({
+      await sendSESEmail({
         to: contacto.email,
         subject: processedSubject,
         html: processedMessage,
+        tenantSubdomain: this.context.tenantId,
       })
       return true
     } catch (error) {

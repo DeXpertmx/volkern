@@ -188,28 +188,12 @@ export async function sendTrialWelcomeEmail(
 }
 
 async function sendEmail(to: string, subject: string, html: string): Promise<void> {
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`[Email] Would send to ${to}: ${subject}`);
-    return;
-  }
-
-  const resendApiKey = process.env.RESEND_API_KEY;
-  if (!resendApiKey) {
-    console.warn('[Email] RESEND_API_KEY not configured');
-    return;
-  }
-
-  try {
-    const { Resend } = await import('resend');
-    const resend = new Resend(resendApiKey);
-    
-    await resend.emails.send({
-      from: 'Volkern <noreply@vokerin.app>',
-      to,
-      subject,
-      html,
-    });
-  } catch (error) {
-    console.error('[Email] Error sending email:', error);
-  }
+  const { sendEmail: sendSESEmail } = await import('./ses-email');
+  
+  await sendSESEmail({
+    to,
+    subject,
+    html,
+    tenantSubdomain: 'system' // Emails de sistema usan un tenant genérico
+  });
 }

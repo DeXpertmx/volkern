@@ -5,7 +5,7 @@ import { prisma } from '@/lib/db'
 import { withTenantAuth } from '@/lib/api-key-auth'
 
 // GET /api/mensajes/conversaciones/[id] - Obtener una conversación específica con sus mensajes
-export const GET = withTenantAuth(async (request, auth, params) => {
+export const GET = withTenantAuth(async (request, auth, { params }) => {
   try {
     const tenantId = auth.tenant!.id;
 
@@ -53,7 +53,7 @@ export const GET = withTenantAuth(async (request, auth, params) => {
 }, ['conversations:read', 'messages:read'])
 
 // PATCH /api/mensajes/conversaciones/[id] - Actualizar una conversación
-export const PATCH = withTenantAuth(async (request, auth, params) => {
+export const PATCH = withTenantAuth(async (request, auth, { params }) => {
   try {
     const tenantId = auth.tenant!.id;
     const body = await request.json()
@@ -92,7 +92,7 @@ export const PATCH = withTenantAuth(async (request, auth, params) => {
 }, ['conversations:write', 'messages:write'])
 
 // Eliminar una conversación
-export const DELETE = withTenantAuth(async (request, auth, params) => {
+export const DELETE = withTenantAuth(async (request, auth, { params }) => {
   try {
     const tenantId = auth.tenant!.id;
 

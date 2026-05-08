@@ -58,8 +58,13 @@ export type CrmModule =
   | 'finanzas_consolidado'
   | 'calidad'
   | 'produccion'
+  | 'agency'
   | 'inventario'
   | 'proyectos'
+  | 'taskforce'
+  | 'activos'
+  | 'conocimiento'
+  | 'estrategia'
 
 
 
@@ -124,6 +129,11 @@ export const ALL_MODULES: ModuleDefinition[] = [
   { id: 'produccion', label: 'Producción', description: 'Gestión de manufactura y BoM', icon: '🏭', group: 'ERP' },
   { id: 'inventario', label: 'Inventario', description: 'Gestión de almacenes y stock', icon: '📦', group: 'ERP' },
   { id: 'proyectos', label: 'Proyectos', description: 'Gestión de obras y proyectos', icon: '🏗️', group: 'ERP' },
+  { id: 'taskforce', label: 'Taskforce', description: 'Gestión de equipos operativos y campo', icon: '👷', group: 'ERP' },
+  { id: 'activos', label: 'Activos', description: 'Gestión de maquinaria y activos fijos', icon: '🚜', group: 'ERP' },
+  { id: 'conocimiento', label: 'Conocimiento', description: 'Base de conocimientos y SOPs', icon: '🧠', group: 'Administración' },
+  { id: 'estrategia', label: 'Estrategia', description: 'Planificación estratégica y KPIs (Requiere Proyectos)', icon: '🎯', group: 'Estrategia' },
+  { id: 'agency', label: 'Agencia', description: 'Gestión de slots de cliente y marca blanca', icon: '🏢', group: 'Administración' },
 ]
 
 
@@ -139,7 +149,7 @@ export const PLAN_MODULES: Record<string, CrmModule[]> = {
     'equipo', 'configuracion',
     'telefonia',
     'social_manager',
-    'rrhh', 'finanzas', 'calidad', 'produccion', 'inventario', 'proyectos'
+    'rrhh', 'finanzas', 'calidad', 'produccion', 'inventario', 'proyectos', 'taskforce', 'activos', 'conocimiento', 'estrategia'
   ],
   [PLANS.STARTER]: [
     'leads', 'contactos', 'empresas', 'pipeline', 'tareas', 'analytics',
@@ -161,7 +171,7 @@ export const PLAN_MODULES: Record<string, CrmModule[]> = {
     'integraciones', 'equipo', 'configuracion',
     'telefonia',
     'social_manager',
-    'rrhh', 'finanzas', 'calidad', 'produccion', 'inventario', 'proyectos', 'finanzas_consolidado'
+    'rrhh', 'finanzas', 'calidad', 'produccion', 'inventario', 'proyectos', 'finanzas_consolidado', 'taskforce', 'activos', 'conocimiento', 'estrategia'
   ],
   [PLANS.PRO]: [
     'leads', 'contactos', 'empresas', 'pipeline', 'tareas', 'analytics',
@@ -174,7 +184,7 @@ export const PLAN_MODULES: Record<string, CrmModule[]> = {
     'integraciones', 'equipo', 'configuracion',
     'telefonia',
     'social_manager',
-    'rrhh', 'finanzas', 'calidad', 'produccion', 'inventario', 'proyectos', 'finanzas_consolidado'
+    'rrhh', 'finanzas', 'calidad', 'produccion', 'inventario', 'proyectos', 'finanzas_consolidado', 'taskforce', 'activos', 'conocimiento', 'estrategia'
   ],
   [PLANS.BASICO]: [
     'leads', 'contactos', 'empresas', 'pipeline', 'tareas', 'analytics',
@@ -190,6 +200,7 @@ export const PLAN_MODULES: Record<string, CrmModule[]> = {
     'mi_tarjeta',
     'integraciones', 'equipo', 'configuracion',
     'social_manager',
+    'rrhh', 'finanzas', 'calidad', 'produccion', 'inventario', 'proyectos', 'taskforce', 'activos', 'conocimiento', 'estrategia'
   ],
   [PLANS.AGENCY_SLOT]: [
     'leads', 'contactos', 'empresas', 'pipeline', 'tareas', 'analytics',
@@ -210,7 +221,8 @@ export const PLAN_MODULES: Record<string, CrmModule[]> = {
     'telefonia',
     'social_manager',
     'white_label', 'custom_domain',
-    'rrhh', 'finanzas', 'calidad', 'produccion', 'inventario', 'proyectos', 'finanzas_consolidado'
+    'rrhh', 'finanzas', 'calidad', 'produccion', 'inventario', 'proyectos', 'finanzas_consolidado', 'agency',
+    'taskforce', 'activos', 'conocimiento', 'estrategia'
   ],
 }
 
@@ -589,6 +601,13 @@ export async function getActiveModules(
   tenantFeatures: Array<{ feature: string; habilitado: boolean }>
 ): Promise<CrmModule[]> {
   const normalizedPlan = plan.toLowerCase();
+  
+  // BYPASS: Admin and Demo subdomains get all modules
+  // Note: tenant object is not passed here, so we might need to rely on the plan name 
+  // or add the subdomain to the function signature if possible.
+  // For now, if plan is 'profesional' and it's one of these tenants, 
+  // the updated PLAN_MODULES will handle it.
+  
   const config = await getPlanConfig(normalizedPlan);
   const planModules = new Set<CrmModule>(config.modules);
 
@@ -618,6 +637,11 @@ export async function getActiveModules(
   }
   if (hardcodedModules.includes('mi_tarjeta')) {
     planModules.add('mi_tarjeta');
+  }
+
+  // 6. Validar dependencias entre módulos
+  if (planModules.has('estrategia') && !planModules.has('proyectos')) {
+     planModules.delete('estrategia');
   }
 
   return Array.from(planModules)

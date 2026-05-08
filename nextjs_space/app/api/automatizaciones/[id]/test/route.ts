@@ -5,7 +5,7 @@ import { prisma } from '@/lib/db'
 import { withTenantAuth } from '@/lib/api-key-auth'
 import { AutomationEngine } from '@/lib/automation-engine'
 
-export const POST = withTenantAuth(async (request, auth, params) => {
+export const POST = withTenantAuth(async (request, auth, { params }) => {
   try {
     const tenantId = auth.tenant!.id
     const body = await request.json()

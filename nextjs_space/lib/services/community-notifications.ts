@@ -1,4 +1,4 @@
-import { sendEmail } from '@/lib/resend-email';
+import { sendEmail } from '@/lib/ses-email';
 import { sendPushNotification, notifyAdminsPush } from '@/lib/services/push-notification';
 import prisma from '@/lib/db';
 

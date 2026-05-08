@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { withTenantAuth } from '@/lib/api-key-auth'
 
-export const POST = withTenantAuth(async (request, auth, params) => {
+export const POST = withTenantAuth(async (request, auth, { params }) => {
   try {
     const tenantId = auth.tenant!.id
 

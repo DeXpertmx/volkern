@@ -7,20 +7,28 @@ import { stripe } from '@/lib/stripe';
 import { getPlanConfig } from '@/lib/plans';
 import { provisionTenantDatabase } from '@/lib/tenant-provisioning';
 
+import { appendFileSync } from 'fs';
+import { join } from 'path';
+
 // POST /api/admin/tenants/[id]/operations - Realizar operaciones administrativas sobre un tenant
-export const POST = withTenantAuth(async (req, auth, params) => {
+export const POST = withTenantAuth(async (req, auth, context) => {
+  const params = context.params || context;
+  const tenantId = params.id;
+
   try {
-    // 1. Verificar si el usuario es superadmin (el rol ya viene en auth.user)
+    const body = await req.json();
+
     if (auth.user?.role?.nombre !== 'Superadmin') {
       return NextResponse.json({ error: 'Acceso denegado: requiere rol de Superadmin' }, { status: 403 });
     }
 
-    const body = await req.json();
-    const { operation, params: opParams } = body;
+    // Soporte para ambos formatos (Frontend usa type, API definía operation)
+    const operation = body.operation || body.type;
+    const opParams = body.params || body;
 
     // Los tenants viven en la Base de Datos Global (Control Plane)
     const tenant = await globalPrisma.tenant.findUnique({
-      where: { id: params.id }
+      where: { id: tenantId }
     });
 
     if (!tenant) {
@@ -32,7 +40,7 @@ export const POST = withTenantAuth(async (req, auth, params) => {
     switch (operation) {
       case 'provision_db':
         // OPERACIÓN CRÍTICA: Crear base de datos física y sincronizar esquema
-        const provisionResult = await provisionTenantDatabase(params.id);
+        const provisionResult = await provisionTenantDatabase(tenantId);
         result.success = provisionResult.success;
         result.message = provisionResult.message;
         result.dbUrl = provisionResult.dbUrl;
@@ -46,7 +54,7 @@ export const POST = withTenantAuth(async (req, auth, params) => {
         const newTrialEnd = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
         
         await globalPrisma.tenant.update({
-          where: { id: params.id },
+          where: { id: tenantId },
           data: {
             estado: 'trial',
             fechaTrialInicio: tenant.fechaTrialInicio || new Date(),
@@ -60,7 +68,7 @@ export const POST = withTenantAuth(async (req, auth, params) => {
 
       case 'suspend':
         await globalPrisma.tenant.update({
-          where: { id: params.id },
+          where: { id: tenantId },
           data: { estado: 'suspendido' }
         });
 
@@ -69,7 +77,7 @@ export const POST = withTenantAuth(async (req, auth, params) => {
 
       case 'reactivate':
         await globalPrisma.tenant.update({
-          where: { id: params.id },
+          where: { id: tenantId },
           data: { estado: 'activo' }
         });
 
@@ -84,7 +92,7 @@ export const POST = withTenantAuth(async (req, auth, params) => {
           globalPrisma.tenantFeature.upsert({
             where: {
               tenantId_feature: {
-                tenantId: params.id,
+                tenantId: tenantId,
                 feature: f
               }
             },
@@ -94,7 +102,7 @@ export const POST = withTenantAuth(async (req, auth, params) => {
               razon: 'Actualización manual de licencia industrial'
             },
             create: {
-              tenantId: params.id,
+              tenantId: tenantId,
               feature: f,
               habilitado: industrialEnabled,
               habilitadoPor: auth.user!.id,
@@ -115,7 +123,7 @@ export const POST = withTenantAuth(async (req, auth, params) => {
         await globalPrisma.tenantFeature.upsert({
           where: {
             tenantId_feature: {
-              tenantId: params.id,
+              tenantId: tenantId,
               feature
             }
           },
@@ -125,7 +133,7 @@ export const POST = withTenantAuth(async (req, auth, params) => {
             razon: opParams.razon
           },
           create: {
-            tenantId: params.id,
+            tenantId: tenantId,
             feature,
             habilitado: enabled,
             habilitadoPor: auth.user!.id,
@@ -143,6 +151,9 @@ export const POST = withTenantAuth(async (req, auth, params) => {
         }
 
         const planConfig = await getPlanConfig(planId);
+        if (!planConfig) {
+          return NextResponse.json({ error: `El plan '${planId}' no está configurado en el sistema` }, { status: 404 });
+        }
         const planLimits = planConfig.limites;
 
         if (withBilling) {
@@ -160,7 +171,7 @@ export const POST = withTenantAuth(async (req, auth, params) => {
               });
               stripeCustomerId = customer.id;
               await globalPrisma.tenant.update({
-                where: { id: params.id },
+                where: { id: tenantId },
                 data: { stripeCustomerId }
               });
             }
@@ -193,7 +204,7 @@ export const POST = withTenantAuth(async (req, auth, params) => {
             }
 
             await globalPrisma.tenant.update({
-              where: { id: params.id },
+              where: { id: tenantId },
               data: {
                 plan: planId,
                 estado: 'activo',
@@ -213,7 +224,7 @@ export const POST = withTenantAuth(async (req, auth, params) => {
           }
         } else {
           await globalPrisma.tenant.update({
-            where: { id: params.id },
+            where: { id: tenantId },
             data: {
               plan: planId,
               estado: 'activo',
@@ -240,14 +251,14 @@ export const POST = withTenantAuth(async (req, auth, params) => {
 
     // Log audit (se registra en la DB física del tenant que realiza/recibe la operación para auditoría local, 
     // pero como superadmin estamos operando GLOBALMENTE).
-    // Usamos el proxy para loguear en el contexto del tenant destino.
-    await proxyPrisma.auditLog.create({
+    // Usamos el globalPrisma para asegurar que se guarde el log aunque el tenant no tenga DB propia aún
+    await globalPrisma.auditLog.create({
       data: {
-        tenantId: params.id,
+        tenantId: tenantId,
         userId: auth.user!.id,
         accion: 'operacion',
         entidad: 'tenant',
-        entidadId: params.id,
+        entidadId: tenantId,
         descripcion: `Superadmin ${auth.user?.name} ejecutó operación ${operation} en tenant ${tenant.nombre}`,
         cambiosDespues: JSON.stringify({ operation, params: opParams, result })
       }
@@ -256,7 +267,11 @@ export const POST = withTenantAuth(async (req, auth, params) => {
     return NextResponse.json(result);
 
   } catch (error: any) {
-    console.error('Error executing tenant operation:', error);
-    return NextResponse.json({ error: 'Error al ejecutar operación' }, { status: 500 });
+    console.error('[TenantOperationsAPI] Error Crítico:', error);
+    return NextResponse.json({ 
+      error: 'Error al ejecutar operación', 
+      details: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined 
+    }, { status: 500 });
   }
 }, ['admin:write'])

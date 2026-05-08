@@ -17,7 +17,7 @@ import { createTask } from './task-skills';
 import { createConversation } from './conversation-skills';
 import type { BookingCreatedEvent, BookingConfirmedEvent } from '@/lib/types/events';
 import { checkAvailability } from '@/lib/services/appointments';
-import { sendEmail } from '@/lib/resend-email';
+import { sendEmail } from '@/lib/ses-email';
 
 // ============== TIPOS ==============
 

@@ -169,8 +169,9 @@ export default function TenantDetail() {
           reason: ''
         });
       } else {
-        const error = await res.json();
-        toast.error(error.error || 'Error al asignar plan');
+        const errorData = await res.json()
+        const fullError = errorData.details ? `${errorData.error}: ${errorData.details}` : (errorData.error || 'Error al ejecutar operación')
+        toast.error(fullError)
       }
     } catch (error) {
       console.error('Error assigning plan:', error);

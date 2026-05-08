@@ -112,7 +112,7 @@ export default function TicketDetailPage({ params }: { params: { id: string } })
         <div className="space-y-4">
            <div className="flex items-center gap-3">
               <Badge className="bg-indigo-50 text-indigo-600 border-none px-4 py-1.5 rounded-full font-black text-[10px] uppercase tracking-widest">
-                 Ticket #{ticket.id.substring(0, 8)}
+                 Ticket #{ticket.id ? ticket.id.substring(0, 8) : '...'}
               </Badge>
               <Badge className={cn("px-4 py-1.5 rounded-full font-black text-[10px] uppercase tracking-widest", 
                 ticket.status === 'OPEN' ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-600")}>

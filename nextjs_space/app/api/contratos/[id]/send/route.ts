@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
 
-import { sendEmail } from '@/lib/resend-email';
+import { sendEmail } from '@/lib/ses-email';
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -103,7 +103,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     await sendEmail({
       to: email,
       subject: `Contrato ${contrato.numero} - ${contrato.titulo}`,
-      html: htmlContent
+      html: htmlContent,
+      tenantSubdomain: tenantId,
     });
 
     // Actualizar contrato

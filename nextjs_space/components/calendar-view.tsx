@@ -184,7 +184,7 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh }:
       titulo: item.nombre,
       descripcion: item.descripcion || '',
       duracion: item.duracionMinutos || 60,
-      tipo: item.tipo === 'servicio' || item.tipo === 'cita' ? 'servicio' : prev.tipo,
+      tipo: (item.tipo === 'servicio' || item.tipo === 'cita') ? 'servicio' : prev.tipo,
     }))
   }, [])
 
@@ -296,7 +296,7 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh }:
       fecha: format(citaDate, 'yyyy-MM-dd'),
       hora: format(citaDate, 'HH:mm'),
       estado: selectedCita.estado,
-      catalogoItemId: '',
+      catalogoItemId: selectedCita.servicioId || '',
     })
     setSelectedCatalogoItem(null)
     setShowDetailDialog(false)
@@ -370,6 +370,7 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh }:
           fechaHora: fechaHora.toISOString(),
           duracion: formData.duracion,
           estado: formData.estado,
+          catalogoItemId: formData.catalogoItemId || undefined,
         }),
       })
 
@@ -491,8 +492,7 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh }:
               <div className="flex items-center gap-2">
                 <CatalogoSelector
                   onSelect={handleCatalogoSelect}
-                  tipoFiltro="servicio"
-                  buttonLabel="Seleccionar Servicio"
+                  buttonLabel="Seleccionar del Catálogo"
                   buttonVariant="outline"
                 />
                 {selectedCatalogoItem && (

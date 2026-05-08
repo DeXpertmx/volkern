@@ -134,17 +134,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
         {/* User */}
         <div className="p-4 border-t border-[#E2E8F0] bg-slate-50/50">
-          <div className="flex items-center gap-3 px-2">
-            <div className="w-9 h-9 rounded-xl bg-[#1A365D] flex items-center justify-center text-white shadow-inner">
-              <Users size={16} />
-            </div>
-            {isSidebarOpen && (
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-black text-[#1A365D] truncate">{session?.user?.name || 'Admin'}</p>
-                <p className="text-[10px] text-[#4A5568] font-bold truncate opacity-70">{session?.user?.email}</p>
-              </div>
-            )}
-          </div>
           {isSidebarOpen && (
             <button
               onClick={() => router.push('/api/auth/signout')}

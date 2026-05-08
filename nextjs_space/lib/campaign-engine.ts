@@ -1,6 +1,6 @@
 
 import { prisma, getTenantDb, dbContext } from './db';
-import { sendEmail } from './resend-email';
+import { sendEmail } from './ses-email';
 import { chatwootApi } from './nexus/chatwoot-api';
 import { sendWhatsAppMessage } from './whatsapp';
 import { sendSMS } from './sms';
@@ -395,7 +395,8 @@ async function sendMessage(
       to: destinatario.email,
       subject: asunto,
       html: contenido,
-      text: contenido
+      text: contenido,
+      tenantSubdomain: tenantId
     });
     return { success: true };
   }

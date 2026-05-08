@@ -5,7 +5,7 @@ import { prisma } from '@/lib/db'
 import { withTenantAuth } from '@/lib/api-key-auth'
 
 // GET /api/campanas/[id] - Obtener campaña específica
-export const GET = withTenantAuth(async (request, auth, params) => {
+export const GET = withTenantAuth(async (request, auth, { params }) => {
   try {
     const tenantId = auth.tenant!.id
 
@@ -30,7 +30,7 @@ export const GET = withTenantAuth(async (request, auth, params) => {
 }, ['campaigns:read'])
 
 // PUT /api/campanas/[id] - Actualizar campaña
-export const PUT = withTenantAuth(async (request, auth, params) => {
+export const PUT = withTenantAuth(async (request, auth, { params }) => {
   try {
     const tenantId = auth.tenant!.id
     const data = await request.json()
@@ -95,7 +95,7 @@ export const PUT = withTenantAuth(async (request, auth, params) => {
 }, ['campaigns:write'])
 
 // DELETE /api/campanas/[id] - Eliminar campaña
-export const DELETE = withTenantAuth(async (request, auth, params) => {
+export const DELETE = withTenantAuth(async (request, auth, { params }) => {
   try {
     const tenantId = auth.tenant!.id
 

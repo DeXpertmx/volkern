@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { replaceTemplateVariables } from '@/lib/resend-email';
+import { replaceTemplateVariables } from '@/lib/ses-email';
 
 // POST /api/email-campanas/preview - Vista previa sin campaña guardada
 export async function POST(request: NextRequest) {

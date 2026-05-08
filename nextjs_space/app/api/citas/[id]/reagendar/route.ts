@@ -13,7 +13,7 @@ import { notifyAdminsPush } from '@/lib/services/push-notification'
  * Reagenda una cita existente a una nueva fecha/hora
  * Mantiene el mismo lead, servicio y datos, solo cambia fechaHora
  */
-export const POST = withTenantAuth(async (request, auth, params) => {
+export const POST = withTenantAuth(async (request, auth, { params }) => {
   try {
     const tenantId = auth.tenant!.id
     const body = await request.json()

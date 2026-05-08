@@ -6,7 +6,7 @@ import { withTenantAuth } from '@/lib/api-key-auth'
 import { pauseCampaign } from '@/lib/campaign-engine'
 
 // POST /api/campanas/[id]/pausar - Pausar campaña
-export const POST = withTenantAuth(async (request, auth, params) => {
+export const POST = withTenantAuth(async (request, auth, { params }) => {
   try {
     const tenantId = auth.tenant!.id
 

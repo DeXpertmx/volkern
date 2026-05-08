@@ -135,9 +135,7 @@ export default function CitasPage() {
     }
   }
 
-  useEffect(() => {
-    fetchData()
-  }, [])
+  // Data fetching is handled by the first useEffect
 
   const fetchData = async () => {
     try {
@@ -225,24 +223,32 @@ export default function CitasPage() {
                 </svg>
               </div>
               <div>
-                <CardTitle className="text-base">Google Calendar</CardTitle>
+                <CardTitle className="text-base flex items-center gap-2">
+                  Google Calendar
+                  {gcalConnected && (
+                    <Badge variant="default" className="bg-green-600 h-5 px-1.5 text-[10px] uppercase tracking-wider font-bold">
+                      Activo
+                    </Badge>
+                  )}
+                </CardTitle>
                 <CardDescription>
                   {gcalConnected
-                    ? 'Conectado - Sincronización activa'
-                    : 'Conecta tu calendario para sincronizar citas'}
+                    ? 'Sincronización en tiempo real activa'
+                    : 'Conecta tu calendario para sincronizar tus citas automáticamente'}
                 </CardDescription>
               </div>
             </div>
             <div className="flex items-center gap-2">
               {gcalConnected ? (
-                <>
-                  <Badge variant="default" className="bg-green-600">
-                    <CheckCircle2 className="h-3 w-3 mr-1" />
-                    Conectado
-                  </Badge>
+                <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-lg p-1 pr-2">
+                  <div className="h-8 w-8 rounded-md bg-green-500 flex items-center justify-center text-white">
+                    <CheckCircle2 className="h-5 w-5" />
+                  </div>
+                  <span className="text-sm font-bold text-green-600 mr-2">Google Calendar Conectado</span>
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
+                    className="h-8 text-xs font-bold hover:bg-green-500/20"
                     onClick={async () => {
                       setGcalSyncing(true)
                       try {
@@ -261,11 +267,12 @@ export default function CitasPage() {
                     <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${gcalSyncing ? 'animate-spin' : ''}`} />
                     Sincronizar
                   </Button>
-                </>
+                </div>
               ) : (
                 <Button
                   variant="default"
                   size="sm"
+                  className="bg-blue-600 hover:bg-blue-700 font-bold"
                   onClick={() => {
                     window.location.href = `/api/integraciones/google-calendar/auth`
                   }}

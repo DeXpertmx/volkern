@@ -6,7 +6,7 @@ import { withTenantAuth } from '@/lib/api-key-auth'
 import { executeCampaign } from '@/lib/campaign-engine'
 
 // POST /api/campanas/[id]/ejecutar - Ejecutar campaña
-export const POST = withTenantAuth(async (request, auth, params) => {
+export const POST = withTenantAuth(async (request, auth, { params }) => {
   try {
     const tenantId = auth.tenant!.id
     console.log('[EjecutarCampaña] Tenant:', tenantId, 'Campaign:', params.id)

@@ -262,26 +262,25 @@ export class NotificationService {
         throw new Error('Email address required');
       }
       
-      // Usar Resend directamente
-      const { Resend } = await import('resend');
-      const resend = new Resend(process.env.RESEND_API_KEY || 're_dummy_key_for_build');
+      const { sendEmail } = await import('@/lib/ses-email');
       
-      const { error } = await resend.emails.send({
-        from: process.env.EMAIL_FROM || 'noreply@volkern.app',
+      const result = await sendEmail({
         to: recipient.email,
         subject: content.subject || 'Notificación',
         html: content.html || content.body,
         text: content.body,
+        tenantSubdomain: _context.tenantId, // Usamos el ID como identificador de inquilino para SES
       });
       
-      if (error) {
-        throw error;
+      if (!result.success) {
+        throw new Error(result.error);
       }
       
       return {
         success: true,
         channel: 'email',
         status: 'sent',
+        externalId: result.messageId,
         sentAt: new Date(),
       };
     } catch (error) {

@@ -54,7 +54,8 @@ import {
   Lock,
   AlertOctagon,
   LifeBuoy,
-  Zap
+  Zap,
+  FileWarning
 } from 'lucide-react'
 import type { PermissionModule } from '@/lib/permissions'
 
@@ -77,6 +78,7 @@ export interface HubConfig {
   description: string
   basePaths?: string[]
   requiredAccountType?: 'AGENCY' | 'BUSINESS' | 'SUPERADMIN'
+  requiredModule?: string
 }
 
 export const HUBS: HubConfig[] = [
@@ -198,6 +200,8 @@ export const HUBS: HubConfig[] = [
     icon: Users,
     href: '/dashboard/rrhh',
     description: 'Gestión de talento, nóminas y bienestar laboral.',
+    requiredAccountType: 'BUSINESS',
+    requiredModule: 'rrhh',
     basePaths: [
       '/dashboard/rrhh'
     ],
@@ -226,6 +230,8 @@ export const HUBS: HubConfig[] = [
     icon: Calculator,
     href: '/dashboard/finanzas',
     description: 'Gestión de gastos, proveedores y salud financiera.',
+    requiredAccountType: 'BUSINESS',
+    requiredModule: 'finanzas',
     basePaths: [
       '/dashboard/gastos',
       '/dashboard/proveedores',
@@ -251,6 +257,8 @@ export const HUBS: HubConfig[] = [
     icon: ShieldCheck,
     href: '/dashboard/calidad',
     description: 'Garantía de calidad industrial y cumplimiento.',
+    requiredAccountType: 'BUSINESS',
+    requiredModule: 'calidad',
     basePaths: [
       '/dashboard/calidad'
     ],
@@ -266,6 +274,8 @@ export const HUBS: HubConfig[] = [
     icon: Factory,
     href: '/dashboard/produccion',
     description: 'Gestión de manufactura, BoM e integridad de planta.',
+    requiredAccountType: 'BUSINESS',
+    requiredModule: 'produccion',
     basePaths: [
       '/dashboard/produccion'
     ],
@@ -282,6 +292,8 @@ export const HUBS: HubConfig[] = [
     icon: Package,
     href: '/dashboard/inventario',
     description: 'Control de existencias, almacenes y movimientos SCM.',
+    requiredAccountType: 'BUSINESS',
+    requiredModule: 'inventario',
     basePaths: [
       '/dashboard/almacenes',
       '/dashboard/existencias'
@@ -299,6 +311,8 @@ export const HUBS: HubConfig[] = [
     icon: Briefcase,
     href: '/dashboard/proyectos',
     description: 'Gestión operativa, hitos y rentabilidad por obra.',
+    requiredAccountType: 'BUSINESS',
+    requiredModule: 'proyectos',
     basePaths: [
       '/dashboard/proyectos/hitos',
       '/dashboard/proyectos/costos'
@@ -316,11 +330,13 @@ export const HUBS: HubConfig[] = [
     icon: LifeBuoy,
     href: '/dashboard/support',
     description: 'Gestión de soporte, incidencias y excepciones operativas.',
+    requiredAccountType: 'BUSINESS',
+    requiredModule: 'taskforce',
     basePaths: ['/dashboard/support'],
     items: [
-      { name: 'Bandeja de Entrada', href: '/dashboard/support', icon: LifeBuoy, description: 'Tickets activos y por asignar' },
-      { name: 'SLA Dashboard', href: '/dashboard/support/analytics', icon: BarChart3, description: 'Métricas de tiempo de respuesta' },
-      { name: 'Incidencias Críticas', href: '/dashboard/support?status=CRITICAL', icon: AlertOctagon, description: 'Problemas de alta prioridad' },
+      { name: 'Bandeja de Entrada', href: '/dashboard/support', icon: LifeBuoy, planModule: 'taskforce', description: 'Tickets activos y por asignar' },
+      { name: 'SLA Dashboard', href: '/dashboard/support/analytics', icon: BarChart3, planModule: 'taskforce', description: 'Métricas de tiempo de respuesta' },
+      { name: 'Incidencias Críticas', href: '/dashboard/support?status=CRITICAL', icon: AlertOctagon, planModule: 'taskforce', description: 'Problemas de alta prioridad' },
     ]
   },
   {
@@ -329,12 +345,14 @@ export const HUBS: HubConfig[] = [
     icon: LineChart,
     href: '/dashboard/strategy',
     description: 'Inteligencia de negocio, proyecciones y análisis de rentabilidad.',
+    requiredAccountType: 'BUSINESS',
+    requiredModule: 'estrategia',
     basePaths: ['/dashboard/strategy'],
     items: [
-      { name: 'Executive Snapshot', href: '/dashboard/strategy', icon: LayoutDashboard, description: 'Vista general estratégica' },
-      { name: 'Cashflow Forecast', href: '/dashboard/strategy/cashflow', icon: TrendingUp, description: 'Proyección de caja a 90 días' },
-      { name: 'Profitability Sniffer', href: '/dashboard/strategy/profitability', icon: Activity, description: 'Análisis de rentabilidad de clientes y proyectos' },
-      { name: 'Recomendaciones IA', href: '/dashboard/strategy/recommendations', icon: Sparkles, description: 'Sugerencias estratégicas de Gemma' },
+      { name: 'Executive Snapshot', href: '/dashboard/strategy', icon: LayoutDashboard, planModule: 'estrategia', description: 'Vista general estratégica' },
+      { name: 'Cashflow Forecast', href: '/dashboard/strategy/cashflow', icon: TrendingUp, planModule: 'estrategia', description: 'Proyección de caja a 90 días' },
+      { name: 'Profitability Sniffer', href: '/dashboard/strategy/profitability', icon: Activity, planModule: 'estrategia', description: 'Análisis de rentabilidad de clientes y proyectos' },
+      { name: 'Recomendaciones IA', href: '/dashboard/strategy/recommendations', icon: Sparkles, planModule: 'estrategia', description: 'Sugerencias estratégicas de Gemma' },
     ]
   },
   {
@@ -343,12 +361,14 @@ export const HUBS: HubConfig[] = [
     icon: Package,
     href: '/dashboard/assets',
     description: 'Gestión de activos internos, hardware, licencias y vehículos.',
+    requiredAccountType: 'BUSINESS',
+    requiredModule: 'activos',
     basePaths: ['/dashboard/assets'],
     items: [
-      { name: 'Inventario de Activos', href: '/dashboard/assets', icon: Package, description: 'Listado global de equipos y licencias' },
-      { name: 'Asignaciones', href: '/dashboard/assets/assignments', icon: Users, description: 'Control de equipos por empleado' },
-      { name: 'Mantenimiento', href: '/dashboard/assets/maintenance', icon: Activity, description: 'Historial y alertas preventivas' },
-      { name: 'Trazabilidad (Trust)', href: '/dashboard/assets/trust', icon: ShieldCheck, description: 'Registro inmutable de movimientos' },
+      { name: 'Inventario de Activos', href: '/dashboard/assets', icon: Package, planModule: 'activos', description: 'Listado global de equipos y licencias' },
+      { name: 'Asignaciones', href: '/dashboard/assets/assignments', icon: Users, planModule: 'activos', description: 'Control de equipos por empleado' },
+      { name: 'Mantenimiento', href: '/dashboard/assets/maintenance', icon: Activity, planModule: 'activos', description: 'Historial y alertas preventivas' },
+      { name: 'Trazabilidad (Trust)', href: '/dashboard/assets/trust', icon: ShieldCheck, planModule: 'activos', description: 'Registro inmutable de movimientos' },
     ]
   },
   {
@@ -357,11 +377,13 @@ export const HUBS: HubConfig[] = [
     icon: BookOpen,
     href: '/dashboard/knowledge',
     description: 'Memoria organizacional, procesos SOP y políticas internas.',
+    requiredAccountType: 'BUSINESS',
+    requiredModule: 'conocimiento',
     basePaths: ['/dashboard/knowledge'],
     items: [
-      { name: 'Base de Conocimiento', href: '/dashboard/knowledge', icon: BookOpen, description: 'Listado global de artículos y políticas' },
-      { name: 'Mis Favoritos', href: '/dashboard/knowledge?filter=favs', icon: Award, description: 'Artículos guardados para acceso rápido' },
-      { name: 'Cosecha de Soporte', href: '/dashboard/knowledge?filter=harvest', icon: RotateCw, description: 'Lecciones aprendidas desde tickets' },
+      { name: 'Base de Conocimiento', href: '/dashboard/knowledge', icon: BookOpen, planModule: 'conocimiento', description: 'Listado global de artículos y políticas' },
+      { name: 'Mis Favoritos', href: '/dashboard/knowledge?filter=favs', icon: Award, planModule: 'conocimiento', description: 'Artículos guardados para acceso rápido' },
+      { name: 'Cosecha de Soporte', href: '/dashboard/knowledge?filter=harvest', icon: RotateCw, planModule: 'conocimiento', description: 'Lecciones aprendidas desde tickets' },
     ]
   },
   {
@@ -381,6 +403,7 @@ export const HUBS: HubConfig[] = [
       { name: 'Telefonía (Zadarma)', href: '/dashboard/perfil?section=zadarma', icon: Phone, description: 'Configuración de extensión Zadarma' },
       { name: 'Notificaciones', href: '/dashboard/perfil?section=notificaciones', icon: Bell, description: 'Alertas del navegador' },
       { name: 'IA Agent Skills', href: '/dashboard/perfil?section=agent-skills', icon: Cpu, description: 'Conecta tu asistente IA (Gemma/Gemma local)' },
+      { name: 'Canal de Denuncias', href: '/dashboard/perfil?section=denuncias', icon: FileWarning, description: 'Buzón confidencial de igualdad y transparencia' },
       { name: 'Mi Tarjeta', href: '/dashboard/perfil?section=mi-tarjeta', icon: CreditCard, planModule: 'mi_tarjeta', description: 'Tarjeta de presentación digital' },
     ]
   },
@@ -403,6 +426,7 @@ export const HUBS: HubConfig[] = [
       { name: 'Reparto Leads', href: '/dashboard/configuracion?section=reparto', icon: RotateCw, description: 'Asignación de ejecutivos' },
       { name: 'Campos de Leads', href: '/dashboard/configuracion?section=leads', icon: ListTodo, description: 'Personalización de campos' },
       { name: 'Documentos', href: '/dashboard/configuracion?section=documentos', icon: FileText, description: 'Ajustes de contratos' },
+      { name: 'Canal de Igualdad', href: '/dashboard/configuracion?section=igualdad', icon: ShieldCheck, description: 'Configuración de denuncias e inmutabilidad' },
       { name: 'Marca Blanca', href: '/dashboard/configuracion?section=whitelabel', icon: Palette, planModule: 'white_label', description: 'Personalización gráfica' },
       { name: 'Equipo', href: '/dashboard/equipo', icon: UserCog, planModule: 'equipo', description: 'Gestión de usuarios' },
       { name: 'Integraciones', href: '/dashboard/integraciones', icon: Plug, planModule: 'integraciones', description: 'Conexión con apps externas' },

@@ -206,28 +206,6 @@ export function Sidebar() {
             </Link>
           </div>
           
-          {/* Global Quick Access: Connect Hub */}
-          <div className="px-4 py-4 border-b border-dashed bg-primary/5">
-            <Link 
-              href="/dashboard/connect"
-              className={cn(
-                "flex items-center gap-3 p-3 rounded-2xl transition-all group",
-                "bg-primary/10 border border-primary/20 hover:bg-primary/20",
-                isCollapsed && "justify-center"
-              )}
-            >
-              <div className="relative">
-                <Activity className="h-5 w-5 text-primary group-hover:scale-110 transition-transform" />
-                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-500 border-2 border-background rounded-full animate-pulse" />
-              </div>
-              {!isCollapsed && (
-                <div className="flex flex-col">
-                  <span className="text-xs font-black uppercase tracking-tighter text-primary">Volkern Connect</span>
-                  <span className="text-[10px] font-bold text-primary/60">HUB EN VIVO</span>
-                </div>
-              )}
-            </Link>
-          </div>
 
           <nav className="flex-1 overflow-y-auto p-4 space-y-2">
             {/* Global Context or Hub Context */}
@@ -316,11 +294,25 @@ export function Sidebar() {
                   }
 
                   if (hub.requiredAccountType === 'AGENCY') {
-                    return effectiveAccountType === 'AGENCY' || roleName === 'Superadmin';
+                    const isAgencyAccount = effectiveAccountType === 'AGENCY';
+                    const hasAgencyModule = activeModules.includes('agency');
+                    return (isAgencyAccount && hasAgencyModule) || roleName === 'Superadmin';
                   }
 
                   if (hub.requiredAccountType === 'BUSINESS') {
-                    return effectiveAccountType === 'BUSINESS' || effectiveAccountType === 'AGENCY' || roleName === 'Superadmin' || roleName === 'Admin';
+                    const isBusiness = effectiveAccountType === 'BUSINESS' || effectiveAccountType === 'AGENCY' || roleName === 'Superadmin' || roleName === 'Admin' || roleName === 'Administrador';
+                    if (!isBusiness) return false;
+                    
+                    // Si requiere un módulo específico, verificarlo
+                    if (hub.requiredModule && !isLoadingModules && !activeModules.includes(hub.requiredModule)) {
+                      return false;
+                    }
+                    return true;
+                  }
+
+                  // Si no requiere cuenta específica pero sí módulo
+                  if (hub.requiredModule && !isLoadingModules && !activeModules.includes(hub.requiredModule)) {
+                    return false;
                   }
 
                   return true;
@@ -361,17 +353,28 @@ export function Sidebar() {
 
           {/* Premium Footer */}
           <div className="border-t bg-accent/5 p-6">
-            {!isCollapsed && (
-              <div className="flex items-center space-x-3 mb-6 p-2 rounded-2xl bg-background/50 border border-border/50">
-                <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center text-white shadow-lg">
-                  <span className="text-sm font-black">{session?.user?.name?.charAt(0)?.toUpperCase() || 'A'}</span>
+            {/* Global Quick Access: Connect Hub */}
+            <div className="mb-4">
+              <Link 
+                href="/dashboard/connect"
+                className={cn(
+                  "flex items-center gap-3 p-3 rounded-2xl transition-all group",
+                  "bg-primary/10 border border-primary/20 hover:bg-primary/20",
+                  isCollapsed && "justify-center"
+                )}
+              >
+                <div className="relative">
+                  <Activity className="h-5 w-5 text-primary group-hover:scale-110 transition-transform" />
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-500 border-2 border-background rounded-full animate-pulse" />
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-bold truncate leading-none mb-1">{session?.user?.name || 'Admin'}</p>
-                  <p className="text-[10px] text-muted-foreground truncate">{session?.user?.email || ''}</p>
-                </div>
-              </div>
-            )}
+                {!isCollapsed && (
+                  <div className="flex flex-col">
+                    <span className="text-xs font-black uppercase tracking-tighter text-primary">Volkern Connect</span>
+                    <span className="text-[10px] font-bold text-primary/60">HUB EN VIVO</span>
+                  </div>
+                )}
+              </Link>
+            </div>
             
             <div className="flex gap-2">
               <Button

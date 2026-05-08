@@ -5,7 +5,7 @@ import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
 
 // GET /api/contratos/[id]
-export const GET = withTenantAuth(async (request, auth, params) => {
+export const GET = withTenantAuth(async (request, auth, { params }) => {
   try {
     const tenantId = auth.tenant!.id;
 
@@ -41,7 +41,7 @@ export const GET = withTenantAuth(async (request, auth, params) => {
 }, ['contratos:read']);
 
 // PATCH /api/contratos/[id]
-export const PATCH = withTenantAuth(async (request, auth, params) => {
+export const PATCH = withTenantAuth(async (request, auth, { params }) => {
   try {
     const tenantId = auth.tenant!.id;
     const userId = auth.user!.id;
@@ -131,7 +131,7 @@ export const PATCH = withTenantAuth(async (request, auth, params) => {
 }, ['contratos:write']);
 
 // DELETE /api/contratos/[id]
-export const DELETE = withTenantAuth(async (request, auth, params) => {
+export const DELETE = withTenantAuth(async (request, auth, { params }) => {
   try {
     const tenantId = auth.tenant!.id;
     const userId = auth.user!.id;

@@ -175,7 +175,7 @@ export default function CatalogoPage() {
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('basico');
   
-  // Filtros disponibles del backend
+  const [modules, setModules] = useState<string[]>([]);
   const [availableCategorias, setAvailableCategorias] = useState<string[]>([]);
   const [availableEtiquetas, setAvailableEtiquetas] = useState<string[]>([]);
 
@@ -231,7 +231,20 @@ export default function CatalogoPage() {
     fetchItems();
     fetchTasas();
     fetchFieldDefinitions();
+    fetchModules();
   }, [filterTipo, filterActivo, filterCategoria, filterEtiqueta]);
+
+  const fetchModules = async () => {
+    try {
+      const res = await apiFetch('/api/tenant/modules');
+      if (res.ok) {
+        const data = await res.json();
+        setModules(data.modules || []);
+      }
+    } catch (error) {
+      console.error('Error fetching modules:', error);
+    }
+  };
 
   const fetchFieldDefinitions = async () => {
     try {
@@ -797,7 +810,9 @@ export default function CatalogoPage() {
               <TabsTrigger value="basico" className="text-[10px] uppercase font-bold">Básico</TabsTrigger>
               <TabsTrigger value="campos" className="text-[10px] uppercase font-bold">Campos</TabsTrigger>
               <TabsTrigger value="logistica" className="text-[10px] uppercase font-bold">Logística</TabsTrigger>
-              <TabsTrigger value="ingenieria" className="text-[10px] uppercase font-bold" disabled={!form.isManufactured}>Ingeniería</TabsTrigger>
+              {modules.includes('produccion') && (
+                <TabsTrigger value="ingenieria" className="text-[10px] uppercase font-bold" disabled={!form.isManufactured}>Ingeniería</TabsTrigger>
+              )}
               <TabsTrigger value="categorias" className="text-[10px] uppercase font-bold">Tags</TabsTrigger>
               <TabsTrigger value="media" className="text-[10px] uppercase font-bold">Media</TabsTrigger>
               <TabsTrigger value="precios" className="text-[10px] uppercase font-bold">Precios</TabsTrigger>
@@ -858,13 +873,15 @@ export default function CatalogoPage() {
                 </div>
 
                 <div className="flex flex-col gap-4">
-                  <div className="flex items-center space-x-2 pt-2">
-                    <Switch
-                      checked={form.isManufactured}
-                      onCheckedChange={(v) => setForm({ ...form, isManufactured: v })}
-                    />
-                    <Label className="font-bold text-primary">Se puede fabricar (Habilitar BoM)</Label>
-                  </div>
+                  {modules.includes('produccion') && (
+                    <div className="flex items-center space-x-2 pt-2">
+                      <Switch
+                        checked={form.isManufactured}
+                        onCheckedChange={(v) => setForm({ ...form, isManufactured: v })}
+                      />
+                      <Label className="font-bold text-primary">Se puede fabricar (Habilitar BoM)</Label>
+                    </div>
+                  )}
 
                   <div className="flex items-center space-x-2">
                     <Switch

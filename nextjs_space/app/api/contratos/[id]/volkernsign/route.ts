@@ -115,7 +115,7 @@ function generateContratoHTML(contrato: any, tenant: any): string {
   `;
 }
 
-export const POST = withTenantAuth(async (request, auth, params) => {
+export const POST = withTenantAuth(async (request, auth, { params }) => {
   try {
     const tenantId = auth.tenant!.id;
     const contratoId = params.id;
