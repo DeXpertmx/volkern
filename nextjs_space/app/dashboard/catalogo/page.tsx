@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/api-client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -161,6 +162,7 @@ const TIPOS_PRECIO = [
 
 // ============== COMPONENTE PRINCIPAL ==============
 export default function CatalogoPage() {
+  const router = useRouter();
   const { config: fiscalConfig, loading: loadingFiscal } = useFiscalConfig();
   const [items, setItems] = useState<CatalogoItem[]>([]);
   const [tasas, setTasas] = useState<TasaImpuesto[]>([]);
@@ -1043,8 +1045,8 @@ export default function CatalogoPage() {
             <TabsContent value="campos" className="space-y-4 mt-4">
               <div className="flex items-center justify-between">
                 <h4 className="font-medium">Campos Personalizados</h4>
-                <Button variant="ghost" size="sm" className="h-8 text-xs underline" onClick={() => setActiveTab('basico')}>
-                  Configurar campos en Ajustes
+                <Button variant="ghost" size="sm" className="h-8 text-xs underline" onClick={() => router.push('/dashboard/catalogo/campos')}>
+                  Configurar campos
                 </Button>
               </div>
               

@@ -8,13 +8,12 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Loader2, Mail, MessageSquare, Phone, Send, CheckCircle, XCircle } from "lucide-react";
+import { Loader2, Send, MessageSquare } from "lucide-react";
 
 interface ChannelConfig {
   enabled: boolean;
-  apiKey?: string;
-  webhookUrl?: string;
-  config?: Record<string, string>;
+  botToken?: string;
+  defaultChannel?: string;
 }
 
 interface NotificationConfigData {
@@ -22,12 +21,25 @@ interface NotificationConfigData {
 }
 
 const CHANNELS = [
-  { id: 'email', name: 'Email', icon: Mail, description: 'Notificaciones por correo electrónico' },
-  { id: 'sms', name: 'SMS', icon: MessageSquare, description: 'Mensajes de texto' },
-  { id: 'whatsapp', name: 'WhatsApp', icon: MessageSquare, description: 'Mensajes vía WhatsApp Business' },
-  { id: 'telegram', name: 'Telegram', icon: Send, description: 'Notificaciones via Telegram Bot' },
-  { id: 'slack', name: 'Slack', icon: MessageSquare, description: 'Canales de Slack' },
-  { id: 'discord', name: 'Discord', icon: MessageSquare, description: 'Webhooks de Discord' },
+  { 
+    id: 'telegram', 
+    name: 'Telegram', 
+    icon: Send, 
+    description: 'Notificaciones via Telegram Bot',
+    fields: [
+      { key: 'botToken', label: 'Bot Token', placeholder: '123456789:ABCdefGHIjklMNOpqrsTUVwxyz', type: 'password' }
+    ]
+  },
+  { 
+    id: 'slack', 
+    name: 'Slack', 
+    icon: MessageSquare, 
+    description: 'Notificaciones en canales de Slack',
+    fields: [
+      { key: 'botToken', label: 'Bot Token', placeholder: 'xoxb-...', type: 'password' },
+      { key: 'defaultChannel', label: 'Canal por defecto', placeholder: '#general', type: 'text' }
+    ]
+  },
 ];
 
 export function NotificationConfig() {
@@ -136,7 +148,7 @@ export function NotificationConfig() {
       <Tabs defaultValue="channels" className="space-y-4">
         <TabsList>
           <TabsTrigger value="channels">Canales</TabsTrigger>
-          <TabsTrigger value="settings">Ajustes Globales</TabsTrigger>
+          <TabsTrigger value="settings">Ajustes</TabsTrigger>
         </TabsList>
 
         <TabsContent value="channels" className="space-y-4">
@@ -162,25 +174,18 @@ export function NotificationConfig() {
                   </CardHeader>
                   {channelConfig.enabled && (
                     <CardContent className="space-y-3">
-                      <div>
-                        <Label htmlFor={`${channel.id}-apikey`}>API Key / Token</Label>
-                        <Input
-                          id={`${channel.id}-apikey`}
-                          type="password"
-                          value={channelConfig.apiKey || ''}
-                          onChange={(e) => updateChannel(channel.id, 'apiKey', e.target.value)}
-                          placeholder="Ingresa tu API Key"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor={`${channel.id}-webhook`}>Webhook URL</Label>
-                        <Input
-                          id={`${channel.id}-webhook`}
-                          value={channelConfig.webhookUrl || ''}
-                          onChange={(e) => updateChannel(channel.id, 'webhookUrl', e.target.value)}
-                          placeholder="https://..."
-                        />
-                      </div>
+                      {channel.fields.map(field => (
+                        <div key={field.key}>
+                          <Label htmlFor={`${channel.id}-${field.key}`}>{field.label}</Label>
+                          <Input
+                            id={`${channel.id}-${field.key}`}
+                            type={field.type}
+                            value={channelConfig[field.key as keyof ChannelConfig] || ''}
+                            onChange={(e) => updateChannel(channel.id, field.key, e.target.value)}
+                            placeholder={field.placeholder}
+                          />
+                        </div>
+                      ))}
                       <Button 
                         variant="outline" 
                         size="sm" 
@@ -190,9 +195,7 @@ export function NotificationConfig() {
                       >
                         {testing === channel.id ? (
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <CheckCircle className="mr-2 h-4 w-4" />
-                        )}
+                        ) : null}
                         Probar conexión
                       </Button>
                     </CardContent>
@@ -206,32 +209,9 @@ export function NotificationConfig() {
         <TabsContent value="settings">
           <Card>
             <CardHeader>
-              <CardTitle>Ajustes de Notificaciones</CardTitle>
-              <CardDescription>Configuración global para todas las notificaciones</CardDescription>
+              <CardTitle>Canales Pendientes</CardTitle>
+              <CardDescription>Próximamente disponibles: Email, SMS, WhatsApp, Discord</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Notificaciones Push</Label>
-                  <p className="text-sm text-muted-foreground">Recibir notificaciones en tiempo real</p>
-                </div>
-                <Switch defaultChecked />
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Notificaciones por Email</Label>
-                  <p className="text-sm text-muted-foreground">Recibir resumen diario por email</p>
-                </div>
-                <Switch defaultChecked />
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Registro de Notificaciones</Label>
-                  <p className="text-sm text-muted-foreground">Mantener historial de notificaciones enviadas</p>
-                </div>
-                <Switch defaultChecked />
-              </div>
-            </CardContent>
           </Card>
         </TabsContent>
       </Tabs>

@@ -10,16 +10,6 @@ const APPRISE_URL = process.env.APPRISE_URL || 'https://notify.dimension.expert/
 const MAX_RETRY_ATTEMPTS = 3;
 const BASE_RETRY_DELAY_MS = 1000;
 
-const CHANNEL_URLS: Record<string, string> = {
-  email: 'mailto://',
-  sms: 'json://sms://',
-  whatsapp: 'json://whatsapp://',
-  telegram: 'json://tgram://',
-  slack: 'json://slack://',
-  discord: 'json://discord://',
-  webhook: 'json://',
-};
-
 export class AppriseService {
   private tenantId: string;
 
@@ -173,12 +163,27 @@ export class AppriseService {
         },
       });
 
-      if (channelConfig?.enabled && channelConfig.webhookUrl) {
-        return [channelConfig.webhookUrl];
+      if (!channelConfig?.enabled) {
+        return [];
       }
 
-      const defaultUrl = CHANNEL_URLS[channel];
-      return defaultUrl ? [defaultUrl] : [];
+      const config = channelConfig.config as Record<string, any> || {};
+      const botToken = config.botToken;
+
+      if (!botToken) {
+        return [];
+      }
+
+      if (channel === 'telegram') {
+        return [`telegram://${botToken}/`];
+      }
+
+      if (channel === 'slack') {
+        const defaultChannel = config.defaultChannel || '#general';
+        return [`slack://${botToken}/${defaultChannel}`];
+      }
+
+      return [];
     } catch (error) {
       console.error('[AppriseService] Error getting channel URLs:', error);
       return [];
@@ -224,17 +229,21 @@ export class AppriseService {
         where: { tenantId },
       });
 
-      return dbChannels.map((ch) => ({
-        channel: ch.channel as NotificationChannelType,
-        name: ch.name,
-        enabled: ch.enabled,
-        priority: ch.priority as any,
-        rateLimitPerDay: ch.rateLimitPerDay,
-        retryAttempts: ch.retryAttempts,
-        retryDelayMs: ch.retryDelayMs,
-        timeoutMs: ch.timeoutMs,
-        webhookUrl: ch.webhookUrl,
-      }));
+      return dbChannels.map((ch) => {
+        const config = ch.config as Record<string, any> || {};
+        return {
+          channel: ch.channel as NotificationChannelType,
+          name: ch.name,
+          enabled: ch.enabled,
+          priority: ch.priority as any,
+          rateLimitPerDay: ch.rateLimitPerDay,
+          retryAttempts: ch.retryAttempts,
+          retryDelayMs: ch.retryDelayMs,
+          timeoutMs: ch.timeoutMs,
+          botToken: config.botToken,
+          defaultChannel: config.defaultChannel,
+        };
+      });
     } catch (error) {
       console.error('[AppriseService] Error getting channel configs:', error);
       return [];
@@ -246,6 +255,11 @@ export class AppriseService {
     channel: NotificationChannelType,
     config: Partial<ChannelConfig>
   ): Promise<void> {
+    const channelConfig = {
+      botToken: config.botToken,
+      defaultChannel: config.defaultChannel,
+    };
+
     await prisma.notificationChannel.upsert({
       where: {
         tenantId_channel: {
@@ -255,8 +269,7 @@ export class AppriseService {
       },
       update: {
         enabled: config.enabled,
-        webhookUrl: config.webhookUrl,
-        config: config.config,
+        config: channelConfig,
       },
       create: {
         tenantId,
@@ -268,8 +281,7 @@ export class AppriseService {
         retryAttempts: config.retryAttempts || 3,
         retryDelayMs: config.retryDelayMs || 2000,
         timeoutMs: config.timeoutMs || 30000,
-        webhookUrl: config.webhookUrl,
-        config: config.config,
+        config: channelConfig,
       },
     });
   }
