@@ -7,7 +7,14 @@ import { withTenantAuth } from '@/lib/api-key-auth';
 /**
  * GET /api/cms/pages/[id] - Obtener página por ID (Aislamiento por Tenant)
  */
-export const GET = withTenantAuth(async (req, auth, { id }) => {
+export const GET = withTenantAuth(async (req, auth, context) => {
+  const id = context?.params?.id || (context as any)?.id;
+  
+  if (!id) {
+    console.error('[CMS Page GET] Missing id param, context:', context);
+    return NextResponse.json({ error: 'ID de página requerido' }, { status: 400 });
+  }
+  
   try {
     const isSuperadmin = auth.user?.role?.nombre === 'Superadmin';
     const tenantId = auth.tenant!.id;
@@ -39,15 +46,21 @@ export const GET = withTenantAuth(async (req, auth, { id }) => {
 
     return NextResponse.json({ error: 'Página no encontrada' }, { status: 404 });
   } catch (error) {
-    console.error('[CMS Page] Error:', error);
-    return NextResponse.json({ error: 'Error al obtener página' }, { status: 500 });
+    console.error('[CMS Page GET] Error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json({ error: 'Error al obtener página', details: errorMessage }, { status: 500 });
   }
 });
 
 /**
  * PUT /api/cms/pages/[id] - Actualizar página
  */
-export const PUT = withTenantAuth(async (req, auth, { id }) => {
+export const PUT = withTenantAuth(async (req, auth, context) => {
+  const id = context?.params?.id || (context as any)?.id;
+  
+  if (!id) {
+    return NextResponse.json({ error: 'ID de página requerido' }, { status: 400 });
+  }
   try {
     const isSuperadmin = auth.user?.role?.nombre === 'Superadmin';
     const tenantId = auth.tenant!.id;
@@ -136,7 +149,12 @@ export const PUT = withTenantAuth(async (req, auth, { id }) => {
 /**
  * DELETE /api/cms/pages/[id] - Eliminar página
  */
-export const DELETE = withTenantAuth(async (req, auth, { id }) => {
+export const DELETE = withTenantAuth(async (req, auth, context) => {
+  const id = context?.params?.id || (context as any)?.id;
+  
+  if (!id) {
+    return NextResponse.json({ error: 'ID de página requerido' }, { status: 400 });
+  }
   try {
     const isSuperadmin = auth.user?.role?.nombre === 'Superadmin';
 
