@@ -3,182 +3,103 @@
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 
+const STORAGE_KEY = 'push_prompt_dismissed';
+
 export function usePushNotifications() {
   const { data: session } = useSession();
-  const [isSupported, setIsSupported] = useState(true);
-  const [subscription, setSubscription] = useState<any>(null);
+  const [isSupported, setIsSupported] = useState(false);
+  const [subscription, setSubscription] = useState<PushSubscription | null>(null);
   const [loading, setLoading] = useState(true);
-  const [permissionState, setPermissionState] = useState<string>(() => {
-    // Detectar permiso nativo inmediatamente para evitar mostrar el prompt si ya está concedido
-    if (typeof window !== 'undefined' && 'Notification' in window) {
-      return Notification.permission; // 'granted' | 'denied' | 'default'
-    }
-    return 'default';
-  });
-
-  const appId = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID || '';
+  const [permissionState, setPermissionState] = useState<string>('default');
 
   useEffect(() => {
-    // Solo inicializar si estamos en el cliente y tenemos el App ID
-    if (typeof window !== 'undefined' && appId) {
-      if (!(window as any).OneSignalDeferred) {
-        (window as any).OneSignalDeferred = [];
-      }
-      
-      const onSignalDeferred = (window as any).OneSignalDeferred;
-      
-      onSignalDeferred.push(async function(OneSignal: any) {
-        try {
-          // OneSignal init might have already been called in OneSignalInit component
-          // Wait for initialization to complete or check state
-          if (!OneSignal.initialized) {
-            // It might already be configured by OneSignalInit
-          }
-
-          setLoading(false);
-
-          // Listen to changes (v16 API)
-          OneSignal.User.PushSubscription.addEventListener("change", (event: any) => {
-            if (event.current.optedIn) {
-               setSubscription({ id: event.current.id || OneSignal.User.PushSubscription.id });
-               setPermissionState('granted');
-            } else {
-               setSubscription(null);
-               setPermissionState('default'); // or denied
-            }
-          });
-
-          // Verificar estado inicial
-          const isPushEnabled = OneSignal.User.PushSubscription?.optedIn;
-          if (isPushEnabled) {
-             setSubscription({ id: OneSignal.User.PushSubscription?.id });
-          }
-          
-          // Mapear permisos explícitos si estuvieran disponibles
-          const permission = OneSignal.Notifications?.permission;
-          if (permission !== undefined) {
-             setPermissionState(permission ? 'granted' : 'default');
-          } else if (isPushEnabled) {
-             setPermissionState('granted');
-          }
-        } catch (error) {
-          console.error('Error verificando OneSignal:', error);
-          setIsSupported(false);
-          setLoading(false);
-        }
-      });
-    } else {
+    if (typeof window === 'undefined') {
       setLoading(false);
+      return;
     }
-  }, [appId]);
 
-  // Efecto separado para el login una vez inicializado
+    const supported = 'Notification' in window && 'serviceWorker' in navigator;
+    setIsSupported(supported);
+
+    if (supported) {
+      setPermissionState(Notification.permission);
+    }
+
+    setLoading(false);
+  }, []);
+
   useEffect(() => {
-    if (session?.user?.id && typeof window !== 'undefined') {
-      const onSignalDeferred = (window as any).OneSignalDeferred || [];
-      onSignalDeferred.push(async function(OneSignal: any) {
-        try {
-          if (OneSignal && OneSignal.login && OneSignal.User && session.user.id) {
-            await OneSignal.login(session.user.id);
-            console.log('[OneSignal] Login exitoso:', session.user.id);
-          }
-        } catch (e) {
-          console.error('[OneSignal] Login error:', e);
-        }
-      });
+    if (!session?.user?.id || typeof window === 'undefined') return;
+
+    fetch('/api/users/me/push-subscription', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: session.user.id,
+        permission: Notification.permission,
+      }),
+    }).catch(console.error);
+  }, [session?.user?.id, permissionState]);
+
+  const subscribe = async (): Promise<boolean> => {
+    if (typeof window === 'undefined') return false;
+
+    if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+      console.warn('[Push] Navegador no soporta notificaciones push');
+      return false;
     }
-  }, [session?.user?.id]);
 
-  const subscribe = async () => {
-    return new Promise<boolean>((resolve) => {
-      setLoading(true);
-      if (typeof window === 'undefined') {
-        setLoading(false);
-        resolve(false);
-        return;
+    try {
+      const perm = await Notification.requestPermission();
+      setPermissionState(perm);
+
+      if (perm !== 'granted') {
+        console.warn('[Push] Permiso denegado:', perm);
+        return false;
       }
-      const onSignalDeferred = (window as any).OneSignalDeferred || [];
-      
-      // Añadir un timeout de seguridad de 8 segundos para evitar el estado "Activando..." infinito
-      const timeoutId = setTimeout(() => {
-        console.error('[Push] Timeout esperando respuesta de OneSignal');
-        setLoading(false);
-        resolve(false);
-      }, 8000);
 
-      onSignalDeferred.push(async function(OneSignal: any) {
-        try {
-          if (!OneSignal || !OneSignal.Notifications) {
-            console.error('[Push] OneSignal no está inicializado correctamente o el dominio no está autorizado');
-            clearTimeout(timeoutId);
-            setLoading(false);
-            resolve(false);
-            return;
-          }
+      const registration = await navigator.serviceWorker.register('/sw.js');
+      console.log('[Push] Service Worker registrado');
 
-          // Solicitar permiso nativo directamente
-          console.log('[Push] Solicitando permiso nativo...');
-          await OneSignal.Notifications.requestPermission();
-          
-          // OneSignal v16: Si hay permiso, aseguramos que esté "opted in"
-          if (OneSignal.Notifications.permission && OneSignal.User?.PushSubscription) {
-            console.log('[Push] Permiso concedido, activando suscripción...');
-            await OneSignal.User.PushSubscription.optIn();
-          }
-          
-          // Esperar un breve momento para que el estado se actualice internamente
-          await new Promise(r => setTimeout(r, 1000));
-
-          // Verificar si se suscribió correctamente
-          const isPushEnabled = OneSignal.User?.PushSubscription?.optedIn;
-          const subscriptionId = OneSignal.User?.PushSubscription?.id;
-          
-          clearTimeout(timeoutId);
-
-          if (isPushEnabled && subscriptionId) {
-            console.log('[Push] Suscripción exitosa:', subscriptionId);
-            setSubscription({ id: subscriptionId });
-            setPermissionState('granted');
-            setLoading(false);
-            resolve(true);
-          } else {
-            console.log('[Push] No se completó la suscripción (ignorado o cancelado)');
-            setLoading(false);
-            resolve(false);
-          }
-        } catch (error) {
-          console.error('Error al suscribir en OneSignal:', error);
-          clearTimeout(timeoutId);
-          setLoading(false);
-          resolve(false);
-        }
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(
+          process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || ''
+        ),
       });
-    });
+
+      setSubscription(subscription);
+
+      await fetch('/api/users/me/push-subscription', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: session?.user?.id,
+          permission: 'granted',
+          subscription: JSON.stringify(subscription),
+        }),
+      });
+
+      console.log('[Push] Suscripción exitosa');
+      return true;
+    } catch (error) {
+      console.error('[Push] Error al suscribir:', error);
+      return false;
+    }
   };
 
-  const unsubscribe = async () => {
-    return new Promise<boolean>((resolve) => {
-      setLoading(true);
-      if (typeof window === 'undefined') {
-        setLoading(false);
-        resolve(false);
-        return;
+  const unsubscribe = async (): Promise<boolean> => {
+    try {
+      if (subscription) {
+        await subscription.unsubscribe();
+        setSubscription(null);
+        setPermissionState('default');
       }
-      const onSignalDeferred = (window as any).OneSignalDeferred || [];
-      onSignalDeferred.push(async function(OneSignal: any) {
-        try {
-          // En OneSignal, "unsubscribe" suele ser desactivar el envío
-          await OneSignal.User.PushSubscription.optOut();
-          setSubscription(null);
-          setLoading(false);
-          resolve(true);
-        } catch (error) {
-          console.error('Error al desuscribir en OneSignal:', error);
-          setLoading(false);
-          resolve(false);
-        }
-      });
-    });
+      return true;
+    } catch (error) {
+      console.error('[Push] Error al desuscribir:', error);
+      return false;
+    }
   };
 
   return {
@@ -187,6 +108,17 @@ export function usePushNotifications() {
     permissionState,
     loading,
     subscribe,
-    unsubscribe
+    unsubscribe,
   };
+}
+
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
 }
