@@ -348,6 +348,7 @@ model Tenant {
   metasVenta                     MetaVenta[]
   n8nWorkflows                   N8nWorkflow[]                    @relation("TenantN8nWorkflows")
   notificationLogs               NotificationLog[]
+  notificationChannels           NotificationChannel[]
   notifications                  Notification[]
   ordenesVenta                   OrdenVenta[]
   outgoingWebhookDeliveries      OutgoingWebhookDelivery[]
@@ -3367,6 +3368,35 @@ model NotificationLog {
   @@index([recipientId])
   @@index([createdAt])
   @@map("notification_logs")
+}
+
+model NotificationChannel {
+  id                String    @id @default(cuid())
+  tenantId          String
+  channel           String
+  name              String
+  enabled           Boolean   @default(true)
+  priority          String    @default("normal")
+  apiKey            String?
+  apiKeyName        String?
+  webhookUrl        String?
+  config            Json?
+  rateLimitPerDay   Int       @default(1000)
+  usedToday         Int       @default(0)
+  lastResetAt       DateTime  @default(now())
+  retryAttempts     Int       @default(3)
+  retryDelayMs      Int       @default(1000)
+  timeoutMs         Int       @default(30000)
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  tenant            Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, channel])
+  @@index([tenantId])
+  @@index([channel])
+  @@index([isActive])
+  @@map("notification_channels")
 }
 
 model InAppNotification {
