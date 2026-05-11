@@ -1,0 +1,29 @@
+version: "3.8"
+
+services:
+  apprise-api:
+    image: lc1332/chat-harvester:latest
+    container_name: volkern-apprise-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - APPRISE_API_KEYS=${APPRISE_API_KEYS:-}
+      - APPRISE_LOG_LEVEL=${APPRISE_LOG_LEVEL:-INFO}
+      - TZ=Europe/Madrid
+    volumes:
+      - apprise-config:/config
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  apprise-config:
+    driver: local
+
+networks:
+  default:
+    name: volkern-network

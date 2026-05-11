@@ -31,6 +31,7 @@ import { DocumentTemplatesList } from "@/components/dashboard/DocumentTemplatesL
 import { LeadFieldsConfig } from "@/components/dashboard/LeadFieldsConfig";
 import { ImageUploader } from "@/components/ui/image-uploader";
 import EqualityConfigSection from "@/components/equality/EqualityConfigSection";
+import { NotificationConfig } from "@/components/dashboard/notifications/NotificationConfig";
 import Link from "next/link";
 
 interface ConfiguracionDashboardProps {
@@ -192,6 +193,12 @@ export function ConfiguracionDashboard({ activeSection }: ConfiguracionDashboard
             </div>
           )}
           
+          {activeSection === "notificaciones" && (
+            <div className="py-6">
+              <NotificationConfig />
+            </div>
+          )}
+
           {activeSection === "billing" && (
             <div className="p-12 text-center">
               <CreditCard className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
