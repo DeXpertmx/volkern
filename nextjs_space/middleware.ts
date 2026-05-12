@@ -52,6 +52,11 @@ export async function middleware(request: NextRequest) {
   // (Assuming / is already the landing page)
 
 
+  // Allow .well-known paths (AI plugin discovery, etc.)
+  if (pathname.startsWith('/.well-known/')) {
+    return NextResponse.next()
+  }
+
   // Check if it's an API route that requires no auth
   if (pathname.startsWith('/api/')) {
     // Allow webhooks, public API, and auth routes
@@ -72,7 +77,8 @@ export async function middleware(request: NextRequest) {
       pathname.startsWith('/api/users/me') ||
       pathname.startsWith('/api/tenant/modules') ||
       pathname.startsWith('/api/notifications') ||
-      pathname.startsWith('/api/guide')
+      pathname.startsWith('/api/guide') ||
+      pathname.startsWith('/api/skills')
     ) {
       // Set headers for downstream even for public API routes
       const res = NextResponse.next()
