@@ -219,7 +219,7 @@ metadata:
 
 ## Instructions
 
-Usa \`run_js\` con script "index.html" para ejecutar acciones.
+Usa \`run_js\` con script "volkern-skill.html" para ejecutar acciones. El script está en: https://dexpert.volkern.app/skills/volkern-skill.html
 
 **Formato JSON a pasar:**
 \`\`\`json
