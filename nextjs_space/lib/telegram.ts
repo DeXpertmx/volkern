@@ -48,3 +48,27 @@ export class TelegramService {
     }
   }
 }
+
+/**
+ * Legacy exports for backward compatibility
+ */
+export async function sendTelegramMessage(
+  chatId: string, 
+  message: string, 
+  token?: string,
+  extra?: Record<string, unknown>
+) {
+  const botToken = token || process.env.TELEGRAM_BOT_TOKEN;
+  if (!botToken) {
+    console.error('[telegram] No token provided');
+    return { success: false, error: 'No bot token' };
+  }
+  return TelegramService.sendMessage(botToken, chatId, message);
+}
+
+export async function loadTelegramCredentials() {
+  return {
+    bot_token: process.env.TELEGRAM_BOT_TOKEN,
+    admin_chat_id: process.env.TELEGRAM_ADMIN_CHAT_ID,
+  };
+}
