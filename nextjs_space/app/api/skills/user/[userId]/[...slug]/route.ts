@@ -74,14 +74,6 @@ export async function GET(
     });
   }
 
-  // 5. index.html (JS Skill para AI Edge Gallery)
-  if (path === 'index.html') {
-    const html = generateJsSkill(userId, baseUrl);
-    return new Response(html, {
-      headers: { 'Content-Type': 'text/html' }
-    });
-  }
-
   return NextResponse.json({ error: 'Ruta de skill no encontrada' }, { status: 404 });
 }
 
@@ -238,56 +230,5 @@ Usa \`run_js\` con script "index.html" para ejecutar acciones.
 ${skillList}
 
 El script hará la llamada API automáticamente y devolverá el resultado.
-}
-
-/**
- * Generador del HTML para JS Skill (AI Edge Gallery)
- */
-function generateJsSkill(userId: string, baseUrl: string) {
-  return `<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Volkern CRM Skill</title>
-</head>
-<body>
-  <script>
-    window['ai_edge_gallery_get_result'] = async function(data, secret) {
-      try {
-        const jsonData = JSON.parse(data);
-        const { action, args, userId } = jsonData;
-        
-        if (!secret) {
-          return JSON.stringify({ error: "Se requiere API Key. Configúrala en los settings del skill." });
-        }
-
-        // Construir la URL del execute endpoint
-        const apiUrl = \`\${window.location.origin}/api/skills/user/\${userId}/execute\`;
-
-        // Ejecutar la llamada API
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': \`Bearer \${secret}\`
-          },
-          body: JSON.stringify({ tool: action, arguments: args || {} })
-        });
-
-        const result = await response.json();
-        
-        if (!response.ok) {
-          return JSON.stringify({ error: result.error || "Error en la operación" });
-        }
-
-        return JSON.stringify({ result: result });
-      } catch (e) {
-        console.error(e);
-        return JSON.stringify({ error: e.message });
-      }
-    };
-  </script>
-</body>
-</html>`;
+`;
 }
