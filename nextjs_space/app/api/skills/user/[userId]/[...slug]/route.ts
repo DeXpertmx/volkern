@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from 'next/server';
 import { globalPrisma } from '@/lib/db';
 import { skills, listSkills, executeSkill } from '@/lib/skills';
-import { crypto } from 'crypto';
+
 
 /**
  * AGENT SKILLS GATEWAY
