@@ -166,7 +166,7 @@ export async function POST(
 
   } catch (error: any) {
     console.error('[AgentSkill] Error fatal:', error);
-    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
+    return NextResponse.json({ error: 'Error interno del servidor: ' + error.message }, { status: 500 });
   }
 }
 
