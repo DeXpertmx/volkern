@@ -74,6 +74,14 @@ export async function GET(
     });
   }
 
+  // 5. index.html (JS Skill para AI Edge Gallery)
+  if (path === 'index.html') {
+    const html = generateJsSkill(userId, baseUrl);
+    return new Response(html, {
+      headers: { 'Content-Type': 'text/html' }
+    });
+  }
+
   return NextResponse.json({ error: 'Ruta de skill no encontrada' }, { status: 404 });
 }
 
@@ -201,44 +209,91 @@ security:
 }
 
 /**
- * Generador de SKILL.md para plugins de IA (AI Edge Gallery / Gemma)
+ * Generador de SKILL.md para plugins de IA (AI Edge Gallery / Qwen / Gemma)
  */
 function generateSkillMarkdown(userId: string, baseUrl: string, skills: any[]) {
   const skillList = skills.map(s => `- ${s.name}: ${s.description || 'Skill de Volkern CRM/ERP'}`).join('\n');
 
   return `---
-name: volkern-agent-skills
-description: Conectar agentes de IA con Volkern CRM/ERP para gestión de contacts, leads, tareas, inventario y finanzas.
+name: volkern-crm
+description: Gestiona leads, contactos, tareas, inventario y finanzas de Volkern CRM/ERP.
 metadata:
+  require-secret: true
+  require-secret-description: "Introduce tu API Key de Volkern (vk_live_xxx). La encontrarás en tu perfil de usuario."
   homepage: ${baseUrl}
 ---
 
-# Volkern Agent Skills
+# Volkern CRM/ERP Connector
 
 ## Instructions
 
-Para ejecutar skills de Volkern CRM/ERP:
+Usa el tool \`run_js\` para ejecutar operaciones de Volkern CRM. El script index.html recibirá la operación y argumentos, majd ejecutará la llamada API con tu API Key.
 
-1. **Discovery**: GET ${baseUrl} para ver skills disponibles
-2. **Execute**: POST ${baseUrl}/execute con el nombre del tool y argumentos
-3. **Autenticación**: Include header \`Authorization: Bearer vk_live_xxx\`
-
-## Available Tools (${skills.length})
+**Operaciones disponibles (${skills.length}):**
 
 ${skillList}
 
-## Ejemplo de uso
+## Uso
 
-\`\`\`json
-POST ${baseUrl}/execute
-{
-  "tool": "create_contact",
-  "arguments": {
-    "name": "Juan Pérez",
-    "email": "juan@ejemplo.com",
-    "phone": "+1234567890"
-  }
-}
-\`\`\`
+Cuando el usuario solicite una acción (crear contacto, buscar lead, etc):
+1. Llama al tool \`run_js\` con script: "index.html"
+2. Pasa un JSON con:
+   - action: nombre del tool (ej: "create_contact")
+   - args: argumentos específicos
+   - userId: "${userId}"
+
+El script ejecutará la llamada API y retornará el resultado.
 `;
+}
+
+/**
+ * Generador del HTML para JS Skill (AI Edge Gallery)
+ */
+function generateJsSkill(userId: string, baseUrl: string) {
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Volkern CRM Skill</title>
+</head>
+<body>
+  <script>
+    window['ai_edge_gallery_get_result'] = async function(data, secret) {
+      try {
+        const jsonData = JSON.parse(data);
+        const { action, args, userId } = jsonData;
+        
+        if (!secret) {
+          return JSON.stringify({ error: "Se requiere API Key. Configúrala en los settings del skill." });
+        }
+
+        // Construir la URL del execute endpoint
+        const apiUrl = \`\${window.location.origin}/api/skills/user/\${userId}/execute\`;
+
+        // Ejecutar la llamada API
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': \`Bearer \${secret}\`
+          },
+          body: JSON.stringify({ tool: action, arguments: args || {} })
+        });
+
+        const result = await response.json();
+        
+        if (!response.ok) {
+          return JSON.stringify({ error: result.error || "Error en la operación" });
+        }
+
+        return JSON.stringify({ result: result });
+      } catch (e) {
+        console.error(e);
+        return JSON.stringify({ error: e.message });
+      }
+    };
+  </script>
+</body>
+</html>`;
 }
