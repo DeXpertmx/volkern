@@ -99,7 +99,16 @@ export async function POST(
     return NextResponse.json({ error: 'Solo se permite ejecutar via /execute' }, { status: 404 });
   }
 
-  return NextResponse.json({ status: 'ok', message: 'Execute endpoint working' });
+  try {
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
+
+    return NextResponse.json({ status: 'ok', message: 'Execute endpoint working - auth passed' });
+  } catch (error: any) {
+    return NextResponse.json({ error: 'Error: ' + error.message }, { status: 500 });
+  }
 }
 
 /**
