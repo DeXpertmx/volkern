@@ -175,21 +175,27 @@ metadata:
 
 ## Instructions
 
-Para usar Volkern CRM, llama al tool \`run_js\` con:
+Usa el tool \`run_js\` para ejecutar acciones en Volkern.
 
-- **script**: "scripts/index.html"  
-- **data**: Un JSON con la acción y argumentos
+**IMPORTANTE:** El script debe estar en la misma ubicación que el SKILL.md:
+- El SKILL.md está en: ${baseUrl}/SKILL.md  
+- El script está en: ${baseUrl}/scripts/index.html
 
-**Ejemplos:**
+**Llamada correcta:**
+\`\`\`
+run_js(
+  script="scripts/index.html",
+  data='{"action": "list_deals", "args": {}}'
+)
+\`\`\`
 
-1. Para obtener un lead por nombre:
-\`run_js(script="scripts/index.html", data='{"action": "find_lead_by_email", "args": {"email": "lorena@ejemplo.com"}}')\`
-
-2. Para crear un contacto:
-\`run_js(script="scripts/index.html", data='{"action": "create_contact", "args": {"name": "Juan", "email": "juan@email.com"}}')\`
-
-3. Para listar deals:
-\`run_js(script="scripts/index.html", "data")\`
+**Para buscar un lead específico por email:**
+\`\`\`
+run_js(
+  script="scripts/index.html", 
+  data='{"action": "find_lead_by_email", "args": {"email": "email@del-lead.com"}}'
+)
+\`\`\`
 
 **Actions disponibles:**
 ${skillList}
