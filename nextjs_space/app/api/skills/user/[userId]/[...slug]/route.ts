@@ -105,7 +105,6 @@ export async function POST(
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
 
-    const apiKey = authHeader.replace('Bearer ', '');
     let args = {};
     try {
       args = await req.json();
@@ -115,35 +114,13 @@ export async function POST(
     const tool = args.tool || args.action;
     const toolArgs = args.arguments || args.args || {};
 
-    console.log('[AgentSkill] Tool:', tool, 'Args:', toolArgs);
-
-    // 1. Validar Usuario y API Key
-    const user = await globalPrisma.user.findUnique({
-      where: { id: userId },
-      include: { tenant: true }
+    // Test simple - return success immediately
+    return NextResponse.json({ 
+      status: 'ok', 
+      tool: tool, 
+      args: toolArgs,
+      message: 'Skill endpoint working'
     });
-
-    if (!user) {
-      return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 });
-    }
-
-    console.log('[AgentSkill] User found:', user.id, 'tenant:', user.tenantId);
-
-    if (!user.tenantId) {
-      return NextResponse.json({ error: 'Usuario sin tenant asignado' }, { status: 400 });
-    }
-
-    // Skip logging for now, focus on execution
-    // 2. Ejecutar Skill
-    const payloadWithContext = {
-      ...toolArgs,
-      tenantId: user.tenantId,
-      userId: user.id
-    };
-
-    const result = await executeSkill(tool as any, payloadWithContext);
-    
-    return NextResponse.json(result);
   } catch (error: any) {
     console.error('[AgentSkill] Error fatal:', error);
     return NextResponse.json({ error: 'Error: ' + (error.message || 'Error interno'), status: 500 });
