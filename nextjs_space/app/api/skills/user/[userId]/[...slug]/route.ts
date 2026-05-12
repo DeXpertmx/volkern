@@ -138,6 +138,8 @@ export async function POST(
 
     // 3. Ejecutar Skill (Bridge al motor de Volkern)
     try {
+      console.log(`[AgentSkill] Ejecutando ${tool} para usuario ${user.id}, tenant ${user.tenantId}`);
+      
       if (!user.tenantId) {
         return NextResponse.json({ error: 'Usuario sin tenant asignado' }, { status: 400 });
       }
@@ -151,6 +153,7 @@ export async function POST(
       };
 
       const result = await executeSkill(tool as any, payloadWithContext);
+      console.log(`[AgentSkill] Resultado:`, result);
       
       return NextResponse.json(result);
     } catch (skillError: any) {
@@ -161,12 +164,12 @@ export async function POST(
         data: { statusCode: 500 }
       });
 
-      return NextResponse.json({ error: skillError.message }, { status: 500 });
+      return NextResponse.json({ error: 'Error en skill: ' + skillError.message }, { status: 500 });
     }
 
   } catch (error: any) {
     console.error('[AgentSkill] Error fatal:', error);
-    return NextResponse.json({ error: 'Error interno del servidor: ' + error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Error: ' + (error.message || 'Error interno'), status: 500 });
   }
 }
 
