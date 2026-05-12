@@ -219,31 +219,25 @@ name: volkern-crm
 description: Gestiona leads, contactos, tareas, inventario y finanzas de Volkern CRM/ERP.
 metadata:
   require-secret: true
-  require-secret-description: "Introduce tu API Key de Volkern (vk_live_xxx). La encontrarás en tu perfil de usuario."
+  require-secret-description: "Tu API Key de Volkern (vk_live_xxx). Encuéntrala en tu perfil."
   homepage: ${baseUrl}
 ---
 
-# Volkern CRM/ERP Connector
+# Volkern CRM
 
 ## Instructions
 
-Usa el tool \`run_js\` para ejecutar operaciones de Volkern CRM. El script index.html recibirá la operación y argumentos, majd ejecutará la llamada API con tu API Key.
+Usa \`run_js\` con script "index.html" para ejecutar acciones.
 
-**Operaciones disponibles (${skills.length}):**
+**Formato JSON a pasar:**
+\`\`\`json
+{"action": "create_contact", "args": {"name": "Juan", "email": "juan@email.com"}, "userId": "${userId}"}
+\`\`\`
 
+**Actions disponibles:**
 ${skillList}
 
-## Uso
-
-Cuando el usuario solicite una acción (crear contacto, buscar lead, etc):
-1. Llama al tool \`run_js\` con script: "index.html"
-2. Pasa un JSON con:
-   - action: nombre del tool (ej: "create_contact")
-   - args: argumentos específicos
-   - userId: "${userId}"
-
-El script ejecutará la llamada API y retornará el resultado.
-`;
+El script hará la llamada API automáticamente y devolverá el resultado.
 }
 
 /**
