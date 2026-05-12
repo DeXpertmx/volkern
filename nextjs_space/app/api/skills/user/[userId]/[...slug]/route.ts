@@ -138,6 +138,10 @@ export async function POST(
 
     // 3. Ejecutar Skill (Bridge al motor de Volkern)
     try {
+      if (!user.tenantId) {
+        return NextResponse.json({ error: 'Usuario sin tenant asignado' }, { status: 400 });
+      }
+      
       // Inyectamos el contexto necesario para que el skill sepa qué tenant usar
       // El motor de skills de Volkern usa el tenantId interno
       const payloadWithContext = {
