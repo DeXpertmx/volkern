@@ -74,9 +74,12 @@ export async function GET(
     });
   }
 
-  // 5. scripts/index.html (JS Skill para AI Edge Gallery)
+  // 5. scripts/index.html - Servir archivo estático del skill
   if (path === 'scripts/index.html') {
-    const html = generateJsSkillHtml(userId);
+    const fs = require('fs');
+    const path = require('path');
+    const filePath = path.join(process.cwd(), 'public', 'skills', 'volkern-skill.html');
+    const html = fs.readFileSync(filePath, 'utf8');
     return new Response(html, {
       headers: { 'Content-Type': 'text/html' }
     });
@@ -241,54 +244,4 @@ El script hará la llamada API automáticamente y devolverá el resultado.
 `;
 }
 
-/**
- * Generador del HTML para JS Skill (AI Edge Gallery)
- */
-function generateJsSkillHtml(userId: string) {
-  const baseUrl = 'https://dexpert.volkern.app';
-  const executeUrl = baseUrl + '/api/skills/user/' + userId + '/execute';
 
-  return '<!DOCTYPE html>\n' +
-'<html lang="es">\n' +
-'<head>\n' +
-'  <meta charset="UTF-8">\n' +
-'  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n' +
-'  <title>Volkern CRM Skill</title>\n' +
-'</head>\n' +
-'<body>\n' +
-'  <script>\n' +
-'    window[\'ai_edge_gallery_get_result\'] = async function(data, secret) {\n' +
-'      try {\n' +
-'        const jsonData = JSON.parse(data);\n' +
-'        const action = jsonData.action;\n' +
-'        const args = jsonData.args || {};\n' +
-'        \n' +
-'        if (!secret) {\n' +
-'          return JSON.stringify({ error: "Se requiere API Key. Configúrala en los settings del skill." });\n' +
-'        }\n' +
-'\n' +
-'        const response = await fetch(\'' + executeUrl + '\', {\n' +
-'          method: \'POST\',\n' +
-'          headers: {\n' +
-'            \'Content-Type\': \'application/json\',\n' +
-'            \'Authorization\': \'Bearer \' + secret\n' +
-'          },\n' +
-'          body: JSON.stringify({ tool: action, arguments: args })\n' +
-'        });\n' +
-'\n' +
-'        const result = await response.json();\n' +
-'        \n' +
-'        if (!response.ok) {\n' +
-'          return JSON.stringify({ error: result.error || "Error en la operación" });\n' +
-'        }\n' +
-'\n' +
-'        return JSON.stringify({ result: result });\n' +
-'      } catch (e) {\n' +
-'        console.error(e);\n' +
-'        return JSON.stringify({ error: e.message });\n' +
-'      }\n' +
-'    };\n' +
-'  </script>\n' +
-'</body>\n' +
-'</html>';
-}
