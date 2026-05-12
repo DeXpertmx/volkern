@@ -201,28 +201,44 @@ security:
 }
 
 /**
- * Generador de SKILL.md para plugins de IA
+ * Generador de SKILL.md para plugins de IA (AI Edge Gallery / Gemma)
  */
 function generateSkillMarkdown(userId: string, baseUrl: string, skills: any[]) {
-  const skillList = skills.map(s => `- **${s.name}**: ${s.description || 'Skill de Volkern CRM/ERP'}`).join('\n');
+  const skillList = skills.map(s => `- ${s.name}: ${s.description || 'Skill de Volkern CRM/ERP'}`).join('\n');
 
-  return `# Volkern Agent Skills
+  return `---
+name: volkern-agent-skills
+description: Conectar agentes de IA con Volkern CRM/ERP para gestión de contacts, leads, tareas, inventario y finanzas.
+metadata:
+  homepage: ${baseUrl}
+---
 
-Plugin para conectar agentes de IA con Volkern CRM/ERP.
+# Volkern Agent Skills
 
-## Endpoints
+## Instructions
 
-- **Discovery**: ${baseUrl}
-- **Execute**: ${baseUrl}/execute
-- **OpenAPI**: ${baseUrl}/openapi.yaml
+Para ejecutar skills de Volkern CRM/ERP:
 
-## Disponibles (${skills.length})
+1. **Discovery**: GET ${baseUrl} para ver skills disponibles
+2. **Execute**: POST ${baseUrl}/execute con el nombre del tool y argumentos
+3. **Autenticación**: Include header \`Authorization: Bearer vk_live_xxx\`
+
+## Available Tools (${skills.length})
 
 ${skillList}
 
-## Autenticación
+## Ejemplo de uso
 
-Incluye tu API Key en el header:
-\`Authorization: Bearer vk_live_xxx\`
+\`\`\`json
+POST ${baseUrl}/execute
+{
+  "tool": "create_contact",
+  "arguments": {
+    "name": "Juan Pérez",
+    "email": "juan@ejemplo.com",
+    "phone": "+1234567890"
+  }
+}
+\`\`\`
 `;
 }
