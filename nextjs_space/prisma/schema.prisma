@@ -6219,3 +6219,107 @@ model EqualityConfig {
 
   tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
+
+// ============================================================
+// TELEGRAM CHATBOT MODELS
+// ============================================================
+
+model TelegramChatbotConfig {
+  id                    String   @id @default(cuid())
+  tenantId              String   @unique
+  botToken              String
+  webhookUrl            String?
+  isActive             Boolean  @default(true)
+  welcomeMessage        String   @default("¡Hola! Soy el asistente de Volkern. ¿En qué puedo ayudarte?")
+  fallbackMessage       String   @default("No entendí bien tu mensaje. ¿Puedes reformularlo?")
+  maxContextMessages   Int      @default(10)
+  sessionTimeoutMinutes Int      @default(30)
+  gemmaTemperature      Float    @default(0.7)
+  gemmaMaxTokens        Int      @default(2048)
+  enableAuditLog       Boolean  @default(true)
+  enableSecurityCheck  Boolean  @default(true)
+  rateLimitPerMinute   Int      @default(10)
+  allowedUserIds       String[] @default([])
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([tenantId, isActive])
+  @@map("telegram_chatbot_config")
+}
+
+model TelegramUser {
+  id                    String   @id @default(cuid())
+  tenantId              String
+  telegramUserId        String
+  telegramUsername      String?
+  telegramFirstName     String?
+  telegramLastName      String?
+  telegramLanguageCode  String?
+  isAuthorized         Boolean  @default(false)
+  isBlocked             Boolean  @default(false)
+  lastMessageAt        DateTime?
+  totalMessages         Int      @default(0)
+  userId               String?
+  conversationId       String?
+  metadata             Json?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@unique([tenantId, telegramUserId])
+  @@index([tenantId])
+  @@index([telegramUserId])
+  @@map("telegram_users")
+}
+
+model ChatSession {
+  id                    String   @id @default(cuid())
+  tenantId              String
+  telegramUserId        String
+  userId               String?
+  sessionId             String   @unique
+  state                 String   @default("ACTIVE")
+  lastIntent            String?
+  pendingIntent         String?
+  collectedEntities    Json     @default("{}")
+  missingEntities       String[] @default([])
+  step                  Int      @default(0)
+  messagesCount        Int      @default(0)
+  lastMessageAt        DateTime @default(now())
+  startedAt            DateTime @default(now())
+  endedAt              DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([tenantId, telegramUserId])
+  @@index([sessionId])
+  @@index([state])
+  @@index([lastMessageAt])
+  @@map("chat_sessions")
+}
+
+model ChatbotAuditLog {
+  id                  String   @id @default(cuid())
+  tenantId            String
+  sessionId           String?
+  telegramUserId      String?
+  userId             String?
+  messageId          String?
+  intent              String?
+  detectedEntities   Json?
+  skillExecuted       String?
+  skillParams         Json?
+  skillResult         Json?
+  status              String   // PENDING, SUCCESS, ERROR, BLOCKED_SECURITY, BLOCKED_PERMISSION
+  errorMessage        String?
+  executionTimeMs     Int?
+  inputRaw            String?  // Input original del usuario
+  outputFormatted     String?  // Respuesta formateada
+  gemmaInput          String?  // Prompt enviado a Gemma
+  gemmaOutput         String?  // Respuesta de Gemma
+  createdAt           DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([sessionId])
+  @@index([status])
+  @@map("chatbot_audit_logs")
+}
