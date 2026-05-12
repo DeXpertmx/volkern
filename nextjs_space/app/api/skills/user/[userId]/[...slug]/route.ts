@@ -65,6 +65,15 @@ export async function GET(
     });
   }
 
+  // 4. SKILL.md (Para Plugins de IA como Gemma/Pinokio)
+  if (path === 'SKILL.md') {
+    const skills = listSkills();
+    const md = generateSkillMarkdown(userId, baseUrl, skills);
+    return new Response(md, {
+      headers: { 'Content-Type': 'text/markdown' }
+    });
+  }
+
   return NextResponse.json({ error: 'Ruta de skill no encontrada' }, { status: 404 });
 }
 
@@ -189,4 +198,31 @@ security:
 `;
 
   return yaml;
+}
+
+/**
+ * Generador de SKILL.md para plugins de IA
+ */
+function generateSkillMarkdown(userId: string, baseUrl: string, skills: any[]) {
+  const skillList = skills.map(s => `- **${s.name}**: ${s.description || 'Skill de Volkern CRM/ERP'}`).join('\n');
+
+  return `# Volkern Agent Skills
+
+Plugin para conectar agentes de IA con Volkern CRM/ERP.
+
+## Endpoints
+
+- **Discovery**: ${baseUrl}
+- **Execute**: ${baseUrl}/execute
+- **OpenAPI**: ${baseUrl}/openapi.yaml
+
+## Disponibles (${skills.length})
+
+${skillList}
+
+## Autenticación
+
+Incluye tu API Key en el header:
+\`Authorization: Bearer vk_live_xxx\`
+`;
 }
