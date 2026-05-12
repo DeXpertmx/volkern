@@ -100,7 +100,7 @@ export async function POST(
   }
 
   return NextResponse.json({ status: 'ok', message: 'Execute endpoint working' });
-  }
+}
 
 /**
  * Generador dinámico de OpenAPI 3.0 para los skills disponibles
