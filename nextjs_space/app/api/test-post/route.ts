@@ -1,5 +1,7 @@
-import { NextResponse } from 'next/server';
+export const dynamic = 'force-dynamic';
 
 export async function POST() {
-  return NextResponse.json({ ok: true, message: 'test' });
+  return new Response(JSON.stringify({ ok: true }), {
+    headers: { 'Content-Type': 'application/json' }
+  });
 }
