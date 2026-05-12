@@ -2,48 +2,62 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Volkern CRM Skill</title>
+  <title>Volkern CRM</title>
 </head>
 <body>
-  <script>
-    window['ai_edge_gallery_get_result'] = async function(data, secret) {
-      try {
-        const jsonData = JSON.parse(data);
-        const { action, args } = jsonData;
-        
-        if (!secret) {
-          return JSON.stringify({ error: "Se requiere API Key. Configúrala en los settings del skill." });
-        }
+<script>
+window['ai_edge_gallery_get_result'] = async function(data, secret) {
+  console.log('[Volkern] data:', data, 'secret:', secret ? 'yes' : 'no');
+  
+  try {
+    if (!secret) {
+      return JSON.stringify({ error: "Configura tu API Key en los settings del skill" });
+    }
 
-        // Get userId from current page URL (we're in /api/skills/user/{userId}/...)
-        const pathParts = window.location.pathname.split('/');
-        const userIdIndex = pathParts.indexOf('user') + 1;
-        const userId = pathParts[userIdIndex];
-        
-        const apiUrl = '/api/skills/user/' + userId + '/execute';
+    let action, args;
+    try {
+      const parsed = JSON.parse(data);
+      action = parsed.action || parsed.tool;
+      args = parsed.args || parsed.arguments || {};
+    } catch (e) {
+      return JSON.stringify({ error: "Data inválida: " + e.message });
+    }
 
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + secret
-          },
-          body: JSON.stringify({ tool: action, arguments: args || {} })
-        });
+    // Extraer userId de la URL
+    const path = window.location.pathname;
+    const parts = path.split('/');
+    const userIdx = parts.indexOf('user');
+    const userId = parts[userIdx + 1];
+    
+    console.log('[Volkern] action:', action, 'userId:', userId);
 
-        const result = await response.json();
-        
-        if (!response.ok) {
-          return JSON.stringify({ error: result.error || "Error en la operación" });
-        }
+    if (!userId) {
+      return JSON.stringify({ error: "No se pudo determinar el userId" });
+    }
 
-        return JSON.stringify({ result: result });
-      } catch (e) {
-        console.error(e);
-        return JSON.stringify({ error: e.message });
-      }
-    };
-  </script>
+    const apiUrl = '/api/skills/user/' + userId + '/execute';
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + secret
+      },
+      body: JSON.stringify({ tool: action, arguments: args })
+    });
+
+    const result = await response.json();
+    console.log('[Volkern] result:', result);
+    
+    if (!response.ok) {
+      return JSON.stringify({ error: result.error || "Error" });
+    }
+
+    return JSON.stringify({ result: result });
+  } catch (e) {
+    console.error('[Volkern] error:', e);
+    return JSON.stringify({ error: e.message });
+  }
+};
+</script>
 </body>
 </html>
