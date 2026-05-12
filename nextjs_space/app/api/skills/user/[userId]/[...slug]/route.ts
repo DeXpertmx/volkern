@@ -179,13 +179,13 @@ Usa \`run_js\` con script "scripts/index.html" para ejecutar acciones.
 
 **Formato JSON a pasar:**
 \`\`\`json
-{"action": "create_contact", "args": {"name": "Juan", "email": "juan@email.com"}, "userId": "${userId}"}
+{"action": "create_contact", "args": {"name": "Juan", "email": "juan@email.com"}}
 \`\`\`
 
 **Actions disponibles:**
 ${skillList}
 
-El script hará la llamada API automáticamente y devolverá el resultado.
+El script hará la llamada API automáticamente a /execute y devolverá el resultado.
 `;
 }
 
