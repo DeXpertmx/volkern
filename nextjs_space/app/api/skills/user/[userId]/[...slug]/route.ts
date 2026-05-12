@@ -99,33 +99,8 @@ export async function POST(
     return NextResponse.json({ error: 'Solo se permite ejecutar via /execute' }, { status: 404 });
   }
 
-  try {
-    const authHeader = req.headers.get('authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    }
-
-    let args = {};
-    try {
-      args = await req.json();
-    } catch {
-      args = {};
-    }
-    const tool = args.tool || args.action;
-    const toolArgs = args.arguments || args.args || {};
-
-    // Test simple - return success immediately
-    return NextResponse.json({ 
-      status: 'ok', 
-      tool: tool, 
-      args: toolArgs,
-      message: 'Skill endpoint working'
-    });
-  } catch (error: any) {
-    console.error('[AgentSkill] Error fatal:', error);
-    return NextResponse.json({ error: 'Error: ' + (error.message || 'Error interno'), status: 500 });
+  return NextResponse.json({ status: 'ok', message: 'Execute endpoint working' });
   }
-}
 
 /**
  * Generador dinámico de OpenAPI 3.0 para los skills disponibles
