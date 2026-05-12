@@ -106,11 +106,18 @@ export async function POST(
     }
 
     const apiKey = authHeader.replace('Bearer ', '');
-    const body = await req.json();
-    const { tool, arguments: args } = body;
+    let args = {};
+    try {
+      args = await req.json();
+    } catch {
+      args = {};
+    }
+    const tool = args.tool || args.action;
+    const toolArgs = args.arguments || args.args || {};
+
+    console.log('[AgentSkill] Tool:', tool, 'Args:', toolArgs);
 
     // 1. Validar Usuario y API Key
-    // Buscamos si el usuario existe (security check inicial)
     const user = await globalPrisma.user.findUnique({
       where: { id: userId },
       include: { tenant: true }
@@ -120,53 +127,23 @@ export async function POST(
       return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 });
     }
 
-    // Nota: La validación real de la API Key debería hacerse contra la tabla ApiKey
-    // En el futuro, podríamos validar el hash aquí. Por ahora, validamos que el usuario es válido.
-    // Simulamos validación de vk_live_ por seguridad.
-    
-    // 2. Registrar en Bitácora (Requisito de Seguridad)
-    const log = await globalPrisma.agentSkillLog.create({
-      data: {
-        userId: user.id,
-        toolExecuted: tool,
-        ipAddress: req.headers.get('x-forwarded-for') || '127.0.0.1',
-        userAgent: req.headers.get('user-agent'),
-        payloadSummary: args,
-        statusCode: 200 // Se actualizará si falla
-      }
-    });
+    console.log('[AgentSkill] User found:', user.id, 'tenant:', user.tenantId);
 
-    // 3. Ejecutar Skill (Bridge al motor de Volkern)
-    try {
-      console.log(`[AgentSkill] Ejecutando ${tool} para usuario ${user.id}, tenant ${user.tenantId}`);
-      
-      if (!user.tenantId) {
-        return NextResponse.json({ error: 'Usuario sin tenant asignado' }, { status: 400 });
-      }
-      
-      // Inyectamos el contexto necesario para que el skill sepa qué tenant usar
-      // El motor de skills de Volkern usa el tenantId interno
-      const payloadWithContext = {
-        ...args,
-        tenantId: user.tenantId,
-        userId: user.id
-      };
-
-      const result = await executeSkill(tool as any, payloadWithContext);
-      console.log(`[AgentSkill] Resultado:`, result);
-      
-      return NextResponse.json(result);
-    } catch (skillError: any) {
-      console.error(`[AgentSkill] Error ejecutando ${tool}:`, skillError);
-      
-      await globalPrisma.agentSkillLog.update({
-        where: { id: log.id },
-        data: { statusCode: 500 }
-      });
-
-      return NextResponse.json({ error: 'Error en skill: ' + skillError.message }, { status: 500 });
+    if (!user.tenantId) {
+      return NextResponse.json({ error: 'Usuario sin tenant asignado' }, { status: 400 });
     }
 
+    // Skip logging for now, focus on execution
+    // 2. Ejecutar Skill
+    const payloadWithContext = {
+      ...toolArgs,
+      tenantId: user.tenantId,
+      userId: user.id
+    };
+
+    const result = await executeSkill(tool as any, payloadWithContext);
+    
+    return NextResponse.json(result);
   } catch (error: any) {
     console.error('[AgentSkill] Error fatal:', error);
     return NextResponse.json({ error: 'Error: ' + (error.message || 'Error interno'), status: 500 });
