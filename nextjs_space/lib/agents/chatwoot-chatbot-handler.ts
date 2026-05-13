@@ -16,6 +16,7 @@ import { ExecutionEngine, ExecutionResult } from './execution-engine';
 import { ResponseFormatter } from './response-formatter';
 import { ChatbotAuditLogger } from './audit-logger';
 import { SecurityCheckpointAgent } from './security-checkpoint';
+import { ConversationContextAgent } from './conversation-context';
 import { syncOutgoingChatwootMessage } from '@/lib/skills/chatwoot-sync-skill';
 
 interface ChatwootMessagePayload {
@@ -41,26 +42,6 @@ interface ChatwootMessagePayload {
     };
   };
 }
-
-interface ChatContext {
-  tenantId: string;
-  userId: string;
-  conversationId: string;
-  lastIntent?: string;
-  pendingIntent?: string;
-  collectedEntities: Record<string, string>;
-  missingEntities: string[];
-  step: number;
-  chatwootContactId?: string;
-  telegramChatId?: string;
-  createdAt: number;
-  updatedAt: number;
-}
-
-// Contexto en memoria con persistencia básica
-const CONTEXT_CACHE = new Map<string, { context: ChatContext; expires: number }>();
-const CONTEXT_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutos
-const CONTEXT_MAX_AGE = 24 * 60 * 60 * 1000; // 24 horas máximo
 
 export async function handleChatwootMessage(payload: ChatwootMessagePayload) {
   const startTime = Date.now();
@@ -131,17 +112,23 @@ export async function handleChatwootMessage(payload: ChatwootMessagePayload) {
       return;
     }
 
-    // 2. Obtener o crear contexto de conversación
-    const context = await getOrCreateContext(tenantId, user.id, conversationId, {
-      telegramChatId,
-      chatwootContactId
+    // 2. Obtener o crear contexto de conversación con el agente mejorado
+    const context = await ConversationContextAgent.load({
+      conversationId,
+      userId: user.id,
+      tenantId
     });
+    
+    // Agregar mensaje del usuario al historial
+    await ConversationContextAgent.addMessage(context, 'user', content);
 
-    // 3. Detectar intent con Gemma (solo últimos mensajes para no saturar)
+    // 3. Detectar intent con Gemma (usando resumen del contexto)
+    const contextSummary = ConversationContextAgent.getSummary(context);
+    
     const intentResult = await GemmaRouterAgent.detectIntent(content, {
-      pendingIntent: context.pendingIntent,
-      collectedEntities: context.collectedEntities,
-      missingEntities: context.missingEntities
+      pendingIntent: contextSummary.pendingIntent,
+      collectedEntities: contextSummary.entities,
+      missingEntities: contextSummary.missing
     });
 
     if (!intentResult.success || !intentResult.data) {
@@ -192,18 +179,13 @@ export async function handleChatwootMessage(payload: ChatwootMessagePayload) {
     // 4b. Loggear intent detectado
     await logAudit(tenantId, user.id, context, intent, content, entities, 'PENDING');
 
-    // 5. Actualizar contexto
-    context.lastIntent = intent;
-    context.collectedEntities = { ...context.collectedEntities, ...entities };
-    context.missingEntities = missingEntities;
-    context.step += 1;
+    // 5. Actualizar contexto con el intent detectado
+    await ConversationContextAgent.updateIntent(context, intent, entities, missingEntities);
 
     // 6. Si hay missing entities, pedir la faltante (flujo multi-turno)
     if (missingEntities.length > 0) {
       const nextEntity = missingEntities[0];
       const prompt = getPromptForEntity(nextEntity);
-      context.pendingIntent = intent;
-      saveContext(conversationId, context);
 
       await sendResponseToChatwoot(tenantId, conversationId, prompt, payload);
       return;
@@ -224,9 +206,11 @@ export async function handleChatwootMessage(payload: ChatwootMessagePayload) {
 
     // Si hay response en lugar de plan, retornarlo
     if (planResult.response) {
-      context.pendingIntent = undefined;
-      context.missingEntities = [];
-      saveContext(conversationId, context);
+      // Limpiar contexto (intento completado)
+      await ConversationContextAgent.update(context, {
+        pendingIntent: undefined,
+        missingEntities: []
+      });
 
       await logAudit(tenantId, user.id, context, intent, content, entities, 'SUCCESS', undefined, planResult.response);
       await sendResponseToChatwoot(tenantId, conversationId, planResult.response, payload);
@@ -254,13 +238,17 @@ export async function handleChatwootMessage(payload: ChatwootMessagePayload) {
 
     if (executionResult.success) {
       responseText = ExecutionEngine.formatSkillResult(planResult.plan.skillName, executionResult.data);
-      context.pendingIntent = undefined;
-      context.missingEntities = [];
+      // Limpiar contexto (intento completado)
+      await ConversationContextAgent.update(context, {
+        pendingIntent: undefined,
+        missingEntities: []
+      });
     } else {
       responseText = executionResult.error || '❌ Ocurrió un error al procesar tu solicitud.';
     }
 
-    saveContext(conversationId, context);
+    // Agregar respuesta al historial
+    await ConversationContextAgent.addMessage(context, 'assistant', responseText);
 
     // 10. Enviar respuesta
     await sendResponseToChatwoot(tenantId, conversationId, responseText, payload);
@@ -338,50 +326,10 @@ async function findUserByTelegramOrContact(
   return null;
 }
 
-/**
- * Obtiene o crea contexto de conversación
- */
-async function getOrCreateContext(
-  tenantId: string,
-  userId: string,
-  conversationId: string,
-  identifiers: { telegramChatId?: string; chatwootContactId?: string }
-): Promise<ChatContext> {
-  const cached = CONTEXT_CACHE.get(conversationId);
-  
-  if (cached && cached.expires > Date.now()) {
-    return cached.context;
-  }
-
-  const context: ChatContext = {
-    tenantId,
-    userId,
-    conversationId,
-    pendingIntent: undefined,
-    collectedEntities: {},
-    missingEntities: [],
-    step: 0,
-    telegramChatId: identifiers.telegramChatId,
-    chatwootContactId: identifiers.chatwootContactId,
-    createdAt: Date.now(),
-    updatedAt: Date.now()
-  };
-
-  return context;
-}
-
-function saveContext(conversationId: string, context: ChatContext) {
-  context.updatedAt = Date.now();
-  CONTEXT_CACHE.set(conversationId, {
-    context,
-    expires: Date.now() + CONTEXT_TIMEOUT_MS
-  });
-}
-
 async function logAudit(
   tenantId: string,
   userId: string,
-  context: ChatContext,
+  context: any,
   intent: string,
   inputRaw: string,
   entities: Record<string, string> | undefined,
@@ -391,10 +339,10 @@ async function logAudit(
 ) {
   await ChatbotAuditLogger.log({
     tenantId,
-    sessionId: context.conversationId,
+    sessionId: context?.conversationId,
     userId,
-    telegramUserId: context.telegramChatId,
-    chatwootContactId: context.chatwootContactId,
+    telegramUserId: context?.telegramChatId,
+    chatwootContactId: context?.chatwootContactId,
     intent,
     detectedEntities: entities,
     status: status as any,
