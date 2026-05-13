@@ -177,7 +177,7 @@ metadata:
 
 Usa el tool \`run_js\` para ejecutar acciones en Volkern.
 
-**IMPORTANTE:** El script debe estar en la misma ubicación que el SKILL.md:
+**IMPORTANTE:** El script está en la carpeta scripts/:
 - El SKILL.md está en: ${baseUrl}/SKILL.md  
 - El script está en: ${baseUrl}/scripts/index.html
 

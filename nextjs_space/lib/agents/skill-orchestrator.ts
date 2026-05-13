@@ -310,7 +310,7 @@ export const SkillOrchestratorAgent = {
   /**
    * Verificar acceso al skill por tenant
    */
-  private async checkSkillAccess(tenantId: string, intent: string): Promise<boolean> {
+  async checkSkillAccess(tenantId: string, intent: string): Promise<boolean> {
     try {
       const tenant = await prisma.tenant.findUnique({
         where: { id: tenantId },

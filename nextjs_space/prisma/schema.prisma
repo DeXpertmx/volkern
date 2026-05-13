@@ -420,6 +420,8 @@ model OnboardingProgress {
   watchdogConectado     Boolean   @default(false)
   packSeleccionado      String?   @default("basic")
   packAplicado         Boolean   @default(false)
+  primerMensaje        Boolean   @default(false)
+  fechaPrimerMensaje   DateTime?
 
   @@index([tenantId])
 }
