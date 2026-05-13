@@ -67,8 +67,8 @@ export default function SignupPage() {
         return
       }
 
-      // Redirigir al wizard de onboarding
-      router.push('/dashboard/onboarding')
+      // Redirigir al onboarding simplificado
+      router.push('/dashboard/onboarding-quick')
       
     } catch (error: any) {
       console.error('Error en signup:', error)
