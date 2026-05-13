@@ -43,9 +43,38 @@ interface ChatwootMessagePayload {
   };
 }
 
+// Timeout para todo el agente (ms)
+const AGENT_TIMEOUT_MS = 8000;
+
+// Fallback response cuando algo falla
+const FALLBACK_RESPONSE = '⏳ Estoy procesando tu solicitud. Por favor, espera un momento...';
+
 export async function handleChatwootMessage(payload: ChatwootMessagePayload) {
   const startTime = Date.now();
   const { tenantId, content, conversationId, metadata } = payload;
+
+  // 🔐 1. Validar conversationId del payload
+  if (!conversationId) {
+    console.error('[Gemma] ERROR: No conversationId en payload');
+    return;
+  }
+
+  // 🔐 2. Validar accountId si está en metadata
+  if (metadata?.accountId) {
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { configuracion: true, metadata: true }
+    });
+    
+    const expectedAccountId = (tenant?.configuracion as any)?.chatwootAccountId || 
+                              (tenant?.metadata as any)?.chatwootAccountId;
+    
+    if (expectedAccountId && expectedAccountId !== metadata.accountId) {
+      console.error('[Gemma] ERROR: Cross-tenant conversation attempt');
+      await sendFallbackResponse(tenantId, conversationId, payload);
+      return;
+    }
+  }
 
   // SECURITY: Validar tenantId presente
   if (!tenantId) {
@@ -66,6 +95,35 @@ export async function handleChatwootMessage(payload: ChatwootMessagePayload) {
   }
 
   console.log(`[Gemma] Procesando mensaje para tenant ${tenantId}, conversación ${conversationId}`);
+
+  // ⏱️ Timeout wrapper para todo el procesamiento
+  const processingPromise = processMessage(payload);
+  
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error('TIMEOUT')), AGENT_TIMEOUT_MS);
+  });
+
+  try {
+    await Promise.race([processingPromise, timeoutPromise]);
+  } catch (error) {
+    console.error('[Gemma] Error o timeout:', error instanceof Error ? error.message : 'Unknown');
+    
+    // 📤 Fallback response si hay timeout o error
+    await sendFallbackResponse(tenantId, conversationId, payload);
+    
+    // Loggear error
+    await ChatbotAuditLogger.log({
+      tenantId,
+      conversationId,
+      inputRaw: content,
+      status: error instanceof Error && error.message === 'TIMEOUT' ? 'TIMEOUT' : 'ERROR',
+      errorMessage: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+}
+
+async function processMessage(payload: ChatwootMessagePayload) {
+  const { tenantId, content, conversationId, metadata } = payload;
 
   try {
     // 1. Identificar usuario con doble mapeo
@@ -385,6 +443,22 @@ async function sendResponseToChatwoot(
     console.log(`[Gemma] Respuesta enviada a conversación ${conversationId}`);
   } catch (error) {
     console.error('[Gemma] Error enviando respuesta:', error);
+  }
+}
+
+/**
+ * Envía mensaje de fallback cuando hay timeout o error
+ */
+async function sendFallbackResponse(
+  tenantId: string,
+  conversationId: string,
+  originalPayload: ChatwootMessagePayload
+): Promise<void> {
+  try {
+    await sendResponseToChatwoot(tenantId, conversationId, FALLBACK_RESPONSE, originalPayload);
+    console.log(`[Gemma] Fallback response enviado para conversación ${conversationId}`);
+  } catch (error) {
+    console.error('[Gemma] Error enviando fallback response:', error);
   }
 }
 
