@@ -1,148 +1,316 @@
+/**
+ * SkillOrchestratorAgent - Orquestador de planes de ejecución
+ * 
+ * Convierte intent → plan multi-step dinámico
+ * Usa contexto para completar entidades faltantes
+ * Permite flujos condicionales
+ */
+
 import { prisma } from '@/lib/db';
-import { DetectedIntent } from './gemma-router';
-import { ConversationContext } from './conversation-context';
 
 export interface ExecutionPlan {
   steps: ExecutionStep[];
-  skillName: string;
-  skillParams: Record<string, any>;
 }
 
 export interface ExecutionStep {
   action: string;
   params?: Record<string, any>;
-  skill?: string;
 }
 
-interface SkillMapping {
-  skillName: string;
-  permission?: string;
-  paramBuilder: (entities: Record<string, string>, context: ConversationContext) => Record<string, any>;
+export interface OrchestratorInput {
+  intent: string;
+  entities: Record<string, string>;
+  context: {
+    tenantId: string;
+    userId: string;
+    pendingIntent?: string;
+    collectedEntities: Record<string, string>;
+    missingEntities: string[];
+  };
+  tenantId: string;
 }
 
-const INTENT_TO_SKILL_MAP: Record<string, SkillMapping> = {
-  'agendar_cita': {
-    skillName: 'auto_schedule',
-    paramBuilder: (entities, context) => ({
-      tenantId: context.tenantId,
-      leadId: context.userId,
-      date: entities.date,
-      time: entities.time,
-      service: entities.service,
-      customerName: entities.customer_name,
-      phone: entities.phone,
-      email: entities.email
-    })
-  },
-  'consultar_cita': {
-    skillName: 'get_upcoming_bookings',
-    paramBuilder: (entities, context) => ({
-      tenantId: context.tenantId,
-      limit: 5
-    })
-  },
-  'cancelar_cita': {
-    skillName: 'cancel_booking',
-    paramBuilder: (entities, context) => ({
-      tenantId: context.tenantId,
-      bookingId: entities.appointment_id
-    })
-  },
-  'consultar_servicios': {
-    skillName: 'export_catalog',
-    paramBuilder: (entities, context) => ({
-      tenantId: context.tenantId,
-      format: 'json'
-    })
-  },
-  'consultar_precio': {
-    skillName: 'search_catalog',
-    paramBuilder: (entities, context) => ({
-      tenantId: context.tenantId,
-      search: entities.service
-    })
-  },
-  'contactar_humano': {
-    skillName: 'transfer_to_human',
-    paramBuilder: (entities, context) => ({
-      tenantId: context.tenantId,
-      userId: context.userId,
-      reason: entities.reason || 'Solicitud del cliente',
-      priority: 'normal'
-    })
-  }
+const INTENT_TO_SKILL: Record<string, string> = {
+  'agendar_cita': 'auto_schedule',
+  'consultar_cita': 'get_upcoming_bookings',
+  'cancelar_cita': 'cancel_booking',
+  'consultar_servicios': 'export_catalog',
+  'consultar_precio': 'search_catalog',
+  'contactar_humano': 'transfer_to_human',
+  'consultar_estado_pedido': 'get_deal',
+  'help': 'help'
 };
 
-export class SkillOrchestratorAgent {
-  static async buildExecutionPlan(
-    intent: DetectedIntent,
-    context: ConversationContext,
+export const SkillOrchestratorAgent = {
+  /**
+   * Crear plan de ejecución desde intent
+   */
+  async createPlan(
+    intentData: { intent: string; entities: Record<string, string>; missingEntities: string[] },
+    context: any,
     tenantId: string
-  ): Promise<{ success: boolean; plan?: ExecutionPlan; error?: string; response?: string }> {
-    // Si el intent no es accionable, generar respuesta de ayuda
-    if (!this.isActionableIntent(intent.intent)) {
-      return {
-        success: true,
-        response: this.getHelpResponse(intent.intent)
-      };
-    }
+  ): Promise<{ success: boolean; plan?: ExecutionPlan; response?: string; error?: string }> {
+    const { intent, entities, missingEntities } = intentData;
 
-    // Si hay missing entities, generar prompt para obtenerlos
-    if (intent.missingEntities && intent.missingEntities.length > 0) {
-      return {
-        success: true,
-        response: intent.suggestedResponse || this.getPromptForEntity(intent.missingEntities[0])
-      };
-    }
+    // 🧠 1. Merge con contexto (entity completion)
+    const mergedEntities = {
+      ...(context.collectedEntities || {}),
+      ...entities
+    };
 
-    // Obtener mapping de skill
-    const mapping = INTENT_TO_SKILL_MAP[intent.intent];
-    if (!mapping) {
-      return {
-        success: false,
-        error: `No hay skill mapeado para el intent: ${intent.intent}`
-      };
-    }
-
-    // Verificar que el tenant tiene el skill disponible (module check)
-    const hasAccess = await this.checkSkillAccess(tenantId, mapping.skillName);
+    // 🛡️ 2. Verificar acceso al skill
+    const hasAccess = await this.checkSkillAccess(tenantId, intent);
     if (!hasAccess) {
       return {
         success: true,
-        response: 'Lo siento, no tienes acceso a esta función. ¿Hay algo más en lo que pueda ayudarte?'
+        response: this.getNoAccessMessage(intent)
       };
     }
 
-    // Construir parámetros del skill
-    const skillParams = mapping.paramBuilder(intent.entities, context);
+    // 🧩 3. Si hay missing entities, generar plan para pedir info
+    if (missingEntities && missingEntities.length > 0) {
+      return {
+        success: true,
+        plan: this.createAskUserPlan(missingEntities[0], intent)
+      };
+    }
 
-    // Construir plan de ejecución
-    const plan: ExecutionPlan = {
-      skillName: mapping.skillName,
-      skillParams,
-      steps: [
-        {
-          action: 'validate_params',
-          params: skillParams
-        },
-        {
-          action: 'execute_skill',
-          skill: mapping.skillName,
-          params: skillParams
-        },
-        {
-          action: 'format_response'
-        }
-      ]
-    };
+    // 🧩 4. Generar plan según intent
+    const plan = this.buildPlan(intent, mergedEntities, tenantId);
+    
+    if (!plan) {
+      return {
+        success: true,
+        response: this.getHelpResponse()
+      };
+    }
 
     return {
       success: true,
       plan
     };
-  }
+  },
 
-  private static async checkSkillAccess(tenantId: string, skillName: string): Promise<boolean> {
+  /**
+   * Construir plan según intent
+   */
+  private buildPlan(intent: string, entities: Record<string, string>, tenantId: string): ExecutionPlan | null {
+    const planBuilders: Record<string, (entities: Record<string, string>, tenantId: string) => ExecutionPlan | null> = {
+      'agendar_cita': this.planAgendarCita,
+      'consultar_cita': this.planConsultarCita,
+      'cancelar_cita': this.planCancelarCita,
+      'consultar_servicios': this.planConsultarServicios,
+      'consultar_precio': this.planConsultarPrecio,
+      'contactar_humano': this.planContactarHumano,
+      'consultar_estado_pedido': this.planEstadoPedido,
+      'help': this.planHelp
+    };
+
+    const builder = planBuilders[intent];
+    return builder ? builder.call(this, entities, tenantId) : this.planFallback();
+  },
+
+  // ==================== PLANES POR INTENT ====================
+
+  /**
+   * Plan: Agendar cita
+   */
+  private planAgendarCita(entities: Record<string, string>, tenantId: string): ExecutionPlan {
+    // Si falta fecha → pedir
+    if (!entities.date) {
+      return this.createAskUserPlan('date', 'agendar_cita');
+    }
+
+    // Si falta hora → pedir
+    if (!entities.time) {
+      return this.createAskUserPlan('time', 'agendar_cita');
+    }
+
+    // Si falta servicio → pedir
+    if (!entities.service) {
+      return this.createAskUserPlan('service', 'agendar_cita');
+    }
+
+    // Flujo completo
+    return {
+      steps: [
+        {
+          action: 'validate_availability',
+          params: { date: entities.date, time: entities.time }
+        },
+        {
+          action: 'auto_schedule',
+          params: {
+            tenantId,
+            date: entities.date,
+            time: entities.time,
+            service: entities.service,
+            customerName: entities.customer_name
+          }
+        },
+        {
+          action: 'confirm_booking',
+          params: {}
+        }
+      ]
+    };
+  },
+
+  /**
+   * Plan: Consultar cita
+   */
+  private planConsultarCita(entities: Record<string, string>, tenantId: string): ExecutionPlan {
+    return {
+      steps: [
+        {
+          action: 'get_upcoming_bookings',
+          params: { tenantId, limit: 5 }
+        }
+      ]
+    };
+  },
+
+  /**
+   * Plan: Cancelar cita
+   */
+  private planCancelarCita(entities: Record<string, string>, tenantId: string): ExecutionPlan {
+    if (!entities.appointment_id) {
+      return this.createAskUserPlan('appointment_id', 'cancelar_cita');
+    }
+
+    return {
+      steps: [
+        {
+          action: 'cancel_booking',
+          params: { tenantId, bookingId: entities.appointment_id }
+        }
+      ]
+    };
+  },
+
+  /**
+   * Plan: Consultar servicios
+   */
+  private planConsultarServicios(_entities: Record<string, string>, tenantId: string): ExecutionPlan {
+    return {
+      steps: [
+        {
+          action: 'export_catalog',
+          params: { tenantId, format: 'json' }
+        }
+      ]
+    };
+  },
+
+  /**
+   * Plan: Consultar precio
+   */
+  private planConsultarPrecio(entities: Record<string, string>, tenantId: string): ExecutionPlan {
+    if (!entities.service) {
+      return this.createAskUserPlan('service', 'consultar_precio');
+    }
+
+    return {
+      steps: [
+        {
+          action: 'search_catalog',
+          params: { tenantId, search: entities.service }
+        }
+      ]
+    };
+  },
+
+  /**
+   * Plan: Contactar humano
+   */
+  private planContactarHumano(_entities: Record<string, string>, tenantId: string): ExecutionPlan {
+    return {
+      steps: [
+        {
+          action: 'transfer_to_human',
+          params: { tenantId, reason: 'Solicitud del usuario' }
+        }
+      ]
+    };
+  },
+
+  /**
+   * Plan: Estado de pedido
+   */
+  private planEstadoPedido(_entities: Record<string, string>, _tenantId: string): ExecutionPlan {
+    return {
+      steps: [
+        {
+          action: 'get_deal',
+          params: { status: 'open' }
+        }
+      ]
+    };
+  },
+
+  /**
+   * Plan: Help
+   */
+  private planHelp(): ExecutionPlan {
+    return {
+      steps: [
+        {
+          action: 'help',
+          params: {}
+        }
+      ]
+    };
+  },
+
+  /**
+   * Plan: Fallback
+   */
+  private planFallback(): ExecutionPlan {
+    return {
+      steps: [
+        {
+          action: 'ask_user',
+          params: {
+            message: '🤔 No entendí bien tu mensaje. ¿Puedes reformular o escribir con otras palabras?'
+          }
+        }
+      ]
+    };
+  },
+
+  /**
+   * Crear plan para pedir información faltante
+   */
+  private createAskUserPlan(missingEntity: string, _intent: string): ExecutionPlan {
+    const prompts: Record<string, string> = {
+      date: '📅 ¿Para qué fecha te gustaría agendar? (puedes decir "mañana", "hoy", o "15/05")',
+      time: '⏰ ¿A qué hora te viene bien? (ej: 10:00, 14:30)',
+      service: '📋 ¿Qué servicio o producto necesitas?',
+      customer_name: '👤 ¿Cuál es tu nombre?',
+      phone: '📱 ¿Cuál es tu número de teléfono?',
+      email: '📧 ¿Cuál es tu correo electrónico?',
+      appointment_id: '🔖 ¿Podrías darme el ID de la cita?',
+      productId: '🛒 ¿Qué producto deseas?',
+      quantity: '🔢 ¿Cuántos necesitas?'
+    };
+
+    return {
+      steps: [
+        {
+          action: 'ask_user',
+          params: {
+            message: prompts[missingEntity] || `❓ ¿Podrías darme ${missingEntity}?`,
+            missingEntity
+          }
+        }
+      ]
+    };
+  },
+
+  /**
+   * Verificar acceso al skill por tenant
+   */
+  private async checkSkillAccess(tenantId: string, intent: string): Promise<boolean> {
     try {
       const tenant = await prisma.tenant.findUnique({
         where: { id: tenantId },
@@ -151,17 +319,17 @@ export class SkillOrchestratorAgent {
 
       if (!tenant) return false;
 
-      // Mapping de skills a features
-      const skillToFeature: Record<string, string> = {
-        'auto_schedule': 'booking',
-        'get_upcoming_bookings': 'booking',
-        'cancel_booking': 'booking',
-        'export_catalog': 'catalog',
-        'search_catalog': 'catalog',
-        'transfer_to_human': 'chatbot'
+      // Mapping de intents a features
+      const intentFeatures: Record<string, string> = {
+        'agendar_cita': 'booking',
+        'consultar_cita': 'booking',
+        'cancelar_cita': 'booking',
+        'consultar_servicios': 'catalog',
+        'consultar_precio': 'catalog',
+        'consultar_estado_pedido': 'deals'
       };
 
-      const feature = skillToFeature[skillName];
+      const feature = intentFeatures[intent];
       if (!feature) return true; // Si no hay mapping, permitir
 
       const featureRecord = tenant.tenantFeatures.find(f => f.feature === feature);
@@ -169,42 +337,44 @@ export class SkillOrchestratorAgent {
     } catch {
       return false;
     }
-  }
+  },
 
-  static isActionableIntent(intent: string): boolean {
-    return Object.keys(INTENT_TO_SKILL_MAP).includes(intent);
-  }
-
-  private static getHelpResponse(intent: string): string {
-    const responses: Record<string, string> = {
-      'unknown': 'No entendí bien tu mensaje. Puedo ayudarte con:\n• Ver nuestros servicios\n• Agendar una cita\n• Consultar tus citas\n• Consultar precios\n• Hablar con un humano',
-      'help': '¡Hola! Soy tu asistente de Volkern. Puedo ayudarte con:\n\n📋 *Servicios*: Pregunta por nuestros servicios\n📅 *Citas*: Puedo agendar, consultar o cancelar citas\n💰 *Precios*: Consulta precios de servicios\n👤 *Humano*: Puedo transferirte a un agente\n\n¿En qué puedo ayudarte?'
+  /**
+   * Mensaje cuando no hay acceso
+   */
+  private getNoAccessMessage(intent: string): string {
+    const messages: Record<string, string> = {
+      'agendar_cita': '📅 No tienes acceso al módulo de citas. Contacta al administrador.',
+      'consultar_servicios': '📋 No tienes acceso al catálogo. Contacta al administrador.',
+      'consultar_precio': '💰 No tienes acceso al módulo de precios. Contacta al administrador.'
     };
-    return responses[intent] || responses['help'];
-  }
+    return messages[intent] || '❌ No tienes acceso a esta función. Contacta al administrador.';
+  },
 
-  private static getPromptForEntity(entity: string): string {
-    const prompts: Record<string, string> = {
-      date: '¿Para qué fecha te gustaría agendar? (puedes decir "mañana", "hoy", o una fecha específica)',
-      time: '¿A qué hora te viene bien? (por ejemplo, 10:00, 14:30)',
-      service: '¿Qué servicio necesitas?',
-      appointment_id: '¿Podrías darme el ID de la cita que quieres cancelar?',
-      customer_name: '¿Cuál es tu nombre?',
-      phone: '¿Cuál es tu número de teléfono?',
-      email: '¿Cuál es tu correo electrónico?'
-    };
-    return prompts[entity] || `¿Podrías proporcionarme ${entity}?`;
-  }
+  /**
+   * Mensaje de ayuda
+   */
+  private getHelpResponse(): string {
+    return `👋 Soy *Gemma*, tu asistente de Volkern.\n\nPuedo ayudarte con:\n\n📅 *Citas*: Agendar, consultar o cancelar\n📋 *Servicios*: Ver nuestro catálogo\n💰 *Precios*: Consultar precios\n👤 *Ayuda*: Hablar con un agente\n\n¿En qué puedo ayudarte?`;
+  },
 
-  static getSkillDescription(skillName: string): string {
+  /**
+   * Obtener descripción de skill
+   */
+  getSkillDescription(skillName: string): string {
     const descriptions: Record<string, string> = {
-      'auto_schedule': 'Agendar una cita automáticamente',
-      'get_upcoming_bookings': 'Consultar próximas citas',
+      'auto_schedule': 'Agendar una cita',
+      'get_upcoming_bookings': 'Consultar citas',
       'cancel_booking': 'Cancelar una cita',
-      'export_catalog': 'Ver catálogo de servicios',
-      'search_catalog': 'Buscar en el catálogo',
-      'transfer_to_human': 'Transferir a un agente humano'
+      'export_catalog': 'Ver catálogo',
+      'search_catalog': 'Buscar en catálogo',
+      'transfer_to_human': 'Transferir a agente',
+      'get_deal': 'Consultar deals',
+      'ask_user': 'Pedir información',
+      'help': 'Mostrar ayuda'
     };
-    return descriptions[skillName] || 'Skill desconocido';
+    return descriptions[skillName] || 'Acción desconocida';
   }
-}
+};
+
+export default SkillOrchestratorAgent;
