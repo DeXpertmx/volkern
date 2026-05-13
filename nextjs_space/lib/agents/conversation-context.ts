@@ -1,216 +1,268 @@
-import { prisma } from '@/lib/db';
+/**
+ * Conversation Context Agent - Memoria multi-turn
+ * 
+ * Gestiona el contexto de conversación con:
+ * - Persistencia de entidades
+ * - Historial de mensajes
+ * - Continuidad de intent
+ * - Expiración de sesiones
+ */
+
+export interface ConversationMessage {
+  role: 'user' | 'assistant';
+  message: string;
+  timestamp: number;
+}
 
 export interface ConversationContext {
-  tenantId: string;
-  telegramUserId: string;
-  userId?: string;
   sessionId: string;
-  state: 'ACTIVE' | 'COMPLETED' | 'TIMEOUT' | 'BLOCKED';
+  conversationId: string;
+  userId: string;
+  tenantId: string;
+  
   lastIntent?: string;
   pendingIntent?: string;
   collectedEntities: Record<string, string>;
   missingEntities: string[];
-  step: number;
-  messagesCount: number;
-  lastMessageAt: Date;
+  
+  history: ConversationMessage[];
+  
+  telegramChatId?: string;
+  chatwootContactId?: string;
+  
+  createdAt: number;
+  updatedAt: number;
 }
 
-export interface Message {
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  timestamp: Date;
+// Storage en memoria (en producción usar Redis)
+const contextStore = new Map<string, ConversationContext>();
+
+// Configuración
+const SESSION_TTL_MS = 30 * 60 * 1000; // 30 minutos
+const MAX_HISTORY = 20; // Máximo mensajes en historial
+
+function getKey(conversationId: string): string {
+  return `ctx:${conversationId}`;
 }
 
-export class ConversationContextAgent {
-  private static readonly SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutos
-
-  static async getOrCreateContext(
-    tenantId: string,
-    telegramUserId: string,
-    maxMessages: number = 10
-  ): Promise<ConversationContext> {
-    // Buscar sesión activa reciente
-    const activeSession = await prisma.chatSession.findFirst({
-      where: {
-        tenantId,
-        telegramUserId,
-        state: 'ACTIVE',
-        lastMessageAt: {
-          gte: new Date(Date.now() - this.SESSION_TIMEOUT_MS)
-        }
-      },
-      orderBy: { lastMessageAt: 'desc' }
-    });
-
-    if (activeSession) {
-      return this.serializeContext(activeSession);
+export const ConversationContextAgent = {
+  /**
+   * Cargar o crear contexto para una conversación
+   */
+  async load(params: {
+    conversationId: string;
+    userId: string;
+    tenantId: string;
+  }): Promise<ConversationContext> {
+    const { conversationId, userId, tenantId } = params;
+    const key = getKey(conversationId);
+    
+    let ctx = contextStore.get(key);
+    
+    // Verificar expiración
+    if (ctx && Date.now() - ctx.updatedAt > SESSION_TTL_MS) {
+      console.log(`[Context] Sesión expirada para ${conversationId}, creando nueva`);
+      await this.reset(conversationId);
+      ctx = null;
     }
-
-    // Crear nueva sesión
-    const newSession = await prisma.chatSession.create({
-      data: {
-        tenantId,
-        telegramUserId,
-        sessionId: this.generateSessionId(),
-        state: 'ACTIVE',
-        collectedEntities: {},
-        missingEntities: [],
-        step: 0,
-        messagesCount: 0
-      }
-    });
-
-    return this.serializeContext(newSession);
-  }
-
-  static async updateContext(
-    sessionId: string,
-    updates: Partial<ConversationContext>
-  ): Promise<ConversationContext | null> {
-    const session = await prisma.chatSession.findUnique({
-      where: { sessionId }
-    });
-
-    if (!session) return null;
-
-    const updated = await prisma.chatSession.update({
-      where: { sessionId },
-      data: {
-        ...updates,
-        lastMessageAt: new Date(),
-        messagesCount: { increment: 1 }
-      }
-    });
-
-    return this.serializeContext(updated);
-  }
-
-  static async getContext(sessionId: string): Promise<ConversationContext | null> {
-    const session = await prisma.chatSession.findUnique({
-      where: { sessionId }
-    });
-
-    if (!session) return null;
-
-    // Verificar si expiró
-    if (
-      session.state === 'ACTIVE' &&
-      new Date(session.lastMessageAt).getTime() < Date.now() - this.SESSION_TIMEOUT_MS
-    ) {
-      await this.expireSession(sessionId);
-      return null;
+    
+    if (!ctx) {
+      ctx = this.create(conversationId, userId, tenantId);
+      contextStore.set(key, ctx);
+      console.log(`[Context] Nuevo contexto creado para ${conversationId}`);
     }
+    
+    return ctx;
+  },
 
-    return this.serializeContext(session);
-  }
-
-  static async getConversationHistory(
-    sessionId: string,
-    limit: number = 10
-  ): Promise<Message[]> {
-    // Por ahora retornamos un array vacío
-    // En una implementación completa, almacenaríamos los mensajes en otra tabla
-    // Por ahora reconstruimos el contexto desde la sesión
-    return [];
-  }
-
-  static async addEntity(
-    sessionId: string,
-    entityName: string,
-    entityValue: string
-  ): Promise<ConversationContext | null> {
-    const session = await prisma.chatSession.findUnique({
-      where: { sessionId }
-    });
-
-    if (!session) return null;
-
-    const collectedEntities = session.collectedEntities as Record<string, string>;
-    const missingEntities = session.missingEntities as string[];
-
-    // Actualizar entidades recogidas
-    collectedEntities[entityName] = entityValue;
-
-    // Remover de missingEntities si estaba
-    const newMissingEntities = missingEntities.filter(e => e !== entityName);
-
-    return this.updateContext(sessionId, {
-      collectedEntities,
-      missingEntities: newMissingEntities
-    });
-  }
-
-  static async setMissingEntities(
-    sessionId: string,
-    entities: string[]
-  ): Promise<ConversationContext | null> {
-    return this.updateContext(sessionId, {
-      missingEntities: entities,
-      step: { increment: 1 }
-    });
-  }
-
-  static async completeSession(sessionId: string): Promise<void> {
-    await prisma.chatSession.update({
-      where: { sessionId },
-      data: {
-        state: 'COMPLETED',
-        endedAt: new Date()
-      }
-    });
-  }
-
-  static async expireSession(sessionId: string): Promise<void> {
-    await prisma.chatSession.update({
-      where: { sessionId },
-      data: {
-        state: 'TIMEOUT',
-        endedAt: new Date()
-      }
-    });
-  }
-
-  static async blockSession(sessionId: string, reason: string): Promise<void> {
-    await prisma.chatSession.update({
-      where: { sessionId },
-      data: {
-        state: 'BLOCKED',
-        endedAt: new Date(),
-        metadata: { blockReason: reason }
-      }
-    });
-  }
-
-  private static serializeContext(session: any): ConversationContext {
+  /**
+   * Crear nuevo contexto
+   */
+  create(conversationId: string, userId: string, tenantId: string): ConversationContext {
     return {
-      tenantId: session.tenantId,
-      telegramUserId: session.telegramUserId,
-      userId: session.userId,
-      sessionId: session.sessionId,
-      state: session.state as 'ACTIVE' | 'COMPLETED' | 'TIMEOUT' | 'BLOCKED',
-      lastIntent: session.lastIntent || undefined,
-      pendingIntent: session.pendingIntent || undefined,
-      collectedEntities: session.collectedEntities as Record<string, string> || {},
-      missingEntities: session.missingEntities as string[] || [],
-      step: session.step || 0,
-      messagesCount: session.messagesCount || 0,
-      lastMessageAt: session.lastMessageAt
+      sessionId: `sess_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+      conversationId,
+      userId,
+      tenantId,
+      collectedEntities: {},
+      missingEntities: [],
+      history: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now()
     };
-  }
+  },
 
-  private static generateSessionId(): string {
-    return `sess_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
-  }
+  /**
+   * Actualizar contexto
+   */
+  async update(context: ConversationContext, updates?: Partial<ConversationContext>): Promise<ConversationContext> {
+    if (updates) {
+      Object.assign(context, updates);
+    }
+    
+    context.updatedAt = Date.now();
+    
+    // Limitar historial para evitar crecimiento infinito
+    if (context.history.length > MAX_HISTORY) {
+      context.history = context.history.slice(-MAX_HISTORY);
+    }
+    
+    const key = getKey(context.conversationId);
+    contextStore.set(key, context);
+    
+    return context;
+  },
 
-  static isContextComplete(context: ConversationContext): boolean {
-    return context.missingEntities.length === 0 && !!context.pendingIntent;
-  }
+  /**
+   * Agregar mensaje al historial
+   */
+  async addMessage(context: ConversationContext, role: 'user' | 'assistant', message: string): Promise<ConversationContext> {
+    context.history.push({
+      role,
+      message,
+      timestamp: Date.now()
+    });
+    
+    // Limitar historial
+    if (context.history.length > MAX_HISTORY) {
+      context.history = context.history.slice(-MAX_HISTORY);
+    }
+    
+    return this.update(context);
+  },
 
-  static getNextMissingEntity(context: ConversationContext): string | null {
-    return context.missingEntities[0] || null;
+  /**
+   * Actualizar intent y entidades
+   */
+  async updateIntent(
+    context: ConversationContext,
+    intent: string,
+    entities: Record<string, string>,
+    missingEntities: string[] = []
+  ): Promise<ConversationContext> {
+    // Entity merging: mantener entidades previamente.collected
+    const mergedEntities = {
+      ...context.collectedEntities,
+      ...entities
+    };
+    
+    return this.update(context, {
+      lastIntent: intent,
+      pendingIntent: missingEntities.length > 0 ? intent : undefined,
+      collectedEntities: mergedEntities,
+      missingEntities
+    });
+  },
+
+  /**
+   * Completar entities faltantes
+   */
+  async completeEntities(context: ConversationContext, entities: Record<string, string>): Promise<ConversationContext> {
+    const mergedEntities = {
+      ...context.collectedEntities,
+      ...entities
+    };
+    
+    // Recalcular missing entities
+    const required = getRequiredEntities(context.pendingIntent);
+    const missing = required.filter(e => !mergedEntities[e]);
+    
+    return this.update(context, {
+      collectedEntities: mergedEntities,
+      missingEntities: missing,
+      pendingIntent: missing.length > 0 ? context.pendingIntent : undefined
+    });
+  },
+
+  /**
+   * Resetear contexto (para errores o soporte)
+   */
+  async reset(conversationId: string): Promise<void> {
+    const key = getKey(conversationId);
+    contextStore.delete(key);
+    console.log(`[Context] Contexto reseteado para ${conversationId}`);
+  },
+
+  /**
+   * Obtener resumen de contexto para Gemma
+   */
+  getSummary(context: ConversationContext): {
+    lastIntent?: string;
+    pendingIntent?: string;
+    entities: Record<string, string>;
+    missing: string[];
+  } {
+    return {
+      lastIntent: context.lastIntent,
+      pendingIntent: context.pendingIntent,
+      entities: context.collectedEntities,
+      missing: context.missingEntities
+    };
+  },
+
+  /**
+   * Obtener últimos N mensajes para contexto
+   */
+  getRecentMessages(context: ConversationContext, count: number = 5): ConversationMessage[] {
+    return context.history.slice(-count);
+  },
+
+  /**
+   * Verificar si sesión está activa
+   */
+  isActive(context: ConversationContext): boolean {
+    return Date.now() - context.updatedAt < SESSION_TTL_MS;
+  },
+
+  /**
+   * Obtener todas las sesiones activas de un tenant
+   */
+  getActiveSessions(tenantId: string): ConversationContext[] {
+    const sessions: ConversationContext[] = [];
+    
+    for (const ctx of contextStore.values()) {
+      if (ctx.tenantId === tenantId && this.isActive(ctx)) {
+        sessions.push(ctx);
+      }
+    }
+    
+    return sessions;
+  },
+
+  /**
+   * Limpiar sesiones expiradas
+   */
+  async cleanExpired(): Promise<number> {
+    let cleaned = 0;
+    
+    for (const [key, ctx] of contextStore.entries()) {
+      if (Date.now() - ctx.updatedAt > SESSION_TTL_MS) {
+        contextStore.delete(key);
+        cleaned++;
+      }
+    }
+    
+    if (cleaned > 0) {
+      console.log(`[Context] Limpiadas ${cleaned} sesiones expiradas`);
+    }
+    
+    return cleaned;
   }
+};
+
+// Helper para obtener entidades requeridas por intent
+function getRequiredEntities(intent?: string): string[] {
+  const required: Record<string, string[]> = {
+    'agendar_cita': ['date', 'time', 'service'],
+    'cancelar_cita': ['appointment_id'],
+    'consultar_cita': ['date'],
+    'consultar_precio': ['service']
+  };
+  
+  return intent ? required[intent] || [] : [];
 }
 
+// Función de sanitización
 export function sanitizeInput(input: string): string {
   return input
     .replace(/[<>]/g, '')
@@ -219,3 +271,5 @@ export function sanitizeInput(input: string): string {
     .trim()
     .substring(0, 4000);
 }
+
+export default ConversationContextAgent;
