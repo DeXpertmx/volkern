@@ -15,6 +15,7 @@ import { SkillOrchestratorAgent, ExecutionPlan } from './skill-orchestrator';
 import { ExecutionEngine, ExecutionResult } from './execution-engine';
 import { ResponseFormatter } from './response-formatter';
 import { ChatbotAuditLogger } from './audit-logger';
+import { SecurityCheckpointAgent } from './security-checkpoint';
 import { syncOutgoingChatwootMessage } from '@/lib/skills/chatwoot-sync-skill';
 
 interface ChatwootMessagePayload {
@@ -109,6 +110,14 @@ export async function handleChatwootMessage(payload: ChatwootMessagePayload) {
       return;
     }
 
+    // SECURITY: Verificar si el usuario está bloqueado
+    const isBlocked = await SecurityCheckpointAgent.isUserBlocked(tenantId, user.id);
+    if (isBlocked) {
+      console.log(`[Gemma] Usuario ${user.id} bloqueado`);
+      await sendResponseToChatwoot(tenantId, conversationId, '❌ Tu acceso ha sido bloqueado. Contacta al administrador.', payload);
+      return;
+    }
+
     // SECURITY: Verificar que el usuario pertenece al tenant correcto
     if (user.tenantId !== tenantId) {
       console.error(`[Gemma] ERROR: Cross-tenant detected! User ${user.id} tenant ${user.tenantId} != payload tenant ${tenantId}`);
@@ -145,7 +154,42 @@ export async function handleChatwootMessage(payload: ChatwootMessagePayload) {
 
     const { intent, entities, missingEntities, confidence } = intentResult.data;
 
-    // 4. Loggear intent detectado
+    // 4. SECURITY: Validar con SecurityCheckpointAgent
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+    if (!tenant) {
+      await sendResponseToChatwoot(tenantId, conversationId, '❌ Error de configuración', payload);
+      return;
+    }
+
+    try {
+      await SecurityCheckpointAgent.validate({
+        user: {
+          id: user.id,
+          tenantId: user.tenantId,
+          role: (user.metadata as any)?.role,
+          metadata: user.metadata
+        },
+        tenant: {
+          id: tenant.id,
+          plan: tenant.plan,
+          estado: tenant.estado
+        },
+        intent,
+        entities
+      });
+    } catch (securityError) {
+      console.error('[Gemma] Security validation failed:', securityError.message);
+      await logAudit(tenantId, user.id, context, intent, content, entities, 'BLOCKED_SECURITY', securityError.message);
+      
+      const errorMsg = securityError.message.includes('Rate limit')
+        ? '⏳ Demasiadas solicitudes. Por favor, espera un momento.'
+        : '🔒 No tienes permisos para realizar esta acción.';
+      
+      await sendResponseToChatwoot(tenantId, conversationId, errorMsg, payload);
+      return;
+    }
+
+    // 4b. Loggear intent detectado
     await logAudit(tenantId, user.id, context, intent, content, entities, 'PENDING');
 
     // 5. Actualizar contexto
