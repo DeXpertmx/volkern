@@ -25,6 +25,7 @@ export { handleChatwootMessage } from './chatwoot-chatbot-handler';
 export { GemmaRouterAgent } from './gemma-router';
 export { SkillOrchestratorAgent } from './skill-orchestrator';
 export { ExecutionEngine } from './execution-engine';
+export { SkillRegistry } from './skill-registry';
 export { ResponseFormatter } from './response-formatter';
 export { ChatbotAuditLogger } from './audit-logger';
 export { SecurityCheckpointAgent } from './security-checkpoint';
