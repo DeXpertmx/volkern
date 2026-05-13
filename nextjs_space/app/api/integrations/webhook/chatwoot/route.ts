@@ -5,7 +5,8 @@
  * Recibe webhooks de Chatwoot (conversaciones, mensajes, contactos)
  * 
  * Headers:
- * - X-Chatwoot-Signature: HMAC signature
+ * - X-Chatwoot-Signature: HMAC SHA256 signature (opcional, para producción)
+ * - X-Tenant-Id: Tenant ID (para múltiples tenants)
  * 
  * Body según evento:
  * - conversation.created
@@ -16,8 +17,65 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { handleIncomingWebhook } from '@/lib/integrations/integration-handler';
 import { prisma } from '@/lib/db';
+import * as crypto from 'crypto';
 
 export const dynamic = 'force-dynamic';
+
+// Secret para validar firma (configurable por tenant)
+const WEBHOOK_SECRET = process.env.CHATWOOT_WEBHOOK_SECRET;
+
+/**
+ * Validar firma del webhook
+ */
+function verifyChatwootSignature(body: string, signature: string | null): boolean {
+  if (!signature || !WEBHOOK_SECRET) {
+    // En desarrollo, permitir sin firma
+    if (process.env.NODE_ENV !== 'production') {
+      return true;
+    }
+    return false;
+  }
+
+  const expectedSignature = crypto
+    .createHmac('sha256', WEBHOOK_SECRET)
+    .update(body)
+    .digest('hex');
+
+  return crypto.timingSafeEqual(
+    Buffer.from(signature),
+    Buffer.from(expectedSignature)
+  );
+}
+
+/**
+ * Verificar idempotencia del mensaje
+ */
+const messageIdCache = new Map<string, number>();
+const IDEMPOTENCY_TTL_MS = 60000; // 1 minuto
+
+function isIdempotent(messageId: string): boolean {
+  const now = Date.now();
+  const cached = messageIdCache.get(messageId);
+  
+  if (cached && now - cached < IDEMPOTENCY_TTL_MS) {
+    return true; // Ya procesado recientemente
+  }
+  
+  messageIdCache.set(messageId, now);
+  
+  // Limpiar entradas antiguas
+  if (messageIdCache.size > 1000) {
+    const keysToDelete: string[] = [];
+    messageIdCache.forEach((ts, key) => {
+      if (now - ts > IDEMPOTENCY_TTL_MS) {
+        keysToDelete.push(key);
+      }
+    });
+    keysToDelete.forEach(key => messageIdCache.delete(key));
+  }
+  
+  return false;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -32,6 +90,27 @@ export async function POST(request: NextRequest) {
         { error: 'Body debe ser JSON válido' },
         { status: 400 }
       );
+    }
+
+    // 🔐 Validar firma del webhook (producción)
+    const signature = request.headers.get('x-chatwoot-signature') || 
+                      request.headers.get('X-Chatwoot-Signature');
+    
+    if (!verifyChatwootSignature(rawBody, signature)) {
+      console.error('[ChatwootWebhook] Firma inválida');
+      return NextResponse.json(
+        { error: 'Firma de webhook inválida' },
+        { status: 401 }
+      );
+    }
+
+    // 🔄 Verificar idempotencia para message.created
+    if (data.event === 'message_created') {
+      const messageId = String(data.message?.id || data.id);
+      if (messageId && isIdempotent(messageId)) {
+        console.log(`[ChatwootWebhook] Mensaje idempotente: ${messageId}`);
+        return NextResponse.json({ ok: true, idempotent: true });
+      }
     }
 
     // Extraer evento de Chatwoot
