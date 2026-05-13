@@ -27,3 +27,4 @@ export { SkillOrchestratorAgent } from './skill-orchestrator';
 export { ExecutionEngine } from './execution-engine';
 export { ResponseFormatter } from './response-formatter';
 export { ChatbotAuditLogger } from './audit-logger';
+export { SecurityCheckpointAgent } from './security-checkpoint';
