@@ -1,0 +1,456 @@
+/**
+ * Chatwoot Chatbot Handler - Gemma AI Agent
+ * 
+ * Se integra con el evento MESSAGE_RECEIVED de Chatwoot para procesar
+ * mensajes de Telegram y responder con IA.
+ * 
+ * ARQUITECTURA:
+ * Telegram → Chatwoot → Webhook → MESSAGE_RECEIVED → Pipeline de Agentes → Chatwoot → Telegram
+ */
+
+import { prisma } from '@/lib/db';
+import { eventBus, EVENTS } from '@/lib/skills/event-bus';
+import { GemmaRouterAgent, DetectedIntent } from './gemma-router';
+import { SkillOrchestratorAgent, ExecutionPlan } from './skill-orchestrator';
+import { ExecutionEngine, ExecutionResult } from './execution-engine';
+import { ResponseFormatter } from './response-formatter';
+import { ChatbotAuditLogger } from './audit-logger';
+import { syncOutgoingChatwootMessage } from '@/lib/skills/chatwoot-sync-skill';
+
+interface ChatwootMessagePayload {
+  tenantId: string;
+  messageId: string;
+  conversationId: string;
+  content: string;
+  canal: string;
+  source: string;
+  timestamp: Date;
+  metadata: {
+    sender_type?: string;
+    channel_type?: string;
+    accountId?: number;
+    inboxId?: number;
+    localConversationId?: string;
+    localMessageId?: string;
+    contact?: {
+      id?: number;
+      name?: string;
+      email?: string;
+      phone?: string;
+    };
+  };
+}
+
+interface ChatContext {
+  tenantId: string;
+  userId: string;
+  conversationId: string;
+  lastIntent?: string;
+  pendingIntent?: string;
+  collectedEntities: Record<string, string>;
+  missingEntities: string[];
+  step: number;
+  chatwootContactId?: string;
+  telegramChatId?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+// Contexto en memoria con persistencia básica
+const CONTEXT_CACHE = new Map<string, { context: ChatContext; expires: number }>();
+const CONTEXT_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutos
+const CONTEXT_MAX_AGE = 24 * 60 * 60 * 1000; // 24 horas máximo
+
+export async function handleChatwootMessage(payload: ChatwootMessagePayload) {
+  const startTime = Date.now();
+  const { tenantId, content, conversationId, metadata } = payload;
+
+  // SECURITY: Validar tenantId presente
+  if (!tenantId) {
+    console.error('[Gemma] ERROR: No tenantId en el payload');
+    return;
+  }
+
+  // Verificar que es un mensaje de contacto (no del sistema)
+  if (metadata?.sender_type !== 'contact') {
+    console.log('[Gemma] Ignorando mensaje de sistema');
+    return;
+  }
+
+  // Verificar que es canal telegram
+  if (metadata?.channel_type !== 'telegram') {
+    console.log('[Gemma] Ignorando mensaje no es de Telegram');
+    return;
+  }
+
+  console.log(`[Gemma] Procesando mensaje para tenant ${tenantId}, conversación ${conversationId}`);
+
+  try {
+    // 1. Identificar usuario con doble mapeo
+    const telegramChatId = metadata?.contact?.id?.toString() || metadata?.contact?.phone;
+    const chatwootContactId = metadata?.contact?.id?.toString();
+    const contactEmail = metadata?.contact?.email;
+
+    const user = await findUserByTelegramOrContact(tenantId, telegramChatId, chatwootContactId, contactEmail);
+
+    if (!user) {
+      console.log('[Gemma] Usuario no identificado, enviando mensaje de vinculación');
+      const welcomeMsg = `👋 ¡Hola! Soy *Gemma*, tu asistente IA de Volkern.\n\nPara usar mis servicios, conecta tu Telegram en tu perfil de Volkern.`;
+      await sendResponseToChatwoot(tenantId, conversationId, welcomeMsg, payload);
+      
+      await ChatbotAuditLogger.log({
+        tenantId,
+        telegramUserId: telegramChatId,
+        chatwootContactId,
+        inputRaw: content,
+        status: 'BLOCKED_PERMISSION',
+        errorMessage: 'Usuario no vinculado'
+      });
+      return;
+    }
+
+    // SECURITY: Verificar que el usuario pertenece al tenant correcto
+    if (user.tenantId !== tenantId) {
+      console.error(`[Gemma] ERROR: Cross-tenant detected! User ${user.id} tenant ${user.tenantId} != payload tenant ${tenantId}`);
+      await ChatbotAuditLogger.log({
+        tenantId,
+        userId: user.id,
+        inputRaw: content,
+        status: 'BLOCKED_SECURITY',
+        errorMessage: 'Cross-tenant execution blocked'
+      });
+      return;
+    }
+
+    // 2. Obtener o crear contexto de conversación
+    const context = await getOrCreateContext(tenantId, user.id, conversationId, {
+      telegramChatId,
+      chatwootContactId
+    });
+
+    // 3. Detectar intent con Gemma (solo últimos mensajes para no saturar)
+    const intentResult = await GemmaRouterAgent.detectIntent(content, {
+      pendingIntent: context.pendingIntent,
+      collectedEntities: context.collectedEntities,
+      missingEntities: context.missingEntities
+    });
+
+    if (!intentResult.success || !intentResult.data) {
+      await logAudit(tenantId, user.id, context, 'unknown', content, null, 'ERROR', intentResult.error);
+
+      const fallbackMsg = intentResult.fallbackMessage || '🤔 No entendí bien tu mensaje. ¿Puedes reformularlo?';
+      await sendResponseToChatwoot(tenantId, conversationId, fallbackMsg, payload);
+      return;
+    }
+
+    const { intent, entities, missingEntities, confidence } = intentResult.data;
+
+    // 4. Loggear intent detectado
+    await logAudit(tenantId, user.id, context, intent, content, entities, 'PENDING');
+
+    // 5. Actualizar contexto
+    context.lastIntent = intent;
+    context.collectedEntities = { ...context.collectedEntities, ...entities };
+    context.missingEntities = missingEntities;
+    context.step += 1;
+
+    // 6. Si hay missing entities, pedir la faltante (flujo multi-turno)
+    if (missingEntities.length > 0) {
+      const nextEntity = missingEntities[0];
+      const prompt = getPromptForEntity(nextEntity);
+      context.pendingIntent = intent;
+      saveContext(conversationId, context);
+
+      await sendResponseToChatwoot(tenantId, conversationId, prompt, payload);
+      return;
+    }
+
+    // 7. Construir plan de ejecución
+    const planResult = await SkillOrchestratorAgent.buildExecutionPlan(
+      intentResult.data,
+      { ...context, userId: user.id } as any,
+      tenantId
+    );
+
+    if (!planResult.success) {
+      await logAudit(tenantId, user.id, context, intent, content, entities, 'ERROR', planResult.error);
+      await sendResponseToChatwoot(tenantId, conversationId, planResult.error || 'Error desconocido', payload);
+      return;
+    }
+
+    // Si hay response en lugar de plan, retornarlo
+    if (planResult.response) {
+      context.pendingIntent = undefined;
+      context.missingEntities = [];
+      saveContext(conversationId, context);
+
+      await logAudit(tenantId, user.id, context, intent, content, entities, 'SUCCESS', undefined, planResult.response);
+      await sendResponseToChatwoot(tenantId, conversationId, planResult.response, payload);
+      return;
+    }
+
+    if (!planResult.plan) {
+      await sendResponseToChatwoot(tenantId, conversationId, '❌ No pude procesar tu solicitud.', payload);
+      return;
+    }
+
+    // 8. Ejecutar el plan
+    const executionResult = await ExecutionEngine.execute(
+      planResult.plan,
+      {
+        tenantId,
+        userId: user.id,
+        telegramUserId: telegramChatId,
+        sessionId: conversationId
+      }
+    );
+
+    // 9. Formatear y enviar respuesta
+    let responseText: string;
+
+    if (executionResult.success) {
+      responseText = ExecutionEngine.formatSkillResult(planResult.plan.skillName, executionResult.data);
+      context.pendingIntent = undefined;
+      context.missingEntities = [];
+    } else {
+      responseText = executionResult.error || '❌ Ocurrió un error al procesar tu solicitud.';
+    }
+
+    saveContext(conversationId, context);
+
+    // 10. Enviar respuesta
+    await sendResponseToChatwoot(tenantId, conversationId, responseText, payload);
+
+    // 11. Loggear resultado final
+    await logAudit(
+      tenantId,
+      user.id,
+      context,
+      intent,
+      content,
+      entities,
+      executionResult.success ? 'SUCCESS' : 'ERROR',
+      executionResult.error,
+      responseText
+    );
+
+  } catch (error) {
+    console.error('[Gemma] Error fatal:', error);
+
+    await ChatbotAuditLogger.log({
+      tenantId,
+      inputRaw: content,
+      status: 'ERROR',
+      errorMessage: error instanceof Error ? error.message : 'Unknown error',
+      executionTimeMs: Date.now() - startTime
+    });
+
+    const errorMsg = '❌ Ocurrió un error inesperado. Por favor, intenta de nuevo.';
+    await sendResponseToChatwoot(tenantId, conversationId, errorMsg, payload);
+  }
+}
+
+/**
+ * Busca usuario por múltiples identificadores
+ */
+async function findUserByTelegramOrContact(
+  tenantId: string,
+  telegramChatId?: string,
+  chatwootContactId?: string,
+  email?: string
+): Promise<{ id: string; tenantId: string; metadata: any } | null> {
+  // 1. Buscar por telegram_chat_id en metadata
+  if (telegramChatId) {
+    const users = await prisma.user.findMany({
+      where: { tenantId },
+      select: { id: true, tenantId: true, metadata: true }
+    });
+
+    const byTelegram = users.find(u => (u.metadata as any)?.telegram?.chat_id === telegramChatId);
+    if (byTelegram) return byTelegram;
+  }
+
+  // 2. Buscar por chatwoot_contact_id en metadata
+  if (chatwootContactId) {
+    const users = await prisma.user.findMany({
+      where: { tenantId },
+      select: { id: true, tenantId: true, metadata: true }
+    });
+
+    const byChatwoot = users.find(u => (u.metadata as any)?.telegram?.chatwoot_contact_id === chatwootContactId);
+    if (byChatwoot) return byChatwoot;
+  }
+
+  // 3. Buscar por email si está disponible
+  if (email) {
+    const user = await prisma.user.findUnique({
+      where: { email }
+    });
+    if (user && user.tenantId === tenantId) {
+      return { id: user.id, tenantId: user.tenantId, metadata: user.metadata };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Obtiene o crea contexto de conversación
+ */
+async function getOrCreateContext(
+  tenantId: string,
+  userId: string,
+  conversationId: string,
+  identifiers: { telegramChatId?: string; chatwootContactId?: string }
+): Promise<ChatContext> {
+  const cached = CONTEXT_CACHE.get(conversationId);
+  
+  if (cached && cached.expires > Date.now()) {
+    return cached.context;
+  }
+
+  const context: ChatContext = {
+    tenantId,
+    userId,
+    conversationId,
+    pendingIntent: undefined,
+    collectedEntities: {},
+    missingEntities: [],
+    step: 0,
+    telegramChatId: identifiers.telegramChatId,
+    chatwootContactId: identifiers.chatwootContactId,
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  };
+
+  return context;
+}
+
+function saveContext(conversationId: string, context: ChatContext) {
+  context.updatedAt = Date.now();
+  CONTEXT_CACHE.set(conversationId, {
+    context,
+    expires: Date.now() + CONTEXT_TIMEOUT_MS
+  });
+}
+
+async function logAudit(
+  tenantId: string,
+  userId: string,
+  context: ChatContext,
+  intent: string,
+  inputRaw: string,
+  entities: Record<string, string> | undefined,
+  status: string,
+  errorMessage?: string,
+  outputFormatted?: string
+) {
+  await ChatbotAuditLogger.log({
+    tenantId,
+    sessionId: context.conversationId,
+    userId,
+    telegramUserId: context.telegramChatId,
+    chatwootContactId: context.chatwootContactId,
+    intent,
+    detectedEntities: entities,
+    status: status as any,
+    errorMessage,
+    inputRaw,
+    outputFormatted
+  });
+}
+
+async function sendResponseToChatwoot(
+  tenantId: string,
+  conversationId: string,
+  message: string,
+  originalPayload: ChatwootMessagePayload
+) {
+  try {
+    const localConversationId = originalPayload.metadata?.localConversationId || conversationId;
+
+    // Crear mensaje local
+    const localMessage = await prisma.message.create({
+      data: {
+        conversationId: localConversationId,
+        contenido: message,
+        direccion: 'salida',
+        canal: 'chatwoot',
+        estado: 'enviado'
+      }
+    }).catch(() => null);
+
+    // Sincronizar con Chatwoot si tenemos el ID local
+    if (localMessage) {
+      await syncOutgoingChatwootMessage({
+        tenantId,
+        conversationId: localConversationId,
+        content: message,
+        messageId: localMessage.id
+      }).catch(err => console.error('[Gemma] Error sync outgoing:', err));
+    }
+
+    console.log(`[Gemma] Respuesta enviada a conversación ${conversationId}`);
+  } catch (error) {
+    console.error('[Gemma] Error enviando respuesta:', error);
+  }
+}
+
+function getPromptForEntity(entity: string): string {
+  const prompts: Record<string, string> = {
+    date: '📅 ¿Para qué fecha te gustaría? (puedes decir "mañana", "hoy", o una fecha específica como "15/05")',
+    time: '⏰ ¿A qué hora te viene bien? (por ejemplo, 10:00, 14:30)',
+    service: '📋 ¿Qué servicio necesitas?',
+    customer_name: '👤 ¿Cuál es tu nombre?',
+    phone: '📱 ¿Cuál es tu número de teléfono?',
+    email: '📧 ¿Cuál es tu correo electrónico?'
+  };
+  return prompts[entity] || `❓ ¿Podrías proporcionarme ${entity}?`;
+}
+
+// ============================================================
+// INICIALIZACIÓN DEL HANDLER
+// ============================================================
+
+export function initGemmaChatbot() {
+  // Registrar handler para el evento MESSAGE_RECEIVED de Chatwoot
+  eventBus.onEvent(EVENTS.MESSAGE_RECEIVED, async (payload: any) => {
+    try {
+      await handleChatwootMessage(payload as ChatwootMessagePayload);
+    } catch (error) {
+      console.error('[Gemma] Error en handler MESSAGE_RECEIVED:', error);
+    }
+  });
+
+  console.log('✅ Gemma AI Agent inicializado - escuchando MESSAGE_RECEIVED');
+}
+
+// Helper para vincular Telegram manualmente (endpoint opcional)
+export async function linkTelegramToUser(
+  userId: string,
+  telegramChatId: string,
+  chatwootContactId?: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return { success: false, error: 'Usuario no encontrado' };
+
+    const metadata = (user.metadata as any) || {};
+    metadata.telegram = {
+      chat_id: telegramChatId,
+      chatwoot_contact_id: chatwootContactId,
+      linkedAt: new Date().toISOString()
+    };
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { metadata: metadata as any }
+    });
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Error desconocido' };
+  }
+}
+
+export { ChatwootMessagePayload };

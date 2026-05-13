@@ -4,6 +4,7 @@ export interface ChatbotAuditInput {
   tenantId: string;
   sessionId?: string;
   telegramUserId?: string;
+  chatwootContactId?: string;
   userId?: string;
   messageId?: string;
   intent?: string;
@@ -28,6 +29,7 @@ export class ChatbotAuditLogger {
           tenantId: input.tenantId,
           sessionId: input.sessionId || null,
           telegramUserId: input.telegramUserId || null,
+          chatwootContactId: input.chatwootContactId || null,
           userId: input.userId || null,
           messageId: input.messageId || null,
           intent: input.intent || null,
