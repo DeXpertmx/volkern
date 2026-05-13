@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Extraer evento de Chatwoot
+// Extraer evento de Chatwoot
     const event = (data.event as string);
     if (!event) {
       return NextResponse.json(
@@ -122,43 +122,87 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Extraer tenantId - Chatwoot puede enviarlo en custom_attributes o header
+    // 🔑 Extraer account_id de Chatwoot (IDENTIFICADOR PRINCIPAL)
     const accountData = data.account as Record<string, unknown> | undefined;
-    const tenantId = (accountData?.custom_attributes as Record<string, unknown>)?.tenantId as string ||
-                     (data.custom_attributes as Record<string, unknown>)?.tenantId as string ||
-                     request.headers.get('X-Tenant-Id') ||
-                     request.headers.get('x-tenant-id');
+    const chatwootAccountId = accountData?.id as number | undefined;
+
+    if (!chatwootAccountId) {
+      return NextResponse.json(
+        { error: 'account_id es requerido para identificar el tenant' },
+        { status: 400 }
+      );
+    }
+
+    // 🧠 Mapear account_id → tenant (aislamiento real)
+    const tenant = await prisma.tenant.findFirst({
+      where: {
+        OR: [
+          { configuracion: { path: ['chatwootAccountId'], equals: chatwootAccountId } },
+          { metadata: { path: ['chatwootAccountId'], equals: chatwootAccountId } }
+        ]
+      },
+      include: {
+        integrations: {
+          where: { tipo: 'chatwoot', activo: true },
+          select: { credenciales: true }
+        }
+      }
+    });
+
+    // Si no encuentra por configuración, buscar en integrations
+    let tenantId: string | null = tenant?.id || null;
+    let chatwootApiKey: string | null = null;
 
     if (!tenantId) {
-      // Intentar buscar por inbox_id si está configurado
+      // Buscar por inbox_id como fallback
       const inboxData = data.inbox as Record<string, unknown> | undefined;
       const inboxId = inboxData?.id || data.inbox_id;
+      
       if (inboxId) {
         const integration = await prisma.integration.findFirst({
           where: {
             tipo: 'chatwoot',
             activo: true,
-            credenciales: {
-              path: ['inbox_id'],
-              equals: String(inboxId),
-            },
+            credenciales: { path: ['inbox_id'], equals: String(inboxId) }
           },
-          select: { tenantId: true },
+          select: { tenantId: true, credenciales: true }
         });
         
         if (integration) {
-          // Procesar con el tenantId encontrado
-          return processWebhook(request, rawBody, data, event, integration.tenantId);
+          tenantId = integration.tenantId;
+          const cred = integration.credenciales as any;
+          chatwootApiKey = cred?.apiToken || cred?.accessToken;
         }
       }
-      
+    } else if (tenant?.integrations?.[0]) {
+      const cred = tenant.integrations[0].credenciales as any;
+      chatwootApiKey = cred?.apiToken || cred?.accessToken;
+    }
+
+    if (!tenantId) {
+      console.error(`[ChatwootWebhook] No se encontró tenant para account_id: ${chatwootAccountId}`);
       return NextResponse.json(
-        { error: 'No se pudo determinar el tenantId' },
-        { status: 400 }
+        { error: 'Tenant no encontrado para este account_id' },
+        { status: 404 }
       );
     }
 
-    return processWebhook(request, rawBody, data, event, tenantId);
+    // 🔐 SEGURIDAD: Verificar aislamiento por account
+    const expectedAccountId = (tenant?.configuracion as any)?.chatwootAccountId || 
+                               (tenant?.metadata as any)?.chatwootAccountId;
+    
+    if (expectedAccountId && expectedAccountId !== chatwootAccountId) {
+      console.error(`[ChatwootWebhook] Cross-tenant attempt! account_id mismatch`);
+      return NextResponse.json(
+        { error: 'Account ID no coincide con el tenant' },
+        { status: 403 }
+      );
+    }
+
+    console.log(`[ChatwootWebhook] Procesando evento ${event} para tenant ${tenantId} (account ${chatwootAccountId})`);
+
+    // ✅ Procesar webhook con tenant identificado por account_id
+    return processWebhook(request, rawBody, data, event, tenantId, chatwootApiKey);
   } catch (error) {
     console.error('[Chatwoot Webhook] Error:', error);
     return NextResponse.json(
@@ -173,7 +217,8 @@ async function processWebhook(
   rawBody: string,
   data: Record<string, unknown>,
   event: string,
-  tenantId: string
+  tenantId: string,
+  chatwootApiKey?: string | null
 ) {
   const signature = request.headers.get('X-Chatwoot-Signature') ||
                     request.headers.get('x-chatwoot-signature');
@@ -191,7 +236,7 @@ async function processWebhook(
     );
   }
 
-  // Buscar secret de Chatwoot
+  // Buscar secret de Chatwoot (si no se pasó como参数)
   const integration = await prisma.integration.findFirst({
     where: {
       tenantId,
@@ -202,12 +247,14 @@ async function processWebhook(
   });
 
   const webhookSecret = (integration?.credenciales as Record<string, unknown>)?.webhookSecret as string | undefined;
+  const apiKey = chatwootApiKey || (integration?.credenciales as Record<string, unknown>)?.apiToken as string;
 
   // Procesar
   const result = await handleIncomingWebhook('chatwoot', event, data, tenantId, {
     signature: signature || undefined,
     rawBody,
     webhookSecret,
+    apiAccessToken: apiKey,
   });
 
   return NextResponse.json({
