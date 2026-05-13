@@ -61,7 +61,20 @@ export const ExecutionEngine = {
         // 1. Obtener skill del registry
         let skill = SkillRegistry.get(step.action);
 
-        // 2. Si no existe local, intentar ejecutar como skill de Volkern
+        // 2. Si es "ask_user" (special skill), handled differently
+        if (step.action === 'ask_user') {
+          const message = step.params?.message || '¿Podrías darme más información?';
+          results.push({
+            action: step.action,
+            output: {
+              message,
+              break: true // Detiene el flujo
+            }
+          });
+          break; // Salir del loop
+        }
+
+        // 3. Si no existe local, intentar ejecutar como skill de Volkern
         if (!skill) {
           const { skills } = await import('@/lib/skills');
           const volkernSkill = skills[step.action as keyof typeof skills];
