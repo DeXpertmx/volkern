@@ -29,10 +29,20 @@ function getDefaultModules(): string[] {
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    let session
+    try {
+      session = await getServerSession(authOptions)
+    } catch (e) {
+      session = null
+    }
+    
+    if (!session) {
+      return NextResponse.json({ error: 'No autorizado - Sesión no encontrada' }, { status: 401 })
+    }
+    
     const roleName = (session?.user as any)?.roleName || (session?.user as any)?.role?.nombre
-    if (!session || (roleName !== 'Admin' && roleName !== 'Superadmin')) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (!roleName || (roleName !== 'Admin' && roleName !== 'Superadmin')) {
+      return NextResponse.json({ error: 'No autorizado - Rol no válido' }, { status: 401 })
     }
 
     const { searchParams } = new URL(request.url)
