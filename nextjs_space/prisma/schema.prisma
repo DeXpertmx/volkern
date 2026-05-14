@@ -6254,4 +6254,30 @@ model ChatbotAuditLog {
   @@map("chatbot_audit_logs")
 }
 
+// ============================================================
+// Data Deletion Requests (Meta/Facebook/Instagram/WhatsApp)
+// ============================================================
+
+model DataDeletionRequest {
+  id              String    @id @default(cuid())
+  platform        String    // facebook, instagram, whatsapp
+  userScopedId    String?   // Meta app-scoped user ID
+  userEmail       String?   // Email provided by user
+  userPhone       String?   // Phone provided by user
+  tenantId        String?   // If associated with a Volkern tenant
+  confirmationCode String   @unique // Code user can use to check status
+  status          String    @default("pending") // pending, processing, completed, rejected
+  statusUrl       String?   // URL where user can check status
+  deletionDetails Json?     // Details about what will be deleted
+  processedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([confirmationCode])
+  @@index([status])
+  @@index([platform])
+  @@index([userEmail])
+  @@map("data_deletion_requests")
+}
+
 
