@@ -21,8 +21,37 @@ export default function SignupPage() {
     fullName: '',
     email: '',
     password: '',
-    confirmPassword: ''
+    confirmPassword: '',
+    couponCode: ''
   })
+  const [couponValid, setCouponValid] = useState<any>(null)
+  const [validatingCoupon, setValidatingCoupon] = useState(false)
+
+  const validateCoupon = async () => {
+    if (!formData.couponCode.trim()) return
+    
+    setValidatingCoupon(true)
+    try {
+      const res = await fetch('/api/coupons/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: formData.couponCode, email: formData.email })
+      })
+      const data = await res.json()
+      
+      if (data.valid) {
+        setCouponValid(data.coupon)
+        toast.success(`Cupón válido: ${data.coupon.durationDays} días`)
+      } else {
+        setCouponValid(null)
+        toast.error(data.error || 'Cupón inválido')
+      }
+    } catch (error) {
+      toast.error('Error al validar cupón')
+    } finally {
+      setValidatingCoupon(false)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -43,7 +72,10 @@ export default function SignupPage() {
       const response = await fetch('/api/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify({
+          ...formData,
+          couponCode: formData.couponCode.trim() || undefined
+        })
       })
 
       const data = await response.json()
@@ -177,6 +209,40 @@ export default function SignupPage() {
                   required
                 />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="couponCode">Código de regalo (opcional)</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="couponCode"
+                  placeholder="ABCD-EFGH-IJKL-MNOP"
+                  value={formData.couponCode}
+                  onChange={(e) => {
+                    setFormData({ ...formData, couponCode: e.target.value.toUpperCase() })
+                    setCouponValid(null)
+                  }}
+                  className="flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={validateCoupon}
+                  disabled={!formData.couponCode.trim() || validatingCoupon}
+                >
+                  {validatingCoupon ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    'Validar'
+                  )}
+                </Button>
+              </div>
+              {couponValid && (
+                <p className="text-xs text-green-600 font-medium">
+                  ✓ Cupón válido: {couponValid.durationDays} días de acceso
+                  {couponValid.discountPercent > 0 && ` - ${couponValid.discountPercent}% descuento`}
+                </p>
+              )}
             </div>
 
             <Button 
