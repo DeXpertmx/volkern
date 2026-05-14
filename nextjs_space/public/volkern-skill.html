@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Volkern CRM</title>
+</head>
+<body>
+<script>
+window['ai_edge_gallery_get_result'] = async function(data, secret) {
+  console.log('[Volkern] data:', data, 'secret:', secret ? 'yes' : 'no');
+  
+  try {
+    if (!secret) {
+      return JSON.stringify({ error: "Configura tu API Key en los settings del skill" });
+    }
+
+    let action, args;
+    try {
+      const parsed = JSON.parse(data);
+      action = parsed.action || parsed.tool;
+      args = parsed.args || parsed.arguments || {};
+    } catch (e) {
+      return JSON.stringify({ error: "Data inválida: " + e.message });
+    }
+
+    // Buscar userId en la URL actual
+    const path = window.location.pathname;
+    const parts = path.split('/');
+    let userId = null;
+    for (let i = 0; i < parts.length; i++) {
+      if (parts[i] === 'user' && parts[i + 1]) {
+        userId = parts[i + 1];
+        break;
+      }
+    }
+    
+    console.log('[Volkern] action:', action, 'userId:', userId, 'path:', path);
+
+    if (!userId) {
+      return JSON.stringify({ error: "No se pudo determinar el userId" });
+    }
+
+    // Construir URL del API usando la URL base actual
+    const baseUrl = window.location.origin;
+    const apiUrl = baseUrl + '/api/skills/user/' + userId + '/execute';
+    console.log('[Volkern] apiUrl:', apiUrl);
+
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + secret
+      },
+      body: JSON.stringify({ tool: action, arguments: args })
+    });
+
+    const result = await response.json();
+    console.log('[Volkern] result:', result);
+    
+    if (!response.ok) {
+      return JSON.stringify({ error: result.error || "Error: " + response.status });
+    }
+
+    return JSON.stringify({ result: result });
+  } catch (e) {
+    console.error('[Volkern] error:', e);
+    return JSON.stringify({ error: e.message });
+  }
+};
+</script>
+</body>
+</html>

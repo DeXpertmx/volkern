@@ -138,6 +138,10 @@ export default function PrivacyPolicyPage() {
                   <li>Revocar el acceso a integraciones de terceros.</li>
                   <li>Exportar sus datos en formato legible.</li>
                 </ul>
+                <p className="text-gray-600 leading-relaxed mt-4">
+                  Para solicitudes de eliminación de datos relacionados con integraciones de Meta (Facebook, Instagram, WhatsApp), 
+                  puede utilizar nuestro <Link href="/delete-data" className="text-blue-600 hover:underline">formulario de eliminación de datos</Link>.
+                </p>
               </section>
 
               <section>
