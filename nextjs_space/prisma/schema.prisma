@@ -6280,4 +6280,64 @@ model DataDeletionRequest {
   @@map("data_deletion_requests")
 }
 
+// ============================================================
+// Gift Coupons - Códigos de regalo para cuentas gratuitas
+// ============================================================
+
+model GiftCoupon {
+  id              String    @id @default(cuid())
+  code            String    @unique
+  descripcion     String?
+  justification   String    // Justificación del cupón (requerido por Meta)
+  
+  // Configuración de duración
+  durationDays    Int       @default(30) // Días de acceso
+  
+  // Descuento (0-100)
+  discountPercent Int       @default(0)
+  
+  // Módulos que se habilitan (replicar trial si no se especifica)
+  modules         Json?     // Array de módulos: ['leads', 'contactos', ...]
+  
+  // Límites del tenant
+  limiteLeads     Int?      @default(1000)
+  limiteUsuarios  Int?      @default(5)
+  
+  // Estado
+  isActive        Boolean   @default(true)
+  maxUses         Int?      // Usos máximos (null = ilimitado)
+  usedCount       Int       @default(0)
+  
+  // Usuario que creó el cupón
+  createdBy       String?
+  
+  // Fecha de expiración del cupón (distinto de la duración del tenant)
+  expiresAt       DateTime?
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  // Usado por (track de redenciones)
+  redemptions     GiftCouponRedemption[]
+  
+  @@index([code])
+  @@index([isActive])
+  @@map("gift_coupons")
+}
+
+model GiftCouponRedemption {
+  id              String    @id @default(cuid())
+  couponId        String
+  tenantId        String?   // Tenant creado al usar el cupón
+  userEmail       String    // Email del usuario que redimió
+  
+  createdAt       DateTime  @default(now())
+  
+  coupon          GiftCoupon @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  
+  @@index([couponId])
+  @@index([tenantId])
+  @@map("gift_coupon_redemptions")
+}
+
 
