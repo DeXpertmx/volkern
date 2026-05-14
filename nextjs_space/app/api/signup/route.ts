@@ -13,9 +13,23 @@ function generateSlug(companyName: string): string {
     .substring(0, 50)
 }
 
+function getDefaultModules(): string[] {
+  return [
+    'leads', 'contactos', 'empresas', 'pipeline', 'tareas', 'analytics',
+    'mensajes', 'citas', 'catalogo',
+    'campanas', 'email_marketing', 'cms', 'builder_premium',
+    'mi_tarjeta',
+    'equipo', 'configuracion',
+    'telefonia',
+    'social_manager',
+    'rrhh', 'finanzas', 'calidad', 'produccion', 'inventario', 'proyectos', 'taskforce', 'activos', 'conocimiento', 'estrategia'
+  ]
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const { email, password, fullName, companyName } = await request.json()
+    const body = await request.json()
+    const { email, password, fullName, companyName, couponCode } = body
 
     if (!email || !password || !fullName || !companyName) {
       return NextResponse.json(
@@ -52,6 +66,58 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Validar cupón si se proporcionó
+    let couponData: any = null
+    if (couponCode) {
+      const coupon = await prisma.giftCoupon.findUnique({
+        where: { code: couponCode.toUpperCase() }
+      })
+
+      if (!coupon) {
+        return NextResponse.json(
+          { error: 'Cupón no válido' },
+          { status: 400 }
+        )
+      }
+
+      if (!coupon.isActive) {
+        return NextResponse.json(
+          { error: 'Cupón inactivo' },
+          { status: 400 }
+        )
+      }
+
+      if (coupon.expiresAt && coupon.expiresAt < new Date()) {
+        return NextResponse.json(
+          { error: 'Cupón expirado' },
+          { status: 400 }
+        )
+      }
+
+      if (coupon.maxUses && coupon.usedCount >= coupon.maxUses) {
+        return NextResponse.json(
+          { error: 'Cupón alcanzado su límite de usos' },
+          { status: 400 }
+        )
+      }
+
+      const existingRedemption = await prisma.giftCouponRedemption.findFirst({
+        where: {
+          couponId: coupon.id,
+          userEmail: { equals: email, mode: 'insensitive' }
+        }
+      })
+
+      if (existingRedemption) {
+        return NextResponse.json(
+          { error: 'Este correo ya ha usado este cupón' },
+          { status: 400 }
+        )
+      }
+
+      couponData = coupon
+    }
+
     // Generar slug único para el tenant
     let baseSlug = generateSlug(companyName)
     let slug = baseSlug
@@ -63,10 +129,34 @@ export async function POST(request: NextRequest) {
       counter++
     }
 
-    // Calcular fecha de fin de trial (14 días desde ahora)
+    // Calcular fecha de fin según cupón o trial
     const trialStart = new Date()
     const trialEnd = new Date()
-    trialEnd.setDate(trialEnd.getDate() + TRIAL_DAYS)
+    
+    let planSlug = PLANS.TRIAL
+    let limites = trialConfig.limites
+    let modules = getDefaultModules()
+    let fechaFin: Date
+    
+    if (couponData) {
+      // Usar configuración del cupón de regalo
+      trialEnd.setDate(trialEnd.getDate() + couponData.durationDays)
+      fechaFin = trialEnd
+      
+      // Usar límites del cupón
+      limites = {
+        ...trialConfig.limites,
+        leads: couponData.limiteLeads || trialConfig.limites.leads,
+        usuarios: couponData.limiteUsuarios || trialConfig.limites.usuarios
+      }
+      
+      // Usar módulos del cupón o los default
+      modules = couponData.modules || getDefaultModules()
+    } else {
+      // Usar trial por defecto
+      trialEnd.setDate(trialEnd.getDate() + TRIAL_DAYS)
+      fechaFin = trialEnd
+    }
 
     // Hashear la contraseña
     const hashedPassword = await bcrypt.hash(password, 12)
@@ -76,14 +166,14 @@ export async function POST(request: NextRequest) {
 
     // Crear el tenant y el usuario en una transacción
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Crear el tenant con trial de 14 días
+      // 1. Crear el tenant
       const tenant = await tx.tenant.create({
         data: {
           nombre: companyName,
           slug,
-          plan: PLANS.TRIAL,
+          plan: couponData ? 'gift' : PLANS.TRIAL,
           estado: 'trial',
-          limites: trialConfig.limites,
+          limites,
           fechaTrialInicio: trialStart,
           fechaTrialFin: trialEnd,
           billingEmail: email,
@@ -146,25 +236,58 @@ export async function POST(request: NextRequest) {
         })
       }
 
-      // 5. Crear log de auditoría
+      // 5. Crear módulos/features del tenant
+      const tenantFeatures = modules.map((modulo: string) => ({
+        tenantId: tenant.id,
+        feature: modulo,
+        activo: true
+      }))
+      
+      await tx.tenantFeature.createMany({
+        data: tenantFeatures
+      })
+
+      // 6. Redimir el cupón de regalo si se usó
+      if (couponData) {
+        await tx.giftCouponRedemption.create({
+          data: {
+            couponId: couponData.id,
+            tenantId: tenant.id,
+            userEmail: email
+          }
+        })
+
+        await tx.giftCoupon.update({
+          where: { id: couponData.id },
+          data: {
+            usedCount: { increment: 1 },
+            isActive: false
+          }
+        })
+      }
+
+      // 7. Crear log de auditoría
       await tx.auditLog.create({
         data: {
           accion: 'crear',
           entidad: 'Tenant',
           entidadId: tenant.id,
-          descripcion: `Tenant creado: ${tenant.nombre} (${tenant.slug}) con plan ${tenant.plan}`,
+          descripcion: `Tenant creado: ${tenant.nombre} (${tenant.slug}) con plan ${tenant.plan}` + 
+            (couponData ? ` [CUPÓN: ${couponData.code}, ${couponData.durationDays} días]` : ` [TRIAL: ${TRIAL_DAYS} días]`),
           cambiosDespues: {
             tenantName: tenant.nombre,
             slug: tenant.slug,
             plan: tenant.plan,
-            trialEnds: trialEnd.toISOString()
+            trialEnds: fechaFin.toISOString(),
+            modules: modules,
+            couponCode: couponData?.code || null
           },
           userId: user.id,
           tenantId: tenant.id
         }
       })
 
-      return { user, tenant }
+      return { user, tenant, couponUsed: !!couponData }
     })
 
     return NextResponse.json({
@@ -181,7 +304,12 @@ export async function POST(request: NextRequest) {
         slug: result.tenant.slug,
         plan: result.tenant.plan,
         trialEndsAt: result.tenant.fechaTrialFin
-      }
+      },
+      couponUsed: result.couponUsed || false,
+      giftInfo: result.couponUsed ? {
+        durationDays: couponData?.durationDays,
+        discountPercent: couponData?.discountPercent
+      } : null
     })
 
   } catch (error) {
