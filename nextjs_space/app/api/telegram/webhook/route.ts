@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { handleTelegramWebhook } from '@/lib/agents/telegram-chatbot';
 import { prisma } from '@/lib/db';
+import { rateLimiter } from '@/lib/agents/rate-limiter';
+import { orchestrator } from '@/lib/agents/orchestrator';
 
 export async function POST(request: NextRequest) {
   try {
@@ -49,18 +51,49 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Procesar el webhook
-    const result = await handleTelegramWebhook(tenantId, update);
-
-    if (result.error) {
-      console.error('[TelegramWebhook] Error:', result.error);
-      return NextResponse.json(
-        { error: result.error },
-        { status: 500 }
-      );
+    const chatId = update.message?.chat?.id?.toString();
+    if (!chatId) {
+      return NextResponse.json({ error: 'chatId no encontrado' }, { status: 400 });
     }
 
-    return NextResponse.json({ success: true });
+    // Extraer datos del mensaje
+    const message = update.message;
+    if (!message || !message.text) {
+      return NextResponse.json({ success: true, message: 'No es un mensaje de texto' });
+    }
+
+    const telegramUserId = message.from.id.toString();
+    const messageText = message.text;
+
+    // 🛡️ Procesar con orchestrator (7 agentes de seguridad)
+    const orchestratorResult = await orchestrator.process({
+      message: messageText,
+      userId: telegramUserId,
+      tenantId,
+      chatId,
+      isAuthenticated: false,
+      userRole: 'user'
+    });
+
+    // 📤 Enviar respuesta a Telegram
+    const botToken = config.botToken;
+    if (botToken && orchestratorResult.response) {
+      const replyMarkup = orchestratorResult.metadata?.quickReplies ? {
+        keyboard: orchestratorResult.metadata.quickReplies.map((reply: string) => [{ text: reply }])
+      } : undefined;
+
+      await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: orchestratorResult.response,
+          reply_markup: replyMarkup
+        })
+      });
+    }
+
+    return NextResponse.json({ success: true, processed: true });
 
   } catch (error) {
     console.error('[TelegramWebhook] Error fatal:', error);

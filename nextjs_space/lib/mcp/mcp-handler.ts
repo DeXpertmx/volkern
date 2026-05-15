@@ -677,6 +677,268 @@ export const MCP_TOOLS: MCPTool[] = [
       required: ['tenantId'],
     },
   },
+
+  // ========== DEALS / PIPELINE ==========
+  {
+    name: 'create_deal',
+    description: 'Crear un nuevo deal (oportunidad) en el pipeline de ventas',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        nombre: { type: 'string', description: 'Nombre del deal' },
+        leadId: { type: 'string', description: 'ID del lead asociado (opcional)' },
+        contactId: { type: 'string', description: 'ID del contacto (opcional)' },
+        monto: { type: 'number', description: 'Monto del deal (opcional)' },
+        etapa: { type: 'string', description: 'Etapa del pipeline (default: prospecto)' },
+        probabilidad: { type: 'number', description: 'Probabilidad de cierre % (opcional)' },
+        fechaCierre: { type: 'string', description: 'Fecha estimada de cierre ISO (opcional)' },
+        tenantId: { type: 'string', description: 'ID del tenant' },
+        userId: { type: 'string', description: 'ID del usuario (opcional)' },
+        source: { type: 'string', description: 'Fuente', enum: ['api', 'app', 'automation', 'mcp', 'webhook'] },
+      },
+      required: ['nombre', 'tenantId'],
+    },
+  },
+  {
+    name: 'update_deal',
+    description: 'Actualizar un deal existente',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        dealId: { type: 'string', description: 'ID del deal a actualizar' },
+        nombre: { type: 'string', description: 'Nuevo nombre (opcional)' },
+        monto: { type: 'number', description: 'Nuevo monto (opcional)' },
+        etapa: { type: 'string', description: 'Nueva etapa (opcional)' },
+        probabilidad: { type: 'number', description: 'Nueva probabilidad % (opcional)' },
+        fechaCierre: { type: 'string', description: 'Nueva fecha de cierre ISO (opcional)' },
+        notas: { type: 'string', description: 'Notas adicionales (opcional)' },
+        tenantId: { type: 'string', description: 'ID del tenant' },
+        userId: { type: 'string', description: 'ID del usuario (opcional)' },
+        source: { type: 'string', description: 'Fuente', enum: ['api', 'app', 'automation', 'mcp', 'webhook'] },
+      },
+      required: ['dealId', 'tenantId'],
+    },
+  },
+  {
+    name: 'list_deals',
+    description: 'Listar deals con filtros (etapa, prioridad, búsqueda)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tenantId: { type: 'string', description: 'ID del tenant' },
+        etapa: { type: 'string', description: 'Filtrar por etapa (opcional)' },
+        prioridad: { type: 'string', description: 'Filtrar por prioridad (baja, media, alta)', enum: ['baja', 'media', 'alta'] },
+        leadId: { type: 'string', description: 'Filtrar por lead (opcional)' },
+        contactId: { type: 'string', description: 'Filtrar por contacto (opcional)' },
+        search: { type: 'string', description: 'Búsqueda por nombre (opcional)' },
+        page: { type: 'number', description: 'Página (default: 1)' },
+        limit: { type: 'number', description: 'Límite por página (default: 20)' },
+      },
+      required: ['tenantId'],
+    },
+  },
+  {
+    name: 'prequalify_lead',
+    description: 'Skill avanzado: Registra nota, actualiza estado del deal y busca en catálogo para recomendación',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        leadId: { type: 'string', description: 'ID del lead' },
+        nota: { type: 'string', description: 'Contenido de la nota' },
+        dealId: { type: 'string', description: 'ID del deal a actualizar (opcional)' },
+        searchQuery: { type: 'string', description: 'Búsqueda en catálogo para recomendación (opcional)' },
+        tenantId: { type: 'string', description: 'ID del tenant' },
+        userId: { type: 'string', description: 'ID del usuario (opcional)' },
+        source: { type: 'string', description: 'Fuente', enum: ['api', 'app', 'automation', 'mcp', 'webhook'] },
+      },
+      required: ['leadId', 'tenantId'],
+    },
+  },
+
+  // ========== ERP FINANZAS ==========
+  {
+    name: 'create_supplier',
+    description: 'Registrar un nuevo proveedor en el sistema',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        nombre: { type: 'string', description: 'Nombre del proveedor' },
+        email: { type: 'string', description: 'Email del proveedor (opcional)' },
+        telefono: { type: 'string', description: 'Teléfono (opcional)' },
+        direccion: { type: 'string', description: 'Dirección (opcional)' },
+        rfc: { type: 'string', description: 'RFC/Tax ID (opcional)' },
+        condicionesPago: { type: 'string', description: 'Condiciones de pago (opcional)' },
+        tenantId: { type: 'string', description: 'ID del tenant' },
+        userId: { type: 'string', description: 'ID del usuario (opcional)' },
+        source: { type: 'string', description: 'Fuente', enum: ['api', 'app', 'automation', 'mcp', 'webhook'] },
+      },
+      required: ['nombre', 'tenantId'],
+    },
+  },
+  {
+    name: 'create_expense',
+    description: 'Registrar un nuevo gasto o egreso',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        descripcion: { type: 'string', description: 'Descripción del gasto' },
+        monto: { type: 'number', description: 'Monto del gasto' },
+        categoria: { type: 'string', description: 'Categoría (ej: operativos, nomina, inventario)' },
+        proveedorId: { type: 'string', description: 'ID del proveedor (opcional)' },
+        fecha: { type: 'string', description: 'Fecha del gasto ISO (default: hoy)' },
+        requiereAprobacion: { type: 'boolean', description: 'Requiere aprobación (default: false)' },
+        tenantId: { type: 'string', description: 'ID del tenant' },
+        userId: { type: 'string', description: 'ID del usuario (opcional)' },
+        source: { type: 'string', description: 'Fuente', enum: ['api', 'app', 'automation', 'mcp', 'webhook'] },
+      },
+      required: ['descripcion', 'monto', 'categoria', 'tenantId'],
+    },
+  },
+  {
+    name: 'analyze_burn_rate',
+    description: 'Analizar la relación entre ingresos y gastos para determinar la salud financiera',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tenantId: { type: 'string', description: 'ID del tenant' },
+        mesInicio: { type: 'string', description: 'Mes de inicio (YYYY-MM) (opcional)' },
+        mesFin: { type: 'string', description: 'Mes de fin (YYYY-MM) (opcional)' },
+      },
+      required: ['tenantId'],
+    },
+  },
+
+  // ========== ERP INVENTARIO ==========
+  {
+    name: 'adjust_stock',
+    description: 'Ajustar niveles de stock (entrada, salida o transferencia)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        productoId: { type: 'string', description: 'ID del producto' },
+        tipo: { type: 'string', description: 'Tipo de ajuste', enum: ['entrada', 'salida', 'transferencia'] },
+        cantidad: { type: 'number', description: 'Cantidad a ajustar' },
+        almacenOrigenId: { type: 'string', description: 'ID almacén origen (opcional para transferencia)' },
+        almacenDestinoId: { type: 'string', description: 'ID almacén destino (opcional para transferencia)' },
+        motivo: { type: 'string', description: 'Motivo del ajuste (opcional)' },
+        tenantId: { type: 'string', description: 'ID del tenant' },
+        userId: { type: 'string', description: 'ID del usuario (opcional)' },
+        source: { type: 'string', description: 'Fuente', enum: ['api', 'app', 'automation', 'mcp', 'webhook'] },
+      },
+      required: ['productoId', 'tipo', 'cantidad', 'tenantId'],
+    },
+  },
+  {
+    name: 'get_inventory_health',
+    description: 'Analizar la salud del inventario y predecir rupturas de stock',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tenantId: { type: 'string', description: 'ID del tenant' },
+        almacenId: { type: 'string', description: 'ID del almacén (opcional)' },
+      },
+      required: ['tenantId'],
+    },
+  },
+
+  // ========== ERP PROYECTOS ==========
+  {
+    name: 'get_project_profitability',
+    description: 'Calcular la rentabilidad real de un proyecto vinculando ingresos y costos',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        proyectoId: { type: 'string', description: 'ID del proyecto' },
+        tenantId: { type: 'string', description: 'ID del tenant' },
+      },
+      required: ['proyectoId', 'tenantId'],
+    },
+  },
+
+  // ========== ERP RRHH ==========
+  {
+    name: 'talent_retention_risk',
+    description: 'Analizar riesgo de fuga de talento basado en métricas y patrones',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tenantId: { type: 'string', description: 'ID del tenant' },
+        umbralRiesgo: { type: 'number', description: 'Umbral de riesgo (0-100, default: 70)' },
+      },
+      required: ['tenantId'],
+    },
+  },
+  {
+    name: 'get_employee_confidential_data',
+    description: 'Obtener datos confidenciales de un empleado (solo RRHH/OWNER)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        employeeId: { type: 'string', description: 'ID del empleado' },
+        tenantId: { type: 'string', description: 'ID del tenant' },
+      },
+      required: ['employeeId', 'tenantId'],
+    },
+  },
+
+  // ========== ERP PRODUCCIÓN ==========
+  {
+    name: 'calculate_production_cost',
+    description: 'Calcular costo de producción de una orden incluyendo materiales y mano de obra',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ordenProduccionId: { type: 'string', description: 'ID de la orden de producción' },
+        tenantId: { type: 'string', description: 'ID del tenant' },
+      },
+      required: ['ordenProduccionId', 'tenantId'],
+    },
+  },
+
+  // ========== ERP CALIDAD ==========
+  {
+    name: 'detect_quality_anomalies',
+    description: 'Detectar anomalías de calidad en producción usando análisis de patrones',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tenantId: { type: 'string', description: 'ID del tenant' },
+        fechaInicio: { type: 'string', description: 'Fecha inicio ISO (opcional)' },
+        fechaFin: { type: 'string', description: 'Fecha fin ISO (opcional)' },
+      },
+      required: ['tenantId'],
+    },
+  },
+
+  // ========== MARKETING AVANZADO ==========
+  {
+    name: 'generate_web_creator_block',
+    description: 'Generar bloque de contenido para landing page con IA',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tipoBloque: { type: 'string', description: 'Tipo: hero, features, testimonials, cta, etc.' },
+        producto: { type: 'string', description: 'Producto o servicio a promocionar' },
+        tono: { type: 'string', description: 'Tono', enum: ['professional', 'friendly', 'urgent', 'educational'] },
+        tenantId: { type: 'string', description: 'ID del tenant' },
+      },
+      required: ['tipoBloque', 'producto', 'tenantId'],
+    },
+  },
+  {
+    name: 'generate_seo_metadata',
+    description: 'Generar metadatos SEO (title, description, keywords) para una página',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tituloPagina: { type: 'string', description: 'Título de la página' },
+        contenido: { type: 'string', description: 'Contenido principal (opcional)' },
+        palabrasClave: { type: 'string', description: 'Palabras clave objetivo (opcional)' },
+        tenantId: { type: 'string', description: 'ID del tenant' },
+      },
+      required: ['tituloPagina', 'tenantId'],
+    },
+  },
 ];
 
 // ============== HANDLERS MCP ==============

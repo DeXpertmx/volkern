@@ -99,6 +99,68 @@ export const AVAILABLE_SCOPES = [
 
   // Agent Skills
   'agent:skill',
+
+  // MCP Server
+  'mcp:read',     // Listar tools disponibles
+  'mcp:execute',  // Ejecutar tools
+  'mcp:admin',    // Gestión y configuración de MCP
+
+  // ========== INTEGRACIONES EXISTENTES ==========
+  
+  // Mensajería (WhatsApp, Telegram, etc.)
+  'messaging:read',
+  'messaging:write',
+  'messaging:send',
+  
+  // Telephony (llamadas)
+  'telephony:read',
+  'telephony:write',
+  'telephony:calls',
+  
+  // Facturación (Stripe, Holded)
+  'invoices:read',
+  'invoices:write',
+  'invoices:create',
+  'billing:read',
+  'billing:write',
+  
+  // Google Calendar
+  'calendar:read',
+  'calendar:write',
+  'calendar:webhook',
+  
+  // Social Media (Instagram, Facebook)
+  'social:read',
+  'social:write',
+  'social:publish',
+  
+  // n8n / Automations
+  'n8n:read',
+  'n8n:write',
+  'n8n:execute',
+  
+  // Inventario
+  'inventory:read',
+  'inventory:write',
+  'inventory:adjust',
+  
+  // Proyectos
+  'projects:read',
+  'projects:write',
+  
+  // RRHH / Payroll
+  'hr:read',
+  'hr:write',
+  'payroll:read',
+  'payroll:write',
+  
+  // ERP Produção
+  'production:read',
+  'production:write',
+  
+  // Contabilidad
+  'accounting:read',
+  'accounting:write',
 ] as const;
 
 export type ApiKeyScope = typeof AVAILABLE_SCOPES[number];
