@@ -38,7 +38,7 @@ export async function callMinimaxM25(
       'X-Title': 'Volkern CRM Assistant'
     },
     body: JSON.stringify({
-      model: 'google/gemini-2.5-flash',
+      model: 'minimax/minimax-m2.5',
       messages,
       temperature: 0.1,
       max_tokens: 1000,
@@ -71,7 +71,7 @@ export async function callAssistantWithFallback(
         'X-Title': 'Volkern CRM Assistant'
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-pro',
+        model: 'google/gemini-2.5-flash',
         messages,
         temperature: 0.1,
         max_tokens: 2000

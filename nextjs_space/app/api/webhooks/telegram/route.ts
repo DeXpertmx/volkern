@@ -4,8 +4,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 
 export async function POST(request: NextRequest) {
+  console.log(`[AlternativeTelegramWebhook] Received POST request at ${new Date().toISOString()}`);
   try {
-    const body = await request.json()
+    const body = await request.json();
+    console.log(`[AlternativeTelegramWebhook] Body: ${JSON.stringify(body).substring(0, 200)}`);
     
     // Telegram envía actualizaciones en este formato
     // https://core.telegram.org/bots/api#update

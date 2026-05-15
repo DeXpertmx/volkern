@@ -5,9 +5,13 @@ import { rateLimiter } from '@/lib/agents/rate-limiter';
 import { orchestrator } from '@/lib/agents/orchestrator';
 
 export async function POST(request: NextRequest) {
+  console.log(`[TelegramWebhook] Received POST request at ${new Date().toISOString()}`);
   try {
+    const body = await request.json();
     const { searchParams } = new URL(request.url);
     const tenantId = searchParams.get('tenantId');
+    console.log(`[TelegramWebhook] Body: ${JSON.stringify(body).substring(0, 200)}`);
+    console.log(`[TelegramWebhook] TenantId: ${tenantId}`);
 
     if (!tenantId) {
       return NextResponse.json(
@@ -41,7 +45,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Parsear el body como JSON
-    const update = await request.json();
+    const update = body;
 
     // Validar que es un update de Telegram válido
     if (!update.update_id) {

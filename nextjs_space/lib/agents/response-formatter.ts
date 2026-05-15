@@ -65,6 +65,7 @@ export class ResponseFormatterAgent {
     },
     'consulta_general': {
       success: () => 'Estoy para ayudarte. Puedo crear contactos, agendar citas, registrar gastos, crear tareas y más. ¿Qué necesitas?',
+      ask_clarification: () => '¿En qué puedo ayudarte? 🌟 Puedo crear contactos, agendar citas, registrar gastos y más. Solo dime qué necesitas, por ejemplo: "Crea un contacto llamado Juan".',
       fallback_to_human: () => 'No estoy seguro de cómo ayudarte. Un agente te atenderá pronto.',
       reject: () => 'No entendí. ¿Podrías reformular?'
     },
