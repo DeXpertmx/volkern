@@ -33,6 +33,11 @@ export class ResponseFormatterAgent {
       error: (error) => `No pude crear el contacto: ${error}. ¿Quieres intentarlo de nuevo?`,
       ask_clarification: (params) => `Para crear un contacto, necesito saber ${params.missingParams?.join(' y ') || 'nombre y email'}.`
     },
+    'actualizar_lead': {
+      success: (data) => `He actualizado el contacto ${data?.nombre || 'indicado'}. ¿Necesitas algo más?`,
+      error: (error) => `No pude actualizar el contacto: ${error}. ¿Quieres intentarlo de nuevo?`,
+      ask_clarification: (params) => `Para actualizar un contacto, necesito saber ${params.missingParams?.join(' y ') || 'su email'}.`
+    },
     'agendar_cita': {
       success: (data) => `✅ Cita agendada para ${data?.fecha || 'la fecha indicada'} a las ${data?.hora || 'hora indicada'}.`,
       error: (error) => `No pude agendar la cita: ${error}.`,

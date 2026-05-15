@@ -81,6 +81,44 @@ const getDealWrapper = (input: { dealId: string; tenantId: string }) =>
 const listDealsWrapper = (input: { tenantId: string; etapa?: string; prioridad?: string; leadId?: string; contactId?: string; search?: string; page?: number; limit?: number }) =>
   dealSkills.listDeals(input.tenantId, input);
 
+const updateLeadWrapper = async (input: { email: string; tenantId: string; nombre?: string; telefono?: string; empresa?: string; notas?: string }) => {
+  const { email, tenantId, ...dataToUpdate } = input;
+  if (!email) throw new Error('Se requiere el email para encontrar el contacto a actualizar');
+  
+  const { prisma } = await import('@/lib/db');
+  
+  // 1. Buscar si es Lead
+  const lead = await contactSkills.findLeadByEmail(email, tenantId);
+  if (lead) {
+    const updated = await prisma.lead.update({
+      where: { id: lead.id },
+      data: {
+        nombre: dataToUpdate.nombre !== undefined ? dataToUpdate.nombre : undefined,
+        telefono: dataToUpdate.telefono !== undefined ? dataToUpdate.telefono : undefined,
+        empresa: dataToUpdate.empresa !== undefined ? dataToUpdate.empresa : undefined,
+        notas: dataToUpdate.notas !== undefined ? dataToUpdate.notas : undefined
+      }
+    });
+    return updated;
+  }
+
+  // 2. Buscar si es Contacto
+  const contact = await contactSkills.findContactByEmail(email, tenantId);
+  if (contact) {
+    const updated = await prisma.contact.update({
+      where: { id: contact.id },
+      data: {
+        nombre: dataToUpdate.nombre !== undefined ? dataToUpdate.nombre : undefined,
+        telefono: dataToUpdate.telefono !== undefined ? dataToUpdate.telefono : undefined,
+        notas: dataToUpdate.notas !== undefined ? dataToUpdate.notas : undefined
+      }
+    });
+    return updated;
+  }
+
+  throw new Error(`No se encontró ningún contacto ni lead con el correo ${email}`);
+};
+
 export const skills = {
   // Contactos
   create_contact: contactSkills.createContact,
@@ -90,6 +128,7 @@ export const skills = {
   
   // Leads
   create_lead: contactSkills.createLead,
+  update_lead: updateLeadWrapper,
   get_lead: contactSkills.getLead,
   find_lead_by_email: findLeadByEmailWrapper,
   convert_lead: contactSkills.convertLead,
