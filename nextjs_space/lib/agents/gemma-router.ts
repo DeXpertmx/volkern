@@ -1,8 +1,15 @@
 /**
- * Gemma Router Agent - Cerebro del sistema
+ * @deprecated Este router está siendo reemplazado por IntentClassifierAgent (Minimax)
  * 
- * Clasificador de intención + Extractor de entidades
- * Controlador de contexto determinista y seguro
+ * Se mantiene como fallback para:
+ * - Conversación general no crítica
+ * - Casos donde Minimax no está disponible
+ * - Backward compatibility con flujos existentes
+ * 
+ * Para nuevos comandos, usar MinimaxOrchestratorAgent
+ * 
+ * @see lib/agents/intent-classifier.ts
+ * @see lib/agents/orchestrator.ts
  */
 
 import { callGemma } from '@/lib/ai/gemma-client';

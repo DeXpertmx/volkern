@@ -6340,4 +6340,74 @@ model GiftCouponRedemption {
   @@map("gift_coupon_redemptions")
 }
 
+model PendingCommand {
+  id             String    @id @default(cuid())
+  userId         String
+  tenantId       String
+  intent         String
+  params         Json      @default("{}")
+  originalMessage String
+  status         String    @default("pending")
+  expiresAt      DateTime
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([tenantId])
+  @@index([status])
+  @@map("pending_commands")
+}
+
+model ApprovalRequest {
+  id             String    @id @default(cuid())
+  userId         String
+  tenantId       String
+  intent         String
+  params         Json      @default("{}")
+  originalMessage String
+  status         String    @default("pending")
+  requestedAt    DateTime  @default(now())
+  resolvedAt     DateTime?
+  resolvedBy     String?
+  approverNote   String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([tenantId])
+  @@index([status])
+  @@map("approval_requests")
+}
+
+model InternalMessage {
+  id                String    @id @default(cuid())
+  tenantId          String
+  fromUserId        String
+  toUserIdentifier  String
+  content           String
+  context           Json?
+  source            String
+  status            String    @default("sent")
+  readAt            DateTime?
+  createdAt         DateTime  @default(now())
+
+  @@index([tenantId])
+  @@index([toUserIdentifier])
+  @@index([createdAt])
+}
+
+model TelegramChatbotConfig {
+  id                  String    @id @default(cuid())
+  tenantId            String    @unique
+  botToken            String?
+  isActive            Boolean   @default(false)
+  welcomeMessage      String?
+  fallbackMessage     String?
+  maxContextMessages  Int       @default(10)
+  sessionTimeoutMinutes Int     @default(30)
+  webhookUrl          String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+}
+
 

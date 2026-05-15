@@ -9,10 +9,16 @@
  * Autenticación:
  * - API Key via header: X-API-Key
  * - O sesión de usuario autenticado
+ * 
+ * Seguridad:
+ * - Rate limiting: 100 req/min por API key
+ * - Logging de auditoría en AiDecisionLog
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/api-key-auth';
+import { prisma } from '@/lib/db';
+import { cookies } from 'next/headers';
 import {
   handleListTools,
   handleCallTool,
@@ -22,6 +28,68 @@ import {
 } from '@/lib/mcp/mcp-handler';
 
 export const dynamic = 'force-dynamic';
+
+// ============== RATE LIMITING ==============
+
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+const RATE_LIMIT = 100; // requests per minute
+const RATE_WINDOW = 60 * 1000; // 1 minute in ms
+
+function checkRateLimit(identifier: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(identifier);
+  
+  if (!entry || now > entry.resetTime) {
+    rateLimitMap.set(identifier, { count: 1, resetTime: now + RATE_WINDOW });
+    return true;
+  }
+  
+  if (entry.count >= RATE_LIMIT) {
+    return false;
+  }
+  
+  entry.count++;
+  return true;
+}
+
+function getRateLimitIdentifier(auth: any): string {
+  if (auth.apiKey?.id) return `apikey:${auth.apiKey.id}`;
+  if (auth.user?.id) return `user:${auth.user.id}`;
+  return 'unknown';
+}
+
+// ============== AUDIT LOGGING ==============
+
+async function logMCPAudit(
+  tenantId: string,
+  userId: string | undefined,
+  action: string,
+  toolName: string | undefined,
+  status: 'success' | 'error',
+  error?: string,
+  metadata?: any
+) {
+  try {
+    await prisma.auditLog.create({
+      data: {
+        tenantId,
+        userId,
+        accion: `MCP_${action}`,
+        entidad: 'MCP',
+        entidadId: toolName || 'unknown',
+        descripcion: `MCP ${action}: ${toolName || 'N/A'}`,
+        metadata: {
+          tool: toolName,
+          status,
+          error,
+          ...metadata,
+        },
+      },
+    });
+  } catch (e) {
+    console.error('[MCP Audit] Failed to log:', e);
+  }
+}
 
 // ============== GET - Server Info & List Tools ==============
 
@@ -77,6 +145,8 @@ export async function GET(request: NextRequest) {
 // ============== POST - Execute Tool ==============
 
 export async function POST(request: NextRequest) {
+  const startTime = Date.now();
+  
   try {
     // Autenticar
     const auth = await authenticateRequest(request, ['mcp:execute']);
@@ -84,6 +154,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'No autorizado', details: auth.error },
         { status: 401 }
+      );
+    }
+
+    // Rate limiting
+    const rateLimitKey = getRateLimitIdentifier(auth);
+    if (!checkRateLimit(rateLimitKey)) {
+      await logMCPAudit(
+        auth.tenant?.id || 'unknown',
+        auth.user?.id,
+        'rate_limit_exceeded',
+        undefined,
+        'error',
+        'Rate limit exceeded'
+      );
+      return NextResponse.json(
+        { error: 'Rate limit exceeded. Máximo 100 requests por minuto.' },
+        { status: 429 }
       );
     }
 
@@ -146,6 +233,17 @@ export async function POST(request: NextRequest) {
       }
 
       if (result.isError) {
+        const duration = Date.now() - startTime;
+        await logMCPAudit(
+          auth.tenant?.id,
+          auth.user?.id,
+          'tool_execution',
+          toolRequest.name,
+          'error',
+          parsedResult?.error,
+          { duration, arguments: body.arguments || body.payload }
+        );
+        
         return NextResponse.json(
           { 
             success: false, 
@@ -156,6 +254,17 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      const duration = Date.now() - startTime;
+      await logMCPAudit(
+        auth.tenant?.id,
+        auth.user?.id,
+        'tool_execution',
+        toolRequest.name,
+        'success',
+        undefined,
+        { duration, arguments: body.arguments || body.payload }
+      );
+
       return NextResponse.json({
         success: true,
         tool: toolRequest.name,
@@ -163,6 +272,7 @@ export async function POST(request: NextRequest) {
         _meta: {
           tenantId: auth.tenant?.id,
           timestamp: new Date().toISOString(),
+          duration: `${duration}ms`,
         },
       });
     }
@@ -173,6 +283,16 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     console.error('[MCP API] Error en POST:', error);
+    
+    await logMCPAudit(
+      auth?.tenant?.id || 'unknown',
+      auth?.user?.id,
+      'tool_execution',
+      undefined,
+      'error',
+      error instanceof Error ? error.message : 'Unknown error'
+    );
+    
     return NextResponse.json(
       { error: 'Error interno del servidor' },
       { status: 500 }
