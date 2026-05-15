@@ -58,9 +58,13 @@ export async function callAssistantWithFallback(
   messages: OpenRouterMessage[]
 ): Promise<OpenRouterResponse> {
   try {
-    return await callMinimaxM25(messages);
+    const primaryResponse = await callMinimaxM25(messages);
+    if (!primaryResponse?.choices?.[0]?.message?.content) {
+      throw new Error('MiniMax retornó una respuesta vacía o nula.');
+    }
+    return primaryResponse;
   } catch (error) {
-    console.warn('Minimax M2.5 falló, usando Gemini Flash:', error);
+    console.warn('Minimax M2.5 falló, usando modelo de respaldo:', error);
 
     const response = await fetch(OPENROUTER_BASE_URL, {
       method: 'POST',
