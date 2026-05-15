@@ -24,12 +24,12 @@ export class IntentClassifierAgent {
     {
       name: 'crear_lead',
       description: 'Crear un nuevo lead o contacto en el sistema',
-      requiredParams: ['nombre', 'email'],
-      optionalParams: ['telefono', 'empresa', 'notas'],
+      requiredParams: ['nombre', 'email', 'contexto'],
+      optionalParams: ['telefono', 'empresa'],
       examples: [
-        'agrega a Juan Pérez con email juan@email.com',
-        'nuevo lead: María García, maria@empresa.com, tel 123456789',
-        'crea un contacto llamado Carlos Ruiz con email carlos@test.com'
+        'agrega a Juan Pérez con email juan@email.com por tema de ventas',
+        'nuevo lead: María García, maria@empresa.com, tel 123456789, contexto: interesado en software',
+        'crea un contacto llamado Carlos Ruiz con email carlos@test.com para seguimiento'
       ],
       destructive: false
     },
@@ -51,7 +51,7 @@ export class IntentClassifierAgent {
       name: 'actualizar_lead',
       description: 'Modificar o actualizar un lead o contacto existente',
       requiredParams: ['email'],
-      optionalParams: ['telefono', 'nombre', 'empresa', 'notas'],
+      optionalParams: ['telefono', 'nombre', 'empresa', 'contexto'],
       examples: [
         'actualiza el telefono de juan@email.com a 555-1234',
         'cambia el nombre de maria@empresa.com a Maria Perez',
