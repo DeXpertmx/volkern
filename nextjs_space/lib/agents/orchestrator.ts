@@ -45,8 +45,22 @@ export class MinimaxOrchestratorAgent {
       const pendingConfirmation = await this.checkPendingConfirmation(userId);
       if (pendingConfirmation) return this.handlePendingConfirmation(request, pendingConfirmation);
 
-      const classification = await intentClassifier.classify({ message, userId, tenantId, context });
+      let activeContext = context;
+      const pendingCtx = await this.getPendingContext(userId);
+      if (pendingCtx) {
+        activeContext = `El usuario está respondiendo a la intención previa: ${pendingCtx.intent}. Parámetros faltantes solicitados: ${pendingCtx.missingParams?.join(', ')}. Parámetros ya recolectados: ${JSON.stringify(pendingCtx.collectedParams)}`;
+      }
+
+      const classification = await intentClassifier.classify({ message, userId, tenantId, context: activeContext });
       
+      // Si hay contexto pendiente y el modelo no detectó una intención clara, asumimos que está respondiendo a la intención previa
+      if (pendingCtx && (classification.intent === 'consulta_general' || classification.intent === 'unknown')) {
+        classification.intent = pendingCtx.intent;
+        classification.confidence = 0.9;
+        // Mezclar parámetros
+        classification.extractedParams = { ...pendingCtx.collectedParams, ...classification.extractedParams };
+      }
+
       const minConfidence = classification.intent === 'consulta_general' ? 0.4 : 0.5;
       if (classification.confidence < minConfidence) {
         const response = await responseFormatter.format({ intent: 'consulta_general', action: 'ask_clarification', success: false });
@@ -60,7 +74,13 @@ export class MinimaxOrchestratorAgent {
         return { success: false, response: `${response.emoji} ${response.text}`, shouldWaitForMoreInfo: confidenceVerdict.action === 'ask_clarification', metadata: { confidence: classification.confidence, action: confidenceVerdict.action } };
       }
 
-      const extraction = await entityExtractor.extract({ message, intent: classification.intent, context });
+      // Si teníamos un contexto pendiente, pasamos los parámetros pre-recolectados al extractor
+      const contextForExtractor = pendingCtx ? `Parámetros previos: ${JSON.stringify(pendingCtx.collectedParams)}` : activeContext;
+      const extraction = await entityExtractor.extract({ message, intent: classification.intent, context: contextForExtractor });
+      
+      if (pendingCtx) {
+        extraction.entities = { ...pendingCtx.collectedParams, ...extraction.entities };
+      }
       const validation = await commandValidator.validate({ intent: classification.intent, params: extraction.entities, message, userId, tenantId, userRole });
 
       if (validation.requiresConfirmation) {
@@ -173,6 +193,21 @@ export class MinimaxOrchestratorAgent {
       await prisma.chatbotAuditLog.deleteMany({ where: { userId, status: 'PENDING_CONTEXT' } });
       await prisma.chatbotAuditLog.delete({ where: { id: `ctx_${userId}` } }).catch(() => {});
     } catch (e) { console.error('Error clearing pending context:', e); }
+  }
+
+  private async getPendingContext(userId: string): Promise<any> {
+    try {
+      const record = await prisma.chatbotAuditLog.findUnique({ where: { id: `ctx_${userId}` } });
+      if (record && record.detectedEntities) {
+        // Only return if it's less than 5 minutes old
+        if (Date.now() - record.createdAt.getTime() < 5 * 60 * 1000) {
+          return record.detectedEntities;
+        } else {
+          await this.clearPendingContext(userId);
+        }
+      }
+    } catch (e) { console.error('Error getting pending context:', e); }
+    return null;
   }
 
   private determineErrorType(error: any): string {
