@@ -48,6 +48,18 @@ export class IntentClassifierAgent {
       destructive: false
     },
     {
+      name: 'actualizar_lead',
+      description: 'Modificar o actualizar un lead o contacto existente',
+      requiredParams: ['email'],
+      optionalParams: ['telefono', 'nombre', 'empresa', 'notas'],
+      examples: [
+        'actualiza el telefono de juan@email.com a 555-1234',
+        'cambia el nombre de maria@empresa.com a Maria Perez',
+        'modifica el contacto juan@test.com, agregale el telefono 123456789'
+      ],
+      destructive: false
+    },
+    {
       name: 'agendar_cita',
       description: 'Agendar una cita o reunión',
       requiredParams: ['email', 'fecha', 'hora'],

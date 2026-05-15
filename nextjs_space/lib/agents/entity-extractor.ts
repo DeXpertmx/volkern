@@ -47,6 +47,7 @@ export class EntityExtractorAgent {
 
   private readonly entityDescriptions: Record<string, { required: string[]; optional: string[]; questions: Record<string, string> }> = {
     crear_lead: { required: ['nombre', 'email'], optional: ['telefono', 'empresa'], questions: { nombre: '¿Cuál es el nombre del contacto?', email: '¿Cuál es el email?', telefono: '¿Teléfono de contacto?', empresa: '¿De qué empresa?' } },
+    actualizar_lead: { required: ['email'], optional: ['nombre', 'telefono', 'empresa', 'notas'], questions: { email: '¿Cuál es el email del contacto que deseas modificar?' } },
     agendar_cita: { required: ['email', 'fecha', 'hora'], optional: ['duracion', 'tipo', 'notas'], questions: { email: '¿Con quién? (email)', fecha: '¿Para qué día?', hora: '¿A qué hora?', duracion: '¿Duración?' } },
     crear_tarea: { required: ['titulo'], optional: ['descripcion', 'fechaVencimiento', 'prioridad', 'email'], questions: { titulo: '¿Cuál es el título?', descripcion: '¿Descripción?', fechaVencimiento: '¿Cuándo vence?', prioridad: '¿Prioridad?' } },
     registrar_gasto: { required: ['monto', 'concepto'], optional: ['fecha', 'proveedor', 'categoria'], questions: { monto: '¿Monto?', concepto: '¿Concepto?', proveedor: '¿Proveedor?' } }
