@@ -1,5 +1,4 @@
 import { callMinimaxM25, callAssistantWithFallback } from '@/lib/assistant/openrouter-client';
-import { getGemmaSystemPrompt } from '@/lib/assistant/gemma-personality';
 import { prisma } from '@/lib/db';
 
 export interface IntentClassification {
@@ -154,16 +153,17 @@ export class IntentClassifierAgent {
     userId: string;
     tenantId: string;
   }): Promise<IntentClassification> {
-    const startTime = Date.now();
+     const startTime = Date.now();
     
-    const systemPrompt = getGemmaSystemPrompt(params.context, this.intentsSchema);
-    console.log(`[IntentClassifier] System Prompt: "${systemPrompt}"`);
+    const systemPrompt = this.buildSystemPrompt(params.context);
+    const userPrompt = this.buildUserPrompt(params.message);
+    console.log(`[IntentClassifier] Using classification-only prompt for: "${params.message}"`);
     
     try {
       console.log(`[IntentClassifier] Classifying: "${params.message}"`);
       const response = await callAssistantWithFallback([
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: params.message }
+        { role: 'user', content: userPrompt }
       ]);
       
       const content = response.choices[0].message.content;
