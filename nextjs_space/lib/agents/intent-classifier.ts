@@ -146,7 +146,7 @@ export class IntentClassifierAgent {
     }
   ];
 
-  private readonly MIN_CONFIDENCE = 0.7;
+  private readonly MIN_CONFIDENCE = 0.5;
 
   async classify(params: {
     message: string;
@@ -157,15 +157,18 @@ export class IntentClassifierAgent {
     const startTime = Date.now();
     
     const systemPrompt = getGemmaSystemPrompt(params.context, this.intentsSchema);
-    const userPrompt = this.buildUserPrompt(params.message);
+    console.log(`[IntentClassifier] System Prompt: "${systemPrompt}"`);
     
     try {
+      console.log(`[IntentClassifier] Classifying: "${params.message}"`);
       const response = await callAssistantWithFallback([
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
+        { role: 'user', content: params.message }
       ]);
       
-      const rawResponse = response.choices[0]?.message?.content || '';
+      const content = response.choices[0].message.content;
+      console.log(`[IntentClassifier] AI Response: "${content}"`);
+      const rawResponse = content || '';
       const parsed = this.parseResponse(rawResponse);
       
       const intentExists = this.intentsSchema.some(i => i.name === parsed.intent);
@@ -188,7 +191,7 @@ export class IntentClassifierAgent {
       });
 
       const missingParams = this.getMissingParams(parsed.intent, parsed.extractedParams);
-      const needsMoreInfo = missingParams.length > 0 && parsed.confidence >= this.MIN_CONFIDENCE;
+      const needsMoreInfo = missingParams.length > 0;
       
       if (needsMoreInfo) {
         parsed.missingParams = missingParams;

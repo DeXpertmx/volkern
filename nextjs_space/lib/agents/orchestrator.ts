@@ -46,6 +46,13 @@ export class MinimaxOrchestratorAgent {
       if (pendingConfirmation) return this.handlePendingConfirmation(request, pendingConfirmation);
 
       const classification = await intentClassifier.classify({ message, userId, tenantId, context });
+      
+      const minConfidence = classification.intent === 'consulta_general' ? 0.4 : 0.5;
+      if (classification.confidence < minConfidence) {
+        const response = await responseFormatter.format({ intent: 'consulta_general', action: 'ask_clarification', success: false });
+        return { success: false, response: `${response.emoji} ${response.text}`, shouldWaitForMoreInfo: true };
+      }
+
       const confidenceVerdict = await confidenceChecker.check({ intent: classification.intent, confidence: classification.confidence, message, userId, tenantId, hasAllRequiredParams: !classification.needsMoreInfo });
 
       if (confidenceVerdict.action !== 'execute') {
@@ -71,6 +78,12 @@ export class MinimaxOrchestratorAgent {
         const response = await responseFormatter.format({ intent: classification.intent, action: 'ask_clarification', success: false, missingParams: extraction.missingParams });
         await this.savePendingContext(userId, { intent: classification.intent, missingParams: extraction.missingParams, collectedParams: extraction.entities });
         return { success: false, response: `${response.emoji} ${response.text}`, shouldWaitForMoreInfo: true, metadata: { missingParams: extraction.missingParams } };
+      }
+
+      if (classification.intent === 'consulta_general' || classification.intent === 'unknown') {
+        const response = await responseFormatter.format({ intent: classification.intent, action: 'success', success: true });
+        await this.clearPendingContext(userId);
+        return { success: true, response: `${response.emoji} ${response.text}`, action: classification.intent };
       }
 
       const skillResult = await this.executeSkill(classification.intent, extraction.entities, tenantId);

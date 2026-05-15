@@ -170,7 +170,7 @@ export class ConfidenceCheckerAgent {
           intent: params.intent,
           status: 'PENDING',
           inputRaw: `confidence_verdict:${params.verdict}`,
-          metadata: {
+          detectedEntities: {
             verdict: params.verdict,
             threshold: params.threshold,
             confidence: params.confidence,
