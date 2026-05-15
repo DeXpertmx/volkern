@@ -81,11 +81,12 @@ const getDealWrapper = (input: { dealId: string; tenantId: string }) =>
 const listDealsWrapper = (input: { tenantId: string; etapa?: string; prioridad?: string; leadId?: string; contactId?: string; search?: string; page?: number; limit?: number }) =>
   dealSkills.listDeals(input.tenantId, input);
 
-const updateLeadWrapper = async (input: { email: string; tenantId: string; nombre?: string; telefono?: string; empresa?: string; notas?: string }) => {
-  const { email, tenantId, ...dataToUpdate } = input;
+const updateLeadWrapper = async (input: { email: string; tenantId: string; nombre?: string; telefono?: string; empresa?: string; notas?: string; contexto?: string }) => {
+  const { email, tenantId, contexto, ...dataToUpdate } = input;
   if (!email) throw new Error('Se requiere el email para encontrar el contacto a actualizar');
   
   const { prisma } = await import('@/lib/db');
+  if (contexto && !dataToUpdate.notas) dataToUpdate.notas = contexto;
   
   // 1. Buscar si es Lead
   const lead = await contactSkills.findLeadByEmail(email, tenantId);
@@ -119,6 +120,14 @@ const updateLeadWrapper = async (input: { email: string; tenantId: string; nombr
   throw new Error(`No se encontró ningún contacto ni lead con el correo ${email}`);
 };
 
+const createLeadWrapper = async (input: { tenantId: string; nombre: string; email: string; telefono?: string; notas?: string; contexto?: string; empresa?: string }) => {
+  const { contexto, notas, ...rest } = input;
+  return contactSkills.createLead({
+    ...rest,
+    notas: contexto || notas
+  });
+};
+
 export const skills = {
   // Contactos
   create_contact: contactSkills.createContact,
@@ -127,7 +136,7 @@ export const skills = {
   find_contact_by_email: findContactByEmailWrapper,
   
   // Leads
-  create_lead: contactSkills.createLead,
+  create_lead: createLeadWrapper,
   update_lead: updateLeadWrapper,
   get_lead: contactSkills.getLead,
   find_lead_by_email: findLeadByEmailWrapper,

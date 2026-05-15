@@ -142,8 +142,8 @@ export class ConfidenceCheckerAgent {
     const confidencePercent = (confidence * 100).toFixed(0);
     
     const messages: Record<string, string> = {
-      'crear_lead': '¿Podrías proporcionarme el nombre y email del contacto que quieres agregar?',
-      'actualizar_lead': '¿Podrías proporcionarme el email del contacto que quieres modificar y los datos nuevos?',
+      'crear_lead': '¿Podrías proporcionarme el nombre, email y contexto (motivo) del contacto que quieres agregar?',
+      'actualizar_lead': '¿Podrías proporcionarme el email del contacto que quieres modificar y los datos nuevos (ej. teléfono o contexto)?',
       'agendar_cita': 'Para agendar una cita, necesito saber con quién (email), fecha y hora. ¿Me los proporcionas?',
       'buscar_lead': '¿Qué lead estás buscando? Dame su email o nombre completo.',
       'crear_tarea': '¿Qué tarea necesitas crear? Dame un título y opcionalmente una fecha de vencimiento.',
