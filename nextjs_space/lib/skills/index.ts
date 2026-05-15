@@ -128,6 +128,63 @@ const createLeadWrapper = async (input: { tenantId: string; nombre: string; emai
   });
 };
 
+const createTaskWrapper = async (input: { tenantId: string; titulo: string; email?: string; descripcion?: string; fechaVencimiento?: string | Date; prioridad?: string; userId?: string }) => {
+  const { tenantId, email, titulo, descripcion, fechaVencimiento, userId } = input;
+  
+  let lead = null;
+  let contact = null;
+
+  if (email) {
+    // Buscar lead o contacto
+    lead = await contactSkills.findLeadByEmail(email, tenantId);
+    if (!lead) {
+      contact = await contactSkills.findContactByEmail(email, tenantId);
+    }
+    
+    if (!lead && !contact) {
+      throw new Error(`No se encontró ningún lead o contacto con el correo ${email}`);
+    }
+  }
+
+  // Parsear fecha o default a mañana
+  let fecha = new Date();
+  if (fechaVencimiento) {
+    fecha = new Date(fechaVencimiento);
+    if (isNaN(fecha.getTime())) fecha = new Date();
+  } else {
+    fecha.setDate(fecha.getDate() + 1); // Por defecto mañana si no viene
+  }
+
+  const { prisma } = await import('@/lib/db');
+  const task = await prisma.task.create({
+    data: {
+      tenantId,
+      leadId: lead ? lead.id : null,
+      contactId: contact ? contact.id : null,
+      titulo,
+      tipo: 'seguimiento',
+      descripcion,
+      fechaVencimiento: fecha,
+      completada: false,
+    }
+  });
+
+  const { eventBus, EVENTS } = await import('./event-bus');
+  eventBus.emitEvent(EVENTS.TASK_CREATED, {
+    tenantId,
+    userId,
+    timestamp: new Date(),
+    source: 'app',
+    taskId: task.id,
+    leadId: task.leadId,
+    titulo: task.titulo,
+    tipo: task.tipo,
+    fechaVencimiento: task.fechaVencimiento,
+  });
+
+  return task;
+};
+
 export const skills = {
   // Contactos
   create_contact: contactSkills.createContact,
@@ -150,7 +207,7 @@ export const skills = {
   close_conversation: conversationSkills.closeConversation,
   
   // Tareas
-  create_task: taskSkills.createTask,
+  create_task: createTaskWrapper,
   complete_task: taskSkills.completeTask,
   get_tasks_by_lead: getTasksByLeadWrapper,
   get_pending_tasks: getPendingTasksWrapper,
