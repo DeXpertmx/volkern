@@ -30,47 +30,47 @@ export class ResponseFormatterAgent {
 
   private readonly templates: Record<string, Record<string, (params: any) => string>> = {
     'crear_lead': {
-      success: (data) => `He creado el contacto ${data?.nombre || 'nuevo'} con email ${data?.email || 'registrado'}. ¿Necesitas algo más?`,
+      execute: (data) => `He creado el contacto ${data?.nombre || 'nuevo'} con email ${data?.email || 'registrado'}. ¿Necesitas algo más?`,
       error: (error) => `No pude crear el contacto: ${error}. ¿Quieres intentarlo de nuevo?`,
       ask_clarification: (params) => `Para crear un contacto, necesito saber ${params.missingParams?.join(' y ') || 'nombre y email'}.`
     },
     'actualizar_lead': {
-      success: (data) => `He actualizado el contacto ${data?.nombre || 'indicado'}. ¿Necesitas algo más?`,
+      execute: (data) => `¡Listo! He actualizado la información de ${data?.nombre || 'contacto'}. ¿Necesitas algo más?`,
       error: (error) => `No pude actualizar el contacto: ${error}. ¿Quieres intentarlo de nuevo?`,
-      ask_clarification: (params) => `Para actualizar un contacto, necesito saber ${params.missingParams?.join(' y ') || 'su email'}.`
+      ask_clarification: (params) => `Para actualizar un contacto, necesito saber su nombre o email.`
     },
     'agendar_cita': {
-      success: (data) => `✅ Cita agendada para ${data?.fecha || 'la fecha indicada'} a las ${data?.hora || 'hora indicada'}.`,
+      execute: (data) => `✅ Cita agendada para ${data?.fechaHora ? new Date(data.fechaHora).toLocaleString() : 'la fecha indicada'}.`,
       error: (error) => `No pude agendar la cita: ${error}.`,
-      ask_clarification: (params) => `Para agendar una cita, necesito ${params.missingParams?.join(', ') || 'email, fecha y hora'}.`
+      ask_clarification: (params) => `Para agendar una cita, necesito saber con quién, la fecha y la hora.`
     },
     'mis_citas': {
-      success: (data) => this.formatCitasList(data),
+      execute: (data) => this.formatCitasList(data),
       error: () => 'No pude recuperar tus citas.',
       empty: () => 'No tienes citas programadas.'
     },
     'cancelar_cita': {
       confirmation_pending: () => `⚠️ ¿Seguro que quieres cancelar esta cita? Responde "SÍ" para confirmar.`,
-      success: (data) => `He cancelado la cita.`,
+      execute: (data) => `He cancelado la cita correctamente.`,
       error: (error) => `No pude cancelar: ${error}.`
     },
     'crear_tarea': {
-      success: (data) => `✅ Tarea creada: "${data?.titulo || 'sin título'}"${data?.fechaVencimiento ? `, vence ${data.fechaVencimiento}` : ''}.`,
+      execute: (data) => `✅ Tarea creada: "${data?.titulo || 'sin título'}"${data?.fechaVencimiento ? `, vence ${new Date(data.fechaVencimiento).toLocaleDateString()}` : ''}.`,
       error: (error) => `No pude crear la tarea: ${error}.`,
-      ask_clarification: () => `Necesito el título de la tarea.`
+      ask_clarification: () => `Necesito el título de la tarea para poder agendarla.`
     },
     'registrar_gasto': {
-      success: (data) => `💰 Gasto registrado: ${data?.concepto || 'Sin concepto'} por ${data?.monto || '0'}€.`,
-      error: (error) => `No pude registrar: ${error}.`,
-      ask_clarification: () => `Necesito monto y concepto del gasto.`
+      execute: (data) => `💰 Gasto registrado: ${data?.concepto || 'Sin concepto'} por ${data?.monto || '0'}€.`,
+      error: (error) => `No pude registrar el gasto: ${error}.`,
+      ask_clarification: () => `Necesito saber el monto y el concepto del gasto.`
     },
     'buscar_lead': {
-      success: (data) => this.formatLeadsList(data),
-      error: (error) => `No pude buscar contactos: ${error}.`,
+      execute: (data) => this.formatLeadsList(data),
+      error: (error) => `No pude buscar los contactos: ${error}.`,
       ask_clarification: () => `¿A quién buscas? Dame un nombre o email.`
     },
     'registrar_interaccion': {
-      success: (data) => `¡Listo! He registrado la ${data?.tipo || 'interacción'} con ${data?.lead?.nombre || data?.contact?.nombre || 'el contacto'}.`,
+      execute: (data) => `¡Listo! He registrado la ${data?.tipo || 'interacción'} con ${data?.lead?.nombre || data?.contact?.nombre || 'el contacto'}.`,
       error: (error) => `Vaya, tuve un problema al registrar la interacción: ${error}`,
       ask_clarification: (params) => {
         if (params.missingParams?.includes('tipo')) return 'Claro, ¿qué tipo de interacción fue? (Llamada, Email, WhatsApp, etc.)';
@@ -79,7 +79,7 @@ export class ResponseFormatterAgent {
       }
     },
     'obtener_telefono': {
-      success: (data) => `Claro, el teléfono de ${data?.nombre} es: ${data?.telefono}`,
+      execute: (data) => `Claro, el teléfono de ${data?.nombre} es: ${data?.telefono}`,
       error: (error) => `Lo siento, no pude encontrar ese teléfono: ${error}`,
       ask_clarification: () => '¿De quién quieres que busque el teléfono? Dime su nombre completo.'
     },
@@ -145,7 +145,7 @@ export class ResponseFormatterAgent {
   }
 
   private getGenericTemplate(action: string, success: boolean): (params: any) => string {
-    if (action === 'success' && success) return () => '✅ ¡Completado! ¿Necesitas algo más?';
+    if ((action === 'success' || action === 'execute') && success) return () => '✅ ¡Hecho! ¿Necesitas algo más?';
     if (action === 'error') return (p) => `❌ ${p.error || 'Hubo un problema.'}`;
     if (action === 'ask_clarification') return (p) => `Necesito ${p.missingParams?.join(', ') || 'más información'}.`;
     return () => 'Procesando...';

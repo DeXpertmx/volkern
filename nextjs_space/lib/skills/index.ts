@@ -82,43 +82,59 @@ const getDealWrapper = (input: { dealId: string; tenantId: string }) =>
 const listDealsWrapper = (input: { tenantId: string; etapa?: string; prioridad?: string; leadId?: string; contactId?: string; search?: string; page?: number; limit?: number }) =>
   dealSkills.listDeals(input.tenantId, input);
 
-const updateLeadWrapper = async (input: { email: string; tenantId: string; nombre?: string; telefono?: string; empresa?: string; notas?: string; contexto?: string }) => {
-  const { email, tenantId, contexto, ...dataToUpdate } = input;
-  if (!email) throw new Error('Se requiere el email para encontrar el contacto a actualizar');
-  
+const updateLeadWrapper = async (input: { tenantId: string; email?: string; nombre?: string; telefono?: string; empresa?: string; contexto?: string; notas?: string }) => {
+  const { tenantId, email, nombre, contexto, notas, ...dataToUpdate } = input;
   const { prisma } = await import('@/lib/db');
-  if (contexto && !dataToUpdate.notas) dataToUpdate.notas = contexto;
   
-  // 1. Buscar si es Lead
-  const lead = await contactSkills.findLeadByEmail(email, tenantId);
+  let targetEmail = email;
+  let targetNombre = nombre;
+
+  // 1. Si no hay email, intentar buscar por nombre
+  if (!targetEmail && targetNombre) {
+    const found = await prisma.lead.findFirst({ 
+      where: { tenantId, nombre: { contains: targetNombre, mode: 'insensitive' } } 
+    }) || await prisma.contact.findFirst({ 
+      where: { tenantId, nombre: { contains: targetNombre, mode: 'insensitive' } } 
+    });
+    
+    if (found) {
+      targetEmail = found.email;
+      if (!targetNombre) targetNombre = found.nombre;
+    }
+  }
+
+  if (!targetEmail) throw new Error('Se requiere un email o nombre válido para identificar al contacto');
+
+  const finalNotas = contexto || notas;
+  
+  // 2. Buscar si es Lead
+  const lead = await contactSkills.findLeadByEmail(targetEmail, tenantId);
   if (lead) {
-    const updated = await prisma.lead.update({
+    return await prisma.lead.update({
       where: { id: lead.id },
       data: {
-        nombre: dataToUpdate.nombre !== undefined ? dataToUpdate.nombre : undefined,
+        nombre: targetNombre !== undefined ? targetNombre : undefined,
         telefono: dataToUpdate.telefono !== undefined ? dataToUpdate.telefono : undefined,
         empresa: dataToUpdate.empresa !== undefined ? dataToUpdate.empresa : undefined,
-        notas: dataToUpdate.notas !== undefined ? dataToUpdate.notas : undefined
+        notas: finalNotas !== undefined ? finalNotas : undefined
       }
     });
-    return updated;
   }
 
-  // 2. Buscar si es Contacto
-  const contact = await contactSkills.findContactByEmail(email, tenantId);
+  // 3. Buscar si es Contacto
+  const contact = await contactSkills.findContactByEmail(targetEmail, tenantId);
   if (contact) {
-    const updated = await prisma.contact.update({
+    return await prisma.contact.update({
       where: { id: contact.id },
       data: {
-        nombre: dataToUpdate.nombre !== undefined ? dataToUpdate.nombre : undefined,
+        nombre: targetNombre !== undefined ? targetNombre : undefined,
         telefono: dataToUpdate.telefono !== undefined ? dataToUpdate.telefono : undefined,
-        notas: dataToUpdate.notas !== undefined ? dataToUpdate.notas : undefined
+        notas: finalNotas !== undefined ? finalNotas : undefined
       }
     });
-    return updated;
   }
 
-  throw new Error(`No se encontró ningún contacto ni lead con el correo ${email}`);
+  throw new Error(`No se encontró ningún contacto ni lead para actualizar.`);
 };
 
 const createLeadWrapper = async (input: { tenantId: string; nombre: string; email: string; telefono?: string; notas?: string; contexto?: string; empresa?: string }) => {

@@ -50,12 +50,14 @@ export class IntentClassifierAgent {
     {
       name: 'actualizar_lead',
       description: 'Modificar o actualizar un lead o contacto existente',
-      requiredParams: ['email'],
-      optionalParams: ['telefono', 'nombre', 'empresa', 'contexto'],
+      requiredParams: [],
+      optionalParams: ['email', 'telefono', 'nombre', 'empresa', 'contexto'],
       examples: [
         'actualiza el telefono de juan@email.com a 555-1234',
+        'ponle contexto a Alejandra Velázquez: Interesada en automatización',
         'cambia el nombre de maria@empresa.com a Maria Perez',
-        'modifica el contacto juan@test.com, agregale el telefono 123456789'
+        'actualiza el contacto de Alejandra Vázquez',
+        'agregar contexto a Alejandra Velázquez'
       ],
       destructive: false
     },
