@@ -2378,6 +2378,12 @@ model Contrato {
   fechaFirmaEmpresa    DateTime?
   fechaInicio          DateTime?
   fechaFin             DateTime?
+  auditHash            String?         @unique
+  chainedHash          String?
+  sealedAt             DateTime?
+  signatureAudit       Json?
+  signedPdfUrl         String?
+  archivedAt           DateTime?
   fechaActualizacion   DateTime                   @updatedAt
   firmadoPorCliente    Boolean                    @default(false)
   nombreFirmaCliente   String?
@@ -3834,6 +3840,9 @@ model StockMovement {
   reason             String?
   referenceId        String?
   metadata           Json?               @default("{}")
+  auditHash          String?             @unique
+  chainedHash        String?
+  sealedAt           DateTime?
   createdAt          DateTime            @default(now())
   projectId          String?
   lotId              String?
@@ -4256,6 +4265,9 @@ model PayrollRecord {
   month           Int
   paymentDate     DateTime?
   year            Int
+  auditHash       String?   @unique
+  chainedHash     String?
+  sealedAt        DateTime?
   metadata        Json?     @default("{}")
   notes           String?
   vaultSeed       String?
@@ -6017,6 +6029,11 @@ model PayrollRecordES {
   calculationSnapshot  Json
   operatorNote         String?
   auditHash            String?         @unique
+  chainedHash          String?
+  sealedAt             DateTime?
+  fiscalStatus         String?         @default("PENDING") // PENDING, SIGNED, ARCHIVED
+  signedXmlUrl         String?
+  signatureAudit       Json?
   createdAt            DateTime        @default(now())
   lines                PayrollLineES[]
   employee             Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)

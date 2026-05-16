@@ -16,7 +16,22 @@ export class StockService {
     metadata?: any;
   }) {
     return await prisma.$transaction(async (tx) => {
-      // 1. Crear el movimiento
+      // 1. Obtener el hash anterior para encadenamiento
+      const lastMovement = await tx.stockMovement.findFirst({
+        where: { tenantId: data.tenantId },
+        orderBy: { createdAt: 'desc' },
+        select: { auditHash: true }
+      });
+
+      const chainedHash = lastMovement?.auditHash || '0'.repeat(64);
+      
+      // 2. Generar el hash del movimiento actual
+      const { createHash } = await import('crypto');
+      const hash = createHash('sha256')
+        .update(chainedHash + JSON.stringify(data))
+        .digest('hex');
+
+      // 3. Crear el movimiento sellado
       const movement = await tx.stockMovement.create({
         data: {
           tenantId: data.tenantId,
@@ -27,18 +42,20 @@ export class StockService {
           quantity: data.quantity,
           reason: data.reason,
           referenceId: data.referenceId,
-          metadata: data.metadata || {}
+          metadata: data.metadata || {},
+          auditHash: hash,
+          chainedHash: chainedHash,
+          sealedAt: new Date()
         }
       });
 
-      // 2. Actualizar o crear el nivel de stock (StockLevel)
-      // Se segmenta por Warehouse + Item + Lot
+      // 4. Actualizar o crear el nivel de stock (StockLevel)
       await tx.stockLevel.upsert({
         where: {
           warehouseId_catalogoItemId_lotId: {
             warehouseId: data.warehouseId,
             catalogoItemId: data.catalogoItemId,
-            lotId: data.lotId || null as any // Prisma maneja null en unique si está permitido
+            lotId: data.lotId || null as any
           }
         },
         update: {
