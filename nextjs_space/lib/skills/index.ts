@@ -40,6 +40,7 @@ import * as vaultPayrollSkills from './vault-payroll-skills';
 import * as operationalSkills from './operational-skills';
 import * as marketingSkills from './marketing-skills';
 import * as interactionSkills from './interaction-skills';
+import * as billingSkills from './billing-skills';
 import { eventBus, EVENTS } from './event-bus';
 
 // ============== SKILL REGISTRY ==============
@@ -322,6 +323,12 @@ export const skills = {
   obtener_telefono: getPhoneByNameWrapper,
   registrar_interaccion: registerInteractionWrapper,
   
+  // Facturación & Veri*factu
+  create_invoice: billingSkills.create_invoice,
+  rectify_invoice: billingSkills.rectify_invoice,
+  cancel_invoice: billingSkills.cancel_invoice,
+  get_invoice_fiscal_status: billingSkills.get_invoice_fiscal_status,
+  
   // Conversaciones
   create_conversation: conversationSkills.createConversation,
   get_conversation: getConversationWrapper,
@@ -513,6 +520,11 @@ export function listSkills(): Array<{ name: SkillName; description: string; cate
     { name: 'generate_success_path', description: 'Generar sugerencia estratégica para un lead basada en patrones de cierre', category: 'proactivity' },
     { name: 'generate_customer_response', description: 'Simular respuesta de cliente en roleplay de negociación', category: 'training' },
     { name: 'generate_post_mortem', description: 'Generar reporte de retroalimentación tras una sesión de roleplay', category: 'training' },
+    // Facturación & Veri*factu
+    { name: 'create_invoice', description: 'Generar una factura legal (Veri*factu)', category: 'billing' },
+    { name: 'rectify_invoice', description: 'Rectificar una factura existente', category: 'billing' },
+    { name: 'cancel_invoice', description: 'Anular una factura', category: 'billing' },
+    { name: 'get_invoice_fiscal_status', description: 'Consultar estado fiscal e integridad de una factura', category: 'billing' },
     // ERP Finanzas
     { name: 'create_supplier', description: 'Registrar un nuevo proveedor', category: 'finance' },
     { name: 'create_expense', description: 'Registrar un nuevo gasto u egreso', category: 'finance' },

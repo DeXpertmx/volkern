@@ -100,7 +100,126 @@ export class TelegramGatewayAgent {
         return { success: true, response };
       }
 
-      // 7. Obtener o crear contexto de conversación
+      // 7. Manejo de Comandos Administrativos Especiales
+      if (parsed.text.startsWith('/fiscal_status')) {
+        const { AEATObservabilityService } = await import('../fiscal/aeat/observability-service');
+        const metrics = await AEATObservabilityService.getRealTimeMetrics();
+        const alerts = await AEATObservabilityService.runHealthCheck();
+
+        let report = `📊 <b>ESTADO DE SALUD FISCAL (ON-DEMAND)</b>\n\n`;
+        report += `✅ Aceptadas: ${metrics.database.accepted}\n`;
+        report += `❌ Rechazadas: ${metrics.database.rejected}\n`;
+        report += `⚠️ Errores (Retry): ${metrics.database.error}\n`;
+        report += `🕒 En Cola: ${metrics.queue.waiting}\n\n`;
+
+        if (alerts.length > 0) {
+          report += `🚨 <b>ALERTAS ACTIVAS:</b>\n`;
+          alerts.forEach(a => {
+            const icon = a.severity === 'CRITICAL' ? '🔥' : '⚠️';
+            report += `${icon} ${a.message}\n`;
+          });
+        } else {
+          report += `✅ Todo el sistema opera dentro de los umbrales normales.`;
+        }
+
+        await this.sendMessage(parsed.chatId, report, tenantId);
+        return { success: true, response: report };
+      }
+
+      // 8. Comando: /fiscal_retry_failed (Reintento Masivo)
+      if (parsed.text.startsWith('/fiscal_retry_failed')) {
+        const failedInvoices = await prisma.invoice.findMany({
+          where: { 
+            tenantId,
+            aeatStatus: { in: ['ERROR', 'REJECTED'] }
+          },
+          select: { id: true }
+        });
+
+        if (failedInvoices.length === 0) {
+          const msg = '✅ No hay facturas fallidas pendientes de reintento.';
+          await this.sendMessage(parsed.chatId, msg, tenantId);
+          return { success: true, response: msg };
+        }
+
+        const { aeatQueue } = await import('../queues/aeat-queue');
+        for (const inv of failedInvoices) {
+          await aeatQueue.add('ship_invoice', { 
+            invoiceId: inv.id, 
+            tenantId 
+          });
+        }
+
+        const msg = `🚀 Se han encolado ${failedInvoices.length} facturas para reintento inmediato.`;
+        
+        // Registrar Auditoría
+        await prisma.auditLog.create({
+          data: {
+            tenantId,
+            userId: parsed.telegramUserId,
+            action: 'FISCAL_RETRY_FAILED',
+            metadata: { count: failedInvoices.length, chatId: parsed.chatId }
+          }
+        });
+
+        await this.sendMessage(parsed.chatId, msg, tenantId);
+        return { success: true, response: msg };
+      }
+
+      // 9. Comando: /fiscal_ack (Reconocer Incidente)
+      if (parsed.text.startsWith('/fiscal_ack')) {
+        const incidentId = parsed.text.split(' ')[1];
+        if (!incidentId) {
+          const msg = '❌ Debes proporcionar el ID del incidente. Ej: /fiscal_ack clx...';
+          await this.sendMessage(parsed.chatId, msg, tenantId);
+          return { success: true, response: msg };
+        }
+
+        const incident = await prisma.fiscalIncident.update({
+          where: { id: incidentId },
+          data: { 
+            status: 'ACKNOWLEDGED',
+            acknowledgedAt: new Date()
+          }
+        });
+
+        // Registrar Auditoría
+        await prisma.auditLog.create({
+          data: {
+            tenantId,
+            userId: parsed.telegramUserId,
+            action: 'FISCAL_INCIDENT_ACK',
+            metadata: { incidentId: incident.id, chatId: parsed.chatId }
+          }
+        });
+
+        const msg = `🤝 Incidente ${incident.id} reconocido. El equipo de guardia ya está al tanto.`;
+        await this.sendMessage(parsed.chatId, msg, tenantId);
+        return { success: true, response: msg };
+      }
+
+      // 10. Comando: /fiscal_ai_forecast (Predicción de Negocio)
+      if (parsed.text.startsWith('/fiscal_ai_forecast')) {
+        const { AEAAIOpsService } = await import('../fiscal/aeat/ai-ops-service');
+        const forecast = await AEAAIOpsService.getFiscalForecast(tenantId);
+
+        if (!forecast) {
+          const msg = '⚠️ No hay datos suficientes para generar una predicción fiable aún.';
+          await this.sendMessage(parsed.chatId, msg, tenantId);
+          return { success: true, response: msg };
+        }
+
+        let msg = `🤖 <b>INTELIGENCIA FISCAL AI (30 DÍAS)</b>\n\n`;
+        msg += `💰 Facturación Est.: ${forecast.totalInvoiced.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}\n`;
+        msg += `🏛️ IVA Estimado: ${forecast.estimatedVAT.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}\n`;
+        msg += `📈 Tendencia: <b>${forecast.trend}</b>\n\n`;
+        msg += `<i>Nota: Esta es una estimación basada en patrones de facturación.</i>`;
+
+        await this.sendMessage(parsed.chatId, msg, tenantId);
+        return { success: true, response: msg };
+      }
+
+      // 11. Obtener o crear contexto de conversación
       const context = await ConversationContextAgent.getOrCreateContext(
         tenantId,
         parsed.telegramUserId,

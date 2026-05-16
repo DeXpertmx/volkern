@@ -77,11 +77,11 @@ export class FiscalAuditService {
   private static async getReceptorNif(invoice: any): Promise<string> {
     if (invoice.contactId) {
       const p = await prisma.perfilFiscalCliente.findFirst({ where: { contactId: invoice.contactId } });
-      return p?.idFiscal || '';
+      return p?.nif || '';
     }
     if (invoice.leadId) {
       const p = await prisma.perfilFiscalCliente.findFirst({ where: { leadId: invoice.leadId } });
-      return p?.idFiscal || '';
+      return p?.nif || '';
     }
     return '';
   }

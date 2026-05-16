@@ -3080,6 +3080,12 @@ model ConfiguracionFiscalEmisor {
   fechaCreacion        DateTime     @default(now())
   fechaActualizacion   DateTime     @updatedAt
   verifactuEnabled     Boolean      @default(false)
+
+  // Veri*factu Certificados (Almacenados de forma segura)
+  certP12              String?      @db.Text
+  certPassword         String?      @db.Text
+  certFingerprint      String?
+  certExpiresAt        DateTime?
   tenant               Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   contratos            Contrato[]   @relation("EmisorContrato")
   cotizaciones         Cotizacion[] @relation("EmisorCotizacion")
@@ -3451,6 +3457,16 @@ model Invoice {
   fiscalDetails      Json?       @default("{}")
   fiscalStatus       String?     @default("pendiente")
   stripeInvoiceId    String?
+  
+  // Veri*factu / AEAT Evidence & Tracking
+  aeatStatus         String?     @default("PENDING") // PENDING, SENT, ACCEPTED, REJECTED, ERROR
+  aeatResponse       Json?       @default("{}")
+  aeatCsv            String?     // Código Seguro de Verificación
+  aeatSentAt         DateTime?
+  aeatErrorCount     Int         @default(0)
+  signedXmlUrl       String?     // URL S3
+  soapRequestUrl     String?     // URL S3
+  soapResponseUrl    String?     // URL S3
   xmlUrl             String?
   contact            Contact?    @relation(fields: [contactId], references: [id])
   lead               Lead?       @relation(fields: [leadId], references: [id])
@@ -6408,6 +6424,36 @@ model TelegramChatbotConfig {
   webhookUrl          String?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
+}
+
+model SystemMetric {
+  id                String   @id @default(cuid())
+  tenantId          String?
+  timestamp         DateTime @default(now())
+  metricType        String   // 'aeat_error_rate', 'aeat_volume', 'queue_size', 'processing_time'
+  value             Float
+  metadata          Json?    // { hourOfDay: 10, totalRequests: 100 }
+
+  @@index([tenantId, metricType, timestamp])
+  @@map("system_metrics")
+}
+
+model FiscalIncident {
+  id                String   @id @default(cuid())
+  tenantId          String?
+  type              String   // HIGH_ERROR_RATE, QUEUE_OVERLOAD, etc.
+  status            String   @default("OPEN") // OPEN, ACKNOWLEDGED, RESOLVED
+  severity          String
+  title             String
+  description       String   @db.Text
+  startTime         DateTime @default(now())
+  endTime           DateTime?
+  acknowledgedAt    DateTime?
+  resolvedAt        DateTime?
+  metadata          Json?    // Correlation data, logs
+  
+  @@index([tenantId, status, startTime])
+  @@map("fiscal_incidents")
 }
 
 
