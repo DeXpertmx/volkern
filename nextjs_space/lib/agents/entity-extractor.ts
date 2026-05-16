@@ -48,9 +48,11 @@ export class EntityExtractorAgent {
   private readonly entityDescriptions: Record<string, { required: string[]; optional: string[]; questions: Record<string, string> }> = {
     crear_lead: { required: ['nombre', 'email', 'contexto'], optional: ['telefono', 'empresa'], questions: { nombre: '¿Cuál es el nombre del contacto?', email: '¿Cuál es el email?', contexto: '¿Cuál es el contexto o razón para registrar a este contacto?', telefono: '¿Teléfono de contacto?', empresa: '¿De qué empresa?' } },
     actualizar_lead: { required: ['email'], optional: ['nombre', 'telefono', 'empresa', 'contexto'], questions: { email: '¿Cuál es el email del contacto que deseas modificar?' } },
-    agendar_cita: { required: ['email', 'fecha', 'hora'], optional: ['duracion', 'tipo', 'notas'], questions: { email: '¿Con quién? (email)', fecha: '¿Para qué día?', hora: '¿A qué hora?', duracion: '¿Duración?' } },
+    agendar_cita: { required: ['fecha', 'hora'], optional: ['email', 'nombre', 'duracion', 'tipo', 'notas'], questions: { fecha: '¿Para qué día?', hora: '¿A qué hora?', email: '¿Cuál es el email del contacto?', duracion: '¿Duración?' } },
     crear_tarea: { required: ['titulo'], optional: ['descripcion', 'fechaVencimiento', 'prioridad', 'email'], questions: { titulo: '¿Cuál es el título?', descripcion: '¿Descripción?', fechaVencimiento: '¿Cuándo vence?', prioridad: '¿Prioridad?' } },
-    registrar_gasto: { required: ['monto', 'concepto'], optional: ['fecha', 'proveedor', 'categoria'], questions: { monto: '¿Monto?', concepto: '¿Concepto?', proveedor: '¿Proveedor?' } }
+    registrar_gasto: { required: ['monto', 'concepto'], optional: ['fecha', 'proveedor', 'categoria'], questions: { monto: '¿Monto?', concepto: '¿Concepto?', proveedor: '¿Proveedor?' } },
+    obtener_telefono: { required: ['nombre'], optional: [], questions: { nombre: '¿De quién quieres saber el teléfono? Dime su nombre completo.' } },
+    registrar_interaccion: { required: ['tipo', 'contenido'], optional: ['nombre', 'email', 'resultado'], questions: { tipo: '¿Qué tipo de interacción fue? (Llamada, Email, WhatsApp, Reunión, Nota Interna)', contenido: '¿De qué trató la interacción? Haz un breve resumen.' } }
   };
 
   async extract(params: { message: string; intent: string; context?: string; previousEntities?: Partial<ExtractedEntities> }): Promise<EntityExtractionResult> {

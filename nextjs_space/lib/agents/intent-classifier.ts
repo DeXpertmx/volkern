@@ -60,14 +60,38 @@ export class IntentClassifierAgent {
       destructive: false
     },
     {
+      name: 'obtener_telefono',
+      description: 'Obtener el número de teléfono de un contacto o lead por su nombre',
+      requiredParams: ['nombre'],
+      optionalParams: [],
+      examples: [
+        'dame el teléfono de Juan Pérez',
+        'cuál es el número de María García',
+        'pásame el cel de Carlos Ruiz'
+      ],
+      destructive: false
+    },
+    {
+      name: 'registrar_interaccion',
+      description: 'Registrar una interacción (llamada, email, whatsapp, reunión, nota) con un contacto o lead',
+      requiredParams: ['tipo', 'contenido'],
+      optionalParams: ['email', 'nombre', 'resultado'],
+      examples: [
+        'registra una llamada con Juan Pérez: "Hablamos sobre el presupuesto"',
+        'nueva interacción tipo email con maria@test.com: "Enviado catálogo"',
+        'anota una reunión con Carlos: "Quedamos en firmar contrato mañana"'
+      ],
+      destructive: false
+    },
+    {
       name: 'agendar_cita',
       description: 'Agendar una cita o reunión',
-      requiredParams: ['email', 'fecha', 'hora'],
-      optionalParams: ['duracion', 'notas', 'tipo'],
+      requiredParams: ['fecha', 'hora'],
+      optionalParams: ['email', 'nombre', 'duracion', 'notas', 'tipo'],
       examples: [
         'agenda cita con juan@email.com para mañana a las 10am',
         'programa reunión con María el viernes a las 15:30 por 1 hora',
-        'crea una cita con carlos@test.com el 2024-12-20 a las 11:00'
+        'crea una cita con alejandra.vvalvede@gmail.com el 2024-12-20 a las 11:00'
       ],
       destructive: false
     },

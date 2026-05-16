@@ -54,9 +54,10 @@ export class MinimaxOrchestratorAgent {
       const classification = await intentClassifier.classify({ message, userId, tenantId, context: activeContext });
       
       // Si hay contexto pendiente y el modelo no detectó una intención clara, asumimos que está respondiendo a la intención previa
-      if (pendingCtx && (classification.intent === 'consulta_general' || classification.intent === 'unknown')) {
+      const isShortMessage = message.trim().split(/\s+/).length <= 3;
+      if (pendingCtx && (classification.intent === 'consulta_general' || classification.intent === 'unknown' || (isShortMessage && classification.confidence < 0.8))) {
         classification.intent = pendingCtx.intent;
-        classification.confidence = 0.9;
+        classification.confidence = Math.max(classification.confidence, 0.9);
         // Mezclar parámetros
         classification.extractedParams = { ...pendingCtx.collectedParams, ...classification.extractedParams };
       }
@@ -135,7 +136,7 @@ export class MinimaxOrchestratorAgent {
 
   private async executeSkill(intent: string, params: any, tenantId: string): Promise<any> {
     const { skills, executeSkill } = await import('@/lib/skills');
-    const skillMap: Record<string, any> = { 'crear_lead': 'create_lead', 'actualizar_lead': 'update_lead', 'buscar_lead': 'get_lead', 'agendar_cita': 'create_booking', 'mis_citas': 'get_upcoming_bookings', 'cancelar_cita': 'cancel_booking', 'crear_tarea': 'create_task', 'registrar_gasto': 'create_expense', 'enviar_mensaje': 'send_message', 'convertir_lead': 'convert_lead', 'enviar_mensaje_interno': '__internal__' };
+    const skillMap: Record<string, any> = { 'crear_lead': 'create_lead', 'actualizar_lead': 'update_lead', 'buscar_lead': 'get_lead', 'agendar_cita': 'create_booking', 'mis_citas': 'get_upcoming_bookings', 'cancelar_cita': 'cancel_booking', 'crear_tarea': 'create_task', 'registrar_gasto': 'create_expense', 'enviar_mensaje': 'send_message', 'convertir_lead': 'convert_lead', 'enviar_mensaje_interno': '__internal__', 'obtener_telefono': 'obtener_telefono', 'registrar_interaccion': 'registrar_interaccion' };
     const skillName = skillMap[intent];
 
     if (intent === 'enviar_mensaje_interno') {

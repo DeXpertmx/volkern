@@ -39,6 +39,7 @@ import * as auditSkills from './audit-skills';
 import * as vaultPayrollSkills from './vault-payroll-skills';
 import * as operationalSkills from './operational-skills';
 import * as marketingSkills from './marketing-skills';
+import * as interactionSkills from './interaction-skills';
 import { eventBus, EVENTS } from './event-bus';
 
 // ============== SKILL REGISTRY ==============
@@ -185,6 +186,110 @@ const createTaskWrapper = async (input: { tenantId: string; titulo: string; emai
   return task;
 };
 
+const registerInteractionWrapper = async (input: { tenantId: string; email?: string; nombre?: string; tipo: any; contenido: string; resultado?: string; userId?: string }) => {
+  const { tenantId, email, nombre, tipo, contenido, resultado, userId } = input;
+  
+  const { prisma } = await import('@/lib/db');
+  
+  let lead = null;
+  let contact = null;
+
+  if (email) {
+    lead = await contactSkills.findLeadByEmail(email, tenantId);
+    if (!lead) contact = await contactSkills.findContactByEmail(email, tenantId);
+  } else if (nombre) {
+    lead = await prisma.lead.findFirst({ where: { tenantId, nombre: { contains: nombre, mode: 'insensitive' } } });
+    if (!lead) contact = await prisma.contact.findFirst({ where: { tenantId, nombre: { contains: nombre, mode: 'insensitive' } } });
+  }
+
+  if (!lead && !contact) {
+    throw new Error('No se encontró el contacto o lead para registrar la interacción');
+  }
+
+  return interactionSkills.createInteraction({
+    tenantId,
+    leadId: lead?.id,
+    contactId: contact?.id,
+    tipo,
+    contenido,
+    resultado,
+    userId
+  });
+};
+
+const getPhoneByNameWrapper = async (input: { tenantId: string; nombre: string }) => {
+  const { tenantId, nombre } = input;
+  const { prisma } = await import('@/lib/db');
+  
+  const lead = await prisma.lead.findFirst({ where: { tenantId, nombre: { contains: nombre, mode: 'insensitive' } } });
+  if (lead?.telefono) return { nombre: lead.nombre, telefono: lead.telefono, tipo: 'lead' };
+  
+  const contact = await prisma.contact.findFirst({ where: { tenantId, nombre: { contains: nombre, mode: 'insensitive' } } });
+  if (contact?.telefono) return { nombre: contact.nombre, telefono: contact.telefono, tipo: 'contact' };
+  
+  throw new Error(`No se encontró teléfono para el nombre "${nombre}"`);
+};
+
+const createBookingWrapper = async (input: { 
+  tenantId: string; 
+  email?: string; 
+  nombre?: string; 
+  fecha?: string; 
+  hora?: string; 
+  titulo?: string;
+  userId?: string;
+}) => {
+  const { tenantId, email, nombre, fecha, hora, titulo, userId } = input;
+  const { prisma } = await import('@/lib/db');
+
+  let targetEmail = email;
+  let targetNombre = nombre;
+
+  // 1. Si no hay email pero hay nombre, intentar buscarlo
+  if (!targetEmail && targetNombre) {
+    const lead = await prisma.lead.findFirst({ 
+      where: { tenantId, nombre: { contains: targetNombre, mode: 'insensitive' } } 
+    });
+    
+    if (lead) {
+      targetEmail = lead.email;
+      targetNombre = lead.nombre;
+    } else {
+      const contact = await prisma.contact.findFirst({ 
+        where: { tenantId, nombre: { contains: targetNombre, mode: 'insensitive' } } 
+      });
+      if (contact) {
+        targetEmail = contact.email;
+        targetNombre = contact.nombre;
+      }
+    }
+  }
+
+  if (!targetEmail) throw new Error('Se requiere un email para agendar la cita. Si el contacto no existe, por favor proporciónalo.');
+  if (!targetNombre) targetNombre = targetEmail.split('@')[0];
+
+  // 2. Procesar fecha y hora
+  let dt = new Date();
+  if (fecha) {
+    const [y, m, d] = fecha.split('-').map(Number);
+    dt.setFullYear(y, m - 1, d);
+  }
+  if (hora) {
+    const [h, min] = hora.split(':').map(Number);
+    dt.setHours(h, min || 0, 0, 0);
+  }
+
+  return bookingSkills.createBooking({
+    tenantId,
+    email: targetEmail,
+    nombre: targetNombre,
+    titulo: titulo || 'Cita de Seguimiento',
+    fechaHora: dt,
+    userId,
+    source: 'app'
+  });
+};
+
 export const skills = {
   // Contactos
   create_contact: contactSkills.createContact,
@@ -198,6 +303,8 @@ export const skills = {
   get_lead: contactSkills.getLead,
   find_lead_by_email: findLeadByEmailWrapper,
   convert_lead: contactSkills.convertLead,
+  obtener_telefono: getPhoneByNameWrapper,
+  registrar_interaccion: registerInteractionWrapper,
   
   // Conversaciones
   create_conversation: conversationSkills.createConversation,
@@ -221,7 +328,7 @@ export const skills = {
   get_diagnosis_by_lead: getDiagnosisByLeadWrapper,
   
   // Bookings/Citas (skill compuesto)
-  create_booking: bookingSkills.createBooking,
+  create_booking: createBookingWrapper,
   confirm_booking: bookingSkills.confirmBooking,
   cancel_booking: bookingSkills.cancelBooking,
   get_bookings_by_lead: getBookingsByLeadWrapper,

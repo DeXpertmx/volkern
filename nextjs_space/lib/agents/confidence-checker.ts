@@ -144,11 +144,13 @@ export class ConfidenceCheckerAgent {
     const messages: Record<string, string> = {
       'crear_lead': '¿Podrías proporcionarme el nombre, email y contexto (motivo) del contacto que quieres agregar?',
       'actualizar_lead': '¿Podrías proporcionarme el email del contacto que quieres modificar y los datos nuevos (ej. teléfono o contexto)?',
-      'agendar_cita': 'Para agendar una cita, necesito saber con quién (email), fecha y hora. ¿Me los proporcionas?',
+      'agendar_cita': 'Para agendar una cita, necesito saber con quién, fecha y hora. ¿Me los proporcionas?',
       'buscar_lead': '¿Qué lead estás buscando? Dame su email o nombre completo.',
       'crear_tarea': '¿Qué tarea necesitas crear? Dame un título y opcionalmente una fecha de vencimiento.',
       'registrar_gasto': '¿Qué gasto quieres registrar? Necesito el monto y el concepto.',
       'enviar_mensaje': '¿A quién quieres enviar mensaje y qué quieres decirle?',
+      'obtener_telefono': '¿De quién quieres saber el teléfono?',
+      'registrar_interaccion': 'Para registrar la interacción, necesito saber el tipo (Llamada, Email, etc.) y un resumen de lo que pasó.',
       'consulta_general': `No estoy seguro de entenderte (${confidencePercent}% de certeza). ¿Podrías reformular tu consulta?`
     };
     
