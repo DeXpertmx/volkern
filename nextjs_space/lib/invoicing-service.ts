@@ -85,7 +85,11 @@ export class InvoicingService {
       where: { tenantId_tipo: { tenantId, tipo: 'gocardless' } }
     })
 
-    // 2. Prioridad: Holded, Square, Stripe, GoCardless
+    const mockIntegration = await prisma.integration.findUnique({
+      where: { tenantId_tipo: { tenantId, tipo: 'mock_billing' } }
+    })
+
+    // 2. Prioridad: Holded, Square, Stripe, GoCardless, Mock
     if (holdedIntegration?.conectado && holdedIntegration?.activo) {
       return await this.createHoldedInvoice(options, holdedIntegration.credenciales as any)
     }
@@ -100,6 +104,10 @@ export class InvoicingService {
 
     if (gocardlessIntegration?.conectado && gocardlessIntegration?.activo) {
       return await this.createGoCardlessPayment(options, gocardlessIntegration.credenciales as any)
+    }
+
+    if (mockIntegration?.conectado && mockIntegration?.activo) {
+      return await this.createMockInvoice(options)
     }
 
     throw new Error('No hay ninguna integración de facturación activa y configurada.')
@@ -150,6 +158,7 @@ export class InvoicingService {
 
     const data = await response.json()
     const numero = data.docNumber || `H-${Date.now()}`
+    const fechaEmision = new Date()
 
     // 4. Sello Veri*factu
     const security = await this.sealInvoiceMetadata({
@@ -157,7 +166,7 @@ export class InvoicingService {
       numero,
       monto: amount,
       moneda: currency || 'EUR',
-      fechaEmision: new Date().toISOString(),
+      fechaEmision: fechaEmision.toISOString(),
       receptorNif: cliente.idFiscal
     })
 
@@ -174,6 +183,7 @@ export class InvoicingService {
         monto: amount,
         moneda: currency || 'EUR',
         estado: 'pendiente',
+        fechaEmision,
         urlPdf: data.downloadUrl || null,
         metadata: data,
         ...security
@@ -284,6 +294,7 @@ export class InvoicingService {
     // 4. Finalizar y enviar (opcional, pero suele ser lo deseado)
     const finalizedInvoice = await stripe.invoices.finalizeInvoice(stripeInvoice.id)
     const numero = finalizedInvoice.number || `S-${Date.now()}`
+    const fechaEmision = new Date()
 
     // 5. Sello Veri*factu
     const security = await this.sealInvoiceMetadata({
@@ -291,7 +302,7 @@ export class InvoicingService {
       numero,
       monto: amount,
       moneda: currency.toUpperCase(),
-      fechaEmision: new Date().toISOString(),
+      fechaEmision: fechaEmision.toISOString(),
       receptorNif: cliente.idFiscal
     })
 
@@ -308,6 +319,7 @@ export class InvoicingService {
         monto: amount,
         moneda: currency.toUpperCase(),
         estado: 'pendiente',
+        fechaEmision,
         urlPdf: finalizedInvoice.invoice_pdf || null,
         metadata: finalizedInvoice as any,
         ...security
@@ -364,12 +376,29 @@ export class InvoicingService {
     return {
       nombre: p?.razonSocial || clienteData.nombre,
       email: clienteData.email,
-      idFiscal: p?.idFiscal || '',
-      direccion: p?.direccionFiscal || clienteData.ubicacion || '',
+      idFiscal: p?.nif || '',
+      direccion: p?.address || clienteData.ubicacion || '',
       taxRate,
-      retencionIrpf: p?.retencionIrpf || 0,
-      recargoEquivalencia: p?.recargoEquivalencia || false
+      retencionIrpf: Number(p?.defaultIrpf || 0),
+      recargoEquivalencia: false // No disponible en el schema simplificado actual
     }
+  }
+
+  /**
+   * Obtiene la configuración fiscal del emisor para un tenant
+   */
+  private static async getEmisorFiscal(tenantId: string) {
+    const config = await prisma.configuracionFiscalEmisor.findFirst({
+      where: { tenantId, esPrincipal: true }
+    }) || await prisma.configuracionFiscalEmisor.findFirst({
+      where: { tenantId }
+    })
+
+    if (!config) {
+      throw new Error('Configuración fiscal del emisor no encontrada para este tenant')
+    }
+
+    return config
   }
 
   /**
@@ -636,22 +665,17 @@ export class InvoicingService {
     monto: number,
     moneda: string,
     fechaEmision: string,
-    receptorNif: string
+    receptorNif: string,
+    invoiceId?: string
   }) {
-    const { tenantId, numero, monto, moneda, fechaEmision, receptorNif } = params;
+    const { tenantId, numero, monto, moneda, fechaEmision, receptorNif, invoiceId } = params;
 
-    // 1. Obtener Configuración del Emisor (usamos el principal como referencia para el sellado)
-    const configFiscal = await prisma.configuracionFiscalEmisor.findFirst({
-      where: { 
-        tenantId,
-        esPrincipal: true 
-      }
-    }) || await prisma.configuracionFiscalEmisor.findFirst({
-      where: { tenantId }
-    });
+    // 1. Obtener Configuración del Emisor
+    const configFiscal = await this.getEmisorFiscal(tenantId);
+    const emisorNif = configFiscal.idFiscal || 'NIF-PENDIENTE';
 
     // 2. Si Veri*factu NO está activado, devolvemos versión Legacy
-    if (!configFiscal?.verifactuEnabled) {
+    if (!configFiscal.verifactuEnabled) {
       return {
         verifactuVersion: 1,
         isSealed: false,
@@ -659,8 +683,6 @@ export class InvoicingService {
         signature: null
       };
     }
-
-    const emisorNif = configFiscal.idFiscal || 'NIF-PENDIENTE';
 
     // 3. Obtener última factura Veri*factu para encadenar
     const lastInvoice = await prisma.invoice.findFirst({
@@ -689,14 +711,66 @@ export class InvoicingService {
     // 5. Firma Digital Externa (Integridad de Capa 2)
     const { signature, algorithm } = await this.signatureProvider.sign(fingerprint);
 
-    return {
+    const security = {
       fingerprint,
       parentFingerprint,
       sequenceNumber: nextSequence,
       verifactuVersion: 2,
       isSealed: true,
       signature,
-      signatureAlgorithm: algorithm
+      signatureAlgorithm: algorithm,
+      aeatStatus: 'PENDING' as const
+    };
+
+    // 6. Encolar envío a AEAT si hay certificado y tenemos el ID de factura
+    if (configFiscal.certP12 && invoiceId) {
+      const { aeatQueue } = await import('./queues/aeat-queue');
+      await aeatQueue.add('ship_invoice', { 
+        invoiceId, 
+        tenantId 
+      });
+    }
+
+    return security;
+  }
+
+  /**
+   * Envía una factura a la AEAT usando la infraestructura XAdES/SOAP (Llamado por Worker)
+   */
+  static async shipToAEAT(tenantId: string, data: any) {
+    const { AEATXmlGenerator } = await import('./fiscal/aeat/xml-generator');
+    const { AEATSigner } = await import('./fiscal/aeat/signer');
+    const { AEATClient } = await import('./fiscal/aeat/client');
+    const { CryptoService } = await import('./crypto-service');
+
+    const config = await this.getEmisorFiscal(tenantId);
+    if (!config.certP12 || !config.certPassword) {
+      throw new Error('Certificado no configurado para este Tenant');
+    }
+
+    // 1. Desencriptar Certificado y Password
+    const p12Base64 = CryptoService.decrypt(config.certP12);
+    const password = CryptoService.decrypt(config.certPassword);
+
+    // 2. Validar expiración en runtime
+    const { xml, expiresAt, certFingerprint } = await AEATSigner.signXml(
+      AEATXmlGenerator.generateAltaFactura(data),
+      p12Base64,
+      password
+    );
+
+    if (new Date(expiresAt) < new Date()) {
+      throw new Error(`Certificado expirado el ${expiresAt}`);
+    }
+
+    // 3. Enviar vía SOAP (Mutual TLS)
+    const response = await AEATClient.sendSoap(xml, p12Base64, password);
+
+    // 4. Auditoría de uso (Opcional: guardar evidencia en S3 aquí)
+    return {
+      response,
+      certFingerprint,
+      sentAt: new Date()
     };
   }
 
@@ -714,5 +788,136 @@ export class InvoicingService {
       // No lanzamos error para no interrumpir el flujo de facturación,
       // pero el audit script lo detectará después si hubo cambios.
     }
+  }
+
+  /**
+   * Generación de factura MOCK (para testing y Veri*factu interno)
+   */
+  private static async createMockInvoice(options: CreateInvoiceOptions) {
+    const { tenantId, leadId, contactId, amount, currency = 'EUR' } = options
+    const cliente = await this.getClienteFiscal(leadId, contactId, tenantId)
+    const numero = `MOCK-${Date.now()}`
+    const fechaEmision = new Date()
+
+    const security = await this.sealInvoiceMetadata({
+      tenantId,
+      numero,
+      monto: amount,
+      moneda: currency,
+      fechaEmision: fechaEmision.toISOString(),
+      receptorNif: cliente.idFiscal
+    })
+
+    const invoice = await prisma.invoice.create({
+      data: {
+        tenantId,
+        leadId,
+        contactId,
+        ordenVentaId: options.ordenVentaId,
+        externalId: `mock_${uuidv4()}`,
+        provider: 'mock',
+        numero,
+        monto: amount,
+        moneda: currency,
+        estado: 'completado',
+        fechaEmision,
+        metadata: { isMock: true },
+        ...security
+      }
+    })
+
+    return invoice
+  }
+
+  /**
+   * Rectificar una factura (Veri*factu R1/R2)
+   */
+  static async rectifyInvoice(invoiceId: string, options: { reason: string, amount?: number }) {
+    const original = await prisma.invoice.findUnique({
+      where: { id: invoiceId },
+      include: { tenant: true }
+    })
+
+    if (!original) throw new Error('Factura original no encontrada')
+    
+    // Generar número de rectificativa
+    const numero = `R-${original.numero}`
+    const amount = options.amount || (original.monto * -1) // Por defecto invierte el signo
+    const fechaEmision = new Date()
+
+    const security = await this.sealInvoiceMetadata({
+      tenantId: original.tenantId,
+      numero,
+      monto: amount,
+      moneda: original.moneda,
+      fechaEmision: fechaEmision.toISOString(),
+      receptorNif: await this.getReceptorNif(original)
+    })
+
+    const rectification = await prisma.invoice.create({
+      data: {
+        tenantId: original.tenantId,
+        leadId: original.leadId,
+        contactId: original.contactId,
+        provider: original.provider,
+        numero,
+        monto: amount,
+        moneda: original.moneda,
+        estado: 'completado',
+        fechaEmision,
+        metadata: { 
+          isRectification: true, 
+          originalInvoiceId: original.id,
+          reason: options.reason
+        },
+        ...security
+      }
+    })
+
+    return rectification
+  }
+
+  /**
+   * Anular una factura (Veri*factu Anulación)
+   */
+  static async cancelInvoice(invoiceId: string) {
+    const original = await prisma.invoice.findUnique({
+      where: { id: invoiceId }
+    })
+
+    if (!original) throw new Error('Factura no encontrada')
+    if (original.fiscalStatus === 'anulada') throw new Error('La factura ya está anulada')
+
+    // En Veri*factu, la anulación genera un evento en la cadena
+    const numero = `ANUL-${original.numero}`
+    
+    const security = await this.sealInvoiceMetadata({
+      tenantId: original.tenantId,
+      numero,
+      monto: 0, // Las anulaciones suelen registrarse con importe 0 o el original según el sistema
+      moneda: original.moneda,
+      fechaEmision: new Date().toISOString(),
+      receptorNif: await this.getReceptorNif(original)
+    })
+
+    // Actualizamos la original y creamos el registro de anulación si es necesario, 
+    // o simplemente marcamos la original y guardamos el sello de anulación en fiscalDetails.
+    const updated = await prisma.invoice.update({
+      where: { id: invoiceId },
+      data: {
+        fiscalStatus: 'anulada',
+        metadata: {
+          ...(original.metadata as any || {}),
+          annulmentSecurity: security
+        }
+      }
+    })
+
+    return updated
+  }
+
+  private static async getReceptorNif(invoice: any): Promise<string> {
+    const cliente = await this.getClienteFiscal(invoice.leadId, invoice.contactId, invoice.tenantId)
+    return cliente.idFiscal
   }
 }

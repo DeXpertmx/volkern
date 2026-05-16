@@ -16,7 +16,16 @@ export const billingLockExtension = Prisma.defineExtension((client) => {
           });
           
           if (invoice?.isSealed) {
-            throw new Error('SECURITY_VIOLATION: No se puede modificar una factura sellada (Veri*factu Compliance).');
+            // Campos críticos que NO pueden cambiarse bajo ninguna circunstancia
+            const criticalFields = ['monto', 'moneda', 'fechaEmision', 'numero', 'tenantId', 'fingerprint', 'parentFingerprint'];
+            const attemptedChanges = Object.keys(args.data);
+            const violation = attemptedChanges.find(field => criticalFields.includes(field));
+
+            if (violation) {
+              throw new Error(`SECURITY_VIOLATION: No se puede modificar el campo crítico '${violation}' en una factura sellada.`);
+            }
+
+            // Si llegamos aquí, los cambios son permitidos (ej. estado, fiscalStatus, metadata)
           }
           return query(args);
         },
