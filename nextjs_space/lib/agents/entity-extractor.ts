@@ -145,7 +145,10 @@ export class EntityExtractorAgent {
   }
 
   private async extractWithAI(message: string, intent: string, context?: string): Promise<Partial<ExtractedEntities>> {
-    const systemPrompt = `Eres un extractor de entidades para Volkern CRM. INTENCIÓN: ${intent}. Extrae: nombre, email, telefono, empresa, fecha (YYYY-MM-DD), hora (HH:MM), duracion (minutos), titulo, descripcion, monto, concepto. Para fechas relativas: "mañana" = fecha de mañana, "viernes" = próximo viernes. Mensaje: "${message}" ${context ? `Contexto: ${context}` : ''}`;
+    const schema = this.entityDescriptions[intent];
+    const fields = schema ? [...schema.required, ...schema.optional].join(', ') : 'nombre, email, telefono, empresa, fecha, hora, titulo, descripcion, monto, concepto';
+    
+    const systemPrompt = `Eres un extractor de entidades para Volkern CRM. INTENCIÓN: ${intent}. Extrae los siguientes campos si están presentes: ${fields}. IMPORTANTE: Para interacciones, el campo "contenido" es el resumen del mensaje. Retorna EXCLUSIVAMENTE un JSON válido. Mensaje: "${message}" ${context ? `Contexto: ${context}` : ''}`;
 
     try {
       const response = await callAssistantWithFallback([{ role: 'system', content: systemPrompt }]);
