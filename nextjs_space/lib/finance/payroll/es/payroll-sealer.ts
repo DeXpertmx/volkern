@@ -35,9 +35,16 @@ export class PayrollSealer {
       operatorNote: operatorNote || record.operatorNote
     }
 
-    // 2. Generar Hash Inmutable (SHA-256)
+    // 2. Generar Hash Inmutable (SHA-256) con Encadenamiento
+    const lastRecord = await prisma.payrollRecordES.findFirst({
+      where: { tenantId: record.tenantId, status: 'SEALED' },
+      orderBy: { sealedAt: 'desc' },
+      select: { auditHash: true }
+    })
+
+    const chainedHash = lastRecord?.auditHash || '0'.repeat(64)
     const hash = createHash('sha256')
-      .update(JSON.stringify(snapshot))
+      .update(chainedHash + JSON.stringify(snapshot))
       .digest('hex')
 
     // 3. Persistir Sellado en Trust Protocol
@@ -46,7 +53,10 @@ export class PayrollSealer {
         where: { id: recordId },
         data: {
           status: 'SEALED',
+          fiscalStatus: 'SIGNED',
           auditHash: hash,
+          chainedHash: chainedHash,
+          sealedAt: new Date(),
           calculationSnapshot: snapshot as any,
           operatorNote: operatorNote
         }
@@ -55,11 +65,11 @@ export class PayrollSealer {
         data: {
           tenantId: record.tenantId,
           userId: userId,
-          accion: 'SELLADO_NOMINA_ES',
-          entidad: 'PayrollRecordES',
-          entidadId: record.id,
-          descripcion: `Sello digital generado para nómina ${record.period}. Hash: ${hash.substring(0, 8)}...`,
-          cambiosDespues: { hash, status: 'SEALED' }
+          action: 'PAYROLL_HARDENED_SEAL',
+          entityId: record.id,
+          entityType: 'PayrollRecordES',
+          details: `Sellado fiscal reforzado (Chaining). Hash: ${hash.substring(0, 8)}...`,
+          metadata: { hash, chainedHash }
         }
       })
     ])
