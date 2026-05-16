@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db';
+import { aeatQueue } from '@/lib/queues/aeat-queue';
 
 /**
  * Motor de Detección de Anomalías basado en Ventana Móvil (Baselines)
@@ -43,6 +44,15 @@ export class AEATAnomalyDetector {
       if (value > thresholds.warning) return 'WARNING';
       return 'OK';
     }
+
+    const warningLimit = baseline.avg + 2 * baseline.stdDev;
+    const criticalLimit = baseline.avg + 3 * baseline.stdDev;
+
+    if (value > criticalLimit) return 'CRITICAL';
+    if (value > warningLimit) return 'WARNING';
+    
+    return 'OK';
+  }
 
   /**
    * Calcula el drift (desviación entre baseline corto y largo)
