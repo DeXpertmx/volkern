@@ -79,7 +79,10 @@ export class IntentClassifierAgent {
       examples: [
         'registra una llamada con Juan Pérez: "Hablamos sobre el presupuesto"',
         'nueva interacción tipo email con maria@test.com: "Enviado catálogo"',
-        'anota una reunión con Carlos: "Quedamos en firmar contrato mañana"'
+        'anota una reunión con Carlos: "Quedamos en firmar contrato mañana"',
+        'registra una interacción con Alejandra Velázquez',
+        'quiero anotar algo sobre mi llamada con Juan',
+        'tuve una reunión con el cliente y quiero registrarla'
       ],
       destructive: false
     },
