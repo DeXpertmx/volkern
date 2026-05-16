@@ -24,7 +24,8 @@ export class ResponseFormatterAgent {
   private readonly intentEmojis: Record<string, string> = {
     'crear_lead': '👤', 'buscar_lead': '🔍', 'agendar_cita': '📅',
     'mis_citas': '📋', 'cancelar_cita': '❌', 'crear_tarea': '✅',
-    'registrar_gasto': '💰', 'enviar_mensaje': '💬', 'convertir_lead': '⭐', 'consulta_general': '🤖'
+    'registrar_gasto': '💰', 'enviar_mensaje': '💬', 'convertir_lead': '⭐', 'consulta_general': '🤖',
+    'registrar_interaccion': '📝', 'obtener_telefono': '📱'
   };
 
   private readonly templates: Record<string, Record<string, (params: any) => string>> = {
@@ -68,11 +69,25 @@ export class ResponseFormatterAgent {
       error: (error) => `No pude buscar contactos: ${error}.`,
       ask_clarification: () => `¿A quién buscas? Dame un nombre o email.`
     },
+    'registrar_interaccion': {
+      success: (data) => `¡Listo! He registrado la ${data?.tipo || 'interacción'} con ${data?.lead?.nombre || data?.contact?.nombre || 'el contacto'}.`,
+      error: (error) => `Vaya, tuve un problema al registrar la interacción: ${error}`,
+      ask_clarification: (params) => {
+        if (params.missingParams?.includes('tipo')) return 'Claro, ¿qué tipo de interacción fue? (Llamada, Email, WhatsApp, etc.)';
+        if (params.missingParams?.includes('contenido')) return 'Entendido, ¿qué fue lo más importante de la interacción? (Un breve resumen)';
+        return 'Ayúdame con el tipo y resumen de la interacción para guardarla correctamente.';
+      }
+    },
+    'obtener_telefono': {
+      success: (data) => `Claro, el teléfono de ${data?.nombre} es: ${data?.telefono}`,
+      error: (error) => `Lo siento, no pude encontrar ese teléfono: ${error}`,
+      ask_clarification: () => '¿De quién quieres que busque el teléfono? Dime su nombre completo.'
+    },
     'consulta_general': {
-      success: () => 'Estoy para ayudarte. Puedo crear contactos, agendar citas, registrar gastos, crear tareas y más. ¿Qué necesitas?',
-      ask_clarification: () => '¿En qué puedo ayudarte? 🌟 Puedo crear contactos, agendar citas, registrar gastos y más. Solo dime qué necesitas, por ejemplo: "Crea un contacto llamado Juan".',
-      fallback_to_human: () => 'No estoy seguro de cómo ayudarte. Un agente te atenderá pronto.',
-      reject: () => 'No entendí. ¿Podrías reformular?'
+      success: () => '¡Hola! Estoy aquí para ayudarte a gestionar tus contactos, citas, tareas y finanzas. ¿En qué puedo apoyarte hoy? 🌟',
+      ask_clarification: () => 'Dime cómo puedo apoyarte. Puedo registrar contactos, agendar citas por ti o incluso anotar tus gastos. Por ejemplo: "Registra una llamada con Juan".',
+      fallback_to_human: () => 'Parece que esto es algo complejo para mí por ahora. Te pondré en contacto con un agente humano enseguida. 👨‍💻',
+      reject: () => 'No estoy del todo seguro de lo que necesitas. ¿Podrías explicármelo de otra forma? 😊'
     },
     'common': {
       rate_limited: () => '⏳ Demasiadas solicitudes. Espera un momento.',
