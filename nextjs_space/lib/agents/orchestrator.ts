@@ -55,8 +55,10 @@ export class MinimaxOrchestratorAgent {
       
       // Si hay contexto pendiente y el modelo no detectó una intención clara, asumimos que está respondiendo a la intención previa
       const isShortMessage = message.trim().split(/\s+/).length <= 3;
-      if (pendingCtx && (classification.intent === 'consulta_general' || classification.intent === 'unknown' || (isShortMessage && classification.confidence < 0.8))) {
-        classification.intent = pendingCtx.intent;
+      const likelyContinuation = pendingCtx && (classification.intent === 'consulta_general' || classification.intent === 'unknown' || (isShortMessage && classification.confidence < 0.8) || (pendingCtx.intent === 'registrar_interaccion' && classification.confidence < 0.9));
+      
+      if (likelyContinuation) {
+        classification.intent = pendingCtx!.intent;
         classification.confidence = Math.max(classification.confidence, 0.9);
         // Mezclar parámetros
         classification.extractedParams = { ...pendingCtx.collectedParams, ...classification.extractedParams };
