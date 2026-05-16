@@ -77,11 +77,13 @@ export class MinimaxOrchestratorAgent {
 
       // Si teníamos un contexto pendiente, pasamos los parámetros pre-recolectados al extractor
       const contextForExtractor = pendingCtx ? `Parámetros previos: ${JSON.stringify(pendingCtx.collectedParams)}` : activeContext;
-      const extraction = await entityExtractor.extract({ message, intent: classification.intent, context: contextForExtractor });
+      const extraction = await entityExtractor.extract({ 
+        message, 
+        intent: classification.intent, 
+        context: contextForExtractor,
+        previousEntities: pendingCtx?.collectedParams
+      });
       
-      if (pendingCtx) {
-        extraction.entities = { ...pendingCtx.collectedParams, ...extraction.entities };
-      }
       const validation = await commandValidator.validate({ intent: classification.intent, params: extraction.entities, message, userId, tenantId, userRole });
 
       if (validation.requiresConfirmation) {

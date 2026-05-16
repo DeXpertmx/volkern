@@ -42,7 +42,8 @@ export class EntityExtractorAgent {
     hora: /(\d{1,2}):?(\d{2})?\s*(?:am|pm|h|horas?)?/i,
     duracion: /(\d+)\s*(?:min|minutos?|horas?|h)/i,
     prioridad: /(alta|media|baja|urgente|normal|poca)/i,
-    nombreCompleto: /(?:agrega|crea|nuevo|contacto|lead|cliente)\s+(?:a\s+)?([A-ZÁÉÍÓÚÜ][a-záéíóúü]+(?:\s+[A-ZÁÉÍÓÚÜ][a-záéíóúü]+){1,3})/i
+    nombreCompleto: /(?:agrega|crea|nuevo|contacto|lead|cliente)\s+(?:a\s+)?([A-ZÁÉÍÓÚÜ][a-záéíóúü]+(?:\s+[A-ZÁÉÍÓÚÜ][a-záéíóúü]+){1,3})/i,
+    tipoInteraccion: /(whatsapp|llamada|email|correo|reunión|reunion|nota interna)/i
   };
 
   private readonly entityDescriptions: Record<string, { required: string[]; optional: string[]; questions: Record<string, string> }> = {
@@ -52,7 +53,7 @@ export class EntityExtractorAgent {
     crear_tarea: { required: ['titulo'], optional: ['descripcion', 'fechaVencimiento', 'prioridad', 'email'], questions: { titulo: '¿Cuál es el título?', descripcion: '¿Descripción?', fechaVencimiento: '¿Cuándo vence?', prioridad: '¿Prioridad?' } },
     registrar_gasto: { required: ['monto', 'concepto'], optional: ['fecha', 'proveedor', 'categoria'], questions: { monto: '¿Monto?', concepto: '¿Concepto?', proveedor: '¿Proveedor?' } },
     obtener_telefono: { required: ['nombre'], optional: [], questions: { nombre: '¿De quién quieres saber el teléfono? Dime su nombre completo.' } },
-    registrar_interaccion: { required: ['tipo', 'contenido'], optional: ['nombre', 'email', 'resultado'], questions: { tipo: '¿Qué tipo de interacción fue? (Llamada, Email, WhatsApp, Reunión, Nota Interna)', contenido: '¿De qué trató la interacción? Haz un breve resumen.' } }
+    registrar_interaccion: { required: ['tipo', 'contenido'], optional: ['nombre', 'email', 'resultado'], questions: { tipo: '¿Por qué medio fue la interacción? (Ej: Llamada, WhatsApp, Email, Reunión)', contenido: '¿Me podrías dar un breve resumen de lo que se habló o se acordó?' } }
   };
 
   async extract(params: { message: string; intent: string; context?: string; previousEntities?: Partial<ExtractedEntities> }): Promise<EntityExtractionResult> {
@@ -126,6 +127,14 @@ export class EntityExtractorAgent {
 
     const nombreMatch = message.match(this.regexPatterns.nombreCompleto);
     if (nombreMatch && !entities.nombre) entities.nombre = nombreMatch[1];
+
+    const tipoMatch = message.match(this.regexPatterns.tipoInteraccion);
+    if (tipoMatch) {
+      let tipo = tipoMatch[1].toLowerCase();
+      if (tipo === 'correo') tipo = 'email';
+      if (tipo === 'reunión') tipo = 'reunion';
+      entities.tipo = tipo;
+    }
 
     if (message.match(/gasto|pago|compra|factura/i)) {
       const conceptoMatch = message.match(/(?:en|por|de|concepto de?)\s+([a-zA-Záéíóúüñ\s]{5,50})/i);
