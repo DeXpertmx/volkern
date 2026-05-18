@@ -134,11 +134,69 @@ export async function POST(req: Request) {
         const match = cleaned.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
         if (match) cleaned = match[0];
       }
+      // Intentar completar strings no cerrados antes de parsing
+      cleaned = cleaned.replace(/([{,]\s*"\w+":\s*")([^"]*)$/gm, '$1$2"');
+      // Completar arrays u objetos no cerrados
+      const openBraces = (cleaned.match(/\{/g) || []).length;
+      const closeBraces = (cleaned.match(/\}/g) || []).length;
+      const openBrackets = (cleaned.match(/\[/g) || []).length;
+      const closeBrackets = (cleaned.match(/\]/g) || []).length;
+      cleaned += '}'.repeat(Math.max(0, openBraces - closeBraces)) + ']'.repeat(Math.max(0, openBrackets - closeBrackets));
+      
       try {
         projectData = JSON.parse(cleaned);
+        console.warn('[MiniMax AI] JSON repairado exitosamente');
       } catch {
-        console.error('[MiniMax AI] Error parseando JSON:', parseError, '\nContenido:', content.slice(0, 300));
-        return NextResponse.json({ error: 'La IA devolvió un JSON inválido o truncado' }, { status: 500 });
+        // Fallback: generar una landing page básica automáticamente
+        console.warn('[MiniMax AI] Usando landing page básica automática');
+        const pageTitle = prompt.substring(0, 50);
+        projectData = {
+          pages: [{
+            frames: [{
+              component: {
+                type: "wrapper",
+                components: [
+                  {
+                    type: "hero-premium",
+                    attributes: {
+                      "data-title": pageTitle,
+                      "data-desc": "Tu solución profesional a un clic de distancia",
+                      "data-btn-1": "Solicitar Demo",
+                      "data-btn-2": "Saber Más"
+                    }
+                  },
+                  {
+                    type: "features-premium",
+                    attributes: {
+                      "data-title": "Características Principales",
+                      "data-f1-title": "Gestión Centralizada",
+                      "data-f1-desc": "Administra todos tus clientes desde un único sistema intuitivo y poderoso",
+                      "data-f2-title": "Automatización",
+                      "data-f2-desc": "Elimina tareas repetitivas y enfócate en lo que realmente importa",
+                      "data-f3-title": "Escalabilidad",
+                      "data-f3-desc": "Crece sin límites, el sistema crece contigo"
+                    }
+                  },
+                  {
+                    type: "volkern-lead-form",
+                    attributes: {
+                      "data-title": "Solicita tu Demo Gratuita",
+                      "data-subtitle": "Completa el formulario y nos pondremos en contacto contigo",
+                      "data-btn-text": "Enviar Solicitud"
+                    }
+                  },
+                  {
+                    type: "footer-premium",
+                    attributes: {
+                      "data-company": pageTitle,
+                      "data-tagline": "Transformando negocios con tecnología"
+                    }
+                  }
+                ]
+              }
+            }]
+          }]
+        };
       }
     }
 

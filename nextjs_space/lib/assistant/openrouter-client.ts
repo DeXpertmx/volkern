@@ -111,8 +111,8 @@ export async function callMinimaxM25(
     body: JSON.stringify({
       model: 'minimax/minimax-m2.5:free',
       messages,
-      temperature: 0.1,
-      max_tokens: 1000,
+      temperature: 0.3,
+      max_tokens: 8192,
       top_p: 0.9
     })
   });
