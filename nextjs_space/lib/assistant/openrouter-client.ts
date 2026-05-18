@@ -90,8 +90,8 @@ async function callGemini25Flash(
 }
 
 /**
- * Intento principal: MiniMax M2.5 via OpenRouter.
- * Solo se usa si OpenRouter tiene créditos disponibles.
+ * Intento principal: MiniMax M2.5 (free) via OpenRouter.
+ * Es gratuito con rate limits.
  */
 export async function callMinimaxM25(
   messages: OpenRouterMessage[]
@@ -109,7 +109,7 @@ export async function callMinimaxM25(
       'X-Title': 'Volkern CRM Assistant'
     },
     body: JSON.stringify({
-      model: 'minimax/minimax-m2.5',
+      model: 'minimax/minimax-m2.5:free',
       messages,
       temperature: 0.1,
       max_tokens: 1000,
