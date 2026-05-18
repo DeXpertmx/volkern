@@ -3,9 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-
-const GOOGLE_AI_KEY = process.env.GOOGLE_AI_KEY?.replace(/"/g, '');
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GOOGLE_AI_KEY}`;
+import { callMinimaxM25, OpenRouterMessage } from '@/lib/assistant/openrouter-client';
 
 const SYSTEM_PROMPT = `Eres el Estratega de Marca y Arquitecto de Contenidos de Volkern AI. Tu misión es generar una landing page de ALTO IMPACTO que parezca diseñada a medida para CUALQUIER empresa que el usuario mencione.
 
@@ -57,7 +55,7 @@ ESTRUCTURA JSON:
 Responde ÚNICAMENTE con el objeto JSON. Sé un redactor creativo y persuasivo para la marca solicitada.`;
 
 export async function POST(req: Request) {
-  console.log('[Gemini AI] Nueva petición de generación de página');
+  console.log('[MiniMax AI] Nueva petición de generación de página');
 
   // Verificar sesión (sin bloquear totalmente - el middleware ya lo hace para /webcreator)
   const session = await getServerSession(authOptions);
@@ -69,14 +67,14 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { prompt, style } = body;
 
-    console.log('[Gemini AI] Prompt recibido:', prompt);
+    console.log('[MiniMax AI] Prompt recibido:', prompt);
 
     if (!prompt) {
       return NextResponse.json({ error: 'Prompt requerido' }, { status: 400 });
     }
 
     if (!GOOGLE_AI_KEY) {
-      console.error('[Gemini AI] ERROR: GOOGLE_AI_KEY no definida o vacía');
+      console.error('[MiniMax AI] ERROR: GOOGLE_AI_KEY no definida o vacía');
       return NextResponse.json({ error: 'GOOGLE_AI_KEY no configurada en el servidor' }, { status: 500 });
     }
 
@@ -85,36 +83,25 @@ export async function POST(req: Request) {
 SOLICITUD DEL USUARIO: Genera una landing page para: ${prompt}. Estilo deseado: ${style || 'Profesional y moderno'}.
 Selecciona los bloques nativos de Volkern más apropiados y devuelve SOLO el JSON.`;
 
-    console.log('[Gemini AI] Llamando a Google Generative AI...');
+    console.log('[MiniMax AI] Llamando a MiniMax M2.5 via OpenRouter...');
 
-    const response = await fetch(GEMINI_API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: fullPrompt }] }],
-        generationConfig: {
-          responseMimeType: 'application/json',
-          temperature: 0.7,
-          maxOutputTokens: 4096,
-        },
-      }),
-    });
+    const messages: OpenRouterMessage[] = [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: `Genera una landing page para: ${prompt}. Estilo deseado: ${style || 'Profesional y moderno'}. Responde SOLO con el JSON.` }
+    ];
 
-    console.log('[Gemini AI] Status respuesta Google:', response.status);
+    const response = await callMinimaxM25(messages);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[Gemini AI] Error de Google API:', errorText);
-      return NextResponse.json(
-        { error: 'Error de Google Gemini', details: errorText },
-        { status: 500 }
-      );
+    console.log('[MiniMax AI] Respuesta recibida');
+
+    if (!response?.choices?.[0]?.message?.content) {
+      console.error('[MiniMax AI] Respuesta vacía o inválida');
+      return NextResponse.json({ error: 'MiniMax no devolvió contenido' }, { status: 500 });
     }
 
-    const data = await response.json();
-    const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const content = response.choices[0].message.content;
 
-    console.log('[Gemini AI] Contenido recibido, longitud:', content.length);
+    console.log('[MiniMax AI] Contenido recibido, longitud:', content.length);
 
     if (!content) {
       return NextResponse.json({ error: 'Gemini no devolvió contenido' }, { status: 500 });
@@ -124,15 +111,15 @@ Selecciona los bloques nativos de Volkern más apropiados y devuelve SOLO el JSO
     try {
       projectData = JSON.parse(content);
     } catch (parseError) {
-      console.error('[Gemini AI] Error parseando JSON:', parseError, '\nContenido:', content.slice(0, 300));
+      console.error('[MiniMax AI] Error parseando JSON:', parseError, '\nContenido:', content.slice(0, 300));
       return NextResponse.json({ error: 'La IA devolvió un JSON inválido' }, { status: 500 });
     }
 
-    console.log('[Gemini AI] ✅ Página generada correctamente');
+    console.log('[MiniMax AI] ✅ Página generada correctamente');
     return NextResponse.json({ success: true, projectData });
 
   } catch (error: any) {
-    console.error('[Gemini AI] Error inesperado:', error);
+    console.error('[MiniMax AI] Error inesperado:', error);
     return NextResponse.json({ error: error.message || 'Error interno' }, { status: 500 });
   }
 }
