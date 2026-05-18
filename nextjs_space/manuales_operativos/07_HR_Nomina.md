@@ -26,6 +26,14 @@ Gestionar de manera integral al personal: desde la estructura organizacional (ro
 - **Un analista de HR estándar no puede "Firmar y Sellar" una nómina definitiva.** Esto requiere el criptograma (Master Key) de un directivo.
 - **No puede alterar una nómina ya sellada.** Cualquier cambio retroactivo requerirá un movimiento de corrección en el mes siguiente.
 
+### 🔐 Payroll Sealer - Nómina Inmutable
+Cuando una nómina se "Sella", el sistema:
+1. Genera un **snapshot completo** del cálculo (bruto, neto, SS, IRPF)
+2. Calcula un **hash SHA-256** que se vincula al hash de la nómina anterior
+3. Guarda todo como evidencia inmutable
+
+Esto significa que una nómina sellada **NO puede modificarse** sin que el sistema lo detecte.
+
 ## 7. Qué ayudas necesita el administrador de tenant
 - Configurar adecuadamente las tasas impositivas por default (`defaultIrpf`, cuotas patronales).
 - Entender el vínculo entre una venta "Cerrada y Pagada" en el Hub de Ventas y cómo se calcula automáticamente como bono variable en este Hub.
@@ -34,10 +42,12 @@ Gestionar de manera integral al personal: desde la estructura organizacional (ro
 - **"El vendedor no recibió su comisión"**: Generalmente ocurre si la factura (`Invoice`) asociada en el hub de Finanzas no ha sido marcada como `PAID`.
 - **"No me deja cerrar la nómina"**: Faltan datos críticos como el NIF/CIF válido del empleado o el Vault detectó una anomalía matemática de seguridad.
 - **"Me da error 403 al asignar roles"**: Necesitas privilegios de `SuperAdmin` para modificar los accesos base de otros.
+- **"La nómina aparece como TAMPERED"**: Significa que el sistema detectó manipulación. Contacta a soporte inmediatamente.
 
 ## 9. Reglas de jerarquía y seguridad
 - **Roles:** El Hub de HR es el motor que da vida a la seguridad de la plataforma. Modificar roles equivale a modificar la visibilidad de datos.
 - **Vault Financiero:** Las corridas de nómina requieren un modelo de "Doble Firma" (Aprobador 1 + Ejecutor Master).
+- **Verificación de Integridad:** El sistema verifica automáticamente que las nóminas selladas no hayan sido alteradas.
 
 ## 10. Flujo normal de uso (Cierre de Nómina)
 1. Fin de mes: El sistema recolecta los sueldos base.

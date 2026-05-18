@@ -1,6 +1,6 @@
 import { prisma } from '../db';
 import { SocialMediaService } from '../marketing/social-media-service';
-import { callMinimaxM25, OpenRouterMessage } from '../assistant/openrouter-client';
+import { callAssistantWithFallback } from '../assistant/openrouter-client';
 
 /**
  * Genera copy para marketing usando IA (Gemma 4)
@@ -100,7 +100,7 @@ Responde SOLO con JSON válido, sin explicaciones ni texto adicional.`;
   ];
 
   try {
-    const response = await callMinimaxM25(messages);
+    const response = await callAssistantWithFallback(messages);
     const content = response.choices[0]?.message?.content || '';
 
     let parsed;

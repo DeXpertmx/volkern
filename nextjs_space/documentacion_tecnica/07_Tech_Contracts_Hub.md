@@ -112,6 +112,47 @@ sequenceDiagram
 - **Proof of Action:** Una firma en el entorno B2B se considera vinculante si se puede demostrar la intencionalidad, la identidad y la inalterabilidad. Volkern recopila Metadatos (IP, Headers) al momento de firmar y genera un hash que vincula el contenido estático del texto con esos metadatos.
 - **Inmutabilidad Post-Emisión:** El ORM (Prisma) tiene triggers o validaciones a nivel de middleware que previenen cualquier comando `UPDATE` sobre el campo `compiledBody` de un `Contract` si su estado ya no es `DRAFT`.
 
+### 4.1 Contract Sealer - Sello Digital Inmutable
+
+El módulo de contratos implementa un sistema de sellado digital mediante `ContractSealer` que garantiza la integridad criptográfica de los contratos firmados.
+
+**Ubicación:** `/lib/erp/contract-sealer.ts`
+
+**Características del sellado:**
+
+| Característica | Descripción |
+|----------------|-------------|
+| **Algoritmo** | SHA-256 con encadenamiento |
+| **Snapshot** | Copia completa del contrato (número, título, total, items) |
+| **Chaining** | Cada contrato referencia el hash del anterior |
+| **Verificación de Cadena** | Método para verificar toda la cadena de contratos |
+
+**Flujo de Sellado:**
+```
+PENDING_SIGNATURE → ContractSealer.sealContract() → ACTIVE (sealedAt set)
+```
+
+**Campos de Auditoría:**
+```prisma
+model Contrato {
+  auditHash       String    // SHA-256 del snapshot
+  chainedHash     String    // Hash del contrato anterior
+  sealedAt        DateTime  // Timestamp del sellado
+  signatureAudit Json      // { method, version, snapshot }
+}
+```
+
+**Verificación de Integridad:**
+```typescript
+// Verificar toda la cadena de contratos
+const results = await ContractSealer.verifyChain(tenantId);
+// Retorna: [{ id, numero, isValid }, ...]
+```
+
+**Auditoría:**
+- Cada sellado genera `auditLog` con acción `CONTRACT_HARDENED_SEAL`
+- Se registra en Trust Protocol con metadata { hash, chainedHash }
+
 ---
 
 ## 5. Integración MCP y AI

@@ -25,6 +25,15 @@ Centralizar, redactar, y firmar de manera jurídicamente vinculante cualquier ac
 - **No puede alterar el contenido de un contrato una vez que se ha recopilado la primera firma.** (La inmutabilidad se sella en el momento que alguien firma).
 - No puede borrar un documento firmado del repositorio sin dejar un rastro de auditoría de eliminación lógica.
 
+### 🔒 Contract Sealer - Sello Digital
+Cuando un contrato se firma, el sistema:
+1. Captura **IP, User Agent y Timestamp** del firmante
+2. Genera un **hash SHA-256** con: número, título, total, items, timestamp
+3. **Encadena** este hash al del contrato anterior
+4. Guarda todo como evidencia forense inmutable
+
+El contrato queda **bloqueado criptográficamente**. Cualquier modificación posterior es detectable.
+
 ## 7. Qué ayudas necesita el administrador de tenant
 - Soporte en la carga inicial de machotes (Templates) legales.
 - Ayuda para comprender cómo Volkern garantiza la validez de la firma electrónica frente a reguladores.
@@ -32,10 +41,12 @@ Centralizar, redactar, y firmar de manera jurídicamente vinculante cualquier ac
 ## 8. Problemas o dudas frecuentes
 - **"Envié el contrato pero el cliente dice que el enlace no funciona"**: El token de firma suele expirar en 7 días por seguridad. Reenviar invitación.
 - **"¿Cómo edito un contrato firmado con un error?"**: Imposible. Se debe ejecutar una "Anulación" (Void) y generar un nuevo documento o crear una Adenda.
+- **"¿Puedo verificar si un contrato no ha sido alterado?"**: Sí, usa la función "Verificar Cadena" que compara todos los hashes.
 
 ## 9. Reglas de jerarquía y seguridad
 - Nivel de acceso altamente compartimentado. Un vendedor ve sus contratos de venta, pero NO ve los contratos de HR.
 - **Integridad:** Cada versión firmada incluye un Hash de integridad que Volkern ancla temporalmente.
+- **Evidencia Forense:** IP, navegador y fecha/hora de cada firma quedan registrados y vinculados al hash.
 
 ## 10. Flujo normal de uso
 1. Se negocia un gran acuerdo B2B en Ventas.

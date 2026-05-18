@@ -19,3 +19,24 @@ Con la integración del servidor MCP, el departamento de HR puede optimizar su t
 - **Erradicación del Fraude de Nómina:** El encriptado militar previene cualquier alteración retrospectiva o robo de datos bancarios.
 - **Transparencia Total:** El empleado ve en su app móvil día a día cómo se construye su comisión. Saben que si el ERP dice que vendieron, se les pagará. 
 - **Cumplimiento Legal Sin Esfuerzo:** El cálculo centralizado de impuestos (Ej: IRPF y Seguridad Social) te mantiene blindado ante cualquier auditoría laboral.
+
+## 🔒 Payroll Sealer - Nómina Inmutable con Blockchain
+
+### Sistema de Sellado Criptográfico
+El Payroll Vault implementa un sistema de protección nivel blockchain para garantizar la integridad de la nómina:
+
+- **Encadenamiento SHA-256:** Cada nómina month'se vincula criptográficamente con la anterior, creando una cadena inmutable.
+- **Snapshot Completo:** En el momento del sellado, se guarda una copia completa del cálculo (bruto, neto, SS, IRPF, horas extras, bonuses).
+- **Verificación de Integridad:** El sistema puede verificar en cualquier momento si una nómina ha sido manipulada recalculando su hash.
+
+### Estados de Verificación
+| Estado | Significado |
+|--------|-------------|
+| **VALID** | Nómina intacta, hash coincide |
+| **TAMPERED** | Datos alterados después del sellado |
+| **HASH_MISMATCH** | Manipulación detectada |
+
+### Beneficio Comercial
+- **Auditoría Laboral Automática:** Demuestra cumplimiento legal con evidencia criptográfica.
+- **Prevención de Fraude Interno:** Cualquier intento de modificar salarios después del cierre queda registrado.
+- **Paz Mental:** El director de RRHH duerme tranquilo sabiendo que la nómina está blindada.

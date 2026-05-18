@@ -2,10 +2,19 @@
 
 ## Sistema de Facturación y Nóminas - Agencia Tributaria Española
 
-**Versión:** 1.0  
-**Fecha:** 14 de Mayo de 2026  
+**Versión:** 2.0  
+**Fecha:** 17 de Mayo de 2026  
 **Empresa:** Volkern Solutions S.L.  
 **Sistema:** Volkern ERP / CRM Platform
+
+---
+
+> **NOTA DE ACTUALIZACIÓN (v2.0):**
+> Esta versión incorpora las nuevas implementaciones de seguridad criptográfica añadidas en mayo 2026:
+> - Billing Lock: Inmutabilidad de facturas a nivel de base de datos
+> - Payroll Sealer: Encadenamiento SHA-256 de nóminas (blockchain-style)
+> - Contract Sealer: Sello digital con evidencia forense para contratos
+> - Kardex Inmutable: Ledger de inventario con encadenamiento de movimientos
 
 ---
 
@@ -363,6 +372,88 @@ X-Signature: {HMAC-SHA256}
 
 ## 6. CONTROLES TÉCNICOS DE CUMPLIMIENTO
 
+### 6.0 Sistema de Inmutabilidad Criptográfica (NUEVO - Mayo 2026)
+
+A partir de mayo 2026, Volkern implementa un sistema de protección de datos que va más allá de los requisitos mínimos de Veri*factu, implementando un ledger inmutable estilo blockchain para máximo nivel de cumplimiento.
+
+#### 6.0.1 Billing Lock - Inmutabilidad de Facturas
+
+**Ubicación:** `/lib/db/extensions/billing-lock.ts`
+
+El sistema de facturación implementa una extensión de Prisma que garantiza la inmutabilidad absoluta de las facturas:
+
+| Control | Descripción | Implementación |
+|---------|-------------|----------------|
+| **Bloqueo de eliminación** | Las facturas selladas NO pueden eliminarse | Prisma Extension |
+| **Campos inviolables** | Monto, moneda, fecha, número, tenantId, fingerprint no pueden modificarse | Validación en query hook |
+| **Bloqueo masivo** | UpdateMany/DeleteMany denegados en facturas | Política de seguridad |
+| **Log de auditoría** | Cada intento de violación genera registro | auditLog con acción SECURITY_VIOLATION |
+
+**Código del control:**
+```typescript
+// Billing Lock Extension -拦截 todas las operaciones de update/delete
+query: {
+  invoice: {
+    async update({ args, query }) {
+      const invoice = await client.invoice.findUnique({ where: args.where });
+      if (invoice?.isSealed) {
+        const criticalFields = ['monto', 'moneda', 'fechaEmision', 'numero', 'tenantId', 'fingerprint', 'parentFingerprint'];
+        const violation = Object.keys(args.data).find(field => criticalFields.includes(field));
+        if (violation) throw new Error(`SECURITY_VIOLATION: Campo '${violation}' protegido`);
+      }
+      return query(args);
+    }
+  }
+}
+```
+
+#### 6.0.2 Payroll Sealer - Nómina Inmutable con Encadenamiento
+
+**Ubicación:** `/lib/finance/payroll/es/payroll-sealer.ts`
+
+El módulo de nóminas implementa un sistema de sellado con encadenamiento (blockchain-style):
+
+| Característica | Descripción |
+|----------------|-------------|
+| **Algoritmo** | SHA-256 con encadenamiento |
+| **Snapshot** | Copia completa del cálculo (gross, net, SS, IRPF) |
+| **Chaining** | Cada nómina reference el hash de la anterior |
+| **Verificación** | Integridad verificable en tiempo real |
+
+**Estados de verificación:**
+- `VALID` - Hash coincide y datos intactos
+- `TAMPERED` - Hash coincide pero valores DB difieren del snapshot
+- `SNAPSHOT_MISSING` - Falta el snapshot del cálculo
+- `HASH_MISMATCH` - Manipulación detectada
+
+#### 6.0.3 Contract Sealer - Sello Digital para Contratos
+
+**Ubicación:** `/lib/erp/contract-sealer.ts`
+
+Sistema de sellado digital para contratos comerciales:
+
+| Característica | Descripción |
+|----------------|-------------|
+| **Algoritmo** | SHA-256 con encadenamiento |
+| **Evidencia forense** | IP, User Agent, Timestamp del firmante |
+| **Chaining** | Cada contrato reference el hash del anterior |
+| **Verificación de cadena** | Método para verificar toda la cadena |
+
+#### 6.0.4 Kardex Inmutable - Ledger de Inventario
+
+**Ubicación:** `/lib/erp/stock-service.ts`
+
+Sistema de ledger inmutable para movimientos de inventario:
+
+| Característica | Descripción |
+|----------------|-------------|
+| **SHA-256 chaining** | Cada movimiento reference el anterior |
+| **Kardex de partida doble** | Principio contable: toda entrada tiene salida |
+| **Reconstrucción** | Estado reconstruible en cualquier punto del tiempo |
+| **Tipos protegidos** | IN, OUT, ADJUSTMENT, TRANSFER, CONSUMPTION |
+
+---
+
 ### 6.1 Seguridad de Datos
 
 #### 6.1.1 Cifrado
@@ -375,6 +466,16 @@ X-Signature: {HMAC-SHA256}
 | Contraseñas | bcrypt | 12 rounds | ✅ Implementado |
 | Hash de integridad | SHA-256 | 256 bits | ✅ Implementado |
 | Firmas digitales | RSA | 2048+ bits | ✅ Implementado |
+| **Encadenamiento (Chaining)** | SHA-256 | 256 bits | ✅ Implementado (NUEVO) |
+
+#### 6.1.1.1 Sistemas de Inmutabilidad Avanzada (NUEVO)
+
+| Sistema | Algoritmo | Encadenamiento | Verificación | Estado |
+|---------|-----------|----------------|---------------|--------|
+| **Billing Lock** (Facturas) | SHA-256 | ✅ | ✅ Automatic | ✅ Implementado |
+| **Payroll Sealer** (Nóminas) | SHA-256 | ✅ | ✅ On-demand | ✅ Implementado |
+| **Contract Sealer** (Contratos) | SHA-256 | ✅ | ✅ Chain verification | ✅ Implementado |
+| **Kardex Inmutable** (Inventario) | SHA-256 | ✅ | ✅ Reconstrucción | ✅ Implementado |
 
 #### 6.1.2 Almacenamiento Seguro
 
@@ -578,6 +679,14 @@ interface LibroRegistroNominas {
 5. Las comunicaciones con los servicios web de la Agencia Tributaria se realizan mediante protocolos seguros con autenticación por certificado y firma digital.
 
 6. El sistema incorpora sellado de tiempo cualificado (RFC 3161) para garantizar la integridad temporal de los documentos.
+
+7. **NUEVO (Mayo 2026):** El sistema implementa controles de inmutabilidad avanzados que superan los requisitos mínimos normativos:
+   - **Billing Lock:** Extensión de base de datos que impide modificación/eliminación de facturas selladas
+   - **Payroll Sealer:** Encadenamiento SHA-256 de nóminas con verificación de integridad
+   - **Contract Sealer:** Sello digital para contratos con evidencia forense
+   - **Kardex Inmutable:** Ledger de inventario con encadenamiento de movimientos
+
+> **Nota sobre nivel de cumplimiento:** Estos controles implementan un nivel de protección que excede los requisitos mínimos de Veri*factu, alineándose con estándares de "Zero Trust" y mejores prácticas de auditoría extrema.
 
 ### 8.2 Firmas y Aprobaciones
 

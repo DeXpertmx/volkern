@@ -19,3 +19,26 @@ Mediante la inyección de contexto RAG y comandos de voz:
 - **Eliminación del Error Humano:** Al hablarle al sistema en lugar de teclear, se reducen los errores de captura en un 90%.
 - **Velocidad de Operación:** Tus empleados de almacén trabajan a la velocidad del habla, acelerando el Picking & Packing de cada orden.
 - **Trazabilidad Implacable:** El rastreo estricto FIFO/FEFO garantiza que siempre sacarás la mercancía más antigua primero, evitando caducidades y mermas silenciosas que devoran tu rentabilidad.
+
+## 🔒 Kardex Inmutable - Ledger Blockchain-style
+
+### Sistema de Trazabilidad Inviolable
+El Logistics Hub implementa un sistema de ledger inmutable para el inventario:
+
+- **Movimientos Inviolables:** Cada movimiento de stock se registra con un hash SHA-256 encadenado al movimiento anterior.
+- **Kardex de Partida Doble:** Principio contable donde cada entrada tiene su correspondiente salida. Nada aparece o desaparece sin registro.
+- **Reconstrucción de Estado:** El sistema puede reconstruir el inventario en cualquier punto del tiempo sumando todos los movimientos desde el origen.
+
+### Tipos de Movimiento Protegidos
+| Tipo | Descripción |
+|------|-------------|
+| **IN** | Entrada de mercancía |
+| **OUT** | Salida por venta/consumo |
+| **ADJUSTMENT** | Ajuste (requiere supervisión) |
+| **TRANSFER** | Entre almacenes |
+| **CONSUMPTION** | Consumo en producción |
+
+### Beneficio Comercial
+- **Prevención de Robo:** Cada movimiento queda registrado con evidencia criptográfica.
+- **Auditoría Automática:** Reconstruye el inventario en cualquier momento.
+- **Compliance:** Cumple con normativas de trazabilidad industrial (FDA, ISO, etc.).

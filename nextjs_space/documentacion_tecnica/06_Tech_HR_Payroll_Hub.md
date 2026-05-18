@@ -127,6 +127,47 @@ sequenceDiagram
 - **Protección Diferencial de Datos Personales (PII):** Los datos bancarios y el NIF de los contactos se guardan cifrados usando una llave estática a nivel de instancia, desacoplados del cifrado de nómina, previniendo fuga de PII en dumps de base de datos.
 - **Acceso Exclusivo (`FINANCE_ROLE`):** Para invocar `/api/erp/hr/payroll/seal`, el middleware exige un permiso de grado 3 (Financiero o SuperAdmin). Un rol normal de HR solo puede preparar los borradores (Drafts).
 
+### 4.1 Payroll Sealer - Inmutabilidad con Encadenamiento
+
+El módulo de nómina implementa un sistema de sellado criptográfico mediante `PayrollSealer` que garantiza la integridad inmutable de los registros de nómina.
+
+**Ubicación:** `/lib/finance/payroll/es/payroll-sealer.ts`
+
+**Características del sellado:**
+
+| Característica | Descripción |
+|----------------|-------------|
+| **Algoritmo** | SHA-256 con encadenamiento (blockchain-style) |
+| **Snapshot** | Guardado completo del cálculo (gross, net, SS, IRPF) |
+| **Chaining** | Cada nómina referencia el hash de la anterior |
+| **Verificación** | Integridad verificable en tiempo de ejecución |
+
+**Flujo de Sellado:**
+```
+Draft → PayrollSealer.sealPayroll() → LOCKED → SEALED
+```
+
+**Estados de Verificación:**
+- `VALID`: Hash coincide y datos intactos
+- `TAMPERED`: Hash coincide pero valores DB difieren del snapshot
+- `SNAPSHOT_MISSING`: Falta el snapshot del cálculo
+- `HASH_MISMATCH`: El hash recalculado no coincide (manipulación detectada)
+
+**Campos de Auditoría:**
+```prisma
+model PayrollRecordES {
+  status          String    // DRAFT, LOCKED, SEALED
+  auditHash       String    // SHA-256 del snapshot
+  chainedHash     String    // Hash de la nómina anterior
+  sealedAt        DateTime  // Timestamp del sellado
+  calculationSnapshot Json  // Copia del cálculo completo
+}
+```
+
+**Auditoría:**
+- Cada sellado genera `auditLog` con acción `PAYROLL_HARDENED_SEAL`
+- Las violaciones de integridad generan `VIOLACION_INTEGRIDAD_NOMINA`
+
 ---
 
 ## 5. Integración MCP y AI

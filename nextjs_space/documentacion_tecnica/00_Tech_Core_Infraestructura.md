@@ -143,3 +143,64 @@ Cada inicio de sesión y desbloqueo del Vault emite un evento en el `EventBus` i
 3. **Usuarios ven una pantalla blanca post-login:**
    - *Causa:* El usuario no tiene asignado un Rol que conceda permisos a ningún Hub.
    - *Solución DB:* Asignar manualmente en la tabla pivote de roles o mediante el Hub de HR por el SuperAdmin.
+
+---
+
+## 9. Sistema de Skills (Volkern Skills Registry)
+
+El Core integra un sistema de Skills que permite a agentes IA y automatizaciones ejecutar operaciones de negocio de forma segura y controlada.
+
+### 9.1 Arquitectura de Skills
+
+```
+App/Agent/Automation → Skills → Core → EventBus
+```
+
+Los skills se registran en `/lib/skills/index.ts` y se ejecutan mediante la función `executeSkill(skillName, payload)`.
+
+### 9.2 Categorías de Skills Disponibles
+
+| Categoría | Skills Principales |
+|-----------|-------------------|
+| **Contacts** | create_contact, update_contact, get_contact, find_contact_by_email |
+| **Leads** | create_lead, get_lead, find_lead_by_email, convert_lead |
+| **Conversations** | create_conversation, get_conversation, send_message, close_conversation |
+| **Tasks** | create_task, complete_task, get_tasks_by_lead, get_pending_tasks |
+| **Notes** | create_note, get_notes_by_lead |
+| **Diagnosis** | complete_diagnosis, get_diagnosis_by_lead |
+| **Bookings** | create_booking, confirm_booking, cancel_booking, auto_schedule |
+| **Deals** | create_deal, update_deal, get_deal, list_deals, prequalify_lead |
+| **Catalog** | export_catalog, get_catalog_item, search_catalog |
+| **Billing** | create_invoice, rectify_invoice, cancel_invoice, get_invoice_fiscal_status |
+| **Finance** | create_supplier, create_expense, analyze_burn_rate, audit_expense_integrity |
+| **Inventory** | adjust_stock, get_inventory_health, inventory_watchdog |
+| **Projects** | get_project_profitability, detect_project_drifting |
+| **Production** | calculate_production_cost, verify_waste_integrity |
+| **Quality** | detect_quality_anomalies, register_qc_inspection |
+| **HR** | talent_retention_risk, get_employee_confidential_data, mcp_access_watchdog |
+| **AI/Chatbot** | execute_chatbot_response, detect_ghosting, generate_success_path |
+| **Training** | generate_customer_response, generate_post_mortem |
+| **Marketing** | generate_marketing_copy, analyze_marketing_sentiment, suggest_campaign_optimization |
+| **Advanced** | audit_finance_integrity, orchestrate_secure_payroll, get_field_activity |
+
+### 9.3 Integración MCP
+
+Los skills se exponen al protocolo MCP para que el modelo Gemma pueda invocarlos:
+
+```typescript
+import { skills, executeSkill } from '@/lib/skills';
+
+// Invocación directa
+const contact = await skills.create_contact({ tenantId, nombre, email, telefono });
+
+// Invocación por nombre (MCP)
+await executeSkill('create_contact', payload);
+```
+
+### 9.4 Context y Permisos
+
+Cada skill se ejecuta dentro de un `SkillContext` que determina:
+- Tenant ID (aislamiento multi-tenant)
+- User ID (auditoría de acciones)
+- Permission Level (OWNER, ADMIN, USER, GUEST)
+- Source (app, agent, automation, webhook, mcp)

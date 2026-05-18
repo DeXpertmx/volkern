@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { callMinimaxM25, OpenRouterMessage } from '@/lib/assistant/openrouter-client';
+import { callAssistantWithFallback, OpenRouterMessage } from '@/lib/assistant/openrouter-client';
 
 const SYSTEM_PROMPT = `Eres el Estratega de Marca y Arquitecto de Contenidos de Volkern AI. Tu misión es generar una landing page de ALTO IMPACTO que parezca diseñada a medida para CUALQUIER empresa que el usuario mencione.
 
@@ -80,7 +80,7 @@ export async function POST(req: Request) {
       { role: 'user', content: `Genera una landing page para: ${prompt}. Estilo deseado: ${style || 'Profesional y moderno'}. Responde SOLO con el JSON.` }
     ];
 
-    const response = await callMinimaxM25(messages);
+    const response = await callAssistantWithFallback(messages);
 
     console.log('[MiniMax AI] Respuesta recibida');
 

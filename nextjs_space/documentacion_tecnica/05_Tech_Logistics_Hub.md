@@ -123,6 +123,50 @@ sequenceDiagram
 - **Ajustes de Inventario:** El movimiento tipo `ADJUSTMENT` requiere una validación de roles más estricta (`requiresSupervisorApproval`).
 - **Bloqueo Transaccional:** La escritura de movimientos concurrente utiliza bloqueos optimistas o `$transaction` de Prisma para evitar pérdida de actualizaciones (Dirty Reads) que generarían Stock Cero virtual.
 
+### 4.1 Stock Service - Inmutabilidad del Kardex
+
+El módulo de inventario implementa un sistema de inmutabilidad mediante encadenamiento de hashes en cada `StockMovement`, creando un ledger inmutable tipo blockchain.
+
+**Ubicación:** `/lib/erp/stock-service.ts`
+
+**Características del sistema:**
+
+| Característica | Descripción |
+|----------------|-------------|
+| **Algoritmo** | SHA-256 con encadenamiento de movimientos |
+| **Kardex Inmutable** | Solo insert, nunca update/delete en StockMovement |
+| **Auditoría** | Cada movimiento incluye hash + chainedHash + timestamp |
+
+**Flujo de Registro de Movimiento:**
+```
+registerMovement(type, quantity, ...) 
+→ Obtener último auditHash 
+→ Generar nuevo hash (chainedHash + data)
+→ Insertar StockMovement sellado
+→ Actualizar StockLevel (upsert)
+```
+
+**Campos de Auditoría en StockMovement:**
+```prisma
+model StockMovement {
+  auditHash       String    // SHA-256 del movimiento
+  chainedHash     String    // Hash del movimiento anterior
+  sealedAt        DateTime  // Timestamp del sellado
+  // ... otros campos
+}
+```
+
+**Reconstrucción de Estado:**
+El sistema puede reconstruir cualquier estado de inventario en cualquier punto del tiempo sumando algebraicamente todos los movimientos desde el génesis (primer movimiento con chainedHash = '0'.repeat(64)).
+
+**Tipos de Movimiento Protegidos:**
+- `IN` - Entrada de inventario
+- `OUT` - Salida (ventas, consumo)
+- `ADJUSTMENT` - Ajuste (requiere supervisión)
+- `TRANSFER` - Transferencia entre almacenes
+- `CONSUMPTION` - Consumo en producción
+- `PRODUCTION_OUTPUT` - Salida de producción
+
 ---
 
 ## 5. Integración MCP y AI

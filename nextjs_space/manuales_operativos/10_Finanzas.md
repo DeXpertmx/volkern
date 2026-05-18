@@ -26,6 +26,17 @@ Controlar el ciclo económico de la empresa. Gestiona la emisión y cobro de fac
 - **No puede alterar el historial de una factura ya emitida y enviada al Trust Protocol.** Si hay un error, debe anularla mediante una Nota de Crédito.
 - No puede modificar las ventas o cotizaciones en el Hub de Ventas; Finanzas es el receptor de las transacciones comerciales, no el creador.
 
+### ⚠️ Importante: Campos Protegidos
+Una vez que una factura se emite (estado `ISSUED`), estos campos quedan **bloqueados automáticamente** por el sistema:
+- Monto total y subtotal
+- Moneda
+- Fecha de emisión
+- Número de factura
+- Tenant ID
+- Hash de integridad (fingerprint)
+
+El sistema impedirá cualquier modificación directa. Si necesitas corregir, usa Notas de Crédito.
+
 ## 7. Qué ayudas necesita el administrador de tenant
 - Configuración de Pasarelas de Pago (Ej: Stripe, PayPal) para el cobro automatizado mediante el Portal de Miembros.
 - Sincronización del catálogo de cuentas contables.
@@ -33,10 +44,12 @@ Controlar el ciclo económico de la empresa. Gestiona la emisión y cobro de fac
 ## 8. Problemas o dudas frecuentes
 - **"Las comisiones de los vendedores no aparecen"**: El sistema de RRHH no liberará comisiones hasta que Finanzas marque la Factura correspondiente como `PAID` (Pagada).
 - **"No puedo borrar esta factura errónea"**: Por cumplimiento (VeriFactu), Volkern prohíbe el borrado de facturas. Debes emitir una nota de crédito o cancelación oficial.
+- **"Me aparece error al intentar modificar una factura"**: Es el **Billing Lock** funcionando. Las facturas selladas son inmutables por diseño. Usa Nota de Crédito.
 
 ## 9. Reglas de jerarquía y seguridad
 - Roles estrictos de acceso financiero. Los Vendedores (Sales) solo pueden "solicitar" la emisión, pero no pueden marcar pagos como recibidos.
 - Trazabilidad total de pagos.
+- **Billing Lock**: Sistema automático que bloquea modificaciones en facturas selladas. Cada intento de violación genera un log de auditoría.
 
 ## 10. Flujo normal de uso
 1. El Hub de Ventas pasa un pedido a `CONFIRMED`.

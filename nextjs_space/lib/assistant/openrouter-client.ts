@@ -25,46 +25,67 @@ export interface OpenRouterResponse {
 }
 
 /**
- * Llama a la API directa de Google (Gemini Flash) usando GOOGLE_AI_KEY.
- * Es gratuita y no requiere créditos de OpenRouter.
+ * Llama a Gemini 2.5 Flash directamente (fallback cuando OpenRouter falla).
  */
-async function callGoogleDirect(
+async function callGemini25Flash(
   messages: OpenRouterMessage[]
 ): Promise<OpenRouterResponse> {
-  const gemmaMessages: GemmaMessage[] = messages.map(m => ({
-    role: m.role === 'assistant' ? 'model' : m.role,
-    content: m.content
-  }));
+  const GOOGLE_AI_KEY = process.env.GOOGLE_AI_KEY;
+  const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GOOGLE_AI_KEY}`;
 
-  const result = await callGemma(gemmaMessages, {
-    temperature: 0.1,
-    maxTokens: 1000,
-    responseMimeType: 'application/json'
+  if (!GOOGLE_AI_KEY) {
+    throw new Error('GOOGLE_AI_KEY no configurada');
+  }
+
+  const systemInstruction = messages.find(m => m.role === 'system')?.content;
+  const history = messages
+    .filter(m => m.role !== 'system')
+    .map(m => ({
+      role: m.role === 'user' ? 'user' : 'model',
+      parts: [{ text: m.content }]
+    }));
+
+  if (systemInstruction && history.length > 0 && history[0].role === 'user') {
+    history[0].parts[0].text = `[System Instructions]\n${systemInstruction}\n\n[User Message]\n${history[0].parts[0].text}`;
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 90000);
+
+  const response = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: history,
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 4096,
+        response_mime_type: 'application/json',
+      }
+    }),
+    signal: controller.signal
   });
+  clearTimeout(timeoutId);
 
-  if (result.error) {
-    throw new Error(`Google AI error: ${result.error}`);
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Gemini 2.5 Flash error: ${response.status} - ${error}`);
   }
 
-  if (!result.content) {
-    throw new Error('Google AI retornó respuesta vacía');
+  const data = await response.json();
+  const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+  if (!content) {
+    throw new Error('Gemini 2.5 Flash retornó respuesta vacía');
   }
 
-  // Adaptar la respuesta de Google al formato de OpenRouter
   return {
-    id: 'google-direct-' + Date.now(),
+    id: 'gemini-2.5-' + Date.now(),
     choices: [{
-      message: {
-        content: result.content,
-        role: 'assistant'
-      },
+      message: { content, role: 'assistant' },
       finish_reason: 'stop'
     }],
-    usage: {
-      prompt_tokens: 0,
-      completion_tokens: 0,
-      total_tokens: 0
-    }
+    usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
   };
 }
 
@@ -113,30 +134,30 @@ export async function callMinimaxM25(
 
 /**
  * Pipeline de llamada con fallback:
- * 1. Google Gemini directo (gratis, via GOOGLE_AI_KEY)
- * 2. MiniMax M2.5 via OpenRouter (si Google falla)
+ * 1. MiniMax M2.5 via OpenRouter (primario)
+ * 2. Google Gemini directo (fallback, gratis)
  */
 export async function callAssistantWithFallback(
   messages: OpenRouterMessage[]
 ): Promise<OpenRouterResponse> {
-  // 1. Intentar Google Gemini directo (gratis, sin límites de crédito)
-  try {
-    console.log('[AI] Intentando Google Gemini directo...');
-    const response = await callGoogleDirect(messages);
-    console.log('[AI] ✅ Google Gemini respondió correctamente');
-    return response;
-  } catch (googleError) {
-    console.warn('[AI] Google Gemini falló:', googleError);
-  }
-
-  // 2. Fallback: MiniMax via OpenRouter
+  // 1. Intentar MiniMax via OpenRouter
   try {
     console.log('[AI] Intentando MiniMax M2.5 via OpenRouter...');
     const response = await callMinimaxM25(messages);
     console.log('[AI] ✅ MiniMax respondió correctamente');
     return response;
   } catch (minimaxError) {
-    console.error('[AI] ❌ MiniMax también falló:', minimaxError);
-    throw minimaxError;
+    console.warn('[AI] MiniMax falló:', minimaxError);
+  }
+
+  // 2. Fallback: Google Gemini directo (gratis)
+  try {
+    console.log('[AI] Intentando Google Gemini directo...');
+    const response = await callGemini25Flash(messages);
+    console.log('[AI] ✅ Google Gemini respondió correctamente');
+    return response;
+  } catch (googleError) {
+    console.error('[AI] ❌ Google Gemini también falló:', googleError);
+    throw googleError;
   }
 }
