@@ -127,8 +127,19 @@ export async function POST(req: Request) {
     try {
       projectData = JSON.parse(content);
     } catch (parseError) {
-      console.error('[MiniMax AI] Error parseando JSON:', parseError, '\nContenido:', content.slice(0, 300));
-      return NextResponse.json({ error: 'La IA devolvió un JSON inválido' }, { status: 500 });
+      console.warn('[MiniMax AI] JSON inválido, intentando reparar...');
+      let cleaned = content.trim();
+      cleaned = cleaned.replace(/```json\n?/i, '').replace(/```\n?$/i, '').trim();
+      if (!cleaned.startsWith('{') && !cleaned.startsWith('[')) {
+        const match = cleaned.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+        if (match) cleaned = match[0];
+      }
+      try {
+        projectData = JSON.parse(cleaned);
+      } catch {
+        console.error('[MiniMax AI] Error parseando JSON:', parseError, '\nContenido:', content.slice(0, 300));
+        return NextResponse.json({ error: 'La IA devolvió un JSON inválido o truncado' }, { status: 500 });
+      }
     }
 
     console.log('[MiniMax AI] ✅ Página generada correctamente');
