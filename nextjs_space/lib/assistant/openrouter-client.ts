@@ -134,30 +134,30 @@ export async function callMinimaxM25(
 
 /**
  * Pipeline de llamada con fallback:
- * 1. MiniMax M2.5 via OpenRouter (primario)
- * 2. Google Gemini directo (fallback, gratis)
+ * 1. Google Gemini directo (primario - gratis y sin límites)
+ * 2. MiniMax M2.5 (free) via OpenRouter (fallback)
  */
 export async function callAssistantWithFallback(
   messages: OpenRouterMessage[]
 ): Promise<OpenRouterResponse> {
-  // 1. Intentar MiniMax via OpenRouter
+  // 1. Intentar Google Gemini directo (primario - sin límites de uso)
+  try {
+    console.log('[AI] Intentando Google Gemini 2.5 Flash...');
+    const response = await callGemini25Flash(messages);
+    console.log('[AI] ✅ Gemini respondió correctamente');
+    return response;
+  } catch (geminiError) {
+    console.warn('[AI] Gemini falló:', geminiError);
+  }
+
+  // 2. Fallback: MiniMax via OpenRouter (puede tener rate limits)
   try {
     console.log('[AI] Intentando MiniMax M2.5 via OpenRouter...');
     const response = await callMinimaxM25(messages);
     console.log('[AI] ✅ MiniMax respondió correctamente');
     return response;
   } catch (minimaxError) {
-    console.warn('[AI] MiniMax falló:', minimaxError);
-  }
-
-  // 2. Fallback: Google Gemini directo (gratis)
-  try {
-    console.log('[AI] Intentando Google Gemini directo...');
-    const response = await callGemini25Flash(messages);
-    console.log('[AI] ✅ Google Gemini respondió correctamente');
-    return response;
-  } catch (googleError) {
-    console.error('[AI] ❌ Google Gemini también falló:', googleError);
-    throw googleError;
+    console.error('[AI] ❌ Ambos fallaron:', minimaxError);
+    throw minimaxError;
   }
 }
