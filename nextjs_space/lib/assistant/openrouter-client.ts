@@ -59,7 +59,7 @@ async function callGemini25Flash(
       contents: history,
       generationConfig: {
         temperature: 0.7,
-        maxOutputTokens: 4096,
+        maxOutputTokens: 8192,
         response_mime_type: 'application/json',
       }
     }),

@@ -55,7 +55,7 @@ export async function callGemma(
       contents: history,
       generationConfig: {
         temperature: options.temperature ?? 0.7,
-        maxOutputTokens: options.maxTokens ?? 2048,
+        maxOutputTokens: options.maxTokens ?? 8192,
         response_mime_type: options.responseMimeType ?? 'text/plain',
       }
     };
