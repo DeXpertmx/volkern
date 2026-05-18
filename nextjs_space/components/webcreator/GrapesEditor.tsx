@@ -459,7 +459,7 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>(({ initialDa
         htmlLabel.style.cssText = 'font-weight:bold;margin-bottom:10px;color:#333;';
         htmlLabel.textContent = 'HTML';
         const htmlTextarea = document.createElement('textarea');
-        htmlTextarea.style.cssText = 'width:100%;height:calc(100% - 30px);font-family:monospace;font-size:13px;border:none;resize:none;outline:none;background:#f5f5f5;padding:10px;border-radius:4px;box-sizing:border-box;';
+        htmlTextarea.style.cssText = 'width:100%;height:calc(100% - 30px);font-family:monospace;font-size:13px;border:none;resize:none;outline:none;background:#1e1e1e;color:#d4d4d4;padding:10px;border-radius:4px;box-sizing:border-box;';
         htmlTextarea.value = html;
         htmlPanel.appendChild(htmlLabel);
         htmlPanel.appendChild(htmlTextarea);
@@ -470,7 +470,7 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>(({ initialDa
         cssLabel.style.cssText = 'font-weight:bold;margin-bottom:10px;color:#333;';
         cssLabel.textContent = 'CSS';
         const cssTextarea = document.createElement('textarea');
-        cssTextarea.style.cssText = 'width:100%;height:calc(100% - 30px);font-family:monospace;font-size:13px;border:none;resize:none;outline:none;background:#f5f5f5;padding:10px;border-radius:4px;box-sizing:border-box;';
+        cssTextarea.style.cssText = 'width:100%;height:calc(100% - 30px);font-family:monospace;font-size:13px;border:none;resize:none;outline:none;background:#1e1e1e;color:#d4d4d4;padding:10px;border-radius:4px;box-sizing:border-box;';
         cssTextarea.value = css;
         cssPanel.appendChild(cssLabel);
         cssPanel.appendChild(cssTextarea);
