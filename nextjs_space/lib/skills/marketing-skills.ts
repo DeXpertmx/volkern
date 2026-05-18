@@ -1,5 +1,6 @@
 import { prisma } from '../db';
 import { SocialMediaService } from '../marketing/social-media-service';
+import { callMinimaxM25, OpenRouterMessage } from '../assistant/openrouter-client';
 
 /**
  * Genera copy para marketing usando IA (Gemma 4)
@@ -71,19 +72,61 @@ export async function generate_web_creator_block(params: {
   category: string;
   tenantId: string;
 }) {
-  const { description } = params;
+  const { description, category } = params;
 
-  // Gemma 4 genera el HTML y CSS
-  // Simulación:
-  const html = `<div class="ai-generated-block">
-    <h2 class="text-3xl font-bold">Título generado para ${description}</h2>
-    <p>Este contenido fue orquestado por Gemma 4 para maximizar la conversión en Volkern.</p>
-    <button class="bg-indigo-600 text-white px-4 py-2 rounded">Call to Action</button>
-  </div>`;
+  const systemPrompt = `Eres un experto desarrollador web especializado en crear bloques HTML/CSS para landing pages modernas. Debes responder SOLO con JSON válido en este formato exacto:
+{
+  "html": "<código HTML del bloque>",
+  "css": "<estilos CSS del bloque>",
+  "description": "<breve descripción del bloque>"
+}
 
-  const css = `.ai-generated-block { padding: 40px; border-radius: 12px; background: #f8fafc; border: 1px solid #e2e8f0; }`;
+El bloque debe ser:
+- Responsive y mobile-first
+- Con clases Tailwind CSS (usa clases existentes como: bg-white, text-gray-900, p-6, rounded-xl, shadow-lg, etc.)
+- Estilizado con Tailwind, NO usar CSS externo
+- Profesional y optimizado para conversión
+- Compatible con GrapesJS
 
-  return { html, css, description };
+Categorías disponibles: hero, features, testimonials, cta, pricing, team, contact, footer, stats, faq, gallery, blog`;
+
+  const userPrompt = `Genera un bloque de tipo "${category}" para una landing page sobre: ${description}
+
+Responde SOLO con JSON válido, sin explicaciones ni texto adicional.`;
+
+  const messages: OpenRouterMessage[] = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userPrompt }
+  ];
+
+  try {
+    const response = await callMinimaxM25(messages);
+    const content = response.choices[0]?.message?.content || '';
+
+    let parsed;
+    try {
+      parsed = JSON.parse(content.trim());
+    } catch {
+      parsed = {
+        html: `<div class="ai-generated-block"><h2 class="text-2xl font-bold text-gray-900">${description}</h2><p class="text-gray-600 mt-2">Bloque generado para ${category}</p><button class="bg-indigo-600 text-white px-6 py-3 rounded-lg mt-4">Contactar ahora</button></div>`,
+        css: `.ai-generated-block { padding: 32px; background: #ffffff; border-radius: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }`,
+        description: `Bloque ${category} generado para ${description}`
+      };
+    }
+
+    return {
+      html: parsed.html || '',
+      css: parsed.css || '',
+      description: parsed.description || description
+    };
+  } catch (error) {
+    console.error('[generate_web_creator_block] Error:', error);
+    return {
+      html: `<div class="ai-generated-block"><h2 class="text-2xl font-bold">${description}</h2><p>Bloque generado por IA</p></div>`,
+      css: `.ai-generated-block { padding: 32px; }`,
+      description: `Bloque ${category} para ${description}`
+    };
+  }
 }
 
 /**
