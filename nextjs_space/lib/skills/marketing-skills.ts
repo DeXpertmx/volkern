@@ -74,25 +74,43 @@ export async function generate_web_creator_block(params: {
 }) {
   const { description, category } = params;
 
-  const systemPrompt = `Eres un experto desarrollador web especializado en crear bloques HTML/CSS para landing pages modernas. Debes responder SOLO con JSON válido en este formato exacto:
+  const systemPrompt = `Eres un DISEÑADOR WEB PROFESIONAL especializado en landing pages de ALTO IMPACTO. Tu trabajo es crear bloques HTML con DISEÑO VISUAL PROFESIONAL.
+
+REGLAS DE DISEÑO CRÍTICAS:
+1. Usa clases Tailwind CSS para TODOS los estilos visuales (colores, espaciado, tipografía, sombras, bordes)
+2. Crea jerarquía visual clara: títulos grandes y llamativos, texto legible, CTAs prominentes
+3. Añade profundidad visual: gradientes sutiles, sombras elegantes, bordes redondeados
+4. Usa paleta de colores profesional y coherente
+5. Espaciado generoso para respiración visual
+6. Tipografía clara con tamaños diferenciados
+
+EJEMPLO de lo que DEBES generar para un Hero:
+<div class="relative bg-gradient-to-br from-indigo-600 to-purple-700 text-white py-24 px-8 rounded-3xl shadow-2xl overflow-hidden">
+  <div class="absolute top-0 right-0 w-96 h-96 bg-white opacity-10 rounded-full blur-3xl"></div>
+  <div class="relative z-10 max-w-4xl mx-auto text-center">
+    <h1 class="text-5xl md:text-6xl font-extrabold mb-6 leading-tight">Título Impactante</h1>
+    <p class="text-xl md:text-2xl text-indigo-100 mb-10 max-w-2xl mx-auto">Descripción persuasiva que captura la atención del visitante</p>
+    <div class="flex flex-col sm:flex-row gap-4 justify-center">
+      <button class="bg-white text-indigo-600 font-bold px-8 py-4 rounded-xl shadow-lg hover:shadow-xl transition-all hover:-translate-y-1">CTA Principal</button>
+      <button class="border-2 border-white text-white font-semibold px-8 py-4 rounded-xl hover:bg-white hover:text-indigo-600 transition-all">CTA Secundario</button>
+    </div>
+  </div>
+</div>
+
+Responde SOLO con JSON válido en este formato:
 {
-  "html": "<código HTML del bloque>",
-  "css": "<estilos CSS del bloque>",
-  "description": "<breve descripción del bloque>"
+  "html": "<código HTML completo con diseño profesional>",
+  "css": "<estilos adicionales si son necesarios (mínimo, usa Tailwind principalmente)>",
+  "description": "<breve descripción>"
 }
 
-El bloque debe ser:
-- Responsive y mobile-first
-- Con clases Tailwind CSS (usa clases existentes como: bg-white, text-gray-900, p-6, rounded-xl, shadow-lg, etc.)
-- Estilizado con Tailwind, NO usar CSS externo
-- Profesional y optimizado para conversión
-- Compatible con GrapesJS
+Para features usa iconos SVG inline, para pricing usa cards destacadas con badge de "popular", para testimonials usa avatars con fotos.
 
-Categorías disponibles: hero, features, testimonials, cta, pricing, team, contact, footer, stats, faq, gallery, blog`;
+Categorías: hero, features, testimonials, cta, pricing, team, contact, footer, stats, faq, gallery, blog`;
 
   const userPrompt = `Genera un bloque de tipo "${category}" para una landing page sobre: ${description}
 
-Responde SOLO con JSON válido, sin explicaciones ni texto adicional.`;
+Diseña con PROFESIONALISMO - no generes texto plano, genera un bloque con DISEÑO VISUAL COMPLETO que parezca diseñado por un experto en UX/UI.`;
 
   const messages: OpenRouterMessage[] = [
     { role: 'system', content: systemPrompt },
@@ -108,9 +126,9 @@ Responde SOLO con JSON válido, sin explicaciones ni texto adicional.`;
       parsed = JSON.parse(content.trim());
     } catch {
       parsed = {
-        html: `<div class="ai-generated-block"><h2 class="text-2xl font-bold text-gray-900">${description}</h2><p class="text-gray-600 mt-2">Bloque generado para ${category}</p><button class="bg-indigo-600 text-white px-6 py-3 rounded-lg mt-4">Contactar ahora</button></div>`,
-        css: `.ai-generated-block { padding: 32px; background: #ffffff; border-radius: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }`,
-        description: `Bloque ${category} generado para ${description}`
+        html: `<div class="bg-gradient-to-br from-indigo-600 to-purple-700 text-white py-16 px-8 rounded-3xl shadow-2xl text-center"><h2 class="text-4xl font-bold mb-4">${description}</h2><p class="text-xl text-indigo-100 mb-8">Bloque profesional para ${category}</p><button class="bg-white text-indigo-600 font-bold px-8 py-4 rounded-xl shadow-lg hover:shadow-xl transition-all">Comenzar ahora</button></div>`,
+        css: ``,
+        description: `Bloque ${category} profesional para ${description}`
       };
     }
 
@@ -122,8 +140,8 @@ Responde SOLO con JSON válido, sin explicaciones ni texto adicional.`;
   } catch (error) {
     console.error('[generate_web_creator_block] Error:', error);
     return {
-      html: `<div class="ai-generated-block"><h2 class="text-2xl font-bold">${description}</h2><p>Bloque generado por IA</p></div>`,
-      css: `.ai-generated-block { padding: 32px; }`,
+      html: `<div class="bg-indigo-600 text-white p-12 rounded-2xl text-center"><h2 class="text-3xl font-bold">${description}</h2></div>`,
+      css: ``,
       description: `Bloque ${category} para ${description}`
     };
   }
