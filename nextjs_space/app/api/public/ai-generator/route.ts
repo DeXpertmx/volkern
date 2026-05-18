@@ -73,16 +73,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Prompt requerido' }, { status: 400 });
     }
 
-    if (!GOOGLE_AI_KEY) {
-      console.error('[MiniMax AI] ERROR: GOOGLE_AI_KEY no definida o vacía');
-      return NextResponse.json({ error: 'GOOGLE_AI_KEY no configurada en el servidor' }, { status: 500 });
-    }
-
-    const fullPrompt = `${SYSTEM_PROMPT}
-
-SOLICITUD DEL USUARIO: Genera una landing page para: ${prompt}. Estilo deseado: ${style || 'Profesional y moderno'}.
-Selecciona los bloques nativos de Volkern más apropiados y devuelve SOLO el JSON.`;
-
     console.log('[MiniMax AI] Llamando a MiniMax M2.5 via OpenRouter...');
 
     const messages: OpenRouterMessage[] = [
