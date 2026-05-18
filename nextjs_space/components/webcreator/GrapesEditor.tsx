@@ -444,6 +444,53 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>(({ initialDa
       }
     });
 
+    // Add open-code command manually (in case grapesjs-custom-code doesn't register it)
+    editor.Commands.add('open-code', {
+      run: (editor: any) => {
+        const html = editor.getHtml({ cleanId: false });
+        const css = editor.getCss();
+        
+        const container = document.createElement('div');
+        container.style.cssText = 'display:flex;height:100%;gap:0;';
+        
+        const htmlPanel = document.createElement('div');
+        htmlPanel.style.cssText = 'flex:1;padding:15px;border-right:1px solid #ddd;';
+        const htmlLabel = document.createElement('div');
+        htmlLabel.style.cssText = 'font-weight:bold;margin-bottom:10px;color:#333;';
+        htmlLabel.textContent = 'HTML';
+        const htmlTextarea = document.createElement('textarea');
+        htmlTextarea.style.cssText = 'width:100%;height:calc(100% - 30px);font-family:monospace;font-size:13px;border:none;resize:none;outline:none;background:#f5f5f5;padding:10px;border-radius:4px;box-sizing:border-box;';
+        htmlTextarea.value = html;
+        htmlPanel.appendChild(htmlLabel);
+        htmlPanel.appendChild(htmlTextarea);
+        
+        const cssPanel = document.createElement('div');
+        cssPanel.style.cssText = 'flex:1;padding:15px;';
+        const cssLabel = document.createElement('div');
+        cssLabel.style.cssText = 'font-weight:bold;margin-bottom:10px;color:#333;';
+        cssLabel.textContent = 'CSS';
+        const cssTextarea = document.createElement('textarea');
+        cssTextarea.style.cssText = 'width:100%;height:calc(100% - 30px);font-family:monospace;font-size:13px;border:none;resize:none;outline:none;background:#f5f5f5;padding:10px;border-radius:4px;box-sizing:border-box;';
+        cssTextarea.value = css;
+        cssPanel.appendChild(cssLabel);
+        cssPanel.appendChild(cssTextarea);
+        
+        container.appendChild(htmlPanel);
+        container.appendChild(cssPanel);
+        
+        editor.Modal.setTitle('Código Fuente');
+        editor.Modal.setContent(container);
+        editor.Modal.open();
+        
+        htmlTextarea.addEventListener('input', () => {
+          editor.setComponents(htmlTextarea.value);
+        });
+        cssTextarea.addEventListener('input', () => {
+          editor.setStyle(cssTextarea.value);
+        });
+      }
+    });
+
       // Handle Context Menu (Right Click)
       editor.on('canvas:contextmenu', (e: MouseEvent) => {
         e.preventDefault();
