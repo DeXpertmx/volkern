@@ -451,26 +451,26 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>(({ initialDa
         const css = editor.getCss();
         
         const container = document.createElement('div');
-        container.style.cssText = 'display:flex;height:100%;gap:0;';
+        container.style.cssText = 'display:flex;height:70vh;gap:0;resize:vertical;overflow:auto;';
         
         const htmlPanel = document.createElement('div');
-        htmlPanel.style.cssText = 'flex:1;padding:15px;border-right:1px solid #ddd;';
+        htmlPanel.style.cssText = 'flex:1;padding:15px;border-right:2px solid #205CB0;display:flex;flex-direction:column;';
         const htmlLabel = document.createElement('div');
-        htmlLabel.style.cssText = 'font-weight:bold;margin-bottom:10px;color:#333;';
+        htmlLabel.style.cssText = 'font-weight:bold;margin-bottom:10px;color:#205CB0;font-size:14px;';
         htmlLabel.textContent = 'HTML';
         const htmlTextarea = document.createElement('textarea');
-        htmlTextarea.style.cssText = 'width:100%;height:calc(100% - 30px);font-family:monospace;font-size:13px;border:none;resize:none;outline:none;background:#1e1e1e;color:#d4d4d4;padding:10px;border-radius:4px;box-sizing:border-box;';
+        htmlTextarea.style.cssText = 'flex:1;width:100%;font-family:monospace;font-size:14px;border:none;resize:none;outline:none;background:#1e1e1e;color:#d4d4d4;padding:15px;border-radius:8px;box-sizing:border-box;line-height:1.5;';
         htmlTextarea.value = html;
         htmlPanel.appendChild(htmlLabel);
         htmlPanel.appendChild(htmlTextarea);
         
         const cssPanel = document.createElement('div');
-        cssPanel.style.cssText = 'flex:1;padding:15px;';
+        cssPanel.style.cssText = 'flex:1;padding:15px;display:flex;flex-direction:column;';
         const cssLabel = document.createElement('div');
-        cssLabel.style.cssText = 'font-weight:bold;margin-bottom:10px;color:#333;';
+        cssLabel.style.cssText = 'font-weight:bold;margin-bottom:10px;color:#205CB0;font-size:14px;';
         cssLabel.textContent = 'CSS';
         const cssTextarea = document.createElement('textarea');
-        cssTextarea.style.cssText = 'width:100%;height:calc(100% - 30px);font-family:monospace;font-size:13px;border:none;resize:none;outline:none;background:#1e1e1e;color:#d4d4d4;padding:10px;border-radius:4px;box-sizing:border-box;';
+        cssTextarea.style.cssText = 'flex:1;width:100%;font-family:monospace;font-size:14px;border:none;resize:none;outline:none;background:#1e1e1e;color:#d4d4d4;padding:15px;border-radius:8px;box-sizing:border-box;line-height:1.5;';
         cssTextarea.value = css;
         cssPanel.appendChild(cssLabel);
         cssPanel.appendChild(cssTextarea);
@@ -481,6 +481,14 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>(({ initialDa
         editor.Modal.setTitle('Código Fuente');
         editor.Modal.setContent(container);
         editor.Modal.open();
+        
+        // Aumentar tamaño del modal
+        const modalEl = editor.Modal.getModal();
+        if (modalEl) {
+          modalEl.style.maxWidth = '90vw';
+          modalEl.style.width = '90vw';
+          modalEl.style.height = '80vh';
+        }
         
         htmlTextarea.addEventListener('input', () => {
           editor.setComponents(htmlTextarea.value);
