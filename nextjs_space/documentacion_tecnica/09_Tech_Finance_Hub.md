@@ -109,6 +109,41 @@ sequenceDiagram
 - **Inmutabilidad Post-Emisión:** Un bloque a nivel de Controlador REST que prohíbe cualquier petición `PUT` o `PATCH` sobre los campos monetarios (`total`, `subtotal`, `taxAmount`) si la factura está en estado `ISSUED` o superior.
 - **Bloqueo Secuencial:** Para evitar colisión de números de factura (Ej: Dos usuarios intentando crear la factura "INV-001"), se utiliza un bloqueo a nivel de tabla `SELECT FOR UPDATE` al generar la secuencia `invoiceNumber`.
 
+### 4.1 Billing Lock - Inmutabilidad Veri*factu
+
+El módulo de facturación implementa un sistema de protección a nivel de Prisma Extension (`billingLockExtension`) que garantiza la inmutabilidad criptográfica de las facturas emitidas.
+
+**Ubicación:** `/lib/db/extensions/billing-lock.ts`
+
+**Protecciones implementadas:**
+
+| Operación | Protección |
+|-----------|-----------|
+| **Delete en facturas selladas** | Bloqueado con `SECURITY_VIOLATION: Las facturas son inmutables` |
+| **Update campos críticos** | Bloqueado si attempted change en: `monto`, `moneda`, `fechaEmision`, `numero`, `tenantId`, `fingerprint`, `parentFingerprint` |
+| **UpdateMany** | Denegado para prevenir actualizaciones masivas |
+| **DeleteMany** | Denegado para prevenir borrado masivo |
+
+**Flujo de Protección:**
+```typescript
+// El extension intercepta TODAS las operaciones de update/delete en Invoice
+query: {
+  invoice: {
+    async update({ args, query }) {
+      const invoice = await client.invoice.findUnique({ where: args.where });
+      if (invoice?.isSealed) {
+        // Verificar campos críticos
+        const violation = attemptedChanges.find(field => criticalFields.includes(field));
+        if (violation) throw new Error(`SECURITY_VIOLATION: Campo '${violation}' protegido`);
+      }
+      return query(args);
+    }
+  }
+}
+```
+
+**Auditoría:** Cada intento de violación genera un log en `auditLog` con acción `SECURITY_VIOLATION`.
+
 ---
 
 ## 5. Integración MCP y AI

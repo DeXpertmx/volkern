@@ -18,5 +18,27 @@ Con **Gemma 4** y el protocolo MCP, puedes utilizar el `Gemma Legal Summarizer`:
 
 ## Impacto en el Negocio (ROI)
 - **Velocidad de Cierre Exponencial:** Pasa del envío del contrato a la firma válida en menos de 5 minutos, antes de que el cliente se enfríe.
-- **Soberanía Inmutable:** Los documentos firmados se anclan para prevenir alteraciones (Proof of Action). Un contrato sellado en Volkern es un contrato blindado.
+- **Soberanía Inmutable:** Los documentos firmados se anclan para prevenir alterations (Proof of Action). Un contrato sellado en Volkern es un contrato blindado.
 - **Renovaciones Automáticas:** El sistema te alerta meses antes de que un contrato de servicio expiré, convirtiendo tu base instalada en una máquina de ingresos recurrentes sin esfuerzo humano.
+
+## 🔒 Contract Sealer - Sello Digital Blockchain
+
+### Sistema de Sellado de Contratos
+El Contracts Hub implementa un sistema de protección criptográfica estilo blockchain:
+
+- **Sello Digital SHA-256:** Al firmarse, se genera un hash único que incluye: número de contrato, título, total, items, timestamp y usuario.
+- **Encadenamiento:** Cada nuevo contrato reference el hash del contrato anterior, creando una cadena inmutable.
+- **Verificación de Cadena:** Método automático para verificar que ningún contrato en la cadena ha sido alterado.
+
+### Evidencia Forense
+Cuando un cliente firma, Volkern captura:
+- **IP del firmante:** Ubicación geográfica de la firma
+- **User Agent:** Dispositivo y navegador usado
+- **Timestamp Unix:** Fecha/hora exacta con precisión de segundos
+
+Esta telemetría se fusiona con el contenido del contrato, generando evidencia irrefutable.
+
+### Beneficio Comercial
+- **Validez Legal Automática:** Demuestra ante tribunales que el contrato existía en ese momento exacto.
+- **Prevención de Alteraciones:** Un contrato sellado NO puede modificarse posteriormente.
+- **Auditoría Completa:** Historial completo de quién firmó, desde dónde y cuándo.

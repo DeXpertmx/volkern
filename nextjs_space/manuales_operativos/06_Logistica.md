@@ -27,6 +27,22 @@ Controlar y proteger la exactitud de los bienes físicos. Rastrea cada lote, cad
 - **No puede eliminar un movimiento de inventario.** Todos los `StockMovement` son inmutables. Si hay un error, debe crear un "Movimiento de Ajuste" para compensarlo.
 - No puede modificar las listas de materiales (BoM) que usa Producción.
 
+### 📦 Kardex Inmutable - Ledger Blockchain
+Cada movimiento de inventario se registra con:
+1. **Hash SHA-256** calculado a partir del movimiento anterior
+2. **Encadenamiento** al movimiento previo (como una cadena)
+3. **Timestamp** exacto del registro
+
+Esto crea un **Kardex inviolable**. Si alguien intenta borrar o alterar un movimiento, la cadena de hashes se rompe y el sistema lo detecta.
+
+**Tipos de Movimiento Protegidos:**
+| Tipo | Acción |
+|------|--------|
+| **IN** | Entrada de mercancía |
+| **OUT** | Salida (venta, consumo) |
+| **ADJUSTMENT** | Ajuste (requiere supervisión) |
+| **TRANSFER** | Entre almacenes |
+
 ## 7. Qué ayudas necesita el administrador de tenant
 - Configuración de la estructura física: Mapeo de Almacenes (`Warehouse`), Pasillos y Estantes.
 - Soporte para ejecutar auditorías cíclicas de inventario (Conteo físico vs Sistema).
@@ -34,10 +50,12 @@ Controlar y proteger la exactitud de los bienes físicos. Rastrea cada lote, cad
 ## 8. Problemas o dudas frecuentes
 - **"El vendedor prometió algo pero aquí no hay stock"**: Esto ocurre si los niveles físicos no concuerdan con el sistema. Se debe realizar un conteo cíclico y un "Ajuste de Inventario". El sistema debió haberlo enviado a Producción (CTP) si la información era correcta.
 - **"No puedo mover este lote"**: Es posible que el lote se encuentre en estado de "Cuarentena" (`QUARANTINE`) pendiente de revisión de calidad.
+- **"¿Puedo reconstruir el inventario en una fecha pasada?"**: Sí, sumando todos los movimientos desde el origen (el primer movimiento tiene hash '0'.repeat(64)).
 
 ## 9. Reglas de jerarquía y seguridad
 - Solo ciertos roles pueden aprobar movimientos de merma o ajustes negativos elevados, previniendo robos silenciosos.
 - El inventario físico disponible para Ventas es siempre el total de todos los lotes en estado `AVAILABLE` menos cualquier cantidad ya "Reservada" por Producción (`MaterialRequirement`).
+- **Auditoría Automática:** El sistema puede verificar que ningún movimiento haya sido alterado reconstructendo la cadena.
 
 ## 10. Flujo normal de uso
 1. El Hub de Ventas confirma un pedido y lo marca como `STOCK` (ATP).

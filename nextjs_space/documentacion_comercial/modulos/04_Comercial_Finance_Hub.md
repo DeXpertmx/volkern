@@ -18,5 +18,19 @@ En lugar de exportar hojas de cálculo para cazar a los clientes morosos, Finanz
 
 ## Impacto en el Negocio (ROI)
 - **Flujo de Caja Real:** Al automatizar el enlace entre Cobros y Ventas, siempre sabes exactamente con cuánta liquidez cuenta la empresa.
-- **Cero Borrados, Cero Multas:** La arquitectura de Volkern impide la edición maliciosa de montos una vez que la factura está emitida. Si hay error, el sistema obliga a emitir una Nota de Crédito, protegiéndote ante auditorías.
+- **Cero Borrados, Cero Multas:** La arquitectura de Volkern impede la edición maliciosa de montos una vez que la factura está emitida. Si hay error, el sistema obliga a emitir una Nota de Crédito, protegiéndote ante auditorías.
 - **Paz Laboral:** Las comisiones dejan de ser un "cálculo místico" del contador. El vendedor vende, el cliente paga, y Volkern calcula el bono al centavo automáticamente.
+
+## 🔒 Seguridad Fiscal de Nivel Bancario
+
+### Billing Lock - Inmutabilidad Veri*factu
+Volkern implementa un sistema de protección a nivel de base de datos que garantiza la integridad absoluta de las facturas:
+
+- **Protección de Borrado:** Las facturas selladas NO pueden eliminarse. Intentarlo dispara una violación de seguridad.
+- **Campos Inviolables:** Una vez emitidas, campos críticos como monto, moneda, fecha de emisión y número son inmutables. Cualquier intento de modificación es bloqueado automáticamente.
+- **Auditoría Automática:** Cada intento de violación genera un log de auditoría inmutable.
+
+### Beneficio Comercial
+- **Cumplimiento Fiscal:** Cumple con los requisitos de inmutabilidad de la normativa Veri*factu.
+- **Tranquilidad ante Auditorías:** Las facturas no pueden ser alteradas posteriormente, garantizando evidencia fiscal válida.
+- **Zero Trust:** El sistema no confía en ningún usuario, incluyendo administradores.
