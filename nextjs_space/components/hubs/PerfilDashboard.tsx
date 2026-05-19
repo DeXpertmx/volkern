@@ -32,7 +32,8 @@ import {
   ExternalLink,
   Share2,
   ChevronRight,
-  FileWarning
+  FileWarning,
+  X
 } from "lucide-react";
 import { ComplaintForm } from "@/components/equality/ComplaintForm";
 import { toast } from "sonner";
