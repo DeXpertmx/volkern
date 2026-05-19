@@ -337,7 +337,7 @@ export const POST = withTenantAuth(async (request, auth) => {
 
       const emailResult = await sendAppointmentConfirmation({
         id: cita.id,
-        lead: { nombre: lead.nombre, email: lead.email },
+        lead: { nombre: lead?.nombre || 'Cliente', email: lead.email },
         servicio: {
           nombre: servicio.nombre,
           descripcion: servicio.descripcion,
@@ -374,14 +374,14 @@ export const POST = withTenantAuth(async (request, auth) => {
 
     notifyAdminsPush({
       title: '📅 Nueva Cita Agendada',
-      body: `${lead.nombre} ha agendado: ${cita.titulo}`,
+      body: `${lead?.nombre || 'Evento sin cliente'} - ${cita.titulo}`,
       data: { url: `/dashboard/citas` }
     }, tenantId).catch(e => console.error('Error en PushNotification:', e))
 
     // Notificación por Telegram al admin
     const { notifyByTelegram } = await import('@/lib/skills/notification-layer');
     notifyByTelegram(
-      `📅 *Nueva Cita*\n\n👤 *Cliente:* ${lead.nombre}\n📋 *Servicio:* ${cita.titulo}\n🕐 *Fecha:* ${new Date(cita.fechaHora).toLocaleString('es-MX')}\n📱 *Teléfono:* ${lead.telefono || 'No disponible'}`,
+      `📅 *Nueva Cita*\n\n👤 *Cliente:* ${lead?.nombre || 'Sin cliente'}\n📋 *Servicio:* ${cita.titulo}\n🕐 *Fecha:* ${new Date(cita.fechaHora).toLocaleString('es-MX')}${lead?.telefono ? `\n📱 *Teléfono:* ${lead.telefono}` : ''}`,
       createSystemContext(tenantId)
     ).catch(e => console.error('Error enviando notificación Telegram:', e))
 
