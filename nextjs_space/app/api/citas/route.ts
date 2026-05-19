@@ -337,7 +337,7 @@ export const POST = withTenantAuth(async (request, auth) => {
 
       const emailResult = await sendAppointmentConfirmation({
         id: cita.id,
-        lead: { nombre: lead?.nombre || 'Cliente', email: lead.email },
+        lead: { nombre: lead?.nombre || 'Cliente', email: lead?.email || '' },
         servicio: {
           nombre: servicio.nombre,
           descripcion: servicio.descripcion,
