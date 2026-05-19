@@ -74,8 +74,8 @@ const getDiagnosisByLeadWrapper = (input: { leadId: string; tenantId: string }) 
 const getBookingsByLeadWrapper = (input: { leadId: string; tenantId: string }) => 
   bookingSkills.getBookingsByLead(input.leadId, input.tenantId);
 
-const getUpcomingBookingsWrapper = (input: { tenantId: string; limit?: number }) => 
-  bookingSkills.getUpcomingBookings(input.tenantId, input.limit);
+const getUpcomingBookingsWrapper = (input: { tenantId: string; limit?: number; userId?: string }) => 
+  bookingSkills.getUpcomingBookings(input.tenantId, input.limit, input.userId);
 
 const getDealWrapper = (input: { dealId: string; tenantId: string }) =>
   dealSkills.getDeal(input.dealId, input.tenantId);
