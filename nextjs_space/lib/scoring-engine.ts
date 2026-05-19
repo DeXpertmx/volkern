@@ -32,6 +32,11 @@ export class ScoringEngine {
     try {
       const { leadId, evento, categoria, detalles } = change;
 
+      // No procesar si no hay leadId
+      if (!leadId) {
+        return null;
+      }
+
       // Obtener el lead
       const lead = await prisma.lead.findUnique({
         where: { id: leadId },
@@ -47,7 +52,7 @@ export class ScoringEngine {
       });
 
       if (!lead) {
-        console.error(`Lead ${leadId} no encontrado`);
+        console.warn(`Lead ${leadId} no encontrado para scoring`);
         return null;
       }
 
