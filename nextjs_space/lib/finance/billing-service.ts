@@ -1,7 +1,7 @@
 import { eventBus, EVENTS } from '@/lib/skills/event-bus'
 import { prisma } from '@/lib/db'
 import { InvoicingService } from '@/lib/invoicing-service'
-import { addMonths, addYears, addQuarters } from 'date-fns'
+import { addMonths, addYears } from 'date-fns'
 
 export class BillingService {
   /**
@@ -11,22 +11,24 @@ export class BillingService {
     console.log('[BillingService] Inicializando listeners de facturación...')
     
     eventBus.onEvent(EVENTS.RESOURCE_UPDATED, async (payload: any) => {
-      if (payload.resourceType === 'contrato' && payload.action === 'contract_signed') {
+      // Detectar órdenes de venta firmadas
+      if (payload.resourceType === 'orden_venta' && payload.action === 'signed') {
         try {
-          await this.onContractSigned(payload.resourceId, payload.tenantId)
+          await this.onOrdenVentaSigned(payload.resourceId, payload.tenantId)
         } catch (error) {
-          console.error('[BillingService] Error procesando contrato firmado:', error)
+          console.error('[BillingService] Error procesando orden de venta firmada:', error)
         }
       }
     })
   }
 
   /**
-   * Lógica ejecutada tras el sellado de un contrato
+   * Lógica ejecutada tras el sellado de una orden de venta
+   * Genera la factura automáticamente en el proveedor configurado
    */
-  static async onContractSigned(contractId: string, tenantId: string) {
-    const contract = await prisma.contrato.findUnique({
-      where: { id: contractId },
+  static async onOrdenVentaSigned(ordenVentaId: string, tenantId: string) {
+    const ordenVenta = await prisma.ordenVenta.findUnique({
+      where: { id: ordenVentaId },
       include: {
         items: true,
         contact: {
@@ -35,13 +37,13 @@ export class BillingService {
       }
     })
 
-    if (!contract || !contract.contactId) {
-      console.warn(`[BillingService] Contrato ${contractId} no válido para facturación automática.`)
+    if (!ordenVenta) {
+      console.warn(`[BillingService] Orden de venta ${ordenVentaId} no encontrada.`)
       return
     }
 
-    const { frecuenciaPago, total, moneda, contactId } = contract
-    const signatureHash = (contract.templateData as any)?.digitalSeal?.hash
+    const { total, moneda, contactId, numero } = ordenVenta
+    const sealHash = ordenVenta.sealHash
 
     // 1. Logging Forense del inicio del proceso
     const systemUser = await prisma.user.findFirst({ where: { tenantId } })
@@ -50,41 +52,21 @@ export class BillingService {
       data: {
         tenantId,
         userId: systemUser?.id || 'SYSTEM',
-        accion: 'CONTRACT_TO_CASH_START',
-        entidad: 'Contrato',
-        entidadId: contractId,
-        descripcion: `Iniciando flujo financiero para contrato ${contract.numero}. Hash: ${signatureHash}`,
+        accion: 'ORDEN_VENTA_SIGNED',
+        entidad: 'OrdenVenta',
+        entidadId: ordenVentaId,
+        descripcion: `Orden de venta ${numero} firmada. Iniciando facturación automática. Seal: ${sealHash}`,
       }
     })
 
-    // 2. Gestionar Suscripción si hay recurrencia
-    if (frecuenciaPago && frecuenciaPago !== 'unico') {
-      console.log(`[BillingService] Creando suscripción recurrente (${frecuenciaPago}) para contacto ${contactId}`)
-      
-      const proximaFactura = this.calculateNextBillingDate(new Date(), frecuenciaPago)
-      
-      await prisma.clientSubscription.create({
-        data: {
-          tenantId,
-          contactId,
-          contratoId: contractId,
-          planNombre: contract.titulo || `Suscripción - ${contract.numero}`,
-          monto: total,
-          moneda: moneda || 'EUR',
-          frecuencia: frecuenciaPago,
-          estado: 'activa',
-          proximaFactura,
-          signatureHash,
-          metadata: {
-            contractNumber: contract.numero,
-            itemsCount: contract.items.length
-          }
-        }
-      })
+    // 2. Verificar que no tenga factura ya
+    if (ordenVenta.invoiceId) {
+      console.log(`[BillingService] Orden de venta ${numero} ya tiene factura ${ordenVenta.invoiceId}`)
+      return
     }
 
-    // 3. Generar Primera Factura Proforma Automáticamente
-    console.log(`[BillingService] Generando factura proforma inicial para contrato ${contract.numero}`)
+    // 3. Generar Factura en el proveedor configurado
+    console.log(`[BillingService] Generando factura para orden de venta ${numero}`)
     
     try {
       const invoice = await InvoicingService.createInvoice({
@@ -92,27 +74,40 @@ export class BillingService {
         contactId,
         amount: total,
         currency: moneda || 'EUR',
-        description: `Factura inicial contrato ${contract.numero} - ${contract.titulo}`,
-        items: contract.items.map(item => ({
+        description: `Factura orden de venta ${numero}`,
+        items: ordenVenta.items.map(item => ({
           name: item.concepto,
           quantity: item.cantidad,
           price: item.precioUnitario,
           description: item.descripcion || undefined
         })),
+        ordenVentaId: ordenVentaId,
         dueDate: new Date()
       })
 
-      // 4. Registrar éxito en auditoría
+      // 4. Vincular factura a la orden de venta
+      await prisma.ordenVenta.update({
+        where: { id: ordenVentaId },
+        data: {
+          invoiceId: invoice.id,
+          estado: 'facturada',
+          fechaFacturacion: new Date()
+        }
+      })
+
+      // 5. Registrar éxito en auditoría
       await prisma.auditLog.create({
         data: {
           tenantId,
           userId: systemUser?.id || 'SYSTEM',
-          accion: 'CONTRACT_TO_CASH_SUCCESS',
+          accion: 'ORDEN_VENTA_FACTURADA',
           entidad: 'Invoice',
           entidadId: invoice.id,
-          descripcion: `Factura ${invoice.numero} generada exitosamente. Suscripción activada.`,
+          descripcion: `Factura ${invoice.numero} generada para orden de venta ${numero}.`,
         }
       })
+
+      console.log(`[BillingService] Factura ${invoice.numero} creada para orden de venta ${numero}`)
     } catch (invoiceError) {
       console.error('[BillingService] Error al generar factura automática:', invoiceError)
       
@@ -120,9 +115,9 @@ export class BillingService {
         data: {
           tenantId,
           userId: systemUser?.id || 'SYSTEM',
-          accion: 'CONTRACT_TO_CASH_ERROR',
-          entidad: 'Contrato',
-          entidadId: contractId,
+          accion: 'ORDEN_VENTA_FACTURA_ERROR',
+          entidad: 'OrdenVenta',
+          entidadId: ordenVentaId,
           descripcion: `Error en facturación automática: ${invoiceError instanceof Error ? invoiceError.message : 'Error desconocido'}`,
         }
       })

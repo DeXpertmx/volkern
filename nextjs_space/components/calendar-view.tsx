@@ -41,13 +41,16 @@ const localizer = dateFnsLocalizer({
 
 interface Cita {
   id: string
-  leadId: string
+  leadId?: string | null
+  contactId?: string | null
   servicioId?: string | null
   tipo: string
   titulo?: string | null
   descripcion?: string | null
   ubicacion?: string | null
   linkReunion?: string | null
+  tipoLinkReunion?: string
+  linkReunionPegado?: string | null
   fechaHora: string
   duracion: number
   estado: string
@@ -127,6 +130,8 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh }:
     descripcion: '',
     ubicacion: '',
     linkReunion: '',
+    tipoLinkReunion: 'ninguno',
+    linkReunionPegado: '',
     duracion: 60,
     fecha: '',
     hora: '',
@@ -165,6 +170,8 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh }:
       descripcion: '',
       ubicacion: '',
       linkReunion: '',
+      tipoLinkReunion: 'ninguno',
+      linkReunionPegado: '',
       duracion: 60,
       fecha: format(slotInfo.start, 'yyyy-MM-dd'),
       hora: format(slotInfo.start, 'HH:mm'),
@@ -196,20 +203,22 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh }:
 
   // Crear nueva cita
   const handleCreateCita = async () => {
-    if (!formData.leadId) {
-      toast.error('Selecciona un lead o contacto')
+    if (!formData.fecha || !formData.hora) {
+      toast.error('Selecciona fecha y hora')
       return
     }
 
-    if (!formData.fecha || !formData.hora) {
-      toast.error('Selecciona fecha y hora')
+    // Validar que haya lead/contact o título
+    if (!formData.leadId && !formData.titulo) {
+      toast.error('Selecciona un lead/contacto o proporciona un título para el evento')
       return
     }
 
     setCreating(true)
 
     try {
-      let actualLeadId = formData.leadId
+      let actualLeadId = formData.leadId || null
+      let actualContactId = null
       
       // Si se seleccionó un contacto, necesitamos crear/obtener un lead
       if (formData.leadId.startsWith('contact:')) {
@@ -242,6 +251,8 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh }:
         
         // El API devuelve { success, lead, isNew, message }
         actualLeadId = leadData.lead?.id || leadData.id
+      } else if (formData.leadId.startsWith('lead:')) {
+        actualLeadId = formData.leadId.replace('lead:', '')
       }
       
       // Combinar fecha y hora
@@ -257,6 +268,8 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh }:
           descripcion: formData.descripcion || undefined,
           ubicacion: formData.ubicacion || undefined,
           linkReunion: formData.linkReunion || undefined,
+          tipoLinkReunion: formData.tipoLinkReunion,
+          linkReunionPegado: formData.tipoLinkReunion === 'pegar' ? formData.linkReunionPegado : undefined,
           fechaHora: fechaHora.toISOString(),
           duracion: formData.duracion,
           estado: formData.estado,
@@ -286,12 +299,14 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh }:
 
     const citaDate = new Date(selectedCita.fechaHora)
     setFormData({
-      leadId: selectedCita.leadId,
-      tipo: selectedCita.tipo,
+      leadId: selectedCita.leadId || '',
+      tipo: selectedCita.tipo || 'reunion',
       titulo: selectedCita.titulo || '',
       descripcion: selectedCita.descripcion || '',
       ubicacion: selectedCita.ubicacion || '',
       linkReunion: selectedCita.linkReunion || '',
+      tipoLinkReunion: selectedCita.tipoLinkReunion || 'ninguno',
+      linkReunionPegado: selectedCita.linkReunionPegado || '',
       duracion: selectedCita.duracion,
       fecha: format(citaDate, 'yyyy-MM-dd'),
       hora: format(citaDate, 'HH:mm'),
@@ -307,11 +322,6 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh }:
   const handleUpdateCita = async () => {
     if (!selectedCita) return
 
-    if (!formData.leadId) {
-      toast.error('Selecciona un lead o contacto')
-      return
-    }
-
     if (!formData.fecha || !formData.hora) {
       toast.error('Selecciona fecha y hora')
       return
@@ -320,7 +330,8 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh }:
     setUpdating(true)
 
     try {
-      let actualLeadId = formData.leadId
+      let actualLeadId = formData.leadId || null
+      let actualContactId = null
       
       // Si se seleccionó un contacto, necesitamos crear/obtener un lead
       if (formData.leadId.startsWith('contact:')) {
@@ -352,6 +363,10 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh }:
         }
         
         actualLeadId = leadData.lead?.id || leadData.id
+      } else if (formData.leadId.startsWith('lead:')) {
+        actualLeadId = formData.leadId.replace('lead:', '')
+      } else if (formData.leadId) {
+        actualLeadId = formData.leadId
       }
       
       // Combinar fecha y hora
@@ -367,6 +382,8 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh }:
           descripcion: formData.descripcion || undefined,
           ubicacion: formData.ubicacion || undefined,
           linkReunion: formData.linkReunion || undefined,
+          tipoLinkReunion: formData.tipoLinkReunion,
+          linkReunionPegado: formData.tipoLinkReunion === 'pegar' ? formData.linkReunionPegado : undefined,
           fechaHora: fechaHora.toISOString(),
           duracion: formData.duracion,
           estado: formData.estado,
@@ -642,14 +659,42 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh }:
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="linkReunion">Link de Reunión Virtual (Opcional)</Label>
-              <Input
-                id="linkReunion"
-                value={formData.linkReunion}
-                onChange={(e) => setFormData({ ...formData, linkReunion: e.target.value })}
-                placeholder="https://zoom.us/j/..."
-              />
+              <Label htmlFor="linkReunion">Link de Reunión Virtual</Label>
+              <Select 
+                value={formData.tipoLinkReunion} 
+                onValueChange={(value) => setFormData({ ...formData, tipoLinkReunion: value, linkReunion: '', linkReunionPegado: '' })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona una opción" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ninguno">No incluir link</SelectItem>
+                  <SelectItem value="generar">Generar Google Meet automáticamente</SelectItem>
+                  <SelectItem value="pegar">Pegar link de reunión</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+
+            {formData.tipoLinkReunion === 'pegar' && (
+              <div className="space-y-2">
+                <Label htmlFor="linkReunionPegado">URL de la Reunión</Label>
+                <Input
+                  id="linkReunionPegado"
+                  value={formData.linkReunionPegado}
+                  onChange={(e) => setFormData({ ...formData, linkReunionPegado: e.target.value })}
+                  placeholder="https://zoom.us/j/... o https://meet.google.com/..."
+                />
+              </div>
+            )}
+
+            {formData.tipoLinkReunion === 'generar' && (
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+                <p className="text-sm text-blue-700">
+                  <Video className="inline h-4 w-4 mr-1" />
+                  Se generará automáticamente un enlace de Google Meet al guardar la cita
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end space-x-2">
@@ -807,14 +852,42 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh }:
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="edit-linkReunion">Link de Reunión Virtual (Opcional)</Label>
-              <Input
-                id="edit-linkReunion"
-                value={formData.linkReunion}
-                onChange={(e) => setFormData({ ...formData, linkReunion: e.target.value })}
-                placeholder="https://zoom.us/j/..."
-              />
+              <Label htmlFor="edit-linkReunion">Link de Reunión Virtual</Label>
+              <Select 
+                value={formData.tipoLinkReunion} 
+                onValueChange={(value) => setFormData({ ...formData, tipoLinkReunion: value, linkReunion: '', linkReunionPegado: '' })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona una opción" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ninguno">No incluir link</SelectItem>
+                  <SelectItem value="generar">Generar Google Meet automáticamente</SelectItem>
+                  <SelectItem value="pegar">Pegar link de reunión</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+
+            {formData.tipoLinkReunion === 'pegar' && (
+              <div className="space-y-2">
+                <Label htmlFor="edit-linkReunionPegado">URL de la Reunión</Label>
+                <Input
+                  id="edit-linkReunionPegado"
+                  value={formData.linkReunionPegado}
+                  onChange={(e) => setFormData({ ...formData, linkReunionPegado: e.target.value })}
+                  placeholder="https://zoom.us/j/... o https://meet.google.com/..."
+                />
+              </div>
+            )}
+
+            {formData.tipoLinkReunion === 'generar' && (
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+                <p className="text-sm text-blue-700">
+                  <Video className="inline h-4 w-4 mr-1" />
+                  Se generará automáticamente un enlace de Google Meet al guardar la cita
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end space-x-2">

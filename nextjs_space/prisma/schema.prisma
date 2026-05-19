@@ -651,7 +651,7 @@ model Servicio {
 
 model Cita {
   id                       String        @id @default(cuid())
-  leadId                   String
+  leadId                   String?                        // Opcional: permite agendar eventos sin lead/contacto
   servicioId               String?
   fechaHora                DateTime
   estado                   String        @default("pendiente")
@@ -664,6 +664,8 @@ model Cita {
   duracion                 Int           @default(60)
   titulo                   String?
   linkReunion              String?
+  tipoLinkReunion          String        @default("ninguno")  // 'ninguno', 'generar', 'pegar'
+  linkReunionPegado        String?                        // URL pegada manualmente
   tipo                     String        @default("reunion")
   ubicacion                String?
   googleCalendarEventId    String?
@@ -674,11 +676,11 @@ model Cita {
   recordatorio1hEnviado    Boolean       @default(false)
   origenCita               String        @default("volkern")
   catalogoItemId           String?
-  usuarioAsignadoId        String?
+  usuarioAsignadoId         String?
   contactId                String?
   catalogoItem             CatalogoItem? @relation(fields: [catalogoItemId], references: [id])
   contacts                 Contact?      @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  lead                     Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  lead                     Lead?         @relation(fields: [leadId], references: [id], onDelete: SetNull)
   servicio                 Servicio?     @relation(fields: [servicioId], references: [id])
   tenant                   Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   usuarioAsignado          User?         @relation("CitaAssignee", fields: [usuarioAsignadoId], references: [id])
@@ -3157,6 +3159,16 @@ model OrdenVenta {
   fechaOrden         DateTime                   @default(now())
   fechaEntrega       DateTime?
   fechaFacturacion   DateTime?
+
+  // Firma digital y sellado
+  tokenPublico       String?                    @unique
+  sealHash           String?
+  parentSealHash     String?
+  sequenceNumber     Int?
+  fechaFirma         DateTime?
+  firmadoPorId       String?
+
+  // Montos
   subtotal           Float                      @default(0)
   descuentoGlobal    Float                      @default(0)
   tipoDescuento      String                     @default("porcentaje")
@@ -3182,7 +3194,7 @@ model OrdenVenta {
   emisor             ConfiguracionFiscalEmisor? @relation(fields: [emisorId], references: [id])
   invoice            Invoice?                   @relation(fields: [invoiceId], references: [id])
   lead               Lead?                      @relation("LeadOrdenesVenta", fields: [leadId], references: [id])
-  tenant             Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant             Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, numero])
   @@index([tenantId])
@@ -3191,6 +3203,7 @@ model OrdenVenta {
   @@index([contactId])
   @@index([contratoId])
   @@index([fechaOrden])
+  @@index([tokenPublico])
   @@map("ordenes_venta")
 }
 

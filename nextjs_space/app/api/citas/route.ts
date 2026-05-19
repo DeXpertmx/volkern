@@ -78,6 +78,7 @@ export const POST = withTenantAuth(async (request, auth) => {
     const body = await request.json()
     const { 
       leadId, 
+      contactId,
       servicioId,
       catalogoItemId,
       tipo = 'reunion',
@@ -85,6 +86,8 @@ export const POST = withTenantAuth(async (request, auth) => {
       descripcion,
       ubicacion,
       linkReunion,
+      tipoLinkReunion = 'ninguno',
+      linkReunionPegado,
       fechaHora,
       duracion: duracionRaw = 60,
       estado = 'pendiente'
@@ -100,26 +103,55 @@ export const POST = withTenantAuth(async (request, auth) => {
       )
     }
 
-    if (!leadId || !fechaHora) {
+    // Validar que al menos haya un lead o contactId, o un título (para eventos sin cliente)
+    if (!leadId && !contactId && !titulo) {
       return NextResponse.json(
-        { error: 'Campos requeridos faltantes: leadId y fechaHora' },
+        { error: 'Se requiere leadId, contactId o título para la cita' },
         { status: 400 }
       )
     }
 
-    // Obtener lead y verificar que pertenece al tenant (en su DB física)
-    const lead = await prisma.lead.findFirst({ 
-      where: { 
-        id: leadId,
-        tenantId: tenantId
-      } 
-    })
-    
-    if (!lead) {
+    if (!fechaHora) {
       return NextResponse.json(
-        { error: 'Lead no encontrado' },
-        { status: 404 }
+        { error: 'La fecha y hora son requeridas' },
+        { status: 400 }
       )
+    }
+
+    // Obtener lead si se proporciona
+    let lead = null
+    if (leadId) {
+      lead = await prisma.lead.findFirst({ 
+        where: { 
+          id: leadId,
+          tenantId: tenantId
+        } 
+      })
+      
+      if (!lead) {
+        return NextResponse.json(
+          { error: 'Lead no encontrado' },
+          { status: 404 }
+        )
+      }
+    }
+
+    // Obtener contact si se proporciona
+    let contact = null
+    if (contactId) {
+      contact = await prisma.contact.findFirst({ 
+        where: { 
+          id: contactId,
+          tenantId: tenantId
+        } 
+      })
+      
+      if (!contact) {
+        return NextResponse.json(
+          { error: 'Contacto no encontrado' },
+          { status: 404 }
+        )
+      }
     }
 
     let servicio = null
@@ -141,17 +173,26 @@ export const POST = withTenantAuth(async (request, auth) => {
       }
     }
 
-    const tituloFinal = titulo || catalogoItem?.nombre || servicio?.nombre || 'Reunión'
+    // Determinar link de reunión según tipoLinkReunion
+    let linkFinal = linkReunion || linkReunionPegado || null
+    if (tipoLinkReunion === 'pegar' && linkReunionPegado) {
+      linkFinal = linkReunionPegado
+    }
+
+    const tituloFinal = titulo || catalogoItem?.nombre || servicio?.nombre || 'Evento'
     const descripcionFinal = descripcion || catalogoItem?.descripcion || servicio?.descripcion
     const duracionFinal = duracion || catalogoItem?.duracionMinutos || servicio?.duracionMinutos || 60
 
     const citaData: any = {
       leadId,
+      contactId,
       tipo,
       titulo: tituloFinal,
       descripcion: descripcionFinal,
       ubicacion,
-      linkReunion,
+      linkReunion: linkFinal,
+      tipoLinkReunion,
+      linkReunionPegado: tipoLinkReunion === 'pegar' ? linkReunionPegado : null,
       fechaHora: new Date(fechaHora),
       duracion: duracionFinal,
       estado,
@@ -244,45 +285,49 @@ export const POST = withTenantAuth(async (request, auth) => {
       }
     })
 
-    // GOOGLE CALENDAR SYNC
+    // GOOGLE CALENDAR SYNC - Solo si tipoLinkReunion es 'generar'
     let linkReunionGenerado: string | null = null
     try {
-      const googleIntegration = await prisma.googleCalendarIntegration.findUnique({
-        where: { userId: auth.user!.id },
-      })
-
-      if (googleIntegration && googleIntegration.activo) {
-        const necesitaMeet = servicio && (servicio.modalidad === 'virtual' || servicio.modalidad === 'hibrido')
-        const calendarEvent = await createCalendarEvent(auth.user!.id, {
-          id: cita.id,
-          titulo: cita.titulo || 'Cita sin título',
-          descripcion: cita.descripcion || undefined,
-          fechaHora: cita.fechaHora,
-          duracion: cita.duracion,
-          leadNombre: lead.nombre,
-          leadEmail: lead.email || undefined,
-          generarMeet: necesitaMeet || undefined,
+      // Solo generar Meet si el usuario eligió esa opción
+      const debeGenerarMeet = tipoLinkReunion === 'generar'
+      
+      if (debeGenerarMeet) {
+        const googleIntegration = await prisma.googleCalendarIntegration.findUnique({
+          where: { userId: auth.user!.id },
         })
 
-        if (calendarEvent?.hangoutLink) {
-          linkReunionGenerado = calendarEvent.hangoutLink
-          await prisma.cita.update({
-            where: { id: cita.id },
-            data: { 
-              linkReunion: calendarEvent.hangoutLink,
-              ubicacion: 'Google Meet (Virtual)'
-            }
+        if (googleIntegration && googleIntegration.activo) {
+          const calendarEvent = await createCalendarEvent(auth.user!.id, {
+            id: cita.id,
+            titulo: cita.titulo || 'Cita sin título',
+            descripcion: cita.descripcion || undefined,
+            fechaHora: cita.fechaHora,
+            duracion: cita.duracion,
+            leadNombre: lead?.nombre || 'Evento sin cliente',
+            leadEmail: lead?.email || undefined,
+            generarMeet: true,
           })
-          cita.linkReunion = calendarEvent.hangoutLink
-          cita.ubicacion = 'Google Meet (Virtual)'
+
+          if (calendarEvent?.hangoutLink) {
+            linkReunionGenerado = calendarEvent.hangoutLink
+            await prisma.cita.update({
+              where: { id: cita.id },
+              data: { 
+                linkReunion: calendarEvent.hangoutLink,
+                ubicacion: 'Google Meet (Virtual)'
+              }
+            })
+            cita.linkReunion = calendarEvent.hangoutLink
+            cita.ubicacion = 'Google Meet (Virtual)'
+          }
         }
       }
     } catch (gcalError) {
       console.error('Error sincronizando Google Calendar:', gcalError)
     }
 
-    // EMAIL CONFIRMATION
-    if (servicio && lead.email) {
+    // EMAIL CONFIRMATION - Solo si hay lead y servicio
+    if (servicio && lead?.email) {
       const emailHash = generateCitaEmailHash({
         fechaHora: new Date(fechaHora),
         duracion: duracion || servicio.duracionMinutos || 60,
