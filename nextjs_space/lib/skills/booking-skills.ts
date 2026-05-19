@@ -295,9 +295,30 @@ export async function getBookingsByLead(leadId: string, tenantId: string) {
 
 /**
  * Obtener próximas citas
+ * Usa la timezone configurada en el perfil del usuario
+ * Incluye citas de Volkern y de Google Calendar
  */
-export async function getUpcomingBookings(tenantId: string, limit = 10) {
-  const citas = await prisma.cita.findMany({
+export async function getUpcomingBookings(tenantId: string, limit = 10, userId?: string) {
+  // Obtener timezone del usuario
+  let timezone = 'America/Mexico_City';
+  
+  if (userId) {
+    const user = await prisma.user.findFirst({
+      where: { id: userId, tenantId },
+      select: { timezone: true }
+    });
+    if (user?.timezone) {
+      timezone = user.timezone;
+    }
+  }
+
+  // Función para convertir UTC a timezone local
+  const toLocalTime = (date: Date) => {
+    return new Date(date.toLocaleString('en-US', { timeZone: timezone }));
+  };
+
+  // Obtener citas de Volkern
+  const citasVolkern = await prisma.cita.findMany({
     where: {
       tenantId,
       fechaHora: { gte: new Date() },
@@ -310,7 +331,74 @@ export async function getUpcomingBookings(tenantId: string, limit = 10) {
       servicio: true,
     },
   });
-  return citas;
+
+  // Intentar obtener citas de Google Calendar
+  let citasGoogleCalendar: any[] = [];
+  if (userId) {
+    try {
+      const gcalIntegration = await prisma.googleCalendarIntegration.findFirst({
+        where: { userId, activo: true }
+      });
+      
+      if (gcalIntegration) {
+        // Obtener eventos próximos de Google Calendar
+        const { google } = await import('googleapis');
+        const oauth2 = new google.auth.OAuth2();
+        oauth2.setCredentials({ access_token: gcalIntegration.accessToken });
+        
+        const calendar = google.calendar({ version: 'v3', auth: oauth2 });
+        const now = new Date();
+        const endDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 días
+        
+        const response = await calendar.events.list({
+          calendarId: 'primary',
+          timeMin: now.toISOString(),
+          timeMax: endDate.toISOString(),
+          singleEvents: true,
+          orderBy: 'startTime',
+          maxResults: limit,
+        });
+        
+        if (response.data.items) {
+          citasGoogleCalendar = response.data.items.map(event => ({
+            id: `gcal_${event.id}`,
+            titulo: event.summary || 'Evento de Google Calendar',
+            descripcion: event.description || null,
+            fechaHora: event.start?.dateTime || event.start?.date,
+            duracion: 60,
+            tipo: 'reunion',
+            estado: 'confirmada',
+            linkReunion: event.hangoutLink || null,
+            ubicacion: event.location || null,
+            lead: null,
+            servicio: null,
+            fuente: 'google_calendar',
+            googleEventId: event.id,
+            timezone,
+            fechaHoraLocal: toLocalTime(new Date(event.start?.dateTime || event.start?.date || now)),
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('[getUpcomingBookings] Error obteniendo eventos de Google Calendar:', error);
+    }
+  }
+
+  // Combinar y ordenar por fecha
+  const todasLasCitas = [
+    ...citasVolkern.map(c => ({ ...c, fuente: 'volkern', fechaHoraLocal: toLocalTime(c.fechaHora) })),
+    ...citasGoogleCalendar
+  ];
+
+  // Ordenar por fecha local
+  todasLasCitas.sort((a, b) => new Date(a.fechaHoraLocal).getTime() - new Date(b.fechaHoraLocal).getTime());
+
+  return {
+    citas: todasLasCitas.slice(0, limit),
+    timezone,
+    totalVolkern: citasVolkern.length,
+    totalGoogleCalendar: citasGoogleCalendar.length
+  };
 }
 
 /**

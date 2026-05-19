@@ -105,6 +105,10 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
     active: false
   });
 
+  const [timezone, setTimezone] = useState('America/Mexico_City');
+  const [showTimezoneModal, setShowTimezoneModal] = useState(false);
+  const [horariosDisponibles, setHorariosDisponibles] = useState<any>(null);
+
   const [cardUrl, setCardUrl] = useState("");
 
   const [telegramChatId, setTelegramChatId] = useState("");
@@ -147,6 +151,7 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
         const data = await res.json();
         setUserData(data);
         setTelegramChatId(data.metadata?.telegram_chat_id || "");
+        setTimezone(data.timezone || 'America/Mexico_City');
         
         // 2. Configurar link de tarjeta digital
         try {
@@ -169,6 +174,17 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
           }
         } catch (e) {
           console.warn("Error fetching card data:", e);
+        }
+        
+        // 3. Obtener horarios de disponibilidad
+        try {
+          const horariosRes = await fetch("/api/config/disponibilidad");
+          if (horariosRes.ok) {
+            const horariosData = await horariosRes.json();
+            setHorariosDisponibles(horariosData);
+          }
+        } catch (e) {
+          console.warn("Error fetching horarios:", e);
         }
       }
     } catch (error) {
@@ -285,6 +301,29 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
       toast.error("Error de conexión");
     } finally {
       setGeneratingKey(false);
+    }
+  };
+
+  const handleSaveTimezone = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/users/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ timezone })
+      });
+      
+      if (res.ok) {
+        toast.success("Zona horaria guardada");
+        fetchUser();
+        setShowTimezoneModal(false);
+      } else {
+        toast.error("Error al guardar zona horaria");
+      }
+    } catch (error) {
+      toast.error("Error de conexión");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -575,12 +614,16 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
             </div>
 
             <div className="pt-6 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="space-y-2 text-center p-6 border border-slate-100 rounded-3xl hover:bg-slate-50 transition-colors cursor-pointer group">
+              <div 
+                className="space-y-2 text-center p-6 border border-slate-100 rounded-3xl hover:bg-slate-50 transition-colors cursor-pointer group"
+                onClick={() => setShowTimezoneModal(true)}
+              >
                 <div className="h-12 w-12 bg-blue-100 text-blue-600 rounded-2xl mx-auto flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                   <Calendar className="h-6 w-6" />
                 </div>
                 <h4 className="font-bold text-slate-900">Editar Horarios</h4>
                 <p className="text-xs text-slate-500">Define tu disponibilidad semanal para citas.</p>
+                <p className="text-xs text-blue-600 font-bold mt-2">Zona: {timezone}</p>
               </div>
               <div className="space-y-2 text-center p-6 border border-slate-100 rounded-3xl hover:bg-slate-50 transition-colors cursor-pointer group">
                 <div className="h-12 w-12 bg-purple-100 text-purple-600 rounded-2xl mx-auto flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
@@ -961,6 +1004,78 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
           </div>
         </SectionWrapper>
       )}
+      
+      {/* Modal de Zona Horaria */}
+      <AnimatePresence>
+        {showTimezoneModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }} 
+              onClick={() => setShowTimezoneModal(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }} 
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="relative bg-white rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden border border-slate-100"
+            >
+              <div className="p-8 space-y-6">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-black text-slate-900">Zona Horaria</h3>
+                  <Button variant="ghost" size="icon" onClick={() => setShowTimezoneModal(false)}>
+                    <X className="h-5 w-5" />
+                  </Button>
+                </div>
+                
+                <p className="text-sm text-slate-500">
+                  Selecciona la zona horaria para mostrar correctamente las citas y horarios de disponibilidad.
+                </p>
+                
+                <div className="space-y-2">
+                  <Label className="text-[11px] font-black uppercase text-slate-400 tracking-wider">Zona Horaria</Label>
+                  <select 
+                    value={timezone}
+                    onChange={(e) => setTimezone(e.target.value)}
+                    className="w-full h-12 px-3 rounded-xl border border-slate-200 bg-background text-sm"
+                  >
+                    <option value="America/Mexico_City">Ciudad de México (UTC-5/UTC-6)</option>
+                    <option value="America/Monterrey">Monterrey (UTC-5/UTC-6)</option>
+                    <option value="America/Tijuana">Tijuana (UTC-7/UTC-8)</option>
+                    <option value="America/Chihuahua">Chihuahua (UTC-6/UTC-7)</option>
+                    <option value="America/Mazatlan">Mazatlán (UTC-6/UTC-7)</option>
+                    <option value="America/Hermosillo">Hermosillo (UTC-7)</option>
+                    <option value="America/Cancun">Cancún (UTC-5)</option>
+                    <option value="America/Bogota">Bogotá (UTC-5)</option>
+                    <option value="America/Lima">Lima (UTC-5)</option>
+                    <option value="America/Santiago">Santiago (UTC-4)</option>
+                    <option value="America/Buenos_Aires">Buenos Aires (UTC-3)</option>
+                    <option value="America/New_York">New York (UTC-5)</option>
+                    <option value="America/Los_Angeles">Los Ángeles (UTC-8)</option>
+                    <option value="America/Denver">Denver (UTC-7)</option>
+                    <option value="Europe/Madrid">Madrid (UTC+1)</option>
+                    <option value="Europe/London">London (UTC+0)</option>
+                    <option value="Europe/Paris">Paris (UTC+1)</option>
+                    <option value="UTC">UTC</option>
+                  </select>
+                </div>
+                
+                <div className="flex justify-end gap-3 pt-4">
+                  <Button variant="outline" onClick={() => setShowTimezoneModal(false)}>
+                    Cancelar
+                  </Button>
+                  <Button onClick={handleSaveTimezone} disabled={saving}>
+                    {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    Guardar
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
