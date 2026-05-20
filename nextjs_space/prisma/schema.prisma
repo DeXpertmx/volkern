@@ -239,6 +239,13 @@ model Tenant {
   campaignRecipients             CampaignRecipient[]
   catalogoFieldDefinitions       CatalogoFieldDefinition[]        @relation("TenantCatalogoFieldDefinitions")
   catalogoItems                  CatalogoItem[]
+  productCategories              ProductCategory[]
+  unitsOfMeasure                 UnitOfMeasure[]
+  productVariants                ProductVariant[]
+  productReviews                 ProductReview[]
+  carts                          Cart[]
+  coupons                        Coupon[]
+  shippingAddresses              ShippingAddress[]
   channels                       Channel[]
   signatureSettings              ClientSignatureSettings?
   client_subscriptions           client_subscriptions[]
@@ -622,6 +629,9 @@ model Contact {
   lead_attachments               LeadAttachment[]
   ordenesVenta                   OrdenVenta[]                     @relation("ContactOrdenesVenta")
   perfilFiscal                   PerfilFiscalCliente?             @relation("ContactPerfilFiscal")
+  productReviews                 ProductReview[]
+  carts                          Cart[]
+  shippingAddresses              ShippingAddress[]
 
   @@index([tenantId])
   @@index([email])
@@ -3046,11 +3056,36 @@ model CatalogoItem {
   isStockable                 Boolean                       @default(false)
   requiresQualityControl      Boolean                       @default(false)
   trackByLot                  Boolean                       @default(false)
+
+  // E-COMMERCE FIELDS
+  slug                        String?
+  precioComparativo           Float?
+  peso                        Float?
+  largo                       Float?
+  ancho                       Float?
+  alto                        Float?
+  marca                       String?
+  estadoProducto              String?
+  tipoEntrega                 String?
+  minOrderQty                 Int                           @default(1)
+  maxOrderQty                 Int?
+  seoTitle                    String?
+  seoDescription              String?
+  seoOgImage                  String?
+  inventarioPublico           Int                           @default(0)
+  promedioRating              Float                         @default(0)
+  totalReviews                Int                           @default(0)
+  relatedProducts             String[]                      @default([])
+  categoryId                  String?
+
   bomComponents               BoMComponent[]
   citas                       Cita[]
   cursos                      Curso[]
   inventoryConfig             InventoryConfig?
   servicios                   Servicio[]
+  category                    ProductCategory?              @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  unidadMedida                UnitOfMeasure?                @relation(fields: [unidadMedidaId], references: [id])
+  unidadMedidaId              String?
   erp_product_families        erp_product_families?         @relation(fields: [familyId], references: [id])
   tasaImpuesto                TasaImpuesto?                 @relation(fields: [tasaImpuestoId], references: [id])
   tenant                      Tenant                        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -3066,12 +3101,19 @@ model CatalogoItem {
   stockLevels                 StockLevel[]
   movements                   StockMovement[]
   ordenVentaItems             OrdenVentaItem[]
+  variants                    ProductVariant[]
+  reviews                     ProductReview[]
+  cartItems                   CartItem[]
 
   @@unique([tenantId, sku])
+  @@unique([tenantId, slug])
   @@index([tenantId])
   @@index([tipo])
   @@index([activo])
   @@index([categoriaFiscal])
+  @@index([slug])
+  @@index([categoryId])
+  @@index([marca])
   @@map("catalogo_items")
 }
 
@@ -3098,6 +3140,167 @@ model CatalogoFieldDefinition {
   @@index([tenantId, categoria])
   @@index([tenantId, activo])
   @@map("catalogo_field_definitions")
+}
+
+// ============================================
+// E-COMMERCE MODELS
+// ============================================
+
+model ProductCategory {
+  id              String            @id @default(cuid())
+  tenantId        String
+  name            String
+  slug            String
+  parentId        String?
+  parent          ProductCategory?  @relation("CategoryChildren", fields: [parentId], references: [id], onDelete: SetNull)
+  children        ProductCategory[] @relation("CategoryChildren")
+  image           String?
+  description     String?
+  orden           Int               @default(0)
+  activo          Boolean           @default(true)
+  tenant          Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  catalogoItems   CatalogoItem[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@index([parentId])
+  @@map("product_categories")
+}
+
+model UnitOfMeasure {
+  id            String        @id @default(cuid())
+  tenantId      String
+  code          String
+  name          String
+  type          String
+  factorToBase  Float
+  activo        Boolean       @default(true)
+  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  catalogoItems CatalogoItem[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("units_of_measure")
+}
+
+model ProductVariant {
+  id              String        @id @default(cuid())
+  tenantId        String
+  catalogoItemId  String
+  sku             String
+  nombre          String
+  precio          Float?
+  stock           Int           @default(0)
+  attributes      Json
+  imagen          String?
+  activo          Boolean       @default(true)
+  fechaCreacion   DateTime      @default(now())
+  catalogItem     CatalogoItem  @relation(fields: [catalogoItemId], references: [id], onDelete: Cascade)
+  tenant          Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cartItems       CartItem[]
+  ordenVentaItems OrdenVentaItem[]
+
+  @@unique([tenantId, sku])
+  @@index([catalogoItemId])
+  @@map("product_variants")
+}
+
+model ProductReview {
+  id              String       @id @default(cuid())
+  tenantId        String
+  catalogoItemId  String
+  contactId       String?
+  rating          Int
+  titulo          String?
+  comentario      String?
+  verificado      Boolean      @default(false)
+  aprobado        Boolean      @default(false)
+  createdAt       DateTime     @default(now())
+  contact         Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  catalogItem     CatalogoItem @relation(fields: [catalogoItemId], references: [id], onDelete: Cascade)
+  tenant          Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([catalogoItemId])
+  @@index([tenantId, aprobado])
+  @@map("product_reviews")
+}
+
+model Cart {
+  id            String       @id @default(cuid())
+  tenantId      String
+  contactId     String?
+  sessionId     String?      @unique
+  tokenRecupera String?      @unique
+  items         CartItem[]
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  tenant        Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact       Contact?     @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([contactId])
+  @@map("carts")
+}
+
+model CartItem {
+  id              String         @id @default(cuid())
+  cartId          String
+  catalogoItemId  String?
+  variantId       String?
+  cantidad        Int            @default(1)
+  precioUnitario  Float
+  metadata        Json?
+  cart            Cart           @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  catalogItem     CatalogoItem?  @relation(fields: [catalogoItemId], references: [id])
+  variant         ProductVariant? @relation(fields: [variantId], references: [id])
+
+  @@index([cartId])
+  @@map("cart_items")
+}
+
+model Coupon {
+  id               String    @id @default(cuid())
+  tenantId         String
+  code             String
+  type             String
+  value            Float
+  minPurchase      Float?
+  maxDiscount      Float?
+  maxUses          Int?
+  maxUsesPerUser   Int?
+  usesCount        Int       @default(0)
+  validoDesde      DateTime
+  validoHasta      DateTime?
+  aplicaProductos  String[]  @default([])
+  aplicaCategorias String[]  @default([])
+  activo           Boolean   @default(true)
+  tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ordenesVenta     OrdenVenta[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("coupons")
+}
+
+model ShippingAddress {
+  id            String       @id @default(cuid())
+  tenantId      String
+  contactId     String?
+  nombre        String
+  telefono      String?
+  linea1        String
+  linea2        String?
+  ciudad        String
+  estado        String?
+  codigoPostal  String
+  pais          String       @default("España")
+  esDefault     Boolean      @default(false)
+  tenant        Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact       Contact?     @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  ordenesVenta  OrdenVenta[]
+
+  @@index([contactId])
+  @@map("shipping_addresses")
 }
 
 model ConfiguracionFiscalEmisor {
@@ -3223,6 +3426,23 @@ model OrdenVenta {
   fechaCreacion      DateTime                   @default(now())
   fechaActualizacion DateTime                   @updatedAt
   invoiceId          String?                    @unique
+
+  // E-COMMERCE FIELDS
+  cartId             String?
+  couponId           String?
+  couponCode         String?
+  couponDiscount     Float                      @default(0)
+  shippingAddressId  String?
+  shippingMethod     String?
+  shippingCost       Float                      @default(0)
+  shippingCarrier    String?
+  trackingNumber     String?
+  trackingUrl        String?
+  notasCliente       String?
+  paymentMethod      String?
+  paymentStatus      String                     @default("pending")
+  paidAt             DateTime?
+
   items              OrdenVentaItem[]
   contact            Contact?                   @relation("ContactOrdenesVenta", fields: [contactId], references: [id])
   contrato           Contrato?                  @relation("ContratoOrdenesVenta", fields: [contratoId], references: [id])
@@ -3233,6 +3453,8 @@ model OrdenVenta {
   invoice            Invoice?                   @relation(fields: [invoiceId], references: [id])
   lead               Lead?                      @relation("LeadOrdenesVenta", fields: [leadId], references: [id])
   tenant             Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  coupon             Coupon?                    @relation(fields: [couponId], references: [id])
+  shippingAddress    ShippingAddress?           @relation(fields: [shippingAddressId], references: [id])
 
   @@unique([tenantId, numero])
   @@index([tenantId])
@@ -3242,6 +3464,8 @@ model OrdenVenta {
   @@index([contratoId])
   @@index([fechaOrden])
   @@index([tokenPublico])
+  @@index([paymentStatus])
+  @@index([cartId])
   @@map("ordenes_venta")
 }
 
@@ -3266,12 +3490,17 @@ model OrdenVentaItem {
   fechaCreacion       DateTime      @default(now())
   fechaActualizacion  DateTime      @updatedAt
   catalogoItemId      String?
+  variantId           String?
+  pesoUnitario        Float?
+  dimensiones         Json?
   catalogoItem        CatalogoItem? @relation(fields: [catalogoItemId], references: [id])
+  variant             ProductVariant? @relation(fields: [variantId], references: [id])
   ordenVenta          OrdenVenta    @relation(fields: [ordenVentaId], references: [id], onDelete: Cascade)
   tasaImpuesto        TasaImpuesto? @relation(fields: [tasaImpuestoId], references: [id])
 
   @@index([ordenVentaId])
   @@index([catalogoItemId])
+  @@index([variantId])
   @@map("orden_venta_items")
 }
 
