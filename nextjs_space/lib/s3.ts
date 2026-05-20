@@ -115,3 +115,42 @@ export async function getUploadUrl(
   
   return { uploadUrl, key };
 }
+
+/**
+ * Genera una URL firmada para subir un archivo público directamente desde el cliente
+ */
+export async function getPublicUploadUrl(
+  fileName: string,
+  contentType: string,
+  expiresIn: number = 3600
+): Promise<{ uploadUrl: string; key: string; publicUrl: string }> {
+  const timestamp = Date.now();
+  const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+  const key = `${folderPrefix}public/catalogo/${timestamp}-${sanitizedFileName}`;
+
+  console.log('[DEBUG getPublicUploadUrl] bucketName:', bucketName);
+  const command = new PutObjectCommand({
+    Bucket: bucketName,
+    Key: key,
+    ContentType: contentType,
+  });
+
+  const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn });
+
+  // Construir URL pública directa
+  let publicUrl = '';
+  const cdnUrl = process.env.NEXT_PUBLIC_CDN_URL;
+  const endpoint = process.env.AWS_ENDPOINT_URL || '';
+  const isR2 = endpoint.includes('r2.cloudflarestorage.com');
+
+  if (cdnUrl) {
+    const base = cdnUrl.endsWith('/') ? cdnUrl.slice(0, -1) : cdnUrl;
+    publicUrl = `${base}/${key}`;
+  } else if (isR2) {
+    publicUrl = `https://CONFIGURA_TU_CDN_EN_VERCEL_PARA_R2.com/${key}`;
+  } else {
+    publicUrl = `https://${bucketName}.s3.${AWS_REGION}.amazonaws.com/${key}`;
+  }
+
+  return { uploadUrl, key, publicUrl };
+}

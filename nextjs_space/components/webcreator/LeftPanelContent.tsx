@@ -56,22 +56,84 @@ const LeftPanelContent: React.FC<LeftPanelContentProps> = ({
 
     try {
       setIsUploading(true);
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('type', 'material'); // S3 path type
+      const isSmallFile = file.size < 4 * 1024 * 1024; // < 4MB
+      let finalUrl = '';
 
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
+      if (isSmallFile) {
+        // Flujo A: Archivo pequeño (<4MB), subir vía servidor para evitar problemas de CORS
+        const formData = new FormData();
+        formData.append('file', file);
 
-      if (!response.ok) throw new Error("Error al subir imagen");
+        const response = await fetch('/api/upload/catalogo', {
+          method: 'POST',
+          body: formData,
+        });
 
-      const data = await response.json();
-      setSeoData.setMetaImagen(data.cloud_storage_path);
-    } catch (err) {
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || "Error al subir imagen");
+        }
+
+        const data = await response.json();
+        if (!data.url) {
+          throw new Error("No se recibió la URL de la imagen");
+        }
+        finalUrl = data.url;
+      } else {
+        // Flujo B: Archivo grande (>=4MB), subir directamente a almacenamiento usando URL firmada
+        const presignedRes = await fetch('/api/upload/catalogo/presigned', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            fileName: file.name,
+            fileType: file.type || 'image/png',
+          }),
+        });
+
+        if (!presignedRes.ok) {
+          const errorData = await presignedRes.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Error al autorizar carga');
+        }
+
+        const { uploadUrl, publicUrl } = await presignedRes.json();
+
+        // Determinar Content-Type mapeado
+        let contentType = file.type || 'image/png';
+        const ext = file.name.split('.').pop()?.toLowerCase();
+        if (ext === 'gif') {
+          contentType = 'image/gif';
+        } else if (ext === 'png') {
+          contentType = 'image/png';
+        } else if (ext === 'jpg' || ext === 'jpeg') {
+          contentType = 'image/jpeg';
+        } else if (ext === 'webp') {
+          contentType = 'image/webp';
+        } else if (ext === 'svg') {
+          contentType = 'image/svg+xml';
+        }
+
+        // Subir directamente a almacenamiento
+        const uploadRes = await fetch(uploadUrl, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': contentType,
+          },
+          body: file,
+        });
+
+        if (!uploadRes.ok) {
+          throw new Error(`Error en la carga directa al almacenamiento (${uploadRes.status}). Verifica la configuración CORS de tu bucket S3/R2.`);
+        }
+
+        finalUrl = publicUrl;
+      }
+
+      setSeoData.setMetaImagen(finalUrl);
+    } catch (err: any) {
       console.error(err);
-      alert("Error al subir la imagen");
+      alert(err.message || "Error al subir la imagen");
     } finally {
       setIsUploading(false);
     }

@@ -599,7 +599,28 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     try {
       const projectData = editorRef.current.exportProject();
       const html = editorRef.current.getHtml() || "";
-      const css = editorRef.current.getCss() || "";
+      let css = editorRef.current.getCss() || "";
+      
+      try {
+        const editor = editorRef.current.getEditor();
+        if (editor) {
+          const allCss = (editor as any).CSS?.getCode?.() || css;
+          if (allCss && allCss.length > css.length) {
+            css = allCss;
+          }
+          
+          // Fix image sources before saving - ensure all images have proper src
+          editor.getAllModels().forEach((comp: any) => {
+            const tagName = comp.get?.('tagName');
+            if (tagName?.toLowerCase() === 'img') {
+              const attrs = comp.get?.('attributes') || {};
+              if (attrs.src) {
+                comp.set?.('attributes', { ...attrs });
+              }
+            }
+          });
+        }
+      } catch {}
 
       const runtimeScript = `
 <script>
@@ -654,7 +675,28 @@ document.addEventListener('click', function(e) {
     try {
       const projectData = editorRef.current.exportProject();
       const html = editorRef.current.getHtml() || "";
-      const css = editorRef.current.getCss() || "";
+      let css = editorRef.current.getCss() || "";
+      
+      try {
+        const editor = editorRef.current.getEditor();
+        if (editor) {
+          const allCss = (editor as any).CSS?.getCode?.() || css;
+          if (allCss && allCss.length > css.length) {
+            css = allCss;
+          }
+          
+          // Fix image sources before publishing
+          editor.getAllModels().forEach((comp: any) => {
+            const tagName = comp.get?.('tagName');
+            if (tagName?.toLowerCase() === 'img') {
+              const attrs = comp.get?.('attributes') || {};
+              if (attrs.src) {
+                comp.set?.('attributes', { ...attrs });
+              }
+            }
+          });
+        }
+      } catch {}
 
       const runtimeScript = `
 <script>

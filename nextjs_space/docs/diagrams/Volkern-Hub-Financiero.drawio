@@ -1,0 +1,418 @@
+<mxfile host="Electron" agent="minimax-m2.5-free">
+  <diagram name="Hub Financiero Volkern" id="volkern-finas-hub" align="center">
+    <mxGraphModel dx="2357" dy="1467" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2400" pageHeight="1800" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=24;fontStyle=1;fontColor=#1e293b;" value="HUB FINANCIERO - VOLKERN ERP" vertex="1">
+          <mxGeometry height="50" width="500" x="800" y="10" as="geometry" />
+        </mxCell>
+        <mxCell id="hub_finanzas" parent="1" style="swimlane;horizontal=0;whiteSpace=wrap;html=1;fillColor=#ea580c;strokeColor=#c2410c;strokeWidth=3;fontSize=16;fontStyle=1;fontColor=#ffffff;swimlaneFillColor=#ea580c;swimlaneLine=0;" value="HUB FINANCIERO" vertex="1">
+          <mxGeometry height="350" width="2320" x="40" y="80" as="geometry" />
+        </mxCell>
+        <mxCell id="dash-fin" parent="hub_finanzas" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#fed7aa;strokeColor=#fb923c;fontSize=11;fontStyle=1;fontColor=#9a3412;swimlaneFillColor=#fed7aa;swimlaneLine=0;" value="DASHBOARD FINANCIERO" vertex="1">
+          <mxGeometry height="90" width="680" x="20" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="d-finanzas" parent="dash-fin" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#9a3412;strokeColor=#fb923c;fontSize=10;align=center;" value="/finanzas&#xa;(Main)" vertex="1">
+          <mxGeometry height="50" width="100" x="10" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="d-income" parent="dash-fin" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#22c55e;strokeColor=#86efac;fontSize=9;align=center;" value="KPIs&#xa;Income" vertex="1">
+          <mxGeometry height="50" width="70" x="120" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="d-expenses" parent="dash-fin" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#dc2626;strokeColor=#fca5a5;fontSize=9;align=center;" value="KPIs&#xa;Expenses" vertex="1">
+          <mxGeometry height="50" width="70" x="200" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="d-margin" parent="dash-fin" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#9a3412;strokeColor=#fb923c;fontSize=9;align=center;" value="KPIs&#xa;Net Margin" vertex="1">
+          <mxGeometry height="50" width="70" x="280" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="d-burn" parent="dash-fin" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#9a3412;strokeColor=#fb923c;fontSize=9;align=center;" value="KPIs&#xa;Burn Rate" vertex="1">
+          <mxGeometry height="50" width="70" x="360" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="d-runway" parent="dash-fin" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#9a3412;strokeColor=#fb923c;fontSize=9;align=center;" value="KPIs&#xa;Runway" vertex="1">
+          <mxGeometry height="50" width="70" x="440" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="d-ebitda" parent="dash-fin" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#9a3412;strokeColor=#fb923c;fontSize=9;align=center;" value="KPIs&#xa;EBITDA" vertex="1">
+          <mxGeometry height="50" width="70" x="520" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="d-ai" parent="dash-fin" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fef3c7;fontColor=#92400e;strokeColor=#fcd34d;fontSize=9;align=center;" value="AI Health&#xa;Analysis" vertex="1">
+          <mxGeometry height="50" width="70" x="600" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="facturacion" parent="hub_finanzas" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#22c55e;strokeColor=#16a34a;fontSize=11;fontStyle=1;fontColor=#ffffff;swimlaneFillColor=#22c55e;swimlaneLine=0;" value="FACTURACIÓN" vertex="1">
+          <mxGeometry height="90" width="560" x="720" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="f-main" parent="facturacion" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dcfce7;fontColor=#166534;strokeColor=#86efac;fontSize=10;align=center;" value="/facturacion&#xa;(Mesa)" vertex="1">
+          <mxGeometry height="50" width="90" x="10" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="f-orders" parent="facturacion" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#166534;strokeColor=#86efac;fontSize=9;align=center;" value="Órdenes&#xa;Pendientes" vertex="1">
+          <mxGeometry height="50" width="80" x="110" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="f-verifactu" parent="facturacion" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fef3c7;fontColor=#166534;strokeColor=#86efac;fontSize=9;align=center;" value="Veri*factu&#xa;Compliance" vertex="1">
+          <mxGeometry height="50" width="80" x="200" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="f-aeat" parent="facturacion" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#166534;strokeColor=#86efac;fontSize=9;align=center;" value="AEAT&#xa;Submit" vertex="1">
+          <mxGeometry height="50" width="80" x="290" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="f-fingerprint" parent="facturacion" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#166534;strokeColor=#86efac;fontSize=9;align=center;" value="Fiscal&#xa;Fingerprint" vertex="1">
+          <mxGeometry height="50" width="80" x="380" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="f-signature" parent="facturacion" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#166534;strokeColor=#86efac;fontSize=9;align=center;" value="XML&#xa;Signature" vertex="1">
+          <mxGeometry height="50" width="80" x="470" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="gastos" parent="hub_finanzas" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#dc2626;strokeColor=#b91c1c;fontSize=11;fontStyle=1;fontColor=#ffffff;swimlaneFillColor=#dc2626;swimlaneLine=0;" value="GASTOS" vertex="1">
+          <mxGeometry height="90" width="480" x="1300" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="g-main" parent="gastos" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fee2e2;fontColor=#991b1b;strokeColor=#fca5a5;fontSize=10;align=center;" value="/gastos" vertex="1">
+          <mxGeometry height="50" width="80" x="10" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="g-receipt" parent="gastos" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fef3c7;fontColor=#991b1b;strokeColor=#fca5a5;fontSize=9;align=center;" value="AI Receipt&#xa;Scan" vertex="1">
+          <mxGeometry height="50" width="80" x="100" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="g-location" parent="gastos" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#991b1b;strokeColor=#fca5a5;fontSize=9;align=center;" value="Location&#xa;Verify" vertex="1">
+          <mxGeometry height="50" width="80" x="190" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="g-supplier" parent="gastos" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#991b1b;strokeColor=#fca5a5;fontSize=9;align=center;" value="Supplier&#xa;Attrib" vertex="1">
+          <mxGeometry height="50" width="80" x="280" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="g-anomaly" parent="gastos" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fef3c7;fontColor=#991b1b;strokeColor=#fca5a5;fontSize=9;align=center;" value="Anomaly&#xa;Detect" vertex="1">
+          <mxGeometry height="50" width="80" x="370" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="global-fin" parent="hub_finanzas" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#7c3aed;strokeColor=#6d28d9;fontSize=11;fontStyle=1;fontColor=#ffffff;swimlaneFillColor=#7c3aed;swimlaneLine=0;" value="CONSOLIDACIÓN" vertex="1">
+          <mxGeometry height="90" width="480" x="1800" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="glo-cockpit" parent="global-fin" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e9d5ff;fontColor=#6b21a8;strokeColor=#d8b4fe;fontSize=10;align=center;" value="/global&#xa;(Cockpit)" vertex="1">
+          <mxGeometry height="50" width="90" x="10" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="glo-multi" parent="global-fin" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#6b21a8;strokeColor=#d8b4fe;fontSize=9;align=center;" value="Multi-Tenant&#xa;Consolidation" vertex="1">
+          <mxGeometry height="50" width="100" x="110" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="glo-pnl" parent="global-fin" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#6b21a8;strokeColor=#d8b4fe;fontSize=9;align=center;" value="/reportes&#xa;(P&amp;L)" vertex="1">
+          <mxGeometry height="50" width="100" x="220" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="glo-certified" parent="global-fin" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fef3c7;fontColor=#6b21a8;strokeColor=#d8b4fe;fontSize=9;align=center;" value="Certified&#xa;P&amp;amp;L" vertex="1">
+          <mxGeometry height="50" width="100" x="330" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="nom-pro" parent="hub_finanzas" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#64748b;strokeColor=#475569;fontSize=11;fontStyle=1;fontColor=#ffffff;swimlaneFillColor=#64748b;swimlaneLine=0;" value="NÓMINAS &amp;amp; PROVEEDORES" vertex="1">
+          <mxGeometry height="80" width="680" x="20" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="np-nominas" parent="nom-pro" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f1f5f9;fontColor=#334155;strokeColor=#cbd5e1;fontSize=10;align=center;" value="/nominas" vertex="1">
+          <mxGeometry height="40" width="80" x="10" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="np-payroll" parent="nom-pro" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#334155;strokeColor=#cbd5e1;fontSize=9;align=center;" value="Payroll&#xa;Records" vertex="1">
+          <mxGeometry height="40" width="80" x="100" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="np-employee" parent="nom-pro" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#334155;strokeColor=#cbd5e1;fontSize=9;align=center;" value="Employee&#xa;Data" vertex="1">
+          <mxGeometry height="40" width="80" x="190" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="np-prov" parent="nom-pro" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f1f5f9;fontColor=#334155;strokeColor=#cbd5e1;fontSize=10;align=center;" value="/proveedores" vertex="1">
+          <mxGeometry height="40" width="80" x="290" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="np-directory" parent="nom-pro" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#334155;strokeColor=#cbd5e1;fontSize=9;align=center;" value="Supplier&#xa;Directory" vertex="1">
+          <mxGeometry height="40" width="80" x="380" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="np-balance" parent="nom-pro" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#334155;strokeColor=#cbd5e1;fontSize=9;align=center;" value="Pending&#xa;Balance" vertex="1">
+          <mxGeometry height="40" width="80" x="470" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="np-category" parent="nom-pro" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#334155;strokeColor=#cbd5e1;fontSize=9;align=center;" value="Category&#xa;Filter" vertex="1">
+          <mxGeometry height="40" width="100" x="560" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="contabilidad" parent="1" style="swimlane;horizontal=0;whiteSpace=wrap;html=1;fillColor=#0d9488;strokeColor=#0f766e;strokeWidth=3;fontSize=14;fontStyle=1;fontColor=#ffffff;swimlaneFillColor=#0d9488;swimlaneLine=0;" value="CONTABILIDAD" vertex="1">
+          <mxGeometry height="320" width="720" x="40" y="450" as="geometry" />
+        </mxCell>
+        <mxCell id="cont-main" parent="contabilidad" style="rounded=1;whiteSpace=wrap;html=1;fontSize=12;fontStyle=1;fillColor=#115e59;fontColor=#ffffff;strokeColor=#134e4a;strokeWidth=2;align=center;" value="/contabilidad (Hub)" vertex="1">
+          <mxGeometry height="50" width="140" x="20" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="cont-double" parent="contabilidad" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#ccfbf1;strokeColor=#5eead4;fontSize=10;fontStyle=1;fontColor=#042f2e;swimlaneFillColor=#ccfbf1;swimlaneLine=0;" value="PARTIDA DOBLE" vertex="1">
+          <mxGeometry height="80" width="340" x="20" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="cont-accounts" parent="cont-double" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#042f2e;strokeColor=#5eead4;fontSize=9;align=center;" value="Plan de&#xa;Cuentas" vertex="1">
+          <mxGeometry height="45" width="80" x="10" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="cont-entries" parent="cont-double" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#042f2e;strokeColor=#5eead4;fontSize=9;align=center;" value="Asientos&#xa;Diarios" vertex="1">
+          <mxGeometry height="45" width="80" x="100" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="cont-hash" parent="cont-double" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fef3c7;fontColor=#042f2e;strokeColor=#5eead4;fontSize=9;align=center;" value="Hash Chain&#xa;Integrity" vertex="1">
+          <mxGeometry height="45" width="80" x="190" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="cont-seal" parent="cont-double" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#042f2e;strokeColor=#5eead4;fontSize=9;align=center;" value="Period&#xa;Sealing" vertex="1">
+          <mxGeometry height="45" width="80" x="280" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="cont-bank" parent="contabilidad" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#5eead4;strokeColor=#2dd4bf;fontSize=10;fontStyle=1;fontColor=#042f2e;swimlaneFillColor=#5eead4;swimlaneLine=0;" value="RECONCILIACIÓN BANCARIA" vertex="1">
+          <mxGeometry height="80" width="320" x="380" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="cont-conn" parent="cont-bank" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#042f2e;strokeColor=#2dd4bf;fontSize=9;align=center;" value="/conexion&#xa;(Bank)" vertex="1">
+          <mxGeometry height="45" width="80" x="10" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="cont-import" parent="cont-bank" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#042f2e;strokeColor=#2dd4bf;fontSize=9;align=center;" value="Import&#xa;Transactions" vertex="1">
+          <mxGeometry height="45" width="80" x="100" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="cont-match" parent="cont-bank" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fef3c7;fontColor=#042f2e;strokeColor=#2dd4bf;fontSize=9;align=center;" value="AI Match&#xa;Confidence" vertex="1">
+          <mxGeometry height="45" width="80" x="190" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="cont-reconcile" parent="cont-bank" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#042f2e;strokeColor=#2dd4bf;fontSize=9;align=center;" value="/reconciliacion" vertex="1">
+          <mxGeometry height="45" width="80" x="10" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="cont-tax" parent="contabilidad" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#f59e0b;strokeColor=#d97706;fontSize=10;fontStyle=1;fontColor=#ffffff;swimlaneFillColor=#f59e0b;swimlaneLine=0;" value="IMPUESTOS" vertex="1">
+          <mxGeometry height="60" width="680" x="20" y="200" as="geometry" />
+        </mxCell>
+        <mxCell id="cont-tax-main" parent="cont-tax" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fef3c7;fontColor=#92400e;strokeColor=#fcd34d;fontSize=9;align=center;" value="/impuestos" vertex="1">
+          <mxGeometry height="35" width="80" x="10" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="cont-iva" parent="cont-tax" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#92400e;strokeColor=#fcd34d;fontSize=9;align=center;" value="IVA&#xa;Soportado/USado" vertex="1">
+          <mxGeometry height="35" width="100" x="100" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="cont-irpf" parent="cont-tax" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#92400e;strokeColor=#fcd34d;fontSize=9;align=center;" value="IRPF&#xa;Retenciones" vertex="1">
+          <mxGeometry height="35" width="100" x="210" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="cont-period" parent="cont-tax" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#92400e;strokeColor=#fcd34d;fontSize=9;align=center;" value="Tax&#xa;Periods" vertex="1">
+          <mxGeometry height="35" width="80" x="320" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="cont-reverse" parent="cont-tax" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fef3c7;fontColor=#92400e;strokeColor=#fcd34d;fontSize=9;align=center;" value="Reverse&#xa;Charge" vertex="1">
+          <mxGeometry height="35" width="80" x="410" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="cont-export" parent="cont-tax" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#92400e;strokeColor=#fcd34d;fontSize=9;align=center;" value="Export&#xa;Gestoría" vertex="1">
+          <mxGeometry height="35" width="80" x="500" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="database" parent="1" style="swimlane;horizontal=0;whiteSpace=wrap;html=1;fillColor=#8b5cf6;strokeColor=#7c3aed;strokeWidth=3;fontSize=14;fontStyle=1;fontColor=#ffffff;swimlaneFillColor=#8b5cf6;swimlaneLine=0;" value="MODELOS PRISMA" vertex="1">
+          <mxGeometry height="320" width="550" x="780" y="450" as="geometry" />
+        </mxCell>
+        <mxCell id="db-invoice" parent="database" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#86efac;fontSize=10;fontStyle=1;fontColor=#166534;swimlaneFillColor=#dcfce7;swimlaneLine=0;" value="FACTURACIÓN" vertex="1">
+          <mxGeometry height="90" width="250" x="20" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="db-inv-model" parent="db-invoice" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#166534;strokeColor=#86efac;fontSize=10;align=center;" value="Invoice" vertex="1">
+          <mxGeometry height="40" width="110" x="10" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="db-inv-fields" parent="database" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=8;fontColor=#166534;" value="fingerprint, sequenceNumber,&#xa;verifactuVersion, signature,&#xa;aeatStatus, aeatCsv,&#xa;signedXmlUrl" vertex="1">
+          <mxGeometry height="50" width="220" x="30" y="65" as="geometry" />
+        </mxCell>
+        <mxCell id="db-accounting" parent="database" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#ccfbf1;strokeColor=#5eead4;fontSize=10;fontStyle=1;fontColor=#042f2e;swimlaneFillColor=#ccfbf1;swimlaneLine=0;" value="CONTABILIDAD" vertex="1">
+          <mxGeometry height="90" width="250" x="280" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="db-acc-models" parent="db-accounting" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#042f2e;strokeColor=#5eead4;fontSize=9;align=center;" value="AccountingAccount&#xa;AccountingEntry&#xa;AccountingLine&#xa;AccountingPeriod" vertex="1">
+          <mxGeometry height="50" width="120" x="10" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="db-acc-fields" parent="database" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=8;fontColor=#042f2e;" value="code, name, type, balance&#xa;date, description, reference&#xa;status, entryHash, sealedBy" vertex="1">
+          <mxGeometry height="50" width="220" x="290" y="65" as="geometry" />
+        </mxCell>
+        <mxCell id="db-banking" parent="database" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#93c5fd;fontSize=10;fontStyle=1;fontColor=#1e40af;swimlaneFillColor=#dbeafe;swimlaneLine=0;" value="BANCARIO" vertex="1">
+          <mxGeometry height="90" width="250" x="20" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="db-bank-models" parent="db-banking" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#1e40af;strokeColor=#93c5fd;fontSize=9;align=center;" value="BankConnection&#xa;BankTransaction&#xa;BankReconciliation" vertex="1">
+          <mxGeometry height="50" width="110" x="10" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="db-bank-fields" parent="database" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=8;fontColor=#1e40af;" value="provider, institutionId&#xa;accessToken, lastSync&#xa;status, confidenceScore" vertex="1">
+          <mxGeometry height="45" width="220" x="30" y="175" as="geometry" />
+        </mxCell>
+        <mxCell id="db-taxes" parent="database" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#fcd34d;fontSize=10;fontStyle=1;fontColor=#92400e;swimlaneFillColor=#fef3c7;swimlaneLine=0;" value="IMPUESTOS" vertex="1">
+          <mxGeometry height="90" width="250" x="280" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="db-tax-models" parent="db-taxes" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#92400e;strokeColor=#fcd34d;fontSize=9;align=center;" value="TaxRecord&#xa;LegalTaxTable" vertex="1">
+          <mxGeometry height="50" width="100" x="10" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="db-tax-fields" parent="database" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=8;fontColor=#92400e;" value="period, taxType, amount&#xa;country, rate, type&#xa;reverseCharge rules" vertex="1">
+          <mxGeometry height="45" width="220" x="290" y="175" as="geometry" />
+        </mxCell>
+        <mxCell id="db-erp" parent="database" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#cbd5e1;fontSize=10;fontStyle=1;fontColor=#475569;swimlaneFillColor=#f1f5f9;swimlaneLine=0;" value="ERP" vertex="1">
+          <mxGeometry height="60" width="510" x="20" y="250" as="geometry" />
+        </mxCell>
+        <mxCell id="db-erp-models" parent="db-erp" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#475569;strokeColor=#cbd5e1;fontSize=9;align=center;" value="Expense | Supplier | ExpenseCategory | PayrollRecord | PayrollLine | EmployeePayrollProfileES" vertex="1">
+          <mxGeometry height="35" width="500" x="10" y="15" as="geometry" />
+        </mxCell>
+        <mxCell id="apis" parent="1" style="swimlane;horizontal=0;whiteSpace=wrap;html=1;fillColor=#1e293b;strokeColor=#0f172a;strokeWidth=3;fontSize=14;fontStyle=1;fontColor=#f8fafc;swimlaneFillColor=#1e293b;swimlaneLine=0;" value="API ENDPOINTS" vertex="1">
+          <mxGeometry height="320" width="450" x="1350" y="450" as="geometry" />
+        </mxCell>
+        <mxCell id="api-finance" parent="apis" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#334155;strokeColor=#1e293b;fontSize=10;fontStyle=1;fontColor=#f1f5f9;swimlaneFillColor=#334155;swimlaneLine=0;" value="FINANCE APIs" vertex="1">
+          <mxGeometry height="80" width="410" x="20" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="api-expenses" parent="api-finance" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#78716c;fontColor=#f8fafc;strokeColor=#57534e;fontSize=9;align=center;" value="/erp/expenses" vertex="1">
+          <mxGeometry height="35" width="90" x="10" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="api-suppliers" parent="api-finance" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#78716c;fontColor=#f8fafc;strokeColor=#57534e;fontSize=9;align=center;" value="/erp/suppliers" vertex="1">
+          <mxGeometry height="35" width="90" x="110" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="api-payroll" parent="api-finance" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#78716c;fontColor=#f8fafc;strokeColor=#57534e;fontSize=9;align=center;" value="/erp/finance/payroll" vertex="1">
+          <mxGeometry height="35" width="90" x="210" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="api-consolidation" parent="api-finance" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#78716c;fontColor=#f8fafc;strokeColor=#57534e;fontSize=9;align=center;" value="/erp/finance/consolidation" vertex="1">
+          <mxGeometry height="35" width="90" x="310" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="api-accounting" parent="apis" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#115e59;strokeColor=#0f766e;fontSize=10;fontStyle=1;fontColor=#f0fdfa;swimlaneFillColor=#115e59;swimlaneLine=0;" value="ACCOUNTING APIs" vertex="1">
+          <mxGeometry height="80" width="410" x="20" y="130" as="geometry" />
+        </mxCell>
+        <mxCell id="api-acc-dash" parent="api-accounting" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ccfbf1;fontColor=#134e4a;strokeColor=#5eead4;fontSize=9;align=center;" value="/accounting/dashboard" vertex="1">
+          <mxGeometry height="35" width="120" x="10" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="api-reconcile" parent="api-accounting" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ccfbf1;fontColor=#134e4a;strokeColor=#5eead4;fontSize=9;align=center;" value="/accounting/reconcile" vertex="1">
+          <mxGeometry height="35" width="120" x="140" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="api-export-acc" parent="api-accounting" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ccfbf1;fontColor=#134e4a;strokeColor=#5eead4;fontSize=9;align=center;" value="/accounting/export" vertex="1">
+          <mxGeometry height="35" width="120" x="270" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="api-sales" parent="apis" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#4f46e5;strokeColor=#3730a3;fontSize=10;fontStyle=1;fontColor=#ffffff;swimlaneFillColor=#4f46e5;swimlaneLine=0;" value="SALES-FINANCE INTEGRATION" vertex="1">
+          <mxGeometry height="80" width="410" x="20" y="230" as="geometry" />
+        </mxCell>
+        <mxCell id="api-orders" parent="api-sales" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e0e7ff;fontColor=#3730a3;strokeColor=#a5b4fc;fontSize=9;align=center;" value="/ordenes-venta" vertex="1">
+          <mxGeometry height="35" width="100" x="10" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="api-facturar" parent="api-sales" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e0e7ff;fontColor=#3730a3;strokeColor=#a5b4fc;fontSize=9;align=center;" value="/ordenes-venta/[id]/facturar" vertex="1">
+          <mxGeometry height="35" width="130" x="120" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="api-webhook" parent="api-sales" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e0e7ff;fontColor=#3730a3;strokeColor=#a5b4fc;fontSize=9;align=center;" value="/webhooks/fiscal/&#xa;inbound-invoice" vertex="1">
+          <mxGeometry height="35" width="130" x="260" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="fiscal-engine" parent="1" style="swimlane;horizontal=0;whiteSpace=wrap;html=1;fillColor=#dc2626;strokeColor=#b91c1c;strokeWidth=3;fontSize=14;fontStyle=1;fontColor=#ffffff;swimlaneFillColor=#dc2626;swimlaneLine=0;" value="FISCAL ENGINE" vertex="1">
+          <mxGeometry height="200" width="700" x="40" y="790" as="geometry" />
+        </mxCell>
+        <mxCell id="fiscal-main" parent="fiscal-engine" style="rounded=1;whiteSpace=wrap;html=1;fontSize=12;fontStyle=1;fillColor=#7f1d1d;fontColor=#ffffff;strokeColor=#450a0a;strokeWidth=2;align=center;" value="lib/fiscal-engine.ts" vertex="1">
+          <mxGeometry height="40" width="180" x="20" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="fiscal-countries" parent="fiscal-engine" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#fecaca;strokeColor=#fca5a5;fontSize=10;fontStyle=1;fontColor=#7f1d1d;swimlaneFillColor=#fecaca;swimlaneLine=0;" value="MULTI-COUNTRY TAX" vertex="1">
+          <mxGeometry height="50" width="660" x="20" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="fc-mx" parent="fiscal-countries" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#7f1d1d;strokeColor=#fca5a5;fontSize=9;align=center;" value="MX (IVA 16%)" vertex="1">
+          <mxGeometry height="30" width="70" x="10" y="15" as="geometry" />
+        </mxCell>
+        <mxCell id="fc-es" parent="fiscal-countries" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fef3c7;fontColor=#7f1d1d;strokeColor=#fca5a5;fontSize=9;align=center;" value="ES (IVA 21%)" vertex="1">
+          <mxGeometry height="30" width="70" x="90" y="15" as="geometry" />
+        </mxCell>
+        <mxCell id="fc-us" parent="fiscal-countries" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#7f1d1d;strokeColor=#fca5a5;fontSize=9;align=center;" value="US (Sales Tax)" vertex="1">
+          <mxGeometry height="30" width="70" x="170" y="15" as="geometry" />
+        </mxCell>
+        <mxCell id="fc-eu" parent="fiscal-countries" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dbeafe;fontColor=#7f1d1d;strokeColor=#fca5a5;fontSize=9;align=center;" value="EU (VAT MOSS)" vertex="1">
+          <mxGeometry height="30" width="70" x="250" y="15" as="geometry" />
+        </mxCell>
+        <mxCell id="fc-latam" parent="fiscal-countries" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dcfce7;fontColor=#7f1d1d;strokeColor=#fca5a5;fontSize=9;align=center;" value="LATAM (CL, AR, CO, PE, BR)" vertex="1">
+          <mxGeometry height="30" width="130" x="330" y="15" as="geometry" />
+        </mxCell>
+        <mxCell id="fc-uk" parent="fiscal-countries" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#7f1d1d;strokeColor=#fca5a5;fontSize=9;align=center;" value="UK (VAT 20%)" vertex="1">
+          <mxGeometry height="30" width="70" x="470" y="15" as="geometry" />
+        </mxCell>
+        <mxCell id="fc-reverse" parent="fiscal-countries" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fef3c7;fontColor=#7f1d1d;strokeColor=#fca5a5;fontSize=9;align=center;" value="Reverse Charge Logic" vertex="1">
+          <mxGeometry height="30" width="110" x="550" y="15" as="geometry" />
+        </mxCell>
+        <mxCell id="fiscal-validation" parent="fiscal-engine" style="rounded=1;whiteSpace=wrap;html=1;fontSize=12;fontStyle=1;fillColor=#991b1b;fontColor=#ffffff;strokeColor=#7f1d1d;strokeWidth=2;align=center;" value="lib/fiscal-validation.ts" vertex="1">
+          <mxGeometry height="40" width="180" x="220" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="fv-validate" parent="fiscal-engine" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=9;fontColor=#fef2f2;" value="Tax ID Validation: MX, ES, US, CL, AR, CO, PE, BR, GB, DE, FR, IT, PT" vertex="1">
+          <mxGeometry height="20" width="400" x="230" y="75" as="geometry" />
+        </mxCell>
+        <mxCell id="ai-features" parent="1" style="swimlane;horizontal=0;whiteSpace=wrap;html=1;fillColor=#7c3aed;strokeColor=#6d28d9;strokeWidth=3;fontSize=14;fontStyle=1;fontColor=#ffffff;swimlaneFillColor=#7c3aed;swimlaneLine=0;" value="AI FEATURES" vertex="1">
+          <mxGeometry height="200" width="650" x="760" y="790" as="geometry" />
+        </mxCell>
+        <mxCell id="ai-gemma" parent="ai-features" style="rounded=1;whiteSpace=wrap;html=1;fontSize=12;fontStyle=1;fillColor=#4c1d95;fontColor=#ffffff;strokeColor=#5b21b6;strokeWidth=2;align=center;" value="Gemma 4 Vision" vertex="1">
+          <mxGeometry height="40" width="140" x="20" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="ai-caps" parent="ai-features" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#e9d5ff;strokeColor=#d8b4fe;fontSize=10;fontStyle=1;fontColor=#6b21a8;swimlaneFillColor=#e9d5ff;swimlaneLine=0;" value="CAPACIDADES AI" vertex="1">
+          <mxGeometry height="50" width="610" x="20" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="ai-receipt" parent="ai-caps" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#6b21a8;strokeColor=#d8b4fe;fontSize=9;align=center;" value="Receipt Scan&#xa;(OCR)" vertex="1">
+          <mxGeometry height="35" width="80" x="10" y="15" as="geometry" />
+        </mxCell>
+        <mxCell id="ai-expense" parent="ai-caps" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#6b21a8;strokeColor=#d8b4fe;fontSize=9;align=center;" value="Expense&#xa;Extract" vertex="1">
+          <mxGeometry height="35" width="80" x="100" y="15" as="geometry" />
+        </mxCell>
+        <mxCell id="ai-anomaly" parent="ai-caps" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fef3c7;fontColor=#6b21a8;strokeColor=#d8b4fe;fontSize=9;align=center;" value="Anomaly&#xa;Detection" vertex="1">
+          <mxGeometry height="35" width="80" x="190" y="15" as="geometry" />
+        </mxCell>
+        <mxCell id="ai-health" parent="ai-caps" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#6b21a8;strokeColor=#d8b4fe;fontSize=9;align=center;" value="Financial&#xa;Health" vertex="1">
+          <mxGeometry height="35" width="80" x="280" y="15" as="geometry" />
+        </mxCell>
+        <mxCell id="ai-burn" parent="ai-caps" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#6b21a8;strokeColor=#d8b4fe;fontSize=9;align=center;" value="Burn Rate&#xa;Analysis" vertex="1">
+          <mxGeometry height="35" width="80" x="370" y="15" as="geometry" />
+        </mxCell>
+        <mxCell id="ai-match" parent="ai-caps" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fef3c7;fontColor=#6b21a8;strokeColor=#d8b4fe;fontSize=9;align=center;" value="Bank Match&#xa;Confidence" vertex="1">
+          <mxGeometry height="35" width="80" x="460" y="15" as="geometry" />
+        </mxCell>
+        <mxCell id="ai-runway" parent="ai-caps" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#6b21a8;strokeColor=#d8b4fe;fontSize=9;align=center;" value="Runway&#xa;Projection" vertex="1">
+          <mxGeometry height="35" width="80" x="550" y="15" as="geometry" />
+        </mxCell>
+        <mxCell id="integrations" parent="1" style="swimlane;horizontal=0;whiteSpace=wrap;html=1;fillColor=#059669;strokeColor=#047857;strokeWidth=3;fontSize=14;fontStyle=1;fontColor=#ffffff;swimlaneFillColor=#059669;swimlaneLine=0;" value="INTEGRACIONES" vertex="1">
+          <mxGeometry height="200" width="370" x="1430" y="790" as="geometry" />
+        </mxCell>
+        <mxCell id="int-providers" parent="integrations" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#86efac;fontSize=10;fontStyle=1;fontColor=#166534;swimlaneFillColor=#dcfce7;swimlaneLine=0;" value="INVOICE PROVIDERS" vertex="1">
+          <mxGeometry height="50" width="330" x="20" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="int-holded" parent="int-providers" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#166534;strokeColor=#86efac;fontSize=10;align=center;" value="Holded" vertex="1">
+          <mxGeometry height="30" width="60" x="10" y="15" as="geometry" />
+        </mxCell>
+        <mxCell id="int-stripe" parent="int-providers" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#166534;strokeColor=#86efac;fontSize=10;align=center;" value="Stripe" vertex="1">
+          <mxGeometry height="30" width="60" x="80" y="15" as="geometry" />
+        </mxCell>
+        <mxCell id="int-square" parent="int-providers" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#166534;strokeColor=#86efac;fontSize=10;align=center;" value="Square" vertex="1">
+          <mxGeometry height="30" width="60" x="150" y="15" as="geometry" />
+        </mxCell>
+        <mxCell id="int-gocardless" parent="int-providers" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#166534;strokeColor=#86efac;fontSize=10;align=center;" value="GoCardless" vertex="1">
+          <mxGeometry height="30" width="80" x="220" y="15" as="geometry" />
+        </mxCell>
+        <mxCell id="int-gov" parent="integrations" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#fcd34d;fontSize=10;fontStyle=1;fontColor=#92400e;swimlaneFillColor=#fef3c7;swimlaneLine=0;" value="GOBIERNO" vertex="1">
+          <mxGeometry height="50" width="330" x="20" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="int-aeat" parent="int-gov" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#92400e;strokeColor=#fcd34d;fontSize=9;align=center;" value="AEAT&#xa;(España)" vertex="1">
+          <mxGeometry height="30" width="80" x="10" y="15" as="geometry" />
+        </mxCell>
+        <mxCell id="int-verifactu" parent="int-gov" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fef3c7;fontColor=#92400e;strokeColor=#fcd34d;fontSize=9;align=center;" value="Veri*factu&#xa;(SII)" vertex="1">
+          <mxGeometry height="30" width="80" x="100" y="15" as="geometry" />
+        </mxCell>
+        <mxCell id="int-sat" parent="int-gov" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#92400e;strokeColor=#fcd34d;fontSize=9;align=center;" value="SAT&#xa;(México)" vertex="1">
+          <mxGeometry height="30" width="80" x="190" y="15" as="geometry" />
+        </mxCell>
+        <mxCell id="int-irs" parent="int-gov" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#92400e;strokeColor=#fcd34d;fontSize=9;align=center;" value="IRS&#xa;(US)" vertex="1">
+          <mxGeometry height="30" width="60" x="280" y="15" as="geometry" />
+        </mxCell>
+        <mxCell id="int-banks" parent="integrations" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#93c5fd;fontSize=10;fontStyle=1;fontColor=#1e40af;swimlaneFillColor=#dbeafe;swimlaneLine=0;" value="BANCOS" vertex="1">
+          <mxGeometry height="30" width="330" x="20" y="170" as="geometry" />
+        </mxCell>
+        <mxCell id="int-bank" parent="int-banks" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#1e40af;strokeColor=#93c5fd;fontSize=9;align=center;" value="Bank APIs (Plaid, Stripe, etc.)" vertex="1">
+          <mxGeometry height="20" width="310" x="10" y="5" as="geometry" />
+        </mxCell>
+        <mxCell id="hub-connections" parent="1" style="swimlane;horizontal=0;whiteSpace=wrap;html=1;fillColor=#475569;strokeColor=#334155;strokeWidth=3;fontSize=14;fontStyle=1;fontColor=#ffffff;swimlaneFillColor=#475569;swimlaneLine=0;" value="CONEXIONES CON OTROS HUBS" vertex="1">
+          <mxGeometry height="150" width="1760" x="40" y="1010" as="geometry" />
+        </mxCell>
+        <mxCell id="hc-ventas" parent="hub-connections" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#6366f1;strokeColor=#4f46e5;fontSize=10;fontStyle=1;fontColor=#ffffff;swimlaneFillColor=#6366f1;swimlaneLine=0;" value="VENTAS&#xa;→ Orders flow to Facturación" vertex="1">
+          <mxGeometry height="50" width="200" x="80" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="hc-crm" parent="hub-connections" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#6366f1;strokeColor=#4f46e5;fontSize=10;fontStyle=1;fontColor=#ffffff;swimlaneFillColor=#6366f1;swimlaneLine=0;" value="CRM&#xa;→ Fiscal profiles" vertex="1">
+          <mxGeometry height="50" width="150" x="300" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="hc-contratos" parent="hub-connections" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#6366f1;strokeColor=#4f46e5;fontSize=10;fontStyle=1;fontColor=#ffffff;swimlaneFillColor=#6366f1;swimlaneLine=0;" value="CONTRATOS&#xa;→ Invoice links" vertex="1">
+          <mxGeometry height="50" width="150" x="470" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="hc-proyectos" parent="hub-connections" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#f59e0b;strokeColor=#d97706;fontSize=10;fontStyle=1;fontColor=#ffffff;swimlaneFillColor=#f59e0b;swimlaneLine=0;" value="PROYECTOS&#xa;→ Project costs" vertex="1">
+          <mxGeometry height="50" width="150" x="640" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="hc-rrhh" parent="hub-connections" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#f59e0b;strokeColor=#d97706;fontSize=10;fontStyle=1;fontColor=#ffffff;swimlaneFillColor=#f59e0b;swimlaneLine=0;" value="RRHH&#xa;→ Employee data" vertex="1">
+          <mxGeometry height="50" width="150" x="810" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="hc-inventario" parent="hub-connections" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#0891b2;strokeColor=#0e7490;fontSize=10;fontStyle=1;fontColor=#ffffff;swimlaneFillColor=#0891b2;swimlaneLine=0;" value="INVENTARIO&#xa;→ COGS tracking" vertex="1">
+          <mxGeometry height="50" width="150" x="980" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="hc-global" parent="hub-connections" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#7c3aed;strokeColor=#6d28d9;fontSize=10;fontStyle=1;fontColor=#ffffff;swimlaneFillColor=#7c3aed;swimlaneLine=0;" value="GLOBAL&#xa;→ Multi-tenant" vertex="1">
+          <mxGeometry height="40" width="200" x="80" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="hc-telefonia" parent="hub-connections" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#06b6d4;strokeColor=#0891b2;fontSize=10;fontStyle=1;fontColor=#ffffff;swimlaneFillColor=#06b6d4;swimlaneLine=0;" value="TELEFONÍA&#xa;→ Cost tracking" vertex="1">
+          <mxGeometry height="40" width="150" x="300" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="hc-marketing" parent="hub-connections" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#ec4899;strokeColor=#db2777;fontSize=10;fontStyle=1;fontColor=#ffffff;swimlaneFillColor=#ec4899;swimlaneLine=0;" value="MARKETING&#xa;→ Campaign ROI" vertex="1">
+          <mxGeometry height="40" width="150" x="470" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="legend" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=12;fontStyle=1;fillColor=#f8fafc;fontColor=#334155;strokeColor=#94a3b8;strokeWidth=2;" value="" vertex="1">
+          <mxGeometry height="150" width="200" x="1820" y="1010" as="geometry" />
+        </mxCell>
+        <mxCell id="leg1" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=9;fontColor=#ea580c;" value="● Naranja: Dashboard Financiero" vertex="1">
+          <mxGeometry height="15" width="180" x="1830" y="1045" as="geometry" />
+        </mxCell>
+        <mxCell id="leg2" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=9;fontColor=#22c55e;" value="● Verde: Facturación" vertex="1">
+          <mxGeometry height="15" width="180" x="1830" y="1065" as="geometry" />
+        </mxCell>
+        <mxCell id="leg3" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=9;fontColor=#dc2626;" value="● Rojo: Gastos" vertex="1">
+          <mxGeometry height="15" width="180" x="1830" y="1085" as="geometry" />
+        </mxCell>
+        <mxCell id="leg4" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=9;fontColor=#0d9488;" value="● Teal: Contabilidad" vertex="1">
+          <mxGeometry height="15" width="180" x="1830" y="1105" as="geometry" />
+        </mxCell>
+        <mxCell id="leg5" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=9;fontColor=#7c3aed;" value="● Morado: Consolidación" vertex="1">
+          <mxGeometry height="15" width="180" x="1830" y="1125" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

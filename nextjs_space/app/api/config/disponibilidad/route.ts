@@ -9,43 +9,47 @@ export const GET = withTenantAuth(async (request, auth) => {
     const tenantId = auth.tenant!.id;
     const userId = auth.user!.id;
 
-    // Obtener timezone del usuario
     let timezone = auth.user!.timezone || 'America/Mexico_City';
 
-    // Obtener configuración de disponibilidad del tenant
     const config = await prisma.configuracion.findMany({
       where: {
         tenantId,
-        clave: { in: ['disponibilidad_horarios', 'disponibilidad_dias', 'timezone'] }
+        clave: { in: ['disponibilidad_horarios', 'timezone'] }
       }
     });
 
-    // Parsear horarios si existen
-    let horarios = {
-      timezone,
-      diasLaborales: ['lunes', 'martes', 'miercoles', 'jueves', 'viernes'],
-      horaInicio: '09:00',
-      horaFin: '18:00',
-      duracionMinima: 30,
-      intervalMinutes: 30,
-    };
+    let horarios = [
+      { diaSemana: 0, activo: false, bloques: [] },
+      { diaSemana: 1, activo: true, bloques: [{ inicio: '09:00', fin: '18:00' }] },
+      { diaSemana: 2, activo: true, bloques: [{ inicio: '09:00', fin: '18:00' }] },
+      { diaSemana: 3, activo: true, bloques: [{ inicio: '09:00', fin: '18:00' }] },
+      { diaSemana: 4, activo: true, bloques: [{ inicio: '09:00', fin: '18:00' }] },
+      { diaSemana: 5, activo: true, bloques: [{ inicio: '09:00', fin: '18:00' }] },
+      { diaSemana: 6, activo: false, bloques: [] },
+    ];
 
     const horariosConfig = config.find(c => c.clave === 'disponibilidad_horarios');
     if (horariosConfig?.valor) {
       try {
-        horarios = { ...horarios, ...JSON.parse(horariosConfig.valor) };
+        const parsed = JSON.parse(horariosConfig.valor);
+        if (parsed.dias && Array.isArray(parsed.dias)) {
+          horarios = parsed.dias.map((d: any) => ({
+            diaSemana: d.diaSemana,
+            activo: d.activo,
+            bloques: d.bloques || [{ inicio: '09:00', fin: '18:00' }]
+          }));
+        }
       } catch (e) {
         console.error('Error parsing horarios config:', e);
       }
     }
 
-    // Obtener timezone del usuario si está definido
     const tzConfig = config.find(c => c.clave === 'timezone');
     if (tzConfig?.valor) {
-      horarios.timezone = tzConfig.valor;
+      timezone = tzConfig.valor;
     }
 
-    return NextResponse.json(horarios);
+    return NextResponse.json({ horarios, timezone });
   } catch (error: any) {
     console.error('Error fetching disponibilidad config:', error);
     return NextResponse.json(
@@ -59,24 +63,24 @@ export const POST = withTenantAuth(async (request, auth) => {
   try {
     const tenantId = auth.tenant!.id;
     const body = await request.json();
-    const { timezone, diasLaborales, horaInicio, horaFin, duracionMinima, intervalMinutes } = body;
+    const { timezone, horarios } = body;
 
-    // Guardar configuración de horarios
-    const horariosData = JSON.stringify({
-      diasLaborales: diasLaborales || ['lunes', 'martes', 'miercoles', 'jueves', 'viernes'],
-      horaInicio: horaInicio || '09:00',
-      horaFin: horaFin || '18:00',
-      duracionMinima: duracionMinima || 30,
-      intervalMinutes: intervalMinutes || 30,
-    });
+    if (horarios) {
+      const horariosData = JSON.stringify({
+        dias: horarios.map((h: any) => ({
+          diaSemana: h.diaSemana,
+          activo: h.activo,
+          bloques: h.bloques || [{ inicio: '09:00', fin: '18:00' }]
+        }))
+      });
 
-    await prisma.configuracion.upsert({
-      where: { tenantId_clave: { tenantId, clave: 'disponibilidad_horarios' } },
-      update: { valor: horariosData },
-      create: { tenantId, clave: 'disponibilidad_horarios', valor: horariosData }
-    });
+      await prisma.configuracion.upsert({
+        where: { tenantId_clave: { tenantId, clave: 'disponibilidad_horarios' } },
+        update: { valor: horariosData },
+        create: { tenantId, clave: 'disponibilidad_horarios', valor: horariosData }
+      });
+    }
 
-    // Guardar timezone si se proporciona
     if (timezone) {
       await prisma.configuracion.upsert({
         where: { tenantId_clave: { tenantId, clave: 'timezone' } },
@@ -84,7 +88,6 @@ export const POST = withTenantAuth(async (request, auth) => {
         create: { tenantId, clave: 'timezone', valor: timezone }
       });
 
-      // Actualizar también en el perfil del usuario
       await prisma.user.update({
         where: { id: auth.user!.id },
         data: { timezone }

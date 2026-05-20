@@ -443,12 +443,14 @@ export const MCP_TOOLS: MCPTool[] = [
   },
   {
     name: 'get_upcoming_bookings',
-    description: 'Obtener próximas citas del tenant',
+    description: 'Obtener próximas citas del tenant. Si se proporciona date, devolverá las citas de ese día en específico.',
     inputSchema: {
       type: 'object',
       properties: {
         tenantId: { type: 'string', description: 'ID del tenant' },
         limit: { type: 'number', description: 'Número máximo de citas (default: 10)' },
+        date: { type: 'string', description: 'Fecha opcional (YYYY-MM-DD). Si se envía, filtra por este día completo interpretado en el timezone.' },
+        timezone: { type: 'string', description: 'Zona horaria (ej: Europe/Madrid) usada para interpretar la fecha dada.' },
       },
       required: ['tenantId'],
     },

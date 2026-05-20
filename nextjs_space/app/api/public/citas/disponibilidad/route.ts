@@ -107,16 +107,37 @@ export async function GET(request: NextRequest) {
 
     // Obtener horarios del día específico
     let rangosDelDia: RangoHorario[] = []
+    let usoHorarioUsuario = false
 
-    if (horariosAtencion && horariosAtencion[diaSemana]) {
-      const diaConfig = horariosAtencion[diaSemana]
-      if (diaConfig.activo && diaConfig.rangos && diaConfig.rangos.length > 0) {
-        rangosDelDia = diaConfig.rangos
+    if (usuarioId) {
+      const disponibilidadUsuario = await prisma.disponibilidad.findMany({
+        where: { userId: usuarioId, activo: true }
+      })
+      
+      if (disponibilidadUsuario.length > 0) {
+        usoHorarioUsuario = true
+        const diaIndex = { 'domingo': 0, 'lunes': 1, 'martes': 2, 'miercoles': 3, 'jueves': 4, 'viernes': 5, 'sabado': 6 }[diaSemana]
+        const userDia = disponibilidadUsuario.find(d => d.diaSemana === diaIndex)
+        
+        if (userDia && userDia.bloques) {
+          const bloquesArr = userDia.bloques as any[]
+          rangosDelDia = bloquesArr.map(b => ({ inicio: b.inicio, fin: b.fin }))
+        }
       }
-    } else {
-      // Default: Lunes a Viernes 9:00-18:00, fines de semana cerrado
-      if (['lunes', 'martes', 'miercoles', 'jueves', 'viernes'].includes(diaSemana)) {
-        rangosDelDia = [{ inicio: '09:00', fin: '18:00' }]
+    }
+
+    // Fallback a horario del tenant si el usuario no tiene horario personalizado
+    if (!usoHorarioUsuario) {
+      if (horariosAtencion && horariosAtencion[diaSemana]) {
+        const diaConfig = horariosAtencion[diaSemana]
+        if (diaConfig.activo && diaConfig.rangos && diaConfig.rangos.length > 0) {
+          rangosDelDia = diaConfig.rangos
+        }
+      } else {
+        // Default: Lunes a Viernes 9:00-18:00, fines de semana cerrado
+        if (['lunes', 'martes', 'miercoles', 'jueves', 'viernes'].includes(diaSemana)) {
+          rangosDelDia = [{ inicio: '09:00', fin: '18:00' }]
+        }
       }
     }
 
@@ -138,8 +159,6 @@ export async function GET(request: NextRequest) {
     const startOfDay = new Date(`${fecha}T00:00:00.000Z`)
     const endOfDay = new Date(`${fecha}T23:59:59.999Z`)
 
-    // Obtener todas las citas del día que ocupan el horario
-    // Excluir estados cancelados (case-insensitive)
     const citasDelDia = await prisma.cita.findMany({
       where: {
         tenantId: tenantId,
@@ -168,10 +187,24 @@ export async function GET(request: NextRequest) {
       }
     })
 
+    // Obtener ausencias del usuario si aplica
+    let ausenciasDelDia: any[] = []
+    if (usuarioId) {
+      ausenciasDelDia = await prisma.ausencia.findMany({
+        where: {
+          userId: usuarioId,
+          activo: true,
+          fechaInicio: { lte: endOfDay },
+          fechaFin: { gte: startOfDay }
+        }
+      })
+    }
+
     console.log(`[Disponibilidad] Fecha: ${fecha}, Citas activas encontradas:`, citasDelDia.length)
     citasDelDia.forEach(c => {
       console.log(`  - ${new Date(c.fechaHora).toISOString()} (${c.duracion}min) - Estado: ${c.estado}`)
     })
+    console.log(`[Disponibilidad] Ausencias encontradas:`, ausenciasDelDia.length)
 
     // Determinar la zona horaria para el cálculo de slots
     let timezone = 'America/Mexico_City' // Default
@@ -254,6 +287,19 @@ export async function GET(request: NextRequest) {
     const esSlotOcupado = (slot: Date): boolean => {
       const slotFin = new Date(slot.getTime() + (duracion + bufferMinutos) * 60000)
 
+      // Chequear ausencias
+      const hayAusencia = ausenciasDelDia.some(ausencia => {
+        const aInicio = new Date(ausencia.fechaInicio)
+        const aFin = new Date(ausencia.fechaFin)
+        return (
+          (slot >= aInicio && slot < aFin) ||
+          (slotFin > aInicio && slotFin <= aFin) ||
+          (slot <= aInicio && slotFin >= aFin)
+        )
+      })
+      if (hayAusencia) return true
+
+      // Chequear citas
       return citasDelDia.some(cita => {
         const citaInicio = new Date(cita.fechaHora)
         const citaFin = new Date(citaInicio.getTime() + ((cita.duracion || 60) + bufferMinutos) * 60000)

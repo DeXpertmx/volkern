@@ -18,6 +18,8 @@ import { createConversation } from './conversation-skills';
 import type { BookingCreatedEvent, BookingConfirmedEvent } from '@/lib/types/events';
 import { checkAvailability } from '@/lib/services/appointments';
 import { sendEmail } from '@/lib/ses-email';
+import { parseISO, startOfDay, endOfDay } from 'date-fns';
+import { zonedTimeToUtc } from 'date-fns-tz';
 
 // ============== TIPOS ==============
 
@@ -298,11 +300,11 @@ export async function getBookingsByLead(leadId: string, tenantId: string) {
  * Usa la timezone configurada en el perfil del usuario
  * Incluye citas de Volkern y de Google Calendar
  */
-export async function getUpcomingBookings(tenantId: string, limit = 10, userId?: string) {
-  // Obtener timezone del usuario
-  let timezone = 'America/Mexico_City';
+export async function getUpcomingBookings(tenantId: string, limit = 10, userId?: string, dateStr?: string, timezoneParam?: string) {
+  // Obtener timezone del usuario o parámetro
+  let timezone = timezoneParam || 'America/Mexico_City';
   
-  if (userId) {
+  if (userId && !timezoneParam) {
     const user = await prisma.user.findFirst({
       where: { id: userId, tenantId },
       select: { timezone: true }
@@ -317,11 +319,30 @@ export async function getUpcomingBookings(tenantId: string, limit = 10, userId?:
     return new Date(date.toLocaleString('en-US', { timeZone: timezone }));
   };
 
+  // Calcular rango de fechas
+  let dateFilter: any = { gte: new Date() };
+
+  if (dateStr) {
+    try {
+      const localDate = parseISO(dateStr);
+      const startLocal = startOfDay(localDate);
+      const endLocal = endOfDay(localDate);
+      
+      const startUTC = zonedTimeToUtc(startLocal, timezone);
+      const endUTC = zonedTimeToUtc(endLocal, timezone);
+      
+      dateFilter = { gte: startUTC, lte: endUTC };
+    } catch (e) {
+      console.warn('Error parseando dateStr:', dateStr, e);
+      dateFilter = { gte: new Date() }; // Fallback a hoy si es inválido
+    }
+  }
+
   // Obtener citas de Volkern
   const citasVolkern = await prisma.cita.findMany({
     where: {
       tenantId,
-      fechaHora: { gte: new Date() },
+      fechaHora: dateFilter,
       estado: { in: ['pendiente', 'confirmada'] },
     },
     orderBy: { fechaHora: 'asc' },
@@ -347,13 +368,19 @@ export async function getUpcomingBookings(tenantId: string, limit = 10, userId?:
         oauth2.setCredentials({ access_token: gcalIntegration.accessToken });
         
         const calendar = google.calendar({ version: 'v3', auth: oauth2 });
-        const now = new Date();
-        const endDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 días
         
+        let timeMinStr = new Date().toISOString();
+        let timeMaxStr = new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 días
+        
+        if (dateStr && dateFilter.gte && dateFilter.lte) {
+          timeMinStr = dateFilter.gte.toISOString();
+          timeMaxStr = dateFilter.lte.toISOString();
+        }
+
         const response = await calendar.events.list({
           calendarId: 'primary',
-          timeMin: now.toISOString(),
-          timeMax: endDate.toISOString(),
+          timeMin: timeMinStr,
+          timeMax: timeMaxStr,
           singleEvents: true,
           orderBy: 'startTime',
           maxResults: limit,
