@@ -5,6 +5,8 @@ import { ProductGallery } from '@/components/tienda/ProductGallery';
 import { VariantSelector } from '@/components/tienda/VariantSelector';
 import { ProductReviews } from '@/components/tienda/ProductReviews';
 import { ProductCard } from '@/components/tienda/ProductCard';
+import { AddToCartButton } from '@/components/tienda/AddToCartButton';
+import { CartDrawer } from '@/components/tienda/CartDrawer';
 
 interface ProductData {
   id: string;
@@ -174,11 +176,9 @@ export default async function ProductDetailPage({
             </div>
           )}
 
-          {/* Add to cart button */}
-          <div className="mt-8 flex gap-4">
-            <button className="flex-1 bg-primary text-white py-3 px-6 rounded-xl font-semibold hover:bg-primary/90 transition-colors">
-              Agregar al carrito
-            </button>
+          {/* Add to cart */}
+          <div className="mt-8">
+            <AddToCartButton product={product} tenant={params.tenant} />
           </div>
 
           {/* Tags */}
@@ -218,6 +218,8 @@ export default async function ProductDetailPage({
           </div>
         </div>
       )}
+
+      <CartDrawer tenant={params.tenant} />
     </div>
   );
 }

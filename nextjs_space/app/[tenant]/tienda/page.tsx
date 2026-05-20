@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { Suspense } from 'react';
 import { ProductFilters } from '@/components/tienda/ProductFilters';
 import { ProductGrid } from '@/components/tienda/ProductGrid';
+import { CartIcon } from '@/components/tienda/CartIcon';
 
 export default async function TiendaPage({
   params,
@@ -13,9 +14,12 @@ export default async function TiendaPage({
 }) {
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Tienda</h1>
-        <p className="text-gray-600 mt-1">Explora nuestros productos y servicios</p>
+      <div className="mb-8 flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Tienda</h1>
+          <p className="text-gray-600 mt-1">Explora nuestros productos y servicios</p>
+        </div>
+        <CartIcon tenant={params.tenant} />
       </div>
 
       <div className="flex flex-col lg:flex-row gap-8">

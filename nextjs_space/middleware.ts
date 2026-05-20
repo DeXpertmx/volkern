@@ -86,7 +86,8 @@ export async function middleware(request: NextRequest) {
       pathname.startsWith('/api/tenant/modules') ||
       pathname.startsWith('/api/notifications') ||
       pathname.startsWith('/api/guide') ||
-      pathname.startsWith('/api/skills')
+      pathname.startsWith('/api/skills') ||
+      pathname.startsWith('/api/cart')
     ) {
       // Set headers for downstream even for public API routes
       const res = NextResponse.next()
