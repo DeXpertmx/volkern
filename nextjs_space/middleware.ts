@@ -13,7 +13,7 @@ function getSubdomain(host: string): string | null {
   return null
 }
 
-const PUBLIC = new Set(['/', '/pricing', '/features', '/about', '/contact', '/login', '/signup'])
+const PUBLIC = new Set(['/', '/pricing', '/features', '/about', '/contact', '/login', '/signup', '/booking'])
 
 import { getToken } from 'next-auth/jwt'
 
@@ -42,7 +42,14 @@ export async function middleware(request: NextRequest) {
   }
 
   // Public paths - allow through
-  if (PUBLIC.has(pathname) || pathname.startsWith('/public/') || pathname.startsWith('/auth/')) {
+  if (
+    PUBLIC.has(pathname) || 
+    pathname.startsWith('/public/') || 
+    pathname.startsWith('/auth/') || 
+    pathname.startsWith('/booking/') || 
+    pathname.startsWith('/embed/') ||
+    pathname.startsWith('/tarjeta/')
+  ) {
     return NextResponse.next()
   }
 
