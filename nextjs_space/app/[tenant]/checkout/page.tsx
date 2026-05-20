@@ -41,6 +41,46 @@ export default function CheckoutPage({ tenant }: CheckoutPageProps) {
   });
 
   const [validatingCoupon, setValidatingCoupon] = useState(false);
+  const [shippingOptions, setShippingOptions] = useState<any[]>([]);
+  const [shippingLoading, setShippingLoading] = useState(false);
+  const [shippingCost, setShippingCost] = useState(0);
+
+  // Calculate shipping when address changes
+  const calculateShippingOptions = async () => {
+    if (!addressForm.codigoPostal || !addressForm.pais) return;
+    
+    setShippingLoading(true);
+    try {
+      // Calculate total weight and dimensions from cart items
+      const res = await fetch('/api/shipping/calculate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          destination: {
+            postalCode: addressForm.codigoPostal,
+            country: addressForm.pais,
+            state: addressForm.estado,
+          },
+          package: {
+            weight: items.reduce((sum, item) => sum + (item.pesoUnitario || 0.5) * item.cantidad, 0),
+            length: 30,
+            width: 20,
+            height: 15,
+          },
+          items: items.map(i => ({ quantity: i.cantidad })),
+        }),
+      });
+      const data = await res.json();
+      setShippingOptions(data.options || []);
+      if (data.options?.length > 0) {
+        setShippingCost(data.options[0].cost);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setShippingLoading(false);
+    }
+  };
 
   if (items.length === 0 && step < 4) {
     return (
@@ -287,34 +327,55 @@ export default function CheckoutPage({ tenant }: CheckoutPageProps) {
             <div className="bg-white rounded-xl border p-6 space-y-4">
               <h2 className="text-xl font-semibold text-gray-900">Método de envío</h2>
 
-              <div className="space-y-3">
-                {[
-                  { id: 'standard', name: 'Estándar (3-5 días)', price: 'Gratis' },
-                  { id: 'express', name: 'Express (1-2 días)', price: '+9.99€' },
-                ].map((method) => (
-                  <label
-                    key={method.id}
-                    className={`flex items-center justify-between p-4 border rounded-lg cursor-pointer transition-colors ${
-                      shippingMethod === method.id
-                        ? 'border-primary bg-primary/5'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="radio"
-                        name="shipping"
-                        value={method.id}
-                        checked={shippingMethod === method.id}
-                        onChange={() => setShippingMethod(method.id)}
-                        className="w-4 h-4 text-primary"
-                      />
-                      <span className="font-medium">{method.name}</span>
-                    </div>
-                    <span className="text-gray-600">{method.price}</span>
-                  </label>
-                ))}
-              </div>
+              {shippingLoading ? (
+                <div className="text-center py-8">
+                  <svg className="animate-spin w-8 h-8 mx-auto text-primary" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  <p className="text-gray-500 mt-2">Calculando opciones de envío...</p>
+                </div>
+              ) : shippingOptions.length > 0 ? (
+                <div className="space-y-3">
+                  {shippingOptions.map((option, idx) => (
+                    <label
+                      key={idx}
+                      className={`flex items-center justify-between p-4 border rounded-lg cursor-pointer transition-colors ${
+                        shippingMethod === option.service.toLowerCase()
+                          ? 'border-primary bg-primary/5'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="radio"
+                          name="shipping"
+                          value={option.service.toLowerCase()}
+                          checked={shippingMethod === option.service.toLowerCase()}
+                          onChange={() => {
+                            setShippingMethod(option.service.toLowerCase());
+                            setShippingCost(option.cost);
+                          }}
+                          className="w-4 h-4 text-primary"
+                        />
+                        <div>
+                          <span className="font-medium">{option.carrier} - {option.service}</span>
+                          <p className="text-sm text-gray-500">
+                            {option.estimatedDays} {option.estimatedDays === 1 ? 'día' : 'días'} · Tracking disponible
+                          </p>
+                        </div>
+                      </div>
+                      <span className="text-lg font-bold text-gray-900">
+                        {currencySymbol}{option.cost.toFixed(2)}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <p>Ingresa tu dirección para calcular el envío</p>
+                </div>
+              )}
 
               <div className="flex gap-3">
                 <button
@@ -430,6 +491,10 @@ export default function CheckoutPage({ tenant }: CheckoutPageProps) {
                 <span className="text-gray-600">Subtotal</span>
                 <span>{currencySymbol}{subtotal.toFixed(2)}</span>
               </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Envío</span>
+                <span>{currencySymbol}{shippingCost.toFixed(2)}</span>
+              </div>
               {couponDiscount > 0 && (
                 <div className="flex justify-between text-sm text-green-600">
                   <span>Descuento</span>
@@ -438,7 +503,7 @@ export default function CheckoutPage({ tenant }: CheckoutPageProps) {
               )}
               <div className="flex justify-between text-lg font-bold border-t pt-2">
                 <span>Total</span>
-                <span>{currencySymbol}{(subtotal - couponDiscount).toFixed(2)}</span>
+                <span>{currencySymbol}{(subtotal - couponDiscount + shippingCost).toFixed(2)}</span>
               </div>
             </div>
           </div>
