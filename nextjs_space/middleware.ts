@@ -49,7 +49,9 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/booking/') || 
     pathname.startsWith('/embed/') ||
     pathname.startsWith('/tarjeta/') ||
-    /\/[^/]+\/tienda(\/.*)?$/.test(pathname)  // /[tenant]/tienda/* is public
+    /\/[^/]+\/tienda(\/.*)?$/.test(pathname) ||  // /[tenant]/tienda/* is public
+    /\/[^/]+\/checkout(\/.*)?$/.test(pathname) ||  // /[tenant]/checkout is public
+    /\/[^/]+\/orden(\/.*)?$/.test(pathname)  // /[tenant]/orden/* is public
   ) {
     return NextResponse.next()
   }
