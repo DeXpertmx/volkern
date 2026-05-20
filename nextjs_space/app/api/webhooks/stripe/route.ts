@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma, globalPrisma, getTenantDb, dbContext } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
 import { createVerifactuInvoice } from "@/lib/ecommerce/verifactu-service";
+import { sendOrderConfirmationEmail } from "@/lib/ecommerce/notifications/email-service";
 
 export async function POST(req: NextRequest) {
   const sig = req.headers.get('stripe-signature');
@@ -89,6 +90,41 @@ export async function POST(req: NextRequest) {
                   }
                 }
               });
+            }
+          }
+
+          // Send confirmation email
+          const sessionEmail = session.customer_details?.email || session.customer_email;
+          if (sessionEmail && orden.shippingAddress) {
+            try {
+              const invoice = await prisma.invoice.findFirst({
+                where: { tenantId, metadata: { path: ['orderId'], equals: orderId } },
+                select: { numero: true }
+              });
+
+              await sendOrderConfirmationEmail({
+                orderNumber: orden.numero,
+                customerName: orden.shippingAddress.nombre,
+                customerEmail: sessionEmail,
+                total: orden.total,
+                currency: orden.moneda,
+                items: orden.items.map((item) => ({
+                  concepto: item.concepto,
+                  cantidad: item.cantidad,
+                  precioUnitario: item.precioUnitario,
+                  total: item.total,
+                })),
+                shippingAddress: {
+                  nombre: orden.shippingAddress.nombre,
+                  linea1: orden.shippingAddress.linea1,
+                  ciudad: orden.shippingAddress.ciudad,
+                  codigoPostal: orden.shippingAddress.codigoPostal,
+                  pais: orden.shippingAddress.pais,
+                },
+                invoiceNumber: invoice?.numero,
+              });
+            } catch (e) {
+              console.error('[Webhook] Error sending confirmation email:', e);
             }
           }
         });
