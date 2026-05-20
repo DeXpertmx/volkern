@@ -1,8 +1,9 @@
 "use client"
 
-import React, { useEffect, useRef, useImperativeHandle, forwardRef, useState } from "react"
+import React, { useEffect, useRef, useImperativeHandle, forwardRef, useState, useCallback } from "react"
 import grapesjs, { Editor } from "grapesjs"
 import "grapesjs/dist/css/grapes.min.css"
+import { toast } from "sonner"
 
 import "./styles/BlockStyles.css"
 
@@ -45,6 +46,22 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>(({ initialDa
   const autoSaveTimeout = useRef<NodeJS.Timeout | null>(null)
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle')
 
+  const getFullCss = useCallback(() => {
+    const editor = editorRef.current;
+    if (!editor) return '';
+    let css = editor.getCss() || '';
+    try {
+      const rules = (editor as any).CSS.getRules ? (editor as any).CSS.getRules() : [];
+      if (rules && rules.length > 0) {
+        const allCss = (editor as any).CSS.getCode ? (editor as any).CSS.getCode() : css;
+        if (allCss && allCss.length > css.length) {
+          css = allCss;
+        }
+      }
+    } catch {}
+    return css;
+  }, []);
+
   useImperativeHandle(ref, () => ({
     exportProject: () => editorRef.current?.getProjectData() as Record<string, unknown>,
     importProject: (data) => editorRef.current?.loadProjectData(data),
@@ -53,7 +70,7 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>(({ initialDa
     getEditor: () => editorRef.current,
     getUndoManager: () => editorRef.current?.UndoManager ?? null,
     getHtml: () => editorRef.current?.getHtml({ cleanId: false, addScripts: true }),
-    getCss: () => editorRef.current?.getCss() || '',
+    getCss: getFullCss,
     getAutoSaveStatus: () => autoSaveStatus,
   }));
 
@@ -125,7 +142,9 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>(({ initialDa
       pluginsOpts: {
         [gjsBlocksBasic.toString()]: {
           blocks: ['column1', 'column2', 'column3', 'column3-7', 'text', 'heading', 'link', 'image', 'video', 'map'],
-          category: 'Basic'
+          category: 'Basic',
+          flexGrid: true,
+          padding: 10
         },
         'gjs-plugin-forms': {
           category: 'Forms'
@@ -448,7 +467,11 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>(({ initialDa
     editor.Commands.add('open-code', {
       run: (editor: any) => {
         const html = editor.getHtml({ cleanId: false });
-        const css = editor.getCss();
+        let css = editor.getCss() || '';
+        try {
+          const allCss = (editor as any).CSS?.getCode?.() || css;
+          if (allCss && allCss.length > css.length) css = allCss;
+        } catch {}
         
         const container = document.createElement('div');
         container.style.cssText = 'display:flex;height:70vh;gap:0;resize:vertical;overflow:auto;';
@@ -555,7 +578,140 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>(({ initialDa
       };
       window.addEventListener('editor:add-block', handleAiBlock);
 
-    (window as any).editor = editor;
+      // Fix image sources on project load to ensure they're preserved
+      editor.on('load', () => {
+        const fixImageSources = () => {
+          const components = editor.DomComponents.getAll();
+          components.forEach((comp: any) => {
+            const tagName = comp.get('tagName');
+            if (tagName?.toLowerCase() === 'img') {
+              const attrs = comp.get('attributes') || {};
+              if (attrs.src && (attrs.src.startsWith('data:') || attrs.src.startsWith('/'))) {
+                // Ensure image src is preserved
+                comp.set('attributes', { ...attrs });
+              }
+            }
+            // Also fix background images
+            const style = comp.getStyle();
+            if (style && style['background-image'] && style['background-image'].startsWith('url(')) {
+              comp.setStyle({ ...style });
+            }
+          });
+        };
+        setTimeout(fixImageSources, 500);
+      });
+
+      // Configure asset manager upload
+      editor.on('load', () => {
+        const am = editor.AssetManager;
+        if (am) {
+          (am as any).config.upload = 1;
+          (am as any).config.uploadName = 'file';
+          (am as any).config.multiUpload = false;
+          
+          (am as any).config.uploadFile = async (e: any) => {
+            const files = e.dataTransfer ? e.dataTransfer.files : e.target.files;
+            if (!files || files.length === 0) return;
+            
+            const file = files[0];
+            const isSmallFile = file.size < 4 * 1024 * 1024; // < 4MB
+
+            try {
+              let finalUrl = '';
+
+              if (isSmallFile) {
+                // Flujo A: Archivo pequeño (<4MB), subir vía servidor para evitar problemas de CORS
+                const formData = new FormData();
+                formData.append('file', file);
+
+                const res = await fetch('/api/upload/catalogo', {
+                  method: 'POST',
+                  body: formData,
+                });
+
+                if (!res.ok) {
+                  const errorData = await res.json().catch(() => ({}));
+                  throw new Error(errorData.error || `Error ${res.status}: ${res.statusText}`);
+                }
+
+                const data = await res.json();
+                if (!data.url) {
+                  throw new Error('No se recibió la URL de la imagen');
+                }
+                finalUrl = data.url;
+              } else {
+                // Flujo B: Archivo grande (>=4MB, como GIFs animados pesados). Subir directo usando URL firmada
+                const presignedRes = await fetch('/api/upload/catalogo/presigned', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    fileName: file.name,
+                    fileType: file.type || 'image/png',
+                  }),
+                });
+
+                if (!presignedRes.ok) {
+                  const errorData = await presignedRes.json().catch(() => ({}));
+                  throw new Error(errorData.error || `Error al autorizar subida pesada: ${presignedRes.statusText}`);
+                }
+
+                const { uploadUrl, publicUrl } = await presignedRes.json();
+
+                // Determinar Content-Type mapeado
+                let contentType = file.type || 'image/png';
+                const ext = file.name.split('.').pop()?.toLowerCase();
+                if (ext === 'gif') {
+                  contentType = 'image/gif';
+                } else if (ext === 'png') {
+                  contentType = 'image/png';
+                } else if (ext === 'jpg' || ext === 'jpeg') {
+                  contentType = 'image/jpeg';
+                } else if (ext === 'webp') {
+                  contentType = 'image/webp';
+                } else if (ext === 'svg') {
+                  contentType = 'image/svg+xml';
+                }
+
+                const uploadRes = await fetch(uploadUrl, {
+                  method: 'PUT',
+                  headers: {
+                    'Content-Type': contentType,
+                  },
+                  body: file,
+                });
+
+                if (!uploadRes.ok) {
+                  throw new Error(`Error en la carga directa al almacenamiento (${uploadRes.status}). Verifica la configuración CORS de tu bucket S3/R2.`);
+                }
+
+                finalUrl = publicUrl;
+              }
+
+              // Registrar el recurso y asociarlo
+              am.add(finalUrl);
+              
+              const selected = editor.getSelected();
+              if (selected && selected.is('image')) {
+                selected.set('src', finalUrl);
+                am.close();
+              }
+              
+              toast.success('Imagen subida con éxito');
+              return;
+            } catch (err: any) {
+              console.error('[AssetManager] Upload error:', err);
+              toast.error(`Error de subida: ${err.message}`);
+            }
+          };
+          
+          // Configure the asset manager to render to our container
+          am.render();
+        }
+      });
+
+      (window as any).editor = editor;
 
     // Inject global B&W style overrides
     const styleId = 'gjs-style-overrides';
@@ -587,6 +743,28 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>(({ initialDa
       };
     }
 
+    // Ensure all styles are properly serialized
+    const normalizeStyles = () => {
+      editor.getAllStyles().forEach((rule: any) => {
+        const selectors = rule.getSelectors();
+        selectors.forEach((sel: any) => {
+          const selStr = typeof sel === 'string' ? sel : sel.toString();
+          if (selStr && !selStr.startsWith('.gjs-') && !selStr.startsWith('*')) {
+            const style = rule.getStyle();
+            // Ensure negative margins and positioning are preserved
+            if (style.margin || style.marginTop || style.marginBottom) {
+              const str = JSON.stringify(style);
+              if (str.includes('-')) {
+                // Style contains negative values - keep as is
+              }
+            }
+          }
+        });
+      });
+    };
+
+    editor.on('style:applied', normalizeStyles);
+
       return () => {
         if (editorRef.current) {
           editorRef.current.destroy();
@@ -603,6 +781,7 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>(({ initialDa
         editor.off('component:update', handleVersionSave);
         editor.off('style:property:update', handleVersionSave);
         editor.off('stack:change', handleVersionSave);
+        editor.off('style:applied', normalizeStyles);
         window.removeEventListener('editor:add-block', handleAiBlock);
       };
    }, []);

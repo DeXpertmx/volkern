@@ -796,7 +796,7 @@ export async function syncFromGoogleToVolkern(userId: string, forceFullSync: boo
             const duracion = Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60));
 
             // Buscar o crear un lead para esta cita
-            let leadId: string;
+            let leadId: string | undefined = undefined;
             const tenantId = integration.tenantId;
 
             if (event.attendees && event.attendees.length > 0 && event.attendees[0].email) {
@@ -826,25 +826,13 @@ export async function syncFromGoogleToVolkern(userId: string, forceFullSync: boo
               }
 
               leadId = existingLead.id;
-            } else {
-              // Sin attendees, crear un lead genérico
-              const genericLead = await prisma.lead.create({
-                data: {
-                  tenantId,
-                  nombre: 'Contacto desde Google Calendar',
-                  email: `calendar-${Date.now()}@volkern.temp`,
-                  fuente: 'Google Calendar',
-                  estado: 'Nuevo',
-                },
-              });
-              leadId = genericLead.id;
             }
 
             const newCita = await prisma.cita.create({
               data: {
                 tenantId,
                 usuarioAsignadoId: userId,
-                leadId,
+                ...(leadId && { leadId }),
                 fechaHora: startDate,
                 duracion,
                 titulo: event.summary || 'Cita desde Google Calendar',

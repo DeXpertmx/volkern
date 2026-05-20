@@ -74,12 +74,14 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
             </div>
           </div>
 
-          <div id="gjs-tm-container" className={`grapesjs-traits-container p-4 ${activePropertyTab === "traits" ? "block" : "hidden"}`}>
+          <div className={`${activePropertyTab === "traits" ? "block" : "hidden"}`}>
+            <div id="gjs-tm-container" className={`grapesjs-traits-container p-4 ${activePropertyTab === "traits" ? "block" : "hidden"}`}>
             {!selectedComponentInfo && (
               <div className="text-center py-16 text-gray-400 dark:text-gray-500">
                 <Settings className="mx-auto mb-4 opacity-20" size={48} />
               </div>
             )}
+          </div>
           </div>
 
           <div className={`${activePropertyTab === "classes" ? "block" : "hidden"}`}>

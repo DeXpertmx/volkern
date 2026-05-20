@@ -1,0 +1,403 @@
+<mxfile host="Electron" agent="minimax-m2.5-free">
+  <diagram name="Arquitectura BackOffice Volkern" id="volkern-backoffice" align="center">
+    <mxGraphModel dx="1178" dy="733" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2400" pageHeight="1800" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=24;fontStyle=1;fontColor=#1e293b;" value="ARQUITECTURA BACKOFFICE - VOLKERN CRM" vertex="1">
+          <mxGeometry height="50" width="500" x="980" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="admin_group" parent="1" style="swimlane;horizontal=0;whiteSpace=wrap;html=1;fillColor=#1e293b;strokeColor=#0f172a;strokeWidth=3;fontSize=14;fontStyle=1;fontColor=#f8fafc;swimlaneFillColor=#1e293b;swimlaneLine=0;" value="ADMIN BACKOFFICE (/admin/)" vertex="1">
+          <mxGeometry height="600" width="720" x="390" y="230" as="geometry" />
+        </mxCell>
+        <mxCell id="admin-global" parent="admin_group" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#334155;strokeColor=#475569;fontSize=11;fontStyle=1;fontColor=#f1f5f9;swimlaneFillColor=#334155;swimlaneLine=0;" value="GLOBAL PULSE" vertex="1">
+          <mxGeometry height="100" width="680" x="20" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="admin-pulse" parent="admin-global" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#0f172a;fontColor=#f8fafc;strokeColor=#475569;fontSize=10;align=center;" value="/admin&#xa;(Dashboard)" vertex="1">
+          <mxGeometry height="50" width="80" x="10" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="admin-health" parent="admin-global" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#0f172a;fontColor=#22c55e;strokeColor=#475569;fontSize=9;align=center;" value="Health&#xa;Monitoring" vertex="1">
+          <mxGeometry height="50" width="80" x="100" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="admin-nodes" parent="admin-global" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#0f172a;fontColor=#f8fafc;strokeColor=#475569;fontSize=9;align=center;" value="Node&#xa;Status" vertex="1">
+          <mxGeometry height="50" width="80" x="190" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="admin-logs" parent="admin-global" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#0f172a;fontColor=#f8fafc;strokeColor=#475569;fontSize=9;align=center;" value="Operational&#xa;Logs" vertex="1">
+          <mxGeometry height="50" width="80" x="280" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="admin-metrics" parent="admin-global" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#0f172a;fontColor=#f8fafc;strokeColor=#475569;fontSize=9;align=center;" value="System&#xa;Metrics" vertex="1">
+          <mxGeometry height="50" width="80" x="370" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="admin-saas" parent="admin_group" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#3b82f6;strokeColor=#2563eb;fontSize=11;fontStyle=1;fontColor=#ffffff;swimlaneFillColor=#3b82f6;swimlaneLine=0;" value="SAAS MANAGEMENT" vertex="1">
+          <mxGeometry height="120" width="680" x="20" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="admin-saas-pg" parent="admin-saas" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dbeafe;fontColor=#1e40af;strokeColor=#93c5fd;fontSize=10;align=center;" value="/admin/saas" vertex="1">
+          <mxGeometry height="50" width="80" x="10" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="admin-mrr" parent="admin-saas" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#1e40af;strokeColor=#93c5fd;fontSize=9;align=center;" value="MRR&#xa;Metrics" vertex="1">
+          <mxGeometry height="50" width="80" x="100" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="admin-churn" parent="admin-saas" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#1e40af;strokeColor=#93c5fd;fontSize=9;align=center;" value="/admin/saas/churn&#xa;(Churn Analytics)" vertex="1">
+          <mxGeometry height="50" width="100" x="190" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="admin-revenue" parent="admin-saas" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#1e40af;strokeColor=#93c5fd;fontSize=9;align=center;" value="/admin/saas/revenue&#xa;(Revenue)" vertex="1">
+          <mxGeometry height="50" width="100" x="300" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="admin-billing" parent="admin-saas" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#1e40af;strokeColor=#93c5fd;fontSize=9;align=center;" value="/admin/billing&#xa;(Billing Analytics)" vertex="1">
+          <mxGeometry height="50" width="100" x="410" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="admin-ltv" parent="admin-saas" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#1e40af;strokeColor=#93c5fd;fontSize=9;align=center;" value="LTV:CAC&#xa;Ratio" vertex="1">
+          <mxGeometry height="50" width="80" x="520" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="admin-tenants" parent="admin_group" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#8b5cf6;strokeColor=#7c3aed;fontSize=11;fontStyle=1;fontColor=#ffffff;swimlaneFillColor=#8b5cf6;swimlaneLine=0;" value="TENANT MANAGEMENT" vertex="1">
+          <mxGeometry height="100" width="680" x="20" y="290" as="geometry" />
+        </mxCell>
+        <mxCell id="admin-tenant-list" parent="admin-tenants" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e9d5ff;fontColor=#6b21a8;strokeColor=#d8b4fe;fontSize=9;align=center;" value="/admin/saas/tenants&#xa;(List)" vertex="1">
+          <mxGeometry height="50" width="90" x="10" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="admin-tenant-detail" parent="admin-tenants" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#6b21a8;strokeColor=#d8b4fe;fontSize=9;align=center;" value="/admin/saas/tenants/[id]&#xa;(Detail)" vertex="1">
+          <mxGeometry height="50" width="90" x="110" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="admin-create" parent="admin-tenants" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#6b21a8;strokeColor=#d8b4fe;fontSize=9;align=center;" value="Create&#xa;Tenant" vertex="1">
+          <mxGeometry height="50" width="80" x="210" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="admin-suspend" parent="admin-tenants" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#6b21a8;strokeColor=#d8b4fe;fontSize=9;align=center;" value="Suspend/&#xa;Reactivate" vertex="1">
+          <mxGeometry height="50" width="80" x="300" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="admin-impersonate" parent="admin-tenants" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fef3c7;fontColor=#92400e;strokeColor=#fde68a;fontSize=9;align=center;" value="Impersonate&#xa;User" vertex="1">
+          <mxGeometry height="50" width="80" x="390" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="admin-trial" parent="admin-tenants" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#6b21a8;strokeColor=#d8b4fe;fontSize=9;align=center;" value="Extend&#xa;Trial" vertex="1">
+          <mxGeometry height="50" width="80" x="480" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="admin-export" parent="admin-tenants" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#6b21a8;strokeColor=#d8b4fe;fontSize=9;align=center;" value="Export&#xa;Data" vertex="1">
+          <mxGeometry height="50" width="80" x="570" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="admin-config" parent="admin_group" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#64748b;strokeColor=#475569;fontSize=11;fontStyle=1;fontColor=#ffffff;swimlaneFillColor=#64748b;swimlaneLine=0;" value="PLATFORM CONFIG" vertex="1">
+          <mxGeometry height="80" width="680" x="20" y="410" as="geometry" />
+        </mxCell>
+        <mxCell id="admin-planes" parent="admin-config" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f1f5f9;fontColor=#334155;strokeColor=#cbd5e1;fontSize=9;align=center;" value="/admin/planes&#xa;(Plans)" vertex="1">
+          <mxGeometry height="40" width="90" x="10" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="admin-settings" parent="admin-config" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f1f5f9;fontColor=#334155;strokeColor=#cbd5e1;fontSize=9;align=center;" value="/admin/settings&#xa;(Config)" vertex="1">
+          <mxGeometry height="40" width="90" x="110" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="admin-coupons" parent="admin-config" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f1f5f9;fontColor=#334155;strokeColor=#cbd5e1;fontSize=9;align=center;" value="/admin/coupons&#xa;(Coupons)" vertex="1">
+          <mxGeometry height="40" width="90" x="210" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="admin-backup" parent="admin-config" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f1f5f9;fontColor=#334155;strokeColor=#cbd5e1;fontSize=9;align=center;" value="Backup&#xa;Management" vertex="1">
+          <mxGeometry height="40" width="90" x="310" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="admin-limits" parent="admin-config" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f1f5f9;fontColor=#334155;strokeColor=#cbd5e1;fontSize=9;align=center;" value="Platform&#xa;Limits" vertex="1">
+          <mxGeometry height="40" width="90" x="410" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="admin-maintenance" parent="admin-config" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f1f5f9;fontColor=#334155;strokeColor=#cbd5e1;fontSize=9;align=center;" value="Maintenance&#xa;Mode" vertex="1">
+          <mxGeometry height="40" width="90" x="510" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="admin-security" parent="admin_group" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#dc2626;strokeColor=#b91c1c;fontSize=11;fontStyle=1;fontColor=#ffffff;swimlaneFillColor=#dc2626;swimlaneLine=0;" value="SECURITY &amp; AUDIT" vertex="1">
+          <mxGeometry height="70" width="680" x="20" y="510" as="geometry" />
+        </mxCell>
+        <mxCell id="admin-seg" parent="admin-security" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fecaca;fontColor=#991b1b;strokeColor=#fca5a5;fontSize=9;align=center;" value="/admin/seguridad&#xa;(Security)" vertex="1">
+          <mxGeometry height="40" width="100" x="10" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="admin-audit" parent="admin-security" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fecaca;fontColor=#991b1b;strokeColor=#fca5a5;fontSize=9;align=center;" value="/admin/auditoria&#xa;(AI Audit)" vertex="1">
+          <mxGeometry height="40" width="100" x="120" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="admin-fraud" parent="admin-security" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fecaca;fontColor=#991b1b;strokeColor=#fca5a5;fontSize=9;align=center;" value="Fraud&#xa;Detection" vertex="1">
+          <mxGeometry height="40" width="100" x="230" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="admin-anomaly" parent="admin-security" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fecaca;fontColor=#991b1b;strokeColor=#fca5a5;fontSize=9;align=center;" value="Anomaly&#xa;Tracking" vertex="1">
+          <mxGeometry height="40" width="100" x="340" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="admin-compliance" parent="admin-security" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fecaca;fontColor=#991b1b;strokeColor=#fca5a5;fontSize=9;align=center;" value="Compliance&#xa;Certificates" vertex="1">
+          <mxGeometry height="40" width="100" x="450" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="admin-blockchain" parent="admin-security" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fecaca;fontColor=#991b1b;strokeColor=#fca5a5;fontSize=9;align=center;" value="Blockchain&#xa;Audit Trail" vertex="1">
+          <mxGeometry height="40" width="100" x="560" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="agency_group" parent="1" style="swimlane;horizontal=0;whiteSpace=wrap;html=1;fillColor=#0d9488;strokeColor=#0f766e;strokeWidth=3;fontSize=14;fontStyle=1;fontColor=#ffffff;swimlaneFillColor=#0d9488;swimlaneLine=0;" value="AGENCY MODULE (/dashboard/agencia/)" vertex="1">
+          <mxGeometry height="400" width="500" x="1425" y="280" as="geometry" />
+        </mxCell>
+        <mxCell id="agency-main" parent="agency_group" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#115e59;strokeColor=#134e4a;fontSize=11;fontStyle=1;fontColor=#f0fdfa;swimlaneFillColor=#115e59;swimlaneLine=0;" value="AGENCY HUB" vertex="1">
+          <mxGeometry height="100" width="460" x="20" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="agency-hub" parent="agency-main" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ccfbf1;fontColor=#134e4a;strokeColor=#99f6e4;fontSize=10;align=center;" value="/dashboard/agencia" vertex="1">
+          <mxGeometry height="50" width="120" x="10" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="agency-slots" parent="agency-main" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#134e4a;strokeColor=#99f6e4;fontSize=9;align=center;" value="/dashboard/agencia/slots&#xa;(Slots)" vertex="1">
+          <mxGeometry height="50" width="100" x="140" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="agency-usage" parent="agency-main" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#134e4a;strokeColor=#99f6e4;fontSize=9;align=center;" value="/dashboard/agencia/usage&#xa;(Usage)" vertex="1">
+          <mxGeometry height="50" width="100" x="250" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="agency-branding" parent="agency-main" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#134e4a;strokeColor=#99f6e4;fontSize=9;align=center;" value="/dashboard/agencia/branding&#xa;(White Label)" vertex="1">
+          <mxGeometry height="50" width="90" x="360" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="agency-provision" parent="agency_group" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#14b8a6;strokeColor=#0d9488;fontSize=11;fontStyle=1;fontColor=#ffffff;swimlaneFillColor=#14b8a6;swimlaneLine=0;" value="SLOT PROVISIONING" vertex="1">
+          <mxGeometry height="100" width="460" x="20" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="agency-create" parent="agency-provision" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#0f766e;strokeColor=#5eead4;fontSize=9;align=center;" value="Create&#xa;Slot" vertex="1">
+          <mxGeometry height="50" width="80" x="10" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="agency-plan" parent="agency-provision" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#0f766e;strokeColor=#5eead4;fontSize=9;align=center;" value="Assign&#xa;Plan" vertex="1">
+          <mxGeometry height="50" width="80" x="100" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="agency-brand" parent="agency-provision" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#0f766e;strokeColor=#5eead4;fontSize=9;align=center;" value="White Label&#xa;Config" vertex="1">
+          <mxGeometry height="50" width="80" x="190" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="agency-genesis" parent="agency-provision" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#0f766e;strokeColor=#5eead4;fontSize=9;align=center;" value="Genesis&#xa;Hash" vertex="1">
+          <mxGeometry height="50" width="80" x="280" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="agency-invite" parent="agency-provision" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#0f766e;strokeColor=#5eead4;fontSize=9;align=center;" value="Invite&#xa;Users" vertex="1">
+          <mxGeometry height="50" width="80" x="370" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="agency-clients" parent="agency_group" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#5eead4;strokeColor=#2dd4bf;fontSize=11;fontStyle=1;fontColor=#042f2e;swimlaneFillColor=#5eead4;swimlaneLine=0;" value="CLIENT MANAGEMENT" vertex="1">
+          <mxGeometry height="100" width="460" x="20" y="270" as="geometry" />
+        </mxCell>
+        <mxCell id="agency-list" parent="agency-clients" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#042f2e;strokeColor=#2dd4bf;fontSize=9;align=center;" value="Client&#xa;List" vertex="1">
+          <mxGeometry height="50" width="80" x="10" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="agency-view" parent="agency-clients" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#042f2e;strokeColor=#2dd4bf;fontSize=9;align=center;" value="View&#xa;Tenant" vertex="1">
+          <mxGeometry height="50" width="80" x="100" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="agency-impersonate" parent="agency-clients" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fef3c7;fontColor=#92400e;strokeColor=#fde68a;fontSize=9;align=center;" value="Impersonate&#xa;Login" vertex="1">
+          <mxGeometry height="50" width="80" x="190" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="agency-analytics" parent="agency-clients" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#042f2e;strokeColor=#2dd4bf;fontSize=9;align=center;" value="Aggregated&#xa;Analytics" vertex="1">
+          <mxGeometry height="50" width="80" x="280" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="agency-fiscal" parent="agency-clients" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;fontColor=#042f2e;strokeColor=#2dd4bf;fontSize=9;align=center;" value="/fiscal-health&#xa;(Fiscal)" vertex="1">
+          <mxGeometry height="50" width="80" x="370" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="tenant_group" parent="1" style="swimlane;horizontal=0;whiteSpace=wrap;html=1;fillColor=#4f46e5;strokeColor=#3730a3;strokeWidth=3;fontSize=14;fontStyle=1;fontColor=#ffffff;swimlaneFillColor=#4f46e5;swimlaneLine=0;" value="TENANT DASHBOARD (/dashboard/)" vertex="1">
+          <mxGeometry height="500" width="650" x="1350" y="780" as="geometry" />
+        </mxCell>
+        <mxCell id="tenant-crm" parent="tenant_group" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#6366f1;strokeColor=#4f46e5;fontSize=10;fontStyle=1;fontColor=#ffffff;swimlaneFillColor=#6366f1;swimlaneLine=0;" value="CRM &amp; SALES" vertex="1">
+          <mxGeometry height="80" width="610" x="20" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="t-leads" parent="tenant-crm" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e0e7ff;fontColor=#3730a3;strokeColor=#a5b4fc;fontSize=9;align=center;" value="/leads" vertex="1">
+          <mxGeometry height="40" width="60" x="10" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="t-contacts" parent="tenant-crm" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e0e7ff;fontColor=#3730a3;strokeColor=#a5b4fc;fontSize=9;align=center;" value="/contacts" vertex="1">
+          <mxGeometry height="40" width="60" x="80" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="t-companies" parent="tenant-crm" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e0e7ff;fontColor=#3730a3;strokeColor=#a5b4fc;fontSize=9;align=center;" value="/companies" vertex="1">
+          <mxGeometry height="40" width="60" x="150" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="t-pipeline" parent="tenant-crm" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e0e7ff;fontColor=#3730a3;strokeColor=#a5b4fc;fontSize=9;align=center;" value="/pipeline" vertex="1">
+          <mxGeometry height="40" width="60" x="220" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="t-deals" parent="tenant-crm" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e0e7ff;fontColor=#3730a3;strokeColor=#a5b4fc;fontSize=9;align=center;" value="/deals" vertex="1">
+          <mxGeometry height="40" width="60" x="290" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="t-quotes" parent="tenant-crm" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e0e7ff;fontColor=#3730a3;strokeColor=#a5b4fc;fontSize=9;align=center;" value="/cotizaciones" vertex="1">
+          <mxGeometry height="40" width="70" x="360" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="t-contracts" parent="tenant-crm" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e0e7ff;fontColor=#3730a3;strokeColor=#a5b4fc;fontSize=9;align=center;" value="/contratos" vertex="1">
+          <mxGeometry height="40" width="70" x="440" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="t-orders" parent="tenant-crm" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e0e7ff;fontColor=#3730a3;strokeColor=#a5b4fc;fontSize=9;align=center;" value="/ordenes-venta" vertex="1">
+          <mxGeometry height="40" width="70" x="520" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="tenant-marketing" parent="tenant_group" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#ec4899;strokeColor=#db2777;fontSize=10;fontStyle=1;fontColor=#ffffff;swimlaneFillColor=#ec4899;swimlaneLine=0;" value="MARKETING" vertex="1">
+          <mxGeometry height="70" width="610" x="20" y="130" as="geometry" />
+        </mxCell>
+        <mxCell id="t-campaigns" parent="tenant-marketing" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fce7f3;fontColor=#831843;strokeColor=#fbcfe8;fontSize=9;align=center;" value="/campaigns" vertex="1">
+          <mxGeometry height="35" width="70" x="10" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="t-email-campaigns" parent="tenant-marketing" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fce7f3;fontColor=#831843;strokeColor=#fbcfe8;fontSize=9;align=center;" value="/email-campaigns" vertex="1">
+          <mxGeometry height="35" width="80" x="90" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="t-automation" parent="tenant-marketing" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fce7f3;fontColor=#831843;strokeColor=#fbcfe8;fontSize=9;align=center;" value="/automation" vertex="1">
+          <mxGeometry height="35" width="70" x="180" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="t-webcreator" parent="tenant-marketing" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fce7f3;fontColor=#831843;strokeColor=#fbcfe8;fontSize=9;align=center;" value="/webcreator" vertex="1">
+          <mxGeometry height="35" width="70" x="260" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="t-cms" parent="tenant-marketing" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fce7f3;fontColor=#831843;strokeColor=#fbcfe8;fontSize=9;align=center;" value="/cms" vertex="1">
+          <mxGeometry height="35" width="60" x="340" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="t-social" parent="tenant-marketing" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fce7f3;fontColor=#831843;strokeColor=#fbcfe8;fontSize=9;align=center;" value="/social" vertex="1">
+          <mxGeometry height="35" width="60" x="410" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="t-quizzes" parent="tenant-marketing" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fce7f3;fontColor=#831843;strokeColor=#fbcfe8;fontSize=9;align=center;" value="/quizzes" vertex="1">
+          <mxGeometry height="35" width="60" x="480" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="tenant-ops" parent="tenant_group" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#f59e0b;strokeColor=#d97706;fontSize=10;fontStyle=1;fontColor=#ffffff;swimlaneFillColor=#f59e0b;swimlaneLine=0;" value="OPERATIONS (ERP)" vertex="1">
+          <mxGeometry height="80" width="610" x="20" y="220" as="geometry" />
+        </mxCell>
+        <mxCell id="t-services" parent="tenant-ops" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fef3c7;fontColor=#92400e;strokeColor=#fde68a;fontSize=9;align=center;" value="/services" vertex="1">
+          <mxGeometry height="40" width="60" x="10" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="t-citas" parent="tenant-ops" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fef3c7;fontColor=#92400e;strokeColor=#fde68a;fontSize=9;align=center;" value="/citas" vertex="1">
+          <mxGeometry height="40" width="60" x="80" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="t-production" parent="tenant-ops" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fef3c7;fontColor=#92400e;strokeColor=#fde68a;fontSize=9;align=center;" value="/production" vertex="1">
+          <mxGeometry height="40" width="70" x="150" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="t-projects" parent="tenant-ops" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fef3c7;fontColor=#92400e;strokeColor=#fde68a;fontSize=9;align=center;" value="/proyectos" vertex="1">
+          <mxGeometry height="40" width="70" x="230" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="t-inventory" parent="tenant-ops" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fef3c7;fontColor=#92400e;strokeColor=#fde68a;fontSize=9;align=center;" value="/inventario" vertex="1">
+          <mxGeometry height="40" width="70" x="310" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="t-quality" parent="tenant-ops" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fef3c7;fontColor=#92400e;strokeColor=#fde68a;fontSize=9;align=center;" value="/calidad" vertex="1">
+          <mxGeometry height="40" width="60" x="390" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="t-rrhh" parent="tenant-ops" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fef3c7;fontColor=#92400e;strokeColor=#fde68a;fontSize=9;align=center;" value="/rrhh" vertex="1">
+          <mxGeometry height="40" width="60" x="460" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="t-support" parent="tenant-ops" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fef3c7;fontColor=#92400e;strokeColor=#fde68a;fontSize=9;align=center;" value="/support" vertex="1">
+          <mxGeometry height="40" width="60" x="530" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="tenant-comm" parent="tenant_group" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#06b6d4;strokeColor=#0891b2;fontSize=10;fontStyle=1;fontColor=#ffffff;swimlaneFillColor=#06b6d4;swimlaneLine=0;" value="COMMUNICATION" vertex="1">
+          <mxGeometry height="70" width="610" x="20" y="320" as="geometry" />
+        </mxCell>
+        <mxCell id="t-messages" parent="tenant-comm" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#cffafe;fontColor=#164e63;strokeColor=#a5f3fc;fontSize=9;align=center;" value="/messages" vertex="1">
+          <mxGeometry height="35" width="70" x="10" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="t-whatsapp" parent="tenant-comm" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#cffafe;fontColor=#164e63;strokeColor=#a5f3fc;fontSize=9;align=center;" value="/whatsapp" vertex="1">
+          <mxGeometry height="35" width="70" x="90" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="t-telephony" parent="tenant-comm" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#cffafe;fontColor=#164e63;strokeColor=#a5f3fc;fontSize=9;align=center;" value="/telefonia" vertex="1">
+          <mxGeometry height="35" width="70" x="170" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="t-templates" parent="tenant-comm" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#cffafe;fontColor=#164e63;strokeColor=#a5f3fc;fontSize=9;align=center;" value="/templates" vertex="1">
+          <mxGeometry height="35" width="70" x="250" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="t-chatbot" parent="tenant-comm" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#cffafe;fontColor=#164e63;strokeColor=#a5f3fc;fontSize=9;align=center;" value="/chatbot" vertex="1">
+          <mxGeometry height="35" width="70" x="330" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="tenant-academia" parent="tenant_group" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#84cc16;strokeColor=#65a30d;fontSize=10;fontStyle=1;fontColor=#ffffff;swimlaneFillColor=#84cc16;swimlaneLine=0;" value="ACADEMIA" vertex="1">
+          <mxGeometry height="70" width="610" x="20" y="410" as="geometry" />
+        </mxCell>
+        <mxCell id="t-cursos" parent="tenant-academia" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7fee7;fontColor=#3f6212;strokeColor=#d9f99d;fontSize=9;align=center;" value="/cursos" vertex="1">
+          <mxGeometry height="35" width="70" x="10" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="t-estudiantes" parent="tenant-academia" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7fee7;fontColor=#3f6212;strokeColor=#d9f99d;fontSize=9;align=center;" value="/estudiantes" vertex="1">
+          <mxGeometry height="35" width="80" x="90" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="t-community" parent="tenant-academia" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7fee7;fontColor=#3f6212;strokeColor=#d9f99d;fontSize=9;align=center;" value="/comunidad" vertex="1">
+          <mxGeometry height="35" width="70" x="180" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="security_group" parent="1" style="swimlane;horizontal=0;whiteSpace=wrap;html=1;fillColor=#450a0a;strokeColor=#7f1d1d;strokeWidth=3;fontSize=14;fontStyle=1;fontColor=#fef2f2;swimlaneFillColor=#450a0a;swimlaneLine=0;" value="SEGURIDAD &amp; ACCESO" vertex="1">
+          <mxGeometry height="300" width="410" x="390" y="850" as="geometry" />
+        </mxCell>
+        <mxCell id="sec-admin" parent="security_group" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#991b1b;strokeColor=#7f1d1d;fontSize=10;fontStyle=1;fontColor=#fef2f2;swimlaneFillColor=#991b1b;swimlaneLine=0;" value="ADMIN BACKOFFICE" vertex="1">
+          <mxGeometry height="60" width="370" x="20" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="sec-superadmin" parent="sec-admin" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fef2f2;fontColor=#991b1b;strokeColor=#fecaca;fontSize=9;align=center;" value="Superadmin" vertex="1">
+          <mxGeometry height="30" width="80" x="10" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="sec-admin-role" parent="sec-admin" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fecaca;fontColor=#7f1d1d;strokeColor=#fca5a5;fontSize=9;align=center;" value="Admin /&#xa;Administrador" vertex="1">
+          <mxGeometry height="30" width="80" x="100" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="sec-block-demo" parent="sec-admin" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fecaca;fontColor=#7f1d1d;strokeColor=#fca5a5;fontSize=9;align=center;" value="Block: Demo&#xa;Accounts" vertex="1">
+          <mxGeometry height="30" width="80" x="190" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="sec-audit" parent="sec-admin" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fecaca;fontColor=#7f1d1d;strokeColor=#fca5a5;fontSize=9;align=center;" value="Audit Log" vertex="1">
+          <mxGeometry height="30" width="80" x="280" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="sec-agency" parent="security_group" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#065f46;strokeColor=#064e3b;fontSize=10;fontStyle=1;fontColor=#ecfdf5;swimlaneFillColor=#065f46;swimlaneLine=0;" value="AGENCY MODULE" vertex="1">
+          <mxGeometry height="60" width="370" x="20" y="110" as="geometry" />
+        </mxCell>
+        <mxCell id="sec-agency-type" parent="sec-agency" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d1fae5;fontColor=#065f46;strokeColor=#6ee7b7;fontSize=9;align=center;" value="Account Type&#xa;= AGENCY" vertex="1">
+          <mxGeometry height="30" width="100" x="10" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="sec-agency-module" parent="sec-agency" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d1fae5;fontColor=#065f46;strokeColor=#6ee7b7;fontSize=9;align=center;" value="Module&#xa;&#39;agency&#39;" vertex="1">
+          <mxGeometry height="30" width="80" x="120" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="sec-agency-role" parent="sec-agency" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d1fae5;fontColor=#065f46;strokeColor=#6ee7b7;fontSize=9;align=center;" value="Role: Owner&#xa;/ Admin" vertex="1">
+          <mxGeometry height="30" width="80" x="210" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="sec-tenant" parent="security_group" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#1e3a8a;strokeColor=#1e40af;fontSize=10;fontStyle=1;fontColor=#dbeafe;swimlaneFillColor=#1e3a8a;swimlaneLine=0;" value="TENANT USERS" vertex="1">
+          <mxGeometry height="60" width="370" x="20" y="190" as="geometry" />
+        </mxCell>
+        <mxCell id="sec-owner" parent="sec-tenant" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dbeafe;fontColor=#1e3a8a;strokeColor=#93c5fd;fontSize=9;align=center;" value="Owner" vertex="1">
+          <mxGeometry height="30" width="60" x="10" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="sec-admin-tenant" parent="sec-tenant" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dbeafe;fontColor=#1e3a8a;strokeColor=#93c5fd;fontSize=9;align=center;" value="Admin" vertex="1">
+          <mxGeometry height="30" width="60" x="80" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="sec-user" parent="sec-tenant" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dbeafe;fontColor=#1e3a8a;strokeColor=#93c5fd;fontSize=9;align=center;" value="User" vertex="1">
+          <mxGeometry height="30" width="60" x="150" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="sec-guest" parent="sec-tenant" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dbeafe;fontColor=#1e3a8a;strokeColor=#93c5fd;fontSize=9;align=center;" value="Guest" vertex="1">
+          <mxGeometry height="30" width="60" x="220" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="sec-rbac" parent="sec-tenant" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dbeafe;fontColor=#1e3a8a;strokeColor=#93c5fd;fontSize=9;align=center;" value="RBAC&#xa;(Permissions)" vertex="1">
+          <mxGeometry height="30" width="70" x="290" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="api_group" parent="1" style="swimlane;horizontal=0;whiteSpace=wrap;html=1;fillColor=#292524;strokeColor=#1c1917;strokeWidth=3;fontSize=14;fontStyle=1;fontColor=#fafaf9;swimlaneFillColor=#292524;swimlaneLine=0;" value="API ENDPOINTS" vertex="1">
+          <mxGeometry height="300" width="400" x="890" y="850" as="geometry" />
+        </mxCell>
+        <mxCell id="api-admin" parent="api_group" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#44403c;strokeColor=#292524;fontSize=10;fontStyle=1;fontColor=#fafaf9;swimlaneFillColor=#44403c;swimlaneLine=0;" value="ADMIN APIs (/api/admin/)" vertex="1">
+          <mxGeometry height="70" width="360" x="20" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="api-tenants" parent="api-admin" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#78716c;fontColor=#fafaf9;strokeColor=#57534e;fontSize=9;align=center;" value="/tenants CRUD" vertex="1">
+          <mxGeometry height="35" width="80" x="10" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="api-plans" parent="api-admin" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#78716c;fontColor=#fafaf9;strokeColor=#57534e;fontSize=9;align=center;" value="/plans CRUD" vertex="1">
+          <mxGeometry height="35" width="80" x="100" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="api-saas" parent="api-admin" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#78716c;fontColor=#fafaf9;strokeColor=#57534e;fontSize=9;align=center;" value="/saas-metrics" vertex="1">
+          <mxGeometry height="35" width="80" x="190" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="api-impersonate" parent="api-admin" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#78716c;fontColor=#fafaf9;strokeColor=#57534e;fontSize=9;align=center;" value="/impersonate" vertex="1">
+          <mxGeometry height="35" width="80" x="280" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="api-agency" parent="api_group" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#115e59;strokeColor=#0f766e;fontSize=10;fontStyle=1;fontColor=#f0fdfa;swimlaneFillColor=#115e59;swimlaneLine=0;" value="AGENCY APIs" vertex="1">
+          <mxGeometry height="70" width="360" x="20" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="api-slots" parent="api-agency" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ccfbf1;fontColor=#134e4a;strokeColor=#99f6e4;fontSize=9;align=center;" value="/agencia/slots" vertex="1">
+          <mxGeometry height="35" width="100" x="10" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="api-provision" parent="api-agency" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ccfbf1;fontColor=#134e4a;strokeColor=#99f6e4;fontSize=9;align=center;" value="/agencia/provision" vertex="1">
+          <mxGeometry height="35" width="100" x="120" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="api-branding" parent="api-agency" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ccfbf1;fontColor=#134e4a;strokeColor=#99f6e4;fontSize=9;align=center;" value="/agencia/branding" vertex="1">
+          <mxGeometry height="35" width="100" x="230" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="api-config" parent="api_group" style="swimlane;horizontal=1;whiteSpace=wrap;html=1;fillColor=#334155;strokeColor=#1e293b;fontSize=10;fontStyle=1;fontColor=#f1f5f9;swimlaneFillColor=#334155;swimlaneLine=0;" value="CONFIG APIs" vertex="1">
+          <mxGeometry height="70" width="360" x="20" y="210" as="geometry" />
+        </mxCell>
+        <mxCell id="legend" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=12;fontStyle=1;fillColor=#f8fafc;fontColor=#334155;strokeColor=#94a3b8;strokeWidth=2;" value="" vertex="1">
+          <mxGeometry height="160" width="540" x="550" y="1210" as="geometry" />
+        </mxCell>
+        <mxCell id="leg1" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#1e293b;" value="● Admin Backoffice (Negro): Superadmin - gestión global de la plataforma" vertex="1">
+          <mxGeometry height="20" width="520" x="570" y="1235" as="geometry" />
+        </mxCell>
+        <mxCell id="leg2" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#0d9488;" value="● Agency Module (Verde): Agencias - gestión de slots white-label" vertex="1">
+          <mxGeometry height="20" width="520" x="570" y="1260" as="geometry" />
+        </mxCell>
+        <mxCell id="leg3" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#4f46e5;" value="● Tenant Dashboard (Azul): Usuarios tenant - operaciones de negocio" vertex="1">
+          <mxGeometry height="20" width="520" x="570" y="1285" as="geometry" />
+        </mxCell>
+        <mxCell id="leg4" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#991b1b;" value="● Security (Rojo oscuro): Control de acceso y autenticación" vertex="1">
+          <mxGeometry height="20" width="520" x="570" y="1310" as="geometry" />
+        </mxCell>
+        <mxCell id="leg5" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#44403c;" value="● API Endpoints (Gris): APIs REST para cada módulo" vertex="1">
+          <mxGeometry height="20" width="520" x="570" y="1335" as="geometry" />
+        </mxCell>
+        <mxCell id="conn-admin-sec" edge="1" parent="1" source="admin_group" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#7f1d1d;strokeWidth=2;dashed=1;dashPattern=8 4;" target="security_group">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="conn-agency-sec" edge="1" parent="1" source="agency_group" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#065f46;strokeWidth=2;dashed=1;dashPattern=8 4;" target="security_group">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="conn-tenant-sec" edge="1" parent="1" source="tenant_group" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#1e3a8a;strokeWidth=2;dashed=1;dashPattern=8 4;" target="security_group">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="conn-admin-api" edge="1" parent="1" source="security_group" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#44403c;strokeWidth=2;" target="api_group">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="conn-tenant-api" edge="1" parent="1" source="tenant_group" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#44403c;strokeWidth=1;dashed=1;dashPattern=4 2;" target="api_group">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="conn-tenant-agency" edge="1" parent="1" source="tenant_group" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0d9488;strokeWidth=2;dashed=1;dashPattern=4 4;" target="agency_group">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

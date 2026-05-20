@@ -106,9 +106,20 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
     active: false
   });
 
-  const [timezone, setTimezone] = useState('America/Mexico_City');
+  const [timezone, setTimezone] = useState('Europe/Madrid');
   const [showTimezoneModal, setShowTimezoneModal] = useState(false);
   const [horariosDisponibles, setHorariosDisponibles] = useState<any>(null);
+  
+  // Estados para horarios de disponibilidad
+  const [horarios, setHorarios] = useState<any[]>([]);
+  const [showHorariosModal, setShowHorariosModal] = useState(false);
+  const [savingHorarios, setSavingHorarios] = useState(false);
+  
+  // Estados para ausencias
+  const [ausencias, setAusencias] = useState<any[]>([]);
+  const [showAusenciaModal, setShowAusenciaModal] = useState(false);
+  const [nuevaAusencia, setNuevaAusencia] = useState({ titulo: '', fechaInicio: '', fechaFin: '', tipo: 'vacaciones', razon: '' });
+  const [savingAusencia, setSavingAusencia] = useState(false);
 
   const [cardUrl, setCardUrl] = useState("");
 
@@ -152,6 +163,9 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
         const data = await res.json();
         setUserData(data);
         setTelegramChatId(data.metadata?.telegram_chat_id || "");
+        if (data.metadata?.notifications) {
+          setNotifications(data.metadata.notifications);
+        }
         setTimezone(data.timezone || 'America/Mexico_City');
         
         // 2. Configurar link de tarjeta digital
@@ -179,13 +193,26 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
         
         // 3. Obtener horarios de disponibilidad
         try {
-          const horariosRes = await fetch("/api/config/disponibilidad");
+          const horariosRes = await fetch("/api/disponibilidad");
           if (horariosRes.ok) {
             const horariosData = await horariosRes.json();
-            setHorariosDisponibles(horariosData);
+            setHorarios(horariosData);
           }
         } catch (e) {
           console.warn("Error fetching horarios:", e);
+        }
+        
+        // 4. Obtener ausencias
+        try {
+          const hoy = new Date();
+          const mesActual = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`;
+          const ausenciasRes = await fetch(`/api/ausencias?mes=${mesActual}`);
+          if (ausenciasRes.ok) {
+            const ausenciasData = await ausenciasRes.json();
+            setAusencias(ausenciasData);
+          }
+        } catch (e) {
+          console.warn("Error fetching ausencias:", e);
         }
       }
     } catch (error) {
@@ -286,6 +313,27 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
     }
   };
 
+  const updateNotificationSetting = async (key: string, value: boolean) => {
+    const newNotifications = { ...notifications, [key]: value };
+    setNotifications(newNotifications);
+    
+    try {
+      const metadata = {
+        ...userData?.metadata,
+        notifications: newNotifications
+      };
+
+      await fetch("/api/users/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ metadata })
+      });
+      fetchUser();
+    } catch (error) {
+      toast.error("Error al guardar preferencia");
+    }
+  };
+
   const handleGenerateSkillKey = async () => {
     setGeneratingKey(true);
     try {
@@ -319,12 +367,83 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
         fetchUser();
         setShowTimezoneModal(false);
       } else {
-        toast.error("Error al guardar zona horaria");
+        const data = await res.json();
+        toast.error(data.error || "Error al guardar zona horaria");
       }
     } catch (error) {
       toast.error("Error de conexión");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveHorarios = async () => {
+    setSavingHorarios(true);
+    try {
+      const res = await fetch("/api/disponibilidad", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ horarios })
+      });
+      
+      if (res.ok) {
+        toast.success("Horarios guardados");
+        setShowHorariosModal(false);
+      } else {
+        const data = await res.json();
+        toast.error(data.error || "Error al guardar horarios");
+      }
+    } catch (error) {
+      toast.error("Error de conexión");
+    } finally {
+      setSavingHorarios(false);
+    }
+  };
+
+  const handleSaveAusencia = async () => {
+    if (!nuevaAusencia.titulo || !nuevaAusencia.fechaInicio || !nuevaAusencia.fechaFin) {
+      toast.error("Completa todos los campos requeridos");
+      return;
+    }
+    
+    setSavingAusencia(true);
+    try {
+      const res = await fetch("/api/ausencias", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(nuevaAusencia)
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        setAusencias([...ausencias, data]);
+        setNuevaAusencia({ titulo: '', fechaInicio: '', fechaFin: '', tipo: 'vacaciones', razon: '' });
+        setShowAusenciaModal(false);
+        toast.success("Ausencia creada");
+      } else {
+        const data = await res.json();
+        toast.error(data.error || "Error al crear ausencia");
+      }
+    } catch (error) {
+      toast.error("Error de conexión");
+    } finally {
+      setSavingAusencia(false);
+    }
+  };
+
+  const handleDeleteAusencia = async (id: string) => {
+    if (!confirm("¿Eliminar esta ausencia?")) return;
+    
+    try {
+      const res = await fetch(`/api/ausencias?id=${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setAusencias(ausencias.filter(a => a.id !== id));
+        toast.success("Ausencia eliminada");
+      } else {
+        toast.error("Error al eliminar ausencia");
+      }
+    } catch (error) {
+      toast.error("Error de conexión");
     }
   };
 
@@ -614,24 +733,65 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
               </div>
             </div>
 
-            <div className="pt-6 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="pt-6 border-t border-slate-100 space-y-6">
+              {/* Horarios de disponibilidad */}
               <div 
-                className="space-y-2 text-center p-6 border border-slate-100 rounded-3xl hover:bg-slate-50 transition-colors cursor-pointer group"
+                className="flex items-center justify-between p-4 border border-slate-100 rounded-2xl hover:bg-slate-50 transition-colors cursor-pointer"
+                onClick={() => setShowHorariosModal(true)}
+              >
+                <div className="flex items-center gap-4">
+                  <div className="h-10 w-10 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center">
+                    <Calendar className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-slate-900">Horarios de Disponibilidad</h4>
+                    <p className="text-xs text-slate-500">Define tu horario laboral para citas</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-400">{horarios.length} días configurados</span>
+                  <ChevronRight className="h-4 w-4 text-slate-400" />
+                </div>
+              </div>
+              
+              {/* Ausencias/Vacaciones */}
+              <div 
+                className="flex items-center justify-between p-4 border border-slate-100 rounded-2xl hover:bg-slate-50 transition-colors cursor-pointer"
+                onClick={() => setShowAusenciaModal(true)}
+              >
+                <div className="flex items-center gap-4">
+                  <div className="h-10 w-10 bg-red-100 text-red-600 rounded-xl flex items-center justify-center">
+                    <Calendar className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-slate-900">Ausencias / Vacaciones</h4>
+                    <p className="text-xs text-slate-500">Bloquea fechas en las que no estás disponible</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-400">{ausencias.length} períodos</span>
+                  <ChevronRight className="h-4 w-4 text-slate-400" />
+                </div>
+              </div>
+              
+              {/* Zona horaria */}
+              <div 
+                className="flex items-center justify-between p-4 border border-slate-100 rounded-2xl hover:bg-slate-50 transition-colors cursor-pointer"
                 onClick={() => setShowTimezoneModal(true)}
               >
-                <div className="h-12 w-12 bg-blue-100 text-blue-600 rounded-2xl mx-auto flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                  <Calendar className="h-6 w-6" />
+                <div className="flex items-center gap-4">
+                  <div className="h-10 w-10 bg-green-100 text-green-600 rounded-xl flex items-center justify-center">
+                    <Globe className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-slate-900">Zona Horaria</h4>
+                    <p className="text-xs text-slate-500">Configura tu zona para correcta visualización de horarios</p>
+                  </div>
                 </div>
-                <h4 className="font-bold text-slate-900">Editar Horarios</h4>
-                <p className="text-xs text-slate-500">Define tu disponibilidad semanal para citas.</p>
-                <p className="text-xs text-blue-600 font-bold mt-2">Zona: {timezone}</p>
-              </div>
-              <div className="space-y-2 text-center p-6 border border-slate-100 rounded-3xl hover:bg-slate-50 transition-colors cursor-pointer group">
-                <div className="h-12 w-12 bg-purple-100 text-purple-600 rounded-2xl mx-auto flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                  <Globe className="h-6 w-6" />
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-blue-600 font-medium">{timezone}</span>
+                  <ChevronRight className="h-4 w-4 text-slate-400" />
                 </div>
-                <h4 className="font-bold text-slate-900">Widgets Web</h4>
-                <p className="text-xs text-slate-500">Ver códigos para insertar en tu sitio web.</p>
               </div>
             </div>
           </Card>
@@ -702,7 +862,7 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
                           <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">Alertas en tiempo real en tu PC/Mac</p>
                        </div>
                     </div>
-                    <Switch checked={notifications.browser} onCheckedChange={(val) => setNotifications({...notifications, browser: val})} />
+                     <Switch checked={notifications.browser} onCheckedChange={(val) => updateNotificationSetting('browser', val)} />
                  </div>
 
                  <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
@@ -715,7 +875,7 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
                           <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">CTI Pop-up para llamadas Zadarma</p>
                        </div>
                     </div>
-                    <Switch checked={notifications.calls} onCheckedChange={(val) => setNotifications({...notifications, calls: val})} />
+                    <Switch checked={notifications.calls} onCheckedChange={(val) => updateNotificationSetting('calls', val)} />
                  </div>
 
                  <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
@@ -728,7 +888,7 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
                           <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">Aviso instantáneo al asignar prospecto</p>
                        </div>
                     </div>
-                    <Switch checked={notifications.leads} onCheckedChange={(val) => setNotifications({...notifications, leads: val})} />
+                    <Switch checked={notifications.leads} onCheckedChange={(val) => updateNotificationSetting('leads', val)} />
                  </div>
                   <div className="pt-4 space-y-4">
                      <div className="flex flex-col gap-2">
@@ -1070,6 +1230,271 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
                   <Button onClick={handleSaveTimezone} disabled={saving}>
                     {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                     Guardar
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      
+      {/* Modal de Horarios de Disponibilidad */}
+      <AnimatePresence>
+        {showHorariosModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }} 
+              onClick={() => setShowHorariosModal(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }} 
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="relative bg-white rounded-[2rem] shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden border border-slate-100"
+            >
+              <div className="p-8 space-y-6 overflow-y-auto max-h-[85vh]">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-black text-slate-900">Horarios de Disponibilidad</h3>
+                  <Button variant="ghost" size="icon" onClick={() => setShowHorariosModal(false)}>
+                    <X className="h-5 w-5" />
+                  </Button>
+                </div>
+                
+                <p className="text-sm text-slate-500">
+                  Define tu horario de atención para cada día de la semana.
+                </p>
+                
+                <div className="space-y-4">
+                  {['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'].map((dia, index) => {
+                    const horario = horarios.find(h => h.diaSemana === index);
+                    const activo = horario?.activo ?? (index >= 1 && index <= 5);
+                    const bloques = horario?.bloques || [{ inicio: '09:00', fin: '18:00' }];
+                    
+                    return (
+                      <div key={index} className="p-4 bg-slate-50 rounded-xl space-y-3">
+                        <div className="flex items-center justify-between">
+                          <label className="flex items-center gap-2">
+                            <input 
+                              type="checkbox" 
+                              checked={activo}
+                              onChange={(e) => {
+                                const updated = [...horarios];
+                                const existing = updated.find(h => h.diaSemana === index);
+                                if (existing) {
+                                  existing.activo = e.target.checked;
+                                } else {
+                                  updated.push({ diaSemana: index, bloques: [{ inicio: '09:00', fin: '18:00' }], activo: e.target.checked });
+                                }
+                                setHorarios(updated);
+                              }}
+                              className="w-4 h-4"
+                            />
+                            <span className="text-sm font-bold">{dia}</span>
+                          </label>
+                          {activo && (
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => {
+                                const updated = [...horarios];
+                                const existing = updated.find(h => h.diaSemana === index);
+                                if (existing) {
+                                  existing.bloques.push({ inicio: '12:00', fin: '13:00' });
+                                } else {
+                                  updated.push({ diaSemana: index, bloques: [{ inicio: '09:00', fin: '18:00' }], activo: true });
+                                }
+                                setHorarios(updated);
+                              }}
+                              className="text-blue-600 text-xs h-7"
+                            >
+                              + Agregar horario
+                            </Button>
+                          )}
+                        </div>
+                        {activo && (
+                          <div className="space-y-2 pl-6">
+                            {bloques.map((bloque: any, bIdx: number) => (
+                              <div key={bIdx} className="flex items-center gap-2">
+                                <span className="text-xs text-slate-400 w-16">Bloque {bIdx + 1}</span>
+                                <input 
+                                  type="time" 
+                                  value={bloque.inicio}
+                                  onChange={(e) => {
+                                    const updated = [...horarios];
+                                    let existing = updated.find(h => h.diaSemana === index);
+                                    if (!existing) {
+                                      existing = { diaSemana: index, bloques: [], activo: true };
+                                      updated.push(existing);
+                                    }
+                                    existing.bloques[bIdx] = { ...existing.bloques[bIdx], inicio: e.target.value };
+                                    setHorarios(updated);
+                                  }}
+                                  className="h-9 px-3 rounded-lg border border-slate-200 text-sm"
+                                />
+                                <span className="text-slate-400">a</span>
+                                <input 
+                                  type="time" 
+                                  value={bloque.fin}
+                                  onChange={(e) => {
+                                    const updated = [...horarios];
+                                    let existing = updated.find(h => h.diaSemana === index);
+                                    if (!existing) {
+                                      existing = { diaSemana: index, bloques: [], activo: true };
+                                      updated.push(existing);
+                                    }
+                                    existing.bloques[bIdx] = { ...existing.bloques[bIdx], fin: e.target.value };
+                                    setHorarios(updated);
+                                  }}
+                                  className="h-9 px-3 rounded-lg border border-slate-200 text-sm"
+                                />
+                                {bloques.length > 1 && (
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm"
+                                    onClick={() => {
+                                      const updated = [...horarios];
+                                      const existing = updated.find(h => h.diaSemana === index);
+                                      if (existing) {
+                                        existing.bloques = existing.bloques.filter((_: any, i: number) => i !== bIdx);
+                                      }
+                                      setHorarios(updated);
+                                    }}
+                                    className="text-red-500 hover:text-red-700 p-1 h-7"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {!activo && <span className="text-xs text-slate-400 ml-6">No disponible</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+                
+                <div className="flex justify-end gap-3 pt-4">
+                  <Button variant="outline" onClick={() => setShowHorariosModal(false)}>
+                    Cancelar
+                  </Button>
+                  <Button onClick={handleSaveHorarios} disabled={savingHorarios}>
+                    {savingHorarios ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    Guardar Horarios
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      
+      {/* Modal de Ausencias */}
+      <AnimatePresence>
+        {showAusenciaModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }} 
+              onClick={() => setShowAusenciaModal(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }} 
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="relative bg-white rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden border border-slate-100"
+            >
+              <div className="p-8 space-y-6">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-black text-slate-900">Ausencias / Vacaciones</h3>
+                  <Button variant="ghost" size="icon" onClick={() => setShowAusenciaModal(false)}>
+                    <X className="h-5 w-5" />
+                  </Button>
+                </div>
+                
+                <p className="text-sm text-slate-500">
+                  Agrega períodos en los que no estarás disponible para citas.
+                </p>
+                
+                {/* Lista de ausencias existentes */}
+                {ausencias.length > 0 && (
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {ausencias.map((a) => (
+                      <div key={a.id} className="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-100">
+                        <div>
+                          <p className="font-medium text-sm">{a.titulo}</p>
+                          <p className="text-xs text-slate-500">
+                            {new Date(a.fechaInicio).toLocaleDateString('es-MX')} - {new Date(a.fechaFin).toLocaleDateString('es-MX')}
+                          </p>
+                        </div>
+                        <Button variant="ghost" size="sm" onClick={() => handleDeleteAusencia(a.id)} className="text-red-500 hover:text-red-700">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {/* Formulario para nueva ausencia */}
+                <div className="space-y-4 pt-4 border-t border-slate-100">
+                  <div className="space-y-2">
+                    <Label className="text-[11px] font-black uppercase text-slate-400 tracking-wider">Título</Label>
+                    <Input 
+                      value={nuevaAusencia.titulo}
+                      onChange={(e) => setNuevaAusencia({...nuevaAusencia, titulo: e.target.value})}
+                      placeholder="Ej. Vacaciones de verano"
+                      className="h-12 rounded-xl"
+                    />
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-[11px] font-black uppercase text-slate-400 tracking-wider">Desde</Label>
+                      <Input 
+                        type="date"
+                        value={nuevaAusencia.fechaInicio}
+                        onChange={(e) => setNuevaAusencia({...nuevaAusencia, fechaInicio: e.target.value})}
+                        className="h-12 rounded-xl"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-[11px] font-black uppercase text-slate-400 tracking-wider">Hasta</Label>
+                      <Input 
+                        type="date"
+                        value={nuevaAusencia.fechaFin}
+                        onChange={(e) => setNuevaAusencia({...nuevaAusencia, fechaFin: e.target.value})}
+                        className="h-12 rounded-xl"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label className="text-[11px] font-black uppercase text-slate-400 tracking-wider">Tipo</Label>
+                    <select 
+                      value={nuevaAusencia.tipo}
+                      onChange={(e) => setNuevaAusencia({...nuevaAusencia, tipo: e.target.value})}
+                      className="w-full h-12 px-3 rounded-xl border border-slate-200"
+                    >
+                      <option value="vacaciones">Vacaciones</option>
+                      <option value="enfermedad">Enfermedad</option>
+                      <option value="personal">Día personal</option>
+                      <option value="otro">Otro</option>
+                    </select>
+                  </div>
+                </div>
+                
+                <div className="flex justify-end gap-3 pt-4">
+                  <Button variant="outline" onClick={() => setShowAusenciaModal(false)}>
+                    Cerrar
+                  </Button>
+                  <Button onClick={handleSaveAusencia} disabled={savingAusencia}>
+                    {savingAusencia ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    Agregar
                   </Button>
                 </div>
               </div>

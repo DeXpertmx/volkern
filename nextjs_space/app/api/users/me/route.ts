@@ -42,7 +42,8 @@ export const GET = withTenantAuth(async (req, auth) => {
             accountType: true
           }
         },
-        metadata: true
+        metadata: true,
+        timezone: true
       }
     });
 
@@ -63,6 +64,7 @@ export const GET = withTenantAuth(async (req, auth) => {
     const responseUser = {
       ...user,
       isTwoFactorEnabled,
+      timezone: user.timezone || currentUser.timezone, // Utilizar el valor fresco de DB
       tenant: {
         id: activeTenant.id,
         nombre: activeTenant.nombre,
@@ -92,7 +94,7 @@ export const PATCH = withTenantAuth(async (req, auth) => {
   try {
     const currentUser = auth.user!;
     const body = await req.json();
-    const { name, telefono, bookingSlug, bookingTitle, bookingBio, bookingEnabled, metadata } = body;
+    const { name, telefono, bookingSlug, bookingTitle, bookingBio, bookingEnabled, metadata, timezone } = body;
 
     // Si se está cambiando el slug, verificar que sea único en la DB Global
     if (bookingSlug) {
@@ -175,11 +177,12 @@ export const PATCH = withTenantAuth(async (req, auth) => {
         bookingBio,
         bookingEnabled: typeof bookingEnabled === 'boolean' ? bookingEnabled : undefined,
         metadata: metadata ? metadata : undefined,
-        image: body.image // Permitir actualizar imagen desde aquí también
+        image: body.image,
+        timezone: timezone !== undefined ? timezone : undefined
       }
     });
 
-    return NextResponse.json({ success: true, user: updatedUser });
+    return NextResponse.json({ success: true, user: { ...updatedUser, timezone } });
 
   } catch (error: any) {
     console.error('Error updating user:', error);

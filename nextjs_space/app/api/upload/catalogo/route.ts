@@ -26,10 +26,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Solo se permiten imágenes' }, { status: 400 });
     }
 
-    // Validar tamaño máximo (5MB)
-    const maxSize = 5 * 1024 * 1024;
+    // Validar tamaño máximo (15MB)
+    const maxSize = 15 * 1024 * 1024;
     if (file.size > maxSize) {
-      return NextResponse.json({ error: 'La imagen no puede superar 5MB' }, { status: 400 });
+      return NextResponse.json({ error: 'La imagen no puede superar 15MB' }, { status: 400 });
     }
 
     // Convertir el archivo a buffer
@@ -43,14 +43,30 @@ export async function POST(request: NextRequest) {
     }
     const fileName = `catalogo/${timestamp}-${sanitizedFileName}`;
 
+    // Determinar el Content-Type correcto basado en la extensión del archivo
+    let contentType = file.type;
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (ext === 'gif') {
+      contentType = 'image/gif';
+    } else if (ext === 'png') {
+      contentType = 'image/png';
+    } else if (ext === 'jpg' || ext === 'jpeg') {
+      contentType = 'image/jpeg';
+    } else if (ext === 'webp') {
+      contentType = 'image/webp';
+    } else if (ext === 'svg') {
+      contentType = 'image/svg+xml';
+    }
+
     // Subir a S3 como archivo público
-    const { publicUrl } = await uploadPublicFile(buffer, fileName, file.type || 'image/png');
+    const { publicUrl } = await uploadPublicFile(buffer, fileName, contentType || 'image/png');
 
     return NextResponse.json({
       url: publicUrl,
+      data: [publicUrl],
       originalName: file.name,
       size: file.size,
-      type: file.type,
+      type: contentType || file.type || 'image/png',
     });
   } catch (error: any) {
     console.error('Error al subir imagen de catálogo:', error);
