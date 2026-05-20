@@ -18,8 +18,7 @@ import { createConversation } from './conversation-skills';
 import type { BookingCreatedEvent, BookingConfirmedEvent } from '@/lib/types/events';
 import { checkAvailability } from '@/lib/services/appointments';
 import { sendEmail } from '@/lib/ses-email';
-import { parseISO, startOfDay, endOfDay } from 'date-fns';
-import { zonedTimeToUtc } from 'date-fns-tz';
+import { fromZonedTime, toZonedTime } from 'date-fns-tz';
 
 // ============== TIPOS ==============
 
@@ -324,12 +323,11 @@ export async function getUpcomingBookings(tenantId: string, limit = 10, userId?:
 
   if (dateStr) {
     try {
-      const localDate = parseISO(dateStr);
-      const startLocal = startOfDay(localDate);
-      const endLocal = endOfDay(localDate);
+      const startLocalStr = `${dateStr}T00:00:00`;
+      const endLocalStr = `${dateStr}T23:59:59.999`;
       
-      const startUTC = zonedTimeToUtc(startLocal, timezone);
-      const endUTC = zonedTimeToUtc(endLocal, timezone);
+      const startUTC = fromZonedTime(startLocalStr, timezone);
+      const endUTC = fromZonedTime(endLocalStr, timezone);
       
       dateFilter = { gte: startUTC, lte: endUTC };
     } catch (e) {
@@ -343,7 +341,7 @@ export async function getUpcomingBookings(tenantId: string, limit = 10, userId?:
     where: {
       tenantId,
       fechaHora: dateFilter,
-      estado: { in: ['pendiente', 'confirmada'] },
+      estado: { in: ['pendiente', 'confirmada', 'Pendiente', 'Confirmada'] },
     },
     orderBy: { fechaHora: 'asc' },
     take: limit,
@@ -362,12 +360,12 @@ export async function getUpcomingBookings(tenantId: string, limit = 10, userId?:
       });
       
       if (gcalIntegration) {
-        // Obtener eventos próximos de Google Calendar
-        const { google } = await import('googleapis');
-        const oauth2 = new google.auth.OAuth2();
-        oauth2.setCredentials({ access_token: gcalIntegration.accessToken });
+        // Obtener eventos próximos de Google Calendar usando getAuthenticatedClient para auto-refresh
+        const { getAuthenticatedClient } = await import('@/lib/google-calendar');
+        const oauth2Client = await getAuthenticatedClient(userId);
         
-        const calendar = google.calendar({ version: 'v3', auth: oauth2 });
+        const { google } = await import('googleapis');
+        const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
         
         let timeMinStr = new Date().toISOString();
         let timeMaxStr = new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 días
@@ -378,7 +376,7 @@ export async function getUpcomingBookings(tenantId: string, limit = 10, userId?:
         }
 
         const response = await calendar.events.list({
-          calendarId: 'primary',
+          calendarId: gcalIntegration.calendarId || 'primary',
           timeMin: timeMinStr,
           timeMax: timeMaxStr,
           singleEvents: true,
@@ -412,10 +410,25 @@ export async function getUpcomingBookings(tenantId: string, limit = 10, userId?:
   }
 
   // Combinar y ordenar por fecha
-  const todasLasCitas = [
+  const todasLasCitasRaw = [
     ...citasVolkern.map(c => ({ ...c, fuente: 'volkern', fechaHoraLocal: toLocalTime(c.fechaHora) })),
     ...citasGoogleCalendar
   ];
+
+  // Deduplicar usando el ID de Google Calendar si existe en ambos
+  const mapCitas = new Map();
+  todasLasCitasRaw.forEach(cita => {
+    const googleId = cita.googleCalendarEventId || cita.googleEventId;
+    if (googleId) {
+      if (!mapCitas.has(googleId)) {
+        mapCitas.set(googleId, cita);
+      }
+    } else {
+      mapCitas.set(cita.id, cita);
+    }
+  });
+
+  const todasLasCitas = Array.from(mapCitas.values());
 
   // Ordenar por fecha local
   todasLasCitas.sort((a, b) => new Date(a.fechaHoraLocal).getTime() - new Date(b.fechaHoraLocal).getTime());
