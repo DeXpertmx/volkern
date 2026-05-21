@@ -188,11 +188,6 @@ function validarCredenciales(tipo: string, credenciales: any): { valido: boolean
         return { valido: false, mensaje: 'Meta requiere page_access_token y page_id' };
       }
       break;
-    case 'holded':
-      if (!credenciales.apiKey) {
-        return { valido: false, mensaje: 'Holded requiere apiKey' };
-      }
-      break;
     case 'stripe_invoicing':
       // El de stripe_invoicing es opcional si ya está configurado stripe general
       return { valido: true };

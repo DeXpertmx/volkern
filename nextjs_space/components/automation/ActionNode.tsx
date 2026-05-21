@@ -64,7 +64,6 @@ export const ActionNode: React.FC<NodeProps> = ({ id, data, selected }) => {
       webhook_externo_seguro: ShieldCheck,
       webhook_saliente: Webhook,
       crear_factura_stripe: CreditCard,
-      crear_factura_holded: FileText,
       crear_factura_square: CreditCard,
       cobrar_gocardless: DollarSign,
       enviar_mandato_gocardless: Send,
@@ -121,10 +120,9 @@ export const ActionNode: React.FC<NodeProps> = ({ id, data, selected }) => {
                 </SelectGroup>
                 <SelectGroup>
                   <SelectLabel>💰 Facturación</SelectLabel>
-                  <SelectItem value="crear_factura_stripe">Factura Stripe</SelectItem>
-                  <SelectItem value="crear_factura_holded">Factura Holded</SelectItem>
-                  <SelectItem value="crear_factura_square">Factura Square</SelectItem>
-                  <SelectItem value="cobrar_gocardless">Cobrar GoCardless</SelectItem>
+                  <SelectItem value="crear_factura_stripe">Generar Factura</SelectItem>
+                  <SelectItem value="crear_factura_square">Generar Factura</SelectItem>
+                  <SelectItem value="cobrar_gocardless">Generar Factura</SelectItem>
                   <SelectItem value="enviar_mandato_gocardless">Mandato GoCardless</SelectItem>
                 </SelectGroup>
               </SelectContent>

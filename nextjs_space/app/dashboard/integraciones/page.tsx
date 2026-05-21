@@ -352,31 +352,6 @@ const INTEGRACIONES_DISPONIBLES = [
     ]
   },
   {
-    tipo: 'holded',
-    nombre: 'Holded',
-    descripcion: 'ERP y Facturación inteligente para empresas (España)',
-    icono: Building,
-    color: 'bg-orange-500',
-    categoria: 'contabilidad',
-    campos: [
-      { name: 'apiKey', label: 'API Key', type: 'password', placeholder: 'Tu API Key de Holded', required: true }
-    ],
-    instrucciones: 'Para obtener tu API Key de Holded:',
-    pasos: [
-      '1. Inicia sesión en tu cuenta de Holded',
-      '2. Ve a Configuración (engrane) > Desarrolladores',
-      '3. En la pestaña API Keys, crea una nueva o copia la existente',
-      '4. Pégala aquí para activar la facturación automática'
-    ],
-    documentacion: 'https://developers.holded.com/reference/api-key',
-    caracteristicas: [
-      '✅ Creación automática de facturas desde Volkern',
-      '✅ Sincronización de clientes y contactos',
-      '✅ Soporte para TicketBAI y normativa española',
-      '✅ Gestión de impuestos (IVA, IRPF)'
-    ]
-  },
-  {
     tipo: 'stripe_invoicing',
     nombre: 'Stripe Invoicing',
     descripcion: 'Genera facturas legales y cobra online de forma global con Stripe',

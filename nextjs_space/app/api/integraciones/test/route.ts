@@ -63,9 +63,6 @@ export async function POST(request: Request) {
         case 'meta':
           resultado = await probarMeta(credenciales);
           break;
-        case 'holded':
-          resultado = await probarHolded(credenciales);
-          break;
         case 'stripe_invoicing':
           resultado = { success: true, mensaje: 'Stripe Invoicing habilitado (se usará la configuración general de Stripe)' };
           break;
@@ -398,44 +395,6 @@ async function probarMeta(credenciales: any) {
     return { 
       success: false, 
       mensaje: `Error al conectar con Meta: ${error.message || 'Error de red'}` 
-    };
-  }
-}
-
-async function probarHolded(credenciales: any) {
-  const { apiKey } = credenciales;
-  
-  if (!apiKey) {
-    return { success: false, mensaje: 'API Key de Holded requerida' };
-  }
-  
-  try {
-    const response = await fetch('https://api.holded.com/api/invoicing/v1/info', {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-        'key': apiKey
-      }
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      return { 
-        success: true, 
-        mensaje: `✅ Conexión a Holded exitosa. Empresa: ${data.name || 'Desconocida'}`,
-        info: data
-      };
-    } else {
-      const error = await response.json().catch(() => ({ message: 'Error de autenticación' }));
-      return { 
-        success: false, 
-        mensaje: `API Key inválida o error en Holded: ${error.message || response.statusText}` 
-      };
-    }
-  } catch (error: any) {
-    return { 
-      success: false, 
-      mensaje: `Error al conectar con Holded: ${error.message || 'Error de red'}` 
     };
   }
 }

@@ -309,13 +309,20 @@ body.puck-editor-active [data-radix-portal] [data-state] {
   input, select, textarea {
     font-size: 16px;
   }
-  .h-screen, .min-h-screen {
-    height: -webkit-fill-available;
-  }
-  .overflow-scroll, .overflow-y-scroll, .overflow-x-scroll {
-    -webkit-overflow-scrolling: touch;
-  }
   .backdrop-blur-md, .backdrop-blur-lg, .backdrop-blur-xl {
     -webkit-backdrop-filter: saturate(180%) blur(20px);
+  }
+}
+
+@supports (height: 100dvh) {
+  .h-screen, .min-h-screen {
+    min-height: 100dvh;
+  }
+}
+
+@supports not (height: 100dvh) {
+  .h-screen, .min-h-screen {
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
   }
 }

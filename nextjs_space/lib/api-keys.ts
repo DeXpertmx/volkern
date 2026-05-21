@@ -117,7 +117,7 @@ export const AVAILABLE_SCOPES = [
   'telephony:write',
   'telephony:calls',
   
-  // Facturación (Stripe, Holded)
+  // Facturación (Stripe, Square, GoCardless)
   'invoices:read',
   'invoices:write',
   'invoices:create',
