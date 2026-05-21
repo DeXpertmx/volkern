@@ -367,20 +367,8 @@ export class IntentClassifierAgent {
       destructive: false
     },
     {
-      name: 'cancelar_factura',
-      description: 'Cancelar o anular una factura existente',
-      requiredParams: ['invoiceId'],
-      optionalParams: [],
-      examples: [
-        'cancela la factura FAC-001',
-        'anula la factura #123',
-        'elimina la factura de juan@email.com'
-      ],
-      destructive: true
-    },
-    {
       name: 'rectificar_factura',
-      description: 'Rectificar una factura existente (corregir monto o datos)',
+      description: 'Rectificar o corregir una factura existente (Veri*factu no permite cancelación, solo rectificación)',
       requiredParams: ['invoiceId', 'razon'],
       optionalParams: ['monto'],
       examples: [
