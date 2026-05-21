@@ -24,6 +24,51 @@ export interface OpenRouterResponse {
   };
 }
 
+async function callOpenRouter(model: string, messages: OpenRouterMessage[], temperature = 0.3): Promise<OpenRouterResponse> {
+  if (!OPENROUTER_API_KEY) {
+    throw new Error('OPENROUTER_API_KEY no configurada');
+  }
+
+  const response = await fetch(OPENROUTER_BASE_URL, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': 'https://volkern.app',
+      'X-Title': 'Volkern CRM Assistant'
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      temperature,
+      max_tokens: 8192,
+      top_p: 0.9
+    })
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`OpenRouter error (${model}): ${response.status} - ${error}`);
+  }
+
+  const data = await response.json();
+
+  if (!data?.choices?.[0]?.message?.content) {
+    throw new Error(`${model} retornó respuesta vacía o nula`);
+  }
+
+  return data;
+}
+
+/**
+ * Llama a DeepSeek V4 Flash (free) via OpenRouter — modelo principal.
+ */
+async function callDeepSeekV4Flash(
+  messages: OpenRouterMessage[]
+): Promise<OpenRouterResponse> {
+  return callOpenRouter('deepseek/deepseek-v4-flash:free', messages, 0.3);
+}
+
 /**
  * Llama a Gemini 2.5 Flash directamente (fallback cuando OpenRouter falla).
  */
@@ -90,74 +135,33 @@ async function callGemini25Flash(
 }
 
 /**
- * Intento principal: MiniMax M2.5 (free) via OpenRouter.
- * Es gratuito con rate limits.
- */
-export async function callMinimaxM25(
-  messages: OpenRouterMessage[]
-): Promise<OpenRouterResponse> {
-  if (!OPENROUTER_API_KEY) {
-    throw new Error('OPENROUTER_API_KEY no configurada');
-  }
-
-  const response = await fetch(OPENROUTER_BASE_URL, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://volkern.app',
-      'X-Title': 'Volkern CRM Assistant'
-    },
-    body: JSON.stringify({
-      model: 'minimax/minimax-m2.5:free',
-      messages,
-      temperature: 0.3,
-      max_tokens: 8192,
-      top_p: 0.9
-    })
-  });
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`OpenRouter error: ${response.status} - ${error}`);
-  }
-
-  const data = await response.json();
-  
-  // Validar que la respuesta tenga contenido
-  if (!data?.choices?.[0]?.message?.content) {
-    throw new Error('MiniMax retornó una respuesta vacía o nula');
-  }
-
-  return data;
-}
-
-/**
  * Pipeline de llamada con fallback:
- * 1. Google Gemini directo (primario - gratis y sin límites)
- * 2. MiniMax M2.5 (free) via OpenRouter (fallback)
+ * 1. DeepSeek V4 Flash (free) via OpenRouter (primario)
+ * 2. Google Gemini 2.5 Flash directo (fallback)
  */
 export async function callAssistantWithFallback(
   messages: OpenRouterMessage[]
 ): Promise<OpenRouterResponse> {
-  // 1. Intentar Google Gemini directo (primario - sin límites de uso)
+  // 1. Intentar DeepSeek V4 Flash via OpenRouter
+  try {
+    console.log('[AI] Intentando DeepSeek V4 Flash...');
+    const response = await callDeepSeekV4Flash(messages);
+    console.log('[AI] ✅ DeepSeek respondió correctamente');
+    return response;
+  } catch (deepseekError) {
+    console.warn('[AI] DeepSeek falló:', deepseekError);
+  }
+
+  // 2. Fallback: Google Gemini 2.5 Flash directo
   try {
     console.log('[AI] Intentando Google Gemini 2.5 Flash...');
     const response = await callGemini25Flash(messages);
     console.log('[AI] ✅ Gemini respondió correctamente');
     return response;
   } catch (geminiError) {
-    console.warn('[AI] Gemini falló:', geminiError);
-  }
-
-  // 2. Fallback: MiniMax via OpenRouter (puede tener rate limits)
-  try {
-    console.log('[AI] Intentando MiniMax M2.5 via OpenRouter...');
-    const response = await callMinimaxM25(messages);
-    console.log('[AI] ✅ MiniMax respondió correctamente');
-    return response;
-  } catch (minimaxError) {
-    console.error('[AI] ❌ Ambos fallaron:', minimaxError);
-    throw minimaxError;
+    console.error('[AI] ❌ Ambos fallaron:', geminiError);
+    throw geminiError;
   }
 }
+
+export { callDeepSeekV4Flash, callGemini25Flash };
