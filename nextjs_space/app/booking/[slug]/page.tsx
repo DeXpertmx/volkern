@@ -287,7 +287,7 @@ export default function UserBookingPage() {
                 )}
 
                 <main>
-                    <AnimatePresence mode="wait">
+                    <AnimatePresence mode="wait" initial={false}>
                         {step === 1 && (
                             <motion.div
                                 key="step1"
