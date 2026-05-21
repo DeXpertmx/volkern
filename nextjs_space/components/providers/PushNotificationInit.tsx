@@ -30,23 +30,26 @@ export function PushNotificationInit() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  const isPublicPage = !session?.user;
+
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || isPublicPage) return;
 
-    setPermission(Notification.permission);
+    try {
+      setPermission(Notification.permission);
 
-    const savedPref = localStorage.getItem(PUSH_NOTIFICATION_KEY);
-    if (savedPref === 'false') {
-      return;
-    }
-
-    if (Notification.permission === 'default' && session?.user?.id) {
-      // No mostrar popup automáticamente, esperar a que el usuario lo active
+      const savedPref = localStorage.getItem(PUSH_NOTIFICATION_KEY);
+      if (savedPref === 'false') {
+        return;
+      }
+    } catch (e) {
+      // iOS Safari puede lanzar error con Notification API
     }
   }, [session?.user?.id]);
 
   const requestPermission = async () => {
     if (typeof window === 'undefined') return;
+    if (!('Notification' in window)) return;
 
     try {
       const perm = await Notification.requestPermission();
@@ -93,6 +96,13 @@ export function PushNotificationInit() {
     if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
 
     try {
+      // Evitar registrar en iOS Safari si está en modo privado
+      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+      const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+      if (isSafari || isIOS) {
+        console.log('[Push] ServiceWorker skip en Safari/iOS');
+        return;
+      }
       const registration = await navigator.serviceWorker.register('/sw.js');
       console.log('[Push] Service Worker registrado:', registration.scope);
     } catch (error) {
@@ -154,6 +164,8 @@ export function PushNotificationInit() {
       fetchConfig();
     }
   }, [showConfigModal]);
+
+  if (isPublicPage) return null;
 
   if (permission === 'denied') {
     return (

@@ -253,13 +253,9 @@ export class AutomationEngine {
       case 'webhook_saliente':
         return await this.sendWebhook(config)
       case 'crear_factura_stripe':
-        return await this.createStripeInvoice(config)
-      case 'crear_factura_holded':
-        return await this.createHoldedInvoice(config)
       case 'crear_factura_square':
-        return await this.createSquareInvoice(config)
       case 'cobrar_gocardless':
-        return await this.createGoCardlessPayment(config)
+        return await this.generateInvoice(config)
       case 'enviar_mandato_gocardless':
         return await this.sendGoCardlessMandate(config)
       
@@ -1426,7 +1422,7 @@ export class AutomationEngine {
     }
   }
 
-  private async createStripeInvoice(config: any): Promise<boolean> {
+  private async generateInvoice(config: any): Promise<boolean> {
     const { amount, currency = 'EUR', description, items = [] } = config
     const tenantId = this.context.tenantId
 
@@ -1439,80 +1435,12 @@ export class AutomationEngine {
         contactId: this.context.contactId,
         amount: amount || 0,
         currency,
-        description: description || 'Factura generada automáticamente (Stripe)',
+        description: description || 'Factura generada desde automatización',
         items: items.length > 0 ? items : [{ name: 'Servicio', quantity: 1, price: amount || 0 }]
       })
       return true
     } catch (error) {
-      console.error('Error creando factura Stripe en automatización:', error)
-      return false
-    }
-  }
-
-  private async createHoldedInvoice(config: any): Promise<boolean> {
-    const { amount, currency = 'EUR', description, items = [] } = config
-    const tenantId = this.context.tenantId
-
-    if (!tenantId) return false
-
-    try {
-      await InvoicingService.createInvoice({
-        tenantId,
-        leadId: this.context.leadId,
-        contactId: this.context.contactId,
-        amount: amount || 0,
-        currency,
-        description: description || 'Factura generada automáticamente (Holded)',
-        items: items.length > 0 ? items : [{ name: 'Servicio', quantity: 1, price: amount || 0 }]
-      })
-      return true
-    } catch (error) {
-      console.error('Error creando factura Holded en automatización:', error)
-      return false
-    }
-  }
-
-  private async createSquareInvoice(config: any): Promise<boolean> {
-    const { amount, currency = 'USD', description, items = [] } = config
-    const tenantId = this.context.tenantId
-
-    if (!tenantId) return false
-
-    try {
-      await InvoicingService.createInvoice({
-        tenantId,
-        leadId: this.context.leadId,
-        contactId: this.context.contactId,
-        amount: amount || 0,
-        currency,
-        description: description || 'Factura generada automáticamente (Square)',
-        items: items.length > 0 ? items : [{ name: 'Servicio', quantity: 1, price: amount || 0 }]
-      })
-      return true
-    } catch (error) {
-      console.error('Error creando factura Square en automatización:', error)
-      return false
-    }
-  }
-
-  private async createGoCardlessPayment(config: any): Promise<boolean> {
-    const { amount, currency = 'EUR', description } = config
-    const tenantId = this.context.tenantId
-
-    if (!tenantId) return false
-
-    try {
-      await InvoicingService.createInvoice({
-        tenantId,
-        leadId: this.context.leadId,
-        contactId: this.context.contactId,
-        amount: amount || 0,
-        currency,
-        description: description || 'Cobro por domiciliación (GoCardless)',
-      })
-      return true
-    } catch (error) {
-      console.error('Error procesando cobro GoCardless en automatización:', error)
+      console.error('Error generando factura en automatización:', error)
       return false
     }
   }
@@ -2037,7 +1965,7 @@ export class AutomationEngine {
     const { nombre, criterios } = config
     const tenantClient = await getTenantDb(this.context.tenantId)
     
-    let whereClause: any = { tenantId: this.context.tenantId }
+    const whereClause: any = { tenantId: this.context.tenantId }
     
     if (criterios?.etiquetas?.length) {
       whereClause.etiquetas = { hasSome: criterios.etiquetas }

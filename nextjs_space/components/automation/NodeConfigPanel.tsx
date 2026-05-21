@@ -120,10 +120,9 @@ export function NodeConfigPanel({ node, onUpdate, onDelete, onClose }: NodeConfi
               <SelectGroup>
                 <SelectLabel>🔌 Integraciones</SelectLabel>
                 <SelectItem value="webhook_saliente">Enviar Webhook</SelectItem>
-                <SelectItem value="crear_factura_stripe">Crear Factura Stripe</SelectItem>
-                <SelectItem value="crear_factura_holded">Crear Factura Holded</SelectItem>
-                <SelectItem value="crear_factura_square">Crear Factura Square</SelectItem>
-                <SelectItem value="cobrar_gocardless">Cobrar GoCardless</SelectItem>
+                <SelectItem value="crear_factura_stripe">Generar Factura</SelectItem>
+                <SelectItem value="crear_factura_square">Generar Factura</SelectItem>
+                <SelectItem value="cobrar_gocardless">Generar Factura</SelectItem>
                 <SelectItem value="enviar_mandato_gocardless">Enviar Mandato GoCardless</SelectItem>
               </SelectGroup>
 
@@ -623,19 +622,13 @@ export function NodeConfigPanel({ node, onUpdate, onDelete, onClose }: NodeConfi
         )}
 
         {(config.actionType === 'crear_factura_stripe' || 
-          config.actionType === 'crear_factura_holded' || 
           config.actionType === 'crear_factura_square' || 
           config.actionType === 'cobrar_gocardless') && (
           <>
             <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-100 dark:border-blue-800 mb-4">
               <p className="text-xs text-blue-800 dark:text-blue-300 flex items-center gap-2">
                 <Info className="h-3 w-3" />
-                {config.actionType === 'cobrar_gocardless' 
-                  ? 'Se intentará realizar un cobro directo a la cuenta bancaria del cliente.'
-                  : `Se generará una factura legal en ${
-                      config.actionType === 'crear_factura_stripe' ? 'Stripe' : 
-                      config.actionType === 'crear_factura_holded' ? 'Holded' : 'Square'
-                    } para el cliente actual.`}
+                Se generará una factura con sello Veri*factu Volkern.
               </p>
             </div>
             <div>
@@ -675,26 +668,7 @@ export function NodeConfigPanel({ node, onUpdate, onDelete, onClose }: NodeConfi
                 placeholder="Ej: Pago de suscripción mensual"
               />
             </div>
-            {config.actionType === 'crear_factura_holded' && (
-              <div>
-                <Label>Tax ID (opcional)</Label>
-                <Select
-                  value={config.taxId || '21'}
-                  onValueChange={(value) => handleConfigChange('taxId', value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="21">21% (IVA General)</SelectItem>
-                    <SelectItem value="10">10% (IVA Reducido)</SelectItem>
-                    <SelectItem value="4">4% (IVA Superreducido)</SelectItem>
-                    <SelectItem value="0">0% (Exento)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          </>
+          </>    
         )}
 
         {config.actionType === 'enviar_mandato_gocardless' && (
