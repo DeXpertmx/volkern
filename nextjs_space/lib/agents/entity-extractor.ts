@@ -1,4 +1,4 @@
-import { callMinimaxM25, callAssistantWithFallback } from '@/lib/assistant/openrouter-client';
+import { callAssistantWithFallback } from '@/lib/assistant/openrouter-client';
 import { prisma } from '@/lib/db';
 
 export interface ExtractedEntities {
