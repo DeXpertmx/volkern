@@ -158,7 +158,30 @@ export class MinimaxOrchestratorAgent {
     }
 
     if (!skillName || !skills[skillName]) throw new Error(`No hay skill para ${intent}`);
-    return await executeSkill(skillName as any, { ...params, tenantId });
+    const normalizedParams = this.normalizeParams(params);
+    return await executeSkill(skillName as any, { ...normalizedParams, tenantId });
+  }
+
+  private normalizeParams(params: Record<string, any>): Record<string, any> {
+    const normalized = { ...params };
+    const map: Record<string, string> = {
+      fecha: 'date',
+      telefono: 'phone',
+      monto: 'amount',
+      concepto: 'concept',
+      duracion: 'duration',
+      prioridad: 'priority',
+      titulo: 'title',
+      descripcion: 'description',
+      fechaVencimiento: 'dueDate',
+      fechaHora: 'datetime',
+    };
+    for (const [spanish, english] of Object.entries(map)) {
+      if (normalized[spanish] !== undefined && normalized[english] === undefined) {
+        normalized[english] = normalized[spanish];
+      }
+    }
+    return normalized;
   }
 
   private async checkPendingConfirmation(userId: string): Promise<any> {

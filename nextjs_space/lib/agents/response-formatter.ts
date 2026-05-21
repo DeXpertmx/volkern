@@ -123,9 +123,22 @@ export class ResponseFormatterAgent {
   private formatCitasList(data: any): string {
     if (!data?.citas || data.citas.length === 0) return 'No tienes citas programadas.';
     const citas = data.citas.slice(0, 5);
-    let response = '📋 Tus próximas citas:\n\n';
-    citas.forEach((cita: any, i: number) => { response += `${i + 1}. ${cita.fecha || 'Pendiente'} a las ${cita.hora || '?'}\n${cita.nombre ? `   Con: ${cita.nombre}\n` : ''}\n`; });
-    if (data.citas.length > 5) response += `Y ${data.citas.length - 5} más...\n`;
+    const timezone = data.timezone || 'America/Mexico_City';
+    const total = data.citas.length;
+    let response = `📋 ${total} cita${total > 1 ? 's' : ''} encontrada${total > 1 ? 's' : ''}:\n\n`;
+    citas.forEach((cita: any, i: number) => {
+      const fechaLocal = cita.fechaHoraLocal || cita.fechaHora;
+      const fechaStr = fechaLocal
+        ? new Date(fechaLocal).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', timeZone: timezone })
+        : 'Pendiente';
+      const horaStr = fechaLocal
+        ? new Date(fechaLocal).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', timeZone: timezone })
+        : '--:--';
+      const nombre = cita.lead?.nombre || cita.nombre || 'Sin nombre';
+      const estado = cita.estado === 'confirmada' ? '✅' : cita.estado === 'pendiente' ? '⏳' : '❓';
+      response += `${i + 1}. ${estado} ${fechaStr} ${horaStr}\n   ${nombre}${cita.titulo ? ` — ${cita.titulo}` : ''}\n`;
+    });
+    if (total > 5) response += `\nY ${total - 5} más...`;
     return response;
   }
 
