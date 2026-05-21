@@ -72,16 +72,22 @@ export class EntityExtractorAgent {
       missingRequired: []
     };
 
-    // Fallback: si es registrar_interaccion y solo falta contenido, usar todo el mensaje
-    if (intent === 'registrar_interaccion' && !combinedEntities.contenido && previousEntities.tipo) {
-      const hasAction = /\b(registra|llamada|whatsapp|email|reuni.n|nota|interacci.n)\b/i.test(message);
-      if (!hasAction) {
-        combinedEntities.contenido = message;
-      }
-    }
-
     const entitySchema = this.entityDescriptions[intent];
     const missingParams: string[] = [];
+
+    // Fallback: si hay contexto previo y solo falta 1 parámetro requerido, usar todo el mensaje
+    if (entitySchema && Object.keys(previousEntities).length > 0) {
+      const missing = entitySchema.required.filter(r => {
+        const val = combinedEntities[r as keyof ExtractedEntities];
+        return !val || (typeof val === 'string' && val.trim() === '');
+      });
+      if (missing.length === 1) {
+        const hasActionVerb = /\b(crea|busca|agenda|cancela|registra|env.a|muestra|lista|dame|nuev[oa]|pon|contexto|convierte|genera|analiza|sugiere|aprueba|ajusta|completa|cierra|califica|rectifica)\b/i.test(message);
+        if (!hasActionVerb) {
+          (combinedEntities as any)[missing[0]] = message;
+        }
+      }
+    }
 
     if (entitySchema) {
       for (const required of entitySchema.required) {

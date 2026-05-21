@@ -50,15 +50,18 @@ export class IntentClassifierAgent {
     },
     {
       name: 'actualizar_lead',
-      description: 'Modificar o actualizar un lead o contacto existente',
+      description: 'Actualizar, modificar o agregar contexto a un lead o contacto existente',
       requiredParams: [],
       optionalParams: ['email', 'telefono', 'nombre', 'empresa', 'contexto'],
       examples: [
         'actualiza el telefono de juan@email.com a 555-1234',
         'ponle contexto a Alejandra Velázquez: Interesada en automatización',
+        'pon contexto al contacto Alejandra Velázquez',
         'cambia el nombre de maria@empresa.com a Maria Perez',
         'actualiza el contacto de Alejandra Vázquez',
-        'agregar contexto a Alejandra Velázquez'
+        'agregar contexto a Alejandra Velázquez',
+        'ponle notas a Juan Pérez: Cliente importante',
+        'agrega contexto al lead María García'
       ],
       destructive: false
     },
@@ -242,13 +245,16 @@ export class IntentClassifierAgent {
     // ========== TAREAS ==========
     {
       name: 'crear_tarea',
-      description: 'Crear una nueva tarea pendiente',
+      description: 'Crear una nueva tarea pendiente para un lead o contacto',
       requiredParams: ['titulo'],
-      optionalParams: ['descripcion', 'fechaVencimiento', 'email', 'prioridad'],
+      optionalParams: ['email', 'nombre', 'descripcion', 'fechaVencimiento', 'prioridad'],
       examples: [
+        'crea una tarea con Alejandra Velázquez',
+        'registra una tarea con Juan Pérez',
         'crea tarea: llamar a Juan Pérez',
-        'nueva tarea: revisar cotización para mañana',
-        'agrega pendiente: enviar documento a María, vence el viernes'
+        'nueva tarea para María: revisar cotización',
+        'agrega pendiente: enviar documento a Carlos, vence el viernes',
+        'tarea con el lead juan@email.com: llamar para seguimiento'
       ],
       destructive: false
     },
