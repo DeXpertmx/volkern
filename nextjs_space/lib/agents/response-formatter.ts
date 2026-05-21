@@ -24,7 +24,7 @@ export class ResponseFormatterAgent {
   private readonly intentEmojis: Record<string, string> = {
     'crear_lead': '👤', 'buscar_lead': '🔍', 'actualizar_lead': '✏️', 'convertir_lead': '⭐',
     'obtener_telefono': '📱', 'registrar_interaccion': '📝', 'diagnosticos_lead': '🩺',
-    'agendar_cita': '📅', 'mis_citas': '📋', 'cancelar_cita': '❌', 'confirmar_cita': '✅',
+    'agendar_cita': '📅', 'mis_citas': '📋', 'cancelar_cita': '❌', 'confirmar_cita': '✅', 'reagendar_cita': '🔄',
     'auto_agendar': '🤖',
     'crear_tarea': '✅', 'completar_tarea': '✔️', 'mis_tareas': '📋',
     'crear_nota': '📝', 'ver_notas': '📓',
@@ -108,6 +108,12 @@ export class ResponseFormatterAgent {
     'confirmar_cita': {
       execute: () => `✅ Cita confirmada correctamente.`,
       error: (error) => `No pude confirmar la cita: ${error}.`
+    },
+    'reagendar_cita': {
+      confirmation_pending: () => `⚠️ ¿Seguro que quieres reprogramar esta cita? Se actualizará la fecha y hora. Responde "SÍ" para confirmar.`,
+      execute: (data) => `🔄 Cita reprogramada: ${data?.cita?.fechaHora ? new Date(data.cita.fechaHora).toLocaleString() : data?.message || 'fecha actualizada'}.`,
+      error: (error) => `No pude reprogramar la cita: ${error}.`,
+      ask_clarification: (params) => `Para reprogramar necesito ${params.missingParams?.join(', ') || 'la cita, la nueva fecha y hora'}.`
     },
     'auto_agendar': {
       execute: (data) => `🤖 Cita agendada automáticamente para ${data?.cita?.fechaHora ? new Date(data.cita.fechaHora).toLocaleString() : 'la fecha disponible'}. Notificación enviada.`,

@@ -53,9 +53,14 @@ export class MinimaxOrchestratorAgent {
 
       const classification = await intentClassifier.classify({ message, userId, tenantId, context: activeContext });
       
-      // Si hay contexto pendiente y el modelo no detectó una intención clara, asumimos que está respondiendo a la intención previa
-      const isShortMessage = message.trim().split(/\s+/).length <= 3;
-      const likelyContinuation = pendingCtx && (classification.intent === 'consulta_general' || classification.intent === 'unknown' || (isShortMessage && classification.confidence < 0.8) || (pendingCtx.intent === 'registrar_interaccion' && classification.confidence < 0.9));
+      // Si hay contexto pendiente, determinar si el usuario está respondiendo a la pregunta anterior
+      const hasActionVerb = /\b(crea|busca|agenda|cancela|registra|envía|muestra|lista|dame|nuev[oa]|convierte|genera|analiza|sugiere|aprueba|ajusta|completa|cierra|califica|rectifica)\b/i.test(message);
+      const likelyContinuation = pendingCtx && (
+        classification.intent === 'consulta_general' || 
+        classification.intent === 'unknown' || 
+        classification.confidence < 0.7 ||
+        (!hasActionVerb && classification.confidence < 0.85)
+      );
       
       if (likelyContinuation) {
         classification.intent = pendingCtx!.intent;
@@ -152,6 +157,7 @@ export class MinimaxOrchestratorAgent {
       'mis_citas': 'get_upcoming_bookings',
       'cancelar_cita': 'cancel_booking',
       'confirmar_cita': 'confirm_booking',
+      'reagendar_cita': '__reschedule__',
       'auto_agendar': 'auto_schedule',
       'crear_tarea': 'create_task',
       'completar_tarea': 'complete_task',
@@ -201,9 +207,21 @@ export class MinimaxOrchestratorAgent {
       const leads = await prisma.lead.findMany({
         where: { tenantId },
         take: 10,
-        select: { id: true, name: true, email: true, phone: true, stage: true }
+        select: { id: true, nombre: true, name: true, email: true, phone: true, telefono: true, stage: true }
       });
       return { leads, count: leads.length };
+    }
+
+    if (intent === 'reagendar_cita') {
+      const { prisma } = await import('@/lib/db');
+      const cita = await prisma.cita.findFirst({ where: { id: params.citaId || params.citaId, tenantId } });
+      if (!cita) throw new Error('No se encontró la cita especificada');
+      const fechaHora = params.fechaHora || new Date(`${params.fecha}T${params.hora || '12:00'}:00`);
+      const updated = await prisma.cita.update({
+        where: { id: cita.id },
+        data: { fechaHora, estado: 'pendiente' }
+      });
+      return { success: true, cita: updated, message: `Cita reprogramada para ${fechaHora.toLocaleString()}` };
     }
 
     if (!skillName || !skills[skillName]) throw new Error(`No hay skill para ${intent}`);

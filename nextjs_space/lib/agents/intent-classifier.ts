@@ -152,6 +152,19 @@ export class IntentClassifierAgent {
       destructive: true
     },
     {
+      name: 'reagendar_cita',
+      description: 'Reprogramar o cambiar la fecha/hora de una cita existente',
+      requiredParams: ['citaId', 'fecha', 'hora'],
+      optionalParams: ['email'],
+      examples: [
+        'cambia la cita que teníamos con Alejandra al viernes a las 4pm',
+        'reprograma mi reunión con Juan para el lunes a las 10am',
+        'mueve la cita #123 al martes a las 3:30pm',
+        'cambia la cita de María del viernes al lunes'
+      ],
+      destructive: true
+    },
+    {
       name: 'confirmar_cita',
       description: 'Confirmar una cita existente',
       requiredParams: ['citaId'],
