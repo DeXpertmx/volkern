@@ -168,7 +168,6 @@ export class MinimaxOrchestratorAgent {
       'calificar_lead': 'prequalify_lead',
       'crear_factura': 'create_invoice',
       'estado_fiscal': 'get_invoice_fiscal_status',
-      'cancelar_factura': 'cancel_invoice',
       'rectificar_factura': 'rectify_invoice',
       'registrar_gasto': 'create_expense',
       'crear_proveedor': 'create_supplier',

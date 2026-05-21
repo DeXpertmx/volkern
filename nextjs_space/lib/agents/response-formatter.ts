@@ -31,7 +31,7 @@ export class ResponseFormatterAgent {
     'crear_conversacion': '💬', 'cerrar_conversacion': '🔒',
     'enviar_mensaje': '💬', 'enviar_mensaje_interno': '📢',
     'crear_negocio': '💼', 'actualizar_negocio': '📊', 'mis_negocios': '📈', 'calificar_lead': '🎯',
-    'crear_factura': '🧾', 'estado_fiscal': '🔎', 'cancelar_factura': '🚫', 'rectificar_factura': '🔄',
+    'crear_factura': '🧾', 'estado_fiscal': '🔎', 'rectificar_factura': '🔄',
     'registrar_gasto': '💰', 'crear_proveedor': '🏢', 'analizar_gastos': '📊', 'proyeccion_financiera': '🔮',
     'salud_inventario': '📦', 'ajustar_stock': '📤', 'buscar_producto': '🔎', 'gestionar_catalogo': '📋',
     'generar_copy': '✍️', 'analizar_sentimiento': '📊', 'sugerir_campania': '📣',
@@ -168,14 +168,9 @@ export class ResponseFormatterAgent {
       },
       error: (error) => `No pude consultar el estado: ${error}.`
     },
-    'cancelar_factura': {
-      confirmation_pending: () => `⚠️ ¿Seguro que quieres cancelar esta factura? Esta acción es irreversible. Responde "SÍ" para confirmar.`,
-      execute: () => `🚫 Factura cancelada correctamente.`,
-      error: (error) => `No pude cancelar la factura: ${error}.`
-    },
     'rectificar_factura': {
-      confirmation_pending: () => `⚠️ ¿Seguro que quieres rectificar esta factura? Responde "SÍ" para confirmar.`,
-      execute: (data) => `🔄 Factura rectificada correctamente. Nueva versión: ${data?.sequenceNumber || '#'}.`,
+      confirmation_pending: () => `⚠️ ¿Seguro que quieres rectificar esta factura? Esta acción reemplaza la factura anterior. Responde "SÍ" para confirmar.`,
+      execute: (data) => `🔄 Factura rectificada correctamente. Nueva versión con sello Veri*factu: ${data?.sequenceNumber || '#'}. La factura anterior queda anulada.`,
       error: (error) => `No pude rectificar la factura: ${error}.`
     },
     'crear_proveedor': {
