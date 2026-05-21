@@ -72,6 +72,14 @@ export class EntityExtractorAgent {
       missingRequired: []
     };
 
+    // Fallback: si es registrar_interaccion y solo falta contenido, usar todo el mensaje
+    if (intent === 'registrar_interaccion' && !combinedEntities.contenido && previousEntities.tipo) {
+      const hasAction = /\b(registra|llamada|whatsapp|email|reuni.n|nota|interacci.n)\b/i.test(message);
+      if (!hasAction) {
+        combinedEntities.contenido = message;
+      }
+    }
+
     const entitySchema = this.entityDescriptions[intent];
     const missingParams: string[] = [];
 
@@ -148,10 +156,14 @@ export class EntityExtractorAgent {
     const schema = this.entityDescriptions[intent];
     const fields = schema ? [...schema.required, ...schema.optional].join(', ') : 'nombre, email, telefono, empresa, fecha, hora, titulo, descripcion, monto, concepto';
     
-    const systemPrompt = `Eres un extractor de entidades para Volkern CRM. INTENCIÓN: ${intent}. Extrae los siguientes campos si están presentes: ${fields}. IMPORTANTE: Para interacciones, el campo "contenido" es el resumen del mensaje. Retorna EXCLUSIVAMENTE un JSON válido. Mensaje: "${message}" ${context ? `Contexto: ${context}` : ''}`;
+    const systemPrompt = `Eres un extractor de entidades para Volkern CRM. Intención detectada: ${intent}. Extrae SOLO estos campos del mensaje del usuario si están presentes: ${fields}. Para interacciones, "contenido" es el resumen o descripción de lo ocurrido. Responde ÚNICAMENTE con un JSON válido, sin texto adicional.`;
+    const userContent = `Mensaje: "${message}"${context ? `\n\nContexto: ${context}` : ''}`;
 
     try {
-      const response = await callAssistantWithFallback([{ role: 'system', content: systemPrompt }]);
+      const response = await callAssistantWithFallback([
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userContent }
+      ]);
       const content = response.choices[0]?.message?.content || '';
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
