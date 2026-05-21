@@ -48,7 +48,8 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/auth/') || 
     pathname.startsWith('/booking/') || 
     pathname.startsWith('/embed/') ||
-    pathname.startsWith('/tarjeta/')
+    pathname.startsWith('/tarjeta/') ||
+    pathname.startsWith('/p/')
   ) {
     return NextResponse.next()
   }

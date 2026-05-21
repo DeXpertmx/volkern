@@ -301,3 +301,21 @@ body.puck-editor-active [data-radix-portal] [data-state] {
 .bento-drag-handle:hover {
   background: rgba(var(--primary-rgb), 0.05);
 }
+
+@supports (-webkit-touch-callout: none) {
+  body {
+    -webkit-tap-highlight-color: transparent;
+  }
+  input, select, textarea {
+    font-size: 16px;
+  }
+  .h-screen, .min-h-screen {
+    height: -webkit-fill-available;
+  }
+  .overflow-scroll, .overflow-y-scroll, .overflow-x-scroll {
+    -webkit-overflow-scrolling: touch;
+  }
+  .backdrop-blur-md, .backdrop-blur-lg, .backdrop-blur-xl {
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+  }
+}
