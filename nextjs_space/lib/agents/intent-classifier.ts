@@ -21,6 +21,7 @@ export interface IntentSchema {
 
 export class IntentClassifierAgent {
   private readonly intentsSchema: IntentSchema[] = [
+    // ========== CONTACTOS & LEADS ==========
     {
       name: 'crear_lead',
       description: 'Crear un nuevo lead o contacto en el sistema',
@@ -35,7 +36,7 @@ export class IntentClassifierAgent {
     },
     {
       name: 'buscar_lead',
-      description: 'Buscar un lead existente por email o nombre',
+      description: 'Buscar un lead existente por email o nombre o listar todos',
       requiredParams: [],
       optionalParams: ['email', 'nombre'],
       examples: [
@@ -58,6 +59,18 @@ export class IntentClassifierAgent {
         'cambia el nombre de maria@empresa.com a Maria Perez',
         'actualiza el contacto de Alejandra Vázquez',
         'agregar contexto a Alejandra Velázquez'
+      ],
+      destructive: false
+    },
+    {
+      name: 'convertir_lead',
+      description: 'Convertir un lead en contacto formal',
+      requiredParams: ['email'],
+      optionalParams: [],
+      examples: [
+        'convierte a juan@email.com en contacto',
+        'convierte lead de María García a contacto',
+        'pasa a contacto a carlos@test.com'
       ],
       destructive: false
     },
@@ -89,8 +102,22 @@ export class IntentClassifierAgent {
       destructive: false
     },
     {
+      name: 'diagnosticos_lead',
+      description: 'Obtener diagnósticos de un lead o completar un flujo de diagnóstico',
+      requiredParams: [],
+      optionalParams: ['email', 'nombre', 'leadId', 'accion'],
+      examples: [
+        'dame los diagnósticos de juan@email.com',
+        'completa el diagnóstico de María García',
+        'qué diagnósticos tiene Carlos Ruiz'
+      ],
+      destructive: false
+    },
+
+    // ========== CITAS / BOOKINGS ==========
+    {
       name: 'agendar_cita',
-      description: 'Agendar una cita o reunión',
+      description: 'Agendar una cita o reunión con un lead',
       requiredParams: ['fecha', 'hora'],
       optionalParams: ['email', 'nombre', 'duracion', 'notas', 'tipo'],
       examples: [
@@ -125,32 +152,34 @@ export class IntentClassifierAgent {
       destructive: true
     },
     {
-      name: 'crear_tarea',
-      description: 'Crear una nueva tarea pendiente',
-      requiredParams: ['titulo'],
-      optionalParams: ['descripcion', 'fechaVencimiento', 'email', 'prioridad'],
+      name: 'confirmar_cita',
+      description: 'Confirmar una cita existente',
+      requiredParams: ['citaId'],
+      optionalParams: [],
       examples: [
-        'crea tarea: llamar a Juan Pérez',
-        'nueva tarea: revisar cotización para mañana',
-        'agrega pendiente: enviar documento a María, vence el viernes'
+        'confirma la cita #123',
+        'marca como confirmada la reunión con Juan',
+        'confirma la cita de mañana con María'
       ],
       destructive: false
     },
     {
-      name: 'registrar_gasto',
-      description: 'Registrar un gasto o factura',
-      requiredParams: ['monto', 'concepto'],
-      optionalParams: ['fecha', 'proveedor', 'email', 'categoria', 'fotoUrl'],
+      name: 'auto_agendar',
+      description: 'Agendar cita automáticamente verificando disponibilidad y notificando al cliente',
+      requiredParams: ['email'],
+      optionalParams: ['fecha', 'hora', 'titulo'],
       examples: [
-        'registra gasto de 45.90 en comida',
-        'nuevo gasto: 120€ de electricidad, proveedor Iberdrola',
-        'gasto de 300€ en software, categoría herramientas'
+        'agenda automáticamente una cita con juan@email.com',
+        'auto-agenda reunión con María para el viernes',
+        'programa cita automática con carlos@test.com'
       ],
       destructive: false
     },
+
+    // ========== CONVERSACIONES & MENSAJES ==========
     {
       name: 'enviar_mensaje',
-      description: 'Enviar un mensaje a un lead',
+      description: 'Enviar un mensaje a un lead o contacto',
       requiredParams: ['email', 'mensaje'],
       optionalParams: ['canal'],
       examples: [
@@ -173,14 +202,464 @@ export class IntentClassifierAgent {
       destructive: false
     },
     {
+      name: 'crear_conversacion',
+      description: 'Iniciar una nueva conversación con un lead',
+      requiredParams: ['email'],
+      optionalParams: ['nombre', 'canal'],
+      examples: [
+        'inicia conversación con juan@email.com',
+        'crea conversación con María García',
+        'nuevo hilo con carlos@test.com'
+      ],
+      destructive: false
+    },
+    {
+      name: 'cerrar_conversacion',
+      description: 'Cerrar una conversación activa',
+      requiredParams: ['email'],
+      optionalParams: [],
+      examples: [
+        'cierra la conversación con juan@email.com',
+        'termina hilo con María García',
+        'cierra el chat con carlos@test.com'
+      ],
+      destructive: false
+    },
+
+    // ========== TAREAS ==========
+    {
+      name: 'crear_tarea',
+      description: 'Crear una nueva tarea pendiente',
+      requiredParams: ['titulo'],
+      optionalParams: ['descripcion', 'fechaVencimiento', 'email', 'prioridad'],
+      examples: [
+        'crea tarea: llamar a Juan Pérez',
+        'nueva tarea: revisar cotización para mañana',
+        'agrega pendiente: enviar documento a María, vence el viernes'
+      ],
+      destructive: false
+    },
+    {
+      name: 'completar_tarea',
+      description: 'Marcar una tarea como completada',
+      requiredParams: ['titulo'],
+      optionalParams: ['email'],
+      examples: [
+        'marca como completada la tarea de llamar a Juan',
+        'termina la tarea de revisar cotización',
+        'completa el pendiente de enviar documento'
+      ],
+      destructive: false
+    },
+    {
+      name: 'mis_tareas',
+      description: 'Ver tareas pendientes o de un lead',
+      requiredParams: [],
+      optionalParams: ['email', 'estado'],
+      examples: [
+        'qué tareas tengo pendientes',
+        'muéstrame mis tareas',
+        'tareas pendientes de juan@email.com'
+      ],
+      destructive: false
+    },
+
+    // ========== NOTAS ==========
+    {
+      name: 'crear_nota',
+      description: 'Agregar una nota a un lead o contacto',
+      requiredParams: ['email', 'contenido'],
+      optionalParams: [],
+      examples: [
+        'agrega nota a juan@email.com: "Cliente interesado en paquete premium"',
+        'nota para María García: "Prefiere contacto por WhatsApp"',
+        'anota en el perfil de Carlos: "Llamar después de las 5pm"'
+      ],
+      destructive: false
+    },
+    {
+      name: 'ver_notas',
+      description: 'Ver notas de un lead o contacto',
+      requiredParams: ['email'],
+      optionalParams: [],
+      examples: [
+        'muéstrame las notas de juan@email.com',
+        'qué notas tiene María García',
+        'ver notas de Carlos Ruiz'
+      ],
+      destructive: false
+    },
+
+    // ========== DEALS / PIPELINE ==========
+    {
+      name: 'crear_negocio',
+      description: 'Crear un nuevo deal u oportunidad en el pipeline de ventas',
+      requiredParams: ['email', 'titulo'],
+      optionalParams: ['monto', 'etapa', 'prioridad'],
+      examples: [
+        'crea un deal con juan@email.com por 5000€ por el paquete empresarial',
+        'nueva oportunidad con María García: consultoría, 3000€',
+        'abre negocio con carlos@test.com para el servicio premium'
+      ],
+      destructive: false
+    },
+    {
+      name: 'actualizar_negocio',
+      description: 'Actualizar etapa, monto o prioridad de un deal existente',
+      requiredParams: ['email'],
+      optionalParams: ['etapa', 'monto', 'prioridad', 'titulo'],
+      examples: [
+        'mueve el deal de juan@email.com a etapa negociación',
+        'actualiza el monto del negocio con María a 7000€',
+        'pon prioridad alta al deal de Carlos Ruiz'
+      ],
+      destructive: false
+    },
+    {
+      name: 'mis_negocios',
+      description: 'Listar deals del pipeline de ventas',
+      requiredParams: [],
+      optionalParams: ['etapa', 'email'],
+      examples: [
+        'cómo va mi pipeline de ventas',
+        'muéstrame los deals activos',
+        'negocios en etapa propuesta',
+        'qué deals tengo con juan@email.com'
+      ],
+      destructive: false
+    },
+    {
+      name: 'calificar_lead',
+      description: 'Prequalificar un lead registrando nota, actualizando deal y buscando en catálogo',
+      requiredParams: ['email'],
+      optionalParams: ['nota'],
+      examples: [
+        'califica a juan@email.com como lead caliente',
+        'prequalifica a María García: "Interesada en el paquete completo"',
+        'haz el pre-qual de carlos@test.com'
+      ],
+      destructive: false
+    },
+
+    // ========== FACTURACIÓN & VERI*FACTU ==========
+    {
+      name: 'crear_factura',
+      description: 'Generar una factura legal con sello Veri*factu',
+      requiredParams: ['leadId'],
+      optionalParams: ['monto', 'concepto'],
+      examples: [
+        'genera una factura para el lead juan@email.com',
+        'crea factura para María García por 5000€',
+        'factura para Carlos Ruiz por consultoría'
+      ],
+      destructive: false
+    },
+    {
+      name: 'estado_fiscal',
+      description: 'Consultar el estado fiscal e integridad de una factura',
+      requiredParams: ['invoiceId'],
+      optionalParams: [],
+      examples: [
+        'dime el estado fiscal de la factura FAC-001',
+        'verifica la integridad de la factura #123',
+        'estado de la factura de juan@email.com'
+      ],
+      destructive: false
+    },
+    {
+      name: 'cancelar_factura',
+      description: 'Cancelar o anular una factura existente',
+      requiredParams: ['invoiceId'],
+      optionalParams: [],
+      examples: [
+        'cancela la factura FAC-001',
+        'anula la factura #123',
+        'elimina la factura de juan@email.com'
+      ],
+      destructive: true
+    },
+    {
+      name: 'rectificar_factura',
+      description: 'Rectificar una factura existente (corregir monto o datos)',
+      requiredParams: ['invoiceId', 'razon'],
+      optionalParams: ['monto'],
+      examples: [
+        'rectifica la factura FAC-001, el monto correcto es 4500€',
+        'corrige la factura #123 por error en el concepto',
+        'rectificar factura de juan@email.com, motivo: cálculo incorrecto'
+      ],
+      destructive: true
+    },
+
+    // ========== GASTOS & FINANZAS ==========
+    {
+      name: 'registrar_gasto',
+      description: 'Registrar un gasto o egreso',
+      requiredParams: ['monto', 'concepto'],
+      optionalParams: ['fecha', 'proveedor', 'email', 'categoria', 'fotoUrl'],
+      examples: [
+        'registra gasto de 45.90 en comida',
+        'nuevo gasto: 120€ de electricidad, proveedor Iberdrola',
+        'gasto de 300€ en software, categoría herramientas'
+      ],
+      destructive: false
+    },
+    {
+      name: 'crear_proveedor',
+      description: 'Registrar un nuevo proveedor',
+      requiredParams: ['nombre'],
+      optionalParams: ['email', 'telefono', 'direccion'],
+      examples: [
+        'registra proveedor: Suministros SA, email ventas@suministros.com',
+        'nuevo proveedor: Papelería López',
+        'crea proveedor Tecnología Plus SA de CV'
+      ],
+      destructive: false
+    },
+    {
+      name: 'analizar_gastos',
+      description: 'Analizar gastos, burn rate o salud financiera',
+      requiredParams: [],
+      optionalParams: ['periodo'],
+      examples: [
+        'cómo vamos de gastos este mes',
+        'analiza mi burn rate',
+        'dame mi salud financiera',
+        'qué gastos hemos tenido'
+      ],
+      destructive: false
+    },
+    {
+      name: 'proyeccion_financiera',
+      description: 'Proyección financiera, EBITDA, flujo de caja o forecast',
+      requiredParams: [],
+      optionalParams: ['periodo'],
+      examples: [
+        'cómo se ve el flujo de caja para el próximo mes',
+        'pronóstico financiero',
+        'proyecta el EBITDA del trimestre'
+      ],
+      destructive: false
+    },
+
+    // ========== INVENTARIO ==========
+    {
+      name: 'salud_inventario',
+      description: 'Consultar la salud del inventario, stock bajo o predicción de rupturas',
+      requiredParams: [],
+      optionalParams: ['producto'],
+      examples: [
+        'cómo está el inventario',
+        'qué productos tienen stock bajo',
+        'salud del inventario del producto X',
+        'hay riesgo de ruptura de stock'
+      ],
+      destructive: false
+    },
+    {
+      name: 'ajustar_stock',
+      description: 'Ajustar cantidades de stock (entrada, salida o transferencia)',
+      requiredParams: ['producto', 'cantidad'],
+      optionalParams: ['tipo'],
+      examples: [
+        'ajusta el stock del producto X, entrada de 50 unidades',
+        'salida de 10 unidades del producto Y',
+        'transfiere 20 unidades del producto Z al almacén 2'
+      ],
+      destructive: true
+    },
+    {
+      name: 'buscar_producto',
+      description: 'Buscar productos en el catálogo o inventario',
+      requiredParams: [],
+      optionalParams: ['producto', 'categoria'],
+      examples: [
+        'busca el producto X en el catálogo',
+        'qué productos hay en la categoría Y',
+        'encuentra el ítem Z en el inventario'
+      ],
+      destructive: false
+    },
+    {
+      name: 'gestionar_catalogo',
+      description: 'Exportar catálogo, ver definiciones o ver ítems del catálogo',
+      requiredParams: [],
+      optionalParams: ['accion'],
+      examples: [
+        'exporta el catálogo completo',
+        'dame las definiciones del catálogo',
+        'muéstrame los ítems del catálogo'
+      ],
+      destructive: false
+    },
+
+    // ========== MARKETING ==========
+    {
+      name: 'generar_copy',
+      description: 'Generar copy publicitario, contenido social o textos de marketing con IA',
+      requiredParams: ['tema'],
+      optionalParams: ['tono', 'formato'],
+      examples: [
+        'genera un copy para una campaña de email sobre nuestro nuevo producto',
+        'crea un post para redes sociales promocionando descuento',
+        'escribe un texto publicitario para WhatsApp'
+      ],
+      destructive: false
+    },
+    {
+      name: 'analizar_sentimiento',
+      description: 'Analizar sentimiento de feedback social o comentarios de clientes',
+      requiredParams: ['texto'],
+      optionalParams: [],
+      examples: [
+        'analiza el sentimiento de este feedback: "El servicio fue excelente"',
+        'qué opinan los clientes sobre nosotros',
+        'analiza estos comentarios: "Muy mal servicio"'
+      ],
+      destructive: false
+    },
+    {
+      name: 'sugerir_campania',
+      description: 'Sugerir optimizaciones de campaña basadas en datos',
+      requiredParams: [],
+      optionalParams: [],
+      examples: [
+        'sugiere mejoras para mi campaña actual',
+        'cómo puedo optimizar mis campañas de marketing',
+        'dame sugerencias de campaña'
+      ],
+      destructive: false
+    },
+
+    // ========== RRHH ==========
+    {
+      name: 'resumen_rrhh',
+      description: 'Obtener el resumen ejecutivo diario de RH (briefing militar)',
+      requiredParams: [],
+      optionalParams: [],
+      examples: [
+        'dame el resumen diario de RH',
+        'briefing de recursos humanos',
+        'cómo está el equipo hoy'
+      ],
+      destructive: false
+    },
+    {
+      name: 'aprobar_vacaciones',
+      description: 'Aprobar solicitud de vacaciones con nota personalizada',
+      requiredParams: ['solicitudId'],
+      optionalParams: ['nota'],
+      examples: [
+        'aprueba la solicitud de vacaciones #123',
+        'autoriza vacaciones de María con nota: "Disfruta tus días"',
+        'confirma la solicitud de vacaciones de Juan Pérez'
+      ],
+      destructive: false
+    },
+    {
+      name: 'riesgo_rotacion',
+      description: 'Analizar riesgo de rotación de talento en el equipo',
+      requiredParams: [],
+      optionalParams: ['empleadoId'],
+      examples: [
+        'analiza el riesgo de rotación del equipo',
+        'quién tiene riesgo de irse',
+        'dame el análisis de retención de talento'
+      ],
+      destructive: false
+    },
+
+    // ========== PROYECTOS ==========
+    {
+      name: 'rentabilidad_proyecto',
+      description: 'Calcular la rentabilidad real de un proyecto',
+      requiredParams: ['proyectoId'],
+      optionalParams: [],
+      examples: [
+        'cuál es la rentabilidad del proyecto Alpha',
+        'dame el profitability del proyecto X',
+        'cómo va el proyecto Y financieramente'
+      ],
+      destructive: false
+    },
+    {
+      name: 'desviaciones_proyecto',
+      description: 'Detectar desviaciones presupuestarias o de cronograma en proyectos',
+      requiredParams: [],
+      optionalParams: [],
+      examples: [
+        'detecta desviaciones en mis proyectos',
+        'hay proyectos con problemas de presupuesto',
+        'qué proyectos se están desviando del plan'
+      ],
+      destructive: false
+    },
+
+    // ========== ANÁLISIS GLOBAL ==========
+    {
+      name: 'auditar_integridad',
+      description: 'Auditar integridad financiera, brechas en Veri*factu o anomalías en gastos',
+      requiredParams: [],
+      optionalParams: [],
+      examples: [
+        'audita la integridad financiera',
+        'hay anomalías en los gastos',
+        'verifica la integridad fiscal'
+      ],
+      destructive: false
+    },
+    {
+      name: 'analizar_rentabilidad_global',
+      description: 'Analizar rentabilidad global: EBITDA, margen real y salud financiera integral',
+      requiredParams: [],
+      optionalParams: ['periodo'],
+      examples: [
+        'dame la rentabilidad global del negocio',
+        'cómo vamos financieramente en general',
+        'analiza el EBITDA del último trimestre',
+        'estado de salud financiera integral'
+      ],
+      destructive: false
+    },
+
+    // ========== PRODUCCIÓN / CALIDAD ==========
+    {
+      name: 'calcular_costo_produccion',
+      description: 'Calcular costo proyectado de fabricación (BoM + mano de obra)',
+      requiredParams: ['productoId'],
+      optionalParams: [],
+      examples: [
+        'calcula el costo de producción del producto X',
+        'cuánto cuesta fabricar el producto Y',
+        'dame el costo de manufactura del lote Z'
+      ],
+      destructive: false
+    },
+    {
+      name: 'detectar_anomalias_calidad',
+      description: 'Detectar anomalías de calidad cruzando materiales y proveedores',
+      requiredParams: [],
+      optionalParams: [],
+      examples: [
+        'detecta anomalías de calidad',
+        'hay problemas de calidad con algún proveedor',
+        'análisis de calidad del último lote'
+      ],
+      destructive: false
+    },
+
+    // ========== CONSULTA GENERAL ==========
+    {
       name: 'consulta_general',
-      description: 'Consulta general, saludo, o conversación no relacionada con CRUD',
+      description: 'Consulta general, saludo, ayuda, o conversación no relacionada con CRUD',
       requiredParams: [],
       optionalParams: [],
       examples: [
         'hola, ¿cómo estás?',
         'gracias por tu ayuda',
-        'qué puedes hacer?'
+        'qué puedes hacer?',
+        'ayuda',
+        'comandos disponibles'
       ],
       destructive: false
     }
