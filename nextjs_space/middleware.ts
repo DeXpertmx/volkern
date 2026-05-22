@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { getToken } from 'next-auth/jwt'
+import { rateLimiter } from '@/lib/rate-limiter'
 
 const RESERVED = new Set(['www', 'app', 'api', 'auth', 'login', 'register', 'dashboard', 'webcreator', 'admin'])
 
@@ -15,7 +17,19 @@ function getSubdomain(host: string): string | null {
 
 const PUBLIC = new Set(['/', '/pricing', '/features', '/about', '/contact', '/login', '/signup', '/booking'])
 
-import { getToken } from 'next-auth/jwt'
+// Rate limiting: endpoints públicos más expuestos a abuso
+const PUBLIC_API_RATE_LIMITED = [
+  '/api/chatbot/widget',
+  '/api/public/',
+  '/api/webhooks/',
+  '/api/cotizacion',
+  '/api/tarjeta',
+  '/api/signup',
+  '/api/onboarding',
+  '/api/skills',
+  '/api/plans',
+  '/api/subscriptions',
+];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -67,6 +81,37 @@ export async function middleware(request: NextRequest) {
 
   // Check if it's an API route that requires no auth
   if (pathname.startsWith('/api/')) {
+    // Rate limiting para endpoints públicos expuestos (basado en IP, sin tenant)
+    const needsRateLimit = PUBLIC_API_RATE_LIMITED.some(prefix =>
+      pathname.startsWith(prefix)
+    )
+    
+    if (needsRateLimit) {
+      const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+                 request.headers.get('x-real-ip') ||
+                 'anonymous'
+      const result = await rateLimiter.checkLimit(`ip:${ip}`, 'api_request_minute', 30)
+      
+      if (!result.allowed) {
+        return NextResponse.json(
+          {
+            error: 'Rate limit exceeded',
+            message: `Demasiadas solicitudes. Límite: ${result.limit} por minuto. Reintenta en ${Math.ceil((result.resetAt.getTime() - Date.now()) / 1000)}s.`,
+            code: 'RATE_LIMIT_EXCEEDED',
+          },
+          {
+            status: 429,
+            headers: {
+              'X-RateLimit-Limit': String(result.limit),
+              'X-RateLimit-Remaining': '0',
+              'X-RateLimit-Reset': result.resetAt.toISOString(),
+              'Retry-After': String(Math.ceil((result.resetAt.getTime() - Date.now()) / 1000)),
+            },
+          }
+        )
+      }
+    }
+
     // Allow webhooks, public API, and auth routes
     if (
       pathname.includes('/webhooks/') ||

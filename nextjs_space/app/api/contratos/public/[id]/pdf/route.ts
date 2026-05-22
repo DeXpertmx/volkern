@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { generatePdf } from '@/lib/pdf-generator';
 
 function formatCurrency(amount: number, currency: string): string {
   const symbols: Record<string, string> = { MXN: '$', USD: '$', EUR: '€' };
@@ -184,51 +185,20 @@ export async function GET(request: Request, { params }: { params: { id: string }
     const tenant = await prisma.tenant.findUnique({ where: { id: contrato.tenantId } });
     const htmlContent = generateContratoHTML(contrato, tenant);
 
-    const createResponse = await fetch('https://apps.abacus.ai/api/createConvertHtmlToPdfRequest', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        deployment_token: process.env.ABACUSAI_API_KEY,
-        html_content: htmlContent,
-        pdf_options: { format: 'A4', margin: { top: '15mm', right: '15mm', bottom: '15mm', left: '15mm' }, print_background: true }
-      })
+    // Generar PDF localmente con Puppeteer
+    const pdfBuffer = await generatePdf(htmlContent, {
+      format: 'A4',
+      margin: { top: '15mm', right: '15mm', bottom: '15mm', left: '15mm' },
+      printBackground: true,
     });
 
-    if (!createResponse.ok) {
-      return NextResponse.json({ error: 'Error creando PDF' }, { status: 500 });
-    }
-
-    const { request_id } = await createResponse.json();
-    if (!request_id) {
-      return NextResponse.json({ error: 'No request ID' }, { status: 500 });
-    }
-
-    let attempts = 0;
-    while (attempts < 60) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      const statusResponse = await fetch('https://apps.abacus.ai/api/getConvertHtmlToPdfStatus', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ request_id, deployment_token: process.env.ABACUSAI_API_KEY })
-      });
-
-      const statusResult = await statusResponse.json();
-      if (statusResult?.status === 'SUCCESS' && statusResult?.result?.result) {
-        const pdfBuffer = Buffer.from(statusResult.result.result, 'base64');
-        const filename = `${contrato.numero.replace(/[^a-zA-Z0-9-]/g, '_')}.pdf`;
-        return new NextResponse(pdfBuffer, {
-          headers: {
-            'Content-Type': 'application/pdf',
-            'Content-Disposition': `attachment; filename="${filename}"`
-          }
-        });
-      } else if (statusResult?.status === 'FAILED') {
-        return NextResponse.json({ error: 'Error generando PDF' }, { status: 500 });
+    const filename = `${contrato.numero.replace(/[^a-zA-Z0-9-]/g, '_')}.pdf`;
+    return new NextResponse(pdfBuffer, {
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="${filename}"`
       }
-      attempts++;
-    }
-
-    return NextResponse.json({ error: 'Timeout' }, { status: 500 });
+    });
   } catch (error) {
     console.error('Error generating public PDF:', error);
     return NextResponse.json({ error: 'Error interno' }, { status: 500 });

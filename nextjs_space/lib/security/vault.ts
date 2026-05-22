@@ -2,8 +2,34 @@ import * as crypto from 'crypto';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12; // 12 bytes for GCM
-const AUTH_TAG_LENGTH = 16;
-const MASTER_KEY = process.env.MASTER_KEY || 'volkern-nexus-premium-secret-2024';
+
+// Validación estricta en startup: sin fallbacks para evitar aislamiento débil
+const MASTER_KEY = process.env.MASTER_KEY;
+const TENANT_PEPPER = process.env.TENANT_PEPPER;
+
+function validateVaultConfig(): void {
+  if (!MASTER_KEY) {
+    throw new Error(
+      '[Vault] FATAL: MASTER_KEY no configurada. Sin ella, todos los tenants comparten cifrado débil. ' +
+      'Configura la variable de entorno MASTER_KEY con una clave de al menos 32 bytes.'
+    );
+  }
+  if (!TENANT_PEPPER) {
+    throw new Error(
+      '[Vault] FATAL: TENANT_PEPPER no configurada. Sin ella, el aislamiento criptográfico entre tenants se debilita. ' +
+      'Configura la variable de entorno TENANT_PEPPER con un valor aleatorio único.'
+    );
+  }
+  if (MASTER_KEY.length < 32) {
+    throw new Error(
+      '[Vault] FATAL: MASTER_KEY debe tener al menos 32 caracteres para AES-256. Longitud actual: ' +
+      MASTER_KEY.length
+    );
+  }
+}
+
+// Validar en tiempo de importación (startup)
+validateVaultConfig();
 
 export class VaultService {
   /**
@@ -15,15 +41,13 @@ export class VaultService {
       throw new Error(`[Vault] Missing vaultSeed for tenant ${tenantId}`);
     }
 
-    const pepper = process.env.TENANT_PEPPER || 'volkern-default-pepper-2024';
-
     // HKDF: Extract-and-Expand
     // Salt: Combinación de vaultSeed y TENANT_PEPPER
     // Info: tenantId + domain separation
     return Buffer.from(crypto.hkdfSync(
       'sha256',
       MASTER_KEY,
-      Buffer.from(vaultSeed + pepper), // Salt combinado
+      Buffer.from(vaultSeed + TENANT_PEPPER), // Salt combinado
       Buffer.from(`${tenantId}:finance-vault-v2`), // Info (Domain Separation)
       32
     ));

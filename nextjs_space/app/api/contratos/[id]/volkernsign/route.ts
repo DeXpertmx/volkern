@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
 import { SignatureService } from '@/lib/signatures/SignatureService';
+import { generatePdf } from '@/lib/pdf-generator';
 
 // Logic based on app/api/contratos/public/[id]/pdf/route.ts
 function formatCurrency(amount: number, currency: string): string {
@@ -133,41 +134,13 @@ export const POST = withTenantAuth(async (request, auth, { params }) => {
     const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
     const htmlContent = generateContratoHTML(contrato, tenant);
 
-    // 2. Convert HTML to PDF (via Abacus AI as existing logic)
-    const createResponse = await fetch('https://apps.abacus.ai/api/createConvertHtmlToPdfRequest', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        deployment_token: process.env.ABACUSAI_API_KEY,
-        html_content: htmlContent,
-        pdf_options: { format: 'A4', print_background: true }
-      })
+    // 2. Convert HTML to PDF (via Puppeteer local — reemplaza Abacus AI)
+    const pdfBuffer = await generatePdf(htmlContent, {
+      format: 'A4',
+      printBackground: true,
     });
 
-    if (!createResponse.ok) throw new Error('Failed to start PDF conversion');
-    const { request_id } = await createResponse.json();
-
-    // 3. Poll for PDF Result
-    let pdfBuffer: Buffer | null = null;
-    let attempts = 0;
-    while (attempts < 30) {
-      await new Promise(r => setTimeout(r, 1000));
-      const statusRes = await fetch('https://apps.abacus.ai/api/getConvertHtmlToPdfStatus', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ request_id, deployment_token: process.env.ABACUSAI_API_KEY })
-      });
-      const statusData = await statusRes.json();
-      if (statusData?.status === 'SUCCESS') {
-        pdfBuffer = Buffer.from(statusData.result.result, 'base64');
-        break;
-      }
-      attempts++;
-    }
-
-    if (!pdfBuffer) throw new Error('PDF conversion timeout');
-
-    // 4. Create VolkernSign Request
+    // 3. Create VolkernSign Request
     const signatureRequest = await SignatureService.createSignatureRequest({
       tenantId,
       contratoId,
