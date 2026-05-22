@@ -9,5 +9,31 @@ export default defineConfig({
       '@': path.resolve(__dirname, './'),
     },
     setupFiles: ['./tests/setup.ts'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'text-summary', 'lcov'],
+      reportsDirectory: './coverage',
+      include: [
+        'lib/**/*.ts',
+        'app/api/webhooks/**/*.ts',
+      ],
+      exclude: [
+        'lib/agents/intents/**',
+        'lib/automation/actions/**',
+        'node_modules/**',
+        'tests/**',
+        '**/*.test.ts',
+        '**/*.spec.ts',
+        '**/*.d.ts',
+      ],
+      // Umbrales actuales basados en cobertura real (179 tests en 10 archivos).
+      // Meta progresiva: subir 5pp por sprint hasta llegar al 60% en todos los métricos.
+      thresholds: {
+        lines: 3,
+        branches: 40,
+        functions: 8,
+        statements: 3,
+      },
+    },
   },
 })

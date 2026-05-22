@@ -3,6 +3,46 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { withTenantAuth } from '@/lib/api-key-auth'
+import { validateBody } from '@/lib/validation'
+import { CommonSchemas } from '@/lib/validation/common'
+import { z } from 'zod'
+
+/** Schema de item de cotización que el cliente envía (sin campos calculados) */
+const CotizacionItemInputSchema = z.object({
+  concepto: z.string().min(1).max(500),
+  descripcion: z.string().max(2000).optional().nullable(),
+  cantidad: z.coerce.number().min(0.01),
+  precioUnitario: CommonSchemas.montoPositivo,
+  descuento: z.coerce.number().min(0).default(0),
+  tasaImpuestoId: CommonSchemas.id.optional().nullable(),
+  porcentajeImpuesto: z.coerce.number().min(0).optional(),
+  aplicaRetencion: z.boolean().optional(),
+  porcentajeRetencion: z.coerce.number().min(0).optional(),
+  catalogoItemId: CommonSchemas.id.optional().nullable(),
+  categoria: z.string().max(100).optional(),
+  sku: z.string().max(50).optional(),
+});
+
+/** Schema de cotización que el cliente envía (sin campos calculados) */
+const CotizacionInputSchema = z.object({
+  dealId: CommonSchemas.id.optional().nullable(),
+  leadId: CommonSchemas.id.optional().nullable(),
+  contactId: CommonSchemas.id.optional().nullable(),
+  titulo: z.string().min(1, 'Título requerido').max(500),
+  descripcion: z.string().max(5000).optional().nullable(),
+  items: z.array(CotizacionItemInputSchema).min(1, 'Se requiere al menos un item').max(200),
+  descuentoPorcentaje: z.coerce.number().min(0).max(100).default(0),
+  moneda: CommonSchemas.moneda,
+  validezDias: z.coerce.number().int().min(1).max(365).default(30),
+  terminosPago: z.string().max(500).optional().nullable(),
+  notasCliente: z.string().max(5000).optional().nullable(),
+  notasInternas: z.string().max(5000).optional().nullable(),
+  clienteNombre: z.string().max(500).optional().nullable(),
+  clienteEmail: z.string().email().optional().nullable(),
+  clienteEmpresa: z.string().max(255).optional().nullable(),
+  clienteTelefono: z.string().max(30).optional().nullable(),
+  emisorId: CommonSchemas.id.optional().nullable(),
+});
 
 // GET - Listar cotizaciones
 export const GET = withTenantAuth(async (req, auth) => {
@@ -66,7 +106,10 @@ export const POST = withTenantAuth(async (req, auth) => {
     const tenantId = auth.tenant!.id;
     const userId = auth.user!.id;
 
-    const body = await req.json()
+    const raw = await req.json()
+    const parsed = validateBody(CotizacionInputSchema, raw)
+    if (parsed instanceof NextResponse) return parsed
+
     const {
       dealId,
       leadId,
@@ -84,14 +127,7 @@ export const POST = withTenantAuth(async (req, auth) => {
       clienteEmpresa,
       clienteTelefono,
       emisorId,
-    } = body
-
-    if (!titulo || !items || items.length === 0) {
-      return NextResponse.json(
-        { error: 'Título e items son requeridos' },
-        { status: 400 }
-      )
-    }
+    } = parsed
 
     // 1. Pre-cargar datos del catálogo si es necesario
     const catalogoItemIds = items

@@ -4,6 +4,8 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { HRService } from '@/lib/erp/hr-service'
 import { prisma } from '@/lib/db'
+import { validateBody } from '@/lib/validation'
+import { ExpenseCreateSchema } from '@/lib/validation/schemas'
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -30,7 +32,10 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const body = await req.json()
+    const raw = await req.json()
+    const body = validateBody(ExpenseCreateSchema, raw)
+    if (body instanceof NextResponse) return body
+
     const claim = await HRService.submitExpenseClaim({
       ...body,
       tenantId: (session.user as any).tenantId

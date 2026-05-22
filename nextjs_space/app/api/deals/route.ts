@@ -6,6 +6,8 @@ import { createSystemContext } from '@/lib/skills/context';
 import { withTenantAuth } from '@/lib/api-key-auth'
 import { hasPermission, canOnlySeeOwnLeads } from '@/lib/permissions'
 import { AdoptionTelemetry } from '@/lib/telemetry/adoption-kpis';
+import { validateBody } from '@/lib/validation';
+import { DealCreateSchema } from '@/lib/validation/schemas';
 
 // GET /api/deals - Listar deals con filtros (Base de Datos aislada del Tenant)
 export const GET = withTenantAuth(async (req, auth) => {
@@ -123,6 +125,9 @@ export const POST = withTenantAuth(async (req, auth) => {
     }
 
     const body = await req.json()
+    const data = validateBody(DealCreateSchema, body);
+    if (data instanceof NextResponse) return data;
+
     const {
       leadId,
       contactId,
@@ -138,11 +143,7 @@ export const POST = withTenantAuth(async (req, auth) => {
       origen,
       tags,
       usuarioAsignadoId,
-    } = body
-
-    if (!titulo || valor === undefined || valor === null) {
-      return NextResponse.json({ error: 'Título y valor son requeridos' }, { status: 400 })
-    }
+    } = data;
 
     let finalContactId = contactId
     let companyId = null

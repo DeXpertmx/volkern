@@ -4,6 +4,8 @@ import { prisma } from '@/lib/db';
 import { Prisma } from '@prisma/client';
 import { withTenantAuth } from '@/lib/api-key-auth';
 import { hasPermission } from '@/lib/permissions';
+import { validateBody } from '@/lib/validation';
+import { EmployeeUpdateSchema } from '@/lib/validation/schemas';
 
 export const GET = withTenantAuth(async (req, auth, params) => {
   try {
@@ -62,7 +64,10 @@ export const PATCH = withTenantAuth(async (req, auth, params) => {
       return NextResponse.json({ error: 'ID de empleado no válido' }, { status: 400 });
     }
 
-    const data = await req.json();
+    const raw = await req.json();
+    const data = validateBody(EmployeeUpdateSchema.passthrough(), raw);
+    if (data instanceof NextResponse) return data;
+
     console.log(`[EMPLOYEE_PATCH] Updating employee ${employeeId} for tenant ${tenantId}`);
 
     // Sanitizar datos relacionales e inmutables para evitar errores de Prisma

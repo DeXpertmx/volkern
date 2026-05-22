@@ -4,6 +4,8 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { HRService } from '@/lib/erp/hr-service'
 import { prisma } from '@/lib/db'
+import { validateBody } from '@/lib/validation'
+import { VacationRequestSchema } from '@/lib/validation/schemas'
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -28,12 +30,15 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const body = await req.json()
+    const raw = await req.json()
+    const body = validateBody(VacationRequestSchema, raw)
+    if (body instanceof NextResponse) return body
+
     const vacation = await HRService.requestVacation({
       ...body,
       tenantId: (session.user as any).tenantId,
-      startDate: new Date(body.startDate),
-      endDate: new Date(body.endDate)
+      startDate: new Date(body.fechaInicio),
+      endDate: new Date(body.fechaFin)
     })
     return NextResponse.json(vacation)
   } catch (error: any) {

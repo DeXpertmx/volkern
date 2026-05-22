@@ -429,7 +429,7 @@ async function handleTransferRequest(context: ChatbotContext): Promise<void> {
  * Verifica si está dentro del horario de atención
  * Soporta tanto horarios legacy como personalizados con múltiples rangos por día
  */
-function isWithinBusinessHours(config: any): boolean {
+export function isWithinBusinessHours(config: any): boolean {
   const now = new Date();
   const dayOfWeek = now.getDay().toString();
   const currentHour = now.getHours();
@@ -480,7 +480,7 @@ function isWithinBusinessHours(config: any): boolean {
 /**
  * Parsea fecha y hora en lenguaje natural
  */
-function parseFechaHora(fecha: string, hora: string): Date | null {
+export function parseFechaHora(fecha: string, hora: string): Date | null {
   try {
     const now = new Date();
     let targetDate = new Date();

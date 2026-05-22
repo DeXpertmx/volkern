@@ -4,6 +4,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
 import { incrementUsage } from '@/lib/subscription';
+import { validateBody } from '@/lib/validation';
+import { ContactCreateSchema } from '@/lib/validation/schemas';
 
 // GET /api/contacts - Listar todos los contactos
 export const GET = withTenantAuth(async (request, auth) => {
@@ -71,15 +73,10 @@ export const POST = withTenantAuth(async (request, auth) => {
     const tenantId = auth.tenant!.id;
 
     const body = await request.json();
-    const { nombre, email, telefono, tipo, companyId, cargo, ubicacion, linkedin, notas, tags } = body;
+    const data = validateBody(ContactCreateSchema, body);
+    if (data instanceof NextResponse) return data;
 
-    // Validación
-    if (!nombre || !email) {
-      return NextResponse.json(
-        { success: false, error: 'Nombre y email son obligatorios' },
-        { status: 400 }
-      );
-    }
+    const { nombre, email, telefono, tipo, companyId, cargo, ubicacion, linkedin, notas, tags } = data;
 
     // Verificar si el email ya existe en la DB del tenant
     const existingContact = await prisma.contact.findFirst({

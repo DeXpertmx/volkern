@@ -4,6 +4,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma, getTenantDb, dbContext } from '@/lib/db';
 import { createSystemContext } from '@/lib/skills/context';
 import { withTenantAuth } from '@/lib/api-key-auth';
+import { validateBody } from '@/lib/validation';
+import { ContratoCreateSchema } from '@/lib/validation/schemas';
 import { randomBytes } from 'crypto';
 
 // GET /api/contratos - Listar contratos
@@ -57,13 +59,12 @@ export const POST = withTenantAuth(async (request, auth) => {
   try {
     const tenantId = auth.tenant!.id;
     const userId = auth.user!.id;
-    const body = await request.json();
+    const raw = await request.json();
+    const body = validateBody(ContratoCreateSchema, raw);
+    if (body instanceof NextResponse) return body;
 
     // 1. Validar Contacto y capturar Snapshot Fiscal (Gobernanza)
     const contactId = body.contactId;
-    if (!contactId) {
-      return NextResponse.json({ error: 'El ID de contacto es obligatorio para contratos inviolables' }, { status: 400 });
-    }
 
     const contact = await prisma.contact.findUnique({
       where: { id: contactId },
