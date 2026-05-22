@@ -67,19 +67,27 @@ if (!MASTER_KEY || !pepper) throw new Error('FATAL: MASTER_KEY y TENANT_PEPPER r
 
 ## 🟠 Altas (arquitectura y mantenibilidad)
 
-### 4. `automation-engine.ts` monolítico (2918 líneas)
-**Archivo:** `lib/automation-engine.ts`  
+### ✅ 4. `automation-engine.ts` monolítico (2918 líneas)
+**Archivo:** `lib/automation-engine.ts` → `lib/automation/`  
 **Problema:** El motor de automatizaciones entero en un solo archivo. Difícil de mantener, testear y extender.
 
 **Acción:**
-- [ ] Extraer `conditions-evaluator.ts` — evaluación de condiciones
-- [ ] Extraer `actions-executor.ts` — ejecución de acciones (email, webhook, notificación)
-- [ ] Extraer `scheduled-tasks.ts` — tareas programadas y recordatorios
-- [ ] Extraer `templates-registry.ts` — registro y carga de templates
-- [ ] Mantener `automation-engine.ts` como fachada que compone los módulos
-- [ ] Verificar que los 30+ imports de `triggerAutomation` sigan funcionando
+- [x] Extraer `types.ts` — interfaces compartidas (ExecutionContext, ActionContext, ActionHandler)
+- [x] Extraer `constants.ts` — VALID_TRIGGERS y TriggerType
+- [x] Extraer `variables-parser.ts` — reemplazo de variables de plantilla
+- [x] Extraer `condition-evaluator.ts` — evaluación de condiciones (24+ operadores)
+- [x] Extraer 12 archivos de acciones por dominio bajo `lib/automation/actions/`:
+  - `communication.ts` (5 handlers), `leads.ts` (16), `integrations.ts` (7)
+  - `inventory.ts` (4), `production.ts` (4), `support.ts` (6)
+  - `marketing.ts` (13), `academy.ts` (5), `hr.ts` (2)
+  - `finance.ts` (10), `quality.ts` (6), `projects.ts` (9)
+- [x] Crear `actions/index.ts` — `ACTION_REGISTRY` con 87 action handlers
+- [x] Refactorizar `automation-engine.ts` como fachada: 2918 → 716 líneas (75% reducción)
+- [x] Re-exportar `VALID_TRIGGERS`, `TriggerType`, `ExecutionContext` para backward compat
+- [x] Verificar que los 22 imports externos (`triggerAutomation`, `enqueueAutomation`, etc.) sigan funcionando
+- [x] Typecheck limpio + 26/26 tests pasando
 
-**Esfuerzo estimado:** 2-3 días
+**Esfuerzo estimado:** 2-3 días ✅ Completado
 
 ---
 
