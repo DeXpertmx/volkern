@@ -9,9 +9,9 @@ import { sendEmail } from '@/lib/ses-email'
 import { triggerAutomation } from '@/lib/automation-engine'
 import { StripeMXService } from '@/lib/finance/mexico/stripe-mx-service'
 
-const DUNNING_NOTIFICATION_DAYS = [3, 7, 14]
+export const DUNNING_NOTIFICATION_DAYS = [3, 7, 14]
 
-async function checkIfEventProcessed(stripeEventId: string, tenantId: string | undefined): Promise<boolean> {
+export async function checkIfEventProcessed(stripeEventId: string, tenantId: string | undefined): Promise<boolean> {
   if (!stripeEventId) return false
   
   const existing = await prisma.processedWebhook.findUnique({

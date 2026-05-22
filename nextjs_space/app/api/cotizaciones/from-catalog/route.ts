@@ -3,15 +3,35 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { authenticateRequest } from '@/lib/api-key-auth'
+import { validateBody } from '@/lib/validation'
+import { z } from 'zod'
 
-interface CatalogItemRequest {
-  catalogoItemId: string
-  cantidad: number
-  descuento?: number
-  precioOverride?: number // Para sobrescribir precio del catálogo
-  descripcionOverride?: string
-}
+const CatalogItemSchema = z.object({
+  catalogoItemId: z.string().min(1),
+  cantidad: z.coerce.number().min(1),
+  descuento: z.coerce.number().min(0).optional(),
+  precioOverride: z.coerce.number().min(0).optional(),
+  descripcionOverride: z.string().max(2000).optional(),
+});
 
+const CatalogCotizacionCreateSchema = z.object({
+  dealId: z.string().min(25).optional(),
+  leadId: z.string().min(25).optional(),
+  titulo: z.string().min(1, 'Título requerido').max(500),
+  descripcion: z.string().max(5000).optional(),
+  catalogItems: z.array(CatalogItemSchema).min(1, 'Se requiere al menos un item').max(200),
+  descuentoPorcentaje: z.coerce.number().min(0).max(100).default(0),
+  moneda: z.string().length(3).optional(),
+  validezDias: z.coerce.number().int().min(1).max(365).default(30),
+  terminosPago: z.string().max(500).optional(),
+  notasCliente: z.string().max(5000).optional(),
+  notasInternas: z.string().max(5000).optional(),
+  clienteNombre: z.string().max(500).optional(),
+  clienteEmail: z.string().email().optional(),
+  clienteEmpresa: z.string().max(255).optional(),
+  clienteTelefono: z.string().max(30).optional(),
+  emisorId: z.string().min(25).optional(),
+});
 /**
  * POST /api/cotizaciones/from-catalog
  * Crear cotización pre-poblada desde items del catálogo
@@ -25,13 +45,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: auth.error }, { status: 401 })
     }
 
-    const body = await req.json()
+    const raw = await req.json()
+    const parsed = validateBody(CatalogCotizacionCreateSchema, raw)
+    if (parsed instanceof NextResponse) return parsed
+
     const {
       dealId,
       leadId,
       titulo,
       descripcion,
-      catalogItems, // Array de { catalogoItemId, cantidad, descuento?, precioOverride? }
+      catalogItems,
       descuentoPorcentaje = 0,
       moneda,
       validezDias = 30,
@@ -43,32 +66,7 @@ export async function POST(req: NextRequest) {
       clienteEmpresa,
       clienteTelefono,
       emisorId,
-    } = body as {
-      dealId?: string
-      leadId?: string
-      titulo: string
-      descripcion?: string
-      catalogItems: CatalogItemRequest[]
-      descuentoPorcentaje?: number
-      moneda?: string
-      validezDias?: number
-      terminosPago?: string
-      notasCliente?: string
-      notasInternas?: string
-      clienteNombre?: string
-      clienteEmail?: string
-      clienteEmpresa?: string
-      clienteTelefono?: string
-      emisorId?: string
-    }
-
-    if (!titulo) {
-      return NextResponse.json({ error: 'El título es requerido' }, { status: 400 })
-    }
-
-    if (!catalogItems || catalogItems.length === 0) {
-      return NextResponse.json({ error: 'Se requiere al menos un item del catálogo' }, { status: 400 })
-    }
+    } = parsed
 
     // Obtener todos los items del catálogo de una sola consulta
     const catalogoItemIds = catalogItems.map(ci => ci.catalogoItemId)

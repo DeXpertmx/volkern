@@ -10,6 +10,8 @@ import { withTenantAuth } from '@/lib/api-key-auth'
 import { assignLeadAutomatically } from '@/lib/leads/assignment'
 import { AdoptionTelemetry } from '@/lib/telemetry/adoption-kpis';
 import { checkFeatureLimit, incrementUsage } from '@/lib/subscription';
+import { validateBody } from '@/lib/validation';
+import { LeadCreateSchema } from '@/lib/validation/schemas';
 import * as crypto from 'crypto'
 
 /**
@@ -83,6 +85,9 @@ export const GET = withTenantAuth(async (request, auth) => {
 export const POST = withTenantAuth(async (request, auth) => {
   try {
     const body = await request.json()
+    const data = validateBody(LeadCreateSchema, body);
+    if (data instanceof NextResponse) return data;
+
     const {
       nombre,
       email,
@@ -97,7 +102,7 @@ export const POST = withTenantAuth(async (request, auth) => {
       fuente,
       etapa,
       metadataExterna
-    } = body
+    } = data;
 
     // 1. Verificar límites de recursos (Usa globalPrisma internamente cuando es necesario)
     const limitCheck = await validateLimit(auth.tenant!.id, 'leads')

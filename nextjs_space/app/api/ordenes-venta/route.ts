@@ -4,6 +4,45 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { authenticateRequest } from '@/lib/api-key-auth'
 import { aplicaInversionSujetoPasivo } from '@/lib/fiscal-validation'
+import { validateBody } from '@/lib/validation'
+import { CommonSchemas } from '@/lib/validation/common'
+import { z } from 'zod'
+
+/** Schema de item de orden de venta que el cliente envía */
+const OrdenVentaItemInputSchema = z.object({
+  concepto: z.string().min(1).max(500),
+  descripcion: z.string().max(2000).optional().nullable(),
+  cantidad: z.coerce.number().min(0.01),
+  precioUnitario: CommonSchemas.montoPositivo,
+  descuento: z.coerce.number().min(0).default(0),
+  unidad: z.string().max(20).optional(),
+  tasaImpuestoId: CommonSchemas.id.optional().nullable(),
+  porcentajeImpuesto: z.coerce.number().min(0).optional(),
+  aplicaRetencion: z.boolean().optional(),
+  porcentajeRetencion: z.coerce.number().min(0).optional(),
+  catalogoItemId: CommonSchemas.id.optional().nullable(),
+});
+
+/** Schema de orden de venta que el cliente envía (campos calculados omitidos) */
+const OrdenVentaInputSchema = z.object({
+  leadId: CommonSchemas.id.optional().nullable(),
+  contactId: CommonSchemas.id.optional().nullable(),
+  contratoId: CommonSchemas.id.optional().nullable(),
+  cotizacionId: CommonSchemas.id.optional().nullable(),
+  dealId: CommonSchemas.id.optional().nullable(),
+  emisorId: CommonSchemas.id.optional().nullable(),
+  moneda: CommonSchemas.moneda,
+  notas: z.string().max(5000).optional().nullable(),
+  fechaOrden: z.string().datetime().optional(),
+  fechaEntrega: z.string().datetime().optional().nullable(),
+  descuentoGlobal: z.coerce.number().min(0).default(0),
+  tipoDescuento: z.enum(['porcentaje', 'monto']).default('porcentaje'),
+  redondeoLinea: z.boolean().default(true),
+  notasInternas: z.string().max(5000).optional().nullable(),
+  condicionesVenta: z.string().max(500).optional().nullable(),
+  referenciaCliente: z.string().max(255).optional().nullable(),
+  items: z.array(OrdenVentaItemInputSchema).optional().default([]),
+});
 
 // GET - Listar órdenes de venta
 export async function GET(req: NextRequest) {
@@ -94,7 +133,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: auth.error }, { status: 401 })
     }
 
-    const body = await req.json()
+    const raw = await req.json()
+    const parsed = validateBody(OrdenVentaInputSchema, raw)
+    if (parsed instanceof NextResponse) return parsed
+
     const {
       leadId,
       contactId,
@@ -102,20 +144,20 @@ export async function POST(req: NextRequest) {
       cotizacionId,
       dealId,
       emisorId,
+      moneda = 'EUR',
+      notas,
       fechaOrden,
       fechaEntrega,
-      moneda = 'EUR',
       descuentoGlobal = 0,
       tipoDescuento = 'porcentaje',
       redondeoLinea = true,
-      notas,
       notasInternas,
       condicionesVenta,
       referenciaCliente,
-      items = []
-    } = body
+      items = [],
+    } = parsed
 
-    // Validaciones
+    // Validaciones de negocio
     if (!leadId && !contactId) {
       return NextResponse.json(
         { error: 'Se requiere leadId o contactId' },

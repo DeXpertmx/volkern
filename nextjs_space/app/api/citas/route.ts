@@ -9,6 +9,8 @@ import { createSystemContext } from '@/lib/skills/context';
 import { withTenantAuth } from '@/lib/api-key-auth'
 import { createCalendarEvent } from '@/lib/google-calendar'
 import { notifyAdminsPush } from '@/lib/services/push-notification'
+import { validateBody } from '@/lib/validation';
+import { CitaCreateSchema } from '@/lib/validation/schemas';
 
 export const GET = withTenantAuth(async (request, auth) => {
   try {
@@ -76,6 +78,9 @@ export const GET = withTenantAuth(async (request, auth) => {
 export const POST = withTenantAuth(async (request, auth) => {
   try {
     const body = await request.json()
+    const data = validateBody(CitaCreateSchema, body);
+    if (data instanceof NextResponse) return data;
+
     const { 
       leadId, 
       contactId,
@@ -91,32 +96,10 @@ export const POST = withTenantAuth(async (request, auth) => {
       fechaHora,
       duracion: duracionRaw = 60,
       estado = 'pendiente'
-    } = body
+    } = data;
 
     const tenantId = auth.tenant!.id;
-    const duracion = typeof duracionRaw === 'string' ? parseInt(duracionRaw, 10) : duracionRaw
-    
-    if (isNaN(duracion) || duracion <= 0) {
-      return NextResponse.json(
-        { error: 'El campo "duracion" debe ser un número positivo (minutos)' },
-        { status: 400 }
-      )
-    }
-
-    // Validar que al menos haya un lead o contactId, o un título (para eventos sin cliente)
-    if (!leadId && !contactId && !titulo) {
-      return NextResponse.json(
-        { error: 'Se requiere leadId, contactId o título para la cita' },
-        { status: 400 }
-      )
-    }
-
-    if (!fechaHora) {
-      return NextResponse.json(
-        { error: 'La fecha y hora son requeridas' },
-        { status: 400 }
-      )
-    }
+    const duracion = duracionRaw; // ya validado por Zod
 
     // Obtener lead si se proporciona
     let lead = null

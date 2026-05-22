@@ -5,6 +5,18 @@ import { prisma, getTenantDb, dbContext } from '@/lib/db'
 import { createSystemContext } from '@/lib/skills/context';
 import { authenticateRequest } from '@/lib/api-key-auth'
 import { aplicaInversionSujetoPasivo } from '@/lib/fiscal-validation'
+import { validateBody } from '@/lib/validation'
+import { z } from 'zod'
+
+const FromCotizacionBodySchema = z.object({
+  cotizacionId: z.string().min(25, 'ID de cotización inválido'),
+  fechaEntrega: z.string().datetime().optional(),
+  notas: z.string().max(5000).optional(),
+  notasInternas: z.string().max(5000).optional(),
+  condicionesVenta: z.string().max(500).optional(),
+  referenciaCliente: z.string().max(255).optional(),
+  ajustarPrecios: z.boolean().default(false),
+});
 
 /**
  * POST /api/ordenes-venta/from-cotizacion
@@ -19,7 +31,10 @@ export async function POST(req: NextRequest) {
     }
     const tenantId = auth.tenant!.id
 
-    const body = await req.json()
+    const raw = await req.json()
+    const parsed = validateBody(FromCotizacionBodySchema, raw)
+    if (parsed instanceof NextResponse) return parsed
+
     const {
       cotizacionId,
       fechaEntrega,
@@ -27,12 +42,8 @@ export async function POST(req: NextRequest) {
       notasInternas,
       condicionesVenta,
       referenciaCliente,
-      ajustarPrecios = false, // Si true, actualiza precios desde el catálogo actual
-    } = body
-
-    if (!cotizacionId) {
-      return NextResponse.json({ error: 'cotizacionId es requerido' }, { status: 400 })
-    }
+      ajustarPrecios = false,
+    } = parsed
 
     // Obtener cotización con items
     const cotizacion = await prisma.cotizacion.findFirst({

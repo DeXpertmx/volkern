@@ -359,7 +359,7 @@ export async function POST(request: NextRequest) {
 /**
  * Parser para mensajes de Evolution API
  */
-function parseEvolutionMessage(body: any) {
+export function parseEvolutionMessage(body: any) {
   try {
     let messageData;
     

@@ -3,6 +3,18 @@ import { NextResponse } from 'next/server';
 import { withTenantAuth } from '@/lib/api-key-auth';
 import { AttendanceService } from '@/lib/erp/attendance-service';
 import { prisma } from '@/lib/db';
+import { validateBody } from '@/lib/validation';
+import { z } from 'zod';
+
+/** Schema que coincide con el body real del endpoint */
+const PunchBodySchema = z.object({
+  employeeId: z.string().min(1),
+  type: z.enum(['entrada', 'salida', 'pausa_inicio', 'pausa_fin']),
+  method: z.string().max(50).optional(),
+  locationLat: z.coerce.number().min(-90).max(90).optional(),
+  locationLng: z.coerce.number().min(-180).max(180).optional(),
+  evidenceUrl: z.string().optional(),
+});
 
 // GET /api/erp/attendance/status
 export const GET = withTenantAuth(async (request, auth) => {
@@ -38,7 +50,10 @@ export const GET = withTenantAuth(async (request, auth) => {
 export const POST = withTenantAuth(async (request, auth) => {
   try {
     const tenantId = auth.tenant!.id;
-    const body = await request.json();
+    const raw = await request.json();
+    const body = validateBody(PunchBodySchema, raw);
+    if (body instanceof NextResponse) return body;
+
     const { employeeId, type, method, locationLat, locationLng, evidenceUrl } = body;
 
     const result = await AttendanceService.registerAudit({
