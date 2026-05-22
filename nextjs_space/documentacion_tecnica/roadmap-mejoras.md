@@ -83,20 +83,21 @@ if (!MASTER_KEY || !pepper) throw new Error('FATAL: MASTER_KEY y TENANT_PEPPER r
 
 ---
 
-### 5. `intent-classifier.ts` con 37 intenciones mezcladas
+### ✅ 5. `intent-classifier.ts` con 50 intenciones mezcladas
 **Archivo:** `lib/agents/intent-classifier.ts`  
 **Problema:** Todas las intenciones del chatbot en un solo archivo, mezclando dominios (CRM, ERP, HR, Finance).
 
 **Acción:**
-- [ ] Crear `lib/agents/intents/crm-intents.ts` — leads, contactos, citas
-- [ ] Crear `lib/agents/intents/erp-intents.ts` — inventario, producción, proyectos
-- [ ] Crear `lib/agents/intents/hr-intents.ts` — empleados, vacaciones, nómina
-- [ ] Crear `lib/agents/intents/finance-intents.ts` — facturación, gastos, impuestos
-- [ ] Crear `lib/agents/intents/marketing-intents.ts` — campañas, email, automatizaciones
-- [ ] Crear un `IntentRegistry` que compile todas las intenciones
-- [ ] Actualizar `intent-classifier.ts` para usar el registry
+- [x] Crear `lib/agents/intents/crm-intents.ts` — 26 intenciones: leads, contactos, citas, pipeline, mensajes, tareas
+- [x] Crear `lib/agents/intents/erp-intents.ts` — 8 intenciones: inventario, producción, proyectos, calidad
+- [x] Crear `lib/agents/intents/hr-intents.ts` — 3 intenciones: briefing, vacaciones, rotación
+- [x] Crear `lib/agents/intents/finance-intents.ts` — 8 intenciones: facturación, gastos, proveedores, análisis
+- [x] Crear `lib/agents/intents/marketing-intents.ts` — 3 intenciones: copy, sentimiento, campañas
+- [x] Crear `lib/agents/intents/operations-intents.ts` — 2 intenciones + `ALL_INTENTS` registry
+- [x] Crear `lib/agents/intents/types.ts` — interfaz `IntentSchema` compartida (evita imports circulares)
+- [x] Actualizar `intent-classifier.ts` para importar `ALL_INTENTS` del registry
 
-**Esfuerzo estimado:** 2 días
+**Esfuerzo estimado:** 2 días ✅ Completado
 
 ---
 
@@ -115,17 +116,18 @@ if (!MASTER_KEY || !pepper) throw new Error('FATAL: MASTER_KEY y TENANT_PEPPER r
 
 ---
 
-### 7. Abacus AI como single-point-of-failure
+### ✅ 7. Abacus AI como single-point-of-failure
 **Archivos:** `lib/scoring-engine.ts`, `app/api/scoring/route.ts`  
 **Riesgo:** Si Abacus AI cae, el scoring inteligente y sugerencias de respuesta se detienen.
 
 **Acción:**
-- [ ] Agregar fallback a OpenRouter (mismo prompt) en `calculateAIScore()`
-- [ ] Agregar fallback a OpenRouter en `POST /api/scoring`
-- [ ] Usar el mismo cliente de OpenRouter ya configurado en `lib/assistant/openrouter-client.ts`
-- [ ] Implementar patrón circuit-breaker: tras N fallos a Abacus, cambiar a fallback por T minutos
+- [x] Migrar todas las llamadas LLM de Abacus AI a OpenRouter (9 archivos)
+- [x] Agregar fallback automático DeepSeek → Gemini 2.5 Flash en `callOpenRouterWithFallback()`
+- [x] Migrar generación de imágenes a OpenRouter (`modalities: ["image"]`)
+- [x] Migrar conversión HTML→PDF de Abacus a Puppeteer local (4 archivos)
+- [x] Eliminar `ABACUSAI_API_KEY` de archivos `.env`
 
-**Esfuerzo estimado:** 1 día
+**Esfuerzo estimado:** 1 día ✅ Completado
 
 ---
 
