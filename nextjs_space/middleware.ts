@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { getToken } from 'next-auth/jwt'
-import { rateLimiter } from '@/lib/rate-limiter'
+import { checkEdgeRateLimit } from '@/lib/edge-rate-limiter'
 
 const RESERVED = new Set(['www', 'app', 'api', 'auth', 'login', 'register', 'dashboard', 'webcreator', 'admin'])
 
@@ -90,13 +90,14 @@ export async function middleware(request: NextRequest) {
       const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
                  request.headers.get('x-real-ip') ||
                  'anonymous'
-      const result = await rateLimiter.checkLimit(`ip:${ip}`, 'api_request_minute', 30)
+      const result = checkEdgeRateLimit(`ip:${ip}`, 30, 60_000)
       
       if (!result.allowed) {
+        const retryAfter = Math.ceil((result.resetAt - Date.now()) / 1000)
         return NextResponse.json(
           {
             error: 'Rate limit exceeded',
-            message: `Demasiadas solicitudes. Límite: ${result.limit} por minuto. Reintenta en ${Math.ceil((result.resetAt.getTime() - Date.now()) / 1000)}s.`,
+            message: `Demasiadas solicitudes. Límite: ${result.limit} por minuto. Reintenta en ${retryAfter}s.`,
             code: 'RATE_LIMIT_EXCEEDED',
           },
           {
@@ -104,8 +105,8 @@ export async function middleware(request: NextRequest) {
             headers: {
               'X-RateLimit-Limit': String(result.limit),
               'X-RateLimit-Remaining': '0',
-              'X-RateLimit-Reset': result.resetAt.toISOString(),
-              'Retry-After': String(Math.ceil((result.resetAt.getTime() - Date.now()) / 1000)),
+              'X-RateLimit-Reset': new Date(result.resetAt).toISOString(),
+              'Retry-After': String(retryAfter),
             },
           }
         )
