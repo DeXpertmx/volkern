@@ -1,12 +1,124 @@
 export const dynamic = 'force-dynamic';
 
-
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/db';
-import { PLANS, PLAN_LIMITS, hasReachedLimit } from '@/lib/plans';
+import { PLANS, PLAN_LIMITS } from '@/lib/plans';
 import { startOfMonth, endOfMonth } from 'date-fns';
+
+// Modelos de generación de imágenes disponibles en OpenRouter
+const IMAGE_MODEL_PRIMARY = 'black-forest-labs/flux-1.1-pro';
+const IMAGE_MODEL_FALLBACK = 'black-forest-labs/flux-schnell';
+
+// Mapeo de aspect ratio a resolución aproximada para el prompt
+const ASPECT_RATIO_HINTS: Record<string, string> = {
+  '1:1': 'square format, 1024x1024',
+  '16:9': 'widescreen landscape, 1792x1024',
+  '9:16': 'vertical portrait, 1024x1792',
+  '4:3': 'landscape, 1152x896',
+  '3:4': 'portrait, 896x1152',
+};
+
+/**
+ * Extrae la imagen de la respuesta de OpenRouter.
+ * OpenRouter puede devolver:
+ * - Un data URI (base64) en el contenido del mensaje
+ * - Una URL en un campo dedicado
+ */
+function extractImageFromResponse(data: any): string | null {
+  // Intento 1: Buscar data URI en el contenido del mensaje
+  const content = data.choices?.[0]?.message?.content || '';
+  const dataUriMatch = content.match(/data:image\/[^;]+;base64,[A-Za-z0-9+/=]+/);
+  if (dataUriMatch) return dataUriMatch[0];
+
+  // Intento 2: Buscar URL de imagen en el contenido
+  const urlMatch = content.match(/https?:\/\/[^\s]+?\.(?:png|jpg|jpeg|webp|gif)(?:\?[^\s]*)?/i);
+  if (urlMatch) return urlMatch[0];
+
+  // Intento 3: Campos alternativos en la respuesta
+  const imageUrl = data.choices?.[0]?.message?.image_url ||
+    data.choices?.[0]?.message?.images?.[0]?.url ||
+    data.image_url ||
+    data.images?.[0]?.url;
+  if (imageUrl) return imageUrl;
+
+  // Intento 4: El contenido es un JSON con imageUrl
+  try {
+    const parsed = JSON.parse(content.replace(/```json\n?|```\n?/g, '').trim());
+    if (parsed.imageUrl) return parsed.imageUrl;
+    if (parsed.url) return parsed.url;
+  } catch {
+    // No es JSON
+  }
+
+  return null;
+}
+
+/**
+ * Llama a OpenRouter para generar una imagen.
+ * Usa el endpoint de chat completions con modalities: ["image"].
+ */
+async function generateImageViaOpenRouter(
+  prompt: string,
+  aspectRatio: string,
+  apiKey: string
+): Promise<string> {
+  const resolution = ASPECT_RATIO_HINTS[aspectRatio] || ASPECT_RATIO_HINTS['1:1'];
+  const enhancedPrompt = `${prompt} — ${resolution}`;
+
+  const models = [IMAGE_MODEL_PRIMARY, IMAGE_MODEL_FALLBACK];
+  let lastError: Error | null = null;
+
+  for (const model of models) {
+    try {
+      console.log(`[Generate Image] Trying model: ${model}`);
+
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+          'HTTP-Referer': 'https://volkern.app',
+          'X-Title': 'Volkern Image Generator',
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            {
+              role: 'user',
+              content: enhancedPrompt,
+            },
+          ],
+          modalities: ['image'],
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[Generate Image] ${model} API Error (${response.status}):`, errorText);
+        lastError = new Error(`${model}: HTTP ${response.status}`);
+        continue;
+      }
+
+      const data = await response.json();
+      const imageUrl = extractImageFromResponse(data);
+
+      if (imageUrl) {
+        console.log(`[Generate Image] Success with ${model}`);
+        return imageUrl;
+      }
+
+      console.warn(`[Generate Image] ${model} returned no extractable image`);
+      lastError = new Error(`${model}: no image data in response`);
+    } catch (err: any) {
+      console.error(`[Generate Image] ${model} exception:`, err.message);
+      lastError = err;
+    }
+  }
+
+  throw lastError || new Error('Todos los modelos de imagen fallaron');
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -80,75 +192,46 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`[Generate Image] Generating image with prompt: "${prompt}" (${aspectRatio})`);
-
-    // Generar la imagen usando la API de Abacus AI
-    // IMPORTANTE: La imagen se generará a través del sistema de Abacus AI
-    // que maneja las credenciales internamente
-    try {
-      const generateResponse = await fetch('https://i.ytimg.com/vi/9-j7sm85WUQ/hq720.jpg?sqp=-oaymwEhCK4FEIIDSFryq4qpAxMIARUAAAAAGAElAADIQj0AgKJD&rs=AOn4CLBV6xVtPznXNMlkiwK1YV_zjzbjOw', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.ABACUSAI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          prompt,
-          aspectRatio,
-          model: 'flux-1.1-pro',
-        }),
-      });
-
-      if (!generateResponse.ok) {
-        const errorText = await generateResponse.text();
-        console.error('[Generate Image] API Error:', errorText);
-        throw new Error(`Error de API: ${generateResponse.status}`);
-      }
-
-      const imageData = await generateResponse.json();
-
-      if (!imageData.imageUrl) {
-        throw new Error('No se recibió URL de imagen de la API');
-      }
-
-      // Log de auditoría
-      await prisma.auditLog.create({
-        data: {
-          tenantId: user.tenantId,
-          userId: user.id,
-          accion: 'imagen_generada_ia',
-          entidad: 'Message',
-          entidadId: imageData.imageUrl || 'N/A',
-          descripcion: `Imagen generada con IA: "${prompt.substring(0, 50)}..."`,
-        },
-      });
-
-      console.log(`[Generate Image] Image generated successfully`);
-
-      return NextResponse.json({
-        success: true,
-        imageUrl: imageData.imageUrl,
-        prompt,
-        aspectRatio,
-        message: 'Imagen generada exitosamente',
-      });
-
-    } catch (apiError: any) {
-      console.error('[Generate Image] Error calling API:', apiError);
+    const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+    if (!OPENROUTER_API_KEY) {
       return NextResponse.json(
-        {
-          error: 'Error al generar la imagen con IA',
-          details: apiError.message || 'Error desconocido al llamar a la API',
-        },
-        { status: 500 }
+        { error: 'Servicio de generación de imágenes no configurado' },
+        { status: 503 }
       );
     }
+
+    console.log(`[Generate Image] Prompt: "${prompt}" (${aspectRatio})`);
+
+    // Generar la imagen usando OpenRouter
+    const imageUrl = await generateImageViaOpenRouter(prompt, aspectRatio, OPENROUTER_API_KEY);
+
+    // Log de auditoría
+    await prisma.auditLog.create({
+      data: {
+        tenantId: user.tenantId,
+        userId: user.id,
+        accion: 'imagen_generada_ia',
+        entidad: 'Message',
+        entidadId: imageUrl.substring(0, 200),
+        descripcion: `Imagen generada con IA: "${prompt.substring(0, 50)}..."`,
+      },
+    });
+
+    console.log(`[Generate Image] Success`);
+
+    return NextResponse.json({
+      success: true,
+      imageUrl,
+      prompt,
+      aspectRatio,
+      message: 'Imagen generada exitosamente',
+    });
 
   } catch (error) {
     console.error('Error generating image:', error);
     return NextResponse.json(
       {
-        error: 'Error al procesar la solicitud',
+        error: 'Error al generar la imagen con IA',
         details: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 }

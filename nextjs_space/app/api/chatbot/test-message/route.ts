@@ -10,10 +10,22 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import OpenAI from 'openai';
 
-const client = new OpenAI({
-  apiKey: process.env.ABACUSAI_API_KEY,
-  baseURL: 'https://api.abacus.ai/v1',
-});
+let _client: OpenAI | null = null;
+
+function getClient(): OpenAI {
+  if (!_client) {
+    const apiKey = process.env.OPENROUTER_API_KEY || '';
+    _client = new OpenAI({
+      apiKey,
+      baseURL: 'https://openrouter.ai/api/v1',
+      defaultHeaders: {
+        'HTTP-Referer': 'https://volkern.app',
+        'X-Title': 'Volkern Test Chatbot',
+      },
+    });
+  }
+  return _client;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -77,8 +89,8 @@ export async function POST(request: NextRequest) {
     ];
 
     // Llamar al LLM
-    const completion = await client.chat.completions.create({
-      model: 'gpt-4.1-mini',
+    const completion = await getClient().chat.completions.create({
+      model: 'deepseek/deepseek-v4-flash:free',
       messages,
       temperature: 0.7,
       max_tokens: 500,

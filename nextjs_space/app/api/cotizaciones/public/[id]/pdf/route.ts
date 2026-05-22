@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { generatePdf } from '@/lib/pdf-generator';
 
 function formatCurrency(amount: number, currency: string): string {
   const symbols: Record<string, string> = { MXN: '$', USD: '$', EUR: '€' };
@@ -208,71 +209,21 @@ export async function GET(request: Request, { params }: { params: { id: string }
 
     const htmlContent = generateCotizacionHTML(cotizacion, tenant);
 
-    // Create PDF request
-    const createResponse = await fetch('https://apps.abacus.ai/api/createConvertHtmlToPdfRequest', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        deployment_token: process.env.ABACUSAI_API_KEY,
-        html_content: htmlContent,
-        pdf_options: { 
-          format: 'A4',
-          margin: { top: '20mm', right: '15mm', bottom: '20mm', left: '15mm' },
-          print_background: true
-        },
-        base_url: process.env.NEXTAUTH_URL || ''
-      })
+    // Generar PDF localmente con Puppeteer
+    const pdfBuffer = await generatePdf(htmlContent, {
+      format: 'A4',
+      margin: { top: '20mm', right: '15mm', bottom: '20mm', left: '15mm' },
+      printBackground: true,
     });
 
-    if (!createResponse.ok) {
-      return NextResponse.json({ success: false, error: 'Error creando solicitud PDF' }, { status: 500 });
-    }
+    const filename = `${cotizacion.numero.replace(/[^a-zA-Z0-9-]/g, '_')}.pdf`;
 
-    const { request_id } = await createResponse.json();
-    if (!request_id) {
-      return NextResponse.json({ success: false, error: 'No request ID' }, { status: 500 });
-    }
-
-    // Poll for completion
-    const maxAttempts = 60;
-    let attempts = 0;
-
-    while (attempts < maxAttempts) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      const statusResponse = await fetch('https://apps.abacus.ai/api/getConvertHtmlToPdfStatus', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          request_id: request_id, 
-          deployment_token: process.env.ABACUSAI_API_KEY 
-        })
-      });
-
-      const statusResult = await statusResponse.json();
-      const status = statusResult?.status || 'FAILED';
-      const result = statusResult?.result || null;
-
-      if (status === 'SUCCESS') {
-        if (result && result.result) {
-          const pdfBuffer = Buffer.from(result.result, 'base64');
-          const filename = `${cotizacion.numero.replace(/[^a-zA-Z0-9-]/g, '_')}.pdf`;
-          
-          return new NextResponse(pdfBuffer, {
-            headers: {
-              'Content-Type': 'application/pdf',
-              'Content-Disposition': `attachment; filename="${filename}"`
-            }
-          });
-        }
-        return NextResponse.json({ success: false, error: 'PDF sin datos' }, { status: 500 });
-      } else if (status === 'FAILED') {
-        return NextResponse.json({ success: false, error: 'Error generando PDF' }, { status: 500 });
+    return new NextResponse(pdfBuffer, {
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="${filename}"`
       }
-      attempts++;
-    }
-
-    return NextResponse.json({ success: false, error: 'Timeout' }, { status: 500 });
+    });
   } catch (error) {
     console.error('Error generating public PDF:', error);
     return NextResponse.json({ error: 'Error interno' }, { status: 500 });

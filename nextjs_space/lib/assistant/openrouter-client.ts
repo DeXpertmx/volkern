@@ -24,7 +24,7 @@ export interface OpenRouterResponse {
   };
 }
 
-async function callOpenRouter(model: string, messages: OpenRouterMessage[], temperature = 0.3): Promise<OpenRouterResponse> {
+export async function callOpenRouter(model: string, messages: OpenRouterMessage[], temperature = 0.3, maxTokens = 8192): Promise<OpenRouterResponse> {
   if (!OPENROUTER_API_KEY) {
     throw new Error('OPENROUTER_API_KEY no configurada');
   }
@@ -41,7 +41,7 @@ async function callOpenRouter(model: string, messages: OpenRouterMessage[], temp
       model,
       messages,
       temperature,
-      max_tokens: 8192,
+      max_tokens: maxTokens,
       top_p: 0.9
     })
   });
@@ -155,6 +155,37 @@ export async function callAssistantWithFallback(
   // 2. Fallback: Google Gemini 2.5 Flash directo
   try {
     console.log('[AI] Intentando Google Gemini 2.5 Flash...');
+    const response = await callGemini25Flash(messages);
+    console.log('[AI] ✅ Gemini respondió correctamente');
+    return response;
+  } catch (geminiError) {
+    console.error('[AI] ❌ Ambos fallaron:', geminiError);
+    throw geminiError;
+  }
+}
+
+/**
+ * Pipeline genérico con modelo configurable y fallback a Gemini.
+ * Permite especificar modelo, temperatura y max tokens.
+ */
+export async function callOpenRouterWithFallback(
+  model: string,
+  messages: OpenRouterMessage[],
+  temperature = 0.7,
+  maxTokens = 500
+): Promise<OpenRouterResponse> {
+  try {
+    console.log(`[AI] Intentando ${model} via OpenRouter...`);
+    const response = await callOpenRouter(model, messages, temperature, maxTokens);
+    console.log(`[AI] ✅ ${model} respondió correctamente`);
+    return response;
+  } catch (openRouterError) {
+    console.warn(`[AI] ${model} falló:`, openRouterError);
+  }
+
+  // Fallback: Google Gemini 2.5 Flash directo
+  try {
+    console.log('[AI] Intentando Google Gemini 2.5 Flash (fallback)...');
     const response = await callGemini25Flash(messages);
     console.log('[AI] ✅ Gemini respondió correctamente');
     return response;

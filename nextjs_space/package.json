@@ -147,6 +147,7 @@
     "pg": "^8.20.0",
     "plaid": "^42.1.0",
     "plotly.js": "2.35.3",
+    "puppeteer": "^25.0.4",
     "qrcode": "^1.5.4",
     "qrcode.react": "^4.2.0",
     "quill": "2.0.2",

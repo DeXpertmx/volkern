@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/db';
+import { callLlm } from '@/lib/openrouter-helper';
 
 
 export async function POST(request: NextRequest) {
@@ -47,41 +48,11 @@ export async function POST(request: NextRequest) {
 
         const servicesInfo = services.map(s => `- ${s.nombre}: ${s.descripcion} ($${s.precio})`).join('\n');
 
-        // 3. Llamar al LLM
-        const systemPrompt = `Eres un asesor de ventas experto. Tu tarea es sugerir la respuesta más adecuada y profesional para el cliente.
-CONTEXTO DEL NEGOCIO (Servicios):
-${servicesInfo}
-
-REGLAS:
-- Sé amable, profesional y persuasivo.
-- Si el cliente tiene una duda, respóndela basándote en los servicios.
-- Si parece listo para agendar, incentiva el cierre.
-- Mantén la respuesta concisa (máximo 3 párrafos cortos).
-- Responde SIEMPRE en español.`;
-
-        const response = await fetch('https://apps.abacus.ai/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${process.env.ABACUSAI_API_KEY}`,
-            },
-            body: JSON.stringify({
-                model: 'gpt-4.1-mini',
-                messages: [
-                    { role: 'system', content: systemPrompt },
-                    { role: 'user', content: `Basado en este historial, ¿cuál debería ser mi siguiente respuesta como asesor?:\n\n${historyText}` },
-                ],
-                max_tokens: 500,
-                temperature: 0.7,
-            }),
+        // 3. Llamar a OpenRouter (DeepSeek V4 Flash con fallback Gemini)
+        const suggestion = await callLlm(systemPrompt, `Basado en este historial, ¿cuál debería ser mi siguiente respuesta como asesor?:\n\n${historyText}`, {
+          temperature: 0.7,
+          maxTokens: 500,
         });
-
-        if (!response.ok) {
-            throw new Error(`Error de API: ${response.status}`);
-        }
-
-        const data = await response.json();
-        const suggestion = data.choices?.[0]?.message?.content || '';
 
         return NextResponse.json({ suggestion });
 

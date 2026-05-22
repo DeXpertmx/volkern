@@ -1,10 +1,11 @@
 /**
  * Motor de Chatbot WhatsApp para Volkern CRM
- * Usa LLM API de Abacus para procesar mensajes y agendar citas
+ * Usa OpenRouter (DeepSeek V4 Flash + Gemini fallback) para procesar mensajes y agendar citas
  */
 
 import { prisma } from '@/lib/db';
 import { sendWhatsAppMessage } from '@/lib/whatsapp';
+import { callAssistantWithFallback, OpenRouterMessage } from '@/lib/assistant/openrouter-client';
 
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -207,27 +208,16 @@ Fecha actual: ${new Date().toLocaleDateString('es-MX', { weekday: 'long', year: 
   ];
 
   try {
-    // Llamar al LLM API
-    const response = await fetch('https://apps.abacus.ai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.ABACUSAI_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4.1-mini',
-        messages: messages,
-        max_tokens: 500,
-        temperature: 0.7,
-      })
-    });
+    // Construir mensajes con historial para preservar contexto de conversación
+    const llmMessages: OpenRouterMessage[] = [
+      { role: 'system', content: systemPrompt },
+      ...historyMessages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+      { role: 'user', content: userMessage },
+    ];
 
-    if (!response.ok) {
-      throw new Error(`LLM API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const assistantMessage = data.choices?.[0]?.message?.content || 'Lo siento, no pude procesar tu mensaje.';
+    // Llamar a OpenRouter (DeepSeek V4 Flash con fallback Gemini)
+    const response = await callAssistantWithFallback(llmMessages);
+    const assistantMessage = response.choices?.[0]?.message?.content || 'Lo siento, no pude procesar tu mensaje.';
 
     // Detectar acciones especiales en la respuesta
     let action: string | undefined;

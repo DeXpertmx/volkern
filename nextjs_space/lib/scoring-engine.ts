@@ -1,4 +1,5 @@
 import { prisma } from './db';
+import { callLlm } from './openrouter-helper';
 
 export interface ScoreChange {
   leadId: string;
@@ -489,28 +490,14 @@ ${interactionHistory || 'No hay mensajes registrados aún.'}
 CITAS: ${lead.citas.length} registradas.
 DEALS: ${lead.deals.length} registrados.`;
 
-      // 3. Llamar a Abacus AI
-      const response = await fetch('https://apps.abacus.ai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.ABACUSAI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: 'gpt-4.1-mini',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userContent },
-          ],
-          max_tokens: 300,
-          temperature: 0.3,
-        }),
+      // 3. Llamar a OpenRouter (DeepSeek V4 Flash con fallback Gemini)
+      const llmResponse = await callLlm(systemPrompt, userContent, {
+        temperature: 0.3,
+        maxTokens: 300,
+        responseFormat: 'json',
       });
 
-      if (!response.ok) throw new Error(`Abacus API Error: ${response.status}`);
-
-      const data = await response.json();
-      const aiResult: AIScoreResult = JSON.parse(data.choices?.[0]?.message?.content || '{}');
+      const aiResult: AIScoreResult = JSON.parse(llmResponse || '{}');
 
       if (typeof aiResult.puntuacion !== 'number') {
         throw new Error('Formato de respuesta IA inválido');

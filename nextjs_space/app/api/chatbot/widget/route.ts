@@ -9,11 +9,22 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import OpenAI from 'openai';
 import { v4 as uuidv4 } from 'uuid';
+let _client: OpenAI | null = null;
 
-const client = new OpenAI({
-  apiKey: process.env.ABACUSAI_API_KEY,
-  baseURL: 'https://api.abacus.ai/v1',
-});
+function getClient(): OpenAI {
+  if (!_client) {
+    const apiKey = process.env.OPENROUTER_API_KEY || '';
+    _client = new OpenAI({
+      apiKey,
+      baseURL: 'https://openrouter.ai/api/v1',
+      defaultHeaders: {
+        'HTTP-Referer': 'https://volkern.app',
+        'X-Title': 'Volkern Widget Chatbot',
+      },
+    });
+  }
+  return _client;
+}
 
 // CORS headers para permitir acceso desde cualquier origen
 const corsHeaders = {
@@ -148,8 +159,8 @@ export async function POST(request: NextRequest) {
     ];
 
     // Llamar al LLM
-    const completion = await client.chat.completions.create({
-      model: 'gpt-4.1-mini',
+    const completion = await getClient().chat.completions.create({
+      model: 'deepseek/deepseek-v4-flash:free',
       messages,
       temperature: 0.7,
       max_tokens: 500,

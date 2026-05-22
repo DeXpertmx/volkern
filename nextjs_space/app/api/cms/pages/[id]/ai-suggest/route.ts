@@ -3,9 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { withTenantAuth } from '@/lib/api-key-auth';
 import { prisma } from '@/lib/db';
-
-const ABACUS_API_KEY = process.env.ABACUSAI_API_KEY;
-const ABACUS_API_URL = 'https://routellm.abacus.ai/v1/chat/completions';
+import { callLlm } from '@/lib/openrouter-helper';
 
 /**
  * POST /api/cms/pages/[id]/ai-suggest - Generar sugerencias de contenido con IA
@@ -71,35 +69,11 @@ Reglas:
       userPrompt += `\n\nContexto adicional: ${context}`;
     }
 
-    // Llamar a la API de Abacus
-    const response = await fetch(ABACUS_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${ABACUS_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        temperature: 0.7,
-        max_tokens: 1000,
-      }),
+    // Llamar a OpenRouter
+    const content = await callLlm(systemPrompt, userPrompt, {
+      temperature: 0.7,
+      maxTokens: 1000,
     });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[AI Suggest] API Error:', errorText);
-      return NextResponse.json(
-        { error: 'Error al generar contenido' },
-        { status: 500 }
-      );
-    }
-
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content || '';
 
     // Intentar parsear como JSON si el contenido parece ser JSON
     let parsedContent = content;

@@ -1,10 +1,25 @@
 import OpenAI from 'openai';
 import { prisma } from '@/lib/db';
 
-const client = new OpenAI({
-  apiKey: process.env.ABACUSAI_API_KEY,
-  baseURL: 'https://api.abacus.ai/v1',
-});
+let _client: OpenAI | null = null;
+
+function getClient(): OpenAI {
+  if (!_client) {
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    if (!apiKey) {
+      console.warn('[ChatbotProcessor] OPENROUTER_API_KEY no configurada. Las llamadas LLM fallarán.');
+    }
+    _client = new OpenAI({
+      apiKey: apiKey || '',
+      baseURL: 'https://openrouter.ai/api/v1',
+      defaultHeaders: {
+        'HTTP-Referer': 'https://volkern.app',
+        'X-Title': 'Volkern CRM Assistant',
+      },
+    });
+  }
+  return _client;
+}
 
 export interface ChatbotResponse {
   success: boolean;
@@ -57,8 +72,8 @@ export async function processChatbotMessage(
       { role: 'user', content: message }
     ];
 
-    const completion = await client.chat.completions.create({
-      model: 'gpt-4.1-mini',
+    const completion = await getClient().chat.completions.create({
+      model: 'deepseek/deepseek-v4-flash:free',
       messages: messages as any,
       temperature: 0.7,
       max_tokens: 500,
