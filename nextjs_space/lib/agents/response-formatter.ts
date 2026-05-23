@@ -299,7 +299,13 @@ export class ResponseFormatterAgent {
 
     let text = '';
     try {
-      text = typeof template === 'function' ? template({ data, error, missingParams, confirmationId }) : template || this.getDefaultResponse(action, success);
+      if (action === 'error') {
+        text = typeof template === 'function' ? template(error) : template || this.getDefaultResponse(action, success);
+      } else if (action === 'execute' || action === 'success') {
+        text = typeof template === 'function' ? template(data) : template || this.getDefaultResponse(action, success);
+      } else {
+        text = typeof template === 'function' ? template({ data, error, missingParams, confirmationId }) : template || this.getDefaultResponse(action, success);
+      }
     } catch (err) {
       text = this.getDefaultResponse(action, success);
     }
@@ -446,7 +452,7 @@ export class ResponseFormatterAgent {
 
   private getGenericTemplate(action: string, success: boolean): (params: any) => string {
     if ((action === 'success' || action === 'execute') && success) return () => '✅ ¡Hecho! ¿Necesitas algo más?';
-    if (action === 'error') return (p) => `❌ ${p.error || 'Hubo un problema.'}`;
+    if (action === 'error') return (p) => `❌ ${p || 'Hubo un problema.'}`;
     if (action === 'ask_clarification') return (p) => `Necesito ${p.missingParams?.join(', ') || 'más información'}.`;
     return () => 'Procesando...';
   }
@@ -457,7 +463,7 @@ export class ResponseFormatterAgent {
   }
 
   private getResponseType(action: string, success: boolean): FormattedResponse['type'] {
-    if (action === 'success') return success ? 'success' : 'error';
+    if (action === 'execute' || action === 'success') return success ? 'success' : 'error';
     if (action === 'error') return 'error';
     if (action === 'confirmation_pending') return 'warning';
     if (action === 'fallback_to_human' || action === 'ask_clarification') return 'info';
@@ -485,7 +491,7 @@ export class ResponseFormatterAgent {
       if (intent.includes('proyecto')) return ['📊 Rentabilidad', '🚨 Desviaciones'];
       return ['🤖 Ayuda', '➕ Nueva acción'];
     }
-    if (action === 'success' && success) {
+    if ((action === 'execute' || action === 'success') && success) {
       if (intent === 'crear_lead') return ['➕ Otro lead', '📅 Agendar cita', '📝 Registrar interacción'];
       if (intent === 'mis_citas') return ['📅 Hoy', '📆 Mañana', '➕ Nueva cita'];
       if (intent === 'crear_tarea') return ['➕ Otra tarea', '✅ Ver pendientes'];
