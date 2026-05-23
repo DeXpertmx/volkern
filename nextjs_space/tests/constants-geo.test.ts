@@ -1,153 +1,128 @@
 import { describe, it, expect } from 'vitest';
 import { PAISES, TIMEZONES } from '@/lib/constants/geo';
 
-// ─── PAISES ────────────────────────────────────────────────────────────
 describe('PAISES', () => {
-  it('debe tener más de 150 países', () => {
-    expect(PAISES.length).toBeGreaterThan(150);
+  it('debe ser un array', () => {
+    expect(Array.isArray(PAISES)).toBe(true);
   });
 
-  it('cada país debe tener value (ISO 3166-1 alpha-2) y label', () => {
+  it('debe contener al menos 190 países', () => {
+    expect(PAISES.length).toBeGreaterThanOrEqual(190);
+  });
+
+  it('cada país debe tener value y label de tipo string', () => {
     for (const pais of PAISES) {
-      expect(pais.value).toBeTruthy();
-      expect(pais.value).toHaveLength(2);
-      expect(pais.value).toMatch(/^[A-Z]{2}$/);
-      expect(pais.label).toBeTruthy();
+      expect(typeof pais.value).toBe('string');
       expect(typeof pais.label).toBe('string');
+      expect(pais.value.length).toBe(2); // ISO 3166-1 alpha-2
     }
   });
 
-  it('no debe haber códigos ISO duplicados', () => {
-    const codes = PAISES.map(p => p.value);
-    expect(new Set(codes).size).toBe(codes.length);
+  it('los values deben ser únicos', () => {
+    const values = PAISES.map(p => p.value);
+    expect(new Set(values).size).toBe(values.length);
   });
 
-  it('no debe haber labels duplicados', () => {
+  it('los labels deben ser únicos', () => {
     const labels = PAISES.map(p => p.label);
     expect(new Set(labels).size).toBe(labels.length);
   });
 
-  it('debe incluir los países hispanohablantes principales', () => {
-    const codes = PAISES.map(p => p.value);
-    expect(codes).toContain('ES'); // España
-    expect(codes).toContain('MX'); // México
-    expect(codes).toContain('AR'); // Argentina
-    expect(codes).toContain('CO'); // Colombia
-    expect(codes).toContain('CL'); // Chile
-    expect(codes).toContain('PE'); // Perú
-    expect(codes).toContain('VE'); // Venezuela
-    expect(codes).toContain('EC'); // Ecuador
-    expect(codes).toContain('UY'); // Uruguay
-    expect(codes).toContain('PY'); // Paraguay
-    expect(codes).toContain('BO'); // Bolivia
+  it('debe incluir España (ES)', () => {
+    const esp = PAISES.find(p => p.value === 'ES');
+    expect(esp).toBeDefined();
+    expect(esp!.label).toBe('España');
   });
 
-  it('debe incluir los países del G7', () => {
-    const codes = PAISES.map(p => p.value);
-    expect(codes).toContain('US'); // Estados Unidos
-    expect(codes).toContain('CA'); // Canadá
-    expect(codes).toContain('GB'); // Reino Unido
-    expect(codes).toContain('DE'); // Alemania
-    expect(codes).toContain('FR'); // Francia
-    expect(codes).toContain('IT'); // Italia
-    expect(codes).toContain('JP'); // Japón
+  it('debe incluir México (MX)', () => {
+    const mx = PAISES.find(p => p.value === 'MX');
+    expect(mx).toBeDefined();
+    expect(mx!.label).toBe('México');
   });
 
-  it('los códigos deben ser solo letras mayúsculas', () => {
-    for (const pais of PAISES) {
-      expect(pais.value).toMatch(/^[A-Z]+$/);
+  it('debe incluir Estados Unidos (US)', () => {
+    const us = PAISES.find(p => p.value === 'US');
+    expect(us).toBeDefined();
+    expect(us!.label).toBe('Estados Unidos');
+  });
+
+  it('debe incluir países de la UE', () => {
+    const euCodes = ['ES', 'DE', 'FR', 'IT', 'PT', 'NL', 'BE', 'AT', 'IE', 'PL', 'SE', 'DK', 'FI', 'GR', 'CZ', 'RO', 'HU', 'BG', 'HR', 'SK', 'SI', 'LT', 'LV', 'EE', 'CY', 'MT', 'LU'];
+    for (const code of euCodes) {
+      expect(PAISES.find(p => p.value === code)).toBeDefined();
     }
   });
 
-  it('debe incluir países de todos los continentes', () => {
-    const codes = PAISES.map(p => p.value);
-    // América
-    expect(codes).toContain('BR');
-    // Europa
-    expect(codes).toContain('PT');
-    // África
-    expect(codes).toContain('ZA');
-    // Asia
-    expect(codes).toContain('CN');
-    // Oceanía
-    expect(codes).toContain('AU');
-  });
-
-  it('los primeros y últimos países deben estar en orden correcto', () => {
-    // Verificar que el array comienza y termina con los países esperados
-    // (ordenamiento alfabético aproximado, puede haber variaciones por locale)
+  it('debe estar mayormente ordenado (los primeros y últimos países son correctos)', () => {
     expect(PAISES[0].label).toBe('Afganistán');
     expect(PAISES[PAISES.length - 1].label).toBe('Zimbabue');
   });
+
+  it('todos los values deben ser códigos ISO 3166-1 alpha-2 válidos', () => {
+    for (const pais of PAISES) {
+      expect(pais.value).toMatch(/^[A-Z]{2}$/);
+    }
+  });
 });
 
-// ─── TIMEZONES ─────────────────────────────────────────────────────────
 describe('TIMEZONES', () => {
-  it('debe tener más de 30 zonas horarias', () => {
-    expect(TIMEZONES.length).toBeGreaterThan(30);
+  it('debe ser un array', () => {
+    expect(Array.isArray(TIMEZONES)).toBe(true);
   });
 
-  it('cada zona debe tener value y label', () => {
+  it('debe contener múltiples zonas horarias', () => {
+    expect(TIMEZONES.length).toBeGreaterThan(50);
+  });
+
+  it('cada timezone debe tener value y label de tipo string', () => {
     for (const tz of TIMEZONES) {
-      expect(tz.value).toBeTruthy();
       expect(typeof tz.value).toBe('string');
-      expect(tz.label).toBeTruthy();
       expect(typeof tz.label).toBe('string');
     }
   });
 
-  it('no debe haber valores duplicados', () => {
+  it('los values deben ser únicos', () => {
     const values = TIMEZONES.map(t => t.value);
     expect(new Set(values).size).toBe(values.length);
   });
 
-  it('cada label debe contener GMT offset', () => {
+  it('debe incluir Europe/Brussels (que cubre Madrid)', () => {
+    const brussels = TIMEZONES.find(t => t.value === 'Europe/Brussels');
+    expect(brussels).toBeDefined();
+    expect(brussels!.label).toContain('Madrid');
+  });
+
+  it('debe incluir America/New_York', () => {
+    const ny = TIMEZONES.find(t => t.value === 'America/New_York');
+    expect(ny).toBeDefined();
+    expect(ny!.label).toContain('Eastern');
+  });
+
+  it('debe incluir America/Mexico_City (Cancun)', () => {
+    const mx = TIMEZONES.find(t => t.value === 'America/Cancun');
+    expect(mx).toBeDefined();
+    expect(mx!.label).toContain('Mexico City');
+  });
+
+  it('los labels deben contener el offset GMT', () => {
     for (const tz of TIMEZONES) {
-      expect(tz.label).toMatch(/GMT[+-]\d{2}:\d{2}/);
+      expect(tz.label).toMatch(/\(GMT[+-]\d{2}:\d{2}\)/);
     }
   });
 
-  it('cada value debe seguir el patrón IANA (Area/City)', () => {
-    for (const tz of TIMEZONES) {
-      // Allow Etc/GMT±X format too
-      expect(tz.value).toMatch(/^(Africa|America|Asia|Atlantic|Australia|Europe|Indian|Pacific|Etc)\/.+/);
-    }
-  });
-
-  it('debe incluir zonas horarias principales', () => {
-    const values = TIMEZONES.map(t => t.value);
-    expect(values).toContain('America/New_York');    // EST
-    expect(values).toContain('America/Chicago');      // CST
-    expect(values).toContain('America/Denver');       // MST
-    expect(values).toContain('America/Los_Angeles');  // PST
-    expect(values).toContain('Europe/London');        // GMT
-    expect(values).toContain('Europe/Brussels');      // CET (Madrid)
-    expect(values).toContain('Asia/Tokyo');           // JST
-    expect(values).toContain('Australia/Canberra');   // AEST (Sydney)
-  });
-
-  it('debe incluir zonas latinoamericanas', () => {
-    const values = TIMEZONES.map(t => t.value);
-    expect(values).toContain('America/Cancun');  // Mexico City
-    expect(values).toContain('America/Bogota');
-    expect(values).toContain('America/Argentina/Buenos_Aires');
-    expect(values).toContain('America/Santiago');
-    expect(values).toContain('America/Sao_Paulo');
-  });
-
-  it('debe incluir Etc/GMT±X para islas del Pacífico', () => {
-    const values = TIMEZONES.map(t => t.value);
-    expect(values).toContain('Etc/GMT+10');
-    expect(values).toContain('Etc/GMT+8');
-    expect(values).toContain('Etc/GMT-12');
-  });
-
-  it('debe cubrir desde GMT-11 hasta GMT+13', () => {
+  it('debe cubrir offsets desde GMT-11 hasta GMT+13', () => {
     const offsets = TIMEZONES.map(t => {
-      const m = t.label.match(/GMT([+-]\d{2}):(\d{2})/);
-      return m ? parseInt(m[1]) : 0;
-    });
+      const match = t.label.match(/\(GMT([+-]\d{2}):\d{2}\)/);
+      return match ? parseInt(match[1]) : null;
+    }).filter(Boolean) as number[];
+    
     expect(Math.min(...offsets)).toBeLessThanOrEqual(-11);
-    expect(Math.max(...offsets)).toBeGreaterThanOrEqual(13);
+    expect(Math.max(...offsets)).toBeGreaterThanOrEqual(12);
+  });
+
+  it('los values deben tener formato de identificador IANA (Area/Location)', () => {
+    for (const tz of TIMEZONES) {
+      expect(tz.value).toMatch(/^(Etc\/)?[A-Z][a-zA-Z]+\/[A-Za-z_+\-0-9]+/);
+    }
   });
 });

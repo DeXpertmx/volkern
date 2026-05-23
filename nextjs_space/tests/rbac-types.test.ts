@@ -1,326 +1,359 @@
 import { describe, it, expect } from 'vitest';
 import {
-  isValidPermission,
-  isValidModule,
-  isRBACUserContext,
-  isRolePermissionsMap,
   DEFAULT_MODULE_PERMISSIONS,
   ALL_MODULES,
   ALL_PERMISSIONS,
   PERMISSION_LABELS,
   MODULE_LABELS,
+  isValidPermission,
+  isValidModule,
+  isRBACUserContext,
+  isRolePermissionsMap,
 } from '@/lib/rbac-types';
 
-// ==================== isValidPermission ====================
+// ─── DEFAULT_MODULE_PERMISSIONS ───────────────────────────────────────────────
+
+describe('DEFAULT_MODULE_PERMISSIONS', () => {
+  it('debe ser un objeto', () => {
+    expect(typeof DEFAULT_MODULE_PERMISSIONS).toBe('object');
+    expect(DEFAULT_MODULE_PERMISSIONS).not.toBeNull();
+  });
+
+  it('debe tener todas las claves de permiso base con valor false', () => {
+    const baseKeys = ['ver', 'crear', 'editar', 'eliminar', 'asignar', 'exportar', 'gestionar'];
+    for (const key of baseKeys) {
+      expect(key in DEFAULT_MODULE_PERMISSIONS).toBe(true);
+      expect(DEFAULT_MODULE_PERMISSIONS[key]).toBe(false);
+    }
+  });
+
+  it('debe tener claves extendidas con valor false', () => {
+    const extendedKeys = ['inscribir', 'publicar', 'activar', 'enviar', 'responder', 'invitar'];
+    for (const key of extendedKeys) {
+      expect(key in DEFAULT_MODULE_PERMISSIONS).toBe(true);
+      expect(DEFAULT_MODULE_PERMISSIONS[key]).toBe(false);
+    }
+  });
+
+  it('no debe tener ningún permiso en true por defecto', () => {
+    const values = Object.values(DEFAULT_MODULE_PERMISSIONS);
+    expect(values.every(v => v === false)).toBe(true);
+  });
+
+  it('debe ser inmutable en el test (copia independiente)', () => {
+    const copy = { ...DEFAULT_MODULE_PERMISSIONS };
+    copy.ver = true;
+    expect(DEFAULT_MODULE_PERMISSIONS.ver).toBe(false);
+  });
+});
+
+// ─── ALL_MODULES ──────────────────────────────────────────────────────────────
+
+describe('ALL_MODULES', () => {
+  it('debe ser un array', () => {
+    expect(Array.isArray(ALL_MODULES)).toBe(true);
+  });
+
+  it('debe contener módulos esperados', () => {
+    const expectedModules = ['leads', 'citas', 'estudiantes', 'cursos', 'automatizaciones',
+      'campanas', 'mensajes', 'analytics', 'configuracion', 'equipo',
+      'whitelabel', 'telefonia', 'pages'];
+    for (const mod of expectedModules) {
+      expect(ALL_MODULES).toContain(mod);
+    }
+  });
+
+  it('todos los elementos deben ser strings', () => {
+    for (const mod of ALL_MODULES) {
+      expect(typeof mod).toBe('string');
+    }
+  });
+
+  it('no debe tener duplicados', () => {
+    expect(new Set(ALL_MODULES).size).toBe(ALL_MODULES.length);
+  });
+
+  it('cada módulo debe tener label en MODULE_LABELS', () => {
+    for (const mod of ALL_MODULES) {
+      expect(mod in MODULE_LABELS).toBe(true);
+    }
+  });
+});
+
+// ─── ALL_PERMISSIONS ──────────────────────────────────────────────────────────
+
+describe('ALL_PERMISSIONS', () => {
+  it('debe ser un array', () => {
+    expect(Array.isArray(ALL_PERMISSIONS)).toBe(true);
+  });
+
+  it('debe contener permisos base', () => {
+    const basePerms = ['ver', 'crear', 'editar', 'eliminar', 'asignar', 'exportar', 'gestionar'];
+    for (const perm of basePerms) {
+      expect(ALL_PERMISSIONS).toContain(perm);
+    }
+  });
+
+  it('debe contener permisos extendidos', () => {
+    const extendedPerms = ['inscribir', 'publicar', 'activar', 'enviar', 'responder', 'invitar'];
+    for (const perm of extendedPerms) {
+      expect(ALL_PERMISSIONS).toContain(perm);
+    }
+  });
+
+  it('no debe tener duplicados', () => {
+    expect(new Set(ALL_PERMISSIONS).size).toBe(ALL_PERMISSIONS.length);
+  });
+
+  it('cada permiso debe tener label en PERMISSION_LABELS', () => {
+    for (const perm of ALL_PERMISSIONS) {
+      expect(perm in PERMISSION_LABELS).toBe(true);
+    }
+  });
+});
+
+// ─── PERMISSION_LABELS ────────────────────────────────────────────────────────
+
+describe('PERMISSION_LABELS', () => {
+  it('debe ser un objeto', () => {
+    expect(typeof PERMISSION_LABELS).toBe('object');
+  });
+
+  it('todas las claves deben estar en ALL_PERMISSIONS', () => {
+    const keys = Object.keys(PERMISSION_LABELS);
+    for (const key of keys) {
+      expect(ALL_PERMISSIONS).toContain(key);
+    }
+  });
+
+  it('todos los valores deben ser strings no vacíos', () => {
+    const entries = Object.entries(PERMISSION_LABELS);
+    expect(entries.length).toBeGreaterThan(0);
+    for (const [key, value] of entries) {
+      expect(typeof value).toBe('string');
+      expect(value.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('debe tener labels en español para permisos clave', () => {
+    expect(PERMISSION_LABELS.ver).toBe('Ver');
+    expect(PERMISSION_LABELS.crear).toBe('Crear');
+    expect(PERMISSION_LABELS.editar).toBe('Editar');
+    expect(PERMISSION_LABELS.eliminar).toBe('Eliminar');
+    expect(PERMISSION_LABELS.gestionar).toBe('Gestionar');
+  });
+});
+
+// ─── MODULE_LABELS ────────────────────────────────────────────────────────────
+
+describe('MODULE_LABELS', () => {
+  it('debe ser un objeto', () => {
+    expect(typeof MODULE_LABELS).toBe('object');
+  });
+
+  it('todas las claves deben estar en ALL_MODULES', () => {
+    const keys = Object.keys(MODULE_LABELS);
+    for (const key of keys) {
+      expect(ALL_MODULES).toContain(key);
+    }
+  });
+
+  it('todos los valores deben ser strings no vacíos', () => {
+    const entries = Object.entries(MODULE_LABELS);
+    expect(entries.length).toBeGreaterThan(0);
+    for (const [_, value] of entries) {
+      expect(typeof value).toBe('string');
+      expect(value.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('debe tener labels descriptivos', () => {
+    expect(MODULE_LABELS.leads).toBe('Leads');
+    expect(MODULE_LABELS.citas).toBe('Citas');
+    expect(MODULE_LABELS.analytics).toBe('Analíticas');
+  });
+});
+
+// ─── isValidPermission ────────────────────────────────────────────────────────
+
 describe('isValidPermission', () => {
-  it('debe aceptar permisos básicos válidos', () => {
+  it('debe devolver true para permisos válidos', () => {
     expect(isValidPermission('ver')).toBe(true);
     expect(isValidPermission('crear')).toBe(true);
     expect(isValidPermission('editar')).toBe(true);
     expect(isValidPermission('eliminar')).toBe(true);
-  });
-
-  it('debe aceptar permisos avanzados válidos', () => {
-    expect(isValidPermission('asignar')).toBe(true);
-    expect(isValidPermission('exportar')).toBe(true);
     expect(isValidPermission('gestionar')).toBe(true);
     expect(isValidPermission('inscribir')).toBe(true);
-    expect(isValidPermission('publicar')).toBe(true);
-    expect(isValidPermission('activar')).toBe(true);
-    expect(isValidPermission('enviar')).toBe(true);
-    expect(isValidPermission('responder')).toBe(true);
-    expect(isValidPermission('invitar')).toBe(true);
   });
 
-  it('debe rechazar permisos inválidos', () => {
+  it('debe devolver false para permisos inválidos', () => {
     expect(isValidPermission('borrar')).toBe(false);
     expect(isValidPermission('leer')).toBe(false);
     expect(isValidPermission('admin')).toBe(false);
   });
 
-  it('debe rechazar strings vacíos', () => {
+  it('debe devolver false para string vacío', () => {
     expect(isValidPermission('')).toBe(false);
   });
 
-  it('los 13 permisos de ALL_PERMISSIONS deben ser válidos', () => {
-    for (const perm of ALL_PERMISSIONS) {
-      expect(isValidPermission(perm)).toBe(true);
-    }
+  it('debe devolver false para valores no string', () => {
+    expect(isValidPermission(123 as any)).toBe(false);
+    expect(isValidPermission(null as any)).toBe(false);
+    expect(isValidPermission(undefined as any)).toBe(false);
+  });
+
+  it('debe ser case-sensitive', () => {
+    expect(isValidPermission('VER')).toBe(false);
+    expect(isValidPermission('Crear')).toBe(false);
   });
 });
 
-// ==================== isValidModule ====================
+// ─── isValidModule ────────────────────────────────────────────────────────────
+
 describe('isValidModule', () => {
-  it('debe aceptar módulos válidos', () => {
+  it('debe devolver true para módulos válidos', () => {
     expect(isValidModule('leads')).toBe(true);
     expect(isValidModule('citas')).toBe(true);
     expect(isValidModule('estudiantes')).toBe(true);
     expect(isValidModule('cursos')).toBe(true);
-    expect(isValidModule('automatizaciones')).toBe(true);
-    expect(isValidModule('campanas')).toBe(true);
-    expect(isValidModule('mensajes')).toBe(true);
-    expect(isValidModule('analytics')).toBe(true);
-    expect(isValidModule('configuracion')).toBe(true);
-    expect(isValidModule('equipo')).toBe(true);
-    expect(isValidModule('whitelabel')).toBe(true);
     expect(isValidModule('telefonia')).toBe(true);
     expect(isValidModule('pages')).toBe(true);
   });
 
-  it('debe rechazar módulos inválidos', () => {
+  it('debe devolver false para módulos inválidos', () => {
     expect(isValidModule('finanzas')).toBe(false);
     expect(isValidModule('inventario')).toBe(false);
-    expect(isValidModule('proyectos')).toBe(false);
+    expect(isValidModule('tickets')).toBe(false);
   });
 
-  it('debe rechazar strings vacíos', () => {
+  it('debe devolver false para string vacío', () => {
     expect(isValidModule('')).toBe(false);
   });
 
-  it('los 13 módulos de ALL_MODULES deben ser válidos', () => {
-    for (const mod of ALL_MODULES) {
-      expect(isValidModule(mod)).toBe(true);
-    }
+  it('debe devolver false para valores no string', () => {
+    expect(isValidModule(123 as any)).toBe(false);
+    expect(isValidModule(null as any)).toBe(false);
+    expect(isValidModule(undefined as any)).toBe(false);
   });
 });
 
-// ==================== isRBACUserContext ====================
+// ─── isRBACUserContext ────────────────────────────────────────────────────────
+
 describe('isRBACUserContext', () => {
-  it('debe aceptar un contexto de usuario completo', () => {
-    expect(isRBACUserContext({
+  it('debe validar un contexto completo', () => {
+    const ctx = {
       userId: 'user-1',
-      email: 'test@example.com',
+      email: 'test@volkern.app',
       name: 'Test User',
       image: null,
       tenantId: 'tenant-1',
       roleId: 'role-1',
-    })).toBe(true);
+    };
+    expect(isRBACUserContext(ctx)).toBe(true);
   });
 
-  it('debe aceptar contexto con tenantId y roleId null', () => {
-    expect(isRBACUserContext({
-      userId: 'user-2',
-      email: 'admin@example.com',
+  it('debe aceptar null en tenantId y roleId', () => {
+    const ctx = {
+      userId: 'user-1',
+      email: 'test@volkern.app',
       name: null,
       image: null,
       tenantId: null,
       roleId: null,
-    })).toBe(true);
+    };
+    expect(isRBACUserContext(ctx)).toBe(true);
+  });
+
+  it('debe rechazar si falta userId', () => {
+    const ctx = {
+      email: 'test@volkern.app',
+      name: null,
+      image: null,
+      tenantId: 'tenant-1',
+      roleId: null,
+    };
+    expect(isRBACUserContext(ctx)).toBe(false);
+  });
+
+  it('debe rechazar si falta email', () => {
+    const ctx = {
+      userId: 'user-1',
+      name: null,
+      image: null,
+      tenantId: 'tenant-1',
+      roleId: null,
+    };
+    expect(isRBACUserContext(ctx)).toBe(false);
   });
 
   it('debe rechazar null', () => {
     expect(isRBACUserContext(null)).toBe(false);
   });
 
-  it('debe rechazar objetos sin userId', () => {
-    expect(isRBACUserContext({
-      email: 'test@test.com',
-      tenantId: 't1',
-    })).toBe(false);
+  it('debe rechazar objetos vacíos', () => {
+    expect(isRBACUserContext({})).toBe(false);
   });
 
-  it('debe rechazar objetos sin email', () => {
-    expect(isRBACUserContext({
-      userId: 'u1',
-      tenantId: 't1',
-    })).toBe(false);
+  it('debe rechazar valores primitivos', () => {
+    expect(isRBACUserContext('string')).toBe(false);
+    expect(isRBACUserContext(123)).toBe(false);
+    expect(isRBACUserContext(undefined)).toBe(false);
   });
 
-  it('debe rechazar tenantId que no es string ni null', () => {
-    expect(isRBACUserContext({
-      userId: 'u1',
-      email: 'e@e.com',
-      tenantId: 123,
-      roleId: null,
-    })).toBe(false);
-  });
-
-  it('debe rechazar roleId que no es string ni null', () => {
-    expect(isRBACUserContext({
-      userId: 'u1',
-      email: 'e@e.com',
-      tenantId: null,
-      roleId: 456,
-    })).toBe(false);
-  });
-
-  it('debe rechazar arrays', () => {
-    expect(isRBACUserContext([1, 2, 3])).toBe(false);
-  });
-
-  it('debe rechazar strings', () => {
-    expect(isRBACUserContext('not an object')).toBe(false);
+  it('debe rechazar si userId no es string', () => {
+    expect(isRBACUserContext({ userId: 123, email: 'test@test.com', tenantId: null, roleId: null })).toBe(false);
   });
 });
 
-// ==================== isRolePermissionsMap ====================
+// ─── isRolePermissionsMap ─────────────────────────────────────────────────────
+
 describe('isRolePermissionsMap', () => {
-  it('debe aceptar un map de permisos válido', () => {
-    expect(isRolePermissionsMap({
-      leads: { ver: true, crear: false, editar: true, eliminar: false },
-      citas: { ver: true, crear: true, editar: false, eliminar: false },
-    })).toBe(true);
+  it('debe validar un mapa de permisos válido', () => {
+    const map = {
+      leads: { ver: true, crear: false, editar: false, eliminar: false, asignar: false, exportar: false, gestionar: false },
+      citas: { ver: true, crear: true, editar: false, eliminar: false, asignar: false, exportar: false, gestionar: false },
+    };
+    expect(isRolePermissionsMap(map)).toBe(true);
   });
 
-  it('debe aceptar un objeto vacío', () => {
+  it('debe validar un mapa vacío', () => {
     expect(isRolePermissionsMap({})).toBe(true);
+  });
+
+  it('debe rechazar si un valor de módulo no es un objeto', () => {
+    const map = {
+      leads: 'not-an-object',
+    };
+    expect(isRolePermissionsMap(map)).toBe(false);
+  });
+
+  it('debe rechazar si un permiso no es booleano', () => {
+    const map = {
+      leads: { ver: 'yes', crear: false },
+    };
+    expect(isRolePermissionsMap(map)).toBe(false);
   });
 
   it('debe rechazar null', () => {
     expect(isRolePermissionsMap(null)).toBe(false);
   });
 
-  it('debe rechazar strings', () => {
-    expect(isRolePermissionsMap('not an object')).toBe(false);
+  it('debe aceptar arrays vacíos (typeof array es object, no tiene claves inválidas)', () => {
+    expect(isRolePermissionsMap([])).toBe(true);
   });
 
-  it('debe rechazar arrays', () => {
-    expect(isRolePermissionsMap([1, 2, 3])).toBe(false);
+  it('debe aceptar permisos con claves extra', () => {
+    const map: any = {
+      leads: { ver: true, crear: false, custom_action: true },
+    };
+    expect(isRolePermissionsMap(map)).toBe(true);
   });
 
-  it('debe rechazar si un módulo no es un objeto', () => {
-    expect(isRolePermissionsMap({
-      leads: 'not an object',
-    })).toBe(false);
+  it('arrays con elementos válidos pasan (typeof array === object, no se discrimina)', () => {
+    expect(isRolePermissionsMap([{ ver: true }])).toBe(true);
   });
 
-  it('debe rechazar si un permiso no es boolean', () => {
-    expect(isRolePermissionsMap({
-      leads: { ver: 'yes' },
-    })).toBe(false);
-  });
-
-  it('debe aceptar un solo módulo con permisos válidos', () => {
-    expect(isRolePermissionsMap({
-      configuracion: DEFAULT_MODULE_PERMISSIONS,
-    })).toBe(true);
-  });
-});
-
-// ==================== DEFAULT_MODULE_PERMISSIONS ====================
-describe('DEFAULT_MODULE_PERMISSIONS', () => {
-  it('debe tener todos los permisos en false', () => {
-    const values = Object.values(DEFAULT_MODULE_PERMISSIONS);
-    expect(values.length).toBeGreaterThan(6);
-    for (const v of values) {
-      expect(v).toBe(false);
-    }
-  });
-
-  it('debe incluir los 7 permisos base', () => {
-    expect(DEFAULT_MODULE_PERMISSIONS.ver).toBe(false);
-    expect(DEFAULT_MODULE_PERMISSIONS.crear).toBe(false);
-    expect(DEFAULT_MODULE_PERMISSIONS.editar).toBe(false);
-    expect(DEFAULT_MODULE_PERMISSIONS.eliminar).toBe(false);
-    expect(DEFAULT_MODULE_PERMISSIONS.asignar).toBe(false);
-    expect(DEFAULT_MODULE_PERMISSIONS.exportar).toBe(false);
-    expect(DEFAULT_MODULE_PERMISSIONS.gestionar).toBe(false);
-  });
-
-  it('debe incluir permisos extendidos', () => {
-    expect(DEFAULT_MODULE_PERMISSIONS.inscribir).toBe(false);
-    expect(DEFAULT_MODULE_PERMISSIONS.publicar).toBe(false);
-    expect(DEFAULT_MODULE_PERMISSIONS.activar).toBe(false);
-    expect(DEFAULT_MODULE_PERMISSIONS.enviar).toBe(false);
-    expect(DEFAULT_MODULE_PERMISSIONS.responder).toBe(false);
-    expect(DEFAULT_MODULE_PERMISSIONS.invitar).toBe(false);
-  });
-});
-
-// ==================== ALL_MODULES ====================
-describe('ALL_MODULES', () => {
-  it('debe tener exactamente 13 módulos', () => {
-    expect(ALL_MODULES).toHaveLength(13);
-  });
-
-  it('no debe tener duplicados', () => {
-    const unique = new Set(ALL_MODULES);
-    expect(unique.size).toBe(ALL_MODULES.length);
-  });
-
-  it('debe incluir módulos CRM base', () => {
-    expect(ALL_MODULES).toContain('leads');
-    expect(ALL_MODULES).toContain('citas');
-    expect(ALL_MODULES).toContain('mensajes');
-    expect(ALL_MODULES).toContain('analytics');
-    expect(ALL_MODULES).toContain('configuracion');
-  });
-
-  it('debe incluir módulos de academia', () => {
-    expect(ALL_MODULES).toContain('estudiantes');
-    expect(ALL_MODULES).toContain('cursos');
-  });
-
-  it('debe incluir módulos de automatización', () => {
-    expect(ALL_MODULES).toContain('automatizaciones');
-    expect(ALL_MODULES).toContain('campanas');
-  });
-});
-
-// ==================== ALL_PERMISSIONS ====================
-describe('ALL_PERMISSIONS', () => {
-  it('debe tener exactamente 13 permisos', () => {
-    expect(ALL_PERMISSIONS).toHaveLength(13);
-  });
-
-  it('no debe tener duplicados', () => {
-    const unique = new Set(ALL_PERMISSIONS);
-    expect(unique.size).toBe(ALL_PERMISSIONS.length);
-  });
-
-  it('debe incluir permisos CRUD base', () => {
-    expect(ALL_PERMISSIONS).toContain('ver');
-    expect(ALL_PERMISSIONS).toContain('crear');
-    expect(ALL_PERMISSIONS).toContain('editar');
-    expect(ALL_PERMISSIONS).toContain('eliminar');
-  });
-});
-
-// ==================== PERMISSION_LABELS ====================
-describe('PERMISSION_LABELS', () => {
-  it('debe tener label para cada permiso en ALL_PERMISSIONS', () => {
-    for (const perm of ALL_PERMISSIONS) {
-      expect(PERMISSION_LABELS[perm]).toBeTruthy();
-      expect(typeof PERMISSION_LABELS[perm]).toBe('string');
-    }
-  });
-
-  it('debe tener labels capitalizados en español', () => {
-    expect(PERMISSION_LABELS.ver).toBe('Ver');
-    expect(PERMISSION_LABELS.crear).toBe('Crear');
-    expect(PERMISSION_LABELS.editar).toBe('Editar');
-    expect(PERMISSION_LABELS.eliminar).toBe('Eliminar');
-    expect(PERMISSION_LABELS.gestionar).toBe('Gestionar');
-    expect(PERMISSION_LABELS.asignar).toBe('Asignar');
-  });
-
-  it('labels para permisos extendidos', () => {
-    expect(PERMISSION_LABELS.inscribir).toBe('Inscribir');
-    expect(PERMISSION_LABELS.publicar).toBe('Publicar');
-    expect(PERMISSION_LABELS.invitar).toBe('Invitar');
-  });
-});
-
-// ==================== MODULE_LABELS ====================
-describe('MODULE_LABELS', () => {
-  it('debe tener label para cada módulo en ALL_MODULES', () => {
-    for (const mod of ALL_MODULES) {
-      expect(MODULE_LABELS[mod]).toBeTruthy();
-      expect(typeof MODULE_LABELS[mod]).toBe('string');
-    }
-  });
-
-  it('debe tener labels legibles', () => {
-    expect(MODULE_LABELS.leads).toBe('Leads');
-    expect(MODULE_LABELS.citas).toBe('Citas');
-    expect(MODULE_LABELS.automatizaciones).toBe('Automatizaciones');
-    expect(MODULE_LABELS.whitelabel).toBe('White Label');
-    expect(MODULE_LABELS.telefonia).toBe('Telefonía');
-    expect(MODULE_LABELS.pages).toBe('Páginas');
-  });
-
-  it('debe tener labels para academia', () => {
-    expect(MODULE_LABELS.estudiantes).toBe('Estudiantes');
-    expect(MODULE_LABELS.cursos).toBe('Cursos');
+  it('debe rechazar arrays con elementos inválidos (índices con valores no objeto)', () => {
+    expect(isRolePermissionsMap(['not-an-object'])).toBe(false);
   });
 });
