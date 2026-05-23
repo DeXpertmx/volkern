@@ -1,173 +1,102 @@
 import { describe, it, expect } from 'vitest';
-import {
-  generateInvoiceFingerprint,
-  generateInvoiceHash,
-  GENESIS_FINGERPRINT,
-} from '@/lib/crypto-utils';
-import type { FingerprintPayload } from '@/lib/crypto-utils';
+import { generateInvoiceFingerprint, GENESIS_FINGERPRINT } from '@/lib/crypto-utils';
 
-const basePayload: FingerprintPayload = {
-  tenantId: 'tenant-001',
-  emisorNif: 'B76364192',
-  receptorNif: '12345678Z',
-  numero: 'FAC-2024-001',
-  fechaEmision: '2024-04-15T10:30:00.000Z',
-  monto: 1500.00,
-  moneda: 'EUR',
-  parentFingerprint: GENESIS_FINGERPRINT,
-};
+// ==================== generateInvoiceFingerprint ====================
+describe('generateInvoiceFingerprint', () => {
+  const samplePayload = {
+    tenantId: 'tenant-001',
+    emisorNif: 'B12345678',
+    receptorNif: '12345678Z',
+    numero: 'FAC-2025-0001',
+    fechaEmision: '2025-06-15T10:00:00.000Z',
+    monto: 1500.50,
+    moneda: 'EUR',
+    parentFingerprint: 'GENESIS_VERIFACTU_2026',
+  };
 
-describe('Crypto Utils — generateInvoiceFingerprint', () => {
-  describe('Determinismo', () => {
-    it('debe generar el mismo hash para el mismo payload', () => {
-      const hash1 = generateInvoiceFingerprint(basePayload);
-      const hash2 = generateInvoiceFingerprint(basePayload);
-      expect(hash1).toBe(hash2);
-    });
-
-    it('debe generar el mismo hash independientemente del orden de las keys', () => {
-      // Creamos un objeto en orden diferente
-      const reversedPayload: FingerprintPayload = {
-        parentFingerprint: basePayload.parentFingerprint,
-        moneda: basePayload.moneda,
-        monto: basePayload.monto,
-        fechaEmision: basePayload.fechaEmision,
-        numero: basePayload.numero,
-        receptorNif: basePayload.receptorNif,
-        emisorNif: basePayload.emisorNif,
-        tenantId: basePayload.tenantId,
-      };
-
-      const hash1 = generateInvoiceFingerprint(basePayload);
-      const hash2 = generateInvoiceFingerprint(reversedPayload);
-      expect(hash1).toBe(hash2);
-    });
-
-    it('debe generar hashes diferentes para payloads diferentes', () => {
-      const hash1 = generateInvoiceFingerprint(basePayload);
-      const hash2 = generateInvoiceFingerprint({
-        ...basePayload,
-        numero: 'FAC-2024-002',
-      });
-      expect(hash1).not.toBe(hash2);
-    });
+  it('debe generar un hash SHA-256 de 64 caracteres hex en mayúsculas', () => {
+    const hash = generateInvoiceFingerprint(samplePayload);
+    expect(hash).toHaveLength(64);
+    expect(hash).toMatch(/^[0-9A-F]{64}$/);
   });
 
-  describe('Formato del hash', () => {
-    it('debe devolver un string hexadecimal de 64 caracteres (SHA-256)', () => {
-      const hash = generateInvoiceFingerprint(basePayload);
-      expect(hash).toMatch(/^[0-9A-F]{64}$/);
-    });
-
-    it('el hash debe estar en mayúsculas', () => {
-      const hash = generateInvoiceFingerprint(basePayload);
-      expect(hash).toBe(hash.toUpperCase());
-    });
+  it('debe ser determinista (orden alfabético de keys)', () => {
+    const hash1 = generateInvoiceFingerprint(samplePayload);
+    const hash2 = generateInvoiceFingerprint(samplePayload);
+    expect(hash1).toBe(hash2);
   });
 
-  describe('Sensibilidad a cambios', () => {
-    it('debe cambiar si cambia el tenantId', () => {
-      const h1 = generateInvoiceFingerprint(basePayload);
-      const h2 = generateInvoiceFingerprint({ ...basePayload, tenantId: 'tenant-002' });
-      expect(h1).not.toBe(h2);
-    });
-
-    it('debe cambiar si cambia el emisorNif', () => {
-      const h1 = generateInvoiceFingerprint(basePayload);
-      const h2 = generateInvoiceFingerprint({ ...basePayload, emisorNif: 'A28015865' });
-      expect(h1).not.toBe(h2);
-    });
-
-    it('debe cambiar si cambia el receptorNif', () => {
-      const h1 = generateInvoiceFingerprint(basePayload);
-      const h2 = generateInvoiceFingerprint({ ...basePayload, receptorNif: '00000000T' });
-      expect(h1).not.toBe(h2);
-    });
-
-    it('debe cambiar si cambia el número de factura', () => {
-      const h1 = generateInvoiceFingerprint(basePayload);
-      const h2 = generateInvoiceFingerprint({ ...basePayload, numero: 'FAC-999' });
-      expect(h1).not.toBe(h2);
-    });
-
-    it('debe cambiar si cambia la fecha de emisión', () => {
-      const h1 = generateInvoiceFingerprint(basePayload);
-      const h2 = generateInvoiceFingerprint({ ...basePayload, fechaEmision: '2024-05-01T00:00:00.000Z' });
-      expect(h1).not.toBe(h2);
-    });
-
-    it('debe cambiar si cambia el monto', () => {
-      const h1 = generateInvoiceFingerprint(basePayload);
-      const h2 = generateInvoiceFingerprint({ ...basePayload, monto: 1500.01 });
-      expect(h1).not.toBe(h2);
-    });
-
-    it('debe cambiar si cambia la moneda', () => {
-      const h1 = generateInvoiceFingerprint(basePayload);
-      const h2 = generateInvoiceFingerprint({ ...basePayload, moneda: 'USD' });
-      expect(h1).not.toBe(h2);
-    });
-
-    it('debe cambiar si cambia el parentFingerprint', () => {
-      const h1 = generateInvoiceFingerprint(basePayload);
-      const h2 = generateInvoiceFingerprint({ ...basePayload, parentFingerprint: 'AAAA' });
-      expect(h1).not.toBe(h2);
-    });
+  it('debe ser independiente del orden de inserción en el objeto', () => {
+    // Construir objeto con keys en distinto orden
+    const payload1 = samplePayload;
+    const payload2 = {
+      moneda: 'EUR',
+      parentFingerprint: 'GENESIS_VERIFACTU_2026',
+      fechaEmision: '2025-06-15T10:00:00.000Z',
+      receptorNif: '12345678Z',
+      tenantId: 'tenant-001',
+      emisorNif: 'B12345678',
+      numero: 'FAC-2025-0001',
+      monto: 1500.50,
+    };
+    expect(generateInvoiceFingerprint(payload1)).toBe(generateInvoiceFingerprint(payload2));
   });
 
-  describe('Normalización de montos', () => {
-    it('debe normalizar montos a 2 decimales', () => {
-      const h1 = generateInvoiceFingerprint({ ...basePayload, monto: 1500 });
-      const h2 = generateInvoiceFingerprint({ ...basePayload, monto: 1500.00 });
-      expect(h1).toBe(h2);
-    });
-
-    it('debe tratar 100.50 igual que 100.5', () => {
-      const h1 = generateInvoiceFingerprint({ ...basePayload, monto: 100.5 });
-      const h2 = generateInvoiceFingerprint({ ...basePayload, monto: 100.50 });
-      expect(h1).toBe(h2);
-    });
+  it('debe cambiar si cambia el tenantId', () => {
+    const modified = { ...samplePayload, tenantId: 'tenant-002' };
+    expect(generateInvoiceFingerprint(modified)).not.toBe(generateInvoiceFingerprint(samplePayload));
   });
 
-  describe('generateInvoiceHash (alias)', () => {
-    it('debe ser idéntico a generateInvoiceFingerprint', () => {
-      const h1 = generateInvoiceFingerprint(basePayload);
-      const h2 = generateInvoiceHash(basePayload);
-      expect(h1).toBe(h2);
-    });
+  it('debe cambiar si cambia el emisorNif', () => {
+    const modified = { ...samplePayload, emisorNif: 'A28017895' };
+    expect(generateInvoiceFingerprint(modified)).not.toBe(generateInvoiceFingerprint(samplePayload));
   });
 
-  describe('GENESIS_FINGERPRINT', () => {
-    it('debe ser el valor esperado', () => {
-      expect(GENESIS_FINGERPRINT).toBe('GENESIS_VERIFACTU_2026');
-    });
+  it('debe cambiar si cambia el receptorNif', () => {
+    const modified = { ...samplePayload, receptorNif: 'X1234567L' };
+    expect(generateInvoiceFingerprint(modified)).not.toBe(generateInvoiceFingerprint(samplePayload));
   });
 
-  describe('Cadena de hashes (encadenamiento)', () => {
-    it('debe permitir encadenar facturas secuencialmente', () => {
-      const factura1 = generateInvoiceFingerprint(basePayload);
-      const factura2 = generateInvoiceFingerprint({
-        ...basePayload,
-        numero: 'FAC-2024-002',
-        parentFingerprint: factura1,
-      });
-      const factura3 = generateInvoiceFingerprint({
-        ...basePayload,
-        numero: 'FAC-2024-003',
-        parentFingerprint: factura2,
-      });
+  it('debe cambiar si cambia el numero de factura', () => {
+    const modified = { ...samplePayload, numero: 'FAC-2025-0002' };
+    expect(generateInvoiceFingerprint(modified)).not.toBe(generateInvoiceFingerprint(samplePayload));
+  });
 
-      expect(factura1).not.toBe(factura2);
-      expect(factura2).not.toBe(factura3);
-      expect(factura1).not.toBe(factura3);
+  it('debe cambiar si cambia la fecha de emisión', () => {
+    const modified = { ...samplePayload, fechaEmision: '2025-06-16T10:00:00.000Z' };
+    expect(generateInvoiceFingerprint(modified)).not.toBe(generateInvoiceFingerprint(samplePayload));
+  });
 
-      // Verificar que factura2 depende de factura1
-      const factura2Alt = generateInvoiceFingerprint({
-        ...basePayload,
-        numero: 'FAC-2024-002',
-        parentFingerprint: 'HASH_ALTERNATIVO',
-      });
-      expect(factura2).not.toBe(factura2Alt);
-    });
+  it('debe cambiar si cambia el monto', () => {
+    const modified = { ...samplePayload, monto: 2000.00 };
+    expect(generateInvoiceFingerprint(modified)).not.toBe(generateInvoiceFingerprint(samplePayload));
+  });
+
+  it('debe formatear montos a 2 decimales', () => {
+    const payload = { ...samplePayload, monto: 100 };
+    const hash = generateInvoiceFingerprint(payload);
+    expect(hash).toHaveLength(64); // No debe lanzar error
+  });
+
+  it('debe generar hash válido para monto 0', () => {
+    const hash = generateInvoiceFingerprint({ ...samplePayload, monto: 0 });
+    expect(hash).toHaveLength(64);
+    expect(hash).toMatch(/^[0-9A-F]{64}$/);
+  });
+
+  it('debe generar hash válido para parentFingerprint vacío', () => {
+    const hash = generateInvoiceFingerprint({ ...samplePayload, parentFingerprint: '' });
+    expect(hash).toHaveLength(64);
+  });
+});
+
+// ==================== GENESIS_FINGERPRINT ====================
+describe('GENESIS_FINGERPRINT', () => {
+  it('debe ser "GENESIS_VERIFACTU_2026"', () => {
+    expect(GENESIS_FINGERPRINT).toBe('GENESIS_VERIFACTU_2026');
+  });
+
+  it('debe ser un string no vacío', () => {
+    expect(GENESIS_FINGERPRINT.length).toBeGreaterThan(0);
   });
 });

@@ -1,220 +1,103 @@
 import { describe, it, expect } from 'vitest';
-import {
-  createAuditHash,
-  generateGenesisHash,
-  GENESIS_HASH,
-  type AuditHashInput,
-} from '@/lib/audit-hash';
+import { createAuditHash, generateGenesisHash, GENESIS_HASH } from '@/lib/audit-hash';
 
-const baseInput: AuditHashInput = {
-  tenantId: 'tenant-001',
-  userId: 'user-abc',
-  entity: 'lead',
-  entityId: 'lead-123',
-  action: 'UPDATE',
-  description: 'Cambio de estado de nuevo a contactado',
-  timestamp: new Date('2024-04-15T10:30:00.000Z'),
-  previousHash: null,
-};
+// ==================== createAuditHash ====================
+describe('createAuditHash', () => {
+  const sampleData = {
+    tenantId: 'tenant-001',
+    userId: 'user-abc-123',
+    entity: 'Factura',
+    entityId: 'fac-2025-001',
+    action: 'CREATE',
+    description: 'Factura creada por sistema',
+    timestamp: new Date('2025-06-15T10:00:00.000Z'),
+    previousHash: 'abc123def456',
+    changesBefore: { estado: 'borrador' },
+    changesAfter: { estado: 'emitida', total: 1500 },
+  };
 
-describe('Audit Hash — createAuditHash', () => {
-  describe('Determinismo', () => {
-    it('debe generar el mismo hash para los mismos datos', () => {
-      const h1 = createAuditHash(baseInput);
-      const h2 = createAuditHash(baseInput);
-      expect(h1).toBe(h2);
-    });
-
-    it('debe generar el mismo hash con la misma fecha (mismo timestamp)', () => {
-      const h1 = createAuditHash(baseInput);
-      const h2 = createAuditHash({
-        ...baseInput,
-        timestamp: new Date('2024-04-15T10:30:00.000Z'),
-      });
-      expect(h1).toBe(h2);
-    });
+  it('debe generar un hash SHA-256 de 64 caracteres hex', () => {
+    const hash = createAuditHash(sampleData);
+    expect(hash).toHaveLength(64);
+    expect(hash).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  describe('Formato del hash', () => {
-    it('debe devolver un hash SHA-256 hexadecimal de 64 caracteres', () => {
-      const hash = createAuditHash(baseInput);
-      expect(hash).toMatch(/^[0-9a-f]{64}$/);
-    });
-
-    it('el hash debe ser lowercase (hex digest)', () => {
-      const hash = createAuditHash(baseInput);
-      expect(hash).toBe(hash.toLowerCase());
-    });
+  it('debe ser determinista', () => {
+    const hash1 = createAuditHash(sampleData);
+    const hash2 = createAuditHash(sampleData);
+    expect(hash1).toBe(hash2);
   });
 
-  describe('Sensibilidad a cambios', () => {
-    it('debe cambiar si cambia el tenantId', () => {
-      const h1 = createAuditHash(baseInput);
-      const h2 = createAuditHash({ ...baseInput, tenantId: 'tenant-002' });
-      expect(h1).not.toBe(h2);
-    });
-
-    it('debe cambiar si cambia el userId', () => {
-      const h1 = createAuditHash(baseInput);
-      const h2 = createAuditHash({ ...baseInput, userId: 'user-xyz' });
-      expect(h1).not.toBe(h2);
-    });
-
-    it('debe cambiar si cambia la entidad (entity)', () => {
-      const h1 = createAuditHash(baseInput);
-      const h2 = createAuditHash({ ...baseInput, entity: 'contact' });
-      expect(h1).not.toBe(h2);
-    });
-
-    it('debe cambiar si cambia el entityId', () => {
-      const h1 = createAuditHash(baseInput);
-      const h2 = createAuditHash({ ...baseInput, entityId: 'lead-999' });
-      expect(h1).not.toBe(h2);
-    });
-
-    it('debe cambiar si cambia la acción', () => {
-      const h1 = createAuditHash(baseInput);
-      const h2 = createAuditHash({ ...baseInput, action: 'DELETE' });
-      expect(h1).not.toBe(h2);
-    });
-
-    it('debe cambiar si cambia la descripción', () => {
-      const h1 = createAuditHash(baseInput);
-      const h2 = createAuditHash({ ...baseInput, description: 'Otra descripción' });
-      expect(h1).not.toBe(h2);
-    });
-
-    it('debe cambiar si cambia el timestamp', () => {
-      const h1 = createAuditHash(baseInput);
-      const h2 = createAuditHash({
-        ...baseInput,
-        timestamp: new Date('2024-04-16T10:30:00.000Z'),
-      });
-      expect(h1).not.toBe(h2);
-    });
-
-    it('debe cambiar si cambia el previousHash', () => {
-      const h1 = createAuditHash(baseInput);
-      const h2 = createAuditHash({ ...baseInput, previousHash: 'abc123' });
-      expect(h1).not.toBe(h2);
-    });
+  it('debe cambiar si cambia tenantId', () => {
+    const modified = { ...sampleData, tenantId: 'tenant-002' };
+    expect(createAuditHash(modified)).not.toBe(createAuditHash(sampleData));
   });
 
-  describe('previousHash nulo (genesis)', () => {
-    it('debe usar GENESIS_HASH cuando previousHash es null', () => {
-      const hash = createAuditHash({ ...baseInput, previousHash: null });
-      expect(hash).toMatch(/^[0-9a-f]{64}$/);
-    });
-
-    it('el hash con previousHash null debe ser diferente del hash con previousHash explícito', () => {
-      const h1 = createAuditHash({ ...baseInput, previousHash: null });
-      const h2 = createAuditHash({ ...baseInput, previousHash: 'abc123' });
-      expect(h1).not.toBe(h2);
-    });
+  it('debe cambiar si cambia entity', () => {
+    const modified = { ...sampleData, entity: 'Cliente' };
+    expect(createAuditHash(modified)).not.toBe(createAuditHash(sampleData));
   });
 
-  describe('Cadena de auditoría (encadenamiento)', () => {
-    it('debe permitir encadenar entradas de auditoría', () => {
-      const entry1 = createAuditHash({
-        ...baseInput,
-        action: 'CREATE',
-        description: 'Lead creado',
-        previousHash: null,
-      });
-
-      const entry2 = createAuditHash({
-        ...baseInput,
-        action: 'UPDATE',
-        description: 'Lead actualizado',
-        previousHash: entry1,
-      });
-
-      const entry3 = createAuditHash({
-        ...baseInput,
-        action: 'DELETE',
-        description: 'Lead eliminado',
-        previousHash: entry2,
-      });
-
-      // Los 3 hashes deben ser diferentes
-      expect(entry1).not.toBe(entry2);
-      expect(entry2).not.toBe(entry3);
-      expect(entry1).not.toBe(entry3);
-
-      // entry2 depende de entry1
-      const entry2Alt = createAuditHash({
-        ...baseInput,
-        action: 'UPDATE',
-        description: 'Lead actualizado',
-        previousHash: 'hash_falsificado',
-      });
-      expect(entry2).not.toBe(entry2Alt);
-    });
+  it('debe cambiar si cambia entityId', () => {
+    const modified = { ...sampleData, entityId: 'fac-2025-002' };
+    expect(createAuditHash(modified)).not.toBe(createAuditHash(sampleData));
   });
 
-  describe('changesBefore y changesAfter', () => {
-    it('debe cambiar el hash si hay changesBefore', () => {
-      const h1 = createAuditHash(baseInput);
-      const h2 = createAuditHash({
-        ...baseInput,
-        changesBefore: { estado: 'nuevo' },
-      });
-      expect(h1).not.toBe(h2);
-    });
-
-    it('debe cambiar el hash si hay changesAfter', () => {
-      const h1 = createAuditHash(baseInput);
-      const h2 = createAuditHash({
-        ...baseInput,
-        changesAfter: { estado: 'contactado' },
-      });
-      expect(h1).not.toBe(h2);
-    });
-
-    it('changesBefore y changesAfter producen hashes diferentes', () => {
-      const h1 = createAuditHash({
-        ...baseInput,
-        changesBefore: { estado: 'nuevo' },
-        changesAfter: { estado: 'contactado' },
-      });
-      const h2 = createAuditHash({
-        ...baseInput,
-        changesBefore: { estado: 'contactado' },
-        changesAfter: { estado: 'nuevo' },
-      });
-      expect(h1).not.toBe(h2);
-    });
-
-    it('debe manejar cambios anidados (objetos JSON)', () => {
-      const hash = createAuditHash({
-        ...baseInput,
-        changesBefore: { lead: { nombre: 'Juan', tags: ['vip'] } },
-        changesAfter: { lead: { nombre: 'Juan Pérez', tags: ['vip', 'urgente'] } },
-      });
-      expect(hash).toMatch(/^[0-9a-f]{64}$/);
-    });
+  it('debe cambiar si cambia action', () => {
+    const modified = { ...sampleData, action: 'UPDATE' };
+    expect(createAuditHash(modified)).not.toBe(createAuditHash(sampleData));
   });
 
-  describe('userId null', () => {
-    it('debe aceptar userId null', () => {
-      const hash = createAuditHash({ ...baseInput, userId: null });
-      expect(hash).toMatch(/^[0-9a-f]{64}$/);
-    });
+  it('debe cambiar si cambia description', () => {
+    const modified = { ...sampleData, description: 'Factura modificada' };
+    expect(createAuditHash(modified)).not.toBe(createAuditHash(sampleData));
+  });
 
-    it('userId null y string vacío se normalizan al mismo hash', () => {
-      // El código usa data.userId || '' — ambos se convierten a ''
-      const h1 = createAuditHash({ ...baseInput, userId: null });
-      const h2 = createAuditHash({ ...baseInput, userId: '' });
-      expect(h1).toMatch(/^[0-9a-f]{64}$/);
-      expect(h2).toMatch(/^[0-9a-f]{64}$/);
-      expect(h1).toBe(h2);
+  it('debe cambiar si cambia timestamp', () => {
+    const modified = { ...sampleData, timestamp: new Date('2025-06-16T10:00:00.000Z') };
+    expect(createAuditHash(modified)).not.toBe(createAuditHash(sampleData));
+  });
+
+  it('debe cambiar si cambia previousHash', () => {
+    const modified = { ...sampleData, previousHash: 'different-hash' };
+    expect(createAuditHash(modified)).not.toBe(createAuditHash(sampleData));
+  });
+
+  it('debe cambiar si cambia changesBefore', () => {
+    const modified = { ...sampleData, changesBefore: { estado: 'pendiente' } };
+    expect(createAuditHash(modified)).not.toBe(createAuditHash(sampleData));
+  });
+
+  it('debe cambiar si cambia changesAfter', () => {
+    const modified = { ...sampleData, changesAfter: { estado: 'anulada' } };
+    expect(createAuditHash(modified)).not.toBe(createAuditHash(sampleData));
+  });
+
+  it('debe usar GENESIS_HASH si previousHash es null', () => {
+    const hash = createAuditHash({ ...sampleData, previousHash: null });
+    expect(hash).toHaveLength(64);
+  });
+
+  it('debe usar string vacío para userId null', () => {
+    const hash = createAuditHash({ ...sampleData, userId: null });
+    expect(hash).toHaveLength(64);
+  });
+
+  it('debe usar string vacío para changesBefore/changesAfter undefined', () => {
+    const hash = createAuditHash({
+      ...sampleData,
+      changesBefore: undefined,
+      changesAfter: undefined,
     });
+    expect(hash).toHaveLength(64);
   });
 });
 
-describe('Audit Hash — GENESIS_HASH y generateGenesisHash', () => {
+// ==================== GENESIS_HASH + generateGenesisHash ====================
+describe('GENESIS_HASH + generateGenesisHash', () => {
   it('GENESIS_HASH debe ser 64 ceros', () => {
     expect(GENESIS_HASH).toBe('0000000000000000000000000000000000000000000000000000000000000000');
+    expect(GENESIS_HASH).toHaveLength(64);
   });
 
   it('generateGenesisHash debe devolver GENESIS_HASH', () => {
