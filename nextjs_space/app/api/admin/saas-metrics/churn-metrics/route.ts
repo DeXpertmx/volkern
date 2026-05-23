@@ -24,12 +24,15 @@ export async function GET(request: NextRequest) {
         }
       });
 
-      const churnedInMonth = await globalPrisma.tenant.count({
+      const churnedSubscriptions = await globalPrisma.subscription.findMany({
         where: {
-          estado: 'cancelado',
+          estado: 'cancelada',
           fechaCancelacion: { gte: monthStart, lte: monthEnd }
-        }
+        },
+        select: { tenantId: true },
+        distinct: ['tenantId']
       });
+      const churnedInMonth = churnedSubscriptions.length;
 
       const churnRate = totalAtStart > 0 ? (churnedInMonth / totalAtStart) * 100 : 0;
 

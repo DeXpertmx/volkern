@@ -15,10 +15,10 @@ export async function GET(
     const signatureId = params.id;
 
     // 1. Localizar la Firma Digital en el registro histórico
-    const signature = await prisma.digitalSignature.findUnique({
+    const signature = await prisma.erp_digital_signatures.findUnique({
       where: { id: signatureId },
       include: {
-        tenant: {
+        Tenant: {
           select: {
             vaultSeed: true,
             nombre: true,
@@ -41,7 +41,7 @@ export async function GET(
     const isValid = SignatureService.verifyIntegrity(
       signature.documentHash,
       signature.signatureHash,
-      signature.tenant.vaultSeed
+      signature.Tenant.vaultSeed!
     );
 
     // 3. Respuesta con metadatos de Soberanía Legal
@@ -50,8 +50,8 @@ export async function GET(
       timestamp: signature.createdAt,
       documentType: signature.documentType,
       issuer: {
-        name: signature.tenant.razonSocial || signature.tenant.nombre,
-        id: signature.tenant.nifCif
+        name: signature.Tenant.razonSocial || signature.Tenant.nombre,
+        id: signature.Tenant.nifCif
       },
       auditTrail: {
         hash: signature.documentHash,

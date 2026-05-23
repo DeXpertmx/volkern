@@ -1029,7 +1029,7 @@ export const ServiceCatalogComponent: React.FC<{
     fetch("/api/servicios")
       .then(r => r.ok ? r.json() : { servicios: [] })
       .then(data => {
-        let list = data.servicios || data.items || [];
+        const list = data.servicios || data.items || [];
         setItems(list);
       })
       .catch(() => {});

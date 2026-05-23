@@ -106,7 +106,7 @@ export function OrgChart() {
     const HORIZONTAL_SPACING = 300;
     const VERTICAL_SPACING = 150;
 
-    let currentX = 0;
+    const currentX = 0;
 
     const traverse = (emp: any, level: number, xOffset: number) => {
       const children = byManager[emp.id] || [];

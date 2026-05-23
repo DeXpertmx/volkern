@@ -136,14 +136,14 @@ export const createCatalogBlock = (editor: Editor) => {
             label: 'Icono 1',
             name: 'data-s1-icon',
             options: [
-              { value: 'bed', name: 'Habitaciones' },
-              { value: 'bath', name: 'Baños' },
-              { value: 'area-c', name: 'Metros (C)' },
-              { value: 'area-t', name: 'Metros (T)' },
-              { value: 'parking', name: 'Parking' },
-              { value: 'tag', name: 'Etiqueta' },
-              { value: 'star', name: 'Estrella' },
-              { value: 'clock', name: 'Antigüedad' },
+              { value: 'bed', id: 'bed', name: 'Habitaciones' },
+              { value: 'bath', id: 'bath', name: 'Baños' },
+              { value: 'area-c', id: 'area-c', name: 'Metros (C)' },
+              { value: 'area-t', id: 'area-t', name: 'Metros (T)' },
+              { value: 'parking', id: 'parking', name: 'Parking' },
+              { value: 'tag', id: 'tag', name: 'Etiqueta' },
+              { value: 'star', id: 'star', name: 'Estrella' },
+              { value: 'clock', id: 'clock', name: 'Antigüedad' },
             ]
           },
           { type: 'text', label: 'Campo 1 (CRM)', name: 'data-s1-field' },
@@ -153,12 +153,12 @@ export const createCatalogBlock = (editor: Editor) => {
             label: 'Icono 2',
             name: 'data-s2-icon',
             options: [
-              { value: 'bed', name: 'Habitaciones' },
-              { value: 'bath', name: 'Baños' },
-              { value: 'area-c', name: 'Metros (C)' },
-              { value: 'area-t', name: 'Metros (T)' },
-              { value: 'parking', name: 'Parking' },
-              { value: 'tag', name: 'Etiqueta' },
+              { value: 'bed', id: 'bed', name: 'Habitaciones' },
+              { value: 'bath', id: 'bath', name: 'Baños' },
+              { value: 'area-c', id: 'area-c', name: 'Metros (C)' },
+              { value: 'area-t', id: 'area-t', name: 'Metros (T)' },
+              { value: 'parking', id: 'parking', name: 'Parking' },
+              { value: 'tag', id: 'tag', name: 'Etiqueta' },
             ]
           },
           { type: 'text', label: 'Campo 2 (CRM)', name: 'data-s2-field' },
@@ -168,7 +168,7 @@ export const createCatalogBlock = (editor: Editor) => {
             label: 'Icono 3',
             name: 'data-s3-icon',
             options: [
-                { value: 'bed', name: 'Habitaciones' },{ value: 'bath', name: 'Baños' },{ value: 'area-c', name: 'Metros (C)' },{ value: 'area-t', name: 'Metros (T)' },{ value: 'parking', name: 'Parking' },{ value: 'tag', name: 'Etiqueta' },
+                { value: 'bed', id: 'bed', name: 'Habitaciones' },{ value: 'bath', id: 'bath', name: 'Baños' },{ value: 'area-c', id: 'area-c', name: 'Metros (C)' },{ value: 'area-t', id: 'area-t', name: 'Metros (T)' },{ value: 'parking', id: 'parking', name: 'Parking' },{ value: 'tag', id: 'tag', name: 'Etiqueta' },
             ]
           },
           { type: 'text', label: 'Campo 3 (CRM)', name: 'data-s3-field' },
@@ -178,7 +178,7 @@ export const createCatalogBlock = (editor: Editor) => {
             label: 'Icono 4',
             name: 'data-s4-icon',
             options: [
-                { value: 'bed', name: 'Habitaciones' },{ value: 'bath', name: 'Baños' },{ value: 'area-c', name: 'Metros (C)' },{ value: 'area-t', name: 'Metros (T)' },{ value: 'parking', name: 'Parking' },{ value: 'tag', name: 'Etiqueta' },
+                { value: 'bed', id: 'bed', name: 'Habitaciones' },{ value: 'bath', id: 'bath', name: 'Baños' },{ value: 'area-c', id: 'area-c', name: 'Metros (C)' },{ value: 'area-t', id: 'area-t', name: 'Metros (T)' },{ value: 'parking', id: 'parking', name: 'Parking' },{ value: 'tag', id: 'tag', name: 'Etiqueta' },
             ]
           },
           { type: 'text', label: 'Campo 4 (CRM)', name: 'data-s4-field' },
@@ -188,7 +188,7 @@ export const createCatalogBlock = (editor: Editor) => {
             label: 'Icono 5',
             name: 'data-s5-icon',
             options: [
-                { value: 'bed', name: 'Habitaciones' },{ value: 'bath', name: 'Baños' },{ value: 'area-c', name: 'Metros (C)' },{ value: 'area-t', name: 'Metros (T)' },{ value: 'parking', name: 'Parking' },{ value: 'tag', name: 'Etiqueta' },
+                { value: 'bed', id: 'bed', name: 'Habitaciones' },{ value: 'bath', id: 'bath', name: 'Baños' },{ value: 'area-c', id: 'area-c', name: 'Metros (C)' },{ value: 'area-t', id: 'area-t', name: 'Metros (T)' },{ value: 'parking', id: 'parking', name: 'Parking' },{ value: 'tag', id: 'tag', name: 'Etiqueta' },
             ]
           },
           { type: 'text', label: 'Campo 5 (CRM)', name: 'data-s5-field' },
@@ -198,7 +198,7 @@ export const createCatalogBlock = (editor: Editor) => {
             label: 'Icono 6',
             name: 'data-s6-icon',
             options: [
-                { value: 'bed', name: 'Habitaciones' },{ value: 'bath', name: 'Baños' },{ value: 'area-c', name: 'Metros (C)' },{ value: 'area-t', name: 'Metros (T)' },{ value: 'parking', name: 'Parking' },{ value: 'tag', name: 'Etiqueta' },
+                { value: 'bed', id: 'bed', name: 'Habitaciones' },{ value: 'bath', id: 'bath', name: 'Baños' },{ value: 'area-c', id: 'area-c', name: 'Metros (C)' },{ value: 'area-t', id: 'area-t', name: 'Metros (T)' },{ value: 'parking', id: 'parking', name: 'Parking' },{ value: 'tag', id: 'tag', name: 'Etiqueta' },
             ]
           },
           { type: 'text', label: 'Campo 6 (CRM)', name: 'data-s6-field' },

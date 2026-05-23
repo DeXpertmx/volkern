@@ -1,11 +1,31 @@
 import { prisma } from './db';
+import { logger } from './logger';
 import { callLlm } from './openrouter-helper';
 
 export interface ScoreChange {
   leadId: string;
   evento: string;
   categoria: string;
-  detalles?: any;
+  detalles?: Record<string, unknown>;
+}
+
+/** Condiciones de una regla de scoring */
+export interface RuleConditions {
+  estadoLead?: string
+  tieneEmail?: boolean
+  tieneTelefono?: boolean
+  [key: string]: unknown
+}
+
+/** Contexto para evaluar condiciones */
+export interface ConditionContext {
+  lead: {
+    estado: string
+    email: string | null
+    telefono: string | null
+    [key: string]: unknown
+  }
+  detalles?: Record<string, unknown>
 }
 
 export interface AIScoreResult {
@@ -53,7 +73,7 @@ export class ScoringEngine {
       });
 
       if (!lead) {
-        console.warn(`Lead ${leadId} no encontrado para scoring`);
+        logger.warn({ leadId }, 'Lead no encontrado para scoring');
         return null;
       }
 
@@ -69,7 +89,7 @@ export class ScoringEngine {
       });
 
       if (rules.length === 0) {
-        console.log(`No hay reglas activas para el evento: ${evento}`);
+        logger.debug({ evento }, 'No hay reglas activas para el evento');
         return null;
       }
 
@@ -78,10 +98,10 @@ export class ScoringEngine {
       let razonCambio = '';
 
       for (const rule of rules) {
-        // Evaluar condiciones si existen
-        if (rule.condiciones && typeof rule.condiciones === 'object') {
-          const condiciones = rule.condiciones as any;
-          if (!this.evaluateConditions(condiciones, { lead, detalles })) {
+      // Evaluar condiciones si existen
+      if (rule.condiciones && typeof rule.condiciones === 'object') {
+        const condiciones = rule.condiciones as RuleConditions;
+        if (!this.evaluateConditions(condiciones, { lead: lead as unknown as ConditionContext['lead'], detalles: (detalles || {}) as Record<string, unknown> })) {
             continue;
           }
         }
@@ -91,7 +111,7 @@ export class ScoringEngine {
       }
 
       if (puntosGanados === 0) {
-        console.log(`No se otorgaron puntos para el evento: ${evento}`);
+        logger.debug({ evento }, 'No se otorgaron puntos para el evento');
         return null;
       }
 
@@ -113,7 +133,14 @@ export class ScoringEngine {
       }
 
       // Actualizar el score según la categoría
-      const updateData: any = {
+      const updateData: {
+        puntuacion: number
+        puntuacionDemografica?: number
+        puntuacionComportamiento?: number
+        puntuacionInteraccion?: number
+        puntuacionEngagement?: number
+        categoria?: string
+      } = {
         puntuacion: leadScore.puntuacion + puntosGanados,
       };
 
@@ -162,7 +189,7 @@ export class ScoringEngine {
         categoria: nuevaCategoria || 'Sin categoría',
       };
     } catch (error) {
-      console.error('Error calculando score:', error);
+      logger.error({ err: error instanceof Error ? error : new Error(String(error)) }, 'Error calculando score');
       return null;
     }
   }
@@ -269,7 +296,7 @@ export class ScoringEngine {
         categoria: nuevaCategoria || 'Sin categoría',
       };
     } catch (error) {
-      console.error('Error recalculando score:', error);
+      logger.error({ err: error instanceof Error ? error : new Error(String(error)) }, 'Error recalculando score');
       return null;
     }
   }
@@ -296,7 +323,7 @@ export class ScoringEngine {
   /**
    * Evalúa condiciones de una regla
    */
-  private static evaluateConditions(condiciones: any, context: any): boolean {
+  private static evaluateConditions(condiciones: RuleConditions, context: ConditionContext): boolean {
     // Implementación básica de evaluación de condiciones
     // Se puede expandir según necesidades
     try {
@@ -320,7 +347,7 @@ export class ScoringEngine {
 
       return true;
     } catch (error) {
-      console.error('Error evaluando condiciones:', error);
+      logger.error({ err: error instanceof Error ? error : new Error(String(error)) }, 'Error evaluando condiciones');
       return false;
     }
   }
@@ -362,7 +389,7 @@ export class ScoringEngine {
 
       return score;
     } catch (error) {
-      console.error('Error obteniendo score:', error);
+      logger.error({ err: error instanceof Error ? error : new Error(String(error)) }, 'Error obteniendo score');
       return null;
     }
   }
@@ -380,7 +407,7 @@ export class ScoringEngine {
         take: limit,
       });
     } catch (error) {
-      console.error('Error obteniendo historial de score:', error);
+      logger.error({ err: error instanceof Error ? error : new Error(String(error)) }, 'Error obteniendo historial de score');
       return [];
     }
   }
@@ -396,11 +423,16 @@ export class ScoringEngine {
         },
       });
 
-      const stats = {
+      const stats: {
+        totalLeads: number
+        promedioScore: number
+        distribucionCategorias: Record<string, number>
+        topLeads: Array<{ leadId: string; nombre: string; puntuacion: number; categoria: string | null }>
+      } = {
         totalLeads: scores.length,
         promedioScore: 0,
         distribucionCategorias: {} as Record<string, number>,
-        topLeads: [] as any[],
+        topLeads: [] as Array<{ leadId: string; nombre: string; puntuacion: number; categoria: string | null }>,
       };
 
       if (scores.length > 0) {
@@ -425,7 +457,7 @@ export class ScoringEngine {
 
       return stats;
     } catch (error) {
-      console.error('Error obteniendo estadísticas de scoring:', error);
+      logger.error({ err: error instanceof Error ? error : new Error(String(error)) }, 'Error obteniendo estadísticas de scoring');
       return null;
     }
   }
@@ -530,7 +562,7 @@ DEALS: ${lead.deals.length} registrados.`;
           cambio: aiResult.puntuacion - puntuacionAnterior,
           razon: `IA: ${aiResult.razon}`,
           categoria: 'ia_evaluation',
-          detalles: aiResult as any,
+          detalles: aiResult as unknown as Record<string, unknown>,
         },
       });
 
@@ -542,7 +574,7 @@ DEALS: ${lead.deals.length} registrados.`;
 
       return aiResult;
     } catch (error) {
-      console.error('Error in calculateAIScore:', error);
+      logger.error({ err: error instanceof Error ? error : new Error(String(error)) }, 'Error in calculateAIScore');
       return null;
     }
   }

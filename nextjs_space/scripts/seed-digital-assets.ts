@@ -8,7 +8,7 @@ async function main() {
   const tenantId = 'cmo09jrkc0000mf0ebul7xe9q';
   
   // 1. Asegurar vaultSeed
-  let vaultSeed = 'volkern-demo-seed-xyz-123';
+  const vaultSeed = 'volkern-demo-seed-xyz-123';
   await prisma.tenant.update({
     where: { id: tenantId },
     data: { vaultSeed }

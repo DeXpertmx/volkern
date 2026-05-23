@@ -198,7 +198,7 @@ export const createMediaPremiumBlocks = (editor: Editor) => {
   // Commands
   editor.Commands.add('add-img-premium', {
     run(editor, sender, options = {}) {
-      let selected = options.target || editor.getSelected();
+      const selected = options.target || editor.getSelected();
       if (!selected) {
         toast.error("Por favor, selecciona el componente primero");
         return;
@@ -256,7 +256,7 @@ export const createMediaPremiumBlocks = (editor: Editor) => {
 
   editor.Commands.add('clear-img-premium', {
     run(editor, sender, options = {}) {
-      let selected = options.target || editor.getSelected();
+      const selected = options.target || editor.getSelected();
       if (!selected) return;
       
       const findPremium = (comp: any): any => {

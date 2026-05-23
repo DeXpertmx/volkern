@@ -76,7 +76,7 @@ export class StripeMXService {
       entity = await prisma.lead.findUnique({ where: { id: targetId } })
     }
 
-    let stripeCustomerId = await this.getOrCreateStripeCustomer(entity, tenantId)
+    const stripeCustomerId = await this.getOrCreateStripeCustomer(entity, tenantId)
 
     if (!stripeCustomerId) throw new Error('No se pudo sincronizar el cliente con Stripe.')
 

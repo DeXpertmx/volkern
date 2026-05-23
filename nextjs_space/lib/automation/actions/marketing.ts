@@ -5,7 +5,7 @@ export async function createCampaign(config: any, ctx: ActionContext): Promise<b
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  const campaign = await tenantClient.campana.create({
+  const campaign = await (tenantClient as any).campana.create({
     data: { tenantId: ctx.state.tenantId, nombre, tipo: tipo || 'email', estado: 'borrador', fechaInicio, fechaFin, presupuesto },
   })
   await ctx.log('create_campaign', 'action', 'success', `Campaña ${campaign.id} creada`)
@@ -17,7 +17,7 @@ export async function addContactToList(config: any, ctx: ActionContext): Promise
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  await tenantClient.listaContacto.create({
+  await (tenantClient as any).listaContacto.create({
     data: { tenantId: ctx.state.tenantId, listaId, leadId: leadId || ctx.state.leadId },
   })
   await ctx.log('add_contact_to_list', 'action', 'success', 'Contacto agregado a lista')
@@ -29,7 +29,7 @@ export async function removeContactFromList(config: any, ctx: ActionContext): Pr
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  await tenantClient.listaContacto.deleteMany({ where: { listaId, leadId: leadId || ctx.state.leadId } })
+  await (tenantClient as any).listaContacto.deleteMany({ where: { listaId, leadId: leadId || ctx.state.leadId } })
   await ctx.log('remove_contact_from_list', 'action', 'success', 'Contacto removido de lista')
   return true
 }
@@ -45,10 +45,10 @@ export async function segmentAudience(config: any, ctx: ActionContext): Promise<
   if (criterios?.fechaCreacionDespues) whereClause.createdAt = { gte: new Date(criterios.fechaCreacionDespues) }
 
   const leads = await tenantClient.lead.findMany({ where: whereClause, select: { id: true } })
-  const lista = await tenantClient.lista.create({
+  const lista = await (tenantClient as any).lista.create({
     data: { tenantId: ctx.state.tenantId, nombre, tipo: 'segmento', criterio: JSON.stringify(criterios) },
   })
-  await tenantClient.listaContacto.createMany({
+  await (tenantClient as any).listaContacto.createMany({
     data: leads.map((l: any) => ({ tenantId: ctx.state.tenantId, listaId: lista.id, leadId: l.id })),
   })
   await ctx.log('segment_audience', 'action', 'success', `Segmento creado con ${leads.length} contactos`)
@@ -60,7 +60,7 @@ export async function scheduleSocialPost(config: any, ctx: ActionContext): Promi
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  await tenantClient.publicacionProgramada.create({
+  await (tenantClient as any).publicacionProgramada.create({
     data: { tenantId: ctx.state.tenantId, plataforma, contenido, fechaPublicacion: fechaPublicacion || new Date(), estado: 'programada', medios: medios || [] },
   })
   await ctx.log('schedule_social_post', 'action', 'success', `Publicación programada para ${plataforma}`)
@@ -72,7 +72,7 @@ export async function publishSocialPost(config: any, ctx: ActionContext): Promis
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  await tenantClient.publicacionProgramada.update({
+  await (tenantClient as any).publicacionProgramada.update({
     where: { id: publicacionId || ctx.state.publicacionId },
     data: { estado: 'publicada', fechaPublicacion: new Date() },
   })
@@ -117,7 +117,7 @@ export async function calculateEngagement(config: any, ctx: ActionContext): Prom
   const startDate = new Date()
   startDate.setDate(startDate.getDate() - (periodo || 30))
 
-  const actividades = await tenantClient.actividad.count({
+  const actividades = await (tenantClient as any).actividad.count({
     where: { leadId: leadId || ctx.state.leadId, createdAt: { gte: startDate } },
   })
   const engagement = Math.min(100, actividades * 10)
@@ -150,7 +150,7 @@ export async function generateCampaignReport(config: any, ctx: ActionContext): P
     fecha: new Date(),
   }
 
-  await tenantClient.reporteCampana.create({
+  await (tenantClient as any).reporteCampana.create({
     data: { tenantId: ctx.state.tenantId, campanaId: campaign?.id, tipo: tipoReporte || 'resumen', datos: JSON.stringify(reporte) },
   })
   await ctx.log('generate_campaign_report', 'action', 'success', 'Reporte de campaña generado')
@@ -166,7 +166,7 @@ export async function sendMarketingEmail(config: any, ctx: ActionContext): Promi
   if (lead?.email) {
     const { sendEmail } = await import('@/lib/resend-email')
     await sendEmail(lead.email, asunto || 'Información', contenido || 'Contenido del email marketing', ctx.state.tenantId)
-    await tenantClient.campanaEnvio.create({
+    await (tenantClient as any).campanaEnvio.create({
       data: { tenantId: ctx.state.tenantId, campanaId: ctx.state.campaignId, leadId: lead.id, estado: 'enviado', fechaEnvio: new Date() },
     })
   }

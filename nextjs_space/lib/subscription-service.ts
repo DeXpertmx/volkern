@@ -49,4 +49,4 @@ export class SubscriptionService {
   }
 }
 
-export { FeatureName, FeatureLimit, PlanConfig };
+export type { FeatureName, FeatureLimit, PlanConfig };

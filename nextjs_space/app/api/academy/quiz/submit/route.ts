@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
 import { AcademyAuthService } from '@/lib/auth/academy-auth';
 import { QuizService } from '@/lib/academy/quiz-service';
 import { CertificationService } from '@/lib/academy/certification-service';

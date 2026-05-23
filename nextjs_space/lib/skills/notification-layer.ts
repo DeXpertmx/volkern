@@ -335,7 +335,7 @@ export class NotificationService {
     context: SkillContext
   ): Promise<Omit<NotificationResult, 'notificationId'>> {
     try {
-      let creds = await loadTelegramCredentials(context.tenantId);
+      const creds = await loadTelegramCredentials(context.tenantId);
       
       // Fallback: si no hay admin_chat_id, buscar el primer usuario del tenant
       if (!creds?.admin_chat_id && context.tenantId) {

@@ -45,6 +45,17 @@ export const ContactInteractionSchema = z.object({
 });
 
 /**
+ * Schema para crear un archivo adjunto de Contact
+ */
+export const ContactAttachmentSchema = z.object({
+  nombre: z.string().min(1, 'Nombre requerido').max(255),
+  tipoArchivo: z.string().min(1, 'Tipo de archivo requerido').max(100),
+  tamano: z.number().int().min(1, 'Tamaño debe ser mayor a 0'),
+  cloud_storage_path: z.string().min(1, 'Path de almacenamiento requerido'),
+  descripcion: z.string().max(2000).optional().nullable(),
+});
+
+/**
  * Schema para crear una tarea asociada a un Contact
  */
 export const ContactTaskSchema = z.object({

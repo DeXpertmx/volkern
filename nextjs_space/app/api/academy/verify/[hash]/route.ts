@@ -21,7 +21,7 @@ export async function GET(
           select: {
             nombre: true,
             email: true,
-            tenant: { select: { name: true } }
+            tenant: { select: { nombre: true } }
           }
         },
         curso: {
@@ -47,7 +47,7 @@ export async function GET(
       fechaExpiracion: certificado.fechaExpiracion,
       estudiante: {
         nombre: certificado.estudiante.nombre,
-        empresa: certificado.estudiante.tenant?.name
+        empresa: certificado.estudiante.tenant?.nombre
       },
       curso: certificado.curso
     });

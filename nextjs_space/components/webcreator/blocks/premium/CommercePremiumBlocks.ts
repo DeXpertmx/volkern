@@ -25,10 +25,10 @@ export const createCommercePremiumBlocks = (editor: Editor) => {
             label: 'Pasarela', 
             name: 'data-provider',
             options: [
-                { value: 'stripe', name: 'Stripe' },
-                { value: 'square', name: 'Square' },
-                { value: 'gocardless', name: 'GoCardless' },
-                { value: 'custom', name: 'Personalizado' },
+                { value: 'stripe', id: 'stripe', name: 'Stripe' },
+                { value: 'square', id: 'square', name: 'Square' },
+                { value: 'gocardless', id: 'gocardless', name: 'GoCardless' },
+                { value: 'custom', id: 'custom', name: 'Personalizado' },
             ]
           },
           { type: 'text', label: 'Producto', name: 'data-product', value: 'Plan Premium' },

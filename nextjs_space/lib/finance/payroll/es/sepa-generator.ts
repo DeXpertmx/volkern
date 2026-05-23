@@ -27,7 +27,7 @@ export class SEPAGenerator {
       SANTANDER: { idPrefix: 'SANT' }
     }[bankSchema]
 
-    let xml = `<?xml version="1.0" encoding="UTF-8"?>
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.03">
   <CstmrCdtTrfInitn>
     <GrpHdr>

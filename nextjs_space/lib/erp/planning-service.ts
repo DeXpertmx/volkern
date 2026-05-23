@@ -48,7 +48,7 @@ export class PlanningService {
     });
 
     // Simulamos carga basada en cantidad restante (0.5h por unidad)
-    let plannedLoad = workOrders.reduce((acc, wo) => acc + (wo.quantityToMake - wo.quantityProduced) * 0.5, 0);
+    const plannedLoad = workOrders.reduce((acc, wo) => acc + (wo.quantityToMake - wo.quantityProduced) * 0.5, 0);
 
     const availableHours = Math.max(0, theoreticalHours - blockedHours);
     const effectiveHours = Math.max(0, availableHours - plannedLoad);

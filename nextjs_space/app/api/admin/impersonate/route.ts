@@ -98,6 +98,7 @@ export async function POST(req: NextRequest) {
  */
 export async function GET() {
   const cookieStore = cookies();
+  const session = await getServerSession(authOptions);
   const impersonatedId = cookieStore.get('volkern_impersonate_id')?.value;
 
   if (!impersonatedId) {

@@ -286,7 +286,7 @@ const createBookingWrapper = async (input: {
   if (!targetNombre) targetNombre = targetEmail.split('@')[0];
 
   // 2. Procesar fecha y hora
-  let dt = new Date();
+  const dt = new Date();
   if (fecha) {
     const [y, m, d] = fecha.split('-').map(Number);
     dt.setFullYear(y, m - 1, d);

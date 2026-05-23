@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db'
 /**
  * Contexto de ejecución de una automatización.
  * Contiene los IDs y datos de las entidades involucradas.
+ * Campos tipados explícitamente para los más usados; extensible vía índice.
  */
 export interface ExecutionContext {
   tenantId?: string
@@ -12,13 +13,16 @@ export interface ExecutionContext {
   estudianteId?: string
   cursoId?: string
   inscripcionId?: string
-  lead?: any
-  cita?: any
-  estudiante?: any
-  curso?: any
-  inscripcion?: any
-  [key: string]: any
+  lead?: Record<string, any>
+  cita?: Record<string, any>
+  estudiante?: Record<string, any>
+  curso?: Record<string, any>
+  inscripcion?: Record<string, any>
+  [key: string]: unknown
 }
+
+/** Configuración genérica para dispatchAction */
+export type ActionConfig = Record<string, unknown>
 
 /**
  * Contexto inyectado a cada action handler.
@@ -31,10 +35,10 @@ export interface ActionContext {
   executionId: string
   log: (nodeId: string, nodeType: string, status: string, message: string) => Promise<void>
   replaceVariables: (text: string) => string
-  dispatchAction: (config: any) => Promise<boolean>
+  dispatchAction: (config: ActionConfig) => Promise<boolean>
 }
 
 /**
  * Firma de un action handler standalone.
  */
-export type ActionHandler = (config: any, ctx: ActionContext) => Promise<boolean>
+export type ActionHandler = (config: ActionConfig, ctx: ActionContext) => Promise<boolean>

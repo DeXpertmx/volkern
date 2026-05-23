@@ -33,6 +33,7 @@ interface LineItem {
   precioUnitario: number;
   descuento: number;
   tasaImpuesto?: number;
+  tasaRetencion?: number;
 }
 
 interface Lead {

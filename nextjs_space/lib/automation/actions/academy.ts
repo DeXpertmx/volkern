@@ -6,13 +6,13 @@ export async function sendOnboarding(config: any, ctx: ActionContext): Promise<b
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  const estudiante = await tenantClient.estudiante.findUnique({
+  const estudiante = await (tenantClient as any).estudiante.findUnique({
     where: { id: estudianteId || ctx.state.estudianteId },
     include: { usuario: true },
-  })
+  }) as any
   if (estudiante?.usuario?.email) {
     const { sendEmail } = await import('@/lib/resend-email')
-    await sendEmail(estudiante.usuario.email, '¡Bienvenido a tu nuevo curso!', '¡Bienvenido al curso! Estamos emocionados de tenerte. Comienza tu viaje de aprendizaje hoy.', ctx.state.tenantId)
+    await sendEmail({ to: estudiante.usuario.email, subject: '¡Bienvenido a tu nuevo curso!', text: '¡Bienvenido al curso! Estamos emocionados de tenerte. Comienza tu viaje de aprendizaje hoy.' })
   }
   await ctx.log('send_onboarding', 'action', 'success', 'Onboarding de estudiante enviado')
   return true
@@ -23,7 +23,7 @@ export async function createEvaluation(config: any, ctx: ActionContext): Promise
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  await tenantClient.evaluacion.create({
+  await (tenantClient as any).evaluacion.create({
     data: {
       tenantId: ctx.state.tenantId, estudianteId: estudianteId || ctx.state.estudianteId,
       cursoId: cursoId || ctx.state.cursoId, tipo: tipo || 'examen',
@@ -39,14 +39,14 @@ export async function sendSurvey(config: any, ctx: ActionContext): Promise<boole
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  const inscripcion = await tenantClient.inscripcion.findUnique({
+  const inscripcion = await (tenantClient as any).inscripcion.findUnique({
     where: { id: inscripcionId || ctx.state.inscripcionId },
     include: { estudiante: { include: { usuario: true } } },
   })
   if (inscripcion?.estudiante?.usuario?.email) {
     const { sendEmail } = await import('@/lib/resend-email')
     const subject = tipoEncuesta === 'satisfaccion' ? 'Encuesta de Satisfacción' : 'Evaluación del Curso'
-    await sendEmail(inscripcion.estudiante.usuario.email, subject, 'Tu opinión es importante. Por favor, toma unos minutos para completar esta encuesta.', ctx.state.tenantId)
+    await sendEmail({ to: inscripcion.estudiante.usuario.email, subject, text: 'Tu opinión es importante. Por favor, toma unos minutos para completar esta encuesta.' })
   }
   await ctx.log('send_survey', 'action', 'success', 'Encuesta enviada')
   return true
@@ -57,7 +57,7 @@ export async function registerTraining(config: any, ctx: ActionContext): Promise
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  await tenantClient.registroCapacitacion.create({
+  await (tenantClient as any).registroCapacitacion.create({
     data: {
       tenantId: ctx.state.tenantId, estudianteId: estudianteId || ctx.state.estudianteId,
       cursoId: cursoId || ctx.state.cursoId, tipo: tipoParticipacion || 'presencial',
@@ -73,22 +73,23 @@ export async function notifyCertification(config: any, ctx: ActionContext): Prom
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  const inscripcion = await tenantClient.inscripcion.findFirst({
+  const inscripcion = await (tenantClient as any).inscripcion.findFirst({
     where: { estudianteId: estudianteId || ctx.state.estudianteId, cursoId: cursoId || ctx.state.cursoId, estado: 'completada' },
   })
 
   if (inscripcion) {
-    const { notifyByTelegram, sendEmail } = await import('@/lib/skills/notification-layer')
+    const { notifyByTelegram } = await import('@/lib/skills/notification-layer')
+    const { sendEmail } = await import('@/lib/resend-email')
     const context = createSystemContext(ctx.state.tenantId)
     const message = '🎓 *¡Felicitaciones!*\n\nHas completado el curso y puedes descargar tu certificado.'
     notifyByTelegram(message, context).catch(() => {})
 
-    const estudiante = await tenantClient.estudiante.findUnique({
+    const estudiante = await (tenantClient as any).estudiante.findUnique({
       where: { id: estudianteId || ctx.state.estudianteId },
       include: { usuario: true },
-    })
+    }) as any
     if (estudiante?.usuario?.email) {
-      await sendEmail(estudiante.usuario.email, '¡Felicidades por completar el curso!', message, ctx.state.tenantId)
+      await sendEmail({ to: estudiante.usuario.email, subject: '¡Felicidades por completar el curso!', text: message })
     }
   }
   await ctx.log('notify_certification', 'action', 'success', 'Notificación de certificación enviada')

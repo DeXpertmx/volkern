@@ -1,4 +1,6 @@
+import { PrismaClient } from '@prisma/client';
 import { prisma, dbContext } from './db';
+import { logger } from './logger';
 import { getServerSession } from 'next-auth';
 import { authOptions } from './auth';
 import { hashApiKey, isValidApiKeyFormat, hasScope, hasAnyScope, extractApiKeyFromRequest } from './api-keys';
@@ -25,6 +27,8 @@ export interface ApiKeyAuthResult {
     slug: string;
     subdomain?: string | null;
     plan: string;
+    accountType?: string;
+    parentId?: string | null;
   };
   user?: {
     id: string;
@@ -32,7 +36,11 @@ export interface ApiKeyAuthResult {
     email: string;
     tenantId: string | null;
     roleId: string | null;
-    role?: any;
+    role?: {
+      id: string;
+      nombre: string;
+      permisos?: unknown;
+    } | null;
     accountType?: string;
     parentId?: string | null;
   };
@@ -41,7 +49,7 @@ export interface ApiKeyAuthResult {
     nombre: string;
     scopes: string[];
   };
-  db?: any; // PrismaClient (Global or Tenant)
+  db?: PrismaClient;
   vaultSeed?: string;
   error?: string;
   authMethod?: 'session' | 'apikey';
@@ -59,12 +67,30 @@ export interface ApiKeyAuthResult {
  * Determina si el solicitante puede actuar sobre el tenant de destino.
  */
 async function resolveHierarchicalContext(
-  requesterUser: any,
-  requesterTenant: any,
+  requesterUser: {
+    id: string
+    email: string
+    role?: { id: string; nombre: string; permisos?: unknown } | null
+  },
+  requesterTenant: {
+    id: string
+    nombre: string
+    slug: string
+    subdomain?: string | null
+    plan: string
+    accountType?: string
+  },
   targetTenantId?: string | null
 ): Promise<{ 
   activeTenantId: string; 
-  targetTenant: any;
+  targetTenant: {
+    id: string
+    nombre: string
+    slug: string
+    subdomain?: string | null
+    plan: string
+    accountType?: string
+  };
   agencyContext: boolean;
   error?: string;
 }> {
@@ -205,8 +231,9 @@ export async function validateApiKey(
       vaultSeed: tDb.vaultSeed
     };
 
-  } catch (error: any) {
-    console.error('Error validando API key:', error);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
+    logger.error({ err: error instanceof Error ? error : new Error(message) }, 'Error validando API key');
     return { valid: false, error: 'Error interno de autenticación' };
   }
 }
@@ -226,12 +253,12 @@ export async function authenticateRequest(
     let session = null;
     try {
       session = await getServerSession(authOptions);
-    } catch (e: any) {
+    } catch (e: unknown) {
       // IMPORTANTE: No capturar errores de Next.js que indican renderizado dinámico
-      if (e?.digest?.includes('DYNAMIC_SERVER_USAGE') || e?.message?.includes('dynamic-server-error')) {
-        throw e;
+      if (e instanceof Error && 'digest' in e && typeof (e as { digest: string }).digest === 'string' && (e as { digest: string }).digest.includes('DYNAMIC_SERVER_USAGE')) {
+        throw e
       }
-      console.warn('[auth] getServerSession failed:', e?.message);
+      logger.warn({ err: e instanceof Error ? e : undefined }, '[auth] getServerSession failed');
     }
     
     if (!session?.user?.id) {
@@ -241,8 +268,8 @@ export async function authenticateRequest(
     if (session?.user?.id) {
       // Si hay subdominio en header (y no es vacío), verificar que coincida con el tenant del usuario
       // Solo aplicar validación estricta si hay un subdominio real (no localhost/vacío)
-      if (headerSubdomain && headerSubdomain !== '' && headerSubdomain !== 'null' && (session.user as any).tenantSubdomain !== headerSubdomain) {
-        console.warn(`[Seguridad] Usuario ${session.user.email} solicitó API de ${headerSubdomain} pero su tenant es ${(session.user as any).tenantSubdomain}`)
+      if (headerSubdomain && headerSubdomain !== '' && headerSubdomain !== 'null' && (session.user as Record<string, unknown>).tenantSubdomain !== headerSubdomain) {
+        logger.warn({ userEmail: session.user.email, headerSubdomain, tenantSubdomain: (session.user as Record<string, unknown>).tenantSubdomain }, '[Seguridad] Subdominio no coincide')
         return { valid: false, error: 'Acceso denegado: subdominio no coincide con tu cuenta' };
       }
       
@@ -260,7 +287,7 @@ export async function authenticateRequest(
       });
 
       if (!user || !user.tenant) {
-        console.warn('[auth] User or tenant not found for session user:', session.user.id);
+        logger.warn({ userId: session.user.id }, '[auth] User or tenant not found');
         return { valid: false, error: 'Sesión inválida o expirada' };
       }
 
@@ -277,7 +304,7 @@ export async function authenticateRequest(
       const context = await resolveHierarchicalContext(user, user.tenant, targetId);
 
       if (context.error) {
-        console.warn('[auth] Hierarchical context error:', context.error);
+        logger.warn({ contextError: context.error }, '[auth] Hierarchical context error');
         return { valid: false, error: context.error };
       }
 
@@ -302,8 +329,14 @@ export async function authenticateRequest(
         vaultSeed: tDb.vaultSeed
       };
     }
-  } catch (e: any) {
-    console.warn('[auth] Falló intento de sesión:', e?.message || e);
+  } catch (e: unknown) {
+    // IMPORTANTE: No capturar errores de Next.js que indican renderizado dinámico
+    if (e instanceof Error) {
+      if ('digest' in e && typeof (e as { digest: string }).digest === 'string' && (e as { digest: string }).digest.includes('DYNAMIC_SERVER_USAGE')) {
+        throw e
+      }
+      logger.warn({ err: e as Error }, '[auth] Falló intento de sesión')
+    }
   }
 
   // 2. Si no hay sesión, intentar API Key
@@ -339,7 +372,7 @@ export function withTenantAuth(
           select: { enabledModules: true, plan: true }
         });
 
-        const isModuleEnabled = tenant?.enabledModules?.includes(requiredModule as any);
+        const isModuleEnabled = tenant?.enabledModules?.includes(requiredModule as string);
         
         if (!isModuleEnabled) {
           return NextResponse.json(
@@ -355,12 +388,13 @@ export function withTenantAuth(
         { tenantId: auth.tenant!.id, client: auth.db, vaultSeed: auth.vaultSeed },
         () => handler(request, auth, context)
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error)
       // IMPORTANTE: No capturar errores de Next.js que indican renderizado dinámico
-      if (error?.digest?.includes('DYNAMIC_SERVER_USAGE') || error?.message?.includes('dynamic-server-error')) {
-        throw error;
+      if (error instanceof Error && 'digest' in error && typeof (error as { digest: string }).digest === 'string' && (error as { digest: string }).digest.includes('DYNAMIC_SERVER_USAGE')) {
+        throw error
       }
-      console.error('[withTenantAuth] Error fatal:', error);
+      logger.error({ err: error instanceof Error ? error : new Error(message) }, '[withTenantAuth] Error fatal');
       return NextResponse.json(
         { error: 'Error interno del servidor' },
         { status: 500 }
@@ -407,8 +441,9 @@ export function withPublicTenant(
         { tenantId: tenantId!, client: db.client },
         () => handler(request, tenantId!, context?.params)
       );
-    } catch (error: any) {
-      console.error('[withPublicTenant] Error fatal:', error);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error)
+      logger.error({ err: error instanceof Error ? error : new Error(message) }, '[withPublicTenant] Error fatal');
       return NextResponse.json(
         { error: 'Error interno del servidor' },
         { status: 500 }

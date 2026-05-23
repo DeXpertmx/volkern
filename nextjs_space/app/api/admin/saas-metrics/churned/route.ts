@@ -15,24 +15,30 @@ export async function GET(request: NextRequest) {
     const churnedTenants = await globalPrisma.tenant.findMany({
       where: {
         estado: 'cancelado',
-        fechaCancelacion: { gte: startDate }
-      },
-      include: {
-        subscription: {
-          where: { estado: 'cancelada' },
-          orderBy: { fechaCancelacion: 'desc' },
-          take: 1
+        subscriptions: {
+          some: {
+            fechaCancelacion: { gte: startDate }
+          }
         }
       },
-      orderBy: { fechaCancelacion: 'desc' }
+      include: {
+        subscriptions: {
+          where: { estado: 'cancelada' },
+          orderBy: { fechaCancelacion: 'desc' },
+          take: 1,
+          include: { plan: true }
+        }
+      },
+      orderBy: { fechaActualizacion: 'desc' }
     });
 
     const customers = await Promise.all(
       churnedTenants.map(async (tenant) => {
-        const planSlug = tenant.plan || tenant.subscription?.[0]?.plan?.slug || 'starter';
+        const sub = tenant.subscriptions?.[0];
+        const planSlug = tenant.plan || sub?.plan?.slug || 'starter';
         const planConfig = await getPlanConfig(planSlug);
         const createdAt = new Date(tenant.fechaCreacion);
-        const cancelledAt = tenant.fechaCancelacion ? new Date(tenant.fechaCancelacion) : new Date();
+        const cancelledAt = sub?.fechaCancelacion ? new Date(sub.fechaCancelacion) : new Date();
         const mesesActivo = Math.max(1, Math.round((cancelledAt.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24 * 30)));
 
         return {
@@ -40,8 +46,8 @@ export async function GET(request: NextRequest) {
           nombre: tenant.nombre,
           plan: planSlug,
           mrr: tenant.mrr || planConfig?.precio || 0,
-          fechaCancelacion: tenant.fechaCancelacion,
-          reason: (tenant.subscription?.[0]?.metadata as any)?.churnReason || null,
+          fechaCancelacion: sub?.fechaCancelacion,
+          reason: (sub?.metadata as any)?.churnReason || null,
           mesesActivo
         };
       })

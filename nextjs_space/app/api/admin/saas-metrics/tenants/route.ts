@@ -44,8 +44,8 @@ export async function GET(request: NextRequest) {
           mrr: true,
           moneda: true,
           fechaCreacion: true,
-          fechaFin: true,
-          updatedAt: true,
+          fechaVencimiento: true,
+          fechaActualizacion: true,
           _count: { select: { users: true } }
         },
         orderBy: { fechaCreacion: 'desc' },
@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       tenants: tenants.map(t => ({
         ...t,
-        lastActivity: t.updatedAt
+        lastActivity: t.fechaActualizacion
       })),
       pagination: { page, limit, total, totalPages }
     });

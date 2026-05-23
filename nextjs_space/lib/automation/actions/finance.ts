@@ -9,7 +9,7 @@ export async function generateInvoicePDF(config: any, ctx: ActionContext): Promi
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  const invoice = await tenantClient.factura.findUnique({ where: { id: invoiceId || ctx.state.invoiceId } })
+  const invoice = await (tenantClient as any).factura.findUnique({ where: { id: invoiceId || ctx.state.invoiceId } })
   if (invoice && tipo === 'pdf') {
     const { InvoicingService } = await import('@/lib/invoicing-service')
     const invoicingService = new InvoicingService(ctx.state.tenantId)
@@ -24,7 +24,7 @@ export async function registerExpense(config: any, ctx: ActionContext): Promise<
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  await tenantClient.gasto.create({
+  await (tenantClient as any).gasto.create({
     data: { tenantId: ctx.state.tenantId, categoria, monto, descripcion, fecha: fecha || new Date(), estado: 'pendiente', usuarioId: ctx.state.userId },
   })
   await ctx.log('register_expense', 'action', 'success', `Gasto registrado: ${monto}`)
@@ -36,7 +36,7 @@ export async function approveExpense(config: any, ctx: ActionContext): Promise<b
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  await tenantClient.gasto.update({
+  await (tenantClient as any).gasto.update({
     where: { id: expenseId || ctx.state.expenseId },
     data: { estado: approve ? 'aprobado' : 'rechazado', fechaAprobacion: new Date(), aprobadorId: ctx.state.userId },
   })
@@ -74,7 +74,7 @@ export async function createPayroll(config: any, ctx: ActionContext): Promise<bo
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  const nomina = await tenantClient.nomina.create({
+  const nomina = await (tenantClient as any).nomina.create({
     data: {
       tenantId: ctx.state.tenantId, periodoInicio, periodoFin, estado: 'borrador',
       detalles: {
@@ -94,7 +94,7 @@ export async function notifyInvoiceOverdue(config: any, ctx: ActionContext): Pro
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  const factura = await tenantClient.factura.findUnique({
+  const factura = await (tenantClient as any).factura.findUnique({
     where: { id: invoiceId || ctx.state.invoiceId },
     include: { cliente: true },
   })
@@ -128,10 +128,10 @@ export async function adjustBudget(config: any, ctx: ActionContext): Promise<boo
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  const presupuesto = await tenantClient.presupuesto.findUnique({ where: { id: budgetId || ctx.state.budgetId } })
+  const presupuesto = await (tenantClient as any).presupuesto.findUnique({ where: { id: budgetId || ctx.state.budgetId } })
   const nuevoMonto = tipo === 'aumentar' ? (presupuesto?.monto || 0) + monto : (presupuesto?.monto || 0) - monto
 
-  await tenantClient.presupuesto.update({ where: { id: budgetId || ctx.state.budgetId }, data: { monto: nuevoMonto } })
+  await (tenantClient as any).presupuesto.update({ where: { id: budgetId || ctx.state.budgetId }, data: { monto: nuevoMonto } })
   await ctx.log('adjust_budget', 'action', 'success', `Presupuesto ajustado: ${tipo} ${monto}`)
   return true
 }
@@ -157,7 +157,7 @@ export async function generateFinancialReport(config: any, ctx: ActionContext): 
     tipo, fechaGeneracion: new Date(),
   }
 
-  await tenantClient.reporteFinanciero.create({
+  await (tenantClient as any).reporteFinanciero.create({
     data: { tenantId: ctx.state.tenantId, tipo, periodoInicio, periodoFin, datos: JSON.stringify(reporte) },
   })
   await ctx.log('generate_financial_report', 'action', 'success', 'Reporte financiero generado')

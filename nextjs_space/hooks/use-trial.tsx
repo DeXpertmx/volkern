@@ -17,17 +17,19 @@ export interface TrialInfo {
   suggestedActions: string[]
 }
 
+interface UpgradeResult {
+  show: boolean
+  blocking: 'soft' | 'hard' | null
+  message: string
+}
+
 interface TrialContextType {
   trialInfo: TrialInfo | null
   loading: boolean
   refreshTrial: () => Promise<void>
   markActivation: () => Promise<void>
   isTrialActive: () => boolean
-  shouldShowUpgrade: (feature: string, usage: number, limit: number) => {
-    show: boolean
-    blocking: 'soft' | 'hard' | null
-    message: string
-  }
+  shouldShowUpgrade: (feature: string, usage: number, limit: number) => UpgradeResult
 }
 
 const TrialContext = createContext<TrialContextType | undefined>(undefined)
@@ -76,13 +78,13 @@ export function TrialProvider({ children }: { children: ReactNode }) {
     return trialInfo?.status === 'active'
   }
 
-  const shouldShowUpgrade = (feature: string, usage: number, limit: number) => {
+  const shouldShowUpgrade = (feature: string, usage: number, limit: number): UpgradeResult => {
     if (!trialInfo || trialInfo.status !== 'active') {
-      return { show: false, blocking: null as 'soft' | 'hard' | null, message: '' }
+      return { show: false, blocking: null, message: '' }
     }
 
     if (limit <= 0 || limit === -1) {
-      return { show: false, blocking: null as 'soft' | 'hard' | null, message: '' }
+      return { show: false, blocking: null, message: '' }
     }
 
     const percentage = (usage / limit) * 100
@@ -99,26 +101,18 @@ export function TrialProvider({ children }: { children: ReactNode }) {
 
     const thresholds = featureThresholds[feature]
     if (!thresholds) {
-      return { show: false, blocking: null as 'soft' | 'hard' | null, message: '' }
+      return { show: false, blocking: null, message: '' }
     }
 
     if (percentage >= thresholds.hard) {
-      return {
-        show: true,
-        blocking: 'hard' as const,
-        message: `Has alcanzado el límite de ${feature}. Actualiza tu plan para continuar.`,
-      }
+      return { show: true, blocking: 'hard', message: `Has alcanzado el límite de ${feature}. Actualiza tu plan para continuar.` }
     }
 
     if (percentage >= thresholds.soft) {
-      return {
-        show: true,
-        blocking: 'soft' as const,
-        message: `Has usado el ${percentage.toFixed(0)}% de tu límite de ${feature}. Considera actualizar.`,
-      }
+      return { show: true, blocking: 'soft', message: `Has usado el ${percentage.toFixed(0)}% de tu límite de ${feature}. Considera actualizar.` }
     }
 
-    return { show: false, blocking: null as 'soft' | 'hard' | null, message: '' }
+    return { show: false, blocking: null, message: '' }
   }
 
   return (

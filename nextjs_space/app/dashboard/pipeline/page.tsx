@@ -2,8 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
-import { apiFetch } from '@/lib/api-client'
-import { apiPost } from '@/lib/api-client'
+import { apiFetch, apiPost } from '@/lib/api-client'
 import {
   DndContext,
   DragOverlay,
@@ -135,6 +134,7 @@ interface Metrics {
   valorPonderado: number
   totalDeals: number
   porEtapa: Record<string, number>
+  gapAnalysis: number
 }
 
 export default function PipelinePage() {

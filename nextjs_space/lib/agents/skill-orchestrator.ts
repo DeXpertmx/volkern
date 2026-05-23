@@ -94,7 +94,7 @@ export const SkillOrchestratorAgent = {
   /**
    * Construir plan según intent
    */
-  private buildPlan(intent: string, entities: Record<string, string>, tenantId: string): ExecutionPlan | null {
+  buildPlan(intent: string, entities: Record<string, string>, tenantId: string): ExecutionPlan | null {
     const planBuilders: Record<string, (entities: Record<string, string>, tenantId: string) => ExecutionPlan | null> = {
       'agendar_cita': this.planAgendarCita,
       'consultar_cita': this.planConsultarCita,
@@ -115,7 +115,7 @@ export const SkillOrchestratorAgent = {
   /**
    * Plan: Agendar cita
    */
-  private planAgendarCita(entities: Record<string, string>, tenantId: string): ExecutionPlan {
+  planAgendarCita(entities: Record<string, string>, tenantId: string): ExecutionPlan {
     // Si falta fecha → pedir
     if (!entities.date) {
       return this.createAskUserPlan('date', 'agendar_cita');
@@ -159,7 +159,7 @@ export const SkillOrchestratorAgent = {
   /**
    * Plan: Consultar cita
    */
-  private planConsultarCita(entities: Record<string, string>, tenantId: string): ExecutionPlan {
+  planConsultarCita(entities: Record<string, string>, tenantId: string): ExecutionPlan {
     return {
       steps: [
         {
@@ -173,7 +173,7 @@ export const SkillOrchestratorAgent = {
   /**
    * Plan: Cancelar cita
    */
-  private planCancelarCita(entities: Record<string, string>, tenantId: string): ExecutionPlan {
+  planCancelarCita(entities: Record<string, string>, tenantId: string): ExecutionPlan {
     if (!entities.appointment_id) {
       return this.createAskUserPlan('appointment_id', 'cancelar_cita');
     }
@@ -191,7 +191,7 @@ export const SkillOrchestratorAgent = {
   /**
    * Plan: Consultar servicios
    */
-  private planConsultarServicios(_entities: Record<string, string>, tenantId: string): ExecutionPlan {
+  planConsultarServicios(_entities: Record<string, string>, tenantId: string): ExecutionPlan {
     return {
       steps: [
         {
@@ -205,7 +205,7 @@ export const SkillOrchestratorAgent = {
   /**
    * Plan: Consultar precio
    */
-  private planConsultarPrecio(entities: Record<string, string>, tenantId: string): ExecutionPlan {
+  planConsultarPrecio(entities: Record<string, string>, tenantId: string): ExecutionPlan {
     if (!entities.service) {
       return this.createAskUserPlan('service', 'consultar_precio');
     }
@@ -223,7 +223,7 @@ export const SkillOrchestratorAgent = {
   /**
    * Plan: Contactar humano
    */
-  private planContactarHumano(_entities: Record<string, string>, tenantId: string): ExecutionPlan {
+  planContactarHumano(_entities: Record<string, string>, tenantId: string): ExecutionPlan {
     return {
       steps: [
         {
@@ -237,7 +237,7 @@ export const SkillOrchestratorAgent = {
   /**
    * Plan: Estado de pedido
    */
-  private planEstadoPedido(_entities: Record<string, string>, _tenantId: string): ExecutionPlan {
+  planEstadoPedido(_entities: Record<string, string>, _tenantId: string): ExecutionPlan {
     return {
       steps: [
         {
@@ -251,7 +251,7 @@ export const SkillOrchestratorAgent = {
   /**
    * Plan: Help
    */
-  private planHelp(): ExecutionPlan {
+  planHelp(): ExecutionPlan {
     return {
       steps: [
         {
@@ -265,7 +265,7 @@ export const SkillOrchestratorAgent = {
   /**
    * Plan: Fallback
    */
-  private planFallback(): ExecutionPlan {
+  planFallback(): ExecutionPlan {
     return {
       steps: [
         {
@@ -281,7 +281,7 @@ export const SkillOrchestratorAgent = {
   /**
    * Crear plan para pedir información faltante
    */
-  private createAskUserPlan(missingEntity: string, _intent: string): ExecutionPlan {
+  createAskUserPlan(missingEntity: string, _intent: string): ExecutionPlan {
     const prompts: Record<string, string> = {
       date: '📅 ¿Para qué fecha te gustaría agendar? (puedes decir "mañana", "hoy", o "15/05")',
       time: '⏰ ¿A qué hora te viene bien? (ej: 10:00, 14:30)',
@@ -333,7 +333,7 @@ export const SkillOrchestratorAgent = {
       if (!feature) return true; // Si no hay mapping, permitir
 
       const featureRecord = tenant.tenantFeatures.find(f => f.feature === feature);
-      return featureRecord?.isActive ?? false;
+      return featureRecord?.habilitado ?? false;
     } catch {
       return false;
     }
@@ -342,7 +342,7 @@ export const SkillOrchestratorAgent = {
   /**
    * Mensaje cuando no hay acceso
    */
-  private getNoAccessMessage(intent: string): string {
+  getNoAccessMessage(intent: string): string {
     const messages: Record<string, string> = {
       'agendar_cita': '📅 No tienes acceso al módulo de citas. Contacta al administrador.',
       'consultar_servicios': '📋 No tienes acceso al catálogo. Contacta al administrador.',
@@ -354,7 +354,7 @@ export const SkillOrchestratorAgent = {
   /**
    * Mensaje de ayuda
    */
-  private getHelpResponse(): string {
+  getHelpResponse(): string {
     return `👋 Soy *Gemma*, tu asistente de Volkern.\n\nPuedo ayudarte con:\n\n📅 *Citas*: Agendar, consultar o cancelar\n📋 *Servicios*: Ver nuestro catálogo\n💰 *Precios*: Consultar precios\n👤 *Ayuda*: Hablar con un agente\n\n¿En qué puedo ayudarte?`;
   },
 
