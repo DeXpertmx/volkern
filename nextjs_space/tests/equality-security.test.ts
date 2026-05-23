@@ -1,219 +1,115 @@
 import { describe, it, expect } from 'vitest';
-import {
-  generateComplaintHash,
-  verifyComplaintIntegrity,
-} from '@/lib/equality/security';
+import { generateComplaintHash, verifyComplaintIntegrity } from '@/lib/equality/security';
 
-const baseData = {
-  description: 'Acoso laboral por parte del supervisor en la reunión del lunes',
-  tenantId: 'tenant-es-042',
-  createdAt: new Date('2024-03-15T09:30:00.000Z'),
-};
+// ==================== generateComplaintHash ====================
+describe('generateComplaintHash', () => {
+  const sampleData = {
+    description: 'Denuncia de prueba',
+    tenantId: 'tenant-abc-123',
+    createdAt: new Date('2025-06-15T10:00:00Z'),
+  };
 
-describe('Equality Security — generateComplaintHash', () => {
-  describe('Formato del hash', () => {
-    it('debe devolver un hash SHA-256 hexadecimal de 64 caracteres', () => {
-      const hash = generateComplaintHash(baseData);
-      expect(hash).toMatch(/^[0-9a-f]{64}$/);
-    });
-
-    it('el hash debe ser lowercase', () => {
-      const hash = generateComplaintHash(baseData);
-      expect(hash).toBe(hash.toLowerCase());
-    });
+  it('debe generar un hash SHA-256 de 64 caracteres hex', () => {
+    const hash = generateComplaintHash(sampleData);
+    expect(hash).toHaveLength(64);
+    expect(hash).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  describe('Determinismo', () => {
-    it('debe generar el mismo hash para los mismos datos', () => {
-      const h1 = generateComplaintHash(baseData);
-      const h2 = generateComplaintHash(baseData);
-      expect(h1).toBe(h2);
-    });
-
-    it('debe generar el mismo hash con la misma fecha (mismo timestamp)', () => {
-      const h1 = generateComplaintHash(baseData);
-      const h2 = generateComplaintHash({
-        ...baseData,
-        createdAt: new Date('2024-03-15T09:30:00.000Z'),
-      });
-      expect(h1).toBe(h2);
-    });
+  it('debe ser determinista para los mismos datos', () => {
+    const hash1 = generateComplaintHash(sampleData);
+    const hash2 = generateComplaintHash(sampleData);
+    expect(hash1).toBe(hash2);
   });
 
-  describe('Sensibilidad a cambios', () => {
-    it('debe cambiar si cambia la descripción', () => {
-      const h1 = generateComplaintHash(baseData);
-      const h2 = generateComplaintHash({
-        ...baseData,
-        description: 'Descripción diferente',
-      });
-      expect(h1).not.toBe(h2);
-    });
-
-    it('debe cambiar si cambia el tenantId', () => {
-      const h1 = generateComplaintHash(baseData);
-      const h2 = generateComplaintHash({
-        ...baseData,
-        tenantId: 'tenant-mx-099',
-      });
-      expect(h1).not.toBe(h2);
-    });
-
-    it('debe cambiar si cambia la fecha', () => {
-      const h1 = generateComplaintHash(baseData);
-      const h2 = generateComplaintHash({
-        ...baseData,
-        createdAt: new Date('2024-03-16T09:30:00.000Z'),
-      });
-      expect(h1).not.toBe(h2);
-    });
-
-    it('debe cambiar si cambia la hora (mismo día, distinta hora)', () => {
-      const h1 = generateComplaintHash(baseData);
-      const h2 = generateComplaintHash({
-        ...baseData,
-        createdAt: new Date('2024-03-15T14:00:00.000Z'),
-      });
-      expect(h1).not.toBe(h2);
-    });
-
-    it('debe ser sensible a un solo carácter de diferencia en descripción', () => {
-      const h1 = generateComplaintHash(baseData);
-      const h2 = generateComplaintHash({
-        ...baseData,
-        description: baseData.description + ' ',
-      });
-      expect(h1).not.toBe(h2);
-    });
-
-    it('debe ser sensible a mayúsculas/minúsculas en descripción', () => {
-      const h1 = generateComplaintHash(baseData);
-      const h2 = generateComplaintHash({
-        ...baseData,
-        description: baseData.description.toUpperCase(),
-      });
-      expect(h1).not.toBe(h2);
-    });
+  it('debe cambiar si cambia la descripción', () => {
+    const modified = { ...sampleData, description: 'Otra denuncia' };
+    expect(generateComplaintHash(modified)).not.toBe(generateComplaintHash(sampleData));
   });
 
-  describe('Descripciones con caracteres especiales', () => {
-    it('debe manejar tildes y eñes', () => {
-      const hash = generateComplaintHash({
-        ...baseData,
-        description: 'Año de acoso con mañana y dirección',
-      });
-      expect(hash).toMatch(/^[0-9a-f]{64}$/);
-    });
+  it('debe cambiar si cambia el tenantId', () => {
+    const modified = { ...sampleData, tenantId: 'otro-tenant' };
+    expect(generateComplaintHash(modified)).not.toBe(generateComplaintHash(sampleData));
+  });
 
-    it('debe manejar saltos de línea en la descripción', () => {
-      const hash = generateComplaintHash({
-        ...baseData,
-        description: 'Línea 1\nLínea 2\nLínea 3',
-      });
-      expect(hash).toMatch(/^[0-9a-f]{64}$/);
-    });
+  it('debe cambiar si cambia createdAt', () => {
+    const modified = { ...sampleData, createdAt: new Date('2025-06-16T10:00:00Z') };
+    expect(generateComplaintHash(modified)).not.toBe(generateComplaintHash(sampleData));
+  });
 
-    it('debe manejar caracteres Unicode (emojis)', () => {
-      const hash = generateComplaintHash({
-        ...baseData,
-        description: 'Denuncia grave 🚨⚠️',
-      });
-      expect(hash).toMatch(/^[0-9a-f]{64}$/);
+  it('debe generar hash válido para string vacío', () => {
+    const hash = generateComplaintHash({
+      description: '',
+      tenantId: '',
+      createdAt: new Date(0),
     });
+    expect(hash).toHaveLength(64);
+    expect(hash).toMatch(/^[0-9a-f]{64}$/);
+  });
 
-    it('hash con emojis debe ser diferente del hash sin emojis', () => {
-      const h1 = generateComplaintHash({
-        ...baseData,
-        description: 'Denuncia grave',
-      });
-      const h2 = generateComplaintHash({
-        ...baseData,
-        description: 'Denuncia grave 🚨',
-      });
-      expect(h1).not.toBe(h2);
+  it('debe generar hash válido para caracteres especiales y unicode', () => {
+    const hash = generateComplaintHash({
+      description: '🚨 Denuncia con ñoño y símbolos !@#$%',
+      tenantId: 'tenant-öü',
+      createdAt: new Date(),
     });
+    expect(hash).toHaveLength(64);
+  });
 
-    it('debe manejar descripción vacía', () => {
-      const hash = generateComplaintHash({
-        ...baseData,
-        description: '',
-      });
-      expect(hash).toMatch(/^[0-9a-f]{64}$/);
-    });
+  it('debe incluir createdAt como timestamp (getTime)', () => {
+    const date1 = new Date('2025-06-15T10:00:00.000Z');
+    const date2 = new Date('2025-06-15T10:00:00.001Z'); // 1ms después
+    expect(generateComplaintHash({ ...sampleData, createdAt: date1 }))
+      .not.toBe(generateComplaintHash({ ...sampleData, createdAt: date2 }));
   });
 });
 
-describe('Equality Security — verifyComplaintIntegrity', () => {
-  it('debe verificar true para una denuncia íntegra', () => {
-    const hash = generateComplaintHash(baseData);
-    const complaint = {
-      description: baseData.description,
-      tenantId: baseData.tenantId,
-      createdAt: baseData.createdAt,
-      hash,
-    };
-    expect(verifyComplaintIntegrity(complaint)).toBe(true);
+// ==================== verifyComplaintIntegrity ====================
+describe('verifyComplaintIntegrity', () => {
+  const validComplaint = {
+    description: 'Denuncia íntegra',
+    tenantId: 'tenant-xyz',
+    createdAt: new Date('2025-01-01T00:00:00Z'),
+    hash: '', // se calcula abajo
+  };
+  validComplaint.hash = generateComplaintHash({
+    description: validComplaint.description,
+    tenantId: validComplaint.tenantId,
+    createdAt: validComplaint.createdAt,
   });
 
-  it('debe verificar false si la descripción fue alterada', () => {
-    const hash = generateComplaintHash(baseData);
-    const complaint = {
-      description: 'Descripción ALTERADA maliciosamente',
-      tenantId: baseData.tenantId,
-      createdAt: baseData.createdAt,
-      hash,
-    };
-    expect(verifyComplaintIntegrity(complaint)).toBe(false);
+  it('debe verificar integridad para denuncia no alterada', () => {
+    expect(verifyComplaintIntegrity(validComplaint)).toBe(true);
   });
 
-  it('debe verificar false si el tenantId fue alterado', () => {
-    const hash = generateComplaintHash(baseData);
-    const complaint = {
-      description: baseData.description,
-      tenantId: 'tenant-hackeado',
-      createdAt: baseData.createdAt,
-      hash,
-    };
-    expect(verifyComplaintIntegrity(complaint)).toBe(false);
+  it('debe detectar alteración en descripción', () => {
+    const tampered = { ...validComplaint, description: 'Denuncia ALTERADA' };
+    expect(verifyComplaintIntegrity(tampered)).toBe(false);
   });
 
-  it('debe verificar false si la fecha fue alterada', () => {
-    const hash = generateComplaintHash(baseData);
-    const complaint = {
-      description: baseData.description,
-      tenantId: baseData.tenantId,
-      createdAt: new Date('2023-01-01T00:00:00.000Z'),
-      hash,
-    };
-    expect(verifyComplaintIntegrity(complaint)).toBe(false);
+  it('debe detectar alteración en tenantId', () => {
+    const tampered = { ...validComplaint, tenantId: 'hacker-tenant' };
+    expect(verifyComplaintIntegrity(tampered)).toBe(false);
   });
 
-  it('debe verificar false si el hash fue manipulado directamente', () => {
-    const complaint = {
-      description: baseData.description,
-      tenantId: baseData.tenantId,
-      createdAt: baseData.createdAt,
-      hash: 'hash_falsificado_1234567890abcdef',
-    };
-    expect(verifyComplaintIntegrity(complaint)).toBe(false);
+  it('debe detectar alteración en createdAt', () => {
+    const tampered = { ...validComplaint, createdAt: new Date('2025-06-15T10:00:00Z') };
+    expect(verifyComplaintIntegrity(tampered)).toBe(false);
   });
 
-  it('debe funcionar con denuncias de diferentes tenants', () => {
-    const dataMX = { ...baseData, tenantId: 'tenant-mx-001' };
-    const dataES = { ...baseData, tenantId: 'tenant-es-001' };
+  it('debe detectar alteración en hash', () => {
+    const tampered = { ...validComplaint, hash: '0'.repeat(64) };
+    expect(verifyComplaintIntegrity(tampered)).toBe(false);
+  });
 
-    const hashMX = generateComplaintHash(dataMX);
-    const hashES = generateComplaintHash(dataES);
-
-    expect(hashMX).not.toBe(hashES);
-
-    expect(
-      verifyComplaintIntegrity({
-        description: dataMX.description,
-        tenantId: dataMX.tenantId,
-        createdAt: dataMX.createdAt,
-        hash: hashMX,
-      })
-    ).toBe(true);
+  it('debe manejar descripción undefined', () => {
+    const complaint = {
+      description: undefined as unknown as string,
+      tenantId: 't1',
+      createdAt: new Date(),
+      hash: 'anything',
+    };
+    // No debe lanzar error
+    expect(() => verifyComplaintIntegrity(complaint)).not.toThrow();
+    expect(typeof verifyComplaintIntegrity(complaint)).toBe('boolean');
   });
 });
