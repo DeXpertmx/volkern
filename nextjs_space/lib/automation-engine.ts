@@ -37,7 +37,7 @@ export class AutomationEngine {
         data: {
           automationId: this.automationId,
           estado: 'ejecutando',
-          contextData: this.context,
+          contextData: this.context as any,
         },
       })
       this.executionId = execution.id
@@ -62,7 +62,7 @@ export class AutomationEngine {
         this.context.lead = await prisma.lead.findUnique({
           where: { id: this.context.leadId },
           include: { perfilFiscal: true }
-        })
+        }) as Record<string, any> | undefined
       }
 
       if (this.context.citaId) {
@@ -72,7 +72,7 @@ export class AutomationEngine {
             lead: { include: { perfilFiscal: true } },
             servicio: true,
           },
-        })
+        }) as Record<string, any> | undefined
         if (this.context.cita) {
           this.context.lead = this.context.cita.lead
         }
@@ -82,13 +82,13 @@ export class AutomationEngine {
       if (this.context.estudianteId) {
         this.context.estudiante = await prisma.estudiante.findUnique({
           where: { id: this.context.estudianteId },
-        })
+        }) as Record<string, any> | undefined
       }
 
       if (this.context.cursoId) {
         this.context.curso = await prisma.curso.findUnique({
           where: { id: this.context.cursoId },
-        })
+        }) as Record<string, any> | undefined
       }
 
       if (this.context.inscripcionId) {
@@ -98,7 +98,7 @@ export class AutomationEngine {
             estudiante: true,
             curso: true,
           },
-        })
+        }) as Record<string, any> | undefined
         if (this.context.inscripcion) {
           this.context.estudiante = this.context.inscripcion.estudiante
           this.context.curso = this.context.inscripcion.curso
@@ -257,7 +257,7 @@ export class AutomationEngine {
           automationId: this.automationId,
           executionId: this.executionId,
           nodeId: nextEdge.target,
-          contextData: this.context,
+          contextData: this.context as any,
           scheduledFor,
           estado: 'pendiente',
         },
@@ -313,7 +313,12 @@ export class AutomationEngine {
 
 // ─── Standalone Functions ───────────────────────────────────────────
 
-export async function triggerAutomation(trigger: string, context: ExecutionContext) {
+/**
+ * Versión síncrona de triggerAutomation.
+ * Busca automatizaciones activas para el trigger y las ejecuta.
+ * Expuesta para uso interno del worker BullMQ.
+ */
+export async function executeAutomationsSync(trigger: string, context: ExecutionContext) {
   try {
     // Validar que se proporcione tenantId
     if (!context.tenantId) {
@@ -386,7 +391,42 @@ export async function triggerAutomation(trigger: string, context: ExecutionConte
 }
 
 /**
- * Encola una ejecución de automatización para procesamiento diferido
+ * triggerAutomation — Encola o ejecuta una automatización.
+ *
+ * Intenta encolar en BullMQ para procesamiento diferido.
+ * Si Redis no está disponible (BullMQ desactivado), ejecuta
+ * síncronamente como fallback.
+ *
+ * @returns jobId si se encoló, o undefined si se ejecutó síncrono
+ */
+export async function triggerAutomation(trigger: string, context: ExecutionContext) {
+  if (!context.tenantId) {
+    console.warn('⚠️ [Automatización] No se proporcionó tenantId, no se ejecutarán automatizaciones')
+    return
+  }
+
+  try {
+    // Intentar encolar en BullMQ — retorna null si Redis no está disponible
+    const jobId = await enqueueAutomation(trigger, context, {
+      priority: 5,
+      maxAttempts: 3,
+    })
+
+    if (jobId) {
+      console.log(`📤 [Automatización] Encolado trigger "${trigger}" → job ${jobId}`)
+      return jobId
+    }
+  } catch (err) {
+    console.warn('⚠️ [Automatización] Error al encolar, ejecutando síncrono:', err)
+  }
+
+  // Fallback: ejecutar síncronamente (Redis no disponible)
+  console.log(`⚡ [Automatización] Fallback síncrono para trigger "${trigger}"`)
+  await executeAutomationsSync(trigger, context)
+}
+
+/**
+ * Encola una ejecución de automatización para procesamiento diferido en BullMQ.
  */
 export async function enqueueAutomation(
   trigger: string,
@@ -465,7 +505,7 @@ export async function processScheduledAutomationTasks() {
 
                 const engine = new AutomationEngine(
                   task.automationId,
-                  { ...task.contextData, tenantId: tenant.id } as ExecutionContext
+                  { ...(task.contextData as any || {}), tenantId: tenant.id } as ExecutionContext
                 )
 
                 await engine.execute()
@@ -529,7 +569,7 @@ export async function processAppointmentReminders() {
           { tenantId: tenant.id, client: tenantClient },
           async () => {
             // Recordatorios 24h
-            const citas24h = await tenantClient.cita.findMany({
+            const citas24h =                await (tenantClient as any).cita.findMany({
               where: {
                 estado: { in: ['pendiente', 'confirmada'] },
                 fechaHora: { gte: now, lte: reminder24h },
@@ -563,9 +603,9 @@ export async function processAppointmentReminders() {
                 // Notificación por Telegram al admin
                 try {
                   const { notifyByTelegram } = await import('@/lib/skills/notification-layer')
-                  const { createSystemContext } = await import('@/lib/tenant-context')
+                  const { createSystemContext } = await import('@/lib/skills/context')
                   notifyByTelegram(
-                    `⏰ *Recordatorio de Cita (24h)*\n\n👤 *Cliente:* ${cita.lead.nombre}\n📋 *Servicio:* ${cita.servicio?.nombre || cita.titulo}\n🕐 *Fecha:* ${new Date(cita.fechaHora).toLocaleString('es-MX')}`,
+                    `⏰ *Recordatorio de Cita (24h)*\n\n👤 *Cliente:* ${(cita as any).lead.nombre}\n📋 *Servicio:* ${(cita as any).servicio?.nombre || cita.titulo}\n🕐 *Fecha:* ${new Date(cita.fechaHora).toLocaleString('es-MX')}`,
                     createSystemContext(tenant.id)
                   ).catch(() => {})
                 } catch (e) {}
@@ -575,7 +615,7 @@ export async function processAppointmentReminders() {
             }
 
             // Recordatorios 1h
-            const citas1h = await tenantClient.cita.findMany({
+            const citas1h = await (tenantClient as any).cita.findMany({
               where: {
                 estado: { in: ['pendiente', 'confirmada'] },
                 fechaHora: { gte: now, lte: reminder1h },
@@ -598,7 +638,7 @@ export async function processAppointmentReminders() {
                   tenantId: tenant.id,
                 })
 
-                await tenantClient.cita.update({
+                await (tenantClient as any).cita.update({
                   where: { id: cita.id },
                   data: { recordatorio1hEnviado: true },
                 })
@@ -609,9 +649,9 @@ export async function processAppointmentReminders() {
                 // Notificación por Telegram al admin
                 try {
                   const { notifyByTelegram } = await import('@/lib/skills/notification-layer')
-                  const { createSystemContext } = await import('@/lib/tenant-context')
+                  const { createSystemContext } = await import('@/lib/skills/context')
                   notifyByTelegram(
-                    `⏰ *Recordatorio de Cita (1h)*\n\n👤 *Cliente:* ${cita.lead.nombre}\n📋 *Servicio:* ${cita.servicio?.nombre || cita.titulo}\n🕐 *Fecha:* ${new Date(cita.fechaHora).toLocaleString('es-MX')}`,
+                    `⏰ *Recordatorio de Cita (1h)*\n\n👤 *Cliente:* ${(cita as any).lead.nombre}\n📋 *Servicio:* ${(cita as any).servicio?.nombre || cita.titulo}\n🕐 *Fecha:* ${new Date(cita.fechaHora).toLocaleString('es-MX')}`,
                     createSystemContext(tenant.id)
                   ).catch(() => {})
                 } catch (e) {}
@@ -687,7 +727,7 @@ export async function processPaymentReminders() {
       // Enviar notificación 3 días antes
       for (const pago of pagos3dias) {
         const { notifyByTelegram } = await import('@/lib/skills/notification-layer')
-        const { createSystemContext } = await import('@/lib/tenant-context')
+        const { createSystemContext } = await import('@/lib/skills/context')
         notifyByTelegram(
           `💳 *Pago por Vencer (3 días)*\n\n📋 *Pago:* ${pago.numero}\n👤 *Cliente:* ${pago.contrato?.lead?.nombre || 'N/A'}\n💰 *Monto:* ${pago.monto} ${pago.moneda}\n📅 *Vence:* ${new Date(pago.fechaProgramada).toLocaleDateString('es-MX')}`,
           createSystemContext(tenant.id)
@@ -698,7 +738,7 @@ export async function processPaymentReminders() {
       // Enviar notificación 1 día antes
       for (const pago of pagos1dia) {
         const { notifyByTelegram } = await import('@/lib/skills/notification-layer')
-        const { createSystemContext } = await import('@/lib/tenant-context')
+        const { createSystemContext } = await import('@/lib/skills/context')
         notifyByTelegram(
           `⚠️ *Pago por Vencer (MAÑANA)*\n\n📋 *Pago:* ${pago.numero}\n👤 *Cliente:* ${pago.contrato?.lead?.nombre || 'N/A'}\n💰 *Monto:* ${pago.monto} ${pago.moneda}\n📅 *Vence:* ${new Date(pago.fechaProgramada).toLocaleDateString('es-MX')}`,
           createSystemContext(tenant.id)

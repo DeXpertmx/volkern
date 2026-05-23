@@ -16,3 +16,6 @@
  */
 
 export { validateBody, parseBody, formatZodErrors, CommonSchemas } from './common';
+
+// Re-exportar todos los schemas para acceso directo desde '@/lib/validation'
+export * from './schemas';

@@ -39,7 +39,7 @@ export class CostControl {
     }
 
     const key = `${tenantId}_${agent}`
-    let counter = AI_USAGE_COUNTERS.get(key) || { daily: 0, monthly: 0, lastReset: new Date() }
+    const counter = AI_USAGE_COUNTERS.get(key) || { daily: 0, monthly: 0, lastReset: new Date() }
     
     const now = new Date()
     const isNewDay = now.getDate() !== counter.lastReset.getDate()
@@ -75,7 +75,7 @@ export class CostControl {
 
   static async recordAIAction(tenantId: string, agent: string): Promise<void> {
     const key = `${tenantId}_${agent}`
-    let counter = AI_USAGE_COUNTERS.get(key) || { daily: 0, monthly: 0, lastReset: new Date() }
+    const counter = AI_USAGE_COUNTERS.get(key) || { daily: 0, monthly: 0, lastReset: new Date() }
     
     counter.daily++
     counter.monthly++

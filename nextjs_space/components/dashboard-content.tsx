@@ -4,7 +4,8 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Users, Calendar, TrendingUp, Send, Lock, Unlock, GripVertical, Rocket, ShieldCheck } from 'lucide-react'
-import { ResponsiveGridLayout, useContainerWidth, Layout } from 'react-grid-layout';
+import { ResponsiveGridLayout, useContainerWidth } from 'react-grid-layout';
+import type { ResponsiveLayouts } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 
@@ -32,7 +33,7 @@ interface DashboardStatsData {
 }
 
 // Layout eXpert Universal (12 columnas)
-const defaultLayouts: { lg: Layout[] } = {
+const defaultLayouts: ResponsiveLayouts = {
   lg: [
     { i: 'actions', x: 0, y: 0, w: 12, h: 2, static: false },
     { i: 'stat-leads', x: 0, y: 2, w: 3, h: 2 },
@@ -60,10 +61,10 @@ export function DashboardContent() {
   })
   const [isLoading, setIsLoading] = useState(true)
   const [isLocked, setIsLocked] = useState(false)
-  const [layouts, setLayouts] = useState(defaultLayouts)
+  const [layouts, setLayouts] = useState<ResponsiveLayouts>(defaultLayouts)
   const [mounted, setMounted] = useState(false)
   
-  const { width, containerRef } = useContainerWidth();
+  const { width, containerRef } = useContainerWidth() as { width: number | undefined; containerRef: React.RefObject<HTMLDivElement | null> };
 
   useEffect(() => {
     setMounted(true)
@@ -116,7 +117,7 @@ export function DashboardContent() {
     []
   );
 
-  const onLayoutChange = (currentLayout: Layout[], allLayouts: { [key: string]: Layout[] }) => {
+  const onLayoutChange = (_currentLayout: any, allLayouts: ResponsiveLayouts) => {
     if (!isLocked) {
       setLayouts(allLayouts);
       persistLayout(allLayouts);
@@ -152,7 +153,7 @@ export function DashboardContent() {
   if (!mounted || isLoading) return <DashboardSkeleton />;
 
   return (
-    <div className="space-y-6" ref={containerRef}>
+    <div className="space-y-6" ref={containerRef as React.Ref<HTMLDivElement>}>
       <div className="flex justify-between items-center mb-6">
         <div className="space-y-1">
           <h1 className="text-4xl font-black tracking-tight bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
@@ -181,6 +182,7 @@ export function DashboardContent() {
       </div>
 
       <ResponsiveGridLayout
+        // @ts-expect-error react-grid-layout v2.x API breaking change
         className="layout"
         layouts={layouts}
         breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}

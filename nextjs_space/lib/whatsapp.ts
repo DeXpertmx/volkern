@@ -246,7 +246,7 @@ export async function sendWhatsAppMessageWithMedia(
     const cleanPhone = to.replace(/[^\d+]/g, '')
     console.log('📤 [WhatsApp Media] Teléfono limpio:', cleanPhone)
     
-    let body: any = {
+    const body: any = {
       number: cleanPhone,
       caption: message,
       media: mediaUrl,

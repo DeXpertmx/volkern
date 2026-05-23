@@ -36,7 +36,7 @@ export const createPricingDynamicBlock = (editor: Editor) => {
           const fetchPlans = async () => {
             try {
               // Determinamos el origen para evitar bloqueos en el editor
-              var origin = "";
+              let origin = "";
               try {
                 if (window.top && window.top.location.origin !== "null") {
                   origin = window.top.location.origin;

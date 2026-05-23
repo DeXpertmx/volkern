@@ -57,7 +57,7 @@ export class StripeOrchestrator {
       entity = await prisma.lead.findUnique({ where: { id: targetId } })
     }
 
-    let stripeCustomerId = await this.getOrCreateStripeCustomer(entity, tenantId)
+    const stripeCustomerId = await this.getOrCreateStripeCustomer(entity, tenantId)
 
     // 3. Registrar Tax ID si no existe
     const taxIds = await stripe.customers.listTaxIds(stripeCustomerId)

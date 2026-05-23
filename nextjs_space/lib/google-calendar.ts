@@ -420,7 +420,7 @@ export async function syncAllFutureCitas(userId: string) {
 
     let createdCount = 0;
     let updatedCount = 0;
-    let skippedCount = 0;
+    const skippedCount = 0;
     let errorCount = 0;
 
     console.log(`📊 Procesando ${citasConLead.length} citas de Volkern para sincronizar...`);
@@ -733,7 +733,7 @@ export async function syncFromGoogleToVolkern(userId: string, forceFullSync: boo
               // Solo actualizar si no está ya cancelada
               if (existingCita.estado !== 'Cancelada') {
                 // Limpiar descripción de tags repetidos antes de agregar nuevo
-                let descLimpia = (existingCita.descripcion || '').replace(/\n?\[(?:Actualizada|Cancelada) desde Google Calendar\]/g, '');
+                const descLimpia = (existingCita.descripcion || '').replace(/\n?\[(?:Actualizada|Cancelada) desde Google Calendar\]/g, '');
                 await prisma.cita.update({
                   where: { id: volkernCitaId },
                   data: {
@@ -757,7 +757,7 @@ export async function syncFromGoogleToVolkern(userId: string, forceFullSync: boo
 
               if (!fechaIgual || !duracionIgual || !tituloIgual) {
                 // Limpiar descripción de tags repetidos
-                let descLimpia = (event.description || existingCita.descripcion || '').replace(/\n?\[(?:Actualizada|Cancelada) desde Google Calendar\]/g, '');
+                const descLimpia = (event.description || existingCita.descripcion || '').replace(/\n?\[(?:Actualizada|Cancelada) desde Google Calendar\]/g, '');
                 await prisma.cita.update({
                   where: { id: volkernCitaId },
                   data: {

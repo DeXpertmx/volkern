@@ -116,7 +116,7 @@ export async function assignLeadAutomatically(leadId: string, tenantId: string) 
  */
 async function getNextAgentRoundRobin(tenantId: string, config: LeadAssignmentConfig): Promise<string | null> {
   const agents = config.agentIds;
-  let nextIndex = (config.lastAssignedIndex + 1) % agents.length;
+  const nextIndex = (config.lastAssignedIndex + 1) % agents.length;
   
   const assignedUserId = agents[nextIndex];
 

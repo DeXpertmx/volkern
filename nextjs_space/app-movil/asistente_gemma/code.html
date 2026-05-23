@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "secondary-container": "#6ebdff",
+                    "background": "#faf9fe",
+                    "error-container": "#ffdad6",
+                    "mcp-indicator": "#6B46C1",
+                    "outline-variant": "#bfc7d2",
+                    "primary-fixed-dim": "#92ccff",
+                    "on-secondary": "#ffffff",
+                    "tertiary": "#006b27",
+                    "surface-container-highest": "#e3e2e7",
+                    "on-tertiary-fixed-variant": "#00531c",
+                    "primary-container": "#007bb9",
+                    "secondary-fixed": "#cde5ff",
+                    "on-primary-fixed": "#001d31",
+                    "bubble-received": "#FFFFFF",
+                    "on-error": "#ffffff",
+                    "on-tertiary": "#ffffff",
+                    "surface-dim": "#dad9df",
+                    "outline": "#6f7881",
+                    "surface-container-low": "#f4f3f8",
+                    "on-surface": "#1a1b1f",
+                    "secondary-fixed-dim": "#95ccff",
+                    "surface-container": "#eeedf3",
+                    "surface-sidebar": "#FFFFFF",
+                    "on-tertiary-container": "#f7fff2",
+                    "tertiary-fixed": "#72fe88",
+                    "surface-background": "#F4F4F5",
+                    "secondary": "#006399",
+                    "bubble-sent": "#0088CC",
+                    "skill-active": "#FF9500",
+                    "surface-variant": "#e3e2e7",
+                    "inverse-on-surface": "#f1f0f5",
+                    "on-primary-fixed-variant": "#004b73",
+                    "surface-container-lowest": "#ffffff",
+                    "inverse-primary": "#92ccff",
+                    "surface-bright": "#faf9fe",
+                    "on-background": "#1a1b1f",
+                    "inverse-surface": "#2f3034",
+                    "on-surface-variant": "#3f4850",
+                    "primary": "#006193",
+                    "on-tertiary-fixed": "#002107",
+                    "surface-container-high": "#e9e7ed",
+                    "on-secondary-container": "#004b76",
+                    "on-primary-container": "#fdfcff",
+                    "tertiary-fixed-dim": "#53e16f",
+                    "on-secondary-fixed": "#001d32",
+                    "on-primary": "#ffffff",
+                    "on-error-container": "#93000a",
+                    "error": "#ba1a1a",
+                    "primary-fixed": "#cce5ff",
+                    "on-secondary-fixed-variant": "#004a75",
+                    "surface-tint": "#006497",
+                    "surface": "#faf9fe",
+                    "tertiary-container": "#008733"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "bubble-padding": "8px 12px",
+                    "gutter": "16px",
+                    "margin-mobile": "12px",
+                    "margin-desktop": "24px",
+                    "sidebar-width": "280px"
+            },
+            "fontFamily": {
+                    "code-sm": ["JetBrains Mono"],
+                    "headline-lg-mobile": ["Inter"],
+                    "headline-lg": ["Inter"],
+                    "headline-md": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "label-caps": ["Inter"],
+                    "body-md": ["Inter"]
+            },
+            "fontSize": {
+                    "code-sm": ["12px", {"lineHeight": "18px", "fontWeight": "400"}],
+                    "headline-lg-mobile": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "headline-lg": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+                    "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700"}],
+                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .chat-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .chat-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .chat-scrollbar::-webkit-scrollbar-thumb {
+            background: #bfc7d2;
+            border-radius: 10px;
+        }
+        .mcp-glow {
+            box-shadow: 0 0 15px rgba(107, 70, 193, 0.2);
+        }
+        .typing-dot {
+            animation: typing 1.4s infinite ease-in-out;
+        }
+        @keyframes typing {
+            0%, 80%, 100% { transform: scale(0); opacity: 0; }
+            40% { transform: scale(1); opacity: 1; }
+        }
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-surface-background text-on-surface font-body-md selection:bg-primary-fixed">
+<!-- Desktop Navigation Drawer -->
+<aside class="hidden md:flex flex-col h-full w-sidebar-width fixed left-0 top-0 bg-surface-sidebar border-r border-outline-variant py-margin-desktop z-50">
+<div class="px-6 mb-8 flex flex-col items-start">
+<h1 class="font-headline-md text-headline-md font-bold text-primary mb-1">CRM Operator</h1>
+<span class="text-on-surface-variant font-body-md">acme.crm.platform</span>
+</div>
+<nav class="flex-1 px-4 space-y-2">
+<div class="flex items-center gap-3 px-4 py-3 bg-secondary-fixed text-on-secondary-fixed rounded-lg font-bold cursor-pointer active:opacity-80 transition-colors">
+<span class="material-symbols-outlined" data-icon="chat">chat</span>
+<span class="font-body-md text-body-md">Conversations</span>
+</div>
+<div class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container rounded-lg cursor-pointer transition-colors">
+<span class="material-symbols-outlined" data-icon="extension">extension</span>
+<span class="font-body-md text-body-md">Skills &amp; MCP</span>
+</div>
+<div class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container rounded-lg cursor-pointer transition-colors">
+<span class="material-symbols-outlined" data-icon="api">api</span>
+<span class="font-body-md text-body-md">API Settings</span>
+</div>
+<div class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container rounded-lg cursor-pointer transition-colors">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-body-md text-body-md">Account</span>
+</div>
+</nav>
+<div class="px-6 mt-auto">
+<div class="flex items-center gap-3 pt-6 border-t border-outline-variant">
+<div class="relative">
+<img alt="User Profile" class="w-10 h-10 rounded-full object-cover" data-alt="A professional headshot of a middle-aged male executive in a sleek, dark navy suit against a clean, minimalist architectural background. The lighting is soft and even, highlighting a confident yet approachable expression. The overall aesthetic is corporate, modern, and high-end, utilizing a color palette of whites, greys, and deep blues to convey authority and professionalism." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDJfVNWMAo6UaJJWIBknAa7PWSG9UTjvBxq_z2p5ToHfI97bXGTy3oBfI5kDYOgWQ83qoeHF8i6IZRT1LW0ddVkF5u7TsnhDwqFnpFvej0rcKsG8m1or5SK9nqxitLVgDHxOOM7pfeD5MVzr7gmE09EFm0Lo5RWPKzLfOgBIaAtlia5eBxh_PKJEnFJxauXUxtdkIG7VstJSKKOwQADf8bHxR5WvVxzU5nMWrffX8thIAW_JMJF4v_AO2fqqqYISiJbnzw_2V93wBI"/>
+<div class="absolute bottom-0 right-0 w-3 h-3 bg-tertiary-container rounded-full border-2 border-white"></div>
+</div>
+<div>
+<p class="font-bold text-on-surface">Alex Rivera</p>
+<p class="text-xs text-on-surface-variant">Online</p>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="md:ml-sidebar-width h-screen flex flex-col relative overflow-hidden">
+<!-- Sticky Header TopAppBar -->
+<header class="fixed top-0 w-full md:w-[calc(100%-280px)] z-40 bg-surface/90 backdrop-blur-md border-b border-outline-variant flex justify-between items-center h-16 px-margin-mobile md:px-margin-desktop">
+<div class="flex items-center gap-4">
+<button class="md:hidden p-2 hover:bg-surface-variant/50 rounded-full transition-all active:scale-95 duration-200">
+<span class="material-symbols-outlined" data-icon="menu">menu</span>
+</button>
+<div class="flex flex-col">
+<div class="flex items-center gap-2">
+<h2 class="font-headline-md text-headline-md text-primary font-bold">Gemma</h2>
+<span class="w-2 h-2 rounded-full bg-tertiary animate-pulse"></span>
+</div>
+<span class="text-xs text-on-surface-variant tracking-wider font-label-caps">ACME.VOLKERN.APP • ONLINE</span>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<button class="p-2 hover:bg-surface-variant/50 rounded-full transition-all active:scale-95 duration-200">
+<span class="material-symbols-outlined" data-icon="search">search</span>
+</button>
+<button class="p-2 hover:bg-surface-variant/50 rounded-full transition-all active:scale-95 duration-200">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+</header>
+<!-- Chat Container -->
+<div class="flex-1 overflow-y-auto pt-20 pb-24 px-4 md:px-margin-desktop chat-scrollbar">
+<div class="max-w-4xl mx-auto space-y-6">
+<!-- System Timestamp -->
+<div class="flex justify-center">
+<span class="bg-surface-container px-3 py-1 rounded-full text-[10px] font-bold text-on-surface-variant tracking-widest uppercase">Today</span>
+</div>
+<!-- Received Message -->
+<div class="flex flex-col items-start gap-1">
+<div class="flex items-end gap-2 max-w-[85%] md:max-w-[70%]">
+<div class="bg-bubble-received border border-outline-variant px-4 py-3 rounded-2xl rounded-bl-sm text-on-surface shadow-sm">
+<p class="font-body-md text-body-md">Hello! I'm your Model Context Protocol assistant. I can help you manage CRM data, execute tasks across your connected skills, and generate reports. What's on your agenda today?</p>
+</div>
+<span class="text-[10px] text-on-surface-variant pb-1">09:41</span>
+</div>
+</div>
+<!-- Sent Message -->
+<div class="flex flex-col items-end gap-1">
+<div class="flex items-end gap-2 max-w-[85%] md:max-w-[70%]">
+<span class="text-[10px] text-on-surface-variant pb-1">09:43</span>
+<div class="bg-bubble-sent px-4 py-3 rounded-2xl rounded-br-sm text-white shadow-md">
+<p class="font-body-md text-body-md">Can you pull the latest lead conversion data from the Volkern API and summarize the top 3 performing regions?</p>
+</div>
+</div>
+</div>
+<!-- MCP Processing Indicator -->
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-mcp-indicator flex items-center justify-center mcp-glow">
+<span class="material-symbols-outlined text-white text-lg" data-icon="terminal">terminal</span>
+</div>
+<div class="flex items-center gap-1.5 bg-surface-container-low px-3 py-1.5 rounded-full">
+<span class="typing-dot w-1.5 h-1.5 bg-mcp-indicator rounded-full"></span>
+<span class="typing-dot w-1.5 h-1.5 bg-mcp-indicator rounded-full"></span>
+<span class="typing-dot w-1.5 h-1.5 bg-mcp-indicator rounded-full"></span>
+<span class="text-xs font-bold text-mcp-indicator ml-2 uppercase tracking-tight">MCP Syncing...</span>
+</div>
+</div>
+<!-- Skill Execution Card (Bento Style) -->
+<div class="flex flex-col items-start gap-2">
+<div class="w-full md:w-[480px] bg-surface border border-outline-variant rounded-xl overflow-hidden shadow-sm">
+<div class="bg-surface-container-high px-4 py-2 border-b border-outline-variant flex justify-between items-center">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-skill-active text-xl" data-icon="bolt">bolt</span>
+<span class="font-label-caps text-on-surface-variant uppercase">Skill Execution: Volkern API</span>
+</div>
+<span class="bg-tertiary-container text-[10px] text-on-tertiary-container px-2 py-0.5 rounded font-bold">COMPLETED</span>
+</div>
+<div class="p-4 bg-white">
+<div class="grid grid-cols-2 gap-4">
+<div class="bg-surface-container-low p-3 rounded-lg border border-outline-variant/30">
+<p class="text-[10px] text-on-surface-variant font-bold uppercase mb-1">Records Parsed</p>
+<p class="text-xl font-headline-md text-primary">1,284</p>
+</div>
+<div class="bg-surface-container-low p-3 rounded-lg border border-outline-variant/30">
+<p class="text-[10px] text-on-surface-variant font-bold uppercase mb-1">Success Rate</p>
+<p class="text-xl font-headline-md text-tertiary">99.2%</p>
+</div>
+</div>
+<div class="mt-4">
+<div class="flex justify-between items-center mb-1.5">
+<span class="text-xs font-medium">Processing Batch #402</span>
+<span class="text-xs text-on-surface-variant">100%</span>
+</div>
+<div class="w-full bg-surface-container-highest h-1.5 rounded-full overflow-hidden">
+<div class="bg-primary h-full w-full"></div>
+</div>
+</div>
+<div class="mt-4 p-2 bg-inverse-surface rounded text-on-primary-container">
+<p class="font-code-sm text-code-sm text-surface-bright opacity-80">GET /v1/leads/conversion-stats?period=latest</p>
+<p class="font-code-sm text-code-sm text-tertiary-fixed-dim">Response 200: Data stream active...</p>
+</div>
+</div>
+</div>
+<span class="text-[10px] text-on-surface-variant ml-2">MCP Log Output • 09:43</span>
+</div>
+<!-- Final Response -->
+<div class="flex flex-col items-start gap-1">
+<div class="flex items-end gap-2 max-w-[85%] md:max-w-[70%]">
+<div class="bg-bubble-received border border-outline-variant px-4 py-3 rounded-2xl rounded-bl-sm text-on-surface shadow-sm">
+<p class="font-body-md text-body-md mb-2">Based on the Volkern API data, here are the top 3 performing regions:</p>
+<ul class="space-y-2 mb-2 font-body-md text-body-md">
+<li class="flex items-center gap-2">
+<span class="w-5 h-5 rounded-full bg-primary-fixed flex items-center justify-center text-[10px] font-bold text-primary">1</span>
+<strong>North America (West):</strong> 24% conversion increase.
+                                </li>
+<li class="flex items-center gap-2">
+<span class="w-5 h-5 rounded-full bg-primary-fixed flex items-center justify-center text-[10px] font-bold text-primary">2</span>
+<strong>Western Europe:</strong> 18% conversion increase.
+                                </li>
+<li class="flex items-center gap-2">
+<span class="w-5 h-5 rounded-full bg-primary-fixed flex items-center justify-center text-[10px] font-bold text-primary">3</span>
+<strong>South East Asia:</strong> 14% conversion increase.
+                                </li>
+</ul>
+<p class="font-body-md text-body-md italic text-on-surface-variant">Would you like me to generate a PDF dashboard for these regions?</p>
+</div>
+<span class="text-[10px] text-on-surface-variant pb-1">09:44</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Input Bar Section -->
+<footer class="fixed bottom-0 w-full md:w-[calc(100%-280px)] bg-surface border-t border-outline-variant p-4 z-40">
+<div class="max-w-4xl mx-auto flex items-end gap-3 bg-white border border-outline-variant rounded-2xl p-2 shadow-sm focus-within:ring-2 focus-within:ring-primary-fixed focus-within:border-primary transition-all">
+<button class="p-2 text-on-surface-variant hover:bg-surface-container rounded-lg transition-colors">
+<span class="material-symbols-outlined" data-icon="attach_file">attach_file</span>
+</button>
+<div class="flex-1 flex flex-col">
+<textarea class="w-full border-none focus:ring-0 bg-transparent py-2 resize-none font-body-md text-body-md max-h-32" oninput="this.style.height = '';this.style.height = this.scrollHeight + 'px'" placeholder="Pregunta a Gemma o escribe un comando..." rows="1"></textarea>
+</div>
+<div class="flex items-center gap-1">
+<button class="p-2 text-on-surface-variant hover:bg-surface-container rounded-lg transition-colors">
+<span class="material-symbols-outlined" data-icon="mic">mic</span>
+</button>
+<button class="p-2 text-primary hover:bg-primary-fixed rounded-lg transition-colors active:scale-95">
+<span class="material-symbols-outlined" data-icon="send" style="font-variation-settings: 'FILL' 1;">send</span>
+</button>
+</div>
+</div>
+<!-- Quick Action Pills -->
+<div class="max-w-4xl mx-auto mt-3 flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+<button class="whitespace-nowrap px-3 py-1.5 rounded-full bg-surface-container border border-outline-variant text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:bg-primary-fixed hover:text-primary transition-colors">/summarize</button>
+<button class="whitespace-nowrap px-3 py-1.5 rounded-full bg-surface-container border border-outline-variant text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:bg-primary-fixed hover:text-primary transition-colors">/export_pdf</button>
+<button class="whitespace-nowrap px-3 py-1.5 rounded-full bg-surface-container border border-outline-variant text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:bg-primary-fixed hover:text-primary transition-colors">/volkern_status</button>
+</div>
+</footer>
+<!-- Mobile Bottom Navigation (JSON Specified) -->
+<nav class="fixed bottom-0 w-full z-50 md:hidden bg-surface border-t border-outline-variant flex justify-around items-center h-16">
+<div class="flex flex-col items-center justify-center text-primary font-bold transition-all">
+<span class="material-symbols-outlined" data-icon="forum">forum</span>
+<span class="font-label-caps text-label-caps">Chats</span>
+</div>
+<div class="flex flex-col items-center justify-center text-on-surface-variant active:bg-surface-container-highest transition-all">
+<span class="material-symbols-outlined" data-icon="smart_toy">smart_toy</span>
+<span class="font-label-caps text-label-caps">Bots</span>
+</div>
+<div class="flex flex-col items-center justify-center text-on-surface-variant active:bg-surface-container-highest transition-all">
+<span class="material-symbols-outlined" data-icon="terminal">terminal</span>
+<span class="font-label-caps text-label-caps">MCP</span>
+</div>
+<div class="flex flex-col items-center justify-center text-on-surface-variant active:bg-surface-container-highest transition-all">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-label-caps text-label-caps">Settings</span>
+</div>
+</nav>
+</main>
+<script>
+        // Simple Interaction: Auto-scroll to bottom of chat
+        const chatContainer = document.querySelector('.chat-scrollbar');
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+
+        // Micro-interaction: Textarea auto-resize (already handled inline but here for robust logic)
+        const textarea = document.querySelector('textarea');
+        textarea.addEventListener('input', function() {
+            if (this.value === '') {
+                this.style.height = '40px';
+            }
+        });
+    </script>
+</body></html>

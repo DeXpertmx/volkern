@@ -35,7 +35,7 @@ export class MarginService {
     if (!order) throw new Error('Pedido no encontrado');
 
     let totalOperationalCost = 0;
-    let totalRevenue = order.totalPrice;
+    const totalRevenue = order.totalPrice;
 
     for (const item of order.items) {
       // Intentar obtener el costo desde la BoM

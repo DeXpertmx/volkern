@@ -19,7 +19,7 @@ export const GET = withTenantAuth(async (request, auth) => {
         ]
       },
       include: {
-        cursos: {
+        Curso: {
           select: {
             id: true,
             titulo: true,

@@ -483,7 +483,7 @@ export function isWithinBusinessHours(config: any): boolean {
 export function parseFechaHora(fecha: string, hora: string): Date | null {
   try {
     const now = new Date();
-    let targetDate = new Date();
+    const targetDate = new Date();
 
     // Parsear fecha
     const fechaLower = fecha.toLowerCase();

@@ -14,13 +14,13 @@ export async function GET(request: Request) {
   }
 
   try {
-    const backups = await prisma.systemBackup.findMany({
+    const backups = await prisma.system_backups.findMany({
       orderBy: { timestamp: 'desc' },
       take: 50,
     });
 
     // Convertir BigInt a Number/String para JSON
-    const formattedBackups = backups.map(b => ({
+    const formattedBackups = backups.map((b: any) => ({
       ...b,
       fileSize: b.fileSize ? b.fileSize.toString() : null,
     }));
@@ -50,14 +50,14 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = await request.json();
+    const body: any = await request.json();
     const { status, fileName, fileSize, storageProvider, checksum, errorMessage } = body;
 
     if (!status) {
       return NextResponse.json({ success: false, error: 'Faltan datos obligatorios' }, { status: 400 });
     }
 
-    const backup = await prisma.systemBackup.create({
+    const backup = await prisma.system_backups.create({
       data: {
         status,
         fileName,
@@ -65,7 +65,7 @@ export async function POST(request: Request) {
         storageProvider: storageProvider || 'S3',
         checksum,
         errorMessage,
-      },
+      } as any,
     });
 
     return NextResponse.json({ 

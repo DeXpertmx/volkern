@@ -640,7 +640,7 @@ export default function IntegracionesPage() {
     try {
 
       // Clean username for Anytimebot before testing
-      let testData = { ...formData }
+      const testData = { ...formData }
       if (selectedIntegracion.tipo === 'anytimebot' && testData.username) {
         testData.username = testData.username.trim()
         if (testData.username.includes('anytimebot.app')) {
@@ -853,7 +853,7 @@ export default function IntegracionesPage() {
       // Handle Anytimebot integration separately
       else if (selectedIntegracion.tipo === 'anytimebot') {
         // Clean username from URL if provided
-        let cleanData = { ...formData }
+        const cleanData = { ...formData }
         if (cleanData.username) {
           cleanData.username = cleanData.username.trim()
           if (cleanData.username.includes('anytimebot.app')) {

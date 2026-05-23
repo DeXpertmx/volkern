@@ -22,7 +22,7 @@ export async function deleteUserData(params: DeleteUserDataParams): Promise<Dele
   const { userEmail, userPhone, userScopedId, platform } = params
 
   try {
-    let deletedRecords = {
+    const deletedRecords = {
       leads: 0,
       contacts: 0,
       messages: 0,

@@ -2,33 +2,67 @@ import { PrismaClient } from '@prisma/client'
 import LRUCache from 'lru-cache'
 import { billingLockExtension } from './db/extensions/billing-lock'
 import { vaultExtension } from './db/extensions/vault'
-// 0. Contexto de base de datos (AsyncLocalStorage)
+import { logger } from './logger'
+
+// ── Tipos ────────────────────────────────────────────────────────────────────
+/** Contexto almacenado en AsyncLocalStorage */
 export interface DbStore {
-  tenantId: string;
-  vaultSeed?: string;
-  client?: any;
+  tenantId: string
+  vaultSeed?: string
+  client?: PrismaClient
+  requestId?: string
+}
+
+/** Interfaz común entre AsyncLocalStorage y el fallback sin store */
+interface DbContextRunner {
+  run<T>(store: DbStore, fn: () => T): T
+  getStore(): DbStore | undefined
 }
 
 // Importación condicional para evitar error en bundles del cliente
-let _AsyncLocalStorage: any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _AsyncLocalStorage: { new <T>(): DbContextRunner } | null = null
 if (typeof window === 'undefined') {
   try {
-    _AsyncLocalStorage = require('async_hooks').AsyncLocalStorage;
+    _AsyncLocalStorage = require('async_hooks').AsyncLocalStorage
   } catch {
     // Fallback silencioso en entornos donde no está disponible
   }
 }
 
-export const dbContext: any = _AsyncLocalStorage ? new _AsyncLocalStorage() : {
-  run: (_store: any, fn: any) => fn(),
-  getStore: () => undefined,
+export const dbContext: DbContextRunner = _AsyncLocalStorage
+  ? new _AsyncLocalStorage()
+  : {
+      run: (_store, fn) => fn(),
+      getStore: () => undefined,
+    }
+
+// ─── Proxy para delegar propiedades PrismaClient ────────────
+/**
+ * Wraps the result of getTenantDb in a Proxy that delegates
+ * all PrismaClient property access to `.client`, while still
+ * exposing `.vaultSeed` and `.client` for destructuring.
+ * This eliminates ~64 type errors where callers use the result
+ * directly as a PrismaClient (e.g. `const prisma = await getTenantDb(...)`).
+ */
+function createTenantProxy(result: CachedTenantClient): PrismaClient & { vaultSeed?: () => string | null | undefined; client: PrismaClient } {
+  return new Proxy(result.client, {
+    get(target, prop, receiver) {
+      if (prop === 'vaultSeed') return result.vaultSeed;
+      if (prop === 'client') return result.client;
+      if (prop === 'then') return undefined; // not a thenable
+      return Reflect.get(target, prop, receiver);
+    }
+  }) as PrismaClient & { vaultSeed?: () => string | null | undefined; client: PrismaClient };
 }
 
 /**
  * Helper para ejecutar una función dentro del contexto de un tenant
  */
 export async function runWithTenant<T>(tenantId: string, fn: () => Promise<T>): Promise<T> {
-  const { client, vaultSeed } = await getTenantDb(tenantId);
+  const result = await getTenantDb(tenantId);
+  const client = (result as any).client || result;
+  const vaultSeed = (result as any).vaultSeed;
   return dbContext.run({ tenantId, vaultSeed, client }, fn);
 }
 
@@ -67,16 +101,23 @@ const GLOBAL_MODELS = [
   'onboardingProgress'
 ];
 
+// ── Tipos para el caché de clientes Prisma ──────────────────────────────────
+interface CachedTenantClient {
+  client: PrismaClient
+  vaultSeed?: string | null
+}
+
 // Configuración del objeto global para persistencia en desarrollo (Next.js hot-reload)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const globalForPrisma = globalThis as unknown as {
-  prisma_v4: any
-  tenantCache: LRUCache<string, any> | undefined
+  prisma_v4: PrismaClient
+  tenantCache: LRUCache<string, CachedTenantClient> | undefined
   skillsLayerInitialized?: boolean
 }
 
 // 1. Caché de clientes Prisma (Optimizado para desarrollo local)
 if (!globalForPrisma.tenantCache) {
-  globalForPrisma.tenantCache = new LRUCache<string, any>({
+  globalForPrisma.tenantCache = new LRUCache<string, CachedTenantClient>({
     max: 20, // Reducido para evitar agotar el pool de Postgres local (default 100)
     dispose: (client) => {
       if (client.$disconnect) client.$disconnect().catch(() => {});
@@ -90,10 +131,11 @@ const createGlobalPrisma = () => {
   return new PrismaClient({
     log: ['error'],
     // Forzamos un límite bajo para evitar colisiones
-  }).$extends(billingLockExtension).$extends(vaultExtension) as any;
-};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma $extends chains lose type precision
+  }).$extends(billingLockExtension).$extends(vaultExtension) as any
+}
 
-export const globalPrisma = globalForPrisma.prisma_v4 || createGlobalPrisma();
+export const globalPrisma: PrismaClient = globalForPrisma.prisma_v4 || createGlobalPrisma()
 
 // Forzar limpieza del cliente global si el esquema ha cambiado (v3)
 if (process.env.NODE_ENV !== 'production') {
@@ -102,15 +144,15 @@ if (process.env.NODE_ENV !== 'production') {
 
 // 3. Fábrica Dinámica de Clientes
 export async function getTenantDb(tenantId?: string) {
-  if (!tenantId) return { client: globalPrisma };
+  if (!tenantId) return createTenantProxy({ client: globalPrisma, vaultSeed: undefined });
 
   const currentContext = getCurrentTenantId();
   if (currentContext && currentContext !== tenantId) {
-    console.warn(`[db.ts] Tenant mismatch: requested ${tenantId}, using context ${currentContext}`);
+    logger.warn({ requested: tenantId, current: currentContext }, '[db.ts] Tenant mismatch')
   }
 
   const cachedClient = clientCacheV3.get(tenantId);
-  if (cachedClient) return cachedClient;
+  if (cachedClient) return createTenantProxy(cachedClient);
 
   const tenant = await globalPrisma.tenant.findUnique({
     where: { id: tenantId },
@@ -118,7 +160,7 @@ export async function getTenantDb(tenantId?: string) {
   });
 
   if (!tenant?.dbUrl) {
-    return { client: globalPrisma, vaultSeed: tenant?.vaultSeed };
+    return createTenantProxy({ client: globalPrisma, vaultSeed: tenant?.vaultSeed });
   }
 
   // Inyectar límite de conexión en la URL de forma segura
@@ -126,15 +168,16 @@ export async function getTenantDb(tenantId?: string) {
     ? `${tenant.dbUrl}&connection_limit=5` 
     : `${tenant.dbUrl}?connection_limit=5`;
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma $extends chains lose type precision
   const tenantClient = new PrismaClient({
     datasources: {
       db: { url: dbUrl }
     }
-  }).$extends(billingLockExtension).$extends(vaultExtension) as any;
+  }).$extends(billingLockExtension).$extends(vaultExtension) as any
 
-  const result = { client: tenantClient, vaultSeed: tenant.vaultSeed };
+  const result: CachedTenantClient = { client: tenantClient, vaultSeed: tenant.vaultSeed }
   clientCacheV3.set(tenantId, result);
-  return result;
+  return createTenantProxy(result);
 }
 
 let currentTenantId: string | null = null;
@@ -144,11 +187,11 @@ export function setCurrentTenantId(tenantId: string): void {
 }
 
 export function getCurrentTenantId(): string | null {
-  const store = dbContext.getStore() as DbStore | undefined;
+  const store = dbContext.getStore()
   if (store?.tenantId) {
-    return store.tenantId;
+    return store.tenantId
   }
-  return currentTenantId;
+  return currentTenantId
 }
 
 export function clearCurrentTenantId(): void {

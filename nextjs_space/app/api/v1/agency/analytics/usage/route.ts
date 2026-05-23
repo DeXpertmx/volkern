@@ -26,7 +26,7 @@ export const GET = withTenantAuth(async (req, auth) => {
     const childIds = children.map(c => c.id);
 
     // 2. Agregar logs de habilidades de IA (AgentSkillLog)
-    const usageBySkill = await prisma.agentSkillLog.groupBy({
+    const usageBySkill = await prisma.agent_skill_logs.groupBy({
       by: ['toolExecuted'],
       where: {
         tenantId: { in: childIds }
@@ -35,34 +35,34 @@ export const GET = withTenantAuth(async (req, auth) => {
     });
 
     // 3. Obtener logs recientes para el feed
-    const recentLogs = await prisma.agentSkillLog.findMany({
+    const recentLogs = await prisma.agent_skill_logs.findMany({
       where: {
         tenantId: { in: childIds }
       },
       include: {
-        tenant: { select: { nombre: true } }
+        Tenant: { select: { nombre: true } }
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: 'desc' } as const,
       take: 10
     });
 
     // 4. Calcular total global
-    const totalCalls = usageBySkill.reduce((acc, curr) => acc + curr._count, 0);
+    const totalCalls = usageBySkill.reduce((acc: number, curr) => acc + curr._count, 0);
 
     return NextResponse.json({
       success: true,
       stats: {
         totalCalls,
         totalSlots: children.length,
-        breakdown: usageBySkill.map(s => ({
+        breakdown: usageBySkill.map((s: { toolExecuted: string; _count: number }) => ({
           skill: s.toolExecuted,
           count: s._count
         }))
       },
-      recentLogs: recentLogs.map(l => ({
+      recentLogs: recentLogs.map((l: { id: string; toolExecuted: string; Tenant?: { nombre?: string | null } | null; createdAt: Date }) => ({
         id: l.id,
         skill: l.toolExecuted,
-        tenant: l.tenant?.nombre || 'Unknown',
+        tenant: l.Tenant?.nombre || 'Unknown',
         timestamp: l.createdAt
       }))
     });

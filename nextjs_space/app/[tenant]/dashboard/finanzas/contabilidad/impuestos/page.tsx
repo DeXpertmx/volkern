@@ -12,7 +12,7 @@ export default function ImpuestosPage() {
     <HubCockpit 
       title="Impuestos e IVA"
       description="Automatización de reportes fiscales y Modelo 303 basado en tu contabilidad inmutable."
-      items={hub.items}
+      items={hub.items.map(item => ({ title: item.name, description: item.description || '', href: item.href, icon: item.icon }))}
       icon={Calculator}
       dashboard={<TaxDashboard />}
     />

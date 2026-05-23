@@ -49,9 +49,9 @@ export async function POST(req: NextRequest) {
         select: { id: true }
       });
 
-      const pendingVacations = await prisma.vacationRequest.findMany({
+      const pendingVacations = await prisma.erp_vacation_requests.findMany({
         where: { tenantId, status: 'APPROVED' },
-        include: { employee: true }
+        include: { erp_employees: true }
       });
 
       for (const vacation of pendingVacations) {

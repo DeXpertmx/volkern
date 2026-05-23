@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
     const failedPaymentTenants = await globalPrisma.tenant.findMany({
       where: {
         estado: { in: ['activo', 'trial'] },
-        subscription: {
+        subscriptions: {
           some: {
             estado: 'fallida',
             fechaActualizacion: { gte: thirtyDaysAgo }
@@ -25,15 +25,15 @@ export async function GET(request: NextRequest) {
         plan: true,
         mrr: true,
         estado: true,
-        fechaFin: true,
-        updatedAt: true
+        fechaVencimiento: true,
+        fechaActualizacion: true
       }
     });
 
     const expiringTenants = await globalPrisma.tenant.findMany({
       where: {
         estado: { in: ['activo', 'trial'] },
-        fechaFin: { lte: fourteenDaysFromNow, gte: now }
+        fechaVencimiento: { lte: fourteenDaysFromNow, gte: now }
       },
       select: {
         id: true,
@@ -41,15 +41,15 @@ export async function GET(request: NextRequest) {
         plan: true,
         mrr: true,
         estado: true,
-        fechaFin: true,
-        updatedAt: true
+        fechaVencimiento: true,
+        fechaActualizacion: true
       }
     });
 
     const lowActivityTenants = await globalPrisma.tenant.findMany({
       where: {
         estado: 'activo',
-        updatedAt: { lt: thirtyDaysAgo }
+        fechaActualizacion: { lt: thirtyDaysAgo }
       },
       select: {
         id: true,
@@ -57,8 +57,8 @@ export async function GET(request: NextRequest) {
         plan: true,
         mrr: true,
         estado: true,
-        fechaFin: true,
-        updatedAt: true
+        fechaVencimiento: true,
+        fechaActualizacion: true
       }
     });
 
@@ -69,8 +69,8 @@ export async function GET(request: NextRequest) {
         plan: t.plan || 'starter',
         mrr: t.mrr || 0,
         estado: t.estado,
-        fechaFin: t.fechaFin,
-        lastActivity: t.updatedAt,
+        fechaFin: t.fechaVencimiento,
+        lastActivity: t.fechaActualizacion,
         risk
       }));
     };

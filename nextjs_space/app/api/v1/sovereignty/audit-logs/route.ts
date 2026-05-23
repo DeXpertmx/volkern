@@ -36,8 +36,8 @@ export async function POST(req: NextRequest) {
           level: level || 'INFO',
           category,
           message,
-          metadata: JSON.stringify(metadata),
-        }
+          metadata: metadata ?? undefined,
+        } as any
       });
     });
 

@@ -9,7 +9,7 @@ export async function GET() {
     const tenants = await globalPrisma.tenant.findMany({
       where: { estado: { in: ['activo', 'trial'] } },
       include: {
-        subscription: {
+        subscriptions: {
           where: { estado: { in: ['activa', 'trial'] } },
           include: { plan: true }
         }
@@ -19,7 +19,7 @@ export async function GET() {
     const planCounts: Record<string, { customers: number; revenue: number }> = {};
 
     for (const tenant of tenants) {
-      const planSlug = tenant.plan || tenant.subscription?.[0]?.plan?.slug || 'starter';
+      const planSlug = tenant.plan || tenant.subscriptions?.[0]?.plan?.slug || 'starter';
       const planConfig = await getPlanConfig(planSlug);
       const mrr = tenant.mrr || planConfig?.precio || 0;
 

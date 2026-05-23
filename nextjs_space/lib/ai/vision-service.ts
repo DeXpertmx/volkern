@@ -30,7 +30,7 @@ export class VisionService {
     // El sistema "reconoce" el contexto basado en el BoM y el análisis visual simulado
     let rootCause = 'Proceso estándar de manufactura.';
     let correctiveAction = 'Ninguna acción requerida.';
-    let identifiedItem = context.bomItems?.[0] || 'Desconocido';
+    const identifiedItem = context.bomItems?.[0] || 'Desconocido';
 
     if (imageUrl.includes('metal')) {
       rootCause = 'Desgaste por fricción térmica en troquel.';

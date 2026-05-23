@@ -53,7 +53,7 @@ export class ContractHealthService {
 
     // 4. Histórico de Relación (10%) - Fidelidad acumulada
     const ageInYears = differenceInDays(new Date(), new Date(contract.fechaCreacion)) / 365
-    let historyScore = 50 + (ageInYears * 10) // +10 pts por año
+    const historyScore = 50 + (ageInYears * 10) // +10 pts por año
     score += (Math.min(100, historyScore) * 0.10)
 
     return Math.round(score)

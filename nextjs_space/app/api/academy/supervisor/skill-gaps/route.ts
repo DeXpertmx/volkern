@@ -14,7 +14,7 @@ export const GET = withTenantAuth(async (request, auth) => {
     // 1. Get all staff (Users)
     const staff = await prisma.user.findMany({
       where: { tenantId },
-      select: { id: true, name: true, email: true, role: { select: { name: true } } }
+      select: { id: true, name: true, email: true, role: { select: { nombre: true } } }
     });
 
     // 2. Get all operational courses
@@ -37,7 +37,7 @@ export const GET = withTenantAuth(async (request, auth) => {
         userId: s.id,
         name: s.name || s.email,
         email: s.email,
-        role: s.role?.name,
+        role: s.role?.nombre,
         hasAcademyProfile: !!estudiante,
         certificationsCount: certifiedCourses.length,
         missingSkills: missingCourses,

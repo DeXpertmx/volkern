@@ -12,7 +12,7 @@ export default function AcademiaHubPage() {
     <HubCockpit 
       title={hub.name}
       description={hub.description}
-      items={hub.items}
+      items={hub.items.map(item => ({ title: item.name, description: item.description || '', href: item.href, icon: item.icon }))}
       icon={GraduationCap}
       dashboard={<AcademiaDashboard />}
       hideModules={true}

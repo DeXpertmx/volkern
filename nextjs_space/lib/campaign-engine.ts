@@ -256,7 +256,7 @@ async function getChatwootCredentials(tenantId: string) {
     async () => {
       let accountId: number | undefined;
       let accountToken: string | undefined;
-      let inboxIds: Record<string, number> = {};
+      const inboxIds: Record<string, number> = {};
 
       // 1. Buscar en MessagingHubConfig (Hub/Chatwoot central)
       const hubConfig = await tenantClient.messagingHubConfig.findUnique({

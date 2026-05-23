@@ -36,6 +36,9 @@ export async function middleware(request: NextRequest) {
   const host = request.headers.get('host') || ''
   const subdomain = getSubdomain(host)
 
+  // Generate requestId for tracing
+  const requestId = `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
+
   // Extract tenant ID from header
   const xTenantId = request.headers.get('x-tenant-id');
   const apiKey = request.headers.get('x-api-key');
@@ -52,7 +55,7 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL('/dashboard', request.url))
     }
     
-    return NextResponse.redirect(new URL('/auth/login', request.url))
+    return withRequestId(NextResponse.redirect(new URL('/auth/login', request.url)))
   }
 
   // Public paths - allow through
@@ -65,7 +68,13 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/tarjeta/') ||
     pathname.startsWith('/p/')
   ) {
-    return NextResponse.next()
+    return withRequestId(NextResponse.next())
+  }
+
+  // Helper: creates response with requestId header
+  const withRequestId = (res: NextResponse) => {
+    res.headers.set('x-request-id', requestId)
+    return res
   }
 
 
@@ -76,7 +85,7 @@ export async function middleware(request: NextRequest) {
 
   // Allow .well-known paths (AI plugin discovery, etc.)
   if (pathname.startsWith('/.well-known/')) {
-    return NextResponse.next()
+    return withRequestId(NextResponse.next())
   }
 
   // Check if it's an API route that requires no auth
@@ -143,7 +152,7 @@ export async function middleware(request: NextRequest) {
       if (apiKey) {
         res.headers.set('x-api-key', apiKey)
       }
-      return res
+      return withRequestId(res)
     }
     // Other API routes need auth - let them through to handler (headers will be set below)
   }
@@ -167,7 +176,7 @@ export async function middleware(request: NextRequest) {
     if (!token) {
       const loginUrl = new URL('/auth/login', request.url)
       loginUrl.searchParams.set('callbackUrl', pathname)
-      return NextResponse.redirect(loginUrl)
+      return withRequestId(NextResponse.redirect(loginUrl))
     }
   }
 
@@ -180,7 +189,7 @@ export async function middleware(request: NextRequest) {
   if (apiKey) {
     res.headers.set('x-api-key', apiKey)
   }
-  return res
+  return withRequestId(res)
 }
 
 export const config = {

@@ -218,7 +218,7 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh }:
 
     try {
       let actualLeadId = formData.leadId || null
-      let actualContactId = null
+      const actualContactId = null
       
       // Si se seleccionó un contacto, necesitamos crear/obtener un lead
       if (formData.leadId.startsWith('contact:')) {
@@ -331,7 +331,7 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh }:
 
     try {
       let actualLeadId = formData.leadId || null
-      let actualContactId = null
+      const actualContactId = null
       
       // Si se seleccionó un contacto, necesitamos crear/obtener un lead
       if (formData.leadId.startsWith('contact:')) {

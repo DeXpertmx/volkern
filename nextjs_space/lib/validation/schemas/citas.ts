@@ -80,3 +80,10 @@ export const DisponibilidadQuerySchema = z.object({
   fechaFin: z.string().datetime().optional(),
   diasAdelante: z.number().int().min(1).max(90).optional().default(30),
 });
+
+/**
+ * Schema para acciones sobre citas públicas (confirmar/cancelar/reagendar)
+ */
+export const CitaActionSchema = z.object({
+  token: z.string().min(1, 'Token requerido'),
+});
