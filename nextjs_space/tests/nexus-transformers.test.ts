@@ -1,203 +1,202 @@
 import { describe, it, expect } from 'vitest';
-import { translateHubEvent } from '@/lib/nexus/transformers';
+import { translateHubEvent, type TranslatedEvent } from '@/lib/nexus/transformers';
 
-describe('nexus/transformers', () => {
-  const tenantId = 'tenant-test-12345678901';
+// ─── translateHubEvent ────────────────────────────────────────────────────
 
-  // ============================================================
-  // translateHubEvent — message_created → message.received
-  // ============================================================
-  describe('translateHubEvent — message_created', () => {
-    it('debe mapear message_created a message.received', () => {
-      const payload = {
-        event: 'message_created',
-        id: 'evt-001',
-        data: {
-          id: 12345,
-          content: 'Hola, necesito ayuda con mi pedido',
-          channel: 'WhatsApp',
-          sender: { id: 789 },
-        },
-      };
+describe('translateHubEvent', () => {
+  const tenantId = 'tenant_test_123';
 
-      const result = translateHubEvent(payload, tenantId);
-      expect(result.type).toBe('message.received');
-      expect(result.tenantId).toBe(tenantId);
-      expect(result.data.content).toBe('Hola, necesito ayuda con mi pedido');
-      expect(result.data.channel).toBe('WhatsApp');
-      expect(result.data.externalRef).toBe('12345');
-      expect(result.data.contactRef).toBe('789');
-    });
+  it('debe mapear message_created → message.received', () => {
+    const result = translateHubEvent({
+      event: 'message_created',
+      id: 'evt_001',
+      data: {
+        id: 'msg_42',
+        content: 'Hola mundo',
+        channel: 'whatsapp',
+        sender: { id: 'contact_99' },
+      },
+    }, tenantId);
 
-    it('debe usar conversation_id como externalRef si no hay data.id', () => {
-      const payload = {
-        event: 'message_created',
-        data: {
-          conversation_id: 999,
-          content: 'Mensaje sin id explícito',
-        },
-      };
-
-      const result = translateHubEvent(payload, tenantId);
-      expect(result.data.externalRef).toBe('999');
-    });
+    expect(result.type).toBe('message.received');
+    expect(result.tenantId).toBe(tenantId);
+    expect(result.data.externalRef).toBe('msg_42');
+    expect(result.data.content).toBe('Hola mundo');
+    expect(result.data.channel).toBe('whatsapp');
+    expect(result.data.contactRef).toBe('contact_99');
+    expect(result.data.metadata.source).toBe('nexus');
   });
 
-  // ============================================================
-  // translateHubEvent — message_updated → message.sent
-  // ============================================================
-  describe('translateHubEvent — message_updated', () => {
-    it('debe mapear message_updated a message.sent', () => {
-      const payload = {
-        event: 'message_updated',
-        id: 'evt-002',
-        data: {
-          id: 200,
-          content: 'Respuesta automática enviada',
-          inbox: { channel_type: 'Email' },
-          contact: { id: 300 },
-        },
-      };
+  it('debe mapear message_updated → message.sent', () => {
+    const result = translateHubEvent({
+      event: 'message_updated',
+      id: 'evt_002',
+      data: { id: 'msg_43' },
+    }, tenantId);
 
-      const result = translateHubEvent(payload, tenantId);
-      expect(result.type).toBe('message.sent');
-      expect(result.data.channel).toBe('Email');
-      expect(result.data.contactRef).toBe('300');
-    });
-
-    it('debe usar sender.id como fallback para contactRef', () => {
-      const payload = {
-        event: 'message_updated',
-        data: {
-          sender: { id: 111 },
-        },
-      };
-
-      const result = translateHubEvent(payload, tenantId);
-      expect(result.data.contactRef).toBe('111');
-    });
-
-    it('debe preferir sender.id sobre contact.id cuando ambos existen', () => {
-      const payload = {
-        event: 'message_created',
-        data: {
-          sender: { id: 111 },
-          contact: { id: 222 },
-        },
-      };
-
-      const result = translateHubEvent(payload, tenantId);
-      expect(result.data.contactRef).toBe('111');
-    });
+    expect(result.type).toBe('message.sent');
   });
 
-  // ============================================================
-  // translateHubEvent — conversation_created
-  // ============================================================
-  describe('translateHubEvent — conversation_created', () => {
-    it('debe mapear conversation_created a conversation.created', () => {
-      const payload = {
-        event: 'conversation_created',
-        id: 'conv-001',
-        data: {
-          conversation_id: 500,
-          channel: 'Facebook',
-        },
-      };
+  it('debe mapear conversation_created → conversation.created', () => {
+    const result = translateHubEvent({
+      event: 'conversation_created',
+      id: 'evt_003',
+      data: { id: 'conv_10' },
+    }, tenantId);
 
-      const result = translateHubEvent(payload, tenantId);
-      expect(result.type).toBe('conversation.created');
-      expect(result.data.externalRef).toBe('500');
-    });
+    expect(result.type).toBe('conversation.created');
   });
 
-  // ============================================================
-  // translateHubEvent — conversation_updated
-  // ============================================================
-  describe('translateHubEvent — conversation_updated', () => {
-    it('debe mapear conversation_updated a conversation.updated', () => {
-      const payload = {
-        event: 'conversation_updated',
-        id: 'conv-002',
-        data: {
-          id: 600,
-          channel: 'Instagram',
-        },
-      };
+  it('debe mapear conversation_updated → conversation.updated', () => {
+    const result = translateHubEvent({
+      event: 'conversation_updated',
+      id: 'evt_004',
+      data: { id: 'conv_11' },
+    }, tenantId);
 
-      const result = translateHubEvent(payload, tenantId);
-      expect(result.type).toBe('conversation.updated');
-    });
+    expect(result.type).toBe('conversation.updated');
   });
 
-  // ============================================================
-  // translateHubEvent — evento desconocido
-  // ============================================================
-  describe('translateHubEvent — evento desconocido', () => {
-    it('debe usar message.received como fallback para eventos desconocidos', () => {
-      const payload = {
-        event: 'evento_inexistente',
-        data: { id: 999 },
-      };
+  it('evento desconocido → message.received (default)', () => {
+    const result = translateHubEvent({
+      event: 'unknown_event_type',
+      id: 'evt_999',
+      data: {},
+    }, tenantId);
 
-      const result = translateHubEvent(payload, tenantId);
-      expect(result.type).toBe('message.received');
-    });
-
-    it('debe usar message.received cuando no hay event', () => {
-      const payload = { data: { id: 888 } };
-      const result = translateHubEvent(payload, tenantId);
-      expect(result.type).toBe('message.received');
-    });
+    expect(result.type).toBe('message.received');
   });
 
-  // ============================================================
-  // translateHubEvent — metadata
-  // ============================================================
-  describe('translateHubEvent — metadata', () => {
-    it('debe incluir source: nexus en metadata', () => {
-      const payload = {
-        event: 'message_created',
-        data: { id: 1, content: 'test' },
-      };
+  it('si no hay id, genera uno con timestamp', () => {
+    const before = Date.now();
+    const result = translateHubEvent({
+      event: 'message_created',
+      data: {},
+    }, tenantId);
+    const after = Date.now();
 
-      const result = translateHubEvent(payload, tenantId);
-      expect(result.data.metadata.source).toBe('nexus');
-    });
-
-    it('debe copiar todo el payload.data en metadata', () => {
-      const payload = {
-        event: 'message_created',
-        data: {
-          id: 1,
-          content: 'test',
-          customField: 'valor-especial',
-          attachments: [{ url: 'file.pdf' }],
-        },
-      };
-
-      const result = translateHubEvent(payload, tenantId);
-      expect(result.data.metadata.id).toBe(1);
-      expect(result.data.metadata.content).toBe('test');
-      expect(result.data.metadata.customField).toBe('valor-especial');
-      expect(result.data.metadata.attachments).toEqual([{ url: 'file.pdf' }]);
-    });
+    expect(result.id).toMatch(/^evt_\d+$/);
+    const ts = parseInt(result.id.replace('evt_', ''), 10);
+    expect(ts).toBeGreaterThanOrEqual(before);
+    expect(ts).toBeLessThanOrEqual(after);
   });
 
-  // ============================================================
-  // translateHubEvent — generación de ID
-  // ============================================================
-  describe('translateHubEvent — generación de ID', () => {
-    it('debe usar el ID del payload si existe', () => {
-      const payload = { event: 'message_created', id: 'custom-id-xyz', data: {} };
-      const result = translateHubEvent(payload, tenantId);
-      expect(result.id).toBe('custom-id-xyz');
-    });
+  it('debe usar conversation_id como externalRef si no hay data.id', () => {
+    const result = translateHubEvent({
+      event: 'message_created',
+      data: { conversation_id: 'conv_999' },
+    }, tenantId);
 
-    it('debe generar un ID con prefijo evt_ si no hay id en payload', () => {
-      const payload = { event: 'message_created', data: {} };
-      const result = translateHubEvent(payload, tenantId);
-      expect(result.id).toMatch(/^evt_\d+$/);
-    });
+    expect(result.data.externalRef).toBe('conv_999');
+  });
+
+  it('debe usar inbox.channel_type como channel si no hay data.channel', () => {
+    const result = translateHubEvent({
+      event: 'message_created',
+      data: {
+        inbox: { channel_type: 'email' },
+      },
+    }, tenantId);
+
+    expect(result.data.channel).toBe('email');
+  });
+
+  it('data.channel tiene prioridad sobre inbox.channel_type', () => {
+    const result = translateHubEvent({
+      event: 'message_created',
+      data: {
+        channel: 'whatsapp',
+        inbox: { channel_type: 'email' },
+      },
+    }, tenantId);
+
+    expect(result.data.channel).toBe('whatsapp');
+  });
+
+  it('debe usar contact.id como contactRef si no hay sender', () => {
+    const result = translateHubEvent({
+      event: 'message_created',
+      data: {
+        contact: { id: 'contact_55' },
+      },
+    }, tenantId);
+
+    expect(result.data.contactRef).toBe('contact_55');
+  });
+
+  it('sender.id tiene prioridad sobre contact.id', () => {
+    const result = translateHubEvent({
+      event: 'message_created',
+      data: {
+        sender: { id: 'sender_1' },
+        contact: { id: 'contact_2' },
+      },
+    }, tenantId);
+
+    expect(result.data.contactRef).toBe('sender_1');
+  });
+
+  it('result debe tener la estructura TranslatedEvent completa', () => {
+    const result = translateHubEvent({
+      event: 'message_created',
+      data: { id: 'm1' },
+    }, tenantId);
+
+    expect(result).toHaveProperty('id');
+    expect(result).toHaveProperty('type');
+    expect(result).toHaveProperty('tenantId');
+    expect(result).toHaveProperty('data');
+    expect(result.data).toHaveProperty('externalRef');
+    expect(result.data).toHaveProperty('metadata');
+  });
+
+  it('debe propagar el tenantId correctamente', () => {
+    const tid = 'org_acme_v2';
+    const result = translateHubEvent({
+      event: 'message_created',
+      data: {},
+    }, tid);
+    expect(result.tenantId).toBe(tid);
+  });
+
+  it('metadata debe incluir todos los data originales + source nexus', () => {
+    const payload = {
+      event: 'message_created',
+      data: {
+        id: 'm_77',
+        content: 'test content',
+        extra_field: 'extra_value',
+      },
+    };
+    const result = translateHubEvent(payload, tenantId);
+
+    expect(result.data.metadata.id).toBe('m_77');
+    expect(result.data.metadata.content).toBe('test content');
+    expect(result.data.metadata.extra_field).toBe('extra_value');
+    expect(result.data.metadata.source).toBe('nexus');
+  });
+
+  it('payload sin data → no lanza error', () => {
+    expect(() => translateHubEvent({
+      event: 'message_created',
+    }, tenantId)).not.toThrow();
+  });
+
+  it('payload.data null → no lanza error', () => {
+    expect(() => translateHubEvent({
+      event: 'message_created',
+      data: null,
+    } as any, tenantId)).not.toThrow();
+  });
+
+  it('determinismo: mismo payload produce misma salida', () => {
+    const payload = {
+      event: 'message_created',
+      id: 'fixed_id',
+      data: { id: 'd1', content: 'hola', channel: 'sms' },
+    };
+    const a = translateHubEvent(payload, tenantId);
+    const b = translateHubEvent(payload, tenantId);
+    expect(a).toEqual(b);
   });
 });
