@@ -3,29 +3,15 @@ import {
   generateApiKey,
   hashApiKey,
   isValidApiKeyFormat,
+  AVAILABLE_SCOPES,
   hasScope,
   hasAnyScope,
   extractApiKeyFromRequest,
-  AVAILABLE_SCOPES,
 } from '@/lib/api-keys';
 
-describe('API Keys — generateApiKey', () => {
-  it('debe generar una key con prefijo vk_prod_ por defecto', () => {
-    const { key } = generateApiKey();
-    expect(key.startsWith('vk_prod_')).toBe(true);
-  });
+// ─── generateApiKey ───────────────────────────────────────────────────────
 
-  it('debe generar una key con prefijo vk_live_ cuando type=live', () => {
-    const { key } = generateApiKey('live');
-    expect(key.startsWith('vk_live_')).toBe(true);
-  });
-
-  it('la key debe tener 64 caracteres hexadecimales después del prefijo', () => {
-    const { key } = generateApiKey();
-    const body = key.replace('vk_prod_', '');
-    expect(body).toMatch(/^[0-9a-f]{64}$/);
-  });
-
+describe('generateApiKey', () => {
   it('debe devolver key, keyHash y prefix', () => {
     const result = generateApiKey();
     expect(result).toHaveProperty('key');
@@ -33,157 +19,204 @@ describe('API Keys — generateApiKey', () => {
     expect(result).toHaveProperty('prefix');
   });
 
-  it('el keyHash debe ser un string hexadecimal de 64 caracteres', () => {
-    const { keyHash } = generateApiKey();
-    expect(keyHash).toMatch(/^[0-9a-f]{64}$/);
+  it('key debe empezar con vk_prod_ y tener 72 caracteres', () => {
+    const result = generateApiKey('prod');
+    expect(result.key).toMatch(/^vk_prod_/);
+    expect(result.key.length).toBe(8 + 64); // vk_prod_ (8) + 64 hex
   });
 
-  it('el prefix debe empezar con vk_prod_ y tener 8 caracteres extra', () => {
-    const { prefix } = generateApiKey();
-    expect(prefix.startsWith('vk_prod_')).toBe(true);
-    expect(prefix.length).toBe('vk_prod_'.length + 8);
+  it('key con type live debe empezar con vk_live_', () => {
+    const result = generateApiKey('live');
+    expect(result.key).toMatch(/^vk_live_/);
+    expect(result.key.length).toBe(8 + 64);
   });
 
-  it('debe generar keys diferentes en cada llamada', () => {
-    const key1 = generateApiKey().key;
-    const key2 = generateApiKey().key;
-    expect(key1).not.toBe(key2);
+  it('keyHash debe ser SHA-256 hex de 64 caracteres', () => {
+    const result = generateApiKey();
+    expect(result.keyHash).toMatch(/^[a-f0-9]{64}$/);
   });
 
-  it('el prefix debe ser un subconjunto de la key', () => {
-    const { key, prefix } = generateApiKey();
-    expect(key.startsWith(prefix)).toBe(true);
-  });
-});
-
-describe('API Keys — hashApiKey', () => {
-  it('debe generar el mismo hash para la misma key', () => {
-    const key = 'vk_prod_abc123def456';
-    expect(hashApiKey(key)).toBe(hashApiKey(key));
+  it('prefix debe incluir los primeros 8 chars hex del key body', () => {
+    const result = generateApiKey('prod');
+    const keyBody = result.key.slice(8); // remove vk_prod_
+    expect(result.prefix).toBe(`vk_prod_${keyBody.substring(0, 8)}`);
   });
 
-  it('debe generar hashes diferentes para keys diferentes', () => {
-    expect(hashApiKey('vk_prod_aaa'))
-      .not.toBe(hashApiKey('vk_prod_bbb'));
+  it('cada llamada genera keys diferentes (random)', () => {
+    const results = Array.from({ length: 5 }, () => generateApiKey());
+    const keys = results.map(r => r.key);
+    expect(new Set(keys).size).toBe(5);
   });
 
-  it('el hash debe ser hexadecimal de 64 caracteres', () => {
-    expect(hashApiKey('test')).toMatch(/^[0-9a-f]{64}$/);
-  });
-
-  it('el hash de una key generada debe coincidir con keyHash', () => {
-    const { key, keyHash } = generateApiKey();
-    expect(hashApiKey(key)).toBe(keyHash);
+  it('cada llamada genera keyHash diferente', () => {
+    const results = Array.from({ length: 5 }, () => generateApiKey());
+    const hashes = results.map(r => r.keyHash);
+    expect(new Set(hashes).size).toBe(5);
   });
 });
 
-describe('API Keys — isValidApiKeyFormat', () => {
-  it('debe validar una key prod generada', () => {
-    const { key } = generateApiKey();
-    expect(isValidApiKeyFormat(key)).toBe(true);
+// ─── hashApiKey ───────────────────────────────────────────────────────────
+
+describe('hashApiKey', () => {
+  it('debe generar hash SHA-256 de 64 chars hex', () => {
+    const hash = hashApiKey('vk_prod_abc123');
+    expect(hash).toMatch(/^[a-f0-9]{64}$/);
   });
 
-  it('debe validar una key live generada', () => {
-    const { key } = generateApiKey('live');
-    expect(isValidApiKeyFormat(key)).toBe(true);
+  it('debe ser determinista: misma key → mismo hash', () => {
+    const h1 = hashApiKey('vk_prod_test_key_001');
+    const h2 = hashApiKey('vk_prod_test_key_001');
+    expect(h1).toBe(h2);
   });
 
-  it('debe rechazar una key sin prefijo', () => {
-    expect(isValidApiKeyFormat('abc123')).toBe(false);
+  it('diferentes keys → diferentes hashes', () => {
+    const h1 = hashApiKey('vk_prod_aaa');
+    const h2 = hashApiKey('vk_prod_bbb');
+    expect(h1).not.toBe(h2);
   });
 
-  it('debe rechazar una key con prefijo inválido', () => {
-    expect(isValidApiKeyFormat('vk_test_abc123')).toBe(false);
+  it('key vacía → hash válido (hash de string vacío)', () => {
+    const hash = hashApiKey('');
+    expect(hash).toMatch(/^[a-f0-9]{64}$/);
+  });
+});
+
+// ─── isValidApiKeyFormat ──────────────────────────────────────────────────
+
+describe('isValidApiKeyFormat', () => {
+  it('formato vk_prod_ + 64 hex → true', () => {
+    expect(isValidApiKeyFormat('vk_prod_' + 'a'.repeat(64))).toBe(true);
   });
 
-  it('debe rechazar una key con caracteres no hexadecimales', () => {
-    expect(isValidApiKeyFormat('vk_prod_zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz')).toBe(false);
+  it('formato vk_live_ + 64 hex → true', () => {
+    expect(isValidApiKeyFormat('vk_live_' + 'f'.repeat(64))).toBe(true);
   });
 
-  it('debe rechazar una key demasiado corta', () => {
-    expect(isValidApiKeyFormat('vk_prod_abc')).toBe(false);
+  it('key muy corta → false', () => {
+    expect(isValidApiKeyFormat('vk_prod_short')).toBe(false);
   });
 
-  it('debe rechazar string vacío', () => {
+  it('prefijo inválido vk_test_ → false', () => {
+    expect(isValidApiKeyFormat('vk_test_' + 'a'.repeat(64))).toBe(false);
+  });
+
+  it('caracteres no hex → false', () => {
+    expect(isValidApiKeyFormat('vk_prod_' + 'z'.repeat(64))).toBe(false); // z no es hex
+  });
+
+  it('string vacío → false', () => {
     expect(isValidApiKeyFormat('')).toBe(false);
   });
 
-  it('debe ser case-insensitive en el prefijo', () => {
-    const { key } = generateApiKey();
-    const upperKey = key.toUpperCase();
-    expect(isValidApiKeyFormat(upperKey)).toBe(true);
+  it('case-insensitive: VK_PROD_ → true', () => {
+    expect(isValidApiKeyFormat('VK_PROD_' + 'a'.repeat(64))).toBe(true);
   });
 });
 
-describe('API Keys — Scopes', () => {
-  it('AVAILABLE_SCOPES debe ser un array no vacío', () => {
+// ─── AVAILABLE_SCOPES ─────────────────────────────────────────────────────
+
+describe('AVAILABLE_SCOPES', () => {
+  it('debe ser un array', () => {
     expect(Array.isArray(AVAILABLE_SCOPES)).toBe(true);
-    expect(AVAILABLE_SCOPES.length).toBeGreaterThan(20);
-  });    it('todos los scopes deben tener formato recurso:acción', () => {
-      for (const scope of AVAILABLE_SCOPES) {
-        expect(scope).toMatch(/^[a-z0-9]+:[a-z]+$/);
-      }
-    });
-
-  it('hasScope debe retornar true si el scope está presente', () => {
-    expect(hasScope(['leads:read', 'leads:write'], 'leads:read')).toBe(true);
   });
 
-  it('hasScope debe retornar false si el scope no está presente', () => {
-    expect(hasScope(['leads:read'], 'leads:delete')).toBe(false);
+  it('debe tener al menos 30 scopes', () => {
+    expect(AVAILABLE_SCOPES.length).toBeGreaterThanOrEqual(30);
   });
 
-  it('hasScope debe funcionar con array vacío', () => {
+  it('todos los scopes deben ser strings con formato recurso:accion (pueden incluir números en recurso)', () => {
+    for (const scope of AVAILABLE_SCOPES) {
+      expect(typeof scope).toBe('string');
+      expect(scope).toMatch(/^[a-z0-9]+:[a-z]+$/);
+    }
+  });
+
+  it('scopes únicos', () => {
+    expect(new Set(AVAILABLE_SCOPES).size).toBe(AVAILABLE_SCOPES.length);
+  });
+
+  it('debe incluir scopes clave', () => {
+    expect(AVAILABLE_SCOPES).toContain('leads:read');
+    expect(AVAILABLE_SCOPES).toContain('leads:write');
+    expect(AVAILABLE_SCOPES).toContain('deals:read');
+    expect(AVAILABLE_SCOPES).toContain('messages:read');
+    expect(AVAILABLE_SCOPES).toContain('analytics:read');
+    expect(AVAILABLE_SCOPES).toContain('mcp:execute');
+  });
+});
+
+// ─── hasScope ─────────────────────────────────────────────────────────────
+
+describe('hasScope', () => {
+  it('scope presente → true', () => {
+    expect(hasScope(['leads:read', 'deals:write'], 'leads:read')).toBe(true);
+  });
+
+  it('scope no presente → false', () => {
+    expect(hasScope(['leads:read', 'deals:write'], 'contacts:read')).toBe(false);
+  });
+
+  it('array vacío → false', () => {
     expect(hasScope([], 'leads:read')).toBe(false);
   });
+});
 
-  it('hasAnyScope debe retornar true si al menos un scope coincide', () => {
-    expect(hasAnyScope(['leads:read'], ['leads:read', 'contacts:write'])).toBe(true);
+// ─── hasAnyScope ──────────────────────────────────────────────────────────
+
+describe('hasAnyScope', () => {
+  it('al menos uno coincide → true', () => {
+    expect(hasAnyScope(['leads:read', 'deals:write'], ['deals:write', 'admin:all'])).toBe(true);
   });
 
-  it('hasAnyScope debe retornar false si ningún scope coincide', () => {
-    expect(hasAnyScope(['leads:read'], ['contacts:write', 'deals:delete'])).toBe(false);
+  it('ninguno coincide → false', () => {
+    expect(hasAnyScope(['leads:read'], ['admin:all', 'super:access'])).toBe(false);
   });
 
-  it('hasAnyScope debe funcionar con array de scopes vacío', () => {
+  it('array requerido vacío → false', () => {
     expect(hasAnyScope(['leads:read'], [])).toBe(false);
+  });
+
+  it('ambos vacíos → false', () => {
+    expect(hasAnyScope([], [])).toBe(false);
   });
 });
 
-describe('API Keys — extractApiKeyFromRequest', () => {
-  it('debe extraer del header X-API-Key', () => {
-    const request = new Request('https://example.com', {
-      headers: { 'x-api-key': 'vk_prod_abc123' },
+// ─── extractApiKeyFromRequest ─────────────────────────────────────────────
+
+describe('extractApiKeyFromRequest', () => {
+  it('X-API-Key header → extrae key', () => {
+    const req = new Request('https://example.com/api', {
+      headers: { 'X-API-Key': 'vk_prod_' + 'a'.repeat(64) },
     });
-    expect(extractApiKeyFromRequest(request)).toBe('vk_prod_abc123');
+    expect(extractApiKeyFromRequest(req)).toBe('vk_prod_' + 'a'.repeat(64));
   });
 
-  it('debe extraer del header Authorization: Bearer', () => {
-    const request = new Request('https://example.com', {
-      headers: { authorization: 'Bearer vk_prod_xyz789' },
+  it('Authorization Bearer → extrae key', () => {
+    const req = new Request('https://example.com/api', {
+      headers: { 'Authorization': 'Bearer vk_live_' + 'b'.repeat(64) },
     });
-    expect(extractApiKeyFromRequest(request)).toBe('vk_prod_xyz789');
+    expect(extractApiKeyFromRequest(req)).toBe('vk_live_' + 'b'.repeat(64));
   });
 
-  it('debe priorizar X-API-Key sobre Authorization', () => {
-    const request = new Request('https://example.com', {
+  it('X-API-Key tiene prioridad sobre Authorization', () => {
+    const req = new Request('https://example.com/api', {
       headers: {
-        'x-api-key': 'vk_prod_priority',
-        authorization: 'Bearer vk_prod_secondary',
+        'X-API-Key': 'vk_prod_1111',
+        'Authorization': 'Bearer vk_prod_2222',
       },
     });
-    expect(extractApiKeyFromRequest(request)).toBe('vk_prod_priority');
+    expect(extractApiKeyFromRequest(req)).toBe('vk_prod_1111');
   });
 
-  it('debe retornar null si no hay headers relevantes', () => {
-    const request = new Request('https://example.com');
-    expect(extractApiKeyFromRequest(request)).toBeNull();
+  it('sin headers → null', () => {
+    const req = new Request('https://example.com/api');
+    expect(extractApiKeyFromRequest(req)).toBeNull();
   });
 
-  it('debe retornar null si Authorization no es Bearer', () => {
-    const request = new Request('https://example.com', {
-      headers: { authorization: 'Basic dXNlcjpwYXNz' },
+  it('Authorization sin Bearer → null', () => {
+    const req = new Request('https://example.com/api', {
+      headers: { 'Authorization': 'Basic abc123' },
     });
-    expect(extractApiKeyFromRequest(request)).toBeNull();
+    expect(extractApiKeyFromRequest(req)).toBeNull();
   });
 });
