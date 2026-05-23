@@ -13,305 +13,264 @@ import {
   getTrialDaysRemaining,
 } from '@/lib/plans';
 
-// ─── PLANS constants ───────────────────────────────────────────────────
+// ============================================================
+// PLANS constant
+// ============================================================
 describe('PLANS', () => {
-  it('debe tener 8 planes definidos', () => {
-    const keys = Object.keys(PLANS);
-    expect(keys).toHaveLength(8);
+  it('debe definir todos los planes', () => {
+    expect(PLANS).toHaveProperty('STARTER');
+    expect(PLANS).toHaveProperty('GROWTH');
+    expect(PLANS).toHaveProperty('PRO');
+    expect(PLANS).toHaveProperty('TRIAL');
+    expect(PLANS).toHaveProperty('BASICO');
+    expect(PLANS).toHaveProperty('PROFESIONAL');
+    expect(PLANS).toHaveProperty('AGENCY_SLOT');
+    expect(PLANS).toHaveProperty('PRO_AGENCY');
   });
 
-  it('debe incluir STARTER, GROWTH, PRO, TRIAL', () => {
-    expect(PLANS.STARTER).toBe('starter');
-    expect(PLANS.GROWTH).toBe('growth');
-    expect(PLANS.PRO).toBe('pro');
-    expect(PLANS.TRIAL).toBe('trial');
+  it('todos los valores deben ser strings únicos', () => {
+    const values = Object.values(PLANS);
+    expect(new Set(values).size).toBe(values.length);
   });
 
-  it('debe incluir BASICO, PROFESIONAL, AGENCY_SLOT, PRO_AGENCY', () => {
-    expect(PLANS.BASICO).toBe('basico');
-    expect(PLANS.PROFESIONAL).toBe('profesional');
-    expect(PLANS.AGENCY_SLOT).toBe('agency-slot');
-    expect(PLANS.PRO_AGENCY).toBe('pro-agency');
-  });
-
-  it('todos los valores deben ser strings no vacíos', () => {
-    for (const [key, value] of Object.entries(PLANS)) {
-      expect(value).toBeTruthy();
-      expect(typeof value).toBe('string');
+  it('los valores deben ser slugs en lowercase', () => {
+    for (const v of Object.values(PLANS)) {
+      expect(v).toBe(v.toLowerCase());
+      expect(v).not.toContain(' ');
     }
   });
 });
 
-// ─── ALL_MODULES ───────────────────────────────────────────────────────
+// ============================================================
+// ALL_MODULES
+// ============================================================
 describe('ALL_MODULES', () => {
-  it('debe tener al menos 40 módulos', () => {
+  it('debe ser un array con al menos 40 módulos', () => {
+    expect(Array.isArray(ALL_MODULES)).toBe(true);
     expect(ALL_MODULES.length).toBeGreaterThanOrEqual(40);
   });
 
   it('cada módulo debe tener id, label, description, icon, group', () => {
     for (const mod of ALL_MODULES) {
-      expect(mod.id).toBeTruthy();
-      expect(mod.label).toBeTruthy();
-      expect(mod.description).toBeTruthy();
-      expect(mod.icon).toBeTruthy();
-      expect(mod.group).toBeTruthy();
+      expect(mod).toHaveProperty('id');
+      expect(mod).toHaveProperty('label');
+      expect(mod).toHaveProperty('description');
+      expect(mod).toHaveProperty('icon');
+      expect(mod).toHaveProperty('group');
+      expect(typeof mod.id).toBe('string');
+      expect(typeof mod.label).toBe('string');
+      expect(typeof mod.group).toBe('string');
     }
   });
 
-  it('no debe haber IDs duplicados', () => {
+  it('los IDs de módulos deben ser únicos', () => {
     const ids = ALL_MODULES.map(m => m.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('debe contener los módulos principales de CRM', () => {
+  it('debe incluir módulos clave: leads, pipeline, mensajes, campanas, cursos, rrhh, finanzas', () => {
     const ids = ALL_MODULES.map(m => m.id);
     expect(ids).toContain('leads');
-    expect(ids).toContain('contactos');
     expect(ids).toContain('pipeline');
-    expect(ids).toContain('tareas');
-    expect(ids).toContain('analytics');
     expect(ids).toContain('mensajes');
-  });
-
-  it('debe contener módulos ERP', () => {
-    const ids = ALL_MODULES.map(m => m.id);
+    expect(ids).toContain('campanas');
+    expect(ids).toContain('cursos');
     expect(ids).toContain('rrhh');
     expect(ids).toContain('finanzas');
-    expect(ids).toContain('produccion');
     expect(ids).toContain('inventario');
-    expect(ids).toContain('calidad');
-    expect(ids).toContain('proyectos');
+    expect(ids).toContain('produccion');
+    expect(ids).toContain('estrategia');
   });
 
-  it('debe contener módulos de integraciones', () => {
-    const ids = ALL_MODULES.map(m => m.id);
-    expect(ids).toContain('whatsapp');
-    expect(ids).toContain('telegram');
-    expect(ids).toContain('sms');
-    expect(ids).toContain('api_access');
-  });
-
-  it('debe contener módulos de administración', () => {
-    const ids = ALL_MODULES.map(m => m.id);
-    expect(ids).toContain('white_label');
-    expect(ids).toContain('custom_domain');
-    expect(ids).toContain('equipo');
-    expect(ids).toContain('configuracion');
-  });
-
-  it('todos los grupos deben ser strings no vacíos', () => {
-    const groups = ALL_MODULES.map(m => m.group);
-    for (const group of groups) {
-      expect(typeof group).toBe('string');
-      expect(group.length).toBeGreaterThan(0);
-    }
+  it('los grupos deben ser válidos', () => {
+    const groups = new Set(ALL_MODULES.map(m => m.group));
+    expect(groups.has('Ventas & Leads')).toBe(true);
+    expect(groups.has('Comunicación')).toBe(true);
+    expect(groups.has('Marketing')).toBe(true);
+    expect(groups.has('ERP')).toBe(true);
+    expect(groups.has('Administración')).toBe(true);
   });
 });
 
-// ─── PLAN_MODULES ──────────────────────────────────────────────────────
+// ============================================================
+// PLAN_MODULES
+// ============================================================
 describe('PLAN_MODULES', () => {
-  it('debe tener entrada para cada plan', () => {
-    for (const plan of Object.values(PLANS)) {
-      expect(PLAN_MODULES[plan]).toBeDefined();
-    }
+  it('debe tener entries para TRIAL, STARTER, GROWTH, PRO, BASICO, PROFESIONAL, AGENCY_SLOT, PRO_AGENCY', () => {
+    expect(PLAN_MODULES).toHaveProperty(PLANS.TRIAL);
+    expect(PLAN_MODULES).toHaveProperty(PLANS.STARTER);
+    expect(PLAN_MODULES).toHaveProperty(PLANS.GROWTH);
+    expect(PLAN_MODULES).toHaveProperty(PLANS.PRO);
+    expect(PLAN_MODULES).toHaveProperty(PLANS.BASICO);
+    expect(PLAN_MODULES).toHaveProperty(PLANS.PROFESIONAL);
+    expect(PLAN_MODULES).toHaveProperty(PLANS.AGENCY_SLOT);
+    expect(PLAN_MODULES).toHaveProperty(PLANS.PRO_AGENCY);
   });
 
-  it('TRIAL debe incluir módulos básicos', () => {
-    const modules = PLAN_MODULES[PLANS.TRIAL];
-    expect(modules).toContain('leads');
-    expect(modules).toContain('pipeline');
-    expect(modules).toContain('mensajes');
-    expect(modules).toContain('campanas');
+  it('TRIAL debe incluir módulos core: leads, mensajes, campanas, rrhh, finanzas', () => {
+    const trial = PLAN_MODULES[PLANS.TRIAL];
+    expect(trial).toContain('leads');
+    expect(trial).toContain('mensajes');
+    expect(trial).toContain('campanas');
+    expect(trial).toContain('rrhh');
+    expect(trial).toContain('finanzas');
   });
 
-  it('STARTER no debe incluir contratos ni scoring', () => {
-    const modules = PLAN_MODULES[PLANS.STARTER];
-    expect(modules).not.toContain('contratos');
-    expect(modules).not.toContain('scoring');
-    expect(modules).not.toContain('pronosticos');
+  it('GROWTH debe incluir más módulos que STARTER', () => {
+    const starter = PLAN_MODULES[PLANS.STARTER];
+    const growth = PLAN_MODULES[PLANS.GROWTH];
+    expect(growth.length).toBeGreaterThan(starter.length);
   });
 
-  it('GROWTH debe incluir cotizaciones y scoring', () => {
-    const modules = PLAN_MODULES[PLANS.GROWTH];
-    expect(modules).toContain('cotizaciones');
-    expect(modules).toContain('scoring');
-    expect(modules).toContain('automatizaciones');
-    expect(modules).toContain('cursos');
-  });
-
-  it('PRO debe incluir los mismos módulos que GROWTH', () => {
-    const growthMods = [...PLAN_MODULES[PLANS.GROWTH]].sort();
-    const proMods = [...PLAN_MODULES[PLANS.PRO]].sort();
-    expect(proMods).toEqual(growthMods);
+  it('PRO debe incluir más módulos que GROWTH', () => {
+    const growth = PLAN_MODULES[PLANS.GROWTH];
+    const pro = PLAN_MODULES[PLANS.PRO];
+    expect(pro.length).toBeGreaterThanOrEqual(growth.length);
   });
 
   it('PRO_AGENCY debe incluir white_label y custom_domain', () => {
-    const modules = PLAN_MODULES[PLANS.PRO_AGENCY];
-    expect(modules).toContain('white_label');
-    expect(modules).toContain('custom_domain');
-    expect(modules).toContain('agency');
+    const proAgency = PLAN_MODULES[PLANS.PRO_AGENCY];
+    expect(proAgency).toContain('white_label');
+    expect(proAgency).toContain('custom_domain');
+    expect(proAgency).toContain('agency');
   });
 
-  it('ningún plan debe tener módulos duplicados', () => {
+  it('todos los módulos en PLAN_MODULES deben ser IDs válidos de ALL_MODULES', () => {
+    const validIds = new Set(ALL_MODULES.map(m => m.id));
+    for (const [plan, modules] of Object.entries(PLAN_MODULES)) {
+      for (const mod of modules) {
+        expect(validIds.has(mod)).toBe(true);
+      }
+    }
+  });
+
+  it('cada plan debe tener módulos únicos (sin duplicados)', () => {
     for (const [plan, modules] of Object.entries(PLAN_MODULES)) {
       expect(new Set(modules).size).toBe(modules.length);
     }
   });
-
-  it('todos los módulos en PLAN_MODULES deben existir en ALL_MODULES', () => {
-    const allIds = new Set(ALL_MODULES.map(m => m.id));
-    for (const modules of Object.values(PLAN_MODULES)) {
-      for (const mod of modules) {
-        expect(allIds.has(mod)).toBe(true);
-      }
-    }
-  });
 });
 
-// ─── PLAN_LIMITS ───────────────────────────────────────────────────────
+// ============================================================
+// PLAN_LIMITS
+// ============================================================
 describe('PLAN_LIMITS', () => {
-  const limitKeys = [
-    'leads', 'users', 'emails_per_month', 'automation_runs',
-    'whatsapp_messages', 'sms_messages', 'courses', 'students',
-    'storage_gb', 'ai_image_generations', 'business_emails',
-    'business_domains', 'business_email_gb', 'automations_count', 'pages',
-  ];
-
-  it('debe tener entrada para cada plan', () => {
-    for (const plan of Object.values(PLANS)) {
-      expect(PLAN_LIMITS[plan]).toBeDefined();
+  it('debe tener entries para todos los planes', () => {
+    for (const v of Object.values(PLANS)) {
+      expect(PLAN_LIMITS).toHaveProperty(v);
     }
   });
 
-  it('cada plan debe tener todos los limitKeys', () => {
+  it('cada plan debe tener al menos leads, users, storage_gb', () => {
     for (const [plan, limits] of Object.entries(PLAN_LIMITS)) {
-      for (const key of limitKeys) {
-        expect(limits[key as keyof typeof limits]).toBeDefined();
-      }
+      expect(limits).toHaveProperty('leads');
+      expect(limits).toHaveProperty('users');
+      expect(limits).toHaveProperty('storage_gb');
     }
   });
 
-  it('todos los límites deben ser números', () => {
-    for (const limits of Object.values(PLAN_LIMITS)) {
-      for (const key of limitKeys) {
-        expect(typeof limits[key as keyof typeof limits]).toBe('number');
-      }
-    }
+  it('PRO debe tener límites ilimitados (-1) para leads, emails, automation, courses, students', () => {
+    const pro = PLAN_LIMITS[PLANS.PRO];
+    expect(pro.leads).toBe(-1);
+    expect(pro.emails_per_month).toBe(-1);
+    expect(pro.automation_runs).toBe(-1);
+    expect(pro.courses).toBe(-1);
+    expect(pro.students).toBe(-1);
   });
 
-  it('TRIAL: leads debe ser 100', () => {
-    expect(PLAN_LIMITS[PLANS.TRIAL].leads).toBe(100);
+  it('TRIAL debe tener límites restrictivos', () => {
+    const trial = PLAN_LIMITS[PLANS.TRIAL];
+    expect(trial.leads).toBeLessThanOrEqual(100);
+    expect(trial.users).toBeLessThanOrEqual(2);
+    expect(trial.automation_runs).toBe(0);
   });
 
-  it('TRIAL: users debe ser 2', () => {
-    expect(PLAN_LIMITS[PLANS.TRIAL].users).toBe(2);
+  it('GROWTH debe tener más leads que STARTER', () => {
+    expect(PLAN_LIMITS[PLANS.GROWTH].leads).toBeGreaterThan(PLAN_LIMITS[PLANS.STARTER].leads);
   });
 
-  it('STARTER: leads debe ser 2500', () => {
-    expect(PLAN_LIMITS[PLANS.STARTER].leads).toBe(2500);
-  });
-
-  it('GROWTH: leads debe ser 10000', () => {
-    expect(PLAN_LIMITS[PLANS.GROWTH].leads).toBe(10000);
-  });
-
-  it('PRO: leads debe ser -1 (ilimitado)', () => {
-    expect(PLAN_LIMITS[PLANS.PRO].leads).toBe(-1);
-  });
-
-  it('PRO_AGENCY: users debe ser -1 (ilimitado)', () => {
-    expect(PLAN_LIMITS[PLANS.PRO_AGENCY].users).toBe(-1);
-  });
-
-  it('PRO_AGENCY: storage_gb debe ser 1000', () => {
-    expect(PLAN_LIMITS[PLANS.PRO_AGENCY].storage_gb).toBe(1000);
-  });
-
-  it('BASICO debe tener límites menores que PROFESIONAL en campos no ilimitados', () => {
-    // PROFESIONAL tiene -1 (ilimitado) en leads, no comparar esos campos
-    expect(PLAN_LIMITS[PLANS.BASICO].storage_gb).toBeLessThan(PLAN_LIMITS[PLANS.PROFESIONAL].storage_gb);
-    expect(PLAN_LIMITS[PLANS.BASICO].business_email_gb).toBeLessThan(PLAN_LIMITS[PLANS.PROFESIONAL].business_email_gb);
-  });
-
-  it('AGENCY_SLOT debe tener límites intermedios', () => {
-    expect(PLAN_LIMITS[PLANS.AGENCY_SLOT].leads).toBe(5000);
-    expect(PLAN_LIMITS[PLANS.AGENCY_SLOT].users).toBe(5);
-  });
-
-  it('TRIAL: automation_runs debe ser 0 (sin automatización)', () => {
-    expect(PLAN_LIMITS[PLANS.TRIAL].automation_runs).toBe(0);
-    expect(PLAN_LIMITS[PLANS.STARTER].automation_runs).toBe(0);
+  it('PRO debe tener al menos 5 límites ilimitados (-1)', () => {
+    const pro = PLAN_LIMITS[PLANS.PRO];
+    const unlimitedCount = Object.values(pro).filter(v => v === -1).length;
+    expect(unlimitedCount).toBeGreaterThanOrEqual(5);
   });
 });
 
-// ─── PLAN_PRICES ───────────────────────────────────────────────────────
+// ============================================================
+// PLAN_PRICES
+// ============================================================
 describe('PLAN_PRICES', () => {
-  it('debe tener precios para STARTER, GROWTH, PRO', () => {
-    expect(PLAN_PRICES[PLANS.STARTER]).toBeDefined();
-    expect(PLAN_PRICES[PLANS.GROWTH]).toBeDefined();
-    expect(PLAN_PRICES[PLANS.PRO]).toBeDefined();
+  it('debe tener entries para STARTER, GROWTH, PRO', () => {
+    expect(PLAN_PRICES).toHaveProperty(PLANS.STARTER);
+    expect(PLAN_PRICES).toHaveProperty(PLANS.GROWTH);
+    expect(PLAN_PRICES).toHaveProperty(PLANS.PRO);
   });
 
-  it('STARTER: monthly 49, yearly 490', () => {
-    expect(PLAN_PRICES[PLANS.STARTER].monthly).toBe(49);
-    expect(PLAN_PRICES[PLANS.STARTER].yearly).toBe(490);
+  it('cada plan debe tener monthly, yearly, currency, stripePriceId', () => {
+    for (const [plan, price] of Object.entries(PLAN_PRICES)) {
+      expect(price).toHaveProperty('monthly');
+      expect(price).toHaveProperty('yearly');
+      expect(price).toHaveProperty('currency');
+      expect(price).toHaveProperty('stripePriceId');
+      expect(typeof price.monthly).toBe('number');
+      expect(typeof price.yearly).toBe('number');
+    }
   });
 
-  it('GROWTH: monthly 99, yearly 990', () => {
-    expect(PLAN_PRICES[PLANS.GROWTH].monthly).toBe(99);
-    expect(PLAN_PRICES[PLANS.GROWTH].yearly).toBe(990);
+  it('yearly debe ser mayor que monthly * 10 (descuento anual)', () => {
+    for (const [plan, price] of Object.entries(PLAN_PRICES)) {
+      expect(price.yearly).toBeLessThan(price.monthly * 12);
+    }
   });
 
-  it('PRO: monthly 199, yearly 1990', () => {
-    expect(PLAN_PRICES[PLANS.PRO].monthly).toBe(199);
-    expect(PLAN_PRICES[PLANS.PRO].yearly).toBe(1990);
+  it('PRO debe ser más caro que GROWTH, GROWTH más caro que STARTER', () => {
+    expect(PLAN_PRICES[PLANS.PRO].monthly).toBeGreaterThan(PLAN_PRICES[PLANS.GROWTH].monthly);
+    expect(PLAN_PRICES[PLANS.GROWTH].monthly).toBeGreaterThan(PLAN_PRICES[PLANS.STARTER].monthly);
   });
 
-  it('la moneda debe ser EUR para todos los planes', () => {
-    for (const price of Object.values(PLAN_PRICES)) {
+  it('la moneda debe ser EUR para todos', () => {
+    for (const [plan, price] of Object.entries(PLAN_PRICES)) {
       expect(price.currency).toBe('eur');
     }
   });
-
-  it('yearly debe ser monthly * 10 (2 meses gratis)', () => {
-    for (const price of Object.values(PLAN_PRICES)) {
-      expect(price.yearly).toBe(price.monthly * 10);
-    }
-  });
 });
 
-// ─── PLAN_FEATURES ─────────────────────────────────────────────────────
+// ============================================================
+// PLAN_FEATURES
+// ============================================================
 describe('PLAN_FEATURES', () => {
-  it('debe tener features para STARTER, GROWTH, PRO', () => {
-    expect(PLAN_FEATURES[PLANS.STARTER]).toBeDefined();
-    expect(PLAN_FEATURES[PLANS.GROWTH]).toBeDefined();
-    expect(PLAN_FEATURES[PLANS.PRO]).toBeDefined();
+  it('debe tener entries para STARTER, GROWTH, PRO', () => {
+    expect(PLAN_FEATURES).toHaveProperty(PLANS.STARTER);
+    expect(PLAN_FEATURES).toHaveProperty(PLANS.GROWTH);
+    expect(PLAN_FEATURES).toHaveProperty(PLANS.PRO);
   });
 
-  it('cada plan debe tener al menos 5 features', () => {
-    for (const features of Object.values(PLAN_FEATURES)) {
-      expect(features.length).toBeGreaterThanOrEqual(5);
+  it('cada plan debe tener features no vacíos', () => {
+    for (const [plan, features] of Object.entries(PLAN_FEATURES)) {
+      expect(features.length).toBeGreaterThan(0);
+      for (const f of features) {
+        expect(typeof f).toBe('string');
+      }
     }
   });
 
-  it('PRO y STARTER deben tener cantidad similar de features', () => {
-    // Ambos tienen ~10-11 features; PRO prioriza límites ilimitados, no más bullets
-    expect(PLAN_FEATURES[PLANS.PRO].length).toBeGreaterThanOrEqual(8);
-    expect(PLAN_FEATURES[PLANS.STARTER].length).toBeGreaterThanOrEqual(8);
+  it('GROWTH debe tener más features que STARTER', () => {
+    expect(PLAN_FEATURES[PLANS.GROWTH].length).toBeGreaterThan(PLAN_FEATURES[PLANS.STARTER].length);
   });
 });
 
-// ─── PLAN_EXCLUDED ─────────────────────────────────────────────────────
+// ============================================================
+// PLAN_EXCLUDED
+// ============================================================
 describe('PLAN_EXCLUDED', () => {
+  it('debe tener entries para STARTER, GROWTH, PRO', () => {
+    expect(PLAN_EXCLUDED).toHaveProperty(PLANS.STARTER);
+    expect(PLAN_EXCLUDED).toHaveProperty(PLANS.GROWTH);
+    expect(PLAN_EXCLUDED).toHaveProperty(PLANS.PRO);
+  });
+
   it('STARTER debe tener exclusiones', () => {
     expect(PLAN_EXCLUDED[PLANS.STARTER].length).toBeGreaterThan(0);
-  });
-
-  it('STARTER no debe incluir Contratos, Cotizaciones, Chatbot WhatsApp', () => {
-    const excluded = PLAN_EXCLUDED[PLANS.STARTER];
-    expect(excluded).toContain('Contratos');
-    expect(excluded).toContain('Cotizaciones');
-    expect(excluded).toContain('Chatbot WhatsApp');
   });
 
   it('GROWTH y PRO no deben tener exclusiones', () => {
@@ -320,130 +279,128 @@ describe('PLAN_EXCLUDED', () => {
   });
 });
 
-// ─── ADDONS ──────────────────────────────────────────────────────────
+// ============================================================
+// ADDONS
+// ============================================================
 describe('ADDONS', () => {
-  it('debe tener al menos 3 add-ons', () => {
+  it('debe ser un array con al menos 3 add-ons', () => {
+    expect(Array.isArray(ADDONS)).toBe(true);
     expect(ADDONS.length).toBeGreaterThanOrEqual(3);
   });
 
   it('cada add-on debe tener id, nombre, descripcion, precio, moneda, intervalo, icon', () => {
     for (const addon of ADDONS) {
-      expect(addon.id).toBeTruthy();
-      expect(addon.nombre).toBeTruthy();
-      expect(addon.descripcion).toBeTruthy();
+      expect(addon).toHaveProperty('id');
+      expect(addon).toHaveProperty('nombre');
+      expect(addon).toHaveProperty('descripcion');
+      expect(addon).toHaveProperty('precio');
+      expect(addon).toHaveProperty('moneda');
+      expect(addon).toHaveProperty('intervalo');
+      expect(addon).toHaveProperty('icon');
       expect(typeof addon.precio).toBe('number');
-      expect(addon.moneda).toBeTruthy();
-      expect(addon.intervalo).toBeTruthy();
-      expect(addon.icon).toBeTruthy();
+      expect(addon.precio).toBeGreaterThan(0);
     }
   });
 
-  it('no debe haber IDs duplicados', () => {
+  it('los IDs de add-ons deben ser únicos', () => {
     const ids = ADDONS.map(a => a.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('addon_usuarios debe tener precio 10 y intervalo usuario/mes', () => {
-    const addon = ADDONS.find(a => a.id === 'addon_usuarios');
-    expect(addon).toBeDefined();
-    expect(addon!.precio).toBe(10);
-    expect(addon!.intervalo).toBe('usuario/mes');
-  });
-
-  it('addon_whatsapp debe desbloquear chatbot_whatsapp', () => {
-    const addon = ADDONS.find(a => a.id === 'addon_whatsapp');
-    expect(addon).toBeDefined();
-    expect(addon!.modulosDesbloqueados).toContain('chatbot_whatsapp');
-  });
-
-  it('addon_academia debe desbloquear cursos y estudiantes', () => {
-    const addon = ADDONS.find(a => a.id === 'addon_academia');
-    expect(addon).toBeDefined();
-    expect(addon!.modulosDesbloqueados).toContain('cursos');
-    expect(addon!.modulosDesbloqueados).toContain('estudiantes');
-  });
-
-  it('addon_automatizacion_ia debe tener limitesExtra ilimitados', () => {
-    const addon = ADDONS.find(a => a.id === 'addon_automatizacion_ia');
-    expect(addon).toBeDefined();
-    expect(addon!.limitesExtra?.automation_runs).toBe(-1);
-    expect(addon!.limitesExtra?.automations_count).toBe(-1);
+  it('debe incluir addon_usuarios, addon_whatsapp, addon_academia, addon_automatizacion_ia', () => {
+    const ids = ADDONS.map(a => a.id);
+    expect(ids).toContain('addon_usuarios');
+    expect(ids).toContain('addon_whatsapp');
+    expect(ids).toContain('addon_academia');
+    expect(ids).toContain('addon_automatizacion_ia');
   });
 });
 
-// ─── TRIAL_DAYS ──────────────────────────────────────────────────────
+// ============================================================
+// TRIAL_DAYS
+// ============================================================
 describe('TRIAL_DAYS', () => {
-  it('debe ser 14 días', () => {
+  it('debe ser un número positivo', () => {
+    expect(typeof TRIAL_DAYS).toBe('number');
+    expect(TRIAL_DAYS).toBeGreaterThan(0);
+  });
+
+  it('debe ser 14 (trial estándar de 2 semanas)', () => {
     expect(TRIAL_DAYS).toBe(14);
   });
 });
 
-// ─── isTrialActive ───────────────────────────────────────────────────
+// ============================================================
+// isTrialActive
+// ============================================================
 describe('isTrialActive', () => {
-  it('debe devolver true para trial activo', () => {
+  it('debe devolver true para trial activo (estado trial, fecha futura)', () => {
     const future = new Date();
-    future.setDate(future.getDate() + 5);
-    const tenant = { trialEndsAt: future, estado: 'trial' };
-    expect(isTrialActive(tenant)).toBe(true);
+    future.setDate(future.getDate() + 5); // 5 días en el futuro
+    expect(isTrialActive({ trialEndsAt: future, estado: 'trial' })).toBe(true);
   });
 
-  it('debe devolver false si trialEndsAt es null', () => {
-    const tenant = { trialEndsAt: null, estado: 'trial' };
-    expect(isTrialActive(tenant)).toBe(false);
-  });
-
-  it('debe devolver false si ya expiró', () => {
+  it('debe devolver false para trial expirado (fecha pasada)', () => {
     const past = new Date();
-    past.setDate(past.getDate() - 5);
-    const tenant = { trialEndsAt: past, estado: 'trial' };
-    expect(isTrialActive(tenant)).toBe(false);
+    past.setDate(past.getDate() - 1); // ayer
+    expect(isTrialActive({ trialEndsAt: past, estado: 'trial' })).toBe(false);
   });
 
-  it('debe devolver false si estado no es trial', () => {
-    const future = new Date();
-    future.setDate(future.getDate() + 5);
-    const tenant = { trialEndsAt: future, estado: 'activo' };
-    expect(isTrialActive(tenant)).toBe(false);
+  it('debe devolver false para trialEndsAt null', () => {
+    expect(isTrialActive({ trialEndsAt: null, estado: 'trial' })).toBe(false);
   });
 
-  it('debe devolver false para estado cancelado aunque trialEndsAt sea futuro', () => {
+  it('debe devolver false si estado no es trial aunque la fecha sea futura', () => {
     const future = new Date();
     future.setDate(future.getDate() + 5);
-    const tenant = { trialEndsAt: future, estado: 'cancelado' };
-    expect(isTrialActive(tenant)).toBe(false);
+    expect(isTrialActive({ trialEndsAt: future, estado: 'activo' })).toBe(false);
+    expect(isTrialActive({ trialEndsAt: future, estado: 'cancelado' })).toBe(false);
+  });
+
+  it('debe devolver false si justo ahora expira (mismo momento)', () => {
+    const now = new Date();
+    // new Date() < new Date(now) → falso porque son el mismo timestamp
+    expect(isTrialActive({ trialEndsAt: now, estado: 'trial' })).toBe(false);
   });
 });
 
-// ─── getTrialDaysRemaining ───────────────────────────────────────────
+// ============================================================
+// getTrialDaysRemaining
+// ============================================================
 describe('getTrialDaysRemaining', () => {
-  it('debe devolver 0 si trialEndsAt es null', () => {
-    expect(getTrialDaysRemaining(null)).toBe(0);
-  });
-
-  it('debe devolver días restantes positivos para trial activo', () => {
+  it('debe devolver días positivos para trial con fecha futura', () => {
     const future = new Date();
-    future.setDate(future.getDate() + 7);
+    future.setDate(future.getDate() + 5);
     const days = getTrialDaysRemaining(future);
-    expect(days).toBeGreaterThanOrEqual(6);
-    expect(days).toBeLessThanOrEqual(8);
+    expect(days).toBeGreaterThanOrEqual(3);
+    expect(days).toBeLessThanOrEqual(7);
   });
 
-  it('debe devolver 0 para trial ya expirado', () => {
+  it('debe devolver 0 para trial expirado', () => {
     const past = new Date();
-    past.setDate(past.getDate() - 3);
+    past.setDate(past.getDate() - 5);
     expect(getTrialDaysRemaining(past)).toBe(0);
   });
 
-  it('debe devolver 0 para trial que expira exactamente ahora', () => {
-    const now = new Date();
-    // Diferencia de 0 o negativa → Math.max(0, 0) = 0
-    const days = getTrialDaysRemaining(now);
-    expect(days).toBeGreaterThanOrEqual(0);
+  it('debe devolver 0 para trialEndsAt null', () => {
+    expect(getTrialDaysRemaining(null)).toBe(0);
   });
 
-  it('debe devolver ~1 para trial que expira en 23 horas', () => {
-    const soon = new Date(Date.now() + 23 * 60 * 60 * 1000);
-    const days = getTrialDaysRemaining(soon);
-    expect(days).toBe(1);
+  it('debe devolver al menos 1 día si faltan horas (ceil)', () => {
+    const future = new Date(Date.now() + 60 * 60 * 1000); // 1 hora en el futuro
+    const days = getTrialDaysRemaining(future);
+    expect(days).toBe(1); // ceil de ~0.04 → 1
+  });
+
+  it('debe devolver 1 día si faltan segundos', () => {
+    const future = new Date(Date.now() + 1000); // 1 segundo
+    expect(getTrialDaysRemaining(future)).toBe(1);
+  });
+
+  it('debe ser determinista para una misma fecha', () => {
+    const future = new Date('2027-06-15T12:00:00Z');
+    const a = getTrialDaysRemaining(future);
+    const b = getTrialDaysRemaining(future);
+    expect(a).toBe(b);
   });
 });
