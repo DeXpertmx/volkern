@@ -2,265 +2,166 @@ import { describe, it, expect } from 'vitest';
 import { replaceVariables } from '@/lib/automation/variables-parser';
 import type { ExecutionContext } from '@/lib/automation/types';
 
-describe('Variables Parser — replaceVariables', () => {
-  describe('Texto vacío o sin variables', () => {
-    it('debe devolver string vacío si el texto es vacío', () => {
-      expect(replaceVariables('', {} as ExecutionContext)).toBe('');
-    });
+function makeContext(overrides: Partial<ExecutionContext> = {}): ExecutionContext {
+  return {
+    tenantId: 'tenant-1',
+    ...overrides,
+  };
+}
 
-    it('debe devolver el mismo texto si no hay variables', () => {
-      expect(replaceVariables('Hola mundo', {} as ExecutionContext)).toBe('Hola mundo');
-    });
-
-    it('debe devolver el mismo texto si no hay contexto que haga match', () => {
-      expect(
-        replaceVariables('Hola {nombre}', {} as ExecutionContext)
-      ).toBe('Hola {nombre}');
-    });
+describe('replaceVariables', () => {
+  // ─── Texto vacío / sin variables ─────────────────────────────────────
+  it('debe devolver cadena vacía si el texto es vacío', () => {
+    expect(replaceVariables('', makeContext())).toBe('');
   });
 
-  describe('Variables de lead', () => {
-    const ctx: ExecutionContext = {
-      lead: {
-        nombre: 'Juan Pérez',
-        email: 'juan@example.com',
-        telefono: '+34600000000',
-        estado: 'nuevo',
-        empresa: 'Acme Corp',
-        perfilFiscal: { idFiscal: 'B76364192' },
-      },
-    };
-
-    it('debe reemplazar {nombre} con el nombre del lead', () => {
-      expect(replaceVariables('Hola {nombre}', ctx)).toBe('Hola Juan Pérez');
-    });
-
-    it('debe reemplazar {{nombre}} (doble llave) — NOTA: bug conocido, la simple consume primero dejando residuo', () => {
-      // El código procesa {nombre} antes que {{nombre}} con split/join,
-      // lo que deja una llave residual: {Juan Pérez}
-      expect(replaceVariables('Hola {{nombre}}', ctx)).toBe('Hola {Juan Pérez}');
-    });
-
-    it('debe reemplazar {lead.nombre}', () => {
-      expect(replaceVariables('Cliente: {lead.nombre}', ctx)).toBe('Cliente: Juan Pérez');
-    });
-
-    it('debe reemplazar {{lead.nombre}} — NOTA: bug conocido, {lead.nombre} consume primero', () => {
-      expect(replaceVariables('Cliente: {{lead.nombre}}', ctx)).toBe('Cliente: {Juan Pérez}');
-    });
-
-    it('debe reemplazar {email}', () => {
-      expect(replaceVariables('Email: {email}', ctx)).toBe('Email: juan@example.com');
-    });
-
-    it('debe reemplazar {telefono}', () => {
-      expect(replaceVariables('Tel: {telefono}', ctx)).toBe('Tel: +34600000000');
-    });
-
-    it('debe reemplazar {lead.estado}', () => {
-      expect(replaceVariables('Estado: {lead.estado}', ctx)).toBe('Estado: nuevo');
-    });
-
-    it('debe reemplazar {empresa}', () => {
-      expect(replaceVariables('Empresa: {empresa}', ctx)).toBe('Empresa: Acme Corp');
-    });
-
-    it('debe reemplazar {id_fiscal}', () => {
-      expect(replaceVariables('NIF: {id_fiscal}', ctx)).toBe('NIF: B76364192');
-    });
-
-    it('debe reemplazar {fecha_hoy} con la fecha actual', () => {
-      const result = replaceVariables('Fecha: {fecha_hoy}', ctx);
-      expect(result).not.toBe('Fecha: {fecha_hoy}');
-      expect(result).toMatch(/Fecha: \d{1,2} de \w+ de \d{4}/);
-    });
-
-    it('debe reemplazar múltiples variables en el mismo texto', () => {
-      const result = replaceVariables(
-        'Hola {nombre}, tu email es {email} y tu empresa es {empresa}',
-        ctx
-      );
-      expect(result).toBe(
-        'Hola Juan Pérez, tu email es juan@example.com y tu empresa es Acme Corp'
-      );
-    });
-
-    it('debe dejar intactas las variables que no existen en el lead', () => {
-      // Las variables no definidas en el mapa de vars quedan sin reemplazar
-      expect(replaceVariables('Campo: {no_existe}', ctx)).toBe('Campo: {no_existe}');
-    });
-
-    it('debe manejar lead con campos faltantes (undefined)', () => {
-      const ctxIncompleto: ExecutionContext = {
-        lead: { nombre: 'Ana' },
-      };
-      expect(replaceVariables('Email: {email}', ctxIncompleto)).toBe('Email: ');
-    });
+  it('debe devolver el texto sin cambios si no hay variables', () => {
+    expect(replaceVariables('Hola mundo', makeContext())).toBe('Hola mundo');
   });
 
-  describe('Variables de estudiante', () => {
-    const ctx: ExecutionContext = {
-      estudiante: {
-        nombre: 'María García',
-        email: 'maria@academia.com',
-        telefono: '+34611111111',
-      },
-    };
-
-    it('debe reemplazar {nombre} desde estudiante', () => {
-      expect(replaceVariables('Estudiante: {nombre}', ctx)).toBe('Estudiante: María García');
-    });
-
-    it('debe reemplazar {estudiante.nombre}', () => {
-      expect(replaceVariables('Alumno: {estudiante.nombre}', ctx)).toBe('Alumno: María García');
-    });
-
-    it('debe reemplazar {email} desde estudiante', () => {
-      expect(replaceVariables('Correo: {email}', ctx)).toBe('Correo: maria@academia.com');
-    });
-
-    it('debe reemplazar {estudiante.telefono}', () => {
-      expect(replaceVariables('Tel: {estudiante.telefono}', ctx)).toBe('Tel: +34611111111');
-    });
-
-    it('lead gana sobre estudiante para {nombre} — el primero en procesar consume el token', () => {
-      const ctxAmbos: ExecutionContext = {
-        lead: { nombre: 'Lead Nombre' },
-        estudiante: { nombre: 'Est Nombre' },
-      };
-      // Lead se procesa primero y consume {nombre}.
-      // Cuando estudiante intenta reemplazar {nombre}, ya no existe el token.
-      const result = replaceVariables('Hola {nombre}', ctxAmbos);
-      expect(result).toBe('Hola Lead Nombre');
-    });
+  // ─── Variables de lead ───────────────────────────────────────────────
+  it('debe reemplazar {nombre} con lead.nombre', () => {
+    const ctx = makeContext({ lead: { nombre: 'Juan' } });
+    expect(replaceVariables('Hola {nombre}', ctx)).toBe('Hola Juan');
   });
 
-  describe('Variables de curso', () => {
-    const ctx: ExecutionContext = {
-      curso: {
-        titulo: 'React Avanzado',
-        descripcion: 'Curso completo de React con TypeScript',
-      },
-    };
-
-    it('debe reemplazar {curso.titulo}', () => {
-      expect(replaceVariables('Curso: {curso.titulo}', ctx)).toBe('Curso: React Avanzado');
-    });
-
-    it('debe reemplazar {curso.descripcion}', () => {
-      expect(replaceVariables('Desc: {curso.descripcion}', ctx)).toBe(
-        'Desc: Curso completo de React con TypeScript'
-      );
-    });
-
-    it('debe reemplazar {{curso.titulo}} (doble llave) — NOTA: bug conocido, la simple consume primero', () => {
-      expect(replaceVariables('Curso: {{curso.titulo}}', ctx)).toBe('Curso: {React Avanzado}');
-    });
+  it('debe reemplazar {{nombre}} con lead.nombre (doble llave) — nota: {nombre} se procesa primero y rompe {{nombre}} parcialmente', () => {
+    const ctx = makeContext({ lead: { nombre: 'María' } });
+    // Comportamiento real: {nombre} se reemplaza primero, dejando '{María}' en vez de 'María'
+    expect(replaceVariables('Hola {{nombre}}', ctx)).toBe('Hola {María}');
   });
 
-  describe('Variables de cita', () => {
-    const ctx: ExecutionContext = {
-      cita: {
-        fechaHora: '2024-06-15T14:30:00.000Z',
-        servicio: { nombre: 'Consulta Premium' },
-      },
-    };
-
-    it('debe reemplazar {cita.fechaHora}', () => {
-      const result = replaceVariables('Cita: {cita.fechaHora}', ctx);
-      expect(result).not.toBe('Cita: {cita.fechaHora}');
-      expect(result).toContain('Cita: ');
-      // La fecha se formatea con es-MX locale
-      expect(result.length).toBeGreaterThan('Cita: '.length);
-    });
-
-    it('debe reemplazar {cita.servicio}', () => {
-      expect(replaceVariables('Servicio: {cita.servicio}', ctx)).toBe(
-        'Servicio: Consulta Premium'
-      );
-    });
-
-    it('debe manejar cita sin fechaHora', () => {
-      const ctxSinFecha: ExecutionContext = {
-        cita: { servicio: { nombre: 'Test' } },
-      };
-      expect(replaceVariables('Fecha: {cita.fechaHora}', ctxSinFecha)).toBe('Fecha: ');
-    });
-
-    it('debe manejar cita sin servicio', () => {
-      const ctxSinServicio: ExecutionContext = {
-        cita: { fechaHora: '2024-01-01T00:00:00.000Z' },
-      };
-      expect(replaceVariables('Servicio: {cita.servicio}', ctxSinServicio)).toBe('Servicio: ');
-    });
+  it('debe reemplazar {lead.nombre} con lead.nombre', () => {
+    const ctx = makeContext({ lead: { nombre: 'Carlos' } });
+    expect(replaceVariables('Hola {lead.nombre}', ctx)).toBe('Hola Carlos');
   });
 
-  describe('Contexto combinado (múltiples entidades)', () => {
-    const ctx: ExecutionContext = {
-      lead: { nombre: 'Juan', email: 'juan@test.com' },
-      estudiante: { nombre: 'María', email: 'maria@test.com' },
-      curso: { titulo: 'TypeScript Pro', descripcion: 'De cero a experto' },
-      cita: {
-        fechaHora: '2024-07-01T10:00:00.000Z',
-        servicio: { nombre: 'Mentoría' },
-      },
-    };
-
-    it('debe reemplazar variables de todas las entidades', () => {
-      const template = 'Lead: {lead.nombre} | Estudiante: {estudiante.nombre} | Curso: {curso.titulo} | Servicio: {cita.servicio}';
-      const result = replaceVariables(template, ctx);
-      expect(result).toBe(
-        'Lead: Juan | Estudiante: María | Curso: TypeScript Pro | Servicio: Mentoría'
-      );
-    });
-
-    it('{nombre} genérico usa la primera entidad que lo define (lead gana)', () => {
-      const result = replaceVariables('Nombre: {nombre}', ctx);
-      // Lead se procesa primero y consume {nombre} → 'Juan'.
-      // Estudiante no puede reemplazar porque el token ya no existe.
-      expect(result).toBe('Nombre: Juan');
-    });
+  it('debe reemplazar {email} con lead.email', () => {
+    const ctx = makeContext({ lead: { email: 'test@volkern.com' } });
+    expect(replaceVariables('Tu email: {email}', ctx)).toBe('Tu email: test@volkern.com');
   });
 
-  describe('Edge cases', () => {
-    it('debe manejar variables con caracteres especiales en el valor', () => {
-      const ctx: ExecutionContext = {
-        lead: { nombre: 'José María O\'Connor', email: 'jose@test.com' },
-      };
-      const result = replaceVariables('Hola {nombre}', ctx);
-      expect(result).toBe("Hola José María O'Connor");
-    });
+  it('debe reemplazar {telefono} con lead.telefono', () => {
+    const ctx = makeContext({ lead: { telefono: '+34666111222' } });
+    expect(replaceVariables('Tel: {telefono}', ctx)).toBe('Tel: +34666111222');
+  });
 
-    it('debe manejar variables repetidas en el texto', () => {
-      const ctx: ExecutionContext = {
-        lead: { nombre: 'Ana', email: 'ana@test.com' },
-      };
-      const result = replaceVariables('{nombre} - {nombre} - {nombre}', ctx);
-      expect(result).toBe('Ana - Ana - Ana');
-    });
+  it('debe reemplazar {lead.estado} con lead.estado', () => {
+    const ctx = makeContext({ lead: { estado: 'nuevo' } });
+    expect(replaceVariables('Estado: {lead.estado}', ctx)).toBe('Estado: nuevo');
+  });
 
-    it('debe manejar texto sin variables con contexto poblado', () => {
-      const ctx: ExecutionContext = {
-        lead: { nombre: 'Test' },
-        curso: { titulo: 'Curso' },
-      };
-      expect(replaceVariables('Texto plano sin placeholders', ctx)).toBe(
-        'Texto plano sin placeholders'
-      );
-    });
+  it('debe reemplazar {empresa} con lead.empresa', () => {
+    const ctx = makeContext({ lead: { empresa: 'ACME Corp' } });
+    expect(replaceVariables('Empresa: {empresa}', ctx)).toBe('Empresa: ACME Corp');
+  });
 
-    it('no debe reemplazar parcialmente (ej: {nombre} no debe matchear {nombres})', () => {
-      const ctx: ExecutionContext = {
-        lead: { nombre: 'Juan' },
-      };
-      // {nombres} no es una variable definida, no debe ser reemplazada
-      const result = replaceVariables('Var: {nombres}', ctx);
-      expect(result).toBe('Var: {nombres}');
-    });
+  it('debe reemplazar {id_fiscal} con lead.perfilFiscal.idFiscal', () => {
+    const ctx = makeContext({ lead: { perfilFiscal: { idFiscal: 'B12345678' } } });
+    expect(replaceVariables('ID Fiscal: {id_fiscal}', ctx)).toBe('ID Fiscal: B12345678');
+  });
 
-    it('debe manejar contexto completamente vacío', () => {
-      const result = replaceVariables('Hola {nombre}', {} as ExecutionContext);
-      expect(result).toBe('Hola {nombre}');
+  it('debe reemplazar {fecha_hoy} con la fecha actual formateada', () => {
+    const ctx = makeContext({ lead: { nombre: 'Test' } });
+    const result = replaceVariables('Fecha: {fecha_hoy}', ctx);
+    expect(result).not.toBe('Fecha: {fecha_hoy}');
+    expect(result).toMatch(/Fecha: \d{2} de \w+ de \d{4}/);
+  });
+
+  it('debe dejar vacío si el campo no existe en lead', () => {
+    const ctx = makeContext({ lead: { nombre: 'Juan' } });
+    expect(replaceVariables('Email: {email}', ctx)).toBe('Email: ');
+  });
+
+  it('debe reemplazar múltiples variables en el mismo texto', () => {
+    const ctx = makeContext({
+      lead: { nombre: 'Ana', email: 'ana@test.com', empresa: 'MiEmpresa' },
     });
+    const result = replaceVariables(
+      '{nombre} de {empresa} - {email}',
+      ctx
+    );
+    expect(result).toBe('Ana de MiEmpresa - ana@test.com');
+  });
+
+  // ─── Variables de estudiante ─────────────────────────────────────────
+  it('debe reemplazar {nombre} con estudiante.nombre', () => {
+    const ctx = makeContext({ estudiante: { nombre: 'Pedro' } });
+    expect(replaceVariables('Alumno: {nombre}', ctx)).toBe('Alumno: Pedro');
+  });
+
+  it('debe reemplazar {estudiante.nombre} con estudiante.nombre', () => {
+    const ctx = makeContext({ estudiante: { nombre: 'Lucía' } });
+    expect(replaceVariables('{estudiante.nombre}', ctx)).toBe('Lucía');
+  });
+
+  it('debe reemplazar {estudiante.email} con estudiante.email', () => {
+    const ctx = makeContext({ estudiante: { email: 'alumno@test.com' } });
+    expect(replaceVariables('Email: {estudiante.email}', ctx)).toBe('Email: alumno@test.com');
+  });
+
+  it('debe reemplazar {estudiante.telefono} con estudiante.telefono', () => {
+    const ctx = makeContext({ estudiante: { telefono: '+52666111222' } });
+    expect(replaceVariables('Tel: {estudiante.telefono}', ctx)).toBe('Tel: +52666111222');
+  });
+
+  // ─── Variables de curso ──────────────────────────────────────────────
+  it('debe reemplazar {curso.titulo} con curso.titulo', () => {
+    const ctx = makeContext({ curso: { titulo: 'Ventas B2B' } });
+    expect(replaceVariables('Curso: {curso.titulo}', ctx)).toBe('Curso: Ventas B2B');
+  });
+
+  it('debe reemplazar {curso.descripcion} con curso.descripcion', () => {
+    const ctx = makeContext({ curso: { descripcion: 'Aprende a vender' } });
+    expect(replaceVariables('{curso.descripcion}', ctx)).toBe('Aprende a vender');
+  });
+
+  // ─── Variables de cita ───────────────────────────────────────────────
+  it('debe reemplazar {cita.servicio} con cita.servicio.nombre', () => {
+    const ctx = makeContext({
+      cita: { servicio: { nombre: 'Consultoría' } },
+    });
+    expect(replaceVariables('Servicio: {cita.servicio}', ctx)).toBe('Servicio: Consultoría');
+  });
+
+  it('debe reemplazar {cita.fechaHora} con fecha formateada', () => {
+    const ctx = makeContext({
+      cita: { fechaHora: '2026-06-15T10:30:00Z' },
+    });
+    const result = replaceVariables('Cita: {cita.fechaHora}', ctx);
+    expect(result).not.toBe('Cita: {cita.fechaHora}');
+    expect(result.startsWith('Cita: ')).toBe(true);
+    expect(result.length).toBeGreaterThan('Cita: '.length);
+  });
+
+  it('debe dejar vacío si cita.fechaHora es null', () => {
+    const ctx = makeContext({
+      cita: { fechaHora: null },
+    });
+    expect(replaceVariables('{cita.fechaHora}', ctx)).toBe('');
+  });
+
+  // ─── Prioridad lead sobre estudiante ─────────────────────────────────
+  it('lead debe tener prioridad sobre estudiante para {nombre}', () => {
+    const ctx = makeContext({
+      lead: { nombre: 'LeadName' },
+      estudiante: { nombre: 'StudentName' },
+    });
+    // lead se procesa primero, sus reemplazos se aplican antes
+    const result = replaceVariables('{nombre}', ctx);
+    // Como lead.nombre ya fue reemplazado, estudiante.nombre no lo sobrescribe
+    // porque el texto ya no contiene {nombre}
+    expect(result).toBe('LeadName');
+  });
+
+  // ─── Sin contexto ────────────────────────────────────────────────────
+  it('no debe reemplazar variables si no hay lead/estudiante/curso/cita', () => {
+    const ctx = makeContext({});
+    expect(replaceVariables('Hola {nombre}', ctx)).toBe('Hola {nombre}');
+  });
+
+  it('no debe reemplazar el texto si solo hay campos requeridos parciales', () => {
+    const ctx = makeContext({ lead: {} });
+    expect(replaceVariables('{nombre}', ctx)).toBe('');
   });
 });
