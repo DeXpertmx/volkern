@@ -21,12 +21,14 @@ export async function POST(request: NextRequest) {
 
     const result = await CustomerAuthService.login(email, password, deviceInfo, ipAddress);
 
+    // Include token in JSON body for mobile clients (React Native can't read httpOnly cookies)
     const response = NextResponse.json({ 
       success: true, 
-      user: result.user 
+      user: result.user,
+      token: result.token
     });
 
-    // Set HttpOnly cookie for the token
+    // Set HttpOnly cookie for browser-based sessions
     response.cookies.set('customer_token', result.token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
