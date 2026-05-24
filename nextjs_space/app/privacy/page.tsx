@@ -53,7 +53,7 @@ export default function PrivacyPolicyPage() {
           <p className="text-xl text-blue-100 max-w-2xl mx-auto">
             Tu privacidad es nuestra prioridad. Conoce cómo protegemos tus datos.
           </p>
-          <p className="text-sm text-blue-200 mt-4">Última actualización: 14 de enero de 2026</p>
+          <p className="text-sm text-blue-200 mt-4">Última actualización: 24 de mayo de 2026</p>
         </div>
       </section>
 
@@ -86,15 +86,24 @@ export default function PrivacyPolicyPage() {
               </section>
 
               <section>
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">3. Uso de Google Calendar</h2>
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">3. Uso de APIs de Google</h2>
                 <p className="text-gray-600 leading-relaxed mb-4">
-                  Volkern CRM utiliza la API de Google Calendar para proporcionar sincronización de citas. Específicamente:
+                  Volkern CRM utiliza las siguientes APIs de Google para proporcionar funcionalidades de productividad:
                 </p>
                 <ul className="list-disc pl-6 text-gray-600 space-y-2">
-                  <li>Accedemos a sus eventos de calendario para mostrarlos en el CRM.</li>
-                  <li>Creamos eventos en su calendario cuando agenda citas en Volkern.</li>
-                  <li>Sincronizamos cambios bidireccionales entre ambas plataformas.</li>
-                  <li>No compartimos sus datos de calendario con terceros.</li>
+                  <li><strong>Google Calendar API:</strong> Accedemos a sus eventos de calendario para mostrarlos en el CRM, crear eventos al agendar citas, y sincronizar cambios bidireccionalmente.</li>
+                  <li><strong>Google Tasks API:</strong> Creamos y gestionamos tareas en Google Tasks para mantener sincronizadas sus actividades del CRM.</li>
+                </ul>
+                <p className="text-gray-600 leading-relaxed mt-4 mb-4">
+                  <strong>Uso Limitado:</strong> El uso y la transferencia de la información recibida de las APIs de Google por parte de Volkern CRM se adhiere a la 
+                  <a href="https://developers.google.com/terms/api-services-user-data-policy" className="text-blue-600 hover:underline" target="_blank" rel="noopener noreferrer"> Política de Datos de Usuario de los Servicios de API de Google</a>, 
+                  incluyendo los requisitos de <strong>Uso Limitado (Limited Use)</strong>:
+                </p>
+                <ul className="list-disc pl-6 text-gray-600 space-y-2">
+                  <li>Los datos se utilizan exclusivamente para proporcionar y mejorar las funciones visibles para el usuario dentro de la plataforma.</li>
+                  <li>No transferimos estos datos a terceros, excepto cuando sea necesario para prestar el servicio (ej. Google Meet).</li>
+                  <li>No utilizamos los datos para servir anuncios ni para fines de marketing.</li>
+                  <li>No permitimos que personas humanas lean los datos a menos que el usuario haya dado su consentimiento explícito o por razones de seguridad.</li>
                   <li>Puede revocar el acceso en cualquier momento desde la configuración de integraciones.</li>
                 </ul>
               </section>
@@ -112,7 +121,25 @@ export default function PrivacyPolicyPage() {
               </section>
 
               <section>
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">5. Compartir Información</h2>
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">5. Uso de Inteligencia Artificial</h2>
+                <p className="text-gray-600 leading-relaxed mb-4">
+                  Volkern CRM utiliza un modelo de inteligencia artificial autohospedado (self-hosted AI model) 
+                  para proporcionar funcionalidades avanzadas como análisis predictivo, automatización de procesos, 
+                  scoring de leads, generación de contenido y asistencia inteligente.
+                </p>
+                <p className="text-gray-600 leading-relaxed mb-4">
+                  El modelo de IA se ejecuta exclusivamente en nuestra infraestructura, lo que significa que:
+                </p>
+                <ul className="list-disc pl-6 text-gray-600 space-y-2">
+                  <li><strong>No se comparten datos de usuario</strong> con proveedores externos de IA.</li>
+                  <li><strong>Los datos permanecen en nuestros servidores</strong> bajo los mismos estándares de seguridad y encriptación.</li>
+                  <li><strong>No utilizamos sus datos</strong> para entrenar o mejorar modelos de terceros.</li>
+                  <li>Puede desactivar las funcionalidades de IA en cualquier momento desde la configuración de su cuenta.</li>
+                </ul>
+              </section>
+
+              <section>
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">6. Compartir Información</h2>
                 <p className="text-gray-600 leading-relaxed">
                   No vendemos, alquilamos ni compartimos su información personal con terceros para fines de marketing. 
                   Podemos compartir información con proveedores de servicios que nos ayudan a operar la plataforma, 
@@ -121,7 +148,7 @@ export default function PrivacyPolicyPage() {
               </section>
 
               <section>
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">6. Seguridad de Datos</h2>
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">7. Seguridad de Datos</h2>
                 <p className="text-gray-600 leading-relaxed">
                   Implementamos medidas de seguridad técnicas y organizativas para proteger su información, incluyendo:
                   encriptación de datos en tránsito y en reposo, autenticación segura, y acceso restringido a datos personales.
@@ -129,7 +156,7 @@ export default function PrivacyPolicyPage() {
               </section>
 
               <section>
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">7. Sus Derechos</h2>
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">8. Sus Derechos</h2>
                 <p className="text-gray-600 leading-relaxed mb-4">Usted tiene derecho a:</p>
                 <ul className="list-disc pl-6 text-gray-600 space-y-2">
                   <li>Acceder a sus datos personales.</li>
@@ -145,7 +172,7 @@ export default function PrivacyPolicyPage() {
               </section>
 
               <section>
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">8. Retención de Datos</h2>
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">9. Retención de Datos</h2>
                 <p className="text-gray-600 leading-relaxed">
                   Conservamos su información mientras su cuenta esté activa o según sea necesario para proporcionarle servicios. 
                   Si solicita la eliminación de su cuenta, eliminaremos sus datos personales dentro de 30 días, 
@@ -154,7 +181,7 @@ export default function PrivacyPolicyPage() {
               </section>
 
               <section>
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">9. Cambios a esta Política</h2>
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">10. Cambios a esta Política</h2>
                 <p className="text-gray-600 leading-relaxed">
                   Podemos actualizar esta Política de Privacidad periódicamente. Le notificaremos sobre cambios significativos 
                   mediante un aviso en nuestra plataforma o por correo electrónico.
@@ -162,7 +189,7 @@ export default function PrivacyPolicyPage() {
               </section>
 
               <section>
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">10. Contacto</h2>
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">11. Contacto</h2>
                 <p className="text-gray-600 leading-relaxed">
                   Si tiene preguntas sobre esta Política de Privacidad, puede contactarnos en:
                 </p>
