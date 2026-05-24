@@ -9,6 +9,7 @@ export default defineConfig({
       '@': path.resolve(__dirname, './'),
     },
     setupFiles: ['./tests/setup.ts'],
+    exclude: ['app-movil/**', 'node_modules/**', '.opencode/**', 'mcp-server/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'text-summary', 'lcov'],
