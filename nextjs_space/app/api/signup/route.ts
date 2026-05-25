@@ -129,6 +129,9 @@ export async function POST(request: NextRequest) {
       counter++
     }
 
+    // Obtener configuración del plan (Trial por defecto)
+    const trialConfig = await getPlanConfig(PLANS.TRIAL);
+
     // Calcular fecha de fin según cupón o trial
     const trialStart = new Date()
     const trialEnd = new Date()
@@ -160,9 +163,6 @@ export async function POST(request: NextRequest) {
 
     // Hashear la contraseña
     const hashedPassword = await bcrypt.hash(password, 12)
-
-    // Obtener configuración del plan (Trial por defecto)
-    const trialConfig = await getPlanConfig(PLANS.TRIAL);
 
     // Crear el tenant y el usuario en una transacción
     const result = await prisma.$transaction(async (tx) => {
