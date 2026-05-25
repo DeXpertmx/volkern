@@ -2,6 +2,7 @@ import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors, typography, layout } from '../../src/theme';
 import { Platform, View, Text, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNotificationsCount } from '../../src/contexts/notifications';
 import { useNetwork } from '../../src/contexts/network';
 
@@ -12,6 +13,7 @@ function TabIcon({ name, color, size }: { name: keyof typeof Ionicons.glyphMap; 
 
 export default function TabLayout() {
   const colors = useThemeColors();
+  const insets = useSafeAreaInsets();
   const { unreadCount } = useNotificationsCount();
   const { pendingCount } = useNetwork();
   const s = makeStyles(colors);
@@ -23,11 +25,13 @@ export default function TabLayout() {
         tabBarActiveTintColor: colors.primary as string,
         tabBarInactiveTintColor: colors.textTertiary as string,
         tabBarStyle: {
-          height: layout.tabBarHeight,
+          height: Platform.OS === 'android'
+            ? layout.tabBarHeight + Math.max(insets.bottom - 8, 0)
+            : layout.tabBarHeight + Math.max(insets.bottom - 20, 0),
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
           borderTopWidth: 1,
-          paddingBottom: Platform.OS === 'ios' ? 20 : 8,
+          paddingBottom: Platform.OS === 'ios' ? Math.max(insets.bottom, 20) : Math.max(insets.bottom, 8),
           paddingTop: 8,
           ...Platform.select({
             ios: {

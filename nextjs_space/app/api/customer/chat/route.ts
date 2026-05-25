@@ -3,12 +3,13 @@ export const dynamic = 'force-dynamic';
 /**
  * POST /api/customer/chat
  * Mobile chat endpoint — authenticated via Bearer JWT.
- * Delegates to AIEngine for LLM responses.
+ * Uses system prompt with brand rules + user context, delegates to AI.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { CustomerAuthService } from '@/lib/auth/customer-auth';
-import { AIEngine } from '@/lib/event-engine/ai-engine';
+import { callAssistantWithFallback } from '@/lib/assistant/openrouter-client';
+import { getGemmaSystemPrompt } from '@/lib/assistant/gemma-personality';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function POST(request: NextRequest) {
@@ -42,25 +43,43 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── Call AIEngine ──
-    const result = await AIEngine.chat(
-      { prompt: message, model: 'gemma', temperature: 0.7, max_tokens: 1024 },
-      session.tenantId,
-    );
+    // ── Build context with user info ──
+    const context = [
+      `INFORMACIÓN DEL USUARIO:`,
+      `- ID de usuario: ${session.userId}`,
+      `- ID del tenant/espacio: ${session.tenantId}`,
+      `- Fecha actual: ${new Date().toLocaleDateString('es-MX', { timeZone: 'UTC' })}`,
+      ``,
+      `INSTRUCCIÓN: Responde al mensaje del usuario usando el contexto de Volkern.`,
+      `Si el usuario pide datos que no puedes consultar (como listas de leads, reportes, etc.),`,
+      `dirígelo amablemente al módulo correspondiente dentro de Volkern.`,
+    ].join('\n');
 
-    if (result.error) {
-      console.error('[CustomerChat] AIEngine error:', result.error);
+    // ── Build messages with system prompt + context ──
+    const systemPrompt = getGemmaSystemPrompt(context);
+    const messages = [
+      { role: 'system' as const, content: systemPrompt },
+      { role: 'user' as const, content: message },
+    ];
+
+    // ── Call AI with fallback support ──
+    let result;
+    try {
+      result = await callAssistantWithFallback(messages);
+    } catch (aiError) {
+      console.error('[CustomerChat] All AI models failed:', aiError);
       return NextResponse.json(
-        { error: 'Error al procesar el mensaje' },
+        { error: 'Error al procesar el mensaje. Intenta de nuevo.' },
         { status: 500 },
       );
     }
 
     // ── Build response matching mobile ChatResponse ──
     const responseChatId = chatId || uuidv4();
+    const reply = result.choices[0].message.content;
 
     return NextResponse.json({
-      reply: result.content,
+      reply,
       chatId: responseChatId,
       suggestions: [
         'Crear un nuevo lead',
