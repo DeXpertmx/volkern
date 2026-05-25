@@ -240,7 +240,7 @@ export async function POST(request: NextRequest) {
       const tenantFeatures = modules.map((modulo: string) => ({
         tenantId: tenant.id,
         feature: modulo,
-        activo: true
+        habilitado: true
       }))
       
       await tx.tenantFeature.createMany({
