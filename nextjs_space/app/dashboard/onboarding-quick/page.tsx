@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -25,24 +25,41 @@ export default function OnboardingQuickPage() {
   const [token, setToken] = useState('');
   const [botUsername, setBotUsername] = useState('');
   const [polling, setPolling] = useState(false);
+  const [provisionError, setProvisionError] = useState<string | null>(null);
 
+  // Refs para evitar doble ejecución
+  const provisionStarted = useRef(false);
+  const pollingInterval = useRef<NodeJS.Timeout>();
+
+  // Auto-provisioning al entrar al paso 2
+  useEffect(() => {
+    if (step === 2 && !provisionStarted.current) {
+      provisionStarted.current = true;
+      handleProvision();
+    }
+  }, [step]);
+
+  // Polling al entrar al paso 5
   useEffect(() => {
     if (step === 5) {
       startPolling();
     }
-    return () => setPolling(false);
+    return () => {
+      setPolling(false);
+      if (pollingInterval.current) clearInterval(pollingInterval.current);
+    };
   }, [step]);
 
   const startPolling = () => {
     setPolling(true);
-    const interval = setInterval(async () => {
+    pollingInterval.current = setInterval(async () => {
       try {
         const res = await fetch('/api/onboarding/check-first-message');
         if (res.ok) {
           const data = await res.json();
           if (data.hasFirstMessage) {
             setPolling(false);
-            clearInterval(interval);
+            if (pollingInterval.current) clearInterval(pollingInterval.current);
             router.push('/dashboard');
           }
         }
@@ -54,21 +71,37 @@ export default function OnboardingQuickPage() {
 
   const handleProvision = async () => {
     setLoading(true);
+    setProvisionError(null);
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000);
+      
       const res = await fetch('/api/onboarding/quick', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ step: 'provision' })
+        body: JSON.stringify({ step: 'provision' }),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
 
-      if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      if (data?.success) {
         setStep(3);
       } else {
-        const data = await res.json();
-        toast.error(data.error || 'Error al preparar');
+        const msg = data?.error || 'Error al preparar el espacio de trabajo';
+        setProvisionError(msg);
+        toast.error(msg);
       }
-    } catch (err) {
-      toast.error('Error de conexión');
+    } catch (err: any) {
+      if (err?.name === 'AbortError') {
+        const msg = 'La conexión está tardando demasiado. Verifica tu internet e intenta de nuevo.';
+        setProvisionError(msg);
+        toast.error(msg);
+      } else {
+        const msg = err?.message || 'Error de conexión. Verifica tu internet.';
+        setProvisionError(msg);
+        toast.error(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -160,11 +193,11 @@ export default function OnboardingQuickPage() {
                   <h2 className="text-2xl font-bold text-white mb-6">
                     Preparando tu espacio de trabajo...
                   </h2>
-                  <div className="space-y-4 text-left mb-8">
+                  <div className="space-y-4 text-left mb-4">
                     <motion.div 
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.2 }}
+                      transition={{ delay: 0.1 }}
                       className="flex items-center gap-3 text-slate-300"
                     >
                       <CheckCircle2 className="h-5 w-5 text-green-400" />
@@ -173,7 +206,7 @@ export default function OnboardingQuickPage() {
                     <motion.div 
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.4 }}
+                      transition={{ delay: 0.3 }}
                       className="flex items-center gap-3 text-slate-300"
                     >
                       <CheckCircle2 className="h-5 w-5 text-green-400" />
@@ -182,27 +215,49 @@ export default function OnboardingQuickPage() {
                     <motion.div 
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.6 }}
-                      className="flex items-center gap-3 text-slate-300"
+                      transition={{ delay: 0.5 }}
+                      className="flex items-center gap-3"
                     >
-                      <Loader2 className="h-5 w-5 text-purple-400 animate-spin" />
-                      <span>Activando IA</span>
+                      {loading ? (
+                        <Loader2 className="h-5 w-5 text-purple-400 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="h-5 w-5 text-green-400" />
+                      )}
+                      <span className={loading ? 'text-purple-300' : 'text-green-300'}>
+                        {loading ? 'Activando IA…' : 'IA activada'}
+                      </span>
                     </motion.div>
                   </div>
-                  <Button 
-                    onClick={handleProvision}
-                    disabled={loading}
-                    className="w-full h-12 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-xl"
-                  >
-                    {loading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Preparando...
-                      </>
-                    ) : (
-                      'Continuar'
-                    )}
-                  </Button>
+
+                  {loading && (
+                    <p className="text-xs text-slate-500 mt-2">
+                      Configurando tu asistente inteligente, esto toma solo unos segundos
+                    </p>
+                  )}
+                  {provisionError && !loading && (
+                    <div className="mt-6 space-y-3">
+                      <p className="text-xs text-red-400 bg-red-500/10 rounded-lg p-3 border border-red-500/20">
+                        {provisionError}
+                      </p>
+                      <Button
+                        onClick={() => {
+                          provisionStarted.current = true;
+                          handleProvision();
+                        }}
+                        className="w-full h-12 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-xl"
+                      >
+                        <Loader2 className="mr-2 h-4 w-4" />
+                        Reintentar
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => setStep(3)}
+                        className="w-full h-12 border-slate-600 text-slate-300 hover:bg-slate-800 font-semibold rounded-xl"
+                      >
+                        Omitir este paso
+                      </Button>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </motion.div>

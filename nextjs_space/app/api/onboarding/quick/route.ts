@@ -30,7 +30,13 @@ async function quickProvisionTenant(tenantId: string): Promise<ProvisioningResul
       throw new Error('Tenant no encontrado');
     }
 
-    const account = await chatwootApi.createAccount(tenant.nombre, 'es');
+    // Timeout de 15s para evitar que el onboarding se cuelgue
+    const account = await Promise.race([
+      chatwootApi.createAccount(tenant.nombre, 'es'),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Timeout: Chatwoot no respondió en 15s')), 15000)
+      ),
+    ]);
 
     return {
       success: true,

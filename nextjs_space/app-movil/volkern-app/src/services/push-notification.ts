@@ -46,6 +46,8 @@ export function setupPushNotifications() {
     if (response) {
       handleNotificationTap(response.notification.request.content.data);
     }
+  }).catch(() => {
+    // Ignorar errores al iniciar — posiblemente permisos no concedidos aún
   });
 
   // 2. App abierta en background → el usuario toca la notificación

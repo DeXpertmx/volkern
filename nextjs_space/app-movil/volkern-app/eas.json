@@ -6,13 +6,25 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://volkern.app",
+        "EXPO_PUBLIC_WEB_URL": "https://volkern.app"
+      }
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://volkern.app",
+        "EXPO_PUBLIC_WEB_URL": "https://volkern.app"
+      }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://volkern.app",
+        "EXPO_PUBLIC_WEB_URL": "https://volkern.app"
+      }
     }
   },
   "submit": {

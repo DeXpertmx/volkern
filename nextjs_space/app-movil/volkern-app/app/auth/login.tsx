@@ -174,7 +174,7 @@ export default function LoginScreen() {
             >
               <Text style={s.registerText}>
                 ¿No tienes cuenta?{' '}
-                <Text style={s.registerTextBold}>Regístrate</Text>
+                <Text style={s.registerTextBold}>Crear cuenta</Text>
               </Text>
             </TouchableOpacity>
           </View>
