@@ -10,7 +10,6 @@
     "@testing-library/react-native": "^13.3.3",
     "babel-preset-expo": "~56.0.0",
     "expo": "~56.0.4",
-    "expo-av": "^16.0.8",
     "expo-camera": "~56.0.7",
     "expo-clipboard": "~56.0.3",
     "expo-constants": "~56.0.15",
@@ -57,7 +56,10 @@
   "expo": {
     "doctor": {
       "reactNativeDirectoryCheck": {
-        "exclude": ["expo-av", "expo-modules-jsi"],
+        "exclude": [
+          "expo-av",
+          "expo-modules-jsi"
+        ],
         "listUnknownPackages": false
       }
     }

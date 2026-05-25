@@ -61,6 +61,24 @@ export function usePushNotifications() {
       const registration = await navigator.serviceWorker.register('/sw.js');
       console.log('[Push] Service Worker registrado');
 
+      // Esperar a que el Service Worker esté en estado 'activated' antes de suscribir
+      // PushManager.subscribe() falla si el SW no está activo
+      if (!registration.active) {
+        const sw = registration.installing || registration.waiting;
+        if (sw) {
+          await Promise.race([
+            new Promise<void>((resolve) => {
+              sw.addEventListener('statechange', () => {
+                if (sw.state === 'activated') resolve();
+              });
+            }),
+            new Promise<void>((_, reject) =>
+              setTimeout(() => reject(new Error('Timeout esperando activación del SW')), 10000)
+            ),
+          ]);
+        }
+      }
+
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(

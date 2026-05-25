@@ -51,7 +51,7 @@ const NATIVE_SCREEN_MAP: Record<string, string> = {
 };
 
 // ─── Web Base URL ─────────────────────────────────────────────────────────────
-const WEB_BASE_URL = process.env.EXPO_PUBLIC_WEB_URL || 'https://volkern.com';
+const WEB_BASE_URL = process.env.EXPO_PUBLIC_WEB_URL || 'https://volkern.app';
 
 // ─── Action Button ────────────────────────────────────────────────────────────
 function ActionButton({

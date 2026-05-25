@@ -42,12 +42,6 @@ describe('authService', () => {
     expect(result.token).toBe('tok');
   });
 
-  it('register calls api.post', async () => {
-    mockPost.mockResolvedValue({ success: true, user: { id: '1', name: 'T', email: 'a@b.com', roleName: 'admin' }, tenant: { id: 't1', nombre: 'C', slug: 'c', plan: 'pro', trialEndsAt: '' } });
-    await authService.register({ email: 'a@b.com', password: 'p', fullName: 'T', companyName: 'C' });
-    expect(mockPost).toHaveBeenCalled();
-  });
-
   it('checkSession validates token', async () => {
     mockGet.mockResolvedValue({ session: { id: '1', name: 'Test' } });
     const { getUserData } = require('../services/storage');

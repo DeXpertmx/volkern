@@ -1,4 +1,4 @@
-import { api, ApiClientError } from './api';
+import { api } from './api';
 import * as storage from './storage';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { Platform } from 'react-native';
@@ -18,30 +18,8 @@ interface SessionResponse {
   session: storage.UserData;
 }
 
-// ─── Signup Response ──────────────────────────────────────────────────────────
-interface SignupResponse {
-  success: boolean;
-  user: {
-    id: string;
-    name: string;
-    email: string;
-    roleName: string;
-  };
-  tenant: {
-    id: string;
-    nombre: string;
-    slug: string;
-    plan: string;
-    trialEndsAt: string;
-  };
-}
-
 // ─── Auth Service ─────────────────────────────────────────────────────────────
 export const authService = {
-  async register(data: { email: string; password: string; fullName: string; companyName: string; couponCode?: string }): Promise<SignupResponse> {
-    return api.post<SignupResponse>('/signup', data);
-  },
-
   async login(credentials: LoginCredentials): Promise<LoginResponse> {
     const response = await api.post<LoginResponse>(
       '/customer/auth/login',
