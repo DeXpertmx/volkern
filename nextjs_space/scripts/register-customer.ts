@@ -12,7 +12,7 @@ async function main() {
   const password = 'password123';
 
   // Check if exists
-  const existing = await prisma.customerUser.findUnique({ where: { email } });
+  const existing = await prisma.erp_customer_users.findUnique({ where: { email } });
   if (existing) {
     console.log('Test user already exists:', email);
     return;

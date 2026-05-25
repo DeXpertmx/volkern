@@ -25,7 +25,7 @@ export class CustomerAuthService {
   }) {
     const hashedPassword = await bcrypt.hash(data.password, 12);
 
-    return await prisma.customerUser.create({
+    return await prisma.erp_customer_users.create({
       data: {
         tenantId: data.tenantId,
         email: data.email.toLowerCase(),
@@ -35,7 +35,7 @@ export class CustomerAuthService {
         contactId: data.contactId,
         role: 'ADMIN', // Default for the first user of the company
         isActive: true,
-        profile: {
+        erp_customer_profiles: {
           create: {
             preferredLanguage: 'es',
             timezone: 'UTC'
@@ -49,9 +49,9 @@ export class CustomerAuthService {
    * Authenticates a CustomerUser and generates a session.
    */
   static async login(email: string, password: string, deviceInfo?: string, ipAddress?: string) {
-    const user = await prisma.customerUser.findUnique({
+    const user = await prisma.erp_customer_users.findUnique({
       where: { email: email.toLowerCase(), isActive: true },
-      include: { tenant: true }
+      include: { Tenant: true }
     });
 
     if (!user) throw new Error('Credenciales inválidas');
@@ -60,7 +60,7 @@ export class CustomerAuthService {
     if (!isValid) throw new Error('Credenciales inválidas');
 
     // Update last login
-    await prisma.customerUser.update({
+    await prisma.erp_customer_users.update({
       where: { id: user.id },
       data: { lastLoginAt: new Date() }
     });
@@ -81,7 +81,7 @@ export class CustomerAuthService {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
-    const session = await prisma.customerSession.create({
+    const session = await prisma.erp_customer_sessions.create({
       data: {
         userId: user.id,
         token: token,
@@ -113,12 +113,12 @@ export class CustomerAuthService {
       const decoded: any = jwt.verify(token, JWT_SECRET);
       
       // Verify session in DB
-      const session = await prisma.customerSession.findUnique({
+      const session = await prisma.erp_customer_sessions.findUnique({
         where: { token, revoked: false },
-        include: { user: true }
+        include: { erp_customer_users: true }
       });
 
-      if (!session || session.expiresAt < new Date() || !session.user.isActive) {
+      if (!session || session.expiresAt < new Date() || !session.erp_customer_users.isActive) {
         return null;
       }
 
@@ -137,7 +137,7 @@ export class CustomerAuthService {
    * Revokes a session (Logout).
    */
   static async logout(token: string) {
-    return await prisma.customerSession.update({
+    return await prisma.erp_customer_sessions.update({
       where: { token },
       data: { revoked: true }
     });
@@ -147,7 +147,7 @@ export class CustomerAuthService {
    * Revokes all sessions for a user (Security reset).
    */
   static async revokeAllSessions(userId: string) {
-    return await prisma.customerSession.updateMany({
+    return await prisma.erp_customer_sessions.updateMany({
       where: { userId, revoked: false },
       data: { revoked: true }
     });

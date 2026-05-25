@@ -11,7 +11,7 @@ export class PortalService {
    * This token is used in the public URL: /portal/[token]
    */
   static async getOrCreatePortalToken(salesOrderId: string, tenantId: string) {
-    const order = await prisma.salesOrder.findUnique({
+    const order = await prisma.erp_sales_orders.findUnique({
       where: { id: salesOrderId },
       select: { publicToken: true }
     });
@@ -23,13 +23,13 @@ export class PortalService {
     // Generate a secure, non-guessable token
     const newToken = randomBytes(24).toString('hex');
 
-    await prisma.salesOrder.update({
+    await prisma.erp_sales_orders.update({
       where: { id: salesOrderId },
       data: { publicToken: newToken }
     });
 
     // Create a formal access record
-    await prisma.customerPortalAccess.create({
+    await prisma.erp_customer_portal_access.create({
       data: {
         tenantId,
         salesOrderId,
@@ -46,10 +46,10 @@ export class PortalService {
    * Validates a public token and returns the sanitized order data.
    */
   static async getOrderDataByToken(token: string) {
-    const access = await prisma.customerPortalAccess.findUnique({
+    const access = await prisma.erp_customer_portal_access.findUnique({
       where: { token, isActive: true },
       include: {
-        salesOrder: {
+        erp_sales_orders: {
           include: {
             contact: {
               select: {
@@ -97,17 +97,17 @@ export class PortalService {
       }
     });
 
-    if (!access || !access.salesOrder) {
+    if (!access || !access.erp_sales_orders) {
       return null;
     }
 
     // Update last access
-    await prisma.customerPortalAccess.update({
+    await prisma.erp_customer_portal_access.update({
       where: { id: access.id },
       data: { lastAccessAt: new Date() }
     });
 
-    return access.salesOrder;
+    return access.erp_sales_orders;
   }
 
   /**
@@ -119,11 +119,11 @@ export class PortalService {
     let tenantId: string = '';
 
     if (entityType === 'LOT') {
-      const lot = await prisma.inventoryLot.findUnique({ where: { id: entityId }, select: { integrityHash: true, tenantId: true } });
+      const lot = await prisma.erp_inventory_lots.findUnique({ where: { id: entityId }, select: { integrityHash: true, tenantId: true } });
       storedHash = lot?.integrityHash || null;
       tenantId = lot?.tenantId || '';
     } else if (entityType === 'ORDER') {
-      const order = await prisma.salesOrder.findUnique({ where: { id: entityId }, select: { integrityHash: true, tenantId: true } });
+      const order = await prisma.erp_sales_orders.findUnique({ where: { id: entityId }, select: { integrityHash: true, tenantId: true } });
       storedHash = order?.integrityHash || null;
       tenantId = order?.tenantId || '';
     } else if (entityType === 'CHECK') {
@@ -136,7 +136,7 @@ export class PortalService {
     const status = isMatch ? 'SUCCESS' : 'TAMPERED';
 
     // Log the verification attempt for sovereignty audit
-    await prisma.portalVerificationLog.create({
+    await prisma.erp_portal_verification_logs.create({
       data: {
         tenantId,
         salesOrderId: entityType === 'ORDER' ? entityId : undefined,
@@ -164,17 +164,17 @@ export class PortalService {
     description: string,
     evidenceUrl?: string
   }) {
-    const access = await prisma.customerPortalAccess.findUnique({
+    const access = await prisma.erp_customer_portal_access.findUnique({
       where: { token: data.token, isActive: true },
-      include: { salesOrder: true }
+      include: { erp_sales_orders: true }
     });
 
     if (!access) throw new Error('Acceso no válido');
 
-    return await prisma.customerClaim.create({
+    return await prisma.erp_customer_claims.create({
       data: {
         tenantId: access.tenantId,
-        contactId: access.salesOrder.contactId,
+        contactId: access.erp_sales_orders.contactId,
         referenceId: access.salesOrderId,
         category: data.category,
         title: data.title,
