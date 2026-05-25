@@ -201,9 +201,14 @@ export function extractApiKeyFromRequest(request: Request): string | null {
   }
   
   // Intentar obtener de Authorization header
+  // Solo devolver si el token tiene formato de API key (vk_prod_ o vk_live_)
+  // Esto evita que JWTs de la app móvil se confundan con API keys
   const authHeader = request.headers.get('authorization');
   if (authHeader && authHeader.startsWith('Bearer ')) {
-    return authHeader.substring(7); // Remover 'Bearer '
+    const token = authHeader.substring(7);
+    if (token.startsWith('vk_')) {
+      return token;
+    }
   }
   
   return null;

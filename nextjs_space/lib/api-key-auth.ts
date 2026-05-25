@@ -4,9 +4,12 @@ import { logger } from './logger';
 import { getServerSession } from 'next-auth';
 import { authOptions } from './auth';
 import { hashApiKey, isValidApiKeyFormat, hasScope, hasAnyScope, extractApiKeyFromRequest } from './api-keys';
+import jwt from 'jsonwebtoken';
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { unstable_noStore as noStore } from 'next/cache';
+
+const CUSTOMER_JWT_SECRET = process.env.CUSTOMER_JWT_SECRET || 'volkern-customer-portal-secret-2026';
 
 export type AuthenticatedHandler = (
   req: Request,
@@ -339,7 +342,94 @@ export async function authenticateRequest(
     }
   }
 
-  // 2. Si no hay sesión, intentar API Key
+  // 2. Intentar JWT (Customer Auth - app móvil)
+  const authHeader = request.headers.get('authorization');
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const bearerToken = authHeader.substring(7);
+    // Si no parece API key, probar como JWT
+    if (!bearerToken.startsWith('vk_')) {
+      try {
+        const decoded: any = jwt.verify(bearerToken, CUSTOMER_JWT_SECRET);
+        if (decoded && decoded.uid && decoded.tid) {
+          // Cargar tenant
+          const tenant = await prisma.tenant.findUnique({
+            where: { id: decoded.tid },
+            select: { id: true, nombre: true, slug: true, subdomain: true, plan: true, accountType: true }
+          });
+
+          if (!tenant) {
+            logger.warn({ tenantId: decoded.tid }, '[auth] JWT: Tenant no encontrado');
+            return { valid: false, error: 'Tenant no encontrado' };
+          }
+
+          // Cargar usuario - probar primero erp_customer_users, luego User
+          let userData: {
+            id: string; name: string | null; email: string;
+            tenantId: string | null; roleId: string | null;
+            role?: { id: string; nombre: string; permisos?: unknown } | null;
+          } | null = null;
+
+          const customerUser = await prisma.erp_customer_users.findUnique({
+            where: { id: decoded.uid },
+            select: { id: true, email: true, firstName: true, lastName: true, tenantId: true, role: true }
+          });
+
+          if (customerUser) {
+            userData = {
+              id: customerUser.id,
+              name: [customerUser.firstName, customerUser.lastName].filter(Boolean).join(' ') || customerUser.email,
+              email: customerUser.email,
+              tenantId: customerUser.tenantId,
+              roleId: null,
+              role: { id: '', nombre: customerUser.role, permisos: null }
+            };
+          } else {
+            const internalUser = await prisma.user.findUnique({
+              where: { id: decoded.uid },
+              select: {
+                id: true, name: true, email: true, tenantId: true, roleId: true,
+                role: { select: { id: true, nombre: true, permisos: true } }
+              }
+            });
+            if (internalUser) {
+              userData = internalUser;
+            }
+          }
+
+          if (!userData) {
+            logger.warn({ uid: decoded.uid }, '[auth] JWT: Usuario no encontrado');
+            return { valid: false, error: 'Usuario no encontrado' };
+          }
+
+          const { getTenantDb } = await import('./db');
+          const tDb = await getTenantDb(decoded.tid);
+
+          return {
+            valid: true,
+            authMethod: 'session',
+            tenant,
+            user: {
+              id: userData.id,
+              name: userData.name,
+              email: userData.email,
+              tenantId: userData.tenantId,
+              roleId: userData.roleId,
+              role: userData.role,
+              accountType: tenant.accountType
+            },
+            agencyContext: false,
+            db: tDb.client,
+            vaultSeed: tDb.vaultSeed
+          };
+        }
+      } catch (e: unknown) {
+        // JWT inválido o expirado — continuar al fallback de API key
+        logger.warn({ err: e instanceof Error ? e : undefined }, '[auth] JWT validation failed');
+      }
+    }
+  }
+
+  // 3. Si no hay sesión ni JWT, intentar API Key
   return await validateApiKey(request, requiredScopes);
 }
 
