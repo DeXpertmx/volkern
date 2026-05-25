@@ -43,6 +43,12 @@ export async function middleware(request: NextRequest) {
   const xTenantId = request.headers.get('x-tenant-id');
   const apiKey = request.headers.get('x-api-key');
 
+  // Helper: creates response with requestId header
+  const withRequestId = (res: NextResponse) => {
+    res.headers.set('x-request-id', requestId)
+    return res
+  }
+
   // Subdomain handling for root path
   if (pathname === '/' && subdomain && !['www', 'app', 'api'].includes(subdomain)) {
     const token = await getToken({ 
@@ -70,18 +76,6 @@ export async function middleware(request: NextRequest) {
   ) {
     return withRequestId(NextResponse.next())
   }
-
-  // Helper: creates response with requestId header
-  const withRequestId = (res: NextResponse) => {
-    res.headers.set('x-request-id', requestId)
-    return res
-  }
-
-
-
-  // Redirect root path without subdomain to landing (if needed) or landing page
-  // (Assuming / is already the landing page)
-
 
   // Allow .well-known paths (AI plugin discovery, etc.)
   if (pathname.startsWith('/.well-known/')) {

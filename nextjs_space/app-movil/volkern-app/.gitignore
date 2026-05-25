@@ -18,6 +18,11 @@ expo-env.d.ts
 *.key
 *.mobileprovision
 
+# Archives (large files)
+*.zip
+*.tar.gz
+*.7z
+
 # Metro
 .metro-health-check*
 
