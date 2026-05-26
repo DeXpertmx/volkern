@@ -12,8 +12,9 @@ import {
   Animated,
   ScrollView,
   Alert,
+  Image,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -22,6 +23,7 @@ import { useThemeColors, typography, spacing, radius, shadows, layout } from '..
 import { useI18n } from '../../src/contexts/i18n';
 import type { ChatMessage } from '../../src/services/chat';
 import { chatService, responseToMessages } from '../../src/services/chat';
+import gemmaBotImage from '../../assets/images/gemma-bot.png';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const RECORDING_LEVELS = 5;
@@ -31,6 +33,7 @@ const WAVE_COLORS = ['#60A5FA', '#3B82F6', '#2563EB', '#1D4ED8', '#1E40AF'];
 export default function GemmaChatScreen() {
   const colors = useThemeColors();
   const { t } = useI18n();
+  const insets = useSafeAreaInsets();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const router = useRouter();
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -253,7 +256,7 @@ export default function GemmaChatScreen() {
       <View style={[styles.messageRow, isUser && styles.messageRowUser]}>
         {!isUser && (
           <View style={styles.botAvatar}>
-            <Ionicons name="sparkles" size={16} color={colors.primary} />
+            <Image source={gemmaBotImage} style={styles.botAvatarImage} />
           </View>
         )}
         <View style={styles.messageContent}>
@@ -383,7 +386,7 @@ export default function GemmaChatScreen() {
       <View style={styles.header}>
         <View style={styles.headerInfo}>
           <View style={styles.headerAvatar}>
-            <Ionicons name="sparkles" size={18} color={colors.white} />
+            <Image source={gemmaBotImage} style={styles.headerAvatarImage} />
           </View>
           <View>
             <Text style={styles.headerTitle}>{t('gemma', 'title')}</Text>
@@ -400,8 +403,8 @@ export default function GemmaChatScreen() {
 
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        behavior="padding"
+        keyboardVerticalOffset={insets.top + 60}
       >
         {/* Messages */}
         <FlatList
@@ -418,7 +421,7 @@ export default function GemmaChatScreen() {
             isLoading ? (
               <View style={styles.typingIndicator}>
                 <View style={styles.botAvatarSmall}>
-                  <Ionicons name="sparkles" size={12} color={colors.primary} />
+                  <Image source={gemmaBotImage} style={styles.botAvatarSmallImage} />
                 </View>
                 <View style={styles.typingDots}>
                   <View style={[styles.dot, styles.dot1]} />
@@ -550,9 +553,17 @@ function makeStyles(colors: ReturnType<typeof useThemeColors>) {
       width: 36,
       height: 36,
       borderRadius: radius.full,
-      backgroundColor: colors.primary,
+      backgroundColor: colors.white,
       justifyContent: 'center',
       alignItems: 'center',
+      overflow: 'hidden',
+      borderWidth: 1.5,
+      borderColor: colors.primary,
+    },
+    headerAvatarImage: {
+      width: '100%',
+      height: '100%',
+      resizeMode: 'cover',
     },
     headerTitle: {
       ...typography.body,
@@ -592,11 +603,17 @@ function makeStyles(colors: ReturnType<typeof useThemeColors>) {
       width: 28,
       height: 28,
       borderRadius: radius.full,
-      backgroundColor: colors.primaryBg,
+      backgroundColor: colors.white,
       justifyContent: 'center',
       alignItems: 'center',
       marginRight: spacing.sm,
       marginBottom: 2,
+      overflow: 'hidden',
+    },
+    botAvatarImage: {
+      width: '100%',
+      height: '100%',
+      resizeMode: 'cover',
     },
     messageContent: {
       flex: 1,
@@ -738,10 +755,16 @@ function makeStyles(colors: ReturnType<typeof useThemeColors>) {
       width: 24,
       height: 24,
       borderRadius: radius.full,
-      backgroundColor: colors.primaryBg,
+      backgroundColor: colors.white,
       justifyContent: 'center',
       alignItems: 'center',
       marginRight: spacing.sm,
+      overflow: 'hidden',
+    },
+    botAvatarSmallImage: {
+      width: '100%',
+      height: '100%',
+      resizeMode: 'cover',
     },
     typingDots: {
       flexDirection: 'row',

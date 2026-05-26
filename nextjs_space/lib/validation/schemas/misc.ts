@@ -17,6 +17,24 @@ export const AgencySlotCreateSchema = z.object({
   modules_enabled: z.array(z.string()).optional(),
 });
 
+// ─── Accounting Slots ────────────────────────────────────────
+
+export const AccountingSlotCreateSchema = z.object({
+  client_name: z.string().min(1, 'Nombre de cliente requerido'),
+  admin_email: z.string().email('Email de admin inválido'),
+  modules_enabled: z.array(z.string()).optional(),
+});
+
+// ─── Accounting Branding ─────────────────────────────────────
+// Nota: show_powered_by siempre se fuerza a true en el backend
+
+export const AccountingBrandingUpdateSchema = z.object({
+  logo_url: z.string().optional(),
+  primary_color: z.string().optional(),
+  custom_footer_text: z.string().optional(),
+  // show_powered_by NO se incluye — siempre forzado a true
+});
+
 // ─── Canales Telegram ───────────────────────────────────────
 
 export const CanalTelegramUpdateSchema = z.object({
@@ -395,6 +413,34 @@ export const SovereigntyBatchSignSchema = z.object({
 
 export const UserLayoutSchema = z.object({
   layout: z.any().refine(val => val != null, 'Layout no proporcionado'),
+});
+
+// ─── Conciliación Bancaria ────────────────────────────────────
+
+export const BankConnectionCreateSchema = z.object({
+  provider: z.enum(['NORDIGEN', 'PLAID', 'STRIPE']),
+  providerId: z.string().optional(),
+  publicToken: z.string().optional(),
+  institutionId: z.string().optional(),
+  institutionName: z.string().optional(),
+});
+
+export const SyncTransactionsSchema = z.object({
+  connectionId: z.string().min(1, 'connectionId requerido'),
+});
+
+export const ReconcileSchema = z.object({
+  transactionId: z.string().min(1, 'transactionId requerido'),
+  entryId: z.string().min(1, 'entryId requerido'),
+  matchedBy: z.string().optional().default('USER'),
+});
+
+export const BulkReconcileSchema = z.object({
+  matches: z.array(z.object({
+    transactionId: z.string().min(1),
+    entryId: z.string().min(1),
+  })).min(1, 'Al menos un match requerido'),
+  matchedBy: z.string().optional().default('BULK'),
 });
 
 // ─── Volkern Proxy ──────────────────────────────────────────

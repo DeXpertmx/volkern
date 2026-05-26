@@ -1,0 +1,212 @@
+<mxfile host="app.diagrams.net" modified="2026-05-26T12:00:00.000Z" agent="Mozilla/5.0" version="24.2.5" etag="accounting_arch">
+  <diagram name="Arquitectura Asesoría Contable" id="page1">
+    <mxGraphModel dx="0" dy="0" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="2000" background="#ffffff">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- ===================== STYLES ===================== -->
+        <mxCell id="styles" style="html=1;whiteSpace=wrap;rounded=1;" parent="1" connectable="0"/>
+
+        <!-- ===================== TITLE ===================== -->
+        <mxCell id="title" value="&lt;b&gt;Arquitectura Vertical de Asesoría Contable y Fiscal — Volkern&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px;&quot; color=&quot;#6b7280&quot;&gt;Provisioning de Clientes, Módulos Contables, Conciliación Bancaria y Branding Forzado&lt;/font&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=16;fontColor=#1f2937;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="1120" height="50" as="geometry"/>
+        </mxCell>
+
+        <!-- ===================== SECTION 1: TENANT TYPES ===================== -->
+        <mxCell id="section1-bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ecfdf5;strokeColor=#6ee7b7;dashed=1;verticalAlign=top;fontSize=11;fontColor=#6b7280;" parent="1" vertex="1">
+          <mxGeometry x="40" y="90" width="1120" height="260" as="geometry"/>
+        </mxCell>
+        <mxCell id="section1-label" value="&lt;b&gt;📍 1. Tipos de Tenant&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=13;fontColor=#374151;" parent="1" vertex="1">
+          <mxGeometry x="50" y="100" width="200" height="30" as="geometry"/>
+        </mxCell>
+
+        <!-- AGENCY Accounting Firm -->
+        <mxCell id="agency-firm-box" value="&lt;b&gt;🏢 Despacho de Asesoría (AGENCY)&lt;/b&gt;&lt;hr&gt;&lt;font style=&quot;font-size:10px;&quot;&gt;• accountType: &lt;b&gt;'AGENCY'&lt;/b&gt;&lt;br&gt;• plan: &lt;b&gt;'pro-accounting'&lt;/b&gt; | 'growth'&lt;br&gt;• parentId: &lt;i&gt;null&lt;/i&gt;&lt;br&gt;• maxSlots: &lt;i&gt;N (límite de clientes)&lt;/i&gt;&lt;br&gt;• brandingConfig: &lt;i&gt;JSON (logo, colores)&lt;/i&gt;&lt;br&gt;• enabledModules: ['crm', 'conciliacion',&lt;br&gt;&amp;nbsp;&amp;nbsp;'finanzas_consolidado', 'agency']&lt;br&gt;• &lt;b&gt;showPoweredBy: 🔒 SIEMPRE TRUE&lt;/b&gt;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d1fae5;strokeColor=#059669;arcSize=8;fontSize=12;fontColor=#064e3b;" parent="1" vertex="1">
+          <mxGeometry x="70" y="140" width="280" height="150" as="geometry"/>
+        </mxCell>
+
+        <!-- Arrow AGENCY → Clients -->
+        <mxCell id="arrow-firm-clients" value="crea / gestiona" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#059669;strokeWidth=2;endArrow=blockThin;endFill=1;dashed=1;fontSize=10;" parent="1" source="agency-firm-box" target="client-slots-box" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Client Slots -->
+        <mxCell id="client-slots-box" value="&lt;b&gt;📋 Clientes (Slots BUSINESS)&lt;/b&gt;&lt;hr&gt;&lt;font style=&quot;font-size:10px;&quot;&gt;• accountType: &lt;b&gt;'BUSINESS'&lt;/b&gt;&lt;br&gt;• plan: &lt;b&gt;'accounting-slot'&lt;/b&gt;&lt;br&gt;• parentId: &lt;i&gt;ref → Tenant AGENCY&lt;/i&gt;&lt;br&gt;• enabledModules: ['CRM', 'FINANZAS',&lt;br&gt;&amp;nbsp;&amp;nbsp;'CONCILIACION', 'CONTABILIDAD']&lt;br&gt;• brandingConfig: &lt;i&gt;heredado + showPoweredBy=true&lt;/i&gt;&lt;br&gt;• billingEmail: &lt;i&gt;admin@cliente.com&lt;/i&gt;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;arcSize=8;fontSize=12;fontColor=#1e3a5f;" parent="1" vertex="1">
+          <mxGeometry x="470" y="140" width="300" height="150" as="geometry"/>
+        </mxCell>
+
+        <!-- BUSINESS Tenant (standalone) -->
+        <mxCell id="business-box" value="&lt;b&gt;🏢 Tenants BUSINESS (Directos)&lt;/b&gt;&lt;hr&gt;&lt;font style=&quot;font-size:10px;&quot;&gt;• accountType: &lt;b&gt;'BUSINESS'&lt;/b&gt;&lt;br&gt;• plan: 'starter' | 'growth' | 'pro'&lt;br&gt;• parentId: &lt;i&gt;null&lt;/i&gt;&lt;br&gt;• enabledModules: según plan&lt;br&gt;• brandingConfig: su propia config&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef2f2;strokeColor=#ef4444;arcSize=8;fontSize=12;fontColor=#991b1b;" parent="1" vertex="1">
+          <mxGeometry x="870" y="140" width="260" height="150" as="geometry"/>
+        </mxCell>
+
+        <!-- ===================== SECTION 2: PROVISIONING FLOW ===================== -->
+        <mxCell id="section2-bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#cbd5e1;dashed=1;verticalAlign=top;fontSize=11;fontColor=#6b7280;" parent="1" vertex="1">
+          <mxGeometry x="40" y="370" width="1120" height="520" as="geometry"/>
+        </mxCell>
+        <mxCell id="section2-label" value="&lt;b&gt;⚙️ 2. Flujo de Provisioning de Clientes Contables&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=13;fontColor=#374151;" parent="1" vertex="1">
+          <mxGeometry x="50" y="380" width="400" height="30" as="geometry"/>
+        </mxCell>
+
+        <!-- Step 1: UI Modal -->
+        <mxCell id="step1" value="&lt;b&gt;1. UI: AccountingSlotProvisioningModal&lt;/b&gt;&lt;hr&gt;&lt;font style=&quot;font-size:10px;&quot;&gt;Usuario despacho llena formulario:&lt;br&gt;• client_name (requerido)&lt;br&gt;• admin_email (requerido, email válido)&lt;br&gt;• módulos contables (checkboxes):&lt;br&gt;&amp;nbsp;&amp;nbsp;CRM Core 🔒 (siempre activo)&lt;br&gt;&amp;nbsp;&amp;nbsp;☐ Contabilidad&lt;br&gt;&amp;nbsp;&amp;nbsp;☐ Conciliación Bancaria&lt;br&gt;&amp;nbsp;&amp;nbsp;☐ Marketing&lt;br&gt;&lt;br&gt;→ &lt;b&gt;POST /api/accounting/slots&lt;/b&gt;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#94a3b8;arcSize=8;fontSize=10;fontColor=#1e293b;" parent="1" vertex="1">
+          <mxGeometry x="65" y="420" width="240" height="200" as="geometry"/>
+        </mxCell>
+
+        <!-- Arrow Step1 → Step2 -->
+        <mxCell id="arrow12" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#64748b;strokeWidth=2;endArrow=blockThin;endFill=1;" parent="1" source="step1" target="step2" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Step 2: Auth -->
+        <mxCell id="step2" value="&lt;b&gt;2. Autenticación&lt;/b&gt;&lt;hr&gt;&lt;font style=&quot;font-size:10px;&quot;&gt;withTenantAuth() verifica:&lt;br&gt;• API Key o JWT válido&lt;br&gt;• accountType === 'AGENCY'&lt;br&gt;• plan: 'pro-accounting' | 'growth'&lt;br&gt;• O usuario 'Superadmin'&lt;br&gt;&lt;br&gt;❌ 403 si no es AGENCY&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#94a3b8;arcSize=8;fontSize=10;fontColor=#1e293b;" parent="1" vertex="1">
+          <mxGeometry x="350" y="420" width="240" height="200" as="geometry"/>
+        </mxCell>
+
+        <!-- Arrow Step2 → Step3 -->
+        <mxCell id="arrow23" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#64748b;strokeWidth=2;endArrow=blockThin;endFill=1;" parent="1" source="step2" target="step3" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Step 3: Zod Validation -->
+        <mxCell id="step3" value="&lt;b&gt;3. Validación Zod&lt;/b&gt;&lt;hr&gt;&lt;font style=&quot;font-size:10px;&quot;&gt;AccountingSlotCreateSchema.safeParse():&lt;br&gt;• client_name: &lt;b&gt;z.string().min(1)&lt;/b&gt;&lt;br&gt;• admin_email: &lt;b&gt;z.string().email()&lt;/b&gt;&lt;br&gt;• modules_enabled: &lt;b&gt;z.string().array().optional()&lt;/b&gt;&lt;br&gt;&lt;br&gt;❌ 400 si datos inválidos&lt;br&gt;+ details del error Zod&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#94a3b8;arcSize=8;fontSize=10;fontColor=#1e293b;" parent="1" vertex="1">
+          <mxGeometry x="635" y="420" width="240" height="200" as="geometry"/>
+        </mxCell>
+
+        <!-- Arrow Step3 → Step4 -->
+        <mxCell id="arrow34" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#64748b;strokeWidth=2;endArrow=blockThin;endFill=1;" parent="1" source="step3" target="step4" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Step 4: Check Limits -->
+        <mxCell id="step4" value="&lt;b&gt;4. Verificar Límites&lt;/b&gt;&lt;hr&gt;&lt;font style=&quot;font-size:10px;&quot;&gt;prisma.tenant.count(parentId) &amp;gt;=&lt;br&gt;tenant.maxSlots ?&lt;br&gt;&lt;br&gt;❌ 403 &amp;quot;Límite de clientes&lt;br&gt;alcanzado&amp;quot;&lt;br&gt;Si maxSlots=0 → bloqueado&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#94a3b8;arcSize=8;fontSize=10;fontColor=#1e293b;" parent="1" vertex="1">
+          <mxGeometry x="920" y="420" width="215" height="200" as="geometry"/>
+        </mxCell>
+
+        <!-- Create operation box -->
+        <mxCell id="create-op" value="&lt;b&gt;5. Creación en BD&lt;/b&gt;&lt;hr&gt;&lt;font style=&quot;font-size:10px;&quot;&gt;prisma.tenant.create({&lt;br&gt;&amp;nbsp;&amp;nbsp;nombre: client_name,&lt;br&gt;&amp;nbsp;&amp;nbsp;slug: &lt;i&gt;{nombre}-{random}&lt;/i&gt;,&lt;br&gt;&amp;nbsp;&amp;nbsp;accountType: &lt;b&gt;'BUSINESS'&lt;/b&gt;,&lt;br&gt;&amp;nbsp;&amp;nbsp;parentId: &lt;i&gt;auth.tenant.id&lt;/i&gt;,&lt;br&gt;&amp;nbsp;&amp;nbsp;billingEmail: admin_email,&lt;br&gt;&amp;nbsp;&amp;nbsp;&lt;b&gt;brandingConfig: {&lt;br&gt;&amp;nbsp;&amp;nbsp;&amp;nbsp;...agency.branding,&lt;br&gt;&amp;nbsp;&amp;nbsp;&amp;nbsp;showPoweredBy: 🔒 true&lt;br&gt;&amp;nbsp;&amp;nbsp;}&lt;/b&gt;,&lt;br&gt;&amp;nbsp;&amp;nbsp;enabledModules: &lt;i&gt;normalizados uppercase&lt;/i&gt;,&lt;br&gt;&amp;nbsp;&amp;nbsp;plan: &lt;b&gt;'accounting-slot'&lt;/b&gt;,&lt;br&gt;&amp;nbsp;&amp;nbsp;estado: 'activo'&lt;br&gt;}) → 201 Created&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d1fae5;strokeColor=#059669;arcSize=8;fontSize=10;fontColor=#064e3b;" parent="1" vertex="1">
+          <mxGeometry x="350" y="660" width="480" height="210" as="geometry"/>
+        </mxCell>
+
+        <!-- Arrow Step4 → Create -->
+        <mxCell id="arrow4create" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#059669;strokeWidth=2;endArrow=blockThin;endFill=1;" parent="1" source="step4" target="create-op" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- ===================== SECTION 3: MODULE ACTIVATION ===================== -->
+        <mxCell id="section3-bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fffbeb;strokeColor=#fde68a;dashed=1;verticalAlign=top;fontSize=11;fontColor=#6b7280;" parent="1" vertex="1">
+          <mxGeometry x="40" y="910" width="1120" height="440" as="geometry"/>
+        </mxCell>
+        <mxCell id="section3-label" value="&lt;b&gt;🔌 3. Activación de Módulos Contables&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=13;fontColor=#374151;" parent="1" vertex="1">
+          <mxGeometry x="50" y="920" width="400" height="30" as="geometry"/>
+        </mxCell>
+
+        <!-- Module Sources -->
+        <mxCell id="mod-sources" value="&lt;b&gt;📥 Fuentes de Módulos&lt;/b&gt;&lt;hr&gt;&lt;font style=&quot;font-size:10px;&quot;&gt;&lt;b&gt;1. Plan Base&lt;/b&gt; (PLAN_MODULES)&lt;br&gt;&amp;nbsp;&amp;nbsp;ACCOUNTING_SLOT: leads, contactos,&lt;br&gt;&amp;nbsp;&amp;nbsp;empresas, pipeline, tareas, analytics,&lt;br&gt;&amp;nbsp;&amp;nbsp;mensajes, citas, cotizaciones, contratos,&lt;br&gt;&amp;nbsp;&amp;nbsp;ordenes_venta, &lt;b&gt;finanzas&lt;/b&gt;, &lt;b&gt;conciliacion&lt;/b&gt;,&lt;br&gt;&amp;nbsp;&amp;nbsp;automatizaciones, conocimiento...&lt;br&gt;&lt;br&gt;&lt;b&gt;2. enabledModules&lt;/b&gt; (manual override)&lt;br&gt;&amp;nbsp;&amp;nbsp;['CRM', 'FINANZAS', 'CONCILIACION']&lt;br&gt;&lt;br&gt;&lt;b&gt;3. TenantFeature&lt;/b&gt; (add-ons)&lt;br&gt;&amp;nbsp;&amp;nbsp;addon_academia → cursos, estudiantes&lt;br&gt;&amp;nbsp;&amp;nbsp;addon_whatsapp → chatbot_whatsapp&lt;br&gt;&lt;br&gt;&lt;b&gt;4. Dependencias&lt;/b&gt;&lt;br&gt;&amp;nbsp;&amp;nbsp;'estrategia' requiere 'proyectos'&lt;br&gt;&amp;nbsp;&amp;nbsp;'agency' requiere accountType='AGENCY'&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d97706;arcSize=8;fontSize=10;fontColor=#78350f;" parent="1" vertex="1">
+          <mxGeometry x="65" y="960" width="310" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- Merge Function -->
+        <mxCell id="mod-merge" value="&lt;b&gt;🔄 getActiveModules()&lt;/b&gt;&lt;hr&gt;&lt;font style=&quot;font-size:10px;&quot;&gt;// lib/plans.ts&lt;br&gt;getActiveModules(plan, tenantFeatures) {&lt;br&gt;&amp;nbsp;&amp;nbsp;1. Obtener módulos del plan&lt;br&gt;&amp;nbsp;&amp;nbsp;2. Merge con enabledModules&lt;br&gt;&amp;nbsp;&amp;nbsp;3. Aplicar overrides TenantFeature&lt;br&gt;&amp;nbsp;&amp;nbsp;4. Forzar módulos críticos&lt;br&gt;&amp;nbsp;&amp;nbsp;5. Validar dependencias&lt;br&gt;}&lt;br&gt;&lt;br&gt;→ Array de CrmModule&lt;br&gt;Ej: ['leads','contactos','finanzas',&lt;br&gt;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;'conciliacion','automatizaciones', ...]&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#d97706;arcSize=8;fontSize=10;fontColor=#78350f;" parent="1" vertex="1">
+          <mxGeometry x="430" y="960" width="300" height="240" as="geometry"/>
+        </mxCell>
+
+        <!-- Arrow Sources → Merge -->
+        <mxCell id="arrow-src-merge" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#d97706;strokeWidth=2;endArrow=blockThin;endFill=1;" parent="1" source="mod-sources" target="mod-merge" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Module Consumers -->
+        <mxCell id="mod-consumers" value="&lt;b&gt;📱 Consumidores de Módulos Contables&lt;/b&gt;&lt;hr&gt;&lt;font style=&quot;font-size:10px;&quot;&gt;&lt;b&gt;API Routes&lt;/b&gt; — api-key-auth.ts&lt;br&gt;&amp;nbsp;&amp;nbsp;validateModuleAccess → 403 si no activo&lt;br&gt;&lt;br&gt;&lt;b&gt;Navigation&lt;/b&gt; — navigation-config.ts&lt;br&gt;&amp;nbsp;&amp;nbsp;HUB 'Finanzas' requiere 'finanzas'&lt;br&gt;&amp;nbsp;&amp;nbsp;→ Conciliación Bancaria, Impuestos, P&amp;amp;L&lt;br&gt;&amp;nbsp;&amp;nbsp;HUB 'Contabilidad' en sidebar&lt;br&gt;&lt;br&gt;&lt;b&gt;UI Components&lt;/b&gt; — AccountingSlotList.tsx&lt;br&gt;&amp;nbsp;&amp;nbsp;Badges: CRM | CONT | 🏦 CONC | MKT&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d97706;arcSize=8;fontSize=10;fontColor=#78350f;" parent="1" vertex="1">
+          <mxGeometry x="790" y="960" width="340" height="240" as="geometry"/>
+        </mxCell>
+
+        <!-- Arrow Merge → Consumers -->
+        <mxCell id="arrow-merge-cons" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#d97706;strokeWidth=2;endArrow=blockThin;endFill=1;" parent="1" source="mod-merge" target="mod-consumers" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- ===================== SECTION 4: BANK RECONCILIATION FLOW ===================== -->
+        <mxCell id="section5-bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f9ff;strokeColor=#7dd3fc;dashed=1;verticalAlign=top;fontSize=11;fontColor=#6b7280;" parent="1" vertex="1">
+          <mxGeometry x="40" y="1370" width="1120" height="280" as="geometry"/>
+        </mxCell>
+        <mxCell id="section5-label" value="&lt;b&gt;🏦 4. Flujo de Conciliación Bancaria&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=13;fontColor=#374151;" parent="1" vertex="1">
+          <mxGeometry x="50" y="1380" width="400" height="30" as="geometry"/>
+        </mxCell>
+
+        <!-- Bank Connection -->
+        <mxCell id="bank-connect" value="&lt;b&gt;🔗 Conexión Bancaria&lt;/b&gt;&lt;hr&gt;&lt;font style=&quot;font-size:10px;&quot;&gt;Módulo: &lt;b&gt;'conciliacion'&lt;/b&gt;&lt;br&gt;• Integración con APIs bancarias&lt;br&gt;  (España, UE, LATAM)&lt;br&gt;• Token seguro por tenant&lt;br&gt;• Periodicidad configurable&lt;br&gt;• Historial de conexiones&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#0284c7;arcSize=8;fontSize=10;fontColor=#0c4a6e;" parent="1" vertex="1">
+          <mxGeometry x="65" y="1420" width="240" height="160" as="geometry"/>
+        </mxCell>
+
+        <!-- Arrow Bank → Sync -->
+        <mxCell id="arrow-bank-sync" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#0284c7;strokeWidth=2;endArrow=blockThin;endFill=1;" parent="1" source="bank-connect" target="bank-sync" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Bank Sync -->
+        <mxCell id="bank-sync" value="&lt;b&gt;🔄 Sincronización Automática&lt;/b&gt;&lt;hr&gt;&lt;font style=&quot;font-size:10px;&quot;&gt;• Cron: fetch movimientos bancarios&lt;br&gt;• Normaliza datos a formato interno&lt;br&gt;• Detecta movimientos nuevos&lt;br&gt;• Almacena en &lt;i&gt;bank_transactions&lt;/i&gt;&lt;br&gt;• Marca como &amp;quot;pendiente&amp;quot; inicial&lt;br&gt;&lt;br&gt;→ Cada movimiento tiene:&lt;br&gt;  fecha, importe, concepto, hash&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e0f2fe;strokeColor=#0284c7;arcSize=8;fontSize=10;fontColor=#0c4a6e;" parent="1" vertex="1">
+          <mxGeometry x="350" y="1420" width="240" height="160" as="geometry"/>
+        </mxCell>
+
+        <!-- Arrow Sync → AI Match -->
+        <mxCell id="arrow-sync-ai" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#0284c7;strokeWidth=2;endArrow=blockThin;endFill=1;" parent="1" source="bank-sync" target="bank-ai" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- AI Matching -->
+        <mxCell id="bank-ai" value="&lt;b&gt;🤖 IA de Conciliación&lt;/b&gt;&lt;hr&gt;&lt;font style=&quot;font-size:10px;&quot;&gt;Gemma coteja transacciones contra:&lt;br&gt;• Facturas emitidas&lt;br&gt;• Facturas recibidas&lt;br&gt;• Apuntes contables (libro diario)&lt;br&gt;• Movimientos previos&lt;br&gt;&lt;br&gt;&lt;b&gt;Score de confianza (0-100%)&lt;/b&gt;&lt;br&gt;• &amp;gt;90% → Automatch ✅&lt;br&gt;• 70-90% → Sugerencia 💡&lt;br&gt;• &amp;lt;70% → Manual 🔍&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#0284c7;arcSize=8;fontSize=10;fontColor=#0c4a6e;" parent="1" vertex="1">
+          <mxGeometry x="635" y="1420" width="240" height="220" as="geometry"/>
+        </mxCell>
+
+        <!-- Arrow AI → Result -->
+        <mxCell id="arrow-ai-res" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#0284c7;strokeWidth=2;endArrow=blockThin;endFill=1;" parent="1" source="bank-ai" target="bank-result" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Conciliation Result -->
+        <mxCell id="bank-result" value="&lt;b&gt;📊 Resultado&lt;/b&gt;&lt;hr&gt;&lt;font style=&quot;font-size:10px;&quot;&gt;• Estado: &amp;quot;Conciliado&amp;quot;&lt;br&gt;• Diferencia = 0 ✅&lt;br&gt;• Partidas pendientes listadas&lt;br&gt;• Reporte exportable (PDF/CSV)&lt;br&gt;• Sello de inmutabilidad&lt;br&gt;&lt;br&gt;&lt;b&gt;Dashboard para el cliente:&lt;/b&gt;&lt;br&gt;/dashboard/finanzas/contabilidad/&lt;br&gt;reconciliacion&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#0284c7;arcSize=8;fontSize=10;fontColor=#0c4a6e;" parent="1" vertex="1">
+          <mxGeometry x="920" y="1420" width="215" height="170" as="geometry"/>
+        </mxCell>
+
+        <!-- ===================== SECTION 5: BRANDING (FORCED) ===================== -->
+        <mxCell id="section4-bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff7ed;strokeColor=#fdba74;dashed=1;verticalAlign=top;fontSize=11;fontColor=#6b7280;" parent="1" vertex="1">
+          <mxGeometry x="40" y="1670" width="1120" height="210" as="geometry"/>
+        </mxCell>
+        <mxCell id="section4-label" value="&lt;b&gt;🎨 5. Marca de Despacho (Branding Forzado)&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=13;fontColor=#374151;" parent="1" vertex="1">
+          <mxGeometry x="50" y="1680" width="450" height="30" as="geometry"/>
+        </mxCell>
+
+        <!-- Branding UI -->
+        <mxCell id="branding-ui" value="&lt;b&gt;🖌️ Página de Identidad de Despacho&lt;/b&gt;&lt;hr&gt;&lt;font style=&quot;font-size:10px;&quot;&gt;/dashboard/contabilidad/branding&lt;br&gt;&lt;br&gt;Campos configurables:&lt;br&gt;• logo_url (logo del despacho)&lt;br&gt;• primary_color (color esmeralda 🔵)&lt;br&gt;• custom_footer_text (texto personalizado)&lt;br&gt;&lt;br&gt;&lt;b&gt;🔒 NO configurables:&lt;/b&gt;&lt;br&gt;• show_powered_by → &lt;b&gt;Siempre activo&lt;/b&gt;&lt;br&gt;  (bloqueado con candado + badge ámbar)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d97706;arcSize=8;fontSize=10;fontColor=#78350f;" parent="1" vertex="1">
+          <mxGeometry x="65" y="1720" width="290" height="150" as="geometry"/>
+        </mxCell>
+
+        <!-- Branding API -->
+        <mxCell id="branding-api" value="&lt;b&gt;📡 API Branding&lt;/b&gt;&lt;hr&gt;&lt;font style=&quot;font-size:10px;&quot;&gt;PATCH /api/accounting/settings/branding&lt;br&gt;Validación Zod: AccountingBrandingUpdateSchema&lt;br&gt;&lt;br&gt;&lt;b&gt;⚠️ showPoweredBy: true FORZADO:&lt;/b&gt;&lt;br&gt;El PATCH siempre escribe:&lt;br&gt;{&lt;br&gt;&amp;nbsp;&amp;nbsp;logoUrl, primaryColor,&lt;br&gt;&amp;nbsp;&amp;nbsp;showPoweredBy: &lt;b&gt;true&lt;/b&gt;,&lt;br&gt;&amp;nbsp;&amp;nbsp;customFooterText&lt;br&gt;}&lt;br&gt;&lt;br&gt;→ Response incluye note confirmando&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fed7aa;strokeColor=#d97706;arcSize=8;fontSize=10;fontColor=#78350f;" parent="1" vertex="1">
+          <mxGeometry x="410" y="1720" width="300" height="150" as="geometry"/>
+        </mxCell>
+
+        <!-- Branding Inheritance with Lock -->
+        <mxCell id="branding-inherit" value="&lt;b&gt;⬇️ Herencia a Clientes + Forzado&lt;/b&gt;&lt;hr&gt;&lt;font style=&quot;font-size:10px;&quot;&gt;&lt;b&gt;Al crear slot contable:&lt;/b&gt;&lt;br&gt;brandingConfig: {&lt;br&gt;&amp;nbsp;&amp;nbsp;...agency?.brandingConfig,&lt;br&gt;&amp;nbsp;&amp;nbsp;&lt;b&gt;showPoweredBy: true  // 🔒 Forzado&lt;/b&gt;&lt;br&gt;}&lt;br&gt;&lt;br&gt;Cada cliente BUSINESS recibe:&lt;br&gt;• Logo y colores del despacho&lt;br&gt;• 🔒 &amp;quot;Powered by Volkern&amp;quot; siempre visible&lt;br&gt;• Footer personalizado del despacho&lt;br&gt;&lt;br&gt;&lt;b&gt;❌ El cliente NO puede quitar el branding&lt;/b&gt;&lt;br&gt;(El endpoint de branding solo existe&lt;br&gt;para el AGENCY, no para el slot)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffedd5;strokeColor=#d97706;arcSize=8;fontSize=10;fontColor=#78350f;" parent="1" vertex="1">
+          <mxGeometry x="770" y="1720" width="365" height="150" as="geometry"/>
+        </mxCell>
+
+        <!-- Arrows branding -->
+        <mxCell id="arrow-brand1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#d97706;strokeWidth=2;endArrow=blockThin;endFill=1;" parent="1" source="branding-ui" target="branding-api" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="arrow-brand2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#d97706;strokeWidth=2;endArrow=blockThin;endFill=1;" parent="1" source="branding-api" target="branding-inherit" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- ===================== LEGEND ===================== -->
+        <mxCell id="legend" value="&lt;b&gt;Leyenda de Colores&lt;/b&gt;&lt;hr&gt;&lt;font style=&quot;font-size:10px;&quot;&gt;&lt;b&gt;🟢 Despacho&lt;/b&gt; — Cuentas AGENCY con plan pro-accounting&lt;br&gt;&lt;b&gt;🔵 Clientes&lt;/b&gt; — Slots BUSINESS con plan accounting-slot&lt;br&gt;&lt;b&gt;🔴 Tenants BUSINESS&lt;/b&gt; — Clientes directos (no contables)&lt;br&gt;&lt;b&gt;🟡 Procesos&lt;/b&gt; — Lógica de activación de módulos contables&lt;br&gt;&lt;b&gt;🔵 Conciliación&lt;/b&gt; — Flujo de sincronización bancaria + IA&lt;br&gt;&lt;b&gt;🟠 Marca Forzada&lt;/b&gt; — Branding con showPoweredBy 🔒 siempre true&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f9fafb;strokeColor=#e5e7eb;arcSize=8;fontSize=10;fontColor=#374151;" parent="1" vertex="1">
+          <mxGeometry x="40" y="1900" width="1120" height="50" as="geometry"/>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

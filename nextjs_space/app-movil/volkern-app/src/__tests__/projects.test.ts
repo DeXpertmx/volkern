@@ -1,243 +1,236 @@
 import { projectService } from '../services/projects';
+import { api } from '../services/api';
 
-jest.mock('expo-secure-store', () => ({
-  getItemAsync: jest.fn(),
-  setItemAsync: jest.fn(),
-  deleteItemAsync: jest.fn(),
+// ─── Mock API ─────────────────────────────────────────────────────────────────
+jest.mock('../services/api', () => ({
+  api: {
+    get: jest.fn(),
+    post: jest.fn(),
+    put: jest.fn(),
+    patch: jest.fn(),
+    delete: jest.fn(),
+  },
 }));
 
-const getItem = require('expo-secure-store').getItemAsync as jest.Mock;
-const setItem = require('expo-secure-store').setItemAsync as jest.Mock;
+const mockGet = api.get as jest.Mock;
+const mockPost = api.post as jest.Mock;
+const mockPatch = api.patch as jest.Mock;
+const mockDelete = api.delete as jest.Mock;
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const API_PROJECT = {
+  id: 'proj-1',
+  name: 'Rediseño Web',
+  description: 'Rediseño completo del sitio corporativo',
+  status: 'IN_PROGRESS',
+  startDate: '2026-05-01T00:00:00.000Z',
+  endDate: '2026-07-15T00:00:00.000Z',
+  budget: 15000,
+  progress: 40,
+  createdAt: '2026-04-20T00:00:00.000Z',
+  updatedAt: '2026-05-24T00:00:00.000Z',
+  milestones: [
+    { id: 'ms-1', name: 'Kickoff', status: 'COMPLETED', dueDate: '2026-05-05T00:00:00.000Z' },
+    { id: 'ms-2', name: 'Fase 1', status: 'IN_PROGRESS', dueDate: '2026-06-01T00:00:00.000Z' },
+  ],
+};
 
 beforeEach(() => {
   jest.clearAllMocks();
-  // Clear projectService cache between tests
-  (projectService as any).cache = null;
 });
 
-describe('projectService.getAll', () => {
-  it('returns seed projects when no saved data', async () => {
-    getItem.mockResolvedValue(null);
-    const result = await projectService.getAll();
-    expect(result.length).toBeGreaterThanOrEqual(5);
-  });
-  it('returns stored projects', async () => {
-    getItem.mockResolvedValue(null);
-    // Mock load to return custom data
-    const spy = jest.spyOn(projectService as any, 'load').mockResolvedValue([
-      { id: 'p1', name: 'Custom', description: '', status: 'active', priority: 'medium',
-        startDate: '', endDate: null, budget: 0, spent: 0, progress: 0, color: '#000',
-        icon: 'flag', members: [], tasks: [], tags: [], createdAt: '', updatedAt: '' }
-    ]);
-    const result = await projectService.getAll();
-    expect(result).toHaveLength(1);
-    spy.mockRestore();
-  });
-});
+// ─── getById ──────────────────────────────────────────────────────────────────
 
 describe('projectService.getById', () => {
-  it('returns seed project by id', async () => {
-    getItem.mockResolvedValue(null);
-    (projectService as any).cache = null;
-    const result = await projectService.getById('p1');
+  it('returns mapped project when API responds', async () => {
+    mockGet.mockResolvedValue(API_PROJECT);
+    const result = await projectService.getById('proj-1');
     expect(result).not.toBeNull();
-    if (result) expect(result.name).toBe('Rediseño Web');
+    expect(result!.name).toBe('Rediseño Web');
+    expect(result!.status).toBe('active');
+    expect(result!.budget).toBe(15000);
+    expect(result!.tasks).toHaveLength(2);
+    expect(mockGet).toHaveBeenCalledWith('/erp/projects/proj-1');
   });
-  it('returns null for non-existent id', async () => {
-    getItem.mockResolvedValue(null);
-    (projectService as any).cache = null;
-    expect(await projectService.getById('nonexistent')).toBeNull();
+
+  it('returns null when API returns nothing', async () => {
+    mockGet.mockResolvedValue(null);
+    const result = await projectService.getById('proj-1');
+    expect(result).toBeNull();
+  });
+
+  it('returns null on API error', async () => {
+    mockGet.mockRejectedValueOnce(new Error('Network error'));
+    const result = await projectService.getById('proj-1');
+    expect(result).toBeNull();
   });
 });
 
-describe('projectService.create', () => {
-  it('creates project', async () => {
-    getItem.mockResolvedValue(null);
-    (projectService as any).cache = null;
-    const result = await projectService.create({ name: 'New Project' });
-    expect(result.id).toBeDefined();
-    expect(setItem).toHaveBeenCalled();
-  });
-});
+// ─── update (PATCH) ──────────────────────────────────────────────────────────
 
 describe('projectService.update', () => {
-  it('updates project', async () => {
-    getItem.mockResolvedValue(null);
-    (projectService as any).cache = null;
-    // First need seed data in cache for update to find project
-    await projectService.getById('p1');
-    (projectService as any).cache = null;
-    // Mock getItemAsync to return seed data
-    getItem.mockResolvedValueOnce(Promise.resolve(null));
-    // The load method will set cache from seed data
-    const result = await projectService.update('p1', { name: 'Updated' });
-    expect(setItem).toHaveBeenCalled();
+  const updatedProject = { ...API_PROJECT, name: 'Updated Name', status: 'COMPLETED', progress: 100 };
+
+  it('sends PATCH and maps response from { success, data } wrapper', async () => {
+    mockPatch.mockResolvedValue({ success: true, data: updatedProject });
+    const result = await projectService.update('proj-1', { name: 'Updated Name', status: 'completed' });
+    expect(result.name).toBe('Updated Name');
+    expect(result.status).toBe('completed');
+    expect(mockPatch).toHaveBeenCalledWith('/erp/projects/proj-1', {
+      name: 'Updated Name',
+      status: 'COMPLETED',
+    });
+  });
+
+  it('handles PATCH response without wrapper (result.data || result)', async () => {
+    mockPatch.mockResolvedValue(updatedProject);
+    const result = await projectService.update('proj-1', { name: 'Updated Name' });
+    expect(result.name).toBe('Updated Name');
+  });
+
+  it('sends STATUS_REVERSE mapping', async () => {
+    mockPatch.mockResolvedValue({ success: true, data: { ...API_PROJECT, status: 'PAUSED' } });
+    await projectService.update('proj-1', { status: 'paused' });
+    expect(mockPatch).toHaveBeenCalledWith('/erp/projects/proj-1', { status: 'PAUSED' });
+  });
+
+  it('only sends defined fields', async () => {
+    mockPatch.mockResolvedValue({ success: true, data: API_PROJECT });
+    await projectService.update('proj-1', { name: 'New' });
+    // Should NOT send status, budget, etc.
+    const body = mockPatch.mock.calls[0][1];
+    expect(body).toEqual({ name: 'New' });
+  });
+
+  it('throws error when API fails', async () => {
+    mockPatch.mockRejectedValueOnce(new Error('API error'));
+    await expect(projectService.update('proj-1', { name: 'X' })).rejects.toThrow('API error');
   });
 });
+
+// ─── delete (DELETE) ──────────────────────────────────────────────────────────
 
 describe('projectService.delete', () => {
-  it('deletes project', async () => {
-    getItem.mockResolvedValue(null);
-    (projectService as any).cache = null;
-    await projectService.delete('p1');
-    expect(setItem).toHaveBeenCalled();
+  it('calls DELETE with project id', async () => {
+    mockDelete.mockResolvedValue({ success: true, message: 'Eliminado' });
+    await projectService.delete('proj-1');
+    expect(mockDelete).toHaveBeenCalledWith('/erp/projects/proj-1');
+  });
+
+  it('throws when API fails', async () => {
+    mockDelete.mockRejectedValueOnce(new Error('Conflict: has expenses'));
+    await expect(projectService.delete('proj-1')).rejects.toThrow('Conflict: has expenses');
   });
 });
+
+// ─── getStats ─────────────────────────────────────────────────────────────────
 
 describe('projectService.getStats', () => {
-  it('returns stats', async () => {
-    getItem.mockResolvedValue(null);
-    (projectService as any).cache = null;
+  it('computes stats from getAll', async () => {
+    mockGet.mockResolvedValue([
+      API_PROJECT,
+      { ...API_PROJECT, id: 'p2', name: 'Done', status: 'COMPLETED', progress: 100, budget: 5000 },
+    ]);
     const stats = await projectService.getStats();
-    expect(stats).toHaveProperty('total');
-    expect(stats).toHaveProperty('active');
-    expect(stats).toHaveProperty('completed');
+    expect(stats.total).toBe(2);
+    expect(stats.active).toBe(1);
+    expect(stats.completed).toBe(1);
+    expect(stats.totalBudget).toBe(20000);
+    expect(stats.avgProgress).toBe(70);
+  });
+
+  it('returns zeros on error', async () => {
+    mockGet.mockRejectedValueOnce(new Error('fail'));
+    const stats = await projectService.getStats();
+    expect(stats).toEqual({ total: 0, active: 0, completed: 0, paused: 0, cancelled: 0, totalBudget: 0, totalSpent: 0, avgProgress: 0 });
   });
 });
 
+// ─── getAll ───────────────────────────────────────────────────────────────────
 
-// ─── Extra coverage: project task/member operations ─────────────────────
+describe('projectService.getAll', () => {
+  it('maps and returns all projects', async () => {
+    mockGet.mockResolvedValue([API_PROJECT]);
+    const result = await projectService.getAll();
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe('Rediseño Web');
+  });
+
+  it('filters by status via query param', async () => {
+    mockGet.mockResolvedValue([{ ...API_PROJECT, status: 'ACTIVE' }]);
+    await projectService.getAll({ status: 'active' });
+    expect(mockGet).toHaveBeenCalledWith('/erp/projects?status=ACTIVE');
+  });
+
+  it('filters by search locally', async () => {
+    mockGet.mockResolvedValue([API_PROJECT, { ...API_PROJECT, id: 'p2', name: 'Otro', description: '' }]);
+    const result = await projectService.getAll({ search: 'rediseño' });
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe('Rediseño Web');
+  });
+
+  it('returns empty array on API error', async () => {
+    mockGet.mockRejectedValueOnce(new Error('fail'));
+    const result = await projectService.getAll();
+    expect(result).toEqual([]);
+  });
+});
+
+// ─── create ───────────────────────────────────────────────────────────────────
+
+describe('projectService.create', () => {
+  it('sends POST and maps response', async () => {
+    mockPost.mockResolvedValue(API_PROJECT);
+    const result = await projectService.create({ name: 'Nuevo Proyecto', budget: 10000 });
+    expect(result.name).toBe('Rediseño Web');
+    expect(mockPost).toHaveBeenCalledWith('/erp/projects', {
+      name: 'Nuevo Proyecto',
+      description: '',
+      budget: 10000,
+      startDate: expect.any(String),
+    });
+  });
+});
+
+// ─── addTask / updateTask / deleteTask / addMember / removeMember ────────────
 
 describe('projectService.addTask', () => {
-  it('adds a task to a project', async () => {
-    (projectService as any).cache = null;
-    getItem.mockResolvedValue(JSON.stringify([{ id: 'p1', name: 'P1', tasks: [], members: [], tags: [], status: 'active', priority: 'medium', startDate: '2026-01-01', endDate: null, budget: 0, spent: 0, progress: 0, color: '#000', icon: 'rocket', description: '', createdAt: '1', updatedAt: '1' }]));
-    const task = await projectService.addTask('p1', { title: 'New Task', status: 'todo' });
-    expect(task.id).toBeDefined();
-    expect(task.title).toBe('New Task');
-    expect(setItem).toHaveBeenCalled();
-  });
-
-  it('throws on project not found', async () => {
-    (projectService as any).cache = null;
-    getItem.mockResolvedValue(JSON.stringify([]));
-    await expect(projectService.addTask('bad', { title: 'T', status: 'todo' })).rejects.toThrow('Proyecto no encontrado');
-  });
-});
-
-describe('projectService.addMember', () => {
-  it('adds a member', async () => {
-    (projectService as any).cache = null;
-    getItem.mockResolvedValue(JSON.stringify([{ id: 'p1', name: 'P1', members: [], tasks: [], tags: [], status: 'active', priority: 'medium', startDate: '2026-01-01', endDate: null, budget: 0, spent: 0, progress: 0, color: '#000', icon: 'rocket', description: '', createdAt: '1', updatedAt: '1' }]));
-    await projectService.addMember('p1', { id: 'u1', name: 'User 1', role: 'member' });
-    expect(setItem).toHaveBeenCalled();
-  });
-
-  it('throws on project not found', async () => {
-    (projectService as any).cache = null;
-    getItem.mockResolvedValue(JSON.stringify([]));
-    await expect(projectService.addMember('bad', { id: 'u1', name: 'U1', role: 'member' })).rejects.toThrow('Proyecto no encontrado');
-  });
-
-  it('skip duplicate member', async () => {
-    (projectService as any).cache = null;
-    getItem.mockResolvedValue(JSON.stringify([{ id: 'p1', name: 'P1', members: [{ id: 'u1', name: 'Existing', role: 'member' }], tasks: [], tags: [], status: 'active', priority: 'medium', startDate: '2026-01-01', endDate: null, budget: 0, spent: 0, progress: 0, color: '#000', icon: 'rocket', description: '', createdAt: '1', updatedAt: '1' }]));
-    // Member already in the project — should return early without persisting
-    await projectService.addMember('p1', { id: 'u1', name: 'Existing', role: 'member' });
-    // persist() is NOT called because the early return happens before save
-    // But setItem may have been called by load() saving seed data, so check via member count
-    const updated = await projectService.getById('p1');
-    expect(updated?.members).toHaveLength(1);
-  });
-});
-
-describe('projectService.getStats', () => {
-  it('computes project stats from seed', async () => {
-    (projectService as any).cache = null;
-    getItem.mockResolvedValue(null); // will fallback to seed
-    const stats = await projectService.getStats();
-    expect(stats.total).toBeGreaterThan(0);
-    expect(stats.avgProgress).toBeGreaterThan(0);
-  });
-});
-
-describe('projectService.getAll with filters', () => {
-  it('filters by status', async () => {
-    (projectService as any).cache = null;
-    getItem.mockResolvedValue(JSON.stringify([{ id: 'p1', name: 'Active', status: 'active', description: '', priority: 'medium', startDate: '', endDate: null, budget: 0, spent: 0, progress: 0, color: '#000', icon: 'flag', members: [], tasks: [], tags: [], createdAt: '', updatedAt: '' }]));
-    const result = await projectService.getAll({ status: 'active' });
-    expect(result).toHaveLength(1);
-  });
-
-  it('filters by search', async () => {
-    (projectService as any).cache = null;
-    getItem.mockResolvedValue(JSON.stringify([{ id: 'p1', name: 'My Project', status: 'active', description: 'Test project', priority: 'medium', startDate: '', endDate: null, budget: 0, spent: 0, progress: 0, color: '#000', icon: 'flag', members: [], tasks: [], tags: ['web'], createdAt: '', updatedAt: '' }]));
-    const result = await projectService.getAll({ search: 'Project' });
-    expect(result).toHaveLength(1);
+  it('returns a stub task with warning', async () => {
+    const task = await projectService.addTask('p1', { title: 'New', status: 'todo' });
+    expect(task.title).toBe('New');
+    expect(task.id).toContain('pt-');
   });
 });
 
 describe('projectService.updateTask', () => {
-  it('updates a task', async () => {
-    (projectService as any).cache = null;
-    getItem.mockResolvedValue(JSON.stringify([{ id: 'p1', name: 'P1', tasks: [{ id: 't1', title: 'Old', status: 'todo' }], members: [], tags: [], status: 'active', priority: 'medium', startDate: '2026-01-01', endDate: null, budget: 0, spent: 0, progress: 0, color: '#000', icon: 'rocket', description: '', createdAt: '1', updatedAt: '1' }]));
-    await projectService.updateTask('p1', 't1', { title: 'Updated', status: 'done' });
-    expect(setItem).toHaveBeenCalled();
-  });
-
-  it('throws on project not found', async () => {
-    (projectService as any).cache = null;
-    getItem.mockResolvedValue(JSON.stringify([]));
-    await expect(projectService.updateTask('bad', 't1', {})).rejects.toThrow('Proyecto no encontrado');
-  });
-
-  it('throws on task not found', async () => {
-    (projectService as any).cache = null;
-    getItem.mockResolvedValue(JSON.stringify([{ id: 'p1', name: 'P1', tasks: [], members: [], tags: [], status: 'active', priority: 'medium', startDate: '2026-01-01', endDate: null, budget: 0, spent: 0, progress: 0, color: '#000', icon: 'rocket', description: '', createdAt: '1', updatedAt: '1' }]));
-    await expect(projectService.updateTask('p1', 'bad-task', {})).rejects.toThrow('Tarea no encontrada');
+  it('returns a stub response', async () => {
+    const result = await projectService.updateTask('p1', 't1', { title: 'Updated' });
+    expect(result.id).toBe('t1');
+    expect(result.title).toBe('Updated');
   });
 });
 
 describe('projectService.deleteTask', () => {
-  it('deletes a task', async () => {
-    (projectService as any).cache = null;
-    getItem.mockResolvedValue(JSON.stringify([{ id: 'p1', name: 'P1', tasks: [{ id: 't1', title: 'Task', status: 'todo' }], members: [], tags: [], status: 'active', priority: 'medium', startDate: '2026-01-01', endDate: null, budget: 0, spent: 0, progress: 0, color: '#000', icon: 'rocket', description: '', createdAt: '1', updatedAt: '1' }]));
-    await projectService.deleteTask('p1', 't1');
-    expect(setItem).toHaveBeenCalled();
+  it('does not throw', async () => {
+    await expect(projectService.deleteTask('p1', 't1')).resolves.toBeUndefined();
   });
+});
 
-  it('throws on project not found', async () => {
-    (projectService as any).cache = null;
-    getItem.mockResolvedValue(JSON.stringify([]));
-    await expect(projectService.deleteTask('bad', 't1')).rejects.toThrow('Proyecto no encontrado');
+describe('projectService.addMember', () => {
+  it('does not throw', async () => {
+    await expect(projectService.addMember('p1', { id: 'u1', name: 'U1', role: 'member' })).resolves.toBeUndefined();
   });
 });
 
 describe('projectService.removeMember', () => {
-  it('removes a member', async () => {
-    (projectService as any).cache = null;
-    getItem.mockResolvedValue(JSON.stringify([{ id: 'p1', name: 'P1', members: [{ id: 'u1', name: 'User', role: 'member' }], tasks: [], tags: [], status: 'active', priority: 'medium', startDate: '2026-01-01', endDate: null, budget: 0, spent: 0, progress: 0, color: '#000', icon: 'rocket', description: '', createdAt: '1', updatedAt: '1' }]));
-    await projectService.removeMember('p1', 'u1');
-    expect(setItem).toHaveBeenCalled();
-  });
-
-  it('throws on project not found', async () => {
-    (projectService as any).cache = null;
-    getItem.mockResolvedValue(JSON.stringify([]));
-    await expect(projectService.removeMember('bad', 'u1')).rejects.toThrow('Proyecto no encontrado');
+  it('does not throw', async () => {
+    await expect(projectService.removeMember('p1', 'u1')).resolves.toBeUndefined();
   });
 });
 
 describe('projectService.clearAll', () => {
-  it('clears all projects', async () => {
-    const deleteItem = require('expo-secure-store').deleteItemAsync;
-    await projectService.clearAll();
-    expect(deleteItem).toHaveBeenCalled();
-  });
-});
-
-describe('projectService.update', () => {
-  it('throws on project not found', async () => {
-    (projectService as any).cache = null;
-    getItem.mockResolvedValue(JSON.stringify([]));
-    await expect(projectService.update('bad', { name: 'X' })).rejects.toThrow('Proyecto no encontrado');
-  });
-});
-
-describe('projectService.delete', () => {
-  it('throws on project not found', async () => {
-    (projectService as any).cache = null;
-    getItem.mockResolvedValue(JSON.stringify([]));
-    await expect(projectService.delete('bad')).rejects.toThrow('Proyecto no encontrado');
+  it('does not throw', async () => {
+    await expect(projectService.clearAll()).resolves.toBeUndefined();
   });
 });

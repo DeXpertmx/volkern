@@ -16,8 +16,8 @@ export const authOptions: NextAuthOptions = {
         httpOnly: true,
         sameSite: 'lax',
         path: '/',
-        secure: true,
-        domain: '.volkern.app'
+        secure: process.env.NODE_ENV === 'production',
+        ...(process.env.NODE_ENV === 'production' ? { domain: '.volkern.app' } : {}),
       }
     }
   },

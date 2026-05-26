@@ -8,11 +8,9 @@ import { Progress } from '@/components/ui/progress'
 import { 
   Users, 
   Plus, 
-  ExternalLink, 
   TrendingUp, 
   Cpu, 
-  Database,
-  Building 
+  Database
 } from 'lucide-react'
 import { SlotList } from '@/components/agency/SlotList'
 import { SlotProvisioningModal } from '@/components/agency/SlotProvisioningModal'

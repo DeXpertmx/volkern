@@ -1,4 +1,4 @@
-import * as SecureStore from 'expo-secure-store';
+import { api, ApiClientError } from './api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -32,15 +32,55 @@ export interface ContactStats {
   recentContacts: Contact[];
 }
 
-// ─── Keys ─────────────────────────────────────────────────────────────────────
-
-const CONTACTS_KEY = 'volkern_contacts';
-const INTERACTIONS_KEY = 'volkern_contact_interactions';
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function generateId(): string {
-  return `ct_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+/** Mapea un contacto de la API al tipo Contact local */
+function mapApiContact(apiContact: any): Contact {
+  const tags = apiContact.tags
+    ? String(apiContact.tags).split(',').map((t: string) => t.trim()).filter(Boolean)
+    : [];
+  return {
+    id: apiContact.id,
+    name: apiContact.nombre || '',
+    phone: apiContact.telefono || '',
+    email: apiContact.email || '',
+    company: apiContact.company?.nombre || apiContact.empresa || '',
+    position: apiContact.cargo || '',
+    notes: apiContact.notas || '',
+    tags,
+    source: apiContact.origen === 'lead' ? 'lead' : apiContact.origen === 'import' ? 'import' : 'manual',
+    createdAt: apiContact.fechaCreacion
+      ? new Date(apiContact.fechaCreacion).getTime()
+      : Date.now(),
+    updatedAt: apiContact.fechaActualizacion
+      ? new Date(apiContact.fechaActualizacion).getTime()
+      : Date.now(),
+  };
+}
+
+/** Mapea una interacción de la API al tipo Interaction local */
+function mapApiInteraction(apiInteraction: any): Interaction {
+  const typeMap: Record<string, InteractionType> = {
+    llamada: 'call',
+    call: 'call',
+    email: 'email',
+    correo: 'email',
+    reunion: 'meeting',
+    meeting: 'meeting',
+    nota: 'note',
+    note: 'note',
+    mensaje: 'message',
+    message: 'message',
+  };
+  return {
+    id: apiInteraction.id,
+    contactId: apiInteraction.contactId || '',
+    type: typeMap[apiInteraction.tipo?.toLowerCase()] || 'note',
+    notes: apiInteraction.contenido || apiInteraction.notas || '',
+    timestamp: apiInteraction.fechaCreacion
+      ? new Date(apiInteraction.fechaCreacion).getTime()
+      : Date.now(),
+  };
 }
 
 // ─── Service ──────────────────────────────────────────────────────────────────
@@ -50,145 +90,156 @@ class ContactsService {
 
   async getAll(): Promise<Contact[]> {
     try {
-      const raw = await SecureStore.getItemAsync(CONTACTS_KEY);
-      if (raw) {
-        return JSON.parse(raw) as Contact[];
-      }
-    } catch {
-      // ignore
+      const data = await api.get<any[]>('/contacts');
+      return (data || []).map(mapApiContact).sort((a, b) => b.updatedAt - a.updatedAt);
+    } catch (e) {
+      console.error('[ContactsService] Error fetching contacts:', e);
+      return [];
     }
-    return [];
   }
 
   async getById(id: string): Promise<Contact | null> {
-    const all = await this.getAll();
-    return all.find((c) => c.id === id) || null;
+    try {
+      const resp = await api.get<any>(`/contacts/${id}`);
+      const data = resp.data || resp;
+      return data ? mapApiContact(data) : null;
+    } catch (e) {
+      if (e instanceof ApiClientError && e.status === 404) return null;
+      console.error('[ContactsService] Error fetching contact:', e);
+      return null;
+    }
   }
 
   async search(query: string): Promise<Contact[]> {
-    const all = await this.getAll();
-    const lower = query.toLowerCase();
-    return all.filter(
-      (c) =>
-        c.name.toLowerCase().includes(lower) ||
-        c.phone.includes(query) ||
-        c.email.toLowerCase().includes(lower) ||
-        c.company.toLowerCase().includes(lower) ||
-        c.tags.some((t) => t.toLowerCase().includes(lower)),
-    );
+    try {
+      const data = await api.get<any[]>(`/contacts?search=${encodeURIComponent(query)}`);
+      return (data || []).map(mapApiContact);
+    } catch (e) {
+      console.error('[ContactsService] Error searching contacts:', e);
+      return [];
+    }
   }
 
   async create(data: Omit<Contact, 'id' | 'createdAt' | 'updatedAt'>): Promise<Contact> {
-    const all = await this.getAll();
-    const contact: Contact = {
-      ...data,
-      id: generateId(),
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+    const body: any = {
+      nombre: data.name,
+      email: data.email,
+      telefono: data.phone,
+      cargo: data.position,
+      notas: data.notes,
+      tipo: 'person',
     };
-    all.push(contact);
-    await this.persist(all);
-    return contact;
+    if (data.company) body.empresa = data.company;
+    if (data.tags?.length) body.tags = data.tags.join(',');
+
+    const result = await api.post<any>('/contacts', body);
+    return mapApiContact(result);
   }
 
   async update(id: string, data: Partial<Omit<Contact, 'id' | 'createdAt'>>): Promise<Contact | null> {
-    const all = await this.getAll();
-    const idx = all.findIndex((c) => c.id === id);
-    if (idx === -1) return null;
-    all[idx] = { ...all[idx], ...data, updatedAt: Date.now() };
-    await this.persist(all);
-    return all[idx];
+    const body: any = {};
+    if (data.name !== undefined) body.nombre = data.name;
+    if (data.email !== undefined) body.email = data.email;
+    if (data.phone !== undefined) body.telefono = data.phone;
+    if (data.position !== undefined) body.cargo = data.position;
+    if (data.notes !== undefined) body.notas = data.notes;
+    if (data.company !== undefined) body.empresa = data.company;
+    if (data.tags !== undefined) body.tags = data.tags.join(',');
+
+    try {
+      const resp = await api.patch<any>(`/contacts/${id}`, body);
+      const contactData = resp.data || resp;
+      return mapApiContact(contactData);
+    } catch (e) {
+      if (e instanceof ApiClientError && e.status === 404) return null;
+      throw e;
+    }
   }
 
   async delete(id: string): Promise<void> {
-    const all = await this.getAll();
-    const filtered = all.filter((c) => c.id !== id);
-    await this.persist(filtered);
-    // Also remove associated interactions
-    const interactions = await this.getAllInteractions();
-    const filteredInteractions = interactions.filter((i) => i.contactId !== id);
-    await this.persistInteractions(filteredInteractions);
+    try {
+      await api.delete(`/contacts/${id}`);
+    } catch (e) {
+      console.error('[ContactsService] Error deleting contact:', e);
+    }
   }
 
   async clearAll(): Promise<void> {
-    await this.persist([]);
-    await this.persistInteractions([]);
+    console.warn('[ContactsService] clearAll no soportado vía API');
   }
 
   // ── Interactions ──────────────────────────────────────────────────────
 
   async getInteractions(contactId: string): Promise<Interaction[]> {
-    const all = await this.getAllInteractions();
-    return all
-      .filter((i) => i.contactId === contactId)
-      .sort((a, b) => b.timestamp - a.timestamp);
+    try {
+      const resp = await api.get<any>(`/contacts/${contactId}`);
+      const historial = resp.data?.historialInteracciones || resp.historialInteracciones || [];
+      return historial.map(mapApiInteraction).sort((a: Interaction, b: Interaction) => b.timestamp - a.timestamp);
+    } catch (e) {
+      console.error('[ContactsService] Error fetching interactions:', e);
+      return [];
+    }
   }
 
   async addInteraction(contactId: string, type: InteractionType, notes: string): Promise<Interaction> {
-    const all = await this.getAllInteractions();
-    const interaction: Interaction = {
-      id: generateId(),
-      contactId,
-      type,
-      notes,
-      timestamp: Date.now(),
+    // Intentar usar interacciones del contacto
+    const typeReverse: Record<InteractionType, string> = {
+      call: 'llamada',
+      email: 'email',
+      meeting: 'reunion',
+      note: 'nota',
+      message: 'mensaje',
     };
-    all.push(interaction);
-    await this.persistInteractions(all);
-    return interaction;
+
+    try {
+      const resp = await api.post<any>(`/contacts/${contactId}/notes`, {
+        contenido: `[${typeReverse[type]}] ${notes}`,
+        metadata: { type, source: 'app-movil' },
+      });
+      const note = resp.note || resp;
+      return {
+        id: note.id,
+        contactId,
+        type,
+        notes: note.contenido || notes,
+        timestamp: note.fechaCreacion ? new Date(note.fechaCreacion).getTime() : Date.now(),
+      };
+    } catch (e) {
+      console.error('[ContactsService] Error adding interaction:', e);
+      // Fallback: devolver objeto local
+      return {
+        id: `int_${Date.now()}`,
+        contactId,
+        type,
+        notes,
+        timestamp: Date.now(),
+      };
+    }
   }
 
   async deleteInteraction(id: string): Promise<void> {
-    const all = await this.getAllInteractions();
-    const filtered = all.filter((i) => i.id !== id);
-    await this.persistInteractions(filtered);
+    console.warn('[ContactsService] deleteInteraction no soportado vía API');
   }
 
   // ── Stats ─────────────────────────────────────────────────────────────
 
   async getStats(): Promise<ContactStats> {
-    const all = await this.getAll();
-    const interactions = await this.getAllInteractions();
-
-    const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    const interactionsThisWeek = interactions.filter((i) => i.timestamp > oneWeekAgo).length;
-
-    const recentContacts = all
-      .sort((a, b) => b.updatedAt - a.updatedAt)
-      .slice(0, 5);
-
-    return {
-      total: all.length,
-      interactionsThisWeek,
-      recentContacts,
-    };
-  }
-
-  // ── Private ───────────────────────────────────────────────────────────
-
-  private async persist(items: Contact[]): Promise<void> {
     try {
-      await SecureStore.setItemAsync(CONTACTS_KEY, JSON.stringify(items));
-    } catch {
-      console.error('[ContactsService] Error saving contacts');
-    }
-  }
+      const all = await this.getAll();
+      const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
 
-  private async getAllInteractions(): Promise<Interaction[]> {
-    try {
-      const raw = await SecureStore.getItemAsync(INTERACTIONS_KEY);
-      if (raw) return JSON.parse(raw) as Interaction[];
-    } catch {
-      // ignore
-    }
-    return [];
-  }
+      const recentContacts = all
+        .sort((a, b) => b.updatedAt - a.updatedAt)
+        .slice(0, 5);
 
-  private async persistInteractions(items: Interaction[]): Promise<void> {
-    try {
-      await SecureStore.setItemAsync(INTERACTIONS_KEY, JSON.stringify(items));
-    } catch {
-      console.error('[ContactsService] Error saving interactions');
+      return {
+        total: all.length,
+        interactionsThisWeek: 0, // Se podría obtener de históricos si se necesita
+        recentContacts,
+      };
+    } catch (e) {
+      console.error('[ContactsService] Error fetching stats:', e);
+      return { total: 0, interactionsThisWeek: 0, recentContacts: [] };
     }
   }
 }

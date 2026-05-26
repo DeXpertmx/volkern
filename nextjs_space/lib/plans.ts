@@ -8,7 +8,9 @@ export const PLANS = {
   BASICO: 'basico',
   PROFESIONAL: 'profesional',
   AGENCY_SLOT: 'agency-slot',
-  PRO_AGENCY: 'pro-agency'
+  PRO_AGENCY: 'pro-agency',
+  ACCOUNTING_SLOT: 'accounting-slot',
+  PRO_ACCOUNTING: 'pro-accounting'
 } as const
 
 export type PlanType = typeof PLANS[keyof typeof PLANS]
@@ -65,6 +67,7 @@ export type CrmModule =
   | 'activos'
   | 'conocimiento'
   | 'estrategia'
+  | 'conciliacion'
 
 
 
@@ -134,6 +137,7 @@ export const ALL_MODULES: ModuleDefinition[] = [
   { id: 'conocimiento', label: 'Conocimiento', description: 'Base de conocimientos y SOPs', icon: '🧠', group: 'Administración' },
   { id: 'estrategia', label: 'Estrategia', description: 'Planificación estratégica y KPIs (Requiere Proyectos)', icon: '🎯', group: 'Estrategia' },
   { id: 'agency', label: 'Agencia', description: 'Gestión de slots de cliente y marca blanca', icon: '🏢', group: 'Administración' },
+  { id: 'conciliacion', label: 'Conciliación Bancaria', description: 'Sincronización con bancos e IA para conciliación automática', icon: '🏦', group: 'ERP' },
 ]
 
 
@@ -223,6 +227,43 @@ export const PLAN_MODULES: Record<string, CrmModule[]> = {
     'white_label', 'custom_domain',
     'rrhh', 'finanzas', 'calidad', 'produccion', 'inventario', 'proyectos', 'finanzas_consolidado', 'agency',
     'taskforce', 'activos', 'conocimiento', 'estrategia'
+  ],
+  // ─── Contabilidad y Asesorías Fiscales ───────────────────────
+  [PLANS.ACCOUNTING_SLOT]: [
+    // CRM básico
+    'leads', 'contactos', 'empresas', 'pipeline', 'tareas', 'analytics',
+    // Comunicación
+    'mensajes', 'citas', 'catalogo',
+    // Comercial
+    'cotizaciones', 'contratos', 'ordenes_venta',
+    // ✅ Core Contable-Fiscal
+    'finanzas', 'conciliacion',
+    // Automatización
+    'automatizaciones',
+    // Extras
+    'mi_tarjeta',
+    'equipo', 'configuracion',
+    'conocimiento',
+    // Comunicación con clientes
+    'chatbot_whatsapp',
+  ],
+  [PLANS.PRO_ACCOUNTING]: [
+    // TODO del slot
+    'leads', 'contactos', 'empresas', 'pipeline', 'tareas', 'analytics',
+    'mensajes', 'citas', 'catalogo',
+    'cotizaciones', 'contratos', 'ordenes_venta', 'pronosticos', 'scoring',
+    'finanzas', 'conciliacion',
+    'automatizaciones',
+    'mi_tarjeta',
+    'equipo', 'configuracion',
+    'conocimiento',
+    'chatbot_whatsapp',
+    // Gestión de despacho
+    'rrhh', 'finanzas_consolidado',
+    'telefonia',
+    'white_label', 'custom_domain',
+    // Slot management (el despacho gestiona clientes)
+    'agency',
   ],
 }
 
@@ -349,6 +390,40 @@ export const PLAN_LIMITS = {
     pages: 10,
   },
   [PLANS.PRO_AGENCY]: {
+    leads: -1,
+    users: -1,
+    emails_per_month: -1,
+    automation_runs: -1,
+    whatsapp_messages: -1,
+    sms_messages: -1,
+    courses: -1,
+    students: -1,
+    storage_gb: 1000,
+    ai_image_generations: -1,
+    business_emails: -1,
+    business_domains: -1,
+    business_email_gb: 50,
+    automations_count: -1,
+    pages: -1,
+  },
+  [PLANS.ACCOUNTING_SLOT]: {
+    leads: 5000,
+    users: 5,
+    emails_per_month: 10000,
+    automation_runs: 1000,
+    whatsapp_messages: 1000,
+    sms_messages: 500,
+    courses: 10,
+    students: 500,
+    storage_gb: 10,
+    ai_image_generations: 50,
+    business_emails: 0,
+    business_domains: 0,
+    business_email_gb: 0,
+    automations_count: 10,
+    pages: 10,
+  },
+  [PLANS.PRO_ACCOUNTING]: {
     leads: -1,
     users: -1,
     emails_per_month: -1,

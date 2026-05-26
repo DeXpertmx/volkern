@@ -247,8 +247,8 @@ export const POST = withTenantAuth(async (req, auth) => {
 
     // Audit log
     const { AuditService } = await import('@/lib/audit-service');
-    const requestIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || undefined;
-    const userAgent = request.headers.get('user-agent') || undefined;
+    const requestIp = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || undefined;
+    const userAgent = req.headers.get('user-agent') || undefined;
     await AuditService.log({
       tenantId: tenantId,
       userId: currentUser.id,

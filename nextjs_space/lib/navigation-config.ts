@@ -101,6 +101,24 @@ export const HUBS: HubConfig[] = [
     ]
   },
   {
+    id: 'contabilidad',
+    name: 'Contabilidad',
+    icon: Calculator,
+    href: '/dashboard/contabilidad',
+    description: 'Gestión de clientes de asesoría, conciliación bancaria y marca de despacho.',
+    requiredAccountType: 'AGENCY',
+    basePaths: [
+      '/dashboard/contabilidad/slots',
+      '/dashboard/contabilidad/branding'
+    ],
+    items: [
+      { name: 'Dashboard Asesoría', href: '/dashboard/contabilidad', icon: LayoutDashboard, description: 'Resumen de clientes y actividad' },
+      { name: 'Gestión de Clientes', href: '/dashboard/contabilidad/slots', icon: Users, description: 'Alta y baja de empresas cliente' },
+      { name: 'Mi Marca de Despacho', href: '/dashboard/contabilidad/branding', icon: Palette, description: 'Personalización visual para clientes' },
+      { name: 'Métricas de Uso', href: '/dashboard/contabilidad/usage', icon: BarChart3, description: 'Consumo IA y almacenamiento' },
+    ]
+  },
+  {
     id: 'ventas',
     name: 'Ventas',
     icon: TrendingUp,

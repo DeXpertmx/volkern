@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
+import { AgencySlotCreateSchema } from '@/lib/validation/schemas/misc';
 
 /**
  * GET /api/agency/slots
@@ -23,6 +24,7 @@ export const GET = withTenantAuth(async (req, auth) => {
       estado: true,
       fechaCreacion: true,
       dbUrl: true,
+      enabledModules: true,
       _count: {
         select: {
           leads: true,
@@ -46,11 +48,20 @@ export const POST = withTenantAuth(async (req, auth) => {
   }
 
   try {
-    const { client_name, admin_email, modules_enabled } = await req.json();
+    const body = await req.json();
+    const validation = AgencySlotCreateSchema.safeParse(body);
 
-    if (!client_name || !admin_email) {
-      return NextResponse.json({ error: 'Nombre de cliente y email de admin son requeridos' }, { status: 400 });
+    if (!validation.success) {
+      return NextResponse.json({
+        error: 'Datos del slot inválidos',
+        details: validation.error.format()
+      }, { status: 400 });
     }
+
+    const { client_name, admin_email, modules_enabled } = validation.data;
+
+    // Normalizar nombres de módulos a uppercase
+    const normalizedModules = modules_enabled?.map(m => m.toUpperCase()) || ['CRM'];
 
     // 1. Verificar límite de slots
     const agency = await prisma.tenant.findUnique({
@@ -82,7 +93,7 @@ export const POST = withTenantAuth(async (req, auth) => {
         parentId: auth.tenant!.id,
         billingEmail: admin_email,
         brandingConfig: agency?.brandingConfig || {}, // Hereda branding inicial
-        enabledModules: modules_enabled || ['CRM'],
+        enabledModules: normalizedModules,
         plan: 'agency-slot',
         estado: 'activo'
       }
