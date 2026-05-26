@@ -356,7 +356,7 @@ export default function DashboardScreen() {
                   onPress={() => {
                     if (fav.type === 'module') {
                       const mod = hubsService.getModule(fav.id);
-                      if (mod) router.push(`/hub/${mod.categoryId}`);
+                      if (mod) router.push(`/hub/module-detail?moduleId=${mod.id}`);
                     } else {
                       router.push('/(tabs)/tasks');
                     }

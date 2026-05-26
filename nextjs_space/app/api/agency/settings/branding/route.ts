@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
+import { AgencyBrandingUpdateSchema } from '@/lib/validation/schemas/misc';
 
 /**
  * PATCH /api/agency/settings/branding
@@ -14,7 +15,17 @@ export const PATCH = withTenantAuth(async (req, auth) => {
   }
 
   try {
-    const { logo_url, primary_color, show_powered_by, custom_footer_text } = await req.json();
+    const body = await req.json();
+    const validation = AgencyBrandingUpdateSchema.safeParse(body);
+
+    if (!validation.success) {
+      return NextResponse.json({ 
+        error: 'Datos de branding inválidos',
+        details: validation.error.format()
+      }, { status: 400 });
+    }
+
+    const { logo_url, primary_color, show_powered_by, custom_footer_text } = validation.data;
 
     const updatedTenant = await prisma.tenant.update({
       where: { id: auth.tenant!.id },

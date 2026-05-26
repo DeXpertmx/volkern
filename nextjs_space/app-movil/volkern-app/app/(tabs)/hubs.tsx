@@ -204,7 +204,7 @@ export default function HubsScreen() {
   };
 
   const handleModulePress = (mod: HubModule) => {
-    router.push(`/hub/${mod.categoryId}`);
+    router.push(`/hub/module-detail?moduleId=${mod.id}`);
   };
 
   const handleToggleFav = async (mod: HubModule) => {

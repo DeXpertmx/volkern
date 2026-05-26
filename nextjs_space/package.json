@@ -7,7 +7,9 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "NODE_OPTIONS='--max-old-space-size=8192' npx tsc --noEmit --project tsconfig.check.json",
-    "prepare": "husky || true"
+    "prepare": "husky || true",
+    "test:e2e:reconciliation": "bash scripts/run-e2e-reconciliation.sh",
+    "test:e2e:reconciliation:browser": "bash scripts/run-e2e-reconciliation-browser.sh"
   },
   "prisma": {
     "seed": "tsx --require dotenv/config scripts/seed.ts"

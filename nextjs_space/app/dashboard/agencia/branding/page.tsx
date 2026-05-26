@@ -7,8 +7,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { toast } from 'sonner'
-import { Palette, Upload, Eye, Save, Sparkles, Building2 } from 'lucide-react'
-import Image from 'next/image'
+import { Palette, Upload, Eye, Save, Sparkles, Building2, ShieldCheck } from 'lucide-react'
+
 
 export default function AgencyBrandingPage() {
   const [loading, setLoading] = useState(true)

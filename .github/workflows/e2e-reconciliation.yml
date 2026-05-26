@@ -11,6 +11,10 @@ concurrency:
   group: e2e-reconciliation-${{ github.ref }}
   cancel-in-progress: true
 
+defaults:
+  run:
+    working-directory: nextjs_space
+
 jobs:
   test:
     name: Reconciliation E2E
@@ -41,27 +45,32 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: nextjs_space/package-lock.json
 
       - name: Install dependencies
+        working-directory: nextjs_space
         run: npm ci
 
       - name: Verify Prisma CLI
+        working-directory: nextjs_space
         run: npx prisma --version
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/volkern_test
 
       - name: Generate Prisma client
+        working-directory: nextjs_space
         run: npx prisma generate
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/volkern_test
 
       - name: Run Prisma migrations
+        working-directory: nextjs_space
         run: npx prisma migrate deploy
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/volkern_test
 
       - name: Run E2E reconciliation test
+        working-directory: nextjs_space
         run: npm run test:e2e:reconciliation
         env:
           PORT: 3099

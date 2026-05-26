@@ -1,4 +1,4 @@
-import * as SecureStore from 'expo-secure-store';
+import { api, ApiClientError } from './api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -39,7 +39,26 @@ export interface CreateLeadInput {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const LEADS_KEY = 'volkern_leads';
+// Mapa de estados español → inglés
+export const STATUS_MAP: Record<string, LeadStatus> = {
+  nuevo: 'new',
+  contactado: 'contacted',
+  calificado: 'qualified',
+  propuesta: 'proposal',
+  negociacion: 'negotiation',
+  ganado: 'won',
+  perdido: 'lost',
+};
+
+const STATUS_REVERSE: Record<LeadStatus, string> = {
+  new: 'nuevo',
+  contacted: 'contactado',
+  qualified: 'calificado',
+  proposal: 'propuesta',
+  negotiation: 'negociacion',
+  won: 'ganado',
+  lost: 'perdido',
+};
 
 export const LEAD_STATUSES: { value: LeadStatus; label: string; icon: string; color: string }[] = [
   { value: 'new', label: 'Nuevo', icon: 'sparkles', color: '#3B82F6' },
@@ -73,77 +92,139 @@ export function getStatusIcon(status: LeadStatus): string {
   return LEAD_STATUSES.find((s) => s.value === status)?.icon || 'ellipse';
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Mapea un lead de la API (campos español) al tipo Lead local (inglés) */
+function mapApiLead(apiLead: any): Lead {
+  const status = STATUS_MAP[apiLead.estado?.toLowerCase()] || 'new';
+  const sourceMap: Record<string, LeadSource> = {
+    website: 'website',
+    referido: 'referral',
+    referral: 'referral',
+    'redes sociales': 'social',
+    social: 'social',
+    email: 'email',
+    correo: 'email',
+    llamada: 'call',
+    call: 'call',
+    visita: 'walk_in',
+    'walk_in': 'walk_in',
+    otro: 'other',
+    other: 'other',
+  };
+  const source = sourceMap[apiLead.fuente?.toLowerCase()] || 'other';
+  const tags = apiLead.tags
+    ? String(apiLead.tags).split(',').map((t: string) => t.trim()).filter(Boolean)
+    : [];
+
+  return {
+    id: apiLead.id,
+    name: apiLead.nombre || '',
+    email: apiLead.email || '',
+    phone: apiLead.telefono || '',
+    company: apiLead.empresa || '',
+    status,
+    source,
+    notes: apiLead.notas || '',
+    tags,
+    assignedTo: apiLead.asignadoA || '',
+    budget: apiLead.presupuesto || 0,
+    currency: apiLead.moneda || 'MXN',
+    interestScore: apiLead.scoreValue || apiLead.interes || 5,
+    lastContactedAt: apiLead.fechaUltimaActividad
+      ? new Date(apiLead.fechaUltimaActividad).getTime()
+      : null,
+    createdAt: apiLead.fechaCreacion
+      ? new Date(apiLead.fechaCreacion).getTime()
+      : Date.now(),
+    updatedAt: apiLead.fechaActualizacion
+      ? new Date(apiLead.fechaActualizacion).getTime()
+      : Date.now(),
+  };
+}
+
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 class LeadsService {
   async getAll(): Promise<Lead[]> {
     try {
-      const raw = await SecureStore.getItemAsync(LEADS_KEY);
-      if (raw) {
-        const items = JSON.parse(raw) as Lead[];
-        return items.sort((a, b) => b.updatedAt - a.updatedAt);
-      }
-    } catch {
-      // ignore
+      const data = await api.get<any[]>('/leads');
+      return (data || []).map(mapApiLead).sort((a, b) => b.updatedAt - a.updatedAt);
+    } catch (e) {
+      console.error('[LeadsService] Error fetching leads:', e);
+      return [];
     }
-    return [];
   }
 
   async getByStatus(status: LeadStatus): Promise<Lead[]> {
-    const all = await this.getAll();
-    return all.filter((l) => l.status === status);
+    try {
+      const data = await api.get<any[]>(`/leads?etapa=${STATUS_REVERSE[status]}`);
+      return (data || []).map(mapApiLead);
+    } catch (e) {
+      console.error('[LeadsService] Error fetching leads by status:', e);
+      return [];
+    }
   }
 
   async getById(id: string): Promise<Lead | undefined> {
-    const all = await this.getAll();
-    return all.find((l) => l.id === id);
+    try {
+      const data = await api.get<any>(`/leads/${id}`);
+      return data ? mapApiLead(data) : undefined;
+    } catch (e) {
+      if (e instanceof ApiClientError && e.status === 404) return undefined;
+      console.error('[LeadsService] Error fetching lead:', e);
+      return undefined;
+    }
   }
 
   async search(query: string): Promise<Lead[]> {
-    const all = await this.getAll();
-    const q = query.toLowerCase();
-    return all.filter(
-      (l) =>
-        l.name.toLowerCase().includes(q) ||
-        l.email.toLowerCase().includes(q) ||
-        l.company.toLowerCase().includes(q) ||
-        l.phone.includes(q) ||
-        l.tags.some((t) => t.toLowerCase().includes(q)),
-    );
+    try {
+      const data = await api.get<any[]>(`/leads?q=${encodeURIComponent(query)}`);
+      return (data || []).map(mapApiLead);
+    } catch (e) {
+      console.error('[LeadsService] Error searching leads:', e);
+      return [];
+    }
   }
 
   async create(data: CreateLeadInput): Promise<Lead> {
-    const all = await this.getAll();
-    const lead: Lead = {
-      id: `lead_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-      name: data.name,
+    const body: any = {
+      nombre: data.name,
       email: data.email || '',
-      phone: data.phone || '',
-      company: data.company || '',
-      status: 'new',
-      source: data.source || 'other',
-      notes: data.notes || '',
-      tags: data.tags || [],
-      assignedTo: '',
-      budget: data.budget || 0,
-      currency: data.currency || 'MXN',
-      interestScore: data.interestScore || 5,
-      lastContactedAt: null,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+      telefono: data.phone || '',
+      empresa: data.company || '',
+      notas: data.notes || '',
+      fuente: data.source || 'other',
+      scoreValue: data.interestScore || 5,
     };
-    all.push(lead);
-    await this.persist(all);
-    return lead;
+    if (data.tags?.length) body.tags = data.tags.join(',');
+
+    const result = await api.post<any>('/leads', body);
+    return mapApiLead(result);
   }
 
   async update(id: string, data: Partial<Omit<Lead, 'id' | 'createdAt'>>): Promise<Lead | null> {
-    const all = await this.getAll();
-    const idx = all.findIndex((l) => l.id === id);
-    if (idx === -1) return null;
-    all[idx] = { ...all[idx], ...data, updatedAt: Date.now() };
-    await this.persist(all);
-    return all[idx];
+    const body: any = {};
+    if (data.name !== undefined) body.nombre = data.name;
+    if (data.email !== undefined) body.email = data.email;
+    if (data.phone !== undefined) body.telefono = data.phone;
+    if (data.company !== undefined) body.empresa = data.company;
+    if (data.status !== undefined) body.estado = STATUS_REVERSE[data.status];
+    if (data.source !== undefined) body.fuente = data.source;
+    if (data.notes !== undefined) body.notas = data.notes;
+    if (data.tags !== undefined) body.tags = data.tags.join(',');
+    if (data.interestScore !== undefined) body.scoreValue = data.interestScore;
+    if (data.budget !== undefined) body.presupuesto = data.budget;
+
+    try {
+      const resp = await api.patch<any>(`/leads/${id}`, body);
+      // PATCH returns { success: true, lead }
+      const leadData = resp.lead || resp;
+      return mapApiLead(leadData);
+    } catch (e) {
+      if (e instanceof ApiClientError && e.status === 404) return null;
+      throw e;
+    }
   }
 
   async updateStatus(id: string, status: LeadStatus): Promise<Lead | null> {
@@ -151,13 +232,16 @@ class LeadsService {
   }
 
   async delete(id: string): Promise<void> {
-    const all = await this.getAll();
-    const filtered = all.filter((l) => l.id !== id);
-    await this.persist(filtered);
+    try {
+      await api.delete(`/leads/${id}`);
+    } catch (e) {
+      console.error('[LeadsService] Error deleting lead:', e);
+    }
   }
 
   async clearAll(): Promise<void> {
-    await this.persist([]);
+    // No implementado para API - borrado masivo no disponible
+    console.warn('[LeadsService] clearAll no soportado vía API');
   }
 
   async getStats(): Promise<{
@@ -169,24 +253,39 @@ class LeadsService {
     lost: number;
     conversionRate: number;
   }> {
-    const all = await this.getAll();
-    const newCount = all.filter((l) => l.status === 'new').length;
-    const contacted = all.filter((l) => l.status === 'contacted').length;
-    const qualified = all.filter((l) => l.status === 'qualified').length;
-    const won = all.filter((l) => l.status === 'won').length;
-    const lost = all.filter((l) => l.status === 'lost').length;
-    const totalClosed = won + lost;
-    const conversionRate = totalClosed > 0 ? Math.round((won / totalClosed) * 100) : 0;
-    return { total: all.length, new: newCount, contacted, qualified, won, lost, conversionRate };
-  }
-
-  // ── Private ────────────────────────────────────────────────────────────
-
-  private async persist(items: Lead[]): Promise<void> {
     try {
-      await SecureStore.setItemAsync(LEADS_KEY, JSON.stringify(items));
-    } catch {
-      console.error('[LeadsService] Error saving leads');
+      const resp = await api.get<{ success: boolean; stats: any }>('/leads/stats');
+      const s = resp.stats?.overview;
+      if (s) {
+        return {
+          total: s.totalLeads || 0,
+          new: s.leadsNuevos || 0,
+          contacted: 0, // no disponible en stats actual
+          qualified: 0,
+          won: s.leadsConvertidos || 0,
+          lost: 0,
+          conversionRate: s.tasaConversion || 0,
+        };
+      }
+      // Fallback: calcular desde porEstado
+      const porEstado = resp.stats?.porEstado || [];
+      const total = porEstado.reduce((sum: number, e: any) => sum + e.count, 0);
+      const newCount = porEstado.find((e: any) => e.estado === 'nuevo')?.count || 0;
+      const won = porEstado.find((e: any) => e.estado === 'ganado')?.count || 0;
+      const lost = porEstado.find((e: any) => e.estado === 'perdido')?.count || 0;
+      const totalClosed = won + lost;
+      return {
+        total,
+        new: newCount,
+        contacted: porEstado.find((e: any) => e.estado === 'contactado')?.count || 0,
+        qualified: porEstado.find((e: any) => e.estado === 'calificado')?.count || 0,
+        won,
+        lost,
+        conversionRate: totalClosed > 0 ? Math.round((won / totalClosed) * 100) : 0,
+      };
+    } catch (e) {
+      console.error('[LeadsService] Error fetching stats:', e);
+      return { total: 0, new: 0, contacted: 0, qualified: 0, won: 0, lost: 0, conversionRate: 0 };
     }
   }
 }
