@@ -93,6 +93,8 @@ jobs:
           # prevent warnings and avoid hitting unset-variable code paths
           STRIPE_SECRET_KEY: sk_test_dummy_ci
           NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_dummy_ci
+          MASTER_KEY: ci_master_key_e2e_reconciliation_32chars
+          TENANT_PEPPER: ci_tenant_pepper_e2e_reconciliation
           RESEND_API_KEY: re_dummy_ci
           ADMIN_EMAIL: ci@volkern.app
           FACEBOOK_APP_ID: '000000000000000'
