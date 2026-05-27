@@ -73,6 +73,11 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/volkern_test
 
+      - name: Run multi-tenancy migration (creates default tenant & roles)
+        run: npx tsx scripts/migrate-multi-tenancy.ts
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/volkern_test
+
       - name: Seed database (tenant, roles, test users)
         run: npx tsx scripts/seed.ts
         env:
