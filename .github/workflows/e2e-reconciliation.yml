@@ -69,6 +69,18 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/volkern_test
 
+      - name: Backup .env files to prevent Next.js from loading conflicting DATABASE_URL
+        working-directory: nextjs_space
+        run: |
+          if [ -f .env ]; then
+            mv .env .env.ci-backup
+            echo "Backed up .env → .env.ci-backup"
+          fi
+          if [ -f .env.local ]; then
+            mv .env.local .env.local.ci-backup
+            echo "Backed up .env.local → .env.local.ci-backup"
+          fi
+
       - name: Run E2E reconciliation test
         working-directory: nextjs_space
         run: npm run test:e2e:reconciliation
