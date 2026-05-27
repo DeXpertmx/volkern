@@ -70,7 +70,6 @@ fi
 # ─── Step 3: Start dev server ────────────────────────────────────────────────
 header "Start dev server"
 
-
 info "Starting next dev on port ${PORT}..."
 info "Server log: /tmp/next-e2e-server.log"
 npx next dev --port "${PORT}" > /tmp/next-e2e-server.log 2>&1 &
