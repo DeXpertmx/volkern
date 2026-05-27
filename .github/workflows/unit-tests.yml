@@ -73,6 +73,11 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/volkern_test
 
+      - name: Seed database (tenant, roles, test users)
+        run: npx tsx scripts/seed.ts
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/volkern_test
+
       - name: Backup .env files to prevent conflicts with CI env vars
         run: |
           for f in .env .env.local .env.production .env.production.local; do
