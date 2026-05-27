@@ -70,19 +70,40 @@ fi
 # ─── Step 3: Start dev server ────────────────────────────────────────────────
 header "Start dev server"
 
+# Debug: print DATABASE_URL being used
+info "DATABASE_URL: ${DATABASE_URL}"
+info "Testing database connectivity..."
+if npx tsx -e "const {PrismaClient}=require('@prisma/client');const p=new PrismaClient();p.\$queryRawUnsafe('SELECT 1').then(r=>{console.log('DB OK:',r);process.exit(0)}).catch(e=>{console.error('DB ERR:',e.message);process.exit(1)})" 2>&1; then
+  pass "Database connectivity OK"
+else
+  fail "Database connectivity FAILED — check DATABASE_URL"
+  exit 1
+fi
+
 info "Starting next dev on port ${PORT}..."
 info "Server log: /tmp/next-e2e-server.log"
-npx next dev --port "${PORT}" > /tmp/next-e2e-server.log 2>&1 &
+# Explicitly pass DATABASE_URL to ensure Next.js picks it up
+DATABASE_URL="${DATABASE_URL}" npx next dev --port "${PORT}" > /tmp/next-e2e-server.log 2>&1 &
 PID=$!
 
 # Wait for server to be ready (max 60 seconds)
 for i in $(seq 1 60); do
   if curl -s -o /dev/null -w '%{http_code}' "${BASE}/" 2>/dev/null | grep -q '200\|302\|401'; then
     pass "Dev server is ready (${BASE})"
+    # Show first lines of server log for info
+    head -5 /tmp/next-e2e-server.log 2>/dev/null || true
     break
+  fi
+  # Show progress every 15 seconds
+  if [ $((i % 15)) -eq 0 ]; then
+    info "Still waiting for server... (${i}s elapsed)"
+    tail -5 /tmp/next-e2e-server.log 2>/dev/null || true
   fi
   if [ "$i" -eq 60 ]; then
     fail "Dev server did not start within 60 seconds"
+    info "=== server log start ==="
+    cat /tmp/next-e2e-server.log 2>/dev/null || echo "(no log file)"
+    info "=== server log end ==="
     exit 1
   fi
   sleep 1
