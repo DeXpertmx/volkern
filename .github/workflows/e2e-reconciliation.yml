@@ -65,7 +65,7 @@ jobs:
 
       - name: Run Prisma migrations
         working-directory: nextjs_space
-        run: npx prisma migrate deploy
+        run: npx prisma db push
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/volkern_test
 
