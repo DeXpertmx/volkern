@@ -1,0 +1,98 @@
+name: Unit Tests (Vitest)
+
+on:
+  push:
+    branches: [master]
+    paths-ignore:
+      - 'app-movil/**'
+      - 'docs/**'
+      - '*.md'
+  pull_request:
+    branches: [master]
+    paths-ignore:
+      - 'app-movil/**'
+      - 'docs/**'
+      - '*.md'
+  workflow_dispatch:
+
+concurrency:
+  group: unit-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: nextjs_space
+
+jobs:
+  test:
+    name: Vitest
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: volkern_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: nextjs_space/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify Prisma CLI
+        run: npx prisma --version
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/volkern_test
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/volkern_test
+
+      - name: Push Prisma schema
+        run: npx prisma db push --accept-data-loss
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/volkern_test
+
+      - name: Backup .env files to prevent conflicts with CI env vars
+        run: |
+          for f in .env .env.local .env.production .env.production.local; do
+            if [ -f "$f" ]; then
+              mv "$f" "$f.ci-backup"
+              echo "Backed up $f → $f.ci-backup"
+            fi
+          done
+
+      - name: Run unit tests
+        run: npx vitest run
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/volkern_test
+          NEXTAUTH_SECRET: ci-test-secret-unit-tests-2026
+          NEXTAUTH_URL: http://localhost:3099
+          MASTER_KEY: ci_master_key_unit_tests_32chars
+          TENANT_PEPPER: ci_tenant_pepper_unit_tests
+          STRIPE_SECRET_KEY: sk_test_dummy_ci
+          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_dummy_ci
+          RESEND_API_KEY: re_dummy_ci
+          ADMIN_EMAIL: ci@volkern.app
+          FACEBOOK_APP_ID: '000000000000000'
+          FACEBOOK_APP_SECRET: dummy_fb_secret
