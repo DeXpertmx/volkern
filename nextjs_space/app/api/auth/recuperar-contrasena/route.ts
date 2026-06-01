@@ -16,10 +16,19 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Buscar usuario por email
+    // Buscar usuario por email incluyendo estado del dominio email
     const user = await prisma.user.findUnique({
       where: { email },
-      include: { tenant: true },
+      include: {
+        tenant: {
+          select: {
+            id: true,
+            nombre: true,
+            subdomain: true,
+            emailDomainStatus: true,
+          },
+        },
+      },
     })
 
     // Por seguridad, siempre devolvemos la misma respuesta aunque el usuario no exista
@@ -88,12 +97,17 @@ export async function POST(request: NextRequest) {
       </div>
     `
 
+    // Usar el subdominio del tenant si está verificado, si no usar admin.volkern.app
+    const usarDominioTenant = user.tenant?.emailDomainStatus === 'verified' && !!user.tenant.subdomain;
+    const senderSubdomain = usarDominioTenant ? user.tenant.subdomain! : 'admin';
+    const senderName = usarDominioTenant ? (user.tenant.nombre || 'Volkern') : 'Volkern';
+
     await sendEmail({
       to: user.email,
       subject: 'Recuperación de contraseña - Volkern CRM',
       html: emailContent,
-      tenantSubdomain: user.tenant?.subdomain || undefined,
-      tenantName: user.tenant?.nombre || undefined,
+      tenantSubdomain: senderSubdomain,
+      tenantName: senderName,
     })
 
     // Registrar en audit log
