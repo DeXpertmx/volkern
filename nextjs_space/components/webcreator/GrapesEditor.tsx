@@ -159,39 +159,34 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>(({ initialDa
       },
       canvas: {
         scripts: [
-          "https://cdn.jsdelivr.net/npm/tailwindcss@3.4.1/dist/tailwind.min.css",
-          "https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap",
-          "data:text/javascript;base64,ZG9jdW1lbnQuYWRkRXZlbnRMaXN0ZW5lcignY2xpY2snLCBmdW5jdGlvbihlKSB7CiAgdmFyIGVsID0gZS50YXJnZXQuY2xvc2VzdCgnW2hyZWZdJyk7CiAgaWYgKGVsKSB7CiAgICB2YXIgdXJsID0gZWwuZ2V0QXR0cmlidXRlKCdocmVmJyk7CiAgICBpZiAodXJsICYmIHVybC5zdGFydHNXaXRoKCcjJykpIHsKICAgICAgdmFyIHRhcmdldEVsID0gZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQodXJsLnN1YnN0cigxKSk7CiAgICAgIGlmICh0YXJnZXRFbCkgewogICAgICAgIHRhcmdldEVsLnNjcm9sbEludG9WaWV3eyBiZWhhdmlvcjogJ3Ntb290aCcgfSk7CiAgICAgICAgZS5wcmV2ZW50RGVmYXVsdCgpOwogICAgICAgIGUuc3RvcFByb3BhZ2F0aW9uKCk7CiAgICAgIH0KICAgIH0gZWxzZSBpZiAoZWwudGFnTmFtZSAhPT0gJ0EnICYmICFlbC5jbG9zZXN0KCdhJykgJiYgdXJsKSB7CiAgICAgICAgdmFyIHRhcmdldCA9IGVsLmdldEF0dHJpYnV0ZSgndGFyZ2V0Jyk7CiAgICAgICAgaWYgKHRhcmdldCA9PT0gJ19ibGFuaycpIHdpbmRvdy5vcGVuKHVybCk7CiAgICAgICAgZWxzZSB3aW5kb3cubG9jYXRpb24uaHJlZiA9IHVybDsKICAgIH0KICB9Cn0sIHRydWUpOw=="
+          // Script de navegaci&oacute;n para enlaces internos/externos en el canvas
+          function() {
+            document.addEventListener('click', function(e) {
+              var el = e.target.closest('[href]');
+              if (el) {
+                var url = el.getAttribute('href');
+                if (url && url.startsWith('#')) {
+                  var targetEl = document.getElementById(url.substr(1));
+                  if (targetEl) {
+                    targetEl.scrollIntoView({ behavior: 'smooth' });
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }
+                } else if (el.tagName !== 'A' && !el.closest('a') && url) {
+                  var target = el.getAttribute('target');
+                  if (target === '_blank') window.open(url);
+                  else window.location.href = url;
+                }
+              }
+            }, true);
+          }
         ],
         styles: [
           "https://cdn.jsdelivr.net/npm/tailwindcss@3.4.1/dist/tailwind.min.css",
           "https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap",
           "https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200",
           "https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200",
-          "https://fonts.googleapis.com/css2?family=Material+Symbols+Sharp:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200",
-          "html { scroll-behavior: smooth; }",
-            ...(mode === 'document' ? [
-                `
-                body { 
-                  background-color: #f1f5f9; 
-                  display: flex; 
-                  flex-direction: column; 
-                  align-items: center; 
-                  padding: 40px;
-                }
-                .gjs-pn-views-container { background: white; }
-                /* A4 Page Simulation */
-                #wrapper {
-                  width: 210mm;
-                  min-height: 297mm;
-                  background: white;
-                  box-shadow: 0 10px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
-                  margin: 0 auto;
-                  padding: 1in;
-                  box-sizing: border-box;
-                }
-                `
-              ] : [])
+          "https://fonts.googleapis.com/css2?family=Material+Symbols+Sharp:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
         ],
       },
     })
@@ -206,6 +201,40 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>(({ initialDa
       } else if (mode === 'email') {
         // We'll add email-specific blocks later
         setupDocumentBlocks(editor);
+      }
+      
+      // Inject canvas inline CSS (evita errores MIME al poner CSS inline en canvas.styles)
+      const canvasDoc = editor.Canvas.getDocument();
+      if (canvasDoc) {
+        // Smooth scroll para el canvas
+        const smoothStyle = canvasDoc.createElement('style');
+        smoothStyle.textContent = 'html { scroll-behavior: smooth; }';
+        canvasDoc.head.appendChild(smoothStyle);
+        
+        // CSS específico para modo documento (simulación A4)
+        if (mode === 'document') {
+          const docStyle = canvasDoc.createElement('style');
+          docStyle.textContent = `
+            body { 
+              background-color: #f1f5f9; 
+              display: flex; 
+              flex-direction: column; 
+              align-items: center; 
+              padding: 40px;
+            }
+            .gjs-pn-views-container { background: white; }
+            #wrapper {
+              width: 210mm;
+              min-height: 297mm;
+              background: white;
+              box-shadow: 0 10px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+              margin: 0 auto;
+              padding: 1in;
+              box-sizing: border-box;
+            }
+          `;
+          canvasDoc.head.appendChild(docStyle);
+        }
       }
       
       // Fix for category labels and IDs to match CSS
