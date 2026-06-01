@@ -300,10 +300,10 @@ export const documentTemplates: Template[] = [
             <p>El PRESTADOR se obliga a realizar para el CLIENTE los servicios de [DETALLE_OBJETO], conforme a las especificaciones técnicas acordadas.</p>
             
             <h3>SEGUNDA.- HONORARIOS Y FORMA DE PAGO</h3>
-            <p>El precio total de los servicios se fija en [IMPORTE] euros mensuales, más el IVA correspondiente.</p>
+            <p>El precio total de los servicios se fija en [IMPORTE] euros mensuales, m&aacute;s el IVA correspondiente.</p>
             
             <h3>TERCERA.- CONFIDENCIALIDAD</h3>
-            <p>Ambas partes se obligan a mantener absoluta confidencialidad sobre cualquier información a la que tengan acceso con motivo de la ejecución del presente contrato.</p>
+            <p>Ambas partes se obligan a mantener absoluta confidencialidad sobre cualquier informaci&oacute;n a la que tengan acceso con motivo de la ejecuci&oacute;n del presente contrato.</p>
           </section>
 
           <div class="signature-area">
@@ -397,6 +397,1210 @@ export const documentTemplates: Template[] = [
             padding: 0;
             box-shadow: none;
           }
+        }
+      `
+    }
+  },
+  // === FACTURA ESTÁNDAR (Ordinaria con IVA) ===
+  {
+    id: 'factura-estandar',
+    name: 'Factura Ordinaria (IVA)',
+    description: 'Factura completa con todos los requisitos fiscales españoles: emisor, cliente, desglose de IVA (21%/10%/4%), base imponible y total. Cumplimiento Veri*Factu.',
+    category: 'document',
+    tags: ['factura', 'IVA', 'fiscal', 'España', 'verifactu'],
+    isDefault: true,
+    data: {
+      html: `
+        <div class="invoice-container">
+          <!-- Header: Emisor -->
+          <div class="invoice-header">
+            <div class="emisor-block">
+              <div class="logo-placeholder">EMPRESA</div>
+              <h1 class="emisor-name">Raz&oacute;n Social / Nombre de la Empresa</h1>
+              <p class="emisor-nif">NIF: B-12345678</p>
+              <p class="emisor-address">Calle del Emisor, 123 – 28001 Madrid</p>
+              <p class="emisor-contact">Tel: 91 000 00 00 | info@empresa.es</p>
+            </div>
+            <div class="invoice-meta">
+              <div class="meta-badge">FACTURA</div>
+              <p class="meta-number">Nº F2024-00001</p>
+              <p class="meta-date">Fecha emisi&oacute;n: 15/05/2024</p>
+              <p class="meta-date">Vencimiento: 14/06/2024</p>
+            </div>
+          </div>
+
+          <!-- Cliente -->
+          <div class="cliente-block">
+            <span class="section-label">CLIENTE</span>
+            <h2 class="cliente-name">Nombre del Cliente o Raz&oacute;n Social</h2>
+            <div class="cliente-grid">
+              <div>
+                <p><strong>NIF/CIF:</strong> 12345678X</p>
+                <p><strong>Direcci&oacute;n:</strong> Calle del Cliente, 45 – 08001 Barcelona</p>
+              </div>
+              <div>
+                <p><strong>Email:</strong> cliente@email.com</p>
+                <p><strong>Tel&eacute;fono:</strong> +34 600 000 000</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tabla de conceptos -->
+          <table class="invoice-items">
+            <thead>
+              <tr>
+                <th class="col-desc">Descripci&oacute;n</th>
+                <th class="col-qty">Cant.</th>
+                <th class="col-price">Precio Unit.</th>
+                <th class="col-tax">IVA</th>
+                <th class="col-total">Importe</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <div class="item-name">Consultor&iacute;a en Sistemas de Gesti&oacute;n Empresarial</div>
+                  <div class="item-desc">An&aacute;lisis, implementaci&oacute;n y configuraci&oacute;n de plataforma CRM</div>
+                </td>
+                <td class="text-center">1</td>
+                <td class="text-right">2.500,00 €</td>
+                <td class="text-center">21%</td>
+                <td class="text-right">2.500,00 €</td>
+              </tr>
+              <tr>
+                <td>
+                  <div class="item-name">Suscripci&oacute;n Anual Plataforma</div>
+                  <div class="item-desc">Licencia premium con soporte prioritario 24/7</div>
+                </td>
+                <td class="text-center">1</td>
+                <td class="text-right">1.200,00 €</td>
+                <td class="text-center">21%</td>
+                <td class="text-right">1.200,00 €</td>
+              </tr>
+              <tr>
+                <td>
+                  <div class="item-name">Formaci&oacute;n de Equipo (On-site)</div>
+                  <div class="item-desc">3 sesiones presenciales de 4 horas para equipo de 10 personas</div>
+                </td>
+                <td class="text-center">3</td>
+                <td class="text-right">400,00 €</td>
+                <td class="text-center">10%</td>
+                <td class="text-right">1.200,00 €</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <!-- Resumen de importes -->
+          <div class="totals-section">
+            <div class="totals-box">
+              <div class="total-row">
+                <span>Base Imponible</span>
+                <span>4.900,00 €</span>
+              </div>
+              <div class="total-row">
+                <span>IVA 21%</span>
+                <span>777,00 €</span>
+              </div>
+              <div class="total-row">
+                <span>IVA 10%</span>
+                <span>120,00 €</span>
+              </div>
+              <div class="total-row grand-total">
+                <span>TOTAL FACTURA</span>
+                <span>5.797,00 €</span>
+              </div>
+              <div class="total-row text-muted">
+                <span>Importe en letra:</span>
+                <span>Cinco mil setecientos noventa y siete euros</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Forma de pago -->
+          <div class="payment-info">
+            <h3>Forma de Pago</h3>
+            <div class="payment-grid">
+              <div>
+                <p><strong>Banco:</strong> Banco Santander</p>
+                <p><strong>IBAN:</strong> ES12 1234 5678 9012 3456 7890</p>
+                <p><strong>SWIFT/BIC:</strong> BSCHESMM</p>
+              </div>
+              <div>
+                <p><strong>M&eacute;todo:</strong> Transferencia bancaria</p>
+                <p><strong>Plazo:</strong> 30 d&iacute;as desde fecha de emisi&oacute;n</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Cumplimiento Veri*Factu -->
+          <div class="compliance-footer">
+            <p class="compliance-text">
+              Esta factura cumple con los requisitos establecidos en el Reglamento Veri*Factu (RD 1007/2023) 
+              y la Ley Crea y Crece. Sistema inform&aacute;tico declarado responsablemente ante la AEAT.
+            </p>
+            <p class="compliance-ref">Volkern ERP - Sistema de Facturaci&oacute;n Veri*Factu v2.0</p>
+          </div>
+
+          <div class="doc-footer">
+            <p>Documento generado electr&oacute;nicamente. Conserve esta factura a efectos fiscales.</p>
+            <p class="footer-small">Volkern ERP - www.volkern.com</p>
+          </div>
+        </div>
+      `,
+      css: `
+        .invoice-container {
+          font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
+          color: #1e293b;
+          max-width: 800px;
+          margin: 0 auto;
+          padding: 40px;
+          background: #ffffff;
+          min-height: 1000px;
+          display: flex;
+          flex-direction: column;
+        }
+
+        /* ── Header ── */
+        .invoice-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          border-bottom: 3px solid #1e40af;
+          padding-bottom: 24px;
+          margin-bottom: 28px;
+        }
+
+        .logo-placeholder {
+          width: 56px;
+          height: 56px;
+          background: #1e40af;
+          color: white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 900;
+          font-size: 9px;
+          border-radius: 10px;
+          margin-bottom: 10px;
+          letter-spacing: 1px;
+        }
+
+        .emisor-name {
+          font-size: 18px;
+          font-weight: 800;
+          color: #0f172a;
+          margin: 0 0 4px 0;
+        }
+
+        .emisor-nif,
+        .emisor-address,
+        .emisor-contact {
+          font-size: 12px;
+          color: #64748b;
+          margin: 1px 0;
+        }
+
+        .meta-badge {
+          display: inline-block;
+          background: #1e40af;
+          color: white;
+          font-size: 14px;
+          font-weight: 900;
+          padding: 4px 16px;
+          border-radius: 6px;
+          letter-spacing: 2px;
+          margin-bottom: 10px;
+        }
+
+        .meta-number {
+          font-size: 16px;
+          font-weight: 700;
+          color: #1e293b;
+          margin: 4px 0;
+        }
+
+        .meta-date {
+          font-size: 12px;
+          color: #64748b;
+          margin: 2px 0;
+        }
+
+        /* ── Cliente ── */
+        .cliente-block {
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 12px;
+          padding: 20px;
+          margin-bottom: 28px;
+        }
+
+        .section-label {
+          display: block;
+          font-size: 10px;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          color: #1e40af;
+          margin-bottom: 8px;
+        }
+
+        .cliente-name {
+          font-size: 17px;
+          font-weight: 700;
+          color: #0f172a;
+          margin: 0 0 8px 0;
+        }
+
+        .cliente-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 8px;
+          font-size: 12px;
+          color: #334155;
+        }
+
+        .cliente-grid p {
+          margin: 2px 0;
+        }
+
+        /* ── Items Table ── */
+        .invoice-items {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 24px;
+          flex-shrink: 0;
+        }
+
+        .invoice-items thead {
+          background: #1e40af;
+          color: white;
+        }
+
+        .invoice-items th {
+          padding: 12px 10px;
+          font-size: 11px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.03em;
+        }
+
+        .invoice-items th:first-child { border-radius: 8px 0 0 0; }
+        .invoice-items th:last-child { border-radius: 0 8px 0 0; }
+
+        .invoice-items td {
+          padding: 14px 10px;
+          border-bottom: 1px solid #e2e8f0;
+          font-size: 13px;
+        }
+
+        .invoice-items tbody tr:last-child td {
+          border-bottom: none;
+        }
+
+        .col-desc { width: 44%; }
+        .col-qty { width: 10%; }
+        .col-price { width: 18%; }
+        .col-tax { width: 10%; }
+        .col-total { width: 18%; }
+
+        .item-name {
+          font-weight: 600;
+          color: #0f172a;
+        }
+
+        .item-desc {
+          font-size: 11px;
+          color: #64748b;
+          margin-top: 2px;
+        }
+
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+
+        /* ── Totals ── */
+        .totals-section {
+          display: flex;
+          justify-content: flex-end;
+          margin-bottom: 24px;
+        }
+
+        .totals-box {
+          width: 340px;
+        }
+
+        .total-row {
+          display: flex;
+          justify-content: space-between;
+          padding: 7px 0;
+          font-size: 14px;
+          border-bottom: 1px solid #f1f5f9;
+        }
+
+        .total-row:last-child {
+          border-bottom: none;
+        }
+
+        .grand-total {
+          border-top: 2px solid #1e40af;
+          margin-top: 8px;
+          padding-top: 12px;
+          font-weight: 900;
+          font-size: 20px;
+          color: #1e40af;
+        }
+
+        .text-muted {
+          font-size: 11px;
+          color: #94a3b8;
+          font-style: italic;
+        }
+
+        /* ── Payment Info ── */
+        .payment-info {
+          background: #f1f5f9;
+          border-radius: 12px;
+          padding: 20px;
+          margin-bottom: 20px;
+        }
+
+        .payment-info h3 {
+          font-size: 12px;
+          font-weight: 800;
+          text-transform: uppercase;
+          color: #1e40af;
+          margin: 0 0 10px 0;
+          letter-spacing: 0.05em;
+        }
+
+        .payment-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px;
+          font-size: 12px;
+          color: #334155;
+        }
+
+        .payment-grid p {
+          margin: 3px 0;
+        }
+
+        /* ── Compliance ── */
+        .compliance-footer {
+          background: #fffbeb;
+          border: 1px solid #fde68a;
+          border-radius: 8px;
+          padding: 12px 16px;
+          margin-top: auto;
+          margin-bottom: 16px;
+        }
+
+        .compliance-text {
+          font-size: 10px;
+          color: #92400e;
+          margin: 0 0 4px 0;
+          line-height: 1.4;
+        }
+
+        .compliance-ref {
+          font-size: 9px;
+          color: #a16207;
+          font-weight: 600;
+          margin: 0;
+        }
+
+        /* ── Footer ── */
+        .doc-footer {
+          text-align: center;
+          font-size: 10px;
+          color: #94a3b8;
+          border-top: 1px solid #e2e8f0;
+          padding-top: 16px;
+        }
+
+        .doc-footer p {
+          margin: 2px 0;
+        }
+
+        .footer-small {
+          font-size: 9px;
+          color: #cbd5e1;
+        }
+      `
+    }
+  },
+  // === FACTURA CON RETENCIÓN IRPF ===
+  {
+    id: 'factura-irpf',
+    name: 'Factura con Retenci&oacute;n IRPF',
+    description: 'Factura para aut&oacute;nomos y profesionales con retenci&oacute;n de IRPF (7% o 15%). Incluye base imponible, IVA, IRPF y total l&iacute;quido a percibir. Cumplimiento Veri*Factu.',
+    category: 'document',
+    tags: ['factura', 'IRPF', 'autonomo', 'fiscal', 'España', 'verifactu'],
+    data: {
+      html: `
+        <div class="irpf-container">
+          <!-- Header: Emisor -->
+          <div class="irpf-header">
+            <div class="emisor-col">
+              <div class="logo-emisor">P</div>
+              <h1 class="emisor-razon">Nombre del Profesional / Aut&oacute;nomo</h1>
+              <p class="emisor-nif">NIF: 12345678Z</p>
+              <p class="emisor-addr">Calle del Profesional, 50 – 46001 Valencia</p>
+            </div>
+            <div class="meta-col">
+              <span class="badge-irpf">FACTURA CON IRPF</span>
+              <p class="irpf-num">F2024-00123</p>
+              <p class="irpf-date">15/05/2024</p>
+              <p class="irpf-ref">Ref: PROY-2024-045</p>
+            </div>
+          </div>
+
+          <!-- Cliente -->
+          <div class="irpf-cliente">
+            <span class="irpf-label">DATOS DEL CLIENTE</span>
+            <div class="cliente-data">
+              <div>
+                <p class="cliente-nom">Nombre del Cliente / Empresa</p>
+                <p>NIF/CIF: B-87654321</p>
+                <p>Domicilio: Avda. del Cliente, 200 – 41001 Sevilla</p>
+              </div>
+              <div>
+                <p>Email: facturacion@cliente.es</p>
+                <p>Tel: 954 000 000</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tabla de conceptos -->
+          <table class="irpf-table">
+            <thead>
+              <tr>
+                <th>Servicio / Producto</th>
+                <th class="text-center">Ud.</th>
+                <th class="text-right">Precio</th>
+                <th class="text-right">Importe</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <div class="serv-name">Servicios de Asesor&iacute;a Fiscal y Contable</div>
+                  <div class="serv-desc">Mensualidad de mayo 2024 – elaboraci&oacute;n de contabilidad, IVA e IS</div>
+                </td>
+                <td class="text-center">1</td>
+                <td class="text-right">1.800,00 €</td>
+                <td class="text-right">1.800,00 €</td>
+              </tr>
+              <tr>
+                <td>
+                  <div class="serv-name">Informe de Auditor&iacute;a de Cumplimiento</div>
+                  <div class="serv-desc">Revisi&oacute;n de procesos fiscales y elaboraci&oacute;n de informe preceptivo</div>
+                </td>
+                <td class="text-center">1</td>
+                <td class="text-right">950,00 €</td>
+                <td class="text-right">950,00 €</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <!-- Desglose con IRPF -->
+          <div class="irpf-totals">
+            <div class="totals-card">
+              <div class="calc-row">
+                <span>Base Imponible</span>
+                <span>2.750,00 €</span>
+              </div>
+              <div class="calc-row">
+                <span>IVA (21%)</span>
+                <span>577,50 €</span>
+              </div>
+              <div class="calc-row highlight-irpf">
+                <span>Retenci&oacute;n IRPF (15%)</span>
+                <span class="text-red">– 412,50 €</span>
+              </div>
+              <div class="calc-divider"></div>
+              <div class="calc-row total-final">
+                <span>TOTAL L&Iacute;QUIDO A PERCIBIR</span>
+                <span>2.915,00 €</span>
+              </div>
+              <div class="calc-row subtle">
+                <span>Total bruto (con IVA):</span>
+                <span>3.327,50 €</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Datos bancarios -->
+          <div class="bank-info">
+            <h3>Transferencia Bancaria</h3>
+            <div class="bank-grid">
+              <div>
+                <p><strong>Banco:</strong> CaixaBank</p>
+                <p><strong>IBAN:</strong> ES21 2100 1234 5678 9012 3456</p>
+              </div>
+              <div>
+                <p><strong>SWIFT:</strong> CAIXESBB</p>
+                <p><strong>Titular:</strong> Nombre del Profesional</p>
+                <p><strong>Concepto:</strong> Factura F2024-00123</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Compliance -->
+          <div class="irpf-compliance">
+            <p>
+              Factura sujeta a retenci&oacute;n de IRPF seg&uacute;n art&iacute;culos 99 y siguientes de la LIRPF.
+              Sistema inform&aacute;tico declarado responsablemente ante la AEAT (Veri*Factu).
+            </p>
+            <p class="compliance-code">Volkern ERP | Veri*Factu v2.0 | C&oacute;digo seguro: VK-2024-00123</p>
+          </div>
+
+          <div class="irpf-footer">
+            <p>Genere su factura electr&oacute;nica con Volkern ERP | www.volkern.com</p>
+          </div>
+        </div>
+      `,
+      css: `
+        .irpf-container {
+          font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
+          color: #1e293b;
+          max-width: 800px;
+          margin: 0 auto;
+          padding: 40px;
+          background: #ffffff;
+          min-height: 1000px;
+          display: flex;
+          flex-direction: column;
+        }
+
+        /* ── Header ── */
+        .irpf-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          border-bottom: 3px solid #9333ea;
+          padding-bottom: 20px;
+          margin-bottom: 24px;
+        }
+
+        .logo-emisor {
+          width: 48px;
+          height: 48px;
+          background: #9333ea;
+          color: white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 900;
+          font-size: 18px;
+          border-radius: 12px;
+          margin-bottom: 10px;
+        }
+
+        .emisor-razon {
+          font-size: 17px;
+          font-weight: 800;
+          margin: 0 0 3px 0;
+        }
+
+        .emisor-nif,
+        .emisor-addr {
+          font-size: 12px;
+          color: #64748b;
+          margin: 1px 0;
+        }
+
+        .badge-irpf {
+          display: inline-block;
+          background: #9333ea;
+          color: white;
+          font-size: 11px;
+          font-weight: 800;
+          padding: 4px 14px;
+          border-radius: 20px;
+          letter-spacing: 0.5px;
+          margin-bottom: 8px;
+        }
+
+        .irpf-num {
+          font-size: 18px;
+          font-weight: 700;
+          margin: 4px 0;
+        }
+
+        .irpf-date {
+          font-size: 12px;
+          color: #64748b;
+          margin: 2px 0;
+        }
+
+        .irpf-ref {
+          font-size: 11px;
+          color: #94a3b8;
+          margin: 2px 0;
+        }
+
+        /* ── Cliente ── */
+        .irpf-cliente {
+          background: #faf5ff;
+          border: 1px solid #e9d5ff;
+          border-radius: 12px;
+          padding: 18px;
+          margin-bottom: 24px;
+        }
+
+        .irpf-label {
+          display: block;
+          font-size: 9px;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          color: #9333ea;
+          margin-bottom: 8px;
+        }
+
+        .cliente-data {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 8px;
+          font-size: 12px;
+          color: #334155;
+        }
+
+        .cliente-nom {
+          font-size: 15px;
+          font-weight: 700;
+          color: #0f172a;
+          margin: 0 0 4px 0;
+        }
+
+        .cliente-data p {
+          margin: 2px 0;
+        }
+
+        /* ── Items Table ── */
+        .irpf-table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 24px;
+        }
+
+        .irpf-table thead {
+          background: #9333ea;
+          color: white;
+        }
+
+        .irpf-table th {
+          padding: 11px 10px;
+          font-size: 11px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.03em;
+        }
+
+        .irpf-table th:first-child { border-radius: 8px 0 0 0; }
+        .irpf-table th:last-child { border-radius: 0 8px 0 0; }
+
+        .irpf-table td {
+          padding: 13px 10px;
+          border-bottom: 1px solid #e9d5ff;
+          font-size: 13px;
+        }
+
+        .serv-name {
+          font-weight: 600;
+        }
+
+        .serv-desc {
+          font-size: 10px;
+          color: #64748b;
+          margin-top: 2px;
+        }
+
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+
+        /* ── Totals ── */
+        .irpf-totals {
+          display: flex;
+          justify-content: flex-end;
+          margin-bottom: 24px;
+        }
+
+        .totals-card {
+          width: 350px;
+          background: #faf5ff;
+          border-radius: 12px;
+          padding: 20px;
+        }
+
+        .calc-row {
+          display: flex;
+          justify-content: space-between;
+          padding: 6px 0;
+          font-size: 14px;
+        }
+
+        .highlight-irpf {
+          color: #b91c1c;
+          font-weight: 600;
+        }
+
+        .text-red {
+          color: #dc2626;
+        }
+
+        .calc-divider {
+          border-top: 2px dashed #d8b4fe;
+          margin: 8px 0;
+        }
+
+        .total-final {
+          font-weight: 900;
+          font-size: 18px;
+          color: #9333ea;
+          padding: 10px 0 4px 0;
+        }
+
+        .subtle {
+          font-size: 11px;
+          color: #94a3b8;
+          border-top: 1px solid #e9d5ff;
+          margin-top: 4px;
+        }
+
+        /* ── Bank Info ── */
+        .bank-info {
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 12px;
+          padding: 18px;
+          margin-bottom: 20px;
+        }
+
+        .bank-info h3 {
+          font-size: 11px;
+          font-weight: 800;
+          text-transform: uppercase;
+          color: #9333ea;
+          margin: 0 0 8px 0;
+          letter-spacing: 0.5px;
+        }
+
+        .bank-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 8px;
+          font-size: 12px;
+          color: #334155;
+        }
+
+        .bank-grid p {
+          margin: 2px 0;
+        }
+
+        /* ── Compliance ── */
+        .irpf-compliance {
+          background: #fffbeb;
+          border: 1px solid #fde68a;
+          border-radius: 8px;
+          padding: 12px 16px;
+          margin-top: auto;
+          margin-bottom: 16px;
+        }
+
+        .irpf-compliance p {
+          font-size: 10px;
+          color: #92400e;
+          margin: 0 0 4px 0;
+          line-height: 1.4;
+        }
+
+        .compliance-code {
+          font-size: 9px;
+          color: #a16207;
+          font-weight: 600;
+          margin: 0;
+        }
+
+        /* ── Footer ── */
+        .irpf-footer {
+          text-align: center;
+          font-size: 9px;
+          color: #94a3b8;
+          border-top: 1px solid #e2e8f0;
+          padding-top: 14px;
+        }
+
+        .irpf-footer p {
+          margin: 0;
+        }
+      `
+    }
+  },
+  // === FACTURA SIMPLIFICADA (TICKET) ===
+  {
+    id: 'factura-simplificada',
+    name: 'Factura Simplificada (Ticket)',
+    description: 'Modelo simplificado para operaciones de importe reducido. Formato compacto tipo ticket con IVA incluido. Ideal para comercios, hosteler&iacute;a y ventas al por menor.',
+    category: 'document',
+    tags: ['factura', 'simplificada', 'ticket', 'comercio', 'España'],
+    data: {
+      html: `
+        <div class="ticket-container">
+          <!-- Header compacto -->
+          <div class="ticket-header">
+            <h1 class="ticket-title">FACTURA SIMPLIFICADA</h1>
+            <p class="ticket-business">Nombre del Negocio / Aut&oacute;nomo</p>
+            <p class="ticket-nif">NIF: 12345678Z</p>
+            <p class="ticket-addr">Direcci&oacute;n del establecimiento, 12 – 28001 Madrid</p>
+          </div>
+
+          <div class="ticket-divider">* * *</div>
+
+          <!-- Meta -->
+          <div class="ticket-meta">
+            <table class="meta-table">
+              <tr>
+                <td class="meta-label">N&ordm; FACTURA:</td>
+                <td class="meta-value">FT24-00987</td>
+              </tr>
+              <tr>
+                <td class="meta-label">FECHA:</td>
+                <td class="meta-value">15/05/2024 18:32</td>
+              </tr>
+              <tr>
+                <td class="meta-label">CAJA / TERMINAL:</td>
+                <td class="meta-value">Caja 01 / TPV-001</td>
+              </tr>
+            </table>
+          </div>
+
+          <div class="ticket-divider">- - - - - - - - - - - - - - - - - - - -</div>
+
+          <!-- Items -->
+          <table class="ticket-items">
+            <thead>
+              <tr>
+                <th>Art&iacute;culo</th>
+                <th class="text-center">Ud.</th>
+                <th class="text-right">P.V.P.</th>
+                <th class="text-right">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <div class="ticket-item">Producto / Servicio A</div>
+                </td>
+                <td class="text-center">2</td>
+                <td class="text-right">25,00 €</td>
+                <td class="text-right">50,00 €</td>
+              </tr>
+              <tr>
+                <td>
+                  <div class="ticket-item">Producto / Servicio B</div>
+                </td>
+                <td class="text-center">1</td>
+                <td class="text-right">34,50 €</td>
+                <td class="text-right">34,50 €</td>
+              </tr>
+              <tr>
+                <td>
+                  <div class="ticket-item">Producto / Servicio C</div>
+                </td>
+                <td class="text-center">3</td>
+                <td class="text-right">12,00 €</td>
+                <td class="text-right">36,00 €</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="ticket-divider">- - - - - - - - - - - - - - - - - - - -</div>
+
+          <!-- Totales compactos -->
+          <div class="ticket-totals">
+            <div class="ticket-line">
+              <span>Base Imponible:</span>
+              <span>99,59 €</span>
+            </div>
+            <div class="ticket-line">
+              <span>IVA 21% (base 99,59 €):</span>
+              <span>20,91 €</span>
+            </div>
+            <div class="ticket-line grand-ticket">
+              <span>TOTAL (IVA incl.):</span>
+              <span>120,50 €</span>
+            </div>
+            <div class="ticket-line text-muted-ticket">
+              <span>Efectivo / Tarjeta:</span>
+              <span>120,50 €</span>
+            </div>
+          </div>
+
+          <!-- Desglose IVA -->
+          <div class="ticket-tax-breakdown">
+            <p class="tax-break-title">Desglose de IVA</p>
+            <table class="tax-table">
+              <tr>
+                <td>Base 21%</td>
+                <td class="text-right">99,59 €</td>
+                <td class="text-right">IVA 20,91 €</td>
+              </tr>
+            </table>
+          </div>
+
+          <div class="ticket-divider">* * *</div>
+
+          <!-- Barcode / QR visual -->
+          <div class="ticket-barcode">
+            <div class="barcode-sim">
+              <div class="bar bar1"></div>
+              <div class="bar bar2"></div>
+              <div class="bar bar3"></div>
+              <div class="bar bar4"></div>
+              <div class="bar bar5"></div>
+              <div class="bar bar6"></div>
+              <div class="bar bar7"></div>
+              <div class="bar bar8"></div>
+              <div class="bar bar9"></div>
+              <div class="bar bar10"></div>
+              <div class="bar bar11"></div>
+              <div class="bar bar12"></div>
+              <div class="bar bar13"></div>
+              <div class="bar bar14"></div>
+              <div class="bar bar15"></div>
+              <div class="bar bar16"></div>
+              <div class="bar bar17"></div>
+              <div class="bar bar18"></div>
+              <div class="bar bar19"></div>
+              <div class="bar bar20"></div>
+            </div>
+            <p class="barcode-id">VK-98765-2024</p>
+          </div>
+
+          <!-- Compliance compacto -->
+          <div class="ticket-compliance">
+            <p>Factura Simplificada art. 7.2 RD 1619/2012</p>
+            <p>SI Veri*Factu – Volkern ERP v2.0</p>
+          </div>
+
+          <div class="ticket-footer">
+            <p>&iexcl;Gracias por su compra!</p>
+            <p class="ticket-footer-small">Conserve este ticket a efectos fiscales</p>
+            <p class="ticket-footer-small">www.volkern.com</p>
+          </div>
+        </div>
+      `,
+      css: `
+        .ticket-container {
+          font-family: 'Courier New', 'Lucida Console', monospace;
+          color: #1a1a1a;
+          max-width: 320px;
+          margin: 0 auto;
+          padding: 20px;
+          background: #ffffff;
+          font-size: 11px;
+          line-height: 1.4;
+          min-height: 600px;
+        }
+
+        /* ── Header ── */
+        .ticket-header {
+          text-align: center;
+          margin-bottom: 8px;
+        }
+
+        .ticket-title {
+          font-size: 14px;
+          font-weight: 900;
+          letter-spacing: 2px;
+          margin: 0 0 6px 0;
+          text-transform: uppercase;
+        }
+
+        .ticket-business {
+          font-size: 13px;
+          font-weight: 700;
+          margin: 2px 0;
+        }
+
+        .ticket-nif,
+        .ticket-addr {
+          font-size: 10px;
+          color: #555;
+          margin: 1px 0;
+        }
+
+        /* ── Divider ── */
+        .ticket-divider {
+          text-align: center;
+          color: #999;
+          margin: 8px 0;
+          font-size: 12px;
+        }
+
+        /* ── Meta ── */
+        .ticket-meta {
+          margin-bottom: 6px;
+        }
+
+        .meta-table {
+          width: 100%;
+          font-size: 10px;
+        }
+
+        .meta-table td {
+          padding: 1px 0;
+        }
+
+        .meta-label {
+          font-weight: 700;
+          width: 100px;
+        }
+
+        .meta-value {
+          color: #333;
+        }
+
+        /* ── Items ── */
+        .ticket-items {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 6px;
+          font-size: 10px;
+        }
+
+        .ticket-items th {
+          font-weight: 700;
+          border-bottom: 1px solid #999;
+          padding: 4px 2px;
+          font-size: 9px;
+          text-transform: uppercase;
+        }
+
+        .ticket-items td {
+          padding: 4px 2px;
+          border-bottom: 1px dotted #ccc;
+        }
+
+        .ticket-item {
+          font-weight: 400;
+        }
+
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+
+        /* ── Totals ── */
+        .ticket-totals {
+          margin-bottom: 8px;
+        }
+
+        .ticket-line {
+          display: flex;
+          justify-content: space-between;
+          padding: 2px 0;
+          font-size: 10px;
+        }
+
+        .grand-ticket {
+          font-weight: 900;
+          font-size: 14px;
+          border-top: 2px solid #1a1a1a;
+          border-bottom: 2px solid #1a1a1a;
+          padding: 6px 0;
+          margin: 4px 0;
+        }
+
+        .text-muted-ticket {
+          font-size: 9px;
+          color: #666;
+        }
+
+        /* ── Tax Breakdown ── */
+        .ticket-tax-breakdown {
+          margin-bottom: 8px;
+          padding: 6px;
+          background: #f9fafb;
+          border-radius: 4px;
+        }
+
+        .tax-break-title {
+          font-weight: 700;
+          font-size: 9px;
+          text-transform: uppercase;
+          margin: 0 0 4px 0;
+        }
+
+        .tax-table {
+          width: 100%;
+          font-size: 9px;
+        }
+
+        .tax-table td {
+          padding: 1px 4px;
+        }
+
+        /* ── Barcode (visual) ── */
+        .ticket-barcode {
+          text-align: center;
+          margin: 10px 0;
+        }
+
+        .barcode-sim {
+          display: flex;
+          justify-content: center;
+          gap: 3px;
+          margin-bottom: 4px;
+        }
+
+        .bar {
+          width: 2px;
+          height: 30px;
+          background: #1a1a1a;
+        }
+
+        .bar:nth-child(odd) { width: 1px; }
+        .bar:nth-child(3n) { width: 4px; }
+        .bar:nth-child(5n+2) { width: 3px; }
+        .bar:nth-child(7n+4) { width: 1px; }
+
+        .barcode-id {
+          font-size: 9px;
+          color: #666;
+          margin: 2px 0;
+        }
+
+        /* ── Compliance ── */
+        .ticket-compliance {
+          background: #fffbeb;
+          border: 1px solid #fde68a;
+          border-radius: 4px;
+          padding: 6px 10px;
+          margin-bottom: 10px;
+          text-align: center;
+        }
+
+        .ticket-compliance p {
+          font-size: 8px;
+          color: #92400e;
+          margin: 1px 0;
+        }
+
+        /* ── Footer ── */
+        .ticket-footer {
+          text-align: center;
+          font-size: 10px;
+          border-top: 1px solid #999;
+          padding-top: 10px;
+        }
+
+        .ticket-footer p {
+          margin: 2px 0;
+        }
+
+        .ticket-footer-small {
+          font-size: 8px;
+          color: #999;
         }
       `
     }
