@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     // 1. Buscar el tenant por subdominio
     const tenant = await prisma.tenant.findUnique({
       where: { subdomain },
-      select: { id: true, name: true }
+      select: { id: true, nombre: true }
     });
 
     if (!tenant) {
