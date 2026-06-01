@@ -79,6 +79,7 @@ model User {
   agent_skill_logs        agent_skill_logs[]
   apiKeys                 ApiKey[]
   comisiones              Comision[]                 @relation("Comisiones")
+  captacionesCreadas      Captacion[]                @relation("CaptacionesCreadas")
   contratosCreadoPor      Contrato[]                 @relation("ContratosCreadoPor")
   contratosFirmadoPor     Contrato[]                 @relation("ContratosFirmadoPor")
   cotizacionesCreadaPor   Cotizacion[]               @relation("CotizacionesCreadaPor")
@@ -185,6 +186,12 @@ model Tenant {
   nifCif                         String?
   razonSocial                    String?
   aiAutopilot                    Boolean                          @default(false)
+
+  // ─── Email Domain (Resend multi-tenant) ─────────────────
+  resendDomainId                String?                          @unique
+  emailDomainStatus             String                           @default("not_started")
+  emailDomainConfiguredAt       DateTime?
+
   AcademyPath                    AcademyPath[]
   AiDecisionLog                  AiDecisionLog[]
   attendanceRules                AttendanceRules?
@@ -242,6 +249,7 @@ model Tenant {
   channels                       Channel[]
   signatureSettings              ClientSignatureSettings?
   client_subscriptions           client_subscriptions[]
+  captaciones                    Captacion[]
   comisiones                     Comision[]
   configuracionesFiscales        ConfiguracionFiscalEmisor[]
   contacts                       Contact[]
@@ -621,6 +629,8 @@ model Contact {
   invoices                       Invoice[]
   lead_attachments               LeadAttachment[]
   ordenesVenta                   OrdenVenta[]                     @relation("ContactOrdenesVenta")
+  ownerProperties                CatalogoItem[]                  @relation("OwnerProperties")
+  captaciones                    Captacion[]                   @relation("CaptacionPropietario")
   perfilFiscal                   PerfilFiscalCliente?             @relation("ContactPerfilFiscal")
 
   @@index([tenantId])
@@ -764,6 +774,7 @@ model Automation {
   scheduledTasks     ScheduledAutomationTask[]
   incomingWebhooks   IncomingWebhook[]
 
+  @@unique([tenantId, nombre])
   @@index([tenantId])
   @@index([activo])
   @@index([trigger])
@@ -2152,6 +2163,7 @@ model Deal {
   valorReal            Float?
   companyId            String?
   contactId            String?
+  catalogoItemId       String?
   healthScore          Int                @default(100)
   healthStatus         String             @default("HEALTHY")
   lastAlertSent        DateTime?
@@ -2172,6 +2184,7 @@ model Deal {
   company              Contact?           @relation("CompanyDeals", fields: [companyId], references: [id])
   contact              Contact?           @relation("ContactDeals", fields: [contactId], references: [id], onDelete: Restrict)
   lead                 Lead?              @relation(fields: [leadId], references: [id])
+  propiedad            CatalogoItem?      @relation(fields: [catalogoItemId], references: [id])
   tenant               Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   usuarioAsignado      User?              @relation("DealsAsignados", fields: [usuarioAsignadoId], references: [id])
   erp_sales_orders     erp_sales_orders[]
@@ -2181,6 +2194,7 @@ model Deal {
   @@index([leadId])
   @@index([contactId])
   @@index([companyId])
+  @@index([catalogoItemId])
   @@index([usuarioAsignadoId])
   @@index([etapa])
   @@index([estado])
@@ -2245,6 +2259,7 @@ model PipelineStage {
   requiereAprobacion Boolean  @default(false)
   esEtapaFinal       Boolean  @default(false)
   tipoEtapaFinal     String?
+  categoria          String   @default("default")
   fechaCreacion      DateTime @default(now())
   activo             Boolean  @default(true)
   tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -2252,6 +2267,7 @@ model PipelineStage {
   @@unique([tenantId, nombre])
   @@index([tenantId])
   @@index([orden])
+  @@index([categoria])
   @@map("pipeline_stages")
 }
 
@@ -2554,6 +2570,77 @@ model Comision {
   @@index([estado])
   @@index([fechaCreacion])
   @@map("comisiones")
+}
+
+model Captacion {
+  id                         String    @id @default(cuid())
+  tenantId                   String
+  propiedadId                String?
+  contactoPropietarioId      String?
+  creadoPor                  String?
+
+  // Tipo de captación: exclusiva, compartida, mandato
+  tipoCaptacion              String    @default("exclusiva")
+  // Estado: borrador, activa, vencida, cancelada, cerrada
+  estado                     String    @default("borrador")
+
+  // Fechas del contrato
+  fechaInicio                DateTime
+  fechaFin                   DateTime
+  fechaFirma                 DateTime?
+  fechaVencimiento           DateTime?
+  fechaCancelacion           DateTime?
+
+  // Exclusividad
+  esExclusiva                Boolean   @default(true)
+  clausulasExclusividad      String?
+
+  // Precio ofertado
+  precioOferta               Float?
+  precioMinimo               Float?
+
+  // Comisión de captación
+  comisionPorcentaje         Float?
+  comisionFija               Float?
+  comisionMoneda             String    @default("EUR")
+  comisionCondiciones        String?
+  comisionNotas              String?
+
+  // Condiciones de pago
+  condicionesPago            String?
+
+  // Documentos
+  documentoUrl               String?
+  documentoHash              String?
+
+  // Notas
+  notasCliente               String?
+  notasInternas              String?
+
+  // Auditoría e integridad
+  auditHash                  String?   @unique
+  chainedHash                String?
+  sealedAt                   DateTime?
+  signatureAudit             Json?
+  metadata                   Json?
+
+  // Timestamps
+  fechaCreacion              DateTime  @default(now())
+  fechaActualizacion         DateTime  @updatedAt
+
+  // Relaciones
+  propiedad                  CatalogoItem? @relation("CaptacionPropiedad", fields: [propiedadId], references: [id])
+  contactoPropietario        Contact?      @relation("CaptacionPropietario", fields: [contactoPropietarioId], references: [id])
+  creador                    User?         @relation("CaptacionesCreadas", fields: [creadoPor], references: [id])
+  tenant                     Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([propiedadId])
+  @@index([contactoPropietarioId])
+  @@index([estado])
+  @@index([fechaInicio])
+  @@index([fechaFin])
+  @@map("captaciones")
 }
 
 model MetaVenta {
@@ -3046,6 +3133,11 @@ model CatalogoItem {
   isStockable                 Boolean                       @default(false)
   requiresQualityControl      Boolean                       @default(false)
   trackByLot                  Boolean                       @default(false)
+  // 👤 Propietario/Vendedor de la propiedad (para inmuebles)
+  contactId                   String?
+  ownerContact                Contact?                      @relation("OwnerProperties", fields: [contactId], references: [id])
+  captaciones                 Captacion[]                   @relation("CaptacionPropiedad")
+  deals                       Deal[]
   bomComponents               BoMComponent[]
   citas                       Cita[]
   cursos                      Curso[]

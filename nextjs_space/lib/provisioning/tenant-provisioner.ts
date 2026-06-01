@@ -6,6 +6,8 @@
 import { prisma } from '@/lib/db';
 import { chatwootApi } from '@/lib/nexus/chatwoot-api';
 import { encrypt } from '@/lib/core/crypto';
+import { registerDomain, verifyDomain, buildTenantEmailDomain } from '@/lib/resend-domains';
+import { getRootZoneId, configureEmailDnsRecords } from '@/lib/cloudflare-dns';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 
@@ -292,6 +294,67 @@ export async function provisionTenant(input: TenantProvisioningInput): Promise<T
     } catch (error: any) {
         console.error('[Provisioner] Webhook configuration error:', error);
         // No es crítico, continuar
+    }
+
+    // PASO 8: Provisionar dominio de email (Resend + Cloudflare)
+    try {
+        const emailDomain = buildTenantEmailDomain(subdomain);
+        console.log('[Provisioner] Registering email domain:', emailDomain);
+
+        // 8a. Registrar dominio en Resend
+        const resendDomain = await registerDomain(emailDomain);
+        
+        // 8b. Intentar configurar DNS automáticamente vía Cloudflare
+        try {
+            const zoneId = await getRootZoneId();
+            const dnsResult = await configureEmailDnsRecords(
+                zoneId,
+                subdomain,
+                resendDomain.records
+            );
+            
+            if (dnsResult.configured > 0 && dnsResult.failed === 0) {
+                // 8c. Verificar dominio si todos los DNS se configuraron
+                const verifiedDomain = await verifyDomain(resendDomain.id);
+                
+                // 8d. Actualizar tenant con la info del dominio
+                await prisma.tenant.update({
+                    where: { id: tenantId },
+                    data: {
+                        resendDomainId: resendDomain.id,
+                        emailDomainStatus: verifiedDomain.status,
+                        emailDomainConfiguredAt: new Date(),
+                    }
+                });
+                
+                console.log('[Provisioner] Email domain verified:', emailDomain);
+            } else {
+                // DNS parcial o fallido — guardar para configuración manual
+                await prisma.tenant.update({
+                    where: { id: tenantId },
+                    data: {
+                        resendDomainId: resendDomain.id,
+                        emailDomainStatus: 'pending_dns',
+                    }
+                });
+                
+                console.warn('[Provisioner] Email domain DNS incomplete:', dnsResult.errors);
+            }
+        } catch (dnsError: any) {
+            // Cloudflare no configurado — guardar para configuración manual
+            console.warn('[Provisioner] Cloudflare not configured, email domain needs manual DNS setup');
+            
+            await prisma.tenant.update({
+                where: { id: tenantId },
+                data: {
+                    resendDomainId: resendDomain.id,
+                    emailDomainStatus: 'pending_dns',
+                }
+            });
+        }
+    } catch (emailError: any) {
+        // Error no crítico — el tenant se crea igual, el email se puede configurar después
+        console.error('[Provisioner] Email domain provisioning error:', emailError.message);
     }
 
     console.log('[Provisioner] Provisioning completed successfully');

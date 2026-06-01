@@ -1,26 +1,16 @@
 
-// Email via Resend
+// Email via Resend — Multi-tenant
+// Cada tenant puede tener su propio subdominio verificado
+// y los emails se envían desde noreply@{subdomain}.volkern.app
 
 interface ResendCredentials {
   api_key: string
 }
 
-// Mapeo de subdominios a direcciones from
-const FROM_ADDRESSES: Record<string, string> = {
-  admin: 'Volkern <noreply@volkern.app>',
-  demo: 'Volkern <noreply@volkern.app>',
-  default: 'Volkern <noreply@volkern.app>'
-}
-
 let credentials: ResendCredentials | null = null
 
-// Obtener dirección FROM basada en el subdomain del tenant
-export function getFromAddress(tenantSubdomain?: string): string {
-  if (tenantSubdomain && FROM_ADDRESSES[tenantSubdomain]) {
-    return FROM_ADDRESSES[tenantSubdomain]
-  }
-  return FROM_ADDRESSES.default
-}
+// Dominio raíz para subdominios de tenants
+const ROOT_EMAIL_DOMAIN = 'volkern.app'
 
 // Cargar credenciales desde variables de entorno
 function loadCredentials(): ResendCredentials {
@@ -36,6 +26,25 @@ function loadCredentials(): ResendCredentials {
   return credentials
 }
 
+// ─── Helpers de direcciones ────────────────────────────────
+
+/**
+ * Obtiene la dirección FROM para un tenant basado en su subdominio.
+ * Ejemplo: "DeXpert <noreply@dexpert.volkern.app>"
+ * 
+ * AHORA es dinámico: construye la dirección a partir del subdominio del tenant
+ * en lugar de usar un mapeo estático.
+ */
+export function getFromAddress(tenantSubdomain?: string, tenantName?: string): string {
+  if (tenantSubdomain && tenantName) {
+    return `${tenantName} <noreply@${tenantSubdomain}.${ROOT_EMAIL_DOMAIN}>`
+  }
+  if (tenantSubdomain) {
+    return `Volkern <noreply@${tenantSubdomain}.${ROOT_EMAIL_DOMAIN}>`
+  }
+  return 'Volkern <noreply@volkern.app>'
+}
+
 interface SendEmailParams {
   to: string | string[]
   subject: string
@@ -43,7 +52,8 @@ interface SendEmailParams {
   text?: string
   from?: string
   replyTo?: string
-  tenantSubdomain?: string // NEW: para enviar desde el email del tenant
+  tenantSubdomain?: string  // Subdominio del tenant para construir from dinámico
+  tenantName?: string       // Nombre del tenant para el from
 }
 
 export async function sendEmail({
@@ -51,12 +61,14 @@ export async function sendEmail({
   subject,
   html,
   text,
-  from, // Ahora este from tiene prioridad sobre el automático
+  from,
   replyTo,
-  tenantSubdomain, // NEW
+  tenantSubdomain,
+  tenantName,
 }: SendEmailParams) {
-  // Si no se especifica from, usar el del tenant subdomain
-  const fromAddress = from || getFromAddress(tenantSubdomain)
+  // Si no se especifica from explícitamente, usar dinámico por tenant
+  const fromAddress = from || getFromAddress(tenantSubdomain, tenantName)
+  
   try {
     const creds = loadCredentials()
     
@@ -66,9 +78,9 @@ export async function sendEmail({
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${creds.api_key}`,
       },
-body: JSON.stringify({
-          from: fromAddress,
-          to: Array.isArray(to) ? to : [to],
+      body: JSON.stringify({
+        from: fromAddress,
+        to: Array.isArray(to) ? to : [to],
         subject,
         html,
         text,
