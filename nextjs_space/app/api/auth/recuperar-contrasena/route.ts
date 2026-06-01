@@ -97,18 +97,29 @@ export async function POST(request: NextRequest) {
       </div>
     `
 
-    // Usar el subdominio del tenant si está verificado, si no usar admin.volkern.app
+    // Intentar enviar con el dominio del tenant si está verificado
+    // Si falla o el dominio no está verificado, usar onboarding@resend.dev (funciona con Lark)
     const usarDominioTenant = user.tenant?.emailDomainStatus === 'verified' && !!user.tenant.subdomain;
-    const senderSubdomain = usarDominioTenant ? user.tenant.subdomain! : 'admin';
-    const senderName = usarDominioTenant ? (user.tenant.nombre || 'Volkern') : 'Volkern';
-
-    await sendEmail({
+    
+    const result = await sendEmail({
       to: user.email,
       subject: 'Recuperación de contraseña - Volkern CRM',
       html: emailContent,
-      tenantSubdomain: senderSubdomain,
-      tenantName: senderName,
+      from: usarDominioTenant ? undefined : 'Volkern CRM <onboarding@resend.dev>',
+      tenantSubdomain: usarDominioTenant ? user.tenant.subdomain! : undefined,
+      tenantName: usarDominioTenant ? (user.tenant.nombre || 'Volkern') : undefined,
     })
+
+    // Si el envío principal falló, reintentar con onboarding@resend.dev
+    if (!result.success && usarDominioTenant) {
+      console.warn('[Recovery] Fallback a onboarding@resend.dev para:', user.email)
+      await sendEmail({
+        to: user.email,
+        subject: 'Recuperación de contraseña - Volkern CRM',
+        html: emailContent,
+        from: 'Volkern CRM <onboarding@resend.dev>',
+      })
+    }
 
     // Registrar en audit log
     await prisma.auditLog.create({
