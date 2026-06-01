@@ -18,10 +18,16 @@ import {
   Clock,
   ShieldCheck,
   Building2,
-  FileText
+  FileText,
+  Plus,
+  User,
+  FileSignature,
+  Euro
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import Link from 'next/link';
+import { cn } from '@/lib/utils';
+import { ManualInvoiceModal } from '@/components/finance/ManualInvoiceModal';
 
 interface OrdenPendiente {
   id: string;
@@ -40,9 +46,17 @@ export default function MesaFacturacionPage() {
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('pendientes');
+  const [manualModalOpen, setManualModalOpen] = useState(false);
+  
+  // Estado para listado de facturas manuales
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [loadingInvoices, setLoadingInvoices] = useState(false);
+  const [invoiceSearch, setInvoiceSearch] = useState('');
 
   useEffect(() => {
-    fetchOrdenes();
+    if (activeTab === 'pendientes' || activeTab === 'facturadas') {
+      fetchOrdenes();
+    }
   }, [activeTab]);
 
   const fetchOrdenes = async () => {
@@ -59,6 +73,29 @@ export default function MesaFacturacionPage() {
       setLoading(false);
     }
   };
+  
+  const fetchInvoices = async () => {
+    try {
+      setLoadingInvoices(true);
+      const params = new URLSearchParams();
+      if (invoiceSearch) params.set('search', invoiceSearch);
+      const res = await fetch(`/api/invoices?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setInvoices(data.invoices || []);
+      }
+    } catch (error) {
+      toast.error('Error al cargar facturas');
+    } finally {
+      setLoadingInvoices(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'todas') {
+      fetchInvoices();
+    }
+  }, [invoiceSearch, activeTab]);
 
   const handleFacturar = async (id: string, numero: string) => {
     try {
@@ -113,20 +150,33 @@ export default function MesaFacturacionPage() {
       <Card className="border-none shadow-xl bg-white overflow-hidden">
         <CardHeader className="border-b bg-slate-50/50">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <CardTitle>Cola de Revisión Financiera</CardTitle>
-              <CardDescription>
-                Gestiona y valida los flujos de facturación legal.
-              </CardDescription>
+            <div className="flex items-center gap-4">
+              <div>
+                <CardTitle>Cola de Revisión Financiera</CardTitle>
+                <CardDescription>
+                  Gestiona y valida los flujos de facturación legal.
+                </CardDescription>
+              </div>
+              <ManualInvoiceModal 
+                open={manualModalOpen} 
+                onOpenChange={setManualModalOpen}
+                onSuccess={() => {
+                  if (activeTab === 'todas') fetchInvoices();
+                }}
+              />
             </div>
             
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-auto">
               <TabsList className="bg-slate-100 rounded-xl p-1">
-                <TabsTrigger value="pendientes" className="rounded-lg px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                <TabsTrigger value="pendientes" className="rounded-lg px-4 data-[state=active]:bg-white data-[state=active]:shadow-sm">
                   Pendientes {activeTab === 'pendientes' && ordenes.length > 0 && `(${ordenes.length})`}
                 </TabsTrigger>
-                <TabsTrigger value="facturadas" className="rounded-lg px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                  Historial / Facturadas
+                <TabsTrigger value="facturadas" className="rounded-lg px-4 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                  Facturadas
+                </TabsTrigger>
+                <TabsTrigger value="todas" className="rounded-lg px-4 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                  <FileText className="h-3.5 w-3.5 mr-1.5" />
+                  Todas
                 </TabsTrigger>
               </TabsList>
             </Tabs>
@@ -145,91 +195,170 @@ export default function MesaFacturacionPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="h-48 text-center">
-                    <div className="flex flex-col items-center gap-2">
-                       <Clock className="h-8 w-8 text-slate-300 animate-spin" />
-                       <span className="text-sm text-slate-500 font-medium">Cargando datos financieros...</span>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ) : ordenes.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="h-64 text-center">
-                    <div className="flex flex-col items-center gap-4 text-slate-400">
-                       <div className="h-20 w-20 bg-slate-50 rounded-full flex items-center justify-center">
-                          {activeTab === 'pendientes' ? <CheckCircle2 className="h-10 w-10 text-slate-200" /> : <ShieldCheck className="h-10 w-10 text-slate-200" />}
-                       </div>
-                       <div>
-                         <p className="text-lg font-bold text-slate-500">
-                           {activeTab === 'pendientes' ? '¡Al día!' : 'Sin historial'}
-                         </p>
-                         <p className="text-sm">
-                           {activeTab === 'pendientes' 
-                             ? 'No hay órdenes pendientes de revisión financiera.' 
-                             : 'Todavía no has emitido facturas desde esta mesa.'}
-                         </p>
-                       </div>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                ordenes.map((orden) => (
-                  <TableRow key={orden.id} className="hover:bg-slate-50 transition-colors">
-                    <TableCell>
-                      <Badge variant="outline" className="font-mono text-primary bg-primary/5">{orden.numero}</Badge>
+              {activeTab === 'todas' ? (
+                loadingInvoices ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="h-48 text-center">
+                      <div className="flex flex-col items-center gap-2">
+                         <Clock className="h-8 w-8 text-slate-300 animate-spin" />
+                         <span className="text-sm text-slate-500 font-medium">Cargando facturas...</span>
+                      </div>
                     </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                         <div className="h-8 w-8 bg-slate-100 rounded-lg flex items-center justify-center text-slate-500">
-                           <Building2 className="h-4 w-4" />
+                  </TableRow>
+                ) : invoices.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="h-64 text-center">
+                      <div className="flex flex-col items-center gap-4 text-slate-400">
+                         <div className="h-20 w-20 bg-slate-50 rounded-full flex items-center justify-center">
+                            <FileText className="h-10 w-10 text-slate-200" />
                          </div>
                          <div>
-                            <p className="text-sm font-bold tracking-tight">{orden.lead?.nombre || orden.contact?.nombre}</p>
-                            <p className="text-[10px] text-muted-foreground uppercase">{orden.lead?.empresa || 'Cliente Particular'}</p>
+                           <p className="text-lg font-bold text-slate-500">Sin facturas</p>
+                           <p className="text-sm">
+                             No hay facturas registradas. Crea tu primera factura manual con el botón superior.
+                           </p>
                          </div>
                       </div>
                     </TableCell>
-                    <TableCell className="text-sm font-medium text-slate-600">
-                      {format(new Date(orden.fechaOrden), 'dd MMM yyyy HH:mm', { locale: es })}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary" className="rounded-full px-3">{orden._count.items} líneas</Badge>
-                    </TableCell>
-                    <TableCell className="text-right text-lg font-black tracking-tighter">
-                      {formatCurrency(orden.total, orden.moneda)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {activeTab === 'pendientes' ? (
-                        <div className="space-x-2">
-                          <Link href={`/dashboard/ventas/ordenes/${orden.id}`}>
-                            <Button variant="ghost" size="sm" className="rounded-xl">
-                              <ExternalLink className="h-4 w-4 mr-1" /> Revisar
-                            </Button>
-                          </Link>
-                          <Button 
-                            size="sm" 
-                            className="rounded-xl bg-primary text-white hover:bg-primary/90 shadow-md px-5"
-                            onClick={() => handleFacturar(orden.id, orden.numero)}
-                            disabled={processingId === orden.id}
-                          >
-                            {processingId === orden.id ? (
-                               <Clock className="h-4 w-4 animate-spin mr-2" />
-                            ) : (
-                               <FileText className="h-4 w-4 mr-2" />
-                            )}
-                            Facturar
-                          </Button>
+                  </TableRow>
+                ) : (
+                  invoices.map((inv: any) => (
+                    <TableRow key={inv.id} className="hover:bg-slate-50 transition-colors">
+                      <TableCell>
+                        <Badge variant="outline" className="font-mono text-primary bg-primary/5">{inv.numero}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                           <div className="h-8 w-8 bg-slate-100 rounded-lg flex items-center justify-center text-slate-500">
+                             <User className="h-4 w-4" />
+                           </div>
+                           <div>
+                              <p className="text-sm font-bold tracking-tight">
+                                {(inv.metadata as any)?.clienteNombre || inv.contact?.nombre || inv.lead?.nombre || 'Cliente'}
+                              </p>
+                              <p className="text-[10px] text-muted-foreground uppercase">
+                                {(inv.metadata as any)?.clienteNif || inv.contact?.email || inv.lead?.email || ''}
+                              </p>
+                           </div>
                         </div>
-                      ) : (
-                        <div className="flex items-center justify-end gap-2 text-emerald-600 font-bold text-xs uppercase tracking-widest">
-                          <ShieldCheck className="h-4 w-4" /> Facturada y Sellada
+                      </TableCell>
+                      <TableCell className="text-sm font-medium text-slate-600">
+                        {format(new Date(inv.fechaEmision), 'dd MMM yyyy', { locale: es })}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1.5">
+                          {inv.isSealed && (
+                            <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
+                          )}
+                          <Badge variant={inv.isSealed ? 'outline' : 'secondary'} className={cn(
+                            'rounded-full px-2 text-[10px]',
+                            inv.isSealed ? 'border-emerald-200 text-emerald-700 bg-emerald-50' : ''
+                          )}>
+                            {inv.isSealed ? 'Sellada' : 'Sin sello'}
+                          </Badge>
                         </div>
-                      )}
+                      </TableCell>
+                      <TableCell className="text-right text-lg font-black tracking-tighter">
+                        {formatCurrency(inv.monto, inv.moneda)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Badge className={cn(
+                          'rounded-full text-[10px]',
+                          inv.estado === 'completado' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-slate-100 text-slate-600'
+                        )}>
+                          {inv.estado === 'completado' ? 'Emitida' : inv.estado === 'pendiente' ? 'Pendiente' : inv.estado}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )
+              ) : (
+                loading ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="h-48 text-center">
+                      <div className="flex flex-col items-center gap-2">
+                         <Clock className="h-8 w-8 text-slate-300 animate-spin" />
+                         <span className="text-sm text-slate-500 font-medium">Cargando datos financieros...</span>
+                      </div>
                     </TableCell>
                   </TableRow>
-                ))
+                ) : ordenes.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="h-64 text-center">
+                      <div className="flex flex-col items-center gap-4 text-slate-400">
+                         <div className="h-20 w-20 bg-slate-50 rounded-full flex items-center justify-center">
+                            {activeTab === 'pendientes' ? <CheckCircle2 className="h-10 w-10 text-slate-200" /> : <ShieldCheck className="h-10 w-10 text-slate-200" />}
+                         </div>
+                         <div>
+                           <p className="text-lg font-bold text-slate-500">
+                             {activeTab === 'pendientes' ? '¡Al día!' : 'Sin historial'}
+                           </p>
+                           <p className="text-sm">
+                             {activeTab === 'pendientes' 
+                               ? 'No hay órdenes pendientes de revisión financiera.' 
+                               : 'Todavía no has emitido facturas desde esta mesa.'}
+                           </p>
+                         </div>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  ordenes.map((orden) => (
+                    <TableRow key={orden.id} className="hover:bg-slate-50 transition-colors">
+                      <TableCell>
+                        <Badge variant="outline" className="font-mono text-primary bg-primary/5">{orden.numero}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                           <div className="h-8 w-8 bg-slate-100 rounded-lg flex items-center justify-center text-slate-500">
+                             <Building2 className="h-4 w-4" />
+                           </div>
+                           <div>
+                              <p className="text-sm font-bold tracking-tight">{orden.lead?.nombre || orden.contact?.nombre}</p>
+                              <p className="text-[10px] text-muted-foreground uppercase">{orden.lead?.empresa || 'Cliente Particular'}</p>
+                           </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-sm font-medium text-slate-600">
+                        {format(new Date(orden.fechaOrden), 'dd MMM yyyy HH:mm', { locale: es })}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className="rounded-full px-3">{orden._count.items} líneas</Badge>
+                      </TableCell>
+                      <TableCell className="text-right text-lg font-black tracking-tighter">
+                        {formatCurrency(orden.total, orden.moneda)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {activeTab === 'pendientes' ? (
+                          <div className="space-x-2">
+                            <Link href={`/dashboard/ventas/ordenes/${orden.id}`}>
+                              <Button variant="ghost" size="sm" className="rounded-xl">
+                                <ExternalLink className="h-4 w-4 mr-1" /> Revisar
+                              </Button>
+                            </Link>
+                            <Button 
+                              size="sm" 
+                              className="rounded-xl bg-primary text-white hover:bg-primary/90 shadow-md px-5"
+                              onClick={() => handleFacturar(orden.id, orden.numero)}
+                              disabled={processingId === orden.id}
+                            >
+                              {processingId === orden.id ? (
+                                 <Clock className="h-4 w-4 animate-spin mr-2" />
+                              ) : (
+                                 <FileText className="h-4 w-4 mr-2" />
+                              )}
+                              Facturar
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-end gap-2 text-emerald-600 font-bold text-xs uppercase tracking-widest">
+                            <ShieldCheck className="h-4 w-4" /> Facturada y Sellada
+                          </div>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )
               )}
             </TableBody>
           </Table>
