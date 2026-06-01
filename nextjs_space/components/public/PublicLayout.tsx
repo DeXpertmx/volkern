@@ -37,6 +37,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
           <div className="flex justify-center gap-6 text-xs text-slate-600">
             <a href="/privacy" className="hover:text-slate-400">Privacidad</a>
             <a href="/terms" className="hover:text-slate-400">Términos</a>
+            <a href="/verifactu" className="hover:text-amber-400 transition-colors font-medium text-amber-500">Veri*Factu</a>
             <a href="#" className="hover:text-slate-400">Status</a>
           </div>
         </div>
