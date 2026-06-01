@@ -9,7 +9,11 @@ interface InvoiceItemInput {
   descripcion?: string
   cantidad: number
   precioUnitario: number
+  descuento?: number
   impuestos?: number
+  tasaImpuestoPorcentaje?: number
+  tasaImpuestoNombre?: string
+  catalogoItemId?: string
 }
 
 interface CreateInvoiceBody {
@@ -20,6 +24,8 @@ interface CreateInvoiceBody {
   items: InvoiceItemInput[]
   moneda?: string
   notas?: string
+  tipoDescuento?: 'linea' | 'total'
+  descuentoGlobal?: number
 }
 
 /**
@@ -102,13 +108,25 @@ export async function POST(request: NextRequest) {
     }
 
     // Calcular totales
+    const moneda = body.moneda || 'EUR'
+    const tipoDescuento = body.tipoDescuento || 'linea'
+    const descuentoGlobal = body.descuentoGlobal || 0
+
     const subtotal = body.items.reduce((sum, item) => sum + (item.cantidad * item.precioUnitario), 0)
+    const descuentoLineas = body.items.reduce((sum, item) => {
+      const base = item.cantidad * item.precioUnitario
+      return sum + (base * (item.descuento || 0) / 100)
+    }, 0)
+    const baseImponible = tipoDescuento === 'total'
+      ? subtotal * (1 - descuentoGlobal / 100)
+      : subtotal - descuentoLineas
     const impuestos = body.items.reduce((sum, item) => {
       const base = item.cantidad * item.precioUnitario
-      return sum + (base * (item.impuestos || 21) / 100)
+      const dto = tipoDescuento === 'linea' ? base * (item.descuento || 0) / 100 : 0
+      const tasa = item.tasaImpuestoPorcentaje || item.impuestos || 0
+      return sum + (base - dto) * tasa / 100
     }, 0)
-    const total = subtotal + impuestos
-    const moneda = body.moneda || 'EUR'
+    const total = baseImponible + impuestos
 
     // Obtener número de factura
     const lastInvoice = await prisma.invoice.findFirst({
@@ -131,7 +149,7 @@ export async function POST(request: NextRequest) {
         quantity: item.cantidad,
         price: item.precioUnitario,
         description: item.descripcion,
-        taxRate: item.impuestos || 21
+        taxRate: item.tasaImpuestoPorcentaje ?? item.impuestos ?? 0
       }))
     }
 
@@ -169,7 +187,9 @@ export async function POST(request: NextRequest) {
               clienteDireccion: body.clienteDireccion,
               notas: body.notas,
               items: body.items,
-              isManual: true
+              isManual: true,
+              tipoDescuento: body.tipoDescuento,
+              descuentoGlobal: body.descuentoGlobal
             }
           }
         })
@@ -188,7 +208,9 @@ export async function POST(request: NextRequest) {
             clienteDireccion: body.clienteDireccion,
             notas: body.notas,
             items: body.items,
-            isManual: true
+            isManual: true,
+            tipoDescuento: body.tipoDescuento,
+            descuentoGlobal: body.descuentoGlobal
           },
           numero
         }
