@@ -47,6 +47,7 @@ export async function GET(
             tipoIdFiscal: true,
             regimenFiscal: true,
             country: true,
+            idIntracomunitario: true,
             defaultIva: true,
             defaultIrpf: true,
             exentoImpuestos: true,
@@ -146,7 +147,40 @@ export async function GET(
     const formatCurrency = (amount: number) =>
       new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(amount);
 
-    // 6. Obtener Modelo 130 (Pago Fraccionado IRPF) del trimestre actual
+    // 6. Obtener Modelo 349 (IVA Intracomunitario) del contacto actual
+    let modelo349Summary: {
+      country: string;
+      idIntracomunitario: string;
+      invoicesInQuarter: number;
+      totalDelivered: string;
+      hasOperations: boolean;
+    } | null = null;
+    if (perfilFiscal?.idIntracomunitario && perfilFiscal.country && perfilFiscal.country !== 'ES') {
+      try {
+        const startDate = new Date(currentYear, months[0] - 1, 1);
+        const endDate = new Date(currentYear, months[2], 0, 23, 59, 59, 999);
+        const euInvoices = await prisma.invoice.findMany({
+          where: {
+            tenantId,
+            contactId,
+            fechaEmision: { gte: startDate, lte: endDate },
+          },
+          select: { monto: true },
+        });
+        const total = euInvoices.reduce((sum, inv) => sum + Number(inv.monto), 0);
+        modelo349Summary = {
+          country: perfilFiscal.country,
+          idIntracomunitario: perfilFiscal.idIntracomunitario,
+          invoicesInQuarter: euInvoices.length,
+          totalDelivered: formatCurrency(total),
+          hasOperations: euInvoices.length > 0,
+        };
+      } catch {
+        // Si falla, continuar sin Modelo 349
+      }
+    }
+
+    // 7. Obtener Modelo 130 (Pago Fraccionado IRPF) del trimestre actual
     let modelo130Summary: {
       quarter: number;
       totalIncome: string;
@@ -172,7 +206,7 @@ export async function GET(
       // Si falla (ej. esquema contable incompleto), continuar sin Modelo 130
     }
 
-    // 7. Obtener Modelo 390 (IVA Anual) para el año actual
+    // 8. Obtener Modelo 390 (IVA Anual) para el año actual
     let modelo390Summary: {
       annualOutputVat: string;
       annualInputVat: string;
@@ -196,7 +230,7 @@ export async function GET(
       // Si falla, continuar sin Modelo 390
     }
 
-    // 8. Totales consolidados del año
+    // 9. Totales consolidados del año
     const yearlyVat = await prisma.taxRecord.aggregate({
       where: {
         tenantId,
@@ -215,7 +249,7 @@ export async function GET(
       _sum: { taxAmount: true },
     });
 
-    // 9. Actualizar tracking del portal
+    // 10. Actualizar tracking del portal
     await prisma.erp_customer_portal_access.update({
       where: { id: access.id },
       data: { lastAccessAt: new Date() },
@@ -231,6 +265,7 @@ export async function GET(
         tipoIdFiscal: perfilFiscal.tipoIdFiscal,
         regimenFiscal: perfilFiscal.regimenFiscal,
         country: perfilFiscal.country,
+        idIntracomunitario: perfilFiscal.idIntracomunitario,
         defaultIva: Number(perfilFiscal.defaultIva),
         defaultIrpf: Number(perfilFiscal.defaultIrpf),
         exentoImpuestos: perfilFiscal.exentoImpuestos,
@@ -257,6 +292,7 @@ export async function GET(
       },
       modelo130Summary,
       modelo390Summary,
+      modelo349Summary,
       invoices: invoices.map(inv => ({
         id: inv.id,
         numero: inv.numero,

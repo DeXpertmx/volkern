@@ -439,6 +439,33 @@ export default function SovereignPortalPage() {
                   </Card>
                 )}
 
+                {/* Modelo 349 - IVA Intracomunitario */}
+                {fiscalData.modelo349Summary && (
+                  <Card className="rounded-2xl border-none shadow-md bg-white overflow-hidden">
+                    <div className="h-1.5 bg-violet-500" />
+                    <CardContent className="p-5">
+                      <div className="flex items-center justify-between mb-3">
+                        <p className="text-xs font-black uppercase tracking-widest text-slate-400">IVA Intracomunitario</p>
+                        <Badge className="bg-violet-50 text-violet-600 border-none text-[10px]">{fiscalData.modelo349Summary.country}</Badge>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-slate-500">ID Intracomunitario</span>
+                          <span className="font-mono font-bold text-sm text-violet-600">{fiscalData.modelo349Summary.idIntracomunitario}</span>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-slate-500">Facturas este trimestre</span>
+                          <span className="font-bold">{fiscalData.modelo349Summary.invoicesInQuarter}</span>
+                        </div>
+                        <div className="border-t pt-2 flex justify-between text-xs">
+                          <span className="font-bold text-slate-700">Total Entregado</span>
+                          <span className="font-black text-lg text-violet-600">{fiscalData.modelo349Summary.totalDelivered}</span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
                 {/* Próximos Vencimientos */}
                 {fiscalData.upcomingDeadlines?.length > 0 && (
                   <Card className="rounded-3xl border-none shadow-xl bg-white overflow-hidden">
