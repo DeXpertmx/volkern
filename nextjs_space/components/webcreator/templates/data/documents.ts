@@ -436,6 +436,32 @@ export const documentTemplates: Template[] = [
             </div>
           </div>
 
+          <!-- Código QR Veri*Factu -->
+          <div class="verifactu-qr-row">
+            <div class="verifactu-qr-box">
+              <div class="qr-placeholder" data-gjs-editable="true" data-gjs-selectable="true">
+                <div class="qr-grid">
+                  <div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div>
+                  <div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div>
+                  <div class="qr-cell qr-dark"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-dark"></div>
+                  <div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div>
+                  <div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div>
+                  <div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div>
+                  <div class="qr-cell qr-light"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div>
+                  <div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-dark"></div>
+                  <div class="qr-cell qr-dark"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div>
+                </div>
+                <span class="qr-label">QR Veri*Factu</span>
+              </div>
+              <div class="qr-info">
+                <p class="qr-info-title">C&oacute;digo de Verificaci&oacute;n</p>
+                <p class="qr-info-text">NIF: <span data-gjs-editable="true" data-gjs-selectable="true">[NIF_EMISOR]</span> &mdash; Factura: <span data-gjs-editable="true" data-gjs-selectable="true">[NUMERO_FACTURA]</span></p>
+                <p class="qr-info-text">Importe: <span data-gjs-editable="true" data-gjs-selectable="true">[IMPORTE_TOTAL]</span> &mdash; Hash: <span data-gjs-editable="true" data-gjs-selectable="true">[HASH_VERIFICACION]</span></p>
+                <p class="qr-info-hash">Este c&oacute;digo QR se genera autom&aacute;ticamente al emitir la factura desde un sistema inform&aacute;tico declarado responsablemente ante la AEAT conforme al RD 1007/2023.</p>
+              </div>
+            </div>
+          </div>
+
           <!-- Cumplimiento Veri*Factu -->
           <div class="compliance-footer">
             <p class="compliance-text">
@@ -688,6 +714,104 @@ export const documentTemplates: Template[] = [
           margin: 3px 0;
         }
 
+        /* ── QR Veri*Factu ── */
+        .verifactu-qr-row {
+          display: flex;
+          justify-content: center;
+          margin-bottom: 20px;
+        }
+
+        .verifactu-qr-box {
+          display: flex;
+          align-items: center;
+          gap: 20px;
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 12px;
+          padding: 16px 20px;
+          width: 100%;
+          max-width: 480px;
+        }
+
+        .qr-placeholder {
+          flex-shrink: 0;
+          width: 80px;
+          height: 80px;
+          background: white;
+          border: 2px solid #1e293b;
+          border-radius: 8px;
+          padding: 6px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: transform 0.2s;
+        }
+
+        .qr-placeholder:hover {
+          transform: scale(1.05);
+        }
+
+        .qr-grid {
+          display: grid;
+          grid-template-columns: repeat(9, 6px);
+          grid-template-rows: repeat(9, 6px);
+          gap: 1px;
+        }
+
+        .qr-cell {
+          width: 6px;
+          height: 6px;
+          border-radius: 1px;
+        }
+
+        .qr-dark {
+          background: #1e293b;
+        }
+
+        .qr-light {
+          background: #ffffff;
+        }
+
+        .qr-label {
+          font-size: 6px;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          color: #1e293b;
+          margin-top: 4px;
+        }
+
+        .qr-info {
+          flex: 1;
+          min-width: 0;
+        }
+
+        .qr-info-title {
+          font-size: 10px;
+          font-weight: 800;
+          color: #1e40af;
+          margin: 0 0 4px 0;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+
+        .qr-info-text {
+          font-size: 9px;
+          color: #475569;
+          margin: 1px 0;
+          font-family: 'Courier New', monospace;
+        }
+
+        .qr-info-hash {
+          font-size: 8px;
+          color: #94a3b8;
+          margin: 4px 0 0 0;
+          font-style: italic;
+          line-height: 1.3;
+        }
+
         /* ── Compliance ── */
         .compliance-footer {
           background: #fffbeb;
@@ -794,6 +918,32 @@ export const documentTemplates: Template[] = [
                 <p><strong>SWIFT:</strong> <span data-gjs-editable="true" data-gjs-selectable="true">[SWIFT]</span></p>
                 <p><strong>Titular:</strong> {{empresa.nombre}}</p>
                 <p><strong>Concepto:</strong> {{contrato.numero}}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Código QR Veri*Factu -->
+          <div class="verifactu-qr-row">
+            <div class="verifactu-qr-box">
+              <div class="qr-placeholder" data-gjs-editable="true" data-gjs-selectable="true">
+                <div class="qr-grid">
+                  <div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div>
+                  <div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div>
+                  <div class="qr-cell qr-dark"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-dark"></div>
+                  <div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div>
+                  <div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div>
+                  <div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div>
+                  <div class="qr-cell qr-light"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div>
+                  <div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-dark"></div>
+                  <div class="qr-cell qr-dark"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div>
+                </div>
+                <span class="qr-label">QR Veri*Factu</span>
+              </div>
+              <div class="qr-info">
+                <p class="qr-info-title">C&oacute;digo de Verificaci&oacute;n</p>
+                <p class="qr-info-text">NIF: <span data-gjs-editable="true" data-gjs-selectable="true">[NIF_EMISOR]</span> &mdash; Factura: <span data-gjs-editable="true" data-gjs-selectable="true">[NUMERO_FACTURA]</span></p>
+                <p class="qr-info-text">Importe: <span data-gjs-editable="true" data-gjs-selectable="true">[IMPORTE_TOTAL]</span> &mdash; Hash: <span data-gjs-editable="true" data-gjs-selectable="true">[HASH_VERIFICACION]</span></p>
+                <p class="qr-info-hash">Este c&oacute;digo QR se genera autom&aacute;ticamente al emitir la factura desde un sistema inform&aacute;tico declarado responsablemente ante la AEAT conforme al RD 1007/2023.</p>
               </div>
             </div>
           </div>
@@ -1051,6 +1201,104 @@ export const documentTemplates: Template[] = [
           margin: 2px 0;
         }
 
+        /* ── QR Veri*Factu ── */
+        .verifactu-qr-row {
+          display: flex;
+          justify-content: center;
+          margin-bottom: 20px;
+        }
+
+        .verifactu-qr-box {
+          display: flex;
+          align-items: center;
+          gap: 20px;
+          background: #faf5ff;
+          border: 1px solid #e9d5ff;
+          border-radius: 12px;
+          padding: 16px 20px;
+          width: 100%;
+          max-width: 480px;
+        }
+
+        .qr-placeholder {
+          flex-shrink: 0;
+          width: 80px;
+          height: 80px;
+          background: white;
+          border: 2px solid #9333ea;
+          border-radius: 8px;
+          padding: 6px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: transform 0.2s;
+        }
+
+        .qr-placeholder:hover {
+          transform: scale(1.05);
+        }
+
+        .qr-grid {
+          display: grid;
+          grid-template-columns: repeat(9, 6px);
+          grid-template-rows: repeat(9, 6px);
+          gap: 1px;
+        }
+
+        .qr-cell {
+          width: 6px;
+          height: 6px;
+          border-radius: 1px;
+        }
+
+        .qr-dark {
+          background: #1e293b;
+        }
+
+        .qr-light {
+          background: #ffffff;
+        }
+
+        .qr-label {
+          font-size: 6px;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          color: #1e293b;
+          margin-top: 4px;
+        }
+
+        .qr-info {
+          flex: 1;
+          min-width: 0;
+        }
+
+        .qr-info-title {
+          font-size: 10px;
+          font-weight: 800;
+          color: #9333ea;
+          margin: 0 0 4px 0;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+
+        .qr-info-text {
+          font-size: 9px;
+          color: #475569;
+          margin: 1px 0;
+          font-family: 'Courier New', monospace;
+        }
+
+        .qr-info-hash {
+          font-size: 8px;
+          color: #94a3b8;
+          margin: 4px 0 0 0;
+          font-style: italic;
+          line-height: 1.3;
+        }
+
         /* ── Compliance ── */
         .irpf-compliance {
           background: #fffbeb;
@@ -1140,31 +1388,22 @@ export const documentTemplates: Template[] = [
 
           <div class="ticket-divider">* * *</div>
 
-          <!-- Barcode / QR visual -->
-          <div class="ticket-barcode">
-            <div class="barcode-sim">
-              <div class="bar bar1"></div>
-              <div class="bar bar2"></div>
-              <div class="bar bar3"></div>
-              <div class="bar bar4"></div>
-              <div class="bar bar5"></div>
-              <div class="bar bar6"></div>
-              <div class="bar bar7"></div>
-              <div class="bar bar8"></div>
-              <div class="bar bar9"></div>
-              <div class="bar bar10"></div>
-              <div class="bar bar11"></div>
-              <div class="bar bar12"></div>
-              <div class="bar bar13"></div>
-              <div class="bar bar14"></div>
-              <div class="bar bar15"></div>
-              <div class="bar bar16"></div>
-              <div class="bar bar17"></div>
-              <div class="bar bar18"></div>
-              <div class="bar bar19"></div>
-              <div class="bar bar20"></div>
+          <!-- QR Veri*Factu compacto -->
+          <div class="ticket-qr">
+            <div class="ticket-qr-box" data-gjs-editable="true" data-gjs-selectable="true">
+              <div class="ticket-qr-grid">
+                <span class="tqr">&#9632;</span><span class="tqr">&nbsp;</span><span class="tqr">&#9632;</span><span class="tqr">&#9632;</span><span class="tqr">&nbsp;</span><span class="tqr">&#9632;</span><span class="tqr">&nbsp;</span><span class="tqr">&#9632;</span>
+                <span class="tqr">&nbsp;</span><span class="tqr">&#9632;</span><span class="tqr">&nbsp;</span><span class="tqr">&nbsp;</span><span class="tqr">&#9632;</span><span class="tqr">&nbsp;</span><span class="tqr">&#9632;</span><span class="tqr">&nbsp;</span>
+                <span class="tqr">&#9632;</span><span class="tqr">&#9632;</span><span class="tqr">&nbsp;</span><span class="tqr">&#9632;</span><span class="tqr">&#9632;</span><span class="tqr">&#9632;</span><span class="tqr">&nbsp;</span><span class="tqr">&#9632;</span>
+                <span class="tqr">&#9632;</span><span class="tqr">&nbsp;</span><span class="tqr">&#9632;</span><span class="tqr">&nbsp;</span><span class="tqr">&nbsp;</span><span class="tqr">&nbsp;</span><span class="tqr">&#9632;</span><span class="tqr">&nbsp;</span>
+                <span class="tqr">&nbsp;</span><span class="tqr">&#9632;</span><span class="tqr">&#9632;</span><span class="tqr">&nbsp;</span><span class="tqr">&#9632;</span><span class="tqr">&nbsp;</span><span class="tqr">&#9632;</span><span class="tqr">&#9632;</span>
+                <span class="tqr">&#9632;</span><span class="tqr">&nbsp;</span><span class="tqr">&#9632;</span><span class="tqr">&#9632;</span><span class="tqr">&nbsp;</span><span class="tqr">&#9632;</span><span class="tqr">&nbsp;</span><span class="tqr">&nbsp;</span>
+                <span class="tqr">&nbsp;</span><span class="tqr">&nbsp;</span><span class="tqr">&#9632;</span><span class="tqr">&nbsp;</span><span class="tqr">&#9632;</span><span class="tqr">&#9632;</span><span class="tqr">&#9632;</span><span class="tqr">&#9632;</span>
+                <span class="tqr">&#9632;</span><span class="tqr">&nbsp;</span><span class="tqr">&#9632;</span><span class="tqr">&nbsp;</span><span class="tqr">&nbsp;</span><span class="tqr">&#9632;</span><span class="tqr">&nbsp;</span><span class="tqr">&#9632;</span>
+              </div>
+              <span class="tqr-label">VERI*FACTU</span>
             </div>
-            <p class="barcode-id">VK-98765-2024</p>
+            <p class="tqr-id">NIF: <span data-gjs-editable="true" data-gjs-selectable="true">[NIF_EMISOR]</span> &mdash; <span data-gjs-editable="true" data-gjs-selectable="true">[NUMERO_FACTURA]</span></p>
           </div>
 
           <!-- Compliance compacto -->
@@ -1329,34 +1568,48 @@ export const documentTemplates: Template[] = [
           padding: 1px 4px;
         }
 
-        /* ── Barcode (visual) ── */
-        .ticket-barcode {
+        /* ── QR Veri*Factu compacto ── */
+        .ticket-qr {
           text-align: center;
           margin: 10px 0;
+          padding: 6px;
+          background: #f9fafb;
+          border: 1px solid #e5e7eb;
+          border-radius: 4px;
         }
 
-        .barcode-sim {
-          display: flex;
-          justify-content: center;
-          gap: 3px;
-          margin-bottom: 4px;
+        .ticket-qr-box {
+          display: inline-flex;
+          flex-direction: column;
+          align-items: center;
+          cursor: pointer;
         }
 
-        .bar {
-          width: 2px;
-          height: 30px;
-          background: #1a1a1a;
+        .ticket-qr-grid {
+          display: grid;
+          grid-template-columns: repeat(8, 6px);
+          gap: 1px;
+          margin-bottom: 3px;
         }
 
-        .bar:nth-child(odd) { width: 1px; }
-        .bar:nth-child(3n) { width: 4px; }
-        .bar:nth-child(5n+2) { width: 3px; }
-        .bar:nth-child(7n+4) { width: 1px; }
+        .tqr {
+          font-size: 6px;
+          line-height: 6px;
+          color: #1a1a1a;
+        }
 
-        .barcode-id {
-          font-size: 9px;
-          color: #666;
-          margin: 2px 0;
+        .tqr-label {
+          font-size: 5px;
+          font-weight: 900;
+          letter-spacing: 1px;
+          color: #1a1a1a;
+        }
+
+        .tqr-id {
+          font-size: 8px;
+          color: #555;
+          margin: 3px 0 0 0;
+          font-family: 'Courier New', monospace;
         }
 
         /* ── Compliance ── */
