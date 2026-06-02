@@ -2,6 +2,7 @@ import { prisma } from '@/lib/db';
 import { notificationService } from '@/lib/skills/notification-layer';
 import { skillsLogger } from '@/lib/skills/observability';
 import { TaxType } from '@prisma/client';
+import { TaxService } from './tax-service';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -285,6 +286,18 @@ export class FiscalCalendarService {
             if (r.isFiled) isFiled = true;
           }
           estimatedAmount = total;
+        }
+
+        if (deadline.model === '130' && deadline.quarter) {
+          try {
+            const report = await TaxService.getQuarterlyModelo130Report(tenantId, deadline.year, deadline.quarter);
+            if (report.hasActivity && report.resultToPay > 0) {
+              estimatedAmount = report.resultToPay;
+            }
+            isFiled = false; // Modelo 130 no tiene flag isFiled en TaxRecord
+          } catch {
+            // Si falla la consulta, no incluimos estimación
+          }
         }
 
         return {

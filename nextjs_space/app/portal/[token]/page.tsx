@@ -383,6 +383,62 @@ export default function SovereignPortalPage() {
                   </Card>
                 </div>
 
+                {/* Modelo 130 - Pago Fraccionado IRPF */}
+                {fiscalData.modelo130Summary && (
+                  <Card className="rounded-2xl border-none shadow-md bg-white overflow-hidden">
+                    <div className="h-1.5 bg-teal-500" />
+                    <CardContent className="p-5">
+                      <div className="flex items-center justify-between mb-3">
+                        <p className="text-xs font-black uppercase tracking-widest text-slate-400">Pago Fraccionado IRPF T{fiscalData.modelo130Summary.quarter}</p>
+                        <Badge className="bg-amber-50 text-amber-600 border-none text-[10px]">Estimado</Badge>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-slate-500">Ingresos</span>
+                          <span className="font-bold text-emerald-600">{fiscalData.modelo130Summary.totalIncome}</span>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-slate-500">Gastos</span>
+                          <span className="font-bold text-red-500">{fiscalData.modelo130Summary.totalExpenses}</span>
+                        </div>
+                        <div className="border-t pt-2 flex justify-between text-xs">
+                          <span className="font-bold text-slate-700">A Pagar (20%)</span>
+                          <span className="font-black text-lg text-teal-600">{fiscalData.modelo130Summary.resultToPay}</span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Modelo 390 - IVA Anual */}
+                {fiscalData.modelo390Summary && (
+                  <Card className="rounded-2xl border-none shadow-md bg-white overflow-hidden">
+                    <div className="h-1.5 bg-indigo-500" />
+                    <CardContent className="p-5">
+                      <div className="flex items-center justify-between mb-3">
+                        <p className="text-xs font-black uppercase tracking-widest text-slate-400">IVA Anual (Modelo 390)</p>
+                        <Badge className="bg-indigo-50 text-indigo-600 border-none text-[10px]">
+                          {fiscalData.modelo390Summary.quartersFiled}/{fiscalData.modelo390Summary.quartersTotal} T presentados
+                        </Badge>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-slate-500">Total Repercutido</span>
+                          <span className="font-bold text-blue-600">{fiscalData.modelo390Summary.annualOutputVat}</span>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-slate-500">Total Soportado</span>
+                          <span className="font-bold text-orange-600">{fiscalData.modelo390Summary.annualInputVat}</span>
+                        </div>
+                        <div className="border-t pt-2 flex justify-between text-xs">
+                          <span className="font-bold text-slate-700">Resultado Anual</span>
+                          <span className="font-black text-lg text-indigo-600">{fiscalData.modelo390Summary.annualResult}</span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
                 {/* Próximos Vencimientos */}
                 {fiscalData.upcomingDeadlines?.length > 0 && (
                   <Card className="rounded-3xl border-none shadow-xl bg-white overflow-hidden">

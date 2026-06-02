@@ -143,7 +143,60 @@ export async function GET(
       // Si el servicio no existe, continuar sin deadlines
     }
 
-    // 6. Totales consolidados del año
+    const formatCurrency = (amount: number) =>
+      new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(amount);
+
+    // 6. Obtener Modelo 130 (Pago Fraccionado IRPF) del trimestre actual
+    let modelo130Summary: {
+      quarter: number;
+      totalIncome: string;
+      totalExpenses: string;
+      netBase: string;
+      resultToPay: string;
+      hasActivity: boolean;
+    } | null = null;
+    try {
+      const { TaxService } = await import('@/lib/accounting/tax-service');
+      const report = await TaxService.getQuarterlyModelo130Report(tenantId, currentYear, currentQuarter);
+      if (report.hasActivity) {
+        modelo130Summary = {
+          quarter: currentQuarter,
+          totalIncome: formatCurrency(report.totalIncome),
+          totalExpenses: formatCurrency(report.totalExpenses),
+          netBase: formatCurrency(report.netBase),
+          resultToPay: formatCurrency(report.resultToPay),
+          hasActivity: report.hasActivity,
+        };
+      }
+    } catch {
+      // Si falla (ej. esquema contable incompleto), continuar sin Modelo 130
+    }
+
+    // 7. Obtener Modelo 390 (IVA Anual) para el año actual
+    let modelo390Summary: {
+      annualOutputVat: string;
+      annualInputVat: string;
+      annualResult: string;
+      quartersFiled: number;
+      quartersTotal: number;
+    } | null = null;
+    try {
+      const { TaxService } = await import('@/lib/accounting/tax-service');
+      const report = await TaxService.getAnnualModelo390Report(tenantId, currentYear);
+      if (report.hasActivity) {
+        modelo390Summary = {
+          annualOutputVat: formatCurrency(report.annualOutputVat),
+          annualInputVat: formatCurrency(report.annualInputVat),
+          annualResult: formatCurrency(report.annualResult),
+          quartersFiled: report.quartersFiled,
+          quartersTotal: 4,
+        };
+      }
+    } catch {
+      // Si falla, continuar sin Modelo 390
+    }
+
+    // 8. Totales consolidados del año
     const yearlyVat = await prisma.taxRecord.aggregate({
       where: {
         tenantId,
@@ -162,14 +215,11 @@ export async function GET(
       _sum: { taxAmount: true },
     });
 
-    // 7. Actualizar tracking del portal
+    // 9. Actualizar tracking del portal
     await prisma.erp_customer_portal_access.update({
       where: { id: access.id },
       data: { lastAccessAt: new Date() },
     });
-
-    const formatCurrency = (amount: number) =>
-      new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(amount);
 
     return NextResponse.json({
       success: true,
@@ -205,6 +255,8 @@ export async function GET(
         vat: formatCurrency(Number(yearlyVat._sum.taxAmount || 0)),
         irpf: formatCurrency(Number(yearlyIrpf._sum.taxAmount || 0)),
       },
+      modelo130Summary,
+      modelo390Summary,
       invoices: invoices.map(inv => ({
         id: inv.id,
         numero: inv.numero,
