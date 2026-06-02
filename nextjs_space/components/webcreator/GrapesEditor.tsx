@@ -15,6 +15,7 @@ import gjsNavbar from "grapesjs-navbar"
 import gjsTyped from "grapesjs-typed"
 import gjsTooltip from "grapesjs-tooltip"
 import gjsMaterialIcons from "grapesjs-google-material-icons"
+// @ts-expect-error - grapesjs-style-easing doesn't have types
 import gjsStyleEasing from "grapesjs-style-easing"
 import { setupVolkernBlocksAsync } from "./blocks/dynamicBlocks"
 import { setupDocumentBlocks } from "./blocks/DocumentBlocks"
@@ -44,6 +45,7 @@ interface GrapesEditorProps {
 const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>(({ initialData, onSave, device = "desktop", preview = false, templateId = "blank", pageTitle = 'Página sin título', mode = 'webpage' }, ref): React.ReactElement => {
   const editorRef = useRef<Editor | null>(null)
   const autoSaveTimeout = useRef<NodeJS.Timeout | null>(null)
+  const initialDataRef = useRef<Record<string, unknown> | undefined>(initialData)
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle')
 
   useImperativeHandle(ref, () => ({
@@ -195,6 +197,21 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>(({ initialDa
       } else if (mode === 'email') {
         // We'll add email-specific blocks later
         setupDocumentBlocks(editor);
+      }
+
+      // Load initialData here (inside 'load' event) to avoid the race condition
+      // where the editor isn't ready when the useEffect fires
+      const dataToLoad = initialDataRef.current;
+      if (dataToLoad) {
+        const d = dataToLoad as any;
+        const hasData = (d.pages && d.pages.length > 0) || (d.components && d.components.length > 0);
+        if (hasData) {
+          try {
+            editor.loadProjectData(d);
+          } catch (e) {
+            console.warn('[GrapesEditor] initialData load failed on editor load event:', e);
+          }
+        }
       }
       
       // Inyectar CSS y scripts en el canvas (evita errores MIME al ponerlos en canvas.styles/scripts)
@@ -796,7 +813,7 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>(({ initialDa
 
     // Ensure all styles are properly serialized
     const normalizeStyles = () => {
-      editor.getAllStyles().forEach((rule: any) => {
+      ed.getAllStyles().forEach((rule: any) => {
         const selectors = rule.getSelectors();
         selectors.forEach((sel: any) => {
           const selStr = typeof sel === 'string' ? sel : sel.toString();
@@ -887,12 +904,20 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>(({ initialDa
      };
    }, [editorRef, onSave]);
 
+  // Keep the ref in sync with the prop so the 'load' event handler always has fresh data
   useEffect(() => {
+    initialDataRef.current = initialData;
+    // If the editor is already initialized (e.g. hot-reload or prop change after mount),
+    // load the data directly — no race condition possible here since we know it's ready.
     if (editorRef.current && initialData) {
       const data = initialData as any;
       const hasData = (data.pages && data.pages.length > 0) || (data.components && data.components.length > 0);
       if (hasData) {
-        setTimeout(() => editorRef.current?.loadProjectData(data), 100);
+        try {
+          editorRef.current.loadProjectData(data);
+        } catch (e) {
+          console.warn('[GrapesEditor] initialData load failed on prop update:', e);
+        }
       }
     }
   }, [initialData]);
