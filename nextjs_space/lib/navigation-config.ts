@@ -38,6 +38,7 @@ import {
   Bell,
   Palette,
   Globe,
+  PieChart,
   FileSignature,
   LineChart,
   AlertTriangle,

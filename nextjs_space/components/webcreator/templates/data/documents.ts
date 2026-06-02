@@ -241,7 +241,6 @@ export const documentTemplates: Template[] = [
     description: 'Documento formal para realizar pedidos a proveedores con condiciones comerciales, plazos de entrega y t&eacute;rminos de pago. Ideal para compras corporativas y gesti&oacute;n de suministros.',
     category: 'document',
     tags: ['compras', 'proveedores', 'logística', 'España'],
-    isDefault: true,
     data: {
       html: `
         <div class="po-container">
@@ -782,7 +781,6 @@ export const documentTemplates: Template[] = [
     description: 'Factura completa con todos los requisitos fiscales españoles: emisor, cliente, desglose de IVA (21%/10%/4%), base imponible y total. Cumplimiento Veri*Factu.',
     category: 'document',
     tags: ['factura', 'IVA', 'fiscal', 'España', 'verifactu'],
-    isDefault: true,
     data: {
       html: `
         <div class="invoice-container">
@@ -2061,7 +2059,6 @@ export const documentTemplates: Template[] = [
     description: 'Recibo de salarios conforme al modelo oficial espa&ntilde;ol (RD 491/2024). Incluye devengos, bases de cotizaci&oacute;n, deducciones de Seguridad Social, IRPF y l&iacute;quido a percibir. Cumplimiento Veri*Factu y Sistema de Liquidaci&oacute;n Directa (SLD).',
     category: 'document',
     tags: ['nómina', 'recibo salarios', 'RRHH', 'España', 'SLD', 'verifactu'],
-    isDefault: true,
     data: {
       html: `
         <div class="nomina-container">
@@ -2641,7 +2638,6 @@ export const documentTemplates: Template[] = [
     description: 'Certificado de finalizaci&oacute;n de curso con dise&ntilde;o institucional. Incluye logotipo del alumno, nombre del curso, horas lectivas, fecha de expedici&oacute;n, c&oacute;digo &uacute;nico de verificaci&oacute;n QR y firmas digitales. Ideal para plataformas LMS y formaci&oacute;n corporativa.',
     category: 'document',
     tags: ['certificado', 'academia', 'LMS', 'formación', 'curso'],
-    isDefault: true,
     data: {
       html: `
         <div class="cert-container">
