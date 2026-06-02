@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useRef, useImperativeHandle, forwardRef, useState, useCallback } from "react"
+import React, { useEffect, useRef, useImperativeHandle, forwardRef, useState } from "react"
 import grapesjs, { Editor } from "grapesjs"
 import "grapesjs/dist/css/grapes.min.css"
 import { toast } from "sonner"
@@ -46,31 +46,40 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>(({ initialDa
   const autoSaveTimeout = useRef<NodeJS.Timeout | null>(null)
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle')
 
-  const getFullCss = useCallback(() => {
-    const editor = editorRef.current;
-    if (!editor) return '';
-    let css = editor.getCss() || '';
-    try {
-      const rules = (editor as any).CSS.getRules ? (editor as any).CSS.getRules() : [];
-      if (rules && rules.length > 0) {
-        const allCss = (editor as any).CSS.getCode ? (editor as any).CSS.getCode() : css;
-        if (allCss && allCss.length > css.length) {
-          css = allCss;
+  useImperativeHandle(ref, () => ({
+    exportProject: () => (editorRef.current || (window as any).editor)?.getProjectData() as Record<string, unknown>,
+    importProject: (data) => (editorRef.current || (window as any).editor)?.loadProjectData(data),
+    runCommand: (cmd, opt) => (editorRef.current || (window as any).editor)?.runCommand(cmd, opt),
+    stopCommand: (cmd, opt) => (editorRef.current || (window as any).editor)?.stopCommand(cmd, opt),
+    getEditor: () => {
+      if (editorRef.current) return editorRef.current;
+      if (typeof window !== 'undefined' && (window as any).editor) {
+        const recovered = (window as any).editor as Editor;
+        if (typeof recovered.getHtml === 'function') {
+          editorRef.current = recovered; // Restore the ref for future calls
+          return recovered;
         }
       }
-    } catch {}
-    return css;
-  }, []);
-
-  useImperativeHandle(ref, () => ({
-    exportProject: () => editorRef.current?.getProjectData() as Record<string, unknown>,
-    importProject: (data) => editorRef.current?.loadProjectData(data),
-    runCommand: (cmd, opt) => editorRef.current?.runCommand(cmd, opt),
-    stopCommand: (cmd, opt) => editorRef.current?.stopCommand(cmd, opt),
-    getEditor: () => editorRef.current,
-    getUndoManager: () => editorRef.current?.UndoManager ?? null,
-    getHtml: () => editorRef.current?.getHtml({ cleanId: false, addScripts: true }),
-    getCss: getFullCss,
+      return null;
+    },
+    getUndoManager: () => {
+      const e = editorRef.current || (window as any).editor;
+      return (e as any)?.UndoManager ?? null;
+    },
+    getHtml: () => {
+      const e = editorRef.current || (window as any).editor;
+      return e?.getHtml({ cleanId: false, addScripts: true });
+    },
+    getCss: () => {
+      const e = editorRef.current || (window as any).editor;
+      if (!e) return '';
+      let css = e.getCss() || '';
+      try {
+        const allCss = (e as any).CSS?.getCode?.() || css;
+        if (allCss && allCss.length > css.length) css = allCss;
+      } catch {}
+      return css;
+    },
     getAutoSaveStatus: () => autoSaveStatus,
   }));
 
@@ -811,6 +820,10 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>(({ initialDa
         if (editorRef.current) {
           editorRef.current.destroy();
           editorRef.current = null;
+        }
+        // Clear the global ref so we don't return a stale/destroyed editor
+        if (typeof window !== 'undefined' && (window as any).editor) {
+          (window as any).editor = null;
         }
         if (style) style.remove();
         if (autoSaveTimeout.current) {
