@@ -574,7 +574,7 @@ export async function processAppointmentReminders() {
                 estado: { in: ['pendiente', 'confirmada'] },
                 fechaHora: { gte: now, lte: reminder24h },
                 recordatorio24hEnviado: false,
-                lead: { email: { not: null } },
+                lead: { email: { not: '' } },
               },
               include: {
                 lead: true,
@@ -620,7 +620,7 @@ export async function processAppointmentReminders() {
                 estado: { in: ['pendiente', 'confirmada'] },
                 fechaHora: { gte: now, lte: reminder1h },
                 recordatorio1hEnviado: false,
-                lead: { email: { not: null } },
+                lead: { email: { not: '' } },
               },
               include: {
                 lead: true,

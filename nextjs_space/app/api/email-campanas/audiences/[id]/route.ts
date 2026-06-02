@@ -38,7 +38,7 @@ export async function GET(
 
     // Calcular total actual
     const filtros = JSON.parse(audiencia.filtrosJSON || '{}');
-    const where: any = { tenantId: user.tenantId, email: { not: null } };
+    const where: any = { tenantId: user.tenantId, email: { not: '' } };
 
     if (filtros.tags?.length > 0) {
       where.tags = { contains: filtros.tags[0] };
@@ -102,7 +102,7 @@ export async function PUT(
 
     // Calcular nuevo total
     const filtros = data.filtros || JSON.parse(audiencia.filtrosJSON || '{}');
-    const where: any = { tenantId: user.tenantId, email: { not: null } };
+    const where: any = { tenantId: user.tenantId, email: { not: '' } };
 
     if (filtros.tags?.length > 0) {
       where.tags = { contains: filtros.tags[0] };

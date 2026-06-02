@@ -53,7 +53,7 @@ export async function POST(
     // Obtener leads destinatarios
     let leadsQuery: any = {
       tenantId: user.tenantId,
-      email: { not: null }
+      email: { not: '' }
     };
 
     // Aplicar filtros de audiencia

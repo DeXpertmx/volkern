@@ -28,7 +28,7 @@ export function PublicPageRenderer({ projectData, html, css }: PublicPageRendere
 
     return (
         <div className="w-full min-h-screen bg-white">
-            <link href="https://cdn.jsdelivr.net/npm/tailwindcss@3.4.1/dist/tailwind.min.css" rel="stylesheet" />
+            <link href="https://unpkg.com/tailwindcss@3.4.1/dist/tailwind.min.css" rel="stylesheet" />
             <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap" rel="stylesheet" />
             <div
                 ref={containerRef}
