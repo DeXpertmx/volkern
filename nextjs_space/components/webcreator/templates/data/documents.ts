@@ -234,6 +234,413 @@ export const documentTemplates: Template[] = [
       `
     }
   },
+  // === ORDEN DE COMPRA ===
+  {
+    id: 'orden-compra-profesional',
+    name: 'Orden de Compra Profesional',
+    description: 'Documento formal para realizar pedidos a proveedores con condiciones comerciales, plazos de entrega y t&eacute;rminos de pago. Ideal para compras corporativas y gesti&oacute;n de suministros.',
+    category: 'document',
+    tags: ['compras', 'proveedores', 'logística', 'España'],
+    isDefault: true,
+    data: {
+      html: `
+        <div class="po-container">
+          <!-- Header: Comprador (Empresa) -->
+          <div class="po-header">
+            <div class="buyer-block">
+              <div class="po-logo" data-gjs-editable="true">OC</div>
+              <div>
+                <h1 class="buyer-name">{{empresa.nombre}}</h1>
+                <p class="buyer-tax">NIF/CIF: {{empresa.rfc}}</p>
+                <p class="buyer-addr">{{empresa.direccion}}</p>
+                <p class="buyer-contact">Tel: {{lead.telefono}} &mdash; Email: {{lead.email}}</p>
+              </div>
+            </div>
+            <div class="po-meta">
+              <div class="po-badge">ORDEN DE COMPRA</div>
+              <p class="po-number">N&ordm; <span data-gjs-editable="true" data-gjs-selectable="true">[NUMERO_OC]</span></p>
+              <p class="po-date">Fecha: {{fecha.hoy}}</p>
+              <p class="po-delivery-date">Entrega solic.: <span data-gjs-editable="true" data-gjs-selectable="true">[FECHA_ENTREGA]</span></p>
+            </div>
+          </div>
+
+          <!-- Proveedor -->
+          <div class="supplier-section">
+            <div class="supplier-block">
+              <span class="section-badge">PROVEEDOR</span>
+              <h2 class="supplier-name" data-gjs-editable="true" data-gjs-selectable="true">[NOMBRE_PROVEEDOR]</h2>
+              <div class="supplier-grid">
+                <div>
+                  <p><strong>NIF/CIF:</strong> <span data-gjs-editable="true" data-gjs-selectable="true">[CIF_PROVEEDOR]</span></p>
+                  <p><strong>Direcci&oacute;n:</strong> <span data-gjs-editable="true" data-gjs-selectable="true">[DIRECCION_PROVEEDOR]</span></p>
+                  <p><strong>Contacto:</strong> <span data-gjs-editable="true" data-gjs-selectable="true">[CONTACTO_PROVEEDOR]</span></p>
+                </div>
+                <div>
+                  <p><strong>Tel&eacute;fono:</strong> <span data-gjs-editable="true" data-gjs-selectable="true">[TELEFONO_PROVEEDOR]</span></p>
+                  <p><strong>Email:</strong> <span data-gjs-editable="true" data-gjs-selectable="true">[EMAIL_PROVEEDOR]</span></p>
+                  <p><strong>Forma de pago:</strong> <span data-gjs-editable="true" data-gjs-selectable="true">Transferencia bancaria</span></p>
+                </div>
+              </div>
+            </div>
+            <div class="supplier-extra">
+              <p><strong>Direcci&oacute;n de env&iacute;o:</strong> <span data-gjs-editable="true" data-gjs-selectable="true">[DIRECCION_ENVIO]</span></p>
+              <p><strong>Condiciones de entrega:</strong> <span data-gjs-editable="true" data-gjs-selectable="true">[CONDICIONES_ENTREGA]</span></p>
+            </div>
+          </div>
+
+          <!-- Tabla de artículos -->
+          {{items.tabla}}
+
+          <!-- Resumen y condiciones -->
+          <div class="po-summary">
+            <div class="po-notes">
+              <span class="section-badge">CONDICIONES</span>
+              <div class="notes-content">
+                <p data-gjs-editable="true" data-gjs-selectable="true"><strong>Plazo de entrega:</strong> [PLAZO_ENTREGA] d&iacute;as h&aacute;biles desde la recepci&oacute;n de la OC.</p>
+                <p data-gjs-editable="true" data-gjs-selectable="true"><strong>Forma de pago:</strong> [FORMA_PAGO]</p>
+                <p data-gjs-editable="true" data-gjs-selectable="true"><strong>Validez de la oferta:</strong> [VALIDEZ] d&iacute;as.</p>
+                <p data-gjs-editable="true" data-gjs-selectable="true"><strong>Transporte:</strong> [TRANSPORTE]</p>
+                <p data-gjs-editable="true" data-gjs-selectable="true"><strong>Observaciones:</strong> [OBSERVACIONES]</p>
+              </div>
+            </div>
+            <div class="po-totals">
+              {{totales.resumen}}
+            </div>
+          </div>
+
+          <!-- Firmas -->
+          <div class="po-signatures">
+            <div class="signature-block">
+              <span class="section-badge">APROBADO POR</span>
+              <div class="sign-line"></div>
+              <p class="sign-name">{{empresa.nombre}}</p>
+              <p class="sign-role" data-gjs-editable="true" data-gjs-selectable="true">[CARGO_RESPONSABLE]</p>
+            </div>
+            <div class="signature-block">
+              <span class="section-badge">RECIBIDO CONFORME</span>
+              <div class="sign-line"></div>
+              <p class="sign-name" data-gjs-editable="true" data-gjs-selectable="true">[NOMBRE_PROVEEDOR]</p>
+              <p class="sign-role" data-gjs-editable="true" data-gjs-selectable="true">[FIRMA_PROVEEDOR]</p>
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div class="po-footer">
+            <p>Documento de Compra Oficial. Conserve para efectos contables y fiscales.</p>
+            <p class="footer-small">Volkern ERP — www.volkern.com</p>
+          </div>
+        </div>
+      `,
+      css: `
+        .po-container {
+          font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
+          color: #1e293b;
+          max-width: 800px;
+          margin: 0 auto;
+          padding: 40px;
+          background: #ffffff;
+          min-height: 1000px;
+          display: flex;
+          flex-direction: column;
+        }
+
+        /* ── Header ── */
+        .po-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          border-bottom: 3px solid #0891b2;
+          padding-bottom: 22px;
+          margin-bottom: 26px;
+        }
+
+        .buyer-block {
+          display: flex;
+          gap: 14px;
+          align-items: flex-start;
+        }
+
+        .po-logo {
+          width: 52px;
+          height: 52px;
+          background: #0891b2;
+          color: white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 900;
+          font-size: 12px;
+          border-radius: 10px;
+          flex-shrink: 0;
+        }
+
+        .buyer-name {
+          font-size: 17px;
+          font-weight: 800;
+          color: #0f172a;
+          margin: 0 0 3px 0;
+        }
+
+        .buyer-tax,
+        .buyer-addr,
+        .buyer-contact {
+          font-size: 11px;
+          color: #64748b;
+          margin: 1px 0;
+        }
+
+        .po-meta {
+          text-align: right;
+        }
+
+        .po-badge {
+          display: inline-block;
+          background: #0891b2;
+          color: white;
+          font-size: 12px;
+          font-weight: 900;
+          padding: 5px 16px;
+          border-radius: 6px;
+          letter-spacing: 2px;
+          margin-bottom: 8px;
+        }
+
+        .po-number {
+          font-size: 18px;
+          font-weight: 700;
+          color: #0f172a;
+          margin: 4px 0;
+        }
+
+        .po-date {
+          font-size: 12px;
+          color: #64748b;
+          margin: 2px 0;
+        }
+
+        .po-delivery-date {
+          font-size: 12px;
+          font-weight: 600;
+          color: #0891b2;
+          margin: 4px 0 0 0;
+        }
+
+        /* ── Supplier ── */
+        .supplier-section {
+          margin-bottom: 28px;
+        }
+
+        .supplier-block {
+          background: #ecfeff;
+          border: 1px solid #a5f3fc;
+          border-radius: 12px;
+          padding: 18px;
+          margin-bottom: 10px;
+        }
+
+        .section-badge {
+          display: block;
+          font-size: 9px;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          color: #0891b2;
+          margin-bottom: 8px;
+        }
+
+        .supplier-name {
+          font-size: 16px;
+          font-weight: 700;
+          color: #0f172a;
+          margin: 0 0 8px 0;
+        }
+
+        .supplier-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 8px;
+          font-size: 12px;
+          color: #334155;
+        }
+
+        .supplier-grid p {
+          margin: 2px 0;
+        }
+
+        .supplier-extra {
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+          padding: 12px 18px;
+          font-size: 12px;
+          color: #475569;
+        }
+
+        .supplier-extra p {
+          margin: 2px 0;
+        }
+
+        /* ── Items Table ── */
+        .po-items {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 28px;
+        }
+
+        .po-items thead {
+          background: #0891b2;
+          color: white;
+        }
+
+        .po-items th {
+          padding: 11px 10px;
+          font-size: 10px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.03em;
+        }
+
+        .po-items th:first-child { border-radius: 8px 0 0 0; }
+        .po-items th:last-child { border-radius: 0 8px 0 0; }
+
+        .po-items td {
+          padding: 13px 10px;
+          border-bottom: 1px solid #e2e8f0;
+          font-size: 13px;
+        }
+
+        .po-items tbody tr:last-child td {
+          border-bottom: none;
+        }
+
+        .col-code { width: 12%; }
+        .col-desc-po { width: 38%; }
+        .col-qty-po { width: 10%; }
+        .col-uprice { width: 15%; }
+        .col-total-po { width: 15%; }
+
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+
+        /* ── Summary ── */
+        .po-summary {
+          display: grid;
+          grid-template-columns: 1.4fr 1fr;
+          gap: 30px;
+          margin-bottom: 30px;
+        }
+
+        .po-notes {
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 12px;
+          padding: 18px;
+        }
+
+        .notes-content p {
+          font-size: 11px;
+          color: #475569;
+          margin: 5px 0;
+          line-height: 1.5;
+        }
+
+        .po-totals {
+          background: #ecfeff;
+          border: 1px solid #a5f3fc;
+          border-radius: 12px;
+          padding: 20px;
+          align-self: flex-start;
+        }
+
+        .total-row {
+          display: flex;
+          justify-content: space-between;
+          padding: 7px 0;
+          font-size: 14px;
+          border-bottom: 1px solid #e2e8f0;
+        }
+
+        .total-row:last-child {
+          border-bottom: none;
+        }
+
+        .grand-total {
+          border-top: 2px solid #0891b2;
+          margin-top: 8px;
+          padding-top: 12px;
+          font-weight: 900;
+          font-size: 18px;
+          color: #0891b2;
+        }
+
+        .text-muted {
+          font-size: 11px;
+          color: #94a3b8;
+          font-style: italic;
+        }
+
+        /* ── Signatures ── */
+        .po-signatures {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 40px;
+          margin-top: 40px;
+          padding-top: 20px;
+          border-top: 1px solid #e2e8f0;
+        }
+
+        .signature-block {
+          text-align: center;
+        }
+
+        .sign-line {
+          height: 1px;
+          background: #cbd5e1;
+          margin: 30px auto 10px auto;
+          width: 70%;
+        }
+
+        .sign-name {
+          font-size: 13px;
+          font-weight: 700;
+          color: #0f172a;
+          margin: 4px 0 2px 0;
+        }
+
+        .sign-role {
+          font-size: 10px;
+          color: #64748b;
+          margin: 0;
+        }
+
+        /* ── Footer ── */
+        .po-footer {
+          margin-top: auto;
+          text-align: center;
+          font-size: 10px;
+          color: #94a3b8;
+          border-top: 1px solid #e2e8f0;
+          padding-top: 16px;
+        }
+
+        .po-footer p {
+          margin: 2px 0;
+        }
+
+        .footer-small {
+          font-size: 9px;
+          color: #cbd5e1;
+        }
+
+        @media print {
+          .po-container {
+            padding: 0;
+            box-shadow: none;
+          }
+        }
+      `
+    }
+  },
   {
     id: 'contrato-servicios',
     name: 'Contrato de Servicios Estándar',
