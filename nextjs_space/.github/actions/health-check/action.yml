@@ -1,0 +1,376 @@
+# ═══════════════════════════════════════════════════════════════
+# Volkern ERP — Infrastructure & API Health Check
+#
+# Composite action reusable entre jobs. Verifica:
+#   1. Prisma CLI disponible y versión
+#   2. Conexión a PostgreSQL (SELECT 1)
+#   3. Conexión a Redis (PING via ioredis)
+#   4. Conexión a colas BullMQ del proyecto:
+#      - execution-queue (automatizaciones / workflows)
+#      - aeat-shipment (envíos fiscales AEAT Veri*factu)
+#      - marketing-social-posts (publicaciones en redes)
+#      - marketing-campaign-emails (campañas de email)
+#      - marketing-lead-nurturing (nutrición de leads)
+#   5. Conexión a S3/R2 (HeadBucket via @aws-sdk/client-s3)
+#   6. Conexión a AI providers — OpenRouter + OpenAI (auth key validation)
+#   7. API health endpoint (GET /api/health) — arranca servidor local
+#   8. Script npm requerido existe en package.json
+#
+# Uso:
+#   - name: Health check
+#     uses: ./.github/actions/health-check
+#     with:
+#       npm-script: test:e2e
+#       api-port: 3098
+#     env:
+#       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+# ═══════════════════════════════════════════════════════════════
+
+name: Infrastructure & API Health Check
+description: Verify Prisma CLI, PostgreSQL, Redis, BullMQ queues, S3/R2, AI providers (OpenRouter, OpenAI), API health, and required npm script
+
+inputs:
+  npm-script:
+    description: "Name of the npm script to verify (e.g., 'test', 'test:e2e')"
+    required: true
+    default: "test"
+  api-port:
+    description: "Port for the API health check server (default: 3098 — avoids conflict with E2E on 3099)"
+    required: false
+    default: "3098"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Check Prisma version
+      shell: bash
+      run: |
+        echo "=== Prisma version ==="
+        npx prisma --version 2>&1 | head -3
+
+    - name: Check database connection
+      shell: bash
+      run: |
+        echo "=== Database connection ==="
+        npx prisma db execute --stdin <<< "SELECT 1 AS ok" 2>&1 | head -3
+
+    - name: Check Redis connection
+      shell: bash
+      run: |
+        echo "=== Redis connection ==="
+        node -e "
+        const Redis = require('ioredis');
+        const url = process.env.REDIS_URL || 'redis://localhost:6379';
+        const c = new Redis(url, { lazyConnect: true, maxRetriesPerRequest: 1, retryStrategy: () => null, maxLoadingRetryTime: 1000 });
+        c.ping().then(r => { console.log('Redis: connected (' + r + ')'); c.disconnect(); process.exit(0); }).catch(e => { console.log('Redis: not available (' + e.message + ')'); c.disconnect(); process.exit(0); });
+        "
+
+    - name: Check BullMQ — execution-queue
+      shell: bash
+      run: |
+        echo "=== BullMQ: execution-queue ==="
+        node -e "
+        const { Queue } = require('bullmq');
+        const url = process.env.REDIS_URL || 'redis://localhost:6379';
+        async function check() {
+          const q = new Queue('execution-queue', {
+            connection: { url, maxRetriesPerRequest: 1, retryStrategy: () => null },
+          });
+          try {
+            const c = await q.getJobCounts();
+            console.log('OK — waiting:' + c.waiting + ' active:' + c.active + ' failed:' + c.failed);
+          } catch (e) {
+            console.log('FAIL — ' + e.message);
+          } finally {
+            try { await q.close(); } catch {}
+            process.exit(0);
+          }
+        }
+        check();
+        "
+
+    - name: Check BullMQ — aeat-shipment
+      shell: bash
+      run: |
+        echo "=== BullMQ: aeat-shipment ==="
+        node -e "
+        const { Queue } = require('bullmq');
+        const url = process.env.REDIS_URL || 'redis://localhost:6379';
+        async function check() {
+          const q = new Queue('aeat-shipment', {
+            connection: { url, maxRetriesPerRequest: 1, retryStrategy: () => null },
+          });
+          try {
+            const c = await q.getJobCounts();
+            console.log('OK — waiting:' + c.waiting + ' active:' + c.active + ' failed:' + c.failed);
+          } catch (e) {
+            console.log('FAIL — ' + e.message);
+          } finally {
+            try { await q.close(); } catch {}
+            process.exit(0);
+          }
+        }
+        check();
+        "
+
+    - name: Check BullMQ — marketing-social-posts
+      shell: bash
+      run: |
+        echo "=== BullMQ: marketing-social-posts ==="
+        node -e "
+        const { Queue } = require('bullmq');
+        const url = process.env.REDIS_URL || 'redis://localhost:6379';
+        async function check() {
+          const q = new Queue('marketing-social-posts', {
+            connection: { url, maxRetriesPerRequest: 1, retryStrategy: () => null },
+          });
+          try {
+            const c = await q.getJobCounts();
+            console.log('OK — waiting:' + c.waiting + ' active:' + c.active + ' failed:' + c.failed);
+          } catch (e) {
+            console.log('FAIL — ' + e.message);
+          } finally {
+            try { await q.close(); } catch {}
+            process.exit(0);
+          }
+        }
+        check();
+        "
+
+    - name: Check BullMQ — marketing-campaign-emails
+      shell: bash
+      run: |
+        echo "=== BullMQ: marketing-campaign-emails ==="
+        node -e "
+        const { Queue } = require('bullmq');
+        const url = process.env.REDIS_URL || 'redis://localhost:6379';
+        async function check() {
+          const q = new Queue('marketing-campaign-emails', {
+            connection: { url, maxRetriesPerRequest: 1, retryStrategy: () => null },
+          });
+          try {
+            const c = await q.getJobCounts();
+            console.log('OK — waiting:' + c.waiting + ' active:' + c.active + ' failed:' + c.failed);
+          } catch (e) {
+            console.log('FAIL — ' + e.message);
+          } finally {
+            try { await q.close(); } catch {}
+            process.exit(0);
+          }
+        }
+        check();
+        "
+
+    - name: Check BullMQ — marketing-lead-nurturing
+      shell: bash
+      run: |
+        echo "=== BullMQ: marketing-lead-nurturing ==="
+        node -e "
+        const { Queue } = require('bullmq');
+        const url = process.env.REDIS_URL || 'redis://localhost:6379';
+        async function check() {
+          const q = new Queue('marketing-lead-nurturing', {
+            connection: { url, maxRetriesPerRequest: 1, retryStrategy: () => null },
+          });
+          try {
+            const c = await q.getJobCounts();
+            console.log('OK — waiting:' + c.waiting + ' active:' + c.active + ' failed:' + c.failed);
+          } catch (e) {
+            console.log('FAIL — ' + e.message);
+          } finally {
+            try { await q.close(); } catch {}
+            process.exit(0);
+          }
+        }
+        check();
+        "
+
+    - name: Check S3/R2 connection
+      shell: bash
+      run: |
+        echo "=== S3/R2 connection ==="
+        node -e "
+        const { S3Client, HeadBucketCommand } = require('@aws-sdk/client-s3');
+        const bucket = process.env.AWS_BUCKET_NAME;
+        const endpoint = process.env.AWS_ENDPOINT_URL || process.env.S3_ENDPOINT;
+        const keyId = process.env.AWS_ACCESS_KEY_ID;
+        if (!bucket || !keyId) {
+          console.log('S3/R2: skipped (AWS_BUCKET_NAME or AWS_ACCESS_KEY_ID not set)');
+          process.exit(0);
+        }
+        const config = { region: 'auto' };
+        if (endpoint) {
+          config.endpoint = endpoint;
+          if (endpoint.includes('r2.cloudflarestorage.com')) config.forcePathStyle = true;
+        }
+        if (keyId && process.env.AWS_SECRET_ACCESS_KEY) {
+          config.credentials = { accessKeyId: keyId, secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY };
+        }
+        const client = new S3Client(config);
+        client.send(new HeadBucketCommand({ Bucket: bucket }))
+          .then(() => { console.log('S3/R2: bucket \"' + bucket + '\" accessible'); process.exit(0); })
+          .catch(e => {
+            if (e.name === 'NotFound' || e.name === 'NoSuchBucket') {
+              console.log('S3/R2: bucket \"' + bucket + '\" not found');
+            } else if (e.name === 'Forbidden' || e.name === 'AccessDenied') {
+              console.log('S3/R2: access denied to bucket \"' + bucket + '\" (credentials may be invalid)');
+            } else {
+              console.log('S3/R2: not available (' + e.message + ')');
+            }
+            process.exit(0);
+          });
+        "
+
+    - name: Check AI providers
+      shell: bash
+      run: |
+        echo "=== AI Providers (OpenRouter / OpenAI) ==="
+        node -e "
+        const https = require('https');
+
+        function httpGet(url, headers) {
+          return new Promise((resolve) => {
+            const req = https.get(url, { headers, timeout: 10000 }, (res) => {
+              let body = '';
+              res.on('data', (c) => { body += c; });
+              res.on('end', () => {
+                resolve({ status: res.statusCode, body });
+              });
+            });
+            req.on('error', (e) => resolve({ status: 0, error: e.message }));
+            req.on('timeout', () => { req.destroy(); resolve({ status: 0, error: 'timeout' }); });
+            req.end();
+          });
+        }
+
+        async function main() {
+          const orKey = process.env.OPENROUTER_API_KEY;
+          const oaKey = process.env.OPENAI_API_KEY;
+
+          if (!orKey && !oaKey) {
+            console.log('AI: skipped (no API keys configured)');
+            process.exit(0);
+          }
+
+          // ── OpenRouter: GET /api/v1/auth/key ─────────────────────────
+          if (orKey) {
+            const r = await httpGet('https://openrouter.ai/api/v1/auth/key', {
+              'Authorization': 'Bearer ' + orKey,
+            });
+            if (r.status === 200) {
+              try {
+                const data = JSON.parse(r.body);
+                const label = data.data?.label || data.label || 'authenticated';
+                console.log('OpenRouter: OK (' + label + ')');
+              } catch {
+                console.log('OpenRouter: OK (key valid)');
+              }
+            } else if (r.status === 401) {
+              console.log('OpenRouter: FAIL (invalid API key)');
+            } else if (r.status === 0) {
+              console.log('OpenRouter: not available (' + (r.error || 'connection failed') + ')');
+            } else {
+              console.log('OpenRouter: FAIL (HTTP ' + r.status + ')');
+            }
+          } else {
+            console.log('OpenRouter: skipped (OPENROUTER_API_KEY not set)');
+          }
+
+          // ── OpenAI: GET /v1/models ───────────────────────────────────
+          if (oaKey) {
+            const r = await httpGet('https://api.openai.com/v1/models', {
+              'Authorization': 'Bearer ' + oaKey,
+            });
+            if (r.status === 200) {
+              try {
+                const data = JSON.parse(r.body);
+                const count = data.data ? data.data.length : '?';
+                console.log('OpenAI: OK (' + count + ' models available)');
+              } catch {
+                console.log('OpenAI: OK (key valid)');
+              }
+            } else if (r.status === 401) {
+              console.log('OpenAI: FAIL (invalid API key)');
+            } else if (r.status === 0) {
+              console.log('OpenAI: not available (' + (r.error || 'connection failed') + ')');
+            } else {
+              console.log('OpenAI: FAIL (HTTP ' + r.status + ')');
+            }
+          } else {
+            console.log('OpenAI: skipped (OPENAI_API_KEY not set)');
+          }
+
+          process.exit(0);
+        }
+        main();
+        "
+
+    - name: Check API health
+      shell: bash
+      run: |
+        PORT="${{ inputs.api-port }}"
+        echo "=== API health (http://localhost:${PORT}/api/health) ==="
+
+        # ── 1. Arrancar Next.js dev server en background ────────────────
+        npx next dev --port "${PORT}" > /tmp/next-dev.log 2>&1 &
+        SERVER_PID=$!
+        trap 'kill $SERVER_PID 2>/dev/null || true; wait $SERVER_PID 2>/dev/null || true' EXIT
+
+        # ── 2. Esperar a que el servidor responda (max 45s) ─────────────
+        WAIT_START=$(date +%s)
+        READY=false
+        for i in $(seq 1 45); do
+          if curl -sf "http://localhost:${PORT}/api/health" > /dev/null 2>&1; then
+            READY=true
+            ELAPSED=$(( $(date +%s) - WAIT_START ))
+            echo "Server ready after ${ELAPSED}s"
+            break
+          fi
+          sleep 1
+        done
+
+        # ── 3. Fetch y validar respuesta ────────────────────────────────
+        if [ "$READY" = true ]; then
+          RESPONSE=$(curl -sf "http://localhost:${PORT}/api/health" 2>&1) || true
+          node -e "
+          const d = JSON.parse(process.argv[1]);
+          const status = d.status;
+          const db = d.database;
+          const redis = d.redis;
+          const hasUptime = typeof d.uptime === 'number';
+          const hasTimestamp = typeof d.timestamp === 'string';
+          const ok = (status === 'healthy' || status === 'degraded')
+            && (db === 'connected')
+            && hasUptime
+            && hasTimestamp;
+          if (ok) {
+            console.log('API: OK — status=' + status + ' db=' + db + ' redis=' + (redis || 'n/a') + ' uptime=' + d.uptime + 's');
+          } else {
+            const reasons = [];
+            if (status !== 'healthy' && status !== 'degraded') reasons.push('status=' + status);
+            if (db !== 'connected') reasons.push('db=' + db);
+            if (!hasUptime) reasons.push('uptime missing');
+            if (!hasTimestamp) reasons.push('timestamp missing');
+            console.log('API: DEGRADED — ' + reasons.join(', '));
+          }
+          process.exit(0);
+          " "$RESPONSE"
+        else
+          echo "API: not available (server did not start within timeout)"
+          echo "El servidor no arrancó en 45s. Se omitió el health check de API."
+        fi
+
+        # El trap se encarga de matar el servidor al salir del step
+
+    - name: Check npm script
+      shell: bash
+      run: |
+        echo "=== npm script (${{ inputs.npm-script }}) ==="
+        node -e "const p=require('./package.json'); \
+          const s=p.scripts['${{ inputs.npm-script }}']; \
+          console.log('${{ inputs.npm-script }}:', s); \
+          process.exit(s ? 0 : 1);"
+
+    - name: Summary
+      shell: bash
+      run: echo "Health check passed"

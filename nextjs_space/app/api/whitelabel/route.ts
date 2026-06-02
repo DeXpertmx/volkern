@@ -197,6 +197,19 @@ export const PUT = withTenantAuth(async (request, auth) => {
       }
     });
 
+    // También actualizar tenant.brandingConfig para que getEffectiveBranding() lo lea
+    await prisma.tenant.update({
+      where: { id: tenantId },
+      data: {
+        brandingConfig: {
+          logoUrl: logoUrl || undefined,
+          primaryColor: colorPrimario || undefined,
+          companyName: nombreEmpresa || undefined,
+          showPoweredBy: true,
+        }
+      }
+    });
+
     return NextResponse.json({ success: true, config: customConfig });
     
   } catch (error) {

@@ -55,7 +55,8 @@ import {
   AlertOctagon,
   LifeBuoy,
   Zap,
-  FileWarning
+  FileWarning,
+  Home
 } from 'lucide-react'
 import type { PermissionModule } from '@/lib/permissions'
 
@@ -67,6 +68,7 @@ export interface NavigationItem {
   planModule?: string
   description?: string
   requiredRegion?: 'MX' | 'ES' | 'CO' | 'US' // Regiones soportadas
+  requiredAccountType?: 'AGENCY' | 'BUSINESS' | 'SUPERADMIN'
 }
 
 export interface HubConfig {
@@ -446,6 +448,9 @@ export const HUBS: HubConfig[] = [
       { name: 'Documentos', href: '/dashboard/configuracion?section=documentos', icon: FileText, description: 'Ajustes de contratos' },
       { name: 'Canal de Igualdad', href: '/dashboard/configuracion?section=igualdad', icon: ShieldCheck, description: 'Configuración de denuncias e inmutabilidad' },
       { name: 'Marca Blanca', href: '/dashboard/configuracion?section=whitelabel', icon: Palette, planModule: 'white_label', description: 'Personalización gráfica' },
+      { name: 'Agencia', href: '/dashboard/configuracion/agency', icon: Building, description: 'Gestión de clientes (slots)', requiredAccountType: 'AGENCY' },
+      { name: 'Contabilidad', href: '/dashboard/configuracion/accounting', icon: Calculator, description: 'Gestión de empresas clientes (despacho)', requiredAccountType: 'AGENCY' },
+      { name: 'Inmobiliaria', href: '/dashboard/configuracion/real-estate', icon: Home, description: 'Configuración del portal de propiedades y comisiones' },
       { name: 'Equipo', href: '/dashboard/equipo', icon: UserCog, planModule: 'equipo', description: 'Gestión de usuarios' },
       { name: 'Integraciones', href: '/dashboard/integraciones', icon: Plug, planModule: 'integraciones', description: 'Conexión con apps externas' },
       { name: 'Mi Suscripción', href: '/dashboard/configuracion/billing', icon: CreditCard, description: 'Suscripción y pagos' },

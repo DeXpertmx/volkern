@@ -1,8 +1,14 @@
 /**
  * PDF Generator — reemplaza el servicio HTML→PDF de Abacus AI
- * Usa Puppeteer (headless Chromium) para conversión local
+ * Usa Puppeteer-core con Chrome del sistema para conversión local
+ *
+ * Ahorro estimado: ~300MB (evita empaquetar Chromium en el build)
  */
-import puppeteer, { Browser, Page } from 'puppeteer';
+import puppeteer, { Browser, Page } from 'puppeteer-core';
+
+const CHROME_PATH =
+  process.env.CHROME_PATH ||
+  '/usr/bin/google-chrome';
 
 let browserInstance: Browser | null = null;
 
@@ -12,6 +18,7 @@ async function getBrowser(): Promise<Browser> {
   }
   browserInstance = await puppeteer.launch({
     headless: true,
+    executablePath: CHROME_PATH,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',

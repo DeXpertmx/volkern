@@ -19,6 +19,7 @@ export const DealCreateSchema = z.object({
   origen: z.string().max(255).optional().nullable(),
   tags: z.string().max(500).optional().nullable(),
   usuarioAsignadoId: CommonSchemas.id.optional().nullable(),
+  catalogoItemId: CommonSchemas.id.optional().nullable(),
   newContact: z.object({
     nombre: CommonSchemas.nombre,
     email: CommonSchemas.email,
@@ -53,6 +54,7 @@ export const DealUpdateSchema = z.object({
   competidor: z.string().max(255).optional().nullable(),
   tags: z.string().max(500).optional().nullable(),
   usuarioAsignadoId: z.string().optional().nullable(),
+  catalogoItemId: z.string().optional().nullable(),
   notasInternas: z.string().max(10000).optional().nullable(),
 });
 

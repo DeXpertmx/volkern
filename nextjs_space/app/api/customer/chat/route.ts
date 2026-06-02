@@ -11,6 +11,8 @@ import { CustomerAuthService } from '@/lib/auth/customer-auth';
 import { callAssistantWithFallback } from '@/lib/assistant/openrouter-client';
 import { getGemmaSystemPrompt } from '@/lib/assistant/gemma-personality';
 import { v4 as uuidv4 } from 'uuid';
+import { prisma } from '@/lib/db';
+import { parseInmueble } from '@/lib/real-estate/property-helpers';
 
 export async function POST(request: NextRequest) {
   try {
@@ -44,15 +46,57 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Build context with user info ──
+    const tenantId = session.tenantId;
+
+    // Detectar si la consulta es inmobiliaria y recuperar propiedades recientes
+    let realEstateContext = '';
+    const lowerMsg = message.toLowerCase();
+    const isRealEstateQuery = /propiedad|casa|piso|inmueble|alquiler|venta|habitación|departamento|terreno|local|oficina|chalet/i.test(lowerMsg);
+
+    if (isRealEstateQuery) {
+      try {
+        // Recuperar últimas propiedades disponibles para contexto
+        const properties = await prisma.$queryRawUnsafe(
+          `SELECT * FROM "CatalogoItem"
+           WHERE "tenantId" = $1 AND tipo = 'inmueble' AND activo = true
+           AND ("customFieldValues"->>'estado' IS NULL OR "customFieldValues"->>'estado' = 'disponible')
+           ORDER BY "fechaCreacion" DESC
+           LIMIT 5`,
+          tenantId
+        );
+
+        const rows = properties as any[];
+        if (rows.length > 0) {
+          const listings = rows.map((p) => {
+            const parsed = parseInmueble(p);
+            return `- ${parsed.propertyType || 'Inmueble'} en ${parsed.operationType || 'venta'}
+  Precio: ${parsed.precioBase?.toLocaleString('es-ES') || '?'} €
+  Ubicación: ${[parsed.city, parsed.area].filter(Boolean).join(', ') || 'N/A'}
+  ${parsed.bedrooms ? parsed.bedrooms + ' habs' : ''} ${parsed.bathrooms ? '/ ' + parsed.bathrooms + ' baños' : ''} ${parsed.areaM2 ? '/ ' + parsed.areaM2 + ' m²' : ''}`;
+          }).join('\n\n');
+
+          realEstateContext = `\n\nPROPIEDADES DISPONIBLES (últimas ${rows.length}):\n${listings}\n\n`;
+          realEstateContext += `Instrucciones extra para consultas inmobiliarias:
+- Si el usuario pregunta por propiedades, usa la información de arriba.
+- Para búsquedas más específicas, sugiere usar el buscador de propiedades en Volkern.
+- Si quieres recomendar, destaca precio, ubicación y características clave.
+- Puedes mencionar que hay más propiedades disponibles en el portal.`;
+        }
+      } catch {
+        // Silently fail - not critical if real estate context isn't available
+      }
+    }
+
     const context = [
       `INFORMACIÓN DEL USUARIO:`,
       `- ID de usuario: ${session.userId}`,
-      `- ID del tenant/espacio: ${session.tenantId}`,
+      `- ID del tenant/espacio: ${tenantId}`,
       `- Fecha actual: ${new Date().toLocaleDateString('es-MX', { timeZone: 'UTC' })}`,
       ``,
       `INSTRUCCIÓN: Responde al mensaje del usuario usando el contexto de Volkern.`,
       `Si el usuario pide datos que no puedes consultar (como listas de leads, reportes, etc.),`,
       `dirígelo amablemente al módulo correspondiente dentro de Volkern.`,
+      realEstateContext,
     ].join('\n');
 
     // ── Build messages with system prompt + context ──
@@ -78,15 +122,25 @@ export async function POST(request: NextRequest) {
     const responseChatId = chatId || uuidv4();
     const reply = result.choices[0].message.content;
 
-    return NextResponse.json({
-      reply,
-      chatId: responseChatId,
-      suggestions: [
+    // Suggestions contextuales
+    const suggestions = isRealEstateQuery
+      ? [
+        'Mostrar propiedades disponibles',
+        'Buscar casas en alquiler',
+        'Propiedades con 3 habitaciones',
+        'Ver detalle de propiedades',
+      ]
+      : [
         'Crear un nuevo lead',
         'Agendar una cita',
         'Consultar inventario',
         '¿Qué módulos tengo?',
-      ],
+      ];
+
+    return NextResponse.json({
+      reply,
+      chatId: responseChatId,
+      suggestions,
     });
   } catch (error) {
     console.error('[CustomerChat] Error:', error);

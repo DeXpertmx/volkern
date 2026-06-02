@@ -30,6 +30,13 @@ import {
   BookingCalendarComponent,
   ServiceCatalogComponent,
   ProductCatalogComponent,
+  PropertyGridComponent,
+  PropertyCardComponent,
+  PropertyDetailComponent,
+  PropertyContactForm,
+  RealEstateStatsWidget,
+  RealEstateChartWidget,
+  RealEstateRecentWidget,
 } from "./components";
 
 // ============== PUCK CONFIG ==============
@@ -76,6 +83,10 @@ export const puckConfig: Config = {
     crm: {
       title: "📊 CRM",
       components: ["ServiceCatalog", "ProductCatalog"],
+    },
+    inmobiliario: {
+      title: "🏠 Inmobiliario",
+      components: ["PropertyGrid", "PropertyCard", "PropertyDetail", "PropertyContactForm", "RealEstateStatsWidget", "RealEstateChartWidget", "RealEstateRecentWidget"],
     },
     contenido: {
       title: "📄 Contenido",
@@ -566,6 +577,160 @@ export const puckConfig: Config = {
         showCustomFields: true,
       },
       render: ProductCatalogComponent as any,
+    },
+
+    // ========== INMOBILIARIO ==========
+    PropertyGrid: {
+      label: "Cuadrícula de Propiedades",
+      fields: {
+        title: { type: "text", label: "Título" },
+        columns: {
+          type: "select",
+          label: "Columnas",
+          options: [
+            { label: "2", value: 2 },
+            { label: "3", value: 3 },
+            { label: "4", value: 4 },
+          ],
+        },
+        operationType: {
+          type: "select",
+          label: "Tipo de operación",
+          options: [
+            { label: "Todos", value: "todos" },
+            { label: "Venta", value: "venta" },
+            { label: "Alquiler", value: "alquiler" },
+          ],
+        },
+        maxItems: { type: "number", label: "Máximo de propiedades" },
+        showFilters: { type: "radio", label: "Mostrar filtros", options: [{ label: "Sí", value: true }, { label: "No", value: false }] },
+        showMap: { type: "radio", label: "Mostrar mapa", options: [{ label: "Sí", value: true }, { label: "No", value: false }] },
+      },
+      defaultProps: {
+        title: "Propiedades destacadas",
+        columns: 3,
+        operationType: "todos",
+        maxItems: 9,
+        showFilters: true,
+        showMap: false,
+      },
+      render: PropertyGridComponent as any,
+    },
+    PropertyCard: {
+      label: "Tarjeta de Propiedad",
+      fields: {
+        propertyId: { type: "text", label: "ID de la propiedad (dejar vacío para mostrar destacadas)" },
+        showImage: { type: "radio", label: "Mostrar imagen", options: [{ label: "Sí", value: true }, { label: "No", value: false }] },
+        showPrice: { type: "radio", label: "Mostrar precio", options: [{ label: "Sí", value: true }, { label: "No", value: false }] },
+        showDetails: { type: "radio", label: "Mostrar detalles (hab, m²)", options: [{ label: "Sí", value: true }, { label: "No", value: false }] },
+      },
+      defaultProps: {
+        propertyId: "",
+        showImage: true,
+        showPrice: true,
+        showDetails: true,
+      },
+      render: PropertyCardComponent as any,
+    },
+    PropertyDetail: {
+      label: "Detalle de Propiedad",
+      fields: {
+        propertyId: { type: "text", label: "ID de la propiedad" },
+        showGallery: { type: "radio", label: "Mostrar galería", options: [{ label: "Sí", value: true }, { label: "No", value: false }] },
+        showMap: { type: "radio", label: "Mostrar mapa", options: [{ label: "Sí", value: true }, { label: "No", value: false }] },
+        showContactForm: { type: "radio", label: "Mostrar formulario de contacto", options: [{ label: "Sí", value: true }, { label: "No", value: false }] },
+      },
+      defaultProps: {
+        propertyId: "",
+        showGallery: true,
+        showMap: true,
+        showContactForm: true,
+      },
+      render: PropertyDetailComponent as any,
+    },
+    PropertyContactForm: {
+      label: "Formulario de Contacto (Propiedades)",
+      fields: {
+        title: { type: "text", label: "Título" },
+        description: { type: "textarea", label: "Descripción" },
+        submitText: { type: "text", label: "Texto del botón" },
+        successMessage: { type: "text", label: "Mensaje de éxito" },
+        includePreferredDate: { type: "radio", label: "Incluir campo de fecha preferida", options: [{ label: "Sí", value: true }, { label: "No", value: false }] },
+        includeMessage: { type: "radio", label: "Incluir campo de mensaje", options: [{ label: "Sí", value: true }, { label: "No", value: false }] },
+      },
+      defaultProps: {
+        title: "¿Te interesa esta propiedad?",
+        description: "Déjanos tus datos y te contactaremos.",
+        submitText: "Enviar",
+        successMessage: "¡Gracias! Te contactaremos pronto.",
+        includePreferredDate: true,
+        includeMessage: true,
+      },
+      render: PropertyContactForm as any,
+    },
+
+    // ========== DASHBOARD INMOBILIARIO ==========
+    RealEstateStatsWidget: {
+      label: "📊 Métricas Inmobiliarias",
+      fields: {
+        title: { type: "text", label: "Título" },
+        showAvgPrice: { type: "radio", label: "Mostrar precio promedio", options: [{ label: "Sí", value: true }, { label: "No", value: false }] },
+        showAvgM2: { type: "radio", label: "Mostrar precio/m²", options: [{ label: "Sí", value: true }, { label: "No", value: false }] },
+        showFeatured: { type: "radio", label: "Mostrar destacadas", options: [{ label: "Sí", value: true }, { label: "No", value: false }] },
+        columns: {
+          type: "select",
+          label: "Columnas",
+          options: [
+            { label: "2", value: 2 },
+            { label: "3", value: 3 },
+            { label: "4", value: 4 },
+          ],
+        },
+      },
+      defaultProps: {
+        title: "Panel de Métricas",
+        showAvgPrice: true,
+        showAvgM2: true,
+        showFeatured: true,
+        columns: 4,
+      },
+      render: RealEstateStatsWidget as any,
+    },
+    RealEstateChartWidget: {
+      label: "📈 Gráficos Inmobiliarios",
+      fields: {
+        title: { type: "text", label: "Título" },
+        chartType: {
+          type: "select",
+          label: "Tipo de gráfico",
+          options: [
+            { label: "Ambos", value: "both" },
+            { label: "Por operación", value: "operation" },
+            { label: "Por ciudad", value: "city" },
+          ],
+        },
+      },
+      defaultProps: {
+        title: "Distribución de Propiedades",
+        chartType: "both",
+      },
+      render: RealEstateChartWidget as any,
+    },
+    RealEstateRecentWidget: {
+      label: "🕐 Actividad Reciente",
+      fields: {
+        title: { type: "text", label: "Título" },
+        maxItems: { type: "number", label: "Máximo de propiedades", min: 1, max: 20 },
+        showLeads: { type: "radio", label: "Mostrar leads", options: [{ label: "Sí", value: true }, { label: "No", value: false }] },
+        showVisits: { type: "radio", label: "Mostrar visitas", options: [{ label: "Sí", value: true }, { label: "No", value: false }] },
+      },
+      defaultProps: {
+        title: "Actividad Reciente",
+        maxItems: 5,
+        showLeads: true,
+        showVisits: true,
+      },
+      render: RealEstateRecentWidget as any,
     },
 
     // ========== CONTENIDO ==========
