@@ -112,16 +112,14 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
 
         <div className="h-5 w-px bg-gray-200 dark:bg-slate-700 shrink-0" />
 
-        {/* Document Title Input (only shown in document/email mode) */}
-        {mode !== 'webpage' && (
-          <input
-            type="text"
-            value={documentTitle || ''}
-            onChange={(e) => onDocumentTitleChange?.(e.target.value)}
-            placeholder="Nombre del documento..."
-            className="h-9 px-3 bg-transparent border border-transparent hover:border-gray-200 dark:hover:border-slate-700 focus:border-indigo-400 dark:focus:border-indigo-500 rounded-lg text-sm font-semibold text-gray-800 dark:text-gray-200 placeholder-gray-400 focus:outline-none transition-all min-w-[160px] max-w-[280px]"
-          />
-        )}
+        {/* Document Title Input (all modes) */}
+        <input
+          type="text"
+          value={documentTitle || ''}
+          onChange={(e) => onDocumentTitleChange?.(e.target.value)}
+          placeholder={mode === 'webpage' ? 'Nombre de la página...' : 'Nombre del documento...'}
+          className="h-9 px-3 bg-transparent border border-transparent hover:border-gray-200 dark:hover:border-slate-700 focus:border-indigo-400 dark:focus:border-indigo-500 rounded-lg text-sm font-semibold text-gray-800 dark:text-gray-200 placeholder-gray-400 focus:outline-none transition-all min-w-[160px] max-w-[280px]"
+        />
 
         <div className="h-5 w-px bg-gray-200 dark:bg-slate-700 shrink-0" />
 
