@@ -193,7 +193,7 @@ describe('PATCH /api/contacts/[id]', () => {
     vi.clearAllMocks();
   });
 
-  it('debe actualizar el contacto y devolver { success, data }', async () => {
+  it('debe actualizar el contacto y devolverlo directamente', async () => {
     (prisma.contact.findFirst as any).mockResolvedValue(mockContact);
     (prisma.contact.update as any).mockResolvedValue({
       ...mockContact,
@@ -208,8 +208,7 @@ describe('PATCH /api/contacts/[id]', () => {
 
     expect(response.status).toBe(200);
     const json = await response.json();
-    expect(json.success).toBe(true);
-    expect(json.data.nombre).toBe('Carlos Actualizado');
+    expect(json.nombre).toBe('Carlos Actualizado');
   });
 
   it('debe pasar nombre, email, telefono a update', async () => {
@@ -407,8 +406,7 @@ describe('PATCH /api/contacts/[id]', () => {
 
     expect(response.status).toBe(200);
     const json = await response.json();
-    expect(json.success).toBe(true);
-    expect(json.data.nombre).toBe('PUT Test');
+    expect(json.nombre).toBe('PUT Test');
   });
 
   it('debe devolver 500 si auditLog.create falla (no hay catch silencioso)', async () => {

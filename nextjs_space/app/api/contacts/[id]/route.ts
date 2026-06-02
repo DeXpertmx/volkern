@@ -231,7 +231,7 @@ export const PATCH = withTenantAuth(async (request, auth, { params }) => {
       }
     });
 
-    return NextResponse.json({ success: true, data: updatedContact });
+    return NextResponse.json(updatedContact);
   } catch (error) {
     console.error('Error al actualizar contacto:', error);
     return NextResponse.json(
