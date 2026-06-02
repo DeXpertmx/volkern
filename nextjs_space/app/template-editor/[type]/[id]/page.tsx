@@ -146,7 +146,7 @@ export default function TemplateEditorPage() {
     );
   }
 
-  const backUrl = type === 'email' ? "/dashboard/email-campanas" : "/dashboard/configuracion?tab=documentos";
+  const backUrl = type === 'email' ? "/dashboard/email-campanas" : "/dashboard/contratos";
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-white">
