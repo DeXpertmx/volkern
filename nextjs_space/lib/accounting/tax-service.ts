@@ -62,6 +62,28 @@ export interface Modelo347ReportSummary {
   hasOperations: boolean;
 }
 
+export interface Modelo390QuarterDetail {
+  quarter: number;
+  outputVatBase: number;
+  outputVatAmount: number;
+  inputVatBase: number;
+  inputVatAmount: number;
+  result: number;
+  isFiled: boolean;
+}
+
+export interface Modelo390ReportSummary {
+  year: number;
+  quarters: Modelo390QuarterDetail[];
+  annualOutputVatBase: number;
+  annualOutputVatAmount: number;
+  annualInputVatBase: number;
+  annualInputVatAmount: number;
+  annualResult: number;
+  quartersFiled: number;
+  hasActivity: boolean;
+}
+
 export interface Modelo349Delivery {
   clientName: string;
   clientNif: string;
@@ -614,6 +636,79 @@ export class TaxService {
         metadata: {
           year,
           quarter,
+          filedAt: new Date().toISOString()
+        }
+      }
+    });
+  }
+
+  /**
+   * Genera el resumen anual de IVA (Modelo 390)
+   * Consolida los 4 trimestres del Modelo 303
+   */
+  static async getAnnualModelo390Report(tenantId: string, year: number): Promise<Modelo390ReportSummary> {
+    const quarters = [1, 2, 3, 4];
+    const quarterDetails: Modelo390QuarterDetail[] = [];
+
+    for (const q of quarters) {
+      const report = await this.getQuarterlyVatReport(tenantId, year, q);
+
+      // Check if this quarter is filed (all records marked as isFiled)
+      const months = this.getMonthsForQuarter(q);
+      const unfiledCount = await prisma.taxRecord.count({
+        where: {
+          tenantId,
+          periodYear: year,
+          periodMonth: { in: months },
+          type: { in: [TaxType.IVA_REPERCUTIDO, TaxType.IVA_SOPORTADO] },
+          isFiled: false
+        }
+      });
+
+      quarterDetails.push({
+        quarter: q,
+        outputVatBase: report.outputVat.base,
+        outputVatAmount: report.outputVat.amount,
+        inputVatBase: report.inputVat.base,
+        inputVatAmount: report.inputVat.amount,
+        result: report.result,
+        isFiled: unfiledCount === 0,
+      });
+    }
+
+    const annualOutputVatBase = quarterDetails.reduce((s, q) => s + q.outputVatBase, 0);
+    const annualOutputVatAmount = quarterDetails.reduce((s, q) => s + q.outputVatAmount, 0);
+    const annualInputVatBase = quarterDetails.reduce((s, q) => s + q.inputVatBase, 0);
+    const annualInputVatAmount = quarterDetails.reduce((s, q) => s + q.inputVatAmount, 0);
+    const annualResult = annualOutputVatAmount - annualInputVatAmount;
+    const quartersFiled = quarterDetails.filter(q => q.isFiled).length;
+
+    return {
+      year,
+      quarters: quarterDetails,
+      annualOutputVatBase,
+      annualOutputVatAmount,
+      annualInputVatBase,
+      annualInputVatAmount,
+      annualResult,
+      quartersFiled,
+      hasActivity: annualOutputVatBase > 0 || annualInputVatBase > 0,
+    };
+  }
+
+  /**
+   * Marca el ejercicio del Modelo 390 como presentado (registro informativo)
+   */
+  static async fileModelo390Return(tenantId: string, year: number, userId?: string) {
+    return await prisma.auditLog.create({
+      data: {
+        tenantId,
+        usuarioId: userId || '',
+        accion: 'MODELO_390_FILED',
+        entidad: 'MODELO_390',
+        entidadId: `${year}`,
+        metadata: {
+          year,
           filedAt: new Date().toISOString()
         }
       }

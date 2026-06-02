@@ -272,6 +272,7 @@ export const HUBS: HubConfig[] = [
       { name: 'Pago Fraccionado (Modelo 130)', href: '/dashboard/finanzas/contabilidad/modelo130', icon: Calculator, planModule: 'finanzas', requiredRegion: 'ES', description: 'IRPF estimación directa trimestral' },
       { name: 'Intracomunitario (Modelo 349)', href: '/dashboard/finanzas/contabilidad/modelo349', icon: Globe, planModule: 'finanzas', requiredRegion: 'ES', description: 'Operaciones intracomunitarias UE trimestrales' },
       { name: 'Terceros (Modelo 347)', href: '/dashboard/finanzas/contabilidad/modelo347', icon: Building2, planModule: 'finanzas', requiredRegion: 'ES', description: 'Operaciones anuales con terceros >3.005€' },
+      { name: 'IVA Anual (Modelo 390)', href: '/dashboard/finanzas/contabilidad/modelo390', icon: PieChart, planModule: 'finanzas', requiredRegion: 'ES', description: 'Resumen anual de IVA — consolidación 4T' },
       { name: 'Calendario Fiscal', href: '/dashboard/finanzas/contabilidad/calendario-fiscal', icon: CalendarDays, planModule: 'finanzas', requiredRegion: 'ES', description: 'Vencimientos AEAT con alertas automáticas' },
       { name: 'Gastos', href: '/dashboard/finanzas/gastos', icon: ListTodo, planModule: 'finanzas', description: 'Listado de egresos y facturas' },
       { name: 'Proveedores', href: '/dashboard/finanzas/proveedores', icon: Building2, planModule: 'finanzas', description: 'Directorio de proveedores' },
