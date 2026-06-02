@@ -51,16 +51,16 @@ export class PortalService {
       include: {
         erp_sales_orders: {
           include: {
-            contact: {
+            contacts: {
               select: {
                 nombre: true,
                 email: true,
                 ubicacion: true
               }
             },
-            items: {
+            erp_sales_order_items: {
               include: {
-                catalogItem: {
+                catalogo_items: {
                   select: {
                     sku: true,
                     nombre: true,
@@ -68,12 +68,12 @@ export class PortalService {
                     tipo: true
                   }
                 },
-                reservations: {
+                erp_order_reservations: {
                   where: { status: 'ACTIVE' },
                   include: {
-                    lot: {
+                    erp_inventory_lots: {
                       include: {
-                        qualityChecks: {
+                        erp_qc_checks: {
                           select: {
                             status: true,
                             measuredValue: true,
@@ -87,9 +87,9 @@ export class PortalService {
                 }
               }
             },
-            shipments: {
+            erp_shipments: {
               include: {
-                confirmations: true
+                erp_delivery_confirmations: true
               }
             }
           }

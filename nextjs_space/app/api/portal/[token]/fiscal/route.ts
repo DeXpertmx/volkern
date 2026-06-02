@@ -219,8 +219,8 @@ export async function GET(
       const report = await TaxService.getAnnualModelo390Report(tenantId, currentYear);
       if (report.hasActivity) {
         modelo390Summary = {
-          annualOutputVat: formatCurrency(report.annualOutputVat),
-          annualInputVat: formatCurrency(report.annualInputVat),
+          annualOutputVat: formatCurrency(report.annualOutputVatAmount),
+          annualInputVat: formatCurrency(report.annualInputVatAmount),
           annualResult: formatCurrency(report.annualResult),
           quartersFiled: report.quartersFiled,
           quartersTotal: 4,
