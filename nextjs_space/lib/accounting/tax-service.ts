@@ -42,6 +42,26 @@ export interface Modelo130ReportSummary {
   };
 }
 
+export interface Modelo347Operation {
+  counterpartyName: string;
+  counterpartyNif: string;
+  counterpartyCountry: string;
+  operationType: 'CLIENT' | 'SUPPLIER';
+  invoiceCount: number;
+  totalAmount: number;
+}
+
+export interface Modelo347ReportSummary {
+  year: number;
+  threshold: number;
+  operations: Modelo347Operation[];
+  totalOperations: number;
+  totalAmount: number;
+  totalClientAmount: number;
+  totalSupplierAmount: number;
+  hasOperations: boolean;
+}
+
 export interface Modelo349Delivery {
   clientName: string;
   clientNif: string;
@@ -315,6 +335,154 @@ export class TaxService {
         metadata: {
           year,
           quarter,
+          filedAt: new Date().toISOString()
+        }
+      }
+    });
+  }
+
+  /**
+   * Genera el reporte anual de operaciones con terceros (Modelo 347)
+   * Agrupa facturas por cliente y gastos por proveedor, filtrando por umbral > 3.005,06€
+   */
+  static async getAnnualModelo347Report(tenantId: string, year: number): Promise<Modelo347ReportSummary> {
+    const threshold = 3005.06;
+    const startDate = new Date(year, 0, 1);
+    const endDate = new Date(year, 11, 31, 23, 59, 59, 999);
+
+    // ── Sales: invoices grouped by contact ─────────────────────────
+    const invoices = await prisma.invoice.findMany({
+      where: {
+        tenantId,
+        fechaEmision: { gte: startDate, lte: endDate },
+        contact: { isNot: null }
+      },
+      include: {
+        contact: {
+          include: {
+            perfilFiscal: true
+          }
+        }
+      }
+    });
+
+    // Group invoices by contactId, aggregate amounts
+    const clientMap = new Map<string, {
+      nombre: string;
+      nif: string;
+      country: string;
+      count: number;
+      total: number;
+    }>();
+
+    for (const inv of invoices) {
+      if (!inv.contact) continue;
+      const contactId = inv.contactId!;
+      const existing = clientMap.get(contactId);
+      if (existing) {
+        existing.count++;
+        existing.total += Number(inv.monto);
+      } else {
+        const perfil = inv.contact.perfilFiscal;
+        clientMap.set(contactId, {
+          nombre: inv.contact.nombre,
+          nif: perfil?.idFiscal || perfil?.idIntracomunitario || '',
+          country: perfil?.country || 'ES',
+          count: 1,
+          total: Number(inv.monto),
+        });
+      }
+    }
+
+    // Convert to operations array, filter by threshold
+    const clientOps: Modelo347Operation[] = Array.from(clientMap.entries())
+      .filter(([_, data]) => data.total > threshold)
+      .map(([_, data]) => ({
+        counterpartyName: data.nombre,
+        counterpartyNif: data.nif,
+        counterpartyCountry: data.country,
+        operationType: 'CLIENT' as const,
+        invoiceCount: data.count,
+        totalAmount: Math.round(data.total * 100) / 100,
+      }));
+
+    // ── Purchases: expenses grouped by supplier ────────────────────
+    const expenses = await prisma.expense.findMany({
+      where: {
+        tenantId,
+        date: { gte: startDate, lte: endDate },
+      },
+      include: {
+        supplier: true
+      }
+    });
+
+    const supplierMap = new Map<string, {
+      name: string;
+      taxId: string;
+      count: number;
+      total: number;
+    }>();
+
+    for (const exp of expenses) {
+      const supplierId = exp.supplierId;
+      const existing = supplierMap.get(supplierId);
+      if (existing) {
+        existing.count++;
+        existing.total += Number(exp.amount);
+      } else {
+        supplierMap.set(supplierId, {
+          name: exp.supplier.name,
+          taxId: exp.supplier.taxId || '',
+          count: 1,
+          total: Number(exp.amount),
+        });
+      }
+    }
+
+    const supplierOps: Modelo347Operation[] = Array.from(supplierMap.entries())
+      .filter(([_, data]) => data.total > threshold)
+      .map(([_, data]) => ({
+        counterpartyName: data.name,
+        counterpartyNif: data.taxId,
+        counterpartyCountry: 'ES',
+        operationType: 'SUPPLIER' as const,
+        invoiceCount: data.count,
+        totalAmount: Math.round(data.total * 100) / 100,
+      }));
+
+    // ── Combine and sort ───────────────────────────────────────────
+    const allOps = [...clientOps, ...supplierOps]
+      .sort((a, b) => b.totalAmount - a.totalAmount);
+
+    const totalClientAmount = clientOps.reduce((s, o) => s + o.totalAmount, 0);
+    const totalSupplierAmount = supplierOps.reduce((s, o) => s + o.totalAmount, 0);
+
+    return {
+      year,
+      threshold,
+      operations: allOps,
+      totalOperations: allOps.length,
+      totalAmount: totalClientAmount + totalSupplierAmount,
+      totalClientAmount,
+      totalSupplierAmount,
+      hasOperations: allOps.length > 0,
+    };
+  }
+
+  /**
+   * Marca el periodo del Modelo 347 como presentado (registro informativo)
+   */
+  static async fileModelo347Return(tenantId: string, year: number, userId?: string) {
+    return await prisma.auditLog.create({
+      data: {
+        tenantId,
+        usuarioId: userId || '',
+        accion: 'MODELO_347_FILED',
+        entidad: 'MODELO_347',
+        entidadId: `${year}`,
+        metadata: {
+          year,
           filedAt: new Date().toISOString()
         }
       }
