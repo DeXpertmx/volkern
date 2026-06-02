@@ -5,27 +5,25 @@ import { useParams } from 'next/navigation';
 import { 
   ShieldCheck, 
   Package, 
-  Truck, 
   FileText, 
   AlertTriangle, 
   CheckCircle2, 
   ArrowRight, 
-  History, 
   Download,
   Info,
   Clock,
-  MapPin,
-  ExternalLink,
   MessageSquare,
   ShieldAlert,
-  Loader2
+  Loader2,
+  Receipt,
+  CalendarDays
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { motion } from 'framer-motion';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 export default function SovereignPortalPage() {
@@ -34,16 +32,29 @@ export default function SovereignPortalPage() {
   
   const [loading, setLoading] = useState(true);
   const [order, setOrder] = useState<any>(null);
+  const [fiscalData, setFiscalData] = useState<any>(null);
   const [verifying, setVerifying] = useState<string | null>(null);
   const [verificationResults, setVerificationResults] = useState<Record<string, any>>({});
 
   useEffect(() => {
     async function fetchOrder() {
       try {
-        const response = await fetch(`/api/portal/order/${token}`);
-        if (!response.ok) throw new Error('No se pudo encontrar el pedido');
-        const data = await response.json();
-        setOrder(data.order);
+        const [orderRes, fiscalRes] = await Promise.all([
+          fetch(`/api/portal/order/${token}`),
+          fetch(`/api/portal/${token}/fiscal`),
+        ]);
+
+        if (orderRes.ok) {
+          const data = await orderRes.json();
+          setOrder(data.order);
+        } else {
+          throw new Error('No se pudo encontrar el pedido');
+        }
+
+        if (fiscalRes.ok) {
+          const data = await fiscalRes.json();
+          if (data.success) setFiscalData(data);
+        }
       } catch (error: any) {
         toast.error(error.message);
       } finally {
@@ -191,8 +202,9 @@ export default function SovereignPortalPage() {
         </section>
 
         <Tabs defaultValue="items" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 bg-white p-1 rounded-2xl shadow-sm border border-slate-100">
+          <TabsList className="grid w-full grid-cols-4 bg-white p-1 rounded-2xl shadow-sm border border-slate-100">
             <TabsTrigger value="items" className="rounded-xl data-[state=active]:bg-primary data-[state=active]:text-white transition-all font-bold">Items</TabsTrigger>
+            <TabsTrigger value="fiscal" className="rounded-xl data-[state=active]:bg-primary data-[state=active]:text-white transition-all font-bold">Fiscal</TabsTrigger>
             <TabsTrigger value="verification" className="rounded-xl data-[state=active]:bg-primary data-[state=active]:text-white transition-all font-bold">Seguridad</TabsTrigger>
             <TabsTrigger value="claims" className="rounded-xl data-[state=active]:bg-primary data-[state=active]:text-white transition-all font-bold">Soporte</TabsTrigger>
           </TabsList>
@@ -284,6 +296,187 @@ export default function SovereignPortalPage() {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="fiscal" className="space-y-6 mt-6">
+            {!fiscalData ? (
+              <Card className="rounded-3xl border-none shadow-xl bg-white p-8 text-center">
+                <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-3" />
+                <p className="text-sm font-bold text-slate-500">Cargando información fiscal...</p>
+              </Card>
+            ) : (
+              <>
+                {/* Perfil Fiscal */}
+                {fiscalData.perfilFiscal && (
+                  <Card className="rounded-3xl border-none shadow-xl bg-gradient-to-br from-slate-900 to-slate-800 text-white overflow-hidden">
+                    <CardContent className="p-6">
+                      <div className="flex items-center gap-2 mb-4">
+                        <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                        <span className="text-xs font-bold uppercase tracking-widest opacity-60">Perfil Fiscal</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <p className="text-xs opacity-50">NIF/CIF</p>
+                          <p className="font-bold">{fiscalData.perfilFiscal.nif || '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs opacity-50">Razón Social</p>
+                          <p className="font-bold truncate">{fiscalData.perfilFiscal.razonSocial || '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs opacity-50">Régimen Fiscal</p>
+                          <p className="font-bold">{fiscalData.perfilFiscal.regimenFiscal || '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs opacity-50">País</p>
+                          <p className="font-bold">{fiscalData.perfilFiscal.country || '—'}</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Cards de IVA e IRPF */}
+                <div className="grid grid-cols-2 gap-4">
+                  <Card className="rounded-2xl border-none shadow-md bg-white overflow-hidden">
+                    <div className="h-1.5 bg-blue-500" />
+                    <CardContent className="p-5">
+                      <div className="flex items-center justify-between mb-3">
+                        <p className="text-xs font-black uppercase tracking-widest text-slate-400">IVA {fiscalData.vatSummary?.currentQuarter || ''}</p>
+                        {fiscalData.vatSummary?.isFiled ? (
+                          <Badge className="bg-emerald-50 text-emerald-600 border-none text-[10px]">Presentado</Badge>
+                        ) : (
+                          <Badge className="bg-amber-50 text-amber-600 border-none text-[10px]">Pendiente</Badge>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-slate-500">Repercutido</span>
+                          <span className="font-bold text-blue-600">{fiscalData.vatSummary?.outputVat || '0,00 €'}</span>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-slate-500">Soportado</span>
+                          <span className="font-bold text-orange-600">{fiscalData.vatSummary?.inputVat || '0,00 €'}</span>
+                        </div>
+                        <div className="border-t pt-2 flex justify-between text-xs">
+                          <span className="font-bold text-slate-700">Resultado</span>
+                          <span className="font-black text-lg">{fiscalData.vatSummary?.result || '0,00 €'}</span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="rounded-2xl border-none shadow-md bg-white overflow-hidden">
+                    <div className="h-1.5 bg-purple-500" />
+                    <CardContent className="p-5">
+                      <div className="flex items-center justify-between mb-3">
+                        <p className="text-xs font-black uppercase tracking-widest text-slate-400">IRPF Retenciones</p>
+                        {fiscalData.irpfSummary?.isFiled ? (
+                          <Badge className="bg-emerald-50 text-emerald-600 border-none text-[10px]">Presentado</Badge>
+                        ) : (
+                          <Badge className="bg-amber-50 text-amber-600 border-none text-[10px]">Pendiente</Badge>
+                        )}
+                      </div>
+                      <p className="text-3xl font-black text-purple-600 mb-1">{fiscalData.irpfSummary?.totalWithholding || '0,00 €'}</p>
+                      <p className="text-xs text-slate-400 font-medium">Retenciones del trimestre</p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Próximos Vencimientos */}
+                {fiscalData.upcomingDeadlines?.length > 0 && (
+                  <Card className="rounded-3xl border-none shadow-xl bg-white overflow-hidden">
+                    <CardHeader className="pb-3 pt-5 px-6">
+                      <div className="flex items-center gap-2">
+                        <CalendarDays className="w-5 h-5 text-amber-500" />
+                        <CardTitle className="text-sm font-black">Próximos Vencimientos</CardTitle>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <div className="divide-y divide-slate-100">
+                        {fiscalData.upcomingDeadlines.map((dl: any) => (
+                          <div key={`${dl.model}-${dl.periodLabel}`} className="flex items-center justify-between px-6 py-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center text-xs font-black text-amber-600">
+                                {dl.model}
+                              </div>
+                              <div>
+                                <p className="text-sm font-bold text-slate-800">{dl.name}</p>
+                                <p className="text-xs text-slate-400">{dl.periodLabel}</p>
+                              </div>
+                            </div>
+                            <Badge className={dl.daysUntilDue <= 7 ? 'bg-red-50 text-red-600 border-none' : 'bg-amber-50 text-amber-600 border-none'}>
+                              {dl.daysUntilDue === 0 ? 'Hoy' : `${dl.daysUntilDue} días`}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Facturas */}
+                <Card className="rounded-3xl border-none shadow-xl bg-white overflow-hidden">
+                  <CardHeader className="pb-3 pt-5 px-6 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <Receipt className="w-5 h-5 text-slate-500" />
+                      <CardTitle className="text-sm font-black">Facturas y Documentos</CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    {!fiscalData.invoices?.length ? (
+                      <div className="p-8 text-center">
+                        <FileText className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                        <p className="text-sm font-bold text-slate-400">No hay facturas disponibles</p>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-slate-100">
+                        {fiscalData.invoices.map((inv: any) => (
+                          <div key={inv.id} className="flex items-center justify-between px-6 py-3 hover:bg-slate-50 transition-colors">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center">
+                                <FileText className="w-5 h-5 text-slate-500" />
+                              </div>
+                              <div>
+                                <p className="text-sm font-bold text-slate-800">Factura {inv.numero}</p>
+                                <div className="flex items-center gap-2 text-xs text-slate-400">
+                                  <span>{inv.monto}</span>
+                                  <span>•</span>
+                                  <span>{new Date(inv.fechaEmision).toLocaleDateString('es-ES')}</span>
+                                  {inv.aeatStatus && (
+                                    <>
+                                      <span>•</span>
+                                      <span className={cn(
+                                        'font-bold',
+                                        inv.aeatStatus === 'ACCEPTED' ? 'text-emerald-600' : 'text-amber-600'
+                                      )}>{inv.aeatStatus}</span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {inv.estado && (
+                                <Badge variant="outline" className="text-[10px] h-5">
+                                  {inv.estado}
+                                </Badge>
+                              )}
+                              {inv.urlPdf && (
+                                <a href={inv.urlPdf} target="_blank" rel="noopener noreferrer">
+                                  <Button variant="ghost" size="icon" className="w-8 h-8 rounded-full">
+                                    <Download className="w-4 h-4" />
+                                  </Button>
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </>
+            )}
           </TabsContent>
 
           <TabsContent value="claims" className="mt-6">
