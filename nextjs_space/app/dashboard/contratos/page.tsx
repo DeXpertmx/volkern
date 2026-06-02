@@ -219,7 +219,7 @@ export default function ContratosPage() {
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => router.push('/template-editor/document/new')}>
             <FileText className="h-4 w-4 mr-2" />
-            Gestionar Plantillas
+            Nuevo documento
           </Button>
           <Button onClick={() => router.push('/dashboard/contratos/nuevo')}>
             <Plus className="h-4 w-4 mr-2" />
