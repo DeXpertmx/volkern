@@ -269,6 +269,7 @@ export const HUBS: HubConfig[] = [
       { name: 'Conciliación Bancaria', href: '/dashboard/finanzas/contabilidad/reconciliacion', icon: Calculator, planModule: 'finanzas', description: 'Sincronización con bancos e IA' },
       { name: 'Impuestos (Modelo 303)', href: '/dashboard/finanzas/contabilidad/impuestos', icon: FileText, planModule: 'finanzas', requiredRegion: 'ES', description: 'Automatización de IVA trimestral' },
       { name: 'Retenciones (Modelo 111)', href: '/dashboard/finanzas/contabilidad/retenciones', icon: Percent, planModule: 'finanzas', requiredRegion: 'ES', description: 'Retenciones IRPF trimestrales' },
+      { name: 'Pago Fraccionado (Modelo 130)', href: '/dashboard/finanzas/contabilidad/modelo130', icon: Calculator, planModule: 'finanzas', requiredRegion: 'ES', description: 'IRPF estimación directa trimestral' },
       { name: 'Calendario Fiscal', href: '/dashboard/finanzas/contabilidad/calendario-fiscal', icon: CalendarDays, planModule: 'finanzas', requiredRegion: 'ES', description: 'Vencimientos AEAT con alertas automáticas' },
       { name: 'Gastos', href: '/dashboard/finanzas/gastos', icon: ListTodo, planModule: 'finanzas', description: 'Listado de egresos y facturas' },
       { name: 'Proveedores', href: '/dashboard/finanzas/proveedores', icon: Building2, planModule: 'finanzas', description: 'Directorio de proveedores' },

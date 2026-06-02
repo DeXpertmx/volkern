@@ -27,6 +27,21 @@ export interface IrpfReportSummary {
   details: any[];
 }
 
+export interface Modelo130ReportSummary {
+  year: number;
+  quarter: number;
+  totalIncome: number;
+  totalExpenses: number;
+  netBase: number;
+  paymentRate: number;
+  resultToPay: number;
+  hasActivity: boolean;
+  details: {
+    incomeAccounts: { code: string; name: string; amount: number }[];
+    expenseAccounts: { code: string; name: string; amount: number }[];
+  };
+}
+
 export class TaxService {
   /**
    * Calcula el resumen de IVA para un trimestre específico (Modelo 303 simplificado)
@@ -158,6 +173,105 @@ export class TaxService {
       },
       data: {
         isFiled: true
+      }
+    });
+  }
+
+  /**
+   * Calcula el pago fraccionado del IRPF para un trimestre (Modelo 130)
+   * Basado en: (Ingresos - Gastos) * 0.20
+   */
+  static async getQuarterlyModelo130Report(tenantId: string, year: number, quarter: number): Promise<Modelo130ReportSummary> {
+    const months = this.getMonthsForQuarter(quarter);
+
+    const startDate = new Date(year, months[0] - 1, 1);
+    const endDate = new Date(year, months[2], 0, 23, 59, 59, 999);
+
+    // Get all accounting entries for the period with their lines and accounts
+    const entries = await prisma.accountingEntry.findMany({
+      where: {
+        tenantId,
+        date: { gte: startDate, lte: endDate },
+        status: { not: 'VOIDED' }
+      },
+      include: {
+        lines: {
+          include: {
+            account: true
+          }
+        }
+      },
+      orderBy: { date: 'asc' }
+    });
+
+    // Group by account type
+    const incomeByAccount: Record<string, { code: string; name: string; amount: number }> = {};
+    const expenseByAccount: Record<string, { code: string; name: string; amount: number }> = {};
+
+    for (const entry of entries) {
+      for (const line of entry.lines) {
+        const account = line.account;
+        const amount = Number(line.credit) - Number(line.debit);
+
+        if (account.type === 'INGRESO') {
+          const income = Number(line.credit); // Ingresos = credit side
+          if (income > 0) {
+            if (!incomeByAccount[account.code]) {
+              incomeByAccount[account.code] = { code: account.code, name: account.name, amount: 0 };
+            }
+            incomeByAccount[account.code].amount += income;
+          }
+        } else if (account.type === 'GASTO') {
+          const expense = Number(line.debit); // Gastos = debit side
+          if (expense > 0) {
+            if (!expenseByAccount[account.code]) {
+              expenseByAccount[account.code] = { code: account.code, name: account.name, amount: 0 };
+            }
+            expenseByAccount[account.code].amount += expense;
+          }
+        }
+      }
+    }
+
+    const totalIncome = Object.values(incomeByAccount).reduce((sum, a) => sum + a.amount, 0);
+    const totalExpenses = Object.values(expenseByAccount).reduce((sum, a) => sum + a.amount, 0);
+    const netBase = totalIncome - totalExpenses;
+    const paymentRate = 0.20; // 20% tipo fijo para estimación directa
+    const resultToPay = netBase > 0 ? Math.round(netBase * paymentRate * 100) / 100 : 0;
+
+    return {
+      year,
+      quarter,
+      totalIncome,
+      totalExpenses,
+      netBase,
+      paymentRate,
+      resultToPay,
+      hasActivity: totalIncome > 0 || totalExpenses > 0,
+      details: {
+        incomeAccounts: Object.values(incomeByAccount).sort((a, b) => a.code.localeCompare(b.code)),
+        expenseAccounts: Object.values(expenseByAccount).sort((a, b) => a.code.localeCompare(b.code))
+      }
+    };
+  }
+
+  /**
+   * Marca el periodo del Modelo 130 como presentado (registro informativo)
+   */
+  static async fileModelo130Return(tenantId: string, year: number, quarter: number, userId?: string) {
+    // Crear un audit trail de la presentación
+    return await prisma.auditLog.create({
+      data: {
+        tenantId,
+        usuarioId: userId || '',
+        accion: 'MODELO_130_FILED',
+        entidad: 'MODELO_130',
+        entidadId: `${year}_Q${quarter}`,
+        metadata: {
+          year,
+          quarter,
+          filedAt: new Date().toISOString()
+        }
       }
     });
   }
