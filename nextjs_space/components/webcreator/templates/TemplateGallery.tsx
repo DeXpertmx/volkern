@@ -124,7 +124,7 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({
                     key={template.id}
                     whileHover={{ scale: 1.02, y: -4 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={() => onSelectTemplate(template.id)}
+                    onTap={() => onSelectTemplate(template.id)}
                     className={`group relative bg-white dark:bg-slate-800 rounded-2xl overflow-hidden border-2 cursor-pointer transition-all shadow-sm hover:shadow-xl ${
                       selectedTemplateId === template.id
                         ? 'border-purple-500 ring-4 ring-purple-500/20'
