@@ -58,12 +58,14 @@ interface EditorWorkspaceProps {
   backUrl?: string;
   previewUrl?: string;
   mode?: 'webpage' | 'email' | 'document';
+  initialCategory?: string;
   onSave?: (data: { 
     projectData: Record<string, unknown>; 
     html?: string; 
     css?: string; 
     estado?: string;
     category?: string;
+    nombre?: string;
     seo?: {
       metaTitulo?: string;
       metaDescripcion?: string;
@@ -93,6 +95,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   previewUrl,
   onSave,
   mode = 'webpage',
+  initialCategory,
   initialSeo
 }) => {
   const [activePanel, setActivePanel] = useState<string>("blocks");
@@ -130,7 +133,8 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; componentId: string } | null>(null);
   const [showCanvaModal, setShowCanvaModal] = useState(false);
   const [canvaTargetComponentId, setCanvaTargetComponentId] = useState<string | null>(null);
-  const [category, setCategory] = useState<string>(mode === 'email' ? 'EMAIL' : 'CONTRATO');
+  const [category, setCategory] = useState<string>(initialCategory || (mode === 'email' ? 'EMAIL' : 'CONTRATO'));
+  const [documentTitle, setDocumentTitle] = useState<string>(pageTitle || '');
   const [showAIGenerator, setShowAIGenerator] = useState(false);
 
   const editorRef = useRef<GrapesEditorRef>(null);
@@ -666,6 +670,7 @@ document.addEventListener('click', function(e) {
           css,
           estado: "draft",
           category,
+          nombre: documentTitle,
           seo: {
             metaTitulo,
             metaDescripcion,
@@ -743,6 +748,7 @@ document.addEventListener('click', function(e) {
           css,
           estado: "published",
           category,
+          nombre: documentTitle,
           seo: {
             metaTitulo,
             metaDescripcion,
@@ -867,6 +873,8 @@ document.addEventListener('click', function(e) {
         onOpenAIGenerator={() => setShowAIGenerator(true)}
         category={category}
         onCategoryChange={setCategory}
+        documentTitle={documentTitle}
+        onDocumentTitleChange={setDocumentTitle}
       />
 
       <div className="flex flex-1 overflow-hidden">
