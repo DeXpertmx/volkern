@@ -195,6 +195,14 @@ export class MinimaxOrchestratorAgent {
       'analizar_rentabilidad_global': 'analyze_global_profitability',
       'calcular_costo_produccion': 'calculate_production_cost',
       'detectar_anomalias_calidad': 'detect_quality_anomalies',
+
+      // Real Estate
+      'generar_descripcion_inmueble': 'generate_property_description',
+      'sugerir_precio_inmueble': 'suggest_price_based_on_market',
+      'calificar_inmueble': 'calculate_property_quality_score',
+      'buscar_inmuebles': 'search_properties_by_filters',
+      'recomendar_inmuebles': 'recommend_properties',
+      'calcular_comision_franquicia': 'calculate_franchise_commissions',
     };
     const skillName = skillMap[intent];
 

@@ -15,18 +15,47 @@ const PRESETS: Record<string, Array<{
   unidad?: string;
 }>> = {
   inmobiliaria: [
+    // === Datos básicos ===
     { fieldKey: 'tipo_operacion', label: 'Tipo de Operación', type: 'select', options: ['Venta', 'Renta', 'Traspaso'], required: true },
-    { fieldKey: 'tipo_inmueble', label: 'Tipo de Inmueble', type: 'select', options: ['Casa', 'Departamento', 'Oficina', 'Local Comercial', 'Terreno', 'Bodega'] },
+    { fieldKey: 'tipo_inmueble', label: 'Tipo de Inmueble', type: 'select', options: ['Casa', 'Departamento', 'Oficina', 'Local Comercial', 'Terreno', 'Bodega', 'Nave Industrial', 'Edificio'] },
+    { fieldKey: 'estado', label: 'Estado', type: 'select', options: ['disponible', 'reservada', 'vendida', 'alquilada'], required: true },
+
+    // === Ubicación ===
+    { fieldKey: 'direccion', label: 'Dirección', type: 'text', placeholder: 'Calle, número, colonia...' },
+    { fieldKey: 'zona', label: 'Zona/Colonia', type: 'text' },
+    { fieldKey: 'ciudad', label: 'Ciudad', type: 'text' },
+    { fieldKey: 'provincia', label: 'Provincia/Estado', type: 'text' },
+    { fieldKey: 'codigo_postal', label: 'Código Postal', type: 'text' },
+    { fieldKey: 'latitud', label: 'Latitud', type: 'number' },
+    { fieldKey: 'longitud', label: 'Longitud', type: 'number' },
+
+    // === Características ===
     { fieldKey: 'superficie_total', label: 'Superficie Total', type: 'number', unidad: 'm²', required: true },
     { fieldKey: 'superficie_construida', label: 'Superficie Construida', type: 'number', unidad: 'm²' },
     { fieldKey: 'habitaciones', label: 'Habitaciones', type: 'number' },
     { fieldKey: 'banos', label: 'Baños', type: 'number' },
     { fieldKey: 'estacionamientos', label: 'Estacionamientos', type: 'number' },
     { fieldKey: 'antiguedad', label: 'Antigüedad', type: 'number', unidad: 'años' },
+    { fieldKey: 'ascensor', label: 'Ascensor', type: 'boolean' },
     { fieldKey: 'amueblado', label: 'Amueblado', type: 'boolean' },
-    { fieldKey: 'direccion', label: 'Dirección', type: 'text', placeholder: 'Calle, número, colonia...' },
-    { fieldKey: 'zona', label: 'Zona/Colonia', type: 'text' },
+    { fieldKey: 'estacionamiento', label: 'Estacionamiento/Parking', type: 'boolean' },
+    { fieldKey: 'alberca', label: 'Alberca/Piscina', type: 'boolean' },
+    { fieldKey: 'jardin', label: 'Jardín', type: 'boolean' },
+    { fieldKey: 'trastero', label: 'Trastero', type: 'boolean' },
+    { fieldKey: 'orientacion', label: 'Orientación', type: 'select', options: ['Norte', 'Sur', 'Este', 'Oeste', 'Noreste', 'Noroeste', 'Sureste', 'Suroeste'] },
+    { fieldKey: 'certificacion_energetica', label: 'Certificación Energética', type: 'select', options: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'En trámite'] },
+
+    // === Visibilidad y SEO ===
+    { fieldKey: 'destacada', label: 'Propiedad Destacada', type: 'boolean' },
+    { fieldKey: 'descripcion_larga', label: 'Descripción Larga', type: 'textarea' },
+    { fieldKey: 'tags_seo', label: 'Tags SEO', type: 'text', placeholder: 'separados por comas' },
     { fieldKey: 'amenidades', label: 'Amenidades', type: 'textarea', placeholder: 'Alberca, gimnasio, áreas verdes...' },
+
+    // === Propietario / Vendedor ===
+    { fieldKey: 'propietario_nombre', label: 'Nombre del Propietario', type: 'text', placeholder: 'Nombre completo' },
+    { fieldKey: 'propietario_telefono', label: 'Teléfono del Propietario', type: 'text', placeholder: '+34 600 000 000' },
+    { fieldKey: 'propietario_email', label: 'Email del Propietario', type: 'text', placeholder: 'propietario@email.com' },
+    { fieldKey: 'propietario_contact_id', label: 'Contacto Vinculado (ID)', type: 'text', placeholder: 'ID del contacto en CRM' },
   ],
   ecommerce: [
     { fieldKey: 'marca', label: 'Marca', type: 'text' },

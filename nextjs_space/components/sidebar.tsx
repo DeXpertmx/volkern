@@ -114,14 +114,26 @@ export function Sidebar() {
     // 1. Filtro por Región (Tenant Country - obtenido de la API)
     if (item.requiredRegion && item.requiredRegion !== tenantCountry) return false
 
-    // 2. Filtro por Plan/Módulos Activos
+    // 2. Filtro por tipo de cuenta (AGENCY / BUSINESS)
+    if (item.requiredAccountType) {
+      const sessionAccountType = (session?.user as any)?.accountType;
+      const effectiveAccountType = sessionAccountType || userAccountType;
+      const roleName = (session?.user as any)?.roleName;
+      if (item.requiredAccountType === 'SUPERADMIN') {
+        if (roleName !== 'Superadmin' && roleName !== 'Admin') return false
+      } else if (effectiveAccountType !== item.requiredAccountType) {
+        if (roleName !== 'Superadmin' && roleName !== 'Admin') return false
+      }
+    }
+
+    // 3. Filtro por Plan/Módulos Activos
     // Si estamos cargando y el item tiene planModule, mostrarlo (fallback a mostrar todo)
     // Si ya cargamos y no está en activeModules, ocultar
     if (item.planModule) {
       if (!isLoadingModules && !activeModules.includes(item.planModule)) return false
     }
     
-    // 3. Filtro por Permisos de Rol
+    // 4. Filtro por Permisos de Rol
     if (item.module && userPermissions) {
       const modulePerms = userPermissions[item.module]
       if (modulePerms && modulePerms.ver === false) return false

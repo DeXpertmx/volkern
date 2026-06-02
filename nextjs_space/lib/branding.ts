@@ -9,6 +9,13 @@ export interface BrandingConfig {
 
 // Cache simple en memoria para evitar consultas excesivas a la DB
 const BRANDING_CACHE = new Map<string, { config: BrandingConfig, expiry: number }>();
+
+/**
+ * Limpia la caché de branding para forzar una recarga desde la DB.
+ */
+export function clearBrandingCache(): void {
+  BRANDING_CACHE.clear();
+}
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutos
 
 /**
@@ -49,7 +56,7 @@ export async function getEffectiveBranding(tenantId: string): Promise<BrandingCo
         logoUrl: clientConfig?.logoUrl || '/volkern-logo.png',
         primaryColor: clientConfig?.primaryColor || '#3b82f6',
         showPoweredBy: clientConfig?.showPoweredBy ?? true,
-        companyName: tenant.nombre
+        companyName: clientConfig?.companyName || tenant.nombre
       };
     } else {
       // 3. Es una subcuenta. Buscar config del padre (Agencia)
@@ -67,7 +74,7 @@ export async function getEffectiveBranding(tenantId: string): Promise<BrandingCo
         logoUrl: clientConfig?.logoUrl || agencyConfig?.logoUrl || '/volkern-logo.png',
         primaryColor: clientConfig?.primaryColor || agencyConfig?.primaryColor || '#3b82f6',
         showPoweredBy: clientConfig?.showPoweredBy ?? agencyConfig?.showPoweredBy ?? true,
-        companyName: tenant.nombre
+        companyName: clientConfig?.companyName || agencyConfig?.companyName || tenant.nombre
       };
     }
 

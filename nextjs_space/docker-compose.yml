@@ -1,0 +1,68 @@
+# ═══════════════════════════════════════════════════════════════
+# Volkern ERP — Docker Compose
+# Uso:   docker compose up -d
+#        docker compose logs -f app
+# ═══════════════════════════════════════════════════════════════
+
+version: "3.8"
+
+services:
+  # ─── PostgreSQL ────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: volkern-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-volkern}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-volkern_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-volkern}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-volkern} -d ${POSTGRES_DB:-volkern}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ─── App Volkern ───────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: volkern-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-volkern}:${POSTGRES_PASSWORD:-volkern_secret}@postgres:5432/${POSTGRES_DB:-volkern}
+      CHROME_PATH: /usr/bin/chromium
+      ALLOW_DB_PUSH: ${ALLOW_DB_PUSH:-false}
+      SEED_ON_START: ${SEED_ON_START:-false}
+      PORT: 3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get({hostname:'localhost',port:3000,path:'/',timeout:5000},(r)=>{process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ─── Apprise (notificaciones) ──────────────────────────────
+  apprise:
+    extends:
+      file: docker-compose.apprise.yml
+      service: apprise-api
+
+volumes:
+  postgres-data:
+    driver: local
+
+networks:
+  default:
+    name: volkern-network

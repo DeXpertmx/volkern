@@ -1,6 +1,7 @@
 
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
+import { seedRealEstate } from './seed-real-estate'
 
 const prisma = new PrismaClient()
 
@@ -1758,6 +1759,9 @@ El equipo de Volkern CRM`,
   }
   console.log(`✅ ${knowledgeArticles.length} artículos del Knowledge Hub creados`)
 
+  // ========== MÓDULO INMOBILIARIO ==========
+  const { fields: realEstateFieldCount, properties: realEstatePropCount } = await seedRealEstate(defaultTenant.id);
+
   const rulesCount = await prisma.scoringRule.count()
   console.log(`✅ ${rulesCount} reglas de scoring creadas`)
 
@@ -1776,6 +1780,8 @@ El equipo de Volkern CRM`,
   console.log('- 2 canales de comunicación configurados (WhatsApp y Email)')
   console.log(`- ${scoreCategories.length} categorías de scoring`)
   console.log(`- ${rulesCount} reglas de scoring`)
+  console.log(`- ${realEstateFieldCount} definiciones de campos inmobiliarios`)
+  console.log(`- ${realEstatePropCount} propiedades inmobiliarias`)
 }
 
 main()

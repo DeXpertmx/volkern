@@ -39,6 +39,7 @@ import * as auditSkills from './audit-skills';
 import * as vaultPayrollSkills from './vault-payroll-skills';
 import * as operationalSkills from './operational-skills';
 import * as marketingSkills from './marketing-skills';
+import * as realEstateSkills from './real-estate-skills';
 import * as interactionSkills from './interaction-skills';
 import * as billingSkills from './billing-skills';
 import { eventBus, EVENTS } from './event-bus';
@@ -435,6 +436,13 @@ export const skills = {
   get_field_activity: operationalSkills.get_field_activity,
   audit_material_leaks: operationalSkills.audit_material_leaks,
   
+  // Real Estate
+  generate_property_description: realEstateSkills.generate_property_description,
+  suggest_price_based_on_market: realEstateSkills.suggest_price_based_on_market,
+  calculate_property_quality_score: realEstateSkills.calculate_property_quality_score,
+  search_properties_by_filters: realEstateSkills.search_properties_by_filters,
+  recommend_properties: realEstateSkills.recommend_properties,
+
   // Marketing Hub
   generate_marketing_copy: marketingSkills.generate_marketing_copy,
   analyze_marketing_sentiment: marketingSkills.analyze_marketing_sentiment,
@@ -567,6 +575,13 @@ export function listSkills(): Array<{ name: SkillName; description: string; cate
     { name: 'get_field_activity', description: 'Localiza técnicos y activos en campo mediante VISION-LOCK', category: 'advanced' },
     { name: 'audit_material_leaks', description: 'Detecta desviaciones y mermas industriales cruzando stock y producción', category: 'advanced' },
     
+    // Real Estate
+    { name: 'generate_property_description', description: 'Generar descripción comercial atractiva para una propiedad usando IA', category: 'real_estate' },
+    { name: 'suggest_price_based_on_market', description: 'Sugerir precio de venta/alquiler basado en propiedades similares en la misma zona', category: 'real_estate' },
+    { name: 'calculate_property_quality_score', description: 'Calcular score de calidad (0-100) basado en completitud de datos e imágenes', category: 'real_estate' },
+    { name: 'search_properties_by_filters', description: 'Buscar propiedades por filtros en lenguaje natural (para chatbot)', category: 'real_estate' },
+    { name: 'recommend_properties', description: 'Recomendar propiedades basado en preferencias del usuario', category: 'real_estate' },
+
     // Marketing Hub
     { name: 'generate_marketing_copy', description: 'Generar copy publicitario o social con IA', category: 'marketing' },
     { name: 'analyze_marketing_sentiment', description: 'Analizar sentimiento de feedback social', category: 'marketing' },

@@ -268,41 +268,37 @@ export const POST = withTenantAuth(async (request, auth) => {
       }
     })
 
-    // GOOGLE CALENDAR SYNC - Solo si tipoLinkReunion es 'generar'
+    // GOOGLE CALENDAR SYNC - Siempre sincronizar si hay integración activa
     let linkReunionGenerado: string | null = null
     try {
-      // Solo generar Meet si el usuario eligió esa opción
-      const debeGenerarMeet = tipoLinkReunion === 'generar'
-      
-      if (debeGenerarMeet) {
-        const googleIntegration = await prisma.googleCalendarIntegration.findUnique({
-          where: { userId: auth.user!.id },
+      const googleIntegration = await prisma.googleCalendarIntegration.findUnique({
+        where: { userId: auth.user!.id },
+      })
+
+      if (googleIntegration && googleIntegration.activo) {
+        const generarMeet = tipoLinkReunion === 'generar'
+        const calendarEvent = await createCalendarEvent(auth.user!.id, {
+          id: cita.id,
+          titulo: cita.titulo || 'Cita sin título',
+          descripcion: cita.descripcion || undefined,
+          fechaHora: cita.fechaHora,
+          duracion: cita.duracion,
+          leadNombre: lead?.nombre || 'Evento sin cliente',
+          leadEmail: lead?.email || undefined,
+          generarMeet,
         })
 
-        if (googleIntegration && googleIntegration.activo) {
-          const calendarEvent = await createCalendarEvent(auth.user!.id, {
-            id: cita.id,
-            titulo: cita.titulo || 'Cita sin título',
-            descripcion: cita.descripcion || undefined,
-            fechaHora: cita.fechaHora,
-            duracion: cita.duracion,
-            leadNombre: lead?.nombre || 'Evento sin cliente',
-            leadEmail: lead?.email || undefined,
-            generarMeet: true,
+        if (calendarEvent?.hangoutLink) {
+          linkReunionGenerado = calendarEvent.hangoutLink
+          await prisma.cita.update({
+            where: { id: cita.id },
+            data: { 
+              linkReunion: calendarEvent.hangoutLink,
+              ubicacion: 'Google Meet (Virtual)'
+            }
           })
-
-          if (calendarEvent?.hangoutLink) {
-            linkReunionGenerado = calendarEvent.hangoutLink
-            await prisma.cita.update({
-              where: { id: cita.id },
-              data: { 
-                linkReunion: calendarEvent.hangoutLink,
-                ubicacion: 'Google Meet (Virtual)'
-              }
-            })
-            cita.linkReunion = calendarEvent.hangoutLink
-            cita.ubicacion = 'Google Meet (Virtual)'
-          }
+          cita.linkReunion = calendarEvent.hangoutLink
+          cita.ubicacion = 'Google Meet (Virtual)'
         }
       }
     } catch (gcalError) {

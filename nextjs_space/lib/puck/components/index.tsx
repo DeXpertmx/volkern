@@ -1154,3 +1154,15 @@ export const ProductCatalogComponent: React.FC<{
     </div>
   );
 };
+
+// ============== REAL ESTATE ==============
+
+export {
+  PropertyGridComponent,
+  PropertyCardComponent,
+  PropertyDetailComponent,
+  PropertyContactForm,
+  RealEstateStatsWidget,
+  RealEstateChartWidget,
+  RealEstateRecentWidget,
+} from "./real-estate";

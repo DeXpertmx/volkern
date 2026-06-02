@@ -23,6 +23,9 @@ export async function GET(
       },
       include: {
         tasaImpuesto: true,
+        ownerContact: {
+          select: { id: true, nombre: true, email: true, telefono: true }
+        },
         _count: {
           select: {
             servicios: true,
@@ -94,6 +97,7 @@ export async function PATCH(
       // Onboarding 2.0 / MRP Fields
       isManufactured,
       costOfAcquisition,
+      contactId,
       inventoryConfig, // { minStock, reorderPoint, valuationMethod, storageLocation }
       bom, // { laborCost, overheadCost, components: [{ componentId, quantityRequired, unit }] }
     } = data;
@@ -150,6 +154,7 @@ export async function PATCH(
     if (pricing !== undefined) updateData.pricing = pricing;
     if (isManufactured !== undefined) updateData.isManufactured = isManufactured;
     if (costOfAcquisition !== undefined) updateData.costOfAcquisition = parseFloat(costOfAcquisition);
+    if (contactId !== undefined) updateData.contactId = contactId || null;
 
     // 🛡️ Integrity Hash: Calcular si cambian campos críticos
     if (updateData.nombre || updateData.precioBase !== undefined || updateData.costOfAcquisition !== undefined || updateData.sku) {
@@ -201,6 +206,9 @@ export async function PATCH(
       data: updateData,
       include: {
         tasaImpuesto: true,
+        ownerContact: {
+          select: { id: true, nombre: true, email: true, telefono: true }
+        },
         inventoryConfig: true,
         billOfMaterials: {
           include: { components: true }

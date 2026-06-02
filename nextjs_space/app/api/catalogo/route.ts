@@ -57,6 +57,14 @@ export async function GET(req: NextRequest) {
               tipo: true,
             },
           },
+          ownerContact: {
+            select: {
+              id: true,
+              nombre: true,
+              email: true,
+              telefono: true,
+            },
+          },
         },
         orderBy: [{ destacado: 'desc' }, { nombre: 'asc' }],
         skip: (page - 1) * limit,
@@ -122,6 +130,7 @@ export async function POST(req: NextRequest) {
       // Onboarding 2.0 / MRP Fields
       isManufactured = false,
       costOfAcquisition = 0,
+      contactId,
       inventoryConfig, 
       bom,
     } = data;
@@ -179,6 +188,7 @@ export async function POST(req: NextRequest) {
         pricing: pricing || null,
         isManufactured,
         costOfAcquisition: parseFloat(costOfAcquisition || 0),
+        contactId: contactId || null,
         // 🛡️ Integrity Hash
         integrityHash: ItemIntegrityService.calculateHash({
           tenantId: auth.tenant!.id,
@@ -209,6 +219,9 @@ export async function POST(req: NextRequest) {
       },
       include: {
         tasaImpuesto: true,
+        ownerContact: {
+          select: { id: true, nombre: true, email: true, telefono: true }
+        },
         inventoryConfig: true,
         billOfMaterials: {
           include: { components: true }

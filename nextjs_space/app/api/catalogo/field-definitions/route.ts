@@ -47,10 +47,16 @@ export async function GET(request: NextRequest) {
       ]
     });
 
+    // Normalizar options: Prisma devuelve Json? que puede ser array u objeto
+    const normalized = fieldDefinitions.map(f => ({
+      ...f,
+      options: Array.isArray(f.options) ? f.options : []
+    }));
+
     return NextResponse.json({
       success: true,
-      fieldDefinitions,
-      total: fieldDefinitions.length
+      fieldDefinitions: normalized,
+      total: normalized.length
     });
   } catch (error: any) {
     console.error('Error fetching field definitions:', error);

@@ -18,7 +18,7 @@ import { createConversation } from './conversation-skills';
 import type { BookingCreatedEvent, BookingConfirmedEvent } from '@/lib/types/events';
 import { checkAvailability } from '@/lib/services/appointments';
 import { sendEmail } from '@/lib/ses-email';
-import { fromZonedTime, toZonedTime } from 'date-fns-tz';
+import { fromZonedTime, toZonedTime, formatInTimeZone } from 'date-fns-tz';
 
 // ============== TIPOS ==============
 
@@ -314,8 +314,10 @@ export async function getUpcomingBookings(tenantId: string, limit = 10, userId?:
   }
 
   // Función para convertir UTC a timezone local
-  const toLocalTime = (date: Date) => {
-    return new Date(date.toLocaleString('en-US', { timeZone: timezone }));
+  // Retorna ISO 8601 con offset correcto, ej: "2026-06-11T10:00:00-05:00"
+  // ⚠️ NO usar new Date(toLocaleString()) — causa doble offset (bug)
+  const toLocalISOString = (date: Date): string => {
+    return formatInTimeZone(date, timezone, "yyyy-MM-dd'T'HH:mm:ssxxx");
   };
 
   // Calcular rango de fechas
@@ -400,7 +402,7 @@ export async function getUpcomingBookings(tenantId: string, limit = 10, userId?:
             fuente: 'google_calendar',
             googleEventId: event.id,
             timezone,
-            fechaHoraLocal: toLocalTime(new Date(event.start?.dateTime || event.start?.date || now)),
+            fechaHoraLocal: toLocalISOString(new Date(event.start?.dateTime || event.start?.date || new Date())),
           }));
         }
       }
@@ -411,7 +413,7 @@ export async function getUpcomingBookings(tenantId: string, limit = 10, userId?:
 
   // Combinar y ordenar por fecha
   const todasLasCitasRaw = [
-    ...citasVolkern.map(c => ({ ...c, fuente: 'volkern', fechaHoraLocal: toLocalTime(c.fechaHora) })),
+    ...citasVolkern.map(c => ({ ...c, fuente: 'volkern', fechaHoraLocal: toLocalISOString(c.fechaHora) })),
     ...citasGoogleCalendar
   ];
 

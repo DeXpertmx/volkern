@@ -21,6 +21,7 @@ async function main() {
     const activeIntegrations = await prisma.googleCalendarIntegration.findMany({
       where: { activo: true },
       select: {
+        userId: true,
         tenantId: true,
         tenant: {
           select: {
@@ -58,24 +59,24 @@ async function main() {
 
     // Procesar cada tenant
     for (const integration of activeIntegrations) {
-      const tenantId = integration.tenantId;
+      const userId = integration.userId;
       const tenantName = integration.tenant?.nombre || 'Unknown';
       
-      console.log(`\n--- Procesando: ${tenantName} (${tenantId}) ---`);
+      console.log(`\n--- Procesando: ${tenantName} (userId: ${userId}) ---`);
       
       try {
         // PASO 1: Volkern → Google
         console.log('  📤 Sincronizando Volkern → Google...');
-        const volkernToGoogleResult = await syncAllFutureCitas(tenantId);
+        const volkernToGoogleResult = await syncAllFutureCitas(userId);
         console.log(`  ✅ ${volkernToGoogleResult.creados + volkernToGoogleResult.actualizados}/${volkernToGoogleResult.total} citas enviadas`);
 
         // PASO 2: Google → Volkern
         console.log('  📥 Sincronizando Google → Volkern...');
-        await syncFromGoogleToVolkern(tenantId, false); // false = usar syncToken (incremental)
+        await syncFromGoogleToVolkern(userId, false); // false = usar syncToken (incremental)
         console.log('  ✅ Eventos importados');
 
         results.push({
-          tenantId,
+          tenantId: integration.tenantId,
           tenantName,
           success: true,
           volkernToGoogle: volkernToGoogleResult.creados + volkernToGoogleResult.actualizados,
@@ -84,7 +85,7 @@ async function main() {
       } catch (tenantError: any) {
         console.error(`  ❌ Error: ${tenantError.message}`);
         results.push({
-          tenantId,
+          tenantId: integration.tenantId,
           tenantName,
           success: false,
           error: tenantError.message,

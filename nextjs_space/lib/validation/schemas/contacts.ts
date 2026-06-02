@@ -12,9 +12,21 @@ export const ContactCreateSchema = z.object({
   companyId: CommonSchemas.id.optional().nullable(),
   cargo: z.string().max(255).optional().nullable(),
   ubicacion: z.string().max(255).optional().nullable(),
-  linkedin: z.string().url('LinkedIn URL inválida').optional().nullable(),
+  linkedin: z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? undefined : val),
+    z.string().url('LinkedIn URL inválida').optional()
+  ),
   notas: z.string().max(10000).optional().nullable(),
   tags: z.string().max(500).optional().nullable(),
+});
+
+/** Schema para crear empresa (company) - same as ContactCreateSchema but with tipo forced */
+export const CompanyCreateSchema = ContactCreateSchema.extend({
+  tipo: z.literal('company'),
+  linkedin: z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? undefined : val),
+    z.string().url('LinkedIn URL inválida').optional()
+  ),
 });
 
 export type ContactCreateInput = z.infer<typeof ContactCreateSchema>;

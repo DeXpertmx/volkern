@@ -29,6 +29,7 @@ export const GET = withTenantAuth(async (req, auth) => {
     const usuarioAsignadoId = searchParams.get('usuarioAsignadoId')
     const leadId = searchParams.get('leadId')
     const contactId = searchParams.get('contactId')
+    const catalogoItemId = searchParams.get('catalogoItemId')
     const search = searchParams.get('search')
 
     const where: any = {
@@ -46,6 +47,7 @@ export const GET = withTenantAuth(async (req, auth) => {
     if (estado) where.estado = estado
     if (leadId) where.leadId = leadId
     if (contactId) where.contactId = contactId
+    if (catalogoItemId) where.catalogoItemId = catalogoItemId
     
     if (search) {
       where.OR = [
@@ -66,6 +68,9 @@ export const GET = withTenantAuth(async (req, auth) => {
         },
         company: {
           select: { id: true, nombre: true, email: true, telefono: true },
+        },
+        propiedad: {
+          select: { id: true, nombre: true, tipo: true, precioBase: true, moneda: true },
         },
         usuarioAsignado: {
           select: { id: true, name: true, email: true },
@@ -143,6 +148,7 @@ export const POST = withTenantAuth(async (req, auth) => {
       origen,
       tags,
       usuarioAsignadoId,
+      catalogoItemId,
     } = data;
 
     let finalContactId = contactId
@@ -223,12 +229,14 @@ export const POST = withTenantAuth(async (req, auth) => {
         fechaEstimadaCierre: fechaEstimadaCierre ? new Date(fechaEstimadaCierre) : null,
         origen,
         tags,
+        catalogoItemId: catalogoItemId || null,
         fechaUltimaActividad: new Date(),
       },
       include: {
         lead: true,
         contact: true,
         company: true,
+        propiedad: { select: { id: true, nombre: true, tipo: true, precioBase: true } },
         usuarioAsignado: { select: { id: true, name: true, email: true } },
       },
     })

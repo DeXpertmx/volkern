@@ -33,16 +33,16 @@ interface GoogleTaskResult {
 /**
  * Obtiene el cliente de Google Tasks autenticado
  */
-async function getTasksClient(tenantId: string): Promise<tasks_v1.Tasks> {
-  const oauth2Client = await getAuthenticatedClient(tenantId);
+async function getTasksClient(userId: string): Promise<tasks_v1.Tasks> {
+  const oauth2Client = await getAuthenticatedClient(userId);
   return google.tasks({ version: 'v1', auth: oauth2Client });
 }
 
 /**
  * Obtiene o crea la lista de tareas de Volkern en Google Tasks
  */
-async function getOrCreateVolkernTaskList(tenantId: string): Promise<string> {
-  const tasksClient = await getTasksClient(tenantId);
+async function getOrCreateVolkernTaskList(userId: string): Promise<string> {
+  const tasksClient = await getTasksClient(userId);
   
   // Buscar lista existente
   const listResponse = await tasksClient.tasklists.list();
@@ -103,13 +103,13 @@ function formatTaskNotes(task: VolkernTask, appUrl: string): string {
  * Crea una tarea en Google Tasks
  */
 export async function createGoogleTask(
-  tenantId: string,
+  userId: string,
   task: VolkernTask
 ): Promise<GoogleTaskResult> {
   try {
     // Verificar que la integración de Google Calendar existe
-    const integration = await prisma.googleCalendarIntegration.findFirst({
-      where: { tenantId },
+    const integration = await prisma.googleCalendarIntegration.findUnique({
+      where: { userId },
     });
     
     if (!integration || !integration.activo) {
@@ -119,8 +119,8 @@ export async function createGoogleTask(
       };
     }
     
-    const tasksClient = await getTasksClient(tenantId);
-    const taskListId = await getOrCreateVolkernTaskList(tenantId);
+    const tasksClient = await getTasksClient(userId);
+    const taskListId = await getOrCreateVolkernTaskList(userId);
     
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://volkern.app';
     
@@ -168,13 +168,13 @@ export async function createGoogleTask(
  * Actualiza una tarea existente en Google Tasks
  */
 export async function updateGoogleTask(
-  tenantId: string,
+  userId: string,
   task: VolkernTask,
   googleTaskId: string,
   googleTaskListId: string
 ): Promise<GoogleTaskResult> {
   try {
-    const tasksClient = await getTasksClient(tenantId);
+    const tasksClient = await getTasksClient(userId);
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://volkern.app';
     
     await tasksClient.tasks.update({
@@ -209,12 +209,12 @@ export async function updateGoogleTask(
  * Elimina una tarea de Google Tasks
  */
 export async function deleteGoogleTask(
-  tenantId: string,
+  userId: string,
   googleTaskId: string,
   googleTaskListId: string
 ): Promise<GoogleTaskResult> {
   try {
-    const tasksClient = await getTasksClient(tenantId);
+    const tasksClient = await getTasksClient(userId);
     
     await tasksClient.tasks.delete({
       tasklist: googleTaskListId,
@@ -237,12 +237,12 @@ export async function deleteGoogleTask(
  * Marca una tarea como completada en Google Tasks
  */
 export async function completeGoogleTask(
-  tenantId: string,
+  userId: string,
   googleTaskId: string,
   googleTaskListId: string
 ): Promise<GoogleTaskResult> {
   try {
-    const tasksClient = await getTasksClient(tenantId);
+    const tasksClient = await getTasksClient(userId);
     
     // Primero obtener la tarea actual
     const currentTask = await tasksClient.tasks.get({
@@ -275,14 +275,14 @@ export async function completeGoogleTask(
 /**
  * Verifica si la integración de Google Tasks está disponible
  */
-export async function checkGoogleTasksIntegration(tenantId: string): Promise<{
+export async function checkGoogleTasksIntegration(userId: string): Promise<{
   connected: boolean;
   hasTasksScope: boolean;
   error?: string;
 }> {
   try {
-    const integration = await prisma.googleCalendarIntegration.findFirst({
-      where: { tenantId },
+    const integration = await prisma.googleCalendarIntegration.findUnique({
+      where: { userId },
     });
     
     if (!integration || !integration.activo) {
@@ -295,7 +295,7 @@ export async function checkGoogleTasksIntegration(tenantId: string): Promise<{
     
     // Intentar acceder a Google Tasks para verificar el scope
     try {
-      const tasksClient = await getTasksClient(tenantId);
+      const tasksClient = await getTasksClient(userId);
       await tasksClient.tasklists.list({ maxResults: 1 });
       
       return {

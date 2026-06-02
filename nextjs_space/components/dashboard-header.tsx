@@ -73,7 +73,9 @@ export function DashboardHeader() {
         <div className="flex items-center gap-4">
           <div className="hidden lg:flex relative group">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-300 group-hover:text-primary transition-all duration-300" />
-            <Input 
+            <Input
+              id="global-search"
+              aria-label="Buscar recursos"
               placeholder="Buscar recursos..." 
               className="pl-9 w-[280px] h-10 bg-slate-50/50 border-slate-100/50 rounded-2xl text-[11px] font-bold uppercase tracking-widest focus-visible:ring-2 focus-visible:ring-primary/5 transition-all focus:w-[350px] focus:bg-white"
             />

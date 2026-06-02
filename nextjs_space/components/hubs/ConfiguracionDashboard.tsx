@@ -104,22 +104,25 @@ export function ConfiguracionDashboard({ activeSection }: ConfiguracionDashboard
                 <CardContent className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
-                      <Label>Nombre Comercial</Label>
-                      <Input 
+                      <Label htmlFor="business-name">Nombre Comercial</Label>
+                      <Input
+                        id="business-name"
                         value={config.business_name || ""} 
                         onChange={e => setConfig({...config, business_name: e.target.value})} 
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Correo de Soporte</Label>
-                      <Input 
+                      <Label htmlFor="support-email">Correo de Soporte</Label>
+                      <Input
+                        id="support-email"
                         value={config.business_email || ""} 
                         onChange={e => setConfig({...config, business_email: e.target.value})} 
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Zona Horaria</Label>
-                      <Input 
+                      <Label htmlFor="timezone">Zona Horaria</Label>
+                      <Input
+                        id="timezone"
                         value={config.timezone || ""} 
                         onChange={e => setConfig({...config, timezone: e.target.value})} 
                       />

@@ -106,6 +106,13 @@ interface CatalogoItem {
       component?: { nombre: string, sku: string };
     }[];
   } | null;
+  contactId: string | null;
+  ownerContact: {
+    id: string;
+    nombre: string;
+    email: string;
+    telefono: string;
+  } | null;
   tasaImpuesto?: {
     id: string;
     nombre: string;
@@ -227,6 +234,8 @@ export default function CatalogoPage() {
     descuentos: [],
     impuestos: { iva: 0.21, incluido: false },
   });
+  const [contacts, setContacts] = useState<Array<{id: string, nombre: string, email: string, telefono: string | null}>>([]);
+  const [propietarioId, setPropietarioId] = useState<string>('');
   const [metadata, setMetadata] = useState<Record<string, any>>({});
 
   useEffect(() => {
@@ -234,6 +243,7 @@ export default function CatalogoPage() {
     fetchTasas();
     fetchFieldDefinitions();
     fetchModules();
+    fetchContacts();
   }, [filterTipo, filterActivo, filterCategoria, filterEtiqueta]);
 
   const fetchModules = async () => {
@@ -248,12 +258,29 @@ export default function CatalogoPage() {
     }
   };
 
+  const fetchContacts = async () => {
+    try {
+      const res = await apiFetch('/api/contacts?limit=500');
+      if (res.ok) {
+        const data = await res.json();
+        setContacts(data.contacts || data || []);
+      }
+    } catch (error) {
+      console.error('Error loading contacts:', error);
+    }
+  };
+
   const fetchFieldDefinitions = async () => {
     try {
       const res = await apiFetch('/api/catalogo/field-definitions');
       if (res.ok) {
         const data = await res.json();
-        setFieldDefinitions(data.fieldDefinitions || []);
+        // Normalizar options: Prisma Json? puede devolver objeto en vez de array
+        const normalized = (data.fieldDefinitions || []).map((f: any) => ({
+          ...f,
+          options: Array.isArray(f.options) ? f.options : []
+        }));
+        setFieldDefinitions(normalized);
       }
     } catch (error) {
       console.error('Error loading field definitions:', error);
@@ -312,6 +339,7 @@ export default function CatalogoPage() {
     setEtiquetas([]);
     setMedia({ imagenes: [] });
     setPricing({ tipo: 'unico', descuentos: [], impuestos: { iva: 0.21, incluido: false } });
+    setPropietarioId('');
     setMetadata({});
     setInventoryForm({ minStock: '0', reorderPoint: '0', valuationMethod: 'AVERAGE_COST', storageLocation: '' });
     setBomForm({ laborCost: '0', overheadCost: '0', components: [] });
@@ -342,8 +370,18 @@ export default function CatalogoPage() {
     setCategorias(item.categorias || []);
     setEtiquetas(item.etiquetas || []);
     setMedia(item.media || { imagenes: [] });
-    setPricing(item.pricing || { tipo: 'unico', descuentos: [], impuestos: { iva: 0.21, incluido: false } });
+    // Pricing: merge con defaults para evitar undefined en campos anidados
+    setPricing({
+      ...{ tipo: 'unico', descuentos: [], impuestos: { iva: 0.21, incluido: false } },
+      ...(item.pricing || {}),
+      impuestos: {
+        iva: 0.21,
+        incluido: false,
+        ...((item.pricing as any)?.impuestos || {})
+      }
+    });
     setMetadata(item.metadata || {});
+    setPropietarioId(item.contactId || '');
     // Onboarding 2.0 / MRP
     if (item.inventoryConfig) {
       setInventoryForm({
@@ -426,6 +464,7 @@ export default function CatalogoPage() {
           valuationMethod: inventoryForm.valuationMethod,
           storageLocation: inventoryForm.storageLocation || null,
         },
+        contactId: propietarioId || null,
         bom: form.isManufactured ? {
           laborCost: parseFloat(bomForm.laborCost),
           overheadCost: parseFloat(bomForm.overheadCost),
@@ -696,6 +735,7 @@ export default function CatalogoPage() {
                   <TableHead>Tipo</TableHead>
                   <TableHead>SKU</TableHead>
                   <TableHead className="text-right">Precio</TableHead>
+                  <TableHead>Propietario</TableHead>
                   <TableHead>Categorías</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
@@ -753,6 +793,13 @@ export default function CatalogoPage() {
                           <Badge variant="secondary" className="ml-2 text-[10px]">
                             {item.pricing.tipo === 'recurrente' ? 'Recurrente' : 'Por hora'}
                           </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {item.ownerContact ? (
+                          <span className="text-sm">{item.ownerContact.nombre}</span>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">-</span>
                         )}
                       </TableCell>
                       <TableCell>
@@ -917,6 +964,25 @@ export default function CatalogoPage() {
                     rows={3}
                   />
                 </div>
+
+                {form.tipo === 'inmueble' && (
+                  <div className="col-span-2">
+                    <Label>👤 Propietario / Vendedor</Label>
+                    <Select value={propietarioId} onValueChange={setPropietarioId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar propietario..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">Sin propietario</SelectItem>
+                        {contacts.map(c => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.nombre}{c.email ? ` — ${c.email}` : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
             </TabsContent>
 
@@ -1058,9 +1124,9 @@ export default function CatalogoPage() {
                 <div className="grid grid-cols-2 gap-4">
                   {fieldDefinitions.map((field) => (
                     <div key={field.id} className="space-y-1.5">
-                      <Label className="flex items-center gap-1">
-                        {field.nombre}
-                        {field.requerido && <span className="text-rose-500">*</span>}
+                    <Label className="flex items-center gap-1">
+                        {field.label}
+                        {field.required && <span className="text-rose-500">*</span>}
                       </Label>
                       
                       {field.type === 'boolean' ? (

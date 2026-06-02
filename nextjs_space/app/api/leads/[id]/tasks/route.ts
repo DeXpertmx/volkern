@@ -194,7 +194,7 @@ export async function POST(
     // Sincronizar con Google Tasks automáticamente
     let googleTasksSync = null;
     try {
-      const googleResult = await createGoogleTask(auth.tenant.id, {
+      const googleResult = await createGoogleTask(auth.user!.id, {
         id: task.id,
         titulo: task.titulo,
         descripcion: task.descripcion,

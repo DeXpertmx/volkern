@@ -141,7 +141,7 @@ async function main() {
       description: 'Factura #001 - Cliente A',
       reference: 'E2E-AS-001',
       status: 'POSTED',
-      entryHash: `e2e-hash-${Date.now()}-a`,
+      entryHash: 'e2e-hash-recon-entry-a',
       lines: {
         create: [
           { accountId: accounts['1001'].id, debit: 121.00, credit: 0 },
@@ -160,7 +160,7 @@ async function main() {
       description: 'Nómina Marzo 2026',
       reference: 'E2E-AS-002',
       status: 'POSTED',
-      entryHash: `e2e-hash-${Date.now()}-b`,
+      entryHash: 'e2e-hash-recon-entry-b',
       lines: {
         create: [
           { accountId: accounts['6001'].id, debit: 2100.00, credit: 0 },
@@ -179,7 +179,7 @@ async function main() {
       description: 'Transferencia recibida - Cliente B',
       reference: 'E2E-AS-003',
       status: 'POSTED',
-      entryHash: `e2e-hash-${Date.now()}-c`,
+      entryHash: 'e2e-hash-recon-entry-c',
       lines: {
         create: [
           { accountId: accounts['1001'].id, debit: 5000.00, credit: 0 },

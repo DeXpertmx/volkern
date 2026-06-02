@@ -84,6 +84,9 @@ export async function GET(
             },
           },
         },
+        propiedad: {
+          select: { id: true, nombre: true, tipo: true, precioBase: true, moneda: true },
+        },
       },
     })
 
@@ -150,6 +153,7 @@ export async function PATCH(
       descuento,
       tags,
       usuarioAsignadoId,
+      catalogoItemId,
     } = body
 
     // Preparar datos para actualizar
@@ -170,6 +174,7 @@ export async function PATCH(
     if (descuento !== undefined) dataToUpdate.descuento = parseFloat(descuento)
     if (tags !== undefined) dataToUpdate.tags = tags
     if (usuarioAsignadoId !== undefined) dataToUpdate.usuarioAsignadoId = usuarioAsignadoId
+    if (catalogoItemId !== undefined) dataToUpdate.catalogoItemId = catalogoItemId || null
     
     if (fechaEstimadaCierre !== undefined) {
       dataToUpdate.fechaEstimadaCierre = fechaEstimadaCierre ? new Date(fechaEstimadaCierre) : null
@@ -226,6 +231,9 @@ export async function PATCH(
       data: dataToUpdate,
       include: {
         lead: true,
+        propiedad: {
+          select: { id: true, nombre: true, tipo: true, precioBase: true, moneda: true },
+        },
         usuarioAsignado: {
           select: {
             id: true,

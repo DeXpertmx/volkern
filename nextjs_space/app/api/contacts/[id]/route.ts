@@ -100,33 +100,33 @@ export const GET = withTenantAuth(async (request, auth, { params }) => {
             }
           }
         },
-        historialTareas: {
+        Task: {
           orderBy: { fechaVencimiento: 'asc' },
           include: { asignadoUsuario: { select: { name: true, image: true } } }
         },
-        historialNotas: {
+        Note: {
           orderBy: { fechaCreacion: 'desc' },
           include: { creador: { select: { name: true, image: true } } }
         },
-        historialInteracciones: {
+        Interaction: {
           orderBy: { fechaCreacion: 'desc' },
           include: { creador: { select: { name: true, image: true } } }
         },
-        historialCitas: {
+        Cita: {
           orderBy: { fechaHora: 'desc' },
           include: { servicio: true }
         },
-        conversaciones: {
+        Conversation: {
           orderBy: { fechaUltimoMensaje: 'desc' }
         },
-        historialDocumentos: {
+        lead_attachments: {
           orderBy: { fechaSubida: 'desc' },
           include: { usuario: { select: { name: true } } }
         },
-        historialCotizaciones: {
+        cotizaciones: {
           orderBy: { fechaCreacion: 'desc' }
         },
-        historialContratos: {
+        contratos: {
           orderBy: { fechaCreacion: 'desc' }
         }
       }

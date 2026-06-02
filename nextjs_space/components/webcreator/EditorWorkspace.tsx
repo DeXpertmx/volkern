@@ -17,10 +17,23 @@ import {
   Trash2 as LucideTrash2,
   Code2,
 } from "lucide-react";
+import dynamic from 'next/dynamic';
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
-import GrapesEditor, { GrapesEditorRef } from "./GrapesEditor";
+import type { GrapesEditorRef } from "./GrapesEditor";
+
+const GrapesEditor = dynamic(() => import("./GrapesEditor"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-full bg-gray-50/50 dark:bg-slate-950">
+      <div className="flex flex-col items-center gap-3">
+        <RotateCcw className="animate-spin text-primary/60 w-8 h-8" />
+        <span className="text-sm text-muted-foreground">Cargando editor...</span>
+      </div>
+    </div>
+  ),
+});
 import { saveTemplate, loadAllTemplates, loadTemplates, deleteTemplate, TemplateRecord, PaginatedTemplates } from "../../lib/webcreator/templateStorage";
 import { TemplateGallery, getTemplateData } from "./templates";
 import EditorToolbar from "./EditorToolbar";
@@ -928,7 +941,7 @@ document.addEventListener('click', function(e) {
         <main className={`flex-1 bg-gray-50/50 dark:bg-slate-950 flex flex-col relative overflow-auto custom-scrollbar ${mode === 'document' ? 'items-center pt-12 pb-24 bg-slate-200 dark:bg-slate-900' : ''}`}>
           <div 
             className={`transition-all duration-500 ${mode === 'document' ? 'shadow-2xl' : 'flex-1 overflow-hidden'}`}
-            style={mode === 'document' ? { width: '210mm', minHeight: '297mm', backgroundColor: 'white' } : {}}
+            style={mode === 'document' ? { width: '210mm', minHeight: '297mm', height: '100%', backgroundColor: 'white' } : {}}
           >
             <GrapesEditor 
               ref={editorRef} 
