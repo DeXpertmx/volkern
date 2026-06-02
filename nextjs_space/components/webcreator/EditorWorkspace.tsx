@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, forwardRef } from "react";
 import {
   Plus,
   X,
@@ -23,7 +23,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import type { GrapesEditorRef } from "./GrapesEditor";
 
-const GrapesEditor = dynamic(() => import("./GrapesEditor"), {
+const GrapesEditorInner = dynamic(() => import("./GrapesEditor"), {
   ssr: false,
   loading: () => (
     <div className="flex items-center justify-center h-full bg-gray-50/50 dark:bg-slate-950">
@@ -34,6 +34,11 @@ const GrapesEditor = dynamic(() => import("./GrapesEditor"), {
     </div>
   ),
 });
+
+const GrapesEditor = forwardRef<GrapesEditorRef, any>((props, ref) => (
+  <GrapesEditorInner {...props} forwardedRef={ref} />
+));
+GrapesEditor.displayName = "GrapesEditor";
 import { saveTemplate, loadAllTemplates, loadTemplates, deleteTemplate, TemplateRecord, PaginatedTemplates } from "../../lib/webcreator/templateStorage";
 import { TemplateGallery, getTemplateData } from "./templates";
 import EditorToolbar from "./EditorToolbar";
@@ -169,6 +174,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   // Load more templates when scrolling near bottom (handled in TemplateManagerModal)
 
   useEffect(() => {
+    // eslint-disable-next-line prefer-const
     let pollInterval: NodeJS.Timeout;
     const connectEditor = () => {
       const editor = editorRef.current?.getEditor();
@@ -1098,6 +1104,7 @@ document.addEventListener('click', function(e) {
               <div className="max-w-2xl mx-auto">
                 <React.Suspense fallback={<div className="flex items-center justify-center h-64"><RotateCcw className="animate-spin text-purple-600" /></div>}>
                   {(() => {
+                    // eslint-disable-next-line @typescript-eslint/no-var-requires
                     const CanvaDesigner = require('@/components/canva-designer').default;
                     return <CanvaDesigner onDesignPublished={handleCanvaDesignPublished} />;
                   })()}
