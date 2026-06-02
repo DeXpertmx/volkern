@@ -26,6 +26,12 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+interface Attachment {
+  filename: string;
+  content: Buffer;
+  contentType?: string;
+}
+
 interface SendEmailParams {
   to: string | string[];
   subject: string;
@@ -34,6 +40,7 @@ interface SendEmailParams {
   from?: string;
   replyTo?: string;
   tenantSubdomain?: string; // IMPORTANTE: Para aislamiento de reputación
+  attachments?: Attachment[];
 }
 
 /**
@@ -47,6 +54,7 @@ export async function sendEmail({
   from,
   replyTo,
   tenantSubdomain,
+  attachments,
 }: SendEmailParams) {
   const fromAddress = from || getFromAddress(tenantSubdomain);
   
@@ -58,6 +66,7 @@ export async function sendEmail({
       text,
       html,
       replyTo,
+      attachments,
       headers: {
         // La clave para el aislamiento de reputación en SES
         'X-SES-TENANT': tenantSubdomain || 'default',
