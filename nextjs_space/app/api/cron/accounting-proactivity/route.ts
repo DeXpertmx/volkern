@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AccountingProactivityWorker } from '@/lib/accounting/proactivity-worker';
+import { FiscalCalendarService } from '@/lib/accounting/fiscal-calendar-service';
 import { NordigenService } from '@/lib/banking/nordigen-service';
 
 export const dynamic = 'force-dynamic';
@@ -17,13 +18,15 @@ export async function GET(request: NextRequest) {
     // 2. Scan for Suggestions & Alerts
     const reconResult = await AccountingProactivityWorker.scanForSuggestions();
     const taxResult = await AccountingProactivityWorker.scanForTaxAlerts();
+    const fiscalCalendarResult = await FiscalCalendarService.scanAndNotify();
     
     return NextResponse.json({
       success: true,
       timestamp: new Date().toISOString(),
       bankSync: bankSyncResult,
       reconciliationSuggestions: reconResult.suggestionsCount,
-      taxAlerts: taxResult.alertsCount
+      taxAlerts: taxResult.alertsCount,
+      fiscalDeadlineAlerts: fiscalCalendarResult.notified
     });
   } catch (error: any) {
     console.error('Error in Accounting Proactivity Cron:', error);
