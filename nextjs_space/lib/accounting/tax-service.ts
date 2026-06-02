@@ -16,6 +16,17 @@ export interface VatReportSummary {
   details: any[];
 }
 
+export interface IrpfReportSummary {
+  year: number;
+  quarter: number;
+  retentions: {
+    base: number;
+    amount: number;
+  };
+  totalRetentions: number;
+  details: any[];
+}
+
 export class TaxService {
   /**
    * Calcula el resumen de IVA para un trimestre específico (Modelo 303 simplificado)
@@ -84,6 +95,65 @@ export class TaxService {
         periodYear: year,
         periodMonth: { in: months },
         type: { in: [TaxType.IVA_REPERCUTIDO, TaxType.IVA_SOPORTADO] },
+        isFiled: false
+      },
+      data: {
+        isFiled: true
+      }
+    });
+  }
+
+  /**
+   * Calcula el resumen de retenciones IRPF para un trimestre específico (Modelo 111)
+   */
+  static async getQuarterlyIrpfReport(tenantId: string, year: number, quarter: number): Promise<IrpfReportSummary> {
+    const months = this.getMonthsForQuarter(quarter);
+
+    const records = await prisma.taxRecord.findMany({
+      where: {
+        tenantId,
+        periodYear: year,
+        periodMonth: { in: months },
+        type: TaxType.IRPF_RETENCION
+      },
+      include: {
+        entry: true
+      }
+    });
+
+    const summary: IrpfReportSummary = {
+      year,
+      quarter,
+      retentions: { base: 0, amount: 0 },
+      totalRetentions: 0,
+      details: records
+    };
+
+    for (const record of records) {
+      const base = Number(record.baseAmount);
+      const amount = Number(record.taxAmount);
+
+      summary.retentions.base += base;
+      summary.retentions.amount += amount;
+    }
+
+    summary.totalRetentions = summary.retentions.amount;
+
+    return summary;
+  }
+
+  /**
+   * Marca las retenciones IRPF como presentadas (cerradas)
+   */
+  static async fileIrpfReturn(tenantId: string, year: number, quarter: number) {
+    const months = this.getMonthsForQuarter(quarter);
+
+    return await prisma.taxRecord.updateMany({
+      where: {
+        tenantId,
+        periodYear: year,
+        periodMonth: { in: months },
+        type: TaxType.IRPF_RETENCION,
         isFiled: false
       },
       data: {
