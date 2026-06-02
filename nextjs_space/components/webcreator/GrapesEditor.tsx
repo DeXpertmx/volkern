@@ -40,15 +40,19 @@ interface GrapesEditorProps {
   templateId?: string
   pageTitle?: string
   mode?: 'webpage' | 'email' | 'document'
+  forwardedRef?: React.Ref<GrapesEditorRef>
 }
 
-const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>(({ initialData, onSave, device = "desktop", preview = false, templateId = "blank", pageTitle = 'Página sin título', mode = 'webpage' }, ref): React.ReactElement => {
+const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>((props, ref): React.ReactElement => {
+  const { initialData, onSave, device = "desktop", preview = false, templateId = "blank", pageTitle = 'Página sin título', mode = 'webpage', forwardedRef } = props;
+  
+  const activeRef = ref || forwardedRef;
   const editorRef = useRef<Editor | null>(null)
   const autoSaveTimeout = useRef<NodeJS.Timeout | null>(null)
   const initialDataRef = useRef<Record<string, unknown> | undefined>(initialData)
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle')
 
-  useImperativeHandle(ref, () => ({
+  useImperativeHandle(activeRef, () => ({
     exportProject: () => (editorRef.current || (window as any).editor)?.getProjectData() as Record<string, unknown>,
     importProject: (data) => (editorRef.current || (window as any).editor)?.loadProjectData(data),
     runCommand: (cmd, opt) => (editorRef.current || (window as any).editor)?.runCommand(cmd, opt),
