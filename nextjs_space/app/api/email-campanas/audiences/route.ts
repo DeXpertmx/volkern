@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
     const audienciasConConteo = await Promise.all(
       audiencias.map(async (audiencia) => {
         const filtros = JSON.parse(audiencia.filtrosJSON || '{}');
-        const where: any = { tenantId: user.tenantId, email: { not: null } };
+        const where: any = { tenantId: user.tenantId, email: { not: '' } };
 
         if (filtros.tags?.length > 0) {
           where.tags = { contains: filtros.tags[0] };
@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
 
     // Calcular total de leads que coinciden
     const filtros = data.filtros || {};
-    const where: any = { tenantId: user.tenantId, email: { not: null } };
+    const where: any = { tenantId: user.tenantId, email: { not: '' } };
 
     if (filtros.tags?.length > 0) {
       where.tags = { contains: filtros.tags[0] };
