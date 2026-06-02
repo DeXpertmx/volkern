@@ -63,6 +63,7 @@ interface EditorWorkspaceProps {
     html?: string; 
     css?: string; 
     estado?: string;
+    category?: string;
     seo?: {
       metaTitulo?: string;
       metaDescripcion?: string;
@@ -664,6 +665,7 @@ document.addEventListener('click', function(e) {
           html: fullHtml,
           css,
           estado: "draft",
+          category,
           seo: {
             metaTitulo,
             metaDescripcion,
@@ -740,6 +742,7 @@ document.addEventListener('click', function(e) {
           html: fullHtml,
           css,
           estado: "published",
+          category,
           seo: {
             metaTitulo,
             metaDescripcion,
