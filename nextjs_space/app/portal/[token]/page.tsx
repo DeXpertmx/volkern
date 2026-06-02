@@ -145,7 +145,7 @@ export default function SovereignPortalPage() {
             <span className="font-black tracking-tight text-xl italic">VOLKERN <span className="text-primary font-medium text-xs not-italic">PORTAL</span></span>
           </div>
           <Badge variant="outline" className="bg-slate-50 border-slate-200 text-slate-600 font-bold">
-            {order.batchNumber}
+            {order.batchNumber || '—'}
           </Badge>
         </div>
       </header>
@@ -155,7 +155,7 @@ export default function SovereignPortalPage() {
         <section>
           <div className="flex justify-between items-start mb-4">
             <div>
-              <h1 className="text-3xl font-black text-slate-900 tracking-tight">Hola, {order.contact.nombre}</h1>
+              <h1 className="text-3xl font-black text-slate-900 tracking-tight">Hola, {order.contacts?.nombre || 'cliente'}</h1>
               <p className="text-slate-500">Aquí puedes verificar el estado de tu pedido.</p>
             </div>
           </div>
@@ -210,7 +210,7 @@ export default function SovereignPortalPage() {
           </TabsList>
 
           <TabsContent value="items" className="space-y-4 mt-6">
-            {order.items.map((item: any) => (
+            {order.erp_sales_order_items?.map((item: any) => (
               <Card key={item.id} className="rounded-2xl border-none shadow-md overflow-hidden bg-white">
                 <CardContent className="p-4 flex gap-4">
                   <div className="w-16 h-16 bg-slate-100 rounded-xl flex items-center justify-center">
@@ -218,10 +218,10 @@ export default function SovereignPortalPage() {
                   </div>
                   <div className="flex-1">
                     <div className="flex justify-between items-start">
-                      <h3 className="font-bold text-slate-900 leading-tight">{item.catalogItem.nombre}</h3>
+                      <h3 className="font-bold text-slate-900 leading-tight">{item.catalogo_items?.nombre || 'Producto sin nombre'}</h3>
                       <span className="text-xs font-black text-primary">x{item.quantity}</span>
                     </div>
-                    <p className="text-xs text-slate-400 mb-2">SKU: {item.catalogItem.sku}</p>
+                    <p className="text-xs text-slate-400 mb-2">SKU: {item.catalogo_items?.sku || '—'}</p>
                     <div className="flex gap-2">
                       <Badge variant="outline" className="text-[10px] h-5">{item.fulfillmentType}</Badge>
                       <Badge variant="outline" className="text-[10px] h-5 bg-blue-50 text-blue-600 border-blue-100">{item.status}</Badge>
@@ -271,11 +271,11 @@ export default function SovereignPortalPage() {
                   </div>
 
                   {/* Verificación de Lotes vinculados */}
-                  {order.items.flatMap((i: any) => i.reservations).map((res: any) => res.lot && (
-                    <div key={res.lot.id} className="bg-white/5 rounded-2xl p-4 border border-white/10">
+                  {order.erp_sales_order_items?.flatMap((i: any) => i.erp_order_reservations || []).map((res: any) => res.erp_inventory_lots && (
+                    <div key={res.erp_inventory_lots.id} className="bg-white/5 rounded-2xl p-4 border border-white/10">
                       <div className="flex justify-between items-center mb-2">
-                        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Lote: {res.lot.batchNumber}</span>
-                        {verificationResults[res.lot.id]?.isValid ? (
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Lote: {res.erp_inventory_lots.batchNumber}</span>
+                        {verificationResults[res.erp_inventory_lots.id]?.isValid ? (
                           <Badge className="bg-emerald-500 text-white border-none">VERIFICADO</Badge>
                         ) : (
                           <Badge variant="outline" className="text-slate-500 border-slate-700">SIN VERIFICAR</Badge>
@@ -285,10 +285,10 @@ export default function SovereignPortalPage() {
                         variant="ghost" 
                         size="sm"
                         className="w-full text-slate-400 hover:text-white hover:bg-white/5 text-xs h-8"
-                        onClick={() => handleVerify('LOT', res.lot.id, res.lot.integrityHash)}
-                        disabled={verifying === res.lot.id}
+                        onClick={() => handleVerify('LOT', res.erp_inventory_lots.id, res.erp_inventory_lots.integrityHash)}
+                        disabled={verifying === res.erp_inventory_lots.id}
                       >
-                        {verifying === res.lot.id ? <Loader2 className="w-3 h-3 animate-spin mr-2" /> : <ShieldCheck className="w-3 h-3 mr-2" />}
+                        {verifying === res.erp_inventory_lots.id ? <Loader2 className="w-3 h-3 animate-spin mr-2" /> : <ShieldCheck className="w-3 h-3 mr-2" />}
                         Verificar Sello de Calidad
                       </Button>
                     </div>
