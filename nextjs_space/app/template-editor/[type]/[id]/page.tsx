@@ -19,6 +19,7 @@ export default function TemplateEditorPage() {
     id: string;
     nombre: string;
     contenido: any;
+    tipo?: string;
   } | null>(null);
 
   const loadTemplate = useCallback(async () => {
@@ -54,6 +55,7 @@ export default function TemplateEditorPage() {
         id: data.id,
         nombre: data.nombre || data.titulo || "Sin título",
         contenido: projectData,
+        tipo: type === 'email' ? data.categoria : data.tipo,
       });
     } catch (err) {
       console.error('[TemplateEditor] Error loading:', err);
@@ -67,12 +69,13 @@ export default function TemplateEditorPage() {
     loadTemplate();
   }, [loadTemplate]);
 
-  const handleSave = async (data: { projectData: any; html?: string; css?: string; category?: string }) => {
+  const handleSave = async (data: { projectData: any; html?: string; css?: string; category?: string; nombre?: string }) => {
     try {
+      const nuevoNombre = data.nombre || templateData?.nombre || '';
       const payload = {
         type,
         id: id === 'new' ? null : id,
-        nombre: templateData?.nombre,
+        nombre: nuevoNombre,
         projectData: data.projectData,
         html: data.html,
         css: data.css,
@@ -94,11 +97,12 @@ export default function TemplateEditorPage() {
 
       // SYNC: Update local state with the saved data
       if (responseData.id) {
-        setTemplateData({
+        setTemplateData(prev => ({
           id: responseData.id,
-          nombre: responseData.nombre || responseData.titulo || "Sin título",
+          nombre: responseData.nombre || responseData.titulo || nuevoNombre || "Sin título",
           contenido: data.projectData,
-        });
+          tipo: data.category || prev?.tipo,
+        }));
 
         // Redirect if it was a 'new' template to reflect the real ID in the URL
         if (id === 'new') {
@@ -150,6 +154,7 @@ export default function TemplateEditorPage() {
         pageId={templateData.id}
         pageTitle={templateData.nombre}
         initialData={templateData.contenido}
+        initialCategory={templateData.tipo}
         backUrl={backUrl}
         mode={type === 'email' ? 'email' : 'document'}
         onSave={handleSave}
