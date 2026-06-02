@@ -56,7 +56,8 @@ import {
   LifeBuoy,
   Zap,
   FileWarning,
-  Home
+  Home,
+  Percent
 } from 'lucide-react'
 import type { PermissionModule } from '@/lib/permissions'
 
@@ -266,6 +267,7 @@ export const HUBS: HubConfig[] = [
       { name: 'Hub Contable', href: '/dashboard/finanzas/contabilidad', icon: BookOpen, planModule: 'finanzas', description: 'Libro diario inmutable y sellado' },
       { name: 'Conciliación Bancaria', href: '/dashboard/finanzas/contabilidad/reconciliacion', icon: Calculator, planModule: 'finanzas', description: 'Sincronización con bancos e IA' },
       { name: 'Impuestos (Modelo 303)', href: '/dashboard/finanzas/contabilidad/impuestos', icon: FileText, planModule: 'finanzas', requiredRegion: 'ES', description: 'Automatización de IVA trimestral' },
+      { name: 'Retenciones (Modelo 111)', href: '/dashboard/finanzas/contabilidad/retenciones', icon: Percent, planModule: 'finanzas', requiredRegion: 'ES', description: 'Retenciones IRPF trimestrales' },
       { name: 'Gastos', href: '/dashboard/finanzas/gastos', icon: ListTodo, planModule: 'finanzas', description: 'Listado de egresos y facturas' },
       { name: 'Proveedores', href: '/dashboard/finanzas/proveedores', icon: Building2, planModule: 'finanzas', description: 'Directorio de proveedores' },
       { name: 'Reportes P&L', href: '/dashboard/finanzas/reportes', icon: FileText, planModule: 'finanzas', description: 'Balance de pérdidas y ganancias' },
