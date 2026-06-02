@@ -42,7 +42,52 @@ export interface Modelo130ReportSummary {
   };
 }
 
+export interface Modelo349Delivery {
+  clientName: string;
+  clientNif: string;
+  clientCountry: string;
+  clientVatId: string;
+  invoiceNumber: string;
+  invoiceDate: string;
+  amount: number;
+  invoiceId: string;
+}
+
+export interface Modelo349Acquisition {
+  supplierName: string;
+  supplierTaxId: string;
+  supplierCountry: string;
+  expenseDescription: string;
+  expenseDate: string;
+  amount: number;
+  expenseId: string;
+}
+
+export interface Modelo349ReportSummary {
+  year: number;
+  quarter: number;
+  totalDeliveries: number;
+  deliveryCount: number;
+  totalAcquisitions: number;
+  acquisitionCount: number;
+  deliveries: Modelo349Delivery[];
+  acquisitions: Modelo349Acquisition[];
+  hasOperations: boolean;
+}
+
 export class TaxService {
+  private static readonly EU_COUNTRY_CODES = ['DE', 'FR', 'IT', 'PT', 'NL', 'BE', 'AT', 'IE', 'PL', 'SE', 'DK', 'FI', 'GR', 'CZ', 'RO', 'HU', 'SK', 'BG', 'HR', 'SI', 'LT', 'LV', 'EE', 'CY', 'LU', 'MT'];
+
+  private static isEuCountry(country: string): boolean {
+    return this.EU_COUNTRY_CODES.includes(country.toUpperCase());
+  }
+
+  private static guessCountryFromTaxId(taxId: string): string | null {
+    const prefix = taxId.substring(0, 2).toUpperCase();
+    if (this.EU_COUNTRY_CODES.includes(prefix)) return prefix;
+    if (taxId.toUpperCase().startsWith('GB')) return 'GB';
+    return null;
+  }
   /**
    * Calcula el resumen de IVA para un trimestre específico (Modelo 303 simplificado)
    */
@@ -266,6 +311,137 @@ export class TaxService {
         usuarioId: userId || '',
         accion: 'MODELO_130_FILED',
         entidad: 'MODELO_130',
+        entidadId: `${year}_Q${quarter}`,
+        metadata: {
+          year,
+          quarter,
+          filedAt: new Date().toISOString()
+        }
+      }
+    });
+  }
+
+  /**
+   * Genera el reporte de operaciones intracomunitarias (Modelo 349)
+   * Entregas: facturas a clientes UE con ID intracomunitario
+   * Adquisiciones: gastos a proveedores con NIF UE
+   */
+  static async getQuarterlyModelo349Report(tenantId: string, year: number, quarter: number): Promise<Modelo349ReportSummary> {
+    const months = this.getMonthsForQuarter(quarter);
+    const startDate = new Date(year, months[0] - 1, 1);
+    const endDate = new Date(year, months[2], 0, 23, 59, 59, 999);
+
+    // ── Deliveries (Entregas intracomunitarias) ──────────────────────
+    // Find contacts with EU fiscal profiles that have intracommunity VAT ID
+    const euProfiles = await prisma.perfilFiscalCliente.findMany({
+      where: {
+        tenantId,
+        country: { not: 'ES' },
+        idIntracomunitario: { not: null },
+      },
+      select: { contactId: true, country: true, idIntracomunitario: true, idFiscal: true }
+    });
+
+    const contactIds = euProfiles
+      .filter(p => p.contactId && this.isEuCountry(p.country))
+      .map(p => p.contactId!);
+
+    const profileMap = new Map(euProfiles
+      .filter(p => p.contactId && this.isEuCountry(p.country))
+      .map(p => [p.contactId!, p])
+    );
+
+    const invoices = contactIds.length > 0 ? await prisma.invoice.findMany({
+      where: {
+        tenantId,
+        contactId: { in: contactIds },
+        fechaEmision: { gte: startDate, lte: endDate },
+      },
+      include: {
+        contact: { select: { nombre: true } }
+      },
+      orderBy: { fechaEmision: 'asc' }
+    }) : [];
+
+    const deliveries: Modelo349Delivery[] = invoices.map(inv => {
+      const profile = profileMap.get(inv.contactId!);
+      return {
+        clientName: inv.contact?.nombre || 'Sin nombre',
+        clientNif: profile?.idFiscal || '',
+        clientCountry: profile?.country || '',
+        clientVatId: profile?.idIntracomunitario || '',
+        invoiceNumber: inv.numero,
+        invoiceDate: inv.fechaEmision.toISOString(),
+        amount: Number(inv.monto),
+        invoiceId: inv.id,
+      };
+    });
+
+    // ── Acquisitions (Adquisiciones intracomunitarias) ───────────────
+    // Find expenses where supplier taxId suggests an EU country
+    const suppliers = await prisma.supplier.findMany({
+      where: { tenantId, active: true },
+      select: { id: true, name: true, taxId: true }
+    });
+
+    const euSupplierIds = suppliers
+      .filter(s => s.taxId && this.guessCountryFromTaxId(s.taxId))
+      .map(s => s.id);
+
+    const euSupplierMap = new Map(
+      suppliers
+        .filter(s => euSupplierIds.includes(s.id))
+        .map(s => [s.id, { name: s.name, taxId: s.taxId!, country: this.guessCountryFromTaxId(s.taxId!)! }])
+    );
+
+    const expenses = euSupplierIds.length > 0 ? await prisma.expense.findMany({
+      where: {
+        tenantId,
+        supplierId: { in: euSupplierIds },
+        date: { gte: startDate, lte: endDate },
+      },
+      orderBy: { date: 'asc' }
+    }) : [];
+
+    const acquisitions: Modelo349Acquisition[] = expenses.map(exp => {
+      const supplier = euSupplierMap.get(exp.supplierId);
+      return {
+        supplierName: supplier?.name || 'Sin nombre',
+        supplierTaxId: supplier?.taxId || '',
+        supplierCountry: supplier?.country || '',
+        expenseDescription: exp.description,
+        expenseDate: exp.date.toISOString(),
+        amount: Number(exp.amount),
+        expenseId: exp.id,
+      };
+    });
+
+    const totalDeliveries = deliveries.reduce((s, d) => s + d.amount, 0);
+    const totalAcquisitions = acquisitions.reduce((s, a) => s + a.amount, 0);
+
+    return {
+      year,
+      quarter,
+      totalDeliveries,
+      deliveryCount: deliveries.length,
+      totalAcquisitions,
+      acquisitionCount: acquisitions.length,
+      deliveries,
+      acquisitions,
+      hasOperations: deliveries.length > 0 || acquisitions.length > 0,
+    };
+  }
+
+  /**
+   * Marca el periodo del Modelo 349 como presentado (registro informativo)
+   */
+  static async fileModelo349Return(tenantId: string, year: number, quarter: number, userId?: string) {
+    return await prisma.auditLog.create({
+      data: {
+        tenantId,
+        usuarioId: userId || '',
+        accion: 'MODELO_349_FILED',
+        entidad: 'MODELO_349',
         entidadId: `${year}_Q${quarter}`,
         metadata: {
           year,
