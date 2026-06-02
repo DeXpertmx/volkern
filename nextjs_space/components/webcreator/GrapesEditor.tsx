@@ -88,7 +88,9 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>(({ initialDa
   useEffect(() => {
     if (editorRef.current) return;
 
-    const editor = grapesjs.init({
+    let editor: Editor;
+    try {
+      editor = grapesjs.init({
       container: "#gjs",
       height: "100%",
       width: "100%",
@@ -158,9 +160,46 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>(({ initialDa
         }
       },
       canvas: {
-        scripts: [
-          // Script de navegaci&oacute;n para enlaces internos/externos en el canvas
-          function() {
+        scripts: [],
+        styles: [
+          "https://cdn.jsdelivr.net/npm/tailwindcss@3.4.1/dist/tailwind.min.css",
+          "https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap",
+          "https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200",
+          "https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200",
+          "https://fonts.googleapis.com/css2?family=Material+Symbols+Sharp:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
+        ],
+      },
+    })
+      console.log('[GrapesEditor] Editor initialized successfully');
+    } catch (initError) {
+      console.error('[GrapesEditor] grapesjs.init() FAILED:', initError);
+      return; // No editor ref, which will show 'Editor no disponible'
+    }
+
+    editorRef.current = editor;
+
+    editor.on('load', () => {
+      if (mode === 'webpage') {
+        setupVolkernBlocksAsync(editor);
+      } else if (mode === 'document') {
+        setupDocumentBlocks(editor);
+      } else if (mode === 'email') {
+        // We'll add email-specific blocks later
+        setupDocumentBlocks(editor);
+      }
+      
+      // Inyectar CSS y scripts en el canvas (evita errores MIME al ponerlos en canvas.styles/scripts)
+      try {
+        const canvasDoc = editor.Canvas.getDocument();
+        if (canvasDoc) {
+          // Smooth scroll
+          const smoothStyle = canvasDoc.createElement('style');
+          smoothStyle.textContent = 'html { scroll-behavior: smooth; }';
+          canvasDoc.head.appendChild(smoothStyle);
+
+          // Click handler para enlaces (reemplaza function() en canvas.scripts que causaba errores)
+          const navScript = canvasDoc.createElement('script');
+          navScript.innerHTML = `
             document.addEventListener('click', function(e) {
               var el = e.target.closest('[href]');
               if (el) {
@@ -179,62 +218,36 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>(({ initialDa
                 }
               }
             }, true);
-          }
-        ],
-        styles: [
-          "https://cdn.jsdelivr.net/npm/tailwindcss@3.4.1/dist/tailwind.min.css",
-          "https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap",
-          "https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200",
-          "https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200",
-          "https://fonts.googleapis.com/css2?family=Material+Symbols+Sharp:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
-        ],
-      },
-    })
-
-    editorRef.current = editor;
-
-    editor.on('load', () => {
-      if (mode === 'webpage') {
-        setupVolkernBlocksAsync(editor);
-      } else if (mode === 'document') {
-        setupDocumentBlocks(editor);
-      } else if (mode === 'email') {
-        // We'll add email-specific blocks later
-        setupDocumentBlocks(editor);
-      }
-      
-      // Inject canvas inline CSS (evita errores MIME al poner CSS inline en canvas.styles)
-      const canvasDoc = editor.Canvas.getDocument();
-      if (canvasDoc) {
-        // Smooth scroll para el canvas
-        const smoothStyle = canvasDoc.createElement('style');
-        smoothStyle.textContent = 'html { scroll-behavior: smooth; }';
-        canvasDoc.head.appendChild(smoothStyle);
-        
-        // CSS específico para modo documento (simulación A4)
-        if (mode === 'document') {
-          const docStyle = canvasDoc.createElement('style');
-          docStyle.textContent = `
-            body { 
-              background-color: #f1f5f9; 
-              display: flex; 
-              flex-direction: column; 
-              align-items: center; 
-              padding: 40px;
-            }
-            .gjs-pn-views-container { background: white; }
-            #wrapper {
-              width: 210mm;
-              min-height: 297mm;
-              background: white;
-              box-shadow: 0 10px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
-              margin: 0 auto;
-              padding: 1in;
-              box-sizing: border-box;
-            }
           `;
-          canvasDoc.head.appendChild(docStyle);
+          canvasDoc.body.appendChild(navScript);
+
+          // CSS específico para modo documento (simulación A4)
+          if (mode === 'document') {
+            const docStyle = canvasDoc.createElement('style');
+            docStyle.textContent = `
+              body {
+                background-color: #f1f5f9;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                padding: 40px;
+              }
+              .gjs-pn-views-container { background: white; }
+              #wrapper {
+                width: 210mm;
+                min-height: 297mm;
+                background: white;
+                box-shadow: 0 10px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+                margin: 0 auto;
+                padding: 1in;
+                box-sizing: border-box;
+              }
+            `;
+            canvasDoc.head.appendChild(docStyle);
+          }
         }
+      } catch (err) {
+        console.error('[GrapesEditor] Error injecting canvas styles/scripts:', err);
       }
       
       // Fix for category labels and IDs to match CSS
