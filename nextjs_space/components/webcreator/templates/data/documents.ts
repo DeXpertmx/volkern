@@ -2633,5 +2633,476 @@ export const documentTemplates: Template[] = [
         }
       `
     }
+  },
+  // === CERTIFICADO ACADEMIA (LMS) ===
+  {
+    id: 'certificado-academia',
+    name: 'Certificado Academia',
+    description: 'Certificado de finalizaci&oacute;n de curso con dise&ntilde;o institucional. Incluye logotipo del alumno, nombre del curso, horas lectivas, fecha de expedici&oacute;n, c&oacute;digo &uacute;nico de verificaci&oacute;n QR y firmas digitales. Ideal para plataformas LMS y formaci&oacute;n corporativa.',
+    category: 'document',
+    tags: ['certificado', 'academia', 'LMS', 'formación', 'curso'],
+    isDefault: true,
+    data: {
+      html: `
+        <div class="cert-container">
+          <!-- Borde decorativo -->
+          <div class="cert-border">
+            <div class="cert-corner tl"></div>
+            <div class="cert-corner tr"></div>
+            <div class="cert-corner bl"></div>
+            <div class="cert-corner br"></div>
+
+            <!-- Header -->
+            <div class="cert-header">
+              <div class="cert-logo" data-gjs-editable="true">
+                <span class="cert-logo-text">ACADEMIA</span>
+              </div>
+              <div class="cert-institute">
+                <h1 class="institute-name">{{empresa.nombre}}</h1>
+                <p class="institute-tagline" data-gjs-editable="true" data-gjs-selectable="true">Formaci&oacute;n Profesional &mdash; Excelencia Educativa</p>
+              </div>
+            </div>
+
+            <!-- Certifica -->
+            <div class="cert-certifies">
+              <p class="cert-label">CERTIFICA QUE</p>
+              <div class="cert-seal">
+                <div class="seal-circle">
+                  <span class="seal-text">VERIFICADO</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Nombre del estudiante -->
+            <div class="cert-student">
+              <h2 class="student-name">{{lead.nombre}}</h2>
+            </div>
+
+            <!-- Ha completado -->
+            <div class="cert-completed">
+              <p class="completed-text">Ha completado satisfactoriamente el curso de</p>
+              <h3 class="course-name" data-gjs-editable="true" data-gjs-selectable="true">[NOMBRE_DEL_CURSO]</h3>
+              <div class="course-details">
+                <p class="course-hours" data-gjs-editable="true" data-gjs-selectable="true"><strong>Duraci&oacute;n:</strong> [HORAS_LECTIVAS] horas</p>
+                <p class="course-rating" data-gjs-editable="true" data-gjs-selectable="true"><strong>Calificaci&oacute;n:</strong> [CALIFICACION]/10</p>
+              </div>
+            </div>
+
+            <!-- Descripción -->
+            <div class="cert-description">
+              <p data-gjs-editable="true" data-gjs-selectable="true">
+                [DESCRIPCION_BREVE: El estudiante ha demostrado competencia en los temas cubiertos durante el programa, cumpliendo con todos los requisitos acad&eacute;micos establecidos por la instituci&oacute;n.]
+              </p>
+            </div>
+
+            <!-- Meta -->
+            <div class="cert-meta">
+              <p class="cert-date">Expedido: {{fecha.hoy}}</p>
+              <p class="cert-id">C&oacute;digo: <span data-gjs-editable="true" data-gjs-selectable="true">[CODIGO_CERTIFICADO]</span></p>
+            </div>
+
+            <!-- Firmas -->
+            <div class="cert-signatures">
+              <div class="cert-signature-item">
+                <div class="sign-line-cert"></div>
+                <p class="sign-name" data-gjs-editable="true" data-gjs-selectable="true">[NOMBRE_INSTRUCTOR]</p>
+                <p class="sign-role">Instructor</p>
+              </div>
+              <div class="cert-signature-item">
+                <div class="sign-line-cert"></div>
+                <p class="sign-name">{{empresa.nombre}}</p>
+                <p class="sign-role">Direcci&oacute;n Acad&eacute;mica</p>
+              </div>
+            </div>
+
+            <!-- QR + Verificación -->
+            <div class="cert-verify">
+              <div class="verify-qr" data-gjs-editable="true" data-gjs-selectable="true">
+                <div class="qr-grid">
+                  <div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div>
+                  <div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div>
+                  <div class="qr-cell qr-dark"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div>
+                  <div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div>
+                  <div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div>
+                  <div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div>
+                  <div class="qr-cell qr-dark"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div><div class="qr-cell qr-light"></div><div class="qr-cell qr-dark"></div>
+                </div>
+                <span class="qr-label-cert">VERIFICAR</span>
+              </div>
+              <div class="verify-info">
+                <p class="verify-title">C&oacute;digo de Verificaci&oacute;n</p>
+                <p class="verify-code" data-gjs-editable="true" data-gjs-selectable="true">[CODIGO_VERIFICACION]</p>
+                <p class="verify-url" data-gjs-editable="true" data-gjs-selectable="true">https://volkern.app/verify/[CODIGO]</p>
+              </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="cert-footer">
+              <p>Documento oficial emitido por {{empresa.nombre}}. V&aacute;lido &uacute;nicamente con el c&oacute;digo de verificaci&oacute;n.</p>
+              <p class="cert-footer-small">Volkern Academy — www.volkern.com</p>
+            </div>
+          </div>
+        </div>
+      `,
+      css: `
+        .cert-container {
+          font-family: 'Georgia', 'Times New Roman', serif;
+          max-width: 900px;
+          margin: 0 auto;
+          padding: 30px;
+          background: #faf9f6;
+          min-height: 1000px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .cert-border {
+          position: relative;
+          width: 100%;
+          padding: 50px 60px;
+          background: #ffffff;
+          border: 2px solid #d4a853;
+          box-shadow: 0 8px 32px rgba(0,0,0,0.08);
+          text-align: center;
+          min-height: 800px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+        }
+
+        /* ── Corners ── */
+        .cert-corner {
+          position: absolute;
+          width: 40px;
+          height: 40px;
+          border: 3px solid #d4a853;
+        }
+        .cert-corner.tl { top: 15px; left: 15px; border-right: none; border-bottom: none; }
+        .cert-corner.tr { top: 15px; right: 15px; border-left: none; border-bottom: none; }
+        .cert-corner.bl { bottom: 15px; left: 15px; border-right: none; border-top: none; }
+        .cert-corner.br { bottom: 15px; right: 15px; border-left: none; border-top: none; }
+
+        /* ── Header ── */
+        .cert-header {
+          display: flex;
+          align-items: center;
+          gap: 20px;
+          margin-bottom: 30px;
+          width: 100%;
+          justify-content: center;
+        }
+
+        .cert-logo {
+          width: 70px;
+          height: 70px;
+          background: #1e3a5f;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          box-shadow: 0 4px 12px rgba(30,58,95,0.3);
+        }
+
+        .cert-logo-text {
+          color: white;
+          font-size: 9px;
+          font-weight: 900;
+          letter-spacing: 2px;
+          text-align: center;
+          line-height: 1.2;
+        }
+
+        .institute-name {
+          font-size: 20px;
+          font-weight: 900;
+          color: #1e3a5f;
+          margin: 0 0 4px 0;
+          letter-spacing: 1px;
+          text-transform: uppercase;
+        }
+
+        .institute-tagline {
+          font-size: 11px;
+          color: #64748b;
+          font-style: italic;
+          margin: 0;
+        }
+
+        /* ── Certifies ── */
+        .cert-certifies {
+          position: relative;
+          margin-bottom: 20px;
+          width: 100%;
+        }
+
+        .cert-label {
+          font-size: 14px;
+          font-weight: 700;
+          color: #d4a853;
+          letter-spacing: 6px;
+          text-transform: uppercase;
+          margin: 0 0 10px 0;
+        }
+
+        .cert-seal {
+          position: absolute;
+          right: 0;
+          top: 50%;
+          transform: translateY(-50%);
+        }
+
+        .seal-circle {
+          width: 60px;
+          height: 60px;
+          border: 3px solid #d4a853;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: #fffef5;
+        }
+
+        .seal-text {
+          font-size: 7px;
+          font-weight: 900;
+          color: #d4a853;
+          letter-spacing: 1px;
+          text-align: center;
+          line-height: 1.2;
+        }
+
+        /* ── Student ── */
+        .cert-student {
+          margin-bottom: 20px;
+          width: 100%;
+        }
+
+        .student-name {
+          font-size: 32px;
+          font-weight: 900;
+          color: #1e3a5f;
+          margin: 0;
+          letter-spacing: 1px;
+          text-transform: uppercase;
+          border-bottom: 2px solid #d4a853;
+          display: inline-block;
+          padding-bottom: 8px;
+        }
+
+        /* ── Completed ── */
+        .cert-completed {
+          margin-bottom: 20px;
+          width: 100%;
+        }
+
+        .completed-text {
+          font-size: 15px;
+          color: #475569;
+          margin: 0 0 8px 0;
+          font-style: italic;
+        }
+
+        .course-name {
+          font-size: 24px;
+          font-weight: 800;
+          color: #1e3a5f;
+          margin: 0 0 10px 0;
+        }
+
+        .course-details {
+          display: flex;
+          justify-content: center;
+          gap: 30px;
+          margin-top: 6px;
+        }
+
+        .course-details p {
+          font-size: 13px;
+          color: #64748b;
+          margin: 0;
+        }
+
+        /* ── Description ── */
+        .cert-description {
+          max-width: 600px;
+          margin: 0 auto 25px auto;
+          width: 100%;
+        }
+
+        .cert-description p {
+          font-size: 12px;
+          color: #64748b;
+          line-height: 1.6;
+          font-style: italic;
+          margin: 0;
+        }
+
+        /* ── Meta ── */
+        .cert-meta {
+          display: flex;
+          justify-content: center;
+          gap: 30px;
+          margin-bottom: 30px;
+          width: 100%;
+        }
+
+        .cert-meta p {
+          font-size: 12px;
+          color: #64748b;
+          margin: 0;
+        }
+
+        .cert-id {
+          font-family: 'Courier New', monospace;
+          font-weight: 600;
+          color: #475569;
+        }
+
+        /* ── Signatures ── */
+        .cert-signatures {
+          display: flex;
+          justify-content: center;
+          gap: 80px;
+          margin-bottom: 30px;
+          width: 100%;
+        }
+
+        .cert-signature-item {
+          text-align: center;
+          min-width: 180px;
+        }
+
+        .sign-line-cert {
+          width: 180px;
+          height: 1px;
+          background: #cbd5e1;
+          margin: 0 auto 8px auto;
+        }
+
+        .sign-name {
+          font-size: 14px;
+          font-weight: 700;
+          color: #1e3a5f;
+          margin: 0 0 2px 0;
+        }
+
+        .sign-role {
+          font-size: 11px;
+          color: #94a3b8;
+          margin: 0;
+          font-style: italic;
+        }
+
+        /* ── Verification QR ── */
+        .cert-verify {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 16px;
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 12px;
+          padding: 12px 20px;
+          margin-bottom: 20px;
+          width: 100%;
+          max-width: 420px;
+        }
+
+        .verify-qr {
+          flex-shrink: 0;
+          width: 56px;
+          height: 56px;
+          background: white;
+          border: 2px solid #1e3a5f;
+          border-radius: 6px;
+          padding: 4px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: transform 0.2s;
+        }
+
+        .verify-qr:hover {
+          transform: scale(1.05);
+        }
+
+        .verify-qr .qr-grid {
+          display: grid;
+          grid-template-columns: repeat(7, 5px);
+          grid-template-rows: repeat(7, 5px);
+          gap: 1px;
+        }
+
+        .qr-label-cert {
+          font-size: 5px;
+          font-weight: 900;
+          letter-spacing: 0.5px;
+          color: #1e3a5f;
+          text-transform: uppercase;
+          margin-top: 2px;
+        }
+
+        .verify-info {
+          text-align: left;
+        }
+
+        .verify-title {
+          font-size: 9px;
+          font-weight: 800;
+          text-transform: uppercase;
+          color: #1e3a5f;
+          margin: 0 0 4px 0;
+          letter-spacing: 1px;
+        }
+
+        .verify-code {
+          font-size: 11px;
+          font-weight: 700;
+          font-family: 'Courier New', monospace;
+          color: #0f172a;
+          margin: 0 0 2px 0;
+        }
+
+        .verify-url {
+          font-size: 9px;
+          color: #3b82f6;
+          margin: 0;
+          font-family: 'Courier New', monospace;
+        }
+
+        /* ── Footer ── */
+        .cert-footer {
+          margin-top: auto;
+          width: 100%;
+          text-align: center;
+        }
+
+        .cert-footer p {
+          font-size: 10px;
+          color: #94a3b8;
+          margin: 2px 0;
+        }
+
+        .cert-footer-small {
+          font-size: 9px;
+          color: #cbd5e1;
+        }
+
+        @media print {
+          .cert-container {
+            padding: 0;
+            background: white;
+          }
+          .cert-border {
+            box-shadow: none;
+            border: 2px solid #d4a853;
+          }
+        }
+      `
+    }
   }
 ];
