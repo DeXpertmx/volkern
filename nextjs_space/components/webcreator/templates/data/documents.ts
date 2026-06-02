@@ -13,80 +13,47 @@ export const documentTemplates: Template[] = [
         <div class="document-container">
           <header class="doc-header">
             <div class="logo-area">
-              <div class="placeholder-logo">LOGO</div>
+              <div class="placeholder-logo" data-gjs-editable="true">LOGO</div>
               <div class="company-info">
-                <h1>Nombre de Empresa</h1>
-                <p>NIF: B12345678</p>
-                <p>Calle Falsa 123, Madrid</p>
+                <h1>{{empresa.nombre}}</h1>
+                <p>{{empresa.rfc}}</p>
+                <p>{{empresa.direccion}}</p>
               </div>
             </div>
             <div class="doc-meta">
               <h2 class="doc-type">ORDEN DE VENTA</h2>
-              <p class="doc-number">#OV-2024-001</p>
-              <p class="doc-date">Fecha: 04/04/2024</p>
+              <p class="doc-number">{{contrato.numero}}</p>
+              <p class="doc-date">{{fecha.hoy}}</p>
             </div>
           </header>
 
           <section class="addresses">
             <div class="address-box">
               <span class="label">CLIENTE:</span>
-              <p class="client-name">Juan Pérez</p>
-              <p>NIF/CIF: 12345678X</p>
-              <p>Calle del Cliente 45, Barcelona</p>
-              <p>juan.perez@email.com</p>
+              <p class="client-name">{{lead.nombre}}</p>
+              <p>{{lead.empresa}}</p>
+              <p>{{lead.email}}</p>
+              <p>{{lead.telefono}}</p>
             </div>
             <div class="address-box contact">
               <span class="label">CONTACTO:</span>
-              <p>Tel: +34 600 000 000</p>
-              <p>Referencia: Proyecto CRM</p>
+              <p>Ref: {{contrato.numero}}</p>
+              <p>Fecha: {{fecha.hoy}}</p>
             </div>
           </section>
 
-          <table class="items-table">
-            <thead>
-              <tr>
-                <th>DESCRIPCIÓN</th>
-                <th class="text-center">CANT.</th>
-                <th class="text-right">PRECIO</th>
-                <th class="text-right">TOTAL</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>Servicio de Consultoría CRM - Implementación Base</td>
-                <td class="text-center">1</td>
-                <td class="text-right">1.500,00 €</td>
-                <td class="text-right">1.500,00 €</td>
-              </tr>
-              <tr>
-                <td>Configuración de Módulos (Ventas, Contratos)</td>
-                <td class="text-center">1</td>
-                <td class="text-right">500,00 €</td>
-                <td class="text-right">500,00 €</td>
-              </tr>
-              <tr class="spacer"><td colspan="4"></td></tr>
-            </tbody>
-          </table>
+          <div class="dynamic-content">
+            {{items.tabla}}
+          </div>
 
           <div class="summary-area">
             <div class="notes">
               <span class="label">NOTAS Y CONDICIONES:</span>
-              <p>Validez del presupuesto: 15 días.</p>
-              <p>Forma de pago: Transferencia bancaria.</p>
+              <p data-gjs-editable="true" data-gjs-selectable="true">Validez del presupuesto: 15 días.</p>
+              <p data-gjs-editable="true" data-gjs-selectable="true">Forma de pago: Transferencia bancaria.</p>
             </div>
             <div class="totals">
-              <div class="total-row">
-                <span>Subtotal:</span>
-                <span>2.000,00 €</span>
-              </div>
-              <div class="total-row">
-                <span>IVA (21%):</span>
-                <span>420,00 €</span>
-              </div>
-              <div class="total-row grand-total">
-                <span>TOTAL:</span>
-                <span>2.420,00 €</span>
-              </div>
+              {{totales.resumen}}
             </div>
           </div>
 
@@ -279,28 +246,28 @@ export const documentTemplates: Template[] = [
           <h1 class="legal-title">CONTRATO DE PRESTACIÓN DE SERVICIOS</h1>
           
           <div class="legal-meta">
-            <p>En Madrid, a 4 de Abril de 2024</p>
+            <p>{{fecha.hoy}}</p>
           </div>
 
           <section class="legal-section">
             <h2>REUNIDOS</h2>
-            <p>De una parte, <strong>[NOMBRE_EMPRESA]</strong>, con NIF [NIF_EMPRESA] y domicilio social en [DIRECCION_EMPRESA], representada por [NOMBRE_REPRESENTANTE]. En adelante, el "PRESTADOR".</p>
-            <p>De otra parte, <strong>[NOMBRE_CLIENTE]</strong>, con NIF [NIF_CLIENTE] y domicilio en [DIRECCION_CLIENTE]. En adelante, el "CLIENTE".</p>
+            <p>De una parte, <strong>{{empresa.nombre}}</strong>, con NIF {{empresa.rfc}} y domicilio social en {{empresa.direccion}}, representada por <span data-gjs-editable="true" data-gjs-selectable="true">[NOMBRE_REPRESENTANTE]</span>. En adelante, el "PRESTADOR".</p>
+            <p>De otra parte, <strong>{{lead.nombre}}</strong>, con NIF <span data-gjs-editable="true" data-gjs-selectable="true">[NIF_CLIENTE]</span> y domicilio en <span data-gjs-editable="true" data-gjs-selectable="true">[DIRECCION_CLIENTE]</span>. En adelante, el "CLIENTE".</p>
           </section>
 
           <section class="legal-section">
             <h2>EXPOSICIÓN</h2>
-            <p>I. Que el PRESTADOR es una entidad especializada en [DESCRIPCION_SERVICIOS].</p>
+            <p>I. Que el PRESTADOR es una entidad especializada en <span data-gjs-editable="true" data-gjs-selectable="true">[DESCRIPCION_SERVICIOS]</span>.</p>
             <p>II. Que el CLIENTE está interesado en la contratación de dichos servicios bajo los términos estipulados en el presente documento.</p>
           </section>
 
           <section class="legal-section">
             <h2>CLÁUSULAS</h2>
             <h3>PRIMERA.- OBJETO DEL CONTRATO</h3>
-            <p>El PRESTADOR se obliga a realizar para el CLIENTE los servicios de [DETALLE_OBJETO], conforme a las especificaciones técnicas acordadas.</p>
+            <p>El PRESTADOR se obliga a realizar para el CLIENTE los servicios de <span data-gjs-editable="true" data-gjs-selectable="true">[DETALLE_OBJETO]</span>, conforme a las especificaciones técnicas acordadas.</p>
             
             <h3>SEGUNDA.- HONORARIOS Y FORMA DE PAGO</h3>
-            <p>El precio total de los servicios se fija en [IMPORTE] euros mensuales, m&aacute;s el IVA correspondiente.</p>
+            <p>El precio total de los servicios se fija en <span data-gjs-editable="true" data-gjs-selectable="true">[IMPORTE_MENSUAL]</span> euros mensuales, m&aacute;s el IVA correspondiente. El importe total del contrato asciende a {{totales.total}}.</p>
             
             <h3>TERCERA.- CONFIDENCIALIDAD</h3>
             <p>Ambas partes se obligan a mantener absoluta confidencialidad sobre cualquier informaci&oacute;n a la que tengan acceso con motivo de la ejecuci&oacute;n del presente contrato.</p>
@@ -310,12 +277,12 @@ export const documentTemplates: Template[] = [
             <div class="signature-box">
               <p>Por el PRESTADOR:</p>
               <div class="sign-line"></div>
-              <p>Fdo: [Nombre]</p>
+              <p>{{empresa.nombre}}</p>
             </div>
             <div class="signature-box">
               <p>Por el CLIENTE:</p>
               <div class="sign-line"></div>
-              <p>Fdo: [Nombre]</p>
+              <p>{{lead.nombre}}</p>
             </div>
           </div>
         </div>
@@ -415,105 +382,42 @@ export const documentTemplates: Template[] = [
           <!-- Header: Emisor -->
           <div class="invoice-header">
             <div class="emisor-block">
-              <div class="logo-placeholder">EMPRESA</div>
-              <h1 class="emisor-name">Raz&oacute;n Social / Nombre de la Empresa</h1>
-              <p class="emisor-nif">NIF: B-12345678</p>
-              <p class="emisor-address">Calle del Emisor, 123 – 28001 Madrid</p>
-              <p class="emisor-contact">Tel: 91 000 00 00 | info@empresa.es</p>
+              <div class="logo-placeholder" data-gjs-editable="true">EMPRESA</div>
+              <h1 class="emisor-name">{{empresa.nombre}}</h1>
+              <p class="emisor-nif">NIF: {{empresa.rfc}}</p>
+              <p class="emisor-address">{{empresa.direccion}}</p>
+              <p class="emisor-contact">{{lead.email}} | {{lead.telefono}}</p>
             </div>
             <div class="invoice-meta">
               <div class="meta-badge">FACTURA</div>
-              <p class="meta-number">Nº F2024-00001</p>
-              <p class="meta-date">Fecha emisi&oacute;n: 15/05/2024</p>
-              <p class="meta-date">Vencimiento: 14/06/2024</p>
+              <p class="meta-number">{{contrato.numero}}</p>
+              <p class="meta-date">Fecha emisi&oacute;n: {{fecha.hoy}}</p>
+              <p class="meta-date">Vencimiento: <span data-gjs-editable="true" data-gjs-selectable="true">[FECHA_VENCIMIENTO]</span></p>
             </div>
           </div>
 
           <!-- Cliente -->
           <div class="cliente-block">
             <span class="section-label">CLIENTE</span>
-            <h2 class="cliente-name">Nombre del Cliente o Raz&oacute;n Social</h2>
+            <h2 class="cliente-name">{{lead.nombre}}</h2>
             <div class="cliente-grid">
               <div>
-                <p><strong>NIF/CIF:</strong> 12345678X</p>
-                <p><strong>Direcci&oacute;n:</strong> Calle del Cliente, 45 – 08001 Barcelona</p>
+                <p><strong>Empresa:</strong> {{lead.empresa}}</p>
+                <p><strong>Email:</strong> {{lead.email}}</p>
               </div>
               <div>
-                <p><strong>Email:</strong> cliente@email.com</p>
-                <p><strong>Tel&eacute;fono:</strong> +34 600 000 000</p>
+                <p><strong>Tel&eacute;fono:</strong> {{lead.telefono}}</p>
+                <p><strong>Ref:</strong> {{contrato.numero}}</p>
               </div>
             </div>
           </div>
 
           <!-- Tabla de conceptos -->
-          <table class="invoice-items">
-            <thead>
-              <tr>
-                <th class="col-desc">Descripci&oacute;n</th>
-                <th class="col-qty">Cant.</th>
-                <th class="col-price">Precio Unit.</th>
-                <th class="col-tax">IVA</th>
-                <th class="col-total">Importe</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>
-                  <div class="item-name">Consultor&iacute;a en Sistemas de Gesti&oacute;n Empresarial</div>
-                  <div class="item-desc">An&aacute;lisis, implementaci&oacute;n y configuraci&oacute;n de plataforma CRM</div>
-                </td>
-                <td class="text-center">1</td>
-                <td class="text-right">2.500,00 €</td>
-                <td class="text-center">21%</td>
-                <td class="text-right">2.500,00 €</td>
-              </tr>
-              <tr>
-                <td>
-                  <div class="item-name">Suscripci&oacute;n Anual Plataforma</div>
-                  <div class="item-desc">Licencia premium con soporte prioritario 24/7</div>
-                </td>
-                <td class="text-center">1</td>
-                <td class="text-right">1.200,00 €</td>
-                <td class="text-center">21%</td>
-                <td class="text-right">1.200,00 €</td>
-              </tr>
-              <tr>
-                <td>
-                  <div class="item-name">Formaci&oacute;n de Equipo (On-site)</div>
-                  <div class="item-desc">3 sesiones presenciales de 4 horas para equipo de 10 personas</div>
-                </td>
-                <td class="text-center">3</td>
-                <td class="text-right">400,00 €</td>
-                <td class="text-center">10%</td>
-                <td class="text-right">1.200,00 €</td>
-              </tr>
-            </tbody>
-          </table>
+          {{items.tabla}}
 
           <!-- Resumen de importes -->
           <div class="totals-section">
-            <div class="totals-box">
-              <div class="total-row">
-                <span>Base Imponible</span>
-                <span>4.900,00 €</span>
-              </div>
-              <div class="total-row">
-                <span>IVA 21%</span>
-                <span>777,00 €</span>
-              </div>
-              <div class="total-row">
-                <span>IVA 10%</span>
-                <span>120,00 €</span>
-              </div>
-              <div class="total-row grand-total">
-                <span>TOTAL FACTURA</span>
-                <span>5.797,00 €</span>
-              </div>
-              <div class="total-row text-muted">
-                <span>Importe en letra:</span>
-                <span>Cinco mil setecientos noventa y siete euros</span>
-              </div>
-            </div>
+            {{totales.resumen}}
           </div>
 
           <!-- Forma de pago -->
@@ -521,13 +425,13 @@ export const documentTemplates: Template[] = [
             <h3>Forma de Pago</h3>
             <div class="payment-grid">
               <div>
-                <p><strong>Banco:</strong> Banco Santander</p>
-                <p><strong>IBAN:</strong> ES12 1234 5678 9012 3456 7890</p>
-                <p><strong>SWIFT/BIC:</strong> BSCHESMM</p>
+                <p><strong>Banco:</strong> <span data-gjs-editable="true" data-gjs-selectable="true">[NOMBRE_BANCO]</span></p>
+                <p><strong>IBAN:</strong> <span data-gjs-editable="true" data-gjs-selectable="true">[IBAN]</span></p>
+                <p><strong>SWIFT/BIC:</strong> <span data-gjs-editable="true" data-gjs-selectable="true">[SWIFT]</span></p>
               </div>
               <div>
-                <p><strong>M&eacute;todo:</strong> Transferencia bancaria</p>
-                <p><strong>Plazo:</strong> 30 d&iacute;as desde fecha de emisi&oacute;n</p>
+                <p><strong>M&eacute;todo:</strong> <span data-gjs-editable="true" data-gjs-selectable="true">Transferencia bancaria</span></p>
+                <p><strong>Plazo:</strong> <span data-gjs-editable="true" data-gjs-selectable="true">30 d&iacute;as desde fecha de emisi&oacute;n</span></p>
               </div>
             </div>
           </div>
@@ -841,16 +745,16 @@ export const documentTemplates: Template[] = [
           <!-- Header: Emisor -->
           <div class="irpf-header">
             <div class="emisor-col">
-              <div class="logo-emisor">P</div>
-              <h1 class="emisor-razon">Nombre del Profesional / Aut&oacute;nomo</h1>
-              <p class="emisor-nif">NIF: 12345678Z</p>
-              <p class="emisor-addr">Calle del Profesional, 50 – 46001 Valencia</p>
+              <div class="logo-emisor" data-gjs-editable="true">E</div>
+              <h1 class="emisor-razon">{{empresa.nombre}}</h1>
+              <p class="emisor-nif">NIF: {{empresa.rfc}}</p>
+              <p class="emisor-addr">{{empresa.direccion}}</p>
             </div>
             <div class="meta-col">
               <span class="badge-irpf">FACTURA CON IRPF</span>
-              <p class="irpf-num">F2024-00123</p>
-              <p class="irpf-date">15/05/2024</p>
-              <p class="irpf-ref">Ref: PROY-2024-045</p>
+              <p class="irpf-num">{{contrato.numero}}</p>
+              <p class="irpf-date">{{fecha.hoy}}</p>
+              <p class="irpf-ref">Ref: <span data-gjs-editable="true" data-gjs-selectable="true">[REFERENCIA_INTERNA]</span></p>
             </div>
           </div>
 
@@ -859,74 +763,23 @@ export const documentTemplates: Template[] = [
             <span class="irpf-label">DATOS DEL CLIENTE</span>
             <div class="cliente-data">
               <div>
-                <p class="cliente-nom">Nombre del Cliente / Empresa</p>
-                <p>NIF/CIF: B-87654321</p>
-                <p>Domicilio: Avda. del Cliente, 200 – 41001 Sevilla</p>
+                <p class="cliente-nom">{{lead.nombre}}</p>
+                <p>{{lead.empresa}}</p>
+                <p>{{lead.email}}</p>
               </div>
               <div>
-                <p>Email: facturacion@cliente.es</p>
-                <p>Tel: 954 000 000</p>
+                <p>{{lead.telefono}}</p>
+                <p>Ref: {{contrato.numero}}</p>
               </div>
             </div>
           </div>
 
           <!-- Tabla de conceptos -->
-          <table class="irpf-table">
-            <thead>
-              <tr>
-                <th>Servicio / Producto</th>
-                <th class="text-center">Ud.</th>
-                <th class="text-right">Precio</th>
-                <th class="text-right">Importe</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>
-                  <div class="serv-name">Servicios de Asesor&iacute;a Fiscal y Contable</div>
-                  <div class="serv-desc">Mensualidad de mayo 2024 – elaboraci&oacute;n de contabilidad, IVA e IS</div>
-                </td>
-                <td class="text-center">1</td>
-                <td class="text-right">1.800,00 €</td>
-                <td class="text-right">1.800,00 €</td>
-              </tr>
-              <tr>
-                <td>
-                  <div class="serv-name">Informe de Auditor&iacute;a de Cumplimiento</div>
-                  <div class="serv-desc">Revisi&oacute;n de procesos fiscales y elaboraci&oacute;n de informe preceptivo</div>
-                </td>
-                <td class="text-center">1</td>
-                <td class="text-right">950,00 €</td>
-                <td class="text-right">950,00 €</td>
-              </tr>
-            </tbody>
-          </table>
+          {{items.tabla}}
 
           <!-- Desglose con IRPF -->
           <div class="irpf-totals">
-            <div class="totals-card">
-              <div class="calc-row">
-                <span>Base Imponible</span>
-                <span>2.750,00 €</span>
-              </div>
-              <div class="calc-row">
-                <span>IVA (21%)</span>
-                <span>577,50 €</span>
-              </div>
-              <div class="calc-row highlight-irpf">
-                <span>Retenci&oacute;n IRPF (15%)</span>
-                <span class="text-red">– 412,50 €</span>
-              </div>
-              <div class="calc-divider"></div>
-              <div class="calc-row total-final">
-                <span>TOTAL L&Iacute;QUIDO A PERCIBIR</span>
-                <span>2.915,00 €</span>
-              </div>
-              <div class="calc-row subtle">
-                <span>Total bruto (con IVA):</span>
-                <span>3.327,50 €</span>
-              </div>
-            </div>
+            {{totales.resumen}}
           </div>
 
           <!-- Datos bancarios -->
@@ -934,13 +787,13 @@ export const documentTemplates: Template[] = [
             <h3>Transferencia Bancaria</h3>
             <div class="bank-grid">
               <div>
-                <p><strong>Banco:</strong> CaixaBank</p>
-                <p><strong>IBAN:</strong> ES21 2100 1234 5678 9012 3456</p>
+                <p><strong>Banco:</strong> <span data-gjs-editable="true" data-gjs-selectable="true">[NOMBRE_BANCO]</span></p>
+                <p><strong>IBAN:</strong> <span data-gjs-editable="true" data-gjs-selectable="true">[IBAN]</span></p>
               </div>
               <div>
-                <p><strong>SWIFT:</strong> CAIXESBB</p>
-                <p><strong>Titular:</strong> Nombre del Profesional</p>
-                <p><strong>Concepto:</strong> Factura F2024-00123</p>
+                <p><strong>SWIFT:</strong> <span data-gjs-editable="true" data-gjs-selectable="true">[SWIFT]</span></p>
+                <p><strong>Titular:</strong> {{empresa.nombre}}</p>
+                <p><strong>Concepto:</strong> {{contrato.numero}}</p>
               </div>
             </div>
           </div>
@@ -1250,9 +1103,9 @@ export const documentTemplates: Template[] = [
           <!-- Header compacto -->
           <div class="ticket-header">
             <h1 class="ticket-title">FACTURA SIMPLIFICADA</h1>
-            <p class="ticket-business">Nombre del Negocio / Aut&oacute;nomo</p>
-            <p class="ticket-nif">NIF: 12345678Z</p>
-            <p class="ticket-addr">Direcci&oacute;n del establecimiento, 12 – 28001 Madrid</p>
+            <p class="ticket-business">{{empresa.nombre}}</p>
+            <p class="ticket-nif">{{empresa.rfc}}</p>
+            <p class="ticket-addr">{{empresa.direccion}}</p>
           </div>
 
           <div class="ticket-divider">* * *</div>
@@ -1262,15 +1115,15 @@ export const documentTemplates: Template[] = [
             <table class="meta-table">
               <tr>
                 <td class="meta-label">N&ordm; FACTURA:</td>
-                <td class="meta-value">FT24-00987</td>
+                <td class="meta-value">{{contrato.numero}}</td>
               </tr>
               <tr>
                 <td class="meta-label">FECHA:</td>
-                <td class="meta-value">15/05/2024 18:32</td>
+                <td class="meta-value">{{fecha.hoy}}</td>
               </tr>
               <tr>
-                <td class="meta-label">CAJA / TERMINAL:</td>
-                <td class="meta-value">Caja 01 / TPV-001</td>
+                <td class="meta-label">CLIENTE:</td>
+                <td class="meta-value">{{lead.nombre}}</td>
               </tr>
             </table>
           </div>
@@ -1278,76 +1131,12 @@ export const documentTemplates: Template[] = [
           <div class="ticket-divider">- - - - - - - - - - - - - - - - - - - -</div>
 
           <!-- Items -->
-          <table class="ticket-items">
-            <thead>
-              <tr>
-                <th>Art&iacute;culo</th>
-                <th class="text-center">Ud.</th>
-                <th class="text-right">P.V.P.</th>
-                <th class="text-right">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>
-                  <div class="ticket-item">Producto / Servicio A</div>
-                </td>
-                <td class="text-center">2</td>
-                <td class="text-right">25,00 €</td>
-                <td class="text-right">50,00 €</td>
-              </tr>
-              <tr>
-                <td>
-                  <div class="ticket-item">Producto / Servicio B</div>
-                </td>
-                <td class="text-center">1</td>
-                <td class="text-right">34,50 €</td>
-                <td class="text-right">34,50 €</td>
-              </tr>
-              <tr>
-                <td>
-                  <div class="ticket-item">Producto / Servicio C</div>
-                </td>
-                <td class="text-center">3</td>
-                <td class="text-right">12,00 €</td>
-                <td class="text-right">36,00 €</td>
-              </tr>
-            </tbody>
-          </table>
+          {{items.tabla}}
 
           <div class="ticket-divider">- - - - - - - - - - - - - - - - - - - -</div>
 
           <!-- Totales compactos -->
-          <div class="ticket-totals">
-            <div class="ticket-line">
-              <span>Base Imponible:</span>
-              <span>99,59 €</span>
-            </div>
-            <div class="ticket-line">
-              <span>IVA 21% (base 99,59 €):</span>
-              <span>20,91 €</span>
-            </div>
-            <div class="ticket-line grand-ticket">
-              <span>TOTAL (IVA incl.):</span>
-              <span>120,50 €</span>
-            </div>
-            <div class="ticket-line text-muted-ticket">
-              <span>Efectivo / Tarjeta:</span>
-              <span>120,50 €</span>
-            </div>
-          </div>
-
-          <!-- Desglose IVA -->
-          <div class="ticket-tax-breakdown">
-            <p class="tax-break-title">Desglose de IVA</p>
-            <table class="tax-table">
-              <tr>
-                <td>Base 21%</td>
-                <td class="text-right">99,59 €</td>
-                <td class="text-right">IVA 20,91 €</td>
-              </tr>
-            </table>
-          </div>
+          {{totales.resumen}}
 
           <div class="ticket-divider">* * *</div>
 
