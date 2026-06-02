@@ -1393,5 +1393,585 @@ export const documentTemplates: Template[] = [
         }
       `
     }
+  },
+  // === NÓMINA / RECIBO DE SALARIOS (España) ===
+  {
+    id: 'nomina-estandar',
+    name: 'N&oacute;mina / Recibo de Salarios',
+    description: 'Recibo de salarios conforme al modelo oficial espa&ntilde;ol (RD 491/2024). Incluye devengos, bases de cotizaci&oacute;n, deducciones de Seguridad Social, IRPF y l&iacute;quido a percibir. Cumplimiento Veri*Factu y Sistema de Liquidaci&oacute;n Directa (SLD).',
+    category: 'document',
+    tags: ['nómina', 'recibo salarios', 'RRHH', 'España', 'SLD', 'verifactu'],
+    isDefault: true,
+    data: {
+      html: `
+        <div class="nomina-container">
+          <!-- Header: Empresa -->
+          <div class="nomina-header">
+            <div class="empresa-block">
+              <div class="logo-empresa" data-gjs-editable="true">E</div>
+              <div>
+                <h1 class="razon-social">{{empresa.nombre}}</h1>
+                <p class="empresa-nif">NIF/CIF: {{empresa.rfc}}</p>
+                <p class="empresa-dir">{{empresa.direccion}}</p>
+                <p class="empresa-cuenta" data-gjs-editable="true">C.C.C. Seguridad Social: [CCC_EMPRESA]</p>
+              </div>
+            </div>
+            <div class="nomina-meta">
+              <span class="badge-nomina">N&Oacute;MINA</span>
+              <p class="nomina-num">N&ordm; <span data-gjs-editable="true" data-gjs-selectable="true">[NUMERO_NOMINA]</span></p>
+              <p class="nomina-periodo"><span data-gjs-editable="true" data-gjs-selectable="true">[MES]</span> de <span data-gjs-editable="true" data-gjs-selectable="true">[ANIO]</span></p>
+              <p class="nomina-date">Emisi&oacute;n: {{fecha.hoy}}</p>
+            </div>
+          </div>
+
+          <!-- Datos del Empleado -->
+          <div class="empleado-section">
+            <span class="section-tag">DATOS DEL TRABAJADOR</span>
+            <div class="empleado-grid">
+              <div class="empleado-field">
+                <span class="field-label">Apellidos y Nombre</span>
+                <span class="field-value">{{lead.nombre}}</span>
+              </div>
+              <div class="empleado-field">
+                <span class="field-label">NIF / NIE</span>
+                <span class="field-value" data-gjs-editable="true" data-gjs-selectable="true">[NIF_EMPLEADO]</span>
+              </div>
+              <div class="empleado-field">
+                <span class="field-label">N&ordm; Afiliaci&oacute;n Seguridad Social</span>
+                <span class="field-value" data-gjs-editable="true" data-gjs-selectable="true">[NUM_AFILIACION]</span>
+              </div>
+              <div class="empleado-field">
+                <span class="field-label">Categor&iacute;a / Grupo Profesional</span>
+                <span class="field-value" data-gjs-editable="true" data-gjs-selectable="true">[CATEGORIA]</span>
+              </div>
+              <div class="empleado-field">
+                <span class="field-label">Antig&uuml;edad</span>
+                <span class="field-value" data-gjs-editable="true" data-gjs-selectable="true">[FECHA_ALTA]</span>
+              </div>
+              <div class="empleado-field">
+                <span class="field-label">Grupo de Cotizaci&oacute;n</span>
+                <span class="field-value" data-gjs-editable="true" data-gjs-selectable="true">[GRUPO_COTIZACION]</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tabla de Devengos -->
+          <div class="tabla-section">
+            <span class="section-tag">DEVENGOS</span>
+            <table class="tabla-nomina">
+              <thead>
+                <tr>
+                  <th class="col-concepto">Concepto</th>
+                  <th class="col-dias">D&iacute;as</th>
+                  <th class="col-importe">Importe</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Salario Base</td>
+                  <td class="text-center" data-gjs-editable="true" data-gjs-selectable="true">30</td>
+                  <td class="text-right" data-gjs-editable="true" data-gjs-selectable="true">1.200,00</td>
+                </tr>
+                <tr>
+                  <td>Plus Convenio</td>
+                  <td class="text-center" data-gjs-editable="true" data-gjs-selectable="true">30</td>
+                  <td class="text-right" data-gjs-editable="true" data-gjs-selectable="true">150,00</td>
+                </tr>
+                <tr>
+                  <td>Antig&uuml;edad</td>
+                  <td class="text-center" data-gjs-editable="true" data-gjs-selectable="true">30</td>
+                  <td class="text-right" data-gjs-editable="true" data-gjs-selectable="true">60,00</td>
+                </tr>
+                <tr>
+                  <td>Prorrata Pagas Extra</td>
+                  <td class="text-center" data-gjs-editable="true" data-gjs-selectable="true">30</td>
+                  <td class="text-right" data-gjs-editable="true" data-gjs-selectable="true">200,00</td>
+                </tr>
+                <tr class="total-row-nomina">
+                  <td><strong>TOTAL DEVENGADO</strong></td>
+                  <td></td>
+                  <td class="text-right"><strong data-gjs-editable="true" data-gjs-selectable="true">1.610,00</strong></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Tabla de Deducciones -->
+          <div class="tabla-section">
+            <span class="section-tag">DEDUCCIONES</span>
+            <table class="tabla-nomina">
+              <thead>
+                <tr>
+                  <th class="col-concepto">Concepto</th>
+                  <th class="col-dias">%</th>
+                  <th class="col-importe">Importe</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Contingencias Comunes</td>
+                  <td class="text-center">4,70%</td>
+                  <td class="text-right" data-gjs-editable="true" data-gjs-selectable="true">75,67</td>
+                </tr>
+                <tr>
+                  <td>Desempleo</td>
+                  <td class="text-center">1,55%</td>
+                  <td class="text-right" data-gjs-editable="true" data-gjs-selectable="true">24,96</td>
+                </tr>
+                <tr>
+                  <td>Formaci&oacute;n Profesional</td>
+                  <td class="text-center">0,10%</td>
+                  <td class="text-right" data-gjs-editable="true" data-gjs-selectable="true">1,61</td>
+                </tr>
+                <tr>
+                  <td>IRPF</td>
+                  <td class="text-center" data-gjs-editable="true" data-gjs-selectable="true">12,00%</td>
+                  <td class="text-right" data-gjs-editable="true" data-gjs-selectable="true">193,20</td>
+                </tr>
+                <tr class="total-row-nomina">
+                  <td><strong>TOTAL A DEDUCIR</strong></td>
+                  <td></td>
+                  <td class="text-right"><strong data-gjs-editable="true" data-gjs-selectable="true">295,44</strong></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Resumen Líquido -->
+          <div class="liquido-section">
+            <div class="liquido-card">
+              <div class="liquido-row">
+                <span class="liquido-label">TOTAL DEVENGADO</span>
+                <span class="liquido-valor" data-gjs-editable="true" data-gjs-selectable="true">1.610,00</span>
+              </div>
+              <div class="liquido-row deduc">
+                <span class="liquido-label">TOTAL DEDUCCIONES</span>
+                <span class="liquido-valor text-red" data-gjs-editable="true" data-gjs-selectable="true">-295,44</span>
+              </div>
+              <div class="liquido-divider"></div>
+              <div class="liquido-row total-liquido">
+                <span class="liquido-label">L&Iacute;QUIDO A PERCIBIR</span>
+                <span class="liquido-valor-final" data-gjs-editable="true" data-gjs-selectable="true">1.314,56</span>
+              </div>
+              <div class="liquido-letras">
+                <p>SON: <span data-gjs-editable="true" data-gjs-selectable="true">MIL TRESCIENTOS CATORCE EUROS CON CINCUENTA Y SEIS C&Eacute;NTIMOS</span></p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bases de Cotización -->
+          <div class="bases-section">
+            <span class="section-tag">BASES DE COTIZACI&Oacute;N</span>
+            <table class="tabla-bases">
+              <thead>
+                <tr>
+                  <th>Concepto</th>
+                  <th class="text-right">Base</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Contingencias Comunes</td>
+                  <td class="text-right" data-gjs-editable="true" data-gjs-selectable="true">1.610,00</td>
+                </tr>
+                <tr>
+                  <td>Desempleo / FP / FOGASA</td>
+                  <td class="text-right" data-gjs-editable="true" data-gjs-selectable="true">1.610,00</td>
+                </tr>
+                <tr>
+                  <td>IRPF (Base sujeta a retenci&oacute;n)</td>
+                  <td class="text-right" data-gjs-editable="true" data-gjs-selectable="true">1.610,00</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Datos de pago -->
+          <div class="pago-section">
+            <h3>Datos de Pago</h3>
+            <div class="pago-grid">
+              <p><strong>Banco:</strong> <span data-gjs-editable="true" data-gjs-selectable="true">[ENTIDAD_BANCARIA]</span></p>
+              <p><strong>IBAN:</strong> <span data-gjs-editable="true" data-gjs-selectable="true">[IBAN]</span></p>
+              <p><strong>Fecha de pago:</strong> <span data-gjs-editable="true" data-gjs-selectable="true">[FECHA_PAGO]</span></p>
+              <p><strong>Concepto:</strong> N&oacute;mina <span data-gjs-editable="true" data-gjs-selectable="true">[MES]</span> <span data-gjs-editable="true" data-gjs-selectable="true">[ANIO]</span></p>
+            </div>
+          </div>
+
+          <!-- Compliance -->
+          <div class="nomina-compliance">
+            <p>Este documento constituye el Recibo Individual de Salarios conforme al art&iacute;culo 29 del Estatuto de los Trabajadores y al RD 491/2024.</p>
+            <p class="compliance-code">Volkern ERP | Sistema de Liquidaci&oacute;n Directa (SLD) | Veri*Factu v2.0</p>
+          </div>
+
+          <div class="nomina-footer">
+            <p>Documento generado electr&oacute;nicamente por Volkern ERP. Conserve este justificante a efectos de IRPF y Seguridad Social.</p>
+            <p class="footer-small">Volkern ERP &mdash; www.volkern.com</p>
+          </div>
+        </div>
+      `,
+      css: `
+        .nomina-container {
+          font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
+          color: #1e293b;
+          max-width: 800px;
+          margin: 0 auto;
+          padding: 40px;
+          background: #ffffff;
+          min-height: 1000px;
+        }
+
+        /* ── Header ── */
+        .nomina-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          border-bottom: 3px solid #059669;
+          padding-bottom: 20px;
+          margin-bottom: 24px;
+        }
+
+        .empresa-block {
+          display: flex;
+          gap: 14px;
+          align-items: flex-start;
+        }
+
+        .logo-empresa {
+          width: 48px;
+          height: 48px;
+          background: #059669;
+          color: white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 900;
+          font-size: 18px;
+          border-radius: 12px;
+          flex-shrink: 0;
+        }
+
+        .razon-social {
+          font-size: 17px;
+          font-weight: 800;
+          margin: 0 0 2px 0;
+          color: #0f172a;
+        }
+
+        .empresa-nif,
+        .empresa-dir,
+        .empresa-cuenta {
+          font-size: 11px;
+          color: #64748b;
+          margin: 1px 0;
+        }
+
+        .nomina-meta {
+          text-align: right;
+        }
+
+        .badge-nomina {
+          display: inline-block;
+          background: #059669;
+          color: white;
+          font-size: 12px;
+          font-weight: 900;
+          padding: 4px 14px;
+          border-radius: 6px;
+          letter-spacing: 2px;
+          margin-bottom: 8px;
+        }
+
+        .nomina-num {
+          font-size: 16px;
+          font-weight: 700;
+          color: #1e293b;
+          margin: 4px 0;
+        }
+
+        .nomina-periodo {
+          font-size: 14px;
+          font-weight: 600;
+          color: #059669;
+          margin: 2px 0;
+        }
+
+        .nomina-date {
+          font-size: 11px;
+          color: #94a3b8;
+          margin: 2px 0;
+        }
+
+        /* ── Section Tags ── */
+        .section-tag {
+          display: block;
+          font-size: 10px;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          color: #059669;
+          margin-bottom: 10px;
+          border-bottom: 1px solid #d1fae5;
+          padding-bottom: 6px;
+        }
+
+        /* ── Empleado Grid ── */
+        .empleado-section {
+          background: #f0fdf4;
+          border: 1px solid #bbf7d0;
+          border-radius: 12px;
+          padding: 18px;
+          margin-bottom: 24px;
+        }
+
+        .empleado-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+        }
+
+        .empleado-field {
+          display: flex;
+          flex-direction: column;
+        }
+
+        .field-label {
+          font-size: 9px;
+          font-weight: 700;
+          text-transform: uppercase;
+          color: #64748b;
+          letter-spacing: 0.5px;
+          margin-bottom: 2px;
+        }
+
+        .field-value {
+          font-size: 13px;
+          font-weight: 600;
+          color: #0f172a;
+        }
+
+        /* ── Tables ── */
+        .tabla-section {
+          margin-bottom: 24px;
+        }
+
+        .tabla-nomina {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 12px;
+        }
+
+        .tabla-nomina thead {
+          background: #059669;
+          color: white;
+        }
+
+        .tabla-nomina th {
+          padding: 10px 12px;
+          font-size: 10px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.03em;
+        }
+
+        .tabla-nomina th:first-child { border-radius: 8px 0 0 0; }
+        .tabla-nomina th:last-child { border-radius: 0 8px 0 0; }
+
+        .tabla-nomina td {
+          padding: 10px 12px;
+          border-bottom: 1px solid #e2e8f0;
+          font-size: 12px;
+        }
+
+        .tabla-nomina tbody tr:hover {
+          background: #f8fafc;
+        }
+
+        .col-concepto { width: 55%; }
+        .col-dias { width: 15%; }
+        .col-importe { width: 30%; }
+
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+
+        .total-row-nomina td {
+          border-top: 2px solid #059669;
+          border-bottom: 2px solid #059669;
+          background: #f0fdf4;
+          font-weight: 700;
+          color: #065f46;
+        }
+
+        /* ── Líquido ── */
+        .liquido-section {
+          display: flex;
+          justify-content: flex-end;
+          margin-bottom: 24px;
+        }
+
+        .liquido-card {
+          width: 380px;
+          background: #f0fdf4;
+          border: 2px solid #059669;
+          border-radius: 16px;
+          padding: 24px;
+        }
+
+        .liquido-row {
+          display: flex;
+          justify-content: space-between;
+          padding: 6px 0;
+          font-size: 13px;
+        }
+
+        .liquido-label {
+          font-weight: 600;
+          color: #334155;
+        }
+
+        .liquido-valor {
+          font-weight: 700;
+        }
+
+        .deduc .liquido-valor {
+          color: #dc2626;
+        }
+
+        .liquido-divider {
+          border-top: 2px dashed #34d399;
+          margin: 8px 0;
+        }
+
+        .total-liquido {
+          margin-top: 6px;
+        }
+
+        .liquido-valor-final {
+          font-size: 22px;
+          font-weight: 900;
+          color: #059669;
+        }
+
+        .liquido-letras {
+          margin-top: 10px;
+          padding-top: 10px;
+          border-top: 1px solid #bbf7d0;
+        }
+
+        .liquido-letras p {
+          font-size: 10px;
+          color: #64748b;
+          font-style: italic;
+          margin: 0;
+        }
+
+        .text-red {
+          color: #dc2626;
+        }
+
+        /* ── Bases ── */
+        .bases-section {
+          margin-bottom: 24px;
+        }
+
+        .tabla-bases {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 12px;
+        }
+
+        .tabla-bases th {
+          background: #f1f5f9;
+          padding: 10px 12px;
+          font-size: 10px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.03em;
+          border-bottom: 2px solid #cbd5e1;
+        }
+
+        .tabla-bases td {
+          padding: 8px 12px;
+          border-bottom: 1px solid #e2e8f0;
+        }
+
+        /* ── Pago ── */
+        .pago-section {
+          background: #f1f5f9;
+          border: 1px solid #e2e8f0;
+          border-radius: 12px;
+          padding: 18px;
+          margin-bottom: 20px;
+        }
+
+        .pago-section h3 {
+          font-size: 11px;
+          font-weight: 800;
+          text-transform: uppercase;
+          color: #059669;
+          margin: 0 0 10px 0;
+          letter-spacing: 0.5px;
+        }
+
+        .pago-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 8px;
+          font-size: 12px;
+          color: #334155;
+        }
+
+        .pago-grid p {
+          margin: 2px 0;
+        }
+
+        /* ── Compliance ── */
+        .nomina-compliance {
+          background: #fffbeb;
+          border: 1px solid #fde68a;
+          border-radius: 8px;
+          padding: 12px 16px;
+          margin-bottom: 16px;
+        }
+
+        .nomina-compliance p {
+          font-size: 10px;
+          color: #92400e;
+          margin: 0 0 4px 0;
+          line-height: 1.4;
+        }
+
+        .compliance-code {
+          font-size: 9px;
+          color: #a16207;
+          font-weight: 600;
+          margin: 0;
+        }
+
+        /* ── Footer ── */
+        .nomina-footer {
+          text-align: center;
+          font-size: 10px;
+          color: #94a3b8;
+          border-top: 1px solid #e2e8f0;
+          padding-top: 16px;
+        }
+
+        .nomina-footer p {
+          margin: 2px 0;
+        }
+
+        .footer-small {
+          font-size: 9px;
+          color: #cbd5e1;
+        }
+
+        @media print {
+          .nomina-container {
+            padding: 0;
+            box-shadow: none;
+          }
+        }
+      `
+    }
   }
 ];
