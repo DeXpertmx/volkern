@@ -466,6 +466,29 @@ export default function SovereignPortalPage() {
                   </Card>
                 )}
 
+                {/* Modelo 347 - Operaciones con Terceros */}
+                {fiscalData.modelo347Summary && (
+                  <Card className="rounded-2xl border-none shadow-md bg-white overflow-hidden">
+                    <div className="h-1.5 bg-emerald-500" />
+                    <CardContent className="p-5">
+                      <div className="flex items-center justify-between mb-3">
+                        <p className="text-xs font-black uppercase tracking-widest text-slate-400">Operaciones con Terceros</p>
+                        <Badge className="bg-emerald-50 text-emerald-600 border-none text-[10px]">{fiscalData.modelo347Summary.invoiceCount} facturas</Badge>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-slate-500">Total Anual Facturado</span>
+                          <span className="font-black text-lg text-emerald-600">{fiscalData.modelo347Summary.totalAnnualBilled}</span>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-slate-500">Promedio Mensual</span>
+                          <span className="font-bold text-emerald-600">{fiscalData.modelo347Summary.monthlyAverage}</span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
                 {/* Próximos Vencimientos */}
                 {fiscalData.upcomingDeadlines?.length > 0 && (
                   <Card className="rounded-3xl border-none shadow-xl bg-white overflow-hidden">

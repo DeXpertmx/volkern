@@ -249,7 +249,38 @@ export async function GET(
       _sum: { taxAmount: true },
     });
 
-    // 10. Actualizar tracking del portal
+    // 10. Obtener Modelo 347 (Operaciones con Terceros) — total anual del contacto
+    let modelo347Summary: {
+      totalAnnualBilled: string;
+      invoiceCount: number;
+      monthlyAverage: string;
+      hasOperations: boolean;
+    } | null = null;
+    try {
+      const yearStart = new Date(currentYear, 0, 1);
+      const yearEnd = new Date(currentYear, 11, 31, 23, 59, 59, 999);
+      const annualInvoices = await prisma.invoice.findMany({
+        where: {
+          tenantId,
+          contactId,
+          fechaEmision: { gte: yearStart, lte: yearEnd },
+        },
+        select: { monto: true },
+      });
+      if (annualInvoices.length > 0) {
+        const total = annualInvoices.reduce((s, inv) => s + Number(inv.monto), 0);
+        modelo347Summary = {
+          totalAnnualBilled: formatCurrency(total),
+          invoiceCount: annualInvoices.length,
+          monthlyAverage: formatCurrency(total / 12),
+          hasOperations: true,
+        };
+      }
+    } catch {
+      // Si falla, continuar sin Modelo 347
+    }
+
+    // 11. Actualizar tracking del portal
     await prisma.erp_customer_portal_access.update({
       where: { id: access.id },
       data: { lastAccessAt: new Date() },
@@ -293,6 +324,7 @@ export async function GET(
       modelo130Summary,
       modelo390Summary,
       modelo349Summary,
+      modelo347Summary,
       invoices: invoices.map(inv => ({
         id: inv.id,
         numero: inv.numero,
