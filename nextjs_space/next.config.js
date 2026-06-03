@@ -41,6 +41,43 @@ const nextConfig = {
   // resolverse correctamente desde node_modules
   serverExternalPackages: ['pino', 'thread-stream'],
 
+  // ═══ Redirects (301) ═══════════════════════════════════
+  // Redirigir rutas antiguas de landings verticales a /soluciones/
+  async redirects() {
+    return [
+      {
+        source: '/real-estate',
+        destination: '/soluciones/real-estate',
+        permanent: true,
+      },
+      {
+        source: '/accounting',
+        destination: '/soluciones/accounting',
+        permanent: true,
+      },
+      {
+        source: '/marketing',
+        destination: '/soluciones/marketing',
+        permanent: true,
+      },
+      {
+        source: '/academy',
+        destination: '/soluciones/academy',
+        permanent: true,
+      },
+      {
+        source: '/rrhh',
+        destination: '/soluciones/rrhh',
+        permanent: true,
+      },
+      {
+        source: '/crm-ventas',
+        destination: '/soluciones/crm-ventas',
+        permanent: true,
+      },
+    ];
+  },
+
   // ═══ Output File Tracing ═══════════════════════════════
   // Reduce tamaño del build standalone excluyendo archivos
   // que no son necesarios en producción
