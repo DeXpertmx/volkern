@@ -74,7 +74,7 @@ const INTENT_SKILL_MAP: Record<string, string> = {
 
 const INTENT_REQUIRED_PARAMS: Record<string, string[]> = {
   'crear_lead': ['nombre', 'email'],
-  'agendar_cita': ['nombre'],
+  'agendar_cita': ['nombre', 'tipo'],
   'cancelar_cita': ['nombre'],
   'crear_tarea': ['titulo'],
   'registrar_interaccion': ['tipo', 'contenido'],
@@ -92,7 +92,7 @@ const PARAM_QUESTIONS: Record<string, string> = {
   duracion: '⏱️ ¿Cuántos minutos durará la reunión?',
   tipo: '📍 ¿La cita será presencial o por videollamada?',
   contenido: '📝 ¿Qué ocurrió en la interacción?',
-  ubicacion: '📍 ¿Dónde será la cita o prefieres que genere un link de Google Meet?',
+  ubicacion: '📍 Si es presencial, ¿dónde será la cita?',
   motivo: '📝 ¿Por qué motivo deseas cancelar la cita?',
 }
 
@@ -127,7 +127,10 @@ CÓMO TRABAJAS:
 
 INTENCIONES DISPONIBLES:
 - crear_lead: Crear un nuevo lead. Necesita: nombre, email. También: telefono, contexto.
-- agendar_cita: Agendar una cita. Necesita: nombre. También: fecha, hora, email, titulo, tipo.
+- agendar_cita: Agendar una cita. Necesita: nombre, tipo. También: fecha, hora, email, titulo, ubicacion.
+  El tipo debe ser "videollamada" o "presencial".
+  - Si el usuario dice "videollamada", pon tipo:"videollamada". El sistema generará un link de Google Meet.
+  - Si el usuario dice "presencial" o no especifica, pon tipo:"presencial" y también pide la ubicación.
 - mis_citas: Consultar próximas citas.
 - cancelar_cita: Cancelar una cita. Necesita: nombre. También: email, fecha.
 - crear_tarea: Crear tarea. Necesita: titulo. También: descripcion, fechaVencimiento, email.
@@ -162,8 +165,7 @@ CRÍTICO:
 ✅ Cuando falte algo, pregunta UNA COSA a la vez
 ✅ Tu mensaje es lo que el usuario verá — sé natural y cálido
 ✅ Si te preguntan "¿qué puedes hacer?", enumera las intenciones disponibles
-✅ AL AGENDAR: si el usuario no especificó si es videollamada o presencial, pregúntale: "¿La cita será por videollamada o presencial?"
-✅ Si el usuario dice videollamada, agrega tipo:"videollamada" a los parámetros. El sistema generará un link de Google Meet automáticamente.
+
 
 FORMATO DE RESPUESTA (SIEMPRE JSON):
 {
@@ -358,10 +360,18 @@ Continúa con la misma intención (${pendingCtx.intent}) y completa los parámet
 
     // ── 4. Si la IA necesita más información: dejar que ella pregunte ─
     if (aiResult.needsMoreInfo && aiResult.intent !== 'consulta_general') {
+      // Calcular qué parámetros REQUERIDOS faltan realmente
+      const required = INTENT_REQUIRED_PARAMS[aiResult.intent] || []
+      const actualMissing = required.filter(p => !realParams[p] && p !== 'next')
+      // Si tipo es videollamada, ubicacion no es necesaria
+      const missing = realParams.tipo === 'videollamada'
+        ? actualMissing.filter(p => p !== 'ubicacion')
+        : actualMissing
+
       await savePendingContext(userKey, tenantId, {
         intent: aiResult.intent,
         params: realParams,
-        missingParams: ['next'], // Marcador: la IA manejará las preguntas
+        missingParams: missing.length > 0 ? missing : ['next'],
       })
 
       // Usar el mensaje NATURAL de la IA, no plantillas
