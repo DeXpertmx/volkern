@@ -1,10 +1,25 @@
 /**
  * Reproduce un beep usando la Web Audio API.
  * No requiere archivos de audio externos.
+ * Usa un AudioContext singleton para evitar límites del navegador (máx. 4-6 contextos).
  */
+
+let audioCtx: AudioContext | null = null;
+
+function getAudioContext(): AudioContext {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+  }
+  // Reanudar si está suspendido (política de autoplay del navegador)
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume().catch(() => {});
+  }
+  return audioCtx;
+}
+
 export function playBeep(type: 'start' | 'stop'): void {
   try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const ctx = getAudioContext();
 
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -33,11 +48,6 @@ export function playBeep(type: 'start' | 'stop'): void {
       osc.start(now);
       osc.stop(now + 0.13);
     }
-
-    // Liberar recursos después de que termine
-    osc.onended = () => {
-      ctx.close().catch(() => {});
-    };
   } catch {
     // Silenciosamente ignorar si Web Audio no está disponible
   }
