@@ -30,8 +30,9 @@ export function useSpeechRecognition(options?: {
   const [transcript, setTranscript] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const recognitionRef = useRef<any>(null);
   const isListeningRef = useRef(false);
+  const endTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const supported = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
@@ -44,12 +45,21 @@ export function useSpeechRecognition(options?: {
       return;
     }
 
-    if (isListeningRef.current) return;
+    if (isListeningRef.current) {
+      // Ya está escuchando, no hacer nada
+      return;
+    }
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       setError('Reconocimiento de voz no disponible');
       return;
+    }
+
+    // Cancelar cualquier timeout de finalización pendiente
+    if (endTimeoutRef.current) {
+      clearTimeout(endTimeoutRef.current);
+      endTimeoutRef.current = null;
     }
 
     const recognition = new SpeechRecognition();
@@ -59,14 +69,11 @@ export function useSpeechRecognition(options?: {
 
     recognition.onresult = (event: any) => {
       let accumulatedFinal = '';
-      let interimText = '';
 
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
         if (result.isFinal) {
           accumulatedFinal += (accumulatedFinal ? ' ' : '') + result[0].transcript;
-        } else {
-          interimText += (interimText ? ' ' : '') + result[0].transcript;
         }
       }
 
@@ -78,56 +85,71 @@ export function useSpeechRecognition(options?: {
         });
       }
 
-      onResult?.(accumulatedFinal || interimText);
+      onResult?.(accumulatedFinal);
     };
 
     recognition.onerror = (event: any) => {
-      if (event.error === 'no-speech') {
-        // Silencio, intentar de nuevo si autoRestart está activado
-        if (autoRestart && isListeningRef.current) {
-          recognition.start();
-          return;
-        }
-      } else if (event.error === 'aborted') {
-        // El usuario detuvo la grabación, no es error
+      if (event.error === 'aborted') {
+        // El usuario detuvo la grabación explícitamente, no mostrar error
         return;
-      } else {
+      }
+      if (event.error !== 'no-speech') {
         setError(`Error: ${event.error}`);
       }
-      setIsListening(false);
-      isListeningRef.current = false;
+      // onend se encargará de limpiar el estado
     };
 
     recognition.onend = () => {
-      if (isListeningRef.current && autoRestart) {
+      // Marcar como no escuchando INMEDIATAMENTE (ref) para permitir
+      // que el usuario pueda reiniciar el reconocimiento si quiere.
+      // Solo la UI (setIsListening) se delayea para evitar flickering.
+      isListeningRef.current = false;
+
+      if (autoRestart) {
         try {
           recognition.start();
+          isListeningRef.current = true; // restart exitoso
+          return;
         } catch {
-          setIsListening(false);
-          isListeningRef.current = false;
+          // Si falla el restart, dejar que el timeout limpie la UI
         }
-      } else {
-        setIsListening(false);
-        isListeningRef.current = false;
       }
+
+      // Delay visual para evitar flickering
+      if (endTimeoutRef.current) clearTimeout(endTimeoutRef.current);
+      endTimeoutRef.current = setTimeout(() => {
+        setIsListening(false);
+        endTimeoutRef.current = null;
+      }, 300);
     };
+
+    // Establecer estado ANTES de llamar a start() para que la UI reaccione
+    // aunque el navegador dispare onend sincrónicamente
+    setIsListening(true);
+    setError(null);
+    setTranscript('');
+    isListeningRef.current = true;
 
     try {
       recognition.start();
       recognitionRef.current = recognition;
-      isListeningRef.current = true;
-      setIsListening(true);
-      setError(null);
-      setTranscript('');
     } catch (err) {
       setError('Error al iniciar el reconocimiento de voz');
       setIsListening(false);
       isListeningRef.current = false;
+      if (endTimeoutRef.current) {
+        clearTimeout(endTimeoutRef.current);
+        endTimeoutRef.current = null;
+      }
     }
   }, [isSupported, lang, onResult, onFinalResult, autoRestart]);
 
   const stopListening = useCallback(() => {
-    if (recognitionRef.current && isListeningRef.current) {
+    if (endTimeoutRef.current) {
+      clearTimeout(endTimeoutRef.current);
+      endTimeoutRef.current = null;
+    }
+    if (recognitionRef.current) {
       isListeningRef.current = false;
       try {
         recognitionRef.current.stop();
@@ -150,6 +172,10 @@ export function useSpeechRecognition(options?: {
   // Limpiar al desmontar
   useEffect(() => {
     return () => {
+      if (endTimeoutRef.current) {
+        clearTimeout(endTimeoutRef.current);
+        endTimeoutRef.current = null;
+      }
       if (recognitionRef.current) {
         try {
           recognitionRef.current.stop();
