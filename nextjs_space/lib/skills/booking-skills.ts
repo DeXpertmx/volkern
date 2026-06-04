@@ -35,6 +35,8 @@ export interface CreateBookingInput {
   duracion?: number; // en minutos
   servicioId?: string;
   catalogoItemId?: string;
+  linkReunion?: string;
+  ubicacion?: string;
   // Opciones
   crearLead?: boolean;
   crearConversacion?: boolean;
@@ -89,6 +91,8 @@ export async function createBooking(input: CreateBookingInput) {
     duracion = 30,
     servicioId,
     catalogoItemId,
+    linkReunion,
+    ubicacion,
     crearLead = true,
     crearConversacion = false,
     crearTareaConfirmacion = true,
@@ -134,6 +138,8 @@ export async function createBooking(input: CreateBookingInput) {
       leadId: lead.id,
       servicioId,
       catalogoItemId,
+      linkReunion,
+      ubicacion,
     },
   });
 

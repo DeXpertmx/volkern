@@ -40,6 +40,7 @@ import * as vaultPayrollSkills from './vault-payroll-skills';
 import * as operationalSkills from './operational-skills';
 import * as marketingSkills from './marketing-skills';
 import * as realEstateSkills from './real-estate-skills';
+import * as logisticsSkills from './logistics-skills';
 import * as interactionSkills from './interaction-skills';
 import * as billingSkills from './billing-skills';
 import { eventBus, EVENTS } from './event-bus';
@@ -255,15 +256,24 @@ const createBookingWrapper = async (input: {
   fecha?: string; 
   hora?: string; 
   titulo?: string;
+  tipo?: string;
+  ubicacion?: string;
   userId?: string;
 }) => {
-  const { tenantId, email, nombre, fecha, hora, titulo, userId } = input;
+  const { tenantId, email, nombre, fecha, hora, titulo, tipo, ubicacion, userId } = input;
   const { prisma } = await import('@/lib/db');
+
+  // Validar que el nombre no sea un placeholder o valor incorrecto
+  // Usa \b (word boundary) para evitar falsos positivos con palabras que contengan esos términos
+  const invalidNameRegex = /\b(?:una cita|cita (de|en|con)?|agendar|cliente|lead|contacto|prueba|seguimiento)\b/i
+  if (nombre && invalidNameRegex.test(nombre)) {
+    throw new Error(`El nombre "${nombre}" no es válido. Por favor proporciona el nombre completo del contacto.`)
+  }
 
   let targetEmail = email;
   let targetNombre = nombre;
 
-  // 1. Si no hay email pero hay nombre, intentar buscarlo
+  // 1. Si no hay email pero hay nombre, intentar buscar el lead/contacto existente
   if (!targetEmail && targetNombre) {
     const lead = await prisma.lead.findFirst({ 
       where: { tenantId, nombre: { contains: targetNombre, mode: 'insensitive' } } 
@@ -283,18 +293,87 @@ const createBookingWrapper = async (input: {
     }
   }
 
-  if (!targetEmail) throw new Error('Se requiere un email para agendar la cita. Si el contacto no existe, por favor proporciónalo.');
-  if (!targetNombre) targetNombre = targetEmail.split('@')[0];
-
-  // 2. Procesar fecha y hora
-  const dt = new Date();
-  if (fecha) {
-    const [y, m, d] = fecha.split('-').map(Number);
-    dt.setFullYear(y, m - 1, d);
+  // 2. Si no hay email (no se encontró el contacto), generar placeholder
+  // para que bookingSkills.createBooking pueda crear el lead automáticamente
+  if (!targetEmail) {
+    const safeName = (targetNombre || 'cliente').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '.').replace(/[^a-z0-9.]/g, '')
+    targetEmail = `${safeName}@temp.volkern.app`
   }
-  if (hora) {
-    const [h, min] = hora.split(':').map(Number);
-    dt.setHours(h, min || 0, 0, 0);
+  if (!targetNombre) targetNombre = targetEmail.split('@')[0]
+
+  // 3. Procesar fecha y hora de forma robusta
+  //    Soporta formatos: "10:00", "10:00am", "2pm", "10:00 AM", "2:30 PM"
+  function parseHora(horaStr: string): { h: number; min: number } | null {
+    if (!horaStr || typeof horaStr !== 'string') return null
+    
+    // Detectar am/pm
+    const isPM = /pm|p\.m\./i.test(horaStr)
+    const isAM = /am|a\.m\./i.test(horaStr)
+    
+    // Extraer números: puede ser "10:00" o "10" o "2"
+    const nums = horaStr.match(/(\d{1,2})(?:[:\.](\d{2}))?/)
+    if (!nums) return null
+    
+    let h = parseInt(nums[1], 10)
+    const min = nums[2] ? parseInt(nums[2], 10) : 0
+    
+    // Ajustar am/pm
+    if (isPM && h !== 12) h += 12
+    if (isAM && h === 12) h = 0
+    
+    return { h, min }
+  }
+
+  let dt: Date
+  try {
+    if (fecha && hora) {
+      // Intentar parsear YYYY-MM-DD o DD/MM/YYYY
+      const fechaRegex = /^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})$/
+      const fechaMatch = typeof fecha === 'string' ? fecha.match(fechaRegex) : null
+      if (fechaMatch) {
+        const [y, m, d] = [fechaMatch[1], fechaMatch[2], fechaMatch[3]].map(Number)
+        const horaParsed = parseHora(hora)
+        if (horaParsed) {
+          dt = new Date(y, m - 1, d, horaParsed.h, horaParsed.min, 0, 0)
+        } else {
+          dt = new Date(y, m - 1, d, 12, 0, 0, 0)
+        }
+      } else {
+        // Fallback: new Date con string completo
+        dt = new Date(`${fecha}T${hora}:00`)
+        if (isNaN(dt.getTime())) dt = new Date()
+      }
+    } else if (fecha && !hora) {
+      dt = new Date(fecha)
+      if (isNaN(dt.getTime())) dt = new Date()
+    } else {
+      // Sin fecha ni hora — NO asumir default, usar mañana 10am como fallback
+      dt = new Date()
+      dt.setDate(dt.getDate() + 1)
+      dt.setHours(10, 0, 0, 0)
+    }
+  } catch {
+    dt = new Date()
+    dt.setDate(dt.getDate() + 1)
+    dt.setHours(10, 0, 0, 0)
+  }
+
+  // Validar que la fecha sea válida
+  if (isNaN(dt.getTime())) {
+    dt = new Date()
+    dt.setDate(dt.getDate() + 1)
+    dt.setHours(10, 0, 0, 0)
+  }
+
+  // 4. Determinar ubicación según el tipo de cita
+  let ubicacionFinal = ubicacion
+  let linkReunion: string | undefined
+  
+  if (tipo && /videollamada|video|meet|virtual|en línea|online|zoom|google/i.test(tipo)) {
+    ubicacionFinal = 'Google Meet (Virtual)'
+    linkReunion = 'https://meet.google.com/new'
+  } else if (tipo && /presencial|oficina|domicilio|casa/i.test(tipo)) {
+    ubicacionFinal = ubicacion || 'Por confirmar ubicación'
   }
 
   return bookingSkills.createBooking({
@@ -303,7 +382,10 @@ const createBookingWrapper = async (input: {
     nombre: targetNombre,
     titulo: titulo || 'Cita de Seguimiento',
     fechaHora: dt,
+    descripcion: tipo ? `Tipo: ${tipo}` : undefined,
     userId,
+    linkReunion,
+    ubicacion: ubicacionFinal,
     source: 'app'
   });
 };
@@ -443,6 +525,13 @@ export const skills = {
   search_properties_by_filters: realEstateSkills.search_properties_by_filters,
   recommend_properties: realEstateSkills.recommend_properties,
 
+  // ERP Logística
+  get_shipment_status: logisticsSkills.getShipmentStatus,
+  check_fleet_health: logisticsSkills.checkFleetHealth,
+  optimize_route: logisticsSkills.optimizeRoute,
+  suggest_warehouse_reorg: logisticsSkills.suggestWarehouseReorganization,
+  track_order: logisticsSkills.trackOrder,
+
   // Marketing Hub
   generate_marketing_copy: marketingSkills.generate_marketing_copy,
   analyze_marketing_sentiment: marketingSkills.analyze_marketing_sentiment,
@@ -581,6 +670,13 @@ export function listSkills(): Array<{ name: SkillName; description: string; cate
     { name: 'calculate_property_quality_score', description: 'Calcular score de calidad (0-100) basado en completitud de datos e imágenes', category: 'real_estate' },
     { name: 'search_properties_by_filters', description: 'Buscar propiedades por filtros en lenguaje natural (para chatbot)', category: 'real_estate' },
     { name: 'recommend_properties', description: 'Recomendar propiedades basado en preferencias del usuario', category: 'real_estate' },
+
+    // ERP Logística
+    { name: 'get_shipment_status', description: 'Consultar estado de un envío por tracking o referencia', category: 'logistics' },
+    { name: 'check_fleet_health', description: 'Analizar estado de la flota, mantenimientos pendientes e ITVs próximas a vencer', category: 'logistics' },
+    { name: 'optimize_route', description: 'Optimizar ruta de reparto basada en pedidos pendientes y destinos', category: 'logistics' },
+    { name: 'suggest_warehouse_reorg', description: 'Sugerir reorganización de almacén basada en rotación de productos', category: 'logistics' },
+    { name: 'track_order', description: 'Tracking público de pedido para cliente con timeline de eventos', category: 'logistics' },
 
     // Marketing Hub
     { name: 'generate_marketing_copy', description: 'Generar copy publicitario o social con IA', category: 'marketing' },
