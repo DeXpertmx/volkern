@@ -129,10 +129,10 @@ export const crmIntents: IntentSchema[] = [
   {
     name: 'cancelar_cita',
     description: 'Cancelar una cita existente',
-    requiredParams: ['citaId'],
-    optionalParams: ['email', 'fecha'],
+    requiredParams: ['nombre'],
+    optionalParams: ['email', 'fecha', 'citaId'],
     examples: [
-      'cancela la cita #123',
+      'cancela la cita de Alejandra Velázquez',
       'elimina mi reunión con juan@email.com de mañana',
       'anula la cita del viernes con María'
     ],
