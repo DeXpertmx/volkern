@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils';
 import { Slider } from '@/components/ui/slider';
 import { useSpeechRecognition } from './useSpeechRecognition';
 import { VoiceWaveform } from './VoiceWaveform';
-import { playBeep } from './playBeep';
+import { playBeep, hapticFeedback } from './playBeep';
 
 interface Message {
   id: string;
@@ -82,16 +82,19 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
     },
   });
 
-  // Envolver toggle para agregar sonido de inicio/fin
+  // Envolver toggle para agregar sonido + vibración de inicio/fin
   const handleToggleVoice = () => {
     if (isPaused) {
       playBeep('start');
+      hapticFeedback('start');
       resumeListening();
     } else if (isListening) {
       playBeep('stop');
+      hapticFeedback('stop');
       stopListening();
     } else {
       playBeep('start');
+      hapticFeedback('start');
       startListening();
     }
   };
@@ -340,8 +343,10 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
                         onClick={() => {
                           if (isPaused) {
                             playBeep('start');
+                            hapticFeedback('start');
                             resumeListening();
                           } else {
+                            hapticFeedback('pause');
                             pauseListening();
                           }
                         }}
