@@ -42,7 +42,7 @@ export class EntityExtractorAgent {
     hora: /(\d{1,2}):?(\d{2})?\s*(?:am|pm|h|horas?)?/i,
     duracion: /(\d+)\s*(?:min|minutos?|horas?|h)/i,
     prioridad: /(alta|media|baja|urgente|normal|poca)/i,
-    nombreCompleto: /(?:agrega|crea|nuevo|contacto|lead|cliente)\s+(?:a\s+)?([A-ZÁÉÍÓÚÜ][a-záéíóúü]+(?:\s+[A-ZÁÉÍÓÚÜ][a-záéíóúü]+){1,3})/i,
+    nombreCompleto: /(?:agrega|crea|nuevo|contacto|lead|cliente|agenda|agendar|cita|reunión|reunion|busca|buscar|registra|actualiza)\s+(?:a\s+|una\s+|un\s+|la\s+|el\s+)?(?:cita\s+con\s+|reuni.n\s+con\s+|meeting\s+con\s+|con\s+|para\s+)?([A-ZÁÉÍÓÚÜ][a-záéíóúü]+(?:\s+[A-ZÁÉÍÓÚÜ][a-záéíóúü]+){1,3})/i,
     tipoInteraccion: /(whatsapp|llamada|email|correo|reunión|reunion|nota interna)/i
   };
 

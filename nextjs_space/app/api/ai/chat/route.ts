@@ -123,7 +123,7 @@ CÓMO TRABAJAS:
 3. Si falta algo, pregunta UNA SOLA COSA a la vez, de forma NATURAL (no uses plantillas)
 4. Si el usuario ya te está respondiendo a una pregunta anterior, completa el parámetro que falta
 5. NUNCA inventes fechas, horas ni valores que el usuario no mencionó explícitamente
-6. Cuando extraigas el NOMBRE del contacto, asegúrate de obtener solo el nombre real (ej: "Alejandra Velázquez" de "haz una cita con Alejandra Velázquez" — el nombre es "Alejandra Velázquez", no incluyas "cita con")
+6. Cuando extraigas el NOMBRE del contacto: busca cualquier nombre propio (nombre y apellido) en el mensaje. El nombre está después de palabras como "con", "para", "de" seguidas de un nombre con mayúscula. Ej: de "Agenda una reunión con Alejandra Velázquez" el nombre es "Alejandra Velázquez". De "cita con Juan Pérez" el nombre es "Juan Pérez". Ignora palabras como "agenda", "cita", "reunión", "con" — solo deja el nombre real.
 
 INTENCIONES DISPONIBLES:
 - crear_lead: Crear un nuevo lead. Necesita: nombre, email. También: telefono, contexto.
