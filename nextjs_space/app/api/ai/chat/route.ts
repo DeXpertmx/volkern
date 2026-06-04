@@ -45,6 +45,13 @@ interface ChatResponse {
 
 // ─── Mapa de intenciones a skills ─────────────────────────────────────────
 
+// ─── Roles y permisos ─────────────────────────────────────────────────────
+
+const ADMIN_ROLES = ['Superadmin', 'Administrador', 'Admin', 'Owner']
+const ADMIN_ONLY_SKILLS = ['ajustar_stock', 'completar_tarea', 'convertir_lead', 'actualizar_negocio']
+
+// ─── Mapa de intenciones a skills ─────────────────────────────────────────
+
 const INTENT_SKILL_MAP: Record<string, string> = {
   'crear_lead': 'create_lead',
   'actualizar_lead': 'update_lead',
@@ -71,96 +78,92 @@ const INTENT_SKILL_MAP: Record<string, string> = {
 
 // ─── Descripciones completas de skills para la IA ──────────────────────────
 
+// ─── SKILLS organizados por módulo ────────────────────────────────────────
+
 const SKILL_DESCRIPTIONS = `
-== SKILLS DISPONIBLES ==
+== SKILLS DISPONIBLES (organizados por módulo) ==
 
-[CREAR LEAD]
-  intent: "crear_lead"
-  desc: Crear un nuevo contacto/lead en el sistema.
-  params requeridos: nombre (string), email (string)
-  params opcionales: telefono (string), contexto (string), empresa (string)
-  ejemplo: {"intent":"crear_lead","params":{"nombre":"Juan Pérez","email":"juan@email.com","telefono":"612345678"}}
+=== CRM (Ventas y Marketing) ===
 
-[ACTUALIZAR LEAD]
-  intent: "actualizar_lead"
-  desc: Actualizar datos de un lead existente.
-  params requeridos: nombre o email (para identificar)
-  params opcionales: telefono, empresa, contexto
+[CREAR LEAD] intent:"crear_lead"
+  Crear un nuevo contacto/lead. Req: nombre, email. Opc: telefono, contexto, empresa.
 
-[CONVERTIR LEAD]
-  intent: "convertir_lead"
-  desc: Convertir un lead en contacto.
+[ACTUALIZAR LEAD] intent:"actualizar_lead"
+  Actualizar datos de un lead existente.
 
-[AGENDAR CITA]
-  intent: "agendar_cita"
-  desc: Crear una cita/reunión para un contacto.
-  params requeridos: nombre (string)
-  params opcionales: fecha ("YYYY-MM-DD" o día relativo), hora ("HH:MM" o "10am"), email, titulo, tipo ("videollamada"|"presencial"), ubicacion
-  NOTA: Siempre pregunta tipo si no lo mencionó. Si es videollamada el sistema genera Meet.
-  NOTA2: Si el contacto no existe en la BD, el sistema pedirá el email.
-  ejemplo: {"intent":"agendar_cita","params":{"nombre":"María García","fecha":"2026-06-12","hora":"10:00","titulo":"Revisión","tipo":"videollamada"}}
+[CONVERTIR LEAD] intent:"convertir_lead" (solo admin)
+  Convertir un lead en contacto formal.
 
-[MIS CITAS]
-  intent: "mis_citas"
-  desc: Consultar las próximas citas del usuario.
-  params: ninguno
+[CREAR NEGOCIO] intent:"crear_negocio"
+  Crear una oportunidad/deal en el pipeline de ventas.
 
-[CANCELAR CITA]
-  intent: "cancelar_cita"
-  desc: Cancelar una cita existente.
-  params requeridos: nombre (string) — el nombre del contacto
-  params opcionales: email, fecha ("YYYY-MM-DD"), motivo
-  NOTA: Si no encuentra la cita exacta, te dirá qué citas activas encontró para que el usuario elija.
-  ejemplo: {"intent":"cancelar_cita","params":{"nombre":"Juan Pérez","fecha":"2026-06-12"}}
+[ACTUALIZAR NEGOCIO] intent:"actualizar_negocio" (solo admin)
+  Cambiar etapa o modificar un deal existente.
 
-[CONFIRMAR CITA]
-  intent: "confirmar_cita"
-  desc: Confirmar una cita pendiente.
+[MIS NEGOCIOS] intent:"mis_negocios"
+  Listar oportunidades/deals activos.
 
-[CREAR TAREA]
-  intent: "crear_tarea"
-  desc: Crear una tarea de seguimiento.
-  params requeridos: titulo (string)
-  params opcionales: descripcion, fechaVencimiento, email, prioridad
+[REGISTRAR INTERACCIÓN] intent:"registrar_interaccion"
+  Registrar llamada, WhatsApp, email o reunión. Req: tipo, contenido.
 
-[COMPLETAR TAREA]
-  intent: "completar_tarea"
-  desc: Marcar tarea como completada.
+[OBTENER TELÉFONO] intent:"obtener_telefono"
+  Buscar teléfono de un contacto. Req: nombre.
 
-[MIS TAREAS]
-  intent: "mis_tareas"
-  desc: Consultar tareas pendientes.
+=== AGENDAMIENTO (Citas y Calendario) ===
 
-[CREAR NOTA]
-  intent: "crear_nota"
-  desc: Agregar una nota a un lead.
+[AGENDAR CITA] intent:"agendar_cita"
+  Crear cita/reunión. Req: nombre. Opc: fecha, hora, email, titulo, tipo(videollamada|presencial), ubicacion.
+  NOTA: Pregunta tipo si no lo mencionó. Videollamada genera Meet automático.
 
-[CREAR NEGOCIO]
-  intent: "crear_negocio"
-  desc: Crear una oportunidad/deal en el pipeline de ventas.
+[MIS CITAS] intent:"mis_citas"
+  Consultar próximas citas.
 
-[ACTUALIZAR NEGOCIO]
-  intent: "actualizar_negocio"
-  desc: Actualizar etapa o datos de un deal.
+[CANCELAR CITA] intent:"cancelar_cita"
+  Cancelar cita existente. Req: nombre. Opc: email, fecha, motivo.
+  NOTA: requiereConfirmacion=true. Pregunta "¿Estás seguro?"
 
-[MIS NEGOCIOS]
-  intent: "mis_negocios"
-  desc: Listar oportunidades/deals activos.
+[CONFIRMAR CITA] intent:"confirmar_cita"
+  Confirmar una cita pendiente.
 
-[REGISTRAR INTERACCIÓN]
-  intent: "registrar_interaccion"
-  desc: Registrar una interacción con un contacto (llamada, WhatsApp, email, reunión).
-  params requeridos: tipo ("llamada"|"whatsapp"|"email"|"reunion"), contenido (string - resumen)
-  params opcionales: nombre, email, resultado
+=== TAREAS Y NOTAS ===
 
-[OBTENER TELÉFONO]
-  intent: "obtener_telefono"
-  desc: Buscar el número de teléfono de un contacto.
-  params requeridos: nombre (string)
+[CREAR TAREA] intent:"crear_tarea"
+  Crear tarea de seguimiento. Req: titulo. Opc: descripcion, fechaVencimiento, email, prioridad.
 
-[CONSULTA GENERAL]
-  intent: "consulta_general"
-  desc: Para preguntas, dudas, conversación casual, saludos, o cuando no aplica ninguna acción anterior.
+[COMPLETAR TAREA] intent:"completar_tarea" (solo admin)
+  Marcar tarea como completada.
+
+[MIS TAREAS] intent:"mis_tareas"
+  Consultar tareas pendientes.
+
+[CREAR NOTA] intent:"crear_nota"
+  Agregar nota a un lead/contacto.
+
+=== INVENTARIO ===
+
+[AJUSTAR STOCK] intent:"ajustar_stock" (solo admin)
+  Ajustar niveles de stock (entrada/salida/transferencia).
+
+[SALUD INVENTARIO] intent:"salud_inventario"
+  Analizar salud del inventario y predecir rupturas.
+
+=== CATÁLOGO ===
+
+[BUSCAR PRODUCTO] intent:"buscar_producto"
+  Buscar en el catálogo con filtros.
+
+=== INMOBILIARIO ===
+
+[BUSCAR INMUEBLES] intent:"buscar_inmuebles"
+  Buscar propiedades por filtros en lenguaje natural.
+
+[RECOMENDAR INMUEBLES] intent:"recomendar_inmuebles"
+  Recomendar propiedades según preferencias.
+
+=== CONSULTA GENERAL ===
+
+[CONSULTA GENERAL] intent:"consulta_general"
+  Para preguntas, dudas, saludos, conversación casual, o cuando no aplica ninguna acción.
 
 == IMPORTANTE ==
 - TÚ controlas el flujo. Si falta un parámetro, pon needsMoreInfo:true y pregunta naturalmente.
@@ -168,48 +171,32 @@ const SKILL_DESCRIPTIONS = `
 - Si el usuario da todo en un mensaje, ejecuta directo con needsMoreInfo:false.
 - Para fechas relativas ("viernes", "mañana"), usa la referencia de FECHA ACTUAL.
 - El nombre del contacto es solo el nombre real, sin "cita con" ni "reunión con".
-- Si un skill falla (ej: no encuentra el contacto), el sistema lo manejará. Tú solo indica en message lo que pasó.
+- Si un skill falla (ej: no encuentra el contacto), el sistema lo manejará.
 
-== ACCIONES DESTRUCTIVAS (REQUIEREN CONFIRMACIÓN) ==
-Las siguientes acciones requieresConfirmation=true:
-- cancelar_cita: Cancelar una cita
-Pon requiresConfirmation:true en tu JSON, y en message pregunta "¿Estás seguro de cancelar la cita?"
-El usuario responderá "Sí" o "No". Si dice que sí, el sistema ejecutará la acción.
+== ACCIONES DESTRUCTIVAS ==
+Estas requieren requiresConfirmation=true siempre:
+- cancelar_cita
+- ajustar_stock
+- completar_tarea
+
+Pon requiresConfirmation:true y pregunta "¿Estás seguro?" antes de que se ejecute.
 
 == VOLKERN PLATFORM OVERVIEW ==
-Volkern es un Sistema Operativo Empresarial (ERP + CRM) con estos módulos:
+Volkern: Sistema Operativo Empresarial (ERP + CRM). 10 módulos:
 
-1. CRM (Ventas y Marketing): Gestión de leads, contactos, oportunidades (deals), pipeline Kanban,
-   cotizaciones, campañas de marketing, seguimiento de interacciones (llamadas, WhatsApp, email, reuniones).
+1. CRM: Leads, contactos, deals (pipeline Kanban), cotizaciones, campañas, interacciones.
+2. Inmobiliario: Propiedades venta/renta, portal público, franquicias, comisiones.
+3. ERP: Proyectos, inventario, producción (MRP), calidad (QC), logística.
+4. Financiero: Facturación Veri*Factu, contabilidad, conciliación, cash flow, EBITDA.
+5. RRHH: Expedientes, asistencia, nóminas (The Vault 2.0), vacaciones.
+6. Omnicanal: WhatsApp, email, web chat, Telegram, Chatwoot.
+7. Academia (LMS): Cursos, lecciones, evaluaciones, certificaciones.
+8. Gemma AI: Asistente IA con skills, auto-diagnóstico, generación de contenido.
+9. Web Creator: Landing pages con Puck CMS.
+10. Hub Social: Meta (Facebook/Instagram).
 
-2. Inmobiliario: Gestión de propiedades (venta/renta), catálogo con campos personalizados JSONB,
-   portal público embebible con filtros, dashboard con KPIs y gráficos, franquicias multi-tenant,
-   cálculo de comisiones con splits (agente/agencia/franquicia), búsqueda por lenguaje natural con IA.
-
-3. ERP (Operaciones): Proyectos, inventario con alertas de stock, producción (MRP) con cálculos
-   de costos y materias primas, control de calidad (QC) con hash SHA-256, logística con tracking de envíos.
-
-4. Financiero y Fiscal: Facturación Veri*Factu (cumplimiento legal España/México), contabilidad,
-   cobranza, conciliación bancaria vía Plaid/Nordigen, proyección de flujo de caja (cash flow),
-   análisis de rentabilidad, cálculo de EBITDA.
-
-5. RRHH (Recursos Humanos): Expedientes de empleados, control de asistencia, nóminas con payroll
-   sealing (The Vault 2.0), gestión de vacaciones, autorización de gastos, activos de personal.
-
-6. Omnicanal: WhatsApp vía Evolution API, email vía AWS SES, web chat, Telegram, integración con
-   Chatwoot para helpdesk multicanal.
-
-7. Academia (LMS): Cursos, lecciones, evaluaciones, certificaciones, portal de alumnos.
-
-8. Gemma AI: Asistente nativo de IA con skills contextuales, auto-diagnóstico (AIOps) cada 5 minutos,
-   generación de contenido, análisis predictivo.
-
-9. Web Creator: CMS basado en Puck para crear landing pages arrastrando componentes.
-
-10. Hub Social: Integración con Meta (Facebook/Instagram) para gestión de redes sociales.
-
-Nota: El usuario puede no tener acceso a todos los módulos. Pero si pregunta por cualquier módulo,
-     debes conocerlo y explicarlo. Si no tienes acceso a los datos de un módulo, dilo claramente.
+Nota: El usuario puede NO tener acceso a todos los módulos. Si pregunta sobre un módulo,
+     explícale de qué se trata. Si no tiene acceso a los datos, indícalo claramente.
 ``
 
 // ─── System prompt ──────────────────────────────────────────────────────────
@@ -422,6 +409,21 @@ export const POST = withTenantAuth(async (req, auth) => {
         }
 
         if (isConfirm) {
+          // Verificar permisos antes de ejecutar
+          const isAdmin = ADMIN_ROLES.includes(auth.user?.role?.nombre || '')
+          if (ADMIN_ONLY_SKILLS.includes(pendingCtx.intent) && !isAdmin) {
+            const errorReply = `⚠️ No tienes permisos para realizar esta acción. Se requiere rol de administrador.`
+            saveMessageToHistory(userKey, tenantId, message, errorReply, pendingCtx.intent, 'ERROR').catch(() => {})
+            await clearPendingContext(userKey)
+            return NextResponse.json({
+              reply: errorReply,
+              type: 'text',
+              richData: null,
+              quickReplies: ['¿Qué puedo hacer?', 'Ayuda'],
+              chatId: responseChatId,
+            } as ChatResponse)
+          }
+
           // Ejecutar el skill directamente
           try {
             const skillName = INTENT_SKILL_MAP[pendingCtx.intent]
@@ -579,34 +581,43 @@ Continúa con la misma intención (${pendingCtx.intent}) y completa los parámet
       } as ChatResponse)
     }
 
-    // ── 5. Ejecutar skill si aplica ──────────────────────────────
+    // ── 5. Verificar permisos del usuario antes de ejecutar ────
+    const roleName = auth.user?.role?.nombre || ''
+    const isAdmin = ADMIN_ROLES.includes(roleName)
+
+    // ── 6. Ejecutar skill si aplica ──────────────────────────────
     let skillResult: any = null
     let skillErrorMsg: string | null = null
     const skillName = INTENT_SKILL_MAP[aiResult.intent]
 
     if (skillName && !aiResult.needsMoreInfo && !aiResult.requiresConfirmation && aiResult.intent !== 'consulta_general') {
-      try {
-        skillResult = await executeSkill(skillName as any, {
-          ...params,
-          tenantId,
-          userId: userId || undefined,
-        })
-        await clearPendingContext(userKey)
-      } catch (skillError: any) {
-        console.error('[Chat] Skill error:', skillError)
-        const msg = skillError.message || 'Error al ejecutar la acción'
-
-        // Si el skill pide email, guardar contexto para que continúe naturalmente
-        if (msg.startsWith('EMAIL_REQUIRED:')) {
-          skillErrorMsg = msg.replace(/^EMAIL_REQUIRED:\s*/, '')
-          await savePendingContext(userKey, tenantId, {
-            intent: aiResult.intent,
-            params,
-            missingParams: ['next'],
+      // Verificar permisos
+      if (ADMIN_ONLY_SKILLS.includes(aiResult.intent) && !isAdmin) {
+        skillErrorMsg = `⚠️ No tienes permisos para realizar esta acción. Se requiere rol de administrador. Tu rol actual es: ${roleName || 'Usuario'}`
+      } else {
+        try {
+          skillResult = await executeSkill(skillName as any, {
+            ...params,
+            tenantId,
+            userId: userId || undefined,
           })
-        } else {
-          // Para otros errores, usar el mensaje de la IA o el error
-          skillErrorMsg = aiMessage || msg
+          await clearPendingContext(userKey)
+        } catch (skillError: any) {
+          console.error('[Chat] Skill error:', skillError)
+          const msg = skillError.message || 'Error al ejecutar la acción'
+
+          // Si el skill pide email, guardar contexto para que continúe naturalmente
+          if (msg.startsWith('EMAIL_REQUIRED:')) {
+            skillErrorMsg = msg.replace(/^EMAIL_REQUIRED:\s*/, '')
+            await savePendingContext(userKey, tenantId, {
+              intent: aiResult.intent,
+              params,
+              missingParams: ['next'],
+            })
+          } else {
+            // Para otros errores, usar el mensaje de la IA o el error
+            skillErrorMsg = aiMessage || msg
+          }
         }
       }
     }
