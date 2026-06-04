@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSpeechRecognition } from './useSpeechRecognition';
+import { VoiceWaveform } from './VoiceWaveform';
 
 interface Message {
   id: string;
@@ -261,16 +262,29 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
                 El chatbot está desactivado
               </p>
             ) : (
-              <div className="flex gap-2">
-                <Input
-                  ref={inputRef}
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  placeholder={isListening ? 'Escuchando...' : 'Escribe un mensaje...'}
-                  disabled={isLoading || isListening}
-                  className="flex-1"
-                />
+              <div className="flex gap-2 items-center">
+                <div className="flex-1 relative">
+                  <Input
+                    ref={inputRef}
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    onKeyPress={handleKeyPress}
+                    placeholder={isListening ? 'Escuchando...' : 'Escribe un mensaje...'}
+                    disabled={isLoading || isListening}
+                    className={cn(
+                      'w-full transition-all duration-300',
+                      isListening && 'border-destructive/50 ring-1 ring-destructive/20'
+                    )}
+                  />
+                  {isListening && (
+                    <div className="absolute inset-0 flex items-center gap-1.5 bg-background/90 rounded-md px-3 pointer-events-none">
+                      <VoiceWaveform isListening={true} />
+                      <span className="text-xs text-muted-foreground animate-pulse">
+                        Escuchando...
+                      </span>
+                    </div>
+                  )}
+                </div>
                 {voiceSupported && (
                   <Button
                     onClick={toggleListening}
@@ -278,8 +292,8 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
                     size="icon"
                     variant={isListening ? 'destructive' : 'outline'}
                     className={cn(
-                      'relative transition-all duration-300',
-                      isListening && 'animate-pulse shadow-lg shadow-red-500/50'
+                      'relative transition-all duration-300 shrink-0',
+                      isListening && 'shadow-lg shadow-red-500/40'
                     )}
                     title={isListening ? 'Detener grabación' : 'Activar voz'}
                   >
@@ -297,6 +311,7 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
                   onClick={handleSend}
                   disabled={!inputValue.trim() || isLoading}
                   size="icon"
+                  className="shrink-0"
                 >
                   <Send className="h-4 w-4" />
                 </Button>
