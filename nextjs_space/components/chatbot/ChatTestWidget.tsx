@@ -51,6 +51,7 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
 
   const [interimText, setInterimText] = useState('');
   const [silenceTimeout, setSilenceTimeout] = useState(2); // segundos
+  const [recordingTimer, setRecordingTimer] = useState(0); // segundos acumulados
 
   const {
     isListening,
@@ -99,12 +100,42 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
     }
   };
 
-  // Limpiar interim text al empezar a grabar (evita texto stale de sesión anterior)
+  // Timer de grabación: cuenta mientras escucha, pausa cuando paused, resetea al iniciar
   useEffect(() => {
     if (isListening) {
       setInterimText('');
+      setRecordingTimer(0);
     }
   }, [isListening]);
+
+  useEffect(() => {
+    if (!isListening && !isPaused && recordingTimer > 0) {
+      // Grabación terminada, mantener el timer para el último valor
+    }
+  }, [isListening]);
+
+  useEffect(() => {
+    if (!isListening && !isPaused) {
+      setRecordingTimer(0);
+    }
+  }, [isListening, isPaused]);
+
+  // Intervalo del timer
+  useEffect(() => {
+    if (!isListening || isPaused) return;
+    const interval = setInterval(() => {
+      setRecordingTimer(prev => prev + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isListening, isPaused]);
+
+  // Formatear timer como m:ss
+  const formatTimer = (totalSeconds: number): string => {
+    if (totalSeconds <= 0) return '';
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
 
   // Auto-enviar cuando se detiene la grabación y hay texto (no en pausa)
   useEffect(() => {
@@ -318,6 +349,12 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
                   {(isListening || isPaused) && (
                     <div className="absolute inset-0 flex items-center gap-1.5 bg-background/90 rounded-md px-3 pointer-events-none overflow-hidden">
                       <VoiceWaveform isListening={isListening} isPaused={isPaused} className="shrink-0" />
+                      <span className={cn(
+                        'text-[11px] tabular-nums shrink-0',
+                        isPaused ? 'text-muted-foreground' : 'text-destructive'
+                      )}>
+                        {formatTimer(recordingTimer)}
+                      </span>
                       {isPaused ? (
                         <span className="text-xs text-muted-foreground">
                           Pausado
