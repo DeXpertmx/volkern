@@ -4,13 +4,14 @@ import { cn } from '@/lib/utils';
 
 interface VoiceWaveformProps {
   isListening: boolean;
+  isPaused?: boolean;
   className?: string;
 }
 
 const BAR_COUNT = 5;
 
-export function VoiceWaveform({ isListening, className }: VoiceWaveformProps) {
-  if (!isListening) return null;
+export function VoiceWaveform({ isListening, isPaused, className }: VoiceWaveformProps) {
+  if (!isListening && !isPaused) return null;
 
   return (
     <div
@@ -24,13 +25,15 @@ export function VoiceWaveform({ isListening, className }: VoiceWaveformProps) {
       {Array.from({ length: BAR_COUNT }).map((_, i) => (
         <div
           key={i}
-          className="w-[3px] rounded-full bg-destructive transition-all duration-75"
+          className={cn(
+            'w-[3px] rounded-full transition-all duration-300',
+            isPaused ? 'bg-muted-foreground/40' : 'bg-destructive'
+          )}
           style={{
-            height: '16px',
+            height: isPaused ? '8px' : '16px',
             animation: isListening
               ? `waveform-bar 1.2s ease-in-out ${i * 0.15}s infinite`
               : 'none',
-            animationPlayState: isListening ? 'running' : 'paused',
           }}
         />
       ))}

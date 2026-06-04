@@ -4,12 +4,15 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 
 export interface UseSpeechRecognitionReturn {
   isListening: boolean;
+  isPaused: boolean;
   isSupported: boolean;
   transcript: string;
   error: string | null;
   startListening: () => void;
   stopListening: () => void;
   toggleListening: () => void;
+  pauseListening: () => void;
+  resumeListening: () => void;
 }
 
 export function useSpeechRecognition(options?: {
@@ -40,12 +43,15 @@ export function useSpeechRecognition(options?: {
   } = options || {};
 
   const [isListening, setIsListening] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [isSupported, setIsSupported] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const recognitionRef = useRef<any>(null);
   const isListeningRef = useRef(false);
+  const isPausingRef = useRef(false);
+  const isResumingRef = useRef(false);
   const endTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -54,7 +60,7 @@ export function useSpeechRecognition(options?: {
     setIsSupported(supported);
   }, []);
 
-  const startListening = useCallback(() => {
+  const startListening = useCallback((resume = false) => {
     if (!isSupported) {
       setError('Reconocimiento de voz no soportado en este navegador');
       return;
@@ -151,6 +157,14 @@ export function useSpeechRecognition(options?: {
         silenceTimerRef.current = null;
       }
 
+      // Si es una pausa, no hacer cleanup completo
+      if (isPausingRef.current) {
+        isPausingRef.current = false;
+        isListeningRef.current = false;
+        // El estado isListening ya lo cambió pauseListening
+        return;
+      }
+
       // Marcar como no escuchando INMEDIATAMENTE (ref) para permitir
       // que el usuario pueda reiniciar el reconocimiento si quiere.
       // Solo la UI (setIsListening) se delayea para evitar flickering.
@@ -178,7 +192,9 @@ export function useSpeechRecognition(options?: {
     // aunque el navegador dispare onend sincrónicamente
     setIsListening(true);
     setError(null);
-    setTranscript('');
+    if (!resume) {
+      setTranscript('');
+    }
     isListeningRef.current = true;
 
     try {
@@ -196,6 +212,12 @@ export function useSpeechRecognition(options?: {
   }, [isSupported, lang, onResult, onFinalResult, onInterimResult, autoRestart, silenceTimeoutMs]);
 
   const stopListening = useCallback(() => {
+    // Si estaba en pausa, solo resetear estado
+    if (isPaused) {
+      setIsPaused(false);
+      setIsListening(false);
+      return;
+    }
     if (silenceTimerRef.current) {
       clearTimeout(silenceTimerRef.current);
       silenceTimerRef.current = null;
@@ -214,15 +236,39 @@ export function useSpeechRecognition(options?: {
       recognitionRef.current = null;
     }
     setIsListening(false);
-  }, []);
+    setIsPaused(false);
+  }, [isPaused]);
 
   const toggleListening = useCallback(() => {
-    if (isListeningRef.current) {
+    if (isPaused) {
+      resumeListening();
+    } else if (isListeningRef.current) {
       stopListening();
     } else {
       startListening();
     }
-  }, [startListening, stopListening]);
+  }, [startListening, stopListening, resumeListening, isPaused]);
+
+  const pauseListening = useCallback(() => {
+    if (!isListeningRef.current || isPaused) return;
+    isPausingRef.current = true;
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {
+        // Ignorar
+      }
+    }
+    setIsPaused(true);
+    setIsListening(false);
+  }, [isPaused]);
+
+  const resumeListening = useCallback(() => {
+    if (!isPaused) return;
+    isResumingRef.current = true;
+    setIsPaused(false);
+    startListening(true);
+  }, [isPaused, startListening]);
 
   // Limpiar al desmontar
   useEffect(() => {
@@ -248,11 +294,14 @@ export function useSpeechRecognition(options?: {
 
   return {
     isListening,
+    isPaused,
     isSupported,
     transcript,
     error,
     startListening,
     stopListening,
     toggleListening,
+    pauseListening,
+    resumeListening,
   };
 }
