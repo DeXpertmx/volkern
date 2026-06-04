@@ -3,7 +3,9 @@ import '@/app/globals.css';
 import { Inter } from 'next/font/google';
 import { Toaster } from '@/components/ui/sonner';
 import { SessionProvider } from '@/components/session-provider';
+import { ThemeProvider } from '@/components/theme-provider';
 import { PushNotificationInit } from '@/components/providers/PushNotificationInit';
+import { CookieConsentBanner } from '@/components/public/CookieConsentBanner';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -35,9 +37,12 @@ export default function RootLayout({
     <html lang="es">
       <body className={`${inter.className} selection:bg-blue-500/30`}>
         <SessionProvider>
-          <PushNotificationInit />
-          {children}
-          <Toaster position="top-center" theme="dark" />
+          <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+            <PushNotificationInit />
+            {children}
+            <CookieConsentBanner />
+            <Toaster position="top-center" theme="dark" />
+          </ThemeProvider>
         </SessionProvider>
       </body>
     </html>
