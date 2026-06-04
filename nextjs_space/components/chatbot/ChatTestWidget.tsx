@@ -16,6 +16,7 @@ import {
   MicOff,
   Pause,
   Play,
+  Trash2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Slider } from '@/components/ui/slider';
@@ -53,6 +54,7 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
   const [interimText, setInterimText] = useState('');
   const [silenceTimeout, setSilenceTimeout] = useState(2); // segundos
   const [recordingTimer, setRecordingTimer] = useState(0); // segundos acumulados
+  const cancelVoiceRef = useRef(false);
 
   const audioBands = useAudioLevel(isListening || isPaused);
 
@@ -136,8 +138,24 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
-  // Auto-enviar cuando se detiene la grabación y hay texto (no en pausa)
+  // Cancelar grabación: detiene y descarta el texto
+  const handleCancelRecording = () => {
+    cancelVoiceRef.current = true;
+    setInputValue('');
+    setInterimText('');
+    if (isPaused) {
+      stopListening();
+    } else if (isListening) {
+      stopListening();
+    }
+  };
+
+  // Auto-enviar cuando se detiene la grabación y hay texto (no en pausa, no cancelado)
   useEffect(() => {
+    if (cancelVoiceRef.current) {
+      cancelVoiceRef.current = false;
+      return;
+    }
     if (!isListening && !isPaused && inputValueRef.current.trim() && !voiceError) {
       const timer = setTimeout(() => {
         handleSend();
@@ -373,6 +391,19 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
                 </div>
                 {voiceSupported && (
                   <>
+                    {/* Botón Cancelar: visible durante grabación o pausa */}
+                    {(isListening || isPaused) && (
+                      <Button
+                        onClick={handleCancelRecording}
+                        disabled={isLoading}
+                        size="icon"
+                        variant="ghost"
+                        className="shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all duration-300"
+                        title="Descartar grabación"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                     {/* Botón Pausa/Reanudar: visible durante grabación o pausa */}
                     {(isListening || isPaused) && (
                       <Button
