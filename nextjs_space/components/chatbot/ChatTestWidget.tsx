@@ -16,6 +16,7 @@ import {
   MicOff,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Slider } from '@/components/ui/slider';
 import { useSpeechRecognition } from './useSpeechRecognition';
 import { VoiceWaveform } from './VoiceWaveform';
 
@@ -46,6 +47,7 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
   }, [inputValue]);
 
   const [interimText, setInterimText] = useState('');
+  const [silenceTimeout, setSilenceTimeout] = useState(2); // segundos
 
   const {
     isListening,
@@ -54,6 +56,7 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
     toggleListening,
   } = useSpeechRecognition({
     lang: 'es-ES',
+    silenceTimeoutMs: silenceTimeout * 1000,
     onInterimResult: (text) => {
       setInterimText(text);
     },
@@ -338,6 +341,24 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
               </div>
               {voiceError && (
                 <p className="text-xs text-destructive mt-1">{voiceError}</p>
+              )}
+              {voiceSupported && !isListening && (
+                <div className="flex items-center gap-2 mt-2 px-0.5">
+                  <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                    ⏱ Silencio
+                  </span>
+                  <Slider
+                    value={[silenceTimeout]}
+                    onValueChange={([v]) => setSilenceTimeout(v)}
+                    min={0.5}
+                    max={5}
+                    step={0.5}
+                    className="flex-1"
+                  />
+                  <span className="text-[10px] text-muted-foreground tabular-nums w-7 text-right">
+                    {silenceTimeout}s
+                  </span>
+                </div>
               )}
             )}
           </div>
