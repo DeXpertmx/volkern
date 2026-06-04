@@ -65,27 +65,32 @@ export function useAudioLevel(active: boolean): number[] {
         const bufferLength = analyser.frequencyBinCount; // FFT_SIZE / 2 = 128
         const dataArray = new Uint8Array(bufferLength);
         const bucketSize = Math.floor(bufferLength / BAR_COUNT); // ~25 valores por banda
+        let frameCount = 0;
+        const THROTTLE_FRAME = 2; // actualizar cada 2 frames ≈ 30fps
 
         function read() {
           if (cancelled) return;
 
           analyser.getByteFrequencyData(dataArray);
 
-          const newBands = new Array(BAR_COUNT);
-          for (let b = 0; b < BAR_COUNT; b++) {
-            const start = b * bucketSize;
-            const end = b === BAR_COUNT - 1 ? bufferLength : start + bucketSize;
-            let sum = 0;
-            for (let i = start; i < end; i++) {
-              sum += dataArray[i];
+          frameCount++;
+          if (frameCount % THROTTLE_FRAME === 0) {
+            const newBands = new Array(BAR_COUNT);
+            for (let b = 0; b < BAR_COUNT; b++) {
+              const start = b * bucketSize;
+              const end = b === BAR_COUNT - 1 ? bufferLength : start + bucketSize;
+              let sum = 0;
+              for (let i = start; i < end; i++) {
+                sum += dataArray[i];
+              }
+              const avg = sum / (end - start);
+              // Normalizar: 0-255 → 0-1, con sensibilidad (threshold ~10 para evitar ruido de fondo)
+              const normalized = avg < 10 ? 0 : Math.min(avg / 180, 1);
+              newBands[b] = normalized;
             }
-            const avg = sum / (end - start);
-            // Normalizar: 0-255 → 0-1, con sensibilidad (threshold ~10 para evitar ruido de fondo)
-            const normalized = avg < 10 ? 0 : Math.min(avg / 180, 1);
-            newBands[b] = normalized;
+            setBands(newBands);
           }
 
-          setBands(newBands);
           animFrameRef.current = requestAnimationFrame(read);
         }
 
