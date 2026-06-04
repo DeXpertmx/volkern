@@ -373,10 +373,11 @@ Continúa con la misma intención (${pendingCtx.intent}) y completa los parámet
       }
     })
 
-    // ── 3. Restaurar placeholders en parámetros ──────────────────
+    // ── 3. Restaurar placeholders en parámetros y mensaje ────────
     const realParams = aiResult.params ? filter.restoreParams(aiResult.params) : {}
+    const realMessage = aiResult.message ? filter.restore(aiResult.message) : ''
 
-    // ── 4. Si necesita más información, guardar contexto ─────────
+    // ── 4. Si necesita más información: preguntar UN parámetro a la vez ─
     if (aiResult.needsMoreInfo && aiResult.intent !== 'consulta_general') {
       const requiredParams = INTENT_REQUIRED_PARAMS[aiResult.intent] || []
       const missingParams = requiredParams.filter(p => !realParams[p])
@@ -388,8 +389,10 @@ Continúa con la misma intención (${pendingCtx.intent}) y completa los parámet
           missingParams,
         })
 
+        // Siempre preguntar UN parámetro a la vez usando PARAM_QUESTIONS,
+        // ignorando el message de la IA (que podría pedir varios a la vez)
         return NextResponse.json({
-          reply: aiResult.message || (PARAM_QUESTIONS[missingParams[0]] || `❓ ¿Podrías proporcionarme ${missingParams[0]}?`),
+          reply: PARAM_QUESTIONS[missingParams[0]] || `❓ ¿Podrías proporcionarme ${missingParams[0]}?`,
           type: 'question',
           richData: null,
           quickReplies: [],
@@ -463,7 +466,7 @@ Continúa con la misma intención (${pendingCtx.intent}) y completa los parámet
     const response: ChatResponse = {
       reply: skillResult
         ? formatSuccessMessage(aiResult.intent, skillResult)
-        : (aiResult.message || 'Entendido. ¿Algo más en lo que pueda ayudarte? 🌟'),
+        : (realMessage || 'Entendido. ¿Algo más en lo que pueda ayudarte? 🌟'),
       type: responseType,
       richData,
       quickReplies: quickReplies.length > 0 ? quickReplies : [
