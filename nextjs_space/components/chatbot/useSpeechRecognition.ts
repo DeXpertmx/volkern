@@ -17,12 +17,20 @@ export function useSpeechRecognition(options?: {
   onResult?: (transcript: string) => void;
   onFinalResult?: (transcript: string) => void;
   autoRestart?: boolean;
+  /**
+   * Tiempo de silencio en ms después del cual se auto-detiene la grabación.
+   * Solo se activa después de haber detectado texto (no se detiene si el
+   * usuario nunca habló). Poner en 0 para deshabilitar.
+   * @default 2000
+   */
+  silenceTimeoutMs?: number;
 }): UseSpeechRecognitionReturn {
   const {
     lang = 'es-ES',
     onResult,
     onFinalResult,
     autoRestart = false,
+    silenceTimeoutMs = 2000,
   } = options || {};
 
   const [isListening, setIsListening] = useState(false);
@@ -33,6 +41,7 @@ export function useSpeechRecognition(options?: {
   const recognitionRef = useRef<any>(null);
   const isListeningRef = useRef(false);
   const endTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const supported = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
@@ -67,6 +76,22 @@ export function useSpeechRecognition(options?: {
     recognition.interimResults = true;
     recognition.lang = lang;
 
+    const resetSilenceTimer = () => {
+      if (!silenceTimeoutMs) return;
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+      }
+      silenceTimerRef.current = setTimeout(() => {
+        silenceTimerRef.current = null;
+        // Silencio detectado — auto-detener
+        try {
+          recognition.stop();
+        } catch {
+          // Ignorar si ya se detuvo
+        }
+      }, silenceTimeoutMs);
+    };
+
     recognition.onresult = (event: any) => {
       let accumulatedFinal = '';
 
@@ -83,6 +108,8 @@ export function useSpeechRecognition(options?: {
           onFinalResult?.(newTranscript);
           return newTranscript;
         });
+        // Hay texto nuevo — el usuario sigue hablando, reiniciar timer de silencio
+        resetSilenceTimer();
       }
 
       onResult?.(accumulatedFinal);
@@ -100,6 +127,12 @@ export function useSpeechRecognition(options?: {
     };
 
     recognition.onend = () => {
+      // Limpiar timer de silencio
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+      }
+
       // Marcar como no escuchando INMEDIATAMENTE (ref) para permitir
       // que el usuario pueda reiniciar el reconocimiento si quiere.
       // Solo la UI (setIsListening) se delayea para evitar flickering.
@@ -145,6 +178,10 @@ export function useSpeechRecognition(options?: {
   }, [isSupported, lang, onResult, onFinalResult, autoRestart]);
 
   const stopListening = useCallback(() => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
     if (endTimeoutRef.current) {
       clearTimeout(endTimeoutRef.current);
       endTimeoutRef.current = null;
@@ -172,6 +209,10 @@ export function useSpeechRecognition(options?: {
   // Limpiar al desmontar
   useEffect(() => {
     return () => {
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+      }
       if (endTimeoutRef.current) {
         clearTimeout(endTimeoutRef.current);
         endTimeoutRef.current = null;
