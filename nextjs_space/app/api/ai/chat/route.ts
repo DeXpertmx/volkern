@@ -374,8 +374,29 @@ Continúa con la misma intención (${pendingCtx.intent}) y completa los parámet
     })
 
     // ── 3. Restaurar placeholders en parámetros y mensaje ────────
-    const realParams = aiResult.params ? filter.restoreParams(aiResult.params) : {}
+    let realParams = aiResult.params ? filter.restoreParams(aiResult.params) : {}
     const realMessage = aiResult.message ? filter.restore(aiResult.message) : ''
+
+    // ─── Validación crítica: forzar preguntar fecha/hora aunque la IA las haya inferido ──
+    // La IA (DeepSeek) tiende a inventar fechas (hoy) y horas (cualquiera) en vez de
+    // dejarlos vacíos. Si la IA devolvió fecha/hora pero el usuario NO las mencionó
+    // explícitamente en su mensaje original, debemos ignorarlas y preguntar.
+    if (aiResult.intent === 'agendar_cita') {
+      // Si message tiene menos de 30 caracteres, probablemente es respuesta a una
+      // pregunta anterior, no un mensaje inicial. No tocar fecha/hora si ya están
+      // siendo recolectadas por el contexto pendiente.
+      const userMentionedDate = /\b(mañana|hoy|pasado|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo|\d{1,2}[\/\-]\d{1,2})\b/i.test(message)
+      const userMentionedTime = /\b(\d{1,2})(?::(\d{2}))?\s*(?:am|pm|a\.m\.|p\.m\.|horas?|h\b)?\b/i.test(message)
+      
+      if (!userMentionedDate && realParams.fecha) {
+        // La IA infirió la fecha, ignorarla
+        delete realParams.fecha
+      }
+      if (!userMentionedTime && realParams.hora) {
+        // La IA infirió la hora, ignorarla
+        delete realParams.hora
+      }
+    }
 
     // ── 4. Si necesita más información: preguntar UN parámetro a la vez ─
     if (aiResult.needsMoreInfo && aiResult.intent !== 'consulta_general') {

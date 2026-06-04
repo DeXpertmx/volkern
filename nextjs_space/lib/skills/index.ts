@@ -263,11 +263,18 @@ const createBookingWrapper = async (input: {
   const { tenantId, email, nombre, fecha, hora, titulo, tipo, ubicacion, userId } = input;
   const { prisma } = await import('@/lib/db');
 
-  // Validar que el nombre no sea un placeholder o valor incorrecto
-  // Usa \b (word boundary) para evitar falsos positivos con palabras que contengan esos términos
-  const invalidNameRegex = /\b(?:una cita|cita (de|en|con)?|agendar|cliente|lead|contacto|prueba|seguimiento)\b/i
-  if (nombre && invalidNameRegex.test(nombre)) {
-    throw new Error(`El nombre "${nombre}" no es válido. Por favor proporciona el nombre completo del contacto.`)
+  // Validar que el nombre sea un nombre real de persona (no un placeholder)
+  // Debe tener al menos 2 palabras y no ser un comando/frase del sistema
+  if (nombre && nombre.trim()) {
+    const nameWords = nombre.trim().split(/\s+/)
+    const hasMinWords = nameWords.length >= 2
+    const isLikelyAction = /\b(?:cita|agendar|crear|registrar|buscar|listar|eliminar|prueba|seguimiento|una cita)\b/i.test(nombre)
+    
+    if (!hasMinWords || isLikelyAction) {
+      throw new Error(
+        `El nombre "${nombre}" no parece un nombre válido. Proporciona nombre y apellido del contacto.`
+      )
+    }
   }
 
   let targetEmail = email;
