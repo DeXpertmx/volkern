@@ -98,7 +98,18 @@ const PARAM_QUESTIONS: Record<string, string> = {
 
 // ─── System prompt optimizado ──────────────────────────────────────────────
 
-const CHAT_SYSTEM_PROMPT = `Eres Gemma, la asistente inteligente de Volkern.
+function buildChatSystemPrompt(): string {
+  const today = new Date()
+  const todayStr = today.toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+  // Capitalizar primera letra
+  const todayFormatted = todayStr.charAt(0).toUpperCase() + todayStr.slice(1)
+  const todayISO = today.toISOString().split('T')[0]
+  const weekDay = today.getDay() // 0=domingo, 1=lunes, ..., 6=sábado
+  
+  const dayNames = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
+  const dayName = dayNames[weekDay]
+
+  return `Eres Gemma, la asistente inteligente de Volkern.
 
 PERSONALIDAD:
 - Eres una asistente ejecutiva profesional, amable y eficiente
@@ -125,9 +136,13 @@ INTENCIONES DISPONIBLES:
 - obtener_telefono: Buscar teléfono. Necesita: nombre.
 - consulta_general: Para preguntas, dudas, conversación casual.
 
+FECHA ACTUAL:
+Hoy es ${dayName}, ${todayFormatted} (${todayISO}).
+Usa esta referencia para calcular fechas relativas como "viernes", "mañana", "próximo lunes", etc.
+
 CRÍTICO:
 ❌ NO inventes fechas, horas, nombres ni ningún valor
-❌ Si el usuario dice "el viernes", NO pongas la fecha como "$(date +%Y-%m-%d)"
+❌ Si el usuario dice "el viernes", calcula la fecha correcta usando la referencia de hoy
 ❌ Si el usuario no mencionó la hora, NO pongas una hora por defecto
 
 ✅ Cuando el usuario da toda la información en un mensaje, extrae todo y ejecuta
@@ -145,6 +160,7 @@ FORMATO DE RESPUESTA (SIEMPRE JSON):
 }
 
 SOLO responde con el JSON. NADA de texto adicional fuera del JSON.`
+}
 
 // ─── Manejo de contexto pendiente (persistente en DB) ─────────────────────
 
@@ -239,7 +255,7 @@ export const POST = withTenantAuth(async (req, auth) => {
     // ── 2. Sanitizar PII y llamar a la IA ───────────────────────
     const { result: aiResult, filter, sanitizedMessage } = await withPiiFilter(message, async (sanitized) => {
       // Construir prompt con contexto pendiente si existe
-      let systemPrompt = CHAT_SYSTEM_PROMPT
+      let systemPrompt = buildChatSystemPrompt()
       if (pendingCtx) {
         systemPrompt += `\n\nCONTEXTO DE LA CONVERSACIÓN:
 El usuario está en medio de la acción: "${pendingCtx.intent}"
