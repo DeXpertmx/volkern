@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils';
 import { Slider } from '@/components/ui/slider';
 import { useSpeechRecognition } from './useSpeechRecognition';
 import { VoiceWaveform } from './VoiceWaveform';
+import { playBeep } from './playBeep';
 
 interface Message {
   id: string;
@@ -75,6 +76,12 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
       }, 800);
     },
   });
+
+  // Envolver toggle para agregar sonido de inicio/fin
+  const handleToggleVoice = () => {
+    playBeep(isListening ? 'stop' : 'start');
+    toggleListening();
+  };
 
   // Limpiar interim text al empezar a grabar (evita texto stale de sesión anterior)
   useEffect(() => {
@@ -310,7 +317,7 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
                 </div>
                 {voiceSupported && (
                   <Button
-                    onClick={toggleListening}
+                    onClick={handleToggleVoice}
                     disabled={isLoading}
                     size="icon"
                     variant={isListening ? 'destructive' : 'outline'}
