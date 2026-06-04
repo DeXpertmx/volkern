@@ -239,16 +239,6 @@ export function useSpeechRecognition(options?: {
     setIsPaused(false);
   }, [isPaused]);
 
-  const toggleListening = useCallback(() => {
-    if (isPaused) {
-      resumeListening();
-    } else if (isListeningRef.current) {
-      stopListening();
-    } else {
-      startListening();
-    }
-  }, [startListening, stopListening, resumeListening, isPaused]);
-
   const pauseListening = useCallback(() => {
     if (!isListeningRef.current || isPaused) return;
     isPausingRef.current = true;
@@ -269,6 +259,16 @@ export function useSpeechRecognition(options?: {
     setIsPaused(false);
     startListening(true);
   }, [isPaused, startListening]);
+
+  const toggleListening = useCallback(() => {
+    if (isPaused) {
+      resumeListening();
+    } else if (isListeningRef.current) {
+      stopListening();
+    } else {
+      startListening();
+    }
+  }, [startListening, stopListening, resumeListening, isPaused]);
 
   // Limpiar al desmontar
   useEffect(() => {
