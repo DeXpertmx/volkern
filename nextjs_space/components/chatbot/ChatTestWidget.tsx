@@ -14,6 +14,8 @@ import {
   User,
   Mic,
   MicOff,
+  Pause,
+  Play,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Slider } from '@/components/ui/slider';
@@ -52,9 +54,12 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
 
   const {
     isListening,
+    isPaused,
     isSupported: voiceSupported,
     error: voiceError,
     toggleListening,
+    pauseListening,
+    resumeListening,
   } = useSpeechRecognition({
     lang: 'es-ES',
     silenceTimeoutMs: silenceTimeout * 1000,
@@ -79,8 +84,16 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
 
   // Envolver toggle para agregar sonido de inicio/fin
   const handleToggleVoice = () => {
-    playBeep(isListening ? 'stop' : 'start');
-    toggleListening();
+    if (isPaused) {
+      playBeep('start');
+      resumeListening();
+    } else if (isListening) {
+      playBeep('stop');
+      stopListening();
+    } else {
+      playBeep('start');
+      startListening();
+    }
   };
 
   // Limpiar interim text al empezar a grabar (evita texto stale de sesión anterior)
@@ -90,9 +103,9 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
     }
   }, [isListening]);
 
-  // Auto-enviar cuando se detiene la grabación y hay texto
+  // Auto-enviar cuando se detiene la grabación y hay texto (no en pausa)
   useEffect(() => {
-    if (!isListening && inputValueRef.current.trim() && !voiceError) {
+    if (!isListening && !isPaused && inputValueRef.current.trim() && !voiceError) {
       const timer = setTimeout(() => {
         handleSend();
       }, 600);
@@ -299,10 +312,14 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
                       isListening && 'border-destructive/50 ring-1 ring-destructive/20'
                     )}
                   />
-                  {isListening && (
+                  {(isListening || isPaused) && (
                     <div className="absolute inset-0 flex items-center gap-1.5 bg-background/90 rounded-md px-3 pointer-events-none overflow-hidden">
-                      <VoiceWaveform isListening={true} className="shrink-0" />
-                      {interimText ? (
+                      <VoiceWaveform isListening={isListening} isPaused={isPaused} className="shrink-0" />
+                      {isPaused ? (
+                        <span className="text-xs text-muted-foreground">
+                          Pausado
+                        </span>
+                      ) : interimText ? (
                         <span className="text-xs text-foreground truncate">
                           {interimText}
                           <span className="inline-block w-[2px] h-3.5 bg-destructive ml-0.5 animate-pulse align-middle" />
@@ -316,26 +333,55 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
                   )}
                 </div>
                 {voiceSupported && (
-                  <Button
-                    onClick={handleToggleVoice}
-                    disabled={isLoading}
-                    size="icon"
-                    variant={isListening ? 'destructive' : 'outline'}
-                    className={cn(
-                      'relative transition-all duration-300 shrink-0',
-                      isListening && 'shadow-lg shadow-red-500/40'
+                  <>
+                    {/* Botón Pausa/Reanudar: visible durante grabación o pausa */}
+                    {(isListening || isPaused) && (
+                      <Button
+                        onClick={() => {
+                          if (isPaused) {
+                            playBeep('start');
+                            resumeListening();
+                          } else {
+                            pauseListening();
+                          }
+                        }}
+                        disabled={isLoading}
+                        size="icon"
+                        variant="outline"
+                        className="shrink-0 transition-all duration-300"
+                        title={isPaused ? 'Reanudar grabación' : 'Pausar grabación'}
+                      >
+                        {isPaused ? (
+                          <Play className="h-4 w-4" />
+                        ) : (
+                          <Pause className="h-4 w-4" />
+                        )}
+                      </Button>
                     )}
-                    title={isListening ? 'Detener grabación' : 'Activar voz'}
-                  >
-                    {isListening ? (
-                      <>
-                        <MicOff className="h-4 w-4" />
-                        <span className="absolute top-0 right-0 h-2 w-2 rounded-full bg-red-500 animate-ping" />
-                      </>
-                    ) : (
-                      <Mic className="h-4 w-4" />
-                    )}
-                  </Button>
+                    {/* Botón Detener/Iniciar micrófono */}
+                    <Button
+                      onClick={handleToggleVoice}
+                      disabled={isLoading}
+                      size="icon"
+                      variant={(isListening || isPaused) ? 'destructive' : 'outline'}
+                      className={cn(
+                        'relative transition-all duration-300 shrink-0',
+                        isListening && 'shadow-lg shadow-red-500/40'
+                      )}
+                      title={(isListening || isPaused) ? 'Detener grabación' : 'Activar voz'}
+                    >
+                      {(isListening || isPaused) ? (
+                        <>
+                          <MicOff className="h-4 w-4" />
+                          {isListening && (
+                            <span className="absolute top-0 right-0 h-2 w-2 rounded-full bg-red-500 animate-ping" />
+                          )}
+                        </>
+                      ) : (
+                        <Mic className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </>
                 )}
                 <Button
                   onClick={handleSend}
@@ -349,7 +395,7 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
               {voiceError && (
                 <p className="text-xs text-destructive mt-1">{voiceError}</p>
               )}
-              {voiceSupported && !isListening && (
+              {voiceSupported && !isListening && !isPaused && (
                 <div className="flex items-center gap-2 mt-2 px-0.5">
                   <span className="text-[10px] text-muted-foreground whitespace-nowrap">
                     ⏱ Silencio
