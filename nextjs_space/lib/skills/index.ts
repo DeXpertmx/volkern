@@ -397,6 +397,108 @@ const createBookingWrapper = async (input: {
   });
 };
 
+// ─── Cancel Booking Wrapper: busca por nombre/email si no hay bookingId ──────
+
+const cancelBookingWrapper = async (input: {
+  tenantId: string;
+  bookingId?: string;
+  citaId?: string;
+  nombre?: string;
+  email?: string;
+  fecha?: string;
+  motivo?: string;
+  userId?: string;
+}) => {
+  const { tenantId, bookingId, citaId, nombre, email, fecha, motivo, userId } = input;
+  const id = bookingId || citaId
+
+  // Si hay ID directo, cancelar sin búsqueda
+  if (id) {
+    return bookingSkills.cancelBooking({ bookingId: id, tenantId, motivo, userId })
+  }
+
+  // Sin ID: buscar por nombre/email
+  if (!nombre && !email) {
+    throw new Error('Para cancelar una cita necesito el nombre o email del contacto. ¿De quién es la cita?')
+  }
+
+  const { prisma } = await import('@/lib/db')
+
+  // 1. Buscar lead/contacto por nombre o email
+  let leadIds: string[] = []
+
+  if (email) {
+    const lead = await prisma.lead.findFirst({ where: { tenantId, email: { equals: email, mode: 'insensitive' } } })
+    if (lead) leadIds.push(lead.id)
+    const contact = await prisma.contact.findFirst({ where: { tenantId, email: { equals: email, mode: 'insensitive' } } })
+    if (contact) leadIds.push(contact.id)
+  }
+
+  if (nombre && leadIds.length === 0) {
+    const leads = await prisma.lead.findMany({
+      where: { tenantId, nombre: { contains: nombre, mode: 'insensitive' } },
+      select: { id: true, nombre: true, email: true },
+    })
+    leadIds.push(...leads.map(l => l.id))
+
+    const contacts = await prisma.contact.findMany({
+      where: { tenantId, nombre: { contains: nombre, mode: 'insensitive' } },
+      select: { id: true, nombre: true, email: true },
+    })
+    leadIds.push(...contacts.map(c => c.id))
+  }
+
+  if (leadIds.length === 0) {
+    throw new Error(`No encontré ningún contacto con${nombre ? ` nombre "${nombre}"` : ''}${email ? ` email "${email}"` : ''}. ¿Tienes otro dato?`)
+  }
+
+  // 2. Buscar citas activas (pendiente/confirmada) del lead
+  const fechaFilter: any = {}
+  if (fecha) {
+    const d = new Date(fecha)
+    if (!isNaN(d.getTime())) {
+      const start = new Date(d)
+      start.setHours(0, 0, 0, 0)
+      const end = new Date(d)
+      end.setHours(23, 59, 59, 999)
+      fechaFilter.fechaHora = { gte: start, lte: end }
+    }
+  }
+
+  const citas = await prisma.cita.findMany({
+    where: {
+      tenantId,
+      leadId: { in: leadIds },
+      estado: { in: ['pendiente', 'confirmada', 'Pendiente', 'Confirmada'] },
+      ...fechaFilter,
+    },
+    include: {
+      lead: { select: { nombre: true, email: true } },
+    },
+    orderBy: { fechaHora: 'asc' },
+  })
+
+  if (citas.length === 0) {
+    const fechaMsg = fecha ? ` para esa fecha` : ''
+    throw new Error(`No encontré citas activas${fechaMsg} de ${nombre || email}.`)
+  }
+
+  if (citas.length > 1) {
+    const lista = citas.map((c, i) => {
+      const f = c.fechaHora.toLocaleString('es-MX', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+      return `  ${i + 1}. ${f} — ${c.titulo || 'Sin título'}`
+    }).join('\n')
+    throw new Error(
+      `Encontré varias citas de ${citas[0].lead?.nombre || nombre}:\n\n${lista}\n\n¿Cuál quieres cancelar? Puedes darme más detalles como la fecha exacta.`
+    )
+  }
+
+  // 3. Cancelar la cita encontrada
+  const cita = citas[0]
+  return bookingSkills.cancelBooking({ bookingId: cita.id, tenantId, motivo, userId })
+}
+
+
 export const skills = {
   // Contactos
   create_contact: contactSkills.createContact,
@@ -443,7 +545,7 @@ export const skills = {
   // Bookings/Citas (skill compuesto)
   create_booking: createBookingWrapper,
   confirm_booking: bookingSkills.confirmBooking,
-  cancel_booking: bookingSkills.cancelBooking,
+  cancel_booking: cancelBookingWrapper,
   get_bookings_by_lead: getBookingsByLeadWrapper,
   get_upcoming_bookings: getUpcomingBookingsWrapper,
   auto_schedule: bookingSkills.autoScheduleAppointment,

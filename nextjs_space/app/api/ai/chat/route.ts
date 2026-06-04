@@ -75,6 +75,7 @@ const INTENT_SKILL_MAP: Record<string, string> = {
 const INTENT_REQUIRED_PARAMS: Record<string, string[]> = {
   'crear_lead': ['nombre', 'email'],
   'agendar_cita': ['fecha', 'hora', 'nombre', 'email', 'titulo', 'tipo'],
+  'cancelar_cita': ['nombre'],
   'crear_tarea': ['titulo'],
   'registrar_interaccion': ['tipo', 'contenido'],
   'obtener_telefono': ['nombre'],
@@ -82,7 +83,7 @@ const INTENT_REQUIRED_PARAMS: Record<string, string[]> = {
 
 const PARAM_QUESTIONS: Record<string, string> = {
   email: '📧 ¿Cuál es el correo electrónico del contacto?',
-  nombre: '👤 ¿Cuál es el nombre del contacto?',
+  nombre: '👤 ¿Cuál es el nombre completo del contacto?',
   fecha: '📅 ¿Para qué fecha? (ej: mañana, viernes, 15/06)',
   hora: '⏰ ¿A qué hora? (ej: 10:00, 2pm, 3:30pm)',
   titulo: '📋 ¿Cuál es el motivo o título de la cita?',
@@ -92,6 +93,7 @@ const PARAM_QUESTIONS: Record<string, string> = {
   tipo: '📍 ¿La cita será presencial o por videollamada?',
   contenido: '📝 ¿Qué ocurrió en la interacción?',
   ubicacion: '📍 ¿Dónde será la cita o prefieres que genere un link de Google Meet?',
+  motivo: '📝 ¿Por qué motivo deseas cancelar la cita?',
 }
 
 // ─── System prompt optimizado ──────────────────────────────────────────────
@@ -119,7 +121,7 @@ INTENCIONES DISPONIBLES:
 - crear_lead: Crear un nuevo lead. Parámetros requeridos: nombre, email. Opcionales: telefono, contexto.
 - agendar_cita: Agendar una cita. Parámetros requeridos: fecha, hora, nombre. Opcionales: email, titulo, telefono.
 - mis_citas: Consultar próximas citas. Sin parámetros.
-- cancelar_cita: Cancelar una cita. Parámetros requeridos: citaId.
+- cancelar_cita: Cancelar una cita. Parámetros: nombre (obligatorio), email (opcional), fecha (opcional), motivo (opcional). Si no sabes el ID, busca por nombre y/o email.
 - crear_tarea: Crear tarea. Parámetros requeridos: titulo. Opcionales: descripcion, fechaVencimiento, email.
 - completar_tarea: Completar tarea. Parámetros: taskId.
 - registrar_interaccion: Registrar interacción. Parámetros requeridos: tipo, contenido.
@@ -543,6 +545,11 @@ function safeFormatDate(dateValue: any, long = false): string {
 // ─── Helper: formatear mensaje de éxito ────────────────────────────────────
 
 function formatSuccessMessage(intent: string, result: any): string {
+  if (intent === 'cancelar_cita' && result) {
+    const fecha = safeFormatDate(result.fechaHora, true)
+    return `❌ Cita cancelada: **${result.titulo || 'Sin título'}**\n📅 ${fecha}\n✅ La cita ha sido cancelada exitosamente.\n\n¿Necesitas algo más? 🌟`
+  }
+
   if (intent === 'agendar_cita' && result?.cita) {
     const fecha = safeFormatDate(result.cita.fechaHoraLocal || result.cita.fechaHora, true)
     const tipoCita = result.cita.ubicacion ? `📍 ${result.cita.ubicacion}` : ''
