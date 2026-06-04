@@ -64,6 +64,8 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
     toggleListening,
     pauseListening,
     resumeListening,
+    startListening,
+    stopListening,
   } = useSpeechRecognition({
     lang: 'es-ES',
     silenceTimeoutMs: silenceTimeout * 1000,
