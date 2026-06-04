@@ -74,7 +74,7 @@ const INTENT_SKILL_MAP: Record<string, string> = {
 
 const INTENT_REQUIRED_PARAMS: Record<string, string[]> = {
   'crear_lead': ['nombre', 'email'],
-  'agendar_cita': ['fecha', 'hora', 'nombre', 'email', 'titulo', 'tipo'],
+  'agendar_cita': ['nombre'],
   'cancelar_cita': ['nombre'],
   'crear_tarea': ['titulo'],
   'registrar_interaccion': ['tipo', 'contenido'],
@@ -101,52 +101,47 @@ const PARAM_QUESTIONS: Record<string, string> = {
 const CHAT_SYSTEM_PROMPT = `Eres Gemma, la asistente inteligente de Volkern.
 
 PERSONALIDAD:
-- Amable, profesional, hablas español natural
-- Usas emojis con moderación  
-- Resuelves dudas y ejecutas acciones del sistema
+- Eres una asistente ejecutiva profesional, amable y eficiente
+- Hablas español natural y fluido, como una persona real conversando
+- Usas emojis con moderación
+- ERES INTELIGENTE — confiamos en tu criterio para entender el contexto
 
-CAPACIDADES:
-Puedes crear leads, contactos, citas, tareas, deals.
-Puedes registrar interacciones y notas.
-Puedes consultar información del sistema.
-
-REGLAS IMPORTANTES:
-1. Cuando el usuario te pida UNA ACCIÓN (crear, agendar, registrar, etc.), debes devolver el JSON estructurado con la intención.
-2. NUNCA finjas que ejecutaste una acción. Debes devolver los datos estructurados para que el sistema la ejecute.
-3. Si falta información, marca needsMoreInfo=true y proporciona SOLO los parámetros que el usuario mencionó explícitamente.
-4. NUNCA inventes ni asignes valores por defecto. Si el usuario no dijo una fecha, NO pongas la fecha de hoy en params.
-5. El mensaje de respuesta (message) debe ser natural y amigable.
+CÓMO TRABAJAS:
+1. Cuando el usuario te pida una acción (crear, agendar, registrar, etc.), extrae TODOS los datos que puedas de SU MENSAJE
+2. Si el usuario te dio todo en un solo mensaje, ejecuta la acción directamente. ¡No preguntes de más!
+3. Si falta algo, pregunta UNA SOLA COSA a la vez, de forma NATURAL (no uses plantillas)
+4. Si el usuario ya te está respondiendo a una pregunta anterior, completa el parámetro que falta
+5. NUNCA inventes fechas, horas ni valores que el usuario no mencionó explícitamente
+6. Cuando extraigas el NOMBRE del contacto, asegúrate de obtener solo el nombre real (ej: "Alejandra Velázquez" de "haz una cita con Alejandra Velázquez" — el nombre es "Alejandra Velázquez", no incluyas "cita con")
 
 INTENCIONES DISPONIBLES:
-- crear_lead: Crear un nuevo lead. Parámetros requeridos: nombre, email. Opcionales: telefono, contexto.
-- agendar_cita: Agendar una cita. Parámetros requeridos: fecha, hora, nombre. Opcionales: email, titulo, telefono.
-- mis_citas: Consultar próximas citas. Sin parámetros.
-- cancelar_cita: Cancelar una cita. Parámetros: nombre (obligatorio), email (opcional), fecha (opcional), motivo (opcional). Si no sabes el ID, busca por nombre y/o email.
-- crear_tarea: Crear tarea. Parámetros requeridos: titulo. Opcionales: descripcion, fechaVencimiento, email.
-- completar_tarea: Completar tarea. Parámetros: taskId.
-- registrar_interaccion: Registrar interacción. Parámetros requeridos: tipo, contenido.
-- obtener_telefono: Buscar teléfono. Parámetros requeridos: nombre.
-- consulta_general: Para preguntas, dudas, conversación casual. Sin parámetros.
+- crear_lead: Crear un nuevo lead. Necesita: nombre, email. También: telefono, contexto.
+- agendar_cita: Agendar una cita. Necesita: nombre. También: fecha, hora, email, titulo, tipo.
+- mis_citas: Consultar próximas citas.
+- cancelar_cita: Cancelar una cita. Necesita: nombre. También: email, fecha.
+- crear_tarea: Crear tarea. Necesita: titulo. También: descripcion, fechaVencimiento, email.
+- completar_tarea: Completar tarea.
+- registrar_interaccion: Registrar interacción. Necesita: tipo, contenido.
+- obtener_telefono: Buscar teléfono. Necesita: nombre.
+- consulta_general: Para preguntas, dudas, conversación casual.
 
-CRÍTICO — NUNCA hagas esto:
-❌ NO pongas "fecha": "$(date +%Y-%m-%d)" si el usuario no la mencionó
-❌ NO pongas "hora": "10:00" si el usuario no la mencionó
-❌ NO pongas "nombre": "Cliente" o valores inventados
-❌ NO completes parámetros que el usuario no haya dicho explícitamente
+CRÍTICO:
+❌ NO inventes fechas, horas, nombres ni ningún valor
+❌ Si el usuario dice "el viernes", NO pongas la fecha como "$(date +%Y-%m-%d)"
+❌ Si el usuario no mencionó la hora, NO pongas una hora por defecto
 
-En lugar de eso:
-✅ Deja el parámetro FUERA de params
-✅ Marca needsMoreInfo=true
-✅ El sistema preguntará por cada parámetro faltante automáticamente
+✅ Cuando el usuario da toda la información en un mensaje, extrae todo y ejecuta
+✅ Cuando falte algo, pregunta UNA COSA a la vez
+✅ Tu mensaje es lo que el usuario verá — sé natural y cálido
 
 FORMATO DE RESPUESTA (SIEMPRE JSON):
 {
   "intent": "agendar_cita",
   "confidence": 0.95,
-  "needsMoreInfo": true,
+  "needsMoreInfo": false,
   "requiresConfirmation": false,
-  "params": { "nombre": "Alejandra Velázquez" },
-  "message": "¿A qué hora?"
+  "params": { "nombre": "Alejandra Velázquez", "fecha": "2026-06-12", "hora": "11:00", "titulo": "Revisar IA" },
+  "message": "¡Perfecto! Voy a agendar la cita con Alejandra Velázquez para el viernes a las 11:00 con el motivo Revisar IA. Dame un momento..."
 }
 
 SOLO responde con el JSON. NADA de texto adicional fuera del JSON.`
@@ -231,75 +226,14 @@ export const POST = withTenantAuth(async (req, auth) => {
     // ── 0. Verificar contexto pendiente ──────────────────────────
     let pendingCtx = await getPendingContext(userKey)
 
-    // ── 1. Construir mensaje para la IA (con contexto pendiente) ─
-    let pendingContextStr = ''
     if (pendingCtx) {
+      // Si el usuario inicia una nueva acción (verbo de acción), descartar contexto anterior
       const hasActionVerb = /\b(crea|busca|agenda|cancela|registra|envía|muestra|lista|dame|nuev[oa]|convierte|genera|analiza|sugiere|aprueba|ajusta|completa|cierra|califica|rectifica)\b/i.test(message)
-      
-      if (!hasActionVerb && pendingCtx.missingParams.length > 0) {
-        // El usuario está respondiendo a la pregunta anterior
-        const nextMissing = pendingCtx.missingParams[0]
-        pendingCtx.params[nextMissing] = message
-        pendingCtx.missingParams = pendingCtx.missingParams.slice(1)
-        
-        // Guardar progreso
-        await savePendingContext(userKey, tenantId, pendingCtx)
-      } else {
-        // El usuario inició una nueva acción - descartar contexto anterior
+      if (hasActionVerb) {
         await clearPendingContext(userKey)
         pendingCtx = null
       }
-    }
-
-    // Si aún faltan parámetros, preguntar directamente (sin IA)
-    if (pendingCtx && pendingCtx.missingParams.length > 0) {
-      const nextMissing = pendingCtx.missingParams[0]
-      await savePendingContext(userKey, tenantId, pendingCtx)
-
-      const response: ChatResponse = {
-        reply: PARAM_QUESTIONS[nextMissing] || `❓ ¿Podrías proporcionarme ${nextMissing}?`,
-        type: 'question',
-        richData: null,
-        quickReplies: [],
-        chatId: responseChatId,
-        action: pendingCtx.intent,
-      }
-      return NextResponse.json(response)
-    }
-
-    // Si todos los parámetros están completos, ejecutar skill
-    if (pendingCtx && pendingCtx.missingParams.length === 0) {
-      const skillName = INTENT_SKILL_MAP[pendingCtx.intent]
-      if (skillName) {
-        try {
-          const skillResult = await executeSkill(skillName as any, {
-            ...pendingCtx.params,
-            tenantId,
-            userId: userId || undefined,
-          })
-
-          await clearPendingContext(userKey)
-
-          const response: ChatResponse = {
-            reply: formatSuccessMessage(pendingCtx.intent, skillResult),
-            type: 'rich',
-            richData: { type: 'summary', ...skillResult },
-            quickReplies: ['Si, gracias', 'Que mas puedes hacer?', 'Ayuda'],
-            chatId: responseChatId,
-            action: pendingCtx.intent,
-          }
-          return NextResponse.json(response)
-        } catch (skillError: any) {
-          await clearPendingContext(userKey)
-          return NextResponse.json({
-            reply: `❌ Error: ${skillError.message || 'No se pudo completar la acción'}`,
-            type: 'error',
-            richData: null,
-            quickReplies: ['Intentar de nuevo', 'Ayuda'],
-            chatId: responseChatId,
-          })
-        }
-      }
+      // Si no hay verbo de acción, es una respuesta a la pregunta anterior — la IA lo procesará con contexto
     }
 
     // ── 2. Sanitizar PII y llamar a la IA ───────────────────────
@@ -379,59 +313,39 @@ Continúa con la misma intención (${pendingCtx.intent}) y completa los parámet
     let realParams = aiResult.params ? filter.restoreParams(aiResult.params) : {}
     const realMessage = aiResult.message ? filter.restore(aiResult.message) : ''
 
-    // ─── Validación crítica: forzar preguntar fecha/hora aunque la IA las haya inferido ──
-    // La IA (DeepSeek) tiende a inventar fechas (hoy) y horas (cualquiera) en vez de
-    // dejarlos vacíos. Si la IA devolvió fecha/hora pero el usuario NO las mencionó
-    // explícitamente en su mensaje original, debemos ignorarlas y preguntar.
+    // ─── Validación: evitar que la IA invente fechas/horas ──
+    // La IA tiende a inferir fechas (hoy) si el usuario no las mencionó.
+    // Si el usuario no mencionó fecha/hora en su mensaje, las borramos.
     if (aiResult.intent === 'agendar_cita') {
-      // Si message tiene menos de 30 caracteres, probablemente es respuesta a una
-      // pregunta anterior, no un mensaje inicial. No tocar fecha/hora si ya están
-      // siendo recolectadas por el contexto pendiente.
       const userMentionedDate = /\b(mañana|hoy|pasado|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo|\d{1,2}[\/\-]\d{1,2})\b/i.test(message)
       const userMentionedTime = /\b(\d{1,2})(?::(\d{2}))?\s*(?:am|pm|a\.m\.|p\.m\.|horas?|h\b)?\b/i.test(message)
       
-      if (!userMentionedDate && realParams.fecha) {
-        delete realParams.fecha
-      }
-      if (!userMentionedTime && realParams.hora) {
-        delete realParams.hora
-      }
-
-      // Si tras el strip faltan parámetros requeridos, forzar needsMoreInfo
-      const bookingRequired = INTENT_REQUIRED_PARAMS['agendar_cita'] || []
-      const nowMissing = bookingRequired.filter(p => !realParams[p])
-      if (nowMissing.length > 0) {
-        aiResult.needsMoreInfo = true
-      }
+      if (!userMentionedDate && realParams.fecha) delete realParams.fecha
+      if (!userMentionedTime && realParams.hora) delete realParams.hora
     }
 
-    // ── 4. Si necesita más información: preguntar UN parámetro a la vez ─
+    // ── 4. Si la IA necesita más información: dejar que ella pregunte ─
     if (aiResult.needsMoreInfo && aiResult.intent !== 'consulta_general') {
-      const requiredParams = INTENT_REQUIRED_PARAMS[aiResult.intent] || []
-      const missingParams = requiredParams.filter(p => !realParams[p])
+      await savePendingContext(userKey, tenantId, {
+        intent: aiResult.intent,
+        params: realParams,
+        missingParams: ['next'], // Marcador: la IA manejará las preguntas
+      })
 
-      if (missingParams.length > 0) {
-        await savePendingContext(userKey, tenantId, {
-          intent: aiResult.intent,
-          params: realParams,
-          missingParams,
-        })
-
-        // Siempre preguntar UN parámetro a la vez usando PARAM_QUESTIONS,
-        // ignorando el message de la IA (que podría pedir varios a la vez)
-        return NextResponse.json({
-          reply: PARAM_QUESTIONS[missingParams[0]] || `❓ ¿Podrías proporcionarme ${missingParams[0]}?`,
-          type: 'question',
-          richData: null,
-          quickReplies: [],
-          chatId: responseChatId,
-          action: aiResult.intent,
-        } as ChatResponse)
-      }
+      // Usar el mensaje NATURAL de la IA, no plantillas
+      return NextResponse.json({
+        reply: realMessage || '¿Qué más necesito saber?',
+        type: 'question',
+        richData: null,
+        quickReplies: [],
+        chatId: responseChatId,
+        action: aiResult.intent,
+      } as ChatResponse)
     }
 
     // ── 5. Ejecutar skill si aplica ──────────────────────────────
     let skillResult: any = null
+    let skillErrorMsg: string | null = null
     const skillName = INTENT_SKILL_MAP[aiResult.intent]
 
     if (skillName && !aiResult.needsMoreInfo && !aiResult.requiresConfirmation && aiResult.intent !== 'consulta_general') {
@@ -444,7 +358,22 @@ Continúa con la misma intención (${pendingCtx.intent}) y completa los parámet
         await clearPendingContext(userKey)
       } catch (skillError: any) {
         console.error('[Chat] Skill error:', skillError)
-        aiResult.message = skillError.message || 'Error al ejecutar la acción'
+        const msg = skillError.message || 'Error al ejecutar la acción'
+        aiResult.message = msg
+
+        // Si el skill necesita más datos (EMAIL_REQUIRED), guardar contexto pendiente
+        // para que la conversación continúe naturalmente
+        if (msg.startsWith('EMAIL_REQUIRED:')) {
+          skillErrorMsg = msg.replace(/^EMAIL_REQUIRED:\s*/, '')
+          aiResult.message = skillErrorMsg
+          await savePendingContext(userKey, tenantId, {
+            intent: aiResult.intent,
+            params: realParams,
+            missingParams: ['next'],
+          })
+        } else {
+          skillErrorMsg = msg
+        }
       }
     }
 
@@ -494,7 +423,7 @@ Continúa con la misma intención (${pendingCtx.intent}) y completa los parámet
     const response: ChatResponse = {
       reply: skillResult
         ? formatSuccessMessage(aiResult.intent, skillResult)
-        : (realMessage || 'Entendido. ¿Algo más en lo que pueda ayudarte? 🌟'),
+        : (skillErrorMsg || realMessage || 'Entendido. ¿Algo más en lo que pueda ayudarte? 🌟'),
       type: responseType,
       richData,
       quickReplies: quickReplies.length > 0 ? quickReplies : [

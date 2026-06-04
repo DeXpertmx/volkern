@@ -263,48 +263,60 @@ const createBookingWrapper = async (input: {
   const { tenantId, email, nombre, fecha, hora, titulo, tipo, ubicacion, userId } = input;
   const { prisma } = await import('@/lib/db');
 
-  // Validar que el nombre sea un nombre real de persona (no un placeholder)
-  // Debe tener al menos 2 palabras y no ser un comando/frase del sistema
-  if (nombre && nombre.trim()) {
-    const nameWords = nombre.trim().split(/\s+/)
+  // ── Limpiar nombre: extraer solo el nombre real ──
+  // La IA a veces incluye "cita con", "reunión con", etc.
+  function cleanNombre(raw: string): string {
+    let cleaned = raw.trim()
+    // Remover TODO lo que venga antes de "con" + el "con"
+    // Esto cubre: "cita con X", "reunión con X", "haz una cita con X", etc.
+    cleaned = cleaned.replace(/^.+\bcon\s+/i, '')
+    // Remover prefijos remanentes: "agendar", "programar", "crear" al inicio
+    cleaned = cleaned.replace(/^(?:agendar|programar|crear|hacer|haz|poner|una|la|el|un|para)\s+/i, '')
+    return cleaned.trim()
+  }
+
+  let targetNombre = nombre ? cleanNombre(nombre) : nombre
+
+  // ── Validar nombre ──
+  if (targetNombre && targetNombre.trim()) {
+    const nameWords = targetNombre.trim().split(/\s+/)
     const hasMinWords = nameWords.length >= 2
-    const isLikelyAction = /\b(?:cita|agendar|crear|registrar|buscar|listar|eliminar|prueba|seguimiento|una cita)\b/i.test(nombre)
+    // Solo rechazar si claramente no es un nombre (puro verbo o comando)
+    const isCompleteCommand = /^(?:cita|agendar|crear|registrar|buscar|listar|eliminar|seguimiento)$/i.test(targetNombre.trim())
     
-    if (!hasMinWords || isLikelyAction) {
+    if (!hasMinWords || isCompleteCommand) {
       throw new Error(
-        `El nombre "${nombre}" no parece un nombre válido. Proporciona nombre y apellido del contacto.`
+        `El nombre "${targetNombre}" no parece un nombre válido. Proporciona nombre y apellido del contacto.`
       )
     }
   }
 
-  let targetEmail = email;
-  let targetNombre = nombre;
+  let targetEmail = email
 
-  // 1. Si no hay email pero hay nombre, intentar buscar el lead/contacto existente
-  if (!targetEmail && targetNombre) {
+  // ── Buscar contacto existente ──
+  if (targetNombre) {
     const lead = await prisma.lead.findFirst({ 
       where: { tenantId, nombre: { contains: targetNombre, mode: 'insensitive' } } 
     });
     
     if (lead) {
-      targetEmail = lead.email;
-      targetNombre = lead.nombre;
+      targetEmail = targetEmail || lead.email
+      targetNombre = lead.nombre
     } else {
       const contact = await prisma.contact.findFirst({ 
         where: { tenantId, nombre: { contains: targetNombre, mode: 'insensitive' } } 
       });
       if (contact) {
-        targetEmail = contact.email;
-        targetNombre = contact.nombre;
+        targetEmail = targetEmail || contact.email
+        targetNombre = contact.nombre
       }
     }
   }
 
-  // 2. Si no hay email (no se encontró el contacto), generar placeholder
-  // para que bookingSkills.createBooking pueda crear el lead automáticamente
+  // ── Si no hay email, pedir al usuario ──
+  // (No generar emails placeholder. La IA preguntará en el siguiente turno)
   if (!targetEmail) {
-    const safeName = (targetNombre || 'cliente').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '.').replace(/[^a-z0-9.]/g, '')
-    targetEmail = `${safeName}@temp.volkern.app`
+    throw new Error(`EMAIL_REQUIRED: No tengo el email de ${targetNombre || 'este contacto'}. ¿Me lo puedes proporcionar?`)
   }
   if (!targetNombre) targetNombre = targetEmail.split('@')[0]
 
