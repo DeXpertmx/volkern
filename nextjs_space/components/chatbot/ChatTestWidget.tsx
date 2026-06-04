@@ -100,17 +100,11 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
     }
   };
 
-  // Timer de grabación: cuenta mientras escucha, pausa cuando paused, resetea al iniciar
+  // Timer de grabación: cuenta mientras escucha, pausa cuando paused, resetea al finalizar
   useEffect(() => {
     if (isListening) {
       setInterimText('');
       setRecordingTimer(0);
-    }
-  }, [isListening]);
-
-  useEffect(() => {
-    if (!isListening && !isPaused && recordingTimer > 0) {
-      // Grabación terminada, mantener el timer para el último valor
     }
   }, [isListening]);
 
@@ -120,7 +114,7 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
     }
   }, [isListening, isPaused]);
 
-  // Intervalo del timer
+  // Intervalo del timer (solo corre cuando activamente escuchando)
   useEffect(() => {
     if (!isListening || isPaused) return;
     const interval = setInterval(() => {
