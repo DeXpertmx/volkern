@@ -55,6 +55,7 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
   const [silenceTimeout, setSilenceTimeout] = useState(2); // segundos
   const [recordingTimer, setRecordingTimer] = useState(0); // segundos acumulados
   const cancelVoiceRef = useRef(false);
+  const pttActiveRef = useRef(false);
 
   const audioBands = useAudioLevel(isListening || isPaused);
 
@@ -89,6 +90,49 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
       }, 800);
     },
   });
+
+  // Push-to-talk: espacio inicia grabación, soltar espacio envía
+  useEffect(() => {
+    if (!isOpen || !voiceSupported || !activo) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code !== 'Space' || e.repeat) return;
+      if (document.activeElement === inputRef.current) return;
+      if (pttActiveRef.current) return; // Ya grabando vía PTT
+
+      e.preventDefault();
+
+      pttActiveRef.current = true;
+      playBeep('start');
+      hapticFeedback('start');
+      startListening();
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code !== 'Space') return;
+      if (!pttActiveRef.current) return;
+
+      e.preventDefault();
+      pttActiveRef.current = false;
+
+      playBeep('stop');
+      hapticFeedback('stop');
+      stopListening();
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('keyup', handleKeyUp);
+      // Si PTT estaba activo al cerrar, limpiar
+      if (pttActiveRef.current && isListeningRef.current) {
+        pttActiveRef.current = false;
+        stopListening();
+      }
+    };
+  }, [isOpen, voiceSupported, activo]);
 
   // Envolver toggle para agregar sonido + vibración de inicio/fin
   const handleToggleVoice = () => {
@@ -482,6 +526,26 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
                   />
                   <span className="text-[10px] text-muted-foreground tabular-nums w-7 text-right">
                     {silenceTimeout}s
+                  </span>
+                </div>
+              )}
+              {voiceSupported && !isListening && !isPaused && (
+                <div className="flex items-center justify-center gap-1.5 mt-1.5">
+                  <kbd className="inline-flex items-center justify-center h-4 min-w-[18px] rounded-[3px] border border-border bg-muted px-1 text-[10px] font-medium text-muted-foreground">
+                    Espacio
+                  </kbd>
+                  <span className="text-[10px] text-muted-foreground">
+                    para grabar
+                  </span>
+                </div>
+              )}
+              {isListening && !isPaused && (
+                <div className="flex items-center justify-center gap-1.5 mt-1.5">
+                  <kbd className="inline-flex items-center justify-center h-4 min-w-[18px] rounded-[3px] border border-destructive/30 bg-destructive/10 px-1 text-[10px] font-medium text-destructive">
+                    Espacio
+                  </kbd>
+                  <span className="text-[10px] text-destructive/80 animate-pulse">
+                    suelta para enviar
                   </span>
                 </div>
               )}
