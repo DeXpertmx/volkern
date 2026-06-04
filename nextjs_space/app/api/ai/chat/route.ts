@@ -19,12 +19,11 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { withTenantAuth } from '@/lib/api-key-auth'
 import { callAssistantWithFallback } from '@/lib/assistant/openrouter-client'
-import { withPiiFilter } from '@/lib/ai/pii-filter'
+import { PiiFilter } from '@/lib/ai/pii-filter'
 import { executeSkill } from '@/lib/skills'
 import { prisma } from '@/lib/db'
 import { v4 as uuidv4 } from 'uuid'
 import { intentClassifier } from '@/lib/agents/intent-classifier'
-import { entityExtractor } from '@/lib/agents/entity-extractor'
 
 // ─── Tipos ─────────────────────────────────────────────────────────────────
 
@@ -70,115 +69,150 @@ const INTENT_SKILL_MAP: Record<string, string> = {
   'recomendar_inmuebles': 'recommend_properties',
 }
 
-// ─── Parámetros requeridos por intención ───────────────────────────────────
+// ─── Descripciones completas de skills para la IA ──────────────────────────
 
-const INTENT_REQUIRED_PARAMS: Record<string, string[]> = {
-  'crear_lead': ['nombre', 'email'],
-  'agendar_cita': ['nombre', 'tipo'],
-  'cancelar_cita': ['nombre'],
-  'crear_tarea': ['titulo'],
-  'registrar_interaccion': ['tipo', 'contenido'],
-  'obtener_telefono': ['nombre'],
-}
+const SKILL_DESCRIPTIONS = `
+== SKILLS DISPONIBLES ==
 
-const PARAM_QUESTIONS: Record<string, string> = {
-  email: '📧 ¿Cuál es el correo electrónico del contacto?',
-  nombre: '👤 ¿Cuál es el nombre completo del contacto?',
-  fecha: '📅 ¿Para qué fecha? (ej: mañana, viernes, 15/06)',
-  hora: '⏰ ¿A qué hora? (ej: 10:00, 2pm, 3:30pm)',
-  titulo: '📋 ¿Cuál es el motivo o título de la cita?',
-  telefono: '📱 ¿Cuál es el teléfono del contacto?',
-  contexto: '📝 ¿Alguna nota adicional?',
-  duracion: '⏱️ ¿Cuántos minutos durará la reunión?',
-  tipo: '📍 ¿La cita será presencial o por videollamada?',
-  contenido: '📝 ¿Qué ocurrió en la interacción?',
-  ubicacion: '📍 Si es presencial, ¿dónde será la cita?',
-  motivo: '📝 ¿Por qué motivo deseas cancelar la cita?',
-}
+[CREAR LEAD]
+  intent: "crear_lead"
+  desc: Crear un nuevo contacto/lead en el sistema.
+  params requeridos: nombre (string), email (string)
+  params opcionales: telefono (string), contexto (string), empresa (string)
+  ejemplo: {"intent":"crear_lead","params":{"nombre":"Juan Pérez","email":"juan@email.com","telefono":"612345678"}}
 
-// ─── System prompt optimizado ──────────────────────────────────────────────
+[ACTUALIZAR LEAD]
+  intent: "actualizar_lead"
+  desc: Actualizar datos de un lead existente.
+  params requeridos: nombre o email (para identificar)
+  params opcionales: telefono, empresa, contexto
+
+[CONVERTIR LEAD]
+  intent: "convertir_lead"
+  desc: Convertir un lead en contacto.
+
+[AGENDAR CITA]
+  intent: "agendar_cita"
+  desc: Crear una cita/reunión para un contacto.
+  params requeridos: nombre (string)
+  params opcionales: fecha ("YYYY-MM-DD" o día relativo), hora ("HH:MM" o "10am"), email, titulo, tipo ("videollamada"|"presencial"), ubicacion
+  NOTA: Siempre pregunta tipo si no lo mencionó. Si es videollamada el sistema genera Meet.
+  NOTA2: Si el contacto no existe en la BD, el sistema pedirá el email.
+  ejemplo: {"intent":"agendar_cita","params":{"nombre":"María García","fecha":"2026-06-12","hora":"10:00","titulo":"Revisión","tipo":"videollamada"}}
+
+[MIS CITAS]
+  intent: "mis_citas"
+  desc: Consultar las próximas citas del usuario.
+  params: ninguno
+
+[CANCELAR CITA]
+  intent: "cancelar_cita"
+  desc: Cancelar una cita existente.
+  params requeridos: nombre (string) — el nombre del contacto
+  params opcionales: email, fecha ("YYYY-MM-DD"), motivo
+  NOTA: Si no encuentra la cita exacta, te dirá qué citas activas encontró para que el usuario elija.
+  ejemplo: {"intent":"cancelar_cita","params":{"nombre":"Juan Pérez","fecha":"2026-06-12"}}
+
+[CONFIRMAR CITA]
+  intent: "confirmar_cita"
+  desc: Confirmar una cita pendiente.
+
+[CREAR TAREA]
+  intent: "crear_tarea"
+  desc: Crear una tarea de seguimiento.
+  params requeridos: titulo (string)
+  params opcionales: descripcion, fechaVencimiento, email, prioridad
+
+[COMPLETAR TAREA]
+  intent: "completar_tarea"
+  desc: Marcar tarea como completada.
+
+[MIS TAREAS]
+  intent: "mis_tareas"
+  desc: Consultar tareas pendientes.
+
+[CREAR NOTA]
+  intent: "crear_nota"
+  desc: Agregar una nota a un lead.
+
+[CREAR NEGOCIO]
+  intent: "crear_negocio"
+  desc: Crear una oportunidad/deal en el pipeline de ventas.
+
+[ACTUALIZAR NEGOCIO]
+  intent: "actualizar_negocio"
+  desc: Actualizar etapa o datos de un deal.
+
+[MIS NEGOCIOS]
+  intent: "mis_negocios"
+  desc: Listar oportunidades/deals activos.
+
+[REGISTRAR INTERACCIÓN]
+  intent: "registrar_interaccion"
+  desc: Registrar una interacción con un contacto (llamada, WhatsApp, email, reunión).
+  params requeridos: tipo ("llamada"|"whatsapp"|"email"|"reunion"), contenido (string - resumen)
+  params opcionales: nombre, email, resultado
+
+[OBTENER TELÉFONO]
+  intent: "obtener_telefono"
+  desc: Buscar el número de teléfono de un contacto.
+  params requeridos: nombre (string)
+
+[CONSULTA GENERAL]
+  intent: "consulta_general"
+  desc: Para preguntas, dudas, conversación casual, saludos, o cuando no aplica ninguna acción anterior.
+
+== IMPORTANTE ==
+- TÚ controlas el flujo. Si falta un parámetro, pon needsMoreInfo:true y pregunta naturalmente.
+- NO inventes valores. Si el usuario no dijo fecha, no pongas una por defecto.
+- Si el usuario da todo en un mensaje, ejecuta directo con needsMoreInfo:false.
+- Para fechas relativas ("viernes", "mañana"), usa la referencia de FECHA ACTUAL.
+- El nombre del contacto es solo el nombre real, sin "cita con" ni "reunión con".
+- Si un skill falla (ej: no encuentra el contacto), el sistema lo manejará. Tú solo indica en message lo que pasó.
+`
+
+// ─── System prompt ──────────────────────────────────────────────────────────
 
 function buildChatSystemPrompt(): string {
   const today = new Date()
   const todayStr = today.toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
-  // Capitalizar primera letra
   const todayFormatted = todayStr.charAt(0).toUpperCase() + todayStr.slice(1)
   const todayISO = today.toISOString().split('T')[0]
-  const weekDay = today.getDay() // 0=domingo, 1=lunes, ..., 6=sábado
-  
+  const weekDay = today.getDay()
   const dayNames = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
   const dayName = dayNames[weekDay]
 
   return `Eres Gemma, la asistente inteligente de Volkern.
 
 PERSONALIDAD:
-- Eres una asistente ejecutiva profesional, amable y eficiente
-- Hablas español natural y fluido, como una persona real conversando
+- Asistente ejecutiva profesional, amable y eficiente
+- Hablas español natural y fluido
 - Usas emojis con moderación
-- ERES INTELIGENTE — confiamos en tu criterio para entender el contexto
-
-CÓMO TRABAJAS:
-1. Cuando el usuario te pida una acción (crear, agendar, registrar, etc.), extrae TODOS los datos que puedas de SU MENSAJE
-2. Si el usuario te dio todo en un solo mensaje, ejecuta la acción directamente. ¡No preguntes de más!
-3. Si falta algo, pregunta UNA SOLA COSA a la vez, de forma NATURAL (no uses plantillas)
-4. Si el usuario ya te está respondiendo a una pregunta anterior, completa el parámetro que falta
-5. NUNCA inventes fechas, horas ni valores que el usuario no mencionó explícitamente
-6. Cuando extraigas el NOMBRE del contacto: busca cualquier nombre propio (nombre y apellido) en el mensaje. El nombre está después de palabras como "con", "para", "de" seguidas de un nombre con mayúscula. Ej: de "Agenda una reunión con Alejandra Velázquez" el nombre es "Alejandra Velázquez". De "cita con Juan Pérez" el nombre es "Juan Pérez". Ignora palabras como "agenda", "cita", "reunión", "con" — solo deja el nombre real.
-7. IMPORTANTE: Es posible que veas placeholders como [NOMBRE_1], [EMAIL_1], [TELEFONO_1] en el mensaje del usuario. Estos son DATOS REALES protegidos por privacidad. Úsalos directamente en tus params. Ej: si ves "cita con [NOMBRE_1]", pon params.nombre = "[NOMBRE_1]". El sistema restaurará el valor real automáticamente.
-
-INTENCIONES DISPONIBLES:
-- crear_lead: Crear un nuevo lead. Necesita: nombre, email. También: telefono, contexto.
-- agendar_cita: Agendar una cita. Necesita: nombre, tipo. También: fecha, hora, email, titulo, ubicacion.
-  El tipo debe ser "videollamada" o "presencial".
-  - Si el usuario dice "videollamada", pon tipo:"videollamada". El sistema generará un link de Google Meet.
-  - Si el usuario dice "presencial" o no especifica, pon tipo:"presencial" y también pide la ubicación.
-- mis_citas: Consultar próximas citas.
-- cancelar_cita: Cancelar una cita. Necesita: nombre. También: email, fecha.
-- crear_tarea: Crear tarea. Necesita: titulo. También: descripcion, fechaVencimiento, email.
-- completar_tarea: Completar tarea.
-- registrar_interaccion: Registrar interacción. Necesita: tipo, contenido.
-- obtener_telefono: Buscar teléfono. Necesita: nombre.
-- consulta_general: Para preguntas, dudas, conversación casual.
+- ERES INTELIGENTE y tienes criterio propio
 
 FECHA ACTUAL:
 Hoy es ${dayName}, ${todayFormatted} (${todayISO}).
-Usa esta referencia para calcular fechas relativas como "viernes", "mañana", "próximo lunes", etc.
 
-LÍMITES ABSOLUTOS (NO LOS ROMPAS NUNCA):
-🚫 Solo hablas de Volkern. No conoces ni recomiendas otros CRM, ERP, softwares, herramientas ni competidores.
-🚫 Si el usuario pregunta por otros productos ("mejor CRM", "qué opinas de Salesforce", "alternativas a Volkern"), responde: "No conozco otras herramientas. Mi especialidad es Volkern. ¿Qué necesitas hacer en Volkern?"
-🚫 NUNCA menciones datos, contactos, citas, leads ni información de OTROS usuarios o empresas. Solo ves los datos del usuario que está hablando.
-🚫 No des consejos financieros, legales, fiscales ni médicos externos. Sí puedes explicar cómo funcionan los módulos de Volkern (facturación, contabilidad, RRHH, etc.) pero no asesores sobre qué hacer fuera del sistema.
-🚫 No inventes información. Si no sabes algo, di que no lo sabes.
-🚫 No finjas tener emociones humanas. Sé profesional y cálida, pero no digas "estoy feliz" o "me siento triste".
+${SKILL_DESCRIPTIONS}
 
-ALCANCE:
-✅ Puedes responder preguntas sobre cómo usar Volkern, sus módulos y funciones
-✅ Puedes consultar y modificar los datos del usuario (citas, leads, tareas, contactos, etc.)
-✅ Si no sabes cómo hacer algo en Volkern, di que lo consultes con soporte
-
-CRÍTICO:
-❌ NO inventes fechas, horas, nombres ni ningún valor
-❌ Si el usuario dice "el viernes", calcula la fecha correcta usando la referencia de hoy
-❌ Si el usuario no mencionó la hora, NO pongas una hora por defecto
-
-✅ Cuando el usuario da toda la información en un mensaje, extrae todo y ejecuta
-✅ Cuando falte algo, pregunta UNA COSA a la vez
-✅ Tu mensaje es lo que el usuario verá — sé natural y cálido
-✅ Si te preguntan "¿qué puedes hacer?", enumera las intenciones disponibles
-
+LÍMITES:
+🚫 Solo hablas de Volkern — no recomiendas otros CRM, ERP ni herramientas
+🚫 Si preguntan por competidores: "No conozco otras herramientas. Mi especialidad es Volkern"
+🚫 Nunca menciones datos de OTROS usuarios
+🚫 No inventes información
+🚫 No des consejos financieros, legales ni médicos externos
 
 FORMATO DE RESPUESTA (SIEMPRE JSON):
 {
-  "intent": "agendar_cita",
-  "confidence": 0.95,
-  "needsMoreInfo": false,
+  "intent": "nombre_del_intent",
+  "confidence": 0.0-1.0,
+  "needsMoreInfo": true|false,
   "requiresConfirmation": false,
-  "params": { "nombre": "Alejandra Velázquez", "fecha": "2026-06-12", "hora": "11:00", "titulo": "Revisar IA" },
-  "message": "¡Perfecto! Voy a agendar la cita con Alejandra Velázquez para el viernes a las 11:00 con el motivo Revisar IA. Dame un momento..."
+  "params": { "param1": "valor1", "param2": "valor2" },
+  "message": "Tu mensaje natural al usuario aquí"
 }
 
-SOLO responde con el JSON. NADA de texto adicional fuera del JSON.`
+SOLO responde con el JSON. NADA más.`
 }
 
 // ─── Historial de conversación (memoria de últimos N mensajes) ──────────
@@ -332,120 +366,86 @@ export const POST = withTenantAuth(async (req, auth) => {
       // Si no hay verbo de acción, es una respuesta a la pregunta anterior — la IA lo procesará con contexto
     }
 
-    // ── 2. Sanitizar PII y llamar a la IA ───────────────────────
-    const { result: aiResult, filter, sanitizedMessage } = await withPiiFilter(message, async (sanitized) => {
-      // Construir prompt con contexto pendiente si existe
-      let systemPrompt = buildChatSystemPrompt()
-      if (pendingCtx) {
-        systemPrompt += `\n\nCONTEXTO DE LA CONVERSACIÓN:
+    // ── 2. Llamar a la IA con el mensaje ORIGINAL (sin sanitizar) ───
+    // Construir prompt con contexto pendiente si existe
+    let systemPrompt = buildChatSystemPrompt()
+    if (pendingCtx) {
+      systemPrompt += `\n\nCONTEXTO DE LA CONVERSACIÓN:
 El usuario está en medio de la acción: "${pendingCtx.intent}"
 Parámetros ya recolectados: ${JSON.stringify(pendingCtx.params)}
 Parámetros faltantes: ${JSON.stringify(pendingCtx.missingParams)}
 
 El mensaje actual del usuario es una RESPUESTA a la pregunta anterior.
 Continúa con la misma intención (${pendingCtx.intent}) y completa los parámetros faltantes si el usuario los proporciona.`
+    }
+
+    // Incluir historial de conversación (últimos 10 mensajes)
+    const conversationHistory = await getConversationHistory(userKey)
+
+    const openAiMessages: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
+      { role: 'system', content: systemPrompt },
+      ...conversationHistory,
+      { role: 'user', content: message }, // Mensaje ORIGINAL sin filtrar
+    ]
+
+    const openAiResponse = await callAssistantWithFallback(openAiMessages)
+    const rawContent = openAiResponse.choices[0].message.content
+
+    // Intentar parsear JSON de la respuesta
+    const safeMessage = (rawContent || '').substring(0, 500)
+
+    let aiResult = { intent: 'consulta_general' as const, confidence: 0.5, needsMoreInfo: false, requiresConfirmation: false, params: {} as Record<string, any>, message: safeMessage }
+
+    const jsonMatch = rawContent?.match(/\{[\s\S]*\}/)
+    if (jsonMatch) {
+      try {
+        const parsed = JSON.parse(jsonMatch[0])
+        aiResult = { ...aiResult, ...parsed, message: (parsed.message || '').substring(0, 500) }
+      } catch {
+        // Si falla el parseo, usar el fallback
       }
+    }
 
-      // Incluir historial de conversación (últimos 10 mensajes)
-      const conversationHistory = await getConversationHistory(userKey)
-
-      const messages: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
-        { role: 'system', content: systemPrompt },
-        ...conversationHistory,
-        { role: 'user', content: sanitized },
-      ]
-
-      const response = await callAssistantWithFallback(messages)
-      const content = response.choices[0].message.content
-
-      // Intentar parsear JSON
-      const jsonMatch = content.match(/\{[\s\S]*\}/)
-      if (jsonMatch) {
-        try {
-          return JSON.parse(jsonMatch[0])
-        } catch {
-          // Si falla el parseo, tratar como consulta_general
-        }
-      }
-
-      // Fallback: si la IA no devolvió JSON, usar intent classifier
+    // Fallback: si no se pudo parsear JSON o es consulta_general sin mensaje, usar intent classifier
+    if (!jsonMatch || (aiResult.intent === 'consulta_general' && !aiResult.message)) {
       try {
         const classification = await intentClassifier.classify({
-          message: sanitized,
+          message,
           userId: userKey,
           tenantId,
         })
 
         if (classification.intent !== 'consulta_general' && classification.confidence >= 0.5) {
-          // Extraer entidades
-          const extraction = await entityExtractor.extract({
-            message: sanitized,
-            intent: classification.intent,
-          })
-
-          return {
+          aiResult = {
             intent: classification.intent,
             confidence: classification.confidence,
-            needsMoreInfo: extraction.missingParams.length > 0,
+            needsMoreInfo: classification.needsMoreInfo,
             requiresConfirmation: false,
-            params: extraction.entities,
-            message: extraction.missingParams.length > 0
-              ? (PARAM_QUESTIONS[extraction.missingParams[0]] || `❓ ¿Podrías proporcionarme ${extraction.missingParams[0]}?`)
-              : `Entendido, voy a procesar tu solicitud.`,
+            params: classification.extractedParams,
+            message: 'Entendido, voy a procesar tu solicitud.',
           }
         }
       } catch {
-        // Si todo falla, tratar como consulta general
+        // Conservar el aiResult actual
       }
-
-      // Devolver el texto de la IA como consulta general
-      return {
-        intent: 'consulta_general',
-        confidence: 0.5,
-        needsMoreInfo: false,
-        requiresConfirmation: false,
-        params: {},
-        message: content,
-      }
-    })
-
-    // ── 3. Restaurar placeholders en parámetros y mensaje ────────
-    let realParams = aiResult.params ? filter.restoreParams(aiResult.params) : {}
-    const realMessage = aiResult.message ? filter.restore(aiResult.message) : ''
-
-    // ─── Validación: evitar que la IA invente fechas/horas ──
-    // La IA tiende a inferir fechas (hoy) si el usuario no las mencionó.
-    // Si el usuario no mencionó fecha/hora en su mensaje, las borramos.
-    if (aiResult.intent === 'agendar_cita') {
-      const userMentionedDate = /\b(mañana|hoy|pasado|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo|\d{1,2}[\/\-]\d{1,2})\b/i.test(message)
-      const userMentionedTime = /\b(\d{1,2})(?::(\d{2}))?\s*(?:am|pm|a\.m\.|p\.m\.|horas?|h\b)?\b/i.test(message)
-      
-      if (!userMentionedDate && realParams.fecha) delete realParams.fecha
-      if (!userMentionedTime && realParams.hora) delete realParams.hora
     }
 
-    // ── 4. Si la IA necesita más información: dejar que ella pregunte ─
-    if (aiResult.needsMoreInfo && aiResult.intent !== 'consulta_general') {
-      // Calcular qué parámetros REQUERIDOS faltan realmente
-      const required = INTENT_REQUIRED_PARAMS[aiResult.intent] || []
-      const actualMissing = required.filter(p => !realParams[p] && p !== 'next')
-      // Si tipo es videollamada, ubicacion no es necesaria
-      const missing = realParams.tipo === 'videollamada'
-        ? actualMissing.filter(p => p !== 'ubicacion')
-        : actualMissing
+    const params = aiResult.params || {}
+    const aiMessage = aiResult.message || ''
 
+    // ── 3. Si la IA necesita más información: dejar que ella pregunte ─
+    if (aiResult.needsMoreInfo && aiResult.intent !== 'consulta_general') {
       await savePendingContext(userKey, tenantId, {
         intent: aiResult.intent,
-        params: realParams,
-        missingParams: missing.length > 0 ? missing : ['next'],
+        params,
+        missingParams: ['next'],
       })
 
-      // Guardar en historial (asíncrono)
-      const questionReply = realMessage || '¿Qué más necesito saber?'
-      saveMessageToHistory(userKey, tenantId, message, questionReply, aiResult.intent, 'PENDING').catch(() => {})
+      // Guardar en historial
+      saveMessageToHistory(userKey, tenantId, message, aiMessage, aiResult.intent, 'PENDING').catch(() => {})
 
       return NextResponse.json({
-        reply: questionReply,
+        reply: aiMessage || '¿Qué más necesito saber?',
         type: 'question',
         richData: null,
         quickReplies: [],
@@ -454,7 +454,7 @@ Continúa con la misma intención (${pendingCtx.intent}) y completa los parámet
       } as ChatResponse)
     }
 
-    // ── 5. Ejecutar skill si aplica ──────────────────────────────
+    // ── 4. Ejecutar skill si aplica ──────────────────────────────
     let skillResult: any = null
     let skillErrorMsg: string | null = null
     const skillName = INTENT_SKILL_MAP[aiResult.intent]
@@ -462,7 +462,7 @@ Continúa con la misma intención (${pendingCtx.intent}) y completa los parámet
     if (skillName && !aiResult.needsMoreInfo && !aiResult.requiresConfirmation && aiResult.intent !== 'consulta_general') {
       try {
         skillResult = await executeSkill(skillName as any, {
-          ...realParams,
+          ...params,
           tenantId,
           userId: userId || undefined,
         })
@@ -470,36 +470,35 @@ Continúa con la misma intención (${pendingCtx.intent}) y completa los parámet
       } catch (skillError: any) {
         console.error('[Chat] Skill error:', skillError)
         const msg = skillError.message || 'Error al ejecutar la acción'
-        aiResult.message = msg
 
-        // Si el skill necesita más datos (EMAIL_REQUIRED), guardar contexto pendiente
-        // para que la conversación continúe naturalmente
+        // Si el skill pide email, guardar contexto para que continúe naturalmente
         if (msg.startsWith('EMAIL_REQUIRED:')) {
           skillErrorMsg = msg.replace(/^EMAIL_REQUIRED:\s*/, '')
-          aiResult.message = skillErrorMsg
           await savePendingContext(userKey, tenantId, {
             intent: aiResult.intent,
-            params: realParams,
+            params,
             missingParams: ['next'],
           })
         } else {
-          skillErrorMsg = msg
+          // Para otros errores, usar el mensaje de la IA o el error
+          skillErrorMsg = aiMessage || msg
         }
       }
     }
 
-    // ── 6. Construir respuesta ────────────────────────────────────
+    // ── 5. Construir respuesta ────────────────────────────────────
 
-    // Log de auditoría (con mensaje SANITIZADO, sin PII)
+    // Log de auditoría (sanitizado para privacidad)
     try {
+      const auditFilter = new PiiFilter()
+      const sanitizedForLog = auditFilter.sanitize(message)
       await prisma.chatbotAuditLog.create({
         data: {
           userId: userId || 'system',
           tenantId,
           intent: aiResult.intent,
           status: skillResult ? 'SUCCESS' : 'PENDING',
-          inputRaw: sanitizedMessage.substring(0, 500),
-          detectedEntities: { piiCount: filter.getMatches().length, params: realParams },
+          inputRaw: sanitizedForLog.substring(0, 500),
           createdAt: new Date(),
         },
       })
@@ -507,51 +506,39 @@ Continúa con la misma intención (${pendingCtx.intent}) y completa los parámet
       // Non-critical
     }
 
-    // Determinar tipo de respuesta y rich data
+    // Determinar tipo de respuesta
     let responseType: ResponseType = 'text'
     let richData: RichData | null = null
     let quickReplies: string[] = []
+    let replyText: string
 
-    if (aiResult.needsMoreInfo) {
-      responseType = 'question'
-    } else if (aiResult.requiresConfirmation) {
-      responseType = 'confirmation'
-      quickReplies = ['Sí, confirmar', 'No, cancelar']
-    } else if (skillResult) {
+    if (skillResult) {
+      replyText = formatSuccessMessage(aiResult.intent, skillResult)
       responseType = 'rich'
       richData = { type: 'summary', ...skillResult }
-    }
-
-    // Si es consulta general o no hay skill, texto plano
-    if (aiResult.intent === 'consulta_general' || !skillResult) {
-      quickReplies = [
-        'Crear un lead',
-        'Agendar una cita',
-        '¿Qué puedes hacer?',
-      ]
+    } else if (aiResult.intent === 'consulta_general') {
+      replyText = aiMessage || 'Entendido. ¿Algo más? 🌟'
+      quickReplies = ['Crear un lead', 'Agendar una cita', '¿Qué puedes hacer?']
+    } else {
+      replyText = skillErrorMsg || aiMessage || 'Entendido. ¿Algo más? 🌟'
+      quickReplies = ['Sí, gracias', 'Ayuda']
     }
 
     const response: ChatResponse = {
-      reply: skillResult
-        ? formatSuccessMessage(aiResult.intent, skillResult)
-        : (skillErrorMsg || realMessage || 'Entendido. ¿Algo más en lo que pueda ayudarte? 🌟'),
+      reply: replyText,
       type: responseType,
       richData,
-      quickReplies: quickReplies.length > 0 ? quickReplies : [
-        'Sí, gracias',
-        '¿Qué más puedes hacer?',
-        'Ayuda',
-      ],
+      quickReplies: quickReplies.length > 0 ? quickReplies : ['Sí, gracias', '¿Qué más puedes hacer?', 'Ayuda'],
       chatId: responseChatId,
       action: aiResult.intent,
     }
 
-    // Guardar en historial de conversación (asíncrono, no crítico)
+    // Guardar en historial de conversación
     saveMessageToHistory(
       userKey,
       tenantId,
       message,
-      response.reply,
+      replyText,
       aiResult.intent,
       skillResult ? 'SUCCESS' : (aiResult.needsMoreInfo ? 'PENDING' : 'COMPLETED')
     ).catch(() => {})
