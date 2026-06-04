@@ -169,7 +169,48 @@ const SKILL_DESCRIPTIONS = `
 - Para fechas relativas ("viernes", "mañana"), usa la referencia de FECHA ACTUAL.
 - El nombre del contacto es solo el nombre real, sin "cita con" ni "reunión con".
 - Si un skill falla (ej: no encuentra el contacto), el sistema lo manejará. Tú solo indica en message lo que pasó.
-`
+
+== ACCIONES DESTRUCTIVAS (REQUIEREN CONFIRMACIÓN) ==
+Las siguientes acciones requieresConfirmation=true:
+- cancelar_cita: Cancelar una cita
+Pon requiresConfirmation:true en tu JSON, y en message pregunta "¿Estás seguro de cancelar la cita?"
+El usuario responderá "Sí" o "No". Si dice que sí, el sistema ejecutará la acción.
+
+== VOLKERN PLATFORM OVERVIEW ==
+Volkern es un Sistema Operativo Empresarial (ERP + CRM) con estos módulos:
+
+1. CRM (Ventas y Marketing): Gestión de leads, contactos, oportunidades (deals), pipeline Kanban,
+   cotizaciones, campañas de marketing, seguimiento de interacciones (llamadas, WhatsApp, email, reuniones).
+
+2. Inmobiliario: Gestión de propiedades (venta/renta), catálogo con campos personalizados JSONB,
+   portal público embebible con filtros, dashboard con KPIs y gráficos, franquicias multi-tenant,
+   cálculo de comisiones con splits (agente/agencia/franquicia), búsqueda por lenguaje natural con IA.
+
+3. ERP (Operaciones): Proyectos, inventario con alertas de stock, producción (MRP) con cálculos
+   de costos y materias primas, control de calidad (QC) con hash SHA-256, logística con tracking de envíos.
+
+4. Financiero y Fiscal: Facturación Veri*Factu (cumplimiento legal España/México), contabilidad,
+   cobranza, conciliación bancaria vía Plaid/Nordigen, proyección de flujo de caja (cash flow),
+   análisis de rentabilidad, cálculo de EBITDA.
+
+5. RRHH (Recursos Humanos): Expedientes de empleados, control de asistencia, nóminas con payroll
+   sealing (The Vault 2.0), gestión de vacaciones, autorización de gastos, activos de personal.
+
+6. Omnicanal: WhatsApp vía Evolution API, email vía AWS SES, web chat, Telegram, integración con
+   Chatwoot para helpdesk multicanal.
+
+7. Academia (LMS): Cursos, lecciones, evaluaciones, certificaciones, portal de alumnos.
+
+8. Gemma AI: Asistente nativo de IA con skills contextuales, auto-diagnóstico (AIOps) cada 5 minutos,
+   generación de contenido, análisis predictivo.
+
+9. Web Creator: CMS basado en Puck para crear landing pages arrastrando componentes.
+
+10. Hub Social: Integración con Meta (Facebook/Instagram) para gestión de redes sociales.
+
+Nota: El usuario puede no tener acceso a todos los módulos. Pero si pregunta por cualquier módulo,
+     debes conocerlo y explicarlo. Si no tienes acceso a los datos de un módulo, dilo claramente.
+``
 
 // ─── System prompt ──────────────────────────────────────────────────────────
 
@@ -195,12 +236,17 @@ Hoy es ${dayName}, ${todayFormatted} (${todayISO}).
 
 ${SKILL_DESCRIPTIONS}
 
-LÍMITES:
-🚫 Solo hablas de Volkern — no recomiendas otros CRM, ERP ni herramientas
-🚫 Si preguntan por competidores: "No conozco otras herramientas. Mi especialidad es Volkern"
-🚫 Nunca menciones datos de OTROS usuarios
-🚫 No inventes información
-🚫 No des consejos financieros, legales ni médicos externos
+LÍMITES ABSOLUTOS:
+🚫 Solo hablas de Volkern — no recomiendas ni mencionas otros CRM, ERP, softwares ni herramientas
+🚫 Si preguntan por competidores: "No conozco otras herramientas. Mi especialidad es Volkern. ¿Qué necesitas hacer en Volkern?"
+🚫 NUNCA des información de OTROS usuarios, contactos, empresas o datos que no pertenezcan al usuario que está hablando
+🚫 NUNCA inventes datos. Si no está en la base de datos, no lo digas como si existiera. Di "No encontré información sobre eso"
+🚫 No puedes eliminar nada permanentemente. Las cancelaciones y eliminaciones siempre requieren confirmación del usuario
+🚫 Solo puedes acceder y mostrar datos a los que el usuario tenga permiso según su perfil/rol
+🚫 Si el usuario pregunta por datos de un módulo al que no tiene acceso, dilo claramente
+🚫 No des consejos financieros, legales, fiscales ni médicos externos
+🚫 No finjas tener emociones humanas. Sé profesional y cálida
+🚫 Si preguntan por el mejor CRM o herramienta, responde: "Volkern es la plataforma que conozco. ¿Qué necesitas hacer?"
 
 FORMATO DE RESPUESTA (SIEMPRE JSON):
 {
@@ -357,13 +403,71 @@ export const POST = withTenantAuth(async (req, auth) => {
     let pendingCtx = await getPendingContext(userKey)
 
     if (pendingCtx) {
+      // Si el contexto está esperando CONFIRMACIÓN y el usuario confirma, ejecutar directo
+      if (pendingCtx.missingParams[0] === 'pending_confirmation') {
+        const isConfirm = /\b(s[ií]|confirm[ao]|adelante|dale|ok|sim|sip|yes|proced[ae])\b/i.test(message)
+        const isCancel = /\b(no|cancel[ao]|cancelar|para|detente|mejor no|quita)\b/i.test(message)
+
+        if (isCancel) {
+          const cancelReply = 'Entendido, cancelo la operación. ¿Algo más? 🌟'
+          saveMessageToHistory(userKey, tenantId, message, cancelReply, pendingCtx.intent, 'CANCELLED').catch(() => {})
+          await clearPendingContext(userKey)
+          return NextResponse.json({
+            reply: cancelReply,
+            type: 'text',
+            richData: null,
+            quickReplies: ['Crear un lead', 'Agendar una cita', 'Ayuda'],
+            chatId: responseChatId,
+          } as ChatResponse)
+        }
+
+        if (isConfirm) {
+          // Ejecutar el skill directamente
+          try {
+            const skillName = INTENT_SKILL_MAP[pendingCtx.intent]
+            if (skillName) {
+              const result = await executeSkill(skillName as any, {
+                ...pendingCtx.params,
+                tenantId,
+                userId: userId || undefined,
+              })
+              await clearPendingContext(userKey)
+
+              const replyText = formatSuccessMessage(pendingCtx.intent, result)
+              saveMessageToHistory(userKey, tenantId, message, replyText, pendingCtx.intent, 'SUCCESS').catch(() => {})
+              return NextResponse.json({
+                reply: replyText,
+                type: 'rich',
+                richData: { type: 'summary', ...result },
+                quickReplies: ['Sí, gracias', '¿Qué más puedes hacer?', 'Ayuda'],
+                chatId: responseChatId,
+                action: pendingCtx.intent,
+              } as ChatResponse)
+            }
+          } catch (skillError: any) {
+            const errorReply = skillError.message || 'Error al ejecutar la acción'
+            saveMessageToHistory(userKey, tenantId, message, errorReply, pendingCtx.intent, 'ERROR').catch(() => {})
+            await clearPendingContext(userKey)
+            return NextResponse.json({
+              reply: errorReply,
+              type: 'text',
+              richData: null,
+              quickReplies: ['Intentar de nuevo', 'Ayuda'],
+              chatId: responseChatId,
+            } as ChatResponse)
+          }
+        }
+
+        // Si no es ni confirmación ni cancelación, dejar que la IA procese
+      }
+
       // Si el usuario inicia una nueva acción (verbo de acción), descartar contexto anterior
       const hasActionVerb = /\b(crea|busca|agenda|cancela|registra|envía|muestra|lista|dame|nuev[oa]|convierte|genera|analiza|sugiere|aprueba|ajusta|completa|cierra|califica|rectifica)\b/i.test(message)
       if (hasActionVerb) {
         await clearPendingContext(userKey)
         pendingCtx = null
       }
-      // Si no hay verbo de acción, es una respuesta a la pregunta anterior — la IA lo procesará con contexto
+      // Si no hay verbo de acción y no es confirmación, es respuesta a pregunta — la IA lo procesará con contexto
     }
 
     // ── 2. Llamar a la IA con el mensaje ORIGINAL (sin sanitizar) ───
@@ -454,7 +558,28 @@ Continúa con la misma intención (${pendingCtx.intent}) y completa los parámet
       } as ChatResponse)
     }
 
-    // ── 4. Ejecutar skill si aplica ──────────────────────────────
+    // ── 4. Si la IA requiere confirmación (acción destructiva) ──
+    if (aiResult.requiresConfirmation && aiResult.intent !== 'consulta_general') {
+      // Guardar contexto con la acción pendiente de confirmación
+      await savePendingContext(userKey, tenantId, {
+        intent: aiResult.intent,
+        params,
+        missingParams: ['pending_confirmation'],
+      })
+
+      saveMessageToHistory(userKey, tenantId, message, aiMessage, aiResult.intent, 'PENDING').catch(() => {})
+
+      return NextResponse.json({
+        reply: aiMessage || '¿Estás seguro de realizar esta acción?',
+        type: 'confirmation',
+        richData: null,
+        quickReplies: ['Sí, confirmar', 'No, cancelar'],
+        chatId: responseChatId,
+        action: aiResult.intent,
+      } as ChatResponse)
+    }
+
+    // ── 5. Ejecutar skill si aplica ──────────────────────────────
     let skillResult: any = null
     let skillErrorMsg: string | null = null
     const skillName = INTENT_SKILL_MAP[aiResult.intent]
