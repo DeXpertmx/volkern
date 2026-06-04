@@ -127,7 +127,7 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
       document.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('keyup', handleKeyUp);
       // Si PTT estaba activo al cerrar, limpiar
-      if (pttActiveRef.current && isListeningRef.current) {
+      if (pttActiveRef.current) {
         pttActiveRef.current = false;
         stopListening();
       }
