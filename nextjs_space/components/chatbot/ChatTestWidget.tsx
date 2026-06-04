@@ -12,8 +12,11 @@ import {
   Loader2,
   Bot,
   User,
+  Mic,
+  MicOff,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useSpeechRecognition } from './useSpeechRecognition';
 
 interface Message {
   id: string;
@@ -34,6 +37,44 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const inputValueRef = useRef('');
+  // Mantener ref sincronizada con inputValue para evitar closures stale
+  useEffect(() => {
+    inputValueRef.current = inputValue;
+  }, [inputValue]);
+
+  const {
+    isListening,
+    isSupported: voiceSupported,
+    error: voiceError,
+    toggleListening,
+  } = useSpeechRecognition({
+    lang: 'es-ES',
+    onFinalResult: (text) => {
+      setInputValue(text);
+      // Auto-enviar después de un breve delay si hay texto
+      setTimeout(() => {
+        setInputValue(prev => {
+          if (prev.trim()) {
+            // Pequeño hack para enviar automáticamente
+            return prev;
+          }
+          return prev;
+        });
+      }, 800);
+    },
+  });
+
+  // Auto-enviar cuando se detiene la grabación y hay texto
+  useEffect(() => {
+    if (!isListening && inputValueRef.current.trim() && !voiceError) {
+      const timer = setTimeout(() => {
+        handleSend();
+      }, 600);
+      return () => clearTimeout(timer);
+    }
+  }, [isListening, voiceError]);
 
   // Auto-scroll cuando hay nuevos mensajes
   useEffect(() => {
@@ -62,12 +103,13 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
   }, [isOpen, nombreAsistente]);
 
   const handleSend = async () => {
-    if (!inputValue.trim() || isLoading || !activo) return;
+    const text = inputValueRef.current || inputValue;
+    if (!text.trim() || isLoading || !activo) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
-      content: inputValue.trim(),
+      content: text.trim(),
       timestamp: new Date()
     };
 
@@ -225,10 +267,32 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
                   onKeyPress={handleKeyPress}
-                  placeholder="Escribe un mensaje..."
-                  disabled={isLoading}
+                  placeholder={isListening ? 'Escuchando...' : 'Escribe un mensaje...'}
+                  disabled={isLoading || isListening}
                   className="flex-1"
                 />
+                {voiceSupported && (
+                  <Button
+                    onClick={toggleListening}
+                    disabled={isLoading}
+                    size="icon"
+                    variant={isListening ? 'destructive' : 'outline'}
+                    className={cn(
+                      'relative transition-all duration-300',
+                      isListening && 'animate-pulse shadow-lg shadow-red-500/50'
+                    )}
+                    title={isListening ? 'Detener grabación' : 'Activar voz'}
+                  >
+                    {isListening ? (
+                      <>
+                        <MicOff className="h-4 w-4" />
+                        <span className="absolute top-0 right-0 h-2 w-2 rounded-full bg-red-500 animate-ping" />
+                      </>
+                    ) : (
+                      <Mic className="h-4 w-4" />
+                    )}
+                  </Button>
+                )}
                 <Button
                   onClick={handleSend}
                   disabled={!inputValue.trim() || isLoading}
@@ -237,6 +301,9 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
                   <Send className="h-4 w-4" />
                 </Button>
               </div>
+              {voiceError && (
+                <p className="text-xs text-destructive mt-1">{voiceError}</p>
+              )}
             )}
           </div>
         </Card>
