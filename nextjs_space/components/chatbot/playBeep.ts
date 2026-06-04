@@ -52,3 +52,31 @@ export function playBeep(type: 'start' | 'stop'): void {
     // Silenciosamente ignorar si Web Audio no está disponible
   }
 }
+
+/**
+ * Activa la vibración háptica en dispositivos móviles.
+ * Usa la Vibration API (navigator.vibrate).
+ * No hace nada si no está soportada.
+ */
+export function hapticFeedback(type: 'start' | 'stop' | 'pause'): void {
+  try {
+    if (!navigator.vibrate) return;
+
+    switch (type) {
+      case 'start':
+        // Vibración corta y suave
+        navigator.vibrate(10);
+        break;
+      case 'stop':
+        // Vibración un poco más larga
+        navigator.vibrate(15);
+        break;
+      case 'pause':
+        // Doble vibración (patrón: 10ms on, 30ms off, 10ms on)
+        navigator.vibrate([10, 30, 10]);
+        break;
+    }
+  } catch {
+    // Silenciosamente ignorar si la API no está disponible
+  }
+}
