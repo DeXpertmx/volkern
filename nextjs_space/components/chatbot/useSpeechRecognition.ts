@@ -193,7 +193,7 @@ export function useSpeechRecognition(options?: {
         endTimeoutRef.current = null;
       }
     }
-  }, [isSupported, lang, onResult, onFinalResult, autoRestart]);
+  }, [isSupported, lang, onResult, onFinalResult, onInterimResult, autoRestart, silenceTimeoutMs]);
 
   const stopListening = useCallback(() => {
     if (silenceTimerRef.current) {
