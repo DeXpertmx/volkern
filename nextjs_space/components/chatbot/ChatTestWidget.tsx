@@ -22,6 +22,7 @@ import { Slider } from '@/components/ui/slider';
 import { useSpeechRecognition } from './useSpeechRecognition';
 import { VoiceWaveform } from './VoiceWaveform';
 import { playBeep, hapticFeedback } from './playBeep';
+import { useAudioLevel } from './useAudioLevel';
 
 interface Message {
   id: string;
@@ -52,6 +53,8 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
   const [interimText, setInterimText] = useState('');
   const [silenceTimeout, setSilenceTimeout] = useState(2); // segundos
   const [recordingTimer, setRecordingTimer] = useState(0); // segundos acumulados
+
+  const audioBands = useAudioLevel(isListening || isPaused);
 
   const {
     isListening,
@@ -342,7 +345,7 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
                   />
                   {(isListening || isPaused) && (
                     <div className="absolute inset-0 flex items-center gap-1.5 bg-background/90 rounded-md px-3 pointer-events-none overflow-hidden">
-                      <VoiceWaveform isListening={isListening} isPaused={isPaused} className="shrink-0" />
+                      <VoiceWaveform isListening={isListening} isPaused={isPaused} audioBands={audioBands} className="shrink-0" />
                       <span className={cn(
                         'text-[11px] tabular-nums shrink-0',
                         isPaused ? 'text-muted-foreground' : 'text-destructive'
