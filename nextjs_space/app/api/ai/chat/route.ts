@@ -389,12 +389,17 @@ Continúa con la misma intención (${pendingCtx.intent}) y completa los parámet
       const userMentionedTime = /\b(\d{1,2})(?::(\d{2}))?\s*(?:am|pm|a\.m\.|p\.m\.|horas?|h\b)?\b/i.test(message)
       
       if (!userMentionedDate && realParams.fecha) {
-        // La IA infirió la fecha, ignorarla
         delete realParams.fecha
       }
       if (!userMentionedTime && realParams.hora) {
-        // La IA infirió la hora, ignorarla
         delete realParams.hora
+      }
+
+      // Si tras el strip faltan parámetros requeridos, forzar needsMoreInfo
+      const bookingRequired = INTENT_REQUIRED_PARAMS['agendar_cita'] || []
+      const nowMissing = bookingRequired.filter(p => !realParams[p])
+      if (nowMissing.length > 0) {
+        aiResult.needsMoreInfo = true
       }
     }
 
