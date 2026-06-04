@@ -16,6 +16,11 @@ export function useSpeechRecognition(options?: {
   lang?: string;
   onResult?: (transcript: string) => void;
   onFinalResult?: (transcript: string) => void;
+  /**
+   * Callback que se dispara en cada evento de voz con el texto parcial
+   * (no-final/interim) que se está reconociendo en vivo.
+   */
+  onInterimResult?: (transcript: string) => void;
   autoRestart?: boolean;
   /**
    * Tiempo de silencio en ms después del cual se auto-detiene la grabación.
@@ -29,6 +34,7 @@ export function useSpeechRecognition(options?: {
     lang = 'es-ES',
     onResult,
     onFinalResult,
+    onInterimResult,
     autoRestart = false,
     silenceTimeoutMs = 2000,
   } = options || {};
@@ -94,11 +100,15 @@ export function useSpeechRecognition(options?: {
 
     recognition.onresult = (event: any) => {
       let accumulatedFinal = '';
+      let latestInterim = '';
 
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
         if (result.isFinal) {
           accumulatedFinal += (accumulatedFinal ? ' ' : '') + result[0].transcript;
+        } else {
+          // Último resultado interim (se sobrescribe en cada iteración)
+          latestInterim = result[0].transcript;
         }
       }
 
@@ -112,7 +122,15 @@ export function useSpeechRecognition(options?: {
         resetSilenceTimer();
       }
 
-      onResult?.(accumulatedFinal);
+      // Reportar texto parcial en vivo (interim)
+      if (latestInterim) {
+        onInterimResult?.(latestInterim);
+      } else {
+        // Si no hay interim, limpiar (el usuario dejó de hablar parcialmente)
+        onInterimResult?.('');
+      }
+
+      onResult?.(accumulatedFinal || latestInterim);
     };
 
     recognition.onerror = (event: any) => {

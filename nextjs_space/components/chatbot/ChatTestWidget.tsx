@@ -45,6 +45,8 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
     inputValueRef.current = inputValue;
   }, [inputValue]);
 
+  const [interimText, setInterimText] = useState('');
+
   const {
     isListening,
     isSupported: voiceSupported,
@@ -52,8 +54,12 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
     toggleListening,
   } = useSpeechRecognition({
     lang: 'es-ES',
+    onInterimResult: (text) => {
+      setInterimText(text);
+    },
     onFinalResult: (text) => {
       setInputValue(text);
+      setInterimText('');
       // Auto-enviar después de un breve delay si hay texto
       setTimeout(() => {
         setInputValue(prev => {
@@ -277,11 +283,18 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
                     )}
                   />
                   {isListening && (
-                    <div className="absolute inset-0 flex items-center gap-1.5 bg-background/90 rounded-md px-3 pointer-events-none">
-                      <VoiceWaveform isListening={true} />
-                      <span className="text-xs text-muted-foreground animate-pulse">
-                        Escuchando...
-                      </span>
+                    <div className="absolute inset-0 flex items-center gap-1.5 bg-background/90 rounded-md px-3 pointer-events-none overflow-hidden">
+                      <VoiceWaveform isListening={true} className="shrink-0" />
+                      {interimText ? (
+                        <span className="text-xs text-foreground truncate">
+                          {interimText}
+                          <span className="inline-block w-[2px] h-3.5 bg-destructive ml-0.5 animate-pulse align-middle" />
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground animate-pulse">
+                          Escuchando...
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>
