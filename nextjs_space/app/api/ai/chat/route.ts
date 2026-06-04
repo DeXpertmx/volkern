@@ -162,6 +162,8 @@ CRÍTICO:
 ✅ Cuando falte algo, pregunta UNA COSA a la vez
 ✅ Tu mensaje es lo que el usuario verá — sé natural y cálido
 ✅ Si te preguntan "¿qué puedes hacer?", enumera las intenciones disponibles
+✅ AL AGENDAR: si el usuario no especificó si es videollamada o presencial, pregúntale: "¿La cita será por videollamada o presencial?"
+✅ Si el usuario dice videollamada, agrega tipo:"videollamada" a los parámetros. El sistema generará un link de Google Meet automáticamente.
 
 FORMATO DE RESPUESTA (SIEMPRE JSON):
 {
