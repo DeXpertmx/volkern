@@ -124,6 +124,7 @@ CÓMO TRABAJAS:
 4. Si el usuario ya te está respondiendo a una pregunta anterior, completa el parámetro que falta
 5. NUNCA inventes fechas, horas ni valores que el usuario no mencionó explícitamente
 6. Cuando extraigas el NOMBRE del contacto: busca cualquier nombre propio (nombre y apellido) en el mensaje. El nombre está después de palabras como "con", "para", "de" seguidas de un nombre con mayúscula. Ej: de "Agenda una reunión con Alejandra Velázquez" el nombre es "Alejandra Velázquez". De "cita con Juan Pérez" el nombre es "Juan Pérez". Ignora palabras como "agenda", "cita", "reunión", "con" — solo deja el nombre real.
+7. IMPORTANTE: Es posible que veas placeholders como [NOMBRE_1], [EMAIL_1], [TELEFONO_1] en el mensaje del usuario. Estos son DATOS REALES protegidos por privacidad. Úsalos directamente en tus params. Ej: si ves "cita con [NOMBRE_1]", pon params.nombre = "[NOMBRE_1]". El sistema restaurará el valor real automáticamente.
 
 INTENCIONES DISPONIBLES:
 - crear_lead: Crear un nuevo lead. Necesita: nombre, email. También: telefono, contexto.
@@ -178,6 +179,67 @@ FORMATO DE RESPUESTA (SIEMPRE JSON):
 }
 
 SOLO responde con el JSON. NADA de texto adicional fuera del JSON.`
+}
+
+// ─── Historial de conversación (memoria de últimos N mensajes) ──────────
+
+const HISTORY_PREFIX = 'gemma_history_' // Para diferenciar de pending context
+const MAX_HISTORY = 10 // Últimos 10 mensajes
+
+async function getConversationHistory(userId: string): Promise<{ role: 'user' | 'assistant'; content: string }[]> {
+  try {
+    const records = await prisma.chatbotAuditLog.findMany({
+      where: {
+        userId,
+        id: { not: { startsWith: PENDING_PREFIX } }, // Excluir contexto pendiente
+        NOT: { status: 'PENDING_CONTEXT' },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: MAX_HISTORY,
+      select: { inputRaw: true, gemmaOutput: true },
+    })
+
+    // Ordenar cronológicamente (más antiguo primero)
+    const history: { role: 'user' | 'assistant'; content: string }[] = []
+    for (let i = records.length - 1; i >= 0; i--) {
+      const record = records[i]
+      if (record.inputRaw) {
+        history.push({ role: 'user', content: record.inputRaw })
+      }
+      if (record.gemmaOutput) {
+        history.push({ role: 'assistant', content: record.gemmaOutput })
+      }
+    }
+    return history
+  } catch {
+    return []
+  }
+}
+
+async function saveMessageToHistory(
+  userId: string,
+  tenantId: string,
+  userMessage: string,
+  aiResponse: string,
+  intent: string,
+  status: string
+): Promise<void> {
+  try {
+    await prisma.chatbotAuditLog.create({
+      data: {
+        id: `${HISTORY_PREFIX}${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        userId,
+        tenantId,
+        intent,
+        status,
+        inputRaw: userMessage.substring(0, 500),
+        gemmaOutput: aiResponse.substring(0, 1000),
+        createdAt: new Date(),
+      },
+    })
+  } catch {
+    // Non-critical
+  }
 }
 
 // ─── Manejo de contexto pendiente (persistente en DB) ─────────────────────
@@ -284,9 +346,13 @@ El mensaje actual del usuario es una RESPUESTA a la pregunta anterior.
 Continúa con la misma intención (${pendingCtx.intent}) y completa los parámetros faltantes si el usuario los proporciona.`
       }
 
-      const messages = [
-        { role: 'system' as const, content: systemPrompt },
-        { role: 'user' as const, content: sanitized },
+      // Incluir historial de conversación (últimos 10 mensajes)
+      const conversationHistory = await getConversationHistory(userKey)
+
+      const messages: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
+        { role: 'system', content: systemPrompt },
+        ...conversationHistory,
+        { role: 'user', content: sanitized },
       ]
 
       const response = await callAssistantWithFallback(messages)
@@ -374,9 +440,12 @@ Continúa con la misma intención (${pendingCtx.intent}) y completa los parámet
         missingParams: missing.length > 0 ? missing : ['next'],
       })
 
-      // Usar el mensaje NATURAL de la IA, no plantillas
+      // Guardar en historial (asíncrono)
+      const questionReply = realMessage || '¿Qué más necesito saber?'
+      saveMessageToHistory(userKey, tenantId, message, questionReply, aiResult.intent, 'PENDING').catch(() => {})
+
       return NextResponse.json({
-        reply: realMessage || '¿Qué más necesito saber?',
+        reply: questionReply,
         type: 'question',
         richData: null,
         quickReplies: [],
@@ -476,6 +545,16 @@ Continúa con la misma intención (${pendingCtx.intent}) y completa los parámet
       chatId: responseChatId,
       action: aiResult.intent,
     }
+
+    // Guardar en historial de conversación (asíncrono, no crítico)
+    saveMessageToHistory(
+      userKey,
+      tenantId,
+      message,
+      response.reply,
+      aiResult.intent,
+      skillResult ? 'SUCCESS' : (aiResult.needsMoreInfo ? 'PENDING' : 'COMPLETED')
+    ).catch(() => {})
 
     return NextResponse.json(response)
   } catch (error: any) {
