@@ -73,6 +73,13 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
     },
   });
 
+  // Limpiar interim text al empezar a grabar (evita texto stale de sesión anterior)
+  useEffect(() => {
+    if (isListening) {
+      setInterimText('');
+    }
+  }, [isListening]);
+
   // Auto-enviar cuando se detiene la grabación y hay texto
   useEffect(() => {
     if (!isListening && inputValueRef.current.trim() && !voiceError) {
