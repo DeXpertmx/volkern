@@ -108,10 +108,23 @@ export function useSpeechToText(options: UseSpeechToTextOptions = {}): UseSpeech
       }
 
       recognition.onerror = (event: any) => {
-        console.error('[SpeechToText] Web Error:', event.error)
-        if (event.error !== 'no-speech' && event.error !== 'aborted') {
-          onError?.(`Error: ${event.error}`)
+        console.warn('[SpeechToText] Web Error:', event.error)
+
+        // 'no-speech' y 'aborted' son normales, no mostrar error
+        if (event.error === 'no-speech' || event.error === 'aborted') {
+          setState('idle')
+          setInterimText('')
+          recognitionRef.current = null
+          return
         }
+
+        // 'not-allowed' = micrófono bloqueado por el navegador
+        if (event.error === 'not-allowed') {
+          onError?.('Permiso de micrófono denegado. Permite el acceso al micrófono en la configuración del navegador y recarga la página.')
+        } else {
+          onError?.(`Error de voz: ${event.error}`)
+        }
+
         setState('idle')
         setInterimText('')
         recognitionRef.current = null
