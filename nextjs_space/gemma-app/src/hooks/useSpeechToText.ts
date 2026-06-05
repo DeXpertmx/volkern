@@ -19,9 +19,9 @@ interface UseSpeechToTextReturn {
 }
 
 /**
- * Hook for speech-to-text using Web Speech API.
- * Works on Expo web (Chrome/Edge) and modern browsers.
- * For native iOS/Android, @react-native-voice/voice would be needed.
+ * Hook for speech-to-text with dual support:
+ * - Web (Expo web): Web Speech API (SpeechRecognition)
+ * - Native (iOS/Android): @react-native-voice/voice
  */
 export function useSpeechToText(options: UseSpeechToTextOptions = {}): UseSpeechToTextReturn {
   const { lang = 'es-ES', onResult, onError } = options
@@ -31,96 +31,161 @@ export function useSpeechToText(options: UseSpeechToTextOptions = {}): UseSpeech
   const [interimText, setInterimText] = useState('')
   const recognitionRef = useRef<any>(null)
 
-  // Detect support on mount
+  // ─── Detect support on mount ────────────────────────────────────────
   useEffect(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-      setIsSupported(!!SpeechRecognitionAPI)
+      const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+      setIsSupported(!!SR)
+    } else if (Platform.OS === 'ios' || Platform.OS === 'android') {
+      // @react-native-voice/voice — dynamic import to avoid crash on web
+      try {
+        const Voice = require('@react-native-voice/voice').default
+        setIsSupported(!!Voice && typeof Voice.start === 'function')
+      } catch {
+        setIsSupported(false)
+      }
     }
   }, [])
 
+  // ─── Stop (shared) ──────────────────────────────────────────────────
   const stopListening = useCallback(() => {
-    try {
-      recognitionRef.current?.abort()
-      recognitionRef.current?.stop()
-    } catch {}
-    recognitionRef.current = null
+    if (Platform.OS === 'web') {
+      try {
+        recognitionRef.current?.abort()
+        recognitionRef.current?.stop()
+      } catch {}
+      recognitionRef.current = null
+    } else {
+      try {
+        const Voice = require('@react-native-voice/voice').default
+        Voice.stop()
+      } catch {}
+    }
     setState('idle')
     setInterimText('')
   }, [])
 
+  // ─── Start ──────────────────────────────────────────────────────────
   const startListening = useCallback(() => {
-    if (Platform.OS !== 'web') {
-      onError?.('Reconocimiento de voz solo disponible en web por ahora')
-      return
-    }
+    if (Platform.OS === 'web') {
+      // ── Web: Web Speech API ──────────────────────────────────────────
+      const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+      if (!SR) {
+        onError?.('Tu navegador no soporta reconocimiento de voz')
+        return
+      }
 
-    const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-    if (!SpeechRecognitionAPI) {
-      onError?.('Tu navegador no soporta reconocimiento de voz')
-      return
-    }
+      // Cleanup previous instance
+      if (recognitionRef.current) {
+        try { recognitionRef.current.abort() } catch {}
+        recognitionRef.current = null
+      }
 
-    // Cleanup previous instance
-    if (recognitionRef.current) {
-      try { recognitionRef.current.abort() } catch {}
-      recognitionRef.current = null
-    }
+      const recognition = new SR()
+      recognition.continuous = true
+      recognition.interimResults = true
+      recognition.lang = lang
+      recognition.maxAlternatives = 1
 
-    const recognition = new SpeechRecognitionAPI()
-    recognition.continuous = true
-    recognition.interimResults = true
-    recognition.lang = lang
-    recognition.maxAlternatives = 1
+      recognition.onstart = () => {
+        setState('listening')
+        setInterimText('')
+      }
 
-    recognition.onstart = () => {
-      setState('listening')
-      setInterimText('')
-    }
-
-    recognition.onresult = (event: any) => {
-      let interim = ''
-      let final = ''
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        const transcript = event.results[i][0].transcript
-        if (event.results[i].isFinal) {
-          final += transcript
-        } else {
-          interim += transcript
+      recognition.onresult = (event: any) => {
+        let interim = ''
+        let final = ''
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          const transcript = event.results[i][0].transcript
+          if (event.results[i].isFinal) {
+            final += transcript
+          } else {
+            interim += transcript
+          }
         }
+        setInterimText(interim)
+        if (final) onResult?.(final)
       }
-      setInterimText(interim)
-      if (final) {
-        onResult?.(final)
+
+      recognition.onerror = (event: any) => {
+        console.error('[SpeechToText] Web Error:', event.error)
+        if (event.error !== 'no-speech' && event.error !== 'aborted') {
+          onError?.(`Error: ${event.error}`)
+        }
+        setState('idle')
+        setInterimText('')
+        recognitionRef.current = null
       }
-    }
 
-    recognition.onerror = (event: any) => {
-      console.error('[SpeechToText] Error:', event.error)
-      if (event.error !== 'no-speech' && event.error !== 'aborted') {
-        onError?.(`Error: ${event.error}`)
+      recognition.onend = () => {
+        setState('idle')
+        setInterimText('')
+        recognitionRef.current = null
       }
-      setState('idle')
-      setInterimText('')
-      recognitionRef.current = null
-    }
 
-    recognition.onend = () => {
-      setState('idle')
-      setInterimText('')
-      recognitionRef.current = null
-    }
+      try {
+        recognition.start()
+        recognitionRef.current = recognition
+      } catch (err) {
+        console.error('[SpeechToText] Web start error:', err)
+        onError?.('Error al iniciar el micrófono')
+        setState('idle')
+      }
+    } else {
+      // ── Native iOS / Android: @react-native-voice/voice ──────────────
+      try {
+        const Voice = require('@react-native-voice/voice').default
 
-    try {
-      recognition.start()
-      recognitionRef.current = recognition
-    } catch (err) {
-      console.error('[SpeechToText] Start error:', err)
-      onError?.('Error al iniciar el micrófono')
-      setState('idle')
+        // Remove stale listeners
+        Voice.onSpeechStart = undefined
+        Voice.onSpeechEnd = undefined
+        Voice.onSpeechResults = undefined
+        Voice.onSpeechPartialResults = undefined
+        Voice.onSpeechError = undefined
+
+        // Set fresh listeners
+        Voice.onSpeechStart = () => {
+          setState('listening')
+          setInterimText('')
+        }
+
+        Voice.onSpeechEnd = () => {
+          setState('idle')
+        }
+
+        Voice.onSpeechResults = (e: any) => {
+          const text = e.value?.[0] || ''
+          if (text) {
+            onResult?.(text)
+          }
+          setInterimText('')
+        }
+
+        Voice.onSpeechPartialResults = (e: any) => {
+          const text = e.value?.[0] || ''
+          setInterimText(text)
+        }
+
+        Voice.onSpeechError = (e: any) => {
+          console.error('[SpeechToText] Native Error:', e.error?.message || e.error)
+          if (e.error?.code !== '7' && e.error?.code !== '5') {
+            // code 7 = no match, code 5 = cancelled
+            onError?.(`Error: ${e.error?.message || e.error}`)
+          }
+          setState('idle')
+          setInterimText('')
+        }
+
+        Voice.start(lang)
+      } catch (err) {
+        console.error('[SpeechToText] Native start error:', err)
+        onError?.('Error al iniciar el micrófono nativo')
+        setState('idle')
+      }
     }
   }, [lang, onResult, onError])
 
+  // ─── Toggle ─────────────────────────────────────────────────────────
   const toggleListening = useCallback(() => {
     if (state === 'listening') {
       stopListening()
@@ -129,12 +194,24 @@ export function useSpeechToText(options: UseSpeechToTextOptions = {}): UseSpeech
     }
   }, [state, startListening, stopListening])
 
-  // Cleanup on unmount
+  // ─── Cleanup on unmount ─────────────────────────────────────────────
   useEffect(() => {
     return () => {
-      if (recognitionRef.current) {
-        try { recognitionRef.current.abort() } catch {}
-        recognitionRef.current = null
+      if (Platform.OS === 'web') {
+        if (recognitionRef.current) {
+          try { recognitionRef.current.abort() } catch {}
+          recognitionRef.current = null
+        }
+      } else {
+        try {
+          const Voice = require('@react-native-voice/voice').default
+          Voice.onSpeechStart = undefined
+          Voice.onSpeechEnd = undefined
+          Voice.onSpeechResults = undefined
+          Voice.onSpeechPartialResults = undefined
+          Voice.onSpeechError = undefined
+          Voice.destroy()
+        } catch {}
       }
     }
   }, [])
