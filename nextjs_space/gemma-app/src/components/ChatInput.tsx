@@ -3,6 +3,7 @@ import { View, TextInput, TouchableOpacity, StyleSheet, Keyboard, Platform, Text
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { useSpeechToText } from '../hooks/useSpeechToText'
+import VoiceWaveform from './VoiceWaveform'
 
 const COLORS = {
   primary: '#2563EB',
@@ -119,11 +120,11 @@ export default function ChatInput({ onSend, disabled, placeholder }: ChatInputPr
         />
       </TouchableOpacity>
 
-      {/* Voice indicator on web */}
-      {isListening && Platform.OS === 'web' && (
+      {/* Voice waveform + interim text */}
+      {isListening && (
         <View style={styles.voiceIndicator}>
-          <Text style={styles.voiceIndicatorDot}>●</Text>
-          <Text style={styles.voiceIndicatorText}>
+          <VoiceWaveform isListening={true} />
+          <Text style={styles.voiceIndicatorText} numberOfLines={1}>
             {interimText || 'Escuchando...'}
           </Text>
         </View>
@@ -196,8 +197,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
@@ -207,10 +208,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 5,
     zIndex: 100,
-  },
-  voiceIndicatorDot: {
-    color: COLORS.danger,
-    fontSize: 10,
   },
   voiceIndicatorText: {
     flex: 1,
