@@ -5,6 +5,7 @@ import * as Haptics from 'expo-haptics'
 import { useSpeechToText } from '../hooks/useSpeechToText'
 import { useAudioLevel } from '../hooks/useAudioLevel'
 import VoiceWaveform from './VoiceWaveform'
+import Toast from './Toast'
 
 const COLORS = {
   primary: '#2563EB',
@@ -30,6 +31,13 @@ interface ChatInputProps {
 
 export default function ChatInput({ onSend, disabled, placeholder, onVoiceStatus, continuousDictation, onDictationToggle, voiceLang }: ChatInputProps) {
   const [text, setText] = useState('')
+  const [toastMsg, setToastMsg] = useState<string>('')
+  const [toastVisible, setToastVisible] = useState(false)
+
+  const showToast = (msg: string) => {
+    setToastMsg(msg)
+    setToastVisible(true)
+  }
 
   const {
     state: voiceState,
@@ -110,7 +118,11 @@ export default function ChatInput({ onSend, disabled, placeholder, onVoiceStatus
       silenceTimerRef.current = null
     }
     const trimmed = text.trim()
-    if (!trimmed || disabled) return
+    if (!trimmed) {
+      showToast('Mensaje no puede estar vacío')
+      return
+    }
+    if (disabled) return
     onSend(trimmed)
     setText('')
     Keyboard.dismiss()
@@ -220,6 +232,14 @@ export default function ChatInput({ onSend, disabled, placeholder, onVoiceStatus
         maxLength={2000}
         onSubmitEditing={handleSend}
         blurOnSubmit
+      />
+
+      {/* Toast de validación */}
+      <Toast
+        message={toastMsg}
+        visible={toastVisible}
+        type="error"
+        onHide={() => setToastVisible(false)}
       />
 
       {/* Send button */}
