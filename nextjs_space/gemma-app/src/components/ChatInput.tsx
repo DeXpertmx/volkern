@@ -3,6 +3,7 @@ import { View, TextInput, TouchableOpacity, StyleSheet, Keyboard, Platform, Text
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { useSpeechToText } from '../hooks/useSpeechToText'
+import { useAudioLevel } from '../hooks/useAudioLevel'
 import VoiceWaveform from './VoiceWaveform'
 
 const COLORS = {
@@ -46,6 +47,7 @@ export default function ChatInput({ onSend, disabled, placeholder }: ChatInputPr
   })
 
   const isListening = voiceState === 'listening'
+  const audioBands = useAudioLevel(isListening)
 
   const handleSend = () => {
     const trimmed = text.trim()
@@ -123,7 +125,7 @@ export default function ChatInput({ onSend, disabled, placeholder }: ChatInputPr
       {/* Voice waveform + interim text */}
       {isListening && (
         <View style={styles.voiceIndicator}>
-          <VoiceWaveform isListening={true} />
+          <VoiceWaveform isListening={true} audioBands={audioBands} />
           <Text style={styles.voiceIndicatorText} numberOfLines={1}>
             {interimText || 'Escuchando...'}
           </Text>
