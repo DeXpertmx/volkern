@@ -18,6 +18,12 @@ import {
   Play,
   Trash2,
 } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+} from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { Slider } from '@/components/ui/slider';
 import { useSpeechRecognition } from './useSpeechRecognition';
@@ -57,6 +63,9 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
   const cancelVoiceRef = useRef(false);
   const pttActiveRef = useRef(false);
 
+  const isListeningRef = useRef(false);
+  const isPausedRef = useRef(false);
+
   const audioBands = useAudioLevel(isListening || isPaused);
 
   const {
@@ -92,16 +101,28 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
   });
 
   // Push-to-talk: espacio inicia grabación, soltar espacio envía
+  // Escape cancela la grabación
   useEffect(() => {
     if (!isOpen || !voiceSupported || !activo) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Escape: cancelar grabación (check antes del guard de Space)
+      if (e.code === 'Escape' && (isListeningRef.current || isPausedRef.current)) {
+        e.preventDefault();
+        if (pttActiveRef.current) pttActiveRef.current = false;
+        cancelVoiceRef.current = true;
+        setInputValue('');
+        setInterimText('');
+        stopListening();
+        return;
+      }
+
+      // Espacio: push-to-talk
       if (e.code !== 'Space' || e.repeat) return;
       if (document.activeElement === inputRef.current) return;
-      if (pttActiveRef.current) return; // Ya grabando vía PTT
+      if (pttActiveRef.current) return;
 
       e.preventDefault();
-
       pttActiveRef.current = true;
       playBeep('start');
       hapticFeedback('start');
@@ -126,13 +147,21 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('keyup', handleKeyUp);
-      // Si PTT estaba activo al cerrar, limpiar
       if (pttActiveRef.current) {
         pttActiveRef.current = false;
         stopListening();
       }
     };
   }, [isOpen, voiceSupported, activo]);
+
+  // Sincronizar refs con estado (para efecto PTT sin depender de state changes)
+  useEffect(() => {
+    isListeningRef.current = isListening;
+  }, [isListening]);
+
+  useEffect(() => {
+    isPausedRef.current = isPaused;
+  }, [isPaused]);
 
   // Envolver toggle para agregar sonido + vibración de inicio/fin
   const handleToggleVoice = () => {
@@ -393,6 +422,7 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
                 El chatbot está desactivado
               </p>
             ) : (
+              <TooltipProvider>
               <div className="flex gap-2 items-center">
                 <div className="flex-1 relative">
                   <Input
@@ -437,77 +467,104 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
                   <>
                     {/* Botón Cancelar: visible durante grabación o pausa */}
                     {(isListening || isPaused) && (
-                      <Button
-                        onClick={handleCancelRecording}
-                        disabled={isLoading}
-                        size="icon"
-                        variant="ghost"
-                        className="shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all duration-300"
-                        title="Descartar grabación"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            onClick={handleCancelRecording}
+                            disabled={isLoading}
+                            size="icon"
+                            variant="ghost"
+                            className="shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all duration-300"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">
+                          <p>Descartar grabación <kbd className="ml-1 rounded-sm border border-border/40 bg-background/80 px-1 text-[9px]">Esc</kbd></p>
+                        </TooltipContent>
+                      </Tooltip>
                     )}
                     {/* Botón Pausa/Reanudar: visible durante grabación o pausa */}
                     {(isListening || isPaused) && (
-                      <Button
-                        onClick={() => {
-                          if (isPaused) {
-                            playBeep('start');
-                            hapticFeedback('start');
-                            resumeListening();
-                          } else {
-                            hapticFeedback('pause');
-                            pauseListening();
-                          }
-                        }}
-                        disabled={isLoading}
-                        size="icon"
-                        variant="outline"
-                        className="shrink-0 transition-all duration-300"
-                        title={isPaused ? 'Reanudar grabación' : 'Pausar grabación'}
-                      >
-                        {isPaused ? (
-                          <Play className="h-4 w-4" />
-                        ) : (
-                          <Pause className="h-4 w-4" />
-                        )}
-                      </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            onClick={() => {
+                              if (isPaused) {
+                                playBeep('start');
+                                hapticFeedback('start');
+                                resumeListening();
+                              } else {
+                                hapticFeedback('pause');
+                                pauseListening();
+                              }
+                            }}
+                            disabled={isLoading}
+                            size="icon"
+                            variant="outline"
+                            className="shrink-0 transition-all duration-300"
+                          >
+                            {isPaused ? (
+                              <Play className="h-4 w-4" />
+                            ) : (
+                              <Pause className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">
+                          <p>{isPaused ? 'Reanudar grabación' : 'Pausar grabación'}</p>
+                          <p className="text-[10px] text-muted-foreground">Mantén <kbd className="rounded-sm border border-border/40 bg-background/80 px-1 text-[9px]">Espacio</kbd> para grabar</p>
+                        </TooltipContent>
+                      </Tooltip>
                     )}
                     {/* Botón Detener/Iniciar micrófono */}
-                    <Button
-                      onClick={handleToggleVoice}
-                      disabled={isLoading}
-                      size="icon"
-                      variant={(isListening || isPaused) ? 'destructive' : 'outline'}
-                      className={cn(
-                        'relative transition-all duration-300 shrink-0',
-                        isListening && 'shadow-lg shadow-red-500/40'
-                      )}
-                      title={(isListening || isPaused) ? 'Detener grabación' : 'Activar voz'}
-                    >
-                      {(isListening || isPaused) ? (
-                        <>
-                          <MicOff className="h-4 w-4" />
-                          {isListening && (
-                            <span className="absolute top-0 right-0 h-2 w-2 rounded-full bg-red-500 animate-ping" />
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          onClick={handleToggleVoice}
+                          disabled={isLoading}
+                          size="icon"
+                          variant={(isListening || isPaused) ? 'destructive' : 'outline'}
+                          className={cn(
+                            'relative transition-all duration-300 shrink-0',
+                            isListening && 'shadow-lg shadow-red-500/40'
                           )}
-                        </>
-                      ) : (
-                        <Mic className="h-4 w-4" />
-                      )}
-                    </Button>
+                        >
+                          {(isListening || isPaused) ? (
+                            <>
+                              <MicOff className="h-4 w-4" />
+                              {isListening && (
+                                <span className="absolute top-0 right-0 h-2 w-2 rounded-full bg-red-500 animate-ping" />
+                              )}
+                            </>
+                          ) : (
+                            <Mic className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">
+                        <p>{(isListening || isPaused) ? 'Detener grabación (Espacio)' : 'Iniciar grabación (Espacio)'}</p>
+                      </TooltipContent>
+                    </Tooltip>
                   </>
                 )}
-                <Button
-                  onClick={handleSend}
-                  disabled={!inputValue.trim() || isLoading}
-                  size="icon"
-                  className="shrink-0"
-                >
-                  <Send className="h-4 w-4" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      onClick={handleSend}
+                      disabled={!inputValue.trim() || isLoading}
+                      size="icon"
+                      className="shrink-0"
+                    >
+                      <Send className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    <p>Enviar mensaje (Enter)</p>
+                  </TooltipContent>
+                </Tooltip>
               </div>
+              </TooltipProvider>
               {voiceError && (
                 <p className="text-xs text-destructive mt-1">{voiceError}</p>
               )}
