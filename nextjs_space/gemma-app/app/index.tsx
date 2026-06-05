@@ -44,16 +44,11 @@ export default function LoginScreen() {
       return
     }
 
-    // Guardar URL
-    const url = serverUrl.trim().replace(/\/$/, '')
-    if (url) {
-      await setApiUrl(url)
-    }
-
     setLoading(true)
     setError(null)
     try {
-      await login(email.trim(), password)
+      const url = serverUrl.trim().replace(/\/$/, '')
+      await login(email.trim(), password, url || undefined)
       router.replace('/chat')
     } catch (err: any) {
       const msg = err.friendlyMessage || err.message || 'Error al iniciar sesión'

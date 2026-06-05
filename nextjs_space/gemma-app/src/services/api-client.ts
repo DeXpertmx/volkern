@@ -46,15 +46,26 @@ export class ApiError extends Error {
   }
 }
 
-// Funciones getItem/setItem/removeItem se importan de lib/storage
+// Cache en memoria — evita depender exclusivamente de localStorage
+// que puede fallar en navegadores móviles con restricciones de privacidad.
+let _cachedApiUrl: string | null = null
 
 export async function getApiUrl(): Promise<string> {
+  // 1. Memoria (más rápido y fiable)
+  if (_cachedApiUrl) return _cachedApiUrl
+  // 2. localStorage (persistencia entre sesiones)
   const stored = await getItem(KEYS.API_URL)
-  return stored || DEFAULT_API_URL
+  if (stored) {
+    _cachedApiUrl = stored
+    return stored
+  }
+  // 3. Fallback por detección de IP
+  return DEFAULT_API_URL
 }
 
 export async function setApiUrl(url: string): Promise<void> {
-  await setItem(KEYS.API_URL, url)
+  _cachedApiUrl = url // siempre en memoria
+  await setItem(KEYS.API_URL, url) // best-effort a localStorage
 }
 
 export async function getToken(): Promise<string | null> {
@@ -78,8 +89,8 @@ export async function clearSession(): Promise<void> {
   await removeItem(KEYS.USER_DATA)
 }
 
-async function apiFetch(path: string, options: RequestInit = {}): Promise<Response> {
-  const apiUrl = await getApiUrl()
+async function apiFetch(path: string, options: RequestInit = {}, baseUrlOverride?: string): Promise<Response> {
+  const apiUrl = baseUrlOverride || await getApiUrl()
   const url = `${apiUrl}${path}`
 
   const controller = new AbortController()
@@ -101,12 +112,17 @@ async function apiFetch(path: string, options: RequestInit = {}): Promise<Respon
   }
 }
 
-export async function login(email: string, password: string): Promise<AuthSession> {
+export async function login(email: string, password: string, baseUrl?: string): Promise<AuthSession> {
+  // Si recibimos URL directamente, cachearla y usarla
+  if (baseUrl) {
+    await setApiUrl(baseUrl)
+  }
+
   const response = await apiFetch('/api/auth/mobile-login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
-  })
+  }, baseUrl)
 
   if (!response.ok) {
     const errBody = await response.json().catch(() => ({ error: `Error ${response.status}` }))
