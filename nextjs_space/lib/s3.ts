@@ -2,10 +2,14 @@
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { createS3Client, getBucketConfig } from './aws-config';
+import { encryptFile, decryptFile } from './file-crypto';
 
 const s3Client = createS3Client();
 const { bucketName, folderPrefix } = getBucketConfig();
 const AWS_REGION = process.env.AWS_REGION || 'us-west-2';
+
+// Append .enc extension to mark encrypted files
+const ENCRYPTED_SUFFIX = '.enc';
 
 /**
  * Sube un archivo a S3 (privado por defecto)
@@ -26,6 +30,51 @@ export async function uploadFile(
 
   await s3Client.send(command);
   return key; // Retorna la cloud_storage_path
+}
+
+/**
+ * Sube un archivo a S3 cifrado con AES-256-CBC.
+ * El archivo se encripta localmente antes de subirlo.
+ * Para descargarlo, usa getEncryptedDownloadUrl que redirige al proxy de desencriptado.
+ */
+export async function uploadEncryptedFile(
+  buffer: Buffer,
+  fileName: string,
+  contentType?: string
+): Promise<string> {
+  const encrypted = encryptFile(buffer);
+  const encryptedFileName = fileName.endsWith(ENCRYPTED_SUFFIX) ? fileName : `${fileName}${ENCRYPTED_SUFFIX}`;
+  return uploadFile(encrypted, encryptedFileName, contentType);
+}
+
+/**
+ * Descarga un archivo cifrado desde S3 y lo desencripta.
+ */
+export async function downloadAndDecryptFile(key: string): Promise<{ buffer: Buffer; originalKey: string }> {
+  const originalKey = key.endsWith(ENCRYPTED_SUFFIX) ? key.slice(0, -ENCRYPTED_SUFFIX.length) : key;
+  
+  const command = new GetObjectCommand({
+    Bucket: bucketName,
+    Key: key,
+  });
+
+  const response = await s3Client.send(command);
+  if (!response.Body) {
+    throw new Error('[S3] Empty response body from S3');
+  }
+
+  const encryptedBytes = await response.Body.transformToByteArray();
+  const buffer = decryptFile(Buffer.from(encryptedBytes));
+  return { buffer, originalKey };
+}
+
+/**
+ * Genera una URL de descarga que pasa por el proxy de desencriptado.
+ */
+export function getEncryptedDownloadUrl(key: string): string {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const encodedKey = encodeURIComponent(key);
+  return `${baseUrl}/api/files/download?key=${encodedKey}`;
 }
 
 /**
