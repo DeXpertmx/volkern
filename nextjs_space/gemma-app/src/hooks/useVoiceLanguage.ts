@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import { getItem, setItem } from '../lib/storage'
 
 const STORAGE_KEY = 'gemma_voice_language'
 const DEFAULT_LANG = 'es-ES'
@@ -35,8 +35,8 @@ export function getLanguageFlag(value: string): string {
 let _currentLanguage: string = DEFAULT_LANG
 const _subscriptions = new Set<(lang: string) => void>()
 
-// Carga inicial desde AsyncStorage (se ejecuta una vez al importar el módulo)
-AsyncStorage.getItem(STORAGE_KEY)
+// Carga inicial desde storage (se ejecuta una vez al importar el módulo)
+getItem(STORAGE_KEY)
   .then((stored) => {
     if (stored && VOICE_LANGUAGES.some(l => l.value === stored)) {
       _currentLanguage = stored
@@ -80,7 +80,7 @@ export function useVoiceLanguage(): UseVoiceLanguageReturn {
       return
     }
 
-    AsyncStorage.getItem(STORAGE_KEY)
+    getItem(STORAGE_KEY)
       .then((stored) => {
         if (stored && VOICE_LANGUAGES.some(l => l.value === stored)) {
           _currentLanguage = stored
@@ -97,7 +97,7 @@ export function useVoiceLanguage(): UseVoiceLanguageReturn {
     _currentLanguage = lang
     setLanguageState(lang)
     _notify(lang)
-    await AsyncStorage.setItem(STORAGE_KEY, lang).catch(() => {})
+    await setItem(STORAGE_KEY, lang).catch(() => {})
   }, [])
 
   return { language, setLanguage, isLoading }

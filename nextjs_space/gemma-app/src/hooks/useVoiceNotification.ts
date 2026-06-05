@@ -1,20 +1,24 @@
 import { useRef, useEffect } from 'react'
 import { Platform } from 'react-native'
-import * as Notifications from 'expo-notifications'
-
-// Configurar cómo se muestran las notificaciones cuando la app está en foreground
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-})
 
 // IDs de categorías para agrupar notificaciones de voz
 const NOTIF_CHANNEL_ID = 'voice-detection'
 const NOTIF_CHANNEL_NAME = 'Detección de Voz'
+
+// Módulo cargado dinámicamente para evitar error "Cannot find native module 'ExpoPushTokenManager'" en web
+let NotificationsModule: any = null
+
+async function getNotifications() {
+  if (!NotificationsModule) {
+    try {
+      NotificationsModule = await import('expo-notifications')
+    } catch {
+      // En web, expo-notifications no está disponible
+      NotificationsModule = { __unavailable: true }
+    }
+  }
+  return NotificationsModule
+}
 
 /**
  * Hook que muestra una notificación local cuando se detecta voz con contenido significativo.
@@ -30,29 +34,39 @@ export function useVoiceNotification(
   const lastNotifiedRef = useRef<string>('')
   const channelCreatedRef = useRef(false)
 
-  // Crear el canal de notificación en Android
+  // Configurar handler + crear canal en Android al montar
   useEffect(() => {
-    if (Platform.OS === 'android' && !channelCreatedRef.current) {
-      channelCreatedRef.current = true
-      Notifications.setNotificationChannelAsync(NOTIF_CHANNEL_ID, {
-        name: NOTIF_CHANNEL_NAME,
-        importance: Notifications.AndroidImportance.DEFAULT,
-        vibrationPattern: [0, 100, 50, 100],
-        lightColor: '#8B5CF6',
-      }).catch(() => {})
-    }
-  }, [])
+    getNotifications().then((Notifs) => {
+      if (Notifs.__unavailable) return
 
-  // Solicitar permisos al montar
-  useEffect(() => {
-    if (Platform.OS === 'web') return
-    Notifications.requestPermissionsAsync({
-      ios: {
-        allowAlert: true,
-        allowSound: true,
-        allowBadge: false,
-      },
-    }).catch(() => {})
+      // Handler para mostrar banner en foreground
+      Notifs.default.setNotificationHandler({
+        handleNotification: async () => ({
+          shouldShowBanner: true,
+          shouldShowList: true,
+          shouldPlaySound: true,
+          shouldSetBadge: false,
+        }),
+      })
+
+      // Canal Android
+      if (Platform.OS === 'android' && !channelCreatedRef.current) {
+        channelCreatedRef.current = true
+        Notifs.default.setNotificationChannelAsync(NOTIF_CHANNEL_ID, {
+          name: NOTIF_CHANNEL_NAME,
+          importance: Notifs.default.AndroidImportance?.DEFAULT ?? 3,
+          vibrationPattern: [0, 100, 50, 100],
+          lightColor: '#8B5CF6',
+        }).catch(() => {})
+      }
+
+      // Solicitar permisos
+      if (Platform.OS !== 'web') {
+        Notifs.default.requestPermissionsAsync({
+          ios: { allowAlert: true, allowSound: true, allowBadge: false },
+        }).catch(() => {})
+      }
+    })
   }, [])
 
   // Mostrar notificación cuando se detecta voz con contenido
@@ -64,12 +78,14 @@ export function useVoiceNotification(
     }
 
     const trimmed = interimText.trim()
-    // Solo notificar si hay suficiente contenido y no es el mismo texto que ya notificamos
     if (trimmed.length >= minLength && trimmed !== lastNotifiedRef.current) {
       lastNotifiedRef.current = trimmed
 
-      const timer = setTimeout(() => {
-        Notifications.scheduleNotificationAsync({
+      const timer = setTimeout(async () => {
+        const Notifs = await getNotifications()
+        if (Notifs.__unavailable) return
+
+        Notifs.default.scheduleNotificationAsync({
           content: {
             title: '🎤 Escuchando...',
             body: trimmed,
@@ -79,7 +95,7 @@ export function useVoiceNotification(
           },
           trigger: null, // Inmediata
         }).catch(() => {})
-      }, 300) // Pequeño delay para evitar notificaciones en cada frame
+      }, 300)
 
       return () => clearTimeout(timer)
     }
@@ -90,7 +106,11 @@ export function useVoiceNotification(
    */
   const cancelVoiceNotifications = () => {
     lastNotifiedRef.current = ''
-    Notifications.cancelAllScheduledNotificationsAsync().catch(() => {})
+    getNotifications().then((Notifs) => {
+      if (!Notifs.__unavailable) {
+        Notifs.default.cancelAllScheduledNotificationsAsync().catch(() => {})
+      }
+    })
   }
 
   return { cancelVoiceNotifications }
