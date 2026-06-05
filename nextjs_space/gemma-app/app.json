@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "owner": "dexpertmx",
+    "name": "Gemma",
+    "slug": "gemma",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "gemma",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.volkern.gemma",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Gemma usa el microfono para comandos de voz"
+      }
+    },
+    "android": {
+      "package": "com.volkern.gemma",
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#8B5CF6",
+          "sounds": ["./assets/notification-sound.wav"]
+        }
+      ]
+    ],
+    "extra": {
+      "router": {},
+      "apiUrl": "http://localhost:3000",
+      "eas": {
+        "projectId": "baaeb27f-3dd4-4b25-b0c9-e4654c7547cb"
+      }
+    }
+  }
+}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { View, TextInput, TouchableOpacity, StyleSheet, Keyboard, Platform, Text, Vibration } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
@@ -22,9 +22,10 @@ interface ChatInputProps {
   onSend: (text: string) => void
   disabled?: boolean
   placeholder?: string
+  onVoiceStatus?: (interim: string, isListening: boolean) => void
 }
 
-export default function ChatInput({ onSend, disabled, placeholder }: ChatInputProps) {
+export default function ChatInput({ onSend, disabled, placeholder, onVoiceStatus }: ChatInputProps) {
   const [text, setText] = useState('')
 
   const {
@@ -48,6 +49,11 @@ export default function ChatInput({ onSend, disabled, placeholder }: ChatInputPr
 
   const isListening = voiceState === 'listening'
   const audioBands = useAudioLevel(isListening)
+
+  // Reportar estado de voz al padre para notificaciones
+  useEffect(() => {
+    onVoiceStatus?.(interimText, isListening)
+  }, [interimText, isListening])
 
   const handleSend = () => {
     const trimmed = text.trim()
