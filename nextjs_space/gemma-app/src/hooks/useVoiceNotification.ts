@@ -5,15 +5,21 @@ import { Platform } from 'react-native'
 const NOTIF_CHANNEL_ID = 'voice-detection'
 const NOTIF_CHANNEL_NAME = 'Detección de Voz'
 
-// Módulo cargado dinámicamente para evitar error "Cannot find native module 'ExpoPushTokenManager'" en web
-let NotificationsModule: any = null
+// Módulo cargado dinámicamente solo en native.
+// En web, expo-notifications no existe como módulo nativo y falla
+// incluso con try/catch porque Metro lo resuelve en el bundle.
+let NotificationsModule: any | null = null
 
 async function getNotifications() {
+  // En web, ni siquiera intentamos importar — siempre no disponible
+  if (Platform.OS === 'web') {
+    return { __unavailable: true }
+  }
+
   if (!NotificationsModule) {
     try {
       NotificationsModule = await import('expo-notifications')
     } catch {
-      // En web, expo-notifications no está disponible
       NotificationsModule = { __unavailable: true }
     }
   }
