@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
-import { View, TextInput, TouchableOpacity, StyleSheet, Keyboard, Platform, Text } from 'react-native'
+import { View, TextInput, TouchableOpacity, StyleSheet, Keyboard, Platform, Text, Vibration } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import * as Haptics from 'expo-haptics'
 import { useSpeechToText } from '../hooks/useSpeechToText'
 
 const COLORS = {
@@ -53,8 +54,39 @@ export default function ChatInput({ onSend, disabled, placeholder }: ChatInputPr
     Keyboard.dismiss()
   }
 
+  const triggerHaptic = (type: 'start' | 'stop' | 'cancel') => {
+    if (Platform.OS === 'web') {
+      // Web: usar Vibration API del navegador
+      try {
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          if (type === 'start') navigator.vibrate(10)
+          else if (type === 'stop') navigator.vibrate(15)
+          else navigator.vibrate([10, 30, 10])
+        }
+      } catch {}
+    } else {
+      // iOS / Android: expo-haptics
+      try {
+        if (type === 'start') {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+        } else if (type === 'stop') {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+        } else {
+          // cancel: doble pulso
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
+        }
+      } catch {
+        // Fallback a Vibration API nativa
+        if (type === 'start') Vibration.vibrate(10)
+        else if (type === 'stop') Vibration.vibrate(15)
+        else Vibration.vibrate([0, 10, 30, 10])
+      }
+    }
+  }
+
   const handleVoicePress = () => {
     if (isListening) {
+      triggerHaptic('stop')
       // Stop listening and commit the interim text
       if (interimText) {
         setText(prev => {
@@ -64,6 +96,7 @@ export default function ChatInput({ onSend, disabled, placeholder }: ChatInputPr
       }
       stopListening()
     } else {
+      triggerHaptic('start')
       toggleListening()
     }
   }
