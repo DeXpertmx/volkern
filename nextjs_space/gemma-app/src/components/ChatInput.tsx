@@ -25,9 +25,10 @@ interface ChatInputProps {
   onVoiceStatus?: (interim: string, isListening: boolean) => void
   continuousDictation?: boolean
   onDictationToggle?: () => void
+  voiceLang?: string
 }
 
-export default function ChatInput({ onSend, disabled, placeholder, onVoiceStatus, continuousDictation, onDictationToggle }: ChatInputProps) {
+export default function ChatInput({ onSend, disabled, placeholder, onVoiceStatus, continuousDictation, onDictationToggle, voiceLang }: ChatInputProps) {
   const [text, setText] = useState('')
 
   const {
@@ -38,7 +39,7 @@ export default function ChatInput({ onSend, disabled, placeholder, onVoiceStatus
     startListening,
     stopListening,
   } = useSpeechToText({
-    lang: 'es-ES',
+    lang: voiceLang || 'es-ES',
     onResult: (finalText) => {
       setText(prev => {
         const trimmed = prev.trim()
