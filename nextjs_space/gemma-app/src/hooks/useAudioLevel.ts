@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
 import { Platform } from 'react-native'
-import { Audio } from 'expo-av'
 
 const BAR_COUNT = 5
 const FFT_SIZE = 256
@@ -18,7 +17,7 @@ export function useAudioLevel(active: boolean): number[] {
   const [bands, setBands] = useState<number[]>(new Array(BAR_COUNT).fill(0))
 
   const animFrameRef = useRef<number>(0)
-  const recordingRef = useRef<Audio.Recording | null>(null)
+  const recordingRef = useRef<any>(null)
   const cancelledRef = useRef(false)
   const prevBandsRef = useRef<number[]>(new Array(BAR_COUNT).fill(0.1))
   const targetBandsRef = useRef<number[]>(new Array(BAR_COUNT).fill(0.5))
@@ -116,13 +115,14 @@ export function useAudioLevel(active: boolean): number[] {
 
       async function setupNative() {
         try {
-          await Audio.setAudioModeAsync({
+          const { Audio: ExpoAV } = await import('expo-av')
+          await ExpoAV.setAudioModeAsync({
             allowsRecordingIOS: true,
             playsInSilentModeIOS: true,
             shouldDuckAndroid: true,
           })
 
-          const recording = new Audio.Recording()
+          const recording = new ExpoAV.Recording()
           recordingRef.current = recording
 
           recording.setOnRecordingStatusUpdate((status) => {
@@ -142,7 +142,7 @@ export function useAudioLevel(active: boolean): number[] {
           })
 
           await recording.prepareToRecordAsync({
-            ...Audio.RecordingOptionsPresets.HIGH_QUALITY,
+            ...ExpoAV.RecordingOptionsPresets.HIGH_QUALITY,
             isMeteringEnabled: true,
           })
 
@@ -189,7 +189,7 @@ export function useAudioLevel(active: boolean): number[] {
         cancelledRef.current = true
         cancelAnimationFrame(animFrameRef.current)
         if (recordingRef.current) {
-          recordingRef.current.stopAndUnloadAsync().catch(() => {})
+          recordingRef.current?.stopAndUnloadAsync().catch(() => {})
           recordingRef.current = null
         }
         setBands(new Array(BAR_COUNT).fill(0))
