@@ -39,8 +39,12 @@ export function useVoiceNotification(
     getNotifications().then((Notifs) => {
       if (Notifs.__unavailable) return
 
+      // Normalizar: expo-notifications puede exportar en .default o directo
+      const N = Notifs.default || Notifs
+      if (!N.setNotificationHandler) return
+
       // Handler para mostrar banner en foreground
-      Notifs.default.setNotificationHandler({
+      N.setNotificationHandler({
         handleNotification: async () => ({
           shouldShowBanner: true,
           shouldShowList: true,
@@ -52,9 +56,9 @@ export function useVoiceNotification(
       // Canal Android
       if (Platform.OS === 'android' && !channelCreatedRef.current) {
         channelCreatedRef.current = true
-        Notifs.default.setNotificationChannelAsync(NOTIF_CHANNEL_ID, {
+        N.setNotificationChannelAsync(NOTIF_CHANNEL_ID, {
           name: NOTIF_CHANNEL_NAME,
-          importance: Notifs.default.AndroidImportance?.DEFAULT ?? 3,
+          importance: N.AndroidImportance?.DEFAULT ?? 3,
           vibrationPattern: [0, 100, 50, 100],
           lightColor: '#8B5CF6',
         }).catch(() => {})
@@ -62,7 +66,7 @@ export function useVoiceNotification(
 
       // Solicitar permisos
       if (Platform.OS !== 'web') {
-        Notifs.default.requestPermissionsAsync({
+        N.requestPermissionsAsync({
           ios: { allowAlert: true, allowSound: true, allowBadge: false },
         }).catch(() => {})
       }
@@ -85,7 +89,10 @@ export function useVoiceNotification(
         const Notifs = await getNotifications()
         if (Notifs.__unavailable) return
 
-        Notifs.default.scheduleNotificationAsync({
+        const N = Notifs.default || Notifs
+        if (!N.scheduleNotificationAsync) return
+
+        N.scheduleNotificationAsync({
           content: {
             title: '🎤 Escuchando...',
             body: trimmed,
@@ -107,9 +114,9 @@ export function useVoiceNotification(
   const cancelVoiceNotifications = () => {
     lastNotifiedRef.current = ''
     getNotifications().then((Notifs) => {
-      if (!Notifs.__unavailable) {
-        Notifs.default.cancelAllScheduledNotificationsAsync().catch(() => {})
-      }
+      if (Notifs.__unavailable) return
+      const N = Notifs.default || Notifs
+      N.cancelAllScheduledNotificationsAsync?.().catch(() => {})
     })
   }
 

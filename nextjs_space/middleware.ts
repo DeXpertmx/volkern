@@ -43,9 +43,28 @@ export async function middleware(request: NextRequest) {
   const xTenantId = request.headers.get('x-tenant-id');
   const apiKey = request.headers.get('x-api-key');
 
-  // Helper: creates response with requestId header
-  const withRequestId = (res: NextResponse) => {
+  // ─── CORS ──────────────────────────────────────────────────────────────
+  // La app Gemma se conecta desde otro origen (ej: http://192.168.0.22:3000)
+  // y necesita cabeceras CORS para que el navegador permita la respuesta.
+  const origin = request.headers.get('origin') || ''
+  const corsHeaders: Record<string, string> = {
+    'Access-Control-Allow-Origin': origin || '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-Key, X-Tenant-Id, x-request-id',
+    'Access-Control-Allow-Credentials': 'true',
+  }
+
+  // Responder inmediatamente a OPTIONS preflight
+  if (request.method === 'OPTIONS') {
+    return NextResponse.json({}, { headers: corsHeaders })
+  }
+
+  // Helper: creates response with requestId + CORS headers
+  const withHeaders = (res: NextResponse) => {
     res.headers.set('x-request-id', requestId)
+    for (const [key, val] of Object.entries(corsHeaders)) {
+      res.headers.set(key, val)
+    }
     return res
   }
 
@@ -61,7 +80,7 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL('/dashboard', request.url))
     }
     
-    return withRequestId(NextResponse.redirect(new URL('/auth/login', request.url)))
+    return withHeaders(NextResponse.redirect(new URL('/auth/login', request.url)))
   }
 
   // Public paths - allow through
@@ -74,12 +93,12 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/tarjeta/') ||
     pathname.startsWith('/p/')
   ) {
-    return withRequestId(NextResponse.next())
+    return withHeaders(NextResponse.next())
   }
 
   // Allow .well-known paths (AI plugin discovery, etc.)
   if (pathname.startsWith('/.well-known/')) {
-    return withRequestId(NextResponse.next())
+    return withHeaders(NextResponse.next())
   }
 
   // Check if it's an API route that requires no auth
@@ -146,7 +165,7 @@ export async function middleware(request: NextRequest) {
       if (apiKey) {
         res.headers.set('x-api-key', apiKey)
       }
-      return withRequestId(res)
+      return withHeaders(res)
     }
     // Other API routes need auth - let them through to handler (headers will be set below)
   }
@@ -170,7 +189,7 @@ export async function middleware(request: NextRequest) {
     if (!token) {
       const loginUrl = new URL('/auth/login', request.url)
       loginUrl.searchParams.set('callbackUrl', pathname)
-      return withRequestId(NextResponse.redirect(loginUrl))
+      return withHeaders(NextResponse.redirect(loginUrl))
     }
   }
 
@@ -183,7 +202,7 @@ export async function middleware(request: NextRequest) {
   if (apiKey) {
     res.headers.set('x-api-key', apiKey)
   }
-  return withRequestId(res)
+  return withHeaders(res)
 }
 
 export const config = {
