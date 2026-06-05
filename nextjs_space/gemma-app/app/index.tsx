@@ -60,7 +60,7 @@ export default function LoginScreen() {
 
       // Si es error de conexión, sugerir configurar servidor
       if (err.isNetworkError) {
-        setError(msg + '\n\n💡 Toca "Configurar servidor" abajo y pon http://192.168.0.22:3000')
+        setError(msg + '\n\n💡 Toca "Configurar servidor" abajo y pon http://192.168.0.22:3002')
       } else {
         setError(msg)
       }
@@ -211,7 +211,7 @@ export default function LoginScreen() {
                 nativeID="server-url"
                 value={serverUrl}
                 onChangeText={text => { setServerUrl(text); setConnResult('idle'); setConfigSaved(false) }}
-                placeholder="http://192.168.0.22:3000"
+                placeholder="http://192.168.0.22:3002"
                 placeholderTextColor={COLORS.textTertiary}
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -235,7 +235,7 @@ export default function LoginScreen() {
                 </TouchableOpacity>
               </View>
               <Text style={styles.configHint}>
-                Tu servidor está en 192.168.0.22:3000. Pega esa URL arriba y toca "Probar conexión". Si ves el check verde, inicia sesión.
+                Tu servidor está en 192.168.0.22:3002. Pega esa URL arriba y toca "Probar conexión". Si ves el check verde, inicia sesión.
               </Text>
             </View>
           </View>

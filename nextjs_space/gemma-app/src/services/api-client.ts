@@ -10,11 +10,11 @@ function detectServerHost(): string {
     if (hostUri) {
       const ip = hostUri.split(':')[0]
       if (ip && !ip.startsWith('127') && !ip.startsWith('::1')) {
-        return `http://${ip}:3000`
+        return `http://${ip}:3002`
       }
     }
   } catch {}
-  return 'http://localhost:3000'
+  return 'http://localhost:3002'
 }
 
 const DEFAULT_API_URL = detectServerHost()
@@ -117,7 +117,7 @@ export async function login(email: string, password: string): Promise<AuthSessio
   const contentType = response.headers.get('content-type') || ''
   if (!contentType.toLowerCase().includes('application/json')) {
     throw new ApiError(
-      'El servidor respondió con HTML en lugar de JSON. Verifica que la URL del servidor sea correcta (ej: http://192.168.0.22:3000)',
+      'El servidor respondió con HTML en lugar de JSON. Verifica que la URL del servidor sea correcta (ej: http://192.168.0.22:3002)',
       0,
     )
   }
