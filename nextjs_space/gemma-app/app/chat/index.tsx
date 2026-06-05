@@ -39,6 +39,7 @@ export default function ChatScreen() {
   const [userName, setUserName] = useState('')
   const [voiceInterim, setVoiceInterim] = useState('')
   const [isVoiceListening, setIsVoiceListening] = useState(false)
+  const [continuousDictation, setContinuousDictation] = useState(false)
 
   // Notificaciones de voz: se activan cuando el input reporta voz detectada
   useVoiceNotification(voiceInterim, isVoiceListening)
@@ -165,6 +166,8 @@ export default function ChatScreen() {
         <ChatInput
           onSend={handleSend}
           disabled={isLoading}
+          continuousDictation={continuousDictation}
+          onDictationToggle={() => setContinuousDictation(prev => !prev)}
           onVoiceStatus={(interim, listening) => {
             setVoiceInterim(interim)
             setIsVoiceListening(listening)

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { View, TextInput, TouchableOpacity, StyleSheet, Keyboard, Platform, Text, Vibration } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
@@ -23,9 +23,11 @@ interface ChatInputProps {
   disabled?: boolean
   placeholder?: string
   onVoiceStatus?: (interim: string, isListening: boolean) => void
+  continuousDictation?: boolean
+  onDictationToggle?: () => void
 }
 
-export default function ChatInput({ onSend, disabled, placeholder, onVoiceStatus }: ChatInputProps) {
+export default function ChatInput({ onSend, disabled, placeholder, onVoiceStatus, continuousDictation, onDictationToggle }: ChatInputProps) {
   const [text, setText] = useState('')
 
   const {
@@ -33,6 +35,7 @@ export default function ChatInput({ onSend, disabled, placeholder, onVoiceStatus
     isSupported: voiceSupported,
     interimText,
     toggleListening,
+    startListening,
     stopListening,
   } = useSpeechToText({
     lang: 'es-ES',
@@ -55,7 +58,56 @@ export default function ChatInput({ onSend, disabled, placeholder, onVoiceStatus
     onVoiceStatus?.(interimText, isListening)
   }, [interimText, isListening])
 
+  // Silencio timer para dictado continuo
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const textRef = useRef('')
+
+  // Sincronizar textRef con text
+  useEffect(() => {
+    textRef.current = text
+  }, [text])
+
+  // Auto-enviar por silencio en modo dictado continuo
+  useEffect(() => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current)
+      silenceTimerRef.current = null
+    }
+
+    if (!continuousDictation || !isListening || disabled) return
+
+    // Cuando hay texto parcial y el usuario deja de hablar por 1.5s, enviar
+    if (interimText.trim().length > 0) {
+      silenceTimerRef.current = setTimeout(() => {
+        const currentText = textRef.current.trim()
+        const pendingInterim = interimText.trim()
+        const fullText = currentText
+          ? `${currentText} ${pendingInterim}`
+          : pendingInterim
+
+        if (fullText.length > 0) {
+          setText('')
+          onSend(fullText)
+          // Reiniciar escucha para la siguiente frase
+          stopListening()
+          setTimeout(() => startListening(), 300)
+        }
+      }, 1500)
+    }
+
+    return () => {
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current)
+        silenceTimerRef.current = null
+      }
+    }
+  }, [interimText, isListening, continuousDictation, disabled])
+
   const handleSend = () => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current)
+      silenceTimerRef.current = null
+    }
     const trimmed = text.trim()
     if (!trimmed || disabled) return
     onSend(trimmed)
@@ -112,6 +164,24 @@ export default function ChatInput({ onSend, disabled, placeholder, onVoiceStatus
 
   return (
     <View style={styles.container}>
+      {/* Dictation toggle (visible when voice is supported) */}
+      {voiceSupported && (
+        <TouchableOpacity
+          style={[
+            styles.dictationBtn,
+            continuousDictation && styles.dictationBtnActive,
+          ]}
+          onPress={onDictationToggle}
+          disabled={disabled}
+        >
+          <Ionicons
+            name={continuousDictation ? 'infinite' : 'infinite-outline'}
+            size={18}
+            color={continuousDictation ? '#fff' : COLORS.textTertiary}
+          />
+        </TouchableOpacity>
+      )}
+
       {/* Voice button */}
       <TouchableOpacity
         style={[
@@ -178,6 +248,23 @@ const styles = StyleSheet.create({
     borderTopColor: COLORS.border,
     gap: 8,
     position: 'relative',
+  },
+  dictationBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  dictationBtnActive: {
+    backgroundColor: COLORS.success,
+    shadowColor: COLORS.success,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   voiceBtn: {
     width: 36,
