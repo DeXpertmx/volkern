@@ -11,6 +11,7 @@ import TypingIndicator from '../../src/components/TypingIndicator'
 import QuickReplies from '../../src/components/QuickReplies'
 import { useVoiceNotification } from '../../src/hooks/useVoiceNotification'
 import { sendMessage, getSession, clearSession } from '../../src/services/api-client'
+import { useVoiceLanguage } from '../../src/hooks/useVoiceLanguage'
 import type { ChatMessage, ChatResponse } from '../../src/types'
 
 const COLORS = {
@@ -40,6 +41,7 @@ export default function ChatScreen() {
   const [voiceInterim, setVoiceInterim] = useState('')
   const [isVoiceListening, setIsVoiceListening] = useState(false)
   const [continuousDictation, setContinuousDictation] = useState(false)
+  const { language: voiceLanguage } = useVoiceLanguage()
 
   // Notificaciones de voz: se activan cuando el input reporta voz detectada
   useVoiceNotification(voiceInterim, isVoiceListening)
@@ -129,9 +131,14 @@ export default function ChatScreen() {
             <Text style={styles.headerSub}>En línea</Text>
           </View>
         </View>
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-          <Ionicons name="log-out-outline" size={20} color={COLORS.textSecondary} />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity style={styles.settingsBtn} onPress={() => router.push('/settings')}>
+            <Ionicons name="settings-outline" size={20} color={COLORS.textSecondary} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+            <Ionicons name="log-out-outline" size={20} color={COLORS.textSecondary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Messages */}
@@ -172,6 +179,7 @@ export default function ChatScreen() {
             setVoiceInterim(interim)
             setIsVoiceListening(listening)
           }}
+          voiceLang={voiceLanguage}
         />
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -215,6 +223,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#10B981',
     fontWeight: '500',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  settingsBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.background,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   logoutBtn: {
     width: 36,
