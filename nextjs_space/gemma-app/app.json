@@ -22,15 +22,7 @@
       ]
     },
     "plugins": [
-      "expo-router",
-      [
-        "expo-notifications",
-        {
-          "icon": "./assets/notification-icon.png",
-          "color": "#8B5CF6",
-          "sounds": ["./assets/notification-sound.wav"]
-        }
-      ]
+      "expo-router"
     ],
     "extra": {
       "router": {},
