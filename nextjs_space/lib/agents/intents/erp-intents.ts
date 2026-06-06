@@ -106,6 +106,32 @@ export const erpIntents: IntentSchema[] = [
     ],
     destructive: false
   },
+  {
+    name: 'verificar_mermas',
+    description: 'Auditar mermas de producción con verificación de integridad (Vision-Lock). Requiere evidencia fotográfica y ubicación GPS.',
+    requiredParams: ['ordenProduccionId', 'productoId', 'cantidad'],
+    optionalParams: ['evidenciaUrl', 'lat', 'lng'],
+    examples: [
+      'verifica las mermas de la orden de producción #OP-001',
+      'audita el desperdicio del producto X, 5 unidades',
+      'reporta merma de 3 unidades en la orden #OP-002',
+      'registra scrap de producción con evidencia'
+    ],
+    destructive: true
+  },
+  {
+    name: 'registrar_inspeccion_calidad',
+    description: 'Registrar una inspección de calidad con firma criptográfica SHA-256 para trazabilidad',
+    requiredParams: ['productoId', 'resultado'],
+    optionalParams: ['lote', 'inspector', 'notas'],
+    examples: [
+      'registra inspección de calidad del producto X, resultado aprobado',
+      'crea un registro de QC para el lote #L-123, rechazado',
+      'inspección de calidad del producto Y, conforme',
+      'registra el control de calidad del último lote'
+    ],
+    destructive: false
+  },
 
   // ========== PROYECTOS ==========
   {
