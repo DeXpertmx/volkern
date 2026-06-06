@@ -20,15 +20,43 @@ export const crmIntents: IntentSchema[] = [
   },
   {
     name: 'buscar_lead',
-    description: 'Buscar un lead existente por email o nombre o listar todos',
+    description: 'Buscar un lead existente por email o nombre',
     requiredParams: [],
     optionalParams: ['email', 'nombre'],
     examples: [
       'busca el lead con email juan@email.com',
       'encuentra a María García',
-      'dame una lista de mis leads',
-      'muéstrame los leads',
-      'listar contactos'
+      'dame los datos de juan@email.com'
+    ],
+    destructive: false
+  },
+  {
+    name: 'listar_contactos',
+    description: 'Listar todos los contactos del tenant con filtros opcionales (búsqueda, tipo, tags)',
+    requiredParams: [],
+    optionalParams: ['search', 'tipo', 'tags', 'page', 'limit'],
+    examples: [
+      'lista los contactos',
+      'muéstrame todos los contactos',
+      'ver contactos',
+      'dame una lista de contactos',
+      'busca contactos que contengan "García"',
+      'contactos tipo empresa'
+    ],
+    destructive: false
+  },
+  {
+    name: 'listar_leads',
+    description: 'Listar todos los leads del tenant con filtros opcionales (búsqueda, estado, fuente)',
+    requiredParams: [],
+    optionalParams: ['search', 'estado', 'fuente', 'page', 'limit'],
+    examples: [
+      'lista los leads',
+      'muéstrame todos los leads',
+      'ver leads nuevos',
+      'dame una lista de leads',
+      'leads en estado contactado',
+      'busca leads que contengan "Martínez"'
     ],
     destructive: false
   },

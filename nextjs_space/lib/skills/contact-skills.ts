@@ -359,3 +359,158 @@ export async function findContactByEmail(email: string, tenantId: string) {
   });
   return contact;
 }
+
+/**
+ * Listar contactos con búsqueda y filtros
+ */
+export async function listContacts(input: {
+  tenantId: string;
+  limit?: number;
+  offset?: number;
+  page?: number;
+  search?: string;
+  tipo?: 'person' | 'company';
+  tags?: string;
+  sortBy?: 'nombre' | 'email' | 'fechaCreacion' | 'fechaActualizacion';
+  sortOrder?: 'asc' | 'desc';
+}) {
+  const {
+    tenantId,
+    limit = 50,
+    offset = 0,
+    page,
+    search,
+    tipo,
+    tags,
+    sortBy = 'fechaCreacion',
+    sortOrder = 'desc',
+  } = input;
+
+  // Construir where clause
+  const where: any = { tenantId };
+
+  if (tipo) {
+    where.tipo = tipo;
+  }
+
+  if (tags) {
+    where.tags = { contains: tags, mode: 'insensitive' };
+  }
+
+  if (search) {
+    where.OR = [
+      { nombre: { contains: search, mode: 'insensitive' } },
+      { email: { contains: search, mode: 'insensitive' } },
+      { telefono: { contains: search, mode: 'insensitive' } },
+      { cargo: { contains: search, mode: 'insensitive' } },
+    ];
+  }
+
+  // Calcular skip: si se usa page, calcular desde page; sino usar offset
+  const take = Math.min(limit, 100);
+  const skip = page ? (page - 1) * take : offset;
+
+  // Mapping de sortBy a campo real de Prisma
+  const orderByField = sortBy === 'nombre' ? 'nombre'
+    : sortBy === 'email' ? 'email'
+    : sortBy === 'fechaActualizacion' ? 'fechaActualizacion'
+    : 'fechaCreacion';
+
+  const [contacts, total] = await Promise.all([
+    prisma.contact.findMany({
+      where,
+      take,
+      skip,
+      orderBy: { [orderByField]: sortOrder },
+      include: {
+        company: { select: { id: true, nombre: true } },
+        _count: { select: { deals: true, Task: true } },
+      },
+    }),
+    prisma.contact.count({ where }),
+  ]);
+
+  return {
+    items: contacts,
+    total,
+    limit: take,
+    offset: skip,
+    page: page || Math.floor(skip / take) + 1,
+    totalPages: Math.ceil(total / take),
+  };
+}
+
+/**
+ * Listar leads con búsqueda y filtros
+ */
+export async function listLeads(input: {
+  tenantId: string;
+  limit?: number;
+  offset?: number;
+  page?: number;
+  estado?: string;
+  search?: string;
+  fuente?: string;
+  sortBy?: 'nombre' | 'email' | 'fechaCreacion' | 'fechaActualizacion' | 'estado';
+  sortOrder?: 'asc' | 'desc';
+}) {
+  const {
+    tenantId,
+    limit = 50,
+    offset = 0,
+    page,
+    estado,
+    search,
+    fuente,
+    sortBy = 'fechaCreacion',
+    sortOrder = 'desc',
+  } = input;
+
+  const where: any = { tenantId };
+  if (estado) {
+    where.estado = estado;
+  }
+  if (fuente) {
+    where.fuente = fuente;
+  }
+
+  if (search) {
+    where.OR = [
+      { nombre: { contains: search, mode: 'insensitive' } },
+      { email: { contains: search, mode: 'insensitive' } },
+      { telefono: { contains: search, mode: 'insensitive' } },
+      { empresa: { contains: search, mode: 'insensitive' } },
+    ];
+  }
+
+  const take = Math.min(limit, 100);
+  const skip = page ? (page - 1) * take : offset;
+
+  const orderByField = sortBy === 'nombre' ? 'nombre'
+    : sortBy === 'email' ? 'email'
+    : sortBy === 'fechaActualizacion' ? 'fechaActualizacion'
+    : sortBy === 'estado' ? 'estado'
+    : 'fechaCreacion';
+
+  const [leads, total] = await Promise.all([
+    prisma.lead.findMany({
+      where,
+      take,
+      skip,
+      orderBy: { [orderByField]: sortOrder },
+      include: {
+        _count: { select: { deals: true, Task: true, citas: true } },
+      },
+    }),
+    prisma.lead.count({ where }),
+  ]);
+
+  return {
+    items: leads,
+    total,
+    limit: take,
+    offset: skip,
+    page: page || Math.floor(skip / take) + 1,
+    totalPages: Math.ceil(total / take),
+  };
+}

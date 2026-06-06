@@ -171,6 +171,8 @@ export class MinimaxOrchestratorAgent {
       'crear_negocio': 'create_deal',
       'actualizar_negocio': 'update_deal',
       'mis_negocios': 'list_deals',
+      'listar_contactos': 'list_contacts',
+      'listar_leads': 'list_leads',
       'calificar_lead': 'prequalify_lead',
       'crear_factura': 'create_invoice',
       'estado_fiscal': 'get_invoice_fiscal_status',
