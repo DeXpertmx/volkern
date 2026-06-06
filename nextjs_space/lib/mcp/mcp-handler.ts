@@ -121,6 +121,24 @@ export const MCP_TOOLS: MCPTool[] = [
       required: ['email', 'tenantId'],
     },
   },
+  {
+    name: 'list_contacts',
+    description: 'Listar todos los contactos del tenant con filtros opcionales. Usa esto cuando el usuario pida "ver contactos", "lista de contactos" o "mis contactos". Soporta búsqueda por texto, filtro por tipo (person/company) y tags.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tenantId: { type: 'string', description: 'ID del tenant' },
+        search: { type: 'string', description: 'Búsqueda por nombre, email, teléfono o cargo (opcional)' },
+        tipo: { type: 'string', description: 'Filtrar por tipo: person o company', enum: ['person', 'company'] },
+        tags: { type: 'string', description: 'Filtrar por tags (búsqueda parcial, ej: "vip")' },
+        page: { type: 'number', description: 'Número de página (default: 1)' },
+        limit: { type: 'number', description: 'Resultados por página (default: 50, max: 100)' },
+        sortBy: { type: 'string', description: 'Ordenar por: nombre, email, fechaCreacion, fechaActualizacion', enum: ['nombre', 'email', 'fechaCreacion', 'fechaActualizacion'] },
+        sortOrder: { type: 'string', description: 'Dirección: asc o desc (default: desc)', enum: ['asc', 'desc'] },
+      },
+      required: ['tenantId'],
+    },
+  },
 
   // ========== LEADS ==========
   {
@@ -178,6 +196,24 @@ export const MCP_TOOLS: MCPTool[] = [
         source: { type: 'string', description: 'Fuente', enum: ['api', 'app', 'automation', 'mcp', 'webhook'] },
       },
       required: ['leadId', 'tenantId'],
+    },
+  },
+  {
+    name: 'list_leads',
+    description: 'Listar todos los leads del tenant con filtros opcionales. Usa esto cuando el usuario pida "ver leads", "lista de leads", "leads nuevos", etc. Permite filtrar por estado, fuente y búsqueda de texto.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tenantId: { type: 'string', description: 'ID del tenant' },
+        search: { type: 'string', description: 'Búsqueda por nombre, email, teléfono o empresa (opcional)' },
+        estado: { type: 'string', description: 'Filtrar por estado: nuevo, contactado, calificado, convertido (opcional)', enum: ['nuevo', 'contactado', 'calificado', 'convertido'] },
+        fuente: { type: 'string', description: 'Filtrar por fuente de adquisición: web, referido, whatsapp, etc. (opcional)' },
+        page: { type: 'number', description: 'Número de página (default: 1)' },
+        limit: { type: 'number', description: 'Resultados por página (default: 50, max: 100)' },
+        sortBy: { type: 'string', description: 'Ordenar por: nombre, email, fechaCreacion, fechaActualizacion, estado', enum: ['nombre', 'email', 'fechaCreacion', 'fechaActualizacion', 'estado'] },
+        sortOrder: { type: 'string', description: 'Dirección: asc o desc (default: desc)', enum: ['asc', 'desc'] },
+      },
+      required: ['tenantId'],
     },
   },
 
