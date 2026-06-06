@@ -174,6 +174,8 @@ export class MinimaxOrchestratorAgent {
       'listar_contactos': 'list_contacts',
       'listar_leads': 'list_leads',
       'calificar_lead': 'prequalify_lead',
+      'detectar_ghosting': 'detect_ghosting',
+      'generar_ruta_exito': 'generate_success_path',
       'crear_factura': 'create_invoice',
       'cancelar_factura': 'cancel_invoice',
       'estado_fiscal': 'get_invoice_fiscal_status',

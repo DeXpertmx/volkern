@@ -371,4 +371,32 @@ export const crmIntents: IntentSchema[] = [
     ],
     destructive: false
   },
+
+  // ========== PROACTIVIDAD ==========
+  {
+    name: 'detectar_ghosting',
+    description: 'Detectar leads inactivos o fantasmas que están en etapas calientes pero sin actividad reciente',
+    requiredParams: [],
+    optionalParams: ['dias_inactivo'],
+    examples: [
+      'detecta leads fantasmas',
+      'hay leads que dejaron de responder',
+      'qué leads están inactivos en etapa negociación',
+      'encuentra leads que no han tenido actividad en 7 días'
+    ],
+    destructive: false
+  },
+  {
+    name: 'generar_ruta_exito',
+    description: 'Generar una sugerencia estratégica (success path) para un lead basada en patrones de cierre exitosos de leads similares',
+    requiredParams: ['email'],
+    optionalParams: [],
+    examples: [
+      'genera una ruta de éxito para juan@email.com',
+      'cómo puedo cerrar el deal con María García',
+      'sugiere siguiente paso para el lead de Carlos',
+      'dame una estrategia para convertir a este lead'
+    ],
+    destructive: false
+  },
 ];
