@@ -183,6 +183,8 @@ export class MinimaxOrchestratorAgent {
       'proyeccion_financiera': 'project_financial_forecast',
       'salud_inventario': 'get_inventory_health',
       'ajustar_stock': 'adjust_stock',
+      'consumir_inventario': 'process_inventory_consumption',
+      'watchdog_inventario': 'inventory_watchdog',
       'buscar_producto': 'search_catalog',
       'gestionar_catalogo': 'export_catalog',
       'generar_copy': 'generate_marketing_copy',

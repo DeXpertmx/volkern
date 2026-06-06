@@ -31,6 +31,32 @@ export const erpIntents: IntentSchema[] = [
     destructive: true
   },
   {
+    name: 'consumir_inventario',
+    description: 'Descontar inventario por consumo de un producto. Si tiene BoM (lista de materiales), descuenta automáticamente los componentes.',
+    requiredParams: ['producto', 'cantidad'],
+    optionalParams: ['almacenId'],
+    examples: [
+      'descarga 5 unidades del producto X del inventario',
+      'consume 10 unidades del producto Y',
+      'registra consumo de 3 unidades del material Z',
+      'procesa la salida de 20 unidades del producto del almacén principal'
+    ],
+    destructive: true
+  },
+  {
+    name: 'watchdog_inventario',
+    description: 'Ejecutar el vigilante de inventario para detectar puntos de reorden, alertas de stock bajo y sugerir compras',
+    requiredParams: [],
+    optionalParams: [],
+    examples: [
+      'revisa las alertas de inventario',
+      'qué productos necesito reponer',
+      'ejecuta el watchdog de inventario',
+      'hay productos por debajo del punto de reorden'
+    ],
+    destructive: false
+  },
+  {
     name: 'buscar_producto',
     description: 'Buscar productos en el catálogo o inventario',
     requiredParams: [],
