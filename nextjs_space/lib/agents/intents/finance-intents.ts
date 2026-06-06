@@ -19,6 +19,18 @@ export const financeIntents: IntentSchema[] = [
     destructive: false
   },
   {
+    name: 'cancelar_factura',
+    description: 'Anular o cancelar una factura existente (Veri*factu)',
+    requiredParams: ['invoiceId'],
+    optionalParams: ['motivo'],
+    examples: [
+      'cancela la factura FAC-001',
+      'anula la factura #123',
+      'cancelar factura de Juan Pérez, motivo: error en datos'
+    ],
+    destructive: true
+  },
+  {
     name: 'estado_fiscal',
     description: 'Consultar el estado fiscal e integridad de una factura',
     requiredParams: ['invoiceId'],
@@ -53,6 +65,19 @@ export const financeIntents: IntentSchema[] = [
       'registra gasto de 45.90 en comida',
       'nuevo gasto: 120€ de electricidad, proveedor Iberdrola',
       'gasto de 300€ en software, categoría herramientas'
+    ],
+    destructive: false
+  },
+  {
+    name: 'registrar_gasto_vision',
+    description: 'Registrar un gasto mediante procesamiento de imagen/foto del ticket o factura usando IA (Gemma Vision)',
+    requiredParams: ['fotoUrl'],
+    optionalParams: ['categoria', 'fecha'],
+    examples: [
+      'registra este ticket de compra',
+      'procesa la foto de esta factura',
+      'escanea este recibo y regístralo como gasto',
+      'digitaliza este ticket de restaurante'
     ],
     destructive: false
   },
@@ -94,6 +119,19 @@ export const financeIntents: IntentSchema[] = [
     destructive: false
   },
   {
+    name: 'proyeccion_impuestos',
+    description: 'Proyección fiscal regional (MX, ES, US-LLC). Calcula la provisión de impuestos estimada según la jurisdicción.',
+    requiredParams: ['pais'],
+    optionalParams: ['periodo'],
+    examples: [
+      'calcula la provisión de impuestos para España',
+      'proyección fiscal de México este trimestre',
+      'cuánto debo pagar de impuestos en USA este año',
+      'dame la estimación de impuestos para mi LLC'
+    ],
+    destructive: false
+  },
+  {
     name: 'analizar_rentabilidad_global',
     description: 'Analizar rentabilidad global: EBITDA, margen real y salud financiera integral',
     requiredParams: [],
@@ -103,6 +141,19 @@ export const financeIntents: IntentSchema[] = [
       'cómo vamos financieramente en general',
       'analiza el EBITDA del último trimestre',
       'estado de salud financiera integral'
+    ],
+    destructive: false
+  },
+  {
+    name: 'auditar_integridad_gastos',
+    description: 'Auditar la integridad de los gastos registrados: verifica hashes de seguridad, detecta anomalías y discrepancias',
+    requiredParams: [],
+    optionalParams: ['periodo', 'proveedorId'],
+    examples: [
+      'audita la integridad de los gastos',
+      'hay discrepancias en los gastos de este mes',
+      'verifica la integridad de los gastos del proveedor X',
+      'revisa si hay gastos duplicados o sospechosos'
     ],
     destructive: false
   },
