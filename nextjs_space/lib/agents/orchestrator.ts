@@ -199,6 +199,8 @@ export class MinimaxOrchestratorAgent {
       'analizar_rentabilidad_global': 'analyze_global_profitability',
       'calcular_costo_produccion': 'calculate_production_cost',
       'detectar_anomalias_calidad': 'detect_quality_anomalies',
+      'verificar_mermas': 'verify_waste_integrity',
+      'registrar_inspeccion_calidad': 'register_qc_inspection',
 
       // Real Estate
       'generar_descripcion_inmueble': 'generate_property_description',
