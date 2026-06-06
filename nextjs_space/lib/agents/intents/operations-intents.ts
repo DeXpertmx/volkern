@@ -17,6 +17,32 @@ export const operationsIntents: IntentSchema[] = [
     destructive: false
   },
   {
+    name: 'actividad_campo',
+    description: 'Localizar técnicos y activos en campo mediante geolocalización (VISION-LOCK) y consultar su estado de actividad',
+    requiredParams: [],
+    optionalParams: ['fecha'],
+    examples: [
+      'dónde están los técnicos en campo hoy',
+      'muéstrame la actividad de campo',
+      'localiza a los trabajadores en terreno',
+      'qué activos están desplegados'
+    ],
+    destructive: false
+  },
+  {
+    name: 'auditar_fugas_materiales',
+    description: 'Detectar desviaciones, mermas y fugas de materiales cruzando datos de stock contra consumo de producción',
+    requiredParams: [],
+    optionalParams: ['periodo', 'almacenId'],
+    examples: [
+      'audita las fugas de materiales',
+      'hay mermas sospechosas en el inventario',
+      'detecta desviaciones de stock contra producción',
+      'revisa si hay robos o fugas de material'
+    ],
+    destructive: false
+  },
+  {
     name: 'consulta_general',
     description: 'Consulta general, saludo, ayuda, o conversación no relacionada con CRUD',
     requiredParams: [],
