@@ -40,6 +40,7 @@ import { financeIntents } from './finance-intents';
 import { erpIntents } from './erp-intents';
 import { hrIntents } from './hr-intents';
 import { marketingIntents } from './marketing-intents';
+import { logisticsIntents } from './logistics-intents';
 
 export const ALL_INTENTS: IntentSchema[] = [
   ...crmIntents,
@@ -47,5 +48,6 @@ export const ALL_INTENTS: IntentSchema[] = [
   ...erpIntents,
   ...hrIntents,
   ...marketingIntents,
+  ...logisticsIntents,
   ...operationsIntents,
 ];

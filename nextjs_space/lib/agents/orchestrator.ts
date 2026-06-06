@@ -205,6 +205,13 @@ export class MinimaxOrchestratorAgent {
       'buscar_inmuebles': 'search_properties_by_filters',
       'recomendar_inmuebles': 'recommend_properties',
       'calcular_comision_franquicia': 'calculate_franchise_commissions',
+
+      // Logística
+      'estado_envio': 'get_shipment_status',
+      'rastrear_pedido': 'track_order',
+      'salud_flota': 'check_fleet_health',
+      'optimizar_ruta': 'optimize_route',
+      'reorganizar_almacen': 'suggest_warehouse_reorganization',
     };
     const skillName = skillMap[intent];
 
