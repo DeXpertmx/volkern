@@ -41,4 +41,45 @@ export const marketingIntents: IntentSchema[] = [
     ],
     destructive: false
   },
+
+  // ========== MARKETING AVANZADO ==========
+  {
+    name: 'generar_web_block',
+    description: 'Generar bloques HTML para landing pages con IA (Web Creator): hero, features, testimonials, CTA, etc.',
+    requiredParams: ['tipoBloque', 'producto'],
+    optionalParams: ['tono'],
+    examples: [
+      'genera un bloque hero para la landing de mi producto',
+      'crea una sección de testimonios para la web',
+      'dame un bloque CTA para promocionar el servicio',
+      'genera un bloque de features para el SaaS'
+    ],
+    destructive: false
+  },
+  {
+    name: 'generar_seo',
+    description: 'Generar metadatos SEO (title, description, keywords) para una página usando IA',
+    requiredParams: ['tituloPagina'],
+    optionalParams: ['contenido', 'palabrasClave'],
+    examples: [
+      'genera el SEO para la página de servicios',
+      'dame metadatos SEO para mi landing de ventas',
+      'optimiza el título y descripción para la página de contacto',
+      'crea keywords para mi página de producto'
+    ],
+    destructive: false
+  },
+  {
+    name: 'sugerir_automatizacion',
+    description: 'Analizar el tenant y sugerir reglas de automatización de marketing basadas en patrones de uso',
+    requiredParams: [],
+    optionalParams: [],
+    examples: [
+      'sugiere reglas de automatización para mi negocio',
+      'qué automatizaciones de marketing puedo implementar',
+      'dame ideas de reglas automáticas para campañas',
+      'cómo puedo automatizar mi marketing'
+    ],
+    destructive: false
+  },
 ];
