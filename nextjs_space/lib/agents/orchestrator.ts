@@ -200,6 +200,8 @@ export class MinimaxOrchestratorAgent {
       'rentabilidad_proyecto': 'get_project_profitability',
       'desviaciones_proyecto': 'detect_project_drifting',
       'auditar_integridad': 'audit_finance_integrity',
+      'actividad_campo': 'get_field_activity',
+      'auditar_fugas_materiales': 'audit_material_leaks',
       'analizar_rentabilidad_global': 'analyze_global_profitability',
       'calcular_costo_produccion': 'calculate_production_cost',
       'detectar_anomalias_calidad': 'detect_quality_anomalies',
