@@ -53,6 +53,57 @@ services:
       retries: 3
       start_period: 60s
 
+  # ─── Traccar GPS Server (ingestión de trackers) ────────────
+  # Documentación: docs/GPS-TRACKER-SETUP.md
+  traccar:
+    image: traccar/traccar:latest
+    container_name: volkern-traccar
+    restart: unless-stopped
+    ports:
+      # Puerto web (admin dashboard)
+      - "8082:8082"
+      # Puertos para dispositivos GPS (protocolos binarios)
+      - "5001:5001"   # GT06 / Concox
+      - "5002:5002"   # H02
+      - "5003:5003"   # Teltonika
+      - "5005:5005"   # Queclink
+      - "5008:5008"   # Watch
+      - "5013:5013"   # Ruptela
+      - "5023:5023"   # OsmAnd (HTTP)
+      - "5055:5055"   # Traccar protocol (HTTP)
+    environment:
+      CONFIG_USE_ENVIRONMENT_VARIABLES: "true"
+      LOGGER_LEVEL: "info"
+      DATABASE_DRIVER: "org.postgresql.Driver"
+      DATABASE_URL: "jdbc:postgresql://postgres:5432/${POSTGRES_DB:-volkern}?user=${POSTGRES_USER:-volkern}&password=${POSTGRES_PASSWORD:-volkern_secret}"
+    volumes:
+      - traccar-logs:/opt/traccar/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ─── Bridge Traccar → Volkern (cron-based) ─────────────────
+  # Descomenta para activar el reenvío automático de posiciones GPS a Volkern
+  # traccar-bridge:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   container_name: volkern-traccar-bridge
+  #   restart: unless-stopped
+  #   entrypoint: ["npx", "tsx", "scripts/traccar-bridge.ts", "--daemon", "--interval", "30"]
+  #   environment:
+  #     TRACCAR_URL: "http://traccar:8082"
+  #     TRACCAR_USER: "admin"
+  #     TRACCAR_PASS: "admin"
+  #     VOLKERN_URL: "http://app:3000"
+  #   volumes:
+  #     - ./traccar-device-mapping.json:/app/traccar-device-mapping.json:ro
+  #   depends_on:
+  #     traccar:
+  #       condition: service_started
+  #     app:
+  #       condition: service_healthy
+
   # ─── Apprise (notificaciones) ──────────────────────────────
   apprise:
     extends:
@@ -61,6 +112,8 @@ services:
 
 volumes:
   postgres-data:
+    driver: local
+  traccar-logs:
     driver: local
 
 networks:
