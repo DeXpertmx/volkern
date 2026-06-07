@@ -4,3 +4,4 @@ tsconfig.tsbuildinfo
 .tsbuildinfo.check
 coverage/
 .env*
+traccar-device-mapping.json
