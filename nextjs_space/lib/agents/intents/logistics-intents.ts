@@ -31,6 +31,20 @@ export const logisticsIntents: IntentSchema[] = [
     ],
     destructive: false
   },
+  {
+    name: 'tracking_envio',
+    description: 'Consultar el estado y la ubicación de un envío mediante número de tracking o referencia',
+    requiredParams: ['tracking'],
+    optionalParams: [],
+    examples: [
+      'dónde está mi envío TRK-998',
+      'consultar el tracking del paquete',
+      'cuándo llega mi pedido #ENV-550',
+      'muéstrame el estado del envío ABC-123',
+      'haz seguimiento del envío de Carlos'
+    ],
+    destructive: false
+  },
 
   // ========== FLOTA ==========
   {
@@ -44,6 +58,20 @@ export const logisticsIntents: IntentSchema[] = [
       'dame la salud de la flota',
       'qué vehículos tienen ITV próxima a vencer',
       'estado del vehículo VEH-001'
+    ],
+    destructive: false
+  },
+  {
+    name: 'estado_flota',
+    description: 'Consultar el estado general de la flota: vehículos activos, en mantenimiento, ITV próxima, y posiciones GPS actuales',
+    requiredParams: [],
+    optionalParams: ['vehiculoId'],
+    examples: [
+      'cómo está la flota hoy',
+      'dame el estado de todos los vehículos',
+      'qué camiones están activos',
+      'estado de la flota de reparto',
+      'qué vehículos tienen mantenimiento pendiente'
     ],
     destructive: false
   },
