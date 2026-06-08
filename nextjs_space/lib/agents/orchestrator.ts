@@ -224,7 +224,9 @@ export class MinimaxOrchestratorAgent {
       // Logística
       'estado_envio': 'get_shipment_status',
       'rastrear_pedido': 'track_order',
+      'tracking_envio': 'track_order',
       'salud_flota': 'check_fleet_health',
+      'estado_flota': 'check_fleet_health',
       'optimizar_ruta': 'optimize_route',
       'reorganizar_almacen': 'suggest_warehouse_reorganization',
     };
