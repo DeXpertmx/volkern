@@ -18,8 +18,8 @@
  *
  * ## Env vars (or .env.local)
  *   TRACCAR_URL          Traccar server URL (default: http://localhost:8082)
- *   TRACCAR_USER         Traccar admin username (default: admin)
- *   TRACCAR_PASS         Traccar admin password (default: admin)
+ *   TRACCAR_EMAIL        Traccar login email (default: admin@volkern.app)
+ *   TRACCAR_PASS         Traccar login password (default: admin)
  *   VOLKERN_URL          Volkern app URL (default: http://localhost:3000)
  *
  * ## cron example (every 30 seconds)
@@ -77,10 +77,12 @@ interface BridgeStats {
 // ═══════════════════════════════════════════════════════════════
 
 const TRACCAR_URL = process.env.TRACCAR_URL || 'http://localhost:8082'
-const TRACCAR_USER = process.env.TRACCAR_USER || 'admin'
+const TRACCAR_EMAIL = process.env.TRACCAR_EMAIL || 'admin@volkern.app'
 const TRACCAR_PASS = process.env.TRACCAR_PASS || 'admin'
 const VOLKERN_URL = process.env.VOLKERN_URL || 'http://localhost:3000'
 const VEHICLE_POLL_ENDPOINT = `${VOLKERN_URL}/api/erp/logistics/gps/vehicle-poll`
+// Session expires after ~30 min of inactivity in Traccar — refresh every 5 min
+const SESSION_REFRESH_MS = 5 * 60 * 1000
 
 // ═══════════════════════════════════════════════════════════════
 // CLI argument parsing
@@ -131,8 +133,8 @@ Options:
 
 Environment:
   TRACCAR_URL          Traccar server URL (default: http://localhost:8082)
-  TRACCAR_USER         Traccar admin user (default: admin)
-  TRACCAR_PASS         Traccar admin password (default: admin)
+  TRACCAR_EMAIL        Traccar login email (default: admin@volkern.app)
+  TRACCAR_PASS         Traccar login password (default: admin)
   VOLKERN_URL          Volkern app URL (default: http://localhost:3000)
 `)
 }
@@ -164,19 +166,73 @@ function loadMapping(filePath: string): DeviceMapping {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// Traccar API client
+// Traccar API client (session-based auth — Traccar 6.x)
 // ═══════════════════════════════════════════════════════════════
 
-const AUTH_HEADER = 'Basic ' + Buffer.from(`${TRACCAR_USER}:${TRACCAR_PASS}`).toString('base64')
+let sessionCookie: string | null = null
+let sessionExpiresAt = 0
+
+/** Login to Traccar via /api/session and store the JSESSIONID cookie */
+async function traccarLogin(): Promise<string> {
+  const res = await fetch(`${TRACCAR_URL}/api/session`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ email: TRACCAR_EMAIL, password: TRACCAR_PASS }).toString(),
+  })
+
+  if (!res.ok) {
+    throw new Error(`Traccar login failed: ${res.status} ${res.statusText}`)
+  }
+
+  const setCookie = res.headers.get('set-cookie')
+  if (!setCookie) {
+    throw new Error('Traccar login succeeded but no session cookie returned')
+  }
+
+  // Extract JSESSIONID from the cookie header
+  const match = setCookie.match(/JSESSIONID=([^;]+)/)
+  if (!match) {
+    throw new Error('Traccar login succeeded but JSESSIONID not found in cookie')
+  }
+
+  sessionCookie = `JSESSIONID=${match[1]}`
+  sessionExpiresAt = Date.now() + SESSION_REFRESH_MS
+  return sessionCookie
+}
+
+/** Get (or refresh) the session cookie */
+async function getSessionCookie(): Promise<string> {
+  if (sessionCookie && Date.now() < sessionExpiresAt) {
+    return sessionCookie
+  }
+  return await traccarLogin()
+}
 
 async function traccarFetch<T>(endpoint: string): Promise<T> {
+  const cookie = await getSessionCookie()
   const url = `${TRACCAR_URL}/api/${endpoint}`
   const res = await fetch(url, {
     headers: {
-      'Authorization': AUTH_HEADER,
+      'Cookie': cookie,
       'Accept': 'application/json',
     },
   })
+
+  // If session expired, re-login and retry once
+  if (res.status === 401) {
+    sessionCookie = null
+    const newCookie = await traccarLogin()
+    const retryRes = await fetch(url, {
+      headers: {
+        'Cookie': newCookie,
+        'Accept': 'application/json',
+      },
+    })
+    if (!retryRes.ok) {
+      throw new Error(`Traccar API error ${retryRes.status}: ${retryRes.statusText} at ${url}`)
+    }
+    return retryRes.json() as Promise<T>
+  }
 
   if (!res.ok) {
     throw new Error(`Traccar API error ${res.status}: ${res.statusText} at ${url}`)
@@ -347,7 +403,7 @@ async function main() {
   const { mode, interval, mappingPath } = parseArgs()
 
   console.log(`[bridge] Traccar Bridge → Volkern GPS`)
-  console.log(`[bridge] Traccar: ${TRACCAR_URL}  |  Volkern: ${VOLKERN_URL}`)
+  console.log(`[bridge] Traccar: ${TRACCAR_URL} (user: ${TRACCAR_EMAIL})  |  Volkern: ${VOLKERN_URL}`)
   console.log(`[bridge] Mode: ${mode}  |  Interval: ${interval}s  |  Mapping: ${mappingPath}`)
   console.log(`[bridge] ─────────────────────────────────────────────`)
 
