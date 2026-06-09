@@ -161,7 +161,7 @@ export async function POST(request: NextRequest) {
 
         if (googleIntegration && googleIntegration.activo) {
           console.log('📅 Eliminando cita cancelada de Google Calendar...');
-          await deleteCalendarEvent(cita.tenantId, citaId, cita.googleCalendarEventId);
+          await deleteCalendarEvent(googleIntegration.userId, citaId, cita.googleCalendarEventId);
           console.log('✅ Cita eliminada de Google Calendar');
         }
       } catch (gcalError: any) {

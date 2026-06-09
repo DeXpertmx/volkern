@@ -68,13 +68,54 @@ export function initCronJobs() {
     console.log(`[Cron] ✅ Límites verificados: ${result.checked} tenants, ${result.notified} notificaciones enviadas, ${result.alerts.length} alertas.`);
   });
 
+  // 8. Google Calendar Webhook Renewal - Cada 12 horas
+  cron.schedule('0 */12 * * *', async () => {
+    console.log('[Cron] 🔄 Iniciando renovación de canales webhook de Google Calendar...');
+    try {
+      const { renewWebhookChannel } = await import('../google-calendar');
+      
+      const now = new Date();
+      const expirationThreshold = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+
+      const integrationsToRenew = await prisma.googleCalendarIntegration.findMany({
+        where: {
+          activo: true,
+          channelId: { not: null },
+          channelExpiration: {
+            not: null,
+            lte: expirationThreshold,
+          },
+        },
+      });
+
+      console.log(`[Cron] 📊 Encontradas ${integrationsToRenew.length} integraciones para renovar`);
+
+      for (const integration of integrationsToRenew) {
+        try {
+          const horasRestantes = Math.round(
+            (integration.channelExpiration!.getTime() - now.getTime()) / (1000 * 60 * 60)
+          );
+          console.log(`[Cron] 🔄 Renovando canal para usuario ${integration.userId} (expira en ${horasRestantes}h)`);
+          await renewWebhookChannel(integration.userId);
+          console.log(`[Cron] ✅ Canal renovado para usuario ${integration.userId}`);
+        } catch (error: any) {
+          console.error(`[Cron] ❌ Error renovando canal para usuario ${integration.userId}:`, error.message);
+        }
+      }
+
+      console.log(`[Cron] ✅ Renovación de canales webhook completada`);
+    } catch (error: any) {
+      console.error('[Cron] ❌ Error en renovación de canales webhook:', error.message);
+    }
+  });
+
   console.log('✅ [Scheduler] Radar de Ghosting programado (09:00 AM daily)');
   console.log('✅ [Scheduler] Ritual Dominical programado (Sun 23:59)');
   console.log('✅ [Scheduler] Recuperación Proactiva programada (cada 4h)');
   console.log('✅ [Scheduler] Métricas SaaS diarias programadas (00:05 AM)');
   console.log('✅ [Scheduler] Churn rate semanal programado (Sun 01:00 AM)');
   console.log('✅ [Scheduler] Snapshot mensual programado (1st of month 02:00 AM)');
-  console.log('✅ [Scheduler] Alertas de límites programadas (10:00 AM daily)');
+  console.log('✅ [Scheduler] Google Calendar webhook renewal programado (cada 12h)');
 }
 
 /**

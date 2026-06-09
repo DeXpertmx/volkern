@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
 
         console.log(`🔄 Renovando canal para tenant ${integration.tenantId} (expira en ${horasRestantes}h)`);
 
-        await renewWebhookChannel(integration.tenantId);
+        await renewWebhookChannel(integration.userId);
 
         results.renovadas++;
         results.detalles.push({

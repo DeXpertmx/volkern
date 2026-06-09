@@ -1,0 +1,58 @@
+# ═══════════════════════════════════════════════════════════════
+# Volkern ERP — Google Calendar Webhook Renewal (Cron Backup)
+# Renueva los canales webhook de Google Calendar cada 12 horas.
+#
+# Respaldo para el cron job de Vercel. Ejecuta el mismo endpoint
+# GET /api/cron/google-calendar-renew que el vercel.json.
+#
+# Configurar en GitHub:
+#   Settings → Secrets and variables → Actions → New repository secret
+#   - CRON_SECRET:  (el mismo valor configurado en Vercel)
+#   - APP_URL:      https://volkern-fmd2652nf-dexpertmxs-projects.vercel.app
+# ═══════════════════════════════════════════════════════════════
+
+name: Google Calendar Webhook Renewal
+
+on:
+  # Cada 12 horas: 00:00 y 12:00 UTC
+  schedule:
+    - cron: "0 */12 * * *"
+
+  # Permitir ejecución manual desde GitHub Actions UI
+  workflow_dispatch:
+
+jobs:
+  renew-webhooks:
+    name: Renew webhook channels
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Call renew endpoint
+        run: |
+          echo "🔄 Renovando canales webhook de Google Calendar..."
+          echo "   Target: ${{ secrets.APP_URL }}/api/cron/google-calendar-renew"
+          echo "   Time:   $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.APP_URL }}/api/cron/google-calendar-renew" 2>&1)
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          echo "   HTTP Status: $HTTP_CODE"
+          echo "   Response:    $BODY"
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "❌ Error: HTTP $HTTP_CODE"
+            exit 1
+          fi
+
+          echo "✅ Canales renovados exitosamente"
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "❌ Falló la renovación de canales webhook de Google Calendar"
+          echo "   Revise los logs en: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
