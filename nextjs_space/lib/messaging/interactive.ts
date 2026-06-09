@@ -244,27 +244,32 @@ export function detectInteractiveContext(
   llmResponse: string,
   hasServices: boolean
 ): InteractiveContext {
-  const userLower = userMessage.toLowerCase();
-  const responseLower = llmResponse.toLowerCase();
+  // Normalizar: quitar acentos y pasar a minúsculas para matching robusto
+  const normalize = (s: string) =>
+    s.toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // quita acentos
+
+  const userLower = normalize(userMessage);
+  const responseLower = normalize(llmResponse);
 
   // Saludo inicial → welcome buttons
-  if (
-    ['hola', 'buenos días', 'buenas tardes', 'buenas noches', 'hi', 'hey', 'ola', 'inicio', 'empezar'].some(g =>
-      userLower.includes(g)
-    ) &&
-    userLower.length < 30
-  ) {
+  const greetings = ['hola', 'buenos dias', 'buenas tardes', 'buenas noches', 'hi', 'hey', 'ola', 'inicio', 'empezar', 'saludos', 'buenas'];
+  const isGreeting = greetings.some(g => userLower.includes(g));
+  // Permitir saludos en mensajes de hasta 100 chars (antes 30 era muy restrictivo)
+  if (isGreeting && userLower.length < 100) {
     return { showWelcome: true };
   }
 
   // Pregunta por servicios → mostrar lista
-  if (
-    hasServices &&
-    ['servicio', 'servicios', 'qué ofrecen', 'que hacen', 'catalogo', 'catálogo', 'precios', 'costo', 'cuánto cuesta'].some(s =>
-      userLower.includes(s)
-    )
-  ) {
-    return { showServices: true };
+  if (hasServices) {
+    const serviceKeywords = [
+      'servicio', 'servicios', 'que ofrecen', 'que hacen', 'catalogo',
+      'precios', 'costo', 'cuanto cuesta', 'planes', 'productos',
+      'precio', 'catalogo de', 'lista de', 'opciones', 'disponible',
+    ];
+    if (serviceKeywords.some(s => userLower.includes(normalize(s)))) {
+      return { showServices: true };
+    }
   }
 
   // Confirmación de cita detectada en la respuesta del LLM
@@ -272,7 +277,7 @@ export function detectInteractiveContext(
     responseLower.includes('confirmada') ||
     responseLower.includes('cita confirmada') ||
     responseLower.includes('agendada') ||
-    responseLower.includes('¡te esperamos')
+    responseLower.includes('te esperamos')
   ) {
     return { showPostBooking: true };
   }
