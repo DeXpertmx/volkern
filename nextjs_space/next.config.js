@@ -33,12 +33,13 @@ const nextConfig = {
       'lodash',
       'date-fns',
     ],
-    // ═══ Server External Packages ═════════════════════════
-    // Excluir pino y thread-stream del bundling de Next.js
-    // para que los worker threads (pino/lib/worker.js) puedan
-    // resolverse correctamente desde node_modules
-    serverComponentsExternalPackages: ['pino', 'thread-stream'],
   },
+
+  // ═══ Server External Packages ═════════════════════════
+  // Excluir pino y thread-stream del bundling de Next.js
+  // para que los worker threads (pino/lib/worker.js) puedan
+  // resolverse correctamente desde node_modules
+  serverExternalPackages: ['pino', 'thread-stream'],
 
   // ═══ Redirects (301) ═══════════════════════════════════
   // Redirigir rutas antiguas de landings verticales a /soluciones/
@@ -72,11 +73,6 @@ const nextConfig = {
       {
         source: '/crm-ventas',
         destination: '/soluciones/crm-ventas',
-        permanent: true,
-      },
-      {
-        source: '/logistica',
-        destination: '/soluciones/logistica',
         permanent: true,
       },
     ];
