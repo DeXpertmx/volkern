@@ -73,11 +73,10 @@ export async function handleChatwootMessage(payload: ChatwootMessagePayload) {
   if (metadata?.accountId) {
     const tenant = await prisma.tenant.findUnique({
       where: { id: tenantId },
-      select: { configuracion: true, metadata: true } as any
+      select: { configuracion: true }
     });
     
-    const expectedAccountId = (tenant?.configuracion as any)?.chatwootAccountId || 
-                              (tenant?.metadata as any)?.chatwootAccountId;
+    const expectedAccountId = (tenant?.configuracion as any)?.chatwootAccountId;
     
     if (expectedAccountId && expectedAccountId !== metadata.accountId) {
       console.error('[Gemma] ERROR: Cross-tenant conversation attempt');
@@ -92,23 +91,23 @@ export async function handleChatwootMessage(payload: ChatwootMessagePayload) {
     return;
   }
 
+  // Determinar si es WhatsApp (flujo simplificado sin user auth)
+  const channelType = metadata?.channel_type || '';
+  const isWhatsApp = channelType.toLowerCase().includes('whatsapp') || channelType.toLowerCase().includes('sms');
+
   // Verificar que es un mensaje de contacto (no del sistema)
-  // Para WhatsApp, los mensajes siempre vienen de contactos externos
+  // Para WhatsApp/SMS, los mensajes siempre vienen de contactos externos
   if (!isWhatsApp && metadata?.sender_type !== 'contact') {
     console.log('[Gemma] Ignorando mensaje de sistema');
     return;
   }
 
   // Verificar que es un canal soportado (Telegram, WhatsApp, SMS)
-  const channelType = metadata?.channel_type || '';
   const isSupported = ['telegram', 'whatsapp', 'sms'].some(ch => channelType.toLowerCase().includes(ch));
   if (!isSupported) {
     console.log('[Gemma] Ignorando mensaje de canal no soportado:', channelType);
     return;
   }
-
-  // Determinar si es WhatsApp (flujo simplificado sin user auth)
-  const isWhatsApp = channelType.toLowerCase().includes('whatsapp') || channelType.toLowerCase().includes('sms');
 
   console.log(`[Gemma] Procesando mensaje para tenant ${tenantId}, conversación ${conversationId}, canal: ${channelType}`);
 
@@ -788,7 +787,7 @@ async function sendResponseToChatwoot(
       data: {
         conversationId: localConversationId,
         contenido: message,
-        direccion: 'salida',
+        direccion: 'saliente',
         canal: 'chatwoot',
         estado: 'enviado',
         metadatos: Object.keys(interactionMeta).length > 0 ? interactionMeta : undefined,
