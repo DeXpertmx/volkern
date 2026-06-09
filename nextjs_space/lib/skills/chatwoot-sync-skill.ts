@@ -162,8 +162,10 @@ export async function syncOutgoingChatwootMessage(payload: {
   conversationId: string;
   content: string;
   messageId: string;
+  contentType?: string;
+  contentAttributes?: Record<string, any>;
 }) {
-  const { tenantId, conversationId, content, messageId } = payload;
+  const { tenantId, conversationId, content, messageId, contentType, contentAttributes } = payload;
 
   try {
     // 1. Obtener la conversación para sacar los IDs de Chatwoot
@@ -208,7 +210,11 @@ export async function syncOutgoingChatwootMessage(payload: {
       chatwootConversationId,
       content,
       accountToken,
-      { messageType: 'outgoing' }
+      {
+        messageType: 'outgoing',
+        ...(contentType && { contentType }),
+        ...(contentAttributes && { contentAttributes }),
+      }
     );
 
     // 4. Actualizar el mensaje local con el ID de Chatwoot
