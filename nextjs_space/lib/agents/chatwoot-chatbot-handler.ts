@@ -87,20 +87,49 @@ export async function handleChatwootMessage(payload: ChatwootMessagePayload) {
   }
 
   // Verificar que es un mensaje de contacto (no del sistema)
-  if (metadata?.sender_type !== 'contact') {
+  // Para WhatsApp, los mensajes siempre vienen de contactos externos
+  if (!isWhatsApp && metadata?.sender_type !== 'contact') {
     console.log('[Gemma] Ignorando mensaje de sistema');
     return;
   }
 
-  // Verificar que es canal telegram
-  if (metadata?.channel_type !== 'telegram') {
-    console.log('[Gemma] Ignorando mensaje no es de Telegram');
+  // Verificar que es un canal soportado (Telegram, WhatsApp, SMS)
+  const channelType = metadata?.channel_type || '';
+  const isSupported = ['telegram', 'whatsapp', 'sms'].some(ch => channelType.toLowerCase().includes(ch));
+  if (!isSupported) {
+    console.log('[Gemma] Ignorando mensaje de canal no soportado:', channelType);
     return;
   }
 
-  console.log(`[Gemma] Procesando mensaje para tenant ${tenantId}, conversación ${conversationId}`);
+  // Determinar si es WhatsApp (flujo simplificado sin user auth)
+  const isWhatsApp = channelType.toLowerCase().includes('whatsapp') || channelType.toLowerCase().includes('sms');
 
-  // ⏱️ Timeout wrapper para todo el procesamiento
+  console.log(`[Gemma] Procesando mensaje para tenant ${tenantId}, conversación ${conversationId}, canal: ${channelType}`);
+
+  // Si es WhatsApp, usar el flujo simplificado (lead-based, sin user auth)
+  if (isWhatsApp) {
+    const processingPromise = processWhatsAppMessage(payload);
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('TIMEOUT')), AGENT_TIMEOUT_MS);
+    });
+
+    try {
+      await Promise.race([processingPromise, timeoutPromise]);
+    } catch (error) {
+      console.error('[Gemma] Error o timeout en WhatsApp:', error instanceof Error ? error.message : 'Unknown');
+      await sendFallbackResponse(tenantId, conversationId, payload);
+      await ChatbotAuditLogger.log({
+        tenantId,
+        conversationId,
+        inputRaw: content,
+        status: (error instanceof Error && error.message === 'TIMEOUT' ? 'TIMEOUT' : 'ERROR') as any,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error'
+      } as any);
+    }
+    return;
+  }
+
+  // ⏱️ Timeout wrapper para Telegram (flujo completo con user auth)
   const processingPromise = processMessage(payload);
   
   const timeoutPromise = new Promise<never>((_, reject) => {
@@ -341,6 +370,309 @@ async function processMessage(payload: ChatwootMessagePayload) {
     const errorMsg = '❌ Ocurrió un error inesperado. Por favor, intenta de nuevo.';
     await sendResponseToChatwoot(tenantId, conversationId, errorMsg, payload);
   }
+}
+
+/**
+ * Procesa mensajes de WhatsApp (flujo simplificado sin user auth)
+ * Usa LLM para generar respuestas y las envía vía Chatwoot API
+ */
+async function processWhatsAppMessage(payload: ChatwootMessagePayload) {
+  const { tenantId, content, conversationId, metadata } = payload;
+  const localConversationId = metadata?.localConversationId || conversationId;
+  const chatwootAccountId = metadata?.accountId;
+
+  try {
+    console.log('[Gemma/WhatsApp] Procesando mensaje:', content.substring(0, 50));
+
+    if (!chatwootAccountId) {
+      console.log('[Gemma/WhatsApp] Sin accountId, intentando obtener desde tenant');
+    }
+
+    // 1. Obtener configuración del tenant
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { id: true, nombre: true, plan: true }
+    });
+
+    if (!tenant) {
+      await sendResponseToChatwoot(tenantId, conversationId, '❌ Error de configuración', payload);
+      return;
+    }
+
+    // 2. Obtener el lead asociado a la conversación
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: localConversationId },
+      select: { leadId: true, lead: { select: { id: true, nombre: true, email: true, telefono: true } } }
+    });
+
+    const leadName = conversation?.lead?.nombre || 'Cliente';
+
+    // 3. Cargar servicios disponibles
+    const services = await prisma.servicio.findMany({
+      where: { tenantId, activo: true },
+      select: { id: true, nombre: true, descripcion: true, duracionMinutos: true, precio: true, moneda: true }
+    });
+
+    // 4. Cargar configuración del chatbot
+    let chatbotConfig = await prisma.chatbotConfig.findUnique({ where: { tenantId } });
+    if (!chatbotConfig) {
+      chatbotConfig = await prisma.chatbotConfig.create({
+        data: { tenantId, activo: true, nombreAsistente: 'Asistente Virtual' }
+      });
+    }
+
+    if (!chatbotConfig.activo) {
+      console.log('[Gemma/WhatsApp] Chatbot inactivo para este tenant');
+      return;
+    }
+
+    // Verificar horario de atención
+    const { isWithinBusinessHours } = await import('@/lib/chatbot-engine');
+    if (!isWithinBusinessHours(chatbotConfig)) {
+      console.log('[Gemma/WhatsApp] Fuera de horario de atención');
+      if (chatbotConfig.mensajeFueraHorario) {
+        await sendResponseToChatwoot(tenantId, conversationId, chatbotConfig.mensajeFueraHorario, payload);
+      }
+      return;
+    }
+
+    // 5. Verificar que el tenant tenga Chatwoot configurado
+    const hubConfig = await prisma.messagingHubConfig.findUnique({
+      where: { tenantId },
+      select: { chatwootAccountId: true }
+    });
+
+    if (!chatwootAccountId && !hubConfig?.chatwootAccountId) {
+      console.log('[Gemma/WhatsApp] No hay cuenta de Chatwoot configurada');
+      return;
+    }
+
+    // 6. Rate limiting: evitar responder si ya se respondió en los últimos 2 segundos
+    const lastBotMessage = await prisma.message.findFirst({
+      where: {
+        conversationId: localConversationId,
+        direccion: 'saliente',
+      },
+      orderBy: { fechaCreacion: 'desc' },
+      select: { fechaCreacion: true }
+    });
+
+    if (lastBotMessage?.fechaCreacion) {
+      const msSinceLastResponse = Date.now() - new Date(lastBotMessage.fechaCreacion).getTime();
+      if (msSinceLastResponse < 2000) {
+        console.log('[Gemma/WhatsApp] Rate limit: última respuesta hace', msSinceLastResponse, 'ms');
+        return;
+      }
+    }
+
+    // 7. Cargar historial reciente de la conversación (últimos 6 mensajes)
+    const recentMessages = await prisma.message.findMany({
+      where: { conversationId: localConversationId },
+      orderBy: { fechaCreacion: 'desc' },
+      take: 6,
+      select: { contenido: true, direccion: true }
+    });
+
+    // 8. Construir system prompt
+    const servicesInfo = services.map(s =>
+      `- ${s.nombre}: ${s.descripcion || 'Sin descripción'} | ${s.duracionMinutos}min | $${s.precio} ${s.moneda}`
+    ).join('\n');
+
+    const systemPrompt = `Eres ${chatbotConfig.nombreAsistente}, asistente virtual de ${tenant.nombre}.
+
+${chatbotConfig.contextoNegocio || 'Ayudas a clientes por WhatsApp.'}
+${chatbotConfig.personalidad || 'Eres cordial, profesional y conciso.'}
+
+Cliente: ${leadName}
+
+SERVICIOS:\n${servicesInfo || 'No hay servicios configurados.'}
+
+INSTRUCCIONES:
+1. Responde en español, sé amable y directo.
+2. Si preguntan por servicios, descríbelos con precio y duración.
+3. Si quieren agendar, responde: [AGENDAR:servicio|fecha|hora]
+4. Si quieren hablar con humano, responde: [TRANSFERIR]
+5. Usa formato WhatsApp: negritas con *texto*, emojis con moderación.
+6. Máximo 2-3 párrafos. Sé conciso.`;
+
+    // 9. Construir historial
+    const historyMessages = recentMessages.reverse().map(m => ({
+      role: (m.direccion === 'entrante' ? 'user' : 'assistant') as 'user' | 'assistant',
+      content: m.contenido
+    }));
+
+    const llmMessages = [
+      { role: 'system' as const, content: systemPrompt },
+      ...historyMessages,
+      { role: 'user' as const, content }
+    ];
+
+    // 10. Llamar LLM
+    const { callAssistantWithFallback } = await import('@/lib/assistant/openrouter-client');
+    const llmResponse = await callAssistantWithFallback(llmMessages as any);
+    const assistantMessage = llmResponse.choices?.[0]?.message?.content ||
+      'Gracias por tu mensaje. ¿En qué puedo ayudarte?';
+
+    // 11. Detectar acciones especiales
+    let finalMessage = assistantMessage;
+    let action: string | undefined;
+
+    const agendarMatch = assistantMessage.match(/\[AGENDAR:([^|]+)\|([^|]+)\|([^\]]+)\]/);
+    if (agendarMatch) {
+      action = 'agendar';
+      finalMessage = assistantMessage.replace(/\[AGENDAR:[^\]]+\]/, '').trim();
+    }
+    if (assistantMessage.includes('[TRANSFERIR]')) {
+      action = 'transferir';
+      finalMessage = assistantMessage.replace('[TRANSFERIR]', '').trim();
+    }
+
+    // 12. Enviar respuesta vía Chatwoot
+    await sendResponseToChatwoot(tenantId, conversationId, finalMessage, payload);
+
+    // 13. Actualizar estadísticas
+    await prisma.chatbotConfig.update({
+      where: { tenantId },
+      data: { totalConversaciones: { increment: 1 } }
+    }).catch(() => {});
+
+    // 14. Ejecutar acción si es necesario (agendar/transferir)
+    if (action && conversation?.leadId) {
+      await executeWhatsAppAction(action, {
+        tenantId,
+        leadId: conversation.leadId,
+        conversationId: localConversationId,
+        phoneNumber: conversation.lead?.telefono || '',
+        services,
+      }, agendarMatch ? {
+        servicio: agendarMatch[1].trim(),
+        fecha: agendarMatch[2].trim(),
+        hora: agendarMatch[3].trim(),
+      } : undefined, payload);
+    }
+
+    console.log('[Gemma/WhatsApp] ✅ Respuesta enviada:', finalMessage.substring(0, 50));
+
+  } catch (error) {
+    console.error('[Gemma/WhatsApp] Error:', error);
+    await sendResponseToChatwoot(
+      tenantId, conversationId,
+      'Disculpa, estoy teniendo problemas técnicos. ¿Puedes intentar de nuevo?',
+      payload
+    );
+  }
+}
+
+/**
+ * Ejecuta acciones para WhatsApp (agendar cita, transferir a humano)
+ */
+async function executeWhatsAppAction(
+  action: string,
+  context: {
+    tenantId: string;
+    leadId: string;
+    conversationId: string;
+    phoneNumber: string;
+    services: any[];
+  },
+  actionData: { servicio: string; fecha: string; hora: string } | undefined,
+  originalPayload: ChatwootMessagePayload
+) {
+  const { tenantId, leadId, conversationId, services, phoneNumber } = context;
+
+  try {
+    if (action === 'agendar' && actionData) {
+      const service = services.find((s: any) =>
+        s.nombre.toLowerCase().includes(actionData.servicio.toLowerCase())
+      );
+
+      if (!service) {
+        await sendResponseToChatwoot(
+          tenantId, conversationId,
+          `No encontré el servicio "${actionData.servicio}". ¿Cuál de estos te interesa?\n\n${services.map((s: any) => `• ${s.nombre}`).join('\n')}`,
+          originalPayload
+        );
+        return;
+      }
+
+      // Crear la cita
+      const fechaHora = await parseWhatsAppDate(actionData.fecha, actionData.hora);
+      if (!fechaHora) {
+        await sendResponseToChatwoot(
+          tenantId, conversationId,
+          'No entendí la fecha/hora. ¿Puedes decirme de nuevo? Por ejemplo: "mañana a las 10am"',
+          originalPayload
+        );
+        return;
+      }
+
+      const cita = await prisma.cita.create({
+        data: {
+          tenantId,
+          leadId,
+          servicioId: service.id,
+          tipo: 'servicio',
+          titulo: `${service.nombre} - WhatsApp`,
+          fechaHora,
+          duracion: service.duracionMinutos,
+          estado: 'confirmada',
+          descripcion: 'Cita agendada vía chatbot WhatsApp',
+          origenCita: 'whatsapp',
+        }
+      });
+
+      const fechaFormateada = fechaHora.toLocaleDateString('es-MX', {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+      });
+
+      await sendResponseToChatwoot(
+        tenantId, conversationId,
+        `✅ *¡Cita confirmada!*\n\n📌 *Servicio:* ${service.nombre}\n📅 *Fecha:* ${fechaFormateada}\n⏱ *Duración:* ${service.duracionMinutos} min\n💰 *Precio:* $${service.precio} ${service.moneda}\n\n¡Te esperamos!`,
+        originalPayload
+      );
+
+      await prisma.chatbotConfig.update({
+        where: { tenantId },
+        data: { totalCitasAgendadas: { increment: 1 } }
+      }).catch(() => {});
+
+    } else if (action === 'transferir') {
+      // Notificar y crear tarea urgente
+      await sendResponseToChatwoot(
+        tenantId, conversationId,
+        'Entendido, te transfiero con un asesor. En breve alguien se comunicará contigo. 👋',
+        originalPayload
+      );
+
+      await prisma.task.create({
+        data: {
+          tenantId,
+          titulo: '📢 Cliente de WhatsApp solicita atención humana',
+          descripcion: `Cliente ${phoneNumber} solicitó hablar con un asesor.`,
+          tipo: 'llamada',
+          fechaVencimiento: new Date(),
+          completada: false,
+          leadId,
+        }
+      });
+
+      await prisma.chatbotConfig.update({
+        where: { tenantId },
+        data: { totalTransferencias: { increment: 1 } }
+      }).catch(() => {});
+    }
+  } catch (error) {
+    console.error('[Gemma/WhatsApp] Error ejecutando acción:', error);
+  }
+}
+
+/**
+ * Parsea fecha y hora desde lenguaje natural (usa parseFechaHora de chatbot-engine)
+ */
+async function parseWhatsAppDate(fecha: string, hora: string): Promise<Date | null> {
+  const { parseFechaHora } = await import('@/lib/chatbot-engine');
+  return parseFechaHora(fecha, hora);
 }
 
 /**
