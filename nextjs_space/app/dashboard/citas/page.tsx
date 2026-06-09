@@ -1,11 +1,21 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Calendar as CalendarIcon, Clock, MapPin, Video, List, CalendarDays, Settings2, RefreshCw, CheckCircle2, AlertCircle, Link2 } from 'lucide-react'
+import { CalendarListPanel } from '@/components/CalendarListPanel'
+
+interface GoogleCalendarEvent {
+  id: string
+  title: string
+  start: Date
+  end: Date
+  calendarName: string
+  calendarColor: string
+}
 import { toast } from 'sonner'
 import dynamic from 'next/dynamic'
 import { format } from 'date-fns'
@@ -98,6 +108,61 @@ export default function CitasPage() {
   const [gcalConnected, setGcalConnected] = useState(false)
   const [gcalLoading, setGcalLoading] = useState(false)
   const [gcalSyncing, setGcalSyncing] = useState(false)
+  const [googleEvents, setGoogleEvents] = useState<GoogleCalendarEvent[]>([])
+  const [connectedCalendars, setConnectedCalendars] = useState<any[]>([])
+  const [currentDate, setCurrentDate] = useState<Date>(new Date())
+
+  // Compute visible calendars
+  const visibleCalendarIds = useMemo(
+    () => connectedCalendars.filter(c => c.visible).map(c => c.id),
+    [connectedCalendars]
+  )
+
+  // Fetch Google Calendar events when date range or visible calendars change
+  const fetchGoogleEvents = useCallback(async (date: Date, calendarIds: string[]) => {
+    if (calendarIds.length === 0) {
+      setGoogleEvents([])
+      return
+    }
+
+    try {
+      // Calculate range: current view ± 2 months for context
+      const startOfMonth = new Date(date.getFullYear(), date.getMonth() - 1, 1)
+      const endOfMonth = new Date(date.getFullYear(), date.getMonth() + 2, 0, 23, 59, 59)
+
+      const res = await fetch('/api/calendars/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          calendarIds,
+          timeMin: startOfMonth.toISOString(),
+          timeMax: endOfMonth.toISOString(),
+        }),
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        setGoogleEvents(data.events || [])
+      }
+    } catch (e) {
+      console.error('Error fetching Google events:', e)
+    }
+  }, [])
+
+  // Re-fetch when visible calendars or current date changes
+  useEffect(() => {
+    fetchGoogleEvents(currentDate, visibleCalendarIds)
+  }, [currentDate, visibleCalendarIds, fetchGoogleEvents])
+
+  // Handle calendar list changes from CalendarListPanel
+  const handleCalendarsChange = useCallback((calendars: any[]) => {
+    setConnectedCalendars(calendars)
+  }, [])
+
+  // Handle date range changes from CalendarView navigation
+  const handleDateRangeChange = useCallback((date: Date) => {
+    setCurrentDate(date)
+  }, [])
 
   useEffect(() => {
     fetchData()
@@ -329,7 +394,23 @@ export default function CitasPage() {
 
         {/* Vista de Calendario */}
         <TabsContent value="calendario" className="mt-6">
-          <CalendarView citas={citas} leads={leads} contacts={contacts} onRefresh={fetchData} />
+          <div className="flex gap-4">
+            {gcalConnected && (
+              <div className="w-64 flex-shrink-0 space-y-3">
+                <CalendarListPanel onCalendarsChange={handleCalendarsChange} />
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <CalendarView
+                citas={citas}
+                leads={leads}
+                contacts={contacts}
+                onRefresh={fetchData}
+                googleEvents={googleEvents}
+                onDateRangeChange={handleDateRangeChange}
+              />
+            </div>
+          </div>
         </TabsContent>
 
         {/* Vista de Lista */}

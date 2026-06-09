@@ -26,6 +26,7 @@ export interface CreateDealInput {
   origen?: string;
   tags?: string[];
   usuarioAsignadoId?: string;
+  pipelineId?: string;
   source?: 'api' | 'app' | 'automation' | 'mcp' | 'webhook';
 }
 
@@ -56,7 +57,7 @@ export interface PrequalifyLeadInput {
 // ============== SKILLS ==============
 
 export async function createDeal(input: CreateDealInput) {
-  const { tenantId, titulo, valor, moneda = 'EUR', leadId, contactId, descripcion, etapa = 'calificacion', probabilidad = 25, prioridad = 'media', fechaEstimadaCierre, origen, tags, usuarioAsignadoId, source = 'app' } = input;
+  const { tenantId, titulo, valor, moneda = 'EUR', leadId, contactId, descripcion, etapa = 'calificacion', probabilidad = 25, prioridad = 'media', fechaEstimadaCierre, origen, tags, usuarioAsignadoId, pipelineId, source = 'app' } = input;
 
   if (!titulo || valor === undefined || valor === null) {
     throw new Error('Título y valor son requeridos para crear un deal');
@@ -78,6 +79,7 @@ export async function createDeal(input: CreateDealInput) {
       fechaEstimadaCierre: fechaEstimadaCierre ? new Date(fechaEstimadaCierre) : undefined,
       origen,
       tags: tags ? tags.join(',') : undefined,
+      pipelineId: pipelineId || undefined,
     },
   });
 

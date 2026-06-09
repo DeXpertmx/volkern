@@ -34,14 +34,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es">
+    <html lang="es" suppressHydrationWarning>
       <body className={`${inter.className} selection:bg-blue-500/30`}>
         <SessionProvider>
-          <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+          <ThemeProvider attribute="class" defaultTheme="system" enableSystem={true}>
             <PushNotificationInit />
             {children}
             <CookieConsentBanner />
-            <Toaster position="top-center" theme="dark" />
+            <Toaster position="top-center" />
           </ThemeProvider>
         </SessionProvider>
       </body>

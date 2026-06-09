@@ -2,11 +2,22 @@
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 import { seedRealEstate } from './seed-real-estate'
+import { seedLogistics } from './seed-logistics'
 
 const prisma = new PrismaClient()
 
 async function main() {
   console.log('🌱 Iniciando seed de la base de datos...')
+
+  // ─── Data migrations (idempotentes, todos los tenants) ──────
+  console.log('→ Ejecutando data migrations...')
+  const r1 = await prisma.$executeRawUnsafe(`UPDATE "pipelines" SET "activo" = false, "nombre" = 'Inmobiliario (Legacy)', "descripcion" = 'Pipeline migrado. Reemplazado por Captación y Compra.' WHERE "categoria" = 'inmobiliario' AND "activo" = true`)
+  if (r1 > 0) console.log('   ✓ Inmobiliario legacy desactivado: ' + r1 + ' pipeline(s)')
+  else console.log('   ✓ Inmobiliario legacy ya migrado')
+
+  const r2 = await prisma.$executeRawUnsafe(`UPDATE "pipelines" SET "orden" = 6 WHERE "categoria" = 'finanzas' AND "orden" = 5`)
+  if (r2 > 0) console.log('   ✓ Finanzas orden corregido (5 → 6): ' + r2 + ' pipeline(s)')
+  else console.log('   ✓ Finanzas orden ya correcto')
 
   // Obtener tenant y rol por defecto
   const defaultTenant = await prisma.tenant.findFirst({
@@ -1762,6 +1773,9 @@ El equipo de Volkern CRM`,
   // ========== MÓDULO INMOBILIARIO ==========
   const { fields: realEstateFieldCount, properties: realEstatePropCount } = await seedRealEstate(defaultTenant.id);
 
+  // ========== MÓDULO LOGÍSTICA ==========
+  const logisticsCounts = await seedLogistics(defaultTenant.id);
+
   const rulesCount = await prisma.scoringRule.count()
   console.log(`✅ ${rulesCount} reglas de scoring creadas`)
 
@@ -1782,6 +1796,10 @@ El equipo de Volkern CRM`,
   console.log(`- ${rulesCount} reglas de scoring`)
   console.log(`- ${realEstateFieldCount} definiciones de campos inmobiliarios`)
   console.log(`- ${realEstatePropCount} propiedades inmobiliarias`)
+  console.log(`- ${logisticsCounts?.vehicles} vehículos`) 
+  console.log(`- ${logisticsCounts?.warehouses} almacenes`)
+  console.log(`- ${logisticsCounts?.shipments} envíos`) 
+  console.log(`- ${logisticsCounts?.maintenanceOrders} órdenes de mantenimiento`)
 }
 
 main()

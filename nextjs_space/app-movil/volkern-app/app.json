@@ -14,7 +14,7 @@
         "NSFaceIDUsageDescription": "Usa Face ID o Touch ID para acceder rápidamente a Volkern",
         "NSCameraUsageDescription": "Gemma usa la cámara para escanear códigos QR y de barras",
         "NSMicrophoneUsageDescription": "Gemma usa el micrófono para comandos de voz",
-        "NSLocationWhenInUseUsageDescription": "Gemma usa tu ubicación para contexto industrial"
+        "NSLocationWhenInUseUsageDescription": "Volkern GPS Tracker necesita acceso a tu ubicación para enviar la posición del vehículo en tiempo real."
       }
     },
     "android": {
@@ -28,6 +28,7 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.USE_FINGERPRINT",
         "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.USE_BIOMETRIC",
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ]
@@ -39,6 +40,12 @@
       "expo-router",
       "expo-secure-store",
       "expo-local-authentication",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Volkern GPS Tracker necesita acceso a tu ubicación para enviar la posición del vehículo en tiempo real."
+        }
+      ],
       [
         "expo-image-picker",
         {

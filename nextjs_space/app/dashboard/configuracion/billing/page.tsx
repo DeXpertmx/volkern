@@ -2,6 +2,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -220,55 +221,20 @@ export default function BillingPage() {
         </CardContent>
       </Card>
 
-      {/* Usage Stats (si tienes limites) */}
-      {status?.limits && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Uso Actual</CardTitle>
-            <CardDescription>Límites de tu plan</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="text-center">
-                <p className="text-2xl font-bold text-purple-600">{status.limits.leads === -1 ? '∞' : status.limits.leads}</p>
-                <p className="text-sm text-gray-600">Leads</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-blue-600">{status.limits.users === -1 ? '∞' : status.limits.users}</p>
-                <p className="text-sm text-gray-600">Usuarios</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-green-600">{status.limits.emails_per_month === -1 ? '∞' : status.limits.emails_per_month}</p>
-                <p className="text-sm text-gray-600">Emails/mes</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-orange-600">{status.limits.automation_runs === -1 ? '∞' : status.limits.automation_runs}</p>
-                <p className="text-sm text-gray-600">Automatizaciones</p>
-              </div>
+      {/* Quick link a Uso y Límites */}
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">¿Quieres ver el detalle de tu consumo?</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Indicadores de uso y límites por feature</p>
             </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Upgrade Banner */}
-      <Card className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-xl shadow-blue-500/20 border-none rounded-2xl overflow-hidden relative">
-        <div className="absolute top-0 right-0 -m-8 opacity-10 pointer-events-none">
-           <TrendingUp className="w-64 h-64" />
-        </div>
-        <CardContent className="p-8 md:p-12 relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
-          <div className="space-y-4 max-w-xl">
-             <h2 className="text-3xl md:text-4xl font-black tracking-tight">Lleva tu negocio al siguiente nivel</h2>
-             <p className="text-blue-100 text-lg leading-relaxed">
-               Haz un upgrade de tu suscripción para acceder a automatizaciones avanzadas, límites extendidos de envíos y atención prioritaria.
-             </p>
+            <Button variant="outline" size="sm" asChild className="shrink-0">
+              <Link href="/dashboard/configuracion/usage">
+                Ver Uso y Límites
+              </Link>
+            </Button>
           </div>
-          <Button 
-            size="lg" 
-            className="bg-white text-blue-600 hover:bg-slate-50 font-bold rounded-full px-8 py-6 h-auto text-lg shadow-2xl transition-transform hover:scale-105 shrink-0"
-            onClick={() => window.open('https://dexpert.mx/contacto', '_blank')}
-          >
-            Hacer Upgrade
-          </Button>
         </CardContent>
       </Card>
 

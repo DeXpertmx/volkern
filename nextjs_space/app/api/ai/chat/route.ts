@@ -197,7 +197,7 @@ Volkern: Sistema Operativo Empresarial (ERP + CRM). 10 módulos:
 
 Nota: El usuario puede NO tener acceso a todos los módulos. Si pregunta sobre un módulo,
      explícale de qué se trata. Si no tiene acceso a los datos, indícalo claramente.
-``
+`
 
 // ─── System prompt ──────────────────────────────────────────────────────────
 

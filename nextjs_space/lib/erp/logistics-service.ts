@@ -2,6 +2,8 @@ import { prisma } from '@/lib/db';
 import { StockService } from '@/lib/erp/stock-service';
 
 export class LogisticsService {
+  // ─── SHIPMENTS ────────────────────────────────────────
+
   /**
    * Crea un despacho (Shipment) para un pedido
    * Valida que todos los ítems tengan stock RESERVED o READY y lotes AVAILABLE
@@ -157,5 +159,147 @@ export class LogisticsService {
 
       return { shipment, confirmation };
     });
+  }
+
+  // ─── WMS ─────────────────────────────────────────────
+
+  /**
+   * Registrar recepción de mercancía en almacén
+   */
+  static async receiveGoods(tenantId: string, data: {
+    warehouseId: string;
+    purchaseOrderRef?: string;
+    items: Array<{ catalogoItemId: string; quantity: number; lotNumber?: string; notes?: string }>;
+  }) {
+    return await prisma.$transaction(async (tx) => {
+      const movements = [];
+      for (const item of data.items) {
+        const lotId = item.lotNumber
+          ? (await (tx as any).erp_inventory_lots.create({
+              data: {
+                tenantId,
+                catalogoItemId: item.catalogoItemId,
+                batchNumber: item.lotNumber,
+                status: 'AVAILABLE',
+                quantity: item.quantity,
+              },
+            })).id
+          : undefined;
+
+        const movement = await StockService.registerMovement({
+          tenantId,
+          warehouseId: data.warehouseId,
+          catalogoItemId: item.catalogoItemId,
+          lotId,
+          quantity: item.quantity,
+          type: 'IN',
+          reason: `Recepción mercancía${data.purchaseOrderRef ? ` - OC: ${data.purchaseOrderRef}` : ''}${item.notes ? ` - ${item.notes}` : ''}`,
+        });
+        movements.push(movement);
+      }
+      return movements;
+    });
+  }
+
+  /**
+   * Preparar pedido (Picking)
+   */
+  static async preparePicking(salesOrderId: string, tenantId: string, warehouseId: string) {
+    return await prisma.$transaction(async (tx) => {
+      const order = await tx.salesOrder.findUnique({
+        where: { id: salesOrderId, tenantId },
+        include: { items: true },
+      });
+
+      if (!order) throw new Error('Pedido no encontrado');
+
+      const pickingList = [];
+      for (const item of order.items as any[]) {
+        const stockLevels = await (tx as any).erp_stock_levels.findMany({
+          where: {
+            tenantId,
+            warehouseId,
+            catalogoItemId: item.catalogoItemId,
+            quantity: { gte: item.quantity },
+          },
+          include: {
+            erp_inventory_lots: true,
+          },
+          orderBy: { lastSync: 'asc' },
+        });
+
+        if (stockLevels.length === 0) {
+          throw new Error(`Stock insuficiente para ${item.catalogItem?.nombre || item.catalogoItemId}`);
+        }
+
+        // Usar FIFO por lote
+        for (const sl of stockLevels) {
+          const toPick = Math.min(sl.quantity, item.quantity);
+          pickingList.push({
+            catalogoItemId: item.catalogoItemId,
+            lotId: sl.lotId,
+            warehouseId,
+            quantity: toPick,
+            fromLocation: sl.location || 'Sin ubicación',
+          });
+
+          await StockService.registerMovement({
+            tenantId,
+            warehouseId,
+            catalogoItemId: item.catalogoItemId,
+            lotId: sl.lotId || undefined,
+            quantity: -toPick,
+            type: 'OUT',
+            referenceId: salesOrderId,
+            reason: `Picking pedido ${order.batchNumber}`,
+          });
+
+          item.quantity -= toPick;
+          if (item.quantity <= 0) break;
+        }
+      }
+
+      return pickingList;
+    });
+  }
+
+  /**
+   * Obtener KPIs logísticos
+   */
+  static async getLogisticsKPIs(tenantId: string) {
+    const now = new Date();
+    const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    const [
+      totalShipments,
+      deliveredShipments,
+      inTransit,
+      monthlyShipments,
+      deliveries,
+      activeWarehouses,
+      totalStockValue,
+    ] = await Promise.all([
+      (prisma as any).erp_shipments.count({ where: { tenantId } }),
+      (prisma as any).erp_shipments.count({ where: { tenantId, status: 'DELIVERED' } }),
+      (prisma as any).erp_shipments.count({ where: { tenantId, status: 'SHIPPED' } }),
+      (prisma as any).erp_shipments.count({ where: { tenantId, createdAt: { gte: monthAgo } } }),
+      (prisma as any).erp_delivery_confirmations.count({ where: { tenantId, confirmedAt: { gte: monthAgo } } }),
+      prisma.warehouse.count({ where: { tenantId, active: true } }),
+      (prisma as any).erp_stock_levels.aggregate({
+        where: { tenantId },
+        _sum: { quantity: true },
+      }),
+    ]);
+
+    return {
+      totalShipments,
+      deliveredShipments,
+      inTransit,
+      monthlyShipments,
+      monthlyDeliveries: deliveries,
+      activeWarehouses,
+      deliveryRate: totalShipments > 0 ? Math.round((deliveredShipments / totalShipments) * 100) : 0,
+      totalStockUnits: totalStockValue._sum.quantity || 0,
+    };
   }
 }

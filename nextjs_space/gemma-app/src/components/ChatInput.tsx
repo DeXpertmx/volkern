@@ -1,26 +1,36 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { View, TextInput, TouchableOpacity, StyleSheet, Keyboard, Platform, Text, Vibration } from 'react-native'
+import {
+  View, TextInput, TouchableOpacity, StyleSheet, Keyboard,
+  Platform, Text, Vibration, Image, ScrollView
+} from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
+import * as ImagePicker from 'expo-image-picker'
+import * as DocumentPicker from 'expo-document-picker'
 import { useSpeechToText } from '../hooks/useSpeechToText'
 import { useAudioLevel } from '../hooks/useAudioLevel'
 import VoiceWaveform from './VoiceWaveform'
 import Toast from './Toast'
+import type { Attachment } from '../types'
 
 const COLORS = {
-  primary: '#2563EB',
-  border: '#E2E8F0',
-  surface: '#FFFFFF',
-  background: '#F8FAFC',
-  textPrimary: '#0F172A',
-  textSecondary: '#475569',
-  textTertiary: '#94A3B8',
-  danger: '#EF4444',
-  success: '#10B981',
+  primary: '#c0c1ff',        // Deep Space Indigo
+  secondary: '#ddb7ff',      // Vibrant Violet
+  tertiary: '#3cddc7',       // Soft Mint
+  background: '#0b1326',     // Deep space base background
+  surface: '#131b2e',        // Dark Surface
+  surfaceContainerLow: '#0e1524',
+  textPrimary: '#dae2fd',
+  textSecondary: '#c7c4d7',
+  textTertiary: '#908fa0',
+  border: 'rgba(255, 255, 255, 0.08)',
+  danger: '#ffb4ab',
+  success: '#3cddc7',
 }
 
 interface ChatInputProps {
-  onSend: (text: string) => void
+  onSend: (text: string, attachments?: Attachment[]) => void
   disabled?: boolean
   placeholder?: string
   onVoiceStatus?: (interim: string, isListening: boolean) => void
@@ -29,8 +39,14 @@ interface ChatInputProps {
   voiceLang?: string
 }
 
-export default function ChatInput({ onSend, disabled, placeholder, onVoiceStatus, continuousDictation, onDictationToggle, voiceLang }: ChatInputProps) {
+export default function ChatInput({
+  onSend, disabled, placeholder, onVoiceStatus,
+  continuousDictation, onDictationToggle, voiceLang
+}: ChatInputProps) {
+  const insets = useSafeAreaInsets()
   const [text, setText] = useState('')
+  const [attachments, setAttachments] = useState<Attachment[]>([])
+  const [showOptions, setShowOptions] = useState(false)
   const [toastMsg, setToastMsg] = useState<string>('')
   const [toastVisible, setToastVisible] = useState(false)
 
@@ -94,9 +110,10 @@ export default function ChatInput({ onSend, disabled, placeholder, onVoiceStatus
           ? `${currentText} ${pendingInterim}`
           : pendingInterim
 
-        if (fullText.length > 0) {
+        if (fullText.length > 0 || attachments.length > 0) {
           setText('')
-          onSend(fullText)
+          onSend(fullText, attachments)
+          setAttachments([])
           // Reiniciar escucha para la siguiente frase
           stopListening()
           setTimeout(() => startListening(), 300)
@@ -110,7 +127,56 @@ export default function ChatInput({ onSend, disabled, placeholder, onVoiceStatus
         silenceTimerRef.current = null
       }
     }
-  }, [interimText, isListening, continuousDictation, disabled])
+  }, [interimText, isListening, continuousDictation, disabled, attachments])
+
+  const pickImage = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 0.8,
+      })
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0]
+        const newAttachment: Attachment = {
+          name: asset.fileName || `Imagen_${Date.now()}.jpg`,
+          uri: asset.uri,
+          type: 'image',
+          size: asset.fileSize,
+        }
+        setAttachments(prev => [...prev, newAttachment])
+      }
+    } catch (err) {
+      showToast('Error al seleccionar imagen')
+    }
+  }
+
+  const pickDocument = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'application/pdf',
+        copyToCacheDirectory: true,
+      })
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0]
+        const newAttachment: Attachment = {
+          name: asset.name,
+          uri: asset.uri,
+          type: 'pdf',
+          size: asset.size,
+        }
+        setAttachments(prev => [...prev, newAttachment])
+      }
+    } catch (err) {
+      showToast('Error al seleccionar PDF')
+    }
+  }
+
+  const removeAttachment = (index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index))
+  }
 
   const handleSend = () => {
     if (silenceTimerRef.current) {
@@ -118,19 +184,19 @@ export default function ChatInput({ onSend, disabled, placeholder, onVoiceStatus
       silenceTimerRef.current = null
     }
     const trimmed = text.trim()
-    if (!trimmed) {
-      showToast('Mensaje no puede estar vacío')
+    if (!trimmed && attachments.length === 0) {
+      showToast('Escribe un mensaje o añade un archivo')
       return
     }
     if (disabled) return
-    onSend(trimmed)
+    onSend(trimmed, attachments)
     setText('')
+    setAttachments([])
     Keyboard.dismiss()
   }
 
   const triggerHaptic = (type: 'start' | 'stop' | 'cancel') => {
     if (Platform.OS === 'web') {
-      // Web: usar Vibration API del navegador
       try {
         if (typeof navigator !== 'undefined' && navigator.vibrate) {
           if (type === 'start') navigator.vibrate(10)
@@ -139,18 +205,15 @@ export default function ChatInput({ onSend, disabled, placeholder, onVoiceStatus
         }
       } catch {}
     } else {
-      // iOS / Android: expo-haptics
       try {
         if (type === 'start') {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
         } else if (type === 'stop') {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
         } else {
-          // cancel: doble pulso
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
         }
       } catch {
-        // Fallback a Vibration API nativa
         if (type === 'start') Vibration.vibrate(10)
         else if (type === 'stop') Vibration.vibrate(15)
         else Vibration.vibrate([0, 10, 30, 10])
@@ -159,9 +222,14 @@ export default function ChatInput({ onSend, disabled, placeholder, onVoiceStatus
   }
 
   const handleVoicePress = () => {
+    if (!voiceSupported) {
+      showToast('El micrófono nativo requiere una compilación APK/iOS y no funciona en Expo Go.')
+      triggerHaptic('error')
+      return
+    }
+
     if (isListening) {
       triggerHaptic('stop')
-      // Stop listening and commit the interim text
       if (interimText) {
         setText(prev => {
           const trimmed = prev.trim()
@@ -176,63 +244,130 @@ export default function ChatInput({ onSend, disabled, placeholder, onVoiceStatus
   }
 
   return (
-    <View style={styles.container}>
-      {/* Dictation toggle (visible when voice is supported) */}
-      {voiceSupported && (
-        <TouchableOpacity
-          style={[
-            styles.dictationBtn,
-            continuousDictation && styles.dictationBtnActive,
-          ]}
-          onPress={onDictationToggle}
-          disabled={disabled}
-        >
-          <Ionicons
-            name={continuousDictation ? 'infinite' : 'infinite-outline'}
-            size={18}
-            color={continuousDictation ? '#fff' : COLORS.textTertiary}
-          />
-        </TouchableOpacity>
-      )}
-
-      {/* Voice button */}
-      <TouchableOpacity
-        style={[
-          styles.voiceBtn,
-          isListening && styles.voiceBtnActive,
-        ]}
-        onPress={handleVoicePress}
-        disabled={disabled || !voiceSupported}
-      >
-        <Ionicons
-          name={isListening ? 'mic' : 'mic-outline'}
-          size={22}
-          color={isListening ? '#fff' : COLORS.textTertiary}
-        />
-      </TouchableOpacity>
-
-      {/* Voice waveform + interim text */}
-      {isListening && (
-        <View style={styles.voiceIndicator}>
-          <VoiceWaveform isListening={true} audioBands={audioBands} />
-          <Text style={styles.voiceIndicatorText} numberOfLines={1}>
-            {interimText || 'Escuchando...'}
-          </Text>
+    <View style={[styles.outerContainer, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+      {/* Options Panel (floating inline) */}
+      {showOptions && (
+        <View style={styles.optionsPanel}>
+          <TouchableOpacity style={styles.optionItem} onPress={() => { pickImage(); setShowOptions(false); }}>
+            <Ionicons name="image-outline" size={18} color={COLORS.primary} />
+            <Text style={styles.optionText}>Imagen</Text>
+          </TouchableOpacity>
+          <View style={styles.optionSeparator} />
+          <TouchableOpacity style={styles.optionItem} onPress={() => { pickDocument(); setShowOptions(false); }}>
+            <Ionicons name="document-text-outline" size={18} color={COLORS.secondary} />
+            <Text style={styles.optionText}>Documento PDF</Text>
+          </TouchableOpacity>
         </View>
       )}
 
-      {/* Text input */}
-      <TextInput
-        style={[styles.input, isListening && styles.inputActive]}
-        value={text}
-        onChangeText={setText}
-        placeholder={isListening ? 'Habla ahora...' : (placeholder || 'Escribe un mensaje...')}
-        placeholderTextColor={COLORS.textTertiary}
-        multiline
-        maxLength={2000}
-        onSubmitEditing={handleSend}
-        blurOnSubmit
-      />
+      {/* Attachment Preview Bar */}
+      {attachments.length > 0 && (
+        <View style={styles.previewContainer}>
+          <ScrollView horizontal contentContainerStyle={styles.attachmentList} showsHorizontalScrollIndicator={false}>
+            {attachments.map((att, index) => (
+              <View key={index} style={styles.attachmentThumb}>
+                {att.type === 'image' ? (
+                  <Image source={{ uri: att.uri }} style={styles.thumbImage} />
+                ) : (
+                  <View style={styles.thumbPdf}>
+                    <Ionicons name="document-text" size={24} color={COLORS.secondary} />
+                    <Text style={styles.pdfText} numberOfLines={1}>{att.name}</Text>
+                  </View>
+                )}
+                <TouchableOpacity style={styles.removeAttBtn} onPress={() => removeAttachment(index)}>
+                  <Ionicons name="close-circle" size={18} color={COLORS.danger} />
+                </TouchableOpacity>
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
+      {/* Main input row */}
+      <View style={styles.container}>
+        {/* Attachment menu toggle button */}
+        <TouchableOpacity
+          style={[styles.actionBtn, showOptions && styles.actionBtnActive]}
+          onPress={() => setShowOptions(!showOptions)}
+          disabled={disabled}
+        >
+          <Ionicons
+            name="add-circle-outline"
+            size={24}
+            color={showOptions ? COLORS.primary : COLORS.textTertiary}
+          />
+        </TouchableOpacity>
+
+        {/* Dictation toggle */}
+        {voiceSupported && (
+          <TouchableOpacity
+            style={[
+              styles.actionBtn,
+              continuousDictation && styles.actionBtnActive,
+            ]}
+            onPress={onDictationToggle}
+            disabled={disabled}
+          >
+            <Ionicons
+              name={continuousDictation ? 'infinite' : 'infinite-outline'}
+              size={20}
+              color={continuousDictation ? COLORS.tertiary : COLORS.textTertiary}
+            />
+          </TouchableOpacity>
+        )}
+
+        {/* Voice button */}
+        <TouchableOpacity
+          style={[
+            styles.voiceBtn,
+            isListening && styles.voiceBtnActive,
+          ]}
+          onPress={handleVoicePress}
+          disabled={disabled}
+        >
+          <Ionicons
+            name={isListening ? 'mic' : 'mic-outline'}
+            size={22}
+            color={isListening ? '#1000a9' : COLORS.textTertiary}
+          />
+        </TouchableOpacity>
+
+        {/* Voice waveform + interim text */}
+        {isListening && (
+          <View style={styles.voiceIndicator}>
+            <VoiceWaveform isListening={true} audioBands={audioBands} />
+            <Text style={styles.voiceIndicatorText} numberOfLines={1}>
+              {interimText || 'Escuchando...'}
+            </Text>
+          </View>
+        )}
+
+        {/* Text input */}
+        <TextInput
+          style={[styles.input, isListening && styles.inputActive]}
+          value={text}
+          onChangeText={setText}
+          placeholder={isListening ? 'Habla ahora...' : (placeholder || 'Escribe un mensaje...')}
+          placeholderTextColor="rgba(144, 143, 160, 0.4)"
+          multiline
+          maxLength={2000}
+          onSubmitEditing={handleSend}
+          blurOnSubmit
+        />
+
+        {/* Send button */}
+        <TouchableOpacity
+          style={[styles.sendBtn, (!text.trim() && attachments.length === 0 || disabled) && styles.sendBtnDisabled]}
+          onPress={handleSend}
+          disabled={!text.trim() && attachments.length === 0 || disabled}
+        >
+          <Ionicons
+            name="send"
+            size={18}
+            color={!text.trim() && attachments.length === 0 || disabled ? COLORS.textTertiary : '#1000a9'}
+          />
+        </TouchableOpacity>
+      </View>
 
       {/* Toast de validación */}
       <Toast
@@ -241,68 +376,126 @@ export default function ChatInput({ onSend, disabled, placeholder, onVoiceStatus
         type="error"
         onHide={() => setToastVisible(false)}
       />
-
-      {/* Send button */}
-      <TouchableOpacity
-        style={[styles.sendBtn, (!text.trim() || disabled) && styles.sendBtnDisabled]}
-        onPress={handleSend}
-        disabled={!text.trim() || disabled}
-      >
-        <Ionicons
-          name="send"
-          size={18}
-          color={!text.trim() || disabled ? COLORS.textTertiary : '#fff'}
-        />
-      </TouchableOpacity>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
+  outerContainer: {
+    backgroundColor: COLORS.surfaceContainerLow,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    position: 'relative',
+  },
+  optionsPanel: {
+    position: 'absolute',
+    bottom: 60,
+    left: 12,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 12,
+    paddingVertical: 6,
+    width: 160,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 5,
+    zIndex: 200,
+  },
+  optionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  optionText: {
+    color: COLORS.textPrimary,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  optionSeparator: {
+    height: 1,
+    backgroundColor: COLORS.border,
+  },
+  previewContainer: {
+    backgroundColor: COLORS.surfaceContainerLow,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.04)',
+  },
+  attachmentList: {
+    paddingHorizontal: 12,
+    gap: 12,
+  },
+  attachmentThumb: {
+    width: 76,
+    height: 76,
+    borderRadius: 8,
+    overflow: 'visible',
+    position: 'relative',
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  thumbImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 8,
+  },
+  thumbPdf: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 6,
+  },
+  pdfText: {
+    color: COLORS.textSecondary,
+    fontSize: 9,
+    textAlign: 'center',
+    marginTop: 4,
+    width: '100%',
+  },
+  removeAttBtn: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    zIndex: 10,
+    backgroundColor: COLORS.background,
+    borderRadius: 9,
+  },
   container: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: COLORS.surface,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+    paddingTop: 8,
     gap: 8,
     position: 'relative',
   },
-  dictationBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: COLORS.background,
+  actionBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 4,
   },
-  dictationBtnActive: {
-    backgroundColor: COLORS.success,
-    shadowColor: COLORS.success,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
+  actionBtnActive: {
+    backgroundColor: 'rgba(192, 193, 255, 0.1)',
   },
   voiceBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 4,
   },
   voiceBtnActive: {
     backgroundColor: COLORS.danger,
-    shadowColor: COLORS.danger,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
   },
   voiceIndicator: {
     position: 'absolute',
@@ -320,8 +513,8 @@ const styles = StyleSheet.create({
     gap: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
     elevation: 5,
     zIndex: 100,
   },
@@ -333,7 +526,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.surface,
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 10,
@@ -357,6 +550,8 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   sendBtnDisabled: {
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
 })

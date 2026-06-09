@@ -365,6 +365,7 @@ model Tenant {
   outgoingWebhooks               OutgoingWebhook[]
   pages                          Page[]
   perfilesFiscalesClientes       PerfilFiscalCliente[]
+  pipelines                      Pipeline[]
   pipelineStages                 PipelineStage[]
   plaudernIntegration            PlaudernIntegration?             @relation("TenantPlaudernIntegration")
   salesPlaybookEntries           SalesPlaybookEntry[]
@@ -680,6 +681,7 @@ model Cita {
   linkReunionPegado        String?                        // URL pegada manualmente
   tipo                     String        @default("reunion")
   ubicacion                String?
+  connectedCalendarId     String?
   googleCalendarEventId    String?
   emailConfirmacionEnviado Boolean       @default(false)
   fechaEmailConfirmacion   DateTime?
@@ -695,7 +697,8 @@ model Cita {
   lead                     Lead?         @relation(fields: [leadId], references: [id], onDelete: SetNull)
   servicio                 Servicio?     @relation(fields: [servicioId], references: [id])
   tenant                   Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  usuarioAsignado          User?         @relation("CitaAssignee", fields: [usuarioAsignadoId], references: [id])
+  connectedCalendar        ConnectedCalendar? @relation(fields: [connectedCalendarId], references: [id], onDelete: SetNull)
+  usuarioAsignado          User?             @relation("CitaAssignee", fields: [usuarioAsignadoId], references: [id])
 
   @@index([tenantId])
   @@index([usuarioAsignadoId])
@@ -706,6 +709,7 @@ model Cita {
   @@index([origenCita])
   @@index([catalogoItemId])
   @@index([contactId])
+  @@index([connectedCalendarId])
 }
 
 model Configuracion {
@@ -2000,10 +2004,32 @@ model GoogleCalendarIntegration {
   userId                  String    @unique
   tenant                  Tenant    @relation("TenantGoogleCalendars", fields: [tenantId], references: [id], onDelete: Cascade)
   user                    User      @relation("UserGoogleCalendar", fields: [userId], references: [id], onDelete: Cascade)
+  connectedCalendars      ConnectedCalendar[]
 
   @@index([userId])
   @@index([tenantId])
   @@map("google_calendar_integrations")
+}
+
+model ConnectedCalendar {
+  id              String   @id @default(cuid())
+  integrationId   String
+  tenantId        String
+  calendarId      String   // Google's calendar ID (not the local ID)
+  nombre          String   // Google's calendar summary (name)
+  color           String   @default("#3b82f6") // Default blue
+  visible         Boolean  @default(true)       // Toggle in calendar view
+  activo          Boolean  @default(true)
+  ultimaSync      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  integration     GoogleCalendarIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  citas           Cita[]
+
+  @@unique([integrationId, calendarId])
+  @@index([integrationId])
+  @@index([tenantId])
+  @@map("connected_calendars")
 }
 
 model WebhookLog {
@@ -2174,6 +2200,7 @@ model Deal {
   aiSentiment          String?
   aiStrategy           String?
   lastAiConsult        DateTime?
+  pipelineId           String?
   AiDecisionLog        AiDecisionLog[]
   MessageDraft         MessageDraft[]
   comisiones           Comision[]
@@ -2184,6 +2211,7 @@ model Deal {
   company              Contact?           @relation("CompanyDeals", fields: [companyId], references: [id])
   contact              Contact?           @relation("ContactDeals", fields: [contactId], references: [id], onDelete: Restrict)
   lead                 Lead?              @relation(fields: [leadId], references: [id])
+  pipeline             Pipeline?          @relation(fields: [pipelineId], references: [id], onDelete: SetNull)
   propiedad            CatalogoItem?      @relation(fields: [catalogoItemId], references: [id])
   tenant               Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   usuarioAsignado      User?              @relation("DealsAsignados", fields: [usuarioAsignadoId], references: [id])
@@ -2200,6 +2228,7 @@ model Deal {
   @@index([estado])
   @@index([fechaEstimadaCierre])
   @@index([fechaCreacion])
+  @@index([pipelineId])
   @@map("deals")
 }
 
@@ -2248,24 +2277,48 @@ model CampaignLead {
   @@map("campaign_leads")
 }
 
+model Pipeline {
+  id                    String          @id @default(cuid())
+  tenantId              String
+  nombre                String
+  categoria             String          @default("ventas")
+  descripcion           String?
+  orden                 Int             @default(0)
+  color                 String          @default("#3b82f6")
+  icono                 String          @default("📈")
+  activo                Boolean         @default(true)
+  fechaCreacion         DateTime        @default(now())
+  fechaActualizacion    DateTime        @updatedAt
+  tenant                Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  stages                PipelineStage[]
+  deals                 Deal[]
+
+  @@unique([tenantId, nombre])
+  @@index([tenantId])
+  @@index([categoria])
+  @@map("pipelines")
+}
+
 model PipelineStage {
-  id                 String   @id @default(cuid())
+  id                 String     @id @default(cuid())
+  pipelineId         String?
   tenantId           String
   nombre             String
   descripcion        String?
   orden              Int
-  probabilidad       Int      @default(50)
-  color              String   @default("#3b82f6")
-  requiereAprobacion Boolean  @default(false)
-  esEtapaFinal       Boolean  @default(false)
+  probabilidad       Int        @default(50)
+  color              String     @default("#3b82f6")
+  requiereAprobacion Boolean    @default(false)
+  esEtapaFinal       Boolean    @default(false)
   tipoEtapaFinal     String?
-  categoria          String   @default("default")
-  fechaCreacion      DateTime @default(now())
-  activo             Boolean  @default(true)
-  tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  categoria          String     @default("default")
+  fechaCreacion      DateTime   @default(now())
+  activo             Boolean    @default(true)
+  tenant             Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  pipeline           Pipeline?  @relation(fields: [pipelineId], references: [id], onDelete: SetNull)
 
-  @@unique([tenantId, nombre])
   @@index([tenantId])
+  @@index([pipelineId])
   @@index([orden])
   @@index([categoria])
   @@map("pipeline_stages")
@@ -5468,6 +5521,17 @@ model erp_shipments {
   evidenceUrl                String?
   receiverName               String?
   receiverSignature          String?
+
+  // GPS / Geolocalizacion
+  originLat                  Float?
+  originLng                  Float?
+  destinationLat             Float?
+  destinationLng             Float?
+  currentLat                 Float?
+  currentLng                 Float?
+  currentTemp                Float?
+  lastGpsUpdate              DateTime?
+  routeWaypoints             Json?                      @default("[]")
   erp_delivery_confirmations erp_delivery_confirmations[]
   erp_sales_orders           erp_sales_orders             @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
   Tenant                     Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -6617,3 +6681,36 @@ model FiscalIncident {
 }
 
 
+
+model erp_fleet_vehicles {
+  id                   String    @id @default(cuid())
+  tenantId             String
+  plate                String
+  brand                String
+  model                String
+  year                 Int
+  type                 String    @default("camion")
+  capacity             Float     @default(0)
+  capacityUnit         String    @default("kg")
+  status               String    @default("ACTIVE")
+  currentKm            Int       @default(0)
+  lastMaintenanceKm    Int?
+  itvExpiration        DateTime?
+  insuranceExpiration  DateTime?
+  fuelType             String    @default("diesel")
+  gpsDeviceId          String?   @unique
+  currentLat           Float?
+  currentLng           Float?
+  lastGpsUpdate        DateTime?
+  currentTemp          Float?
+  lastSpeed            Float?
+  driverId             String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@index([tenantId])
+  @@index([plate])
+  @@index([status])
+  @@index([driverId])
+  @@map("erp_fleet_vehicles")
+}

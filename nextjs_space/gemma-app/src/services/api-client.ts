@@ -1,4 +1,4 @@
-import type { ChatResponse, AuthSession } from '../types'
+import type { ChatResponse, AuthSession, Attachment } from '../types'
 import { getItem, setItem, removeItem } from '../lib/storage'
 import Constants from 'expo-constants'
 
@@ -161,14 +161,64 @@ export async function login(email: string, password: string, baseUrl?: string): 
   return session
 }
 
+export async function loginWithApiKey(apiKey: string, baseUrl: string): Promise<AuthSession> {
+  const cleanUrl = baseUrl.trim().replace(/\/$/, '')
+  await setApiUrl(cleanUrl)
+
+  // Validar la API Key llamando a /api/users/me
+  const response = await apiFetch('/api/users/me', {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`
+    }
+  }, cleanUrl)
+
+  if (!response.ok) {
+    const errBody = await response.json().catch(() => ({ error: `Error ${response.status}` }))
+    throw new ApiError(errBody.error || `Error ${response.status} de autenticación`, response.status)
+  }
+
+  // Verificar que la respuesta sea JSON (no HTML)
+  const contentType = response.headers.get('content-type') || ''
+  if (!contentType.toLowerCase().includes('application/json')) {
+    throw new ApiError(
+      'El servidor respondió con HTML en lugar de JSON. Verifica que la URL del servidor sea correcta.',
+      0,
+    )
+  }
+
+  const data = await response.json()
+
+  const session: AuthSession = {
+    userId: data.id || '',
+    tenantId: data.tenant?.id || '',
+    name: data.name || data.email?.split('@')[0] || 'Usuario',
+    email: data.email || '',
+    token: apiKey, // Guardamos la API Key como token
+  }
+
+  await saveSession(session)
+  return session
+}
+
 export async function sendMessage(
   text: string,
   chatId?: string,
+  attachments?: Attachment[]
 ): Promise<ChatResponse> {
   const token = await getToken()
 
   if (!token) {
     throw new ApiError('No autenticado', 401)
+  }
+
+  // Si hay attachments, podemos construir un texto para el prompt que los mencione
+  let messageText = text
+  if (attachments && attachments.length > 0) {
+    const fileNames = attachments.map(a => `[Archivo ${a.type}: ${a.name}]`).join(', ')
+    messageText = text 
+      ? `${text} (He adjuntado: ${fileNames})` 
+      : `He adjuntado: ${fileNames}`
   }
 
   const response = await apiFetch('/api/ai/chat', {
@@ -178,8 +228,9 @@ export async function sendMessage(
       'Authorization': `Bearer ${token}`,
     },
     body: JSON.stringify({
-      message: text,
+      message: messageText,
       chatId,
+      attachments // Pasarlo por si acaso el backend lo soporta/audita
     }),
   })
 

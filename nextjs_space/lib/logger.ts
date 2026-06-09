@@ -2,7 +2,7 @@
  * Logger estructurado con pino
  *
  * - JSON estructurado en producción
- * - pretty-print en desarrollo
+ * - pretty-print en desarrollo (sin worker threads para compatibilidad con Next.js)
  * - requestId automático vía AsyncLocalStorage (dbContext)
  * - Niveles: trace < debug < info < warn < error < fatal
  *
@@ -18,7 +18,17 @@ import pino, { type Logger as PinoLogger } from 'pino'
 
 const isProduction = process.env.NODE_ENV === 'production'
 
-/** Instancia base de pino */
+/**
+ * Instancia base de pino.
+ *
+ * IMPORTANTE: NO usar transport/worker threads en desarrollo porque Next.js
+ * 14.x no resuelve correctamente los workers de thread-stream/pino-pretty
+ * en modo dev (MODULE_NOT_FOUND). En su lugar, usamos el output por defecto
+ * de pino (stdout JSON) que es simple, fiable y no requiere workers.
+ *
+ * Para formatear la salida en desarrollo, se puede pipear a pino-pretty:
+ *   yarn dev 2>&1 | npx pino-pretty
+ */
 const baseLogger: PinoLogger = pino({
   level: process.env.LOG_LEVEL || (isProduction ? 'info' : 'debug'),
   ...(isProduction
@@ -31,17 +41,7 @@ const baseLogger: PinoLogger = pino({
         },
         timestamp: pino.stdTimeFunctions.isoTime,
       }
-    : {
-        // Pretty-print en desarrollo
-        transport: {
-          target: 'pino-pretty',
-          options: {
-            colorize: true,
-            translateTime: 'HH:MM:ss.l',
-            ignore: 'pid,hostname',
-          },
-        },
-      }),
+    : {}),
   // Redactar datos sensibles en producción (claves top-level, no rutas anidadas)
   redact: isProduction
     ? ['apiKey', 'password', 'token', 'secret', 'keyHash', 'vaultSeed', 'dbUrl']

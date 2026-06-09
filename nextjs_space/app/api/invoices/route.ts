@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { prisma } from '@/lib/db'
 import { authenticateRequest } from '@/lib/api-key-auth'
 import { InvoicingService } from '@/lib/invoicing-service'
+import { checkFeatureLimit } from '@/lib/subscription'
 
 interface InvoiceItemInput {
   concepto: string
@@ -95,6 +96,15 @@ export async function POST(request: NextRequest) {
     const auth = await authenticateRequest(request, ['billing:write', 'invoices:create'])
     if (!auth.valid) {
       return NextResponse.json({ error: auth.error }, { status: 401 })
+    }
+
+    // Verificar límite de facturas emitidas
+    const limitCheck = await checkFeatureLimit(auth.tenant!.id, 'invoices', 1)
+    if (!limitCheck.allowed) {
+      return NextResponse.json(
+        { error: `Has alcanzado el límite de ${limitCheck.limit} facturas emitidas en tu plan actual.` },
+        { status: 403 }
+      )
     }
 
     const body: CreateInvoiceBody = await request.json()

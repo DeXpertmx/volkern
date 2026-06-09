@@ -20,7 +20,11 @@ const TRACKED_FEATURES: FeatureName[] = [
   'whatsapp_messages',
   'sms_messages',
   'courses',
-  'students'
+  'students',
+  'catalogo_items',
+  'published_pages',
+  'invoices',
+  'contratos_sign'
 ];
 
 export const GET = withTenantAuth(async (request: NextRequest, auth) => {

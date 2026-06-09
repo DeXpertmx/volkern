@@ -60,6 +60,14 @@ export default function TenantDetail() {
   const [modulesData, setModulesData] = useState<any>(null);
   const [togglingModule, setTogglingModule] = useState<string | null>(null);
 
+  // Feature limits (max_pipelines, etc.)
+  const [featureLimits, setFeatureLimits] = useState<any>(null);
+  const [loadingFeatures, setLoadingFeatures] = useState(false);
+  const [showLimitDialog, setShowLimitDialog] = useState(false);
+  const [editLimitValue, setEditLimitValue] = useState('');
+  const [savingLimit, setSavingLimit] = useState(false);
+  const [limitType, setLimitType] = useState('max_pipelines');
+
   useEffect(() => {
     if (params?.id) {
       loadTenant();
@@ -96,11 +104,85 @@ export default function TenantDetail() {
     }
   };
 
+  const loadFeatureLimits = async () => {
+    try {
+      setLoadingFeatures(true);
+      const res = await fetch(`/api/admin/tenants/${params?.id}/features`);
+      if (res.ok) {
+        const data = await res.json();
+        setFeatureLimits(data);
+      }
+    } catch (error) {
+      console.error('Error loading feature limits:', error);
+    } finally {
+      setLoadingFeatures(false);
+    }
+  };
+
   useEffect(() => {
     if (params?.id && tenant) {
       loadModules();
+      loadFeatureLimits();
     }
   }, [params?.id, tenant]);
+
+  const handleSaveLimit = async () => {
+    const value = parseInt(editLimitValue);
+    if (isNaN(value) || value < -1 || value === 0) {
+      toast.error('El valor debe ser -1 (ilimitado) o un número mayor a 0');
+      return;
+    }
+    setSavingLimit(true);
+    try {
+      const res = await fetch(`/api/admin/tenants/${params?.id}/features`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          feature: limitType,
+          limitePersonalizado: value,
+          razon: `Admin configuró ${limitType} a ${value}`,
+        }),
+      });
+      if (res.ok) {
+        toast.success(`Límite de ${limitType} actualizado a ${value}`);
+        setShowLimitDialog(false);
+        loadFeatureLimits();
+      } else {
+        const err = await res.json();
+        toast.error(err.error || 'Error al guardar límite');
+      }
+    } catch {
+      toast.error('Error de conexión');
+    } finally {
+      setSavingLimit(false);
+    }
+  };
+
+  const handleResetLimit = async () => {
+    setSavingLimit(true);
+    try {
+      const res = await fetch(`/api/admin/tenants/${params?.id}/features`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          feature: limitType,
+          limitePersonalizado: null,
+        }),
+      });
+      if (res.ok) {
+        toast.success(`Límite restablecido al valor del plan`);
+        setShowLimitDialog(false);
+        loadFeatureLimits();
+      } else {
+        const err = await res.json();
+        toast.error(err.error || 'Error al restablecer límite');
+      }
+    } catch {
+      toast.error('Error de conexión');
+    } finally {
+      setSavingLimit(false);
+    }
+  };
 
   const handleToggleModule = async (moduleId: string, currentActive: boolean) => {
     setTogglingModule(moduleId);
@@ -593,6 +675,72 @@ export default function TenantDetail() {
                 </CardHeader>
               </Card>
 
+              {/* Límites del Sistema */}
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle className="text-base">⚙️ Límites del Sistema</CardTitle>
+                    <CardDescription>
+                      Configura límites personalizados para este tenant. Los cambios se aplican inmediatamente.
+                    </CardDescription>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {loadingFeatures ? (
+                    <div className="py-4 text-center text-sm text-gray-500">Cargando límites...</div>
+                  ) : featureLimits?.limits ? (
+                    <div className="space-y-3">
+                      {featureLimits.limits.map((limit: any) => (
+                        <div key={limit.key} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border hover:border-gray-200 transition-colors">
+                          <div className="flex items-start gap-3 min-w-0 flex-1">
+                            <div className="p-2 bg-blue-100 rounded-lg mt-0.5 flex-shrink-0">
+                              <span className="text-lg">{limit.icon}</span>
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium text-sm">{limit.label}</p>
+                              <p className="text-xs text-gray-500 mt-0.5 truncate">
+                                {limit.description}
+                              </p>
+                              <div className="flex items-center gap-2 mt-1.5">
+                                <span className="text-sm font-semibold">
+                                  {limit.unlimited ? '∞' : limit.currentValue}
+                                </span>
+                                {limit.isOverridden ? (
+                                  <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium">
+                                    Override
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-gray-400">
+                                    Default: {limit.unlimited ? '∞' : limit.planDefault}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-shrink-0 ml-2"
+                            onClick={() => {
+                              setLimitType(limit.key);
+                              setEditLimitValue(String(limit.currentValue));
+                              setShowLimitDialog(true);
+                            }}
+                          >
+                            <Settings size={14} className="mr-1.5" />
+                            Editar
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="py-4 text-center text-sm text-gray-500">
+                      No se pudieron cargar los límites
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
               {/* Módulos por grupo */}
               {(() => {
                 const groups = new Map<string, any[]>();
@@ -680,6 +828,94 @@ export default function TenantDetail() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Feature Limit Dialog */}
+      <Dialog open={showLimitDialog} onOpenChange={setShowLimitDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              Editar Límite: {featureLimits?.limits?.find((l: any) => l.key === limitType)?.label || limitType}
+            </DialogTitle>
+            <DialogDescription>
+              {featureLimits?.limits?.find((l: any) => l.key === limitType)?.description || `Configura el límite para ${limitType}`}
+            </DialogDescription>
+          </DialogHeader>
+          {(() => {
+            const currentLimit = featureLimits?.limits?.find((l: any) => l.key === limitType)
+            if (!currentLimit) return null
+            return (
+              <div className="space-y-4 py-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-2xl">{currentLimit.icon}</span>
+                  <div>
+                    <p className="font-medium text-sm">{currentLimit.label}</p>
+                    <p className="text-xs text-gray-500">{currentLimit.description}</p>
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="limitValue">Valor del Límite</Label>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Input
+                      id="limitValue"
+                      type="number"
+                      min="-1"
+                      max="999999"
+                      value={editLimitValue}
+                      onChange={(e) => setEditLimitValue(e.target.value)}
+                      className="text-lg font-bold"
+                    />
+                    <span className="text-xs text-gray-400 whitespace-nowrap">(-1 = ilimitado)</span>
+                  </div>
+                </div>
+                <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
+                  <p className="text-xs text-blue-800">
+                    <strong>Default del plan:</strong>{' '}
+                    {currentLimit.planDefault === -1 ? '∞ (ilimitado)' : currentLimit.planDefault}
+                  </p>
+                  {currentLimit.isOverridden && (
+                    <p className="text-xs text-amber-700 mt-1">
+                      Hay un override activo ({currentLimit.currentValue}).
+                      Ingresa un valor nuevo para actualizarlo, o usa "Restablecer default" para eliminarlo.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )
+          })()}
+          <DialogFooter className="flex items-center justify-between">
+            <div>
+              {featureLimits?.limits?.find((l: any) => l.key === limitType)?.isOverridden && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive"
+                  onClick={handleResetLimit}
+                  disabled={savingLimit}
+                >
+                  Restablecer default
+                </Button>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowLimitDialog(false)}
+                disabled={savingLimit}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleSaveLimit}
+                disabled={savingLimit || !editLimitValue.trim()}
+              >
+                {savingLimit ? 'Guardando...' : 'Guardar'}
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Assign Plan Dialog */}
       <Dialog open={showAssignPlanDialog} onOpenChange={setShowAssignPlanDialog}>

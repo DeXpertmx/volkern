@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
 import { apiFetch, apiPost } from '@/lib/api-client'
 import {
@@ -16,7 +16,7 @@ import {
   useDraggable,
   useDroppable,
 } from '@dnd-kit/core'
-import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
+import { sortableKeyboardCoordinates, arrayMove, SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -75,10 +75,30 @@ import {
   UserPlus,
   Palette,
   ArrowUpDown,
+  AlertCircle,
+  ListOrdered,
+  Copy,
+  RefreshCw,
 } from 'lucide-react'
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+} from '@/components/ui/tooltip'
 import { toast } from 'sonner'
+import { MODULE_PIPELINES, getStagesForCategory } from '@/lib/pipelines'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+
+// ── Haptic feedback helper ──────────────────────────────────────────────────
+function triggerHaptic() {
+  try {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(40)
+    }
+  } catch {}
+}
 
 interface Deal {
   id: string
@@ -150,7 +170,57 @@ export default function PipelinePage() {
   const [filterSalud, setFilterSalud] = useState<string>('all')
   const [showNewDealDialog, setShowNewDealDialog] = useState(false)
   const [showConfigDialog, setShowConfigDialog] = useState(false)
+  const [showNewPipelineDialog, setShowNewPipelineDialog] = useState(false)
+  const [newPipelineName, setNewPipelineName] = useState('')
+  const [newPipelineCategory, setNewPipelineCategory] = useState('generic')
+  const [creatingPipeline, setCreatingPipeline] = useState(false)
   const [collapsedStages, setCollapsedStages] = useState<Set<string>>(new Set())
+
+  const [pipelines, setPipelines] = useState<any[]>([])
+  const [activePipelineId, setActivePipelineId] = useState<string>('')
+  const [maxPipelines, setMaxPipelines] = useState(1)
+  const [showPipelineSelector, setShowPipelineSelector] = useState(false)
+  const pipelineSearchRef = useRef<HTMLInputElement>(null)
+  const [deletingPipeline, setDeletingPipeline] = useState<any>(null)
+  const [deleteTargetPipelineId, setDeleteTargetPipelineId] = useState<string>('')
+  const [deleteConfirmText, setDeleteConfirmText] = useState('')
+  const [deleteCountdownSecs, setDeleteCountdownSecs] = useState(30)
+  const [deleteShakeKey, setDeleteShakeKey] = useState(0)
+  const [renamingPipeline, setRenamingPipeline] = useState<any>(null)
+  const [renamePipelineName, setRenamePipelineName] = useState('')
+  const [renamePipelineColor, setRenamePipelineColor] = useState('#3b82f6')
+  const [renamePipelineIcono, setRenamePipelineIcono] = useState('📈')
+  const [renamingPipelineLoading, setRenamingPipelineLoading] = useState(false)
+  const [showReorderDialog, setShowReorderDialog] = useState(false)
+  const [reorderPipelines, setReorderPipelines] = useState<any[]>([])
+  const [pipelineSearch, setPipelineSearch] = useState('')
+
+  // ── Categorías de pipeline derivadas de MODULE_PIPELINES ─────────────────
+  const pipelineCategories = useMemo(() => {
+    const seen = new Set<string>()
+    const cats: { categoria: string; nombre: string; icono: string; descripcion: string }[] = []
+
+    for (const modulePipes of Object.values(MODULE_PIPELINES)) {
+      for (const pipe of modulePipes) {
+        if (seen.has(pipe.categoria)) continue
+        seen.add(pipe.categoria)
+
+        const stages = getStagesForCategory(pipe.categoria)
+        const nonFinal = stages.filter(s => !s.esEtapaFinal)
+        const first = nonFinal[0]?.nombre || ''
+        const last = nonFinal[nonFinal.length - 1]?.nombre || ''
+
+        cats.push({
+          categoria: pipe.categoria,
+          nombre: pipe.nombre,
+          icono: pipe.icono,
+          descripcion: `${pipe.nombre} — ${first} → ${last}`,
+        })
+      }
+    }
+
+    return cats.sort((a, b) => a.nombre.localeCompare(b.nombre))
+  }, [])
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -175,6 +245,48 @@ export default function PipelinePage() {
     }
   }, [])
 
+  // Atajo de teclado: Delete/Supr para eliminar pipeline activo
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Delete' && e.key !== 'Del' && e.key !== 'Supr') return
+      // No activar si el usuario está escribiendo en un input
+      const tag = (e.target as HTMLElement)?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      // No activar si hay algún diálogo abierto
+      if (deletingPipeline || renamingPipeline || showNewPipelineDialog || showNewDealDialog || showConfigDialog || showReorderDialog) return
+
+      e.preventDefault()
+      const active = pipelines.find(p => p.id === activePipelineId)
+      if (active) {
+        setDeletingPipeline(active)
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [deletingPipeline, renamingPipeline, showNewPipelineDialog, showNewDealDialog, showConfigDialog, activePipelineId, pipelines])
+
+  // Auto-cerrar diálogo de eliminación tras 30s
+  useEffect(() => {
+    if (!deletingPipeline) {
+      setDeleteCountdownSecs(30)
+      return
+    }
+    const timer = setInterval(() => {
+      setDeleteCountdownSecs(prev => {
+        if (prev <= 1) {
+          clearInterval(timer)
+          setDeletingPipeline(null)
+          setDeleteTargetPipelineId('')
+          setDeleteConfirmText('')
+          toast.info('Eliminación cancelada por tiempo de espera')
+          return 30
+        }
+        return prev - 1
+      })
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [deletingPipeline])
+
   // Guardar estado de columnas colapsadas
   const toggleCollapseStage = (stageName: string) => {
     setCollapsedStages(prev => {
@@ -190,15 +302,190 @@ export default function PipelinePage() {
   }
 
   useEffect(() => {
-    fetchData()
+    fetchPipelines()
   }, [])
 
-  const fetchData = async () => {
+  useEffect(() => {
+    if (activePipelineId) {
+      fetchData(activePipelineId)
+    }
+  }, [activePipelineId])
+
+  const fetchPipelines = async () => {
+    try {
+      const res = await fetch('/api/pipelines')
+      if (res.ok) {
+        const data = await res.json()
+        setPipelines(data.pipelines || [])
+        setMaxPipelines(data.maxPipelines || 1)
+        
+        // Auto-select first pipeline or persisted one
+        const saved = localStorage.getItem('active-pipeline-id')
+        const defaultId = saved && data.pipelines?.some((p: any) => p.id === saved)
+          ? saved
+          : data.pipelines?.[0]?.id || ''
+        setActivePipelineId(defaultId)
+      } else {
+        console.error('Error al cargar pipelines:', res.status)
+        toast.error('Error al cargar los pipelines')
+      }
+    } catch (e) {
+      console.error('Error fetching pipelines:', e)
+      toast.error('Error de conexión al cargar pipelines')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handlePipelineChange = (value: string) => {
+    if (value === '__new__') {
+      setShowNewPipelineDialog(true)
+      return
+    }
+    setActivePipelineId(value)
+    localStorage.setItem('active-pipeline-id', value)
+  }
+
+  const handleDeletePipeline = async () => {
+    if (!deletingPipeline) return
+    try {
+      const body: any = {}
+      // If pipeline has deals and a target is selected, migrate them
+      if (deletingPipeline._count?.deals > 0 && deleteTargetPipelineId) {
+        body.migrateToPipelineId = deleteTargetPipelineId
+      }
+      const res = await fetch(`/api/pipelines/${deletingPipeline.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (res.ok) {
+        triggerHaptic()
+        const data = await res.json()
+        toast.success(data.message || `Pipeline "${deletingPipeline.nombre}" eliminado`)
+        setDeletingPipeline(null)
+        setDeleteTargetPipelineId('')
+        await fetchPipelines()
+        // If deleted pipeline was active, switch to first available
+        if (activePipelineId === deletingPipeline.id) {
+          const remaining = pipelines.filter(p => p.id !== deletingPipeline.id)
+          if (remaining.length > 0) {
+            setActivePipelineId(remaining[0].id)
+            localStorage.setItem('active-pipeline-id', remaining[0].id)
+          }
+        }
+      } else {
+        const err = await res.json()
+        toast.error(err.error || 'Error al eliminar pipeline')
+      }
+    } catch (e) {
+      toast.error('Error de conexión')
+    }
+  }
+
+  const handleRenamePipeline = async () => {
+    if (!renamingPipeline || !renamePipelineName.trim()) {
+      toast.error('Nombre requerido')
+      return
+    }
+    setRenamingPipelineLoading(true)
+    try {
+      const body: any = { nombre: renamePipelineName.trim() }
+      if (renamePipelineColor !== renamingPipeline.color) body.color = renamePipelineColor
+      if (renamePipelineIcono !== renamingPipeline.icono) body.icono = renamePipelineIcono
+
+      if (body.nombre === renamingPipeline.nombre && !body.color && !body.icono) {
+        setRenamingPipeline(null)
+        return
+      }
+
+      const res = await fetch(`/api/pipelines/${renamingPipeline.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (res.ok) {
+        const changed = []
+        if (body.nombre !== renamingPipeline.nombre) changed.push(`renombrado a "${body.nombre}"`)
+        if (body.color) changed.push('color actualizado')
+        if (body.icono) changed.push('icono actualizado')
+        toast.success(`Pipeline ${changed.join(' y ')}`)
+        setRenamingPipeline(null)
+        await fetchPipelines()
+      } else {
+        const err = await res.json()
+        toast.error(err.error || 'Error al actualizar pipeline')
+      }
+    } catch (e) {
+      toast.error('Error de conexión')
+    } finally {
+      setRenamingPipelineLoading(false)
+    }
+  }
+
+  const handleDuplicatePipeline = async (pipeline: any) => {
+    try {
+      const res = await fetch(`/api/pipelines/${pipeline.id}/duplicate`, {
+        method: 'POST',
+      })
+      if (res.ok) {
+        const data = await res.json()
+        toast.success(`Pipeline duplicado como "${data.pipeline.nombre}"`)
+        // Set active BEFORE fetchPipelines so auto-select picks it up
+        localStorage.setItem('active-pipeline-id', data.pipeline.id)
+        setActivePipelineId(data.pipeline.id)
+        await fetchPipelines()
+      } else {
+        const err = await res.json()
+        toast.error(err.error || 'Error al duplicar pipeline')
+      }
+    } catch (e) {
+      toast.error('Error de conexión')
+    }
+  }
+
+  const handleCreatePipeline = async () => {
+    if (!newPipelineName.trim()) {
+      toast.error('Nombre requerido')
+      return
+    }
+    setCreatingPipeline(true)
+    try {
+      const res = await fetch('/api/pipelines', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nombre: newPipelineName.trim(),
+          categoria: newPipelineCategory === 'generic' ? undefined : newPipelineCategory,
+        }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        toast.success(`Pipeline "${data.pipeline.nombre}" creado`)
+        setShowNewPipelineDialog(false)
+        setNewPipelineName('')
+        setNewPipelineCategory('generic')
+        await fetchPipelines()
+        setActivePipelineId(data.pipeline.id)
+      } else {
+        const err = await res.json()
+        toast.error(err.error || 'Error al crear pipeline')
+      }
+    } catch (e) {
+      toast.error('Error de conexión')
+    } finally {
+      setCreatingPipeline(false)
+    }
+  }
+
+  const fetchData = async (pipelineId?: string) => {
     try {
       setLoading(true)
+      const pipelineParam = pipelineId ? `?pipelineId=${pipelineId}` : ''
+      
       const [dealsRes, stagesRes] = await Promise.all([
-        apiFetch('/api/deals'),
-        apiFetch('/api/pipeline/stages'),
+        apiFetch(`/api/deals${pipelineParam}`),
+        apiFetch(`/api/pipeline/stages${pipelineParam}`),
       ])
 
       if (dealsRes.ok && stagesRes.ok) {
@@ -341,15 +628,213 @@ export default function PipelinePage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-            <TrendingUp className="h-8 w-8" />
-            Pipeline de Ventas
-          </h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+              <TrendingUp className="h-8 w-8" />
+              Pipeline
+            </h2>
+            {pipelines.length > 0 && (
+              <div className="flex items-center gap-1">
+              <Select
+                value={activePipelineId}
+                onValueChange={(value) => {
+                  setPipelineSearch('')
+                  handlePipelineChange(value)
+                }}
+                onOpenChange={(open) => {
+                  if (open) {
+                    setPipelineSearch('')
+                    setTimeout(() => pipelineSearchRef.current?.focus(), 50)
+                  }
+                }}
+              >
+                <SelectTrigger className="w-[260px] border-primary/20">
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <SelectValue placeholder="Seleccionar pipeline" className="flex-1 min-w-0" />
+                    <span className={`text-xs whitespace-nowrap flex-shrink-0 ${pipelines.length >= maxPipelines ? 'text-amber-500 font-medium' : 'text-muted-foreground'}`}>
+                      {pipelines.length}/{maxPipelines}
+                    </span>
+                  </div>
+                </SelectTrigger>
+                <SelectContent className="max-h-[320px]">
+                  {pipelines.length > 5 && (
+                    <div
+                      className="sticky top-0 z-10 bg-popover px-2 pb-1.5 pt-1"
+                      onPointerDown={(e) => e.stopPropagation()}
+                    >
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                        <Input
+                          ref={pipelineSearchRef}
+                          value={pipelineSearch}
+                          onChange={(e) => setPipelineSearch(e.target.value)}
+                          placeholder="Buscar pipeline..."
+                          className="h-8 pl-8 text-xs"
+                          onKeyDown={(e) => e.stopPropagation()}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  {(() => {
+                    const filtered = pipelines.filter(p => !pipelineSearch || p.nombre.toLowerCase().includes(pipelineSearch.toLowerCase()))
+                    if (filtered.length === 0 && pipelineSearch) {
+                      return (
+                        <div className="px-3 py-6 text-center text-xs text-muted-foreground">
+                          <Search className="h-4 w-4 mx-auto mb-1.5 opacity-40" />
+                          Sin resultados para "{pipelineSearch}"
+                        </div>
+                      )
+                    }
+                    return filtered.map((p) => (
+                    <SelectItem key={p.id} value={p.id} className="group relative">
+                      <div className="flex items-center gap-2 w-full min-w-0">
+                        <span className="flex-shrink-0 text-sm">{p.icono || '📈'}</span>
+                      <span className="truncate flex-1 min-w-0" title={p.nombre}>{p.nombre}</span>
+                      {p.color && p.color !== '#3b82f6' && (
+                        <span className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
+                      )}
+                      <span className="text-xs text-muted-foreground flex-shrink-0">
+                        ({p._count?.deals || 0})
+                      </span>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            type="button"
+                            className="flex-shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground transition-all"
+                            onPointerDown={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              e.preventDefault()
+                            }}
+                          >
+                            <MoreVertical className="h-3.5 w-3.5" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="min-w-[140px]">
+                          <DropdownMenuItem
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              e.preventDefault()
+                              setRenamingPipeline(p)
+                              setRenamePipelineName(p.nombre)
+                              setRenamePipelineColor(p.color || '#3b82f6')
+                              setRenamePipelineIcono(p.icono || '📈')
+                            }}
+                          >
+                            <Palette className="h-3.5 w-3.5 mr-2" />
+                            Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              e.preventDefault()
+                              handleDuplicatePipeline(p)
+                            }}
+                          >
+                            <Copy className="h-3.5 w-3.5 mr-2" />
+                            Duplicar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              e.preventDefault()
+                              setDeletingPipeline(p)
+                            }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5 mr-2" />
+                            Eliminar
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                      </div>
+                    </SelectItem>
+                    ))
+                  })()}
+                  {/* Always show create/limit footer, but hide border when search is active and no results */}
+                  {pipelines.length < maxPipelines ? (
+                    <>
+                      <SelectItem value="__separator__" disabled className="h-px bg-border my-1" />
+                      <SelectItem value="__new__" className="text-primary font-medium">
+                        <Plus className="h-3.5 w-3.5 mr-2 inline" />
+                        Crear pipeline
+                      </SelectItem>
+                    </>
+                  ) : (
+                    <>
+                      <SelectItem value="__separator__" disabled className="h-px bg-border my-1" />
+                      <SelectItem value="__limit__" disabled className="text-xs text-muted-foreground opacity-70 cursor-not-allowed">
+                        <AlertCircle className="h-3.5 w-3.5 mr-2 inline" />
+                        Límite alcanzado ({pipelines.length}/{maxPipelines})
+                      </SelectItem>
+                    </>
+                  )}
+                </SelectContent>
+              </Select>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10"
+                      onClick={() => setShowNewPipelineDialog(true)}
+                      disabled={pipelines.length >= maxPipelines}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    {pipelines.length >= maxPipelines
+                      ? `Límite de pipelines alcanzado (${maxPipelines}). Actualiza tu plan para crear más.`
+                      : 'Crear nuevo pipeline'}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                onClick={() => {
+                  setReorderPipelines([...pipelines].sort((a: any, b: any) => (a.orden || 0) - (b.orden || 0)))
+                  setShowReorderDialog(true)
+                }}
+                title="Reordenar pipelines"
+              >
+                <ListOrdered className="h-4 w-4" />
+              </Button>
+              </div>
+            )}
+          </div>
           <p className="text-muted-foreground mt-1">
             Visualiza y gestiona tus oportunidades de venta
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            className="border-muted-foreground/20 hover:bg-muted/50"
+            onClick={async () => {
+              const res = await fetch('/api/pipelines/seed', { method: 'POST' })
+              if (res.ok) {
+                const data = await res.json()
+                toast.success(data.message || 'Pipelines sincronizados')
+                await fetchPipelines()
+              } else {
+                const err = await res.json()
+                toast.error(err.error || 'Error al sincronizar pipelines')
+              }
+            }}
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Sincronizar Pipelines
+          </Button>
           <Button variant="outline" onClick={() => setShowConfigDialog(true)}>
             <Settings className="h-4 w-4 mr-2" />
             Configurar Etapas
@@ -361,7 +846,7 @@ export default function PipelinePage() {
               toast.promise(apiFetch('/api/deals/sync', { method: 'POST' }), {
                 loading: 'Consultando Oráculo de Ventas...',
                 success: () => {
-                  fetchData()
+                  fetchData(activePipelineId)
                   return 'Pipeline Sincronizado'
                 },
                 error: 'Error en la sincronización'
@@ -387,9 +872,10 @@ export default function PipelinePage() {
               </DialogHeader>
               <NewDealForm
                 stages={stages}
+                pipelineId={activePipelineId}
                 onSuccess={() => {
                   setShowNewDealDialog(false)
-                  fetchData()
+                  fetchData(activePipelineId)
                 }}
               />
             </DialogContent>
@@ -457,6 +943,8 @@ export default function PipelinePage() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
+              id="search-deals"
+              name="searchDeals"
               placeholder="Buscar deals, leads, empresas..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -529,12 +1017,275 @@ export default function PipelinePage() {
         </DragOverlay>
       </DndContext>
 
+      {/* Modal de Editar Pipeline (nombre + color + icono) */}
+      <Dialog open={!!renamingPipeline} onOpenChange={() => setRenamingPipeline(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Palette className="h-5 w-5" />
+              Editar Pipeline
+            </DialogTitle>
+            <DialogDescription>
+              Cambia el nombre, color o icono del pipeline
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={(e) => { e.preventDefault(); handleRenamePipeline(); }} className="space-y-4">
+            <div>
+              <Label htmlFor="renamePipelineName">Nombre *</Label>
+              <Input
+                id="renamePipelineName"
+                value={renamePipelineName}
+                onChange={(e) => setRenamePipelineName(e.target.value)}
+                placeholder="Nombre del pipeline"
+                autoFocus
+              />
+            </div>
+
+            <div>
+              <Label>Color</Label>
+              <div className="flex gap-2 mt-2">
+                {['#94a3b8', '#3b82f6', '#8b5cf6', '#f59e0b', '#10b981', '#ef4444', '#ec4899', '#06b6d4', '#84cc16', '#f97316'].map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    className={`h-8 w-8 rounded-full border-2 transition-all ${
+                      renamePipelineColor === c ? 'border-foreground scale-110' : 'border-transparent'
+                    }`}
+                    style={{ backgroundColor: c }}
+                    onClick={() => setRenamePipelineColor(c)}
+                  />
+                ))}
+                <Input
+                  type="color"
+                  value={renamePipelineColor}
+                  onChange={(e) => setRenamePipelineColor(e.target.value)}
+                  className="h-8 w-12 p-0 border-0"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label>Icono</Label>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {['📈', '👥', '🏗️', '🏠', '💰', '🚚', '🎯', '⭐', '🔥', '💼', '📊', '🛒', '🤝', '📋', '⚡', '🎓', '🏆', '🔧', '📦', '🌐'].map((ico) => (
+                  <button
+                    key={ico}
+                    type="button"
+                    className={`h-9 w-9 flex items-center justify-center rounded-lg border-2 text-lg transition-all ${
+                      renamePipelineIcono === ico ? 'border-primary bg-primary/10 scale-110' : 'border-transparent hover:border-muted-foreground/30'
+                    }`}
+                    onClick={() => setRenamePipelineIcono(ico)}
+                  >
+                    {ico}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setRenamingPipeline(null)}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={renamingPipelineLoading}>
+                {renamingPipelineLoading ? 'Guardando...' : 'Guardar'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Nuevo Pipeline */}
+      <Dialog open={showNewPipelineDialog} onOpenChange={setShowNewPipelineDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Crear Nuevo Pipeline</DialogTitle>
+            <DialogDescription>
+              Los pipelines te permiten organizar deals por categoría
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={(e) => { e.preventDefault(); handleCreatePipeline(); }} className="space-y-4">
+            <div>
+              <Label htmlFor="pipelineName">Nombre del Pipeline *</Label>
+              <Input
+                id="pipelineName"
+                value={newPipelineName}
+                onChange={(e) => setNewPipelineName(e.target.value)}
+                placeholder="Ej: CRM Ventas, RRHH, Proyectos..."
+                autoFocus
+              />
+            </div>
+            <div>
+              <Label htmlFor="pipelineCategory">Categoría (etapas predefinidas)</Label>
+              <Select value={newPipelineCategory} onValueChange={setNewPipelineCategory}>
+                <SelectTrigger id="pipelineCategory">
+                  <SelectValue placeholder="Etapas genéricas (por defecto)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="generic">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm">📊</span>
+                      <span>Etapas genéricas</span>
+                    </div>
+                  </SelectItem>
+                  {pipelineCategories.map(cat => (
+                    <SelectItem key={cat.categoria} value={cat.categoria}>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">{cat.icono}</span>
+                        <span>{cat.descripcion}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1.5">
+                Al seleccionar una categoría, el pipeline se creará con etapas predefinidas para ese tipo de negocio.
+              </p>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setShowNewPipelineDialog(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={creatingPipeline}>
+                {creatingPipeline ? 'Creando...' : 'Crear Pipeline'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmación de eliminación de pipeline */}
+      <AlertDialog open={!!deletingPipeline} onOpenChange={(open) => { if (!open) { setDeletingPipeline(null); setDeleteTargetPipelineId(''); setDeleteConfirmText(''); setDeleteCountdownSecs(30); setDeleteShakeKey(0); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-destructive" />
+              ¿Eliminar pipeline "{deletingPipeline?.nombre}"?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              <p>Esta acción eliminará el pipeline y sus etapas. No se puede deshacer.</p>
+
+              {deletingPipeline?._count?.deals > 0 && (
+                <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-3 space-y-2">
+                  <p className="text-amber-600 font-medium text-sm">
+                    ⚠️ Tiene {deletingPipeline._count.deals} deals activos.
+                  </p>
+                  <div className="space-y-2">
+                    <Label htmlFor="migrate-pipeline" className="text-sm font-medium">
+                      Mover deals a:
+                    </Label>
+                    <Select
+                      value={deleteTargetPipelineId}
+                      onValueChange={setDeleteTargetPipelineId}
+                    >
+                      <SelectTrigger id="migrate-pipeline" className="w-full">
+                        <SelectValue placeholder="Seleccionar pipeline destino..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {pipelines
+                          .filter(p => p.id !== deletingPipeline?.id)
+                          .map(p => (
+                            <SelectItem key={p.id} value={p.id}>
+                              <div className="flex items-center gap-2 w-full min-w-0">
+                                <span className="truncate flex-1 min-w-0" title={p.nombre}>{p.nombre}</span>
+                                <span className="text-xs text-muted-foreground flex-shrink-0">
+                                  {p._count?.deals || 0} deals
+                                </span>
+                                <Badge variant="secondary" className="text-[10px] h-5 px-1.5 flex-shrink-0 bg-amber-500/10 text-amber-600 border-amber-500/20">
+                                  +{deletingPipeline?._count?.deals || 0}
+                                </Badge>
+                              </div>
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                    {deleteTargetPipelineId && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                        <ArrowUpDown className="h-3 w-3" />
+                        Se migrarán <strong>{deletingPipeline?._count?.deals || 0} deals</strong> a este pipeline
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Type-to-confirm */}
+              <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-3 space-y-2">
+                <Label htmlFor="delete-confirm" className="text-sm font-medium text-destructive">
+                  Escribe <strong className="select-none">{deletingPipeline?.nombre}</strong> para confirmar
+                </Label>
+                <Input
+                  id="delete-confirm"
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  placeholder={deletingPipeline?.nombre || ''}
+                  key={deleteShakeKey}
+                  className={`border-destructive/30 focus-visible:ring-destructive/50 ${deleteShakeKey > 0 ? 'animate-[shake_0.3s_ease-in-out]' : ''}`}
+                  autoComplete="off"
+                  autoFocus
+                />
+                <div className="flex items-center gap-1.5">
+                  <div className="flex-1 h-1.5 rounded-full bg-destructive/10 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-200 ${
+                        deleteConfirmText === deletingPipeline?.nombre ? 'bg-green-500' : 'bg-destructive/40'
+                      }`}
+                      style={{ width: `${deletingPipeline?.nombre ? (deleteConfirmText.length / deletingPipeline.nombre.length) * 100 : 0}%` }}
+                    />
+                  </div>
+                  <span className={`text-[10px] font-mono flex-shrink-0 ${
+                    deleteConfirmText === deletingPipeline?.nombre ? 'text-green-600' : 'text-muted-foreground'
+                  }`}>
+                    {deleteConfirmText.length}/{deletingPipeline?.nombre?.length || 0}
+                  </span>
+                </div>
+                <p className="text-[10px] text-muted-foreground text-center">
+                  Se cerrará automáticamente en {deleteCountdownSecs}s
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel onClick={() => setDeleteConfirmText('')}>Cancelar</AlertDialogCancel>
+            <div onClick={() => {
+              if (deleteConfirmText !== deletingPipeline?.nombre) {
+                setDeleteShakeKey(k => k + 1)
+              }
+            }}>
+              <AlertDialogAction
+                onClick={() => {
+                  setDeleteConfirmText('')
+                  handleDeletePipeline()
+                }}
+                disabled={
+                  deleteConfirmText !== deletingPipeline?.nombre ||
+                  (deletingPipeline?._count?.deals > 0 && !deleteTargetPipelineId)
+                }
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {deletingPipeline?._count?.deals > 0
+                  ? `Eliminar y migrar ${deletingPipeline._count.deals} deals`
+                  : 'Eliminar permanentemente'}
+              </AlertDialogAction>
+            </div>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Modal de Configuración de Etapas */}
       <StageConfigDialog
         open={showConfigDialog}
         onOpenChange={setShowConfigDialog}
         stages={stages}
+        pipelineId={activePipelineId}
         onUpdate={fetchData}
+      />
+
+      {/* Modal de Reordenar Pipelines */}
+      <PipelineReorderDialog
+        open={showReorderDialog}
+        onOpenChange={(open) => { setShowReorderDialog(open); if (!open) fetchPipelines(); }}
+        pipelines={reorderPipelines}
+        setPipelines={setReorderPipelines}
       />
     </div>
   )
@@ -761,22 +1512,48 @@ function StageConfigDialog({
   open,
   onOpenChange,
   stages,
+  pipelineId,
   onUpdate,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   stages: Stage[]
+  pipelineId?: string
   onUpdate: () => void
 }) {
   const [localStages, setLocalStages] = useState<Stage[]>([])
   const [editingStage, setEditingStage] = useState<Stage | null>(null)
   const [showNewStageForm, setShowNewStageForm] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<Stage | null>(null)
+  const [deleteConfirmText, setDeleteConfirmText] = useState('')
+  const [deleteCountdownSecs, setDeleteCountdownSecs] = useState(30)
+  const [deleteShakeKey, setDeleteShakeKey] = useState(0)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     setLocalStages([...stages].sort((a, b) => a.orden - b.orden))
   }, [stages, open])
+
+  // Auto-cerrar diálogo de eliminación tras 30s
+  useEffect(() => {
+    if (!deleteConfirm) {
+      setDeleteCountdownSecs(30)
+      return
+    }
+    const timer = setInterval(() => {
+      setDeleteCountdownSecs(prev => {
+        if (prev <= 1) {
+          clearInterval(timer)
+          setDeleteConfirm(null)
+          setDeleteConfirmText('')
+          toast.info('Eliminación cancelada por tiempo de espera')
+          return 30
+        }
+        return prev - 1
+      })
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [deleteConfirm])
 
   const handleCreateStage = async (data: { nombre: string; color: string; probabilidad: number }) => {
     try {
@@ -784,7 +1561,7 @@ function StageConfigDialog({
       const response = await apiFetch('/api/pipeline/stages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...data, pipelineId: pipelineId || undefined }),
       })
 
       if (!response.ok) {
@@ -808,7 +1585,7 @@ function StageConfigDialog({
       const response = await apiFetch(`/api/pipeline/stages/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...data, pipelineId: pipelineId || undefined }),
       })
 
       if (!response.ok) {
@@ -838,6 +1615,7 @@ function StageConfigDialog({
         throw new Error(error.error || 'Error al eliminar etapa')
       }
 
+      triggerHaptic()
       toast.success('Etapa eliminada')
       setDeleteConfirm(null)
       onUpdate()
@@ -911,27 +1689,6 @@ function StageConfigDialog({
                   key={stage.id}
                   className="flex items-center gap-3 p-3 border rounded-lg bg-card"
                 >
-                  <div className="flex flex-col gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
-                      disabled={index === 0 || stage.esEtapaFinal || localStages[index - 1]?.esEtapaFinal}
-                      onClick={() => handleReorder(stage.id, 'up')}
-                    >
-                      <ChevronRight className="h-4 w-4 rotate-[-90deg]" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
-                      disabled={index === localStages.length - 1 || stage.esEtapaFinal || localStages[index + 1]?.esEtapaFinal}
-                      onClick={() => handleReorder(stage.id, 'down')}
-                    >
-                      <ChevronRight className="h-4 w-4 rotate-90" />
-                    </Button>
-                  </div>
-
                   <div
                     className="h-6 w-6 rounded-full flex-shrink-0"
                     style={{ backgroundColor: stage.color }}
@@ -947,30 +1704,48 @@ function StageConfigDialog({
                       )}
                     </div>
                     <span className="text-xs text-muted-foreground">
-                      Probabilidad: {stage.probabilidad}%
+                      Probabilidad: {stage.probabilidad}% • Orden: {stage.orden}
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => setEditingStage(stage)}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    {!stage.esEtapaFinal && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive"
-                        onClick={() => setDeleteConfirm(stage)}
-                      >
-                        <Trash2 className="h-4 w-4" />
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <MoreVertical className="h-4 w-4" />
                       </Button>
-                    )}
-                  </div>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="min-w-[160px]">
+                      <DropdownMenuItem
+                        disabled={index === 0 || stage.esEtapaFinal || localStages[index - 1]?.esEtapaFinal}
+                        onClick={() => handleReorder(stage.id, 'up')}
+                      >
+                        <ChevronRight className="h-3.5 w-3.5 mr-2 rotate-[-90deg]" />
+                        Mover arriba
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={index === localStages.length - 1 || stage.esEtapaFinal || localStages[index + 1]?.esEtapaFinal}
+                        onClick={() => handleReorder(stage.id, 'down')}
+                      >
+                        <ChevronRight className="h-3.5 w-3.5 mr-2 rotate-90" />
+                        Mover abajo
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => setEditingStage(stage)}
+                      >
+                        <Edit className="h-3.5 w-3.5 mr-2" />
+                        Editar
+                      </DropdownMenuItem>
+                      {!stage.esEtapaFinal && (
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={() => setDeleteConfirm(stage)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 mr-2" />
+                          Eliminar
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               ))}
             </div>
@@ -1014,28 +1789,253 @@ function StageConfigDialog({
         </DialogContent>
       </Dialog>
 
-      {/* Confirmación de eliminación */}
-      <AlertDialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
+      {/* Confirmación de eliminación de etapa */}
+      <AlertDialog open={!!deleteConfirm} onOpenChange={(open) => { if (!open) { setDeleteConfirm(null); setDeleteConfirmText(''); setDeleteCountdownSecs(30); setDeleteShakeKey(0); } }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Eliminar etapa "{deleteConfirm?.nombre}"?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta acción no se puede deshacer. La etapa será eliminada permanentemente.
-              Asegúrate de que no hay deals en esta etapa antes de eliminarla.
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-destructive" />
+              ¿Eliminar etapa "{deleteConfirm?.nombre}"?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              <p>Esta acción no se puede deshacer. La etapa será eliminada permanentemente.</p>
+              <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-3 space-y-2">
+                <Label htmlFor="delete-stage-confirm" className="text-sm font-medium text-destructive">
+                  Escribe <strong className="select-none">{deleteConfirm?.nombre}</strong> para confirmar
+                </Label>
+                <Input
+                  id="delete-stage-confirm"
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  placeholder={deleteConfirm?.nombre || ''}
+                  key={deleteShakeKey}
+                  className={`border-destructive/30 focus-visible:ring-destructive/50 ${deleteShakeKey > 0 ? 'animate-[shake_0.3s_ease-in-out]' : ''}`}
+                  autoComplete="off"
+                  autoFocus
+                />
+                <div className="flex items-center gap-1.5">
+                  <div className="flex-1 h-1.5 rounded-full bg-destructive/10 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-200 ${
+                        deleteConfirmText === deleteConfirm?.nombre ? 'bg-green-500' : 'bg-destructive/40'
+                      }`}
+                      style={{ width: `${deleteConfirm?.nombre ? (deleteConfirmText.length / deleteConfirm.nombre.length) * 100 : 0}%` }}
+                    />
+                  </div>
+                  <span className={`text-[10px] font-mono flex-shrink-0 ${
+                    deleteConfirmText === deleteConfirm?.nombre ? 'text-green-600' : 'text-muted-foreground'
+                  }`}>
+                    {deleteConfirmText.length}/{deleteConfirm?.nombre?.length || 0}
+                  </span>
+                </div>
+                <p className="text-[10px] text-muted-foreground text-center">
+                  Se cerrará automáticamente en {deleteCountdownSecs}s
+                </p>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => deleteConfirm && handleDeleteStage(deleteConfirm)}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Eliminar
-            </AlertDialogAction>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel onClick={() => setDeleteConfirmText('')}>Cancelar</AlertDialogCancel>
+            <div onClick={() => {
+              if (deleteConfirmText !== deleteConfirm?.nombre) {
+                setDeleteShakeKey(k => k + 1)
+              }
+            }}>
+              <AlertDialogAction
+                onClick={() => {
+                  setDeleteConfirmText('')
+                  deleteConfirm && handleDeleteStage(deleteConfirm)
+                }}
+                disabled={deleteConfirmText !== deleteConfirm?.nombre}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Eliminar permanentemente
+              </AlertDialogAction>
+            </div>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </>
+  )
+}
+
+// ─── Pipeline Reorder Dialog (drag & drop) ──────────────────────────────────
+
+function PipelineReorderDialog({
+  open,
+  onOpenChange,
+  pipelines,
+  setPipelines,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  pipelines: any[]
+  setPipelines: (pipelines: any[]) => void
+}) {
+  const [saving, setSaving] = useState(false)
+  const [activeId, setActiveId] = useState<string | null>(null)
+  const originalOrderRef = useRef<any[]>([])
+
+  // Snapshot original order when dialog opens
+  useEffect(() => {
+    if (open) {
+      originalOrderRef.current = [...pipelines]
+    }
+  }, [open])
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string)
+  }
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    setActiveId(null)
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+
+    const oldIndex = pipelines.findIndex((p) => p.id === active.id)
+    const newIndex = pipelines.findIndex((p) => p.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+
+    const reordered = arrayMove(pipelines, oldIndex, newIndex)
+    setPipelines(reordered)
+
+    setSaving(true)
+    try {
+      // Persist new order: send PATCH calls in parallel
+      const updates = reordered.map((p, i) =>
+        fetch(`/api/pipelines/${p.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orden: i + 1 }),
+        })
+      )
+      const results = await Promise.all(updates)
+      if (results.some(r => !r.ok)) {
+        const err = await results.find(r => !r.ok)?.json()
+        throw new Error(err?.error || 'Error al guardar orden')
+      }
+      toast.success('Orden actualizado')
+    } catch (error: any) {
+      toast.error(error.message)
+      // Revert to original order before this drag
+      setPipelines([...originalOrderRef.current])
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ListOrdered className="h-5 w-5" />
+            Reordenar Pipelines
+          </DialogTitle>
+          <DialogDescription>
+            Arrastra los pipelines para cambiar su orden en el selector
+          </DialogDescription>
+        </DialogHeader>
+
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCorners}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={pipelines.map(p => p.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <div className="space-y-2 py-2">
+              {pipelines.map((p, i) => (
+                <SortablePipelineItem
+                  key={p.id}
+                  pipeline={p}
+                  index={i}
+                  isDragging={activeId === p.id}
+                />
+              ))}
+            </div>
+          </SortableContext>
+          <DragOverlay>
+            {activeId && (
+              <div className="bg-card border rounded-lg p-3 shadow-lg opacity-90">
+                {pipelines.find(p => p.id === activeId)?.nombre}
+              </div>
+            )}
+          </DragOverlay>
+        </DndContext>
+
+        <DialogFooter className="gap-2">
+          <p className="text-xs text-muted-foreground flex-1">
+            {saving ? 'Guardando...' : `${pipelines.length} pipeline${pipelines.length !== 1 ? 's' : ''}`}
+          </p>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cerrar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function SortablePipelineItem({
+  pipeline,
+  index,
+  isDragging,
+}: {
+  pipeline: any
+  index: number
+  isDragging: boolean
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging: isSortableDragging,
+  } = useSortable({ id: pipeline.id })
+
+  const style = {
+    transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+    transition,
+    opacity: isSortableDragging ? 0.5 : 1,
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex items-center gap-3 p-3 rounded-lg border bg-card ${
+        isDragging ? 'z-50' : ''
+      }`}
+    >
+      <button
+        className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="h-4 w-4" />
+      </button>
+      <span className="text-xs text-muted-foreground font-mono w-5 flex-shrink-0">
+        {index + 1}
+      </span>
+      <span className="font-medium truncate flex-1 min-w-0" title={pipeline.nombre}>{pipeline.nombre}</span>
+      <span className="text-xs text-muted-foreground flex-shrink-0">
+        {pipeline._count?.deals || 0} deals
+      </span>
+    </div>
   )
 }
 
@@ -1153,7 +2153,7 @@ interface Contact {
   }
 }
 
-function NewDealForm({ stages, onSuccess }: { stages: Stage[]; onSuccess: () => void }) {
+function NewDealForm({ stages, pipelineId, onSuccess }: { stages: Stage[]; pipelineId?: string; onSuccess: () => void }) {
   const [loading, setLoading] = useState(false)
   const [contacts, setContacts] = useState<Contact[]>([])
   const [loadingContacts, setLoadingContacts] = useState(false)
@@ -1232,6 +2232,7 @@ function NewDealForm({ stages, onSuccess }: { stages: Stage[]; onSuccess: () => 
         probabilidad: formData.probabilidad,
         prioridad: formData.prioridad,
         fechaEstimadaCierre: formData.fechaEstimadaCierre || null,
+        pipelineId: pipelineId || undefined,
       }
 
       if (contactMode === 'existing') {

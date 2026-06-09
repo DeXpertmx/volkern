@@ -76,11 +76,7 @@ export async function POST(request: NextRequest) {
           }).join('\n\n');
 
           realEstateContext = `\n\nPROPIEDADES DISPONIBLES (últimas ${rows.length}):\n${listings}\n\n`;
-          realEstateContext += `Instrucciones extra para consultas inmobiliarias:
-- Si el usuario pregunta por propiedades, usa la información de arriba.
-- Para búsquedas más específicas, sugiere usar el buscador de propiedades en Volkern.
-- Si quieres recomendar, destaca precio, ubicación y características clave.
-- Puedes mencionar que hay más propiedades disponibles en el portal.`;
+          realEstateContext += `Instrucciones extra para consultas inmobiliarias:\n- Si el usuario pregunta por propiedades, usa la información de arriba.\n- Para búsquedas más específicas, sugiere usar el buscador de propiedades en Volkern.\n- Si quieres recomendar, destaca precio, ubicación y características clave.\n- Puedes mencionar que hay más propiedades disponibles en el portal.`;
         }
       } catch {
         // Silently fail - not critical if real estate context isn't available

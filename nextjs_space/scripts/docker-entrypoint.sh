@@ -3,8 +3,9 @@
 # Docker Entrypoint — Volkern ERP
 # 1. Espera a que la DB esté disponible
 # 2. Ejecuta migraciones de Prisma
-# 3. Hace seed si la DB está vacía (opcional)
-# 4. Inicia el servidor Next.js
+# 3. Ejecuta data migrations (idempotentes)
+# 4. Hace seed si la DB está vacía (opcional)
+# 5. Inicia el servidor Next.js
 # ═══════════════════════════════════════════════════════════════
 set -e
 
@@ -44,13 +45,39 @@ if ! npx prisma migrate deploy 2>&1; then
   fi
 fi
 
-# ─── 3. Seed opcional (solo si la DB está vacía) ──────────
+# ─── 3. Data migrations (idempotentes, seguras de ejecutar en cada deploy) ───
+echo "→ Ejecutando data migrations..."
+node -e "$(cat <<'NODESCRIPT'
+const { PrismaClient } = require('@prisma/client');
+const p = new PrismaClient();
+(async () => {
+  try {
+    // 1. Desactivar pipeline 'Inmobiliario' antiguo (reemplazado por Captación + Compra)
+    const r1 = await p.$executeRawUnsafe(`UPDATE "pipelines" SET "activo" = false, "nombre" = 'Inmobiliario (Legacy)', "descripcion" = 'Pipeline migrado. Reemplazado por Captación y Compra.' WHERE "categoria" = 'inmobiliario' AND "activo" = true`);
+    if (r1 > 0) console.log('   ✓ Inmobiliario legacy desactivado: ' + r1 + ' pipeline(s)');
+    else console.log('   ✓ Inmobiliario legacy ya migrado');
+
+    // 2. Corregir orden del pipeline Finanzas (5 → 6) — duplicado con Compra
+    const r2 = await p.$executeRawUnsafe(`UPDATE "pipelines" SET "orden" = 6 WHERE "categoria" = 'finanzas' AND "orden" = 5`);
+    if (r2 > 0) console.log('   ✓ Finanzas orden corregido (5 → 6): ' + r2 + ' pipeline(s)');
+    else console.log('   ✓ Finanzas orden ya correcto');
+  } catch(e) {
+    console.error('   ⚠️  Data migration falló:', e.message);
+    process.exitCode = 0;
+  } finally {
+    await p.$disconnect();
+  }
+})();
+NODESCRIPT
+)" 2>&1
+
+# ─── 4. Seed opcional (solo si la DB está vacía) ──────────
 if [ "${SEED_ON_START:-false}" = "true" ]; then
   echo "→ Ejecutando seed (SEED_ON_START=true)..."
   npx prisma db seed 2>&1 || echo "⚠️  Seed falló, continuando..."
 fi
 
-# ─── 4. Iniciar servidor ──────────────────────────────────
+# ─── 5. Iniciar servidor ──────────────────────────────────
 echo "→ Iniciando servidor Next.js..."
 echo "   NODE_ENV=$NODE_ENV"
 echo "   PORT=${PORT:-3000}"

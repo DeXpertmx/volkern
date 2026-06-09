@@ -60,12 +60,21 @@ export function initCronJobs() {
     console.log('✅ [Cron] Snapshot mensual generado.');
   });
 
+  // 7. Limit Alerts - Ejecución diaria a las 10:00 AM
+  cron.schedule('0 10 * * *', async () => {
+    console.log('[Cron] 📊 Verificando límites de planes...');
+    const { checkAndNotifyLimitAlerts } = await import('../subscription');
+    const result = await checkAndNotifyLimitAlerts();
+    console.log(`[Cron] ✅ Límites verificados: ${result.checked} tenants, ${result.notified} notificaciones enviadas, ${result.alerts.length} alertas.`);
+  });
+
   console.log('✅ [Scheduler] Radar de Ghosting programado (09:00 AM daily)');
   console.log('✅ [Scheduler] Ritual Dominical programado (Sun 23:59)');
   console.log('✅ [Scheduler] Recuperación Proactiva programada (cada 4h)');
   console.log('✅ [Scheduler] Métricas SaaS diarias programadas (00:05 AM)');
   console.log('✅ [Scheduler] Churn rate semanal programado (Sun 01:00 AM)');
   console.log('✅ [Scheduler] Snapshot mensual programado (1st of month 02:00 AM)');
+  console.log('✅ [Scheduler] Alertas de límites programadas (10:00 AM daily)');
 }
 
 /**

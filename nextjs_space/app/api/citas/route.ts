@@ -95,7 +95,8 @@ export const POST = withTenantAuth(async (request, auth) => {
       linkReunionPegado,
       fechaHora,
       duracion: duracionRaw = 60,
-      estado = 'pendiente'
+      estado = 'pendiente',
+      connectedCalendarId
     } = data;
 
     const tenantId = auth.tenant!.id;
@@ -184,6 +185,7 @@ export const POST = withTenantAuth(async (request, auth) => {
 
     if (servicioId) citaData.servicioId = servicioId
     if (catalogoItemId) citaData.catalogoItemId = catalogoItemId
+    if (connectedCalendarId) citaData.connectedCalendarId = connectedCalendarId
 
     // VALIDACIÓN DE CONFLICTOS (con buffer si se proporciona)
     const bufferMinutos = body.bufferMinutos || 0
@@ -276,6 +278,17 @@ export const POST = withTenantAuth(async (request, auth) => {
       })
 
       if (googleIntegration && googleIntegration.activo) {
+        // Si se especificó un connectedCalendar, obtener su Google Calendar ID
+        let targetCalendarId: string | undefined;
+        if (connectedCalendarId) {
+          const connectedCal = await prisma.connectedCalendar.findUnique({
+            where: { id: connectedCalendarId },
+          });
+          if (connectedCal) {
+            targetCalendarId = connectedCal.calendarId;
+          }
+        }
+
         const generarMeet = tipoLinkReunion === 'generar'
         const calendarEvent = await createCalendarEvent(auth.user!.id, {
           id: cita.id,
@@ -286,6 +299,7 @@ export const POST = withTenantAuth(async (request, auth) => {
           leadNombre: lead?.nombre || 'Evento sin cliente',
           leadEmail: lead?.email || undefined,
           generarMeet,
+          targetCalendarId,
         })
 
         if (calendarEvent?.hangoutLink) {

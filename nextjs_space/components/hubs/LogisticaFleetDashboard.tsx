@@ -20,7 +20,7 @@ import GpsDeviceMappingPanel from '@/components/hubs/GpsDeviceMappingPanel';
 const FleetLiveMap = dynamic(
   () => import('@/components/hubs/FleetLiveMap'),
   { ssr: false, loading: () => (
-    <div className="rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center" style={{ height: '380px' }}>
+    <div className="rounded-xl bg-muted dark:bg-slate-800 border border-border dark:border-slate-700 flex items-center justify-center" style={{ height: '380px' }}>
       <Loader2 className="w-6 h-6 animate-spin text-yellow-400" />
     </div>
   )}
@@ -70,8 +70,8 @@ export default function FleetDashboard() {
               <Truck className="w-5 h-5 text-yellow-400" />
             </div>
             <div>
-              <h1 className="text-2xl font-black uppercase tracking-tight text-white">Gestión de Flota</h1>
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Vehículos, conductores y mantenimiento</p>
+              <h1 className="text-2xl font-black uppercase tracking-tight text-foreground dark:text-white">Gestión de Flota</h1>
+              <p className="text-xs font-bold text-muted-foreground dark:text-slate-500 uppercase tracking-widest">Vehículos, conductores y mantenimiento</p>
             </div>
           </div>
         </div>
@@ -98,12 +98,12 @@ export default function FleetDashboard() {
 
       {/* Search */}
       <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground dark:text-slate-500" />
         <Input
           placeholder="Buscar por matrícula, marca o modelo..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="pl-10 bg-slate-900 border-slate-800 text-white placeholder:text-slate-600 rounded-xl h-11"
+          className="pl-10 bg-card dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-white placeholder:text-muted-foreground/60 dark:placeholder:text-slate-600 rounded-xl h-11"
         />
       </div>
 
@@ -111,9 +111,9 @@ export default function FleetDashboard() {
       <div>
         <div className="flex items-center gap-2 mb-3">
           <MapPin className="w-4 h-4 text-blue-400" />
-          <span className="text-sm font-semibold text-white">Posición de Vehículos en Vivo</span>
+          <span className="text-sm font-semibold text-foreground dark:text-white">Posición de Vehículos en Vivo</span>
           {vehicles.some((v: any) => v.currentLat != null) && (
-            <span className="text-[10px] text-slate-500 font-medium">
+            <span className="text-[10px] text-muted-foreground dark:text-slate-500 font-medium">
               ({vehicles.filter((v: any) => v.currentLat != null).length} reportando)
             </span>
           )}
@@ -122,9 +122,9 @@ export default function FleetDashboard() {
       </div>
 
       {/* Fleet Table */}
-      <Card className="border-none shadow-sm bg-slate-900">
-        <CardHeader className="pb-4 border-b border-slate-800">
-          <CardTitle className="text-lg font-bold uppercase text-white tracking-tight">
+      <Card className="border-none shadow-sm bg-card dark:bg-slate-900">
+        <CardHeader className="pb-4 border-b border-border dark:border-slate-800">
+          <CardTitle className="text-lg font-bold uppercase text-foreground dark:text-white tracking-tight">
             Vehículos ({filtered.length})
           </CardTitle>
         </CardHeader>
@@ -134,9 +134,9 @@ export default function FleetDashboard() {
               <Loader2 className="w-6 h-6 animate-spin text-yellow-400" />
             </div>
           ) : filtered.length === 0 ? (
-            <div className="text-center p-12 bg-slate-800/50 rounded-2xl border border-slate-700">
-              <HardDrive className="w-10 h-10 text-slate-600 mx-auto mb-3" />
-              <p className="text-sm text-slate-500 font-medium">
+            <div className="text-center p-12 bg-muted/50 dark:bg-slate-800/50 rounded-2xl border border-border dark:border-slate-700">
+              <HardDrive className="w-10 h-10 text-muted-foreground/40 dark:text-slate-600 mx-auto mb-3" />
+              <p className="text-sm text-muted-foreground dark:text-slate-500 font-medium">
                 {search ? 'No hay vehículos que coincidan con la búsqueda' : 'No hay vehículos registrados'}
               </p>
             </div>
@@ -152,15 +152,15 @@ export default function FleetDashboard() {
                     setGpsConfigVehicle(v);
                     setGpsConfigOpen(true);
                   }}
-                  className="flex items-center justify-between p-4 rounded-xl bg-slate-800/50 border border-slate-700/50 hover:border-yellow-600/30 hover:bg-slate-800 transition-all group cursor-pointer"
+                  className="flex items-center justify-between p-4 rounded-xl bg-muted/50 dark:bg-slate-800/50 border border-border/50 dark:border-slate-700/50 hover:border-yellow-600/30 hover:bg-accent dark:hover:bg-slate-800 transition-all group cursor-pointer"
                 >
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-slate-800 flex items-center justify-center border border-slate-700">
-                      <Truck className="w-6 h-6 text-slate-400" />
+                    <div className="w-12 h-12 rounded-xl bg-muted dark:bg-slate-800 flex items-center justify-center border border-border dark:border-slate-700">
+                      <Truck className="w-6 h-6 text-muted-foreground dark:text-slate-400" />
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <h4 className="font-bold text-white text-sm">{v.plate}</h4>
+                        <h4 className="font-bold text-foreground dark:text-white text-sm">{v.plate}</h4>
                         <Badge className={`border text-[9px] font-black uppercase px-2 py-0.5 ${statusStyles[v.status] || ''}`}>
                           {v.status === 'ACTIVE' ? 'Activo' : v.status === 'MAINTENANCE' ? 'Mantenimiento' : v.status}
                         </Badge>
@@ -175,25 +175,25 @@ export default function FleetDashboard() {
                                   : 'bg-amber-400/60')
                               }
                             />
-                            <Radio className="w-2.5 h-2.5 text-slate-500" />
+                            <Radio className="w-2.5 h-2.5 text-muted-foreground dark:text-slate-500" />
                           </div>
                         )}
                       </div>
-                      <p className="text-xs text-slate-500 font-bold mt-0.5">
+                      <p className="text-xs text-muted-foreground dark:text-slate-500 font-bold mt-0.5">
                         {v.brand} {v.model} • {v.year} • {typeLabels[v.type] || v.type} • {v.currentKm?.toLocaleString()} km
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="text-right hidden md:block">
-                      <p className="text-[10px] font-bold uppercase text-slate-500">Capacidad</p>
-                      <p className="text-sm font-bold text-white">{v.capacity} {v.capacityUnit}</p>
+                      <p className="text-[10px] font-bold uppercase text-muted-foreground dark:text-slate-500">Capacidad</p>
+                      <p className="text-sm font-bold text-foreground dark:text-white">{v.capacity} {v.capacityUnit}</p>
                     </div>
                     {v.status === 'MAINTENANCE' && (
                       <Wrench className="w-4 h-4 text-amber-400" />
                     )}
                     <Button variant="ghost" size="icon" className="rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-                      <ArrowRight className="w-4 h-4 text-slate-400" />
+                      <ArrowRight className="w-4 h-4 text-muted-foreground dark:text-slate-400" />
                     </Button>
                   </div>
                 </motion.div>
