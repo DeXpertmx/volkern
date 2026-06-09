@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/core/db';
 import { validateWebhookSignature } from '@/lib/nexus/webhook-validator';
 import { translateHubEvent, TranslatedEvent } from '@/lib/nexus/transformers';
+import { eventBus, EVENTS } from '@/lib/skills/event-bus';
 
 export async function POST(request: NextRequest) {
     try {
@@ -78,6 +79,44 @@ async function syncLocalDatabase(event: TranslatedEvent) {
                             fechaUltimoMensaje: new Date(),
                         }
                     });
+
+                    // 🔔 Emitir MESSAGE_RECEIVED para mensajes entrantes → activa el chatbot IA
+                    if (event.type === 'message.received' && data.content) {
+                        const channelType = data.channel || (conversation as any).canal || '';
+                        const isIncomingContactMessage =
+                            (data.metadata?.sender?.type === 'contact' || data.metadata?.sender_type === 'contact') ||
+                            // Si no hay sender explícito, asumimos que es de contacto (no del sistema)
+                            !data.metadata?.sender?.type;
+
+                        if (isIncomingContactMessage) {
+                            const metadata = data.metadata || {};
+                            eventBus.emitEvent(EVENTS.MESSAGE_RECEIVED as any, {
+                                tenantId,
+                                messageId: data.externalRef,
+                                conversationId: conversation.id,
+                                content: data.content,
+                                canal: channelType,
+                                source: 'chatwoot',
+                                timestamp: new Date(),
+                                metadata: {
+                                    sender_type: 'contact',
+                                    channel_type: channelType,
+                                    accountId: metadata.account?.id || (conversation as any).chatwootAccountId,
+                                    inboxId: metadata.inbox?.id || (conversation as any).chatwootInboxId,
+                                    localConversationId: conversation.id,
+                                    localMessageId: data.externalRef,
+                                    contact: {
+                                        id: metadata.sender?.id,
+                                        name: metadata.sender?.name,
+                                        email: metadata.sender?.email,
+                                        phone: metadata.sender?.phone_number,
+                                    },
+                                    hubMetadata: metadata,
+                                },
+                            } as any);
+                            console.log('[Nexus Sync] 📨 MESSAGE_RECEIVED emitido para chatbot IA');
+                        }
+                    }
                 }
             }
             break;
