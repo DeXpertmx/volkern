@@ -59,10 +59,10 @@ async function main() {
   const hashedPasswordSuperadmin = await bcrypt.hash('Volkern-admin2025', 12)
 
   // Usuario Superadmin - Acceso total
+  // ⚠️ update NUNCA toca password para no sobrescribir la contraseña del usuario en producción
   await prisma.user.upsert({
     where: { email: 'bruno.hess@dimensionexpert.com' },
     update: {
-      password: hashedPasswordSuperadmin,
       name: 'Bruno Hess',
     },
     create: {
@@ -77,6 +77,7 @@ async function main() {
   console.log('✅ Usuario Superadmin creado')
 
   // Usuario admin de prueba (hidden)
+  // ⚠️ update NUNCA toca password para no sobrescribir la contraseña del usuario en producción
   await prisma.user.upsert({
     where: { email: 'john@doe.com' },
     update: {},
@@ -89,7 +90,7 @@ async function main() {
     },
   })
 
-  // Usuario admin principal
+  // Usuario admin principal — ⚠️ update no toca password
   const adminUser = await prisma.user.upsert({
     where: { email: 'admin@volkern.com' },
     update: {},

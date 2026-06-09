@@ -83,10 +83,10 @@ async function main() {
   // 4. Create admin user
   const hashedPassword = await bcrypt.hash('Admin12345@', 12)
 
+  // ⚠️ update NUNCA toca password para no sobrescribir la contraseña del usuario
   const user = await prisma.user.upsert({
     where: { email: 'bruno.hess@dimensionexpert.com' },
     update: {
-      password: hashedPassword,
       roleId: adminRole.id,
       tenantId: tenant.id,
     },
