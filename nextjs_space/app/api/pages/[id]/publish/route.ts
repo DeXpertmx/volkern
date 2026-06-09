@@ -3,11 +3,28 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, globalPrisma } from "@/lib/db";
 import { withTenantAuth } from "@/lib/api-key-auth";
+import { checkFeatureLimit } from "@/lib/subscription";
 
 // POST /api/pages/[id]/publish - Publicar una página
 export const POST = withTenantAuth(async (req, auth, params: { id: string }) => {
   try {
     const tenantId = auth.tenant!.id;
+
+    // Verificar si la página ya está publicada antes de chequear el límite
+    const currentPage = await prisma.page.findUnique({
+      where: { id: params.id },
+      select: { estado: true }
+    })
+    if (currentPage && currentPage.estado !== 'published') {
+      const limitCheck = await checkFeatureLimit(tenantId, 'published_pages', 1)
+      if (!limitCheck.allowed) {
+        return NextResponse.json(
+          { error: `Has alcanzado el límite de ${limitCheck.limit} landing pages publicadas en tu plan actual.` },
+          { status: 403 }
+        )
+      }
+    }
+
     const body = await req.json();
     const { subdominio, dominioPersonalizado, generarEmbed } = body;
     console.log(`POST /api/pages/${params.id}/publish - Received body:`, body);

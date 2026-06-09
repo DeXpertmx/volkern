@@ -15,6 +15,7 @@ import { withTenantAuth } from '@/lib/api-key-auth';
 import { getProperties } from '@/lib/real-estate/property-helpers';
 import { generateIdealistaFeed, getIdealistaFilename } from '@/lib/real-estate/exporters/xml-exporter';
 import { generateFotocasaCSV, getFotocasaFilename } from '@/lib/real-estate/exporters/csv-exporter';
+import { generateMLSJsonFeed, getMLSJsonFilename } from '@/lib/real-estate/exporters/json-exporter';
 import { uploadFile, getDownloadUrl } from '@/lib/s3';
 
 // ─── GET: Download export ─────────────────────────────────────────────────────
@@ -49,6 +50,23 @@ export const GET = withTenantAuth(async (request, auth) => {
       return new NextResponse(csvContent, {
         headers: {
           'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': `attachment; filename="${filename}"`,
+        },
+      });
+    }
+
+    if (format === 'json') {
+      const jsonContent = generateMLSJsonFeed(properties, {          tenantName: auth.tenant!.nombre,
+          tenantEmail: auth.user?.email || 'info@volkern.app',
+          portalUrl: auth.tenant?.slug
+            ? `${process.env.NEXT_PUBLIC_APP_URL || 'https://volkern.app'}/p/${auth.tenant.slug}`
+            : process.env.NEXT_PUBLIC_APP_URL || 'https://volkern.app',
+        });
+      const filename = getMLSJsonFilename();
+
+      return new NextResponse(jsonContent, {
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
           'Content-Disposition': `attachment; filename="${filename}"`,
         },
       });
@@ -108,6 +126,16 @@ export const POST = withTenantAuth(async (request, auth) => {
       content = generateFotocasaCSV(properties);
       contentType = 'text/csv; charset=utf-8';
       filename = getFotocasaFilename();
+    } else if (format === 'json') {
+      content = generateMLSJsonFeed(properties, {
+        tenantName: auth.tenant!.nombre,
+        tenantEmail: auth.user?.email || 'info@volkern.app',
+        portalUrl: auth.tenant?.slug
+          ? `${process.env.NEXT_PUBLIC_APP_URL || 'https://volkern.app'}/p/${auth.tenant.slug}`
+          : process.env.NEXT_PUBLIC_APP_URL || 'https://volkern.app',
+      });
+      contentType = 'application/json; charset=utf-8';
+      filename = getMLSJsonFilename();
     } else {
       content = generateIdealistaFeed(properties, {
         tenantName: auth.tenant!.nombre,

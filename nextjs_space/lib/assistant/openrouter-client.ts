@@ -35,7 +35,8 @@ export async function callOpenRouter(model: string, messages: OpenRouterMessage[
       'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
       'Content-Type': 'application/json',
       'HTTP-Referer': 'https://volkern.app',
-      'X-Title': 'Volkern CRM Assistant'
+      'X-Title': 'Volkern CRM Assistant',
+      'X-No-Logging': 'true'
     },
     body: JSON.stringify({
       model,
@@ -61,12 +62,21 @@ export async function callOpenRouter(model: string, messages: OpenRouterMessage[
 }
 
 /**
- * Llama a DeepSeek V4 Flash (free) via OpenRouter — modelo principal.
+ * Llama a google/gemma-4-31b-it:free via OpenRouter — modelo principal.
  */
-async function callDeepSeekV4Flash(
+async function callGemma4(
   messages: OpenRouterMessage[]
 ): Promise<OpenRouterResponse> {
-  return callOpenRouter('deepseek/deepseek-v4-flash:free', messages, 0.3);
+  return callOpenRouter('google/gemma-4-31b-it:free', messages, 0.3);
+}
+
+/**
+ * Llama a nvidia/nemotron-3-ultra-550b-a55b:free via OpenRouter — modelo de respaldo.
+ */
+async function callNemotron(
+  messages: OpenRouterMessage[]
+): Promise<OpenRouterResponse> {
+  return callOpenRouter('nvidia/nemotron-3-ultra-550b-a55b:free', messages, 0.3);
 }
 
 /**
@@ -136,37 +146,47 @@ async function callGemini25Flash(
 
 /**
  * Pipeline de llamada con fallback:
- * 1. DeepSeek V4 Flash (free) via OpenRouter (primario)
- * 2. Google Gemini 2.5 Flash directo (fallback)
+ * 1. google/gemma-4-31b-it:free via OpenRouter (primario)
+ * 2. nvidia/nemotron-3-ultra-550b-a55b:free via OpenRouter (respaldo)
+ * 3. Google Gemini 2.5 Flash directo (respaldo final)
  */
 export async function callAssistantWithFallback(
   messages: OpenRouterMessage[]
 ): Promise<OpenRouterResponse> {
-  // 1. Intentar DeepSeek V4 Flash via OpenRouter
+  // 1. Intentar Gemma 4 via OpenRouter
   try {
-    console.log('[AI] Intentando DeepSeek V4 Flash...');
-    const response = await callDeepSeekV4Flash(messages);
-    console.log('[AI] ✅ DeepSeek respondió correctamente');
+    console.log('[AI] Intentando google/gemma-4-31b-it:free...');
+    const response = await callGemma4(messages);
+    console.log('[AI] ✅ Gemma 4 respondió correctamente');
     return response;
-  } catch (deepseekError) {
-    console.warn('[AI] DeepSeek falló:', deepseekError);
+  } catch (gemmaError) {
+    console.warn('[AI] Gemma 4 falló:', gemmaError);
   }
 
-  // 2. Fallback: Google Gemini 2.5 Flash directo
+  // 2. Intentar Nemotron via OpenRouter
+  try {
+    console.log('[AI] Intentando nvidia/nemotron-3-ultra-550b-a55b:free...');
+    const response = await callNemotron(messages);
+    console.log('[AI] ✅ Nemotron respondió correctamente');
+    return response;
+  } catch (nemotronError) {
+    console.warn('[AI] Nemotron falló:', nemotronError);
+  }
+
+  // 3. Fallback final: Google Gemini 2.5 Flash directo
   try {
     console.log('[AI] Intentando Google Gemini 2.5 Flash...');
     const response = await callGemini25Flash(messages);
     console.log('[AI] ✅ Gemini respondió correctamente');
     return response;
   } catch (geminiError) {
-    console.error('[AI] ❌ Ambos fallaron:', geminiError);
+    console.error('[AI] ❌ Todos los modelos fallaron:', geminiError);
     throw geminiError;
   }
 }
 
 /**
- * Pipeline genérico con modelo configurable y fallback a Gemini.
- * Permite especificar modelo, temperatura y max tokens.
+ * Pipeline genérico con modelo configurable y fallback a Nemotron / Gemini.
  */
 export async function callOpenRouterWithFallback(
   model: string,
@@ -183,16 +203,30 @@ export async function callOpenRouterWithFallback(
     console.warn(`[AI] ${model} falló:`, openRouterError);
   }
 
-  // Fallback: Google Gemini 2.5 Flash directo
+  // Fallback: nvidia/nemotron-3-ultra-550b-a55b:free via OpenRouter
+  if (model !== 'nvidia/nemotron-3-ultra-550b-a55b:free') {
+    try {
+      console.log('[AI] Intentando nvidia/nemotron-3-ultra-550b-a55b:free...');
+      const response = await callNemotron(messages);
+      console.log('[AI] ✅ Nemotron respondió correctamente');
+      return response;
+    } catch (nemotronError) {
+      console.warn('[AI] Nemotron falló:', nemotronError);
+    }
+  }
+
+  // Fallback final: Google Gemini 2.5 Flash directo
   try {
     console.log('[AI] Intentando Google Gemini 2.5 Flash (fallback)...');
     const response = await callGemini25Flash(messages);
     console.log('[AI] ✅ Gemini respondió correctamente');
     return response;
   } catch (geminiError) {
-    console.error('[AI] ❌ Ambos fallaron:', geminiError);
+    console.error('[AI] ❌ Todos fallaron:', geminiError);
     throw geminiError;
   }
 }
 
-export { callDeepSeekV4Flash, callGemini25Flash };
+// Para retrocompatibilidad
+export const callDeepSeekV4Flash = callGemma4;
+export { callGemini25Flash };

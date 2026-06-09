@@ -6,6 +6,7 @@ import { createSystemContext } from '@/lib/skills/context';
 import { withTenantAuth } from '@/lib/api-key-auth';
 import { SignatureService } from '@/lib/security/signature-service';
 import { eventBus, EVENTS } from '@/lib/skills/event-bus';
+import { checkFeatureLimit } from '@/lib/subscription';
 
 /**
  * POST /api/contratos/sign/[id]
@@ -18,6 +19,15 @@ export const POST = withTenantAuth(async (request, auth, { params }) => {
     const contractId = params.id;
     const body = await request.json();
     const { operatorNote } = body;
+
+    // Verificar límite de contratos firmados
+    const signLimitCheck = await checkFeatureLimit(tenantId, 'contratos_sign', 1)
+    if (!signLimitCheck.allowed) {
+      return NextResponse.json(
+        { error: `Has alcanzado el límite de ${signLimitCheck.limit} contratos firmados en tu plan actual.` },
+        { status: 403 }
+      )
+    }
 
     // 1. Obtener contrato y datos del tenant (vaultSeed)
     const [contrato, tenant] = await Promise.all([

@@ -30,6 +30,7 @@ export const GET = withTenantAuth(async (req, auth) => {
     const leadId = searchParams.get('leadId')
     const contactId = searchParams.get('contactId')
     const catalogoItemId = searchParams.get('catalogoItemId')
+    const pipelineId = searchParams.get('pipelineId')
     const search = searchParams.get('search')
 
     const where: any = {
@@ -48,6 +49,7 @@ export const GET = withTenantAuth(async (req, auth) => {
     if (leadId) where.leadId = leadId
     if (contactId) where.contactId = contactId
     if (catalogoItemId) where.catalogoItemId = catalogoItemId
+    if (pipelineId) where.pipelineId = pipelineId
     
     if (search) {
       where.OR = [
@@ -149,6 +151,7 @@ export const POST = withTenantAuth(async (req, auth) => {
       tags,
       usuarioAsignadoId,
       catalogoItemId,
+      pipelineId,
     } = data;
 
     let finalContactId = contactId
@@ -229,6 +232,7 @@ export const POST = withTenantAuth(async (req, auth) => {
         fechaEstimadaCierre: fechaEstimadaCierre ? new Date(fechaEstimadaCierre) : null,
         origen,
         tags,
+        pipelineId: pipelineId || null,
         catalogoItemId: catalogoItemId || null,
         fechaUltimaActividad: new Date(),
       },

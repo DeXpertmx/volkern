@@ -172,15 +172,15 @@ export default function GpsDeviceMappingPanel() {
 
   return (
     <>
-      <Card className="border-none shadow-sm bg-slate-900">
-        <CardHeader className="pb-4 border-b border-slate-800">
+      <Card className="border-none shadow-sm bg-card dark:bg-slate-900">
+        <CardHeader className="pb-4 border-b border-border dark:border-slate-800">
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-lg font-bold uppercase text-white tracking-tight flex items-center gap-2">
+              <CardTitle className="text-lg font-bold uppercase text-foreground dark:text-white tracking-tight flex items-center gap-2">
                 <Radio className="w-4 h-4 text-cyan-400" />
                 Mapeo de Dispositivos GPS
               </CardTitle>
-              <CardDescription className="text-xs text-slate-500 mt-1">
+              <CardDescription className="text-xs text-muted-foreground dark:text-slate-500 mt-1">
                 Vincula IMEI de trackers Traccar con los deviceKey de vehículos Volkern
               </CardDescription>
             </div>
@@ -200,12 +200,12 @@ export default function GpsDeviceMappingPanel() {
               <Loader2 className="w-6 h-6 animate-spin text-cyan-400" />
             </div>
           ) : mappings.length === 0 ? (
-            <div className="text-center p-12 bg-slate-800/50 rounded-2xl border border-slate-700">
-              <Link2 className="w-10 h-10 text-slate-600 mx-auto mb-3" />
-              <p className="text-sm text-slate-500 font-medium">
+            <div className="text-center p-12 bg-muted/50 dark:bg-slate-800/50 rounded-2xl border border-border dark:border-slate-700">
+              <Link2 className="w-10 h-10 text-muted-foreground/40 dark:text-slate-600 mx-auto mb-3" />
+              <p className="text-sm text-muted-foreground dark:text-slate-500 font-medium">
                 No hay mapeos de dispositivos GPS
               </p>
-              <p className="text-xs text-slate-600 mt-1">
+              <p className="text-xs text-muted-foreground/60 dark:text-slate-600 mt-1">
                 Vincula los IMEI de tus trackers Traccar con los deviceKey de los vehículos
               </p>
             </div>
@@ -213,13 +213,13 @@ export default function GpsDeviceMappingPanel() {
             <>
               {/* Table header */}
               <div className="grid grid-cols-[1fr_1fr_100px] gap-3 px-4 py-2 mb-2">
-                <span className="text-[10px] font-black uppercase text-slate-500 tracking-widest">
+                <span className="text-[10px] font-black uppercase text-muted-foreground dark:text-slate-500 tracking-widest">
                   IMEI (Traccar)
                 </span>
-                <span className="text-[10px] font-black uppercase text-slate-500 tracking-widest">
+                <span className="text-[10px] font-black uppercase text-muted-foreground dark:text-slate-500 tracking-widest">
                   Device Key (Volkern)
                 </span>
-                <span className="text-[10px] font-black uppercase text-slate-500 tracking-widest text-right">
+                <span className="text-[10px] font-black uppercase text-muted-foreground dark:text-slate-500 tracking-widest text-right">
                   Acciones
                 </span>
               </div>
@@ -234,14 +234,14 @@ export default function GpsDeviceMappingPanel() {
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, x: -20 }}
                       transition={{ delay: i * 0.03 }}
-                      className="grid grid-cols-[1fr_1fr_100px] gap-3 items-center p-3 rounded-xl bg-slate-800/50 border border-slate-700/50 hover:border-cyan-600/20 hover:bg-slate-800 transition-all group"
+                      className="grid grid-cols-[1fr_1fr_100px] gap-3 items-center p-3 rounded-xl bg-muted/50 dark:bg-slate-800/50 border border-border/50 dark:border-slate-700/50 hover:border-cyan-600/20 hover:bg-accent dark:hover:bg-slate-800 transition-all group"
                     >
                       {/* IMEI */}
                       <div className="flex items-center gap-2 min-w-0">
                         <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center shrink-0">
                           <Radio className="w-3.5 h-3.5 text-cyan-400" />
                         </div>
-                        <code className="text-sm font-mono text-slate-300 truncate select-all">
+                        <code className="text-sm font-mono text-foreground/80 dark:text-slate-300 truncate select-all">
                           {entry.imei}
                         </code>
                       </div>
@@ -261,7 +261,7 @@ export default function GpsDeviceMappingPanel() {
                           {copiedKey === entry.gpsDeviceId ? (
                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                           ) : (
-                            <Copy className="w-3.5 h-3.5 text-slate-500" />
+                            <Copy className="w-3.5 h-3.5 text-muted-foreground dark:text-slate-500" />
                           )}
                         </Button>
                       </div>
@@ -272,10 +272,10 @@ export default function GpsDeviceMappingPanel() {
                           variant="ghost"
                           size="icon"
                           onClick={() => openEditDialog(entry)}
-                          className="h-8 w-8 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-slate-700"
+                          className="h-8 w-8 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-accent dark:hover:bg-slate-700"
                           title="Editar mapeo"
                         >
-                          <Pencil className="w-3.5 h-3.5 text-slate-400" />
+                          <Pencil className="w-3.5 h-3.5 text-muted-foreground dark:text-slate-400" />
                         </Button>
                         <Button
                           variant="ghost"
@@ -293,11 +293,11 @@ export default function GpsDeviceMappingPanel() {
               </div>
 
               {/* Footer */}
-              <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-800">
-                <p className="text-[10px] font-bold text-slate-500 uppercase">
+              <div className="flex items-center justify-between mt-4 pt-3 border-t border-border dark:border-slate-800">
+                <p className="text-[10px] font-bold text-muted-foreground dark:text-slate-500 uppercase">
                   {mappings.length} dispositivo{mappings.length !== 1 ? 's' : ''} mapeado{mappings.length !== 1 ? 's' : ''}
                 </p>
-                <p className="text-[10px] text-slate-600">
+                <p className="text-[10px] text-muted-foreground/60 dark:text-slate-600">
                   El bridge Traccar usa este mapeo para reenviar posiciones GPS a Volkern
                 </p>
               </div>
@@ -311,17 +311,17 @@ export default function GpsDeviceMappingPanel() {
       {/* ══════════════════════════════════════════════════════ */}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-[480px] bg-slate-900 border border-slate-700 text-white">
+        <DialogContent className="sm:max-w-[480px] bg-card dark:bg-slate-900 border border-border dark:border-slate-700">
           {/* Header */}
           <div className="flex items-center gap-3 mb-6">
             <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center">
               <Link2 className="w-5 h-5 text-cyan-400" />
             </div>
             <div>
-              <DialogTitle className="text-lg font-black uppercase tracking-tight text-white">
+              <DialogTitle className="text-lg font-black uppercase tracking-tight text-foreground dark:text-white">
                 {editingEntry ? 'Editar Mapeo' : 'Nuevo Mapeo GPS'}
               </DialogTitle>
-              <DialogDescription className="text-xs text-slate-400 font-medium">
+              <DialogDescription className="text-xs text-muted-foreground dark:text-slate-400 font-medium">
                 {editingEntry
                   ? `Modificando el mapeo para IMEI ${editingEntry.imei}`
                   : 'Vincula un IMEI de tracker Traccar con un deviceKey de Volkern'}
@@ -333,7 +333,7 @@ export default function GpsDeviceMappingPanel() {
           <div className="space-y-4">
             {/* IMEI */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold uppercase tracking-wider text-slate-300">
+              <Label className="text-xs font-bold uppercase tracking-wider text-foreground/80 dark:text-slate-300">
                 IMEI del Dispositivo
               </Label>
               <Input
@@ -341,11 +341,11 @@ export default function GpsDeviceMappingPanel() {
                 onChange={e => setFormImei(e.target.value)}
                 placeholder="Ej: 864394041234567"
                 disabled={!!editingEntry}
-                className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-600 rounded-xl h-11 font-mono text-sm
+                className="bg-muted dark:bg-slate-800 border-border dark:border-slate-700 text-foreground dark:text-white placeholder:text-muted-foreground/60 dark:placeholder:text-slate-600 rounded-xl h-11 font-mono text-sm
                   disabled:opacity-60 disabled:cursor-not-allowed"
               />
               {editingEntry && (
-                <p className="text-[10px] text-slate-500">
+                <p className="text-[10px] text-muted-foreground dark:text-slate-500">
                   El IMEI no se puede modificar. Elimina y crea uno nuevo si necesitas cambiarlo.
                 </p>
               )}
@@ -353,7 +353,7 @@ export default function GpsDeviceMappingPanel() {
 
             {/* gpsDeviceId */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold uppercase tracking-wider text-slate-300">
+              <Label className="text-xs font-bold uppercase tracking-wider text-foreground/80 dark:text-slate-300">
                 Device Key (Volkern)
               </Label>
               <Input
@@ -372,11 +372,11 @@ export default function GpsDeviceMappingPanel() {
                   }
                 }}
                 placeholder="Ej: VK-GPS-1234ABC-X7K2"
-                className={`bg-slate-800 border text-emerald-400 placeholder:text-slate-600 rounded-xl h-11 font-mono text-sm ${
-                  formDeviceIdValid ? 'border-slate-700' : 'border-red-500/50 focus-visible:ring-red-500/20'
+                className={`bg-muted dark:bg-slate-800 border text-emerald-400 placeholder:text-muted-foreground/60 dark:placeholder:text-slate-600 rounded-xl h-11 font-mono text-sm ${
+                  formDeviceIdValid ? 'border-border dark:border-slate-700' : 'border-red-500/50 focus-visible:ring-red-500/20'
                 }`}
               />
-              <p className={`text-[10px] ${formDeviceIdValid ? 'text-slate-500' : 'text-red-400'}`}>
+              <p className={`text-[10px] ${formDeviceIdValid ? 'text-muted-foreground dark:text-slate-500' : 'text-red-400'}`}>
                 {formDeviceIdValid
                   ? 'Formato: VK-GPS-MATRICULA-CÓDIGO. Lo encuentras en la configuración GPS de cada vehículo.'
                   : 'Formato inválido. Debe ser: VK-GPS-XXXXX-XXXX (ej: VK-GPS-1234ABC-X7K2)'}
@@ -384,9 +384,9 @@ export default function GpsDeviceMappingPanel() {
             </div>
 
             {/* Info */}
-            <div className="rounded-lg bg-slate-800/50 border border-slate-700/50 p-3 flex items-start gap-2">
+            <div className="rounded-lg bg-muted/50 dark:bg-slate-800/50 border border-border/50 dark:border-slate-700/50 p-3 flex items-start gap-2">
               <Radio className="w-3.5 h-3.5 text-cyan-400 mt-0.5 shrink-0" />
-              <p className="text-[11px] text-slate-400 leading-relaxed">
+              <p className="text-[11px] text-muted-foreground dark:text-slate-400 leading-relaxed">
                 Este mapeo será utilizado por el bridge Traccar para saber a qué vehículo de Volkern
                 corresponde cada posición GPS recibida de tus trackers físicos.
               </p>
@@ -398,7 +398,7 @@ export default function GpsDeviceMappingPanel() {
             <Button
               variant="outline"
               onClick={() => setDialogOpen(false)}
-              className="flex-1 border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 h-11 rounded-xl text-xs font-bold uppercase gap-1.5"
+              className="flex-1 border-border text-foreground/80 dark:border-slate-700 dark:text-slate-300 hover:text-foreground dark:hover:text-white hover:bg-accent dark:hover:bg-slate-800 h-11 rounded-xl text-xs font-bold uppercase gap-1.5"
             >
               <X className="w-3.5 h-3.5" />
               Cancelar
@@ -424,22 +424,22 @@ export default function GpsDeviceMappingPanel() {
       {/* ══════════════════════════════════════════════════════ */}
 
       <AlertDialog open={!!deleteTarget} onOpenChange={(v) => { if (!v) setDeleteTarget(null) }}>
-        <AlertDialogContent className="bg-slate-900 border border-slate-700 text-white">
+        <AlertDialogContent className="bg-card dark:bg-slate-900 border border-border dark:border-slate-700">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-white flex items-center gap-2">
+            <AlertDialogTitle className="text-foreground dark:text-white flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-red-400" />
               Eliminar Mapeo GPS
             </AlertDialogTitle>
-            <AlertDialogDesc className="text-slate-400 text-sm">
+            <AlertDialogDesc className="text-muted-foreground dark:text-slate-400 text-sm">
               ¿Estás seguro de eliminar el mapeo del dispositivo{' '}
-              <strong className="text-white font-mono">{deleteTarget?.imei}</strong>?
+              <strong className="text-foreground dark:text-white font-mono">{deleteTarget?.imei}</strong>?
               <br /><br />
               El bridge Traccar dejará de reenviar posiciones de este dispositivo a Volkern
               hasta que se cree un nuevo mapeo.
             </AlertDialogDesc>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700 hover:text-white">
+            <AlertDialogCancel className="bg-muted dark:bg-slate-800 text-foreground/80 dark:text-slate-300 border-border dark:border-slate-700 hover:bg-accent dark:hover:bg-slate-700 hover:text-foreground dark:hover:text-white">
               Cancelar
             </AlertDialogCancel>
             <AlertDialogAction

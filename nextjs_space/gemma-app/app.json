@@ -6,23 +6,34 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
     "scheme": "gemma",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.volkern.gemma",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "Gemma usa el microfono para comandos de voz"
+        "NSMicrophoneUsageDescription": "Gemma usa el micrófono para comandos de voz",
+        "NSPhotoLibraryUsageDescription": "Gemma necesita acceso a tu galería para compartir imágenes",
+        "NSPhotoLibraryAddUsageDescription": "Gemma puede guardar archivos en tu galería"
       }
     },
     "android": {
       "package": "com.volkern.gemma",
       "permissions": [
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO"
       ]
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Gemma necesita acceso a tu galería para compartir imágenes."
+        }
+      ]
     ],
     "extra": {
       "router": {},

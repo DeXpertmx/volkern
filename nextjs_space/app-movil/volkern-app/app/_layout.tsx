@@ -435,6 +435,14 @@ function RootLayoutNav() {
           }}
         />
         <Stack.Screen
+          name="gps-tracker/index"
+          options={{
+            headerShown: false,
+            animation: 'slide_from_bottom',
+            presentation: 'modal',
+          }}
+        />
+        <Stack.Screen
           name="+not-found"
           options={{ title: 'Oops!' }}
         />

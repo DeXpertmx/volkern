@@ -116,6 +116,15 @@ export async function GET(request: NextRequest) {
       // No bloqueamos la autenticación si falla el webhook
     }
 
+    // Refrescar la lista de calendarios conectados desde Google
+    try {
+      const { refreshConnectedCalendarsList } = await import('@/lib/google-calendar');
+      await refreshConnectedCalendarsList(userId);
+      console.log('✅ Lista de calendarios conectados guardada');
+    } catch (calError: any) {
+      console.error('⚠️ Error al guardar lista de calendarios (no crítico):', calError.message);
+    }
+
     // Redirigir al usuario de vuelta a la página de citas
     return NextResponse.redirect(
       new URL('/dashboard/citas?success=google_calendar_connected', request.url)

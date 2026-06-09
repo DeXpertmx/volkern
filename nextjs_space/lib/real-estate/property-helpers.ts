@@ -42,6 +42,10 @@ export interface InmuebleParsed {
   hasPool: boolean;                   // alberca
   hasGarden: boolean;                 // jardin
   hasStorageRoom: boolean;            // trastero
+  hasTerrace: boolean;                // terraza
+  hasBalcony: boolean;                // balcon
+  hasAirConditioning: boolean;        // aire_acondicionado
+  hasHeating: boolean;                // calefaccion
   furnished: boolean;                 // amueblado
   orientation: string | null;         // orientacion
   energyCert: string | null;          // certificacion_energetica
@@ -132,6 +136,10 @@ export function parseInmueble(item: CatalogoItem): InmuebleParsed {
     hasPool: Boolean(f.alberca),
     hasGarden: Boolean(f.jardin),
     hasStorageRoom: Boolean(f.trastero),
+    hasTerrace: Boolean(f.terraza),
+    hasBalcony: Boolean(f.balcon),
+    hasAirConditioning: Boolean(f.aire_acondicionado),
+    hasHeating: Boolean(f.calefaccion),
     furnished: Boolean(f.amueblado),
     orientation: f.orientacion || null,
     energyCert: f.certificacion_energetica || null,
@@ -373,6 +381,10 @@ export function buildCustomFieldValues(
   if (data.hasPool) result.alberca = true;
   if (data.hasGarden) result.jardin = true;
   if (data.hasStorageRoom) result.trastero = true;
+  if (data.hasTerrace) result.terraza = true;
+  if (data.hasBalcony) result.balcon = true;
+  if (data.hasAirConditioning) result.aire_acondicionado = true;
+  if (data.hasHeating) result.calefaccion = true;
   if (data.furnished) result.amueblado = true;
   if (data.orientation) result.orientacion = data.orientation;
   if (data.energyCert) result.certificacion_energetica = data.energyCert;

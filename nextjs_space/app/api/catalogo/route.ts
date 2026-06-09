@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
 import { getFiscalConfig } from '@/lib/fiscal-engine';
 import { ItemIntegrityService } from '@/lib/security/item-integrity';
+import { checkFeatureLimit } from '@/lib/subscription';
 
 // GET - Listar ítems del catálogo
 export async function GET(req: NextRequest) {
@@ -134,6 +135,15 @@ export async function POST(req: NextRequest) {
       inventoryConfig, 
       bom,
     } = data;
+
+    // Verificar límite de productos/servicios
+    const limitCheck = await checkFeatureLimit(auth.tenant!.id, 'catalogo_items', 1)
+    if (!limitCheck.allowed) {
+      return NextResponse.json(
+        { error: `Has alcanzado el límite de ${limitCheck.limit} productos/servicios en tu plan actual.` },
+        { status: 403 }
+      )
+    }
 
     if (!nombre || precioBase === undefined) {
       return NextResponse.json(

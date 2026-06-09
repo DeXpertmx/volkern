@@ -20,6 +20,7 @@ export const CitaCreateSchema = z.object({
   duracion: z.coerce.number().int().min(5, 'Duración mínima 5 minutos').max(480, 'Duración máxima 8 horas').default(60),
   estado: z.enum(['pendiente', 'confirmada', 'cancelada', 'completada']).default('pendiente'),
   bufferMinutos: z.coerce.number().int().min(0).max(120).optional().default(0),
+  connectedCalendarId: CommonSchemas.id.optional().nullable(),
   avisoMinimo: z.coerce.number().int().min(0).optional().default(0),
 }).refine(
   (data) => data.leadId || data.contactId || data.titulo,
@@ -44,6 +45,7 @@ export const CitaUpdateSchema = z.object({
   linkReunionPegado: z.string().url().optional().nullable(),
   servicioId: CommonSchemas.id.optional().nullable(),
   catalogoItemId: CommonSchemas.id.optional().nullable(),
+  connectedCalendarId: CommonSchemas.id.optional().nullable(),
 });
 
 export type CitaUpdateInput = z.infer<typeof CitaUpdateSchema>;

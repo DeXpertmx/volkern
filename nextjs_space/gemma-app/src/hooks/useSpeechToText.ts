@@ -40,7 +40,9 @@ export function useSpeechToText(options: UseSpeechToTextOptions = {}): UseSpeech
       // @react-native-voice/voice — dynamic import to avoid crash on web
       try {
         const Voice = require('@react-native-voice/voice').default
-        setIsSupported(!!Voice && typeof Voice.start === 'function')
+        const { NativeModules } = require('react-native')
+        // In Expo Go, NativeModules.Voice will be undefined, so we correctly report unsupported.
+        setIsSupported(!!Voice && !!NativeModules.Voice && typeof Voice.start === 'function')
       } catch {
         setIsSupported(false)
       }

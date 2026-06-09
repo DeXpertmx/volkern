@@ -870,6 +870,20 @@ export default function ProfileScreen() {
           />
         </View>
 
+        <SectionHeader title="GPS Tracker" sty={s} />
+        <View style={[s.settingsCard, { backgroundColor: colors.surface }]}>
+          <SettingRow
+            icon="locate"
+            iconBg={colors.successBg}
+            iconColor={colors.success}
+            label="GPS Tracker"
+            subtitle="Envía la posición del vehículo en tiempo real"
+            onPress={() => router.push('/gps-tracker')}
+            last
+            sty={s}
+          />
+        </View>
+
         <SectionHeader title={t('profile', 'information')} sty={s} />
         <View style={[s.settingsCard, { backgroundColor: colors.surface }]}>
           <SettingRow icon="information-circle" iconBg={colors.primaryBg} iconColor={colors.primary} label={t('profile', 'about')} subtitle="v1.0.0" sty={s} />

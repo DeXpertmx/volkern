@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
 import { Calendar as BigCalendar, dateFnsLocalizer, View, Event as BigCalendarEvent } from 'react-big-calendar'
 import { format, parse, startOfWeek, getDay } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -54,6 +54,7 @@ interface Cita {
   fechaHora: string
   duracion: number
   estado: string
+  connectedCalendarId?: string | null
   lead?: {
     id: string
     nombre: string
@@ -72,11 +73,22 @@ interface CalendarEvent extends BigCalendarEvent {
   cita: Cita
 }
 
+interface GoogleEvent {
+  id: string
+  title: string
+  start: Date
+  end: Date
+  calendarName: string
+  calendarColor: string
+}
+
 interface CalendarViewProps {
   citas: Cita[]
   leads: Array<{ id: string; nombre: string; email: string; empresa?: string }>
   contacts?: Array<{ id: string; nombre: string; email: string; tipo: string; company?: { nombre: string } | null }>
   onRefresh: () => void
+  googleEvents?: GoogleEvent[]
+  onDateRangeChange?: (date: Date) => void
 }
 
 const messages = {
@@ -110,7 +122,7 @@ const estadoOptions = [
   { value: 'cancelada', label: 'Cancelada', color: 'bg-red-500' },
 ]
 
-export default function CalendarView({ citas, leads, contacts = [], onRefresh }: CalendarViewProps) {
+export default function CalendarView({ citas, leads, contacts = [], onRefresh, googleEvents = [], onDateRangeChange }: CalendarViewProps) {
   const [view, setView] = useState<View>('month')
   const [date, setDate] = useState(new Date())
   const [showCreateDialog, setShowCreateDialog] = useState(false)
@@ -118,6 +130,19 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh }:
   const [showDetailDialog, setShowDetailDialog] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [selectedSlot, setSelectedSlot] = useState<{ start: Date; end: Date } | null>(null)
+  const [connectedCalendars, setConnectedCalendars] = useState<Array<{ id: string; nombre: string; color: string }>>([])
+
+  // Fetch connected calendars on mount
+  useEffect(() => {
+    fetch('/api/calendars')
+      .then(res => res.ok ? res.json() : [])
+      .then(data => {
+        if (data.connected && Array.isArray(data.calendars)) {
+          setConnectedCalendars(data.calendars)
+        }
+      })
+      .catch(() => {})
+  }, [])
   const [selectedCita, setSelectedCita] = useState<Cita | null>(null)
   const [creating, setCreating] = useState(false)
   const [updating, setUpdating] = useState(false)
@@ -137,13 +162,14 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh }:
     hora: '',
     estado: 'pendiente',
     catalogoItemId: '',
+    connectedCalendarId: '',
   })
   const [selectedCatalogoItem, setSelectedCatalogoItem] = useState<CatalogoItem | null>(null)
 
-  // Convertir citas a eventos de calendario
-  const events: CalendarEvent[] = useMemo(
-    () =>
-      citas.map((cita) => {
+  // Convertir citas a eventos de calendario + añadir eventos de Google Calendar
+  const events: (CalendarEvent | GoogleEvent)[] = useMemo(
+    () => {
+      const citaEvents = citas.map((cita) => {
         const start = new Date(cita.fechaHora)
         const end = new Date(start.getTime() + cita.duracion * 60000)
         const tipoConfig = tipoOptions.find((t) => t.value === cita.tipo)
@@ -156,8 +182,15 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh }:
           resource: tipoConfig?.label,
           cita,
         }
-      }),
-    [citas]
+      })
+
+      // Merge with Google Calendar events (only non-overlapping IDs)
+      const existingIds = new Set(citaEvents.map(e => e.id))
+      const filteredGoogle = googleEvents.filter(e => !existingIds.has(e.id))
+
+      return [...citaEvents, ...filteredGoogle]
+    },
+    [citas, googleEvents]
   )
 
   // Manejar selección de slot (click en calendario)
@@ -177,6 +210,7 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh }:
       hora: format(slotInfo.start, 'HH:mm'),
       estado: 'pendiente',
       catalogoItemId: '',
+      connectedCalendarId: '',
     })
     setSelectedCatalogoItem(null)
     setShowCreateDialog(true)
@@ -196,8 +230,18 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh }:
   }, [])
 
   // Manejar click en evento existente
-  const handleSelectEvent = useCallback((event: CalendarEvent) => {
-    setSelectedCita(event.cita)
+  const handleSelectEvent = useCallback((event: CalendarEvent | GoogleEvent) => {
+    // Google Calendar events — solo mostrar info en toast por ahora
+    if ('calendarName' in event) {
+      const gcalEv = event as GoogleEvent
+      toast.info(`Evento: ${gcalEv.title}`, {
+        description: `Calendario: ${gcalEv.calendarName}`,
+        duration: 3000,
+      })
+      return
+    }
+    // Cita event
+    setSelectedCita((event as CalendarEvent).cita)
     setShowDetailDialog(true)
   }, [])
 
@@ -274,6 +318,7 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh }:
           duracion: formData.duracion,
           estado: formData.estado,
           catalogoItemId: formData.catalogoItemId || undefined,
+          connectedCalendarId: formData.connectedCalendarId === 'no-sync' || !formData.connectedCalendarId ? undefined : formData.connectedCalendarId,
         }),
       })
 
@@ -312,6 +357,7 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh }:
       hora: format(citaDate, 'HH:mm'),
       estado: selectedCita.estado,
       catalogoItemId: selectedCita.servicioId || '',
+      connectedCalendarId: (selectedCita as any).connectedCalendarId || '',
     })
     setSelectedCatalogoItem(null)
     setShowDetailDialog(false)
@@ -388,6 +434,7 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh }:
           duracion: formData.duracion,
           estado: formData.estado,
           catalogoItemId: formData.catalogoItemId || undefined,
+          connectedCalendarId: formData.connectedCalendarId === 'no-sync' || !formData.connectedCalendarId ? undefined : formData.connectedCalendarId,
         }),
       })
 
@@ -435,14 +482,28 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh }:
   }
 
   // Estilo personalizado para eventos
-  const eventStyleGetter = useCallback((event: CalendarEvent) => {
-    const tipoConfig = tipoOptions.find((t) => t.value === event.cita.tipo)
-    const estadoConfig = estadoOptions.find((e) => e.value === event.cita.estado)
+  const eventStyleGetter = useCallback((event: CalendarEvent | GoogleEvent) => {
+    // Google Calendar event
+    if ('calendarColor' in event) {
+      return {
+        style: {
+          backgroundColor: (event as GoogleEvent).calendarColor,
+          borderRadius: '5px',
+          opacity: 0.85,
+          color: '#fff',
+          border: '0px',
+          display: 'block',
+        },
+      }
+    }
+
+    // Cita event (Volkern)
+    const cita = (event as CalendarEvent).cita
+    const tipoConfig = tipoOptions.find((t) => t.value === cita.tipo)
 
     let backgroundColor = '#3174ad'
     if (tipoConfig?.color) {
-      backgroundColor = tipoConfig.color.replace('bg-', '')
-      backgroundColor = backgroundColor.replace('-500', '')
+      const colorKey = tipoConfig.color.replace('bg-', '').replace('-500', '')
       const colorMap: Record<string, string> = {
         blue: '#3b82f6',
         green: '#10b981',
@@ -452,14 +513,14 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh }:
         yellow: '#eab308',
         red: '#ef4444',
       }
-      backgroundColor = colorMap[backgroundColor] || '#3174ad'
+      backgroundColor = colorMap[colorKey] || '#3174ad'
     }
 
     return {
       style: {
         backgroundColor,
         borderRadius: '5px',
-        opacity: event.cita.estado === 'cancelada' ? 0.5 : 0.9,
+        opacity: cita.estado === 'cancelada' ? 0.5 : 0.9,
         color: 'white',
         border: '0px',
         display: 'block',
@@ -481,7 +542,10 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh }:
           view={view}
           onView={setView}
           date={date}
-          onNavigate={setDate}
+          onNavigate={(newDate: Date) => {
+            setDate(newDate)
+            onDateRangeChange?.(newDate)
+          }}
           messages={messages}
           culture="es"
           selectable
@@ -695,6 +759,34 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh }:
                 </p>
               </div>
             )}
+
+            {connectedCalendars.length > 0 && (
+              <div className="space-y-2">
+                <Label htmlFor="create-connectedCalendar">Sincronizar con Google Calendar</Label>
+                <Select
+                  value={formData.connectedCalendarId}
+                  onValueChange={(value) => setFormData({ ...formData, connectedCalendarId: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="No sincronizar" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="no-sync">No sincronizar</SelectItem>
+                    {connectedCalendars.map((cal) => (
+                      <SelectItem key={cal.id} value={cal.id}>
+                        <span className="flex items-center gap-2">
+                          <span className="inline-block w-3 h-3 rounded-full" style={{ backgroundColor: cal.color }} />
+                          {cal.nombre}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Elige el calendario de Google donde se creará este evento
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end space-x-2">
@@ -885,6 +977,34 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh }:
                 <p className="text-sm text-blue-700">
                   <Video className="inline h-4 w-4 mr-1" />
                   Se generará automáticamente un enlace de Google Meet al guardar la cita
+                </p>
+              </div>
+            )}
+
+            {connectedCalendars.length > 0 && (
+              <div className="space-y-2">
+                <Label htmlFor="edit-connectedCalendar">Sincronizar con Google Calendar</Label>
+                <Select
+                  value={formData.connectedCalendarId}
+                  onValueChange={(value) => setFormData({ ...formData, connectedCalendarId: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="No sincronizar" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="no-sync">No sincronizar</SelectItem>
+                    {connectedCalendars.map((cal) => (
+                      <SelectItem key={cal.id} value={cal.id}>
+                        <span className="flex items-center gap-2">
+                          <span className="inline-block w-3 h-3 rounded-full" style={{ backgroundColor: cal.color }} />
+                          {cal.nombre}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Elige el calendario de Google donde se sincronizará esta cita
                 </p>
               </div>
             )}

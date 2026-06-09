@@ -105,6 +105,7 @@ export async function createCalendarEvent(
     leadNombre?: string;
     leadEmail?: string;
     generarMeet?: boolean; // Si es true, genera Google Meet automáticamente
+    targetCalendarId?: string; // Google Calendar ID específico (de ConnectedCalendar), o usa el primary
   }
 ) {
   try {
@@ -154,8 +155,10 @@ export async function createCalendarEvent(
       };
     }
 
+    const targetCalId = citaData.targetCalendarId || integration.calendarId;
+
     const response = await calendar.events.insert({
-      calendarId: integration.calendarId,
+      calendarId: targetCalId,
       requestBody: event,
       sendUpdates: 'all', // Enviar notificaciones a los asistentes
       conferenceDataVersion: citaData.generarMeet ? 1 : 0,
@@ -210,6 +213,7 @@ export async function updateCalendarEvent(
     duracion: number;
     leadEmail?: string;
     googleCalendarEventId?: string | null;
+    targetCalendarId?: string; // Google Calendar ID específico (de ConnectedCalendar), o usa el primary
   }
 ) {
   try {
@@ -267,8 +271,10 @@ export async function updateCalendarEvent(
       attendees: citaData.leadEmail ? [{ email: citaData.leadEmail }] : [],
     };
 
+    const targetCalId = citaData.targetCalendarId || integration.calendarId;
+
     const response = await calendar.events.update({
-      calendarId: integration.calendarId,
+      calendarId: targetCalId,
       eventId: eventId!,
       requestBody: updatedEvent,
       sendUpdates: 'all',
@@ -302,7 +308,7 @@ export async function updateCalendarEvent(
  * Elimina un evento de Google Calendar
  * @param googleCalendarEventId - ID del evento en Google Calendar (si se conoce)
  */
-export async function deleteCalendarEvent(userId: string, citaId: string, googleCalendarEventId?: string | null) {
+export async function deleteCalendarEvent(userId: string, citaId: string, googleCalendarEventId?: string | null, targetCalendarId?: string | null) {
   try {
     const oauth2Client = await getAuthenticatedClient(userId);
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
@@ -335,8 +341,10 @@ export async function deleteCalendarEvent(userId: string, citaId: string, google
       eventId = events.items[0].id!;
     }
 
+    const targetCalId = targetCalendarId || integration.calendarId;
+
     await calendar.events.delete({
-      calendarId: integration.calendarId,
+      calendarId: targetCalId,
       eventId: eventId!,
       sendUpdates: 'all',
     });
@@ -896,3 +904,86 @@ export async function syncFromGoogleToVolkern(userId: string, forceFullSync: boo
     throw error;
   }
 }
+
+// ─── Multi-Calendar Support ──────────────────────────────────────────────────
+
+/**
+ * Fetches the list of connected Google Calendars from the Google API
+ * and saves them to the database as ConnectedCalendar records.
+ */
+export async function refreshConnectedCalendarsList(userId: string) {
+  try {
+    const integration = await prisma.googleCalendarIntegration.findUnique({
+      where: { userId },
+    });
+
+    if (!integration) {
+      throw new Error('Google Calendar no está conectado');
+    }
+
+    const oauth2Client = await getAuthenticatedClient(userId);
+    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+
+    // Obtener la lista de todos los calendarios del usuario
+    const response = await calendar.calendarList.list();
+    const calendars = response.data.items || [];
+
+    console.log(`📅 Obtenidos ${calendars.length} calendarios de Google`);
+
+    let savedCount = 0;
+    for (const cal of calendars) {
+      if (!cal.id) continue;
+
+      const backgroundColor = cal.backgroundColor || '#3b82f6';
+
+      await prisma.connectedCalendar.upsert({
+        where: {
+          integrationId_calendarId: {
+            integrationId: integration.id,
+            calendarId: cal.id,
+          },
+        },
+        create: {
+          integrationId: integration.id,
+          tenantId: integration.tenantId,
+          calendarId: cal.id,
+          nombre: cal.summary || 'Sin nombre',
+          color: backgroundColor,
+          visible: true,
+          activo: true,
+        },
+        update: {
+          nombre: cal.summary || 'Sin nombre',
+          color: backgroundColor,
+        },
+      });
+      savedCount++;
+    }
+
+    console.log(`✅ ${savedCount} calendarios guardados en la base de datos`);
+    return { total: calendars.length, saved: savedCount };
+  } catch (error: any) {
+    console.error('❌ Error al refrescar lista de calendarios:', error.message);
+    throw error;
+  }
+}
+
+/**
+ * Gets all active connected calendars for a user's integration.
+ */
+export async function getUserConnectedCalendars(userId: string) {
+  const integration = await prisma.googleCalendarIntegration.findUnique({
+    where: { userId },
+  });
+
+  if (!integration) return [];
+
+  return prisma.connectedCalendar.findMany({
+    where: {
+      integrationId: integration.id,
+      activo: true,
+    },
+    orderBy: { nombre: 'asc' },
+  });
+}
+

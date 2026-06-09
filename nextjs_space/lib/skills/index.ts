@@ -517,6 +517,7 @@ export const skills = {
   update_contact: contactSkills.updateContact,
   get_contact: contactSkills.getContact,
   find_contact_by_email: findContactByEmailWrapper,
+  list_contacts: contactSkills.listContacts,
   
   // Leads
   create_lead: createLeadWrapper,
@@ -524,6 +525,7 @@ export const skills = {
   get_lead: contactSkills.getLead,
   find_lead_by_email: findLeadByEmailWrapper,
   convert_lead: contactSkills.convertLead,
+  list_leads: contactSkills.listLeads,
   obtener_telefono: getPhoneByNameWrapper,
   registrar_interaccion: registerInteractionWrapper,
   
@@ -689,11 +691,13 @@ export function listSkills(): Array<{ name: SkillName; description: string; cate
     { name: 'update_contact', description: 'Actualizar un contacto existente', category: 'contacts' },
     { name: 'get_contact', description: 'Obtener contacto por ID', category: 'contacts' },
     { name: 'find_contact_by_email', description: 'Buscar contacto por email', category: 'contacts' },
+    { name: 'list_contacts', description: 'Listar todos los contactos del tenant, con paginación', category: 'contacts' },
     // Leads
     { name: 'create_lead', description: 'Crear un nuevo lead', category: 'leads' },
     { name: 'get_lead', description: 'Obtener lead por ID', category: 'leads' },
     { name: 'find_lead_by_email', description: 'Buscar lead por email', category: 'leads' },
     { name: 'convert_lead', description: 'Convertir lead a contacto', category: 'leads' },
+    { name: 'list_leads', description: 'Listar todos los leads del tenant, con filtro por estado y paginación', category: 'leads' },
     // Conversaciones
     { name: 'create_conversation', description: 'Crear una nueva conversación', category: 'conversations' },
     { name: 'get_conversation', description: 'Obtener conversación por ID', category: 'conversations' },
@@ -818,7 +822,7 @@ export { eventBus, EVENTS };
 export * from '@/lib/types/events';
 
 // Skills individuales (para importación directa si se necesita)
-export { createContact, updateContact, createLead, convertLead } from './contact-skills';
+export { createContact, updateContact, createLead, convertLead, listContacts, listLeads } from './contact-skills';
 export { createConversation, sendMessage, closeConversation } from './conversation-skills';
 export { createTask, completeTask, createNote } from './task-skills';
 export { completeDiagnosis } from './diagnosis-skills';

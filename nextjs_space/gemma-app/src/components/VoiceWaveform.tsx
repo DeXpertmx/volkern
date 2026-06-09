@@ -23,7 +23,7 @@ interface VoiceWaveformProps {
  * Cuando pausado, barras estáticas en gris.
  */
 export default function VoiceWaveform({ isListening, isPaused, audioBands, color }: VoiceWaveformProps) {
-  const activeColor = color || '#EF4444'
+  const activeColor = color || '#c0c1ff' // Indigo primario del tema oscuro
   const hasRealAudio = isListening && !isPaused && audioBands && audioBands.length === BAR_COUNT
 
   // Valores animados — siempre se usan para transiciones suaves
@@ -104,7 +104,7 @@ export default function VoiceWaveform({ isListening, isPaused, audioBands, color
               BAR_STYLE,
               {
                 height: anim,
-                backgroundColor: isPaused ? '#94A3B8' : activeColor,
+                backgroundColor: isPaused ? '#464554' : activeColor,
                 opacity: getOpacity(i),
               },
             ]}

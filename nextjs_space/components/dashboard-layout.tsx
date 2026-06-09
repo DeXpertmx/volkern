@@ -47,14 +47,30 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const isPipeline = pathname === '/dashboard/pipeline'
   const isMessaging = pathname?.startsWith('/dashboard/mensajes')
+  const isFullscreenRoute = pathname?.includes('/fullscreen')
 
   if (!mounted) return null
+
+  // Fullscreen route: render only the content, no sidebar/header/chrome
+  if (isFullscreenRoute) {
+    return (
+      <div className="flex h-screen bg-white dark:bg-slate-900 overflow-hidden font-sans">
+        <main className="flex-1 flex flex-col min-w-0">
+          <div className="flex-1 overflow-y-auto relative scroll-smooth overflow-x-hidden">
+            <div className="w-full min-h-full">
+              {children}
+            </div>
+          </div>
+        </main>
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-screen bg-background overflow-hidden font-sans">
       {!isMessaging && <Sidebar />}
       <main className={cn(
-        "flex-1 flex flex-col min-w-0 transition-all duration-300 relative bg-slate-50/50",
+        "flex-1 flex flex-col min-w-0 transition-all duration-300 relative bg-slate-50/50 dark:bg-slate-950",
         isMessaging ? "ml-0" : (isCollapsed ? "md:ml-20" : "md:ml-64")
       )}>
         {!isMessaging && <DashboardHeader />}

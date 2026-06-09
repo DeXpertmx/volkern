@@ -20,6 +20,7 @@ export const DealCreateSchema = z.object({
   tags: z.string().max(500).optional().nullable(),
   usuarioAsignadoId: CommonSchemas.id.optional().nullable(),
   catalogoItemId: CommonSchemas.id.optional().nullable(),
+  pipelineId: CommonSchemas.id.optional().nullable(),
   newContact: z.object({
     nombre: CommonSchemas.nombre,
     email: CommonSchemas.email,

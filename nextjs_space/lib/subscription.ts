@@ -17,7 +17,11 @@ export type FeatureName =
   | 'business_domains'
   | 'business_email_gb'
   | 'automations_count'
-  | 'pages';
+  | 'pages'
+  | 'catalogo_items'
+  | 'published_pages'
+  | 'invoices'
+  | 'contratos_sign';
 
 export interface FeatureLimit {
   current: number;
@@ -315,6 +319,26 @@ export async function getFeatureUsage(tenantId: string, featureName: FeatureName
       const tenantDb = await getTenantDb(tenantId);
       return await tenantDb.client.automation.count({ where: { tenantId } });
     }
+    case 'catalogo_items': {
+      const catDb = await getTenantDb(tenantId);
+      return await catDb.client.catalogoItem.count({ where: { tenantId } });
+    }
+    case 'published_pages': {
+      const pageDb = await getTenantDb(tenantId);
+      return await pageDb.client.page.count({
+        where: { tenantId, estado: 'publicado' }
+      });
+    }
+    case 'invoices': {
+      const invDb = await getTenantDb(tenantId);
+      return await invDb.client.invoice.count({ where: { tenantId } });
+    }
+    case 'contratos_sign': {
+      const contDb = await getTenantDb(tenantId);
+      return await contDb.client.contrato.count({
+        where: { tenantId, estado: { in: ['firmado', 'vigente'] } }
+      });
+    }
     default:
       return usage;
   }
@@ -481,6 +505,236 @@ export async function getSuggestedUpgrade(tenantId: string): Promise<{
   };
 }
 
+/**
+ * Features tracked for limit alerts (80% threshold)
+ */
+const ALERT_THRESHOLD = 80 // percentage
+
+const ALERT_FEATURES: FeatureName[] = [
+  'leads',
+  'users',
+  'emails_per_month',
+  'storage_gb',
+  'pages',
+  'published_pages',
+  'automations_count',
+  'catalogo_items',
+  'invoices',
+  'contratos_sign',
+  'whatsapp_messages',
+  'courses',
+  'students',
+]
+
+/**
+ * Checks all tenants for features near their limit (>=80%)
+ * and sends email notifications to tenant admins.
+ * Runs via cron job. Tracks last notification to avoid spamming.
+ */
+export async function checkAndNotifyLimitAlerts(): Promise<{
+  checked: number
+  notified: number
+  alerts: { tenantId: string; tenantName: string; features: string[] }[]
+  errors: string[]
+}> {
+  const result = {
+    checked: 0,
+    notified: 0,
+    alerts: [] as { tenantId: string; tenantName: string; features: string[] }[],
+    errors: [] as string[],
+  }
+
+  try {
+    const tenants = await globalPrisma.tenant.findMany({
+      where: { estado: { in: ['trial', 'activo'] } },
+      select: { id: true, nombre: true, slug: true, billingEmail: true, limites: true },
+    })
+
+    for (const tenant of tenants) {
+      try {
+        result.checked++
+        const limits = await getTenantEffectiveLimits(tenant.id)
+        const nearLimitFeatures: { feature: string; label: string; used: number; limit: number; percentage: number }[] = []
+
+        for (const feature of ALERT_FEATURES) {
+          const limit = limits[feature]
+          if (limit === undefined || limit === -1) continue
+
+          const usage = await getFeatureUsage(tenant.id, feature)
+          const percentage = Math.round((usage / Math.max(limit, 1)) * 100)
+
+          if (percentage >= ALERT_THRESHOLD) {
+            nearLimitFeatures.push({
+              feature,
+              label: FEATURE_LABELS[feature as FeatureName] || feature,
+              used: usage,
+              limit,
+              percentage,
+            })
+          }
+        }
+
+        if (nearLimitFeatures.length === 0) continue
+
+        // Check last notification time to avoid spamming (max once per 24h)
+        const currentLimits = (tenant.limites as Record<string, any>) || {}
+        const lastNotified = currentLimits?.lastLimitAlertAt
+        if (lastNotified) {
+          const hoursSinceLast = (Date.now() - new Date(lastNotified).getTime()) / (1000 * 60 * 60)
+          if (hoursSinceLast < 24) continue
+        }
+
+        // Find admin users to notify
+        const admins = await globalPrisma.user.findMany({
+          where: { tenantId: tenant.id, role: { nombre: { in: ['Superadmin', 'Admin'] } } },
+          select: { id: true, email: true, name: true },
+        })
+
+        const recipients = [
+          ...(tenant.billingEmail ? [{ email: tenant.billingEmail, name: tenant.nombre }] : []),
+          ...admins.map(a => ({ email: a.email, name: a.name || 'Admin' })),
+        ]
+
+        // Deduplicate by email
+        const seen = new Set<string>()
+        const uniqueRecipients = recipients.filter(r => {
+          if (seen.has(r.email)) return false
+          seen.add(r.email)
+          return true
+        })
+
+        if (uniqueRecipients.length === 0) continue
+
+        // Build email content
+        const featuresList = nearLimitFeatures.map(f =>
+          `<tr>
+            <td style="padding:10px;border-bottom:1px solid #e2e8f0;font-weight:600">${f.label}</td>
+            <td style="padding:10px;border-bottom:1px solid #e2e8f0;text-align:center">${f.used.toLocaleString()}</td>
+            <td style="padding:10px;border-bottom:1px solid #e2e8f0;text-align:center">${f.limit.toLocaleString()}</td>
+            <td style="padding:10px;border-bottom:1px solid #e2e8f0;text-align:center">
+              <span style="background:${f.percentage >= 100 ? '#ef4444' : '#f59e0b'};color:white;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600">
+                ${f.percentage}%
+              </span>
+            </td>
+          </tr>`
+        ).join('')
+
+        const maxPercentage = Math.max(...nearLimitFeatures.map(f => f.percentage))
+        const isCritical = maxPercentage >= 100
+
+        const html = `
+          <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:600px;margin:0 auto">
+            <div style="background:${isCritical ? '#ef4444' : '#f59e0b'};padding:24px;border-radius:12px 12px 0 0;text-align:center">
+              <h1 style="color:white;margin:0;font-size:22px">
+                ${isCritical ? '⚠️ Límite Alcanzado' : '📊 Límite Casi Alcanzado'}
+              </h1>
+              <p style="color:rgba(255,255,255,0.9);margin:8px 0 0 0;font-size:14px">
+                ${tenant.nombre}
+              </p>
+            </div>
+            <div style="padding:24px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:0 0 12px 12px">
+              <p style="margin:0 0 16px 0;color:#475569;font-size:14px;line-height:1.6">
+                ${isCritical
+                  ? 'Tu cuenta ha alcanzado el límite en algunos recursos. Para evitar interrupciones, considera hacer upgrade a un plan superior.'
+                  : 'Tu cuenta está cerca del límite en algunos recursos. Te recomendamos hacer upgrade para seguir creciendo sin interrupciones.'
+                }
+              </p>
+              <table style="width:100%;border-collapse:collapse;background:white;border-radius:8px;overflow:hidden">
+                <thead>
+                  <tr style="background:#1e293b;color:white">
+                    <th style="padding:10px;text-align:left;font-size:13px">Recurso</th>
+                    <th style="padding:10px;text-align:center;font-size:13px">Usado</th>
+                    <th style="padding:10px;text-align:center;font-size:13px">Límite</th>
+                    <th style="padding:10px;text-align:center;font-size:13px">Uso</th>
+                  </tr>
+                </thead>
+                <tbody>${featuresList}</tbody>
+              </table>
+              <div style="margin-top:24px;text-align:center">
+                <a href="${process.env.NEXTAUTH_URL || 'https://volkern.app'}/dashboard/configuracion/billing"
+                   style="display:inline-block;background:#3b82f6;color:white;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">
+                  Ver mis límites
+                </a>
+              </div>
+            </div>
+          </div>`
+
+        // Build push notification title/body
+        const pushTitle = isCritical
+          ? `⚠️ Límite alcanzado en ${tenant.nombre}`
+          : `📊 ${tenant.nombre} — límite casi alcanzado`
+        const topFeatures = nearLimitFeatures.slice(0, 3)
+        const pushBody = topFeatures.map(f => `${f.label}: ${f.percentage}%`).join(' · ')
+        const extraCount = nearLimitFeatures.length - 3
+        const fullBody = extraCount > 0 ? `${pushBody} y ${extraCount} más` : pushBody
+
+        // Send push notifications to admin users (in-app + external)
+        const { sendPushNotification } = await import('@/lib/services/push-notification')
+        const pushPromises = admins.map(a =>
+          sendPushNotification(a.id, {
+            title: pushTitle,
+            body: fullBody,
+            url: '/dashboard/configuracion/billing',
+            tag: 'limit_alert',
+            priority: isCritical ? 'high' : 'normal',
+            data: {
+              features: nearLimitFeatures.map(f => ({
+                label: f.label,
+                used: f.used,
+                limit: f.limit,
+                percentage: f.percentage,
+              })),
+            },
+          })
+        )
+
+        // Send email to all unique recipients
+        const { sendEmail } = await import('./resend-email')
+        const subject = isCritical
+          ? `⚠️ Límite alcanzado en ${tenant.nombre} — actúa ahora`
+          : `📊 ${tenant.nombre} — ${nearLimitFeatures.length} recurso(s) al ${maxPercentage}% de capacidad`
+
+        await Promise.allSettled([
+          ...pushPromises,
+          ...uniqueRecipients.map(r =>
+            sendEmail({
+              to: r.email,
+              subject,
+              html,
+              tenantSubdomain: tenant.slug,
+              tenantName: tenant.nombre,
+            })
+          ),
+        ])
+
+        // Update last notification timestamp
+        await globalPrisma.tenant.update({
+          where: { id: tenant.id },
+          data: {
+            limites: {
+              ...currentLimits,
+              lastLimitAlertAt: new Date().toISOString(),
+            },
+          },
+        })
+
+        result.notified += uniqueRecipients.length
+        result.alerts.push({
+          tenantId: tenant.id,
+          tenantName: tenant.nombre,
+          features: nearLimitFeatures.map(f => `${f.label} (${f.percentage}%)`),
+        })
+      } catch (err: any) {
+        result.errors.push(`Tenant ${tenant.id}: ${err.message}`)
+      }
+    }
+  } catch (err: any) {
+    result.errors.push(`Fatal: ${err.message}`)
+  }
+
+  return result
+}
+
 export const FEATURE_LABELS: Record<FeatureName, string> = {
   leads: 'Leads',
   users: 'Usuarios',
@@ -497,5 +751,9 @@ export const FEATURE_LABELS: Record<FeatureName, string> = {
   business_domains: 'Dominios de negocio',
   business_email_gb: 'Almacenamiento email (GB)',
   automations_count: 'Automatizaciones',
-  pages: 'Páginas'
+  pages: 'Páginas',
+  catalogo_items: 'Productos/Servicios',
+  published_pages: 'Landing pages publicadas',
+  invoices: 'Facturas emitidas',
+  contratos_sign: 'Contratos firmados'
 };

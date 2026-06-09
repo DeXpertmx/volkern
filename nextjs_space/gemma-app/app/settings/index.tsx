@@ -7,15 +7,19 @@ import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useVoiceLanguage, VOICE_LANGUAGES, getLanguageLabel } from '../../src/hooks/useVoiceLanguage'
+import SafeBlurView from '../../src/components/SafeBlurView'
 
 const COLORS = {
-  primary: '#2563EB',
-  border: '#E2E8F0',
-  surface: '#FFFFFF',
-  background: '#F8FAFC',
-  textPrimary: '#0F172A',
-  textSecondary: '#475569',
-  textTertiary: '#94A3B8',
+  primary: '#c0c1ff',        // Indigo
+  secondary: '#ddb7ff',      // Violet
+  tertiary: '#3cddc7',       // Mint
+  background: '#0b1326',     // Deep space base
+  surface: '#131b2e',        // Dark Surface
+  surfaceContainerLow: '#0e1524',
+  textPrimary: '#dae2fd',
+  textSecondary: '#c7c4d7',
+  textTertiary: '#908fa0',
+  border: 'rgba(255, 255, 255, 0.08)',
 }
 
 export default function SettingsScreen() {
@@ -28,23 +32,31 @@ export default function SettingsScreen() {
     router.back()
   }
 
+  const blurIntensity = Platform.OS === 'ios' ? 15 : 0;
+
   return (
-    <SafeAreaView style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Ajustes</Text>
-        <View style={styles.backBtn} />
+    <SafeAreaView style={styles.container}>
+      {/* Background Mesh */}
+      <View style={styles.glowContainer} pointerEvents="none">
+        <View style={styles.topGlow} />
+        <View style={styles.bottomGlow} />
       </View>
+
+      {/* Header */}
+      <SafeBlurView intensity={blurIntensity} tint="dark" style={styles.header}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={22} color={COLORS.primary} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Ajustes de Voz</Text>
+        <View style={styles.backBtn} />
+      </SafeBlurView>
 
       <ScrollView contentContainerStyle={styles.scroll}>
         {/* Sección: Voz */}
         <Text style={styles.sectionTitle}>RECONOCIMIENTO DE VOZ</Text>
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <Ionicons name="language-outline" size={20} color={COLORS.primary} />
+            <Ionicons name="language" size={20} color={COLORS.primary} />
             <Text style={styles.cardTitle}>Idioma de voz</Text>
           </View>
           <Text style={styles.cardDesc}>
@@ -53,12 +65,16 @@ export default function SettingsScreen() {
           </Text>
 
           <View style={styles.languageList}>
-            {VOICE_LANGUAGES.map((lang) => {
+            {VOICE_LANGUAGES.map((lang, idx) => {
               const isSelected = language === lang.value
               return (
                 <TouchableOpacity
                   key={lang.value}
-                  style={[styles.langItem, isSelected && styles.langItemSelected]}
+                  style={[
+                    styles.langItem,
+                    isSelected && styles.langItemSelected,
+                    idx === VOICE_LANGUAGES.length - 1 && { borderBottomWidth: 0 }
+                  ]}
                   onPress={() => handleSelect(lang.value)}
                   activeOpacity={0.7}
                 >
@@ -67,7 +83,7 @@ export default function SettingsScreen() {
                     {lang.label}
                   </Text>
                   {isSelected && (
-                    <Ionicons name="checkmark-circle" size={20} color={COLORS.primary} />
+                    <Ionicons name="checkmark-circle" size={20} color={COLORS.tertiary} />
                   )}
                 </TouchableOpacity>
               )
@@ -79,12 +95,12 @@ export default function SettingsScreen() {
         <View style={styles.infoBox}>
           <Ionicons name="information-circle-outline" size={16} color={COLORS.textTertiary} />
           <Text style={styles.infoText}>
-            Idioma actual: {getLanguageLabel(language)}
+            Idioma actual configurado: {getLanguageLabel(language)}
           </Text>
         </View>
 
         {/* Footer */}
-        <Text style={styles.footer}>Gemma · Volkern</Text>
+        <Text style={styles.footer}>Gemma · Volkern OS</Text>
       </ScrollView>
     </SafeAreaView>
   )
@@ -95,15 +111,45 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
+  glowContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    overflow: 'hidden',
+    zIndex: 0,
+  },
+  topGlow: {
+    position: 'absolute',
+    top: -100,
+    right: -100,
+    width: 250,
+    height: 250,
+    borderRadius: 125,
+    backgroundColor: COLORS.primary,
+    opacity: 0.06,
+  },
+  bottomGlow: {
+    position: 'absolute',
+    bottom: -100,
+    left: -100,
+    width: 250,
+    height: 250,
+    borderRadius: 125,
+    backgroundColor: COLORS.secondary,
+    opacity: 0.05,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: COLORS.surface,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
+    backgroundColor: 'rgba(23, 31, 51, 0.8)',
+    zIndex: 10,
   },
   backBtn: {
     width: 36,
@@ -113,19 +159,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 17,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
     color: COLORS.textPrimary,
   },
   scroll: {
     padding: 16,
     gap: 16,
+    zIndex: 1,
   },
   sectionTitle: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: COLORS.textTertiary,
-    letterSpacing: 0.5,
+    letterSpacing: 1,
     marginLeft: 4,
   },
   card: {
@@ -145,7 +192,7 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '700',
     color: COLORS.textPrimary,
   },
   cardDesc: {
@@ -169,7 +216,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   langItemSelected: {
-    backgroundColor: COLORS.primary + '08',
+    backgroundColor: 'rgba(192, 193, 255, 0.08)',
   },
   langFlag: {
     fontSize: 20,
@@ -182,7 +229,7 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
   },
   langLabelSelected: {
-    fontWeight: '600',
+    fontWeight: '700',
     color: COLORS.primary,
   },
   infoBox: {

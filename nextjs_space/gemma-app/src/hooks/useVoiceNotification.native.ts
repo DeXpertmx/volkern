@@ -12,11 +12,9 @@ let NotificationsModule: any | null = null
 
 async function getNotifications() {
   if (!NotificationsModule) {
-    try {
-      NotificationsModule = await import('expo-notifications')
-    } catch {
-      NotificationsModule = { __unavailable: true }
-    }
+    // Always fallback to unavailable to prevent Expo Go crashes
+    // until we do a custom development build
+    NotificationsModule = { __unavailable: true }
   }
   return NotificationsModule
 }

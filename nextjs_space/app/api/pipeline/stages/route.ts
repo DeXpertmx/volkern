@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { withTenantAuth } from '@/lib/api-key-auth'
+import { seedTenantPipelines } from '@/lib/pipelines'
 
 // GET - Obtener etapas del pipeline
 export const GET = withTenantAuth(async (req, auth) => {
@@ -10,53 +11,58 @@ export const GET = withTenantAuth(async (req, auth) => {
     const tenantId = auth.tenant!.id;
     const user = auth.user!;
 
+    // Soporte para filtrar por pipelineId
+    const { searchParams } = new URL(req.url)
+    const pipelineId = searchParams.get('pipelineId')
+
+    // Auto-seed pipelines if none exist
+    const pipelinesExist = await prisma.pipeline.findFirst({
+      where: { tenantId, activo: true },
+    })
+
+    if (!pipelinesExist) {
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { enabledModules: true },
+      })
+      if (tenant) {
+        await seedTenantPipelines(tenantId, tenant.enabledModules)
+      }
+    }
+
+    const where: any = {
+      tenantId: tenantId,
+      activo: true,
+    }
+
+    if (pipelineId) {
+      where.pipelineId = pipelineId
+    }
+
     let stages = await prisma.pipelineStage.findMany({
-      where: {
-        tenantId: tenantId,
-        activo: true,
-      },
+      where,
       orderBy: {
         orden: 'asc',
       },
     })
 
-    // Si no hay etapas, crear las por defecto
-    if (stages.length === 0) {
-      const defaultStages: Array<{
-        nombre: string
-        probabilidad: number
-        orden: number
-        color: string
-        esEtapaFinal: boolean
-        tipoEtapaFinal?: string
-      }> = [
-        { nombre: 'Calificación', probabilidad: 10, orden: 1, color: '#94a3b8', esEtapaFinal: false, tipoEtapaFinal: undefined },
-        { nombre: 'Contacto Inicial', probabilidad: 25, orden: 2, color: '#3b82f6', esEtapaFinal: false, tipoEtapaFinal: undefined },
-        { nombre: 'Propuesta', probabilidad: 50, orden: 3, color: '#8b5cf6', esEtapaFinal: false, tipoEtapaFinal: undefined },
-        { nombre: 'Negociación', probabilidad: 75, orden: 4, color: '#f59e0b', esEtapaFinal: false, tipoEtapaFinal: undefined },
-        { nombre: 'Cierre', probabilidad: 90, orden: 5, color: '#10b981', esEtapaFinal: false, tipoEtapaFinal: undefined },
-        { nombre: 'Ganado', probabilidad: 100, orden: 6, color: '#059669', esEtapaFinal: true, tipoEtapaFinal: 'ganado' },
-        { nombre: 'Perdido', probabilidad: 0, orden: 7, color: '#ef4444', esEtapaFinal: true, tipoEtapaFinal: 'perdido' },
-      ]
+    // If still no stages and no specific pipeline, create default
+    if (stages.length === 0 && !pipelineId) {
+      const firstPipeline = await prisma.pipeline.findFirst({
+        where: { tenantId, activo: true },
+        orderBy: { orden: 'asc' },
+      })
 
-      stages = await Promise.all(
-        defaultStages.map((stage) => {
-          const data: any = {
-            nombre: stage.nombre,
-            probabilidad: stage.probabilidad,
-            orden: stage.orden,
-            color: stage.color,
-            esEtapaFinal: stage.esEtapaFinal,
-            tenantId: tenantId,
-          }
-          
-          if (stage.tipoEtapaFinal) {
-            data.tipoEtapaFinal = stage.tipoEtapaFinal
-          }
-          
-          return prisma.pipelineStage.create({ data })
+      if (firstPipeline) {
+        stages = await prisma.pipelineStage.findMany({
+          where: {
+            tenantId,
+            pipelineId: firstPipeline.id,
+            activo: true,
+          },
+          orderBy: { orden: 'asc' },
         })
-      )
+      }
     }
 
     return NextResponse.json({ stages })
@@ -82,15 +88,19 @@ export const POST = withTenantAuth(async (req, auth) => {
       probabilidad = 50,
       color = '#3b82f6',
       requiereAprobacion = false,
+      pipelineId,
     } = body
 
     if (!nombre) {
       return NextResponse.json({ error: 'Nombre requerido' }, { status: 400 })
     }
 
-    // Obtener el último orden
+    // Obtener el último orden dentro del pipeline (o global si no hay pipelineId)
     const ultimaEtapa = await prisma.pipelineStage.findFirst({
-      where: { tenantId: tenantId },
+      where: {
+        tenantId: tenantId,
+        ...(pipelineId ? { pipelineId } : {}),
+      },
       orderBy: { orden: 'desc' },
     })
 
@@ -105,6 +115,7 @@ export const POST = withTenantAuth(async (req, auth) => {
         probabilidad: parseInt(probabilidad),
         color,
         requiereAprobacion,
+        ...(pipelineId ? { pipelineId } : {}),
       },
     })
 
@@ -113,6 +124,41 @@ export const POST = withTenantAuth(async (req, auth) => {
     console.error('Error al crear etapa:', error)
     return NextResponse.json(
       { error: 'Error al crear etapa', details: error.message },
+      { status: 500 }
+    )
+  }
+}, ['leads:write', 'configuracion:editar'])
+
+// PATCH - Actualizar etapa existente (con pipelineId)
+export const PATCH = withTenantAuth(async (req, auth) => {
+  try {
+    const tenantId = auth.tenant!.id;
+    const body = await req.json()
+    const { id, nombre, descripcion, orden, probabilidad, color, pipelineId, activo } = body
+
+    if (!id) {
+      return NextResponse.json({ error: 'ID requerido' }, { status: 400 })
+    }
+
+    const data: any = {}
+    if (nombre !== undefined) data.nombre = nombre
+    if (descripcion !== undefined) data.descripcion = descripcion
+    if (orden !== undefined) data.orden = orden
+    if (probabilidad !== undefined) data.probabilidad = parseInt(probabilidad)
+    if (color !== undefined) data.color = color
+    if (pipelineId !== undefined) data.pipelineId = pipelineId
+    if (activo !== undefined) data.activo = activo
+
+    const stage = await prisma.pipelineStage.update({
+      where: { id },
+      data,
+    })
+
+    return NextResponse.json({ stage })
+  } catch (error: any) {
+    console.error('Error al actualizar etapa:', error)
+    return NextResponse.json(
+      { error: 'Error al actualizar etapa', details: error.message },
       { status: 500 }
     )
   }

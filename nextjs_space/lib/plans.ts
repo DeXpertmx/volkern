@@ -68,7 +68,7 @@ export type CrmModule =
   | 'conocimiento'
   | 'estrategia'
   | 'conciliacion'
-
+  | 'logistica'
 
 
 export interface ModuleDefinition {
@@ -138,6 +138,7 @@ export const ALL_MODULES: ModuleDefinition[] = [
   { id: 'estrategia', label: 'Estrategia', description: 'Planificación estratégica y KPIs (Requiere Proyectos)', icon: '🎯', group: 'Estrategia' },
   { id: 'agency', label: 'Agencia', description: 'Gestión de slots de cliente y marca blanca', icon: '🏢', group: 'Administración' },
   { id: 'conciliacion', label: 'Conciliación Bancaria', description: 'Sincronización con bancos e IA para conciliación automática', icon: '🏦', group: 'ERP' },
+  { id: 'logistica', label: 'Logística', description: 'Gestión de flota, envíos, almacenes y tracking GPS', icon: '🚚', group: 'ERP' },
 ]
 
 
@@ -153,7 +154,7 @@ export const PLAN_MODULES: Record<string, CrmModule[]> = {
     'equipo', 'configuracion',
     'telefonia',
     'social_manager',
-    'rrhh', 'finanzas', 'calidad', 'produccion', 'inventario', 'proyectos', 'taskforce', 'activos', 'conocimiento', 'estrategia'
+    'rrhh', 'finanzas', 'calidad', 'produccion', 'inventario', 'proyectos', 'taskforce', 'activos', 'conocimiento', 'estrategia', 'logistica'
   ],
   [PLANS.STARTER]: [
     'leads', 'contactos', 'empresas', 'pipeline', 'tareas', 'analytics',
@@ -175,7 +176,7 @@ export const PLAN_MODULES: Record<string, CrmModule[]> = {
     'integraciones', 'equipo', 'configuracion',
     'telefonia',
     'social_manager',
-    'rrhh', 'finanzas', 'calidad', 'produccion', 'inventario', 'proyectos', 'finanzas_consolidado', 'taskforce', 'activos', 'conocimiento', 'estrategia'
+    'rrhh', 'finanzas', 'calidad', 'produccion', 'inventario', 'proyectos', 'finanzas_consolidado', 'taskforce', 'activos', 'conocimiento', 'estrategia', 'logistica'
   ],
   [PLANS.PRO]: [
     'leads', 'contactos', 'empresas', 'pipeline', 'tareas', 'analytics',
@@ -188,7 +189,7 @@ export const PLAN_MODULES: Record<string, CrmModule[]> = {
     'integraciones', 'equipo', 'configuracion',
     'telefonia',
     'social_manager',
-    'rrhh', 'finanzas', 'calidad', 'produccion', 'inventario', 'proyectos', 'finanzas_consolidado', 'taskforce', 'activos', 'conocimiento', 'estrategia'
+    'rrhh', 'finanzas', 'calidad', 'produccion', 'inventario', 'proyectos', 'finanzas_consolidado', 'taskforce', 'activos', 'conocimiento', 'estrategia', 'logistica'
   ],
   [PLANS.BASICO]: [
     'leads', 'contactos', 'empresas', 'pipeline', 'tareas', 'analytics',
@@ -204,7 +205,17 @@ export const PLAN_MODULES: Record<string, CrmModule[]> = {
     'mi_tarjeta',
     'integraciones', 'equipo', 'configuracion',
     'social_manager',
-    'rrhh', 'finanzas', 'calidad', 'produccion', 'inventario', 'proyectos', 'taskforce', 'activos', 'conocimiento', 'estrategia'
+    'rrhh', 'finanzas', 'calidad', 'produccion', 'inventario', 'proyectos', 'taskforce', 'activos', 'conocimiento', 'estrategia', 'logistica'
+  ],
+  [PLANS.PROFESIONAL]: [
+    'leads', 'contactos', 'empresas', 'pipeline', 'tareas', 'analytics',
+    'mensajes', 'citas', 'catalogo', 'chatbot_whatsapp',
+    'campanas', 'email_marketing', 'cms', 'builder_premium',
+    'automatizaciones',
+    'mi_tarjeta',
+    'integraciones', 'equipo', 'configuracion',
+    'social_manager',
+    'rrhh', 'finanzas', 'calidad', 'produccion', 'inventario', 'proyectos', 'taskforce', 'activos', 'conocimiento', 'estrategia', 'logistica'
   ],
   [PLANS.AGENCY_SLOT]: [
     'leads', 'contactos', 'empresas', 'pipeline', 'tareas', 'analytics',
@@ -226,7 +237,7 @@ export const PLAN_MODULES: Record<string, CrmModule[]> = {
     'social_manager',
     'white_label', 'custom_domain',
     'rrhh', 'finanzas', 'calidad', 'produccion', 'inventario', 'proyectos', 'finanzas_consolidado', 'agency',
-    'taskforce', 'activos', 'conocimiento', 'estrategia'
+    'taskforce', 'activos', 'conocimiento', 'estrategia', 'logistica'
   ],
   // ─── Contabilidad y Asesorías Fiscales ───────────────────────
   [PLANS.ACCOUNTING_SLOT]: [
@@ -286,6 +297,10 @@ export const PLAN_LIMITS = {
     business_email_gb: 0,
     automations_count: 0,
     pages: 3,
+    catalogo_items: 20,
+    published_pages: 1,
+    invoices: 5,
+    contratos_sign: 2,
   },
   [PLANS.STARTER]: {
     leads: 2500,
@@ -303,6 +318,10 @@ export const PLAN_LIMITS = {
     business_email_gb: 0,
     automations_count: 3,
     pages: 5,
+    catalogo_items: 50,
+    published_pages: 3,
+    invoices: 50,
+    contratos_sign: 20,
   },
   [PLANS.GROWTH]: {
     leads: 10000,
@@ -320,6 +339,10 @@ export const PLAN_LIMITS = {
     business_email_gb: 1,
     automations_count: 20,
     pages: 50,
+    catalogo_items: 500,
+    published_pages: 20,
+    invoices: 500,
+    contratos_sign: 200,
   },
   [PLANS.PRO]: {
     leads: -1, // Ilimitado
@@ -337,6 +360,10 @@ export const PLAN_LIMITS = {
     business_email_gb: 10,
     automations_count: -1,
     pages: -1,
+    catalogo_items: -1,
+    published_pages: -1,
+    invoices: -1,
+    contratos_sign: -1,
   },
   [PLANS.BASICO]: {
     leads: 1000,
@@ -354,6 +381,10 @@ export const PLAN_LIMITS = {
     business_email_gb: 0,
     automations_count: 0,
     pages: 3,
+    catalogo_items: 30,
+    published_pages: 1,
+    invoices: 20,
+    contratos_sign: 10,
   },
   [PLANS.PROFESIONAL]: {
     leads: -1,
@@ -371,6 +402,10 @@ export const PLAN_LIMITS = {
     business_email_gb: 5,
     automations_count: -1,
     pages: -1,
+    catalogo_items: -1,
+    published_pages: -1,
+    invoices: -1,
+    contratos_sign: -1,
   },
   [PLANS.AGENCY_SLOT]: {
     leads: 5000,
@@ -388,6 +423,10 @@ export const PLAN_LIMITS = {
     business_email_gb: 0,
     automations_count: 10,
     pages: 10,
+    catalogo_items: 200,
+    published_pages: 10,
+    invoices: 200,
+    contratos_sign: 100,
   },
   [PLANS.PRO_AGENCY]: {
     leads: -1,
@@ -405,6 +444,10 @@ export const PLAN_LIMITS = {
     business_email_gb: 50,
     automations_count: -1,
     pages: -1,
+    catalogo_items: -1,
+    published_pages: -1,
+    invoices: -1,
+    contratos_sign: -1,
   },
   [PLANS.ACCOUNTING_SLOT]: {
     leads: 5000,
@@ -422,6 +465,10 @@ export const PLAN_LIMITS = {
     business_email_gb: 0,
     automations_count: 10,
     pages: 10,
+    catalogo_items: 200,
+    published_pages: 10,
+    invoices: 200,
+    contratos_sign: 100,
   },
   [PLANS.PRO_ACCOUNTING]: {
     leads: -1,
@@ -439,6 +486,10 @@ export const PLAN_LIMITS = {
     business_email_gb: 50,
     automations_count: -1,
     pages: -1,
+    catalogo_items: -1,
+    published_pages: -1,
+    invoices: -1,
+    contratos_sign: -1,
   },
 }
 

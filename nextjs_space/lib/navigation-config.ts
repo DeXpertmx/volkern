@@ -59,7 +59,11 @@ import {
   FileWarning,
   Home,
   Percent,
-  CalendarDays
+  CalendarDays,
+  Truck,
+  MapPin,
+  Ship,
+  Radio
 } from 'lucide-react'
 import type { PermissionModule } from '@/lib/permissions'
 
@@ -416,6 +420,27 @@ export const HUBS: HubConfig[] = [
     ]
   },
   {
+    id: 'logistica',
+    name: 'Logística',
+    icon: Truck,
+    href: '/dashboard/logistica',
+    description: 'Gestión de flota, almacenes, envíos y tracking GPS.',
+    requiredAccountType: 'BUSINESS',
+    requiredModule: 'logistica',
+    basePaths: [
+      '/dashboard/logistica'
+    ],
+    items: [
+      { name: 'Dashboard Logística', href: '/dashboard/logistica', icon: LayoutDashboard, planModule: 'logistica', description: 'KPIs de flota, almacenes y envíos' },
+      { name: 'Flota', href: '/dashboard/logistica/flota', icon: Truck, planModule: 'logistica', description: 'Gestión de vehículos y conductores' },
+      { name: 'Envíos', href: '/dashboard/logistica/envios', icon: Ship, planModule: 'logistica', description: 'Seguimiento de envíos y entregas' },
+      { name: 'Almacenes', href: '/dashboard/logistica/almacenes', icon: Package, planModule: 'logistica', description: 'WMS y control de existencias' },
+      { name: 'Tracking GPS', href: '/dashboard/logistica/tracking', icon: MapPin, planModule: 'logistica', description: 'Localización en tiempo real' },
+      { name: 'GPS en Vivo', href: '/dashboard/logistica/gps-stream', icon: Radio, planModule: 'logistica', description: 'Streaming SSE de posiciones GPS' },
+      { name: 'Alertas', href: '/dashboard/logistica/alertas', icon: AlertTriangle, planModule: 'logistica', description: 'Mantenimiento, ITV y capacidad' },
+    ]
+  },
+  {
     id: 'perfil',
     name: 'Perfil',
     icon: UserCog,
@@ -463,6 +488,7 @@ export const HUBS: HubConfig[] = [
       { name: 'Equipo', href: '/dashboard/equipo', icon: UserCog, planModule: 'equipo', description: 'Gestión de usuarios' },
       { name: 'Integraciones', href: '/dashboard/integraciones', icon: Plug, planModule: 'integraciones', description: 'Conexión con apps externas' },
       { name: 'Mi Suscripción', href: '/dashboard/configuracion/billing', icon: CreditCard, description: 'Suscripción y pagos' },
+      { name: 'Uso y Límites', href: '/dashboard/configuracion/usage', icon: BarChart3, description: 'Consumo y límites del plan' },
     ]
   }
 ]
