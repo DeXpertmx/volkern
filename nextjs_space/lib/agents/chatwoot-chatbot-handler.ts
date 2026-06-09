@@ -22,6 +22,12 @@ import { ChatbotAuditLogger } from './audit-logger';
 import { SecurityCheckpointAgent } from './security-checkpoint';
 import { ConversationContextAgent } from './conversation-context';
 import { syncOutgoingChatwootMessage } from '@/lib/skills/chatwoot-sync-skill';
+import {
+  buildWelcomeButtons,
+  buildServicesList,
+  buildPostBookingButtons,
+  detectInteractiveContext,
+} from '@/lib/messaging/interactive';
 
 interface ChatwootMessagePayload {
   tenantId: string;
@@ -527,8 +533,19 @@ INSTRUCCIONES:
       finalMessage = assistantMessage.replace('[TRANSFERIR]', '').trim();
     }
 
-    // 12. Enviar respuesta vía Chatwoot
-    await sendResponseToChatwoot(tenantId, conversationId, finalMessage, payload);
+    // 12. Detectar contexto interactivo y enviar respuesta
+    const interactiveCtx = detectInteractiveContext(content, finalMessage, services.length > 0);
+    let interactiveData: { contentType: string; contentAttributes: Record<string, any> } | undefined;
+
+    if (interactiveCtx.showWelcome) {
+      interactiveData = buildWelcomeButtons(tenant.nombre, chatbotConfig.nombreAsistente);
+    } else if (interactiveCtx.showServices && services.length > 0) {
+      interactiveData = buildServicesList(services as any, tenant.nombre);
+    } else if (interactiveCtx.showPostBooking) {
+      interactiveData = buildPostBookingButtons();
+    }
+
+    await sendResponseToChatwoot(tenantId, conversationId, finalMessage, payload, interactiveData);
 
     // 13. Actualizar estadísticas
     await prisma.chatbotConfig.update({
@@ -551,7 +568,8 @@ INSTRUCCIONES:
       } : undefined, payload);
     }
 
-    console.log('[Gemma/WhatsApp] ✅ Respuesta enviada:', finalMessage.substring(0, 50));
+    console.log('[Gemma/WhatsApp] ✅ Respuesta enviada:', finalMessage.substring(0, 50),
+      interactiveData ? '(interactiva)' : '');
 
   } catch (error) {
     console.error('[Gemma/WhatsApp] Error:', error);
@@ -626,10 +644,14 @@ async function executeWhatsAppAction(
         hour: '2-digit', minute: '2-digit'
       });
 
+      // Enviar confirmación con botones de post-booking
+      const confirmMsg = `✅ *¡Cita confirmada!*\n\n📌 *Servicio:* ${service.nombre}\n📅 *Fecha:* ${fechaFormateada}\n⏱ *Duración:* ${service.duracionMinutos} min\n💰 *Precio:* $${service.precio} ${service.moneda}\n\n¡Te esperamos!`;
+      const postBooking = buildPostBookingButtons();
       await sendResponseToChatwoot(
         tenantId, conversationId,
-        `✅ *¡Cita confirmada!*\n\n📌 *Servicio:* ${service.nombre}\n📅 *Fecha:* ${fechaFormateada}\n⏱ *Duración:* ${service.duracionMinutos} min\n💰 *Precio:* $${service.precio} ${service.moneda}\n\n¡Te esperamos!`,
-        originalPayload
+        confirmMsg,
+        originalPayload,
+        postBooking
       );
 
       await prisma.chatbotConfig.update({
@@ -749,10 +771,17 @@ async function sendResponseToChatwoot(
   tenantId: string,
   conversationId: string,
   message: string,
-  originalPayload: ChatwootMessagePayload
+  originalPayload: ChatwootMessagePayload,
+  interactive?: { contentType: string; contentAttributes: Record<string, any> }
 ) {
   try {
     const localConversationId = originalPayload.metadata?.localConversationId || conversationId;
+
+    // Guardar metadata del interactive si existe
+    const interactionMeta = interactive ? {
+      contentType: interactive.contentType,
+      hasInteractive: true,
+    } : {};
 
     // Crear mensaje local
     const localMessage = await prisma.message.create({
@@ -761,7 +790,8 @@ async function sendResponseToChatwoot(
         contenido: message,
         direccion: 'salida',
         canal: 'chatwoot',
-        estado: 'enviado'
+        estado: 'enviado',
+        metadatos: Object.keys(interactionMeta).length > 0 ? interactionMeta : undefined,
       }
     }).catch(() => null);
 
@@ -771,11 +801,13 @@ async function sendResponseToChatwoot(
         tenantId: tenantId as string,
         conversationId: localConversationId,
         content: message,
-        messageId: localMessage.id
+        messageId: localMessage.id,
+        ...(interactive?.contentType && { contentType: interactive.contentType }),
+        ...(interactive?.contentAttributes && { contentAttributes: interactive.contentAttributes }),
       }).catch(err => console.error('[Gemma] Error sync outgoing:', err));
     }
 
-    console.log(`[Gemma] Respuesta enviada a conversación ${conversationId}`);
+    console.log(`[Gemma] Respuesta enviada a conversación ${conversationId}${interactive ? ' (interactiva)' : ''}`);
   } catch (error) {
     console.error('[Gemma] Error enviando respuesta:', error);
   }
