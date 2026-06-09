@@ -69,9 +69,24 @@ export async function POST(request: NextRequest) {
       syncFromGoogleToVolkern(integration.userId)
         .then(() => {
           console.log('✅ Sincronización completada exitosamente');
+          // Limpiar error previo al completar exitosamente (no retornar la promesa
+          // para evitar que un fallo en DB se confunda con error de sync)
+          prisma.googleCalendarIntegration.update({
+            where: { id: integration.id },
+            data: { errorUltimaSync: null },
+          }).catch((dbError: any) => {
+            console.error('⚠️ Error al limpiar errorUltimaSync:', dbError.message);
+          });
         })
         .catch((error: any) => {
           console.error('❌ Error en sincronización:', error.message);
+          // Registrar el error para diagnóstico
+          prisma.googleCalendarIntegration.update({
+            where: { id: integration.id },
+            data: { errorUltimaSync: `Webhook sync error: ${error.message}` },
+          }).catch((dbError: any) => {
+            console.error('⚠️ Error al registrar error de sync:', dbError.message);
+          });
         });
 
       // Responder inmediatamente a Google

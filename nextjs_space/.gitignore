@@ -5,3 +5,4 @@ tsconfig.tsbuildinfo
 coverage/
 .env*
 traccar-device-mapping.json
+scripts/diagnose-calendar-sync.ts
