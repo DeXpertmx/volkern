@@ -66,6 +66,8 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
   const isListeningRef = useRef(false);
   const isPausedRef = useRef(false);
 
+  const audioBands = useAudioLevel(isListening || isPaused);
+
   const {
     isListening,
     isPaused,
@@ -97,8 +99,6 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
       }, 800);
     },
   });
-
-  const audioBands = useAudioLevel(isListening || isPaused);
 
   // Push-to-talk: espacio inicia grabación, soltar espacio envía
   // Escape cancela la grabación
@@ -223,6 +223,46 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
     }
   };
 
+  // Auto-enviar cuando se detiene la grabación y hay texto (no en pausa, no cancelado)
+  useEffect(() => {
+    if (cancelVoiceRef.current) {
+      cancelVoiceRef.current = false;
+      return;
+    }
+    if (!isListening && !isPaused && inputValueRef.current.trim() && !voiceError) {
+      const timer = setTimeout(() => {
+        handleSend();
+      }, 600);
+      return () => clearTimeout(timer);
+    }
+  }, [isListening, voiceError]);
+
+  // Auto-scroll cuando hay nuevos mensajes
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  // Focus input cuando se abre el chat
+  useEffect(() => {
+    if (isOpen && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [isOpen]);
+
+  // Mensaje inicial cuando se abre el chat
+  useEffect(() => {
+    if (isOpen && messages.length === 0) {
+      setMessages([{
+        id: 'welcome',
+        role: 'assistant',
+        content: `¡Hola! Soy ${nombreAsistente}, tu asistente virtual. Este es un modo de prueba para verificar cómo respondo. ¿En qué puedo ayudarte?`,
+        timestamp: new Date()
+      }]);
+    }
+  }, [isOpen, nombreAsistente]);
+
   const handleSend = async () => {
     const text = inputValueRef.current || inputValue;
     if (!text.trim() || isLoading || !activo) return;
@@ -274,46 +314,6 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
       handleSend();
     }
   };
-
-  // Auto-enviar cuando se detiene la grabación y hay texto (no en pausa, no cancelado)
-  useEffect(() => {
-    if (cancelVoiceRef.current) {
-      cancelVoiceRef.current = false;
-      return;
-    }
-    if (!isListening && !isPaused && inputValueRef.current.trim() && !voiceError) {
-      const timer = setTimeout(() => {
-        handleSend();
-      }, 600);
-      return () => clearTimeout(timer);
-    }
-  }, [isListening, voiceError]);
-
-  // Auto-scroll cuando hay nuevos mensajes
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages]);
-
-  // Focus input cuando se abre el chat
-  useEffect(() => {
-    if (isOpen && inputRef.current) {
-      inputRef.current.focus();
-    }
-  }, [isOpen]);
-
-  // Mensaje inicial cuando se abre el chat
-  useEffect(() => {
-    if (isOpen && messages.length === 0) {
-      setMessages([{
-        id: 'welcome',
-        role: 'assistant',
-        content: `¡Hola! Soy ${nombreAsistente}, tu asistente virtual. Este es un modo de prueba para verificar cómo respondo. ¿En qué puedo ayudarte?`,
-        timestamp: new Date()
-      }]);
-    }
-  }, [isOpen, nombreAsistente]);
 
   const clearChat = () => {
     setMessages([]);
