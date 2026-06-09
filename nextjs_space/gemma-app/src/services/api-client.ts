@@ -5,6 +5,12 @@ import Constants from 'expo-constants'
 // ─── Config ──────────────────────────────────────────────────────────────
 
 function detectServerHost(): string {
+  // 1. Variable de entorno EXPO_PUBLIC_API_URL (desde .env o EAS Build)
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL.replace(/\/$/, '')
+  }
+
+  // 2. Detección automática de IP local para desarrollo (Expo Go / LAN)
   try {
     const hostUri = Constants.expoConfig?.hostUri
     if (hostUri) {
@@ -14,6 +20,8 @@ function detectServerHost(): string {
       }
     }
   } catch {}
+
+  // 3. Fallback final
   return 'http://localhost:3002'
 }
 
