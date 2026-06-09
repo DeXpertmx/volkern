@@ -2,25 +2,45 @@ import { prisma } from '@/lib/core/db';
 import crypto from 'crypto';
 
 /**
- * Valida la firma HMAC de un webhook entrante desde el Hub
+ * Valida la firma HMAC de un webhook entrante desde el Hub (Chatwoot).
+ * 
+ * Identificación del tenant:
+ * 1. Por `payload.tenant_id` (webhooks personalizados)
+ * 2. Por `payload.account.id` → lookup en MessagingHubConfig.chatwootAccountId (Chatwoot nativo)
  */
 export async function validateWebhookSignature(
     signature: string,
     payload: any
 ): Promise<{ tenantId: string; webhookSecret: string } | null> {
-    // El Hub debe proporcionar un identificador de tenant, ya sea en el payload o headers
-    // Para Chatwoot/Nexus, asumimos que viene en el payload
-    const tenantId = payload.tenant_id;
+    // Intentar obtener tenantId del payload o identificar por account.id de Chatwoot
+    let tenantId = payload.tenant_id;
+    let config: { tenantId: string; webhookSecret: string } | null = null;
 
-    if (!tenantId) {
-        console.error('[Nexus Validator] No tenantId found in payload');
-        return null;
+    if (tenantId) {
+        // Path 1: tenant_id explícito en el payload
+        config = await (prisma as any).messagingHubConfig.findUnique({
+            where: { tenantId, isActive: true },
+            select: { tenantId: true, webhookSecret: true }
+        });
+    } else if (payload.account?.id) {
+        // Path 2: Chatwoot envía account.id → buscar tenant por chatwootAccountId
+        const chatwootAccountId = Number(payload.account.id);
+        if (!isNaN(chatwootAccountId)) {
+            config = await (prisma as any).messagingHubConfig.findFirst({
+                where: { chatwootAccountId, isActive: true },
+                select: { tenantId: true, webhookSecret: true }
+            });
+            if (config) {
+                tenantId = config.tenantId;
+                console.log(`[Nexus Validator] Tenant identificado por Chatwoot account ${chatwootAccountId}: ${tenantId}`);
+            }
+        }
     }
 
-    const config = await (prisma as any).messagingHubConfig.findUnique({
-        where: { tenantId, isActive: true },
-        select: { tenantId: true, webhookSecret: true }
-    });
+    if (!tenantId) {
+        console.error('[Nexus Validator] No tenantId found in payload (tried tenant_id and account.id)');
+        return null;
+    }
 
     if (!config) {
         console.error(`[Nexus Validator] No active config found for tenant ${tenantId}`);
