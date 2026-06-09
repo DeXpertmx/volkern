@@ -37,7 +37,7 @@
     ],
     "extra": {
       "router": {},
-      "apiUrl": "http://localhost:3000",
+      "apiUrl": "https://volkern.app",
       "eas": {
         "projectId": "baaeb27f-3dd4-4b25-b0c9-e4654c7547cb"
       }
