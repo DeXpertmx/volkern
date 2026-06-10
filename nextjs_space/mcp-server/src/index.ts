@@ -2,11 +2,13 @@
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
   Tool,
 } from "@modelcontextprotocol/sdk/types.js";
+import { createServer, IncomingMessage, ServerResponse } from "http";
 import { z } from "zod";
 
 // ============================================
@@ -14,6 +16,8 @@ import { z } from "zod";
 // ============================================
 const VOLKERN_API_URL = process.env.VOLKERN_API_URL || "https://volkern.app/api";
 const VOLKERN_API_KEY = process.env.VOLKERN_API_KEY || "";
+const TRANSPORT = (process.env.TRANSPORT || "stdio").toLowerCase();
+const PORT = parseInt(process.env.PORT || "3001", 10);
 
 if (!VOLKERN_API_KEY) {
   console.error("Error: VOLKERN_API_KEY environment variable is required");
@@ -1145,11 +1149,126 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
-// Start server
+// ============================================
+// SSE Transport
+// ============================================
+
+async function startSSEServer() {
+  let transport: SSEServerTransport | null = null;
+
+  const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
+    const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+    const pathname = url.pathname;
+
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key");
+
+    if (req.method === "OPTIONS") {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+
+    switch (pathname) {
+      case "/sse": {
+        if (req.method !== "GET") {
+          res.writeHead(405);
+          res.end("Method Not Allowed");
+          return;
+        }
+
+        res.writeHead(200, {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          "Connection": "keep-alive",
+        });
+
+        // Si ya hay una conexión SSE activa, cerrarla antes de conectar la nueva
+        if (transport) {
+          try { await server.close(); } catch { /* ignore */ }
+        }
+
+        transport = new SSEServerTransport("/messages", res);
+        await server.connect(transport);
+
+        req.on("close", () => {
+          console.error("SSE client disconnected");
+          transport = null;
+        });
+        break;
+      }
+
+      case "/messages": {
+        if (req.method !== "POST") {
+          res.writeHead(405);
+          res.end("Method Not Allowed");
+          return;
+        }
+
+        if (!transport) {
+          res.writeHead(400);
+          res.end(JSON.stringify({ error: "No SSE connection established. Connect to /sse first." }));
+          return;
+        }
+
+        // Pasar el request directamente al SDK — él lee el body internamente
+        await transport!.handlePostMessage(req, res);
+        break;
+      }
+
+      default: {
+        // Health check endpoint
+        if (pathname === "/health") {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({
+            status: "ok",
+            server: "volkern-mcp-server",
+            version: "2.0.0",
+            transport: "sse",
+          }));
+          return;
+        }
+
+        res.writeHead(404);
+        res.end("Not Found");
+      }
+    }
+  });
+
+  // Graceful shutdown
+  process.on("SIGINT", () => {
+    console.error("\nShutting down SSE server...");
+    httpServer.close();
+    process.exit(0);
+  });
+  process.on("SIGTERM", () => {
+    console.error("Shutting down SSE server...");
+    httpServer.close();
+    process.exit(0);
+  });
+
+  return new Promise<void>((resolve, reject) => {
+    httpServer.listen(PORT, () => {
+      console.error(`Volkern MCP Server running on SSE at http://localhost:${PORT}/sse`);
+      console.error(`Message endpoint: http://localhost:${PORT}/messages`);
+      resolve();
+    });
+    httpServer.on("error", reject);
+  });
+}
+
+// ============================================
+// Start server (stdio or SSE)
+// ============================================
 async function main() {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.error("Volkern MCP Server running on stdio");
+  if (TRANSPORT === "sse") {
+    await startSSEServer();
+  } else {
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+    console.error("Volkern MCP Server running on stdio");
+  }
 }
 
 main().catch((error) => {
