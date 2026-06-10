@@ -141,7 +141,7 @@ export default function ChatScreen() {
   const blurIntensity = Platform.OS === 'ios' ? 15 : 0;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       {/* Background Mesh */}
       <View style={styles.glowContainer} pointerEvents="none">
         <View style={styles.topGlow} />
@@ -176,8 +176,8 @@ export default function ChatScreen() {
       {/* Messages & Input Area */}
       <KeyboardAvoidingView
         style={styles.chatArea}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
+        behavior="padding"
+        keyboardVerticalOffset={0}
       >
         <FlatList
           ref={flatListRef}

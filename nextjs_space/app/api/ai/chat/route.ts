@@ -105,8 +105,12 @@ const SKILL_DESCRIPTIONS = `
 [MIS NEGOCIOS] intent:"mis_negocios"
   Listar oportunidades/deals activos.
 
-[REGISTRAR INTERACCIÓN] intent:"registrar_interaccion"
-  Registrar llamada, WhatsApp, email o reunión. Req: tipo, contenido.
+[REGISTRAR INTERACCIÓN / ENVIAR EMAIL] intent:"registrar_interaccion"
+  Registrar interacciones (llamada, WhatsApp, reunión) o ENVIAR un email real.
+  Cuando tipo="email": ENVÍA el email por SES al contacto (no solo lo registra).
+  Req: tipo (email|llamada|whatsapp|reunion), contenido (cuerpo del mensaje o resumen).
+  Opc: email (correo del destinatario), nombre (alternativa para buscar el contacto).
+  NOTA: Puedes usar este skill para enviar correos a cualquier contacto del sistema.
 
 [OBTENER TELÉFONO] intent:"obtener_telefono"
   Buscar teléfono de un contacto. Req: nombre.

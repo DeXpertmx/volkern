@@ -44,6 +44,7 @@ import * as logisticsSkills from './logistics-skills';
 import * as interactionSkills from './interaction-skills';
 import * as billingSkills from './billing-skills';
 import { eventBus, EVENTS } from './event-bus';
+import { fromZonedTime } from 'date-fns-tz';
 
 // ============== SKILL REGISTRY ==============
 
@@ -174,7 +175,6 @@ const createTaskWrapper = async (input: { tenantId: string; titulo: string; emai
       if (!isNaN(parsed.getTime())) {
         // Si tenemos timezone, convertir la fecha local del usuario a UTC
         if (timezone && timezone !== 'UTC') {
-          const { fromZonedTime } = await import('date-fns-tz');
           fecha = fromZonedTime(
             typeof fechaVencimiento === 'string'
               ? fechaVencimiento.replace(/Z$/, '').replace(/[+-]\d{2}:\d{2}$/, '')

@@ -33,7 +33,8 @@
         {
           "photosPermission": "Gemma necesita acceso a tu galería para compartir imágenes."
         }
-      ]
+      ],
+      "./plugins/withFixAndroidDependencies"
     ],
     "extra": {
       "router": {},
