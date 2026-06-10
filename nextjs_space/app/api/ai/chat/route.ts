@@ -72,6 +72,8 @@ const INTENT_SKILL_MAP: Record<string, string> = {
   'buscar_producto': 'search_catalog',
   'salud_inventario': 'get_inventory_health',
   'ajustar_stock': 'adjust_stock',
+  'registrar_gasto': 'create_expense',
+  'registrar_gasto_vision': 'register_expense_vision',
   'buscar_inmuebles': 'search_properties_by_filters',
   'recomendar_inmuebles': 'recommend_properties',
 }
@@ -138,6 +140,16 @@ const SKILL_DESCRIPTIONS = `
 
 [CREAR NOTA] intent:"crear_nota"
   Agregar nota a un lead/contacto.
+
+=== FINANZAS ===
+
+[REGISTRAR GASTO] intent:"registrar_gasto"
+  Registrar un gasto o egreso. Req: monto, concepto. Opc: proveedor, categoria, fecha.
+  NOTA: Si el usuario adjunta foto de factura/ticket, usa registrar_gasto_vision (procesa la imagen automáticamente).
+
+[REGISTRAR GASTO VISIÓN] intent:"registrar_gasto_vision"
+  Registrar un gasto procesando automáticamente la imagen de una factura o ticket.
+  Extrae proveedor, monto, fecha e IVA de la imagen.
 
 === INVENTARIO ===
 
@@ -595,11 +607,24 @@ Continúa con la misma intención (${pendingCtx.intent}) y completa los parámet
       if (ADMIN_ONLY_SKILLS.includes(aiResult.intent) && !isAdmin) {
         skillErrorMsg = `⚠️ No tienes permisos para realizar esta acción. Se requiere rol de administrador. Tu rol actual es: ${roleName || 'Usuario'}`
       } else {
+        // Obtener timezone del usuario
+        let userTimezone = 'America/Mexico_City'
+        try {
+          if (auth.user?.id) {
+            const user = await prisma.user.findUnique({
+              where: { id: auth.user.id },
+              select: { timezone: true }
+            })
+            if (user?.timezone) userTimezone = user.timezone
+          }
+        } catch {}
+
         try {
           skillResult = await executeSkill(skillName as any, {
             ...params,
             tenantId,
             userId: userId || undefined,
+            timezone: userTimezone,
           })
           await clearPendingContext(userKey)
         } catch (skillError: any) {
@@ -736,6 +761,12 @@ function formatSuccessMessage(intent: string, result: any): string {
 
   if (intent === 'crear_tarea' && result) {
     return `✅ Tarea creada: **${result.titulo}**\n📅 Vence: ${safeFormatDate(result.fechaVencimiento)}\n\n¿Algo más? 🌟`
+  }
+
+  if (intent === 'registrar_gasto' && result) {
+    const monto = result.amount ? `$${Number(result.amount).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : ''
+    const proveedor = result.supplier?.name || ''
+    return `✅ Gasto registrado\n\n💰 **${monto}**\n📝 ${result.description || 'Sin concepto'}\n${proveedor ? `🏢 ${proveedor}\n` : ''}📂 ${result.category || 'General'}\n\n¿Algo más? 🌟`
   }
 
   if (intent === 'obtener_telefono' && result?.telefono) {
