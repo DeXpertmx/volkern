@@ -1,8 +1,17 @@
-export async function apiFetch(url: string, options?: RequestInit): Promise<Response> {
-  return fetch(url, {
-    ...options,
-    credentials: 'include',
-  });
+const DEFAULT_TIMEOUT = 15000; // 15s timeout
+
+export async function apiFetch(url: string, options?: RequestInit, timeout = DEFAULT_TIMEOUT): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: options?.signal ?? controller.signal,
+      credentials: 'include',
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 export async function apiGet(url: string): Promise<any> {

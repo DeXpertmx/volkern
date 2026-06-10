@@ -91,17 +91,6 @@ import { MODULE_PIPELINES, getStagesForCategory } from '@/lib/pipelines'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
-// ── Helper: fetch con timeout ──────────────────────────────────────────────
-async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout = 15000): Promise<Response> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeout);
-  try {
-    return await fetch(url, { ...options, signal: controller.signal, credentials: 'include' });
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
 // ── Haptic feedback helper ──────────────────────────────────────────────────
 function triggerHaptic() {
   try {
@@ -324,7 +313,7 @@ export default function PipelinePage() {
 
   const fetchPipelines = async () => {
     try {
-      const res = await fetchWithTimeout('/api/pipelines')
+      const res = await apiFetch('/api/pipelines')
       if (res.ok) {
         const data = await res.json()
         setPipelines(data.pipelines || [])
@@ -495,8 +484,8 @@ export default function PipelinePage() {
       const pipelineParam = pipelineId ? `?pipelineId=${pipelineId}` : ''
       
       const [dealsRes, stagesRes] = await Promise.all([
-        fetchWithTimeout(`/api/deals${pipelineParam}`),
-        fetchWithTimeout(`/api/pipeline/stages${pipelineParam}`),
+        apiFetch(`/api/deals${pipelineParam}`),
+        apiFetch(`/api/pipeline/stages${pipelineParam}`),
       ])
 
       if (dealsRes.ok && stagesRes.ok) {
