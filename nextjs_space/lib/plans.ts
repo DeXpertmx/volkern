@@ -69,6 +69,7 @@ export type CrmModule =
   | 'estrategia'
   | 'conciliacion'
   | 'logistica'
+  | 'formularios'
 
 
 export interface ModuleDefinition {
@@ -139,8 +140,9 @@ export const ALL_MODULES: ModuleDefinition[] = [
   { id: 'agency', label: 'Agencia', description: 'Gestión de slots de cliente y marca blanca', icon: '🏢', group: 'Administración' },
   { id: 'conciliacion', label: 'Conciliación Bancaria', description: 'Sincronización con bancos e IA para conciliación automática', icon: '🏦', group: 'ERP' },
   { id: 'logistica', label: 'Logística', description: 'Gestión de flota, envíos, almacenes y tracking GPS', icon: '🚚', group: 'ERP' },
+  // Formularios
+  { id: 'formularios', label: 'Formularios', description: 'Formularios tipo Typeform con Tally', icon: '📋', group: 'Marketing' },
 ]
-
 
 // ============== MÓDULOS POR PLAN ==============
 // Define qué módulos incluye cada plan
@@ -164,6 +166,7 @@ export const PLAN_MODULES: Record<string, CrmModule[]> = {
     'equipo', 'configuracion',
     'telefonia',
     'social_manager',
+    'formularios',
   ],
   [PLANS.GROWTH]: [
     'leads', 'contactos', 'empresas', 'pipeline', 'tareas', 'analytics',
@@ -176,7 +179,8 @@ export const PLAN_MODULES: Record<string, CrmModule[]> = {
     'integraciones', 'equipo', 'configuracion',
     'telefonia',
     'social_manager',
-    'rrhh', 'finanzas', 'calidad', 'produccion', 'inventario', 'proyectos', 'finanzas_consolidado', 'taskforce', 'activos', 'conocimiento', 'estrategia', 'logistica'
+    'rrhh', 'finanzas', 'calidad', 'produccion', 'inventario', 'proyectos', 'finanzas_consolidado', 'taskforce', 'activos', 'conocimiento', 'estrategia', 'logistica',
+    'formularios',
   ],
   [PLANS.PRO]: [
     'leads', 'contactos', 'empresas', 'pipeline', 'tareas', 'analytics',
@@ -189,7 +193,8 @@ export const PLAN_MODULES: Record<string, CrmModule[]> = {
     'integraciones', 'equipo', 'configuracion',
     'telefonia',
     'social_manager',
-    'rrhh', 'finanzas', 'calidad', 'produccion', 'inventario', 'proyectos', 'finanzas_consolidado', 'taskforce', 'activos', 'conocimiento', 'estrategia', 'logistica'
+    'rrhh', 'finanzas', 'calidad', 'produccion', 'inventario', 'proyectos', 'finanzas_consolidado', 'taskforce', 'activos', 'conocimiento', 'estrategia', 'logistica',
+    'formularios',
   ],
   [PLANS.BASICO]: [
     'leads', 'contactos', 'empresas', 'pipeline', 'tareas', 'analytics',
