@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { withTenantAuth } from '@/lib/api-key-auth'
-import { seedTenantPipelines } from '@/lib/pipelines'
+import { seedTenantPipelines } from '@/lib/pipelines-server'
 
 // GET - Obtener etapas del pipeline
 export const GET = withTenantAuth(async (req, auth) => {
