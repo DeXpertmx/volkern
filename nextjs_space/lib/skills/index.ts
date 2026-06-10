@@ -148,8 +148,8 @@ const createLeadWrapper = async (input: { tenantId: string; nombre: string; emai
   });
 };
 
-const createTaskWrapper = async (input: { tenantId: string; titulo: string; email?: string; descripcion?: string; fechaVencimiento?: string | Date; prioridad?: string; userId?: string }) => {
-  const { tenantId, email, titulo, descripcion, fechaVencimiento, userId } = input;
+const createTaskWrapper = async (input: { tenantId: string; titulo: string; email?: string; descripcion?: string; fechaVencimiento?: string | Date; prioridad?: string; userId?: string; timezone?: string }) => {
+  const { tenantId, email, titulo, descripcion, fechaVencimiento, userId, timezone } = input;
   
   let lead = null;
   let contact = null;
@@ -166,11 +166,29 @@ const createTaskWrapper = async (input: { tenantId: string; titulo: string; emai
     }
   }
 
-  // Parsear fecha o default a mañana
+  // Parsear fecha usando timezone del usuario si está disponible
   let fecha = new Date();
   if (fechaVencimiento) {
-    fecha = new Date(fechaVencimiento);
-    if (isNaN(fecha.getTime())) fecha = new Date();
+    try {
+      const parsed = new Date(fechaVencimiento);
+      if (!isNaN(parsed.getTime())) {
+        // Si tenemos timezone, convertir la fecha local del usuario a UTC
+        if (timezone && timezone !== 'UTC') {
+          const { fromZonedTime } = await import('date-fns-tz');
+          fecha = fromZonedTime(
+            typeof fechaVencimiento === 'string'
+              ? fechaVencimiento.replace(/Z$/, '').replace(/[+-]\d{2}:\d{2}$/, '')
+              : fechaVencimiento.toISOString().replace(/Z$/, '').replace(/[+-]\d{2}:\d{2}$/, ''),
+            timezone
+          );
+        } else {
+          fecha = parsed;
+        }
+      }
+    } catch {
+      fecha = new Date(fechaVencimiento);
+      if (isNaN(fecha.getTime())) fecha = new Date();
+    }
   } else {
     fecha.setDate(fecha.getDate() + 1); // Por defecto mañana si no viene
   }
@@ -223,6 +241,31 @@ const registerInteractionWrapper = async (input: { tenantId: string; email?: str
 
   if (!lead && !contact) {
     throw new Error('No se encontró el contacto o lead para registrar la interacción');
+  }
+
+  const contactEmail = lead?.email || contact?.email
+
+  // ── Si es un email, enviarlo realmente por SES ──
+  if (tipo === 'email' && contactEmail) {
+    try {
+      const { sendEmail } = await import('@/lib/ses-email');
+      const emailResult = await sendEmail({
+        to: contactEmail,
+        subject: `Mensaje de Volkern: ${contenido.substring(0, 100)}`,
+        text: contenido,
+        html: contenido.replace(/\n/g, '<br>'),
+      }).catch((e: any) => {
+        console.warn('[Interaction] Error enviando email real (no crítico):', e?.message);
+        return null;
+      });
+      
+      if (emailResult) {
+        console.log(`[Interaction] Email enviado a ${contactEmail}: ${contenido.substring(0, 50)}...`);
+      }
+    } catch (e) {
+      // No crítico - la interacción se registra igual
+      console.warn('[Interaction] No se pudo enviar el email real:', (e as any)?.message);
+    }
   }
 
   return interactionSkills.createInteraction({
@@ -406,6 +449,85 @@ const createBookingWrapper = async (input: {
     linkReunion,
     ubicacion: ubicacionFinal,
     source: 'app'
+  });
+};
+
+// ─── Wrapper para registrar gasto: mapea params español → inglés y busca/crea proveedor ──────
+
+const createExpenseWrapper = async (input: {
+  tenantId: string;
+  userId?: string;
+  monto?: number;
+  amount?: number;
+  concepto?: string;
+  description?: string;
+  proveedor?: string;
+  categoria?: string;
+  category?: string;
+  fecha?: string;
+  date?: string;
+}) => {
+  const { tenantId, userId, monto, amount, concepto, description, proveedor, categoria, category, fecha, date } = input;
+  const { prisma } = await import('@/lib/db');
+  
+  // Mapear params español → inglés
+  const finalAmount = amount ?? monto;
+  const finalDescription = description || concepto || 'Gasto registrado por Gemma';
+  const finalCategory = category || categoria || 'General';
+  
+  if (!finalAmount) {
+    throw new Error('El monto es requerido para registrar el gasto.');
+  }
+
+  // Buscar o crear proveedor por nombre
+  let supplierId: string;
+  if (proveedor) {
+    let supplier = await prisma.supplier.findFirst({
+      where: {
+        tenantId,
+        name: { contains: proveedor, mode: 'insensitive' }
+      }
+    });
+    if (!supplier) {
+      supplier = await prisma.supplier.create({
+        data: {
+          tenantId,
+          name: proveedor,
+          category: finalCategory,
+          active: true,
+        }
+      });
+    }
+    supplierId = supplier.id;
+  } else {
+    // Proveedor por defecto: "Gastos Varios"
+    let defaultSupplier = await prisma.supplier.findFirst({
+      where: { tenantId, name: 'Gastos Varios' }
+    });
+    if (!defaultSupplier) {
+      defaultSupplier = await prisma.supplier.create({
+        data: {
+          tenantId,
+          name: 'Gastos Varios',
+          category: 'General',
+          active: true,
+        }
+      });
+    }
+    supplierId = defaultSupplier.id;
+  }
+
+  const parsedDate = fecha || date ? new Date(fecha || date || '') : undefined;
+
+  return financeSkills.createExpense({
+    tenantId,
+    createdById: userId || 'system',
+    supplierId,
+    description: finalDescription,
+    amount: Number(finalAmount),
+    category: finalCategory,
+    date: parsedDate,
+    status: 'PAID',
   });
 };
 
@@ -595,7 +717,7 @@ export const skills = {
   
   // ERP Finanzas
   create_supplier: financeSkills.createSupplier,
-  create_expense: financeSkills.createExpense,
+  create_expense: createExpenseWrapper,
   register_expense_vision: financeSkills.registerExpenseVision,
   analyze_burn_rate: financeSkills.analyzeBurnRate,
   
