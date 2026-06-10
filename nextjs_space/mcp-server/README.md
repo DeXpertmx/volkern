@@ -10,6 +10,7 @@ Servidor MCP (Model Context Protocol) para integrar Volkern CRM con agentes de I
 - **Cotizaciones**: Crear cotizaciones desde ítems del catálogo con precios, descuentos e impuestos
 - **Órdenes de Venta**: Listar, consultar y convertir cotizaciones en órdenes de venta
 - **Contratos**: Convertir cotizaciones aceptadas en contratos con condiciones de pago
+- **Transporte SSE**: Ahora puedes conectar el servidor vía HTTP/SSE para clientes MCP remotos (VS Code, Cline, n8n)
 
 ### Flujo Comercial Completo vía MCP
 1. `volkern_create_lead` → Capturar lead
@@ -123,6 +124,96 @@ Agrega la siguiente configuración a tu archivo `claude_desktop_config.json`:
   }
 }
 ```
+
+## Transporte SSE (Server-Sent Events)
+
+El servidor MCP soporta dos modos de transporte, seleccionables mediante la variable de entorno `TRANSPORT`:
+
+| Transporte | Modo | Uso típico |
+|------------|------|------------|
+| `stdio` (default) | Comunicación por stdin/stdout | Claude Desktop, Cursor, Windsurf |
+| `sse` | HTTP Server con Server-Sent Events | Clientes remotos, VS Code, Cline, n8n |
+
+### Iniciar en modo SSE
+
+**Opción 1 — Instalación global NPM:**
+```bash
+export VOLKERN_API_KEY="tu_api_key_aqui"
+TRANSPORT=sse PORT=3001 volkern-mcp
+```
+
+**Opción 2 — Con npx (sin instalar):**
+```bash
+export VOLKERN_API_KEY="tu_api_key_aqui"
+TRANSPORT=sse PORT=3001 npx volkern-mcp-server
+```
+
+**Opción 3 — Desde código fuente:**
+```bash
+export VOLKERN_API_KEY="tu_api_key_aqui"
+npm run start:sse
+
+# O directamente
+export VOLKERN_API_KEY="tu_api_key_aqui"
+TRANSPORT=sse PORT=3001 node dist/index.js
+
+# En desarrollo
+export VOLKERN_API_KEY="tu_api_key_aqui"
+TRANSPORT=sse PORT=3001 npm run dev:sse
+```
+
+### Endpoints
+
+| Endpoint | Método | Descripción |
+|----------|--------|-------------|
+| `GET /sse` | GET | Conexión SSE (streaming de eventos). Cliente MCP se suscribe aquí |
+| `POST /messages` | POST | Enviar mensajes/respuestas al servidor MCP |
+| `GET /health` | GET | Health check del servidor (retorna JSON) |
+| `OPTIONS *` | OPTIONS | CORS preflight para todos los endpoints |
+
+### Health Check
+
+```bash
+curl http://localhost:3001/health
+# ➜ {"status":"ok","server":"volkern-mcp-server","version":"2.0.0","transport":"sse"}
+```
+
+### Conectar desde VS Code (Cline)
+
+En la configuración de Cline, especifica el modo SSE:
+
+```json
+{
+  "mcpServers": {
+    "volkern": {
+      "type": "sse",
+      "url": "http://localhost:3001/sse"
+    }
+  }
+}
+```
+
+### Conectar desde n8n o flujos automatizados
+
+Usa el nodo HTTP Request de n8n:
+1. **Endpoint SSE**: `GET http://localhost:3001/sse` para recibir eventos
+2. **Enviar comandos**: `POST http://localhost:3001/messages` con headers:
+   - `Content-Type: application/json`
+   - `Authorization: Bearer tu_api_key`
+
+### Probar con curl (sesión manual)
+
+```bash
+# 1. Abrir conexión SSE (dejar corriendo en una terminal)
+curl -N http://localhost:3001/sse
+
+# 2. En otra terminal, enviar un comando
+curl -X POST http://localhost:3001/messages \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```
+
+> **Nota**: La conexión SSE debe establecerse antes de enviar mensajes. El servidor maneja una sesión SSE a la vez; si se conecta un nuevo cliente, la sesión anterior se cierra automáticamente.
 
 ## Herramientas Disponibles (35 tools)
 
