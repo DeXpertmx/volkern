@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { extractTenantFromRequest } from '@/lib/tenant-context';
+
+async function getTenantId(req: NextRequest): Promise<string | null> {
+  const { tenantId } = await extractTenantFromRequest(req);
+  return tenantId;
+}
 
 // GET /api/formularios — Listar formularios del tenant
 export async function GET(req: NextRequest) {
   try {
-    const tenantId = req.headers.get('x-tenant-id');
+    const tenantId = await getTenantId(req);
     if (!tenantId) {
       return NextResponse.json({ error: 'Tenant no encontrado' }, { status: 400 });
     }
@@ -27,7 +33,7 @@ export async function GET(req: NextRequest) {
 // POST /api/formularios — Crear un nuevo formulario
 export async function POST(req: NextRequest) {
   try {
-    const tenantId = req.headers.get('x-tenant-id');
+    const tenantId = await getTenantId(req);
     if (!tenantId) {
       return NextResponse.json({ error: 'Tenant no encontrado' }, { status: 400 });
     }
@@ -39,7 +45,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'El nombre del formulario es requerido' }, { status: 400 });
     }
 
-    // Default survey JSON if none provided
     const surveyConfig = config || {
       title: name,
       pages: [{
