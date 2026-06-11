@@ -28,32 +28,35 @@ export async function GET(
     const limit = Math.min(parseInt(url.searchParams.get('limit') || '20'), 100);
     const skip = (page - 1) * limit;
 
-    // Fetch submissions with optional lead info
+    // Fetch submissions
     const [submissions, total] = await Promise.all([
       prisma.webFormSubmission.findMany({
         where: { formId: params.id },
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
-        include: {
-          lead: {
-            select: {
-              id: true,
-              nombre: true,
-              email: true,
-              telefono: true,
-              empresa: true,
-              estado: true,
-            },
-          },
-        },
       }),
       prisma.webFormSubmission.count({ where: { formId: params.id } }),
     ]);
 
+    // Separately fetch lead data for submissions that have a leadId
+    const leadIds = [...new Set(submissions.filter((s) => s.leadId).map((s) => s.leadId!))];
+    const leads = leadIds.length > 0
+      ? await prisma.lead.findMany({
+          where: { id: { in: leadIds } },
+          select: { id: true, nombre: true, email: true, telefono: true, empresa: true, estado: true },
+        })
+      : [];
+    const leadMap = new Map(leads.map((l) => [l.id, l]));
+
+    const submissionsWithLeads = submissions.map((s) => ({
+      ...s,
+      lead: s.leadId ? leadMap.get(s.leadId) || null : null,
+    }));
+
     return NextResponse.json({
       form: { id: form.id, name: form.name },
-      submissions,
+      submissions: submissionsWithLeads,
       pagination: {
         page,
         limit,
