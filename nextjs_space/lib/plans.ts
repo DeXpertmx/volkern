@@ -69,6 +69,7 @@ export type CrmModule =
   | 'estrategia'
   | 'conciliacion'
   | 'logistica'
+  | 'formularios'
 
 
 export interface ModuleDefinition {
@@ -139,6 +140,8 @@ export const ALL_MODULES: ModuleDefinition[] = [
   { id: 'agency', label: 'Agencia', description: 'Gestión de slots de cliente y marca blanca', icon: '🏢', group: 'Administración' },
   { id: 'conciliacion', label: 'Conciliación Bancaria', description: 'Sincronización con bancos e IA para conciliación automática', icon: '🏦', group: 'ERP' },
   { id: 'logistica', label: 'Logística', description: 'Gestión de flota, envíos, almacenes y tracking GPS', icon: '🚚', group: 'ERP' },
+  // Formularios
+  { id: 'formularios', label: 'Formularios', description: 'Creador de formularios inteligentes con lógica condicional', icon: '📝', group: 'Marketing' },
 ]
 
 
@@ -164,12 +167,14 @@ export const PLAN_MODULES: Record<string, CrmModule[]> = {
     'equipo', 'configuracion',
     'telefonia',
     'social_manager',
+    'formularios',
   ],
   [PLANS.GROWTH]: [
     'leads', 'contactos', 'empresas', 'pipeline', 'tareas', 'analytics',
     'cotizaciones', 'contratos', 'ordenes_venta', 'pronosticos', 'scoring',
     'mensajes', 'citas', 'catalogo', 'chatbot_whatsapp',
     'campanas', 'email_marketing', 'cms', 'builder_premium',
+    'formularios',
     'automatizaciones',
     'cursos', 'estudiantes',
     'mi_tarjeta',
@@ -189,6 +194,7 @@ export const PLAN_MODULES: Record<string, CrmModule[]> = {
     'integraciones', 'equipo', 'configuracion',
     'telefonia',
     'social_manager',
+    'formularios',
     'rrhh', 'finanzas', 'calidad', 'produccion', 'inventario', 'proyectos', 'finanzas_consolidado', 'taskforce', 'activos', 'conocimiento', 'estrategia', 'logistica'
   ],
   [PLANS.BASICO]: [
@@ -205,6 +211,7 @@ export const PLAN_MODULES: Record<string, CrmModule[]> = {
     'mi_tarjeta',
     'integraciones', 'equipo', 'configuracion',
     'social_manager',
+    'formularios',
     'rrhh', 'finanzas', 'calidad', 'produccion', 'inventario', 'proyectos', 'taskforce', 'activos', 'conocimiento', 'estrategia', 'logistica'
   ],
   [PLANS.PROFESIONAL]: [
