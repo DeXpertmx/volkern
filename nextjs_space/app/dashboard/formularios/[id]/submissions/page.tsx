@@ -21,7 +21,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { apiFetch } from '@/lib/api-client';
+import { apiGet } from '@/lib/api-client';
 
 type LeadInfo = {
   id: string;
@@ -80,7 +80,7 @@ export default function FormSubmissionsPage() {
   const fetchSubmissions = useCallback(async (page: number = 1) => {
     setLoading(true);
     try {
-      const res = await apiFetch(`/api/formularios/${formId}/submissions?page=${page}&limit=${pagination.limit}`);
+      const res = await apiGet(`/api/formularios/${formId}/submissions?page=${page}&limit=${pagination.limit}`);
       setForm(res.form || null);
       setSubmissions(res.submissions || []);
       setPagination(res.pagination || { page: 1, limit: 20, total: 0, totalPages: 0 });
