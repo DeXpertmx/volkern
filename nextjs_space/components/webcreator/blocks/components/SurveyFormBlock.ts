@@ -5,13 +5,10 @@ export const createSurveyFormBlock = (editor: Editor) => {
   const bm = editor.BlockManager;
 
   // ─── Register custom form-picker trait ────────────────────────
-  console.log('[SurveyFormBlock] Registering form-picker trait type...');
-  try {
-    editor.TraitManager.addType('form-picker', {
-      noLabel: false,
-      createInput({ trait, component }: { trait: any; component: any }) {
-        console.log('[SurveyFormBlock] form-picker createInput called', { hasTrait: !!trait, hasComponent: !!component, traitType: trait?.get?.('type') });
-        const wrapper = document.createElement('div');
+  editor.TraitManager.addType('form-picker', {
+    noLabel: false,
+    createInput({ trait, component }: { trait: any; component: any }) {
+      const wrapper = document.createElement('div');
       wrapper.style.cssText = 'position:relative;width:100%;';
 
       const select = document.createElement('select');
@@ -105,9 +102,8 @@ export const createSurveyFormBlock = (editor: Editor) => {
     },
     // Sync select when component attribute changes externally (e.g. undo/redo)
     onEvent({ component, elInput }: { component: any; elInput: HTMLDivElement }) {
-      console.log('[SurveyFormBlock] form-picker onEvent called');
       const select = elInput.querySelector('select') as HTMLSelectElement | null;
-      if (!select) { console.log('[SurveyFormBlock] onEvent: select not found in elInput'); return; }
+      if (!select) return;
       const formId = component.getAttributes()['data-form-id'] || '';
       if (select.value !== formId) {
         for (const opt of Array.from(select.options)) {
@@ -119,10 +115,6 @@ export const createSurveyFormBlock = (editor: Editor) => {
       }
     },
   });
-    console.log('[SurveyFormBlock] form-picker trait registered OK');
-  } catch (e) {
-    console.error('[SurveyFormBlock] FAILED to register form-picker trait:', e);
-  }
 
   bm.add("volkern-survey-form", {
     label: `
@@ -158,7 +150,7 @@ export const createSurveyFormBlock = (editor: Editor) => {
                 <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M17 2v4"/><path d="M7 2v4"/><path d="M2 10h20"/></svg>
               </div>
               <h3 class="survey-placeholder-title">Formulario Inteligente</h3>
-              <p class="survey-placeholder-desc">Selecciona un formulario desde el panel de traits (icono de tuerca)</p>
+              <p class="survey-placeholder-desc">Selecciona un formulario en el panel de Propiedades (⚙️)</p>
               <div class="survey-placeholder-fields">
                 <div class="survey-mock-field"></div>
                 <div class="survey-mock-field short"></div>
