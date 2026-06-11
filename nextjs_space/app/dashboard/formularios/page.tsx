@@ -30,7 +30,7 @@ import { apiGet, apiPost, apiDelete, apiPatch } from '@/lib/api-client';
 import { SurveyFormRenderer } from '@/components/public/SurveyFormRenderer';
 
 // ─── Types ──────────────────────────────────────────────
-type FieldType = 'text' | 'email' | 'comment' | 'dropdown' | 'checkbox' | 'radiogroup' | 'boolean';
+type FieldType = 'text' | 'email' | 'comment' | 'dropdown' | 'checkbox' | 'radiogroup' | 'boolean' | 'date' | 'file' | 'rating' | 'scale';
 
 type FormField = {
   name: string;
@@ -40,6 +40,10 @@ type FormField = {
   placeholder?: string;
   choices?: string[];
   inputType?: string;
+  acceptedTypes?: string;
+  maxSize?: number;
+  rateMin?: number;
+  rateMax?: number;
 };
 
 type WebForm = {
@@ -60,6 +64,10 @@ const FIELD_TYPE_LABELS: Record<string, string> = {
   checkbox: 'Casilla',
   radiogroup: 'Opción única',
   boolean: 'Sí/No',
+  date: 'Fecha',
+  file: 'Archivo',
+  rating: 'Estrellas',
+  scale: 'Escala',
 };
 
 const DEFAULT_SURVEY_JSON = {
@@ -363,6 +371,27 @@ function FormEditor({ form, onBack, onFormUpdated }: { form: WebForm; onBack: ()
       newField.inputType = 'email';
     }
 
+    if (type === 'date') {
+      newField.type = 'text' as FieldType;
+      newField.inputType = 'date';
+    }
+
+    if (type === 'file') {
+      newField.acceptedTypes = '.pdf,.jpg,.jpeg,.png,.doc,.docx';
+      newField.maxSize = 10485760; // 10MB
+    }
+
+    if (type === 'rating') {
+      newField.rateMin = 1;
+      newField.rateMax = 5;
+    }
+
+    if (type === 'scale') {
+      newField.type = 'rating' as FieldType;
+      newField.rateMin = 1;
+      newField.rateMax = 10;
+    }
+
     const updatedJson = { ...surveyJson };
     if (!updatedJson.pages) {
       updatedJson.pages = [{ name: 'page1', elements: [] }];
@@ -608,7 +637,9 @@ function FieldEditor({
         </div>
 
         <Badge variant="outline" className="text-xs">
-          {FIELD_TYPE_LABELS[field.type] || field.type}
+          {field.type === 'text' && field.inputType === 'date' ? 'Fecha' :
+           field.type === 'rating' && (field.rateMax || 0) >= 10 ? 'Escala' :
+           FIELD_TYPE_LABELS[field.type] || field.type}
         </Badge>
 
         <div className="flex-1" />
@@ -672,6 +703,77 @@ function FieldEditor({
             onBlur={handleChoicesBlur}
             className="rounded-xl text-sm min-h-[80px]"
           />
+        </div>
+      )}
+
+      {/* Settings for rating (stars) / scale (1-10) */}
+      {(field.type === 'rating' && !((field.rateMax || 0) >= 10 && field.rateMin === 1)) && (
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label className="text-xs">Valor mínimo</Label>
+            <Input
+              type="number"
+              value={field.rateMin ?? 1}
+              onChange={(e) => onUpdate({ rateMin: parseInt(e.target.value) || 1 })}
+              className="rounded-xl h-9 text-sm"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs">Cantidad de estrellas</Label>
+            <Input
+              type="number"
+              value={field.rateMax ?? 5}
+              onChange={(e) => onUpdate({ rateMax: parseInt(e.target.value) || 5 })}
+              className="rounded-xl h-9 text-sm"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Settings for scale (linear 1-10) */}
+      {field.type === 'rating' && (field.rateMax || 0) >= 10 && field.rateMin === 1 && (
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label className="text-xs">Desde</Label>
+            <Input
+              type="number"
+              value={field.rateMin ?? 1}
+              onChange={(e) => onUpdate({ rateMin: parseInt(e.target.value) || 1 })}
+              className="rounded-xl h-9 text-sm"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs">Hasta</Label>
+            <Input
+              type="number"
+              value={field.rateMax ?? 10}
+              onChange={(e) => onUpdate({ rateMax: parseInt(e.target.value) || 1 })}
+              className="rounded-xl h-9 text-sm"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Settings for file upload */}
+      {field.type === 'file' && (
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label className="text-xs">Tipos permitidos (ej: .pdf,.jpg)</Label>
+            <Input
+              value={field.acceptedTypes || '.pdf,.jpg,.jpeg,.png,.doc,.docx'}
+              onChange={(e) => onUpdate({ acceptedTypes: e.target.value })}
+              className="rounded-xl h-9 text-sm"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs">Tamaño máx. (MB)</Label>
+            <Input
+              type="number"
+              value={Math.round((field.maxSize || 10485760) / 1048576)}
+              onChange={(e) => onUpdate({ maxSize: (parseInt(e.target.value) || 1) * 1048576 })}
+              className="rounded-xl h-9 text-sm"
+            />
+          </div>
         </div>
       )}
     </Card>
