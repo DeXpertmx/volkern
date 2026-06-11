@@ -200,6 +200,7 @@ export const HUBS: HubConfig[] = [
       { name: 'Constructor Web', href: '/dashboard/webcreator', icon: Sparkles, planModule: 'cms', description: 'Diseño de landing pages' },
       { name: 'Hub Social', href: '/dashboard/social', icon: Share2, planModule: 'social_manager', description: 'Gestión de redes sociales' },
       { name: 'Configuración', href: '/dashboard/social/settings', icon: Settings2, description: 'Conectar redes sociales y APIs' },
+      { name: 'Formularios', href: '/dashboard/formularios', icon: FileText, planModule: 'formularios', description: 'Creador de formularios inteligentes' },
     ]
   },
   {

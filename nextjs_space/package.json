@@ -193,6 +193,8 @@
     "sonner": "1.5.0",
     "square": "^44.0.1",
     "stripe": "^19.2.0",
+    "survey-core": "^2.5.28",
+    "survey-react-ui": "^2.5.28",
     "swr": "2.2.4",
     "tailwind-scrollbar-hide": "1.1.7",
     "tesseract.js": "^6.0.1",
