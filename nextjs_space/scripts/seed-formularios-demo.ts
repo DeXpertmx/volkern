@@ -5,13 +5,14 @@
  *   npx tsx scripts/seed-formularios-demo.ts <tenant_slug>
  *   npx tsx scripts/seed-formularios-demo.ts --all       (todos los tenants)
  *
- * Crea 6 formularios WebForm preconfigurados con SurveyJS JSON:
+ * Crea 7 formularios WebForm preconfigurados con SurveyJS JSON:
  *   1. Formulario de Contacto     — nombre, email, teléfono, empresa, mensaje
  *   2. Encuesta de Satisfacción   — NPS (Net Promoter Score), calificación, comentarios
  *   3. Registro para Demo         — nombre, email, empresa, cargo, ¿cómo nos conoció?
  *   4. NPS Avanzado              — NPS con lógica condicional (detractor/pasivo/promotor)
  *   5. Onboarding Wizard          — Multi-step de 3 páginas con progress bar
  *   6. Solicitud con Documentos   — File upload (PDF, JPG, DOCX, máx. 10MB)
+ *   7. Captación Inmobiliaria     — tipo de propiedad, presupuesto, ubicación, urgencia
  */
 
 import { PrismaClient, Prisma } from '@prisma/client';
@@ -622,6 +623,164 @@ const DEMO_FORMS = [
       showQuestionNumbers: 'off',
       completeText: 'Enviar solicitud',
       completedHtml: '<div style="text-align:center;padding:24px"><h3>📋 ¡Solicitud enviada con éxito!</h3><p>Hemos recibido tu solicitud y documentos. Nuestro equipo la revisará y te contactará en un máximo de 48 horas hábiles.</p></div>',
+    },
+  },
+
+  // ─── Captación Inmobiliaria ───────────────────────────────────
+  {
+    name: 'Captación Inmobiliaria',
+    config: {
+      title: 'Captación de Propiedad',
+      description: 'Completa este formulario y uno de nuestros asesores inmobiliarios te contactará para gestionar tu propiedad.',
+      pages: [{
+        name: 'page1',
+        elements: [
+          {
+            type: 'text',
+            name: 'nombre',
+            title: 'Nombre completo',
+            isRequired: true,
+            placeholder: 'Ej. Roberto Méndez',
+          },
+          {
+            type: 'text',
+            name: 'email',
+            title: 'Correo electrónico',
+            isRequired: true,
+            inputType: 'email',
+            placeholder: 'roberto@email.com',
+          },
+          {
+            type: 'text',
+            name: 'telefono',
+            title: 'Teléfono de contacto',
+            isRequired: true,
+            inputType: 'tel',
+            placeholder: '+52 555 123 4567',
+          },
+          {
+            type: 'radiogroup',
+            name: 'tipo_propiedad',
+            title: 'Tipo de propiedad',
+            isRequired: true,
+            choices: [
+              { value: 'departamento', text: 'Departamento' },
+              { value: 'casa', text: 'Casa' },
+              { value: 'terreno', text: 'Terreno' },
+              { value: 'oficina', text: 'Oficina / Local comercial' },
+              { value: 'bodega', text: 'Bodega / Nave industrial' },
+              { value: 'lujo', text: 'Residencia de lujo' },
+              { value: 'otro', text: 'Otro' },
+            ],
+          },
+          {
+            type: 'radiogroup',
+            name: 'proposito',
+            title: '¿Qué deseas hacer con la propiedad?',
+            isRequired: true,
+            choices: [
+              { value: 'vender', text: 'Vender' },
+              { value: 'rentar', text: 'Rentar' },
+              { value: 'ambos', text: 'Ambos (el que llegue primero)' },
+              { value: 'valuar', text: 'Solo quiero una valuación' },
+            ],
+          },
+          {
+            type: 'dropdown',
+            name: 'presupuesto',
+            title: 'Rango de precio estimado',
+            isRequired: true,
+            choices: [
+              { value: '0-500k', text: 'Menos de $500,000 MXN' },
+              { value: '500k-1m', text: '$500,000 - $1,000,000 MXN' },
+              { value: '1m-2m', text: '$1,000,000 - $2,000,000 MXN' },
+              { value: '2m-5m', text: '$2,000,000 - $5,000,000 MXN' },
+              { value: '5m-10m', text: '$5,000,000 - $10,000,000 MXN' },
+              { value: '10m+', text: 'Más de $10,000,000 MXN' },
+            ],
+          },
+          {
+            type: 'text',
+            name: 'ubicacion',
+            title: 'Ubicación de la propiedad',
+            isRequired: true,
+            placeholder: 'Ej. Colonia Condesa, CDMX',
+          },
+          {
+            type: 'text',
+            name: 'codigo_postal',
+            title: 'Código postal',
+            inputType: 'text',
+            placeholder: 'Ej. 06140',
+          },
+          {
+            type: 'radiogroup',
+            name: 'urgencia',
+            title: '¿Qué tan urgente es la operación?',
+            isRequired: true,
+            choices: [
+              { value: 'inmediata', text: 'Inmediata — necesito cerrar ya' },
+              { value: '30_dias', text: 'En los próximos 30 días' },
+              { value: '90_dias', text: 'En los próximos 90 días' },
+              { value: '6_meses', text: 'En los próximos 6 meses' },
+              { value: 'explorando', text: 'Solo estoy explorando el mercado' },
+            ],
+          },
+          {
+            type: 'text',
+            name: 'metros_terreno',
+            title: 'Metros de terreno (m²)',
+            inputType: 'number',
+            placeholder: 'Ej. 200',
+          },
+          {
+            type: 'text',
+            name: 'metros_construccion',
+            title: 'Metros de construcción (m²)',
+            inputType: 'number',
+            placeholder: 'Ej. 150',
+          },
+          {
+            type: 'text',
+            name: 'recamaras',
+            title: 'Número de recámaras',
+            inputType: 'number',
+            placeholder: 'Ej. 3',
+          },
+          {
+            type: 'text',
+            name: 'banos',
+            title: 'Número de baños',
+            inputType: 'number',
+            placeholder: 'Ej. 2',
+          },
+          {
+            type: 'checkbox',
+            name: 'amenidades',
+            title: 'Amenidades y características',
+            choices: [
+              { value: 'estacionamiento', text: 'Estacionamiento' },
+              { value: 'jardin', text: 'Jardín / Patio' },
+              { value: 'alberca', text: 'Alberca' },
+              { value: 'vigilancia', text: 'Vigilancia 24/7' },
+              { value: 'gimnasio', text: 'Gimnasio' },
+              { value: 'roof_garden', text: 'Roof Garden / Terraza' },
+              { value: 'elevador', text: 'Elevador' },
+              { value: 'cuarto_servicio', text: 'Cuarto de servicio' },
+            ],
+          },
+          {
+            type: 'comment',
+            name: 'descripcion_adicional',
+            title: 'Descripción adicional de la propiedad',
+            placeholder: 'Cuéntanos más sobre la propiedad: estado de conservación, remodelaciones recientes, vista, orientación, etc.',
+            rows: 3,
+          },
+        ],
+      }],
+      showQuestionNumbers: 'off',
+      completeText: 'Enviar información',
+      completedHtml: '<div style="text-align:center;padding:24px"><h3>🏠 ¡Información recibida!</h3><p>Un asesor inmobiliario especializado revisará tu caso y te contactará en menos de 24 horas para dar seguimiento.</p></div>',
     },
   },
 ];
