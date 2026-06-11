@@ -26,7 +26,7 @@ import {
   Users,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { apiFetch } from '@/lib/api-client';
+import { apiGet, apiPost, apiDelete, apiPatch } from '@/lib/api-client';
 import { SurveyFormRenderer } from '@/components/public/SurveyFormRenderer';
 
 // ─── Types ──────────────────────────────────────────────
@@ -89,7 +89,7 @@ export default function FormulariosPage() {
 
   const fetchForms = useCallback(async () => {
     try {
-      const res = await apiFetch('/api/formularios');
+      const res = await apiGet('/api/formularios');
       setForms(res.forms || []);
     } catch (e) {
       toast.error('Error al cargar formularios');
@@ -102,10 +102,7 @@ export default function FormulariosPage() {
 
   const handleCreate = async () => {
     try {
-      const res = await apiFetch('/api/formularios', {
-        method: 'POST',
-        body: JSON.stringify({ name: 'Nuevo Formulario', config: DEFAULT_SURVEY_JSON }),
-      });
+      const res = await apiPost('/api/formularios', { name: 'Nuevo Formulario', config: DEFAULT_SURVEY_JSON });
       toast.success('Formulario creado');
       await fetchForms();
       setSelectedForm(res.form);
@@ -118,7 +115,7 @@ export default function FormulariosPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('¿Eliminar este formulario y todas sus submissions?')) return;
     try {
-      await apiFetch(`/api/formularios/${id}`, { method: 'DELETE' });
+      await apiDelete(`/api/formularios/${id}`);
       toast.success('Formulario eliminado');
       if (selectedForm?.id === id) {
         setSelectedForm(null);
@@ -337,10 +334,7 @@ function FormEditor({ form, onBack }: { form: WebForm; onBack: () => void }) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await apiFetch(`/api/formularios/${form.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ name, config: surveyJson }),
-      });
+      await apiPatch(`/api/formularios/${form.id}`, { name, config: surveyJson });
       toast.success('Formulario guardado');
     } catch (e) {
       toast.error('Error al guardar');
