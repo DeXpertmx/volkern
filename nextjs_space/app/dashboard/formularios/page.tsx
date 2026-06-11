@@ -86,6 +86,7 @@ export default function FormulariosPage() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [embedOpen, setEmbedOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [creating, setCreating] = useState(false);
 
   const fetchForms = useCallback(async () => {
     try {
@@ -101,6 +102,7 @@ export default function FormulariosPage() {
   useEffect(() => { fetchForms(); }, [fetchForms]);
 
   const handleCreate = async () => {
+    setCreating(true);
     try {
       const res = await apiPost('/api/formularios', { name: 'Nuevo Formulario', config: DEFAULT_SURVEY_JSON });
       toast.success('Formulario creado');
@@ -109,6 +111,8 @@ export default function FormulariosPage() {
       setEditing(true);
     } catch (e) {
       toast.error('Error al crear formulario');
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -149,9 +153,9 @@ export default function FormulariosPage() {
           <h1 className="text-3xl font-bold text-white">Formularios</h1>
           <p className="text-slate-400 mt-1">Crea formularios inteligentes con lógica condicional para capturar leads</p>
         </div>
-        <Button onClick={handleCreate} className="bg-blue-600 hover:bg-blue-500 gap-2 rounded-xl">
-          <Plus className="w-4 h-4" />
-          Nuevo Formulario
+        <Button onClick={handleCreate} disabled={creating} className="bg-blue-600 hover:bg-blue-500 gap-2 rounded-xl">
+          {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+          {creating ? 'Creando...' : 'Nuevo Formulario'}
         </Button>
       </div>
 
@@ -160,9 +164,9 @@ export default function FormulariosPage() {
         <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-slate-700 rounded-2xl bg-slate-900/30">
           <FileText className="w-12 h-12 text-slate-600 mb-4" />
           <p className="text-slate-400 text-lg mb-4">No tienes formularios aún</p>
-          <Button onClick={handleCreate} variant="outline" className="gap-2 rounded-xl border-slate-700 text-slate-300">
-            <Plus className="w-4 h-4" />
-            Crear primer formulario
+          <Button onClick={handleCreate} disabled={creating} variant="outline" className="gap-2 rounded-xl border-slate-700 text-slate-300">
+            {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+            {creating ? 'Creando...' : 'Crear primer formulario'}
           </Button>
         </div>
       ) : (
