@@ -13,9 +13,22 @@
 
 import { PrismaClient, Prisma } from '@prisma/client';
 import * as dotenv from 'dotenv';
-dotenv.config();
 
-const prisma = new PrismaClient();
+// Only load dotenv when running as CLI (not when imported by API routes)
+const isRunDirectly = process.argv[1]?.endsWith('seed-formularios-demo.ts') ||
+                      process.argv[1]?.endsWith('seed-formularios-demo.js');
+
+// Lazy prisma — created only when needed
+let _prisma: PrismaClient | null = null;
+function getPrisma(): PrismaClient {
+  if (!_prisma) {
+    if (isRunDirectly) {
+      dotenv.config();
+    }
+    _prisma = new PrismaClient();
+  }
+  return _prisma;
+}
 
 // ─── Configuraciones de formularios demo ──────────────────────────
 
@@ -221,8 +234,13 @@ const DEMO_FORMS = [
 
 // ─── Helpers ─────────────────────────────────────────────────────
 
-async function seedFormsForTenant(tenantId: string) {
-  const tenant = await prisma.tenant.findUnique({
+async function seedFormsForTenant(
+  tenantId: string,
+  opts?: { prisma?: PrismaClient }
+) {
+  const db = opts?.prisma || getPrisma();
+
+  const tenant = await db.tenant.findUnique({
     where: { id: tenantId },
     select: { id: true, nombre: true, slug: true },
   });
@@ -236,7 +254,7 @@ async function seedFormsForTenant(tenantId: string) {
   const skipped: string[] = [];
 
   for (const formDef of DEMO_FORMS) {
-    const existing = await prisma.webForm.findFirst({
+    const existing = await db.webForm.findFirst({
       where: { tenantId: tenant.id, name: formDef.name },
       select: { id: true },
     });
@@ -246,7 +264,7 @@ async function seedFormsForTenant(tenantId: string) {
       continue;
     }
 
-    await prisma.webForm.create({
+    await db.webForm.create({
       data: {
         tenantId: tenant.id,
         name: formDef.name,
@@ -260,7 +278,7 @@ async function seedFormsForTenant(tenantId: string) {
   return { created, skipped };
 }
 
-// ─── Main ─────────────────────────────────────────────────────────
+// ─── Main (solo se ejecuta cuando el script se corre directamente) ──
 
 async function main() {
   const arg = process.argv[2];
@@ -274,7 +292,9 @@ async function main() {
   if (arg === '--all') {
     console.log('🌱 Sembrando formularios demo para TODOS los tenants...\n');
 
-    const tenants = await prisma.tenant.findMany({
+    const db = getPrisma();
+
+    const tenants = await db.tenant.findMany({
       where: { estado: 'activo' },
       select: { id: true, nombre: true, slug: true },
       orderBy: { fechaCreacion: 'asc' },
@@ -286,7 +306,7 @@ async function main() {
     let totalSkipped = 0;
 
     for (const tenant of tenants) {
-      const { created, skipped } = await seedFormsForTenant(tenant.id);
+      const { created, skipped } = await seedFormsForTenant(tenant.id, { prisma: db });
       totalCreated += created.length;
       totalSkipped += skipped.length;
 
@@ -297,7 +317,8 @@ async function main() {
     console.log(`\n✨ Total: ${totalCreated} formularios creados, ${totalSkipped} omitidos (ya existían)`);
   } else {
     // Single tenant by slug
-    const tenant = await prisma.tenant.findUnique({
+    const db = getPrisma();
+    const tenant = await db.tenant.findUnique({
       where: { slug: arg },
       select: { id: true, nombre: true, slug: true },
     });
@@ -309,7 +330,7 @@ async function main() {
 
     console.log(`🌱 Sembrando formularios demo para: ${tenant.nombre} (${tenant.slug})\n`);
 
-    const { created, skipped } = await seedFormsForTenant(tenant.id);
+    const { created, skipped } = await seedFormsForTenant(tenant.id, { prisma: db });
 
     if (created.length > 0) {
       console.log(`   ✅ ${created.length} formularios creados:`);
@@ -325,12 +346,18 @@ async function main() {
   }
 }
 
-main()
-  .then(async () => {
-    await prisma.$disconnect();
-  })
-  .catch(async (e) => {
-    console.error('❌ Error:', e);
-    await prisma.$disconnect();
-    process.exit(1);
-  });
+// Only run CLI when executed directly (not when imported)
+
+if (isRunDirectly) {
+  main()
+    .then(async () => {
+      await getPrisma().$disconnect();
+    })
+    .catch(async (e) => {
+      console.error('❌ Error:', e);
+      try { await getPrisma().$disconnect(); } catch {}
+      process.exit(1);
+    });
+}
+
+export { seedFormsForTenant, DEMO_FORMS };

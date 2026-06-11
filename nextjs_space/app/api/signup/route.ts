@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/db'
 import { PLANS, PLAN_LIMITS, TRIAL_DAYS, getPlanConfig } from '@/lib/plans'
+import { seedFormsForTenant } from '@/scripts/seed-formularios-demo'
 
 function generateSlug(companyName: string): string {
   return companyName
@@ -289,6 +290,11 @@ export async function POST(request: NextRequest) {
 
       return { user, tenant, couponUsed: !!couponData }
     })
+
+    // Seed demo forms for the new tenant (fire-and-forget, non-blocking)
+    seedFormsForTenant(result.tenant.id, { prisma }).catch(err => {
+      console.error('[Signup] Error seeding demo forms:', err.message);
+    });
 
     return NextResponse.json({
       success: true,
