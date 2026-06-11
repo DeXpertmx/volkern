@@ -100,17 +100,15 @@ export const createSurveyFormBlock = (editor: Editor) => {
 
       return wrapper;
     },
-    // Keep the label from trait config
-    onEvent({ component, el }: { component: any; el: HTMLDivElement }) {
-      // Update select value when component attribute changes externally
-      const select = el.querySelector('select');
+    // Sync select when component attribute changes externally (e.g. undo/redo)
+    onEvent({ component, elInput }: { component: any; elInput: HTMLDivElement }) {
+      const select = elInput.querySelector('select') as HTMLSelectElement | null;
       if (!select) return;
       const formId = component.getAttributes()['data-form-id'] || '';
       if (select.value !== formId) {
-        // Find and select the matching option
-        for (const opt of select.options) {
-          if (opt.value === formId) {
-            opt.selected = true;
+        for (const opt of Array.from(select.options)) {
+          if ((opt as HTMLOptionElement).value === formId) {
+            select.value = formId;
             break;
           }
         }
