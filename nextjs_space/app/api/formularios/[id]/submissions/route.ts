@@ -1,40 +1,32 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { extractTenantFromRequest } from '@/lib/tenant-context';
-
-async function getTenantId(req: NextRequest): Promise<string | null> {
-  const { tenantId } = await extractTenantFromRequest(req);
-  return tenantId;
-}
+import { withTenantAuth } from '@/lib/api-key-auth';
 
 // GET /api/formularios/[id]/submissions — Listar submissions de un formulario
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export const GET = withTenantAuth(async (request, auth, context) => {
   try {
-    const tenantId = await getTenantId(req);
-    if (!tenantId) {
-      return NextResponse.json({ error: 'Tenant no encontrado' }, { status: 400 });
+    const id = context?.params?.id;
+    if (!id) {
+      return NextResponse.json({ error: 'ID de formulario requerido' }, { status: 400 });
     }
 
     const form = await prisma.webForm.findUnique({
-      where: { id: params.id },
+      where: { id },
       select: { id: true, tenantId: true, name: true, config: true },
     });
 
-    if (!form || form.tenantId !== tenantId) {
+    if (!form || form.tenantId !== auth.tenant!.id) {
       return NextResponse.json({ error: 'Formulario no encontrado' }, { status: 404 });
     }
 
-    const url = new URL(req.url);
+    const url = new URL(request.url);
     const page = parseInt(url.searchParams.get('page') || '1');
     const limit = Math.min(parseInt(url.searchParams.get('limit') || '20'), 100);
     const skip = (page - 1) * limit;
 
     const [submissions, total] = await Promise.all([
       prisma.webFormSubmission.findMany({
-        where: { formId: params.id },
+        where: { formId: id },
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
@@ -42,7 +34,7 @@ export async function GET(
           lead: { select: { id: true, nombre: true, email: true, telefono: true, empresa: true, estado: true } },
         },
       }),
-      prisma.webFormSubmission.count({ where: { formId: params.id } }),
+      prisma.webFormSubmission.count({ where: { formId: id } }),
     ]);
 
     return NextResponse.json({
@@ -59,4 +51,4 @@ export async function GET(
     console.error('[Formularios API] Error listing submissions:', error);
     return NextResponse.json({ error: 'Error al listar submissions' }, { status: 500 });
   }
-}
+});

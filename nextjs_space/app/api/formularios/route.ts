@@ -1,22 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { extractTenantFromRequest } from '@/lib/tenant-context';
-
-async function getTenantId(req: NextRequest): Promise<string | null> {
-  const { tenantId } = await extractTenantFromRequest(req);
-  return tenantId;
-}
+import { withTenantAuth } from '@/lib/api-key-auth';
 
 // GET /api/formularios — Listar formularios del tenant
-export async function GET(req: NextRequest) {
+export const GET = withTenantAuth(async (request, auth) => {
   try {
-    const tenantId = await getTenantId(req);
-    if (!tenantId) {
-      return NextResponse.json({ error: 'Tenant no encontrado' }, { status: 400 });
-    }
-
     const forms = await prisma.webForm.findMany({
-      where: { tenantId },
+      where: { tenantId: auth.tenant!.id },
       orderBy: { updatedAt: 'desc' },
       include: {
         _count: { select: { submissions: true } },
@@ -28,17 +18,12 @@ export async function GET(req: NextRequest) {
     console.error('[Formularios API] Error listing forms:', error);
     return NextResponse.json({ error: 'Error al listar formularios' }, { status: 500 });
   }
-}
+});
 
 // POST /api/formularios — Crear un nuevo formulario
-export async function POST(req: NextRequest) {
+export const POST = withTenantAuth(async (request, auth) => {
   try {
-    const tenantId = await getTenantId(req);
-    if (!tenantId) {
-      return NextResponse.json({ error: 'Tenant no encontrado' }, { status: 400 });
-    }
-
-    const body = await req.json();
+    const body = await request.json();
     const { name, config, pageId } = body;
 
     if (!name || !name.trim()) {
@@ -61,7 +46,7 @@ export async function POST(req: NextRequest) {
 
     const form = await prisma.webForm.create({
       data: {
-        tenantId,
+        tenantId: auth.tenant!.id,
         name: name.trim(),
         config: surveyConfig,
         ...(pageId ? { pageId } : {}),
@@ -73,4 +58,4 @@ export async function POST(req: NextRequest) {
     console.error('[Formularios API] Error creating form:', error);
     return NextResponse.json({ error: 'Error al crear el formulario' }, { status: 500 });
   }
-}
+});
