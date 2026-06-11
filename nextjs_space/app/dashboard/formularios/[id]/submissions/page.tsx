@@ -21,7 +21,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { apiFetch } from '@/lib/api-fetch';
+import { apiFetch } from '@/lib/api-client';
 
 type LeadInfo = {
   id: string;
