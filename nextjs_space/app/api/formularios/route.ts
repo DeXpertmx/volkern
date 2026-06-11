@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
 
+export const dynamic = 'force-dynamic';
+
 // GET /api/formularios — Listar formularios del tenant
 export const GET = withTenantAuth(async (request, auth) => {
   try {

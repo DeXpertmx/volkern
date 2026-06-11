@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
 
+export const dynamic = 'force-dynamic';
+
 // GET /api/formularios/[id] — Obtener un formulario
 export const GET = withTenantAuth(async (request, auth, context) => {
   try {
@@ -47,7 +49,7 @@ export const PATCH = withTenantAuth(async (request, auth, context) => {
     const form = await prisma.webForm.update({
       where: { id },
       data: {
-        ...(name !== undefined ? { name } : {}),
+        ...(name?.trim() ? { name } : {}),
         ...(config !== undefined ? { config } : {}),
         ...(pageId !== undefined ? { pageId } : {}),
       },
