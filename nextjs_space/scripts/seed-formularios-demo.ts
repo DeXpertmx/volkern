@@ -5,10 +5,13 @@
  *   npx tsx scripts/seed-formularios-demo.ts <tenant_slug>
  *   npx tsx scripts/seed-formularios-demo.ts --all       (todos los tenants)
  *
- * Crea 3 formularios WebForm preconfigurados con SurveyJS JSON:
+ * Crea 6 formularios WebForm preconfigurados con SurveyJS JSON:
  *   1. Formulario de Contacto     — nombre, email, teléfono, empresa, mensaje
  *   2. Encuesta de Satisfacción   — NPS (Net Promoter Score), calificación, comentarios
  *   3. Registro para Demo         — nombre, email, empresa, cargo, ¿cómo nos conoció?
+ *   4. NPS Avanzado              — NPS con lógica condicional (detractor/pasivo/promotor)
+ *   5. Onboarding Wizard          — Multi-step de 3 páginas con progress bar
+ *   6. Solicitud con Documentos   — File upload (PDF, JPG, DOCX, máx. 10MB)
  */
 
 import { PrismaClient, Prisma } from '@prisma/client';
@@ -228,6 +231,397 @@ const DEMO_FORMS = [
       showQuestionNumbers: 'off',
       completeText: 'Solicitar demo',
       completedHtml: '<div style="text-align:center;padding:24px"><h3>🚀 ¡Solicitud recibida!</h3><p>Un experto se pondrá en contacto contigo en las próximas 24 horas para agendar tu demo personalizada.</p></div>',
+    },
+  },
+
+  // ─── NPS Avanzado con lógica condicional ──────────────────────
+  {
+    name: 'NPS Avanzado',
+    config: {
+      title: 'Net Promoter Score®',
+      description: 'Ayúdanos a entender tu experiencia con nosotros. Tus respuestas nos permiten mejorar cada día.',
+      pages: [{
+        name: 'page1',
+        elements: [
+          {
+            type: 'text',
+            name: 'nombre',
+            title: 'Tu nombre',
+            isRequired: true,
+            placeholder: 'Ej. Laura Fernández',
+          },
+          {
+            type: 'text',
+            name: 'email',
+            title: 'Tu email',
+            isRequired: true,
+            inputType: 'email',
+            placeholder: 'tu@email.com',
+          },
+          {
+            type: 'rating',
+            name: 'nps_score',
+            title: '¿Qué tan probable es que nos recomiendes a un amigo o colega?',
+            description: '0 = Nada probable, 10 = Muy probable',
+            isRequired: true,
+            rateMin: 0,
+            rateMax: 10,
+            minRateDescription: 'Nada probable',
+            maxRateDescription: 'Muy probable',
+          },
+
+          // ── Detractor (0-6): follow-up específico ──
+          {
+            type: 'radiogroup',
+            name: 'detractor_razon',
+            title: 'Lamentamos que tu experiencia no haya sido la mejor. ¿Qué fue lo que más te decepcionó?',
+            visibleIf: '{nps_score} notempty and {nps_score} <= 6',
+            isRequired: true,
+            choices: [
+              { value: 'atencion', text: 'Atención al cliente insuficiente' },
+              { value: 'calidad', text: 'Calidad del producto/servicio por debajo de lo esperado' },
+              { value: 'precio', text: 'Precio demasiado alto para el valor recibido' },
+              { value: 'tiempo', text: 'Tiempos de entrega o respuesta muy lentos' },
+              { value: 'usabilidad', text: 'Plataforma difícil de usar' },
+              { value: 'soporte', text: 'Falta de soporte técnico' },
+            ],
+          },
+          {
+            type: 'comment',
+            name: 'detractor_detalle',
+            title: 'Cuéntanos más sobre tu experiencia. ¿Qué podríamos haber hecho diferente?',
+            visibleIf: '{nps_score} notempty and {nps_score} <= 6',
+            isRequired: true,
+            placeholder: 'Tu feedback honesto nos ayuda a mejorar...',
+            rows: 4,
+          },
+          {
+            type: 'radiogroup',
+            name: 'detractor_seguimiento',
+            title: '¿Te gustaría que un gerente te contactara para resolver tu caso?',
+            visibleIf: '{nps_score} notempty and {nps_score} <= 6',
+            choices: [
+              { value: 'si', text: 'Sí, por favor' },
+              { value: 'no', text: 'No, gracias' },
+            ],
+          },
+
+          // ── Pasivo (7-8): follow-up de mejora ──
+          {
+            type: 'radiogroup',
+            name: 'pasivo_mejora',
+            title: 'Gracias por tu puntuación. ¿Qué podríamos mejorar para convertir tu experiencia en excepcional?',
+            visibleIf: '{nps_score} notempty and {nps_score} >= 7 and {nps_score} <= 8',
+            isRequired: true,
+            choices: [
+              { value: 'soporte', text: 'Mejor soporte y atención personalizada' },
+              { value: 'features', text: 'Más funcionalidades' },
+              { value: 'precio', text: 'Precios más competitivos' },
+              { value: 'velocidad', text: 'Mayor velocidad de respuesta' },
+              { value: 'documentacion', text: 'Mejor documentación y tutoriales' },
+            ],
+          },
+          {
+            type: 'comment',
+            name: 'pasivo_detalle',
+            title: 'Cuéntanos un poco más sobre qué mejorarías',
+            visibleIf: '{nps_score} notempty and {nps_score} >= 7 and {nps_score} <= 8',
+            placeholder: 'Tus sugerencias son muy valiosas...',
+            rows: 3,
+          },
+
+          // ── Promotor (9-10): follow-up positivo ──
+          {
+            type: 'radiogroup',
+            name: 'promotor_motivo',
+            title: '¡Qué alegría que estés tan satisfecho! ¿Qué es lo que más valoras de nosotros?',
+            visibleIf: '{nps_score} notempty and {nps_score} >= 9',
+            isRequired: true,
+            choices: [
+              { value: 'resultados', text: 'Los resultados obtenidos' },
+              { value: 'atencion', text: 'La atención y el servicio' },
+              { value: 'facilidad', text: 'La facilidad de uso' },
+              { value: 'innovacion', text: 'La innovación constante' },
+              { value: 'equipo', text: 'El equipo humano' },
+              { value: 'precio', text: 'Relación calidad-precio' },
+            ],
+          },
+          {
+            type: 'comment',
+            name: 'promotor_testimonio',
+            title: '¿Nos dejarías un breve testimonio sobre tu experiencia? (Puede ser público)',
+            visibleIf: '{nps_score} notempty and {nps_score} >= 9',
+            placeholder: 'Comparte tu historia de éxito...',
+            rows: 3,
+          },
+          {
+            type: 'checkbox',
+            name: 'promotor_permiso',
+            title: 'Autorizo usar mi testimonio de forma pública',
+            visibleIf: '{nps_score} notempty and {nps_score} >= 9',
+            choices: [{ value: 'si', text: 'Sí, pueden usar mi testimonio' }],
+          },
+        ],
+      }],
+      showQuestionNumbers: 'off',
+      completeText: 'Enviar evaluación',
+      completedHtml: '<div style="text-align:center;padding:24px"><h3>🙏 ¡Gracias por tu honestidad!</h3><p>Cada respuesta nos ayuda a construir un mejor servicio para ti y todos nuestros clientes.</p></div>',
+    },
+  },
+
+  // ─── Wizard Multi-Step (3 páginas) ────────────────────────────
+  {
+    name: 'Onboarding Wizard',
+    config: {
+      title: 'Configura tu Cuenta',
+      description: 'Completa este breve wizard en 3 pasos para configurar tu cuenta y empezar a usar Volkern.',
+      showProgressBar: 'top',
+      progressBarType: 'pages',
+      pages: [
+        // ── Paso 1: Datos personales ──
+        {
+          name: 'datos_personales',
+          title: 'Datos Personales',
+          description: 'Cuéntanos quién eres.',
+          elements: [
+            {
+              type: 'text',
+              name: 'nombre_completo',
+              title: 'Nombre completo',
+              isRequired: true,
+              placeholder: 'Ej. Ana Martínez López',
+            },
+            {
+              type: 'text',
+              name: 'email',
+              title: 'Correo electrónico',
+              isRequired: true,
+              inputType: 'email',
+              placeholder: 'ana@empresa.com',
+            },
+            {
+              type: 'text',
+              name: 'telefono',
+              title: 'Teléfono de contacto',
+              inputType: 'tel',
+              placeholder: '+52 555 123 4567',
+            },
+            {
+              type: 'dropdown',
+              name: 'rol',
+              title: '¿Cuál es tu rol principal?',
+              isRequired: true,
+              choices: [
+                { value: 'ceo', text: 'CEO / Director General' },
+                { value: 'comercial', text: 'Director Comercial / Ventas' },
+                { value: 'marketing', text: 'Director de Marketing' },
+                { value: 'operaciones', text: 'Director de Operaciones' },
+                { value: 'rrhh', text: 'Director de RRHH' },
+                { value: 'otro', text: 'Otro' },
+              ],
+            },
+          ],
+        },
+        // ── Paso 2: Información del negocio ──
+        {
+          name: 'info_negocio',
+          title: 'Tu Negocio',
+          description: 'Ayúdanos a entender tu empresa.',
+          elements: [
+            {
+              type: 'text',
+              name: 'empresa',
+              title: 'Nombre de la empresa',
+              isRequired: true,
+              placeholder: 'Tu Empresa S.A. de C.V.',
+            },
+            {
+              type: 'dropdown',
+              name: 'sector',
+              title: 'Sector / Industria',
+              isRequired: true,
+              choices: [
+                { value: 'tecnologia', text: 'Tecnología / SaaS' },
+                { value: 'inmobiliario', text: 'Inmobiliario / Construcción' },
+                { value: 'servicios', text: 'Servicios profesionales' },
+                { value: 'salud', text: 'Salud / Bienestar' },
+                { value: 'educacion', text: 'Educación / Formación' },
+                { value: 'retail', text: 'Retail / E-commerce' },
+                { value: 'financiero', text: 'Servicios financieros' },
+                { value: 'otro', text: 'Otro' },
+              ],
+            },
+            {
+              type: 'dropdown',
+              name: 'tamano_empresa',
+              title: 'Tamaño de la empresa',
+              isRequired: true,
+              choices: [
+                { value: '1-5', text: '1 - 5 empleados (Startup)' },
+                { value: '6-20', text: '6 - 20 empleados (Pequeña)' },
+                { value: '21-50', text: '21 - 50 empleados (Mediana)' },
+                { value: '51-200', text: '51 - 200 empleados' },
+                { value: '200+', text: 'Más de 200 empleados (Grande)' },
+              ],
+            },
+            {
+              type: 'text',
+              name: 'website',
+              title: 'Sitio web',
+              inputType: 'url',
+              placeholder: 'https://www.tuempresa.com',
+            },
+          ],
+        },
+        // ── Paso 3: Objetivos y preferencias ──
+        {
+          name: 'objetivos',
+          title: 'Tus Objetivos',
+          description: '¿Qué esperas lograr con Volkern?',
+          elements: [
+            {
+              type: 'checkbox',
+              name: 'objetivos_principales',
+              title: '¿Cuáles son tus principales objetivos? (Selecciona todos los que apliquen)',
+              isRequired: true,
+              choices: [
+                { value: 'gestion_leads', text: 'Gestionar leads y pipeline de ventas' },
+                { value: 'automatizar', text: 'Automatizar procesos repetitivos' },
+                { value: 'centralizar', text: 'Centralizar la comunicación con clientes' },
+                { value: 'reportes', text: 'Obtener reportes y analíticas avanzadas' },
+                { value: 'facturacion', text: 'Gestionar facturación y finanzas' },
+                { value: 'equipo', text: 'Gestionar mi equipo y recursos humanos' },
+              ],
+            },
+            {
+              type: 'radiogroup',
+              name: 'urgencia',
+              title: '¿Qué tan urgente es tu necesidad?',
+              isRequired: true,
+              choices: [
+                { value: 'inmediata', text: 'Inmediata — necesito solución ya' },
+                { value: 'semana', text: 'Esta semana' },
+                { value: 'mes', text: 'Este mes' },
+                { value: 'explorando', text: 'Solo estoy explorando opciones' },
+              ],
+            },
+            {
+              type: 'dropdown',
+              name: 'presupuesto_mensual',
+              title: 'Presupuesto mensual estimado para software',
+              choices: [
+                { value: '0-50', text: 'Menos de $50 USD' },
+                { value: '50-200', text: '$50 - $200 USD' },
+                { value: '200-500', text: '$200 - $500 USD' },
+                { value: '500-2000', text: '$500 - $2,000 USD' },
+                { value: '2000+', text: 'Más de $2,000 USD' },
+              ],
+            },
+            {
+              type: 'comment',
+              name: 'notas_adicionales',
+              title: '¿Algo más que quieras compartir?',
+              placeholder: 'Cualquier detalle adicional que nos ayude a entender tu situación...',
+              rows: 3,
+            },
+          ],
+        },
+      ],
+      showQuestionNumbers: 'off',
+      completeText: 'Completar configuración',
+      completedHtml: '<div style="text-align:center;padding:24px"><h3>🎉 ¡Configuración completada!</h3><p>Gracias por tomarte el tiempo. Un especialista revisará tus respuestas y te contactará con recomendaciones personalizadas.</p></div>',
+    },
+  },
+
+  // ─── File Upload ──────────────────────────────────────────────
+  {
+    name: 'Solicitud con Documentos',
+    config: {
+      title: 'Envía tu Solicitud',
+      description: 'Completa el formulario y adjunta los documentos necesarios para procesar tu solicitud.',
+      pages: [{
+        name: 'page1',
+        elements: [
+          {
+            type: 'text',
+            name: 'nombre',
+            title: 'Nombre completo',
+            isRequired: true,
+            placeholder: 'Ej. Pedro Ramírez',
+          },
+          {
+            type: 'text',
+            name: 'email',
+            title: 'Correo electrónico',
+            isRequired: true,
+            inputType: 'email',
+            placeholder: 'pedro@email.com',
+          },
+          {
+            type: 'text',
+            name: 'telefono',
+            title: 'Teléfono',
+            inputType: 'tel',
+            placeholder: '+52 555 123 4567',
+          },
+          {
+            type: 'text',
+            name: 'empresa',
+            title: 'Empresa (si aplica)',
+            placeholder: 'Nombre de tu empresa',
+          },
+          {
+            type: 'dropdown',
+            name: 'tipo_solicitud',
+            title: 'Tipo de solicitud',
+            isRequired: true,
+            choices: [
+              { value: 'cotizacion', text: 'Cotización de servicios' },
+              { value: 'reclamo', text: 'Reclamo o incidencia' },
+              { value: 'devolucion', text: 'Devolución o garantía' },
+              { value: 'contratacion', text: 'Contratación de plan' },
+              { value: 'soporte', text: 'Soporte técnico avanzado' },
+              { value: 'otro', text: 'Otro' },
+            ],
+          },
+          {
+            type: 'comment',
+            name: 'descripcion',
+            title: 'Describe tu solicitud',
+            isRequired: true,
+            placeholder: 'Proporciona todos los detalles relevantes para procesar tu solicitud...',
+            rows: 4,
+          },
+          {
+            type: 'file',
+            name: 'documento_adjunto',
+            title: 'Adjunta documentos de soporte',
+            description: 'Formatos aceptados: PDF, JPG, PNG, DOCX (máx. 10MB por archivo)',
+            acceptedTypes: '.pdf,.jpg,.jpeg,.png,.doc,.docx',
+            maxSize: 10485760,  // 10MB in bytes
+          },
+          {
+            type: 'file',
+            name: 'documento_secundario',
+            title: 'Documento adicional (opcional)',
+            description: 'Adjunta cualquier otro documento relevante',
+            acceptedTypes: '.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx',
+            maxSize: 10485760,
+          },
+          {
+            type: 'checkbox',
+            name: 'terminos',
+            title: 'Términos y condiciones',
+            isRequired: true,
+            choices: [
+              { value: 'acepto', text: 'Acepto los términos y condiciones y la política de privacidad' },
+            ],
+          },
+        ],
+      }],
+      showQuestionNumbers: 'off',
+      completeText: 'Enviar solicitud',
+      completedHtml: '<div style="text-align:center;padding:24px"><h3>📋 ¡Solicitud enviada con éxito!</h3><p>Hemos recibido tu solicitud y documentos. Nuestro equipo la revisará y te contactará en un máximo de 48 horas hábiles.</p></div>',
     },
   },
 ];
