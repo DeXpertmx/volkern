@@ -5,3 +5,4 @@ export * from './components/TestimonialsBlock';
 export * from './components/TeamBlock';
 export * from './components/BlogBlock';
 export * from './components/CatalogBlock';
+export * from './components/SurveyFormBlock';
