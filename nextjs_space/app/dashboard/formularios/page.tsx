@@ -142,7 +142,7 @@ export default function FormulariosPage() {
 
   // ─── Editor View ──────────────────────────────────────
   if (editing && selectedForm) {
-    return <FormEditor form={selectedForm} onBack={() => { setEditing(false); setSelectedForm(null); fetchForms(); }} />;
+    return <FormEditor form={selectedForm} onBack={() => { setEditing(false); setSelectedForm(null); fetchForms(); }} onFormUpdated={(updated) => { setSelectedForm(updated); setForms(prev => prev.map(f => f.id === updated.id ? { ...f, name: updated.name, config: updated.config } : f)); }} />;
   }
 
   return (
@@ -318,7 +318,7 @@ export default function FormulariosPage() {
 }
 
 // ─── Form Editor Component ──────────────────────────────
-function FormEditor({ form, onBack }: { form: WebForm; onBack: () => void }) {
+function FormEditor({ form, onBack, onFormUpdated }: { form: WebForm; onBack: () => void; onFormUpdated?: (updated: WebForm) => void }) {
   const [name, setName] = useState(form.name);
   const [surveyJson, setSurveyJson] = useState<any>(
     form.config?.pages ? form.config : DEFAULT_SURVEY_JSON
@@ -335,9 +335,14 @@ function FormEditor({ form, onBack }: { form: WebForm; onBack: () => void }) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await apiPatch(`/api/formularios/${form.id}`, { name, config: surveyJson });
+      console.error('[FormEditor] handleSave: name=', name, 'form.id=', form.id);
+      const res = await apiPatch(`/api/formularios/${form.id}`, { name, config: surveyJson });
+      console.error('[FormEditor] handleSave response:', res);
       toast.success('Formulario guardado');
+      // Update the parent's selectedForm so the name is immediately reflected
+      if (onFormUpdated) onFormUpdated({ ...form, name, config: surveyJson });
     } catch (e) {
+      console.error('[FormEditor] handleSave error:', e);
       toast.error('Error al guardar');
     } finally {
       setSaving(false);
