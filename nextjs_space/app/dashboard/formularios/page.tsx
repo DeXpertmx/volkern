@@ -135,7 +135,7 @@ export default function FormulariosPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
   }
@@ -150,10 +150,10 @@ export default function FormulariosPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white">Formularios</h1>
-          <p className="text-slate-400 mt-1">Crea formularios inteligentes con lógica condicional para capturar leads</p>
+          <h1 className="text-3xl font-bold text-foreground">Formularios</h1>
+          <p className="text-muted-foreground mt-1">Crea formularios inteligentes con lógica condicional para capturar leads</p>
         </div>
-        <Button onClick={handleCreate} disabled={creating} className="bg-blue-600 hover:bg-blue-500 gap-2 rounded-xl">
+        <Button onClick={handleCreate} disabled={creating} className="gap-2 rounded-xl">
           {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
           {creating ? 'Creando...' : 'Nuevo Formulario'}
         </Button>
@@ -161,10 +161,10 @@ export default function FormulariosPage() {
 
       {/* Forms Grid */}
       {forms.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-slate-700 rounded-2xl bg-slate-900/30">
-          <FileText className="w-12 h-12 text-slate-600 mb-4" />
-          <p className="text-slate-400 text-lg mb-4">No tienes formularios aún</p>
-          <Button onClick={handleCreate} disabled={creating} variant="outline" className="gap-2 rounded-xl border-slate-700 text-slate-300">
+        <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-border rounded-2xl bg-muted/30">
+          <FileText className="w-12 h-12 text-muted-foreground mb-4" />
+          <p className="text-muted-foreground text-lg mb-4">No tienes formularios aún</p>
+          <Button onClick={handleCreate} disabled={creating} variant="outline" className="gap-2 rounded-xl">
             {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
             {creating ? 'Creando...' : 'Crear primer formulario'}
           </Button>
@@ -172,22 +172,22 @@ export default function FormulariosPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {forms.map((form) => (
-            <Card key={form.id} className="bg-slate-900 border-slate-800 p-5 hover:border-slate-700 transition-colors">
+            <Card key={form.id} className="p-5 hover:border-primary/50 transition-colors">
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
-                    <FileText className="w-5 h-5 text-blue-400" />
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                    <FileText className="w-5 h-5 text-primary" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-white">{form.name}</h3>
-                    <p className="text-xs text-slate-500">
+                    <h3 className="font-semibold text-foreground">{form.name}</h3>
+                    <p className="text-xs text-muted-foreground">
                       {form._count?.submissions || 0} submissions
                     </p>
                   </div>
                 </div>
               </div>
 
-              <p className="text-xs text-slate-500 mb-4">
+              <p className="text-xs text-muted-foreground mb-4">
                 Creado: {new Date(form.createdAt).toLocaleDateString()}
               </p>
 
@@ -195,7 +195,7 @@ export default function FormulariosPage() {
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="text-slate-400 hover:text-white text-xs"
+                  className="text-xs"
                   onClick={() => { setSelectedForm(form); setEditing(true); }}
                 >
                   <Settings className="w-3 h-3 mr-1" /> Editar
@@ -203,7 +203,7 @@ export default function FormulariosPage() {
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="text-slate-400 hover:text-blue-400 text-xs"
+                  className="text-xs hover:text-primary"
                   onClick={() => { setSelectedForm(form); setPreviewOpen(true); }}
                 >
                   <Eye className="w-3 h-3 mr-1" /> Vista previa
@@ -212,7 +212,7 @@ export default function FormulariosPage() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="text-slate-400 hover:text-purple-400 text-xs"
+                    className="text-xs hover:text-purple-600 dark:hover:text-purple-400"
                     onClick={() => router.push(`/dashboard/formularios/${form.id}/submissions`)}
                   >
                     <Users className="w-3 h-3 mr-1" />
@@ -222,7 +222,7 @@ export default function FormulariosPage() {
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="text-slate-400 hover:text-green-400 text-xs"
+                  className="text-xs hover:text-green-600 dark:hover:text-green-400"
                   onClick={() => { setSelectedForm(form); setEmbedOpen(true); }}
                 >
                   <Code className="w-3 h-3 mr-1" /> Embed
@@ -230,7 +230,7 @@ export default function FormulariosPage() {
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="text-slate-400 hover:text-red-400 text-xs ml-auto"
+                  className="text-xs hover:text-red-600 dark:hover:text-red-400 ml-auto"
                   onClick={() => handleDelete(form.id)}
                 >
                   <Trash2 className="w-3 h-3" />
@@ -243,9 +243,9 @@ export default function FormulariosPage() {
 
       {/* Preview Dialog */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto bg-slate-950 border-slate-800">
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-white">{selectedForm?.name}</DialogTitle>
+            <DialogTitle>{selectedForm?.name}</DialogTitle>
           </DialogHeader>
           {selectedForm && (
             <SurveyFormRenderer
@@ -259,25 +259,22 @@ export default function FormulariosPage() {
 
       {/* Embed Dialog */}
       <Dialog open={embedOpen} onOpenChange={setEmbedOpen}>
-        <DialogContent className="max-w-lg bg-slate-950 border-slate-800">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-white">Código Embed</DialogTitle>
+            <DialogTitle>Código Embed</DialogTitle>
           </DialogHeader>
           {selectedForm && (
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label className="text-slate-300">Código React (WebCreator)</Label>
+                <Label>Código React (WebCreator)</Label>
                 <div className="relative">
-                  <pre className="bg-slate-900 border border-slate-800 p-4 rounded-xl text-xs text-slate-300 overflow-x-auto">
-                    {`<SurveyFormRenderer
-  surveyJson={${JSON.stringify(selectedForm.config, null, 2)}}
-  submitUrl="/api/formularios/${selectedForm.id}/submit"
-/>`}
+                  <pre className="bg-muted border p-4 rounded-xl text-xs text-muted-foreground overflow-x-auto">
+                    {`<SurveyFormRenderer\n  surveyJson={${JSON.stringify(selectedForm.config, null, 2)}}\n  submitUrl="/api/formularios/${selectedForm.id}/submit"\n/>`}
                   </pre>
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="absolute top-2 right-2 text-slate-400"
+                    className="absolute top-2 right-2"
                     onClick={() => {
                       const code = `<SurveyFormRenderer\n  surveyJson={${JSON.stringify(selectedForm.config, null, 2)}}\n  submitUrl="/api/formularios/${selectedForm.id}/submit"\n/>`;
                       navigator.clipboard.writeText(code);
@@ -285,30 +282,30 @@ export default function FormulariosPage() {
                       setTimeout(() => setCopied(false), 2000);
                     }}
                   >
-                    {copied ? <Check className="w-4 h-4 text-green-400" /> : <Clipboard className="w-4 h-4" />}
+                    {copied ? <Check className="w-4 h-4 text-green-500" /> : <Clipboard className="w-4 h-4" />}
                   </Button>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label className="text-slate-300">URL de embed (iframe)</Label>
+                <Label>URL de embed (iframe)</Label>
                 <div className="relative">
                   <Input
                     readOnly
                     value={`${window.location.origin}/api/formularios/${selectedForm.id}/submit`}
-                    className="bg-slate-900 border-slate-800 text-slate-300 text-xs rounded-xl pr-20"
+                    className="text-xs rounded-xl pr-20"
                   />
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="absolute top-1 right-1 text-slate-400 text-xs"
+                    className="absolute top-1 right-1 text-xs"
                     onClick={() => {
                       navigator.clipboard.writeText(`${window.location.origin}/api/formularios/${selectedForm.id}/submit`);
                       setCopied(true);
                       setTimeout(() => setCopied(false), 2000);
                     }}
                   >
-                    {copied ? <Check className="w-3 h-3 text-green-400" /> : 'Copiar'}
+                    {copied ? <Check className="w-3 h-3 text-green-500" /> : 'Copiar'}
                   </Button>
                 </div>
               </div>
@@ -418,13 +415,13 @@ function FormEditor({ form, onBack }: { form: WebForm; onBack: () => void }) {
       {/* Top Bar */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={onBack} className="text-slate-400 hover:text-white">
+          <Button variant="ghost" onClick={onBack} className="text-muted-foreground hover:text-foreground">
             <ArrowLeft className="w-4 h-4 mr-2" /> Volver
           </Button>
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="text-xl font-bold text-white bg-transparent border-0 border-b-2 border-transparent hover:border-slate-700 focus:border-blue-500 rounded-none px-0 max-w-md"
+            className="text-xl font-bold bg-transparent border-0 border-b-2 border-transparent hover:border-border focus:border-primary rounded-none px-0 max-w-md text-foreground placeholder:text-muted-foreground"
             placeholder="Nombre del formulario"
           />
         </div>
@@ -434,18 +431,18 @@ function FormEditor({ form, onBack }: { form: WebForm; onBack: () => void }) {
               <Settings className="w-4 h-4" /> Editor
             </Button>
           ) : (
-            <Button onClick={() => setPreviewMode(true)} variant="outline" className="gap-2 rounded-xl border-slate-700 text-slate-300">
+            <Button onClick={() => setPreviewMode(true)} variant="outline" className="gap-2 rounded-xl">
               <Eye className="w-4 h-4" /> Vista previa
             </Button>
           )}
           <Button
             onClick={() => { setShowJSON(true); setJsonEdit(JSON.stringify(surveyJson, null, 2)); }}
             variant="outline"
-            className="gap-2 rounded-xl border-slate-700 text-slate-300"
+            className="gap-2 rounded-xl"
           >
             <Code className="w-4 h-4" /> JSON
           </Button>
-          <Button onClick={handleSave} disabled={saving} className="bg-blue-600 hover:bg-blue-500 gap-2 rounded-xl">
+          <Button onClick={handleSave} disabled={saving} className="gap-2 rounded-xl">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             Guardar
           </Button>
@@ -454,8 +451,8 @@ function FormEditor({ form, onBack }: { form: WebForm; onBack: () => void }) {
 
       {previewMode ? (
         /* ─── Preview ─────────────────────────────── */
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 max-w-2xl mx-auto">
-          <h2 className="text-xl font-bold text-white mb-6 text-center">{name}</h2>
+        <div className="bg-card border rounded-2xl p-8 max-w-2xl mx-auto">
+          <h2 className="text-xl font-bold text-foreground mb-6 text-center">{name}</h2>
           <SurveyFormRenderer
             surveyJson={surveyJson}
             submitUrl={`/api/formularios/${form.id}/submit`}
@@ -467,8 +464,8 @@ function FormEditor({ form, onBack }: { form: WebForm; onBack: () => void }) {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left: Field Palette */}
           <div className="lg:col-span-1 space-y-4">
-            <Card className="bg-slate-900 border-slate-800 p-4">
-              <h3 className="text-sm font-semibold text-slate-300 mb-3">Agregar campo</h3>
+            <Card className="p-4">
+              <h3 className="text-sm font-semibold mb-3">Agregar campo</h3>
               <div className="grid grid-cols-2 gap-2">
                 {Object.entries(FIELD_TYPE_LABELS).map(([type, label]) => (
                   <Button
@@ -476,7 +473,7 @@ function FormEditor({ form, onBack }: { form: WebForm; onBack: () => void }) {
                     variant="outline"
                     size="sm"
                     onClick={() => handleAddField(type as FieldType)}
-                    className="text-xs border-slate-700 text-slate-400 hover:text-white hover:border-blue-500/50 rounded-xl justify-start"
+                    className="text-xs rounded-xl justify-start"
                   >
                     <Plus className="w-3 h-3 mr-1" /> {label}
                   </Button>
@@ -484,21 +481,21 @@ function FormEditor({ form, onBack }: { form: WebForm; onBack: () => void }) {
               </div>
             </Card>
 
-            <Card className="bg-slate-900 border-slate-800 p-4">
-              <h3 className="text-sm font-semibold text-slate-300 mb-2">Campos ({currentPage.elements?.length || 0})</h3>
-              <p className="text-xs text-slate-500">Haz clic en un campo para editarlo</p>
+            <Card className="p-4">
+              <h3 className="text-sm font-semibold mb-2">Campos ({currentPage.elements?.length || 0})</h3>
+              <p className="text-xs text-muted-foreground">Haz clic en un campo para editarlo</p>
             </Card>
           </div>
 
           {/* Right: Field Editor */}
           <div className="lg:col-span-2 space-y-4">
             {/* Form config */}
-            <Card className="bg-slate-900 border-slate-800 p-4">
-              <Label className="text-slate-300 text-sm">Título del formulario</Label>
+            <Card className="p-4">
+              <Label className="text-sm">Título del formulario</Label>
               <Input
                 value={surveyJson.title || ''}
                 onChange={(e) => setSurveyJson({ ...surveyJson, title: e.target.value })}
-                className="bg-slate-950 border-slate-700 text-white rounded-xl mt-1"
+                className="rounded-xl mt-1"
                 placeholder="Título que verán los usuarios"
               />
             </Card>
@@ -517,13 +514,13 @@ function FormEditor({ form, onBack }: { form: WebForm; onBack: () => void }) {
             ))}
 
             {(!currentPage.elements || currentPage.elements.length === 0) && (
-              <div className="flex flex-col items-center justify-center h-48 border-2 border-dashed border-slate-700 rounded-2xl bg-slate-900/30">
-                <p className="text-slate-500 mb-4">Agrega campos desde la paleta izquierda</p>
+              <div className="flex flex-col items-center justify-center h-48 border-2 border-dashed border-border rounded-2xl bg-muted/30">
+                <p className="text-muted-foreground mb-4">Agrega campos desde la paleta izquierda</p>
                 <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => handleAddField('text')} className="text-xs rounded-xl border-slate-700">
+                  <Button size="sm" variant="outline" onClick={() => handleAddField('text')} className="text-xs rounded-xl">
                     <Plus className="w-3 h-3 mr-1" /> Texto
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => handleAddField('email')} className="text-xs rounded-xl border-slate-700">
+                  <Button size="sm" variant="outline" onClick={() => handleAddField('email')} className="text-xs rounded-xl">
                     <Plus className="w-3 h-3 mr-1" /> Email
                   </Button>
                 </div>
@@ -535,18 +532,18 @@ function FormEditor({ form, onBack }: { form: WebForm; onBack: () => void }) {
 
       {/* JSON Editor Dialog */}
       <Dialog open={showJSON} onOpenChange={setShowJSON}>
-        <DialogContent className="max-w-2xl max-h-[80vh] bg-slate-950 border-slate-800">
+        <DialogContent className="max-w-2xl max-h-[80vh]">
           <DialogHeader>
-            <DialogTitle className="text-white">Editor JSON</DialogTitle>
+            <DialogTitle>Editor JSON</DialogTitle>
           </DialogHeader>
           <Textarea
             value={jsonEdit}
             onChange={(e) => setJsonEdit(e.target.value)}
-            className="min-h-[400px] bg-slate-900 border-slate-700 text-slate-200 font-mono text-sm rounded-xl"
+            className="min-h-[400px] font-mono text-sm rounded-xl"
           />
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setShowJSON(false)} className="rounded-xl">Cancelar</Button>
-            <Button onClick={handleUpdateJSON} className="bg-blue-600 hover:bg-blue-500 rounded-xl">Aplicar cambios</Button>
+            <Button onClick={handleUpdateJSON} className="rounded-xl">Aplicar cambios</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -580,13 +577,13 @@ function FieldEditor({
   };
 
   return (
-    <Card className="bg-slate-900 border-slate-800 p-4 space-y-4">
+    <Card className="p-4 space-y-4">
       <div className="flex items-center gap-3">
         <div className="flex flex-col gap-0.5">
           <Button
             size="sm"
             variant="ghost"
-            className="h-6 w-6 p-0 text-slate-600 hover:text-white"
+            className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
             onClick={() => onMove('up')}
             disabled={index === 0}
           >
@@ -595,7 +592,7 @@ function FieldEditor({
           <Button
             size="sm"
             variant="ghost"
-            className="h-6 w-6 p-0 text-slate-600 hover:text-white"
+            className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
             onClick={() => onMove('down')}
             disabled={index === total - 1}
           >
@@ -603,7 +600,7 @@ function FieldEditor({
           </Button>
         </div>
 
-        <Badge variant="outline" className="text-xs border-slate-700 text-slate-400">
+        <Badge variant="outline" className="text-xs">
           {FIELD_TYPE_LABELS[field.type] || field.type}
         </Badge>
 
@@ -613,7 +610,7 @@ function FieldEditor({
           size="sm"
           variant="ghost"
           onClick={onRemove}
-          className="text-slate-600 hover:text-red-400 h-8 w-8 p-0"
+          className="text-muted-foreground hover:text-red-600 dark:hover:text-red-400 h-8 w-8 p-0"
         >
           <Trash2 className="w-4 h-4" />
         </Button>
@@ -621,30 +618,30 @@ function FieldEditor({
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label className="text-slate-400 text-xs">Nombre del campo (key)</Label>
+          <Label className="text-xs">Nombre del campo (key)</Label>
           <Input
             value={field.name}
             onChange={(e) => onUpdate({ name: e.target.value })}
-            className="bg-slate-950 border-slate-700 text-white rounded-xl h-9 text-sm"
+            className="rounded-xl h-9 text-sm"
           />
         </div>
         <div className="space-y-2">
-          <Label className="text-slate-400 text-xs">Etiqueta (label)</Label>
+          <Label className="text-xs">Etiqueta (label)</Label>
           <Input
             value={field.title}
             onChange={(e) => onUpdate({ title: e.target.value })}
-            className="bg-slate-950 border-slate-700 text-white rounded-xl h-9 text-sm"
+            className="rounded-xl h-9 text-sm"
           />
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label className="text-slate-400 text-xs">Placeholder</Label>
+          <Label className="text-xs">Placeholder</Label>
           <Input
             value={field.placeholder || ''}
             onChange={(e) => onUpdate({ placeholder: e.target.value })}
-            className="bg-slate-950 border-slate-700 text-white rounded-xl h-9 text-sm"
+            className="rounded-xl h-9 text-sm"
           />
         </div>
         <div className="flex items-center gap-2 pt-6">
@@ -652,7 +649,7 @@ function FieldEditor({
             checked={field.isRequired}
             onCheckedChange={(checked) => onUpdate({ isRequired: checked })}
           />
-          <Label className="text-slate-400 text-xs cursor-pointer" onClick={() => onUpdate({ isRequired: !field.isRequired })}>
+          <Label className="text-xs cursor-pointer" onClick={() => onUpdate({ isRequired: !field.isRequired })}>
             Requerido
           </Label>
         </div>
@@ -661,12 +658,12 @@ function FieldEditor({
       {/* Choices for dropdown/radiogroup */}
       {(field.type === 'dropdown' || field.type === 'radiogroup') && (
         <div className="space-y-2">
-          <Label className="text-slate-400 text-xs">Opciones (una por línea)</Label>
+          <Label className="text-xs">Opciones (una por línea)</Label>
           <Textarea
             value={editingChoices}
             onChange={(e) => setEditingChoices(e.target.value)}
             onBlur={handleChoicesBlur}
-            className="bg-slate-950 border-slate-700 text-white rounded-xl text-sm min-h-[80px]"
+            className="rounded-xl text-sm min-h-[80px]"
           />
         </div>
       )}

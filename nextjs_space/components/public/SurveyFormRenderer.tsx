@@ -69,9 +69,9 @@ export const SurveyFormRenderer: React.FC<SurveyFormRendererProps> = ({
     return (
       <div
         style={{ height }}
-        className={`flex items-center justify-center bg-slate-900/50 rounded-xl border border-slate-800 ${className}`}
+        className={`flex items-center justify-center bg-muted/50 rounded-xl border ${className}`}
       >
-        <div className="animate-pulse text-slate-400">Cargando formulario...</div>
+        <div className="animate-pulse text-muted-foreground">Cargando formulario...</div>
       </div>
     );
   }
@@ -87,33 +87,33 @@ export const SurveyFormRenderer: React.FC<SurveyFormRendererProps> = ({
           font-family: inherit !important;
         }
         .survey-form-container .sd-btn {
-          background-color: #3b82f6 !important;
+          background-color: hsl(var(--primary)) !important;
           border-radius: 0.75rem !important;
           padding: 0.75rem 2rem !important;
           font-weight: 600 !important;
         }
         .survey-form-container .sd-btn:hover {
-          background-color: #2563eb !important;
+          opacity: 0.9 !important;
         }
         .survey-form-container .sd-input {
-          background-color: rgb(15 23 42) !important;
-          border-color: rgb(30 41 59) !important;
-          color: #fff !important;
+          background-color: hsl(var(--background)) !important;
+          border-color: hsl(var(--border)) !important;
+          color: hsl(var(--foreground)) !important;
           border-radius: 0.75rem !important;
         }
         .survey-form-container .sd-input:focus {
-          border-color: #3b82f6 !important;
-          box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2) !important;
+          border-color: hsl(var(--primary)) !important;
+          box-shadow: 0 0 0 2px hsl(var(--primary) / 0.2) !important;
         }
         .survey-form-container .sd-question__title {
-          color: #cbd5e1 !important;
+          color: hsl(var(--foreground)) !important;
           font-weight: 500 !important;
         }
         .survey-form-container .sd-selectbase__item {
-          color: #e2e8f0 !important;
+          color: hsl(var(--foreground)) !important;
         }
         .survey-form-container .sd-completedpage {
-          color: #e2e8f0 !important;
+          color: hsl(var(--foreground)) !important;
         }
       `}</style>
       <Survey model={model} />
