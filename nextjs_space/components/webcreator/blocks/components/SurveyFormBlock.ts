@@ -4,6 +4,120 @@ import { getIconSvg } from "../../icons/BlockIcons";
 export const createSurveyFormBlock = (editor: Editor) => {
   const bm = editor.BlockManager;
 
+  // ─── Register custom form-picker trait ────────────────────────
+  editor.TraitManager.addType('form-picker', {
+    noLabel: false,
+    createInput({ trait, component }: { trait: any; component: any }) {
+      const wrapper = document.createElement('div');
+      wrapper.style.cssText = 'position:relative;width:100%;';
+
+      const select = document.createElement('select');
+      select.setAttribute('data-trait-select', 'true');
+      select.style.cssText = `
+        width:100%;padding:8px 12px;border-radius:8px;font-size:13px;
+        border:1px solid #e2e8f0;
+        background:#fff;
+        color:#0f172a;
+        cursor:pointer;appearance:auto;
+      `;
+
+      // Loading state
+      const loadingOpt = document.createElement('option');
+      loadingOpt.value = '';
+      loadingOpt.textContent = 'Cargando formularios...';
+      loadingOpt.disabled = true;
+      select.appendChild(loadingOpt);
+      select.disabled = true;
+
+      wrapper.appendChild(select);
+
+      // Resolve origin for API call inside GrapesJS iframe
+      const resolveOrigin = (): string => {
+        try {
+          const parentOrigin = window.parent?.location?.origin;
+          if (parentOrigin && parentOrigin !== 'null' && !parentOrigin.startsWith('about')) {
+            return parentOrigin;
+          }
+        } catch {}
+        return window.location.origin;
+      };
+
+      const currentValue = component.getAttributes()['data-form-id'] || '';
+
+      // Fetch available forms
+      const fetchForms = async () => {
+        try {
+          const origin = resolveOrigin();
+          if (!origin || origin.startsWith('about')) {
+            select.innerHTML = '<option value="">No disponible en preview</option>';
+            return;
+          }
+
+          const res = await fetch(`${origin}/api/formularios`);
+          if (!res.ok) throw new Error('Failed to fetch');
+
+          const data = await res.json();
+          const forms: any[] = data.forms || [];
+
+          select.innerHTML = '';
+          select.disabled = false;
+
+          const placeholderOpt = document.createElement('option');
+          placeholderOpt.value = '';
+          placeholderOpt.textContent = '— Seleccionar formulario —';
+          select.appendChild(placeholderOpt);
+
+          forms.forEach((form: any) => {
+            const opt = document.createElement('option');
+            opt.value = form.id;
+            const subs = form._count?.submissions || 0;
+            opt.textContent = `${form.name}${subs > 0 ? ` (${subs} subs)` : ''}`;
+            if (form.id === currentValue) opt.selected = true;
+            select.appendChild(opt);
+          });
+
+          if (forms.length === 0) {
+            const emptyOpt = document.createElement('option');
+            emptyOpt.value = '';
+            emptyOpt.textContent = 'No hay formularios — creá uno en Formularios';
+            emptyOpt.disabled = true;
+            select.appendChild(emptyOpt);
+          }
+        } catch (err) {
+          console.warn('[SurveyFormBlock] Could not fetch forms:', err);
+          select.innerHTML = '<option value="">Error al cargar</option>';
+        }
+      };
+
+      fetchForms();
+
+      // Handle selection change — update component attribute
+      // The MutationObserver in the script detects this change and triggers preview fetch
+      select.addEventListener('change', () => {
+        const selectedId = select.value;
+        component.addAttributes({ 'data-form-id': selectedId });
+      });
+
+      return wrapper;
+    },
+    // Keep the label from trait config
+    onEvent({ component, el }: { component: any; el: HTMLDivElement }) {
+      // Update select value when component attribute changes externally
+      const select = el.querySelector('select');
+      if (!select) return;
+      const formId = component.getAttributes()['data-form-id'] || '';
+      if (select.value !== formId) {
+        // Find and select the matching option
+        for (const opt of select.options) {
+          if (opt.value === formId) {
+            opt.selected = true;
+            break;
+          }
+        }
+      }
+    },
+  });
+
   bm.add("volkern-survey-form", {
     label: `
       <div class="custom-block-layout">
@@ -22,10 +136,9 @@ export const createSurveyFormBlock = (editor: Editor) => {
       defaults: {
         traits: [
           {
-            type: 'text',
-            label: 'ID del Formulario',
+            type: 'form-picker',
+            label: 'Formulario',
             name: 'data-form-id',
-            value: '',
           },
         ],
         attributes: {
