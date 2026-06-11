@@ -1,31 +1,23 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { extractTenantFromRequest } from '@/lib/tenant-context';
-
-async function getTenantId(req: NextRequest): Promise<string | null> {
-  const { tenantId } = await extractTenantFromRequest(req);
-  return tenantId;
-}
+import { withTenantAuth } from '@/lib/api-key-auth';
 
 // GET /api/formularios/[id] — Obtener un formulario
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export const GET = withTenantAuth(async (request, auth, context) => {
   try {
-    const tenantId = await getTenantId(req);
-    if (!tenantId) {
-      return NextResponse.json({ error: 'Tenant no encontrado' }, { status: 400 });
+    const id = context?.params?.id;
+    if (!id) {
+      return NextResponse.json({ error: 'ID de formulario requerido' }, { status: 400 });
     }
 
     const form = await prisma.webForm.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         _count: { select: { submissions: true } },
       },
     });
 
-    if (!form || form.tenantId !== tenantId) {
+    if (!form || form.tenantId !== auth.tenant!.id) {
       return NextResponse.json({ error: 'Formulario no encontrado' }, { status: 404 });
     }
 
@@ -34,29 +26,26 @@ export async function GET(
     console.error('[Formularios API] Error getting form:', error);
     return NextResponse.json({ error: 'Error al obtener el formulario' }, { status: 500 });
   }
-}
+});
 
 // PATCH /api/formularios/[id] — Actualizar un formulario
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export const PATCH = withTenantAuth(async (request, auth, context) => {
   try {
-    const tenantId = await getTenantId(req);
-    if (!tenantId) {
-      return NextResponse.json({ error: 'Tenant no encontrado' }, { status: 400 });
+    const id = context?.params?.id;
+    if (!id) {
+      return NextResponse.json({ error: 'ID de formulario requerido' }, { status: 400 });
     }
 
-    const body = await req.json();
+    const body = await request.json();
     const { name, config, pageId } = body;
 
-    const existing = await prisma.webForm.findUnique({ where: { id: params.id } });
-    if (!existing || existing.tenantId !== tenantId) {
+    const existing = await prisma.webForm.findUnique({ where: { id } });
+    if (!existing || existing.tenantId !== auth.tenant!.id) {
       return NextResponse.json({ error: 'Formulario no encontrado' }, { status: 404 });
     }
 
     const form = await prisma.webForm.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         ...(name !== undefined ? { name } : {}),
         ...(config !== undefined ? { config } : {}),
@@ -69,30 +58,27 @@ export async function PATCH(
     console.error('[Formularios API] Error updating form:', error);
     return NextResponse.json({ error: 'Error al actualizar el formulario' }, { status: 500 });
   }
-}
+});
 
 // DELETE /api/formularios/[id] — Eliminar un formulario
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export const DELETE = withTenantAuth(async (request, auth, context) => {
   try {
-    const tenantId = await getTenantId(req);
-    if (!tenantId) {
-      return NextResponse.json({ error: 'Tenant no encontrado' }, { status: 400 });
+    const id = context?.params?.id;
+    if (!id) {
+      return NextResponse.json({ error: 'ID de formulario requerido' }, { status: 400 });
     }
 
-    const existing = await prisma.webForm.findUnique({ where: { id: params.id } });
-    if (!existing || existing.tenantId !== tenantId) {
+    const existing = await prisma.webForm.findUnique({ where: { id } });
+    if (!existing || existing.tenantId !== auth.tenant!.id) {
       return NextResponse.json({ error: 'Formulario no encontrado' }, { status: 404 });
     }
 
-    await prisma.webFormSubmission.deleteMany({ where: { formId: params.id } });
-    await prisma.webForm.delete({ where: { id: params.id } });
+    await prisma.webFormSubmission.deleteMany({ where: { formId: id } });
+    await prisma.webForm.delete({ where: { id } });
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('[Formularios API] Error deleting form:', error);
     return NextResponse.json({ error: 'Error al eliminar el formulario' }, { status: 500 });
   }
-}
+});
