@@ -24,6 +24,7 @@ import {
   Check,
   Code,
   Users,
+  Palette,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiGet, apiPost, apiDelete, apiPatch } from '@/lib/api-client';
@@ -260,6 +261,8 @@ export default function FormulariosPage() {
               surveyJson={selectedForm.config}
               submitUrl={`/api/formularios/${selectedForm.id}/submit`}
               className="rounded-xl"
+              buttonColor={selectedForm.config?._buttonColor}
+              backgroundColor={selectedForm.config?._backgroundColor}
             />
           )}
         </DialogContent>
@@ -492,6 +495,8 @@ function FormEditor({ form, onBack, onFormUpdated }: { form: WebForm; onBack: ()
             surveyJson={surveyJson}
             submitUrl={`/api/formularios/${form.id}/submit`}
             className="rounded-xl"
+            buttonColor={surveyJson._buttonColor}
+            backgroundColor={surveyJson._backgroundColor}
           />
         </div>
       ) : (
@@ -513,6 +518,61 @@ function FormEditor({ form, onBack, onFormUpdated }: { form: WebForm; onBack: ()
                     <Plus className="w-3 h-3 mr-1" /> {label}
                   </Button>
                 ))}
+              </div>
+            </Card>
+
+            <Card className="p-4">
+              <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                <Palette className="w-4 h-4" /> Diseño
+              </h3>
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Color del botón</Label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={surveyJson._buttonColor || '#3b82f6'}
+                      onChange={(e) => setSurveyJson((prev: any) => ({ ...prev, _buttonColor: e.target.value }))}
+                      className="w-8 h-8 rounded cursor-pointer border-0 p-0"
+                    />
+                    <Input
+                      value={surveyJson._buttonColor || '#3b82f6'}
+                      onChange={(e) => setSurveyJson((prev: any) => ({ ...prev, _buttonColor: e.target.value }))}
+                      className="h-8 text-xs rounded-lg flex-1 font-mono"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Fondo del formulario</Label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={surveyJson._backgroundColor || '#ffffff'}
+                      onChange={(e) => setSurveyJson((prev: any) => ({ ...prev, _backgroundColor: e.target.value }))}
+                      className="w-8 h-8 rounded cursor-pointer border-0 p-0"
+                    />
+                    <Input
+                      value={surveyJson._backgroundColor || '#ffffff'}
+                      onChange={(e) => setSurveyJson((prev: any) => ({ ...prev, _backgroundColor: e.target.value }))}
+                      className="h-8 text-xs rounded-lg flex-1 font-mono"
+                    />
+                  </div>
+                </div>
+                {('_buttonColor' in surveyJson || '_backgroundColor' in surveyJson) && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-xs text-muted-foreground w-full"
+                    onClick={() => setSurveyJson((prev: any) => {
+                      const next = { ...prev };
+                      delete next._buttonColor;
+                      delete next._backgroundColor;
+                      return next;
+                    })}
+                  >
+                    Restablecer colores
+                  </Button>
+                )}
               </div>
             </Card>
 

@@ -17,6 +17,10 @@ type SurveyFormRendererProps = {
   onComplete?: () => void;
   /** CSS class name for the container */
   className?: string;
+  /** Custom button color (CSS color value) */
+  buttonColor?: string;
+  /** Custom background color (CSS color value) */
+  backgroundColor?: string;
 };
 
 export const SurveyFormRenderer: React.FC<SurveyFormRendererProps> = ({
@@ -25,6 +29,8 @@ export const SurveyFormRenderer: React.FC<SurveyFormRendererProps> = ({
   height = 'auto',
   onComplete,
   className = '',
+  buttonColor,
+  backgroundColor,
 }) => {
   const [model, setModel] = useState<Model | null>(null);
 
@@ -86,8 +92,13 @@ export const SurveyFormRenderer: React.FC<SurveyFormRendererProps> = ({
           background: transparent !important;
           font-family: inherit !important;
         }
+        .survey-form-container .sd-body {
+          ${backgroundColor ? `background-color: ${backgroundColor} !important;` : ''}
+          ${backgroundColor ? `padding: 1.5rem !important;` : ''}
+          ${backgroundColor ? `border-radius: 1rem !important;` : ''}
+        }
         .survey-form-container .sd-btn {
-          background-color: hsl(var(--primary)) !important;
+          background-color: ${buttonColor || 'hsl(var(--primary))'} !important;
           border-radius: 0.75rem !important;
           padding: 0.75rem 2rem !important;
           font-weight: 600 !important;
