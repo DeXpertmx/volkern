@@ -539,6 +539,7 @@ model Lead {
   signatureRequests    SignatureRequest[]
   TrainingSession      TrainingSession[]
   unsubscribes         UnsubscribeList[]
+  webFormSubmissions   WebFormSubmission[]
 
   @@index([tenantId])
   @@index([email])
@@ -4586,6 +4587,7 @@ model WebFormSubmission {
   tenantId  String?
   form      WebForm  @relation(fields: [formId], references: [id], onDelete: Cascade)
   Tenant    Tenant?  @relation(fields: [tenantId], references: [id])
+  lead      Lead?    @relation(fields: [leadId], references: [id], onDelete: SetNull)
 
   @@index([formId])
   @@index([leadId])

@@ -38,27 +38,16 @@ export async function GET(
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
+        include: {
+          lead: { select: { id: true, nombre: true, email: true, telefono: true, empresa: true, estado: true } },
+        },
       }),
       prisma.webFormSubmission.count({ where: { formId: params.id } }),
     ]);
 
-    const leadIds = [...new Set(submissions.filter((s) => s.leadId).map((s) => s.leadId!))];
-    const leads = leadIds.length > 0
-      ? await prisma.lead.findMany({
-          where: { id: { in: leadIds } },
-          select: { id: true, nombre: true, email: true, telefono: true, empresa: true, estado: true },
-        })
-      : [];
-    const leadMap = new Map(leads.map((l) => [l.id, l]));
-
-    const submissionsWithLeads = submissions.map((s) => ({
-      ...s,
-      lead: s.leadId ? leadMap.get(s.leadId) || null : null,
-    }));
-
     return NextResponse.json({
       form: { id: form.id, name: form.name },
-      submissions: submissionsWithLeads,
+      submissions,
       pagination: {
         page,
         limit,
