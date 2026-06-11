@@ -5,7 +5,8 @@ import {
   createLeadFormBlock,
   createTestimonialsBlock,
   createTeamBlock,
-  createBlogBlock
+  createBlogBlock,
+  createSurveyFormBlock
 } from './index';
 import { createStandardBlocks } from './components/StandardBlocks';
 
@@ -19,4 +20,5 @@ export const setupVolkernBlocks = (editor: Editor) => {
   createTestimonialsBlock(editor);
   createTeamBlock(editor);
   createBlogBlock(editor);
+  createSurveyFormBlock(editor);
 };

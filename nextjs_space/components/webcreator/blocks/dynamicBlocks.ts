@@ -10,6 +10,7 @@ import { createVolkernFormBlock } from './components/VolkernFormBlock';
 import { createCRMFieldBlock } from './components/CRMFieldBlock';
 import { createStockBlock } from './components/StockBlock';
 import { createPricingDynamicBlock } from './components/PricingDynamicBlock';
+import { createSurveyFormBlock } from './components/SurveyFormBlock';
 
 // Import Premium blocks statically for maximum stability
 import { 
@@ -49,6 +50,7 @@ export const setupVolkernBlocksAsync = (editor: Editor) => {
     createCRMFieldBlock(editor);
     createStockBlock(editor);
     createPricingDynamicBlock(editor);
+    createSurveyFormBlock(editor);
 
     console.log('[Webcreator] Registrando bloques Premium...');
     // Initialize Premium blocks
