@@ -5,10 +5,13 @@ export const createSurveyFormBlock = (editor: Editor) => {
   const bm = editor.BlockManager;
 
   // ─── Register custom form-picker trait ────────────────────────
-  editor.TraitManager.addType('form-picker', {
-    noLabel: false,
-    createInput({ trait, component }: { trait: any; component: any }) {
-      const wrapper = document.createElement('div');
+  console.log('[SurveyFormBlock] Registering form-picker trait type...');
+  try {
+    editor.TraitManager.addType('form-picker', {
+      noLabel: false,
+      createInput({ trait, component }: { trait: any; component: any }) {
+        console.log('[SurveyFormBlock] form-picker createInput called', { hasTrait: !!trait, hasComponent: !!component, traitType: trait?.get?.('type') });
+        const wrapper = document.createElement('div');
       wrapper.style.cssText = 'position:relative;width:100%;';
 
       const select = document.createElement('select');
@@ -102,8 +105,9 @@ export const createSurveyFormBlock = (editor: Editor) => {
     },
     // Sync select when component attribute changes externally (e.g. undo/redo)
     onEvent({ component, elInput }: { component: any; elInput: HTMLDivElement }) {
+      console.log('[SurveyFormBlock] form-picker onEvent called');
       const select = elInput.querySelector('select') as HTMLSelectElement | null;
-      if (!select) return;
+      if (!select) { console.log('[SurveyFormBlock] onEvent: select not found in elInput'); return; }
       const formId = component.getAttributes()['data-form-id'] || '';
       if (select.value !== formId) {
         for (const opt of Array.from(select.options)) {
@@ -115,6 +119,10 @@ export const createSurveyFormBlock = (editor: Editor) => {
       }
     },
   });
+    console.log('[SurveyFormBlock] form-picker trait registered OK');
+  } catch (e) {
+    console.error('[SurveyFormBlock] FAILED to register form-picker trait:', e);
+  }
 
   bm.add("volkern-survey-form", {
     label: `
