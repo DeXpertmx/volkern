@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { extractTenantFromRequest } from '@/lib/tenant-context';
+
+async function getTenantId(req: NextRequest): Promise<string | null> {
+  const { tenantId } = await extractTenantFromRequest(req);
+  return tenantId;
+}
 
 // GET /api/formularios/[id] — Obtener un formulario
 export async function GET(
@@ -7,7 +13,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const tenantId = req.headers.get('x-tenant-id');
+    const tenantId = await getTenantId(req);
     if (!tenantId) {
       return NextResponse.json({ error: 'Tenant no encontrado' }, { status: 400 });
     }
@@ -36,7 +42,7 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
-    const tenantId = req.headers.get('x-tenant-id');
+    const tenantId = await getTenantId(req);
     if (!tenantId) {
       return NextResponse.json({ error: 'Tenant no encontrado' }, { status: 400 });
     }
@@ -44,7 +50,6 @@ export async function PATCH(
     const body = await req.json();
     const { name, config, pageId } = body;
 
-    // Verify ownership
     const existing = await prisma.webForm.findUnique({ where: { id: params.id } });
     if (!existing || existing.tenantId !== tenantId) {
       return NextResponse.json({ error: 'Formulario no encontrado' }, { status: 404 });
@@ -72,7 +77,7 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const tenantId = req.headers.get('x-tenant-id');
+    const tenantId = await getTenantId(req);
     if (!tenantId) {
       return NextResponse.json({ error: 'Tenant no encontrado' }, { status: 400 });
     }
@@ -82,7 +87,6 @@ export async function DELETE(
       return NextResponse.json({ error: 'Formulario no encontrado' }, { status: 404 });
     }
 
-    // Delete submissions first due to foreign key
     await prisma.webFormSubmission.deleteMany({ where: { formId: params.id } });
     await prisma.webForm.delete({ where: { id: params.id } });
 

@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { extractTenantFromRequest } from '@/lib/tenant-context';
+
+async function getTenantId(req: NextRequest): Promise<string | null> {
+  const { tenantId } = await extractTenantFromRequest(req);
+  return tenantId;
+}
 
 // GET /api/formularios/[id]/submissions — Listar submissions de un formulario
 export async function GET(
@@ -7,12 +13,11 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const tenantId = req.headers.get('x-tenant-id');
+    const tenantId = await getTenantId(req);
     if (!tenantId) {
       return NextResponse.json({ error: 'Tenant no encontrado' }, { status: 400 });
     }
 
-    // Verify form ownership
     const form = await prisma.webForm.findUnique({
       where: { id: params.id },
       select: { id: true, tenantId: true, name: true, config: true },
@@ -22,13 +27,11 @@ export async function GET(
       return NextResponse.json({ error: 'Formulario no encontrado' }, { status: 404 });
     }
 
-    // Pagination
     const url = new URL(req.url);
     const page = parseInt(url.searchParams.get('page') || '1');
     const limit = Math.min(parseInt(url.searchParams.get('limit') || '20'), 100);
     const skip = (page - 1) * limit;
 
-    // Fetch submissions
     const [submissions, total] = await Promise.all([
       prisma.webFormSubmission.findMany({
         where: { formId: params.id },
@@ -39,7 +42,6 @@ export async function GET(
       prisma.webFormSubmission.count({ where: { formId: params.id } }),
     ]);
 
-    // Separately fetch lead data for submissions that have a leadId
     const leadIds = [...new Set(submissions.filter((s) => s.leadId).map((s) => s.leadId!))];
     const leads = leadIds.length > 0
       ? await prisma.lead.findMany({
