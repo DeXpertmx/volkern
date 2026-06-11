@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,6 +23,7 @@ import {
   Clipboard,
   Check,
   Code,
+  Users,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiFetch } from '@/lib/api-fetch';
@@ -76,6 +78,7 @@ const DEFAULT_SURVEY_JSON = {
 
 // ─── Main Page ──────────────────────────────────────────
 export default function FormulariosPage() {
+  const router = useRouter();
   const [forms, setForms] = useState<WebForm[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedForm, setSelectedForm] = useState<WebForm | null>(null);
@@ -204,6 +207,17 @@ export default function FormulariosPage() {
                 >
                   <Eye className="w-3 h-3 mr-1" /> Vista previa
                 </Button>
+                {(form._count?.submissions || 0) > 0 && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-slate-400 hover:text-purple-400 text-xs"
+                    onClick={() => router.push(`/dashboard/formularios/${form.id}/submissions`)}
+                  >
+                    <Users className="w-3 h-3 mr-1" />
+                    {form._count?.submissions}
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   variant="ghost"
