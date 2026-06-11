@@ -335,14 +335,10 @@ function FormEditor({ form, onBack, onFormUpdated }: { form: WebForm; onBack: ()
   const handleSave = async () => {
     setSaving(true);
     try {
-      console.error('[FormEditor] handleSave: name=', name, 'form.id=', form.id);
-      const res = await apiPatch(`/api/formularios/${form.id}`, { name, config: surveyJson });
-      console.error('[FormEditor] handleSave response:', res);
+      await apiPatch(`/api/formularios/${form.id}`, { name, config: surveyJson });
       toast.success('Formulario guardado');
-      // Update the parent's selectedForm so the name is immediately reflected
       if (onFormUpdated) onFormUpdated({ ...form, name, config: surveyJson });
     } catch (e) {
-      console.error('[FormEditor] handleSave error:', e);
       toast.error('Error al guardar');
     } finally {
       setSaving(false);
@@ -425,7 +421,12 @@ function FormEditor({ form, onBack, onFormUpdated }: { form: WebForm; onBack: ()
           </Button>
           <Input
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              const newName = e.target.value;
+              setName(newName);
+              // Auto-sync the public form title when user edits the name
+              setSurveyJson((prev: any) => ({ ...prev, title: newName }));
+            }}
             className="text-xl font-bold bg-transparent border-0 border-b-2 border-transparent hover:border-border focus:border-primary rounded-none px-0 max-w-md text-foreground placeholder:text-muted-foreground"
             placeholder="Nombre del formulario"
           />
@@ -496,7 +497,8 @@ function FormEditor({ form, onBack, onFormUpdated }: { form: WebForm; onBack: ()
           <div className="lg:col-span-2 space-y-4">
             {/* Form config */}
             <Card className="p-4">
-              <Label className="text-sm">Título del formulario</Label>
+              <Label className="text-sm">Título público</Label>
+              <p className="text-xs text-muted-foreground mb-2">Este es el título que verán los usuarios en el formulario. Se sincroniza con el nombre, pero podés personalizarlo.</p>
               <Input
                 value={surveyJson.title || ''}
                 onChange={(e) => setSurveyJson({ ...surveyJson, title: e.target.value })}
