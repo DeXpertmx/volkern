@@ -13,12 +13,33 @@ import { toast } from "sonner"
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
+const TIPOS_VIA = [
+  'Calle', 'Avenida', 'Plaza', 'Paseo', 'Camino', 'Carretera',
+  'Travesía', 'Pasaje', 'Ronda', 'Glorieta', 'Polígono',
+  'Urbanización', 'Parque', 'Autovía', 'Barrio', 'Cuesta',
+  'Costanilla', 'Carrera', 'Gran Vía', 'Callejón', 'Plazuela'
+]
+
+function formatAddress(s: any): string {
+  if (!s) return 'No especificada'
+  const parts = [
+    s.streetType, s.streetName, s.streetNumber,
+    s.staircase ? `Esc. ${s.staircase}` : '',
+    s.floor ? `Piso ${s.floor}` : '',
+    s.door ? `Pta. ${s.door}` : '',
+    s.postalCode, s.city, s.province, s.country
+  ].filter(Boolean)
+  return parts.length ? parts.join(', ') : 'No especificada'
+}
+
+const emptyForm = { name: '', taxId: '', email: '', phone: '', streetType: '', streetName: '', streetNumber: '', staircase: '', floor: '', door: '', postalCode: '', city: '', province: '', country: 'España', category: 'Varios' }
+
 export default function ProveedoresPage() {
   const { data: suppliers, isLoading, mutate } = useSWR('/api/erp/suppliers', fetcher)
   const [createOpen, setCreateOpen] = useState(false)
   const [detailSupplier, setDetailSupplier] = useState<any>(null)
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({ name: '', taxId: '', email: '', phone: '', address: '', category: 'Varios' })
+  const [form, setForm] = useState(emptyForm)
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
@@ -33,7 +54,7 @@ export default function ProveedoresPage() {
       if (!res.ok) throw new Error()
       toast.success('Proveedor creado correctamente')
       setCreateOpen(false)
-      setForm({ name: '', taxId: '', email: '', phone: '', address: '', category: 'Varios' })
+      setForm(emptyForm)
       mutate()
     } catch {
       toast.error('Error al crear proveedor')
@@ -66,12 +87,61 @@ export default function ProveedoresPage() {
               <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Razón social o nombre comercial" className="rounded-xl" required />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-[11px] font-bold uppercase tracking-widest">RFC / CIF</Label>
-              <Input value={form.taxId} onChange={e => setForm({ ...form, taxId: e.target.value })} placeholder="Ej: XAXX010101000" className="rounded-xl" />
+              <Label className="text-[11px] font-bold uppercase tracking-widest">CIF / NIF</Label>
+              <Input value={form.taxId} onChange={e => setForm({ ...form, taxId: e.target.value })} placeholder="Ej: B12345678" className="rounded-xl" />
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-[11px] font-bold uppercase tracking-widest">Dirección</Label>
-              <Input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} placeholder="Calle, número, colonia, código postal, ciudad, país" className="rounded-xl" />
+
+            <div className="space-y-3 border-t pt-4 mt-2">
+              <Label className="text-[11px] font-bold uppercase tracking-widest flex items-center gap-1.5"><MapPin className="w-3 h-3" /> Dirección</Label>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-[9px] text-muted-foreground font-semibold uppercase">Tipo de vía</Label>
+                  <select value={form.streetType} onChange={e => setForm({ ...form, streetType: e.target.value })} className="w-full bg-background border rounded-xl px-3 py-2.5 text-sm outline-none">
+                    <option value="">Seleccionar</option>
+                    {TIPOS_VIA.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-1 col-span-2">
+                  <Label className="text-[9px] text-muted-foreground font-semibold uppercase">Nombre de la vía</Label>
+                  <Input value={form.streetName} onChange={e => setForm({ ...form, streetName: e.target.value })} placeholder="Nombre de la calle/avenida" className="rounded-xl" />
+                </div>
+              </div>
+              <div className="grid grid-cols-4 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-[9px] text-muted-foreground font-semibold uppercase">Número</Label>
+                  <Input value={form.streetNumber} onChange={e => setForm({ ...form, streetNumber: e.target.value })} placeholder="Nº" className="rounded-xl" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[9px] text-muted-foreground font-semibold uppercase">Escalera</Label>
+                  <Input value={form.staircase} onChange={e => setForm({ ...form, staircase: e.target.value })} placeholder="Esc." className="rounded-xl" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[9px] text-muted-foreground font-semibold uppercase">Piso</Label>
+                  <Input value={form.floor} onChange={e => setForm({ ...form, floor: e.target.value })} placeholder="Piso" className="rounded-xl" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[9px] text-muted-foreground font-semibold uppercase">Puerta</Label>
+                  <Input value={form.door} onChange={e => setForm({ ...form, door: e.target.value })} placeholder="Pta." className="rounded-xl" />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-[9px] text-muted-foreground font-semibold uppercase">Código Postal</Label>
+                  <Input value={form.postalCode} onChange={e => setForm({ ...form, postalCode: e.target.value })} placeholder="28001" className="rounded-xl" maxLength={5} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[9px] text-muted-foreground font-semibold uppercase">Ciudad</Label>
+                  <Input value={form.city} onChange={e => setForm({ ...form, city: e.target.value })} placeholder="Madrid" className="rounded-xl" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[9px] text-muted-foreground font-semibold uppercase">Provincia</Label>
+                  <Input value={form.province} onChange={e => setForm({ ...form, province: e.target.value })} placeholder="Madrid" className="rounded-xl" />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[9px] text-muted-foreground font-semibold uppercase">País</Label>
+                <Input value={form.country} onChange={e => setForm({ ...form, country: e.target.value })} placeholder="España" className="rounded-xl" />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -216,7 +286,7 @@ export default function ProveedoresPage() {
               </div>
               <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900 space-y-1 col-span-2">
                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5"><MapPin className="w-3 h-3" /> Dirección</p>
-                <p className="text-sm font-medium">{detailSupplier?.address || 'No especificada'}</p>
+                <p className="text-sm font-medium">{detailSupplier ? formatAddress(detailSupplier) : ''}</p>
               </div>
               <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900 space-y-1">
                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5"><Tag className="w-3 h-3" /> Categoría</p>

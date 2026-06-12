@@ -41,7 +41,16 @@ export const POST = withTenantAuth(async (request, auth) => {
         taxId: body.taxId,
         email: body.email,
         phone: body.phone,
-        address: body.address,
+        streetType: body.streetType,
+        streetName: body.streetName,
+        streetNumber: body.streetNumber,
+        staircase: body.staircase,
+        floor: body.floor,
+        door: body.door,
+        postalCode: body.postalCode,
+        city: body.city,
+        province: body.province,
+        country: body.country,
         category: body.category || 'Varios'
       }
     });

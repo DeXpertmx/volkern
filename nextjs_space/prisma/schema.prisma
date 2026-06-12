@@ -3925,20 +3925,29 @@ model SalesPlaybookEntry {
 }
 
 model Supplier {
-  id        String    @id @default(cuid())
-  tenantId  String
-  name      String
-  taxId     String?
-  email     String?
-  phone     String?
-  address   String?
-  category  String
-  balance   Float     @default(0)
-  active    Boolean   @default(true)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  expenses  Expense[]
-  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id           String    @id @default(cuid())
+  tenantId     String
+  name         String
+  taxId        String?
+  email        String?
+  phone        String?
+  streetType   String?
+  streetName   String?
+  streetNumber String?
+  staircase    String?
+  floor        String?
+  door         String?
+  postalCode   String?
+  city         String?
+  province     String?
+  country      String?
+  category     String
+  balance      Float     @default(0)
+  active       Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  expenses     Expense[]
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([category])
