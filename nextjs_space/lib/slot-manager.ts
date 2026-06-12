@@ -1,5 +1,7 @@
 import { prisma } from '@/lib/db';
 import { PLANS, PLAN_MODULES } from '@/lib/plans';
+import { AccountingInitializer } from '@/lib/accounting/initializer';
+import type { PgcPlan, SectorAdaptation } from '@/lib/accounting/plans/catalog';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -9,6 +11,8 @@ export interface CreateSlotInput {
   clientName: string;
   adminEmail: string;
   modulesEnabled?: string[];
+  accountingPlanType?: PgcPlan;
+  sector?: SectorAdaptation;
 }
 
 export interface SlotResult {
@@ -137,12 +141,18 @@ export class SlotManager {
     // Heredar branding del padre
     let brandingConfig: Record<string, unknown> = {};
     if (parent.brandingConfig) {
-      brandingConfig = { ...(parent.brandingConfig as Record<string, unknown>) };
+      const parsed = typeof parent.brandingConfig === 'string'
+        ? JSON.parse(parent.brandingConfig)
+        : parent.brandingConfig;
+      brandingConfig = { ...(parsed as Record<string, unknown>) };
     }
     // Para slots contables, forzar showPoweredBy = true
     if (slotType === 'accounting') {
       brandingConfig.showPoweredBy = true;
     }
+
+    const planType = input.accountingPlanType ?? 'NORMAL';
+    const sector = input.sector ?? 'NINGUNO';
 
     const newSlot = await prisma.tenant.create({
       data: {
@@ -151,11 +161,13 @@ export class SlotManager {
         accountType: 'BUSINESS',
         parentId: parentTenantId,
         billingEmail: input.adminEmail,
-        brandingConfig,
+        brandingConfig: brandingConfig as any,
         enabledModules: normalizedModules,
         plan,
         estado: 'activo',
         provisioningStatus: 'PENDING',
+        accountingPlanType: planType,
+        sector: sector === 'NINGUNO' ? null : sector,
       },
       select: {
         id: true,
@@ -176,6 +188,10 @@ export class SlotManager {
     });
 
     console.log(`[SlotManager] Slot '${input.clientName}' (${plan}) creado por padre ${parent.nombre}`);
+
+    if (planType) {
+      await AccountingInitializer.initializeTenant(newSlot.id, planType, sector);
+    }
 
     return newSlot;
   }

@@ -187,6 +187,10 @@ model Tenant {
   razonSocial                    String?
   aiAutopilot                    Boolean                          @default(false)
 
+  // ─── PGC (Plan General de Contabilidad) ──────────────────
+  accountingPlanType            AccountingPlanType               @default(NORMAL)
+  sector                        String?
+
   // ─── Email Domain (Resend multi-tenant) ─────────────────
   resendDomainId                String?                          @unique
   emailDomainStatus             String                           @default("not_started")
@@ -6359,6 +6363,12 @@ enum FiscalType {
   AUTONOMO
   EMPRESA
   CLIENTE_EXTRANJERO
+}
+
+enum AccountingPlanType {
+  NORMAL
+  PYMES
+  MICRO
 }
 
 enum AccountingEntryStatus {

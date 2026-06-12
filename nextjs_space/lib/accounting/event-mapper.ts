@@ -80,6 +80,7 @@ export class AccountingEventMapper {
   /**
    * Maps a validated expense to a ledger entry.
    * 600/621/629 (Expense) -> 400/410 (Supplier) + 472 (VAT)
+   * Uses AI classification (if confirmed) or falls back to category mapping.
    */
   static async mapExpenseToEntry(expenseId: string) {
     const expense = await prisma.expense.findUnique({
@@ -93,14 +94,15 @@ export class AccountingEventMapper {
     const accounts = await this.getTenantAccounts(tenantId);
 
     const total = Number(expense.amount);
-    const taxRate = 0.21; // Assume 21% if not specified
+    const taxRate = 0.21;
     const subtotal = total / (1 + taxRate);
     const vat = total - subtotal;
 
-    // Map category to account code (Simple mapping for demo)
-    let expenseAccount = '629'; // Default: Otros servicios
-    if (expense.category.toLowerCase().includes('compras')) expenseAccount = '600';
-    if (expense.category.toLowerCase().includes('alquiler')) expenseAccount = '621';
+    // Try confirmed AI classification first
+    const meta = expense.metadata as Record<string, unknown> | null;
+    const confirmedCode = meta?.confirmedAccountCode as string | undefined;
+
+    let expenseAccount = confirmedCode ?? this.fallbackAccountForCategory(expense.category);
 
     return await EntryManager.createEntry({
       tenantId,
@@ -120,6 +122,40 @@ export class AccountingEventMapper {
         periodYear: expense.createdAt.getFullYear()
       }
     });
+  }
+
+  private static fallbackAccountForCategory(category: string): string {
+    const map: Record<string, string> = {
+      compras: '600',
+      'materias primas': '601',
+      arrendamiento: '621',
+      alquiler: '621',
+      reparacion: '622',
+      honorarios: '623',
+      profesional: '623',
+      transporte: '624',
+      seguro: '625',
+      banca: '626',
+      publicidad: '627',
+      suministro: '628',
+      luz: '628',
+      agua: '628',
+      gas: '628',
+      telefono: '628',
+      marketing: '629',
+      software: '629',
+      suscripcion: '629',
+      sueldo: '640',
+      salario: '640',
+      nomina: '640',
+      'seguridad social': '642',
+      personal: '649',
+    };
+    const lower = category.toLowerCase();
+    for (const [key, code] of Object.entries(map)) {
+      if (lower.includes(key)) return code;
+    }
+    return '629';
   }
 
   /**
@@ -161,11 +197,10 @@ export class AccountingEventMapper {
     const map: Record<string, string> = {};
     accounts.forEach(a => map[a.code] = a.id);
     
-    // Ensure critical accounts exist
     const criticalCodes = ['430', '700', '705', '477', '640', '4751', '476', '572', '472', '410', '629', '621', '600'];
     for (const code of criticalCodes) {
       if (!map[code]) {
-        throw new Error(`Cuenta contable crítica ${code} no configurada para el tenant`);
+        console.warn(`[Accounting] Cuenta crítica ${code} no encontrada para tenant ${tenantId}. Las operaciones que la requieran fallarán.`);
       }
     }
     
