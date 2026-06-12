@@ -1337,16 +1337,36 @@ export default function CatalogoPage() {
                       <Label>Impuestos Flexibles</Label>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="flex items-center gap-2">
-                          <Switch
-                            checked={pricing.impuestos.incluido}
-                            onCheckedChange={(v) => setPricing({ 
-                              ...pricing, 
-                              impuestos: { ...pricing.impuestos, incluido: v } 
-                            })}
-                          />
-                          <Label>IVA Incluido</Label>
-                        </div>
+                      <div className="space-y-2">
+                        <Label className="text-[11px] text-muted-foreground font-semibold">Tipo de IVA</Label>
+                        <Select
+                          value={String(Math.round(pricing.impuestos.iva * 100))}
+                          onValueChange={(v) => setPricing({
+                            ...pricing,
+                            impuestos: { ...pricing.impuestos, iva: Number(v) / 100 }
+                          })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="21">21% (General)</SelectItem>
+                            <SelectItem value="10">10% (Reducido)</SelectItem>
+                            <SelectItem value="4">4% (Superreducido)</SelectItem>
+                            <SelectItem value="0">0% (Exento)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex items-center gap-2 pt-6">
+                        <Switch
+                          checked={pricing.impuestos.incluido}
+                          onCheckedChange={(v) => setPricing({ 
+                            ...pricing, 
+                            impuestos: { ...pricing.impuestos, incluido: v } 
+                          })}
+                        />
+                        <Label>IVA Incluido</Label>
+                      </div>
                     </div>
                   </div>
                 </div>
