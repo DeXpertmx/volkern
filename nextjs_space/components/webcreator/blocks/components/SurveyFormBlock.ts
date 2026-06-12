@@ -31,30 +31,17 @@ export const createSurveyFormBlock = (editor: Editor) => {
 
       wrapper.appendChild(select);
 
-      // Resolve origin for API call inside GrapesJS iframe
-      const resolveOrigin = (): string => {
-        try {
-          const parentOrigin = window.parent?.location?.origin;
-          if (parentOrigin && parentOrigin !== 'null' && !parentOrigin.startsWith('about')) {
-            return parentOrigin;
-          }
-        } catch {}
-        return window.location.origin;
-      };
-
       const currentValue = component.getAttributes()['data-form-id'] || '';
 
-      // Fetch available forms
+      // Fetch available forms (runs in main window, so window.location.origin is correct)
       const fetchForms = async () => {
         try {
-          const origin = resolveOrigin();
-          if (!origin || origin.startsWith('about')) {
-            select.innerHTML = '<option value="">No disponible en preview</option>';
-            return;
-          }
+          select.disabled = true;
 
-          const res = await fetch(`${origin}/api/formularios`);
-          if (!res.ok) throw new Error('Failed to fetch');
+          const res = await fetch('/api/formularios', {
+            credentials: 'same-origin',
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
           const data = await res.json();
           const forms: any[] = data.forms || [];
@@ -86,6 +73,7 @@ export const createSurveyFormBlock = (editor: Editor) => {
         } catch (err) {
           console.warn('[SurveyFormBlock] Could not fetch forms:', err);
           select.innerHTML = '<option value="">Error al cargar</option>';
+          select.disabled = false;
         }
       };
 
@@ -259,8 +247,8 @@ export const createSurveyFormBlock = (editor: Editor) => {
           if (!titleEl) return;
 
           if (!formId) {
-            titleEl.innerText = 'Formulario Inteligente';
-            if (descEl) descEl.innerText = 'Pega el ID de tu formulario en el panel de traits (icono ⚙️)';
+            // Keep the default placeholder HTML text — already shows "Selecciona un formulario en el panel de Propiedades (⚙️)"
+            if (descEl) descEl.innerText = 'Selecciona un formulario en el panel de Propiedades (⚙️)';
             return;
           }
 
@@ -277,7 +265,8 @@ export const createSurveyFormBlock = (editor: Editor) => {
               } catch (e) { origin = window.location.origin; }
               if (!origin || origin.startsWith('about')) return;
 
-              const res = await fetch(`${origin}/api/formularios/${formId}`, {
+              const res = await fetch(`/api/formularios/${formId}`, {
+                credentials: 'same-origin',
                 headers: { 'x-tenant-id': 'preview' }
               });
               if (!res.ok) return;
