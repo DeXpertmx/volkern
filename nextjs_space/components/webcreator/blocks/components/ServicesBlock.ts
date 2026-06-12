@@ -69,7 +69,7 @@ export const createServicesBlock = (editor: Editor) => {
 
               <!-- Tarjetas adicionales para visualización en el editor -->
               <div class="v-service-card v-editor-preview">
-                <div class="v-icon-box" style="background: #818cf8;">
+                <div class="v-icon-box">
                   <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v20m10-10H2"/></svg>
                 </div>
                 <h3 class="v-service-title">Configuración CRM</h3>

@@ -33,8 +33,8 @@ export const createLeadFormBlock = (editor: Editor) => {
               <h2 class="volkern-lead-title" data-v-title>Impulsa tu Crecimiento</h2>
               <p class="volkern-lead-subtitle" data-v-subtitle>Déjanos tus datos y un estratega senior te contactará pronto.</p>
               <form class="volkern-lead-form">
-                <input type="text" class="volkern-lead-input" placeholder="Nombre completo" required>
-                <input type="email" class="volkern-lead-input" placeholder="Email corporativo" required>
+                <input type="text" class="volkern-lead-input" placeholder="Nombre completo" autocomplete="name" required>
+                <input type="email" class="volkern-lead-input" placeholder="Email corporativo" autocomplete="email" required>
                 <div data-v-invoice-area style="display: none;">
                   <label class="volkern-file-label">Adjuntar Factura (PDF/Imagen)</label>
                   <input type="file" class="volkern-lead-input" accept=".pdf,image/*">
