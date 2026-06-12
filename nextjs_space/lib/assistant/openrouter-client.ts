@@ -2,6 +2,8 @@ import { callGemma, GemmaMessage } from '@/lib/ai/gemma-client';
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
+const DEEPSEEK_BASE_URL = 'https://api.deepseek.com/v1';
 
 export interface OpenRouterMessage {
   role: 'system' | 'user' | 'assistant';
@@ -80,7 +82,119 @@ async function callNemotron(
 }
 
 /**
- * Llama a Gemini 2.5 Flash directamente (fallback cuando OpenRouter falla).
+ * Llama a DeepSeek V4 Flash directamente (API nativa, OpenAI-compatible).
+ * Usa DEEPSEEK_API_KEY del environment.
+ */
+async function callDeepSeekV4FlashDirect(
+  messages: OpenRouterMessage[]
+): Promise<OpenRouterResponse> {
+  if (!DEEPSEEK_API_KEY) {
+    throw new Error('DEEPSEEK_API_KEY no configurada');
+  }
+
+  const response = await fetch(`${DEEPSEEK_BASE_URL}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'deepseek-ai/DeepSeek-V4-Flash',
+      messages,
+      temperature: 0.4,
+      max_tokens: 8192,
+      top_p: 0.9
+    })
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`DeepSeek V4 Flash error: ${response.status} - ${error}`);
+  }
+
+  const data = await response.json();
+
+  if (!data?.choices?.[0]?.message?.content) {
+    throw new Error('DeepSeek V4 Flash retornó respuesta vacía o nula');
+  }
+
+  return data;
+}
+
+/**
+ * Llama a deepseek/deepseek-chat:free via OpenRouter (fallback si la API directa falla).
+ */
+async function callDeepSeekChat(
+  messages: OpenRouterMessage[]
+): Promise<OpenRouterResponse> {
+  return callOpenRouter('deepseek/deepseek-chat:free', messages, 0.4, 8192);
+}
+
+/**
+ * Pipeline de llamada para Web Creator (DeepSeek V4 Flash prioritario):
+ * 1. DeepSeek V4 Flash directo (API nativa) — PRIMARIO
+ * 2. deepseek/deepseek-chat:free via OpenRouter (respaldo 1)
+ * 3. google/gemma-4-31b-it:free via OpenRouter (respaldo 2)
+ * 4. nvidia/nemotron-3-ultra-550b-a55b:free via OpenRouter (respaldo 3)
+ * 5. Google Gemini 2.5 Flash directo (respaldo final)
+ */
+export async function callWebCreatorWithFallback(
+  messages: OpenRouterMessage[]
+): Promise<OpenRouterResponse> {
+  // 1. DeepSeek V4 Flash directo
+  try {
+    console.log('[AI WebCreator] Intentando DeepSeek V4 Flash (API directa)...');
+    const response = await callDeepSeekV4FlashDirect(messages);
+    console.log('[AI WebCreator] ✅ DeepSeek V4 Flash respondió correctamente');
+    return response;
+  } catch (error) {
+    console.warn('[AI WebCreator] DeepSeek V4 Flash falló:', error);
+  }
+
+  // 2. DeepSeek Chat via OpenRouter
+  try {
+    console.log('[AI WebCreator] Fallback a deepseek/deepseek-chat:free...');
+    const response = await callDeepSeekChat(messages);
+    console.log('[AI WebCreator] ✅ DeepSeek Chat respondió correctamente');
+    return response;
+  } catch (error) {
+    console.warn('[AI WebCreator] DeepSeek Chat falló:', error);
+  }
+
+  // 3. Gemma 4 via OpenRouter
+  try {
+    console.log('[AI WebCreator] Fallback a google/gemma-4-31b-it:free...');
+    const response = await callGemma4(messages);
+    console.log('[AI WebCreator] ✅ Gemma 4 respondió correctamente');
+    return response;
+  } catch (error) {
+    console.warn('[AI WebCreator] Gemma 4 falló:', error);
+  }
+
+  // 4. Nemotron
+  try {
+    console.log('[AI WebCreator] Fallback a nvidia/nemotron-3-ultra-550b-a55b:free...');
+    const response = await callNemotron(messages);
+    console.log('[AI WebCreator] ✅ Nemotron respondió correctamente');
+    return response;
+  } catch (error) {
+    console.warn('[AI WebCreator] Nemotron falló:', error);
+  }
+
+  // 5. Fallback final: Google Gemini 2.5 Flash directo
+  try {
+    console.log('[AI WebCreator] Fallback final a Google Gemini 2.5 Flash...');
+    const response = await callGemini25Flash(messages);
+    console.log('[AI WebCreator] ✅ Gemini respondió correctamente');
+    return response;
+  } catch (error) {
+    console.error('[AI WebCreator] ❌ Todos los modelos fallaron:', error);
+    throw error;
+  }
+}
+
+/**
+ * Llama a Google Gemini 2.5 Flash directamente (fallback cuando OpenRouter falla).
  */
 async function callGemini25Flash(
   messages: OpenRouterMessage[]

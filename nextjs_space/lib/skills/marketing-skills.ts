@@ -1,6 +1,6 @@
 import { prisma } from '../db';
 import { SocialMediaService } from '../marketing/social-media-service';
-import { callAssistantWithFallback } from '../assistant/openrouter-client';
+import { callWebCreatorWithFallback, OpenRouterMessage } from '../assistant/openrouter-client';
 
 /**
  * Genera copy para marketing usando IA (Gemma 4)
@@ -65,7 +65,8 @@ export async function suggest_campaign_optimization(params: {
 }
 
 /**
- * Genera código HTML/CSS para un bloque de GrapesJS basado en un prompt
+ * Genera HTML/CSS + definición GrapesJS para un bloque nativo del editor
+ * Usa DeepSeek como modelo principal con fallback a Gemma 4 / Nemotron / Gemini.
  */
 export async function generate_web_creator_block(params: {
   description: string;
@@ -74,43 +75,69 @@ export async function generate_web_creator_block(params: {
 }) {
   const { description, category } = params;
 
-  const systemPrompt = `Eres un DISEÑADOR WEB PROFESIONAL especializado en landing pages de ALTO IMPACTO. Tu trabajo es crear bloques HTML con DISEÑO VISUAL PROFESIONAL.
+  const systemPrompt = `Eres un DISEÑADOR WEB PROFESIONAL especializado en landing pages de ALTO IMPACTO. Tu trabajo es crear bloques HTML nativos de GrapesJS con DISEÑO VISUAL PROFESIONAL.
 
 REGLAS DE DISEÑO CRÍTICAS:
-1. Usa clases Tailwind CSS para TODOS los estilos visuales (colores, espaciado, tipografía, sombras, bordes)
-2. Crea jerarquía visual clara: títulos grandes y llamativos, texto legible, CTAs prominentes
-3. Añade profundidad visual: gradientes sutiles, sombras elegantes, bordes redondeados
-4. Usa paleta de colores profesional y coherente
-5. Espaciado generoso para respiración visual
-6. Tipografía clara con tamaños diferenciados
+1. Usa clases Tailwind CSS para TODOS los estilos visuales
+2. Jerarquía visual clara: títulos grandes y llamativos, texto legible, CTAs prominentes
+3. Profundidad visual: gradientes sutiles, sombras elegantes, bordes redondeados
+4. Paleta de colores profesional y coherente (máximo 3 colores + neutros)
+5. Espaciado generoso, tipografía clara con tamaños diferenciados
+6. Diseño MODERNO, limpio, tipo startup/SaaS premium
+7. NO uses texto plano — genera un bloque con DISEÑO VISUAL COMPLETO
 
-EJEMPLO de lo que DEBES generar para un Hero:
-<div class="relative bg-gradient-to-br from-indigo-600 to-purple-700 text-white py-24 px-8 rounded-3xl shadow-2xl overflow-hidden">
-  <div class="absolute top-0 right-0 w-96 h-96 bg-white opacity-10 rounded-full blur-3xl"></div>
+REGLAS GRAPESJS (editables en el editor visual):
+- Los textos editables DEBEN tener atributo contenteditable="true"
+- Los elementos clave deben tener atributo data-gjs-selectable="true"
+- El HTML debe ser semántico y bien estructurado
+
+EJEMPLO de bloque HERO profesional:
+<div class="relative bg-gradient-to-br from-indigo-600 via-purple-600 to-indigo-800 text-white py-24 px-6 md:px-12 rounded-3xl shadow-2xl overflow-hidden">
+  <div class="absolute inset-0 bg-[url('data:image/svg+xml;base64,...')] opacity-10"></div>
   <div class="relative z-10 max-w-4xl mx-auto text-center">
-    <h1 class="text-5xl md:text-6xl font-extrabold mb-6 leading-tight">Título Impactante</h1>
-    <p class="text-xl md:text-2xl text-indigo-100 mb-10 max-w-2xl mx-auto">Descripción persuasiva que captura la atención del visitante</p>
+    <span class="inline-block px-4 py-1.5 bg-white/15 rounded-full text-sm font-medium mb-6 backdrop-blur-sm">Nueva funcionalidad</span>
+    <h1 class="text-4xl md:text-6xl font-extrabold mb-6 leading-tight" contenteditable="true">Título Impactante que Convierte</h1>
+    <p class="text-lg md:text-xl text-indigo-100/90 mb-10 max-w-2xl mx-auto leading-relaxed" contenteditable="true">Descripción persuasiva que conecta con tu audiencia y los guía hacia la acción</p>
     <div class="flex flex-col sm:flex-row gap-4 justify-center">
-      <button class="bg-white text-indigo-600 font-bold px-8 py-4 rounded-xl shadow-lg hover:shadow-xl transition-all hover:-translate-y-1">CTA Principal</button>
-      <button class="border-2 border-white text-white font-semibold px-8 py-4 rounded-xl hover:bg-white hover:text-indigo-600 transition-all">CTA Secundario</button>
+      <a class="inline-block bg-white text-indigo-700 font-bold px-8 py-4 rounded-xl shadow-lg hover:shadow-xl transition-all hover:-translate-y-1 hover:scale-105 cursor-pointer">CTA Principal →</a>
+      <a class="inline-block border-2 border-white/30 text-white font-semibold px-8 py-4 rounded-xl hover:bg-white/10 transition-all cursor-pointer">Ver Demo</a>
     </div>
   </div>
 </div>
 
+CRITERIOS POR CATEGORÍA:
+- features: 3 columnas con iconos SVG inline, hover elevación
+- testimonials: cards con avatar, nombre, cargo, estrella, texto
+- pricing: 3 planes con badge "popular" destacado, CTA diferenciado
+- cta: fondo gradiente o imagen, texto grande, botón prominente
+- team: grid de miembros con foto circular, nombre, cargo, redes
+- contact: formulario + info de contacto, mapa o gradiente
+- footer: links en columnas, copyright, redes sociales
+- stats: números grandes con etiqueta, animación sutil
+- faq: acordeón con preguntas expansibles
+- gallery: grid de imágenes con hover overlay
+- blog: cards de artículo con imagen, fecha, categoría, extracto
+
 Responde SOLO con JSON válido en este formato:
 {
-  "html": "<código HTML completo con diseño profesional>",
-  "css": "<estilos adicionales si son necesarios (mínimo, usa Tailwind principalmente)>",
-  "description": "<breve descripción>"
+  "html": "<código HTML completo con Tailwind y contenteditable en textos>",
+  "css": "<estilos adicionales si son necesarios (mínimo)>",
+  "description": "<breve descripción del bloque>",
+  "traits": [
+    {
+      "type": "text",
+      "label": "Título",
+      "name": "data-title",
+      "placeholder": "Título principal"
+    }
+  ]
 }
 
-Para features usa iconos SVG inline, para pricing usa cards destacadas con badge de "popular", para testimonials usa avatars con fotos.
-
-Categorías: hero, features, testimonials, cta, pricing, team, contact, footer, stats, faq, gallery, blog`;
+Los traits son opcionales pero recomendados para que el usuario pueda editar propiedades desde el panel de GrapesJS. Incluye traits para: título, descripción, textos de botones, colores clave, etc.`;
 
   const userPrompt = `Genera un bloque de tipo "${category}" para una landing page sobre: ${description}
 
-Diseña con PROFESIONALISMO - no generes texto plano, genera un bloque con DISEÑO VISUAL COMPLETO que parezca diseñado por un experto en UX/UI.`;
+Diseña con PROFESIONALISMO ABSOLUTO - el bloque debe verse como diseñado por un expert en UX/UI premiado. USA DeepSeek Design System: colores vibrantes pero elegantes, tipografía moderna, espaciado generoso, micro-interacciones.`;
 
   const messages: OpenRouterMessage[] = [
     { role: 'system', content: systemPrompt },
@@ -118,7 +145,7 @@ Diseña con PROFESIONALISMO - no generes texto plano, genera un bloque con DISE�
   ];
 
   try {
-    const response = await callAssistantWithFallback(messages);
+    const response = await callWebCreatorWithFallback(messages);
     const content = response.choices[0]?.message?.content || '';
 
     let parsed;
@@ -126,23 +153,26 @@ Diseña con PROFESIONALISMO - no generes texto plano, genera un bloque con DISE�
       parsed = JSON.parse(content.trim());
     } catch {
       parsed = {
-        html: `<div class="bg-gradient-to-br from-indigo-600 to-purple-700 text-white py-16 px-8 rounded-3xl shadow-2xl text-center"><h2 class="text-4xl font-bold mb-4">${description}</h2><p class="text-xl text-indigo-100 mb-8">Bloque profesional para ${category}</p><button class="bg-white text-indigo-600 font-bold px-8 py-4 rounded-xl shadow-lg hover:shadow-xl transition-all">Comenzar ahora</button></div>`,
+        html: `<div class="bg-gradient-to-br from-indigo-600 to-purple-700 text-white py-16 px-8 rounded-3xl shadow-2xl text-center"><h2 class="text-4xl font-bold mb-4" contenteditable="true">${description}</h2><p class="text-xl text-indigo-100 mb-8" contenteditable="true">Diseño profesional para ${category}</p><a class="inline-block bg-white text-indigo-600 font-bold px-8 py-4 rounded-xl shadow-lg hover:shadow-xl transition-all cursor-pointer">Comenzar ahora</a></div>`,
         css: ``,
-        description: `Bloque ${category} profesional para ${description}`
+        description: `Bloque ${category} profesional para ${description}`,
+        traits: []
       };
     }
 
     return {
       html: parsed.html || '',
       css: parsed.css || '',
-      description: parsed.description || description
+      description: parsed.description || description,
+      traits: parsed.traits || []
     };
   } catch (error) {
     console.error('[generate_web_creator_block] Error:', error);
     return {
-      html: `<div class="bg-indigo-600 text-white p-12 rounded-2xl text-center"><h2 class="text-3xl font-bold">${description}</h2></div>`,
+      html: `<div class="bg-indigo-600 text-white p-12 rounded-2xl text-center"><h2 class="text-3xl font-bold" contenteditable="true">${description}</h2></div>`,
       css: ``,
-      description: `Bloque ${category} para ${description}`
+      description: `Bloque ${category} para ${description}`,
+      traits: []
     };
   }
 }
