@@ -6,8 +6,15 @@ import { Input } from "@/components/ui/input";
 import { Sparkles, Loader2, Plus, Wand2 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 
+export interface AiGeneratedBlock {
+  html: string;
+  css: string;
+  description: string;
+  traits?: Array<{ type: string; label: string; name: string; placeholder?: string }>;
+}
+
 interface AiBlockGeneratorProps {
-  onBlockGenerated: (block: { html: string, css: string, description: string }) => void;
+  onBlockGenerated: (block: AiGeneratedBlock) => void;
 }
 
 export const AiBlockGenerator = ({ onBlockGenerated }: AiBlockGeneratorProps) => {
@@ -48,7 +55,7 @@ export const AiBlockGenerator = ({ onBlockGenerated }: AiBlockGeneratorProps) =>
     <div className="p-4 bg-indigo-50/50 border border-indigo-100 rounded-xl space-y-3">
       <div className="flex items-center space-x-2 text-indigo-700">
         <Sparkles className="w-4 h-4" />
-        <h3 className="text-xs font-bold uppercase tracking-wider">Generador IA Gemma 4</h3>
+        <h3 className="text-xs font-bold uppercase tracking-wider">Generador IA DeepSeek ✦</h3>
       </div>
       
       <div className="flex space-x-2">
@@ -70,7 +77,7 @@ export const AiBlockGenerator = ({ onBlockGenerated }: AiBlockGeneratorProps) =>
       </div>
       
       <p className="text-[10px] text-indigo-400 italic">
-        Describe el componente y Gemma lo construirá con HTML y Tailwind.
+        Describe el componente y DeepSeek lo construirá con diseño profesional nativo GrapesJS.
       </p>
     </div>
   );

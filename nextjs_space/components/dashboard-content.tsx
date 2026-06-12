@@ -11,7 +11,7 @@ import 'react-resizable/css/styles.css';
 
 import debounce from 'lodash.debounce'
 import { DashboardStats } from '@/components/dashboard-stats'
-import { RecentAppointments } from '@/components/recent-appointments'
+import { DayNavigationAppointments } from '@/components/day-navigation-appointments'
 import { UsageLimits } from '@/components/usage-limits'
 import { IntegrityGraph } from '@/components/sovereignty/integrity-graph'
 import { InventoryWatchdog } from '@/components/operations/inventory-watchdog'
@@ -258,7 +258,7 @@ export function DashboardContent() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="scrollbar-thin">
-                <RecentAppointments appointments={stats.proximasCitas || []} />
+                <DayNavigationAppointments />
               </CardContent>
             </Card>
           </WidgetWrapper>

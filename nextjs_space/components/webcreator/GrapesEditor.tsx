@@ -629,23 +629,74 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>((props, ref)
       editor.on('style:property:update', handleVersionSave);
       editor.on('stack:change', handleVersionSave);
 
-      // Listener para bloques generados por IA
+      // Listener para bloques generados por IA (DeepSeek con GrapesJS nativo)
       const handleAiBlock = (e: any) => {
-        const { html, css } = e.detail;
+        const { html, css, traits, description } = e.detail;
         if (editorRef.current) {
           const editor = editorRef.current;
-          // Añadir CSS globalmente
           if (css) editor.Css.addRules(css);
-          
-          // Añadir HTML al componente seleccionado o al final del body
-          const selected = editor.getSelected();
-          if (selected) {
-            selected.append(html);
+
+          if (traits && traits.length > 0) {
+            // Crear type ID único para este componente
+            const typeId = `ai-block-${Date.now()}`;
+            const traitNames = traits.map((t: any) => t.name);
+
+            // Generar script genérico que sincroniza data-* attributes con el DOM
+            const scriptFn = function (this: HTMLElement) {
+              const el = this;
+              const update = () => {
+                traitNames.forEach((name: string) => {
+                  const value = el.getAttribute(name);
+                  if (!value) return;
+                  const attrName = name.replace('data-', '');
+                  const targets = el.querySelectorAll<HTMLElement>(`[data-bind="${attrName}"]`);
+                  targets.forEach(t => t.textContent = value);
+                });
+              };
+              const obs = new MutationObserver(() => update());
+              obs.observe(el, { attributes: true, attributeFilter: traitNames });
+              update();
+            };
+
+            // Registrar type dinámico con traits + script
+            try {
+              editor.DomComponents.addType(typeId, {
+                model: {
+                  defaults: {
+                    traits: traits.map((t: any) => ({
+                      type: t.type || 'text',
+                      label: t.label,
+                      name: t.name,
+                      placeholder: t.placeholder || ''
+                    })),
+                    components: html,
+                    script: scriptFn,
+                    draggable: true,
+                    editable: true
+                  }
+                }
+              });
+            } catch (e) {
+              console.warn('[AI] Error registrando type, fallback a HTML plano:', e);
+            }
+
+            const selected = editor.getSelected();
+            if (selected) {
+              selected.append({ type: typeId });
+            } else {
+              editor.addComponents({ type: typeId });
+            }
+            toast.success(`IA: "${description || 'Bloque'}" añadido con traits editables.`);
           } else {
-            editor.addComponents(html);
+            // Fallback: HTML plano
+            const selected = editor.getSelected();
+            if (selected) {
+              selected.append(html);
+            } else {
+              editor.addComponents(html);
+            }
+            toast.success("IA: Bloque inyectado con éxito.");
           }
-          
-          toast.success("IA: Bloque inyectado con éxito.");
         }
       };
       window.addEventListener('editor:add-block', handleAiBlock);

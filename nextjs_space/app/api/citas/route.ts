@@ -20,13 +20,18 @@ export const GET = withTenantAuth(async (request, auth) => {
     const fecha = searchParams.get('fecha')
     const fechaInicio = searchParams.get('fechaInicio')
     const fechaFin = searchParams.get('fechaFin')
+    const sort = searchParams.get('sort')
 
     const whereClause: any = {
       tenantId: auth.tenant!.id  // Filtrar por tenant
     }
 
     if (estado && estado !== 'all') {
-      whereClause.estado = estado
+      if (estado.includes(',')) {
+        whereClause.estado = { in: estado.split(',') }
+      } else {
+        whereClause.estado = estado
+      }
     }
 
     if (tipo && tipo !== 'all') {
@@ -61,7 +66,7 @@ export const GET = withTenantAuth(async (request, auth) => {
         servicio: true
       },
       orderBy: {
-        fechaHora: 'desc'
+        fechaHora: sort === 'asc' ? 'asc' : 'desc'
       }
     })
 

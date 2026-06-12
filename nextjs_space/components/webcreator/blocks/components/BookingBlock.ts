@@ -24,47 +24,103 @@ export const createBookingBlock = (editor: Editor) => {
           <section class="volkern-booking-section">
             <div class="v-booking-card">
               <div class="v-indicator">
-                <div class="v-dot active"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div>
+                <div class="v-step-num active" data-v-step-num="1">1</div>
+                <div class="v-step-line" data-v-step-line="1-2"></div>
+                <div class="v-step-num" data-v-step-num="2">2</div>
+                <div class="v-step-line" data-v-step-line="2-3"></div>
+                <div class="v-step-num" data-v-step-num="3">3</div>
+                <div class="v-step-line" data-v-step-line="3-4"></div>
+                <div class="v-step-num" data-v-step-num="4">4</div>
               </div>
               
               <div class="v-step active" data-v-step="1">
                 <span class="v-step-desc">Paso 01</span>
                 <h2 class="v-step-title">Selecciona el Servicio</h2>
+                <p class="v-step-sub">Elige el servicio que deseas contratar</p>
                 <div class="v-services-container">
                    <div class="v-booking-item" data-v-template="service-item">
-                     <div>
-                       <div style="font-weight:900; font-size:1.25rem;" data-v-field="nombre">Nombre del Servicio</div>
-                       <div style="opacity:0.4; font-size:0.875rem;" data-v-field="meta">60 MIN • USD 150</div>
+                     <div class="v-booking-item-left">
+                       <div class="v-booking-icon">✦</div>
+                       <div class="v-booking-info">
+                         <div class="v-booking-name" data-v-field="nombre">Nombre del Servicio</div>
+                         <div class="v-booking-meta" data-v-field="meta">60 MIN</div>
+                       </div>
                      </div>
-                     <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="3"><path d="M9 5l7 7-7 7"/></svg>
+                     <div>
+                       <span class="v-booking-price" data-v-field="precio">$150</span>
+                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                     </div>
                    </div>
                    <div class="v-booking-item v-editor-preview">
-                     <div><div style="font-weight:900; font-size:1.25rem;">Servicio de Ejemplo</div><div style="opacity:0.4; font-size:0.875rem;">30 MIN • Gratis</div></div>
-                     <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="3"><path d="M9 5l7 7-7 7"/></svg>
+                     <div class="v-booking-item-left">
+                       <div class="v-booking-icon">✦</div>
+                       <div class="v-booking-info">
+                         <div class="v-booking-name">Servicio de Ejemplo</div>
+                         <div class="v-booking-meta">30 MIN</div>
+                       </div>
+                     </div>
+                     <div>
+                       <span class="v-booking-price">Gratis</span>
+                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                     </div>
                    </div>
                 </div>
               </div>
               
               <div class="v-step" data-v-step="2">
-                <span class="v-step-desc">Paso 02</span><h2 class="v-step-title">Elige el Día</h2>
+                <span class="v-step-desc">Paso 02</span>
+                <h2 class="v-step-title">Elige el Día</h2>
+                <p class="v-step-sub">Selecciona una fecha disponible</p>
                 <div class="v-cal-grid" data-v-field="calendar">
-                   <div class="v-cal-header">Lun</div><div class="v-cal-header">Mar</div><div class="v-cal-header">Mie</div>
-                   <div class="v-cal-day">1</div><div class="v-cal-day selected">2</div><div class="v-cal-day">3</div>
+                   <div class="v-cal-header">Lun</div><div class="v-cal-header">Mar</div><div class="v-cal-header">Mié</div>
+                   <div class="v-cal-header">Jue</div><div class="v-cal-header">Vie</div><div class="v-cal-header">Sáb</div>
+                   <div class="v-cal-header">Dom</div>
                 </div>
-                <button class="v-back-link">← Volver</button>
+                <button class="v-back-link" data-v-back="1">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+                  Volver a servicios
+                </button>
               </div>
 
               <div class="v-step" data-v-step="3">
-                <span class="v-step-desc">Paso 03</span><h2 class="v-step-title">Elige el Horario</h2>
+                <span class="v-step-desc">Paso 03</span>
+                <h2 class="v-step-title">Elige el Horario</h2>
+                <p class="v-step-sub">Selecciona un horario disponible</p>
                 <div class="v-slots-grid" data-v-field="slots">
                    <div class="v-slot-btn">09:00</div><div class="v-slot-btn selected">10:00</div><div class="v-slot-btn">11:00</div>
                 </div>
+                <button class="v-back-link" data-v-back="2">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+                  Volver a fechas
+                </button>
               </div>
               
               <div class="v-step" data-v-step="4">
-                <span class="v-step-desc">Paso Final</span><h2 class="v-step-title">Tus Datos</h2>
-                <input type="text" class="v-book-input" data-v-field="in-name" placeholder="Nombre completo">
-                <input type="email" class="v-book-input" data-v-field="in-email" placeholder="Email de contacto">
+                <span class="v-step-desc">Paso Final</span>
+                <h2 class="v-step-title">Tus Datos</h2>
+                <p class="v-step-sub">Completa tus datos para confirmar la cita</p>
+                <div class="v-booking-summary">
+                  <div class="v-summary-row">
+                    <span class="v-summary-label">Servicio</span>
+                    <span class="v-summary-value" data-v-field="summary-service">—</span>
+                  </div>
+                  <div class="v-summary-row">
+                    <span class="v-summary-label">Fecha</span>
+                    <span class="v-summary-value" data-v-field="summary-date">—</span>
+                  </div>
+                  <div class="v-summary-row">
+                    <span class="v-summary-label">Horario</span>
+                    <span class="v-summary-value" data-v-field="summary-time">—</span>
+                  </div>
+                </div>
+                <div class="v-form-group">
+                  <label class="v-book-label">Nombre completo</label>
+                  <input type="text" class="v-book-input" data-v-field="in-name" placeholder="Ej: Juan Pérez">
+                </div>
+                <div class="v-form-group">
+                  <label class="v-book-label">Email de contacto</label>
+                  <input type="email" class="v-book-input" data-v-field="in-email" placeholder="Ej: juan@email.com">
+                </div>
                 <div class="v-confirm-btn">Confirmar Cita</div>
               </div>
             </div>
@@ -74,17 +130,27 @@ export const createBookingBlock = (editor: Editor) => {
           const el = this;
           const data = { service: '', serviceId: '', date: '', time: '' };
           const steps = el.querySelectorAll('[data-v-step]');
-          const dots = el.querySelectorAll('.v-dot');
+          const stepNums = el.querySelectorAll('[data-v-step-num]');
+          const stepLines = el.querySelectorAll('[data-v-step-line]');
           const serviceTemplate = el.querySelector('[data-v-template="service-item"]');
           
           const isEditor = window.location.href.includes('/webcreator/editor/') || (window.parent && (window.parent as any).editor);
 
           const goToStep = (n: number) => {
             steps.forEach((s: any) => s.classList.remove('active'));
-            dots.forEach((d: any) => d.classList.remove('active'));
             const target = el.querySelector(`[data-v-step="${n}"]`);
             if (target) target.classList.add('active');
-            if (dots[n-1]) dots[n-1].classList.add('active');
+
+            stepNums.forEach((num: any) => {
+              const idx = parseInt(num.dataset.vStepNum);
+              num.classList.remove('active', 'completed');
+              if (idx === n) num.classList.add('active');
+              else if (idx < n) num.classList.add('completed');
+            });
+            stepLines.forEach((line: any) => {
+              const [, end] = line.dataset.vStepLine.split('-').map(Number);
+              line.classList.toggle('completed', end <= n);
+            });
           };
 
           el.querySelectorAll('[data-v-back]').forEach((btn: any) => {
@@ -128,7 +194,9 @@ export const createBookingBlock = (editor: Editor) => {
               const fNombre = clone.querySelector('[data-v-field="nombre"]');
               if (fNombre) fNombre.innerText = s.nombre;
               const fMeta = clone.querySelector('[data-v-field="meta"]');
-              if (fMeta) fMeta.innerText = `${s.duracionMinutos} MIN • ${s.moneda} ${s.precio}`;
+              if (fMeta) fMeta.innerText = `${s.duracionMinutos} MIN`;
+              const fPrecio = clone.querySelector('[data-v-field="precio"]');
+              if (fPrecio) fPrecio.innerText = `${s.moneda} ${s.precio}`;
               
               clone.addEventListener('click', () => {
                 data.service = s.nombre;
@@ -143,20 +211,27 @@ export const createBookingBlock = (editor: Editor) => {
           const renderCalendar = () => {
             const cal = el.querySelector('[data-v-field="calendar"]');
             if (!cal) return;
-            const days = ['Do','Lu','Ma','Mi','Ju','Vi','Sa'];
+            const days = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
             const today = new Date();
+            const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+            const startOffset = firstDay.getDay();
+            const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+
             cal.innerHTML = days.map(d => `<div class="v-cal-header">${d}</div>`).join('') +
-              Array.from({length:28}, (_,i) => {
-                const d = new Date();
-                d.setDate(today.getDate() + i);
-                return `<button class="v-cal-day" data-date="${d.toISOString().split('T')[0]}">${d.getDate()}</button>`;
+              Array.from({length: startOffset}, () => '<div></div>').join('') +
+              Array.from({length: daysInMonth}, (_, i) => {
+                const day = i + 1;
+                const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                const isPast = new Date(dateStr) < new Date(today.toDateString());
+                const isToday = dateStr === today.toISOString().split('T')[0];
+                return `<button class="v-cal-day${isPast ? '' : ''}${isToday ? ' selected' : ''}" data-date="${dateStr}"${isPast ? ' disabled' : ''}>${day}</button>`;
               }).join('');
             
-            cal.querySelectorAll('.v-cal-day').forEach((btn: any) => {
+            cal.querySelectorAll('.v-cal-day:not([disabled])').forEach((btn: any) => {
               btn.addEventListener('click', () => {
+                cal.querySelectorAll('.v-cal-day.selected').forEach((s: any) => s.classList.remove('selected'));
+                btn.classList.add('selected');
                 data.date = btn.dataset.date;
-                const lbl = el.querySelector('[data-v-field="sel-date"]');
-                if (lbl) lbl.innerText = data.date;
                 goToStep(3);
                 renderSlots();
               });
@@ -167,12 +242,18 @@ export const createBookingBlock = (editor: Editor) => {
             const container = el.querySelector('[data-v-field="slots"]');
             if (!container) return;
             const slots = ['09:00', '10:00', '11:00', '12:00', '13:00', '15:00', '16:00', '17:00'];
-            container.innerHTML = slots.map(t => `<div class="v-slot-btn" data-time="${t}">${t}</div>`).join('');
+            container.innerHTML = slots.map(t => `<button class="v-slot-btn" data-time="${t}">${t}</button>`).join('');
             container.querySelectorAll('.v-slot-btn').forEach((i: any) => {
               i.addEventListener('click', () => {
+                container.querySelectorAll('.v-slot-btn.selected').forEach((s: any) => s.classList.remove('selected'));
+                i.classList.add('selected');
                 data.time = i.dataset.time;
-                const sum = el.querySelector('[data-v-field="summary"]');
-                if (sum) sum.innerText = `${data.service} - ${data.date} @ ${data.time}`;
+                const sumService = el.querySelector('[data-v-field="summary-service"]');
+                if (sumService) sumService.innerText = data.service;
+                const sumDate = el.querySelector('[data-v-field="summary-date"]');
+                if (sumDate) sumDate.innerText = data.date;
+                const sumTime = el.querySelector('[data-v-field="summary-time"]');
+                if (sumTime) sumTime.innerText = data.time;
                 goToStep(4);
               });
             });
@@ -202,7 +283,7 @@ export const createBookingBlock = (editor: Editor) => {
                   notas: `Cita agendada desde el Web Creator para ${data.service}`
                 })
               });
-              el.querySelector('.v-booking-card').innerHTML = '<div style="text-align:center;padding:6rem 0;"><h2 style="color:#6366f1;font-size:3rem;font-weight:900;">¡Listo!</h2><p style="color:white;opacity:0.6;">Cita agendada correctamente.</p></div>';
+              el.querySelector('.v-booking-card').innerHTML = '<div style="text-align:center;padding:5rem 2rem;"><div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;margin:0 auto 1.5rem;font-size:1.75rem;">✓</div><h2 style="color:#fff;font-size:2rem;font-weight:800;margin-bottom:0.5rem;">¡Cita Confirmada!</h2><p style="color:rgba(255,255,255,0.4);font-size:1rem;">Te enviaremos un recordatorio a tu email.</p></div>';
             } catch (e) { alert('Error al agendar.'); btn.innerText = originalText; btn.disabled = false; }
           });
 
