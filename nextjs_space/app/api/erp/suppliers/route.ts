@@ -41,6 +41,7 @@ export const POST = withTenantAuth(async (request, auth) => {
         taxId: body.taxId,
         email: body.email,
         phone: body.phone,
+        address: body.address,
         category: body.category || 'Varios'
       }
     });

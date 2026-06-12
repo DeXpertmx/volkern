@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Plus, Search, Building2, Phone, Mail, Calendar, CreditCard, Tag } from "lucide-react"
+import { Plus, Search, Building2, Phone, Mail, MapPin, Calendar, CreditCard, Tag } from "lucide-react"
 import useSWR from "swr"
 import { toast } from "sonner"
 
@@ -18,7 +18,7 @@ export default function ProveedoresPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [detailSupplier, setDetailSupplier] = useState<any>(null)
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({ name: '', taxId: '', email: '', phone: '', category: 'Varios' })
+  const [form, setForm] = useState({ name: '', taxId: '', email: '', phone: '', address: '', category: 'Varios' })
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
@@ -33,7 +33,7 @@ export default function ProveedoresPage() {
       if (!res.ok) throw new Error()
       toast.success('Proveedor creado correctamente')
       setCreateOpen(false)
-      setForm({ name: '', taxId: '', email: '', phone: '', category: 'Varios' })
+      setForm({ name: '', taxId: '', email: '', phone: '', address: '', category: 'Varios' })
       mutate()
     } catch {
       toast.error('Error al crear proveedor')
@@ -69,6 +69,10 @@ export default function ProveedoresPage() {
               <Label className="text-[11px] font-bold uppercase tracking-widest">RFC / CIF</Label>
               <Input value={form.taxId} onChange={e => setForm({ ...form, taxId: e.target.value })} placeholder="Ej: XAXX010101000" className="rounded-xl" />
             </div>
+            <div className="space-y-1.5">
+              <Label className="text-[11px] font-bold uppercase tracking-widest">Dirección</Label>
+              <Input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} placeholder="Calle, número, colonia, código postal, ciudad, país" className="rounded-xl" />
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-[11px] font-bold uppercase tracking-widest">Email</Label>
@@ -88,6 +92,17 @@ export default function ProveedoresPage() {
                 <option value="Logística">Logística</option>
                 <option value="Consultoría">Consultoría</option>
                 <option value="Hosting">Hosting</option>
+                <option value="Servicios Profesionales">Servicios Profesionales</option>
+                <option value="Materia Prima">Materia Prima</option>
+                <option value="Transporte">Transporte</option>
+                <option value="Mantenimiento">Mantenimiento</option>
+                <option value="Telecomunicaciones">Telecomunicaciones</option>
+                <option value="Seguros">Seguros</option>
+                <option value="Servicios Públicos">Servicios Públicos</option>
+                <option value="Papelería">Papelería</option>
+                <option value="Equipo de Cómputo">Equipo de Cómputo</option>
+                <option value="Alimentos y Bebidas">Alimentos y Bebidas</option>
+                <option value="Capacitación">Capacitación</option>
               </select>
             </div>
             <DialogFooter className="pt-2">
@@ -106,11 +121,25 @@ export default function ProveedoresPage() {
           <input className="w-full bg-slate-100 dark:bg-slate-900 border-none rounded-xl pl-10 pr-4 py-3 text-sm" placeholder="Buscar por nombre o identificación..." />
         </div>
         <div>
-           <select className="w-full bg-slate-100 dark:bg-slate-900 border-none rounded-xl px-4 py-3 text-sm font-bold appearance-none outline-none">
+             <select className="w-full bg-slate-100 dark:bg-slate-900 border-none rounded-xl px-4 py-3 text-sm font-bold appearance-none outline-none">
              <option>Todas las categorías</option>
+             <option>Varios</option>
              <option>Software</option>
              <option>Marketing</option>
              <option>Logística</option>
+             <option>Consultoría</option>
+             <option>Hosting</option>
+             <option>Servicios Profesionales</option>
+             <option>Materia Prima</option>
+             <option>Transporte</option>
+             <option>Mantenimiento</option>
+             <option>Telecomunicaciones</option>
+             <option>Seguros</option>
+             <option>Servicios Públicos</option>
+             <option>Papelería</option>
+             <option>Equipo de Cómputo</option>
+             <option>Alimentos y Bebidas</option>
+             <option>Capacitación</option>
            </select>
         </div>
       </div>
@@ -184,6 +213,10 @@ export default function ProveedoresPage() {
               <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900 space-y-1">
                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5"><Phone className="w-3 h-3" /> Teléfono</p>
                 <p className="text-sm font-medium">{detailSupplier?.phone || 'No especificado'}</p>
+              </div>
+              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900 space-y-1 col-span-2">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5"><MapPin className="w-3 h-3" /> Dirección</p>
+                <p className="text-sm font-medium">{detailSupplier?.address || 'No especificada'}</p>
               </div>
               <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900 space-y-1">
                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5"><Tag className="w-3 h-3" /> Categoría</p>

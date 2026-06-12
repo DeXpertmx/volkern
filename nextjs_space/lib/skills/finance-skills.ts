@@ -13,6 +13,7 @@ export interface CreateSupplierInput {
   taxId?: string;
   email?: string;
   phone?: string;
+  address?: string;
   category: string;
 }
 

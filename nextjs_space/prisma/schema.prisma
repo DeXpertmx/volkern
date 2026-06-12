@@ -3927,6 +3927,7 @@ model Supplier {
   taxId     String?
   email     String?
   phone     String?
+  address   String?
   category  String
   balance   Float     @default(0)
   active    Boolean   @default(true)
