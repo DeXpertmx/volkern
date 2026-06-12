@@ -54,7 +54,7 @@ export const createVolkernFormBlock = (editor: Editor) => {
             type: 'color',
             label: 'Color del Título',
             name: 'data-title-color',
-            value: '#3D3D3D'
+            value: '#ffffff'
           },
           {
             type: 'text',
@@ -64,48 +64,54 @@ export const createVolkernFormBlock = (editor: Editor) => {
           }
         ],
         components: `
-          <div class="volkern-adv-container">
-            <div class="volkern-adv-card">
-            
+          <section class="volkern-adv-section">
             <div class="volkern-adv-card">
               <div class="volkern-adv-header">
+                <div class="volkern-adv-icon">✉</div>
                 <h2 class="volkern-adv-title" data-gjs-editable="true" data-gjs-selectable="true">Contáctanos</h2>
-                <p class="volkern-adv-subtitle" data-gjs-editable="true" data-gjs-selectable="true">Localización y mapeo inteligente activado</p>
+                <p class="volkern-adv-subtitle" data-gjs-editable="true" data-gjs-selectable="true">Déjanos tus datos y te contactaremos</p>
               </div>
               
               <form class="volkern-adv-form" data-gjs-droppable="true" data-gjs-custom-name="Contenedor de Formulario">
                 <div class="v-field-group">
                   <input type="text" class="v-field-input" placeholder=" " data-volkern-map="nombre" required>
                   <label class="v-field-label">Nombre Completo</label>
+                  <span class="v-field-focus"></span>
                 </div>
                 
                 <div class="v-field-group">
                   <input type="email" class="v-field-input" placeholder=" " data-volkern-map="email" required>
                   <label class="v-field-label">Correo Electrónico</label>
+                  <span class="v-field-focus"></span>
                 </div>
                 
                 <div class="v-field-group">
                   <input type="tel" class="v-field-input" placeholder=" " data-volkern-map="telefono">
                   <label class="v-field-label">Teléfono / WhatsApp</label>
+                  <span class="v-field-focus"></span>
                 </div>
                 
                 <div class="v-field-group">
-                  <textarea class="v-field-input" placeholder=" " data-volkern-map="notas" rows="3" style="resize:none;"></textarea>
+                  <textarea class="v-field-input v-field-textarea" placeholder=" " data-volkern-map="notas" rows="3"></textarea>
                   <label class="v-field-label">Mensaje o Notas</label>
+                  <span class="v-field-focus"></span>
                 </div>
                 
-                <button type="submit" class="volkern-adv-btn">Enviar Información</button>
+                <button type="submit" class="volkern-adv-btn">
+                  <span class="volkern-adv-btn-text">Enviar Información</span>
+                  <svg class="volkern-adv-btn-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
+                </button>
               </form>
               
               <div class="v-success-overlay">
                 <div class="v-check-icon">
-                  <svg width="35" height="35" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="3"><path d="M5 13l4 4L19 7"></path></svg>
+                  <svg width="28" height="28" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"></path></svg>
                 </div>
-                <h3 style="font-size: 2rem; font-weight: 800;">¡Éxito!</h3>
-                <p class="v-success-text" style="opacity:0.6; margin-top:0.5rem;">Tu solicitud ha sido procesada.</p>
+                <h3 class="v-success-title">¡Información Recibida!</h3>
+                <p class="v-success-text">Gracias, nos pondremos en contacto contigo pronto.</p>
               </div>
             </div>
-          </div>
+          </section>
         `,
         script: function(this: any) {
           const el = this;
@@ -129,16 +135,18 @@ export const createVolkernFormBlock = (editor: Editor) => {
             if (header.querySelector('h2') && !header.querySelector('h2').hasAttribute('data-gjs-type')) {
                header.querySelector('h2').innerText = title;
             }
-            if (form.querySelector('button')) form.querySelector('button').innerText = btnText;
+            const btnTextEl = form.querySelector('.volkern-adv-btn-text');
+            if (btnTextEl) btnTextEl.innerText = btnText;
             if (successText) successText.innerText = successMsg;
           };
 
           form.addEventListener('submit', async (e: any) => {
             e.preventDefault();
             const btn = form.querySelector('button');
-            const originalText = btn.innerText;
+            const btnTextEl = form.querySelector('.volkern-adv-btn-text');
+            const originalText = btnTextEl ? btnTextEl.innerText : btn.innerText;
             btn.disabled = true;
-            btn.innerText = 'PROCESANDO...';
+            if (btnTextEl) btnTextEl.innerText = 'PROCESANDO...';
 
             const target = el.getAttribute('data-volkern-target') || 'leads';
             const formData: Record<string, any> = {};
@@ -182,7 +190,7 @@ export const createVolkernFormBlock = (editor: Editor) => {
             } catch (err) {
               alert('Error al enviar el formulario. Por favor, revisa tu conexión.');
               btn.disabled = false;
-              btn.innerText = originalText;
+              if (btnTextEl) btnTextEl.innerText = originalText;
             }
           });
 
