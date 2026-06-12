@@ -13,7 +13,16 @@ export interface CreateSupplierInput {
   taxId?: string;
   email?: string;
   phone?: string;
-  address?: string;
+  streetType?: string;
+  streetName?: string;
+  streetNumber?: string;
+  staircase?: string;
+  floor?: string;
+  door?: string;
+  postalCode?: string;
+  city?: string;
+  province?: string;
+  country?: string;
   category: string;
 }
 

@@ -122,7 +122,16 @@ export const SupplierCreateSchema = z.object({
   taxId: z.string().optional(),
   email: z.string().email().optional().or(z.literal('')),
   phone: z.string().optional(),
-  address: z.string().optional(),
+  streetType: z.string().optional(),
+  streetName: z.string().optional(),
+  streetNumber: z.string().optional(),
+  staircase: z.string().optional(),
+  floor: z.string().optional(),
+  door: z.string().optional(),
+  postalCode: z.string().optional(),
+  city: z.string().optional(),
+  province: z.string().optional(),
+  country: z.string().optional(),
   category: z.string().optional().default('Varios'),
 });
 
