@@ -24,7 +24,10 @@ export const createMediaPremiumBlocks = (editor: Editor) => {
             {
               tagName: 'div',
               classes: ['premium-gallery-header'],
-              components: [{ tagName: 'h2', classes: ['premium-gallery-title'], content: 'Nuestra Galería' }]
+              components: [
+                { tagName: 'h2', classes: ['premium-gallery-title'], content: 'Nuestra Galería' },
+                { tagName: 'p', content: 'Explora nuestros espacios y momentos', style: { color: 'rgba(255,255,255,0.4)', fontSize: '0.95rem', marginTop: '0.5rem', fontWeight: '400' } }
+              ]
             },
             {
               type: 'gallery-grid',
