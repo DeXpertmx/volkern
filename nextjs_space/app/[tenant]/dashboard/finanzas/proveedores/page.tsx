@@ -1,15 +1,46 @@
 'use client'
 
+import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Search, Building2, Phone, Mail, Globe } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Plus, Search, Building2, Phone, Mail, Calendar, CreditCard, Tag } from "lucide-react"
 import useSWR from "swr"
+import { toast } from "sonner"
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
 export default function ProveedoresPage() {
-  const { data: suppliers, isLoading } = useSWR('/api/erp/suppliers', fetcher)
+  const { data: suppliers, isLoading, mutate } = useSWR('/api/erp/suppliers', fetcher)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [detailSupplier, setDetailSupplier] = useState<any>(null)
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState({ name: '', taxId: '', email: '', phone: '', category: 'Varios' })
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault()
+    if (!form.name.trim()) return
+    setSaving(true)
+    try {
+      const res = await fetch('/api/erp/suppliers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form)
+      })
+      if (!res.ok) throw new Error()
+      toast.success('Proveedor creado correctamente')
+      setCreateOpen(false)
+      setForm({ name: '', taxId: '', email: '', phone: '', category: 'Varios' })
+      mutate()
+    } catch {
+      toast.error('Error al crear proveedor')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -18,10 +49,56 @@ export default function ProveedoresPage() {
           <h1 className="text-3xl font-black tracking-tight uppercase">Base de Proveedores</h1>
           <p className="text-muted-foreground">Directorio centralizado de partners y suministradores.</p>
         </div>
-        <Button className="rounded-xl font-bold uppercase text-xs tracking-wider">
+        <Button onClick={() => setCreateOpen(true)} className="rounded-xl font-bold uppercase text-xs tracking-wider">
           <Plus className="w-4 h-4 mr-2" /> Nuevo Proveedor
         </Button>
       </div>
+
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="sm:max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-black tracking-tight uppercase">Nuevo Proveedor</DialogTitle>
+            <DialogDescription>Registra un nuevo socio o suministrador en tu base.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreate} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-[11px] font-bold uppercase tracking-widest">Nombre *</Label>
+              <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Razón social o nombre comercial" className="rounded-xl" required />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[11px] font-bold uppercase tracking-widest">RFC / CIF</Label>
+              <Input value={form.taxId} onChange={e => setForm({ ...form, taxId: e.target.value })} placeholder="Ej: XAXX010101000" className="rounded-xl" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-bold uppercase tracking-widest">Email</Label>
+                <Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="correo@ejemplo.com" className="rounded-xl" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-bold uppercase tracking-widest">Teléfono</Label>
+                <Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="+34 600 000 000" className="rounded-xl" />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[11px] font-bold uppercase tracking-widest">Categoría</Label>
+              <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} className="w-full bg-background border rounded-xl px-4 py-2.5 text-sm font-medium outline-none">
+                <option value="Varios">Varios</option>
+                <option value="Software">Software</option>
+                <option value="Marketing">Marketing</option>
+                <option value="Logística">Logística</option>
+                <option value="Consultoría">Consultoría</option>
+                <option value="Hosting">Hosting</option>
+              </select>
+            </div>
+            <DialogFooter className="pt-2">
+              <Button type="button" variant="ghost" onClick={() => setCreateOpen(false)} className="rounded-xl">Cancelar</Button>
+              <Button type="submit" disabled={saving || !form.name.trim()} className="rounded-xl font-bold uppercase text-xs tracking-wider">
+                {saving ? 'Guardando...' : 'Guardar Proveedor'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <div className="md:col-span-2 relative">
@@ -72,7 +149,7 @@ export default function ProveedoresPage() {
                          €{supplier.balance.toFixed(2)}
                        </p>
                     </div>
-                    <Button variant="ghost" size="sm" className="rounded-lg text-primary font-bold">Detalle</Button>
+                    <Button variant="ghost" size="sm" className="rounded-lg text-primary font-bold" onClick={() => setDetailSupplier(supplier)}>Detalle</Button>
                  </div>
                </CardContent>
             </Card>
@@ -84,6 +161,48 @@ export default function ProveedoresPage() {
           </div>
         )}
       </div>
+
+      <Dialog open={!!detailSupplier} onOpenChange={(open) => { if (!open) setDetailSupplier(null) }}>
+        <DialogContent className="sm:max-w-lg rounded-2xl">
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-1">
+              <div className="p-2.5 rounded-xl bg-primary/10 text-primary">
+                <Building2 className="w-5 h-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-xl font-black tracking-tight">{detailSupplier?.name}</DialogTitle>
+                <DialogDescription className="text-[10px] font-black uppercase tracking-widest">{detailSupplier?.taxId || 'SIN ID FISCAL'}</DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+          <div className="space-y-5">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900 space-y-1">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5"><Mail className="w-3 h-3" /> Email</p>
+                <p className="text-sm font-medium">{detailSupplier?.email || 'No especificado'}</p>
+              </div>
+              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900 space-y-1">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5"><Phone className="w-3 h-3" /> Teléfono</p>
+                <p className="text-sm font-medium">{detailSupplier?.phone || 'No especificado'}</p>
+              </div>
+              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900 space-y-1">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5"><Tag className="w-3 h-3" /> Categoría</p>
+                <p className="text-sm font-medium">{detailSupplier?.category || 'Varios'}</p>
+              </div>
+              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900 space-y-1">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5"><CreditCard className="w-3 h-3" /> Balance</p>
+                <p className={`text-sm font-black tracking-tight ${detailSupplier?.balance > 0 ? 'text-rose-500' : 'text-emerald-600'}`}>
+                  €{Number(detailSupplier?.balance || 0).toFixed(2)}
+                </p>
+              </div>
+            </div>
+            <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900 space-y-1">
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5"><Calendar className="w-3 h-3" /> Registrado</p>
+              <p className="text-sm font-medium">{new Date(detailSupplier?.createdAt).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
