@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
 import { AccountingSlotCreateSchema } from '@/lib/validation/schemas/misc';
+import { AccountingInitializer } from '@/lib/accounting/initializer';
 
 /**
  * GET /api/accounting/slots
@@ -59,7 +60,7 @@ export const POST = withTenantAuth(async (req, auth) => {
       }, { status: 400 });
     }
 
-    const { client_name, admin_email, modules_enabled } = validation.data;
+    const { client_name, admin_email, modules_enabled, accounting_plan_type, sector } = validation.data;
 
     // Normalizar nombres de módulos a uppercase
     const normalizedModules = modules_enabled?.map(m => m.toUpperCase()) || ['CRM'];
@@ -88,6 +89,8 @@ export const POST = withTenantAuth(async (req, auth) => {
       ? { ...(agency.brandingConfig as any), showPoweredBy: true }
       : { showPoweredBy: true };
 
+    const effectiveSector = sector === 'NINGUNO' ? null : sector;
+
     const newSlot = await prisma.tenant.create({
       data: {
         nombre: client_name,
@@ -98,11 +101,15 @@ export const POST = withTenantAuth(async (req, auth) => {
         brandingConfig: inheritedBranding, // Hereda branding + showPoweredBy forzado a true
         enabledModules: normalizedModules,
         plan: 'accounting-slot',
-        estado: 'activo'
+        estado: 'activo',
+        accountingPlanType: accounting_plan_type,
+        sector: effectiveSector,
       }
     });
 
-    console.log(`[Accounting] Slot '${client_name}' creado por despacho ${auth.tenant!.nombre}`);
+    await AccountingInitializer.initializeTenant(newSlot.id, accounting_plan_type, sector as any);
+
+    console.log(`[Accounting] Slot '${client_name}' creado por despacho ${auth.tenant!.nombre} (plan: ${accounting_plan_type}, sector: ${sector})`);
 
     return NextResponse.json(newSlot, { status: 201 });
 

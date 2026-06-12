@@ -13,8 +13,31 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
-import { Building2, Mail, ShieldCheck, Sparkles, Calculator, Landmark } from 'lucide-react'
+import { Building2, Mail, ShieldCheck, Sparkles, Calculator, Landmark, BookOpen } from 'lucide-react'
+
+const PGC_PLANS = [
+  { value: 'NORMAL', label: 'PGC Normal (RD 1514/2007)', desc: 'Grandes empresas (>6M€ facturación)' },
+  { value: 'PYMES', label: 'PGC Pymes (RD 1515/2007)', desc: 'Pymes (≤6M€ facturación, ≤50 empleados)' },
+  { value: 'MICRO', label: 'Microempresas', desc: 'Microempresas (≤1M€ facturación)' },
+]
+
+const SECTORS = [
+  { value: 'NINGUNO', label: 'Ninguno (PGC estándar)' },
+  { value: 'INMOBILIARIA', label: 'Inmobiliaria' },
+  { value: 'CONSTRUCTORA', label: 'Construcción' },
+  { value: 'SANITARIA', label: 'Asistencia sanitaria' },
+  { value: 'VITIVINICOLA', label: 'Vitivinícola' },
+  { value: 'TRANSPORTE_AEREO', label: 'Transporte aéreo' },
+  { value: 'ELECTRICO', label: 'Sector eléctrico' },
+  { value: 'AGUA', label: 'Sector del agua' },
+  { value: 'COOPERATIVA', label: 'Cooperativa' },
+  { value: 'SIN_FINES_LUCRO', label: 'Entidad sin fines lucrativos' },
+  { value: 'CONCESIONARIA', label: 'Concesionaria de infraestructuras' },
+  { value: 'FEDERACION_DEPORTIVA', label: 'Federación deportiva' },
+  { value: 'SAD', label: 'Sociedad anónima deportiva' },
+]
 
 interface AccountingSlotProvisioningModalProps {
   isOpen: boolean
@@ -34,7 +57,9 @@ export function AccountingSlotProvisioningModal({ isOpen, onClose, onSuccess }: 
   const [formData, setFormData] = useState({
     client_name: '',
     admin_email: '',
-    modules: ['crm']
+    modules: ['crm'],
+    accounting_plan_type: 'NORMAL',
+    sector: 'NINGUNO',
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -48,7 +73,9 @@ export function AccountingSlotProvisioningModal({ isOpen, onClose, onSuccess }: 
         body: JSON.stringify({
           client_name: formData.client_name,
           admin_email: formData.admin_email,
-          modules_enabled: formData.modules
+          modules_enabled: formData.modules,
+          accounting_plan_type: formData.accounting_plan_type,
+          sector: formData.sector,
         })
       })
 
@@ -118,6 +145,51 @@ export function AccountingSlotProvisioningModal({ isOpen, onClose, onSuccess }: 
                 required
                 className="bg-accent/30 border-primary/10 focus-visible:ring-primary"
               />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="planType" className="text-xs font-bold uppercase tracking-widest flex items-center gap-2">
+                  <BookOpen className="h-3 w-3" /> Plan Contable
+                </Label>
+                <Select
+                  value={formData.accounting_plan_type}
+                  onValueChange={(v) => setFormData({ ...formData, accounting_plan_type: v })}
+                >
+                  <SelectTrigger className="bg-accent/30 border-primary/10">
+                    <SelectValue placeholder="Seleccionar plan" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PGC_PLANS.map((p) => (
+                      <SelectItem key={p.value} value={p.value}>
+                        <span className="font-medium">{p.label}</span>
+                        <span className="text-xs text-muted-foreground ml-2">{p.desc}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="sector" className="text-xs font-bold uppercase tracking-widest flex items-center gap-2">
+                  <Building2 className="h-3 w-3" /> Sector / Giro
+                </Label>
+                <Select
+                  value={formData.sector}
+                  onValueChange={(v) => setFormData({ ...formData, sector: v })}
+                >
+                  <SelectTrigger className="bg-accent/30 border-primary/10">
+                    <SelectValue placeholder="Seleccionar sector" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SECTORS.map((s) => (
+                      <SelectItem key={s.value} value={s.value}>
+                        {s.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="grid gap-3">

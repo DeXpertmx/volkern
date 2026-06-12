@@ -11,6 +11,8 @@ const SlotCreateSchema = z.object({
   client_name: z.string().min(1, 'Nombre de cliente requerido'),
   admin_email: z.string().email('Email de admin inválido'),
   modules_enabled: z.array(z.string()).optional(),
+  accounting_plan_type: z.enum(['NORMAL', 'PYMES', 'MICRO']).optional().default('NORMAL'),
+  sector: z.string().optional().default('NINGUNO'),
 });
 
 const ALLOWED_ACCOUNT_TYPES = ['AGENCY'];
@@ -63,7 +65,7 @@ export const POST = withTenantAuth(async (req, auth) => {
       );
     }
 
-    const { client_name, admin_email, modules_enabled } = validation.data;
+    const { client_name, admin_email, modules_enabled, accounting_plan_type, sector } = validation.data;
 
     // Determinar el tipo de slot según el plan del padre
     const parentPlan = auth.tenant?.plan || '';
@@ -75,6 +77,8 @@ export const POST = withTenantAuth(async (req, auth) => {
       clientName: client_name,
       adminEmail: admin_email,
       modulesEnabled: modules_enabled,
+      accountingPlanType: accounting_plan_type,
+      sector: sector as any,
     });
 
     return NextResponse.json(newSlot, { status: 201 });

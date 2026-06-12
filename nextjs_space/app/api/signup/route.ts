@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/db'
 import { PLANS, PLAN_LIMITS, TRIAL_DAYS, getPlanConfig } from '@/lib/plans'
 import { seedFormsForTenant } from '@/scripts/seed-formularios-demo'
+import { AccountingInitializer } from '@/lib/accounting/initializer'
 
 function generateSlug(companyName: string): string {
   return companyName
@@ -295,6 +296,10 @@ export async function POST(request: NextRequest) {
     seedFormsForTenant(result.tenant.id, { prisma }).catch(err => {
       console.error('[Signup] Error seeding demo forms:', err.message);
     });
+
+    AccountingInitializer.initializeTenant(result.tenant.id, 'NORMAL', 'NINGUNO').catch(err =>
+      console.error('[Signup] Error initializing chart of accounts:', err.message)
+    );
 
     return NextResponse.json({
       success: true,

@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Table,
   TableBody,
@@ -625,7 +626,26 @@ function CreateSlotModal({
     client_name: '',
     admin_email: '',
     modules: ['CONTABILIDAD'] as string[],
+    accounting_plan_type: 'NORMAL',
+    sector: 'NINGUNO',
   })
+
+  const PGC_PLANS = [
+    { value: 'NORMAL', label: 'PGC Normal', desc: 'Grandes empresas' },
+    { value: 'PYMES', label: 'PGC Pymes', desc: 'Pymes' },
+    { value: 'MICRO', label: 'Microempresas', desc: 'Microempresas' },
+  ]
+
+  const SECTORS = [
+    { value: 'NINGUNO', label: 'Ninguno (estándar)' },
+    { value: 'INMOBILIARIA', label: 'Inmobiliaria' },
+    { value: 'CONSTRUCTORA', label: 'Construcción' },
+    { value: 'SANITARIA', label: 'Sanitaria' },
+    { value: 'VITIVINICOLA', label: 'Vitivinícola' },
+    { value: 'COOPERATIVA', label: 'Cooperativa' },
+    { value: 'SIN_FINES_LUCRO', label: 'Sin fines lucrativos' },
+    { value: 'SAD', label: 'Sociedad anónima deportiva' },
+  ]
 
   const AVAILABLE_MODULES = [
     { id: 'CONTABILIDAD', label: 'Contabilidad Core', default: true },
@@ -660,12 +680,14 @@ function CreateSlotModal({
           client_name: formData.client_name.trim(),
           admin_email: formData.admin_email.trim(),
           modules_enabled: formData.modules,
+          accounting_plan_type: formData.accounting_plan_type,
+          sector: formData.sector,
         }),
       })
       const data = await res.json()
       if (res.ok) {
         toast.success(`Empresa "${formData.client_name}" creada con éxito`)
-        setFormData({ client_name: '', admin_email: '', modules: ['CONTABILIDAD'] })
+        setFormData({ client_name: '', admin_email: '', modules: ['CONTABILIDAD'], accounting_plan_type: 'NORMAL', sector: 'NINGUNO' })
         onSuccess()
       } else {
         toast.error(data.error || 'Error al crear empresa')
@@ -727,6 +749,43 @@ function CreateSlotModal({
                 required
                 className="bg-accent/30 border-emerald-500/10 focus-visible:ring-emerald-500"
               />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label className="text-xs font-bold uppercase tracking-widest">Plan Contable</Label>
+                <Select
+                  value={formData.accounting_plan_type}
+                  onValueChange={(v) => setFormData({ ...formData, accounting_plan_type: v })}
+                >
+                  <SelectTrigger className="bg-accent/30 border-emerald-500/10">
+                    <SelectValue placeholder="Seleccionar plan" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PGC_PLANS.map((p) => (
+                      <SelectItem key={p.value} value={p.value}>
+                        {p.label} <span className="text-xs text-muted-foreground">({p.desc})</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label className="text-xs font-bold uppercase tracking-widest">Sector / Giro</Label>
+                <Select
+                  value={formData.sector}
+                  onValueChange={(v) => setFormData({ ...formData, sector: v })}
+                >
+                  <SelectTrigger className="bg-accent/30 border-emerald-500/10">
+                    <SelectValue placeholder="Seleccionar sector" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SECTORS.map((s) => (
+                      <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="grid gap-3">
