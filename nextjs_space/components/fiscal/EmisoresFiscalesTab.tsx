@@ -11,7 +11,7 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Building2, Star, MapPin, Phone, Mail } from 'lucide-react';
+import { Plus, Pencil, Trash2, Building2, Star, MapPin, Phone, Mail, ShieldCheck, ShieldAlert, Upload, KeyRound } from 'lucide-react';
 
 interface Emisor {
   id: string;
@@ -37,6 +37,8 @@ interface Emisor {
   esPrincipal: boolean;
   verifactuEnabled: boolean;
   activo: boolean;
+  certFingerprint?: string | null;
+  certExpiresAt?: string | null;
 }
 
 const PAISES = [
@@ -89,6 +91,10 @@ export default function EmisoresFiscalesTab({ onUpdate }: Props) {
     verifactuEnabled: false,
     activo: true
   });
+
+  const [certFileBase64, setCertFileBase64] = useState<string | null>(null)
+  const [certPassword, setCertPassword] = useState('')
+  const [certFileName, setCertFileName] = useState('')
 
   useEffect(() => {
     fetchEmisores();
@@ -160,6 +166,11 @@ export default function EmisoresFiscalesTab({ onUpdate }: Props) {
         activo: formData.activo
       };
 
+      if (certFileBase64) {
+        (payload as any).certP12 = certFileBase64
+        ;(payload as any).certPassword = certPassword
+      }
+
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
@@ -226,8 +237,23 @@ export default function EmisoresFiscalesTab({ onUpdate }: Props) {
     setDialogOpen(true);
   };
 
+  const handleCertFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setCertFileName(file.name)
+    const reader = new FileReader()
+    reader.onload = () => {
+      const base64 = (reader.result as string).split(',')[1]
+      setCertFileBase64(base64)
+    }
+    reader.readAsDataURL(file)
+  }
+
   const resetForm = () => {
     setEditingEmisor(null);
+    setCertFileBase64(null)
+    setCertPassword('')
+    setCertFileName('')
     setFormData({
       razonSocial: '',
       nombreComercial: '',
@@ -421,6 +447,65 @@ export default function EmisoresFiscalesTab({ onUpdate }: Props) {
                   />
                 </div>
 
+                <div className="col-span-2 border-t pt-4 mt-2">
+                  <h4 className="font-medium mb-3 text-sm text-muted-foreground flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4" /> Certificado Digital (AEAT Veri*factu)
+                  </h4>
+                  {editingEmisor && editingEmisor.certFingerprint && (
+                    <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 mb-3">
+                      <div className="flex items-center gap-2 text-sm text-emerald-700 font-medium">
+                        <ShieldCheck className="h-4 w-4" />
+                        Certificado instalado
+                      </div>
+                      <p className="text-xs text-emerald-600 mt-1 font-mono">
+                        Huella: {editingEmisor.certFingerprint.substring(0, 20)}...
+                      </p>
+                      {editingEmisor.certExpiresAt && (
+                        <p className="text-xs text-emerald-600">
+                          Válido hasta: {new Date(editingEmisor.certExpiresAt).toLocaleDateString('es-ES')}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Archivo .p12 / .pfx</Label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="file"
+                          accept=".p12,.pfx"
+                          onChange={handleCertFile}
+                          className="text-xs"
+                        />
+                      </div>
+                      {certFileName && (
+                        <p className="text-xs text-emerald-600 font-medium">
+                          <Upload className="h-3 w-3 inline mr-1" />
+                          {certFileName}
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Contraseña del Certificado</Label>
+                      <div className="relative">
+                        <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          type="password"
+                          value={certPassword}
+                          onChange={(e) => setCertPassword(e.target.value)}
+                          placeholder="Contraseña del .p12/.pfx"
+                          className="pl-9"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  {certFileBase64 && (
+                    <p className="text-xs text-amber-600 mt-2">
+                      ⚠ El certificado se enviará al guardar. Asegúrate de que la contraseña es correcta.
+                    </p>
+                  )}
+                </div>
+
                 <div className="col-span-2 flex items-center gap-6 pt-4 border-t mt-2">
                   <div className="flex items-center gap-2">
                     <Switch
@@ -497,12 +582,21 @@ export default function EmisoresFiscalesTab({ onUpdate }: Props) {
                           <p className="text-sm text-muted-foreground">{emisor.regimenFiscal}</p>
                         )}
                       </div>
-                      <div className="flex gap-2 mt-3">
+                      <div className="flex gap-2 mt-3 flex-wrap">
                         <Badge variant="outline">{getPaisName(emisor.pais)}</Badge>
                         <Badge variant="outline">{emisor.monedaPredeterminada || emisor.monedaPorDefecto}</Badge>
                         <Badge variant={emisor.activo ? 'default' : 'secondary'}>
                           {emisor.activo ? 'Activo' : 'Inactivo'}
                         </Badge>
+                        {emisor.verifactuEnabled && (
+                          <Badge variant={emisor.certFingerprint ? 'default' : 'outline'} className={emisor.certFingerprint ? 'bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100' : 'text-amber-600 border-amber-200 bg-amber-50'}>
+                            {emisor.certFingerprint ? (
+                              <><ShieldCheck className="h-3 w-3 mr-1" /> Cert. OK</>
+                            ) : (
+                              <><ShieldAlert className="h-3 w-3 mr-1" /> Sin Cert.</>
+                            )}
+                          </Badge>
+                        )}
                       </div>
                       {(emisor.ciudad || emisor.telefono || emisor.email) && (
                         <div className="mt-3 pt-3 border-t text-sm text-muted-foreground space-y-1">

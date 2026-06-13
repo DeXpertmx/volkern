@@ -106,7 +106,8 @@ export async function PATCH(
       'razonSocial', 'nombreComercial', 'pais', 'tipoIdFiscal', 'idFiscal',
       'regimenFiscal', 'direccion', 'ciudad', 'estadoProvincia', 'codigoPostal',
       'telefono', 'email', 'sitioWeb', 'monedaPredeterminada', 'serieFactura',
-      'siguienteNumero', 'logoUrl', 'colorPrimario', 'esPrincipal', 'verifactuEnabled', 'activo'
+      'siguienteNumero', 'logoUrl', 'colorPrimario', 'esPrincipal', 'verifactuEnabled', 'activo',
+      'certP12', 'certPassword', 'certFingerprint', 'certExpiresAt'
     ]
 
     for (const campo of camposPermitidos) {

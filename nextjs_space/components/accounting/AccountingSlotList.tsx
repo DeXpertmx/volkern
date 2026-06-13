@@ -12,7 +12,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ExternalLink, MoreVertical, ShieldCheck, Mail, Building2, Calculator } from 'lucide-react'
+import { ExternalLink, MoreVertical, ShieldCheck, Mail, Building2, Calculator, Database } from 'lucide-react'
 import { 
   DropdownMenu,
   DropdownMenuContent,
@@ -42,6 +42,25 @@ export function AccountingSlotList({ isLoading: parentLoading }: { isLoading?: b
 
     fetchSlots()
   }, [])
+
+  const [seedingSlot, setSeedingSlot] = useState<string | null>(null)
+
+  const handleSeedDemo = async (slotId: string, slotName: string) => {
+    setSeedingSlot(slotId)
+    try {
+      const res = await fetch(`/api/accounting/slots/${slotId}/seed-demo`, { method: 'POST' })
+      if (res.ok) {
+        toast.success(`Datos demo cargados en ${slotName}`)
+      } else {
+        const err = await res.json()
+        toast.error(err.error || 'Error al cargar datos demo')
+      }
+    } catch {
+      toast.error('Error de conexión')
+    } finally {
+      setSeedingSlot(null)
+    }
+  }
 
   const handleImpersonate = async (slotId: string, slotName: string) => {
     try {
@@ -147,6 +166,9 @@ export function AccountingSlotList({ isLoading: parentLoading }: { isLoading?: b
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      <DropdownMenuItem className="text-xs font-bold uppercase" onClick={() => handleSeedDemo(slot.id, slot.nombre)} disabled={seedingSlot === slot.id}>
+                        <Database className="mr-2 h-3 w-3" /> {seedingSlot === slot.id ? 'Cargando...' : 'Cargar Datos Demo'}
+                      </DropdownMenuItem>
                       <DropdownMenuItem className="text-xs font-bold uppercase">
                         <Mail className="mr-2 h-3 w-3" /> Contactar Admin
                       </DropdownMenuItem>
