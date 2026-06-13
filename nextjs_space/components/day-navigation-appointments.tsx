@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Calendar, Clock, ChevronLeft, ChevronRight, Loader2, Link2 } from 'lucide-react'
-import { format, addDays, isSameDay } from 'date-fns'
+import { format, addDays, isSameDay, startOfDay } from 'date-fns'
 import { es } from 'date-fns/locale'
 import Link from 'next/link'
 
