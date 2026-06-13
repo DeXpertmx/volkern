@@ -36,7 +36,13 @@ export const createCommercePremiumBlocks = (editor: Editor) => {
           { type: 'text', label: 'Moneda', name: 'data-currency', value: 'EUR' },
         ],
         components: `
-          <div class="premium-payment-wrap">
+          <style>
+.premium-payment-wrap { display: flex; justify-content: center; padding: 24px 0; }
+.premium-payment-btn { display: inline-flex; align-items: center; gap: 12px; padding: 16px 32px; background: #6366f1; color: white; font-size: 16px; font-weight: 700; border: none; border-radius: 12px; cursor: pointer; transition: all 0.2s; }
+.premium-payment-btn:hover { background: #4f46e5; }
+.payment-logo { height: 24px; }
+</style>
+           <div class="premium-payment-wrap">
             <button class="premium-payment-btn payment-stripe" data-v-btn>
               <span data-v-text>Pagar 49.00 EUR</span>
               <img class="payment-logo" data-v-logo src="https://upload.wikimedia.org/wikipedia/commons/b/ba/Stripe_Logo%2C_revised_2016.svg">

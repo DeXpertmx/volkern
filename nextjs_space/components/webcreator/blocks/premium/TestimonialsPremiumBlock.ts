@@ -26,7 +26,21 @@ export const createTestimonialsPremiumBlock = (editor: Editor) => {
           { type: 'text', label: 'Autor 2', name: 'data-s1-author' },
         ],
         components: `
-          <section class="premium-testimonials-section">
+          <style>
+.premium-testimonials-section { padding: 80px 24px; background: white; }
+.premium-testimonials-header { text-align: center; max-width: 700px; margin: 0 auto 48px; }
+.premium-testimonials-badge { display: inline-block; background: #eef2ff; color: #6366f1; font-size: 12px; font-weight: 700; text-transform: uppercase; padding: 8px 16px; border-radius: 9999px; margin-bottom: 16px; letter-spacing: 0.5px; }
+.premium-testimonials-title { font-size: 36px; font-weight: 800; color: #1e293b; margin: 0; }
+.premium-testimonials-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; max-width: 1200px; margin: 0 auto; }
+.premium-testimonial-main { background: #f8fafc; border-radius: 16px; padding: 40px; }
+.premium-testimonial-quote { font-size: 20px; color: #1e293b; font-weight: 600; line-height: 1.6; margin: 0 0 24px; font-style: italic; }
+.premium-testimonial-author-info h4 { font-size: 16px; font-weight: 700; color: #1e293b; margin: 0; }
+.premium-testimonial-author-info p { font-size: 14px; color: #475569; margin: 4px 0 0; }
+.premium-testimonials-sidebar { display: flex; flex-direction: column; gap: 24px; }
+.premium-testimonial-small { background: #f8fafc; border-radius: 16px; padding: 24px; }
+.premium-testimonial-small-quote { font-size: 15px; color: #475569; line-height: 1.6; margin: 0 0 16px; font-style: italic; }
+</style>
+           <section class="premium-testimonials-section">
             <div class="premium-testimonials-header">
               <div class="premium-testimonials-badge">Confianza Elite</div>
               <h2 class="premium-testimonials-title">Respaldado por líderes locales.</h2>

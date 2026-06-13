@@ -28,7 +28,27 @@ export const createPricingPremiumBlock = (editor: Editor) => {
           { type: 'text', label: 'Moneda', name: 'data-currency', value: '$' },
         ],
         components: `
-          <section class="premium-pricing-section">
+          <style>
+.premium-pricing-section { padding: 80px 24px; background: #f8fafc; }
+.premium-pricing-header { text-align: center; max-width: 700px; margin: 0 auto 48px; }
+.premium-pricing-badge { display: inline-block; background: #eef2ff; color: #6366f1; font-size: 12px; font-weight: 700; text-transform: uppercase; padding: 8px 16px; border-radius: 9999px; margin-bottom: 16px; letter-spacing: 0.5px; }
+.premium-pricing-title { font-size: 36px; font-weight: 800; color: #1e293b; margin: 0 0 12px; }
+.premium-pricing-desc { font-size: 16px; color: #475569; line-height: 1.6; margin: 0; }
+.premium-pricing-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; max-width: 1200px; margin: 0 auto; }
+.premium-pricing-card { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 32px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; flex-direction: column; }
+.premium-pricing-card.featured { border-color: #6366f1; border-width: 2px; position: relative; }
+.premium-pricing-card.featured::before { content: 'MAS POPULAR'; position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: #6366f1; color: white; font-size: 11px; font-weight: 700; text-transform: uppercase; padding: 4px 16px; border-radius: 9999px; letter-spacing: 1px; }
+.premium-plan-name { font-size: 14px; font-weight: 700; color: #6366f1; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+.premium-plan-price { font-size: 40px; font-weight: 800; color: #1e293b; margin-bottom: 24px; }
+.premium-price-currency { font-size: 24px; vertical-align: super; }
+.premium-price-period { font-size: 16px; font-weight: 400; color: #475569; }
+.premium-pricing-features { list-style: none; padding: 0; margin: 0 0 32px; display: flex; flex-direction: column; gap: 12px; }
+.premium-pricing-features li { display: flex; align-items: center; gap: 8px; font-size: 15px; color: #475569; }
+.premium-plan-btn { width: 100%; background: #6366f1; color: white; font-weight: 700; font-size: 16px; padding: 14px; border: none; border-radius: 12px; cursor: pointer; margin-top: auto; transition: all 0.2s; }
+.premium-plan-btn:hover { background: #4f46e5; }
+.premium-pricing-card.featured .premium-plan-btn { background: #6366f1; }
+</style>
+           <section class="premium-pricing-section">
             <div class="premium-pricing-header">
               <div class="premium-pricing-badge">Planes de Inversión</div>
               <h2 class="premium-pricing-title">Escala con total transparencia.</h2>

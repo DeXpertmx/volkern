@@ -24,7 +24,12 @@ export const createElementPremiumBlocks = (editor: Editor) => {
           { type: 'text', label: 'Mensaje', name: 'data-text', value: '4.9/5 basado en 2k reseñas' },
         ],
         components: `
-          <div class="premium-rating-wrap">
+          <style>
+.premium-rating-wrap { display: flex; align-items: center; gap: 12px; padding: 16px 0; }
+.premium-stars { display: flex; gap: 2px; color: #f59e0b; }
+.premium-rating-text { font-size: 14px; color: #475569; }
+</style>
+           <div class="premium-rating-wrap">
             <div class="premium-stars" data-v-stars>
             </div>
             <div class="premium-rating-text" data-v-text>4.9/5 basado en 2k reseñas</div>
@@ -96,7 +101,13 @@ export const createElementPremiumBlocks = (editor: Editor) => {
           { type: 'color', label: 'Color Icono', name: 'data-color' },
         ],
         components: `
-          <ul class="premium-icon-list">
+          <style>
+.premium-icon-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
+.premium-list-item { display: flex; align-items: center; gap: 12px; font-size: 15px; color: #475569; }
+.premium-list-icon { flex-shrink: 0; display: flex; }
+.premium-list-text { }
+</style>
+           <ul class="premium-icon-list">
             <div data-v-items>
             </div>
           </ul>
@@ -168,7 +179,14 @@ export const createElementPremiumBlocks = (editor: Editor) => {
           { type: 'textarea', label: 'Descripción', name: 'data-desc' },
         ],
         components: `
-          <div class="premium-image-box">
+          <style>
+.premium-image-box { background: white; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+.premium-box-img { width: 100%; height: 240px; object-fit: cover; display: block; }
+.premium-box-content { padding: 24px; }
+.premium-box-title { font-size: 20px; font-weight: 700; color: #1e293b; margin: 0 0 8px; }
+.premium-box-desc { font-size: 14px; color: #475569; line-height: 1.6; margin: 0; }
+</style>
+           <div class="premium-image-box">
             <img class="premium-box-img" data-v-img src="https://images.unsplash.com/photo-1542744173-8e7e53415bb0?auto=format&fit=crop&w=800&q=80">
             <div class="premium-box-content">
               <h3 class="premium-box-title" data-v-title>Nombre del Proyecto</h3>
@@ -227,7 +245,11 @@ export const createElementPremiumBlocks = (editor: Editor) => {
           { type: 'number', label: 'Margen V (px)', name: 'data-margin', min: 0, max: 100, value: 20 },
         ],
         components: `
-          <div class="premium-divider-container">
+          <style>
+.premium-divider-container { display: flex; justify-content: center; }
+.premium-divider-line { border: 0; }
+</style>
+           <div class="premium-divider-container">
             <div class="premium-divider-line" data-v-line></div>
           </div>
         `,

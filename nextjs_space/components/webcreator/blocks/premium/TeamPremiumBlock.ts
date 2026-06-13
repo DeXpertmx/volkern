@@ -19,7 +19,23 @@ export const createTeamPremiumBlock = (editor: Editor) => {
     model: {
       defaults: {
         components: `
-          <section class="premium-team-section">
+          <style>
+.premium-team-section { padding: 80px 24px; background: #f8fafc; }
+.premium-team-header { text-align: center; max-width: 700px; margin: 0 auto 48px; }
+.premium-team-badge { display: inline-block; background: #eef2ff; color: #6366f1; font-size: 12px; font-weight: 700; text-transform: uppercase; padding: 8px 16px; border-radius: 9999px; margin-bottom: 16px; letter-spacing: 0.5px; }
+.premium-team-title { font-size: 36px; font-weight: 800; color: #1e293b; margin: 0 0 12px; }
+.premium-team-desc { font-size: 16px; color: #475569; line-height: 1.6; margin: 0; }
+.premium-team-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; max-width: 1200px; margin: 0 auto; }
+.premium-team-card { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 32px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+.premium-member-photo { width: 120px; height: 120px; border-radius: 50%; object-fit: cover; margin: 0 auto 16px; display: block; }
+.premium-member-name { display: block; font-size: 20px; font-weight: 700; color: #1e293b; margin-bottom: 4px; }
+.premium-member-role { display: block; font-size: 14px; color: #6366f1; font-weight: 600; margin-bottom: 12px; }
+.premium-member-bio { font-size: 14px; color: #475569; line-height: 1.6; margin: 0 0 16px; }
+.premium-member-social { display: flex; gap: 12px; justify-content: center; }
+.premium-social-link { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; color: #6366f1; background: #eef2ff; border-radius: 50%; transition: all 0.2s; }
+.premium-social-link:hover { background: #6366f1; color: white; }
+</style>
+           <section class="premium-team-section">
             <div class="premium-team-header">
               <div class="premium-team-badge" data-gjs-editable="true" data-gjs-selectable="true">Nuestra Élite</div>
               <h2 class="premium-team-title" data-gjs-editable="true" data-gjs-selectable="true">Mentes brillantes detrás del código.</h2>

@@ -14,21 +14,22 @@ export const createMediaPremiumBlocks = (editor: Editor) => {
       </div>
     `,
     category: "Premium",
-    content: { 
-      type: 'gallery-premium',
-      components: [
-        {
-          tagName: 'section',
-          classes: ['premium-gallery-section'],
-          components: [
-            {
-              tagName: 'div',
-              classes: ['premium-gallery-header'],
-              components: [
-                { tagName: 'h2', classes: ['premium-gallery-title'], content: 'Nuestra Galería' },
-                { tagName: 'p', content: 'Explora nuestros espacios y momentos', style: { color: 'rgba(255,255,255,0.4)', fontSize: '0.95rem', marginTop: '0.5rem', fontWeight: '400' } }
-              ]
-            },
+      content: { 
+        type: 'gallery-premium',
+        components: [
+          {
+            tagName: 'section',
+            classes: ['premium-gallery-section'],
+            components: [
+              { tagName: 'style', content: '.premium-gallery-section { padding: 80px 24px; background: #f8fafc; } .premium-gallery-header { text-align: center; margin-bottom: 48px; } .premium-gallery-title { font-size: 36px; font-weight: 800; color: #1e293b; margin: 0; } .premium-gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 24px; max-width: 1200px; margin: 0 auto; } .premium-gallery-item { border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.05); } .premium-gallery-item img { width: 100%; height: 250px; object-fit: cover; display: block; }' },
+              {
+                tagName: 'div',
+                classes: ['premium-gallery-header'],
+                components: [
+                  { tagName: 'h2', classes: ['premium-gallery-title'], content: 'Nuestra Galería' },
+                  { tagName: 'p', content: 'Explora nuestros espacios y momentos', style: { color: '#475569', fontSize: '0.95rem', marginTop: '0.5rem', fontWeight: '400' } }
+                ]
+              },
             {
               type: 'gallery-grid',
               components: [
@@ -96,25 +97,26 @@ export const createMediaPremiumBlocks = (editor: Editor) => {
       </div>
     `,
     category: "Premium",
-    content: { 
-      type: 'carousel-premium',
-      components: [
-        {
-          tagName: 'section',
-          classes: ['premium-carousel-section'],
-          components: [
-            {
-              type: 'carousel-track',
-              components: [
-                { type: 'carousel-slide', components: [{ type: 'image', classes: ['premium-carousel-img'], attributes: { src: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1200&q=80' } }] },
-                { type: 'carousel-slide', components: [{ type: 'image', classes: ['premium-carousel-img'], attributes: { src: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=1200&q=80' } }] }
-              ]
-            },
-            { tagName: 'div', classes: ['premium-carousel-nav'] }
-          ]
-        }
-      ]
-    }
+      content: { 
+        type: 'carousel-premium',
+        components: [
+          {
+            tagName: 'section',
+            classes: ['premium-carousel-section'],
+            components: [
+              { tagName: 'style', content: '.premium-carousel-section { padding: 80px 24px; background: #f8fafc; overflow: hidden; position: relative; } .premium-carousel-track { display: flex; transition: transform 0.5s ease; } .premium-carousel-slide { min-width: 100%; } .premium-carousel-img { width: 100%; height: 500px; object-fit: cover; display: block; border-radius: 16px; } .premium-carousel-nav { display: flex; gap: 8px; justify-content: center; margin-top: 24px; } .premium-carousel-dot { width: 10px; height: 10px; border-radius: 50%; background: #e2e8f0; border: none; cursor: pointer; padding: 0; transition: all 0.2s; } .premium-carousel-dot.active { background: #6366f1; width: 24px; border-radius: 5px; }' },
+              {
+                type: 'carousel-track',
+                components: [
+                  { type: 'carousel-slide', components: [{ type: 'image', classes: ['premium-carousel-img'], attributes: { src: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1200&q=80' } }] },
+                  { type: 'carousel-slide', components: [{ type: 'image', classes: ['premium-carousel-img'], attributes: { src: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=1200&q=80' } }] }
+                ]
+              },
+              { tagName: 'div', classes: ['premium-carousel-nav'] }
+            ]
+          }
+        ]
+      }
   });
 
   editor.DomComponents.addType('carousel-track', {

@@ -20,6 +20,18 @@ const TIPOS_VIA = [
   'Costanilla', 'Carrera', 'Gran Vía', 'Callejón', 'Plazuela'
 ]
 
+const PAISES = [
+  'España', 'Alemania', 'Andorra', 'Argentina', 'Bélgica', 'Bolivia',
+  'Brasil', 'Chile', 'Colombia', 'Costa Rica', 'Cuba', 'Ecuador',
+  'El Salvador', 'Francia', 'Guatemala', 'Honduras', 'Italia',
+  'México', 'Nicaragua', 'Panamá', 'Paraguay', 'Perú', 'Portugal',
+  'Puerto Rico', 'Reino Unido', 'República Dominicana', 'Uruguay',
+  'Venezuela', 'Estados Unidos', 'Canadá', 'Países Bajos', 'Suiza',
+  'Irlanda', 'Suecia', 'Noruega', 'Dinamarca', 'Finlandia', 'Austria',
+  'Polonia', 'República Checa', 'Hungría', 'Rumanía', 'Bulgaria',
+  'Grecia', 'Turquía', 'Marruecos', 'China', 'Japón', 'India'
+]
+
 function formatAddress(s: any): string {
   if (!s) return 'No especificada'
   const parts = [
@@ -140,7 +152,9 @@ export default function ProveedoresPage() {
               </div>
               <div className="space-y-1">
                 <Label className="text-[9px] text-muted-foreground font-semibold uppercase">País</Label>
-                <Input value={form.country} onChange={e => setForm({ ...form, country: e.target.value })} placeholder="España" className="rounded-xl" />
+                <select value={form.country} onChange={e => setForm({ ...form, country: e.target.value })} className="w-full bg-background border rounded-xl px-3 py-2.5 text-sm outline-none">
+                  {PAISES.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">

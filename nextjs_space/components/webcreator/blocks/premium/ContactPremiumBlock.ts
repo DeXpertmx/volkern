@@ -19,7 +19,26 @@ export const createContactPremiumBlock = (editor: Editor) => {
     model: {
       defaults: {
         components: `
-          <section class="premium-contact-section">
+          <style>
+.premium-contact-section { padding: 80px 24px; background: #f8fafc; }
+.premium-contact-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; max-width: 1200px; margin: 0 auto; }
+.premium-contact-info { }
+.premium-contact-info h2 { font-size: 36px; font-weight: 800; color: #1e293b; line-height: 1.2; margin: 0 0 16px; }
+.premium-contact-info > p { font-size: 16px; color: #475569; line-height: 1.6; margin: 0 0 32px; }
+.premium-contact-details { display: flex; flex-direction: column; gap: 20px; }
+.premium-contact-item { display: flex; align-items: center; gap: 16px; }
+.premium-contact-icon { width: 48px; height: 48px; background: #eef2ff; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #6366f1; flex-shrink: 0; }
+.premium-contact-label { display: block; font-size: 13px; color: #475569; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
+.premium-contact-val { display: block; font-size: 16px; color: #1e293b; font-weight: 600; }
+.premium-contact-form { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 32px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+.premium-form-group { margin-bottom: 20px; }
+.premium-form-label { display: block; font-size: 14px; font-weight: 600; color: #1e293b; margin-bottom: 8px; }
+.premium-input { width: 100%; padding: 12px 16px; border: 1px solid #e2e8f0; border-radius: 12px; font-size: 15px; color: #1e293b; background: white; box-sizing: border-box; }
+.premium-input:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+.premium-submit-btn { width: 100%; background: #6366f1; color: white; font-weight: 700; font-size: 16px; padding: 14px; border: none; border-radius: 12px; cursor: pointer; transition: all 0.2s; }
+.premium-submit-btn:hover { background: #4f46e5; }
+</style>
+           <section class="premium-contact-section">
             <div class="premium-contact-grid">
               <div class="premium-contact-info">
                 <h2 data-gjs-editable="true" data-gjs-selectable="true">HABLEMOS DE<br>TU FUTURO.</h2>

@@ -27,7 +27,23 @@ export const createHeroPremiumBlock = (editor: Editor) => {
           { type: 'text', label: 'Link Botón 2', name: 'data-link-2' },
         ],
         components: `
-          <section class="premium-hero-section">
+          <style>
+.premium-hero-section { padding: 80px 24px; background: #f8fafc; position: relative; overflow: hidden; }
+.premium-hero-container { max-width: 1200px; margin: 0 auto; text-align: center; position: relative; z-index: 2; }
+.premium-hero-bg-glow { position: absolute; top: -200px; left: 50%; transform: translateX(-50%); width: 600px; height: 600px; background: radial-gradient(circle, rgba(99,102,241,0.15) 0%, transparent 70%); pointer-events: none; z-index: 1; }
+.premium-hero-grid-overlay { position: absolute; inset: 0; background-image: linear-gradient(rgba(99,102,241,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(99,102,241,0.03) 1px, transparent 1px); background-size: 40px 40px; pointer-events: none; z-index: 1; }
+.premium-hero-badge { display: inline-flex; align-items: center; gap: 8px; background: #eef2ff; color: #6366f1; font-size: 12px; font-weight: 700; text-transform: uppercase; padding: 8px 16px; border-radius: 9999px; margin-bottom: 24px; letter-spacing: 0.5px; }
+.premium-hero-badge-dot { width: 8px; height: 8px; background: #6366f1; border-radius: 50%; }
+.premium-hero-badge-text { color: #6366f1; }
+.premium-hero-title { font-size: 48px; font-weight: 800; color: #1e293b; line-height: 1.1; margin: 0 0 16px; }
+.premium-hero-desc { font-size: 18px; color: #475569; line-height: 1.6; max-width: 600px; margin: 0 auto 32px; }
+.premium-hero-cta-group { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+.premium-hero-btn-primary { display: inline-block; background: #6366f1; color: white; font-weight: 700; padding: 16px 32px; border-radius: 12px; text-decoration: none; transition: all 0.2s; }
+.premium-hero-btn-primary:hover { background: #4f46e5; }
+.premium-hero-btn-secondary { display: inline-block; background: white; color: #6366f1; font-weight: 700; padding: 16px 32px; border-radius: 12px; text-decoration: none; border: 2px solid #6366f1; transition: all 0.2s; }
+.premium-hero-btn-secondary:hover { background: #f8fafc; }
+</style>
+           <section class="premium-hero-section">
             <div class="premium-hero-bg-glow"></div>
             <div class="premium-hero-grid-overlay"></div>
             <div class="premium-hero-container">
