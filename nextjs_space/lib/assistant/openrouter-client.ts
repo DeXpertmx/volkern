@@ -99,7 +99,7 @@ async function callDeepSeekV4FlashDirect(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'deepseek-ai/DeepSeek-V4-Flash',
+      model: 'deepseek-chat',
       messages,
       temperature: 0.4,
       max_tokens: 8192,
