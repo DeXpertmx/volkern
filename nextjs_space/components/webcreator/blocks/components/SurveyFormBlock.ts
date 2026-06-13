@@ -4,106 +4,6 @@ import { getIconSvg } from "../../icons/BlockIcons";
 export const createSurveyFormBlock = (editor: Editor) => {
   const bm = editor.BlockManager;
 
-  // ─── Register custom form-picker trait ────────────────────────
-  editor.TraitManager.addType('form-picker', {
-    noLabel: false,
-    createInput({ trait, component }: { trait: any; component: any }) {
-      const wrapper = document.createElement('div');
-      wrapper.style.cssText = 'position:relative;width:100%;';
-
-      const select = document.createElement('select');
-      select.setAttribute('data-trait-select', 'true');
-      select.style.cssText = `
-        width:100%;padding:8px 12px;border-radius:8px;font-size:13px;
-        border:1px solid #e2e8f0;
-        background:#fff;
-        color:#0f172a;
-        cursor:pointer;appearance:auto;
-      `;
-
-      // Loading state
-      const loadingOpt = document.createElement('option');
-      loadingOpt.value = '';
-      loadingOpt.textContent = 'Cargando formularios...';
-      loadingOpt.disabled = true;
-      select.appendChild(loadingOpt);
-      select.disabled = true;
-
-      wrapper.appendChild(select);
-
-      const currentValue = component.getAttributes()['data-form-id'] || '';
-
-      // Fetch available forms (runs in main window, so window.location.origin is correct)
-      const fetchForms = async () => {
-        try {
-          select.disabled = true;
-
-          const res = await fetch('/api/formularios', {
-            credentials: 'same-origin',
-          });
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-          const data = await res.json();
-          const forms: any[] = data.forms || [];
-
-          select.innerHTML = '';
-          select.disabled = false;
-
-          const placeholderOpt = document.createElement('option');
-          placeholderOpt.value = '';
-          placeholderOpt.textContent = '— Seleccionar formulario —';
-          select.appendChild(placeholderOpt);
-
-          forms.forEach((form: any) => {
-            const opt = document.createElement('option');
-            opt.value = form.id;
-            const subs = form._count?.submissions || 0;
-            opt.textContent = `${form.name}${subs > 0 ? ` (${subs} subs)` : ''}`;
-            if (form.id === currentValue) opt.selected = true;
-            select.appendChild(opt);
-          });
-
-          if (forms.length === 0) {
-            const emptyOpt = document.createElement('option');
-            emptyOpt.value = '';
-            emptyOpt.textContent = 'No hay formularios — creá uno en Formularios';
-            emptyOpt.disabled = true;
-            select.appendChild(emptyOpt);
-          }
-        } catch (err) {
-          console.warn('[SurveyFormBlock] Could not fetch forms:', err);
-          select.innerHTML = '<option value="">Error al cargar</option>';
-          select.disabled = false;
-        }
-      };
-
-      fetchForms();
-
-      // Handle selection change — update component attribute
-      // The MutationObserver in the script detects this change and triggers preview fetch
-      select.addEventListener('change', () => {
-        const selectedId = select.value;
-        component.addAttributes({ 'data-form-id': selectedId });
-      });
-
-      return wrapper;
-    },
-    // Sync select when component attribute changes externally (e.g. undo/redo)
-    onEvent({ component, elInput }: { component: any; elInput: HTMLDivElement }) {
-      const select = elInput.querySelector('select') as HTMLSelectElement | null;
-      if (!select) return;
-      const formId = component.getAttributes()['data-form-id'] || '';
-      if (select.value !== formId) {
-        for (const opt of Array.from(select.options)) {
-          if ((opt as HTMLOptionElement).value === formId) {
-            select.value = formId;
-            break;
-          }
-        }
-      }
-    },
-  });
-
   bm.add("volkern-survey-form", {
     label: `
       <div class="custom-block-layout">
@@ -122,9 +22,18 @@ export const createSurveyFormBlock = (editor: Editor) => {
       defaults: {
         traits: [
           {
-            type: 'form-picker',
-            label: 'Formulario',
+            type: 'text',
+            label: 'ID del Formulario',
             name: 'data-form-id',
+            placeholder: 'Pega el ID del formulario'
+          },
+          {
+            type: 'button',
+            text: 'Abrir Formularios',
+            command: (editor: Editor) => {
+              const url = `${window.location.origin}/dashboard/formularios`;
+              window.open(url, '_blank');
+            },
           },
         ],
         attributes: {
@@ -132,152 +41,91 @@ export const createSurveyFormBlock = (editor: Editor) => {
           'data-survey-json': '{}',
         },
         components: `
+          <style>
+            .survey-form-placeholder { width:100%; background:#f8fafc; border-radius:12px; }
+            .survey-placeholder-inner { display:flex; flex-direction:column; align-items:center; gap:12px; padding:32px 24px; }
+            .survey-placeholder-icon { opacity:0.7; }
+            .survey-placeholder-title { font-size:1.15rem; font-weight:700; color:#1e293b; margin:0; }
+            .survey-placeholder-desc { font-size:0.8rem; color:#64748b; margin:0; text-align:center; }
+            .survey-placeholder-badge { display:inline-flex; align-items:center; gap:6px; background:rgba(99,102,241,0.1); color:#6366f1; font-size:0.7rem; font-weight:600; padding:5px 12px; border-radius:20px; margin-top:2px; }
+            .survey-placeholder-fields { width:100%; max-width:360px; display:flex; flex-direction:column; gap:8px; padding:16px 0; }
+            .survey-mock-field { width:100%; height:40px; background:#fff; border:1px solid #e2e8f0; border-radius:8px; display:flex; align-items:center; padding:0 12px; position:relative; }
+            .survey-mock-field.required::after { content:'*'; position:absolute; right:12px; color:#ef4444; font-size:0.8rem; }
+            .survey-mock-field.short { width:60%; }
+            .survey-mock-label { font-size:0.65rem; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-weight:500; }
+            .survey-mock-btn { width:100%; max-width:360px; padding:11px 24px; background:linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff; border:none; border-radius:10px; font-weight:600; font-size:0.85rem; text-align:center; cursor:pointer; }
+            .survey-mock-more { font-size:0.7rem; color:#6366f1; text-align:center; padding:4px 0; }
+            .survey-form-error { display:none; padding:24px; text-align:center; }
+            .survey-form-error-icon { color:#ef4444; margin-bottom:8px; }
+            .survey-form-error-text { font-size:0.85rem; color:#dc2626; margin:0; }
+          </style>
           <div class="survey-form-placeholder">
-            <div class="survey-placeholder-inner">
+            <div class="survey-placeholder-inner" data-v-placeholder>
               <div class="survey-placeholder-icon">
                 <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M17 2v4"/><path d="M7 2v4"/><path d="M2 10h20"/></svg>
               </div>
               <h3 class="survey-placeholder-title">Formulario Inteligente</h3>
-              <p class="survey-placeholder-desc">Selecciona un formulario en el panel de Propiedades (⚙️)</p>
-              <div class="survey-placeholder-fields">
+              <p class="survey-placeholder-desc">Configura el <strong>ID del Formulario</strong> en el panel <strong>Propiedades (⚙️)</strong></p>
+              <div class="survey-placeholder-badge">📋 Crear formularios en el menú Formularios</div>
+              <div class="survey-placeholder-fields" data-v-fields>
                 <div class="survey-mock-field"></div>
                 <div class="survey-mock-field short"></div>
                 <div class="survey-mock-field"></div>
               </div>
               <button class="survey-mock-btn">Enviar</button>
             </div>
+            <div class="survey-form-error" data-v-error>
+              <div class="survey-form-error-icon">
+                <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+              </div>
+              <p class="survey-form-error-text">Error al cargar el formulario. Verifica el ID.</p>
+            </div>
           </div>
         `,
         script: function(this: any) {
           const el = this;
-          const isAlreadyRendered = !!el.getAttribute('data-rendered');
-
-          if (!isAlreadyRendered) {
-            // ─── PUBLISHED PAGE MODE: Render the actual SurveyJS form ────
-            const surveyJson = el.getAttribute('data-survey-json');
-            const formId = el.getAttribute('data-form-id');
-
-            if (!surveyJson || surveyJson === '{}' || !surveyJson.includes('"pages"')) {
-              // No valid survey data → show placeholder (editor preview will update it)
-              el.setAttribute('data-rendered', 'editor-preview');
-              const titleEl = el.querySelector('.survey-placeholder-title');
-              if (titleEl) {
-                if (formId) {
-                  titleEl.innerText = 'Formulario #' + formId;
-                }
-              }
-            } else {
-              // Valid survey data → render the form
-              el.innerHTML = '<div style="padding:24px;text-align:center;color:#64748b;font-family:system-ui">Cargando formulario...</div>';
-
-              const loadScript = (src: string): Promise<void> => {
-                return new Promise((resolve, reject) => {
-                  const s = document.createElement('script');
-                  s.src = src;
-                  s.onload = () => resolve();
-                  s.onerror = () => reject(new Error('Failed to load ' + src));
-                  document.head.appendChild(s);
-                });
-              };
-
-              const loadStylesheet = (href: string): Promise<void> => {
-                return new Promise((resolve) => {
-                  const link = document.createElement('link');
-                  link.rel = 'stylesheet';
-                  link.href = href;
-                  link.onload = () => resolve();
-                  document.head.appendChild(link);
-                });
-              };
-
-              const initForm = async () => {
-                try {
-                  await loadStylesheet('https://unpkg.com/survey-core@1.12.44/defaultV2.min.css');
-                  await loadScript('https://unpkg.com/survey-core@1.12.44/survey.core.min.js');
-
-                  const SurveyJS = (window as any).Survey;
-                  if (!SurveyJS?.Model) throw new Error('SurveyJS not loaded');
-
-                  const model = new SurveyJS.Model(JSON.parse(surveyJson));
-                  model.locale = 'es';
-
-                  if (formId) {
-                    const submitUrl = `${window.location.origin}/api/formularios/${formId}/submit`;
-                    model.onComplete.add(async (sender: any) => {
-                      try {
-                        await fetch(submitUrl, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ payload: sender.data }),
-                        });
-                      } catch (e) { /* silent */ }
-                    });
-                  }
-
-                  el.innerHTML = '';
-                  el.style.background = 'transparent';
-                  el.style.border = 'none';
-                  el.style.padding = '16px';
-                  el.style.minHeight = 'auto';
-
-                  const container = document.createElement('div');
-                  container.style.maxWidth = '640px';
-                  container.style.margin = '0 auto';
-                  el.appendChild(container);
-                  model.render(container);
-                  el.setAttribute('data-rendered', 'form');
-                } catch (e) {
-                  console.error('[SurveyFormBlock] Init error:', e);
-                  el.innerHTML = '<div style="padding:24px;text-align:center;color:#ef4444;font-family:system-ui">Error al cargar el formulario. Verifica el ID en el dashboard.</div>';
-                }
-              };
-
-              initForm();
-              return; // Don't run editor preview code
-            }
-          }
-
-          // ─── EDITOR PREVIEW MODE ─────────────────────────────────────
-          // This runs only when data-rendered is already set (= editor context)
-          // or when the script first runs with empty survey data
-          const formId = el.getAttribute('data-form-id');
+          const placeholderEl = el.querySelector('[data-v-placeholder]');
+          const fieldsContainer = el.querySelector('[data-v-fields]');
+          const errorEl = el.querySelector('[data-v-error]');
           const titleEl = el.querySelector('.survey-placeholder-title');
           const descEl = el.querySelector('.survey-placeholder-desc');
+          const badgeEl = el.querySelector('.survey-placeholder-badge');
 
-          if (!titleEl) return;
+          const isAlreadyRendered = el.getAttribute('data-rendered');
 
-          if (!formId) {
-            // Keep the default placeholder HTML text — already shows "Selecciona un formulario en el panel de Propiedades (⚙️)"
-            if (descEl) descEl.innerText = 'Selecciona un formulario en el panel de Propiedades (⚙️)';
-            return;
-          }
+          if (isAlreadyRendered === 'form') return;
 
-          titleEl.innerText = 'Formulario #' + formId;
-          if (descEl) descEl.innerText = 'El formulario se cargará al publicar la página';
+          const renderForm = async (formId: string) => {
+            if (!formId) {
+              if (placeholderEl) placeholderEl.style.display = '';
+              if (errorEl) errorEl.style.display = 'none';
+              if (titleEl) titleEl.innerText = 'Formulario Inteligente';
+              if (descEl) descEl.innerHTML = 'Configura el <strong>ID del Formulario</strong> en el panel <strong>Propiedades (⚙️)</strong>';
+              if (badgeEl) badgeEl.style.display = '';
+              return;
+            }
 
-          const fetchPreview = async () => {
+            if (titleEl) titleEl.innerText = 'Cargando...';
+            if (descEl) descEl.innerText = 'Obteniendo formulario...';
+            if (badgeEl) badgeEl.style.display = 'none';
+            if (errorEl) errorEl.style.display = 'none';
+
             try {
-              let origin = '';
-              try {
-                origin = (window.parent.location && window.parent.location.origin !== 'null')
-                  ? window.parent.location.origin
-                  : window.location.origin;
-              } catch (e) { origin = window.location.origin; }
-              if (!origin || origin.startsWith('about')) return;
-
-              const res = await fetch(`/api/formularios/${formId}`, {
+              const res = await fetch('/api/formularios/' + formId, {
                 credentials: 'same-origin',
                 headers: { 'x-tenant-id': 'preview' }
               });
-              if (!res.ok) return;
+              if (!res.ok) throw new Error('HTTP ' + res.status);
 
-              const { form } = await res.json();
-              if (!form?.config) return;
+              const data = await res.json();
+              const form = data.form || data;
+              if (!form?.config?.pages) throw new Error('Sin configuración');
 
               el.setAttribute('data-survey-json', JSON.stringify(form.config));
-              titleEl.innerText = form.name || 'Formulario';
 
-              const fieldsContainer = el.querySelector('.survey-placeholder-fields');
+              if (titleEl) titleEl.innerText = form.name || 'Formulario';
+              if (descEl) descEl.innerText = 'Formulario configurado correctamente';
+
               if (fieldsContainer && form.config?.pages?.[0]?.elements) {
                 fieldsContainer.innerHTML = '';
                 const elements = form.config.pages[0].elements.slice(0, 5);
@@ -298,27 +146,34 @@ export const createSurveyFormBlock = (editor: Editor) => {
                   fieldsContainer.appendChild(more);
                 }
               }
-            } catch (e) { /* silent */ }
+            } catch (e) {
+              console.warn('[SurveyFormBlock] Error loading form:', e);
+              if (titleEl) titleEl.innerText = 'Error al cargar';
+              if (descEl) descEl.innerText = 'Verifica que el ID del formulario sea correcto';
+              if (errorEl) errorEl.style.display = '';
+            }
           };
 
-          fetchPreview();
+          const formId = el.getAttribute('data-form-id') || '';
+          if (formId) renderForm(formId);
 
-          // Disconnect previous observer if script re-runs
           if ((el as any).__observer) (el as any).__observer.disconnect();
           const observer = new MutationObserver((mutations) => {
             for (const m of mutations) {
-              if (m.attributeName === 'data-form-id') fetchPreview();
+              if (m.attributeName === 'data-form-id') {
+                const newId = el.getAttribute('data-form-id') || '';
+                renderForm(newId);
+              }
             }
           });
           (el as any).__observer = observer;
           observer.observe(el, { attributes: true });
         },
         style: {
-          'min-height': '200px',
-          'background': 'linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(139, 92, 246, 0.05) 100%)',
-          'border': '1px solid rgba(99, 102, 241, 0.2)',
-          'border-radius': '16px',
-          'padding': '32px',
+          'min-height': '100px',
+          'background': '#f8fafc',
+          'border': '1px solid #e2e8f0',
+          'border-radius': '12px',
           'position': 'relative',
           'overflow': 'hidden',
         }
@@ -326,40 +181,21 @@ export const createSurveyFormBlock = (editor: Editor) => {
     },
   });
 
-  // Inject placeholder styles into the canvas
   const styleEl = document.createElement('style');
   styleEl.textContent = `
-    .survey-form-placeholder { width: 100%; min-height: 200px; }
-    .survey-placeholder-inner {
-      display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 24px;
-    }
-    .survey-placeholder-icon { opacity: 0.6; }
-    .survey-placeholder-title {
-      font-size: 1.25rem; font-weight: 700; color: #e2e8f0; margin: 0;
-    }
-    .survey-placeholder-desc { font-size: 0.85rem; color: #64748b; margin: 0; }
-    .survey-placeholder-fields {
-      width: 100%; max-width: 360px; display: flex; flex-direction: column; gap: 8px; padding: 16px 0;
-    }
-    .survey-mock-field {
-      width: 100%; height: 40px; background: rgba(30,41,59,0.6);
-      border: 1px solid rgba(71,85,105,0.3); border-radius: 8px;
-      display: flex; align-items: center; padding: 0 12px; position: relative;
-    }
-    .survey-mock-field.required::after {
-      content: '*'; position: absolute; right: 12px; color: #ef4444; font-size: 0.8rem;
-    }
-    .survey-mock-field.short { width: 60%; }
-    .survey-mock-label {
-      font-size: 0.7rem; color: #475569; text-transform: uppercase; letter-spacing: 0.5px;
-    }
-    .survey-mock-btn {
-      width: 100%; max-width: 360px; padding: 12px 24px;
-      background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white;
-      border: none; border-radius: 10px; font-weight: 600; font-size: 0.9rem;
-      text-align: center;
-    }
-    .survey-mock-more { font-size: 0.75rem; color: #6366f1; text-align: center; padding: 4px 0; }
+    .survey-form-placeholder { width:100%; background:#f8fafc; border-radius:12px; }
+    .survey-placeholder-inner { display:flex; flex-direction:column; align-items:center; gap:12px; padding:32px 24px; }
+    .survey-placeholder-icon { opacity:0.7; }
+    .survey-placeholder-title { font-size:1.15rem; font-weight:700; color:#1e293b; margin:0; }
+    .survey-placeholder-desc { font-size:0.8rem; color:#64748b; margin:0; }
+    .survey-placeholder-badge { display:inline-flex; align-items:center; gap:6px; background:rgba(99,102,241,0.1); color:#6366f1; font-size:0.7rem; font-weight:600; padding:5px 12px; border-radius:20px; margin-top:2px; }
+    .survey-placeholder-fields { width:100%; max-width:360px; display:flex; flex-direction:column; gap:8px; padding:16px 0; }
+    .survey-mock-field { width:100%; height:40px; background:#fff; border:1px solid #e2e8f0; border-radius:8px; display:flex; align-items:center; padding:0 12px; position:relative; }
+    .survey-mock-field.required::after { content:'*'; position:absolute; right:12px; color:#ef4444; font-size:0.8rem; }
+    .survey-mock-field.short { width:60%; }
+    .survey-mock-label { font-size:0.65rem; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-weight:500; }
+    .survey-mock-btn { width:100%; max-width:360px; padding:11px 24px; background:linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff; border:none; border-radius:10px; font-weight:600; font-size:0.85rem; text-align:center; cursor:pointer; }
+    .survey-mock-more { font-size:0.7rem; color:#6366f1; text-align:center; padding:4px 0; }
   `;
   editor.Canvas.getDocument().head.appendChild(styleEl);
 };

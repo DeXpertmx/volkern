@@ -53,6 +53,18 @@ export const createServicesBlock = (editor: Editor) => {
           },
         ],
         components: `
+          <style>
+          .volkern-services-section { padding: 80px 24px; background: #f8fafc; }
+          .volkern-services-grid { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+          .v-service-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); padding: 32px; display: flex; flex-direction: column; transition: box-shadow 0.3s, transform 0.3s; }
+          .v-service-card:hover { box-shadow: 0 8px 30px rgba(99,102,241,0.1); transform: translateY(-2px); }
+          .v-icon-box { width: 56px; height: 56px; background: #eef2ff; border-radius: 16px; display: flex; align-items: center; justify-content: center; margin-bottom: 20px; color: #6366f1; }
+          .v-service-title { font-size: 1.25rem; font-weight: 800; color: #1e293b; margin: 0 0 8px; }
+          .v-service-desc { font-size: 0.95rem; color: #475569; line-height: 1.6; margin: 0 0 20px; flex: 1; }
+          .v-service-price { font-size: 1.5rem; font-weight: 800; color: #6366f1; margin-bottom: 20px; }
+          .v-service-btn { background: #6366f1; color: #fff; font-weight: 700; border-radius: 12px; padding: 14px 28px; border: none; cursor: pointer; text-align: center; transition: background 0.3s, transform 0.2s; font-size: 0.95rem; }
+          .v-service-btn:hover { background: #4f46e5; transform: scale(1.02); }
+          </style>
           <section class="volkern-services-section">
             <div class="volkern-services-grid">
               <div class="v-service-card" data-v-template="service">

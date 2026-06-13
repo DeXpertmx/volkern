@@ -66,6 +66,29 @@ export const createCatalogBlock = (editor: Editor) => {
           'data-s6-label': ''
         },
         components: `
+          <style>
+          .volkern-catalog-section { padding: 80px 24px; background: #f8fafc; }
+          .volkern-catalog-grid { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 24px; }
+          .v-catalog-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); overflow: hidden; display: flex; flex-direction: column; transition: box-shadow 0.3s, transform 0.3s; }
+          .v-catalog-card:hover { box-shadow: 0 8px 30px rgba(99,102,241,0.1); transform: translateY(-2px); }
+          .v-img-container { position: relative; height: 220px; overflow: hidden; }
+          .v-img { width: 100%; height: 100%; object-fit: cover; }
+          .v-badges-top { position: absolute; top: 12px; left: 12px; display: flex; gap: 6px; }
+          .v-badge-pill { font-size: 12px; font-weight: 700; text-transform: uppercase; border-radius: 9999px; padding: 4px 12px; letter-spacing: 0.05em; }
+          .v-badge-destacado { background: #eef2ff; color: #6366f1; }
+          .v-badge-operacion { background: #eef2ff; color: #6366f1; }
+          .v-content { padding: 24px; display: flex; flex-direction: column; flex: 1; }
+          .v-title { font-size: 1.15rem; font-weight: 800; color: #1e293b; margin: 0 0 6px; }
+          .v-location { display: flex; align-items: center; gap: 4px; font-size: 0.85rem; color: #94a3b8; margin-bottom: 12px; }
+          .v-price-box { font-size: 1.5rem; font-weight: 800; color: #6366f1; margin-bottom: 12px; }
+          .v-currency { font-size: 1rem; }
+          .v-stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 20px; }
+          .v-stat-item { display: flex; align-items: center; gap: 4px; font-size: 0.8rem; color: #475569; font-weight: 500; }
+          .v-catalog-btn { background: #6366f1; color: #fff; font-weight: 700; border-radius: 12px; padding: 14px 28px; border: none; cursor: pointer; text-align: center; font-size: 0.95rem; transition: background 0.3s, transform 0.2s; margin-top: auto; }
+          .v-catalog-btn:hover { background: #4f46e5; transform: scale(1.02); }
+          .v-card-clone { display: flex; }
+          .v-dynamic-field { color: inherit; }
+          </style>
           <div class="volkern-catalog-grid" data-gjs-selectable="false" data-gjs-hoverable="false">
             <div class="v-catalog-card" data-v-template="catalog" data-gjs-selectable="false" data-gjs-hoverable="false">
               <div class="v-img-container">

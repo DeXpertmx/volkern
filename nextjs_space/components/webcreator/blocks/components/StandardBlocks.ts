@@ -73,6 +73,14 @@ export const createStandardBlocks = (editor: Editor) => {
         attributes: { class: 'v-btn' },
         components: [
           {
+            tagName: 'style',
+            content: '.v-btn{display:inline-flex;align-items:center;gap:10px;background:#6366f1;color:#fff;font-weight:700;border-radius:12px;padding:14px 28px;text-decoration:none;transition:background 0.3s,transform 0.2s;font-size:0.95rem;cursor:pointer;border:none;}.v-btn:hover{background:#4f46e5;transform:scale(1.02);}.v-icon{display:flex;align-items:center;}.v-text{font-weight:700;}.icon-right{flex-direction:row-reverse;}',
+            hoverable: false,
+            selectable: false,
+            draggable: false,
+            removable: false,
+          },
+          {
             tagName: 'span',
             attributes: { class: 'v-icon' },
             content: getIconSvg('hero', 20),

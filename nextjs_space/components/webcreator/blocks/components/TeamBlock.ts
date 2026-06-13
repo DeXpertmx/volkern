@@ -30,6 +30,16 @@ export const createTeamBlock = (editor: Editor) => {
     model: {
       defaults: {
         components: `
+          <style>
+          .volkern-team-section { padding: 80px 24px; background: #f8fafc; }
+          .volkern-team-grid { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px; }
+          .volkern-team-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); padding: 32px; text-align: center; transition: box-shadow 0.3s, transform 0.3s; }
+          .volkern-team-card:hover { box-shadow: 0 8px 30px rgba(99,102,241,0.1); transform: translateY(-2px); }
+          .volkern-team-img-wrap { margin-bottom: 16px; }
+          .volkern-team-avatar { width: 72px; height: 72px; border-radius: 50%; background: #eef2ff; color: #6366f1; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 800; margin: 0 auto; }
+          .volkern-team-name { font-size: 1.15rem; font-weight: 800; color: #1e293b; margin: 0 0 4px; }
+          .volkern-team-role { font-size: 0.9rem; color: #6366f1; font-weight: 600; }
+          </style>
           <section class="volkern-team-section">
             <div class="volkern-team-grid">
               <div style="padding: 4rem; text-align: center; color: #3D3D3D; opacity: 0.1; font-weight: 900; letter-spacing: 0.2em; text-transform: uppercase;">Invocando mentes...</div>
