@@ -29,7 +29,20 @@ export const createFeaturesPremiumBlock = (editor: Editor) => {
           { type: 'text', label: 'F3: Texto', name: 'data-f3-desc' },
         ],
         components: `
-          <section class="premium-features-section">
+          <style>
+.premium-features-section { padding: 80px 24px; background: white; }
+.premium-features-header { text-align: center; max-width: 700px; margin: 0 auto 48px; }
+.premium-features-badge { display: inline-block; background: #eef2ff; color: #6366f1; font-size: 12px; font-weight: 700; text-transform: uppercase; padding: 8px 16px; border-radius: 9999px; margin-bottom: 16px; letter-spacing: 0.5px; }
+.premium-features-title { font-size: 36px; font-weight: 800; color: #1e293b; margin: 0 0 12px; }
+.premium-features-desc { font-size: 16px; color: #475569; line-height: 1.6; margin: 0; }
+.premium-features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; max-width: 1200px; margin: 0 auto; }
+.premium-feature-card { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 32px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); transition: all 0.2s; }
+.premium-feature-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+.premium-feature-icon { width: 48px; height: 48px; background: #eef2ff; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #6366f1; margin-bottom: 20px; }
+.premium-feature-title { font-size: 20px; font-weight: 700; color: #1e293b; margin: 0 0 8px; }
+.premium-feature-text { font-size: 15px; color: #475569; line-height: 1.6; margin: 0; }
+</style>
+           <section class="premium-features-section">
             <div class="premium-features-header">
               <div class="premium-features-badge">Capacidades Elite</div>
               <h2 class="premium-features-title" data-v-title>Potencia sin límites para equipos modernos.</h2>

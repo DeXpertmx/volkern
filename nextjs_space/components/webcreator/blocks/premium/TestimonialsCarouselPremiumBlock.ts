@@ -23,7 +23,17 @@ export const createTestimonialsCarouselBlock = (editor: Editor) => {
           { type: 'textarea', label: 'Autores (separados por |)', name: 'data-authors' },
         ],
         components: `
-          <section class="premium-testimonial-carousel">
+          <style>
+.premium-testimonial-carousel { padding: 80px 24px; background: #f8fafc; max-width: 800px; margin: 0 auto; text-align: center; overflow: hidden; }
+.premium-testimonial-track { display: flex; transition: transform 0.5s ease; }
+.premium-testimonial-slide { min-width: 100%; padding: 40px; }
+.premium-testimonial-quote { font-size: 22px; color: #1e293b; font-weight: 600; line-height: 1.6; margin: 0 0 16px; font-style: italic; }
+.premium-testimonial-author { font-size: 16px; color: #6366f1; font-weight: 600; margin: 0; }
+.premium-testimonial-nav { display: flex; gap: 8px; justify-content: center; margin-top: 24px; }
+.premium-testimonial-dot { width: 10px; height: 10px; border-radius: 50%; background: #e2e8f0; border: none; cursor: pointer; padding: 0; transition: all 0.2s; }
+.premium-testimonial-dot.active { background: #6366f1; width: 24px; border-radius: 5px; }
+</style>
+           <section class="premium-testimonial-carousel">
             <div class="premium-testimonial-track" data-v-track>
               <div class="premium-testimonial-slide">
                 <blockquote class="premium-testimonial-quote">"La mejor inversión tecnológica que hemos hecho este año. Absolutamente impecable."</blockquote>

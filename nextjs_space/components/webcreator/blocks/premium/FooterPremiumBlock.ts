@@ -23,7 +23,21 @@ export const createFooterPremiumBlock = (editor: Editor) => {
           { type: 'text', label: 'Eslogan', name: 'data-tagline' },
         ],
         components: `
-          <footer class="premium-footer">
+          <style>
+.premium-footer { background: #1e293b; padding: 64px 24px 32px; }
+.premium-footer-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 40px; max-width: 1200px; margin: 0 auto; }
+.premium-footer-info { }
+.premium-footer-logo { font-size: 24px; font-weight: 800; color: white; margin-bottom: 12px; }
+.premium-footer-logo span { color: #6366f1; }
+.premium-footer-tagline { font-size: 14px; color: #94a3b8; line-height: 1.6; margin: 0; }
+.premium-footer-col-title { font-size: 14px; font-weight: 700; color: white; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 16px; }
+.premium-footer-links { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.premium-footer-links a { color: #94a3b8; text-decoration: none; font-size: 14px; transition: color 0.2s; }
+.premium-footer-links a:hover { color: white; }
+.premium-footer-bottom { max-width: 1200px; margin: 40px auto 0; padding-top: 24px; border-top: 1px solid #334155; text-align: center; }
+.premium-copyright { font-size: 13px; color: #64748b; }
+</style>
+           <footer class="premium-footer">
             <div class="premium-footer-grid">
               <div class="premium-footer-info">
                 <div class="premium-footer-logo" data-v-logo>VOLKERN<span>.</span></div>
