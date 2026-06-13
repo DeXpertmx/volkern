@@ -304,6 +304,30 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>((props, ref)
             input[type=radio] { accent-color:#6366f1; width:16px; height:16px; margin-right:6px; }
           `;
           canvasDoc.head.appendChild(formStyle);
+
+          // Estilos para el componente Navbar (grapesjs-navbar)
+          const navStyle = canvasDoc.createElement('style');
+          navStyle.textContent = `
+            .navbar { background:#fff; border-bottom:1px solid #e2e8f0; font-family:system-ui,-apple-system,sans-serif; width:100%; }
+            .navbar-container { max-width:1200px; margin:0 auto; width:95%; display:flex; align-items:center; justify-content:space-between; padding:0 16px; min-height:64px; }
+            .navbar-brand { vertical-align:middle; display:flex; align-items:center; padding:8px 12px; min-height:48px; min-width:120px; color:#1e293b; text-decoration:none; font-weight:700; font-size:1.1rem; background:rgba(99,102,241,0.06); border:1.5px dashed #c7d2fe; border-radius:8px; gap:8px; }
+            .navbar-brand::before { content:'Logo'; font-size:0.7rem; color:#818cf8; font-weight:500; letter-spacing:0.5px; text-transform:uppercase; }
+            .navbar-brand[href="/"] { color:#1e293b; }
+            .navbar-items-c { display:flex; align-items:center; }
+            .navbar-menu { display:flex; gap:4px; padding:0; margin:0; list-style:none; }
+            .navbar-menu-link { margin:0; color:#475569; text-decoration:none; display:inline-block; padding:8px 16px; border-radius:8px; font-size:0.9rem; font-weight:500; transition:background 0.2s,color 0.2s; }
+            .navbar-menu-link:hover { background:rgba(99,102,241,0.08); color:#6366f1; }
+            .navbar-burger { display:none; float:right; cursor:pointer; padding:8px; }
+            .navbar-burger-line { width:24px; height:2px; background:#475569; margin:5px 0; border-radius:2px; }
+            @media (max-width:768px) {
+              .navbar-items-c { display:none; width:100%; position:absolute; top:64px; left:0; background:#fff; border-bottom:1px solid #e2e8f0; box-shadow:0 4px 6px -1px rgba(0,0,0,0.05); }
+              .navbar-burger { display:block; }
+              .navbar-menu { flex-direction:column; width:100%; padding:8px; }
+              .navbar-menu-link { display:block; width:100%; }
+              .navbar-container { flex-wrap:wrap; }
+            }
+          `;
+          canvasDoc.head.appendChild(navStyle);
         }
       } catch (err) {
         console.error('[GrapesEditor] Error injecting canvas styles/scripts:', err);
