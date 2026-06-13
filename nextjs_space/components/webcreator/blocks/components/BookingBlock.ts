@@ -21,6 +21,54 @@ export const createBookingBlock = (editor: Editor) => {
     model: {
       defaults: {
         components: `
+          <style>
+          .volkern-booking-section { padding: 80px 24px; background: #f8fafc; display: flex; justify-content: center; }
+          .v-booking-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); padding: 48px; max-width: 720px; width: 100%; }
+          .v-indicator { display: flex; align-items: center; justify-content: center; gap: 0; margin-bottom: 40px; }
+          .v-step-num { width: 36px; height: 36px; border-radius: 50%; background: #eef2ff; color: #6366f1; font-size: 0.85rem; font-weight: 700; display: flex; align-items: center; justify-content: center; transition: background 0.3s, color 0.3s; }
+          .v-step-num.active { background: #6366f1; color: #fff; }
+          .v-step-num.completed { background: #6366f1; color: #fff; }
+          .v-step-line { width: 48px; height: 2px; background: #e2e8f0; margin: 0 4px; transition: background 0.3s; }
+          .v-step-line.completed { background: #6366f1; }
+          .v-step { display: none; }
+          .v-step.active { display: block; }
+          .v-step-desc { font-size: 0.75rem; font-weight: 700; color: #6366f1; text-transform: uppercase; letter-spacing: 0.1em; }
+          .v-step-title { font-size: 1.75rem; font-weight: 800; color: #1e293b; margin: 8px 0 4px; }
+          .v-step-sub { font-size: 1rem; color: #475569; margin: 0 0 24px; }
+          .v-services-container { display: flex; flex-direction: column; gap: 12px; }
+          .v-booking-item { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border: 1px solid #e2e8f0; border-radius: 12px; cursor: pointer; transition: border-color 0.3s, box-shadow 0.3s; }
+          .v-booking-item:hover { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+          .v-booking-item-left { display: flex; align-items: center; gap: 14px; }
+          .v-booking-icon { width: 44px; height: 44px; background: #eef2ff; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #6366f1; font-size: 1.25rem; }
+          .v-booking-info { display: flex; flex-direction: column; }
+          .v-booking-name { font-weight: 700; color: #1e293b; font-size: 1rem; }
+          .v-booking-meta { font-size: 0.8rem; color: #94a3b8; }
+          .v-booking-price { font-weight: 800; color: #6366f1; font-size: 1.1rem; margin-right: 8px; }
+          .v-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 16px; }
+          .v-cal-header { text-align: center; font-size: 0.8rem; font-weight: 700; color: #94a3b8; padding: 8px 0; text-transform: uppercase; }
+          .v-cal-day { padding: 10px; text-align: center; border: 1px solid #e2e8f0; border-radius: 10px; background: #fff; color: #1e293b; font-size: 0.9rem; cursor: pointer; transition: background 0.2s, border-color 0.2s; font-weight: 500; }
+          .v-cal-day:hover { border-color: #6366f1; }
+          .v-cal-day.selected { background: #6366f1; color: #fff; border-color: #6366f1; }
+          .v-cal-day:disabled { opacity: 0.3; cursor: not-allowed; }
+          .v-slots-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; margin-bottom: 16px; }
+          .v-slot-btn { padding: 12px; text-align: center; border: 1px solid #e2e8f0; border-radius: 10px; background: #fff; color: #1e293b; font-size: 0.9rem; cursor: pointer; transition: border-color 0.2s, background 0.2s; font-weight: 500; }
+          .v-slot-btn:hover { border-color: #6366f1; }
+          .v-slot-btn.selected { background: #6366f1; color: #fff; border-color: #6366f1; }
+          .v-booking-summary { background: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 24px; }
+          .v-summary-row { display: flex; justify-content: space-between; padding: 8px 0; }
+          .v-summary-row + .v-summary-row { border-top: 1px solid #e2e8f0; }
+          .v-summary-label { font-size: 0.9rem; color: #94a3b8; }
+          .v-summary-value { font-weight: 700; color: #1e293b; font-size: 0.9rem; }
+          .v-form-group { margin-bottom: 16px; }
+          .v-book-label { display: block; font-size: 0.85rem; font-weight: 600; color: #475569; margin-bottom: 6px; }
+          .v-book-input { width: 100%; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 16px; font-size: 15px; color: #1e293b; background: #fff; outline: none; transition: border-color 0.3s; box-sizing: border-box; font-family: inherit; }
+          .v-book-input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+          .v-confirm-btn { background: #6366f1; color: #fff; font-weight: 700; border-radius: 12px; padding: 14px 28px; border: none; cursor: pointer; text-align: center; font-size: 1rem; transition: background 0.3s, transform 0.2s; }
+          .v-confirm-btn:hover { background: #4f46e5; transform: scale(1.02); }
+          .v-back-link { display: inline-flex; align-items: center; gap: 6px; background: none; border: none; color: #6366f1; font-weight: 600; cursor: pointer; font-size: 0.9rem; padding: 8px 0; }
+          .v-back-link:hover { text-decoration: underline; }
+          .v-clone { display: flex; }
+          </style>
           <section class="volkern-booking-section">
             <div class="v-booking-card">
               <div class="v-indicator">

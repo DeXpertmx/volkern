@@ -28,6 +28,19 @@ export const createLeadFormBlock = (editor: Editor) => {
           { type: 'text', label: 'Botón: Texto', name: 'data-btn-text', value: 'Enviar Estrategia' },
         ],
         components: `
+          <style>
+          .volkern-lead-section { padding: 80px 24px; background: #f8fafc; display: flex; justify-content: center; }
+          .volkern-lead-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); padding: 48px; max-width: 560px; width: 100%; }
+          .volkern-lead-title { font-size: 2rem; font-weight: 800; color: #1e293b; margin: 0 0 8px; }
+          .volkern-lead-subtitle { font-size: 1rem; color: #475569; margin: 0 0 32px; line-height: 1.6; }
+          .volkern-lead-form { display: flex; flex-direction: column; gap: 16px; }
+          .volkern-lead-input { border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 16px; font-size: 15px; color: #1e293b; background: #fff; outline: none; transition: border-color 0.3s; font-family: inherit; }
+          .volkern-lead-input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+          .volkern-lead-input::placeholder { color: #94a3b8; }
+          .volkern-lead-btn { background: #6366f1; color: #fff; font-weight: 700; border-radius: 12px; padding: 14px 28px; border: none; cursor: pointer; font-size: 1rem; transition: background 0.3s, transform 0.2s; }
+          .volkern-lead-btn:hover { background: #4f46e5; transform: scale(1.02); }
+          .volkern-file-label { display: block; font-size: 0.85rem; font-weight: 600; color: #475569; margin-bottom: 6px; }
+          </style>
           <section class="volkern-lead-section">
             <div class="volkern-lead-card">
               <h2 class="volkern-lead-title" data-v-title>Impulsa tu Crecimiento</h2>

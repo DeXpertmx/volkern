@@ -30,6 +30,18 @@ export const createBlogBlock = (editor: Editor) => {
     model: {
       defaults: {
         components: `
+          <style>
+          .volkern-blog-section { padding: 80px 24px; background: #fff; }
+          .volkern-blog-grid { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; }
+          .volkern-blog-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); overflow: hidden; transition: box-shadow 0.3s, transform 0.3s; }
+          .volkern-blog-card:hover { box-shadow: 0 8px 30px rgba(99,102,241,0.1); transform: translateY(-2px); }
+          .volkern-blog-img { height: 180px; background: #eef2ff; display: flex; align-items: center; justify-content: center; color: #6366f1; font-weight: 800; font-size: 1.5rem; }
+          .volkern-blog-content { padding: 24px; }
+          .volkern-blog-date { font-size: 0.8rem; color: #94a3b8; font-weight: 600; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+          .volkern-blog-title { font-size: 1.15rem; font-weight: 800; color: #1e293b; margin: 0 0 16px; line-height: 1.4; }
+          .volkern-blog-link { display: inline-flex; align-items: center; gap: 6px; color: #6366f1; font-weight: 700; font-size: 0.9rem; text-decoration: none; transition: gap 0.2s; }
+          .volkern-blog-link:hover { gap: 10px; }
+          </style>
           <section class="volkern-blog-section">
             <div class="volkern-blog-grid">
               <div style="padding: 4rem; text-align: center; color: #3D3D3D; opacity: 0.2; font-weight: 900; letter-spacing: 0.2em; text-transform: uppercase;">Cargando conocimiento...</div>

@@ -21,6 +21,18 @@ export const createTestimonialsBlock = (editor: Editor) => {
     model: {
       defaults: {
         components: `
+          <style>
+          .volkern-testi-section { padding: 80px 24px; background: #fff; }
+          .volkern-testi-grid { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; }
+          .v-testi-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); padding: 32px; display: flex; flex-direction: column; transition: box-shadow 0.3s; }
+          .v-testi-card:hover { box-shadow: 0 8px 30px rgba(99,102,241,0.08); }
+          .v-testi-stars { display: flex; gap: 2px; margin-bottom: 16px; color: #f59e0b; }
+          .v-testi-quote { font-size: 1rem; color: #475569; line-height: 1.7; font-style: italic; margin: 0 0 24px; flex: 1; }
+          .v-testi-author { display: flex; align-items: center; gap: 12px; }
+          .v-testi-avatar { width: 44px; height: 44px; border-radius: 50%; background: #eef2ff; color: #6366f1; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1rem; flex-shrink: 0; }
+          .v-testi-name { font-weight: 700; color: #1e293b; font-size: 0.95rem; }
+          .v-testi-role { font-size: 0.8rem; color: #94a3b8; }
+          </style>
           <section class="volkern-testi-section">
             <div class="volkern-testi-grid">
               <div class="v-testi-card" data-v-template="testimonial">

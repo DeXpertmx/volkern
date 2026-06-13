@@ -64,6 +64,33 @@ export const createVolkernFormBlock = (editor: Editor) => {
           }
         ],
         components: `
+          <style>
+            .volkern-adv-section { width:100%; display:flex; justify-content:center; padding:20px 16px; background:#f8fafc; font-family:system-ui,-apple-system,sans-serif; }
+            .volkern-adv-card { width:100%; max-width:520px; background:#fff; border-radius:16px; box-shadow:0 1px 3px rgba(0,0,0,0.06),0 1px 2px rgba(0,0,0,0.04); overflow:hidden; }
+            .volkern-adv-header { background:linear-gradient(135deg,#6366f1,#8b5cf6); padding:28px 28px 24px; text-align:center; }
+            .volkern-adv-icon { width:48px; height:48px; margin:0 auto 12px; background:rgba(255,255,255,0.2); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:22px; }
+            .volkern-adv-title { margin:0 0 4px; font-size:1.35rem; font-weight:700; color:var(--v-title-color,#fff); }
+            .volkern-adv-subtitle { margin:0; font-size:0.85rem; color:rgba(255,255,255,0.8); }
+            .volkern-adv-form { padding:24px 28px 28px; display:flex; flex-direction:column; gap:20px; background:#fff; }
+            .v-field-group { position:relative; }
+            .v-field-input { width:100%; padding:14px 14px 10px; font-size:0.9rem; border:1.5px solid #e2e8f0; border-radius:10px; outline:none; background:#fafbfc; transition:border-color 0.2s,box-shadow 0.2s; box-sizing:border-box; font-family:inherit; color:#0f172a; }
+            .v-field-input:focus { border-color:#6366f1; box-shadow:0 0 0 3px rgba(99,102,241,0.12); background:#fff; }
+            .v-field-input::placeholder { color:transparent; }
+            .v-field-textarea { resize:vertical; min-height:72px; font-family:inherit; }
+            .v-field-label { position:absolute; left:14px; top:14px; font-size:0.9rem; color:#64748b; pointer-events:none; transition:all 0.2s; background:transparent; padding:0 4px; }
+            .v-field-input:focus + .v-field-label,
+            .v-field-input:not(:placeholder-shown) + .v-field-label { top:-8px; left:10px; font-size:0.7rem; color:#6366f1; background:#fff; font-weight:500; }
+            .v-field-input:not(:focus):not(:placeholder-shown) + .v-field-label { color:#64748b; }
+            .v-field-focus { display:none; }
+            .volkern-adv-btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:13px 28px; background:var(--v-accent,#6366f1); color:#fff; border:none; border-radius:10px; font-size:0.95rem; font-weight:600; cursor:pointer; transition:opacity 0.2s,transform 0.15s; font-family:inherit; width:100%; }
+            .volkern-adv-btn:hover { opacity:0.92; transform:translateY(-1px); }
+            .volkern-adv-btn:disabled { opacity:0.6; cursor:not-allowed; transform:none; }
+            .volkern-adv-btn-icon { flex-shrink:0; }
+            .v-success-overlay { display:none; padding:40px 28px; text-align:center; background:#f0fdf4; }
+            .v-check-icon { width:52px; height:52px; margin:0 auto 14px; background:#22c55e; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#fff; }
+            .v-success-title { margin:0 0 6px; font-size:1.2rem; font-weight:700; color:#166534; }
+            .v-success-text { margin:0; font-size:0.85rem; color:#16a34a; }
+          </style>
           <section class="volkern-adv-section">
             <div class="volkern-adv-card">
               <div class="volkern-adv-header">

@@ -275,6 +275,35 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>((props, ref)
             `;
             canvasDoc.head.appendChild(docStyle);
           }
+
+          // Estilos para componentes nativos del plugin de formularios (grapesjs-plugin-forms)
+          // El plugin genera HTML sin clases CSS, solo etiquetas HTML
+          const formStyle = canvasDoc.createElement('style');
+          formStyle.textContent = `
+            form { font-family:system-ui,-apple-system,sans-serif; background:#fff; border-radius:12px; padding:20px; border:1px solid #e2e8f0; }
+            input:not([type=checkbox]):not([type=radio]),
+            textarea,
+            select {
+              width:100%; padding:10px 14px; font-size:0.9rem;
+              border:1.5px solid #e2e8f0; border-radius:10px; outline:none;
+              background:#fafbfc; transition:border-color 0.2s,box-shadow 0.2s;
+              box-sizing:border-box; font-family:inherit; color:#0f172a;
+              margin-bottom:12px;
+            }
+            input:not([type=checkbox]):not([type=radio]):focus,
+            textarea:focus,
+            select:focus {
+              border-color:#6366f1; box-shadow:0 0 0 3px rgba(99,102,241,0.12); background:#fff;
+            }
+            textarea { resize:vertical; min-height:80px; }
+            label { display:block; font-size:0.85rem; font-weight:500; color:#1e293b; margin-bottom:4px; margin-top:8px; }
+            label:first-child { margin-top:0; }
+            button { padding:11px 24px; background:#6366f1; color:#fff; border:none; border-radius:10px; font-weight:600; font-size:0.9rem; cursor:pointer; transition:background 0.2s,transform 0.15s; font-family:inherit; display:inline-flex; align-items:center; gap:6px; }
+            button:hover { background:#4f46e5; transform:translateY(-1px); }
+            input[type=checkbox] { accent-color:#6366f1; width:16px; height:16px; margin-right:6px; }
+            input[type=radio] { accent-color:#6366f1; width:16px; height:16px; margin-right:6px; }
+          `;
+          canvasDoc.head.appendChild(formStyle);
         }
       } catch (err) {
         console.error('[GrapesEditor] Error injecting canvas styles/scripts:', err);

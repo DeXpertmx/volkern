@@ -27,6 +27,10 @@ export const createStockBlock = (editor: Editor) => {
           'data-show-number': 'true'
         },
         components: `
+          <style>
+          .v-stock-badge { display: inline-flex; align-items: center; gap: 6px; }
+          .v-stock-status { font-size: 0.85rem; font-weight: 600; color: #475569; }
+          </style>
           <span class="v-stock-status">Cargando stock...</span>
         `,
         traits: [
