@@ -15,7 +15,7 @@ import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
-import { Building2, Mail, ShieldCheck, Sparkles, Calculator, Landmark, BookOpen } from 'lucide-react'
+import { Building2, Mail, ShieldCheck, Sparkles, Calculator, Landmark, BookOpen, Database } from 'lucide-react'
 
 const PGC_PLANS = [
   { value: 'NORMAL', label: 'PGC Normal (RD 1514/2007)', desc: 'Grandes empresas (>6M€ facturación)' },
@@ -60,6 +60,7 @@ export function AccountingSlotProvisioningModal({ isOpen, onClose, onSuccess }: 
     modules: ['crm'],
     accounting_plan_type: 'NORMAL',
     sector: 'NINGUNO',
+    include_demo_data: false,
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -82,7 +83,17 @@ export function AccountingSlotProvisioningModal({ isOpen, onClose, onSuccess }: 
       const data = await res.json()
 
       if (res.ok) {
-        toast.success(`Cliente '${formData.client_name}' dado de alta con éxito.`)
+        const slot = await res.json()
+        if (formData.include_demo_data) {
+          try {
+            await fetch(`/api/accounting/slots/${slot.id}/seed-demo`, { method: 'POST' })
+            toast.success(`Cliente '${formData.client_name}' dado de alta con datos demo.`)
+          } catch {
+            toast.warning('Cliente creado pero no se pudieron cargar datos demo.')
+          }
+        } else {
+          toast.success(`Cliente '${formData.client_name}' dado de alta con éxito.`)
+        }
         onSuccess()
         onClose()
       } else {
@@ -214,6 +225,22 @@ export function AccountingSlotProvisioningModal({ isOpen, onClose, onSuccess }: 
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-3 p-3 rounded-lg border bg-accent/20 hover:bg-accent/30 transition-colors">
+              <Checkbox
+                id="include-demo"
+                checked={formData.include_demo_data}
+                onCheckedChange={(checked) => setFormData({ ...formData, include_demo_data: checked === true })}
+              />
+              <div className="flex flex-col">
+                <Label htmlFor="include-demo" className="text-sm font-black italic uppercase cursor-pointer flex items-center gap-2">
+                  <Database className="h-3 w-3" /> Incluir Datos Contables Demo
+                </Label>
+                <span className="text-[10px] text-muted-foreground">
+                  Precarga 3 meses de actividad contable (ventas, gastos, nóminas, IVA) para demostración inmediata.
+                </span>
               </div>
             </div>
 

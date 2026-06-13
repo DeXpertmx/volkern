@@ -63,7 +63,8 @@ import {
   Truck,
   MapPin,
   Ship,
-  Radio
+  Radio,
+  Scale
 } from 'lucide-react'
 import type { PermissionModule } from '@/lib/permissions'
 
@@ -282,7 +283,9 @@ export const HUBS: HubConfig[] = [
       { name: 'Calendario Fiscal', href: '/dashboard/finanzas/contabilidad/calendario-fiscal', icon: CalendarDays, planModule: 'finanzas', requiredRegion: 'ES', description: 'Vencimientos AEAT con alertas automáticas' },
       { name: 'Gastos', href: '/dashboard/finanzas/gastos', icon: ListTodo, planModule: 'finanzas', description: 'Listado de egresos y facturas' },
       { name: 'Proveedores', href: '/dashboard/finanzas/proveedores', icon: Building2, planModule: 'finanzas', description: 'Directorio de proveedores' },
-      { name: 'Reportes P&L', href: '/dashboard/finanzas/reportes', icon: FileText, planModule: 'finanzas', description: 'Balance de pérdidas y ganancias' },
+      { name: 'Balance de Situación', href: '/dashboard/finanzas/contabilidad/balance', icon: Scale, planModule: 'finanzas', description: 'Activo, Pasivo y Patrimonio Neto' },
+      { name: 'Cuenta de Resultados', href: '/dashboard/finanzas/contabilidad/cuenta-resultados', icon: FileText, planModule: 'finanzas', description: 'Pérdidas y Ganancias del periodo' },
+      { name: 'Balance de Comprobación', href: '/dashboard/finanzas/contabilidad/trial-balance', icon: FileText, planModule: 'finanzas', description: 'Sumas y saldos de todas las cuentas' },
     ]
   },
   {
