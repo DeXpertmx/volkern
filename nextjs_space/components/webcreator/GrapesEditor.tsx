@@ -310,8 +310,8 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>((props, ref)
           navStyle.textContent = `
             .navbar { background:#fff; border-bottom:1px solid #e2e8f0; font-family:system-ui,-apple-system,sans-serif; width:100%; }
             .navbar-container { max-width:1200px; margin:0 auto; width:95%; display:flex; align-items:center; justify-content:space-between; padding:0 16px; min-height:64px; }
-            .navbar-brand { vertical-align:middle; display:flex; align-items:center; padding:8px 12px; min-height:48px; min-width:120px; color:#1e293b; text-decoration:none; font-weight:700; font-size:1.1rem; background:rgba(99,102,241,0.06); border:1.5px dashed #c7d2fe; border-radius:8px; gap:8px; }
-            .navbar-brand::before { content:'Logo'; font-size:0.7rem; color:#818cf8; font-weight:500; letter-spacing:0.5px; text-transform:uppercase; }
+            .navbar-brand { vertical-align:middle; display:flex; align-items:center; padding:6px 10px; min-height:44px; min-width:100px; color:#1e293b; text-decoration:none; font-weight:700; font-size:1.1rem; background:rgba(99,102,241,0.06); border:1.5px dashed #c7d2fe; border-radius:8px; gap:8px; }
+            .navbar-brand img { max-height:32px; width:auto; display:block; }
             .navbar-brand[href="/"] { color:#1e293b; }
             .navbar-items-c { display:flex; align-items:center; }
             .navbar-menu { display:flex; gap:4px; padding:0; margin:0; list-style:none; }
@@ -339,6 +339,32 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>((props, ref)
       // Ensure 'Forms' category is renamed
       const formsCat = bm.getCategories().get('Forms');
       if (formsCat) formsCat.set('label', 'Formularios 📝');
+
+      // Override navbar-container para que el brand tenga una imagen de logo por defecto
+      editor.DomComponents.addType('navbar-container', {
+        model: {
+          defaults: {
+            components: [
+              {
+                type: 'link',
+                attributes: { class: 'navbar-brand', href: '/' },
+                components: [
+                  {
+                    type: 'image',
+                    src: 'https://placehold.co/120x40/f8fafc/6366f1?text=Logo',
+                    style: { height: '32px', width: 'auto', display: 'block' }
+                  }
+                ]
+              },
+              { type: 'navbar-burger-menu' },
+              {
+                attributes: { class: 'navbar-items-c', 'data-gjs': 'navbar-items' },
+                components: { type: 'navbar-nav-menu' }
+              }
+            ]
+          }
+        }
+      });
 
       // Global fix for Headings and Text components to ensure they are ALWAYS editable
       editor.DomComponents.addType('text', {
