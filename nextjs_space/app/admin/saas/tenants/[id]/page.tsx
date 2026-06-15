@@ -51,7 +51,7 @@ export default function TenantDetail() {
   const [loading, setLoading] = useState(true);
   const [showAssignPlanDialog, setShowAssignPlanDialog] = useState(false);
   const [assignPlanForm, setAssignPlanForm] = useState({
-    planId: 'starter',
+    planId: 'esencial',
     withBilling: false,
     mrr: 0,
     reason: ''
@@ -245,7 +245,7 @@ export default function TenantDetail() {
         
         // Reset form
         setAssignPlanForm({
-          planId: 'starter',
+          planId: 'esencial',
           withBilling: false,
           mrr: 0,
           reason: ''
@@ -656,7 +656,7 @@ export default function TenantDetail() {
                   <CardTitle className="flex items-center justify-between">
                     <span>Plan Actual: <span className="capitalize text-blue-600">{modulesData.plan}</span></span>
                     <div className="flex gap-2">
-                      {['starter', 'growth', 'pro'].map(p => (
+                      {['esencial', 'profesional', 'infinity'].map(p => (
                         <Button
                           key={p}
                           size="sm"
@@ -664,7 +664,7 @@ export default function TenantDetail() {
                           onClick={() => handleChangePlan(p)}
                           className="capitalize"
                         >
-                          {p === 'starter' ? '🟢 Starter — 49€' : p === 'growth' ? '🔵 Growth — 99€' : '🟣 Pro — 199€'}
+                          {p === 'esencial' ? '🟢 Esencial — 69€' : p === 'profesional' ? '🔵 Profesional — 149€' : '🟣 Infinity — 299€'}
                         </Button>
                       ))}
                     </div>
@@ -941,22 +941,22 @@ export default function TenantDetail() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="starter">
+                  <SelectItem value="esencial">
                     <div className="flex items-center gap-2">
-                      <span className="font-medium">🟢 Starter</span>
-                      <span className="text-sm text-gray-500">- €49/mes</span>
+                      <span className="font-medium">🟢 Esencial</span>
+                      <span className="text-sm text-gray-500">- €69/mes</span>
                     </div>
                   </SelectItem>
-                  <SelectItem value="growth">
+                  <SelectItem value="profesional">
                     <div className="flex items-center gap-2">
-                      <span className="font-medium">🔵 Growth</span>
-                      <span className="text-sm text-gray-500">- €99/mes</span>
+                      <span className="font-medium">🔵 Profesional</span>
+                      <span className="text-sm text-gray-500">- €149/mes</span>
                     </div>
                   </SelectItem>
-                  <SelectItem value="pro">
+                  <SelectItem value="infinity">
                     <div className="flex items-center gap-2">
-                      <span className="font-medium">🟣 Pro</span>
-                      <span className="text-sm text-gray-500">- €199/mes</span>
+                      <span className="font-medium">🟣 Infinity</span>
+                      <span className="text-sm text-gray-500">- €299/mes</span>
                     </div>
                   </SelectItem>
                 </SelectContent>

@@ -79,7 +79,7 @@ export default function IndustriaPage() {
         buttonText="Solicitar Demo"
         buttonHref="/#demo"
         secondaryText="Ver Planes"
-        secondaryHref="/#pricing"
+        secondaryHref="/precios"
         accentColor="orange"
       />
     </PublicLayout>

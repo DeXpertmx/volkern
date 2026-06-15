@@ -6736,3 +6736,23 @@ model erp_fleet_vehicles {
   @@index([driverId])
   @@map("erp_fleet_vehicles")
 }
+
+model ImportLog {
+  id              String   @id @default(cuid())
+  tenantId        String
+  type            String
+  source          String
+  fileName        String
+  fileSize        Int      @default(0)
+  recordsTotal    Int      @default(0)
+  recordsImported Int      @default(0)
+  recordsFailed   Int      @default(0)
+  errors          Json?
+  columnMapping   Json?
+  status          String   @default("completed")
+  createdAt       DateTime @default(now())
+  createdBy       String?
+
+  @@index([tenantId])
+  @@map("import_logs")
+}

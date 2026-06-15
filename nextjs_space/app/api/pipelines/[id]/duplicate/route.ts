@@ -44,7 +44,7 @@ export async function POST(
       select: { plan: true },
     });
 
-    const maxPipelines = await getMaxPipelines(tenantId, tenant?.plan || 'starter');
+    const maxPipelines = await getMaxPipelines(tenantId, tenant?.plan || 'esencial');
     const existingCount = await prisma.pipeline.count({
       where: { tenantId, activo: true },
     });

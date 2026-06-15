@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
     const customers = await Promise.all(
       churnedTenants.map(async (tenant) => {
         const sub = tenant.subscriptions?.[0];
-        const planSlug = tenant.plan || sub?.plan?.slug || 'starter';
+        const planSlug = tenant.plan || sub?.plan?.slug || 'esencial';
         const planConfig = await getPlanConfig(planSlug);
         const createdAt = new Date(tenant.fechaCreacion);
         const cancelledAt = sub?.fechaCancelacion ? new Date(sub.fechaCancelacion) : new Date();

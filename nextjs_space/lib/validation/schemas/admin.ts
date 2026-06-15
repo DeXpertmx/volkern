@@ -5,7 +5,7 @@ import { z } from 'zod';
 export const TenantCreateSchema = z.object({
   nombre: z.string().min(1, 'El nombre es obligatorio'),
   slug: z.string().min(1, 'El slug es obligatorio').regex(/^[a-z0-9-]+$/, 'Slug inválido: solo minúsculas, números y guiones'),
-  plan: z.string().optional().default('starter'),
+  plan: z.string().optional().default('trial'),
   dominio: z.string().optional(),
   billingEmail: z.string().email('Email de facturación inválido').optional().or(z.literal('')),
   moneda: z.string().optional().default('EUR'),

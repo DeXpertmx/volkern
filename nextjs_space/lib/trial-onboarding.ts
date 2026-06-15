@@ -57,7 +57,7 @@ export async function checkAndExpireTrial(tenantId: string): Promise<boolean> {
 
 export async function convertTrialToPaid(
   tenantId: string,
-  plan: string = PLANS.GROWTH,
+  plan: string = PLANS.PROFESIONAL,
   stripeCustomerId?: string,
   stripeSubscriptionId?: string
 ): Promise<void> {

@@ -14,7 +14,7 @@ export async function GET() {
     const planRevenue: Record<string, { mrr: number; customers: number }> = {};
 
     for (const tenant of tenants) {
-      const planSlug = tenant.plan || 'starter';
+      const planSlug = tenant.plan || 'esencial';
       const planConfig = await getPlanConfig(planSlug);
       const mrr = tenant.mrr || planConfig?.precio || 0;
 

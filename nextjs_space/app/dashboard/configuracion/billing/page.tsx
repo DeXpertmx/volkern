@@ -132,23 +132,23 @@ export default function BillingPage() {
 
   const plans = [
     {
-      id: PLANS.STARTER,
-      name: '🟢 Starter',
-      price: '49€',
-      features: PLAN_FEATURES[PLANS.STARTER]
+      id: PLANS.ESENCIAL,
+      name: '🟢 Esencial',
+      price: '69€',
+      features: PLAN_FEATURES[PLANS.ESENCIAL]
     },
     {
-      id: PLANS.GROWTH,
-      name: '🔵 Growth',
-      price: '99€',
-      features: PLAN_FEATURES[PLANS.GROWTH],
+      id: PLANS.PROFESIONAL,
+      name: '🔵 Profesional',
+      price: '149€',
+      features: PLAN_FEATURES[PLANS.PROFESIONAL],
       popular: true
     },
     {
-      id: PLANS.PRO,
-      name: '🟣 Pro',
-      price: '199€',
-      features: PLAN_FEATURES[PLANS.PRO]
+      id: PLANS.INFINITY,
+      name: '🟣 Infinity',
+      price: '299€',
+      features: PLAN_FEATURES[PLANS.INFINITY]
     }
   ]
 

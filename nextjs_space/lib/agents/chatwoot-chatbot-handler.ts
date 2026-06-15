@@ -28,6 +28,7 @@ import {
   buildPostBookingButtons,
   detectInteractiveContext,
 } from '@/lib/messaging/interactive';
+import { processMessage as unifiedProcessMessage } from '@/lib/chat/chatbot-service';
 
 interface ChatwootMessagePayload {
   tenantId: string;
@@ -384,190 +385,62 @@ async function processMessage(payload: ChatwootMessagePayload) {
 async function processWhatsAppMessage(payload: ChatwootMessagePayload) {
   const { tenantId, content, conversationId, metadata } = payload;
   const localConversationId = metadata?.localConversationId || conversationId;
-  const chatwootAccountId = metadata?.accountId;
 
   try {
     console.log('[Gemma/WhatsApp] Procesando mensaje:', content.substring(0, 50));
 
-    if (!chatwootAccountId) {
-      console.log('[Gemma/WhatsApp] Sin accountId, intentando obtener desde tenant');
-    }
-
-    // 1. Obtener configuración del tenant
-    const tenant = await prisma.tenant.findUnique({
-      where: { id: tenantId },
-      select: { id: true, nombre: true, plan: true }
-    });
-
-    if (!tenant) {
-      await sendResponseToChatwoot(tenantId, conversationId, '❌ Error de configuración', payload);
-      return;
-    }
-
-    // 2. Obtener el lead asociado a la conversación
     const conversation = await prisma.conversation.findUnique({
       where: { id: localConversationId },
       select: { leadId: true, lead: { select: { id: true, nombre: true, email: true, telefono: true } } }
     });
 
-    const leadName = conversation?.lead?.nombre || 'Cliente';
+    const result = await unifiedProcessMessage({
+      tenantId,
+      message: content,
+      channel: 'whatsapp',
+      contactName: conversation?.lead?.nombre,
+      contactPhone: conversation?.lead?.telefono || undefined,
+      contactEmail: conversation?.lead?.email || undefined,
+      leadId: conversation?.leadId || undefined,
+      conversationId: localConversationId,
+    });
 
-    // 3. Cargar servicios disponibles
+    if (!result.success) {
+      if (result.error !== 'rate_limit') {
+        await sendResponseToChatwoot(tenantId, conversationId, result.response || 'Lo siento, no pude procesar tu mensaje.', payload);
+      }
+      return;
+    }
+
+    if (result.fueraHorario && result.response) {
+      await sendResponseToChatwoot(tenantId, conversationId, result.response, payload);
+      return;
+    }
+
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { nombre: true }
+    });
+
     const services = await prisma.servicio.findMany({
       where: { tenantId, activo: true },
       select: { id: true, nombre: true, descripcion: true, duracionMinutos: true, precio: true, moneda: true }
     });
 
-    // 4. Cargar configuración del chatbot
-    let chatbotConfig = await prisma.chatbotConfig.findUnique({ where: { tenantId } });
-    if (!chatbotConfig) {
-      chatbotConfig = await prisma.chatbotConfig.create({
-        data: { tenantId, activo: true, nombreAsistente: 'Asistente Virtual' }
-      });
-    }
-
-    if (!chatbotConfig.activo) {
-      console.log('[Gemma/WhatsApp] Chatbot inactivo para este tenant');
-      return;
-    }
-
-    // Verificar horario de atención
-    const { isWithinBusinessHours } = await import('@/lib/chatbot-engine');
-    if (!isWithinBusinessHours(chatbotConfig)) {
-      console.log('[Gemma/WhatsApp] Fuera de horario de atención');
-      if (chatbotConfig.mensajeFueraHorario) {
-        await sendResponseToChatwoot(tenantId, conversationId, chatbotConfig.mensajeFueraHorario, payload);
-      }
-      return;
-    }
-
-    // 5. Verificar que el tenant tenga Chatwoot configurado
-    const hubConfig = await prisma.messagingHubConfig.findUnique({
-      where: { tenantId },
-      select: { chatwootAccountId: true }
-    });
-
-    if (!chatwootAccountId && !hubConfig?.chatwootAccountId) {
-      console.log('[Gemma/WhatsApp] No hay cuenta de Chatwoot configurada');
-      return;
-    }
-
-    // 6. Rate limiting: evitar responder si ya se respondió en los últimos 2 segundos
-    const lastBotMessage = await prisma.message.findFirst({
-      where: {
-        conversationId: localConversationId,
-        direccion: 'saliente',
-      },
-      orderBy: { fechaCreacion: 'desc' },
-      select: { fechaCreacion: true }
-    });
-
-    if (lastBotMessage?.fechaCreacion) {
-      const msSinceLastResponse = Date.now() - new Date(lastBotMessage.fechaCreacion).getTime();
-      if (msSinceLastResponse < 2000) {
-        console.log('[Gemma/WhatsApp] Rate limit: última respuesta hace', msSinceLastResponse, 'ms');
-        return;
-      }
-    }
-
-    // 7. Cargar historial reciente de la conversación (últimos 6 mensajes)
-    const recentMessages = await prisma.message.findMany({
-      where: { conversationId: localConversationId },
-      orderBy: { fechaCreacion: 'desc' },
-      take: 6,
-      select: { contenido: true, direccion: true }
-    });
-
-    // 8. Construir system prompt
-    const servicesInfo = services.map(s =>
-      `- ${s.nombre}: ${s.descripcion || 'Sin descripción'} | ${s.duracionMinutos}min | $${s.precio} ${s.moneda}`
-    ).join('\n');
-
-    const systemPrompt = `Eres ${chatbotConfig.nombreAsistente}, asistente virtual de ${tenant.nombre}.
-
-${chatbotConfig.contextoNegocio || 'Ayudas a clientes por WhatsApp.'}
-${chatbotConfig.personalidad || 'Eres cordial, profesional y conciso.'}
-
-Cliente: ${leadName}
-
-SERVICIOS:\n${servicesInfo || 'No hay servicios configurados.'}
-
-INSTRUCCIONES:
-1. Responde en español, sé amable y directo.
-2. Si preguntan por servicios, descríbelos con precio y duración.
-3. Si quieren agendar, responde: [AGENDAR:servicio|fecha|hora]
-4. Si quieren hablar con humano, responde: [TRANSFERIR]
-5. Usa formato WhatsApp: negritas con *texto*, emojis con moderación.
-6. Máximo 2-3 párrafos. Sé conciso.`;
-
-    // 9. Construir historial
-    const historyMessages = recentMessages.reverse().map(m => ({
-      role: (m.direccion === 'entrante' ? 'user' : 'assistant') as 'user' | 'assistant',
-      content: m.contenido
-    }));
-
-    const llmMessages = [
-      { role: 'system' as const, content: systemPrompt },
-      ...historyMessages,
-      { role: 'user' as const, content }
-    ];
-
-    // 10. Llamar LLM
-    const { callAssistantWithFallback } = await import('@/lib/assistant/openrouter-client');
-    const llmResponse = await callAssistantWithFallback(llmMessages as any);
-    const assistantMessage = llmResponse.choices?.[0]?.message?.content ||
-      'Gracias por tu mensaje. ¿En qué puedo ayudarte?';
-
-    // 11. Detectar acciones especiales
-    let finalMessage = assistantMessage;
-    let action: string | undefined;
-
-    const agendarMatch = assistantMessage.match(/\[AGENDAR:([^|]+)\|([^|]+)\|([^\]]+)\]/);
-    if (agendarMatch) {
-      action = 'agendar';
-      finalMessage = assistantMessage.replace(/\[AGENDAR:[^\]]+\]/, '').trim();
-    }
-    if (assistantMessage.includes('[TRANSFERIR]')) {
-      action = 'transferir';
-      finalMessage = assistantMessage.replace('[TRANSFERIR]', '').trim();
-    }
-
-    // 12. Detectar contexto interactivo y enviar respuesta
-    const interactiveCtx = detectInteractiveContext(content, finalMessage, services.length > 0);
+    const interactiveCtx = detectInteractiveContext(content, result.response, services.length > 0);
     let interactiveData: { contentType: string; contentAttributes: Record<string, any> } | undefined;
 
     if (interactiveCtx.showWelcome) {
-      interactiveData = buildWelcomeButtons(tenant.nombre, chatbotConfig.nombreAsistente);
+      interactiveData = buildWelcomeButtons(tenant?.nombre || '', 'Asistente Virtual');
     } else if (interactiveCtx.showServices && services.length > 0) {
-      interactiveData = buildServicesList(services as any, tenant.nombre);
+      interactiveData = buildServicesList(services as any, tenant?.nombre || '');
     } else if (interactiveCtx.showPostBooking) {
       interactiveData = buildPostBookingButtons();
     }
 
-    await sendResponseToChatwoot(tenantId, conversationId, finalMessage, payload, interactiveData);
+    await sendResponseToChatwoot(tenantId, conversationId, result.response, payload, interactiveData);
 
-    // 13. Actualizar estadísticas
-    await prisma.chatbotConfig.update({
-      where: { tenantId },
-      data: { totalConversaciones: { increment: 1 } }
-    }).catch(() => {});
-
-    // 14. Ejecutar acción si es necesario (agendar/transferir)
-    if (action && conversation?.leadId) {
-      await executeWhatsAppAction(action, {
-        tenantId,
-        leadId: conversation.leadId,
-        conversationId: localConversationId,
-        phoneNumber: conversation.lead?.telefono || '',
-        services,
-      }, agendarMatch ? {
-        servicio: agendarMatch[1].trim(),
-        fecha: agendarMatch[2].trim(),
-        hora: agendarMatch[3].trim(),
-      } : undefined, payload);
-    }
-
-    console.log('[Gemma/WhatsApp] ✅ Respuesta enviada:', finalMessage.substring(0, 50),
+    console.log('[Gemma/WhatsApp] ✅ Respuesta enviada:', result.response.substring(0, 50),
       interactiveData ? '(interactiva)' : '');
 
   } catch (error) {
@@ -580,121 +453,7 @@ INSTRUCCIONES:
   }
 }
 
-/**
- * Ejecuta acciones para WhatsApp (agendar cita, transferir a humano)
- */
-async function executeWhatsAppAction(
-  action: string,
-  context: {
-    tenantId: string;
-    leadId: string;
-    conversationId: string;
-    phoneNumber: string;
-    services: any[];
-  },
-  actionData: { servicio: string; fecha: string; hora: string } | undefined,
-  originalPayload: ChatwootMessagePayload
-) {
-  const { tenantId, leadId, conversationId, services, phoneNumber } = context;
-
-  try {
-    if (action === 'agendar' && actionData) {
-      const service = services.find((s: any) =>
-        s.nombre.toLowerCase().includes(actionData.servicio.toLowerCase())
-      );
-
-      if (!service) {
-        await sendResponseToChatwoot(
-          tenantId, conversationId,
-          `No encontré el servicio "${actionData.servicio}". ¿Cuál de estos te interesa?\n\n${services.map((s: any) => `• ${s.nombre}`).join('\n')}`,
-          originalPayload
-        );
-        return;
-      }
-
-      // Crear la cita
-      const fechaHora = await parseWhatsAppDate(actionData.fecha, actionData.hora);
-      if (!fechaHora) {
-        await sendResponseToChatwoot(
-          tenantId, conversationId,
-          'No entendí la fecha/hora. ¿Puedes decirme de nuevo? Por ejemplo: "mañana a las 10am"',
-          originalPayload
-        );
-        return;
-      }
-
-      const cita = await prisma.cita.create({
-        data: {
-          tenantId,
-          leadId,
-          servicioId: service.id,
-          tipo: 'servicio',
-          titulo: `${service.nombre} - WhatsApp`,
-          fechaHora,
-          duracion: service.duracionMinutos,
-          estado: 'confirmada',
-          descripcion: 'Cita agendada vía chatbot WhatsApp',
-          origenCita: 'whatsapp',
-        }
-      });
-
-      const fechaFormateada = fechaHora.toLocaleDateString('es-MX', {
-        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-        hour: '2-digit', minute: '2-digit'
-      });
-
-      // Enviar confirmación con botones de post-booking
-      const confirmMsg = `✅ *¡Cita confirmada!*\n\n📌 *Servicio:* ${service.nombre}\n📅 *Fecha:* ${fechaFormateada}\n⏱ *Duración:* ${service.duracionMinutos} min\n💰 *Precio:* $${service.precio} ${service.moneda}\n\n¡Te esperamos!`;
-      const postBooking = buildPostBookingButtons();
-      await sendResponseToChatwoot(
-        tenantId, conversationId,
-        confirmMsg,
-        originalPayload,
-        postBooking
-      );
-
-      await prisma.chatbotConfig.update({
-        where: { tenantId },
-        data: { totalCitasAgendadas: { increment: 1 } }
-      }).catch(() => {});
-
-    } else if (action === 'transferir') {
-      // Notificar y crear tarea urgente
-      await sendResponseToChatwoot(
-        tenantId, conversationId,
-        'Entendido, te transfiero con un asesor. En breve alguien se comunicará contigo. 👋',
-        originalPayload
-      );
-
-      await prisma.task.create({
-        data: {
-          tenantId,
-          titulo: '📢 Cliente de WhatsApp solicita atención humana',
-          descripcion: `Cliente ${phoneNumber} solicitó hablar con un asesor.`,
-          tipo: 'llamada',
-          fechaVencimiento: new Date(),
-          completada: false,
-          leadId,
-        }
-      });
-
-      await prisma.chatbotConfig.update({
-        where: { tenantId },
-        data: { totalTransferencias: { increment: 1 } }
-      }).catch(() => {});
-    }
-  } catch (error) {
-    console.error('[Gemma/WhatsApp] Error ejecutando acción:', error);
-  }
-}
-
-/**
- * Parsea fecha y hora desde lenguaje natural (usa parseFechaHora de chatbot-engine)
- */
-async function parseWhatsAppDate(fecha: string, hora: string): Promise<Date | null> {
-  const { parseFechaHora } = await import('@/lib/chatbot-engine');
-  return parseFechaHora(fecha, hora);
-}
+// Acciones WhatsApp ahora manejadas por ChatbotService unificado
 
 /**
  * Busca usuario por múltiples identificadores

@@ -44,12 +44,12 @@ export const Pricing = ({ plans }: PricingProps) => {
               key={plan.id}
               whileHover={{ y: -10 }}
               className={`relative rounded-3xl p-8 border ${
-                plan.slug === 'pro' 
+                plan.slug === 'profesional' || plan.slug === 'infinity'
                   ? 'bg-gradient-to-b from-blue-900/40 to-slate-900 border-blue-500 shadow-xl shadow-blue-900/20' 
                   : 'bg-slate-900 border-slate-800'
               }`}
             >
-              {plan.slug === 'pro' && (
+              {(plan.slug === 'profesional' || plan.slug === 'infinity') && (
                 <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-widest">
                   Más Popular
                 </div>
@@ -94,9 +94,9 @@ export const Pricing = ({ plans }: PricingProps) => {
               </ul>
 
               <Button 
-                variant={plan.slug === 'pro' ? 'default' : 'outline'}
+                variant={plan.slug === 'profesional' || plan.slug === 'infinity' ? 'default' : 'outline'}
                 className={`w-full py-6 rounded-xl font-bold ${
-                  plan.slug === 'pro' ? 'bg-blue-600 hover:bg-blue-500' : 'border-slate-800 text-slate-300'
+                  plan.slug === 'profesional' || plan.slug === 'infinity' ? 'bg-blue-600 hover:bg-blue-500' : 'border-slate-800 text-slate-300'
                 }`}
                 onClick={() => window.location.href = `/auth/signup?plan=${plan.slug}`}
               >

@@ -1,42 +1,38 @@
-import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { NextResponse } from 'next/server'
+import { PLANS, PLAN_FEATURES, PLAN_PRICES } from '@/lib/plans'
 
-export const dynamic = 'force-dynamic';
+export const dynamic = 'force-dynamic'
 
 export async function GET() {
-  try {
-    const dbPlans = await prisma.subscriptionPlan.findMany({
-      where: { 
-        activo: true,
-        esPublico: true 
-      },
-      orderBy: { precio: 'asc' }
-    });
+  const plans = [
+    {
+      slug: PLANS.ESENCIAL,
+      name: 'Esencial',
+      price: PLAN_PRICES[PLANS.ESENCIAL].monthly,
+      priceYearly: PLAN_PRICES[PLANS.ESENCIAL].yearly,
+      currency: 'EUR',
+      features: PLAN_FEATURES[PLANS.ESENCIAL],
+      popular: false,
+    },
+    {
+      slug: PLANS.PROFESIONAL,
+      name: 'Profesional',
+      price: PLAN_PRICES[PLANS.PROFESIONAL].monthly,
+      priceYearly: PLAN_PRICES[PLANS.PROFESIONAL].yearly,
+      currency: 'EUR',
+      features: PLAN_FEATURES[PLANS.PROFESIONAL],
+      popular: true,
+    },
+    {
+      slug: PLANS.INFINITY,
+      name: 'Infinity',
+      price: PLAN_PRICES[PLANS.INFINITY].monthly,
+      priceYearly: PLAN_PRICES[PLANS.INFINITY].yearly,
+      currency: 'EUR',
+      features: PLAN_FEATURES[PLANS.INFINITY],
+      popular: false,
+    },
+  ]
 
-    const plans = dbPlans.map(plan => {
-      const features = (plan.features as any)?.ui_features || [];
-      const displayFeatures = features.length > 0 ? features : [
-        `${plan.limiteUsuarios === -1 ? 'Usuarios ilimitados' : 'Hasta ' + plan.limiteUsuarios + ' usuarios'}`,
-        `${plan.limiteLeads === -1 ? 'Leads ilimitados' : 'Hasta ' + plan.limiteLeads + ' leads'}`,
-        `${plan.limiteStorage} GB almacenamiento`,
-      ];
-
-      return {
-        id: plan.id,
-        name: plan.nombre,
-        price: plan.precio,
-        currency: plan.moneda === 'MXN' ? '$' : '€',
-        period: plan.intervalo === 'mensual' ? 'mes' : 'año',
-        description: plan.descripcion || '',
-        features: displayFeatures,
-        popular: plan.esPopular,
-        slug: plan.slug
-      };
-    });
-
-    return NextResponse.json(plans);
-  } catch (error) {
-    console.error('Error fetching plans API:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
+  return NextResponse.json(plans)
 }

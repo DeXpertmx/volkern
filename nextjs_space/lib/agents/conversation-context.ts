@@ -1,275 +1,303 @@
 /**
- * Conversation Context Agent - Memoria multi-turn
- * 
- * Gestiona el contexto de conversación con:
- * - Persistencia de entidades
- * - Historial de mensajes
- * - Continuidad de intent
- * - Expiración de sesiones
+ * Conversation Context Agent - Memoria persistente en DB
+ *
+ * Almacena contexto de conversación en la tabla Conversation (hubMetadata)
+ * y los mensajes en la tabla Message, usando ChatMemoryService.
+ * Reemplaza el anterior almacenamiento en memoria (Map) que se perdía al reiniciar.
  */
 
+import { ChatMemoryService, ChatMemoryMessage, ChatMemoryContext } from '@/lib/chat/chat-memory'
+
 export interface ConversationMessage {
-  role: 'user' | 'assistant';
-  message: string;
-  timestamp: number;
+  role: 'user' | 'assistant'
+  message: string
+  timestamp: number
 }
 
 export interface ConversationContext {
-  sessionId: string;
-  conversationId: string;
-  userId: string;
-  tenantId: string;
-  
-  lastIntent?: string;
-  pendingIntent?: string;
-  collectedEntities: Record<string, string>;
-  missingEntities: string[];
-  
-  history: ConversationMessage[];
-  
-  telegramChatId?: string;
-  chatwootContactId?: string;
-  
-  createdAt: number;
-  updatedAt: number;
+  sessionId: string
+  conversationId: string
+  userId: string
+  tenantId: string
+
+  lastIntent?: string
+  pendingIntent?: string
+  collectedEntities: Record<string, string>
+  missingEntities: string[]
+  facts: string[]
+
+  history: ConversationMessage[]
+
+  telegramChatId?: string
+  chatwootContactId?: string
+
+  createdAt: number
+  updatedAt: number
 }
 
-// Storage en memoria (en producción usar Redis)
-const contextStore = new Map<string, ConversationContext>();
+const MAX_HISTORY = 30
 
-// Configuración
-const SESSION_TTL_MS = 30 * 60 * 1000; // 30 minutos
-const MAX_HISTORY = 20; // Máximo mensajes en historial
+const contextCache = new Map<string, ConversationContext>()
+const SESSION_TTL_MS = 30 * 60 * 1000
 
-function getKey(conversationId: string): string {
-  return `ctx:${conversationId}`;
+async function getMemory(tenantId: string) {
+  return new ChatMemoryService(tenantId)
 }
 
 export const ConversationContextAgent = {
-  /**
-   * Cargar o crear contexto para una conversación
-   */
-  async load(params: {
-    conversationId: string;
-    userId: string;
-    tenantId: string;
-  }): Promise<ConversationContext> {
-    const { conversationId, userId, tenantId } = params;
-    const key = getKey(conversationId);
-    
-    let ctx = contextStore.get(key);
-    
-    // Verificar expiración
-    if (ctx && Date.now() - ctx.updatedAt > SESSION_TTL_MS) {
-      console.log(`[Context] Sesión expirada para ${conversationId}, creando nueva`);
-      await this.reset(conversationId);
-      ctx = null;
-    }
-    
-    if (!ctx) {
-      ctx = this.create(conversationId, userId, tenantId);
-      contextStore.set(key, ctx);
-      console.log(`[Context] Nuevo contexto creado para ${conversationId}`);
-    }
-    
-    return ctx;
-  },
+  async getOrCreateContext(
+    tenantId: string,
+    userId: string,
+    _maxContextMessages = 10
+  ): Promise<ConversationContext> {
+    const externalRef = `telegram:${userId}`
+    const memory = await getMemory(tenantId)
 
-  /**
-   * Crear nuevo contexto
-   */
-  create(conversationId: string, userId: string, tenantId: string): ConversationContext {
-    return {
-      sessionId: `sess_${Date.now()}_${Math.random().toString(36).substring(7)}`,
-      conversationId,
+    const conv = await memory.getOrCreateConversation({
+      channel: 'telegram',
+      externalRef,
+      contactName: userId,
+    })
+
+    const ctx = await this.load({
+      conversationId: conv.id,
       userId,
       tenantId,
-      collectedEntities: {},
-      missingEntities: [],
-      history: [],
+    })
+
+    const cacheKey = `ctx:${conv.id}`
+    contextCache.set(cacheKey, ctx)
+
+    return ctx
+  },
+
+  async updateContext(
+    sessionId: string,
+    updates: Record<string, unknown>
+  ): Promise<void> {
+    const conversationId = sessionId.replace('sess_', '')
+    const cacheKey = `ctx:${conversationId}`
+    const cached = contextCache.get(cacheKey)
+    if (!cached) return
+
+    if (updates.lastIntent !== undefined) cached.lastIntent = updates.lastIntent as string
+    if (updates.pendingIntent !== undefined) cached.pendingIntent = updates.pendingIntent as string
+    if (updates.collectedEntities !== undefined) cached.collectedEntities = updates.collectedEntities as Record<string, string>
+    if (updates.missingEntities !== undefined) cached.missingEntities = updates.missingEntities as string[]
+
+    cached.updatedAt = Date.now()
+
+    const memory = await getMemory(cached.tenantId)
+    await memory.updateContext(conversationId, {
+      lastIntent: cached.lastIntent,
+      pendingIntent: cached.pendingIntent,
+      collectedEntities: cached.collectedEntities,
+      missingEntities: cached.missingEntities,
+      facts: cached.facts,
+    })
+  },
+
+  async setMissingEntities(
+    sessionId: string,
+    missingEntities: string[]
+  ): Promise<void> {
+    const conversationId = sessionId.replace('sess_', '')
+    const cacheKey = `ctx:${conversationId}`
+    const cached = contextCache.get(cacheKey)
+    if (!cached) return
+
+    cached.missingEntities = missingEntities
+    cached.updatedAt = Date.now()
+
+    const memory = await getMemory(cached.tenantId)
+    await memory.updateContext(conversationId, { missingEntities })
+  },
+  async load(params: {
+    conversationId: string
+    userId: string
+    tenantId: string
+  }): Promise<ConversationContext> {
+    const { conversationId, tenantId } = params
+    const memory = new ChatMemoryService(tenantId)
+
+    const ctx = await memory.getContext(conversationId)
+    const messages = await memory.getMessages(conversationId, MAX_HISTORY)
+
+    return {
+      sessionId: `sess_${conversationId}`,
+      conversationId,
+      userId: params.userId,
+      tenantId,
+      lastIntent: ctx.lastIntent,
+      pendingIntent: ctx.pendingIntent,
+      collectedEntities: ctx.collectedEntities,
+      missingEntities: ctx.missingEntities,
+      facts: ctx.facts,
+      history: messages.map((m) => ({
+        role: m.role === 'system' ? 'assistant' : m.role,
+        message: m.content,
+        timestamp: m.timestamp.getTime(),
+      })),
       createdAt: Date.now(),
-      updatedAt: Date.now()
-    };
+      updatedAt: Date.now(),
+    }
   },
 
-  /**
-   * Actualizar contexto
-   */
-  async update(context: ConversationContext, updates?: Partial<ConversationContext>): Promise<ConversationContext> {
+  async update(
+    context: ConversationContext,
+    updates?: Partial<ConversationContext>
+  ): Promise<ConversationContext> {
     if (updates) {
-      Object.assign(context, updates);
+      Object.assign(context, updates)
     }
-    
-    context.updatedAt = Date.now();
-    
-    // Limitar historial para evitar crecimiento infinito
+
+    context.updatedAt = Date.now()
+
     if (context.history.length > MAX_HISTORY) {
-      context.history = context.history.slice(-MAX_HISTORY);
+      context.history = context.history.slice(-MAX_HISTORY)
     }
-    
-    const key = getKey(context.conversationId);
-    contextStore.set(key, context);
-    
-    return context;
+
+    const memory = new ChatMemoryService(context.tenantId)
+    await memory.updateContext(context.conversationId, {
+      lastIntent: context.lastIntent,
+      pendingIntent: context.pendingIntent,
+      collectedEntities: context.collectedEntities,
+      missingEntities: context.missingEntities,
+      facts: context.facts,
+    })
+
+    return context
   },
 
-  /**
-   * Agregar mensaje al historial
-   */
-  async addMessage(context: ConversationContext, role: 'user' | 'assistant', message: string): Promise<ConversationContext> {
-    context.history.push({
-      role,
-      message,
-      timestamp: Date.now()
-    });
-    
-    // Limitar historial
+  async addMessage(
+    context: ConversationContext,
+    role: 'user' | 'assistant',
+    message: string
+  ): Promise<ConversationContext> {
+    context.history.push({ role, message, timestamp: Date.now() })
+
     if (context.history.length > MAX_HISTORY) {
-      context.history = context.history.slice(-MAX_HISTORY);
+      context.history = context.history.slice(-MAX_HISTORY)
     }
-    
-    return this.update(context);
+
+    const memory = new ChatMemoryService(context.tenantId)
+    await memory.addMessage({
+      conversationId: context.conversationId,
+      content: message,
+      direction: role === 'user' ? 'entrante' : 'saliente',
+      channel: 'chatbot',
+    })
+
+    return this.update(context)
   },
 
-  /**
-   * Actualizar intent y entidades
-   */
   async updateIntent(
     context: ConversationContext,
     intent: string,
     entities: Record<string, string>,
     missingEntities: string[] = []
   ): Promise<ConversationContext> {
-    // Entity merging: mantener entidades previamente.collected
-    const mergedEntities = {
-      ...context.collectedEntities,
-      ...entities
-    };
-    
+    const mergedEntities = { ...context.collectedEntities, ...entities }
+
     return this.update(context, {
       lastIntent: intent,
       pendingIntent: missingEntities.length > 0 ? intent : undefined,
       collectedEntities: mergedEntities,
-      missingEntities
-    });
+      missingEntities,
+    })
   },
 
-  /**
-   * Completar entities faltantes
-   */
-  async completeEntities(context: ConversationContext, entities: Record<string, string>): Promise<ConversationContext> {
-    const mergedEntities = {
-      ...context.collectedEntities,
-      ...entities
-    };
-    
-    // Recalcular missing entities
-    const required = getRequiredEntities(context.pendingIntent);
-    const missing = required.filter(e => !mergedEntities[e]);
-    
+  async completeEntities(
+    context: ConversationContext,
+    entities: Record<string, string>
+  ): Promise<ConversationContext> {
+    const mergedEntities = { ...context.collectedEntities, ...entities }
+    const required = getRequiredEntities(context.pendingIntent)
+    const missing = required.filter((e) => !mergedEntities[e])
+
     return this.update(context, {
       collectedEntities: mergedEntities,
       missingEntities: missing,
-      pendingIntent: missing.length > 0 ? context.pendingIntent : undefined
-    });
+      pendingIntent: missing.length > 0 ? context.pendingIntent : undefined,
+    })
   },
 
-  /**
-   * Resetear contexto (para errores o soporte)
-   */
-  async reset(conversationId: string): Promise<void> {
-    const key = getKey(conversationId);
-    contextStore.delete(key);
-    console.log(`[Context] Contexto reseteado para ${conversationId}`);
+  async addFact(context: ConversationContext, fact: string): Promise<ConversationContext> {
+    if (!context.facts.includes(fact)) {
+      context.facts.push(fact)
+      const memory = new ChatMemoryService(context.tenantId)
+      await memory.addFact(context.conversationId, fact)
+    }
+    return context
   },
 
-  /**
-   * Obtener resumen de contexto para Gemma
-   */
+  async reset(conversationId: string, tenantId: string): Promise<void> {
+    const memory = new ChatMemoryService(tenantId)
+    await memory.updateContext(conversationId, {
+      lastIntent: undefined,
+      pendingIntent: undefined,
+      collectedEntities: {},
+      missingEntities: [],
+      facts: [],
+    })
+  },
+
   getSummary(context: ConversationContext): {
-    lastIntent?: string;
-    pendingIntent?: string;
-    entities: Record<string, string>;
-    missing: string[];
+    lastIntent?: string
+    pendingIntent?: string
+    entities: Record<string, string>
+    missing: string[]
+    facts: string[]
   } {
     return {
       lastIntent: context.lastIntent,
       pendingIntent: context.pendingIntent,
       entities: context.collectedEntities,
-      missing: context.missingEntities
-    };
-  },
-
-  /**
-   * Obtener últimos N mensajes para contexto
-   */
-  getRecentMessages(context: ConversationContext, count: number = 5): ConversationMessage[] {
-    return context.history.slice(-count);
-  },
-
-  /**
-   * Verificar si sesión está activa
-   */
-  isActive(context: ConversationContext): boolean {
-    return Date.now() - context.updatedAt < SESSION_TTL_MS;
-  },
-
-  /**
-   * Obtener todas las sesiones activas de un tenant
-   */
-  getActiveSessions(tenantId: string): ConversationContext[] {
-    const sessions: ConversationContext[] = [];
-    
-    for (const ctx of contextStore.values()) {
-      if (ctx.tenantId === tenantId && this.isActive(ctx)) {
-        sessions.push(ctx);
-      }
+      missing: context.missingEntities,
+      facts: context.facts,
     }
-    
-    return sessions;
   },
 
-  /**
-   * Limpiar sesiones expiradas
-   */
-  async cleanExpired(): Promise<number> {
-    let cleaned = 0;
-    
-    for (const [key, ctx] of contextStore.entries()) {
-      if (Date.now() - ctx.updatedAt > SESSION_TTL_MS) {
-        contextStore.delete(key);
-        cleaned++;
-      }
-    }
-    
-    if (cleaned > 0) {
-      console.log(`[Context] Limpiadas ${cleaned} sesiones expiradas`);
-    }
-    
-    return cleaned;
-  }
-};
+  getRecentMessages(context: ConversationContext, count = 5): ConversationMessage[] {
+    return context.history.slice(-count)
+  },
 
-// Helper para obtener entidades requeridas por intent
-function getRequiredEntities(intent?: string): string[] {
-  const required: Record<string, string[]> = {
-    'agendar_cita': ['date', 'time', 'service'],
-    'cancelar_cita': ['appointment_id'],
-    'consultar_cita': ['date'],
-    'consultar_precio': ['service']
-  };
-  
-  return intent ? required[intent] || [] : [];
+  buildPrompt(context: ConversationContext): string {
+    const memory = new ChatMemoryService(context.tenantId)
+    return memory.buildPrompt(
+      {
+        lastIntent: context.lastIntent,
+        pendingIntent: context.pendingIntent,
+        collectedEntities: context.collectedEntities,
+        missingEntities: context.missingEntities,
+        facts: context.facts,
+      },
+      context.history.map((m) => ({
+        role: m.role,
+        content: m.message,
+        timestamp: new Date(m.timestamp),
+      }))
+    )
+  },
 }
 
-// Función de sanitización
+function getRequiredEntities(intent?: string): string[] {
+  const required: Record<string, string[]> = {
+    agendar_cita: ['date', 'time', 'service'],
+    cancelar_cita: ['appointment_id'],
+    consultar_cita: ['date'],
+    consultar_precio: ['service'],
+  }
+  return intent ? required[intent] || [] : []
+}
+
 export function sanitizeInput(input: string): string {
   return input
     .replace(/[<>]/g, '')
     .replace(/javascript:/gi, '')
     .replace(/on\w+=/gi, '')
     .trim()
-    .substring(0, 4000);
+    .substring(0, 4000)
 }
 
-export default ConversationContextAgent;
+export default ConversationContextAgent

@@ -144,7 +144,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verificar límites de IA por plan
-    const planSlug = (tenant.plan as any) || PLANS.STARTER;
+    const planSlug = (tenant.plan as any) || PLANS.ESENCIAL;
     const planConfig = PLAN_LIMITS[planSlug as keyof typeof PLAN_LIMITS] || PLAN_LIMITS['trial'];
     const limit = (planConfig as any).ai_image_generations ?? 5;
 

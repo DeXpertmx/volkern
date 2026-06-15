@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
       return tenants.map(t => ({
         id: t.id,
         nombre: t.nombre,
-        plan: t.plan || 'starter',
+        plan: t.plan || 'esencial',
         mrr: t.mrr || 0,
         estado: t.estado,
         fechaFin: t.fechaVencimiento,

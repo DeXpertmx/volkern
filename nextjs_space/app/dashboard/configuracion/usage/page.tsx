@@ -192,15 +192,15 @@ export default function UsagePage() {
   }
 
   const PLAN_DISPLAY: Record<string, string> = {
-    starter: 'Starter',
-    growth: 'Growth',
-    pro: 'Pro',
+    esencial: 'Esencial',
+    profesional: 'Profesional',
+    infinity: 'Infinity',
   }
 
   const NEXT_PLAN_MAP: Record<string, string> = {
-    trial: PLANS.STARTER,
-    starter: PLANS.GROWTH,
-    growth: PLANS.PRO,
+    trial: PLANS.ESENCIAL,
+    esencial: PLANS.PROFESIONAL,
+    profesional: PLANS.INFINITY,
   }
 
   const isNearLimit = (f: any) => f.status === 'warning' || f.status === 'exceeded'
@@ -524,7 +524,7 @@ export default function UsagePage() {
                           )}
                           {upgradeInfo?.suggestedPlan
                             ? `Upgrade a ${PLAN_DISPLAY[upgradeInfo.suggestedPlan] || upgradeInfo.suggestedPlan}`
-                            : status?.plan === 'pro'
+                            : status?.plan === 'infinity'
                               ? 'Contáctanos'
                               : 'Hacer Upgrade'}
                         </button>
