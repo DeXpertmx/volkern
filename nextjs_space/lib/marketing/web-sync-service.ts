@@ -1,36 +1,63 @@
 import { prisma, globalPrisma } from '../db';
+import { PLANS, PLAN_PRICES, PLAN_LIMITS } from '../plans';
 
 export class WebSyncService {
   /**
-   * Obtiene los planes de suscripción vigentes directamente de la base de datos maestra.
-   * Esto asegura que cualquier cambio en el Admin Panel se refleje en tiempo real.
+   * Obtiene los planes activos para mostrar en landing page.
+   * Usa datos hardcodeados de lib/plans.ts como fuente de verdad.
    */
   static async getActivePlans() {
-    try {
-      const plans = await prisma.subscriptionPlan.findMany({
-        orderBy: { precio: 'asc' },
-        select: {
-          id: true,
-          nombre: true,
-          descripcion: true,
-          slug: true,
-          precio: true,
-          moneda: true,
-          intervalo: true,
-          limiteUsuarios: true,
-          limiteLeads: true,
-          whatsappHabilitado: true,
-          whitelabelHabilitado: true,
-          lmsHabilitado: true,
-          automationsHabilitado: true,
-          campaignsHabilitado: true,
-        }
-      });
-      return plans;
-    } catch (error) {
-      console.error('[WebSync] Error fetching plans:', error);
-      return [];
-    }
+    const plans = [
+      {
+        id: PLANS.ESENCIAL,
+        nombre: 'Esencial',
+        descripcion: 'Para autónomos y gestorías pequeñas que empiezan',
+        slug: PLANS.ESENCIAL,
+        precio: PLAN_PRICES[PLANS.ESENCIAL].monthly,
+        moneda: 'EUR',
+        intervalo: 'mensual',
+        limiteUsuarios: PLAN_LIMITS[PLANS.ESENCIAL].users,
+        limiteLeads: PLAN_LIMITS[PLANS.ESENCIAL].leads,
+        whatsappHabilitado: false,
+        whitelabelHabilitado: false,
+        lmsHabilitado: true,
+        automationsHabilitado: true,
+        campaignsHabilitado: true,
+      },
+      {
+        id: PLANS.PROFESIONAL,
+        nombre: 'Profesional',
+        descripcion: 'Para PYMES y gestorías en crecimiento',
+        slug: PLANS.PROFESIONAL,
+        precio: PLAN_PRICES[PLANS.PROFESIONAL].monthly,
+        moneda: 'EUR',
+        intervalo: 'mensual',
+        limiteUsuarios: PLAN_LIMITS[PLANS.PROFESIONAL].users,
+        limiteLeads: PLAN_LIMITS[PLANS.PROFESIONAL].leads,
+        whatsappHabilitado: true,
+        whitelabelHabilitado: false,
+        lmsHabilitado: true,
+        automationsHabilitado: true,
+        campaignsHabilitado: true,
+      },
+      {
+        id: PLANS.INFINITY,
+        nombre: 'Infinity',
+        descripcion: 'Para empresas y despachos grandes',
+        slug: PLANS.INFINITY,
+        precio: PLAN_PRICES[PLANS.INFINITY].monthly,
+        moneda: 'EUR',
+        intervalo: 'mensual',
+        limiteUsuarios: PLAN_LIMITS[PLANS.INFINITY].users,
+        limiteLeads: PLAN_LIMITS[PLANS.INFINITY].leads,
+        whatsappHabilitado: true,
+        whitelabelHabilitado: true,
+        lmsHabilitado: true,
+        automationsHabilitado: true,
+        campaignsHabilitado: true,
+      },
+    ];
+    return plans;
   }
 
   /**
