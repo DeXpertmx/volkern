@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/db'
 import { PLANS, PLAN_LIMITS, TRIAL_DAYS, getPlanConfig } from '@/lib/plans'
+import { getDefaultModules } from '@/lib/onboarding-modules'
 import { seedFormsForTenant } from '@/scripts/seed-formularios-demo'
 import { AccountingInitializer } from '@/lib/accounting/initializer'
 
@@ -13,19 +14,6 @@ function generateSlug(companyName: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .substring(0, 50)
-}
-
-function getDefaultModules(): string[] {
-  return [
-    'leads', 'contactos', 'empresas', 'pipeline', 'tareas', 'analytics',
-    'mensajes', 'citas', 'catalogo',
-    'campanas', 'email_marketing', 'cms', 'builder_premium',
-    'mi_tarjeta',
-    'equipo', 'configuracion',
-    'telefonia',
-    'social_manager',
-    'rrhh', 'finanzas', 'calidad', 'produccion', 'inventario', 'proyectos', 'taskforce', 'activos', 'conocimiento', 'estrategia'
-  ]
 }
 
 export async function POST(request: NextRequest) {

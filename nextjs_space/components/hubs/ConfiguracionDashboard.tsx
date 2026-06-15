@@ -17,7 +17,9 @@ import {
   Plug,
   ExternalLink,
   CreditCard,
-  Loader2
+  Loader2,
+  LayoutGrid,
+  Info,
 } from "lucide-react";
 import { toast } from "sonner";
 import { WhitelabelConfig } from "@/components/whitelabel-config";
@@ -33,6 +35,9 @@ import { ImageUploader } from "@/components/ui/image-uploader";
 import EqualityConfigSection from "@/components/equality/EqualityConfigSection";
 import { NotificationConfig } from "@/components/dashboard/notifications/NotificationConfig";
 import Link from "next/link";
+import { Switch } from "@/components/ui/switch";
+import { ALL_MODULES } from "@/lib/plans";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface ConfiguracionDashboardProps {
   activeSection: string;
@@ -43,10 +48,19 @@ export function ConfiguracionDashboard({ activeSection }: ConfiguracionDashboard
   const [config, setConfig] = useState<any>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [tenantModules, setTenantModules] = useState<string[]>([]);
+  const [modulesLoading, setModulesLoading] = useState(false);
+  const [togglingModule, setTogglingModule] = useState<string | null>(null);
+
+  const CORE_MODULES = ['leads', 'contactos', 'empresas', 'pipeline', 'tareas', 'analytics', 'equipo', 'configuracion', 'conocimiento'];
 
   useEffect(() => {
     fetchConfig();
   }, []);
+
+  useEffect(() => {
+    if (activeSection === 'modulos') fetchModules();
+  }, [activeSection]);
 
   const fetchConfig = async () => {
     try {
@@ -59,6 +73,46 @@ export function ConfiguracionDashboard({ activeSection }: ConfiguracionDashboard
       console.error("Error fetching config:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchModules = async () => {
+    setModulesLoading(true);
+    try {
+      const res = await fetch('/api/tenant/modules');
+      if (res.ok) {
+        const data = await res.json();
+        setTenantModules(data.modules || []);
+      }
+    } catch (error) {
+      console.error('Error fetching modules:', error);
+    } finally {
+      setModulesLoading(false);
+    }
+  };
+
+  const toggleModule = async (moduleId: string, currentEnabled: boolean) => {
+    if (CORE_MODULES.includes(moduleId) && currentEnabled) return; // No desactivar core
+    setTogglingModule(moduleId);
+    try {
+      const res = await fetch('/api/tenant/modules', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ moduleId, habilitado: !currentEnabled }),
+      });
+      if (res.ok) {
+        setTenantModules(prev =>
+          !currentEnabled ? [...prev, moduleId] : prev.filter(m => m !== moduleId)
+        );
+        toast.success(`Módulo ${!currentEnabled ? 'activado' : 'desactivado'}`);
+      } else {
+        const data = await res.json();
+        toast.error(data.error || 'Error al cambiar módulo');
+      }
+    } catch {
+      toast.error('Error de conexión');
+    } finally {
+      setTogglingModule(null);
     }
   };
 
@@ -94,6 +148,80 @@ export function ConfiguracionDashboard({ activeSection }: ConfiguracionDashboard
           exit={{ opacity: 0, x: -20 }}
           transition={{ duration: 0.2 }}
         >
+          {activeSection === "modulos" && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-2xl font-bold">Gestión de Módulos</h2>
+                <p className="text-muted-foreground">Activa o desactiva las funcionalidades de tu cuenta. Los módulos esenciales no se pueden desactivar.</p>
+              </div>
+
+              {modulesLoading ? (
+                <div className="p-12 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" /></div>
+              ) : (
+                <div className="space-y-4">
+                  {Array.from(new Set(ALL_MODULES.map(m => m.group))).map(group => (
+                    <Card key={group} className="shadow-sm">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base font-semibold flex items-center gap-2">
+                          <LayoutGrid className="h-4 w-4 text-primary" />
+                          {group}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                          {ALL_MODULES.filter(m => m.group === group).map(mod => {
+                            const isEnabled = tenantModules.includes(mod.id);
+                            const isCore = CORE_MODULES.includes(mod.id) && isEnabled;
+                            const isToggling = togglingModule === mod.id;
+
+                            return (
+                              <div
+                                key={mod.id}
+                                className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
+                                  isEnabled ? 'bg-primary/5 border-primary/20' : 'bg-muted/30 border-muted'
+                                } ${isCore ? 'opacity-80' : ''}`}
+                              >
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-medium truncate">{mod.label}</span>
+                                    {isCore && (
+                                      <TooltipProvider>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <Info className="h-3 w-3 text-amber-500 flex-shrink-0" />
+                                          </TooltipTrigger>
+                                          <TooltipContent>
+                                            <p className="text-xs">Módulo esencial — no se puede desactivar</p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    )}
+                                  </div>
+                                  <p className="text-xs text-muted-foreground truncate">{mod.description}</p>
+                                </div>
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                  {isToggling ? (
+                                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                                  ) : (
+                                    <Switch
+                                      checked={isEnabled}
+                                      onCheckedChange={() => toggleModule(mod.id, isEnabled)}
+                                      disabled={isCore}
+                                    />
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {activeSection === "empresa" && (
             <div className="space-y-6">
               <Card className="shadow-xl">

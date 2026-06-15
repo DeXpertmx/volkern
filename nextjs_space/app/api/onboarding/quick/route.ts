@@ -69,6 +69,61 @@ export async function POST(req: NextRequest) {
 
     const { step } = await req.json();
 
+    if (step === 'modules') {
+      const { modules: selectedModules } = await req.json()
+      if (!Array.isArray(selectedModules) || selectedModules.length === 0) {
+        return NextResponse.json({ error: 'Selecciona al menos un módulo' }, { status: 400 })
+      }
+
+      // Validar que los IDs sean módulos válidos
+      const { ALL_MODULES } = await import('@/lib/plans')
+      const validIds = new Set(ALL_MODULES.map((m: any) => m.id))
+      const validModules = selectedModules.filter((m: string) => validIds.has(m))
+
+      // Obtener módulos existentes
+      const existing = await prisma.tenantFeature.findMany({
+        where: { tenantId: user.tenantId },
+        select: { feature: true },
+      })
+      const existingFeatures = new Set(existing.map(e => e.feature))
+
+      // Crear los módulos nuevos (los que no existen aún)
+      const toCreate = validModules.filter(m => !existingFeatures.has(m))
+      if (toCreate.length > 0) {
+        await prisma.tenantFeature.createMany({
+          data: toCreate.map(feature => ({
+            tenantId: user.tenantId,
+            feature,
+            habilitado: true,
+          })),
+        })
+      }
+
+      // Deshabilitar los que no fueron seleccionados (excepto los core)
+      const CORE_MODULES = ['leads', 'contactos', 'empresas', 'pipeline', 'tareas', 'analytics', 'equipo', 'configuracion', 'conocimiento']
+      const toDisable = existing.filter(e => !validModules.includes(e.feature) && !CORE_MODULES.includes(e.feature))
+      if (toDisable.length > 0) {
+        await prisma.tenantFeature.updateMany({
+          where: {
+            tenantId: user.tenantId,
+            feature: { in: toDisable.map(e => e.feature) },
+          },
+          data: { habilitado: false },
+        })
+      }
+
+      // También habilitar los que estaban deshabilitados pero ahora se seleccionaron
+      await prisma.tenantFeature.updateMany({
+        where: {
+          tenantId: user.tenantId,
+          feature: { in: validModules },
+        },
+        data: { habilitado: true },
+      })
+
+      return NextResponse.json({ success: true, activated: toCreate.length })
+    }
+
     if (step === 'profile') {
       const { perfil, nif, nombreEmpresa } = await req.json();
       await prisma.tenant.update({
