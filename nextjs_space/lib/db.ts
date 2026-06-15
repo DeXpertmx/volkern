@@ -126,21 +126,39 @@ if (!globalForPrisma.tenantCache) {
 }
 const clientCacheV3 = globalForPrisma.tenantCache;
 
-// 2. Cliente Global (Control Plane)
-const createGlobalPrisma = () => {
-  return new PrismaClient({
-    log: ['error'],
-    // Forzamos un límite bajo para evitar colisiones
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma $extends chains lose type precision
-  }).$extends(billingLockExtension).$extends(vaultExtension) as any
+// 2. Cliente Global (Control Plane) — lazy init para evitar crash en Vercel
+// cuando el módulo se carga pero DATABASE_URL no está disponible aún.
+let _gp: PrismaClient | undefined
+
+function ensureGlobalPrisma(): PrismaClient {
+  if (!_gp) {
+    if (!process.env.DATABASE_URL) {
+      // No hay DATABASE_URL — devolver un proxy que falla con mensaje claro
+      // en lugar de new URL('') que es imposible de debuggear.
+      _gp = new Proxy({} as PrismaClient, {
+        get(_target, prop) {
+          if (prop === 'then') return undefined
+          throw new Error(
+            '[db] PrismaClient no disponible: DATABASE_URL no está definida. ' +
+            'Asegúrate de configurarla en el entorno (Vercel, .env, etc).'
+          )
+        },
+      })
+    } else {
+      _gp = globalForPrisma.prisma_v4 || createGlobalPrisma()
+      if (process.env.NODE_ENV !== 'production') {
+        globalForPrisma.prisma_v4 = _gp
+      }
+    }
+  }
+  return _gp
 }
 
-export const globalPrisma: PrismaClient = globalForPrisma.prisma_v4 || createGlobalPrisma()
-
-// Forzar limpieza del cliente global si el esquema ha cambiado (v3)
-if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma_v4 = globalPrisma;
-}
+export const globalPrisma = new Proxy({} as PrismaClient, {
+  get(_target, prop, receiver) {
+    return Reflect.get(ensureGlobalPrisma(), prop, receiver)
+  },
+})
 
 // 3. Fábrica Dinámica de Clientes
 export async function getTenantDb(tenantId?: string) {
@@ -168,7 +186,6 @@ export async function getTenantDb(tenantId?: string) {
     ? `${tenant.dbUrl}&connection_limit=5` 
     : `${tenant.dbUrl}?connection_limit=5`;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma $extends chains lose type precision
   const tenantClient = new PrismaClient({
     datasources: {
       db: { url: dbUrl }

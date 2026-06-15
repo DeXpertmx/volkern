@@ -1,0 +1,13 @@
+diff --git a/node_modules/next-auth/utils/parse-url.js b/node_modules/next-auth/utils/parse-url.js
+index 5015454..39e1606 100644
+--- a/node_modules/next-auth/utils/parse-url.js
++++ b/node_modules/next-auth/utils/parse-url.js
+@@ -10,7 +10,7 @@ function parseUrl(url) {
+   if (url && !url.startsWith("http")) {
+     url = `https://${url}`;
+   }
+-  const _url = new URL((_url2 = url) !== null && _url2 !== void 0 ? _url2 : defaultUrl);
++  const _url = new URL(url || defaultUrl);
+   const path = (_url.pathname === "/" ? defaultUrl.pathname : _url.pathname).replace(/\/$/, "");
+   const base = `${_url.origin}${path}`;
+   return {

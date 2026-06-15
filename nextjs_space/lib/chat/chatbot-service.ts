@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db'
+import { KnowledgeService } from '@/lib/knowledge/knowledge-service'
 import { callAssistantWithFallback, OpenRouterMessage } from '@/lib/assistant/openrouter-client'
 import { ChatMemoryService } from '@/lib/chat/chat-memory'
 
@@ -88,18 +89,9 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
     const context = await memory.getContext(conv.id)
     const recentMessages = await memory.getMessages(conv.id, DEFAULTS.MAX_HISTORY)
 
-    const kbArticles = await prisma.knowledgeArticle.findMany({
-      where: {
-        tenantId,
-        isPublic: true,
-        OR: [
-          { content: { contains: message, mode: 'insensitive' } },
-          { title: { contains: message, mode: 'insensitive' } },
-          { tags: { hasSome: message.toLowerCase().split(/\s+/).slice(0, 3) } },
-        ],
-      },
-      select: { title: true, content: true, category: true, tags: true },
-      take: 5,
+    const kbArticles = await KnowledgeService.searchSemantic(tenantId, message).catch(err => {
+      console.warn('[ChatbotService] Error en búsqueda semántica de KB:', err)
+      return []
     })
 
     let kbSection = ''

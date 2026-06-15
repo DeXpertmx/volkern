@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/db'
+import { KnowledgeService } from '@/lib/knowledge/knowledge-service'
 
 const ACCOUNTING_ARTICLES = [
   {
@@ -147,7 +147,9 @@ En Volkern puedes subir tu certificado P12/PFX en Configuración > Fiscal > Emis
 ]
 
 export async function seedKnowledgeBase(tenantId: string, authorId: string) {
+  const { prisma } = await import('@/lib/db')
   let created = 0
+  let embeddingsGenerated = 0
 
   for (const article of ACCOUNTING_ARTICLES) {
     const existing = await prisma.knowledgeArticle.findFirst({
@@ -155,18 +157,20 @@ export async function seedKnowledgeBase(tenantId: string, authorId: string) {
     })
 
     if (!existing) {
-      await prisma.knowledgeArticle.create({
-        data: {
-          ...article,
-          tenantId,
-          authorId,
-          isPublic: true,
-        },
+      // Usar KnowledgeService.createArticle para generar embeddings automáticamente
+      const createdArticle = await KnowledgeService.createArticle(tenantId, {
+        ...article,
+        authorId,
+        isPublic: true,
       })
+
+      if (createdArticle.vectorId) {
+        embeddingsGenerated++
+      }
       created++
     }
   }
 
-  console.log(`[SeedKB] Creados ${created} artículos de knowledge base contable/fiscal`)
+  console.log(`[SeedKB] Creados ${created} artículos (${embeddingsGenerated} con embeddings)`)
   return created
 }

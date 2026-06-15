@@ -341,6 +341,82 @@ export async function callOpenRouterWithFallback(
   }
 }
 
+// ─── Embeddings ──────────────────────────────────────────────────────────────
+
+const OPENROUTER_EMBEDDING_MODEL = 'intfloat/e5-large-v2';
+
+export interface EmbeddingResult {
+  embedding: number[];
+  tokens: number;
+}
+
+type EmbeddingType = 'passage' | 'query';
+
+/**
+ * Llama al endpoint de embeddings de OpenRouter.
+ * e5 models require "query: " or "passage: " prefix.
+ */
+async function callEmbeddingAPI(text: string, type: EmbeddingType): Promise<EmbeddingResult> {
+  if (!OPENROUTER_API_KEY) {
+    throw new Error('OPENROUTER_API_KEY no configurada');
+  }
+
+  const input = `${type}: ${text}`;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+  try {
+    const response = await fetch('https://openrouter.ai/api/v1/embeddings', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://volkern.app',
+        'X-Title': 'Volkern Knowledge Embeddings',
+      },
+      body: JSON.stringify({
+        model: OPENROUTER_EMBEDDING_MODEL,
+        input,
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`OpenRouter Embedding error: ${response.status} - ${error}`);
+    }
+
+    const data = await response.json();
+
+    if (!data?.data?.[0]?.embedding) {
+      throw new Error('OpenRouter Embedding: respuesta vacía o sin embedding');
+    }
+
+    return {
+      embedding: data.data[0].embedding,
+      tokens: data.usage?.total_tokens || 0,
+    };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/**
+ * Genera un embedding vectorial para un artículo/documento.
+ * Costo: ~$0.00013/1K tokens — insignificante para artículos de KB.
+ */
+export async function generateEmbedding(text: string): Promise<EmbeddingResult> {
+  return callEmbeddingAPI(text, 'passage');
+}
+
+/**
+ * Genera un embedding para una query de búsqueda.
+ */
+export async function generateQueryEmbedding(query: string): Promise<EmbeddingResult> {
+  return callEmbeddingAPI(query, 'query');
+}
+
 // Para retrocompatibilidad
 export const callDeepSeekV4Flash = callGemma4;
 export { callGemini25Flash };

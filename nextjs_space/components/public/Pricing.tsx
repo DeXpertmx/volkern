@@ -53,10 +53,9 @@ export const Pricing = ({ plans }: PricingProps) => {
     <section id="pricing" className="py-24 bg-slate-950">
       <div className="container mx-auto px-6">
         <div className="text-center mb-16">
-          <h2 className="text-4xl font-bold text-white mb-4">Planes de Inversión Soberana</h2>
+          <h2 className="text-4xl font-bold text-white mb-4">Planes</h2>
           <p className="text-slate-400 max-w-2xl mx-auto">
-            Selecciona la infraestructura que mejor se adapte a tu escala. Sin sorpresas, 
-            sin límites ocultos. Control total de tus costos.
+            Un solo plan. Todo incluido. Solo escalas en capacidad.
           </p>
         </div>
 

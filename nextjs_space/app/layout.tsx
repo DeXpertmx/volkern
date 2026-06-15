@@ -1,6 +1,8 @@
 import React from 'react';
 import '@/app/globals.css';
 import { Inter } from 'next/font/google';
+
+export const dynamic = 'force-dynamic';
 import { Toaster } from '@/components/ui/sonner';
 import { SessionProvider } from '@/components/session-provider';
 import { ThemeProvider } from '@/components/theme-provider';
@@ -9,7 +11,6 @@ import { CookieConsentBanner } from '@/components/public/CookieConsentBanner';
 
 const inter = Inter({ subsets: ['latin'] });
 
-export const dynamic = 'force-dynamic';
 
 export const metadata = {
   title: 'Volkern | La Infraestructura Soberana para tu Empresa',
