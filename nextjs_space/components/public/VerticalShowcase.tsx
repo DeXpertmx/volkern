@@ -18,7 +18,7 @@ const verticals = [
     description: 'Pipeline Kanban visual, cotizaciones inteligentes, automatización de tareas comerciales, forecasting con IA y omnicanal nativo (WhatsApp, email, llamadas).',
     href: '/soluciones/crm-ventas',
     accent: 'cyan',
-    portada: '',
+    portada: '/ventas-portada.png',
     icon: Zap,
     features: [
       'Pipeline Kanban con drag & drop',
@@ -90,7 +90,7 @@ const verticals = [
     description: 'Gestiona personal, nóminas, asistencia, expedientes y reclutamiento. Portal del empleado 24/7, payroll sealing y automatización de procesos de RRHH con IA.',
     href: '/soluciones/rrhh',
     accent: 'rose',
-    portada: '',
+    portada: '/rrhh-portada.png',
     icon: UserCheck,
     features: [
       'Gestión de personal con expedientes digitales',
