@@ -61,9 +61,9 @@ const plans = [
 ];
 
 const clientLogos = [
-  { name: 'Industrial Nexus', logo: '/assets/logos/client1.png' },
-  { name: 'Sovereign Lab', logo: '/assets/logos/client2.png' },
-  { name: 'Global Logistics', logo: '/assets/logos/client3.png' },
+  { name: 'Industrial Nexus', logo: '/assets/logos/client1.svg' },
+  { name: 'Sovereign Lab', logo: '/assets/logos/client2.svg' },
+  { name: 'Global Logistics', logo: '/assets/logos/client3.svg' },
 ];
 
 export default function LandingClient() {
