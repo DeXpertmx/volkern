@@ -6,15 +6,17 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, X, ChevronDown, Building2, Calculator, PenTool, GraduationCap, Factory, UserCheck, Zap } from 'lucide-react';
 
-export const verticalLinks = [
-  { name: 'Inmobiliarias', href: '/soluciones/real-estate', icon: Building2 },
-  { name: 'Asesorías Contables', href: '/soluciones/accounting', icon: Calculator },
-  { name: 'Agencias Marketing', href: '/soluciones/marketing', icon: PenTool },
-  { name: 'Academias (LMS)', href: '/soluciones/academy', icon: GraduationCap },
-  { name: 'Industria', href: '/soluciones/industria', icon: Factory },
-  { name: 'Recursos Humanos', href: '/soluciones/rrhh', icon: UserCheck },
-  { name: 'CRM Ventas', href: '/soluciones/crm-ventas', icon: Zap },
-];
+import { verticalLinks } from '@/lib/navigation';
+
+const verticalIcons: Record<string, any> = {
+  '/soluciones/real-estate': Building2,
+  '/soluciones/accounting': Calculator,
+  '/soluciones/marketing': PenTool,
+  '/soluciones/academy': GraduationCap,
+  '/soluciones/industria': Factory,
+  '/soluciones/rrhh': UserCheck,
+  '/soluciones/crm-ventas': Zap,
+};
 
 export function PublicLayout({ children }: { children: React.ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -50,7 +52,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               <div className="absolute top-full left-1/2 -translate-x-1/2 pt-3 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
                 <div className="bg-slate-900 border border-slate-800 rounded-2xl p-2 min-w-[240px] shadow-2xl">
                   {verticalLinks.map((link) => {
-                    const Icon = link.icon;
+                    const Icon = verticalIcons[link.href];
                     return (
                       <Link
                         key={link.href}
@@ -58,7 +60,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                         className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-800 transition-colors group/item"
                       >
                         <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center group-hover/item:bg-slate-700 transition-colors">
-                          <Icon className="w-4 h-4 text-slate-400 group-hover/item:text-blue-400 transition-colors" />
+                          {Icon && <Icon className="w-4 h-4 text-slate-400 group-hover/item:text-blue-400 transition-colors" />}
                         </div>
                         <span className="text-sm text-slate-300 group-hover/item:text-white transition-colors font-medium">
                           {link.name}
@@ -100,7 +102,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               <div className="container mx-auto px-6 py-4 space-y-2">
                 <p className="text-xs font-bold uppercase tracking-widest text-slate-600 mb-2">Soluciones</p>
                 {verticalLinks.map((link) => {
-                  const Icon = link.icon;
+                  const Icon = verticalIcons[link.href];
                   return (
                     <Link
                       key={link.href}
@@ -108,7 +110,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                       onClick={() => setMobileMenuOpen(false)}
                       className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-900 transition-colors"
                     >
-                      <Icon className="w-4 h-4 text-slate-500" />
+                      {Icon && <Icon className="w-4 h-4 text-slate-500" />}
                       <span className="text-sm text-slate-300">{link.name}</span>
                     </Link>
                   );

@@ -2,7 +2,7 @@ import React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { NewLanding } from '@/components/public/NewLanding';
-import { verticalLinks } from '@/components/public/PublicLayout';
+import { verticalLinks } from '@/lib/navigation';
 
 export const metadata = {
   title: 'Volkern | El sistema operativo de tu negocio',
