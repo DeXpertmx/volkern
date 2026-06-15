@@ -141,7 +141,7 @@ export async function provisionTenant(input: TenantProvisioningInput): Promise<T
             data: {
                 nombre: empresa,
                 slug,
-                plan: 'starter',
+                plan: 'trial',
                 estado: 'trial',
                 nexusEnabled: true,
                 vaultSeed: crypto.randomBytes(32).toString('hex'),

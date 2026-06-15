@@ -39,6 +39,7 @@ export interface PlanConfig {
   limites: Record<string, number>;
   modules: CrmModule[];
   stripePriceId?: string;
+  stripePriceYearlyId?: string;
   branding?: {
     whitelabel: boolean;
     customDomain: boolean;
@@ -163,6 +164,7 @@ function mapDbPlanToConfig(plan: DbSubscriptionPlan): PlanConfig {
     },
     modules,
     stripePriceId: parsedFeatures?.stripePriceId || '',
+    stripePriceYearlyId: parsedFeatures?.stripePriceYearlyId || '',
     branding: {
       whitelabel: plan.whitelabelHabilitado,
       customDomain: plan.dominioPersonalizadoHabilitado
@@ -171,23 +173,22 @@ function mapDbPlanToConfig(plan: DbSubscriptionPlan): PlanConfig {
 }
 
 function getHardcodedPlanConfig(planSlug: string): PlanConfig {
-  const key = planSlug.toUpperCase() as keyof typeof PLANS;
-  const actualSlug = PLANS[key] || planSlug;
-  
-  const limits = PLAN_LIMITS[actualSlug as keyof typeof PLAN_LIMITS] || PLAN_LIMITS[PLANS.PRO];
-  const modules = PLAN_MODULES[actualSlug] || PLAN_MODULES[PLANS.STARTER];
-  const prices = PLAN_PRICES[actualSlug as keyof typeof PLAN_PRICES];
+  const normalizedSlug = planSlug.toLowerCase();
+  const limits = PLAN_LIMITS[normalizedSlug as keyof typeof PLAN_LIMITS] || PLAN_LIMITS[PLANS.ESENCIAL];
+  const modules = PLAN_MODULES[normalizedSlug] || PLAN_MODULES[PLANS.ESENCIAL];
+  const prices = (PLAN_PRICES as any)[normalizedSlug];
 
   return {
-    id: actualSlug,
-    slug: actualSlug,
-    nombre: actualSlug,
+    id: normalizedSlug,
+    slug: normalizedSlug,
+    nombre: normalizedSlug === 'esencial' ? 'Esencial' : normalizedSlug === 'profesional' ? 'Profesional' : normalizedSlug === 'infinity' ? 'Infinity' : normalizedSlug,
     precio: prices?.monthly || 0,
     moneda: prices?.currency || 'eur',
     intervalo: prices ? 'mensual' : 'mensual',
     limites: limits,
     modules,
-    stripePriceId: prices?.stripePriceId || ''
+    stripePriceId: prices?.stripePriceId || '',
+    stripePriceYearlyId: prices?.stripePriceYearlyId || '',
   };
 }
 
@@ -198,7 +199,7 @@ export async function getTenantEffectiveLimits(tenantId: string): Promise<Record
   });
 
   if (!tenant) {
-    return PLAN_LIMITS[PLANS.STARTER];
+    return PLAN_LIMITS[PLANS.ESENCIAL];
   }
 
   const planConfig = await getPlanConfig(tenant.plan);
@@ -465,7 +466,7 @@ export async function getSuggestedUpgrade(tenantId: string): Promise<{
   
   let suggestedPlan: string | null = null;
   
-  const planOrder = ['basico', 'starter', 'growth', 'pro', 'profesional', 'pro-agency'];
+  const planOrder = ['basico', 'esencial', 'profesional', 'infinity', 'pro-agency'];
   const currentPlanIndex = planOrder.indexOf(tenant.plan.toLowerCase());
 
   if (currentPlanIndex < planOrder.length - 1) {

@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
         break;
 
       case 'convert':
-        result = await service.convertToPaid(plan || 'growth');
+        result = await service.convertToPaid(plan || 'esencial');
         break;
 
       case 'extend':

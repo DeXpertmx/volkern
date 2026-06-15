@@ -16,12 +16,9 @@ export async function POST(request: NextRequest) {
 
     const { newPlanId } = await request.json()
 
-    if (!newPlanId || !Object.values(PLANS).includes(newPlanId)) {
+    const validPaidPlans = [PLANS.ESENCIAL, PLANS.PROFESIONAL, PLANS.INFINITY]
+    if (!validPaidPlans.includes(newPlanId)) {
       return NextResponse.json({ error: 'Plan inválido' }, { status: 400 })
-    }
-
-    if (newPlanId === PLANS.TRIAL) {
-      return NextResponse.json({ error: 'No se puede cambiar a plan trial' }, { status: 400 })
     }
 
     const user = await prisma.user.findUnique({

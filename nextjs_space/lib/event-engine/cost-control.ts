@@ -31,7 +31,7 @@ export class CostControl {
       select: { plan: true, subscription: true }
     })
 
-    const plan = tenant?.plan || PLANS.STARTER
+    const plan = tenant?.plan || PLANS.ESENCIAL
     const config = await this.getConfig(tenantId, plan)
 
     if (!config.allowed_agents.includes(agent)) {
@@ -114,7 +114,7 @@ export class CostControl {
         where: { id: tenantId },
         select: { plan: true }
       })
-      plan = tenant?.plan || PLANS.STARTER
+      plan = tenant?.plan || PLANS.ESENCIAL
     }
 
     const limits = await getPlanConfig(plan)
@@ -124,7 +124,7 @@ export class CostControl {
       max_ai_per_day: aiLimit === -1 ? 1000 : Math.min(50, Math.floor((aiLimit || 100) / 10)),
       max_ai_per_month: aiLimit === -1 ? 10000 : (aiLimit || 100),
       allowed_agents: DEFAULT_CONFIG.allowed_agents,
-      fallback_on_limit: plan === PLANS.STARTER || plan === PLANS.BASICO
+      fallback_on_limit: plan === PLANS.ESENCIAL || plan === PLANS.BASICO
     }
   }
 

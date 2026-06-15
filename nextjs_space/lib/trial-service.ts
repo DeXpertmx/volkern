@@ -170,7 +170,7 @@ export class TrialService {
     return status.status === 'active';
   }
 
-  async convertToPaid(plan: string = PLANS.GROWTH): Promise<TrialInfo> {
+  async convertToPaid(plan: string = PLANS.PROFESIONAL): Promise<TrialInfo> {
     const currentStatus = await this.checkTrialStatus();
     const now = new Date();
 

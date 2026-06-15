@@ -282,9 +282,9 @@ export default function TenantsManagement() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos los planes</SelectItem>
-                <SelectItem value="starter">🟢 Starter</SelectItem>
-                <SelectItem value="growth">🔵 Growth</SelectItem>
-                <SelectItem value="pro">🟣 Pro</SelectItem>
+                <SelectItem value="esencial">🟢 Esencial</SelectItem>
+                <SelectItem value="profesional">🔵 Profesional</SelectItem>
+                <SelectItem value="infinity">🟣 Infinity</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -472,13 +472,14 @@ export default function TenantsManagement() {
               </div>
               <div>
                 <Label htmlFor="plan">Plan</Label>
-                <Select name="plan" defaultValue="starter">
+                <Select name="plan" defaultValue="esencial">
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="starter">🟢 Starter - €49/mes</SelectItem>
-                    <SelectItem value="growth">🔵 Growth - €99/mes</SelectItem>
+                    <SelectItem value="esencial">🟢 Esencial - €69/mes</SelectItem>
+                    <SelectItem value="profesional">🔵 Profesional - €149/mes</SelectItem>
+                    <SelectItem value="infinity">🟣 Infinity - €299/mes</SelectItem>
                     <SelectItem value="enterprise">💎 Enterprise - €299/mes</SelectItem>
                     <SelectItem value="ERP_INDUSTRIAL">🏭 ERP Industrial - €499/mes</SelectItem>
                   </SelectContent>

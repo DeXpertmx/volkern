@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
       select: { plan: true },
     });
 
-    const maxPipelines = await getMaxPipelines(tenantId, tenant?.plan || 'starter');
+    const maxPipelines = await getMaxPipelines(tenantId, tenant?.plan || 'esencial');
 
     return NextResponse.json({
       pipelines,
@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
       select: { plan: true },
     });
 
-    const maxPipelines = await getMaxPipelines(tenantId, tenant?.plan || 'starter');
+    const maxPipelines = await getMaxPipelines(tenantId, tenant?.plan || 'esencial');
     const existingCount = await prisma.pipeline.count({
       where: { tenantId, activo: true },
     });

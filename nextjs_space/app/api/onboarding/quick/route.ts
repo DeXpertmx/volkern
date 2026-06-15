@@ -69,6 +69,21 @@ export async function POST(req: NextRequest) {
 
     const { step } = await req.json();
 
+    if (step === 'profile') {
+      const { perfil, nif, nombreEmpresa } = await req.json();
+      await prisma.tenant.update({
+        where: { id: user.tenantId },
+        data: {
+          nifCif: nif || undefined,
+          configuracion: {
+            ...((user.tenant?.configuracion as any) || {}),
+            perfil: perfil || 'general',
+          },
+        },
+      });
+      return NextResponse.json({ success: true });
+    }
+
     if (step === 'provision') {
       const result = await quickProvisionTenant(user.tenantId);
       
@@ -94,6 +109,8 @@ export async function POST(req: NextRequest) {
     }
 
     if (step === 'complete') {
+      const tenantConfig = await prisma.tenant.findUnique({ where: { id: user.tenantId }, select: { configuracion: true } });
+      const isGestoria = (tenantConfig?.configuracion as any)?.perfil === 'gestoria';
       await prisma.onboardingProgress.upsert({
         where: { tenantId: user.tenantId },
         update: {

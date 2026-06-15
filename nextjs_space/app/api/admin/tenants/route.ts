@@ -134,7 +134,7 @@ export const POST = withTenantAuth(async (req, auth) => {
       data: {
         nombre,
         slug,
-        plan: plan || 'starter',
+        plan: plan || 'trial',
         estado: estado || 'activo',
         dominio,
         billingEmail,

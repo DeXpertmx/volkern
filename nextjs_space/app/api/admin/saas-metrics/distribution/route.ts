@@ -19,7 +19,7 @@ export async function GET() {
     const planCounts: Record<string, { customers: number; revenue: number }> = {};
 
     for (const tenant of tenants) {
-      const planSlug = tenant.plan || tenant.subscriptions?.[0]?.plan?.slug || 'starter';
+      const planSlug = tenant.plan || tenant.subscriptions?.[0]?.plan?.slug || 'esencial';
       const planConfig = await getPlanConfig(planSlug);
       const mrr = tenant.mrr || planConfig?.precio || 0;
 

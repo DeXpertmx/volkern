@@ -122,7 +122,7 @@ export const PUT = withTenantAuth(async (request, auth) => {
       }
     });
 
-    const planConfig = await getPlanConfig(tenant?.plan || 'starter');
+    const planConfig = await getPlanConfig(tenant?.plan || 'esencial');
     const canCustomBranding = tenant?.tenantFeatures?.[0]?.habilitado || planConfig.branding?.whitelabel;
 
     if (!canCustomBranding && userRole !== 'Superadmin') {

@@ -14,14 +14,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
-    const { planId } = await request.json()
+    const { planId, interval = 'monthly' } = await request.json()
 
-    if (!planId || !Object.values(PLANS).includes(planId)) {
+    const validPaidPlans = [PLANS.ESENCIAL, PLANS.PROFESIONAL, PLANS.INFINITY]
+    if (!validPaidPlans.includes(planId)) {
       return NextResponse.json({ error: 'Plan inválido' }, { status: 400 })
     }
-
-    if (planId === PLANS.TRIAL) {
-      return NextResponse.json({ error: 'No se puede crear suscripción para plan trial' }, { status: 400 })
+    if (!['monthly', 'yearly'].includes(interval)) {
+      return NextResponse.json({ error: 'Intervalo inválido' }, { status: 400 })
     }
 
     // Obtener usuario y tenant
@@ -57,17 +57,20 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Obtener el price ID de Stripe desde las variables de entorno o usar valores por defecto
     const priceInfo = PLAN_PRICES[planId as keyof typeof PLAN_PRICES]
+    const stripePriceId = interval === 'yearly' ? priceInfo.stripePriceYearlyId : priceInfo.stripePriceId
+
+    if (!stripePriceId) {
+      return NextResponse.json({ error: 'Price ID no configurado para este plan' }, { status: 500 })
+    }
     
-    // Crear Checkout Session para suscripción
     const checkoutSession = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: 'subscription',
       payment_method_types: ['card'],
       line_items: [
         {
-          price: priceInfo.stripePriceId,
+          price: stripePriceId,
           quantity: 1
         }
       ],
@@ -75,12 +78,14 @@ export async function POST(request: NextRequest) {
       cancel_url: `${process.env.NEXTURL || 'http://localhost:3000'}/dashboard/configuracion/billing?canceled=true`,
       metadata: {
         tenantId: tenant.id,
-        planId
+        planId,
+        interval,
       },
       subscription_data: {
         metadata: {
           tenantId: tenant.id,
-          planId
+          planId,
+          interval,
         }
       }
     })

@@ -230,9 +230,9 @@ export default function PlansManagement() {
                 <div className="space-y-2">
                   <h4 className="font-bold text-gray-900">Variables Globales:</h4>
                   <div className="grid grid-cols-1 gap-1 font-mono text-[10px]">
-                    <span className="p-1 px-2 bg-slate-100 rounded">STRIPE_STARTER: {plans.find(p => p.id === 'starter')?.stripePriceId}</span>
-                    <span className="p-1 px-2 bg-slate-100 rounded">STRIPE_GROWTH: {plans.find(p => p.id === 'growth')?.stripePriceId}</span>
-                    <span className="p-1 px-2 bg-slate-100 rounded">STRIPE_PRO: {plans.find(p => p.id === 'pro')?.stripePriceId}</span>
+                    <span className="p-1 px-2 bg-slate-100 rounded">STRIPE_ESENCIAL: {plans.find(p => p.id === 'esencial')?.stripePriceId}</span>
+                    <span className="p-1 px-2 bg-slate-100 rounded">STRIPE_PROFESIONAL: {plans.find(p => p.id === 'profesional')?.stripePriceId}</span>
+                    <span className="p-1 px-2 bg-slate-100 rounded">STRIPE_INFINITY: {plans.find(p => p.id === 'infinity')?.stripePriceId}</span>
                   </div>
                 </div>
               </div>
@@ -290,11 +290,11 @@ export default function PlansManagement() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         {plans.map((plan) => (
           <Card key={plan.id} className="border-none shadow-xl rounded-3xl overflow-hidden hover:scale-[1.02] transition-all bg-white group ring-1 ring-gray-100">
-            <div className={`h-2 ${plan.id === 'pro' ? 'bg-indigo-600' : 'bg-gray-200'}`} />
+            <div className={`h-2 ${plan.id === 'profesional' || plan.id === 'infinity' ? 'bg-indigo-600' : 'bg-gray-200'}`} />
             <CardHeader className="pb-4">
               <div className="flex items-center justify-between mb-4">
                 <Badge className={`rounded-xl px-3 py-1 font-bold text-[10px] uppercase tracking-wider ${
-                   plan.id === 'pro' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'
+                   plan.id === 'profesional' || plan.id === 'infinity' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'
                 }`}>
                   {plan.nombre}
                 </Badge>

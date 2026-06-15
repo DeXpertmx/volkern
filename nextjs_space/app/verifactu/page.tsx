@@ -22,7 +22,7 @@ export default function VerifactuPage() {
             
             <nav className="hidden md:flex items-center space-x-8">
               <Link href="/#features" className="text-gray-600 hover:text-gray-900 transition">Características</Link>
-              <Link href="/#pricing" className="text-gray-600 hover:text-gray-900 transition">Precios</Link>
+              <Link href="/precios" className="text-gray-600 hover:text-gray-900 transition">Precios</Link>
               <Link href="/#testimonials" className="text-gray-600 hover:text-gray-900 transition">Testimonios</Link>
             </nav>
 
@@ -312,7 +312,7 @@ export default function VerifactuPage() {
               <h3 className="text-white font-semibold mb-4">Producto</h3>
               <ul className="space-y-2 text-sm">
                 <li><Link href="/#features" className="hover:text-white transition">Características</Link></li>
-                <li><Link href="/#pricing" className="hover:text-white transition">Precios</Link></li>
+                <li><Link href="/precios" className="hover:text-white transition">Precios</Link></li>
                 <li><Link href="/#testimonials" className="hover:text-white transition">Testimonios</Link></li>
               </ul>
             </div>

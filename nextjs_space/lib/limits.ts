@@ -32,10 +32,10 @@ export async function checkResourceLimit(
     };
   }
 
-  const planLimits = PLAN_LIMITS[tenant.plan as PlanType] || PLAN_LIMITS['pro'];
+  const planLimits = PLAN_LIMITS[tenant.plan as PlanType] || PLAN_LIMITS['esencial'];
   
   if (!PLAN_LIMITS[tenant.plan as PlanType]) {
-    console.warn(`[Limits] Plan "${tenant.plan}" no encontrado en PLAN_LIMITS, usando fallback "pro"`);
+    console.warn(`[Limits] Plan "${tenant.plan}" no encontrado en PLAN_LIMITS, usando fallback "esencial"`);
   }
 
   // Map automations to automation_runs in plan limits
@@ -118,7 +118,7 @@ export async function getTenantUsage(tenantId: string) {
     throw new Error('Tenant no encontrado');
   }
 
-  const planLimits = PLAN_LIMITS[tenant.plan as PlanType] || PLAN_LIMITS['pro'];
+  const planLimits = PLAN_LIMITS[tenant.plan as PlanType] || PLAN_LIMITS['esencial'];
   const now = new Date();
   const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 

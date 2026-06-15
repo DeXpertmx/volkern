@@ -70,7 +70,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               </div>
             </div>
 
-            <a href="/#pricing" className="text-sm text-slate-400 hover:text-white transition-colors">Precios</a>
+            <a href="/precios" className="text-sm text-slate-400 hover:text-white transition-colors">Precios</a>
             <a href="/#real-estate" className="text-sm text-slate-400 hover:text-white transition-colors">Ecosistema</a>
             <a href="/#demo" className="text-sm text-slate-400 hover:text-white transition-colors">Demo</a>
             <a href="/auth/login" className="text-sm font-medium bg-slate-900 px-4 py-2 rounded-lg border border-slate-800 hover:bg-slate-800 transition-all">
@@ -114,7 +114,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                   );
                 })}
                 <div className="border-t border-slate-900 pt-2 mt-2 space-y-2">
-                  <a href="/#pricing" onClick={() => setMobileMenuOpen(false)} className="block px-4 py-3 text-sm text-slate-400 hover:text-white transition-colors">Precios</a>
+                  <a href="/precios" onClick={() => setMobileMenuOpen(false)} className="block px-4 py-3 text-sm text-slate-400 hover:text-white transition-colors">Precios</a>
                   <a href="/#demo" onClick={() => setMobileMenuOpen(false)} className="block px-4 py-3 text-sm text-slate-400 hover:text-white transition-colors">Demo</a>
                   <a href="/auth/login" onClick={() => setMobileMenuOpen(false)} className="block px-4 py-3 text-sm font-medium text-blue-400 hover:text-blue-300 transition-colors">Login</a>
                 </div>
@@ -162,7 +162,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
             <div>
               <h4 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Enlaces</h4>
               <ul className="space-y-2">
-                <li><a href="/#pricing" className="text-sm text-slate-400 hover:text-white transition-colors">Precios</a></li>
+                <li><a href="/precios" className="text-sm text-slate-400 hover:text-white transition-colors">Precios</a></li>
                 <li><a href="/#demo" className="text-sm text-slate-400 hover:text-white transition-colors">Solicitar Demo</a></li>
                 <li><a href="/auth/login" className="text-sm text-slate-400 hover:text-white transition-colors">Iniciar Sesión</a></li>
               </ul>

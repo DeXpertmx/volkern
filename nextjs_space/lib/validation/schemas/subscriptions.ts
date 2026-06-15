@@ -5,9 +5,9 @@ import { CommonSchemas } from '../common';
  * Planes válidos del sistema (sin depender de lib/plans para evitar imports circulares)
  */
 const VALID_PLANS = [
-  'starter', 'growth', 'pro', 'trial',
-  'basico', 'profesional',
-  'agency-slot', 'pro-agency'
+  'trial', 'esencial', 'profesional', 'infinity',
+  'basico',
+  'agency-slot', 'pro-agency', 'accounting-slot', 'pro-accounting'
 ] as const;
 
 const VALID_FEATURES = [
