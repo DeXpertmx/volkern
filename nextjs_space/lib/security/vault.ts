@@ -3,11 +3,10 @@ import * as crypto from 'crypto';
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12; // 12 bytes for GCM
 
-// Validación estricta en startup: sin fallbacks para evitar aislamiento débil
 const MASTER_KEY = process.env.MASTER_KEY;
 const TENANT_PEPPER = process.env.TENANT_PEPPER;
 
-function validateVaultConfig(): void {
+function assertVaultReady(): void {
   if (!MASTER_KEY) {
     throw new Error(
       '[Vault] FATAL: MASTER_KEY no configurada. Sin ella, todos los tenants comparten cifrado débil. ' +
@@ -27,9 +26,6 @@ function validateVaultConfig(): void {
     );
   }
 }
-
-// Validar en tiempo de importación (startup)
-validateVaultConfig();
 
 export class VaultService {
   /**
@@ -57,6 +53,7 @@ export class VaultService {
    * Cifrar un dato sensible para un tenant específico
    */
   static encrypt(text: string, tenantId: string, vaultSeed: string): string {
+    assertVaultReady();
     const key = this.deriveKey(tenantId, vaultSeed);
     const iv = crypto.randomBytes(IV_LENGTH);
     const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
@@ -74,6 +71,7 @@ export class VaultService {
    * Descifrar un dato sensible de un tenant específico
    */
   static decrypt(encryptedData: string, tenantId: string, vaultSeed: string): string {
+    assertVaultReady();
     try {
       if (!encryptedData || !encryptedData.includes(':')) return encryptedData;
       
