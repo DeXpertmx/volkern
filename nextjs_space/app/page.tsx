@@ -1,60 +1,104 @@
 import React from 'react';
-import { Hero } from '@/components/public/Hero';
-import { TrustBar } from '@/components/public/TrustBar';
-import { Pricing } from '@/components/public/Pricing';
-import { LeadForm } from '@/components/public/LeadForm';
-import { WebSyncService } from '@/lib/marketing/web-sync-service';
-import { PublicLayout } from '@/components/public/PublicLayout';
+import Image from 'next/image';
+import Link from 'next/link';
+import { NewLanding } from '@/components/public/NewLanding';
+import { verticalLinks } from '@/components/public/PublicLayout';
 
-export const dynamic = 'force-dynamic';
+export const metadata = {
+  title: 'Volkern | El sistema operativo de tu negocio',
+  description:
+    'Volkern reúne CRM, marketing, comunicación, automatización e IA en una sola plataforma para operar tu negocio con menos herramientas y más control.',
+};
 
-export default async function LandingPage() {
-  // Fetch live data from the ERP ecosystem
-  const [plans, vaultCount, clientLogos] = await Promise.all([
-    WebSyncService.getActivePlans(),
-    WebSyncService.getVaultProofCount(),
-    WebSyncService.getClientLogos()
-  ]);
-
+export default function LandingPage() {
   return (
-    <PublicLayout>
-      <div className="flex flex-col">
-        {/* Componentes marcados con data-block para integración con WebCreator/GrapesJS */}
-        
-        <div data-block="hero-machine">
-          <Hero />
-        </div>
+    <>
+      <NewLanding />
 
-        <div data-block="trust-protocol">
-          <TrustBar logos={clientLogos} vaultCount={vaultCount} />
-        </div>
+      {/* Footer — same as PublicLayout */}
+      <footer className="bg-[#060b16] border-t border-slate-800 py-12">
+        <div className="container mx-auto px-6">
+          <div className="grid md:grid-cols-4 gap-8 mb-8">
+            {/* Brand */}
+            <div className="md:col-span-2">
+              <Image
+                src="/volkern-logo.png"
+                alt="Volkern CRM"
+                width={100}
+                height={28}
+                className="h-6 w-auto brightness-0 invert mb-4"
+              />
+              <p className="text-sm text-slate-500 max-w-md leading-relaxed">
+                El Sistema Operativo Empresarial que unifica Marketing, Ventas,
+                Operaciones y Finanzas con IA propia y soberanía de datos.
+              </p>
+            </div>
 
-        <div className="py-24 bg-slate-950 flex flex-col items-center">
-          <div className="container mx-auto px-6 text-center">
-              <h2 className="text-3xl font-bold mb-12">Nuestra Misión: Tu Soberanía</h2>
-              <div className="grid md:grid-cols-3 gap-12 text-left">
-                  {[
-                      { title: "Independencia", desc: "No dependes de nubes propietarias. Tus datos, tu infraestructura." },
-                      { title: "Automatización", desc: "Reduce la carga operativa con agentes de IA integrados nativamente." },
-                      { title: "Escalabilidad", desc: "Diseñado para crecer de 1 a 1,000,000 de operaciones sin fricción." }
-                  ].map((m, i) => (
-                      <div key={i} className="p-8 bg-slate-900/30 border border-slate-800 rounded-2xl">
-                          <h3 className="text-xl font-bold mb-4 text-blue-400">{m.title}</h3>
-                          <p className="text-slate-400 leading-relaxed">{m.desc}</p>
-                      </div>
-                  ))}
-              </div>
+            {/* Soluciones */}
+            <div>
+              <h4 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">
+                Soluciones
+              </h4>
+              <ul className="space-y-2">
+                {verticalLinks.map((link) => (
+                  <li key={link.href}>
+                    <Link
+                      href={link.href}
+                      className="text-sm text-slate-400 hover:text-white transition-colors"
+                    >
+                      {link.name}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Enlaces */}
+            <div>
+              <h4 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">
+                Enlaces
+              </h4>
+              <ul className="space-y-2">
+                <li>
+                  <Link href="/precios" className="text-sm text-slate-400 hover:text-white transition-colors">
+                    Precios
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/signup" className="text-sm text-slate-400 hover:text-white transition-colors">
+                    Crear cuenta
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/auth/login" className="text-sm text-slate-400 hover:text-white transition-colors">
+                    Iniciar Sesión
+                  </Link>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="border-t border-slate-800 pt-6 flex flex-col md:flex-row items-center justify-between gap-4">
+            <p className="text-slate-500 text-sm">
+              &copy; {new Date().getFullYear()} Volkern Nexus Core. Todos los derechos reservados.
+            </p>
+            <div className="flex justify-center gap-6 text-xs text-slate-600">
+              <Link href="/privacy" className="hover:text-slate-400 transition-colors">
+                Política de Privacidad
+              </Link>
+              <Link href="/terms" className="hover:text-slate-400 transition-colors">
+                Términos de Servicio
+              </Link>
+              <Link
+                href="/verifactu"
+                className="hover:text-amber-400 transition-colors font-medium text-amber-500"
+              >
+                Veri*Factu
+              </Link>
+            </div>
           </div>
         </div>
-
-        <div data-block="pricing-engine">
-          <Pricing plans={plans as any} />
-        </div>
-
-        <div data-block="lead-closer">
-          <LeadForm />
-        </div>
-      </div>
-    </PublicLayout>
+      </footer>
+    </>
   );
 }

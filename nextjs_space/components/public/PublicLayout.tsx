@@ -6,7 +6,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, X, ChevronDown, Building2, Calculator, PenTool, GraduationCap, Factory, UserCheck, Zap } from 'lucide-react';
 
-const verticalLinks = [
+export const verticalLinks = [
   { name: 'Inmobiliarias', href: '/soluciones/real-estate', icon: Building2 },
   { name: 'Asesorías Contables', href: '/soluciones/accounting', icon: Calculator },
   { name: 'Agencias Marketing', href: '/soluciones/marketing', icon: PenTool },
