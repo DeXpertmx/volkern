@@ -9,8 +9,13 @@ import { toast } from 'sonner'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Loader2, CheckCircle2, MessageCircle, ArrowRight, Bot, Zap,
-  Building2, Calculator, FileKey, Users, Upload,
+  Building2, Calculator, FileKey, Users, Upload, LayoutGrid, CheckSquare, Square,
 } from 'lucide-react'
+import {
+  MODULE_GROUPS,
+  PERFIL_SUGGESTED_MODULES,
+  type ModuleGroup,
+} from '@/lib/onboarding-modules'
 
 type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
 
@@ -23,6 +28,8 @@ export default function OnboardingQuickPage() {
   const [polling, setPolling] = useState(false)
   const [provisionError, setProvisionError] = useState<string | null>(null)
   const [perfil, setPerfil] = useState<'gestoria' | 'general' | null>(null)
+  const [selectedModules, setSelectedModules] = useState<Set<string>>(new Set())
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['CRM Esencial']))
   const [nif, setNif] = useState('')
   const [nombreEmpresa, setNombreEmpresa] = useState('')
   const [pgcPlan, setPgcPlan] = useState('PYMES')
@@ -63,6 +70,58 @@ export default function OnboardingQuickPage() {
         }
       } catch {}
     }, 3000)
+  }
+
+  const toggleModule = (id: string) => {
+    setSelectedModules(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleGroup = (group: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(group)) next.delete(group)
+      else next.add(group)
+      return next
+    })
+  }
+
+  const selectAllInGroup = (group: ModuleGroup) => {
+    setSelectedModules(prev => {
+      const next = new Set(prev)
+      group.modules.forEach(m => next.add(m.id))
+      return next
+    })
+  }
+
+  const handleStartOnboarding = async () => {
+    // Save module selection
+    try {
+      const res = await fetch('/api/onboarding/quick', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ step: 'modules', modules: Array.from(selectedModules) })
+      })
+      if (!res.ok) {
+        console.warn('[Onboarding] Error al guardar módulos, continuando de todas formas')
+      }
+    } catch (err) {
+      console.warn('[Onboarding] Error de red al guardar módulos:', err)
+    }
+    setStep(2)
+  }
+
+  const handleSelectProfile = (p: 'gestoria' | 'general') => {
+    setPerfil(p)
+    // Pre-select suggested modules based on profile
+    const suggested = PERFIL_SUGGESTED_MODULES[p] || []
+    setSelectedModules(new Set(suggested))
+    // Expand relevant groups
+    setExpandedGroups(new Set(['CRM Esencial', 'Ventas y Documentos', 'Comunicación', p === 'gestoria' ? 'Contabilidad y ERP' : 'Marketing']))
   }
 
   const handleProvision = async () => {
@@ -155,7 +214,7 @@ export default function OnboardingQuickPage() {
                   <div className="space-y-3 mb-8">
                     <p className="text-sm text-slate-400 mb-2">¿Cuál es tu perfil?</p>
                     <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                      <Card className={`p-4 cursor-pointer transition-colors ${perfil === 'gestoria' ? 'bg-purple-600/20 border-purple-500' : 'bg-slate-800/50 border-slate-700 hover:border-purple-500'}`} onClick={() => setPerfil('gestoria')}>
+                      <Card className={`p-4 cursor-pointer transition-colors ${perfil === 'gestoria' ? 'bg-purple-600/20 border-purple-500' : 'bg-slate-800/50 border-slate-700 hover:border-purple-500'}`} onClick={() => handleSelectProfile('gestoria')}>
                         <div className="flex items-center gap-4">
                           <div className="w-12 h-12 bg-indigo-500/20 rounded-xl flex items-center justify-center"><Building2 className="h-6 w-6 text-indigo-400" /></div>
                           <div><p className="font-semibold text-white">Gestoría / Asesoría</p><p className="text-sm text-slate-400">Contabilidad, IVA, certificados AEAT, clientes</p></div>
@@ -163,7 +222,7 @@ export default function OnboardingQuickPage() {
                       </Card>
                     </motion.div>
                     <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                      <Card className={`p-4 cursor-pointer transition-colors ${perfil === 'general' ? 'bg-purple-600/20 border-purple-500' : 'bg-slate-800/50 border-slate-700 hover:border-purple-500'}`} onClick={() => setPerfil('general')}>
+                      <Card className={`p-4 cursor-pointer transition-colors ${perfil === 'general' ? 'bg-purple-600/20 border-purple-500' : 'bg-slate-800/50 border-slate-700 hover:border-purple-500'}`} onClick={() => handleSelectProfile('general')}>
                         <div className="flex items-center gap-4">
                           <div className="w-12 h-12 bg-teal-500/20 rounded-xl flex items-center justify-center"><Zap className="h-6 w-6 text-teal-400" /></div>
                           <div><p className="font-semibold text-white">General / Otro</p><p className="text-sm text-slate-400">CRM, citas, chatbot, web creator</p></div>
@@ -172,14 +231,79 @@ export default function OnboardingQuickPage() {
                     </motion.div>
                   </div>
 
-                  {perfil === 'gestoria' && (
-                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-3 mb-6">
-                      <Input placeholder="Nombre de la gestoría" value={nombreEmpresa} onChange={e => setNombreEmpresa(e.target.value)} className="bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500" />
-                      <Input placeholder="NIF / CIF" value={nif} onChange={e => setNif(e.target.value)} className="bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500" />
+                  {perfil && (
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mb-6">
+                      {perfil === 'gestoria' && (
+                        <div className="space-y-3 mb-4">
+                          <Input placeholder="Nombre de la gestoría" value={nombreEmpresa} onChange={e => setNombreEmpresa(e.target.value)} className="bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500" />
+                          <Input placeholder="NIF / CIF" value={nif} onChange={e => setNif(e.target.value)} className="bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500" />
+                        </div>
+                      )}
+
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm text-slate-300">
+                            <LayoutGrid className="inline h-4 w-4 mr-1.5 text-violet-400" />
+                            Módulos a activar ({selectedModules.size})
+                          </p>
+                          <p className="text-xs text-slate-500">Puedes cambiarlos después en Configuración</p>
+                        </div>
+
+                        <div className="space-y-2 max-h-[340px] overflow-y-auto pr-1">
+                          {MODULE_GROUPS.map(group => (
+                            <div key={group.group} className="bg-slate-800/40 rounded-xl border border-slate-700/50 overflow-hidden">
+                              <button
+                                onClick={() => toggleGroup(group.group)}
+                                className="w-full flex items-center justify-between p-3 hover:bg-slate-700/30 transition-colors"
+                              >
+                                <span className="text-sm font-medium text-slate-200">{group.group}</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-slate-500">
+                                    {group.modules.filter(m => selectedModules.has(m.id)).length}/{group.modules.length}
+                                  </span>
+                                  <ArrowRight className={`h-4 w-4 text-slate-400 transition-transform ${expandedGroups.has(group.group) ? 'rotate-90' : ''}`} />
+                                </div>
+                              </button>
+                              {expandedGroups.has(group.group) && (
+                                <div className="px-3 pb-3 space-y-1">
+                                  <button
+                                    onClick={() => selectAllInGroup(group)}
+                                    className="text-xs text-violet-400 hover:text-violet-300 mb-2"
+                                  >
+                                    Seleccionar todos
+                                  </button>
+                                  {group.modules.map(m => {
+                                    const isSelected = selectedModules.has(m.id)
+                                    const isCore = ['leads', 'contactos', 'empresas', 'pipeline', 'tareas', 'analytics', 'equipo', 'configuracion'].includes(m.id)
+                                    return (
+                                      <div
+                                        key={m.id}
+                                        onClick={() => !isCore && toggleModule(m.id)}
+                                        className={`flex items-center gap-3 p-2 rounded-lg transition-colors ${isCore ? 'opacity-70 cursor-default' : 'cursor-pointer hover:bg-slate-700/50'} ${isSelected ? 'bg-violet-500/10 border border-violet-500/30' : 'border border-transparent'}`}
+                                      >
+                                        <div className={`w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 ${isSelected ? 'bg-violet-500 text-white' : 'bg-slate-700 text-slate-500'} ${isCore ? 'opacity-90' : ''}`}>
+                                          {isSelected ? <CheckSquare className="h-3.5 w-3.5" /> : <Square className="h-3.5 w-3.5" />}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-sm text-white truncate">
+                                            {m.icon} {m.label}
+                                            {isCore && <span className="text-xs text-slate-500 ml-1">(esencial)</span>}
+                                          </p>
+                                          <p className="text-xs text-slate-500 truncate">{m.description}</p>
+                                        </div>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </motion.div>
                   )}
 
-                  <Button onClick={() => setStep(2)} className="w-full h-14 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white font-bold text-lg rounded-xl">
+                  <Button onClick={perfil ? handleStartOnboarding : undefined} disabled={!perfil} className="w-full h-14 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white font-bold text-lg rounded-xl">
                     Comenzar <ArrowRight className="ml-2 h-5 w-5" />
                   </Button>
                 </CardContent>

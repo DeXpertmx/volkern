@@ -491,6 +491,7 @@ export const HUBS: HubConfig[] = [
       { name: 'Inmobiliaria', href: '/dashboard/configuracion/real-estate', icon: Home, description: 'Configuración del portal de propiedades y comisiones' },
       { name: 'Equipo', href: '/dashboard/equipo', icon: UserCog, planModule: 'equipo', description: 'Gestión de usuarios' },
       { name: 'Integraciones', href: '/dashboard/integraciones', icon: Plug, planModule: 'integraciones', description: 'Conexión con apps externas' },
+      { name: 'Módulos', href: '/dashboard/configuracion?section=modulos', icon: LayoutGrid, description: 'Activar/desactivar funciones' },
       { name: 'Mi Suscripción', href: '/dashboard/configuracion/billing', icon: CreditCard, description: 'Suscripción y pagos' },
       { name: 'Uso y Límites', href: '/dashboard/configuracion/usage', icon: BarChart3, description: 'Consumo y límites del plan' },
     ]
