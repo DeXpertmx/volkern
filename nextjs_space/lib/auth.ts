@@ -86,7 +86,12 @@ export const authOptions: NextAuthOptions = {
         console.log(`[DEBUG-AUTH] User Tenant Subdomain: ${user.tenant?.subdomain}`);
 
         // 🔴 VALIDACIÓN CRUZADA: Si hay subdominio en request, el usuario debe pertenecer a ese tenant
-        if (requestSubdomain && user.tenant?.subdomain !== requestSubdomain) {
+        // Los subdominios reservados (admin, www, app, api, auth, etc.) son portales multi-tenant
+        // y no deben aplicar validación cruzada.
+        const RESERVED_SUBDOMAINS = new Set(['www', 'app', 'api', 'auth', 'login', 'register', 'dashboard', 'webcreator', 'admin']);
+        const isReservedSubdomain = requestSubdomain ? RESERVED_SUBDOMAINS.has(requestSubdomain) : false;
+
+        if (requestSubdomain && !isReservedSubdomain && user.tenant?.subdomain !== requestSubdomain) {
           console.warn(`[DEBUG-AUTH] Mismatch: Request=${requestSubdomain}, UserTenant=${user.tenant?.subdomain}`);
           await prisma.auditLog.create({
             data: {
