@@ -130,6 +130,10 @@ const clientCacheV3 = globalForPrisma.tenantCache;
 // cuando el módulo se carga pero DATABASE_URL no está disponible aún.
 let _gp: PrismaClient | undefined
 
+function createGlobalPrisma(): PrismaClient {
+  return new PrismaClient()
+}
+
 function ensureGlobalPrisma(): PrismaClient {
   if (!_gp) {
     if (!process.env.DATABASE_URL) {
