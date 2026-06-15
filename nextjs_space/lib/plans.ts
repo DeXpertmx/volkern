@@ -1,4 +1,4 @@
-import { prisma } from './db'
+// prisma: solo import dinámico dentro de getPlanConfig()
 
 export const PLANS = {
   TRIAL: 'trial',
@@ -345,22 +345,22 @@ export const PLAN_PRICES = {
     monthly: 69,
     yearly: 662,
     currency: 'eur',
-    stripePriceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_ESENCIAL_MONTHLY || 'price_esencial_monthly',
-    stripePriceYearlyId: process.env.NEXT_PUBLIC_STRIPE_PRICE_ESENCIAL_YEARLY || 'price_esencial_yearly',
+    stripePriceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_ESENCIAL_MONTHLY || '',
+    stripePriceYearlyId: process.env.NEXT_PUBLIC_STRIPE_PRICE_ESENCIAL_YEARLY || '',
   },
   [PLANS.PROFESIONAL]: {
     monthly: 149,
     yearly: 1430,
     currency: 'eur',
-    stripePriceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_PROFESIONAL_MONTHLY || 'price_profesional_monthly',
-    stripePriceYearlyId: process.env.NEXT_PUBLIC_STRIPE_PRICE_PROFESIONAL_YEARLY || 'price_profesional_yearly',
+    stripePriceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_PROFESIONAL_MONTHLY || '',
+    stripePriceYearlyId: process.env.NEXT_PUBLIC_STRIPE_PRICE_PROFESIONAL_YEARLY || '',
   },
   [PLANS.INFINITY]: {
     monthly: 299,
     yearly: 2870,
     currency: 'eur',
-    stripePriceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_INFINITY_MONTHLY || 'price_infinity_monthly',
-    stripePriceYearlyId: process.env.NEXT_PUBLIC_STRIPE_PRICE_INFINITY_YEARLY || 'price_infinity_yearly',
+    stripePriceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_INFINITY_MONTHLY || '',
+    stripePriceYearlyId: process.env.NEXT_PUBLIC_STRIPE_PRICE_INFINITY_YEARLY || '',
   },
 }
 
