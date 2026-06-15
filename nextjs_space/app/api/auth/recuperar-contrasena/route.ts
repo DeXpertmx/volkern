@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
     })
 
     // Construir URL de reseteo
-    const baseUrl = process.env.NEXTAUTH_URL || 'https://volkern.abacusai.app'
+    const baseUrl = process.env.NEXTAUTH_URL || 'https://admin.volkern.app'
     const resetUrl = `${baseUrl}/auth/resetear-contrasena?token=${resetToken}`
 
     // Enviar email
@@ -98,46 +98,82 @@ export async function POST(request: NextRequest) {
     `
 
     // Intentar enviar con el dominio del tenant si está verificado
-    // Si falla o el dominio no está verificado, usar onboarding@resend.dev (funciona con Lark)
+    // Si falla o el dominio no está verificado, usar onboarding@resend.dev
     const usarDominioTenant = user.tenant?.emailDomainStatus === 'verified' && !!user.tenant.subdomain;
     
-    const result = await sendEmail({
-      to: user.email,
-      subject: 'Recuperación de contraseña - Volkern CRM',
-      html: emailContent,
-      from: usarDominioTenant ? undefined : 'Volkern CRM <onboarding@resend.dev>',
-      tenantSubdomain: usarDominioTenant ? user.tenant.subdomain! : undefined,
-      tenantName: usarDominioTenant ? (user.tenant.nombre || 'Volkern') : undefined,
-    })
+    console.log(`[Recovery] Enviando email a ${user.email} (usarDominioTenant: ${usarDominioTenant}, subdomain: ${user.tenant?.subdomain}, status: ${user.tenant?.emailDomainStatus})`);
 
-    // Si el envío principal falló, reintentar con onboarding@resend.dev
-    if (!result.success && usarDominioTenant) {
-      console.warn('[Recovery] Fallback a onboarding@resend.dev para:', user.email)
-      await sendEmail({
-        to: user.email,
-        subject: 'Recuperación de contraseña - Volkern CRM',
-        html: emailContent,
-        from: 'Volkern CRM <onboarding@resend.dev>',
-      })
+    let emailSent = false;
+    
+    // Intento 1: con dominio del tenant (si aplica)
+    if (usarDominioTenant) {
+      try {
+        const result = await sendEmail({
+          to: user.email,
+          subject: 'Recuperación de contraseña - Volkern CRM',
+          html: emailContent,
+          tenantSubdomain: user.tenant.subdomain!,
+          tenantName: user.tenant.nombre || 'Volkern',
+        });
+        emailSent = result.success;
+        if (!emailSent) {
+          console.warn(`[Recovery] Falló envío con dominio tenant: ${result.error}`);
+        }
+      } catch (err) {
+        console.error('[Recovery] Error en envío con dominio tenant:', err);
+      }
     }
 
-    // Registrar en audit log
-    await prisma.auditLog.create({
-      data: {
-        userId: user.id,
-        tenantId: user.tenantId,
-        accion: 'password_reset_requested',
-        entidad: 'User',
-        entidadId: user.id,
-        descripcion: 'Solicitud de recuperación de contraseña',
-      },
-    })
+    // Intento 2: fallback a onboarding@resend.dev (si el primero falló o no aplicaba)
+    if (!emailSent) {
+      try {
+        const result = await sendEmail({
+          to: user.email,
+          subject: 'Recuperación de contraseña - Volkern CRM',
+          html: emailContent,
+          from: 'Volkern CRM <onboarding@resend.dev>',
+        });
+        emailSent = result.success;
+        if (!emailSent) {
+          console.error(`[Recovery] Falló también el envío con onboarding@resend.dev: ${result.error}`);
+        }
+      } catch (err) {
+        console.error('[Recovery] Error en envío con onboarding@resend.dev:', err);
+      }
+    }
+
+    // Registrar en audit log (con try/catch individual para no romper la respuesta)
+    try {
+      await prisma.auditLog.create({
+        data: {
+          userId: user.id,
+          tenantId: user.tenantId,
+          accion: 'password_reset_requested',
+          entidad: 'User',
+          entidadId: user.id,
+          descripcion: 'Solicitud de recuperación de contraseña',
+        },
+      })
+    } catch (auditError) {
+      console.error('[Recovery] Error al registrar audit log:', auditError);
+    }
+
+    if (!emailSent) {
+      console.error(`[Recovery] No se pudo enviar el email de recuperación a ${user.email}`);
+      // Aún así devolvemos 200 por seguridad (no revelar si el email existe o no)
+      return NextResponse.json({
+        message: 'Si el email existe, recibirás instrucciones para recuperar tu contraseña',
+      })
+    }
 
     return NextResponse.json({
       message: 'Si el email existe, recibirás instrucciones para recuperar tu contraseña',
     })
   } catch (error) {
-    console.error('Error en recuperación de contraseña:', error)
+    console.error('[Recovery] Error en recuperación de contraseña:', error)
+    if (error instanceof Error) {
+      console.error('[Recovery] Stack:', error.stack)
+    }
     return NextResponse.json(
       { error: 'Error al procesar la solicitud' },
       { status: 500 }
