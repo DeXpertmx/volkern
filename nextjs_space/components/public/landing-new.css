@@ -1,0 +1,797 @@
+/* ═══════════════════════════════════════════════════════════════════════════════
+   Volkern Landing — New (GrapesJS-based)
+   Scoped under .vl-landing wrapper to avoid conflicts with Tailwind.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+.vl-landing {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-family: 'Inter', sans-serif;
+  background: radial-gradient(circle at top left, #1e3a8a 0%, rgba(30, 58, 138, 0) 28%),
+    radial-gradient(circle at top right, #581c87 0%, rgba(88, 28, 135, 0) 30%),
+    linear-gradient(180deg, #060b16 0%, #091425 35%, #0b1220 100%);
+  color: #dbe6f7;
+  font-size: 1rem;
+  line-height: 1.75rem;
+}
+
+/* ─── Typography ──────────────────────────────────────────────────────────── */
+.vl-landing .vl-h1 {
+  color: #f8fbff;
+  font-size: 4.5rem;
+  line-height: 5rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  margin: 0;
+}
+
+.vl-landing .vl-h2 {
+  color: #eff6ff;
+  font-size: 2.25rem;
+  line-height: 2.75rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  margin: 0;
+}
+
+/* ─── Links ───────────────────────────────────────────────────────────────── */
+.vl-landing .vl-link {
+  color: #93c5fd;
+  text-decoration: none;
+}
+
+/* ─── Glass & Ring ────────────────────────────────────────────────────────── */
+.vl-landing .vl-glass {
+  backdrop-filter: blur(12px);
+}
+
+.vl-landing .vl-ring-soft {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06), 0 0 0 1px rgba(255, 255, 255, .08);
+}
+
+/* ─── Buttons ─────────────────────────────────────────────────────────────── */
+.vl-landing .vl-btn {
+  transition: transform .2s ease, box-shadow .2s ease, background-color .2s ease, border-color .2s ease;
+}
+
+.vl-landing .vl-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, .24);
+}
+
+.vl-landing .vl-btn-primary {
+  background-color: #7c3aed;
+  color: #fff;
+  border-radius: 1rem;
+  padding: 1rem 1.75rem;
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-weight: 600;
+  box-shadow: 0 20px 25px -5px rgb(46 16 101 / 0.3), 0 8px 10px -6px rgb(46 16 101 / 0.3);
+}
+
+.vl-landing .vl-btn-secondary {
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, .15);
+  background-color: rgba(255, 255, 255, .05);
+  padding: 1rem 1.75rem;
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+/* ─── Page Wrapper ────────────────────────────────────────────────────────── */
+.vl-landing .vl-page {
+  min-height: 100vh;
+}
+
+/* ─── Hero Section ────────────────────────────────────────────────────────── */
+.vl-landing .vl-hero-section {
+  padding-left: 2rem;
+  padding-right: 2rem;
+}
+
+.vl-landing .vl-hero-container {
+  margin-left: auto;
+  margin-right: auto;
+  display: flex;
+  max-width: 80rem;
+  flex-direction: column;
+  gap: 2.5rem;
+  padding-top: 2rem;
+  padding-bottom: 2rem;
+}
+
+.vl-landing .vl-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, .1);
+  background-color: rgba(255, 255, 255, .05);
+  padding: 1rem 1.25rem;
+}
+
+.vl-landing .vl-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-weight: 600;
+  color: #fff;
+  text-decoration: none;
+}
+
+.vl-landing .vl-brand-mark {
+  display: flex;
+  height: 2.5rem;
+  width: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.75rem;
+  background-image: linear-gradient(to bottom right, #8b5cf6, #38bdf8);
+  font-size: 1.125rem;
+  line-height: 1.75rem;
+  font-weight: 700;
+  color: #fff;
+  box-shadow: 0 10px 15px -3px rgb(76 29 149 / 0.3), 0 4px 6px -4px rgb(76 29 149 / 0.3);
+}
+
+.vl-landing .vl-brand-name {
+  letter-spacing: -0.025em;
+  color: #fff;
+}
+
+.vl-landing .vl-topnav {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.vl-landing .vl-toplink {
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, .1);
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  color: #e2e8f0;
+  transition: color .15s, background-color .15s, border-color .15s;
+}
+
+.vl-landing .vl-toplink:hover {
+  border-color: rgba(255, 255, 255, .2);
+  background-color: rgba(255, 255, 255, .05);
+  color: #fff;
+}
+
+.vl-landing .vl-hero-content {
+  position: relative;
+  overflow: hidden;
+  border-radius: 28px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  background-color: rgba(255, 255, 255, .04);
+  padding: 6rem 2.5rem;
+  text-align: center;
+}
+
+.vl-landing .vl-hero-badge-row {
+  margin: 0 auto 2rem;
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(167, 139, 250, .2);
+  background-color: rgba(167, 139, 250, .1);
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  color: #ede9fe;
+}
+
+.vl-landing .vl-hero-badge-dot {
+  height: 0.625rem;
+  width: 0.625rem;
+  border-radius: 9999px;
+  background-color: #67e8f9;
+}
+
+.vl-landing .vl-hero-text-group {
+  margin: 0 auto;
+  display: flex;
+  max-width: 56rem;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.vl-landing .vl-hero-subtitle {
+  margin: 0 auto;
+  max-width: 48rem;
+  font-size: 1.25rem;
+  line-height: 2rem;
+  color: #cbd5e1;
+}
+
+.vl-landing .vl-hero-actions {
+  margin-top: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.vl-landing .vl-hero-highlights {
+  margin: 3.5rem auto 0;
+  display: grid;
+  max-width: 64rem;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.vl-landing .vl-highlight-card {
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, .1);
+  background-color: rgba(2, 6, 23, .25);
+  padding: 1.25rem;
+  text-align: left;
+}
+
+.vl-landing .vl-highlight-label {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: #94a3b8;
+}
+
+.vl-landing .vl-highlight-text {
+  margin: 0.5rem 0 0;
+  font-size: 1rem;
+  line-height: 1.5rem;
+  color: #e2e8f0;
+}
+
+/* ─── Modules Section ─────────────────────────────────────────────────────── */
+.vl-landing .vl-modules-section {
+  margin: 0 auto;
+  display: flex;
+  max-width: 80rem;
+  flex-direction: column;
+  gap: 3rem;
+  padding: 6rem 2rem;
+}
+
+.vl-landing .vl-section-heading {
+  margin: 0 auto;
+  display: flex;
+  max-width: 48rem;
+  flex-direction: column;
+  gap: 1.25rem;
+  text-align: center;
+}
+
+.vl-landing .vl-section-eyebrow {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: #7dd3fc;
+}
+
+.vl-landing .vl-section-subtitle {
+  margin: 0;
+  font-size: 1.125rem;
+  line-height: 1.75rem;
+  color: #cbd5e1;
+}
+
+.vl-landing .vl-modules-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+}
+
+.vl-landing .vl-module-card {
+  transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease;
+  border-radius: 20px;
+  border: 1px solid rgba(103, 232, 249, .2);
+  background-image: linear-gradient(to bottom right, transparent, transparent);
+  padding: 1.75rem;
+}
+
+.vl-landing .vl-module-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 24px 60px rgba(2, 8, 23, .28);
+  border-color: rgba(255, 255, 255, .18);
+}
+
+.vl-landing .vl-module-icon-wrap {
+  margin-bottom: 1.5rem;
+  display: flex;
+  height: 3.5rem;
+  width: 3.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1rem;
+}
+
+.vl-landing .vl-module-icon {
+  height: 1.75rem;
+  width: 1.75rem;
+}
+
+.vl-landing .vl-module-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.vl-landing .vl-module-title {
+  margin: 0;
+  font-size: 1.5rem;
+  line-height: 2rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #fff;
+}
+
+.vl-landing .vl-module-desc {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.75rem;
+  color: rgba(236, 254, 255, .85);
+}
+
+/* ─── Pricing Section ─────────────────────────────────────────────────────── */
+.vl-landing .vl-pricing-section {
+  margin: 0 auto;
+  display: flex;
+  max-width: 80rem;
+  flex-direction: column;
+  gap: 3rem;
+  padding: 2.5rem 2rem;
+}
+
+.vl-landing .vl-pricing-box {
+  overflow: hidden;
+  border-radius: 28px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  background-color: rgba(255, 255, 255, .04);
+}
+
+.vl-landing .vl-pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.vl-landing .vl-pricing-intro {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  border-right: 1px solid rgba(255, 255, 255, .1);
+  padding: 3rem 2.5rem;
+}
+
+.vl-landing .vl-pricing-intro-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.vl-landing .vl-pricing-eyebrow {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: #c4b5fd;
+}
+
+.vl-landing .vl-pricing-text {
+  margin: 0;
+  max-width: 36rem;
+  font-size: 1.125rem;
+  line-height: 1.75rem;
+  color: #cbd5e1;
+}
+
+.vl-landing .vl-pricing-main-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  background-color: rgba(2, 6, 23, .35);
+  padding: 1.75rem;
+}
+
+.vl-landing .vl-price-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.vl-landing .vl-price-label {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: #94a3b8;
+}
+
+.vl-landing .vl-billing-badge {
+  border-radius: 9999px;
+  border: 1px solid rgba(110, 231, 183, .2);
+  background-color: rgba(110, 231, 183, .1);
+  padding: 0.25rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  color: #a7f3d0;
+}
+
+.vl-landing .vl-price-display {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.75rem;
+}
+
+.vl-landing .vl-price-value {
+  font-size: 3.75rem;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  color: #fff;
+}
+
+.vl-landing .vl-price-suffix {
+  padding-bottom: 0.5rem;
+  font-size: 1rem;
+  line-height: 1.5rem;
+  color: #94a3b8;
+}
+
+.vl-landing .vl-price-footnote {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.5rem;
+  color: #cbd5e1;
+}
+
+.vl-landing .vl-replacement-price {
+  font-weight: 600;
+  color: #fff;
+}
+
+.vl-landing .vl-price-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+}
+
+.vl-landing .vl-summary-item {
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, .1);
+  background-color: rgba(255, 255, 255, .03);
+  padding: 1rem;
+}
+
+.vl-landing .vl-summary-label {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: #94a3b8;
+}
+
+.vl-landing .vl-summary-value {
+  margin: 0.25rem 0 0;
+  font-size: 1.125rem;
+  line-height: 1.75rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.vl-landing .vl-pricing-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  padding: 3rem 2.5rem;
+}
+
+.vl-landing .vl-selectors-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.25rem;
+}
+
+.vl-landing .vl-selector-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.vl-landing .vl-field-label {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: #94a3b8;
+}
+
+.vl-landing .vl-field-select {
+  appearance: none;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, .1);
+  background-color: rgba(2, 6, 23, .4);
+  background-image: url("https://api.iconify.design/lucide-chevron-down.svg?color=%23cbd5e1");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 16px 16px;
+  padding: 1rem;
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-weight: 500;
+  color: #fff;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  transition: color .15s, background-color .15s, border-color .15s;
+}
+
+.vl-landing .vl-field-select:hover {
+  border-color: rgba(255, 255, 255, .2);
+}
+
+.vl-landing .vl-field-select:focus {
+  border-color: #a78bfa;
+}
+
+.vl-landing .vl-slider-field {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  background-color: rgba(2, 6, 23, .25);
+  padding: 1.5rem;
+}
+
+.vl-landing .vl-slider-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.vl-landing .vl-slider-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.vl-landing .vl-slider-label {
+  font-size: 1.125rem;
+  line-height: 1.75rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.vl-landing .vl-slider-help {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: #94a3b8;
+}
+
+.vl-landing .vl-slider-value-badge {
+  border-radius: 9999px;
+  border: 1px solid rgba(125, 211, 252, .2);
+  background-color: rgba(125, 211, 252, .1);
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 600;
+  color: #e0f2fe;
+}
+
+.vl-landing .vl-pricing-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #4f46e5 0%, #7c3aed 50%, #38bdf8 100%);
+  outline: none;
+}
+
+.vl-landing .vl-pricing-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #fff;
+  border: 3px solid #4f46e5;
+  box-shadow: 0 6px 20px rgba(79, 70, 229, .35);
+  cursor: pointer;
+}
+
+.vl-landing .vl-pricing-range::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #fff;
+  border: 3px solid #4f46e5;
+  box-shadow: 0 6px 20px rgba(79, 70, 229, .35);
+  cursor: pointer;
+}
+
+.vl-landing .vl-slider-ends {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: #64748b;
+}
+
+.vl-landing .vl-pricing-assurance {
+  border-radius: 24px;
+  border: 1px solid rgba(103, 232, 249, .15);
+  background-color: rgba(6, 182, 212, .08);
+  padding: 1.5rem;
+}
+
+.vl-landing .vl-assurance-text {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.75rem;
+  color: rgba(236, 254, 255, .9);
+}
+
+.vl-landing .vl-assurance-price {
+  font-weight: 600;
+  color: #fff;
+}
+
+/* ─── Differential Section ────────────────────────────────────────────────── */
+.vl-landing .vl-differential-section {
+  margin: 0 auto;
+  display: flex;
+  max-width: 64rem;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 6rem 2rem;
+  text-align: center;
+}
+
+.vl-landing .vl-differential-eyebrow {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: #c4b5fd;
+}
+
+.vl-landing .vl-differential-subtitle {
+  margin: 0 auto;
+  max-width: 48rem;
+  font-size: 1.25rem;
+  line-height: 2rem;
+  color: #cbd5e1;
+}
+
+/* ─── Final CTA ───────────────────────────────────────────────────────────── */
+.vl-landing .vl-final-cta-section {
+  margin: 0 auto;
+  max-width: 80rem;
+  padding: 0 2rem 6rem;
+}
+
+.vl-landing .vl-final-cta-card {
+  border-radius: 28px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  background-color: rgba(2, 6, 23, .6);
+  padding: 4rem 2.5rem;
+  text-align: center;
+}
+
+.vl-landing .vl-final-cta-content {
+  margin: 0 auto;
+  display: flex;
+  max-width: 48rem;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.vl-landing .vl-final-cta-eyebrow {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: #94a3b8;
+}
+
+.vl-landing .vl-final-cta-subtitle {
+  margin: 0;
+  font-size: 1.125rem;
+  line-height: 1.75rem;
+  color: #cbd5e1;
+}
+
+.vl-landing .vl-final-cta-btn {
+  margin-top: 0.5rem;
+  border-radius: 1rem;
+  padding: 1rem 2rem;
+  font-size: 1.125rem;
+  line-height: 1.75rem;
+  font-weight: 600;
+  background-color: #7c3aed;
+  color: #fff;
+  box-shadow: 0 20px 25px -5px rgb(46 16 101 / 0.3), 0 8px 10px -6px rgb(46 16 101 / 0.3);
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+
+.vl-landing .vl-final-cta-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, .24);
+}
+
+/* ─── Responsive ──────────────────────────────────────────────────────────── */
+@media (max-width: 992px) {
+  .vl-landing .vl-h1 { font-size: 3.2rem; line-height: 3.7rem; }
+  .vl-landing .vl-h2 { font-size: 1.9rem; line-height: 2.35rem; }
+  .vl-landing .vl-hero-section { padding-left: 1.5rem; padding-right: 1.5rem; }
+  .vl-landing .vl-hero-content { padding: 5rem 1.5rem; }
+  .vl-landing .vl-hero-subtitle { font-size: 1.125rem; line-height: 1.75rem; }
+  .vl-landing .vl-hero-highlights { grid-template-columns: repeat(1, 1fr); }
+  .vl-landing .vl-modules-section { padding: 5rem 1.5rem; }
+  .vl-landing .vl-modules-grid { grid-template-columns: repeat(2, 1fr); }
+  .vl-landing .vl-pricing-grid { grid-template-columns: repeat(1, 1fr); }
+  .vl-landing .vl-pricing-intro { border-right-width: 0; border-bottom: 1px solid rgba(255, 255, 255, .1); padding: 3rem 1.5rem; }
+  .vl-landing .vl-price-value { font-size: 3rem; line-height: 1; }
+  .vl-landing .vl-pricing-controls { padding: 3rem 1.5rem; }
+  .vl-landing .vl-differential-section { padding: 5rem 1.5rem; }
+  .vl-landing .vl-differential-subtitle { font-size: 1.125rem; line-height: 1.75rem; }
+  .vl-landing .vl-final-cta-section { padding: 0 1.5rem 5rem; }
+  .vl-landing .vl-final-cta-card { padding: 4rem 1.5rem; }
+}
+
+@media (max-width: 480px) {
+  .vl-landing .vl-h1 { font-size: 2.45rem; line-height: 2.9rem; }
+  .vl-landing .vl-h2 { font-size: 1.6rem; line-height: 2rem; }
+  .vl-landing .vl-hero-section { padding-left: 1rem; padding-right: 1rem; }
+  .vl-landing .vl-hero-content { padding: 4rem 1rem; }
+  .vl-landing .vl-hero-subtitle { font-size: 1rem; line-height: 1.75rem; }
+  .vl-landing .vl-hero-actions { flex-direction: column; }
+  .vl-landing .vl-modules-section { padding: 4rem 1rem; }
+  .vl-landing .vl-section-subtitle { font-size: 1rem; line-height: 1.5rem; }
+  .vl-landing .vl-modules-grid { grid-template-columns: repeat(1, 1fr); }
+  .vl-landing .vl-pricing-intro { padding: 3rem 1rem; }
+  .vl-landing .vl-pricing-text { font-size: 1rem; line-height: 1.5rem; }
+  .vl-landing .vl-price-value { font-size: 2.25rem; line-height: 2.5rem; }
+  .vl-landing .vl-price-summary { grid-template-columns: repeat(1, 1fr); }
+  .vl-landing .vl-pricing-controls { padding: 3rem 1rem; }
+  .vl-landing .vl-selectors-grid { grid-template-columns: repeat(1, 1fr); }
+  .vl-landing .vl-slider-header { flex-direction: column; align-items: flex-start; }
+  .vl-landing .vl-differential-section { padding: 4rem 1rem; }
+  .vl-landing .vl-differential-subtitle { font-size: 1rem; line-height: 1.75rem; }
+  .vl-landing .vl-final-cta-section { padding: 0 1rem 4rem; }
+  .vl-landing .vl-final-cta-card { padding: 3rem 1rem; }
+  .vl-landing .vl-final-cta-subtitle { font-size: 1rem; line-height: 1.5rem; }
+}
