@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from 'next/server';
 import { withTenantAuth } from '@/lib/api-key-auth';
 import { prisma } from '@/lib/db';
+import { KnowledgeService } from '@/lib/knowledge/knowledge-service';
 
 /**
  * GET /api/knowledge/[id] - Obtener detalle
@@ -22,17 +23,14 @@ export const GET = withTenantAuth(async (request, auth, context) => {
 }, ['knowledge:read']);
 
 /**
- * PATCH /api/knowledge/[id] - Actualizar
+ * PATCH /api/knowledge/[id] - Actualizar (regenera embedding si cambia título/contenido)
  */
 export const PATCH = withTenantAuth(async (request, auth, context) => {
   try {
     const { id } = await context.params;
     const body = await request.json();
 
-    const article = await prisma.knowledgeArticle.update({
-      where: { id, tenantId: auth.tenant!.id },
-      data: body
-    });
+    const article = await KnowledgeService.updateArticle(auth.tenant!.id, id, body);
 
     return NextResponse.json(article);
   } catch (error: any) {

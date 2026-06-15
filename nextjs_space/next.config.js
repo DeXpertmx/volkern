@@ -6,11 +6,6 @@ const withBundleAnalyzer = process.env.ANALYZE === 'true'
   : (config) => config;
 
 const nextConfig = {
-  // ═══ Build Output ═══════════════════════════════════════
-  // Modo standalone: genera carpeta autocontenida para producción (VPS/Docker)
-  // Reduce drásticamente el tamaño del artifact de deploy
-  output: 'standalone',
-
   // ═══ ESLint ════════════════════════════════════════════
   eslint: {
     ignoreDuringBuilds: true,
@@ -33,6 +28,7 @@ const nextConfig = {
       'lodash',
       'date-fns',
     ],
+    instrumentationHook: true,
   },
 
   // ═══ Server External Packages ═════════════════════════
@@ -78,24 +74,6 @@ const nextConfig = {
     ];
   },
 
-  // ═══ Output File Tracing ═══════════════════════════════
-  // Reduce tamaño del build standalone excluyendo archivos
-  // que no son necesarios en producción
-  outputFileTracingExcludes: {
-    '/**': [
-      // Chromium de puppeteer ya no incluido — usamos Chrome del sistema
-      // (puppeteer-core no descarga Chromium, el patrón es innecesario)
-      // Prisma engine binaries para otros SOs (solo Linux x64 necesario)
-      '**/prisma/engines/introspection-engine*',
-      '**/prisma/engines/migration-engine*',
-      '**/prisma/engines/prisma-fmt*',
-      // Documentación empaquetada de dependencias
-      '**/*.md',
-      '**/*.markdown',
-      '**/CHANGELOG*',
-      '**/LICENSE*',
-    ],
-  },
 };
 
 module.exports = withBundleAnalyzer(nextConfig);
