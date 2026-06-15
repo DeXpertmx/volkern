@@ -74,8 +74,8 @@ export async function POST(request: NextRequest) {
           quantity: 1
         }
       ],
-      success_url: `${process.env.NEXTURL || 'http://localhost:3000'}/dashboard/configuracion/billing?success=true`,
-      cancel_url: `${process.env.NEXTURL || 'http://localhost:3000'}/dashboard/configuracion/billing?canceled=true`,
+      success_url: `${process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://volkern.app'}/dashboard/configuracion/billing?success=true`,
+      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://volkern.app'}/dashboard/configuracion/billing?canceled=true`,
       metadata: {
         tenantId: tenant.id,
         planId,

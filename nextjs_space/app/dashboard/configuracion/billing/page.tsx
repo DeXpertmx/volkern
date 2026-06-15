@@ -26,9 +26,34 @@ export default function BillingPage() {
   const [actionLoading, setActionLoading] = useState(false)
   const [showCancelDialog, setShowCancelDialog] = useState(false)
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null)
+  const [successPolling, setSuccessPolling] = useState(false)
 
   useEffect(() => {
     fetchStatus()
+  }, [])
+
+  // Polling post-checkout: refresh status after Stripe redirect
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('success') === 'true') {
+      setSuccessPolling(true)
+      let attempts = 0
+      const maxAttempts = 15 // 30 seconds max
+      const interval = setInterval(async () => {
+        attempts++
+        const data = await fetchStatus()
+        if (data && (data.status === 'activo' || attempts >= maxAttempts)) {
+            setSuccessPolling(false)
+            clearInterval(interval)
+            // Clean URL
+            window.history.replaceState({}, '', '/dashboard/configuracion/billing')
+            if (data.status === 'activo') {
+              toast.success('¡Pago confirmado! Tu suscripción está activa.')
+            }
+          }
+        }, 2000)
+      return () => clearInterval(interval)
+    }
   }, [])
 
   const fetchStatus = async () => {
@@ -37,6 +62,7 @@ export default function BillingPage() {
       if (response.ok) {
         const data = await response.json()
         setStatus(data)
+        return data
       }
     } catch (error) {
       console.error('Error fetching status:', error)
@@ -44,6 +70,7 @@ export default function BillingPage() {
     } finally {
       setLoading(false)
     }
+    return null
   }
 
   const handleSubscribe = async (planId: string) => {
@@ -174,6 +201,12 @@ export default function BillingPage() {
           <CardDescription>Tu plan y estado de suscripción</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {successPolling && (
+            <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+              <Loader2 className="w-4 h-4 animate-spin text-green-600" />
+              <p className="text-sm text-green-800">Confirmando tu pago... esto puede tomar unos segundos.</p>
+            </div>
+          )}
           <div className="flex items-center justify-between">
             <div>
               <div className="flex items-center gap-2">
@@ -194,15 +227,36 @@ export default function BillingPage() {
               )}
             </div>
 
-            {status?.status === 'activo' && status?.subscription && (
+          {status?.status === 'activo' && status?.subscription && (
+            <div className="space-y-3">
+              <div className="flex gap-2 flex-wrap">
+                {plans
+                  .filter(p => p.id !== status.plan)
+                  .map(p => (
+                    <Button
+                      key={p.id}
+                      variant="outline"
+                      onClick={() => handleChangePlan(p.id)}
+                      disabled={actionLoading}
+                      className="font-medium"
+                    >
+                      {actionLoading && selectedPlan === p.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                      ) : null}
+                      Cambiar a {p.name}
+                    </Button>
+                  ))}
+              </div>
               <Button
                 variant="outline"
                 onClick={() => setShowCancelDialog(true)}
                 disabled={actionLoading}
+                className="text-red-600 border-red-200 hover:bg-red-50"
               >
                 Cancelar Suscripción
               </Button>
-            )}
+            </div>
+          )}
           </div>
 
           {status?.subscription?.cancelAtPeriodEnd && (
@@ -220,6 +274,53 @@ export default function BillingPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Plan Selection for Trial Users */}
+      {status?.status === 'trial' && (
+        <Card className="border-indigo-200 bg-indigo-50/30">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-indigo-600" />
+              Elige tu plan
+            </CardTitle>
+            <CardDescription>
+              Tu prueba gratuita termina en {status.trial?.daysRemaining || '?'} días. Selecciona un plan para continuar sin interrupción.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {plans.map((plan) => (
+                <div key={plan.id} className={`bg-white rounded-xl p-5 border-2 ${plan.popular ? 'border-indigo-500 ring-2 ring-indigo-100' : 'border-gray-200'}`}>
+                  {plan.popular && (
+                    <Badge className="mb-2 bg-indigo-600 text-white">Más popular</Badge>
+                  )}
+                  <h3 className="text-lg font-bold">{plan.name}</h3>
+                  <p className="text-2xl font-black mt-2">{plan.price}<span className="text-sm font-normal text-gray-400">/mes</span></p>
+                  <ul className="mt-4 space-y-2 mb-6">
+                    {plan.features.slice(0, 5).map((f: string, i: number) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
+                        <Check className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
+                        <span>{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <Button
+                    onClick={() => handleSubscribe(plan.id)}
+                    disabled={actionLoading}
+                    className={`w-full font-bold ${plan.popular ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : ''}`}
+                    variant={plan.popular ? 'default' : 'outline'}
+                  >
+                    {actionLoading && selectedPlan === plan.id ? (
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    ) : null}
+                    Elegir {plan.name}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Quick link a Uso y Límites */}
       <Card>
