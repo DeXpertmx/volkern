@@ -4,8 +4,10 @@ import React, { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, Check, Minus, Monitor, Zap, MessageCircle, FileSignature, Users, BarChart3, TrendingUp, Clock, AlertTriangle, Layers, ShieldCheck, Sparkles, ChevronRight, BookOpen, ChevronDown } from 'lucide-react';
+import { ArrowRight, Check, Zap, ShieldCheck, Users, BookOpen, BarChart3, ChevronDown, Sparkles, Monitor, TrendingUp, Settings, Rocket, Layers } from 'lucide-react';
 import { calcularPrecio, getMensajeLimite, getComparisonTable, type PlanTipo } from '@/lib/pricing-engine';
+
+/* ─── Constants ───────────────────────────────────────────────────────────── */
 
 const SLIDER_USUARIOS_MIN = 1;
 const SLIDER_USUARIOS_MAX = 99;
@@ -15,32 +17,27 @@ const SLIDER_CONTACTOS_STEP = 1000;
 
 /* ─── Data ────────────────────────────────────────────────────────────────── */
 
-const COMPETITOR_TOOLS = [
-  { name: 'CRM', price: 50 },
-  { name: 'Email marketing', price: 30 },
-  { name: 'Chat en vivo', price: 20 },
-  { name: 'Telefonía', price: 25 },
-  { name: 'Automatización', price: 40 },
-  { name: 'Firma digital', price: 15 },
-  { name: 'Gestión interna', price: 30 },
-];
-
-const TOTAL_COMPETITOR = COMPETITOR_TOOLS.reduce((sum, t) => sum + t.price, 0);
-
-const PROBLEMS = [
-  { icon: Clock, title: 'Pierdes tiempo', desc: 'cambiando entre plataformas' },
-  { icon: AlertTriangle, title: 'Información fragmentada', desc: 'tus datos están dispersos' },
-  { icon: TrendingUp, title: 'Sin control total', desc: 'del negocio en tiempo real' },
-  { icon: Minus, title: 'Pagas más', desc: 'por menos funcionalidad' },
-];
-
-const CAPABILITIES = [
-  'Gestionar clientes y ventas',
-  'Automatizar procesos',
-  'Comunicarte con clientes',
-  'Firmar documentos',
-  'Gestionar pagos',
-  'Controlar operaciones',
+const VALUE_GROUPS = [
+  {
+    title: 'Genera ingresos',
+    icon: TrendingUp,
+    items: ['CRM', 'Ventas', 'Marketing automation'],
+  },
+  {
+    title: 'Opera tu negocio',
+    icon: Settings,
+    items: ['Facturación', 'RRHH', 'Academy'],
+  },
+  {
+    title: 'Conecta todo',
+    icon: Zap,
+    items: ['Integraciones', 'Telefonía', 'Hub social'],
+  },
+  {
+    title: 'Control total',
+    icon: ShieldCheck,
+    items: ['Firma digital', 'Compliance'],
+  },
 ];
 
 const MODULES = [
@@ -56,24 +53,7 @@ const MODULES = [
   'Dashboard y reportes',
 ];
 
-const BENEFITS = [
-  { icon: Zap, text: 'No pierdes oportunidades' },
-  { icon: MessageCircle, text: 'Respondes más rápido' },
-  { icon: ShieldCheck, text: 'Reduces errores' },
-  { icon: Clock, text: 'Ahorras tiempo' },
-  { icon: BarChart3, text: 'Tomas mejores decisiones' },
-];
-
-const TARGETS = [
-  'Inmobiliarias',
-  'Agencias de marketing',
-  'Despachos contables',
-  'Academias',
-  'Equipos comerciales',
-  'Empresas en crecimiento',
-];
-
-/* ─── PricingSlider (compartido con /precios) ──────────────────────────────── */
+/* ─── PricingSlider ────────────────────────────────────────────────────────── */
 
 function fmtUsuarios(n: number) {
   if (n === SLIDER_USUARIOS_MAX) return '99+'
@@ -91,10 +71,10 @@ function fmtPrecio(n: number) {
 }
 
 function PricingSlider() {
-  const [users, setUsers] = useState(5)
-  const [contacts, setContacts] = useState(5000)
+  const [users, setUsers] = useState(1)
+  const [contacts, setContacts] = useState(1000)
   const [plan, setPlan] = useState<PlanTipo>('scale')
-  const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly')
+  const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('yearly')
   const [showComparison, setShowComparison] = useState(false)
 
   const result = useMemo(
@@ -370,24 +350,20 @@ export default function SimplifiedLanding() {
             </span>
 
             <h1 className="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight tracking-tight">
-              Centraliza todo tu negocio{' '}
+              Tu negocio completo.{' '}
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-500">
-                en un solo lugar
+                En un solo lugar.
               </span>
             </h1>
 
-            <p className="text-xl text-slate-400 max-w-2xl mx-auto mb-8 leading-relaxed">
-              Gestiona clientes, ventas, comunicación, pagos y operaciones sin cambiar de herramienta.
-            </p>
-
-            <p className="text-2xl md:text-3xl font-bold text-white mb-10">
-              Todo lo que necesitas para operar y crecer, desde <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">€50/mes</span>
+            <p className="text-xl text-slate-400 max-w-2xl mx-auto mb-10 leading-relaxed">
+              CRM, ventas, marketing, facturación, firma digital y compliance. Sin integraciones. Sin fricción.
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/signup">
+              <Link href="/precios#configurador">
                 <Button size="lg" className="bg-blue-600 hover:bg-blue-500 text-white px-10 py-7 text-lg rounded-xl font-bold shadow-xl shadow-blue-600/30 group">
-                  Activar mi sistema
+                  Configura tu plan en vivo
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </Button>
               </Link>
@@ -403,78 +379,24 @@ export default function SimplifiedLanding() {
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════════
-         PRUEBA RÁPIDA — Comparación de costos
+         VALUE GROUPED — 4 columnas
       ════════════════════════════════════════════════════════════════════ */}
-      <Section dark id="como-funciona">
+      <Section dark>
         <FadeIn>
-          <div className="max-w-3xl mx-auto">
-            <span className="inline-block py-1 px-3 rounded-full bg-emerald-500/10 text-emerald-400 text-sm font-medium mb-6 border border-emerald-500/20">
-              Prueba rápida
-            </span>
-            <h2 className="text-4xl md:text-5xl font-bold text-white mb-12">
-              Todo lo que dejas de pagar
-            </h2>
-
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
-              {/* Header */}
-              <div className="grid grid-cols-3 gap-4 px-6 py-4 border-b border-slate-800 bg-slate-900/50">
-                <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Herramienta</span>
-                <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider text-right">Costo/mes</span>
-                <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider text-right">Con Volkern</span>
-              </div>
-
-              {/* Rows */}
-              {COMPETITOR_TOOLS.map((tool, i) => (
-                <motion.div
-                  key={tool.name}
-                  initial={{ opacity: 0, x: -10 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.3, delay: i * 0.05 }}
-                  className="grid grid-cols-3 gap-4 px-6 py-4 border-b border-slate-800/50 last:border-b-0 hover:bg-slate-800/30 transition-colors"
-                >
-                  <span className="text-slate-300 font-medium">{tool.name}</span>
-                  <span className="text-red-400 text-right font-mono font-semibold">€{tool.price}</span>
-                  <span className="text-emerald-400 text-right font-mono font-semibold flex items-center justify-end gap-2">
-                    <Check className="w-4 h-4" /> Incluido
-                  </span>
-                </motion.div>
-              ))}
-
-              {/* Total Row */}
-              <div className="grid grid-cols-3 gap-4 px-6 py-5 bg-slate-800/50 border-t-2 border-emerald-500/30">
-                <span className="text-white font-bold text-lg">Total</span>
-                <span className="text-red-400 text-right font-bold text-lg font-mono">€{TOTAL_COMPETITOR}+</span>
-                <span className="text-emerald-400 text-right font-bold text-lg font-mono">€50/mes</span>
-              </div>
+          <div className="max-w-5xl mx-auto">
+            <div className="text-center mb-14">
+              <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
+                No necesitas 10 herramientas.{' '}
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-500">Solo Volkern.</span>
+              </h2>
+              <p className="text-lg text-slate-400 max-w-xl mx-auto">
+                Centraliza toda tu operación en una sola plataforma.
+              </p>
             </div>
 
-            <p className="text-center text-slate-400 mt-6 text-sm">
-              Reemplaza más de <span className="text-white font-semibold">{COMPETITOR_TOOLS.length} herramientas</span> por una sola plataforma
-            </p>
-          </div>
-        </FadeIn>
-      </Section>
-
-      {/* ═══════════════════════════════════════════════════════════════════
-         PROBLEMA
-      ════════════════════════════════════════════════════════════════════ */}
-      <Section>
-        <FadeIn>
-          <div className="max-w-4xl mx-auto">
-            <span className="inline-block py-1 px-3 rounded-full bg-red-500/10 text-red-400 text-sm font-medium mb-6 border border-red-500/20">
-              El problema
-            </span>
-            <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
-              Estás usando <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-rose-400">demasiadas herramientas</span>
-            </h2>
-            <p className="text-lg text-slate-400 max-w-2xl mb-12 leading-relaxed">
-              Cada herramienta que añades promete solucionar un problema… pero añade tres más.
-            </p>
-
-            <div className="grid md:grid-cols-2 gap-6">
-              {PROBLEMS.map((p, i) => {
-                const Icon = p.icon;
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {VALUE_GROUPS.map((group, i) => {
+                const Icon = group.icon;
                 return (
                   <motion.div
                     key={i}
@@ -482,15 +404,20 @@ export default function SimplifiedLanding() {
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
                     transition={{ duration: 0.4, delay: i * 0.1 }}
-                    className="flex items-start gap-4 p-6 bg-slate-900/50 border border-slate-800 rounded-2xl hover:border-red-500/20 transition-colors"
+                    className="p-6 bg-slate-900/50 border border-slate-800 rounded-2xl hover:border-blue-500/20 transition-colors"
                   >
-                    <div className="w-12 h-12 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center flex-shrink-0">
-                      <Icon className="w-6 h-6 text-red-400" />
+                    <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mb-4">
+                      <Icon className="w-5 h-5 text-blue-400" />
                     </div>
-                    <div>
-                      <h3 className="text-white font-semibold text-lg mb-1">{p.title}</h3>
-                      <p className="text-slate-400">{p.desc}</p>
-                    </div>
+                    <h3 className="text-white font-bold text-lg mb-3">{group.title}</h3>
+                    <ul className="space-y-2">
+                      {group.items.map((item, j) => (
+                        <li key={j} className="flex items-center gap-2 text-sm text-slate-400">
+                          <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
                   </motion.div>
                 );
               })}
@@ -500,175 +427,113 @@ export default function SimplifiedLanding() {
       </Section>
 
       {/* ═══════════════════════════════════════════════════════════════════
-         SOLUCIÓN
+         HOW IT WORKS — 3 pasos
+      ════════════════════════════════════════════════════════════════════ */}
+      <Section id="como-funciona">
+        <FadeIn>
+          <div className="max-w-4xl mx-auto">
+            <div className="text-center mb-14">
+              <span className="inline-block py-1 px-3 rounded-full bg-blue-500/10 text-blue-400 text-sm font-medium mb-6 border border-blue-500/20">
+                Cómo funciona
+              </span>
+              <h2 className="text-4xl md:text-5xl font-bold text-white">
+                Empieza en minutos
+              </h2>
+            </div>
+
+            <div className="grid md:grid-cols-3 gap-8">
+              {[
+                {
+                  step: '1',
+                  icon: Settings,
+                  title: 'Configura',
+                  desc: 'Define usuarios y volumen de operación',
+                },
+                {
+                  step: '2',
+                  icon: Rocket,
+                  title: 'Activa',
+                  desc: 'Empieza a usar todos los módulos desde el primer día',
+                },
+                {
+                  step: '3',
+                  icon: TrendingUp,
+                  title: 'Escala',
+                  desc: 'Volkern crece contigo automáticamente',
+                },
+              ].map((item, i) => {
+                const Icon = item.icon;
+                return (
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.4, delay: i * 0.15 }}
+                    className="relative p-8 bg-slate-950 border border-slate-800 rounded-3xl text-center group hover:border-blue-500/20 transition-colors"
+                  >
+                    <div className="absolute -top-4 left-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-blue-600 text-white text-xs font-black flex items-center justify-center">
+                      {item.step}
+                    </div>
+                    <div className="w-14 h-14 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mx-auto mb-5 mt-2 group-hover:bg-blue-500/20 transition-colors">
+                      <Icon className="w-7 h-7 text-blue-400" />
+                    </div>
+                    <h3 className="text-white font-bold text-lg mb-2">{item.title}</h3>
+                    <p className="text-slate-400 text-sm">{item.desc}</p>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </div>
+        </FadeIn>
+      </Section>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+         MODULES — simplificado, baja prioridad
       ════════════════════════════════════════════════════════════════════ */}
       <Section dark>
         <FadeIn>
-          <div className="max-w-4xl mx-auto">
-            <span className="inline-block py-1 px-3 rounded-full bg-blue-500/10 text-blue-400 text-sm font-medium mb-6 border border-blue-500/20">
-              La solución
-            </span>
-            <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
-              Un sistema para{' '}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-500">todo tu negocio</span>
+          <div className="max-w-4xl mx-auto text-center">
+            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+              Todo lo que incluye Volkern
             </h2>
-            <p className="text-lg text-slate-400 max-w-2xl mb-12 leading-relaxed">
-              Con Volkern puedes:
-            </p>
 
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {CAPABILITIES.map((cap, i) => (
+            <div className="flex flex-wrap justify-center gap-3 mt-10">
+              {MODULES.map((mod, i) => (
                 <motion.div
                   key={i}
                   initial={{ opacity: 0, scale: 0.95 }}
                   whileInView={{ opacity: 1, scale: 1 }}
                   viewport={{ once: true }}
-                  transition={{ duration: 0.3, delay: i * 0.05 }}
-                  className="flex items-center gap-3 p-5 bg-slate-950 border border-slate-800 rounded-xl hover:border-blue-500/30 transition-colors group"
+                  transition={{ duration: 0.2, delay: i * 0.03 }}
+                  className="flex items-center gap-2 px-4 py-2 bg-slate-900/50 border border-slate-800 rounded-full text-sm text-slate-300 hover:border-blue-500/20 transition-colors"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-500/20 transition-colors">
-                    <Check className="w-4 h-4 text-blue-400" />
-                  </div>
-                  <span className="text-slate-300 font-medium">{cap}</span>
+                  <Layers className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                  {mod}
                 </motion.div>
               ))}
             </div>
-
-            <p className="text-center text-slate-400 mt-8 text-sm">
-              Todo en un solo lugar. Sin integraciones complejas. Sin duplicar datos.
-            </p>
           </div>
         </FadeIn>
       </Section>
 
       {/* ═══════════════════════════════════════════════════════════════════
-         MÓDULOS (Volumen = Valor)
+         MID CTA
       ════════════════════════════════════════════════════════════════════ */}
       <Section>
-        <FadeIn>
-          <div className="max-w-4xl mx-auto">
-            <span className="inline-block py-1 px-3 rounded-full bg-purple-500/10 text-purple-400 text-sm font-medium mb-6 border border-purple-500/20">
-              Volumen = Valor
-            </span>
-            <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
-              Todo lo que incluye{' '}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-fuchsia-400">Volkern</span>
-            </h2>
-            <p className="text-lg text-slate-400 max-w-2xl mb-12 leading-relaxed">
-              No vendemos módulos por separado. Todo está incluido desde el primer día.
-            </p>
-
-            <div className="grid sm:grid-cols-2 gap-3">
-              {MODULES.map((mod, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, x: -10 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.3, delay: i * 0.04 }}
-                  className="flex items-center gap-3 p-4 bg-slate-900/50 border border-slate-800 rounded-xl hover:border-purple-500/20 transition-colors group"
-                >
-                  <div className="w-8 h-8 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center flex-shrink-0 group-hover:bg-purple-500/20 transition-colors">
-                    <Layers className="w-4 h-4 text-purple-400" />
-                  </div>
-                  <span className="text-slate-300">{mod}</span>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </FadeIn>
-      </Section>
-
-      {/* ═══════════════════════════════════════════════════════════════════
-         BENEFICIOS
-      ════════════════════════════════════════════════════════════════════ */}
-      <Section dark>
-        <FadeIn>
-          <div className="max-w-4xl mx-auto text-center">
-            <span className="inline-block py-1 px-3 rounded-full bg-amber-500/10 text-amber-400 text-sm font-medium mb-6 border border-amber-500/20">
-              Beneficios reales
-            </span>
-            <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
-              Diseñado para{' '}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-400">operar mejor</span>
-            </h2>
-            <p className="text-lg text-slate-400 max-w-2xl mx-auto mb-12 leading-relaxed">
-              No es un CRM, no es un ERP. Es la forma de operar tu negocio.
-            </p>
-
-            <div className="grid sm:grid-cols-3 lg:grid-cols-5 gap-4">
-              {BENEFITS.map((b, i) => {
-                const Icon = b.icon;
-                return (
-                  <motion.div
-                    key={i}
-                    initial={{ opacity: 0, y: 15 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ duration: 0.4, delay: i * 0.06 }}
-                    className="p-6 bg-slate-900/50 border border-slate-800 rounded-2xl hover:border-amber-500/20 transition-all duration-300 group"
-                  >
-                    <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto mb-4 group-hover:bg-amber-500/20 transition-colors">
-                      <Icon className="w-6 h-6 text-amber-400" />
-                    </div>
-                    <p className="text-white font-semibold">{b.text}</p>
-                  </motion.div>
-                );
-              })}
-            </div>
-          </div>
-        </FadeIn>
-      </Section>
-
-      {/* ═══════════════════════════════════════════════════════════════════
-         PARA QUIÉN ES
-      ════════════════════════════════════════════════════════════════════ */}
-      <Section>
-        <FadeIn>
-          <div className="max-w-4xl mx-auto">
-            <span className="inline-block py-1 px-3 rounded-full bg-emerald-500/10 text-emerald-400 text-sm font-medium mb-6 border border-emerald-500/20">
-              Para quién es
-            </span>
-            <h2 className="text-4xl md:text-5xl font-bold text-white mb-12">
-              Diseñado para{' '}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">distintos negocios</span>
-            </h2>
-
-            <div className="flex flex-wrap justify-center gap-3">
-              {TARGETS.map((t, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  whileInView={{ opacity: 1, scale: 1 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.3, delay: i * 0.06 }}
-                  className="px-6 py-3 bg-slate-900/50 border border-slate-800 rounded-full text-slate-300 font-medium hover:border-emerald-500/30 hover:text-emerald-300 transition-all duration-300"
-                >
-                  {t}
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </FadeIn>
-      </Section>
-
-      {/* ═══════════════════════════════════════════════════════════════════
-         CTA INTERMEDIO
-      ════════════════════════════════════════════════════════════════════ */}
-      <Section dark>
         <FadeIn>
           <div className="max-w-3xl mx-auto text-center">
             <div className="bg-gradient-to-r from-blue-900/30 via-slate-900 to-purple-900/30 border border-slate-800 rounded-3xl p-12 md:p-16">
               <Sparkles className="w-12 h-12 text-blue-400 mx-auto mb-6" />
               <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
-                Empieza a centralizar tu negocio hoy
+                Configura Volkern según tu negocio
               </h2>
               <p className="text-lg text-slate-400 mb-10 max-w-xl mx-auto leading-relaxed">
-                Todo en un solo sistema. Sin complicaciones.
+                Adapta usuarios, contactos y operación en tiempo real.
               </p>
-              <Link href="/signup">
+              <Link href="/precios">
                 <Button size="lg" className="bg-blue-600 hover:bg-blue-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-blue-600/30 group">
-                  Empezar con Volkern
+                  Ver precios dinámicos
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </Button>
               </Link>
@@ -678,9 +543,9 @@ export default function SimplifiedLanding() {
       </Section>
 
       {/* ═══════════════════════════════════════════════════════════════════
-         PRICING (sliders interactivos — mismo motor que /precios)
+         PRICING (sliders interactivos)
       ════════════════════════════════════════════════════════════════════ */}
-      <Section id="pricing">
+      <Section dark id="pricing">
         <FadeIn>
           <div className="max-w-4xl mx-auto">
             <div className="text-center mb-10">
@@ -700,25 +565,6 @@ export default function SimplifiedLanding() {
       </Section>
 
       {/* ═══════════════════════════════════════════════════════════════════
-         CONFIANZA
-      ════════════════════════════════════════════════════════════════════ */}
-      <Section dark>
-        <FadeIn>
-          <div className="max-w-3xl mx-auto text-center">
-            <div className="p-10 bg-slate-900/30 border border-slate-800 rounded-3xl">
-              <Users className="w-10 h-10 text-slate-600 mx-auto mb-6" />
-              <p className="text-lg text-slate-300 leading-relaxed mb-4">
-                Empresas están comenzando a reemplazar múltiples herramientas por Volkern.
-              </p>
-              <p className="text-slate-500 text-sm max-w-lg mx-auto">
-                Centralizar ya no es una opción, es una ventaja competitiva.
-              </p>
-            </div>
-          </div>
-        </FadeIn>
-      </Section>
-
-      {/* ═══════════════════════════════════════════════════════════════════
          CTA FINAL
       ════════════════════════════════════════════════════════════════════ */}
       <Section>
@@ -726,15 +572,14 @@ export default function SimplifiedLanding() {
           <div className="max-w-3xl mx-auto text-center">
             <div className="bg-gradient-to-r from-blue-900/40 via-slate-900 to-indigo-900/40 border border-slate-800 rounded-3xl p-12 md:p-16">
               <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
-                Deja de usar{' '}
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-rose-400">múltiples herramientas</span>
+                Empieza a operar con Volkern hoy
               </h2>
               <p className="text-xl text-slate-400 mb-10">
-                Empieza a operar con un solo sistema
+                Configura tu plan en segundos y escala sin límites.
               </p>
-              <Link href="/signup">
+              <Link href="/precios">
                 <Button size="lg" className="bg-blue-600 hover:bg-blue-500 text-white px-14 py-8 text-xl rounded-xl font-bold shadow-xl shadow-blue-600/30 group">
-                  Activar mi sistema
+                  Configura tu plan
                   <ArrowRight className="ml-2 w-6 h-6 group-hover:translate-x-1 transition-transform" />
                 </Button>
               </Link>
