@@ -198,6 +198,15 @@ export default function SimplifiedLanding() {
          HERO
       ════════════════════════════════════════════════════════════════════ */}
       <section className="relative min-h-[90vh] flex items-center justify-center pt-24 overflow-hidden bg-slate-950">
+        {/* Background image */}
+        <div className="absolute inset-0">
+          <img
+            src="/assets/landing/laptop-volkern-1.png"
+            alt=""
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-slate-950/80 via-slate-950/70 to-slate-950/95" />
+        </div>
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[900px] h-[500px] bg-blue-600/15 blur-[140px] rounded-full pointer-events-none" />
 
         <div className="container mx-auto px-6 relative z-10 text-center">
