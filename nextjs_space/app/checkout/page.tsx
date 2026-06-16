@@ -24,6 +24,7 @@ import {
   Building2,
   Mail,
   User,
+  Phone,
 } from 'lucide-react'
 import {
   calcularPrecio,
