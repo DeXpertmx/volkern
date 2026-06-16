@@ -55,3 +55,81 @@ export async function createCheckoutSession({
     return { success: false, error }
   }
 }
+
+/**
+ * Crea una sesión de checkout de suscripción con precio dinámico.
+ * Usa price_data con recurring en lugar de un Price ID predefinido.
+ */
+export async function createSubscriptionCheckout({
+  customerId,
+  tenantId,
+  planLabel,
+  usuarios,
+  contactos,
+  plan,
+  interval,
+  precioMensual,
+  successUrl,
+  cancelUrl,
+}: {
+  customerId: string
+  tenantId: string
+  planLabel: string
+  usuarios: number
+  contactos: number
+  plan: string
+  interval: 'monthly' | 'yearly'
+  precioMensual: number
+  successUrl: string
+  cancelUrl: string
+}) {
+  try {
+    const precioCentavos = Math.round(precioMensual * 100)
+
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      mode: 'subscription',
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price_data: {
+            currency: 'eur',
+            product_data: {
+              name: `Volkern ${planLabel}`,
+              description: `${usuarios} usuarios · ${contactos >= 1000 ? `${(contactos / 1000).toFixed(0)}.000` : contactos} contactos`,
+            },
+            recurring: {
+              interval: interval === 'yearly' ? 'year' : 'month',
+            },
+            unit_amount: precioCentavos,
+          },
+          quantity: 1,
+        },
+      ],
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+      metadata: {
+        tenantId,
+        plan,
+        interval,
+        usuarios: String(usuarios),
+        contactos: String(contactos),
+        precioMensual: String(precioMensual),
+      },
+      subscription_data: {
+        metadata: {
+          tenantId,
+          plan,
+          interval,
+          usuarios: String(usuarios),
+          contactos: String(contactos),
+        },
+      },
+    })
+
+    return { success: true, session }
+  } catch (error) {
+    console.error('Error creating subscription checkout:', error)
+    return { success: false, error }
+  }
+}

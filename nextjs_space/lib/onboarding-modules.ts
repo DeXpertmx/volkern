@@ -91,6 +91,7 @@ export const MODULE_GROUPS: ModuleGroup[] = [
       { id: 'mi_tarjeta', label: 'Mi Tarjeta', icon: '💳', description: 'Tarjeta digital' },
       { id: 'white_label', label: 'Marca Blanca', icon: '🏷️', description: 'Tu propio branding' },
       { id: 'estrategia', label: 'Estrategia', icon: '🎯', description: 'KPIs y planificación' },
+      { id: 'compliance_pro', label: 'Compliance PRO', icon: '🛡️', description: 'Control normativo y auditoría avanzada' },
     ],
   },
 ]

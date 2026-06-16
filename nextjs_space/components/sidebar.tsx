@@ -20,6 +20,7 @@ import { useState, useEffect } from 'react'
 import { useWhitelabel } from '@/hooks/use-whitelabel'
 import { HUBS, type NavigationItem } from '@/lib/navigation-config'
 import { PunchClock } from '@/components/attendance/PunchClock'
+import { ComplianceBadge } from '@/components/compliance/ComplianceBadge'
 
 // Simple logger
 const log = (...args: any[]) => {
@@ -359,7 +360,8 @@ export function Sidebar() {
           </nav>
 
           {/* ⌚ VISION-LOCK ATTENDANCE (Punch Clock) */}
-          <div className="px-4 py-4 border-t border-dashed bg-accent/5">
+          <div className="px-4 py-4 border-t border-dashed bg-accent/5 space-y-3">
+            <ComplianceBadge isCollapsed={isCollapsed} />
             <PunchClock isCollapsed={isCollapsed} />
           </div>
 

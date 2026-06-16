@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { WhitelabelConfig } from "@/components/whitelabel-config";
+import { ComplianceModeToggle } from "@/components/compliance/ComplianceModeToggle";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import HorariosMultiplesEditor from "@/components/HorariosMultiplesEditor";
@@ -324,6 +325,51 @@ export function ConfiguracionDashboard({ activeSection }: ConfiguracionDashboard
             </div>
           )}
           
+          {activeSection === "compliance" && (
+            <div className="space-y-6">
+              <div className="space-y-1">
+                <h2 className="text-2xl font-bold tracking-tight">Control de Compliance</h2>
+                <p className="text-sm text-muted-foreground">
+                  Activa el Modo Compliance para proteger procesos críticos con reglas obligatorias no evitables.
+                </p>
+              </div>
+              <Card className="shadow-sm">
+                <CardContent className="p-6">
+                  <ComplianceModeToggle />
+                </CardContent>
+              </Card>
+
+              <Card className="shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-base font-semibold">Reglas Activas</CardTitle>
+                  <CardDescription>
+                    Estas son las reglas que se evalúan cuando el Modo Compliance está activo.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {[
+                      { icon: '🔴', name: 'Cerrar deal ganado', desc: 'Requiere contrato firmado asociado' },
+                      { icon: '🔴', name: 'Activar contrato', desc: 'Requiere ambas firmas digitales (cliente + empresa)' },
+                      { icon: '🟡', name: 'Avanzar pipeline', desc: 'Requiere tareas obligatorias completadas' },
+                      { icon: '🟡', name: 'Enviar cotización', desc: 'Requiere aprobación Manager si >5.000€' },
+                      { icon: '🟡', name: 'Cerrar deal perdido', desc: 'Requiere razón de pérdida documentada' },
+                      { icon: '🟢', name: 'Eliminar contacto', desc: 'Requiere justificación escrita ≥10 caracteres' },
+                    ].map((rule, i) => (
+                      <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
+                        <span className="text-base">{rule.icon}</span>
+                        <div>
+                          <p className="text-sm font-bold text-slate-800">{rule.name}</p>
+                          <p className="text-xs text-slate-500">{rule.desc}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
           {activeSection === "notificaciones" && (
             <div className="py-6">
               <NotificationConfig />

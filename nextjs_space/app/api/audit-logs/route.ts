@@ -63,7 +63,22 @@ export async function GET(req: NextRequest) {
       take: limit,
     })
 
-    return NextResponse.json({ logs })
+    // Mapear nombres de campos del español (Prisma) al inglés (frontend)
+    const mappedLogs = logs.map((log) => ({
+      id: log.id,
+      action: log.accion,
+      entity: log.entidad,
+      entityId: log.entidadId,
+      description: log.descripcion,
+      createdAt: log.fechaCreacion,
+      ipAddress: log.ipAddress,
+      metadata: log.metadata,
+      userId: log.userId,
+      tenantId: log.tenantId,
+      user: log.user,
+    }))
+
+    return NextResponse.json({ logs: mappedLogs })
   } catch (error: any) {
     console.error('Error al obtener audit logs:', error)
     return NextResponse.json({ error: 'Error al obtener logs' }, { status: 500 })

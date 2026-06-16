@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
+import { ComplianceGate } from '@/lib/compliance-gate';
 
 // GET /api/contacts/[id] - Obtener un contacto específico (Actualizado con historial unificado)
 export const GET = withTenantAuth(async (request, auth, { params }) => {
@@ -279,6 +280,29 @@ export const DELETE = withTenantAuth(async (request, auth, { params }) => {
       );
     }
 
+    // COMPLIANCE GATE: Verificar justificación antes de eliminar
+    const body = await request.json().catch(() => ({}));
+    const gateResult = await ComplianceGate.check({
+      tenantId,
+      userId: userId || 'api',
+      action: 'contact_delete',
+      entityId: params.id,
+      entityType: 'contact',
+      metadata: { justification: body.justification },
+    });
+
+    if (!gateResult.allowed) {
+      return NextResponse.json({
+        error: gateResult.reason,
+        gate: {
+          requiredAction: gateResult.requiredAction,
+          missingRequirements: gateResult.missingRequirements,
+          blockingRule: gateResult.blockingRule?.name,
+          mode: gateResult.mode,
+        },
+      }, { status: 403 });
+    }
+
     await prisma.contact.delete({
       where: { id: params.id }
     });
@@ -291,7 +315,7 @@ export const DELETE = withTenantAuth(async (request, auth, { params }) => {
         accion: 'eliminar',
         entidad: 'contact',
         entidadId: params.id,
-        descripcion: `Contacto "${contact.nombre}" eliminado`,
+        descripcion: `Contacto "${contact.nombre}" eliminado. Justificación: ${body.justification || 'No provista'}`,
         cambiosAntes: { nombre: contact.nombre, email: contact.email }
       }
     });

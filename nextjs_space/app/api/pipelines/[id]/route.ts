@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { ComplianceGate } from '@/lib/compliance-gate';
 
 /**
  * PATCH /api/pipelines/[id]
@@ -79,11 +80,20 @@ export async function DELETE(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user || !(session.user as any).tenantId) {
+    if (!session?.user?.email) {
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
 
-    const tenantId = (session.user as any).tenantId;
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { id: true, tenantId: true },
+    });
+
+    if (!user?.tenantId) {
+      return NextResponse.json({ error: 'Usuario sin tenant' }, { status: 403 });
+    }
+
+    const tenantId = user.tenantId;
     const pipelineId = params.id;
 
     // Read optional body for migration target
@@ -108,6 +118,34 @@ export async function DELETE(
     const dealCount = await prisma.deal.count({
       where: { pipelineId, estado: 'activo' },
     });
+
+    // ── Compliance Gate: pipeline_delete requiere justificación ──────────
+    const gateResult = await ComplianceGate.check({
+      tenantId,
+      userId: user.id,
+      action: 'pipeline_delete',
+      entityId: pipelineId,
+      entityType: 'pipeline',
+      metadata: {
+        justification: migrateToPipelineId
+          ? `Eliminación de pipeline "${existing.nombre}" con migración de ${dealCount} deals al pipeline ${migrateToPipelineId}`
+          : undefined,
+        dealsActivos: dealCount,
+        migrateToPipelineId: migrateToPipelineId || undefined,
+      },
+    });
+
+    if (!gateResult.allowed) {
+      return NextResponse.json({
+        error: gateResult.reason,
+        gate: {
+          requiredAction: gateResult.requiredAction,
+          missingRequirements: gateResult.missingRequirements,
+          blockingRule: gateResult.blockingRule?.name,
+          mode: gateResult.mode,
+        },
+      }, { status: 403 });
+    }
 
     if (dealCount > 0) {
       if (migrateToPipelineId) {

@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { withTenantAuth } from '@/lib/api-key-auth'
+import { ComplianceGate } from '@/lib/compliance-gate'
 
 // GET - Obtener cotización por ID
 export const GET = withTenantAuth(async (req, auth, params) => {
@@ -77,6 +78,29 @@ export const PATCH = withTenantAuth(async (req, auth, params) => {
     const dataToUpdate: any = {}
 
     if (estado !== undefined) {
+      // COMPLIANCE GATE: Verificar antes de enviar cotización
+      if (estado === 'enviada') {
+        const gateResult = await ComplianceGate.check({
+          tenantId: tenantId,
+          userId: userId,
+          action: 'cotizacion_send',
+          entityId: params.id,
+          entityType: 'cotizacion',
+        });
+
+        if (!gateResult.allowed) {
+          return NextResponse.json({
+            error: gateResult.reason,
+            gate: {
+              requiredAction: gateResult.requiredAction,
+              missingRequirements: gateResult.missingRequirements,
+              blockingRule: gateResult.blockingRule?.name,
+              mode: gateResult.mode,
+            },
+          }, { status: 403 });
+        }
+      }
+
       dataToUpdate.estado = estado
       
       if (estado === 'enviada' && !cotizacionActual.fechaEnvio) {

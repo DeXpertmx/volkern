@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { withTenantAuth } from '@/lib/api-key-auth'
 import { seedTenantPipelines } from '@/lib/pipelines-server'
+import { ComplianceGate } from '@/lib/compliance-gate'
 
 // GET - Obtener etapas del pipeline
 export const GET = withTenantAuth(async (req, auth) => {
@@ -95,6 +96,34 @@ export const POST = withTenantAuth(async (req, auth) => {
       return NextResponse.json({ error: 'Nombre requerido' }, { status: 400 })
     }
 
+    // ── Compliance Gate: creación de etapa ────────────────────────────────
+    const gateResult = await ComplianceGate.check({
+      tenantId,
+      userId: user.id,
+      action: 'pipeline_stage_create',
+      entityId: pipelineId || tenantId,
+      entityType: 'pipeline_stage',
+      metadata: {
+        nombre,
+        descripcion,
+        probabilidad,
+        requiereAprobacion,
+        pipelineId,
+      },
+    });
+
+    if (!gateResult.allowed) {
+      return NextResponse.json({
+        error: gateResult.reason,
+        gate: {
+          requiredAction: gateResult.requiredAction,
+          missingRequirements: gateResult.missingRequirements,
+          blockingRule: gateResult.blockingRule?.name,
+          mode: gateResult.mode,
+        },
+      }, { status: 403 });
+    }
+
     // Obtener el último orden dentro del pipeline (o global si no hay pipelineId)
     const ultimaEtapa = await prisma.pipelineStage.findFirst({
       where: {
@@ -138,6 +167,33 @@ export const PATCH = withTenantAuth(async (req, auth) => {
 
     if (!id) {
       return NextResponse.json({ error: 'ID requerido' }, { status: 400 })
+    }
+
+    // ── Compliance Gate: modificación de etapa (especialmente desactivación) ─
+    const gateResult = await ComplianceGate.check({
+      tenantId,
+      userId: user.id,
+      action: 'pipeline_stage_modify',
+      entityId: id,
+      entityType: 'pipeline_stage',
+      metadata: {
+        nombre,
+        descripcion,
+        activo,
+        pipelineId,
+      },
+    });
+
+    if (!gateResult.allowed) {
+      return NextResponse.json({
+        error: gateResult.reason,
+        gate: {
+          requiredAction: gateResult.requiredAction,
+          missingRequirements: gateResult.missingRequirements,
+          blockingRule: gateResult.blockingRule?.name,
+          mode: gateResult.mode,
+        },
+      }, { status: 403 });
     }
 
     const data: any = {}

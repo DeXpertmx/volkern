@@ -18,7 +18,7 @@ export const GET = withTenantAuth(async (request, auth) => {
 
     const tenant = await prisma.tenant.findUnique({
       where: { id: tenantId },
-      select: { plan: true, enabledModules: true, accountType: true, moneda: true, subdomain: true }
+      select: { plan: true, enabledModules: true, accountType: true, moneda: true, subdomain: true, configuracion: true }
     });
 
     if (!tenant) {
@@ -65,11 +65,15 @@ export const GET = withTenantAuth(async (request, auth) => {
        finalModules.push('configuracion');
     }
 
+    const config = tenant.configuracion as Record<string, any> | null;
+    const complianceMode = (config?.complianceMode as string) || 'normal';
+
     return NextResponse.json({ 
       modules: finalModules, 
       plan: tenant.plan,
       accountType: tenant.accountType,
-      country: tenant.moneda === 'MXN' ? 'MX' : 'ES'
+      country: tenant.moneda === 'MXN' ? 'MX' : 'ES',
+      complianceMode,
     });
 
   } catch (error) {
