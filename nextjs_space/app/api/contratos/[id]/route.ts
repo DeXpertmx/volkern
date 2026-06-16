@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
+import { ComplianceGate } from '@/lib/compliance-gate';
 
 // GET /api/contratos/[id]
 export const GET = withTenantAuth(async (request, auth, { params }) => {
@@ -90,6 +91,29 @@ export const PATCH = withTenantAuth(async (request, auth, { params }) => {
       body.descuentoMonto = descuentoMonto;
       body.impuestos = impuestos;
       body.total = total;
+    }
+
+    // COMPLIANCE GATE: Verificar antes de activar contrato
+    if (body.estado === 'vigente' && existing.estado !== 'vigente') {
+      const gateResult = await ComplianceGate.check({
+        tenantId,
+        userId,
+        action: 'contrato_make_vigente',
+        entityId: params.id,
+        entityType: 'contrato',
+      });
+
+      if (!gateResult.allowed) {
+        return NextResponse.json({
+          error: gateResult.reason,
+          gate: {
+            requiredAction: gateResult.requiredAction,
+            missingRequirements: gateResult.missingRequirements,
+            blockingRule: gateResult.blockingRule?.name,
+            mode: gateResult.mode,
+          },
+        }, { status: 403 });
+      }
     }
 
     // Limpieza de body para el update

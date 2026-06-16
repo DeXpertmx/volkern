@@ -251,6 +251,7 @@ export const HUBS: HubConfig[] = [
     items: [
       { name: 'Miembros', href: '/dashboard/equipo', icon: Users, description: 'Directorio y alta de personal' },
       { name: 'Roles y Permisos', href: '/dashboard/equipo/roles', icon: ShieldCheck, description: 'Configuración de niveles de acceso' },
+      { name: 'Aprobaciones ⚡', href: '/dashboard/aprobaciones', icon: ShieldCheck, description: 'Workflows obligatorios con aprobación por roles' },
     ]
   },
   {
@@ -445,6 +446,20 @@ export const HUBS: HubConfig[] = [
     ]
   },
   {
+    id: 'compliance',
+    name: 'Compliance',
+    icon: ShieldCheck,
+    href: '/dashboard/compliance',
+    description: 'Score de cumplimiento, procesos obligatorios y modos de control.',
+    basePaths: [
+      '/dashboard/compliance'
+    ],
+    items: [
+      { name: 'Score Dashboard', href: '/dashboard/compliance', icon: BarChart3, description: 'Score de cumplimiento en tiempo real y KPIs' },
+      { name: 'Configuración', href: '/dashboard/configuracion?section=compliance', icon: ShieldCheck, description: 'Modos de control y activación de gates' },
+    ]
+  },
+  {
     id: 'perfil',
     name: 'Perfil',
     icon: UserCog,
@@ -492,6 +507,9 @@ export const HUBS: HubConfig[] = [
       { name: 'Equipo', href: '/dashboard/equipo', icon: UserCog, planModule: 'equipo', description: 'Gestión de usuarios' },
       { name: 'Integraciones', href: '/dashboard/integraciones', icon: Plug, planModule: 'integraciones', description: 'Conexión con apps externas' },
       { name: 'Módulos', href: '/dashboard/configuracion?section=modulos', icon: LayoutGrid, description: 'Activar/desactivar funciones' },
+      { name: 'Auditoría', href: '/dashboard/auditoria', icon: Activity, description: 'Historial completo de acciones en el sistema' },
+      { name: 'Compliance ⚡', href: '/dashboard/configuracion?section=compliance', icon: ShieldCheck, description: 'Control de compliance y procesos obligatorios' },
+      { name: 'Privacidad GDPR', href: '/dashboard/compliance/gdpr', icon: Lock, description: 'Exportar y anonimizar tus datos personales' },
       { name: 'Mi Suscripción', href: '/dashboard/configuracion/billing', icon: CreditCard, description: 'Suscripción y pagos' },
       { name: 'Uso y Límites', href: '/dashboard/configuracion/usage', icon: BarChart3, description: 'Consumo y límites del plan' },
     ]

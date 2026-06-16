@@ -19,6 +19,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { ComplianceProUpgrade } from '@/components/compliance/ComplianceProUpgrade'
 
 export default function BillingPage() {
   const [status, setStatus] = useState<any>(null)
@@ -321,6 +322,15 @@ export default function BillingPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Compliance PRO Upgrade */}
+      <Card className="border-indigo-200 overflow-hidden">
+        <CardContent className="p-0">
+          <div className="p-6">
+            <ComplianceProUpgrade compact />
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Quick link a Uso y Límites */}
       <Card>

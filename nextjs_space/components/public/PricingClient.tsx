@@ -47,6 +47,20 @@ const PLANS_DATA = [
     limiteLeads: PLAN_LIMITS[PLANS.INFINITY].leads,
     popular: false,
   },
+  {
+    id: 'compliance_pro',
+    nombre: 'Compliance PRO',
+    descripcion: 'Control normativo, trazabilidad forense y auditoría avanzada para tu empresa',
+    slug: 'compliance_pro',
+    precio: 149,
+    precioYearly: 1430,
+    moneda: 'EUR',
+    intervalo: 'mensual',
+    limiteUsuarios: 'Add-on',
+    limiteLeads: 'Add-on',
+    popular: false,
+    isAddon: true,
+  },
 ]
 
 export default function PricingClient() {
@@ -63,6 +77,10 @@ export default function PricingClient() {
           redirect: false,
           plan: plan.slug,
         })
+        return
+      }
+      if (plan.isAddon) {
+        router.push('/dashboard/configuracion/billing')
         return
       }
       const res = await fetch('/api/subscriptions/create', {
@@ -117,7 +135,7 @@ export default function PricingClient() {
             </div>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+          <div className="grid md:grid-cols-4 gap-8 max-w-7xl mx-auto">
             {PLANS_DATA.map((plan) => (
               <div
                 key={plan.id}
@@ -132,6 +150,11 @@ export default function PricingClient() {
                     MÁS POPULAR
                   </span>
                 )}
+                {plan.isAddon && (
+                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-xs font-bold px-4 py-1 rounded-full">
+                    ADD-ON
+                  </span>
+                )}
 
                 <h3 className="text-2xl font-bold mb-2">{plan.nombre}</h3>
                 <p className="text-slate-400 text-sm mb-6">{plan.descripcion}</p>
@@ -143,18 +166,41 @@ export default function PricingClient() {
                   <span className="text-slate-400 ml-2">
                     {plan.moneda}/{isAnnual ? 'año' : 'mes'}
                   </span>
+                  {plan.isAddon && (
+                    <p className="text-xs text-slate-400 mt-1">+ plan base requerido</p>
+                  )}
                 </div>
 
                 <div className="flex-grow space-y-3 mb-8">
                   <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                     Incluye
                   </p>
-                  {(PLAN_FEATURES[plan.id as keyof typeof PLAN_FEATURES] || []).map(
-                    (feature: string, i: number) => (
-                      <div key={i} className="flex items-start gap-2">
-                        <Check className="w-4 h-4 text-green-400 mt-0.5 shrink-0" />
-                        <span className="text-sm text-slate-300">{feature}</span>
-                      </div>
+                  {plan.isAddon ? (
+                    <>
+                      {[
+                        'Compliance Gate (procesos obligatorios)',
+                        'Score de cumplimiento en tiempo real',
+                        'Alertas inteligentes con 4 detectores',
+                        'Trazabilidad SHA-256 encadenada',
+                        'Panel de auditoría para el cliente',
+                        'Exportación GDPR (acceso + olvido)',
+                        'PDF certificado descargable',
+                        'Webhooks auditables',
+                      ].map((feature, i) => (
+                        <div key={i} className="flex items-start gap-2">
+                          <Check className="w-4 h-4 text-green-400 mt-0.5 shrink-0" />
+                          <span className="text-sm text-slate-300">{feature}</span>
+                        </div>
+                      ))}
+                    </>
+                  ) : (
+                    (PLAN_FEATURES[plan.id as keyof typeof PLAN_FEATURES] || []).map(
+                      (feature: string, i: number) => (
+                        <div key={i} className="flex items-start gap-2">
+                          <Check className="w-4 h-4 text-green-400 mt-0.5 shrink-0" />
+                          <span className="text-sm text-slate-300">{feature}</span>
+                        </div>
+                      )
                     )
                   )}
                 </div>
@@ -163,16 +209,18 @@ export default function PricingClient() {
                   onClick={() => handleSelect(plan)}
                   disabled={loadingPlan === plan.id}
                   className={`w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all ${
-                    plan.popular
-                      ? 'bg-purple-600 hover:bg-purple-500 text-white'
-                      : 'bg-slate-800 hover:bg-slate-700 text-white'
+                    plan.isAddon
+                      ? 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                      : plan.popular
+                        ? 'bg-purple-600 hover:bg-purple-500 text-white'
+                        : 'bg-slate-800 hover:bg-slate-700 text-white'
                   } disabled:opacity-50`}
                 >
                   {loadingPlan === plan.id ? (
                     <Loader2 className="w-5 h-5 animate-spin" />
                   ) : (
                     <>
-                      {session ? 'Suscribirse' : 'Comenzar gratis'}
+                      {plan.isAddon ? 'Activar Compliance PRO' : session ? 'Suscribirse' : 'Comenzar gratis'}
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}

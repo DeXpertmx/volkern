@@ -8,6 +8,7 @@
 
 import { prisma } from '@/lib/db';
 import crypto from 'crypto';
+import { AuditService } from '@/lib/audit-service';
 
 // Tipos de eventos soportados
 export type WebhookEvent =
@@ -68,6 +69,26 @@ export async function dispatchWebhook(
     console.log(
       `[Webhook] Disparando ${webhooksInteresados.length} webhook(s) para evento: ${evento}`
     );
+
+    // Registrar en audit chain que se despacharon webhooks
+    try {
+      await AuditService.log({
+        tenantId,
+        userId: 'system',
+        action: 'WEBHOOK_DISPATCHED',
+        entity: entidadTipo || 'Webhook',
+        entityId: entidadId || 'batch',
+        description: `📡 Webhook: ${evento} → ${webhooksInteresados.length} endpoint(s) (${webhooksInteresados.map(w => w.url).join(', ')})`,
+        metadata: {
+          event: evento,
+          webhookCount: webhooksInteresados.length,
+          targets: webhooksInteresados.map(w => ({ id: w.id, url: w.url, method: w.metodoHttp })),
+          dataKeys: data ? Object.keys(data) : [],
+        },
+      });
+    } catch (auditError) {
+      console.error('[Webhook] Error al registrar audit log de dispatch:', auditError);
+    }
 
     // Enviar webhooks en paralelo
     const promises = webhooksInteresados.map((webhook) =>
@@ -203,6 +224,29 @@ async function enviarWebhook(
         ultimoEnvio: new Date(),
       },
     });
+
+    // Registrar en audit chain
+    try {
+      await AuditService.log({
+        tenantId: webhook.tenantId,
+        userId: 'system',
+        action: esExitoso ? 'WEBHOOK_DELIVERED' : 'WEBHOOK_FAILED',
+        entity: 'OutgoingWebhook',
+        entityId: webhook.id,
+        description: `${esExitoso ? '✅' : '❌'} Webhook ${evento} → ${webhook.url} [HTTP ${response.status}]`,
+        metadata: {
+          event: evento,
+          status: response.status,
+          responseTime: tiempoRespuesta,
+          hasSignature: !!webhook.secretKey,
+          deliveryId: delivery?.id,
+          entidadTipo,
+          entidadId,
+        },
+      });
+    } catch (auditError) {
+      console.error('[Webhook] Error al registrar audit log de delivery:', auditError);
+    }
 
     console.log(
       `[Webhook] Enviado (${response.status}) a ${webhook.url} en ${tiempoRespuesta}ms`

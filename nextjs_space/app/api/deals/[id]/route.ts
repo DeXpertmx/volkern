@@ -5,6 +5,7 @@ import { getServerSession } from 'next-auth'
 import { prisma, getTenantDb, dbContext } from '@/lib/db'
 import { createSystemContext } from '@/lib/skills/context';
 import { authOptions } from '@/lib/auth'
+import { ComplianceGate } from '@/lib/compliance-gate'
 
 // GET - Obtener deal por ID
 export async function GET(
@@ -180,8 +181,29 @@ export async function PATCH(
       dataToUpdate.fechaEstimadaCierre = fechaEstimadaCierre ? new Date(fechaEstimadaCierre) : null
     }
 
-    // Cambio de etapa
+    // Cambio de etapa — COMPLIANCE GATE
     if (etapa !== undefined && etapa !== dealActual.etapa) {
+      // Verificar compliance antes de cambiar etapa (tareas obligatorias)
+      const gateResult = await ComplianceGate.check({
+        tenantId: user.tenantId,
+        userId: user.id,
+        action: 'pipeline_advance',
+        entityId: params.id,
+        entityType: 'deal',
+      });
+
+      if (!gateResult.allowed) {
+        return NextResponse.json({
+          error: gateResult.reason,
+          gate: {
+            requiredAction: gateResult.requiredAction,
+            missingRequirements: gateResult.missingRequirements,
+            blockingRule: gateResult.blockingRule?.name,
+            mode: gateResult.mode,
+          },
+        }, { status: 403 });
+      }
+
       dataToUpdate.etapa = etapa
       
       // Registrar actividad de cambio de etapa
@@ -197,11 +219,31 @@ export async function PATCH(
       })
     }
 
-    // Cambio de estado (ganado/perdido)
+    // Cambio de estado (ganado/perdido) — COMPLIANCE GATE
     if (estado !== undefined && estado !== dealActual.estado) {
-      dataToUpdate.estado = estado
-      
+      // Verificar compliance antes de cerrar el deal
       if (estado === 'ganado' || estado === 'perdido') {
+        const gateResult = await ComplianceGate.check({
+          tenantId: user.tenantId,
+          userId: user.id,
+          action: estado === 'ganado' ? 'deal_close_won' : 'deal_close_lost',
+          entityId: params.id,
+          entityType: 'deal',
+          metadata: { razonPerdida: body.razonPerdida },
+        });
+
+        if (!gateResult.allowed) {
+          return NextResponse.json({
+            error: gateResult.reason,
+            gate: {
+              requiredAction: gateResult.requiredAction,
+              missingRequirements: gateResult.missingRequirements,
+              blockingRule: gateResult.blockingRule?.name,
+              mode: gateResult.mode,
+            },
+          }, { status: 403 });
+        }
+
         dataToUpdate.fechaCierre = new Date()
         
         // Registrar actividad de cierre

@@ -1,0 +1,1 @@
+✅ No se encontraron mismatches español ↔ inglés entre APIs y frontends.

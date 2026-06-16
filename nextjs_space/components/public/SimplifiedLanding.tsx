@@ -4,13 +4,14 @@ import React, { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, Check, Minus, Monitor, Zap, MessageCircle, FileSignature, Users, BarChart3, TrendingUp, Clock, AlertTriangle, Layers, ShieldCheck, Sparkles, ChevronRight } from 'lucide-react';
+import { ArrowRight, Check, Minus, Monitor, Zap, MessageCircle, FileSignature, Users, BarChart3, TrendingUp, Clock, AlertTriangle, Layers, ShieldCheck, Sparkles, ChevronRight, BookOpen, ChevronDown } from 'lucide-react';
+import { calcularPrecio, getMensajeLimite, getComparisonTable, type PlanTipo } from '@/lib/pricing-engine';
 
-const BASE_PRICE = 50;
-const USER_INCREMENT = 20;
-const CONTACT_INCREMENT = 5;
-const BASE_USERS = 1;
-const BASE_CONTACTS = 1000;
+const SLIDER_USUARIOS_MIN = 1;
+const SLIDER_USUARIOS_MAX = 99;
+const SLIDER_CONTACTOS_MIN = 1000;
+const SLIDER_CONTACTOS_MAX = 99000;
+const SLIDER_CONTACTOS_STEP = 1000;
 
 /* ─── Data ────────────────────────────────────────────────────────────────── */
 
@@ -72,102 +73,250 @@ const TARGETS = [
   'Empresas en crecimiento',
 ];
 
-/* ─── PricingSlider (interactivo) ──────────────────────────────────────────── */
+/* ─── PricingSlider (compartido con /precios) ──────────────────────────────── */
+
+function fmtUsuarios(n: number) {
+  if (n === SLIDER_USUARIOS_MAX) return '99+'
+  return String(n)
+}
+
+function fmtContactos(n: number) {
+  if (n >= SLIDER_CONTACTOS_MAX) return '99.000+'
+  if (n >= 1000) return `${(n / 1000).toFixed(0)}.000`
+  return n.toLocaleString('es-ES')
+}
+
+function fmtPrecio(n: number) {
+  return n.toLocaleString('es-ES')
+}
 
 function PricingSlider() {
-  const [users, setUsers] = useState(1);
-  const [contacts, setContacts] = useState(1000);
+  const [users, setUsers] = useState(5)
+  const [contacts, setContacts] = useState(5000)
+  const [plan, setPlan] = useState<PlanTipo>('scale')
+  const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly')
+  const [showComparison, setShowComparison] = useState(false)
 
-  const total = useMemo(() => {
-    const additionalUsers = Math.max(0, users - BASE_USERS);
-    const additionalContacts = Math.max(0, (contacts - BASE_CONTACTS) / 1000);
-    return BASE_PRICE + additionalUsers * USER_INCREMENT + additionalContacts * CONTACT_INCREMENT;
-  }, [users, contacts]);
+  const result = useMemo(
+    () => calcularPrecio({ usuarios: users, contactos: contacts, plan }),
+    [users, contacts, plan]
+  )
+
+  const mensajeLimite = getMensajeLimite(result.esMaximo, result.esAltoVolumen)
+  const comparison = useMemo(() => getComparisonTable(result.nivel), [result.nivel])
+  const precioMostrar = billingInterval === 'yearly' ? Math.round(result.precio * 0.8) : result.precio
+  
+  const usuariosPct = ((users - SLIDER_USUARIOS_MIN) / (SLIDER_USUARIOS_MAX - SLIDER_USUARIOS_MIN)) * 100
+  const contactosPct = ((contacts - SLIDER_CONTACTOS_MIN) / (SLIDER_CONTACTOS_MAX - SLIDER_CONTACTOS_MIN)) * 100
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 md:p-10 text-center relative overflow-hidden">
-      <div className="absolute -top-20 -right-20 w-40 h-40 bg-blue-600/10 blur-[80px] rounded-full pointer-events-none" />
-
-      <div className="relative z-10">
-        {/* Price Display */}
-        <div className="text-6xl md:text-7xl font-bold text-white mb-1">
-          €{total}<span className="text-2xl text-slate-500 font-normal">/mes</span>
-        </div>
-        <p className="text-slate-500 text-sm mb-8">
-          {users} {users === 1 ? 'usuario' : 'usuarios'} · {contacts.toLocaleString()} contactos
-        </p>
-
-        {/* Sliders */}
-        <div className="space-y-6 mb-8 text-left">
-          {/* Users */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-sm text-slate-400 font-medium">Usuarios</label>
-              <span className="text-lg font-bold text-white">{users}</span>
+    <div>
+      <div className="grid lg:grid-cols-2 gap-10 mb-10">
+        {/* IZQUIERDA — Controles */}
+        <div className="space-y-6">
+          {/* Slider: Usuarios */}
+          <div className="p-5 rounded-2xl bg-slate-950/80 border border-slate-800">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-purple-500/10 flex items-center justify-center">
+                  <Users className="h-5 w-5 text-purple-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-black text-white uppercase tracking-tight">Usuarios</p>
+                  <p className="text-xs text-slate-500">Miembros del equipo</p>
+                </div>
+              </div>
+              <span className="text-2xl font-black text-white tabular-nums">{fmtUsuarios(users)}</span>
             </div>
             <input
               type="range"
               min={1}
-              max={50}
+              max={99}
               step={1}
               value={users}
               onChange={(e) => setUsers(Number(e.target.value))}
-              className="w-full h-2 bg-slate-800 rounded-full appearance-none cursor-pointer accent-blue-500 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:bg-blue-500 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:shadow-blue-500/30 [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:bg-blue-500 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer"
+              className="w-full h-2 rounded-full bg-slate-800 appearance-none cursor-pointer accent-purple-500"
+              style={{ background: `linear-gradient(to right, #A855F7 0%, #A855F7 ${usuariosPct}%, #1E293B ${usuariosPct}%, #1E293B 100%)` }}
             />
-            <div className="flex justify-between text-xs text-slate-600 mt-1">
-              <span>1</span>
-              <span>50</span>
+            <div className="flex justify-between mt-1.5">
+              <span className="text-[10px] font-bold text-slate-600">1</span>
+              <span className="text-[10px] font-bold text-slate-600">99+</span>
             </div>
           </div>
 
-          {/* Contacts */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-sm text-slate-400 font-medium">Contactos</label>
-              <span className="text-lg font-bold text-white">{contacts.toLocaleString()}</span>
+          {/* Slider: Contactos */}
+          <div className="p-5 rounded-2xl bg-slate-950/80 border border-slate-800">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                  <BookOpen className="h-5 w-5 text-blue-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-black text-white uppercase tracking-tight">Contactos</p>
+                  <p className="text-xs text-slate-500">Base de datos activa</p>
+                </div>
+              </div>
+              <span className="text-2xl font-black text-white tabular-nums">{fmtContactos(contacts)}</span>
             </div>
             <input
               type="range"
               min={1000}
-              max={100000}
+              max={99000}
               step={1000}
               value={contacts}
               onChange={(e) => setContacts(Number(e.target.value))}
-              className="w-full h-2 bg-slate-800 rounded-full appearance-none cursor-pointer accent-blue-500 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:bg-blue-500 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:shadow-blue-500/30 [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:bg-blue-500 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer"
+              className="w-full h-2 rounded-full bg-slate-800 appearance-none cursor-pointer accent-blue-500"
+              style={{ background: `linear-gradient(to right, #3B82F6 0%, #3B82F6 ${contactosPct}%, #1E293B ${contactosPct}%, #1E293B 100%)` }}
             />
-            <div className="flex justify-between text-xs text-slate-600 mt-1">
-              <span>1.000</span>
-              <span>100.000</span>
+            <div className="flex justify-between mt-1.5">
+              <span className="text-[10px] font-bold text-slate-600">1.000</span>
+              <span className="text-[10px] font-bold text-slate-600">99.000+</span>
+            </div>
+          </div>
+
+          {/* Toggle: Scale / Compliance Pro */}
+          <div className="p-5 rounded-2xl bg-slate-950/80 border border-slate-800">
+            <p className="text-sm font-black text-white uppercase tracking-tight mb-4">Modalidad</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setPlan('scale')}
+                className={`flex-1 p-3 rounded-xl border transition-all text-left ${
+                  plan === 'scale' ? 'border-purple-500 bg-purple-500/10' : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
+                }`}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <Zap className={`h-4 w-4 ${plan === 'scale' ? 'text-purple-400' : 'text-slate-500'}`} />
+                  <span className={`text-xs font-black uppercase ${plan === 'scale' ? 'text-white' : 'text-slate-400'}`}>Scale</span>
+                </div>
+                <p className="text-[10px] text-slate-500 leading-relaxed">Funcionalidades base</p>
+              </button>
+              <button
+                onClick={() => setPlan('compliance')}
+                className={`flex-1 p-3 rounded-xl border transition-all text-left ${
+                  plan === 'compliance' ? 'border-indigo-500 bg-indigo-500/10' : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
+                }`}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <ShieldCheck className={`h-4 w-4 ${plan === 'compliance' ? 'text-indigo-400' : 'text-slate-500'}`} />
+                  <span className={`text-xs font-black uppercase ${plan === 'compliance' ? 'text-white' : 'text-slate-400'}`}>Compliance Pro</span>
+                </div>
+                <p className="text-[10px] text-slate-500 leading-relaxed">+25% control y auditoría</p>
+              </button>
+            </div>
+          </div>
+
+          {/* Toggle: Mensual / Anual */}
+          <div className="flex justify-center">
+            <div className="bg-slate-800/50 rounded-full p-1 flex gap-1">
+              <button
+                onClick={() => setBillingInterval('monthly')}
+                className={`px-5 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${
+                  billingInterval === 'monthly' ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/25' : 'text-slate-400 hover:text-white'
+                }`}
+              >Mensual</button>
+              <button
+                onClick={() => setBillingInterval('yearly')}
+                className={`px-5 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${
+                  billingInterval === 'yearly' ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/25' : 'text-slate-400 hover:text-white'
+                }`}
+              >Anual <span className="text-[9px] text-purple-300 ml-0.5">-20%</span></button>
             </div>
           </div>
         </div>
 
-        {/* Included checkmarks */}
-        <div className="space-y-3 mb-8 text-left max-w-xs mx-auto">
-          {[
-            `${users} ${users === 1 ? 'usuario' : 'usuarios'} incluido${users > 1 ? 's' : ''}`,
-            `${contacts.toLocaleString()} contactos incluidos`,
-            'Todos los módulos activos',
-            'Sin costos ocultos',
-          ].map((item, i) => (
-            <div key={i} className="flex items-center gap-3">
-              <Check className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-              <span className="text-slate-300">{item}</span>
+        {/* DERECHA — Precio + Features */}
+        <div className="flex flex-col justify-center">
+          <div className="p-8 rounded-3xl bg-gradient-to-br from-slate-900 to-slate-900/80 border border-slate-800 shadow-2xl">
+            <div className="flex items-center gap-2 mb-1">
+              <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full ${
+                plan === 'compliance' ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' : 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+              }`}>{plan === 'compliance' ? 'Compliance Pro' : 'Scale'}</span>
+              {billingInterval === 'yearly' && (
+                <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded-full">-20%</span>
+              )}
             </div>
-          ))}
+
+            <div className="mb-2">
+              <span className="text-6xl font-black text-white tracking-tight">€{fmtPrecio(precioMostrar)}</span>
+              <span className="text-slate-500 text-lg ml-1">/mes</span>
+            </div>
+            {billingInterval === 'yearly' && (
+              <p className="text-[11px] text-emerald-500 font-bold mb-4">Facturado anualmente · 20% de ahorro</p>
+            )}
+            <p className="text-sm text-slate-400 mb-6">{result.mensaje}</p>
+
+            {mensajeLimite && (
+              <div className={`p-4 rounded-xl border mb-6 ${
+                result.esMaximo ? 'bg-amber-500/10 border-amber-500/30 text-amber-300' : 'bg-blue-500/10 border-blue-500/30 text-blue-300'
+              }`}>
+                <p className="text-xs font-bold">{mensajeLimite}</p>
+                {result.esMaximo && (
+                  <a href="mailto:ventas@volkern.com" className="mt-2 inline-block text-[11px] font-bold text-amber-400 hover:text-amber-300 underline underline-offset-2">
+                    Contactar para plan personalizado
+                  </a>
+                )}
+              </div>
+            )}
+
+            <div className="space-y-3 mb-8">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Incluye</p>
+              {result.features.map((feature, i) => (
+                <div key={i} className="flex items-start gap-3">
+                  <Check className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
+                  <span className="text-sm text-slate-300">{feature}</span>
+                </div>
+              ))}
+            </div>
+
+            <Link href={`/signup?usuarios=${users}&contactos=${contacts}&plan=${plan}&interval=${billingInterval}&precio=${precioMostrar}`}>
+              <Button size="lg" className="w-full bg-blue-600 hover:bg-blue-500 text-white py-7 text-lg rounded-xl font-bold shadow-xl shadow-blue-600/30 group">
+                Activar mi sistema
+                <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </Button>
+            </Link>
+            <p className="text-xs text-slate-600 mt-4 text-center">Sin permanencia. Cancela cuando quieras.</p>
+          </div>
         </div>
+      </div>
 
-        <Link href="/auth/signup">
-          <Button size="lg" className="w-full bg-blue-600 hover:bg-blue-500 text-white py-7 text-lg rounded-xl font-bold shadow-xl shadow-blue-600/30 group">
-            Activar mi sistema
-            <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
-          </Button>
-        </Link>
+      {/* Tabla comparativa colapsable */}
+      <div className="max-w-3xl mx-auto">
+        <button
+          onClick={() => setShowComparison(!showComparison)}
+          className="w-full flex items-center justify-between p-4 rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-slate-700 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <BarChart3 className="h-5 w-5 text-slate-400" />
+            <span className="text-sm font-black text-white uppercase tracking-tight">Comparativa de funcionalidades</span>
+          </div>
+          <ChevronDown className={`h-5 w-5 text-slate-400 transition-transform ${showComparison ? 'rotate-180' : ''}`} />
+        </button>
 
-        <p className="text-xs text-slate-600 mt-4">Sin tarjeta de crédito. Cancela cuando quieras.</p>
+        {showComparison && (
+          <div className="mt-4 rounded-2xl bg-slate-950/80 border border-slate-800 overflow-hidden animate-in fade-in duration-300">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-slate-800">
+                  <th className="text-left p-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Funcionalidad</th>
+                  <th className="text-center p-4 text-[10px] font-black text-purple-400 uppercase tracking-widest bg-purple-500/5">Scale</th>
+                  <th className="text-center p-4 text-[10px] font-black text-indigo-400 uppercase tracking-widest bg-indigo-500/5">Compliance Pro</th>
+                </tr>
+              </thead>
+              <tbody>
+                {comparison.map((row, i) => (
+                  <tr key={i} className="border-b border-slate-800/50 last:border-0 hover:bg-slate-800/20 transition-colors">
+                    <td className="p-4 text-sm font-medium text-slate-300">{row.feature}</td>
+                    <td className={`p-4 text-center text-sm font-bold bg-purple-500/5 ${row.scale === '✔' ? 'text-emerald-400' : row.scale === '—' ? 'text-slate-600' : 'text-slate-300'}`}>{row.scale}</td>
+                    <td className={`p-4 text-center text-sm font-bold bg-indigo-500/5 ${row.compliance === '✔' ? 'text-emerald-400' : row.compliance === '—' ? 'text-slate-600' : 'text-slate-300'}`}>{row.compliance}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
-  );
+  )
 }
 
 /* ─── Section Wrapper ──────────────────────────────────────────────────────── */
@@ -236,7 +385,7 @@ export default function SimplifiedLanding() {
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/auth/signup">
+              <Link href="/signup">
                 <Button size="lg" className="bg-blue-600 hover:bg-blue-500 text-white px-10 py-7 text-lg rounded-xl font-bold shadow-xl shadow-blue-600/30 group">
                   Activar mi sistema
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -517,7 +666,7 @@ export default function SimplifiedLanding() {
               <p className="text-lg text-slate-400 mb-10 max-w-xl mx-auto leading-relaxed">
                 Todo en un solo sistema. Sin complicaciones.
               </p>
-              <Link href="/auth/signup">
+              <Link href="/signup">
                 <Button size="lg" className="bg-blue-600 hover:bg-blue-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-blue-600/30 group">
                   Empezar con Volkern
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -529,18 +678,21 @@ export default function SimplifiedLanding() {
       </Section>
 
       {/* ═══════════════════════════════════════════════════════════════════
-         PRICING SIMPLIFICADO (con sliders interactivos)
+         PRICING (sliders interactivos — mismo motor que /precios)
       ════════════════════════════════════════════════════════════════════ */}
       <Section id="pricing">
         <FadeIn>
-          <div className="max-w-lg mx-auto">
-            <span className="inline-block py-1 px-3 rounded-full bg-blue-500/10 text-blue-400 text-sm font-medium mb-6 border border-blue-500/20">
-              Pricing
-            </span>
-            <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
-              Un solo plan.{' '}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-500">Todo incluido.</span>
-            </h2>
+          <div className="max-w-4xl mx-auto">
+            <div className="text-center mb-10">
+              <span className="inline-block py-1 px-3 rounded-full bg-blue-500/10 text-blue-400 text-sm font-medium mb-6 border border-blue-500/20">
+                Pricing
+              </span>
+              <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
+                Un solo plan.{' '}
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-500">Todo incluido.</span>
+              </h2>
+              <p className="text-slate-400 text-lg">Ajusta los controles y descubre tu precio ideal</p>
+            </div>
 
             <PricingSlider />
           </div>
@@ -580,7 +732,7 @@ export default function SimplifiedLanding() {
               <p className="text-xl text-slate-400 mb-10">
                 Empieza a operar con un solo sistema
               </p>
-              <Link href="/auth/signup">
+              <Link href="/signup">
                 <Button size="lg" className="bg-blue-600 hover:bg-blue-500 text-white px-14 py-8 text-xl rounded-xl font-bold shadow-xl shadow-blue-600/30 group">
                   Activar mi sistema
                   <ArrowRight className="ml-2 w-6 h-6 group-hover:translate-x-1 transition-transform" />

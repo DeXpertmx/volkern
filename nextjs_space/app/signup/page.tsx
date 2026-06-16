@@ -1,8 +1,8 @@
 
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { signIn } from 'next-auth/react'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -11,10 +11,71 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { toast } from 'sonner'
-import { Building2, Mail, Lock, User, Loader2 } from 'lucide-react'
+import { Building2, Mail, Lock, User, Loader2, Zap, Shield, Users, BookOpen } from 'lucide-react'
 
-export default function SignupPage() {
+/* ─── Plan Summary Card ──────────────────────────────────────────────────── */
+
+function PlanSummary({ searchParams }: { searchParams: Record<string, string> }) {
+  const plan = searchParams.plan === 'compliance' ? 'compliance' : 'scale'
+  const usuarios = parseInt(searchParams.usuarios || '5')
+  const contactos = parseInt(searchParams.contactos || '5000')
+  const precio = parseInt(searchParams.precio || '0')
+  const interval = searchParams.interval === 'yearly' ? 'yearly' : 'monthly'
+
+  // Si no hay precio, no mostramos resumen (viene sin slider)
+  if (!searchParams.precio || precio === 0 || Number.isNaN(precio)) return null
+
+  const planName = plan === 'compliance' ? 'Compliance Pro' : 'Scale'
+  const planIcon = plan === 'compliance' ? Shield : Zap
+  const planColor = plan === 'compliance' ? 'indigo' : 'purple'
+  const IconPlan = planIcon
+  const safeUsuarios = Number.isNaN(usuarios) ? 5 : usuarios
+  const safeContactos = Number.isNaN(contactos) ? 5000 : contactos
+
+  return (
+    <div className={`p-4 rounded-xl border mb-6 ${planColor === 'indigo' ? 'bg-indigo-50 border-indigo-200' : 'bg-purple-50 border-purple-200'}`}>
+      <div className="flex items-center gap-2 mb-3">
+        <IconPlan className={`h-4 w-4 ${planColor === 'indigo' ? 'text-indigo-500' : 'text-purple-500'}`} />
+        <span className={`text-xs font-bold ${planColor === 'indigo' ? 'text-indigo-700' : 'text-purple-700'}`}>
+          Tu plan · {planName}
+        </span>
+        {interval === 'yearly' && (
+          <span className="text-[10px] font-bold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">-20%</span>
+        )}
+      </div>
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-1.5">
+          <Users className="h-3.5 w-3.5 text-slate-400" />
+          <span className="text-xs text-slate-600"><span className="text-slate-900 font-bold">{safeUsuarios}</span> usuarios</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <BookOpen className="h-3.5 w-3.5 text-slate-400" />
+          <span className="text-xs text-slate-600"><span className="text-slate-900 font-bold">{safeContactos >= 1000 ? `${(safeContactos/1000).toFixed(0)}.000` : safeContactos}</span> contactos</span>
+        </div>
+        <div className="flex items-center gap-1.5 ml-auto">
+          <span className="text-xl font-black text-slate-900">€{precio.toLocaleString('es-ES')}</span>
+          <span className="text-xs text-slate-400">/mes</span>
+          {interval === 'yearly' && <span className="text-[10px] text-slate-400">fact. anual</span>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ─── Signup Form (inner, uses useSearchParams) ──────────────────────────── */
+
+function SignupForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+
+  // Leer params del slider
+  const pricingParams: Record<string, string> = {}
+  const paramKeys = ['usuarios', 'contactos', 'plan', 'interval', 'precio']
+  paramKeys.forEach(k => {
+    const v = searchParams.get(k)
+    if (v) pricingParams[k] = v
+  })
+
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
     companyName: '',
@@ -69,13 +130,24 @@ export default function SignupPage() {
     setLoading(true)
 
     try {
+      // Construir payload con pricing params si vienen del slider
+      const payload: any = {
+        ...formData,
+        couponCode: formData.couponCode.trim() || undefined
+      }
+      if (pricingParams.usuarios) {
+        payload.pricing = {
+          usuarios: parseInt(pricingParams.usuarios),
+          contactos: parseInt(pricingParams.contactos || '5000'),
+          plan: pricingParams.plan || 'scale',
+          interval: pricingParams.interval || 'monthly'
+        }
+      }
+
       const response = await fetch('/api/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...formData,
-          couponCode: formData.couponCode.trim() || undefined
-        })
+        body: JSON.stringify(payload)
       })
 
       const data = await response.json()
@@ -99,7 +171,13 @@ export default function SignupPage() {
         return
       }
 
-      // Redirigir al onboarding simplificado
+      // Si la API devolvió checkout URL → redirigir a Stripe
+      if (data.checkoutUrl) {
+        window.location.href = data.checkoutUrl
+        return
+      }
+
+      // Sin checkout → redirigir al onboarding simplificado (cupón / trial)
       router.push('/dashboard/onboarding-quick')
       
     } catch (error: any) {
@@ -109,6 +187,8 @@ export default function SignupPage() {
       setLoading(false)
     }
   }
+
+  const hasPricing = Object.keys(pricingParams).length > 0
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 via-blue-50 to-white p-4">
@@ -126,10 +206,15 @@ export default function SignupPage() {
           </div>
           <CardTitle className="text-2xl font-bold">Crea tu cuenta</CardTitle>
           <CardDescription>
-            Comienza tu prueba gratuita de 14 días. Sin tarjeta de crédito.
+            {hasPricing 
+              ? 'Completa tus datos para activar tu plan.' 
+              : 'Comienza tu prueba gratuita de 14 días. Sin tarjeta de crédito.'}
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {/* Resumen del plan elegido */}
+          <PlanSummary searchParams={pricingParams} />
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="companyName">Nombre de tu empresa</Label>
@@ -255,6 +340,8 @@ export default function SignupPage() {
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Creando cuenta...
                 </>
+              ) : hasPricing ? (
+                'Activar plan'
               ) : (
                 'Crear cuenta gratis'
               )}
@@ -281,5 +368,23 @@ export default function SignupPage() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+/* ─── Page export (wraps in Suspense for useSearchParams) ────────────────── */
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 via-blue-50 to-white p-4">
+        <Card className="w-full max-w-md shadow-xl">
+          <CardContent className="p-8 text-center">
+            <Loader2 className="h-8 w-8 animate-spin text-purple-500 mx-auto" />
+          </CardContent>
+        </Card>
+      </div>
+    }>
+      <SignupForm />
+    </Suspense>
   )
 }

@@ -7,6 +7,8 @@ import { PLANS, PLAN_LIMITS, TRIAL_DAYS, getPlanConfig } from '@/lib/plans'
 import { getDefaultModules } from '@/lib/onboarding-modules'
 import { seedFormsForTenant } from '@/scripts/seed-formularios-demo'
 import { AccountingInitializer } from '@/lib/accounting/initializer'
+import { stripe, createSubscriptionCheckout } from '@/lib/stripe'
+import { calcularPrecio } from '@/lib/pricing-engine'
 
 function generateSlug(companyName: string): string {
   return companyName
@@ -19,7 +21,7 @@ function generateSlug(companyName: string): string {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { email, password, fullName, companyName, couponCode } = body
+    const { email, password, fullName, companyName, couponCode, pricing } = body
 
     if (!email || !password || !fullName || !companyName) {
       return NextResponse.json(
@@ -289,6 +291,87 @@ export async function POST(request: NextRequest) {
       console.error('[Signup] Error initializing chart of accounts:', err.message)
     );
 
+    // ─── Crear checkout de Stripe si hay pricing params y no hay cupón ──────
+    let checkoutUrl: string | null = null
+
+    if (pricing && !couponData) {
+      try {
+        const { usuarios, contactos, plan, interval } = pricing
+
+        // Recalcular precio en servidor (no confiar en el cliente)
+        const engineResult = calcularPrecio({
+          usuarios: usuarios || 5,
+          contactos: contactos || 5000,
+          plan: plan === 'compliance' ? 'compliance' : 'scale',
+        })
+        const precioCalculado = interval === 'yearly'
+          ? Math.round(engineResult.precio * 0.8)
+          : engineResult.precio
+
+        // Crear cliente en Stripe
+        let customerId = result.tenant.stripeCustomerId
+        if (!customerId) {
+          const customer = await stripe.customers.create({
+            email: result.user.email,
+            name: result.tenant.nombre,
+            metadata: {
+              tenantId: result.tenant.id,
+              tenantSlug: result.tenant.slug,
+            },
+          })
+          customerId = customer.id
+
+          await prisma.tenant.update({
+            where: { id: result.tenant.id },
+            data: { stripeCustomerId: customerId },
+          })
+        }
+
+        const planLabel = plan === 'compliance' ? 'Compliance Pro' : 'Scale'
+        const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+
+        const checkoutResult = await createSubscriptionCheckout({
+          customerId,
+          tenantId: result.tenant.id,
+          planLabel,
+          usuarios: usuarios || 5,
+          contactos: contactos || 5000,
+          plan: plan || 'scale',
+          interval: interval || 'monthly',
+          precioMensual: precioCalculado,
+          successUrl: `${origin}/dashboard?checkout=success`,
+          cancelUrl: `${origin}/signup?checkout=canceled`,
+        })
+
+        if (checkoutResult.success && checkoutResult.session) {
+          checkoutUrl = checkoutResult.session.url || null
+
+          // Log de auditoría
+          await prisma.auditLog.create({
+            data: {
+              accion: 'crear',
+              entidad: 'Subscription',
+              entidadId: checkoutResult.session.id,
+              descripcion: `Checkout de suscripción iniciado en signup: ${planLabel} ${interval}`,
+              cambiosDespues: {
+                plan,
+                interval,
+                usuarios,
+                contactos,
+                precioMensual: precioCalculado,
+                sessionId: checkoutResult.session.id,
+              },
+              userId: result.user.id,
+              tenantId: result.tenant.id,
+            },
+          })
+        }
+      } catch (checkoutError) {
+        console.error('[Signup] Error creating checkout session:', checkoutError)
+        // No bloqueamos el signup si falla el checkout
+      }
+    }
+
     return NextResponse.json({
       success: true,
       user: {
@@ -308,7 +391,8 @@ export async function POST(request: NextRequest) {
       giftInfo: result.couponUsed ? {
         durationDays: couponData?.durationDays,
         discountPercent: couponData?.discountPercent
-      } : null
+      } : null,
+      checkoutUrl
     })
 
   } catch (error) {

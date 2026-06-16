@@ -36,6 +36,7 @@ export type CrmModule =
   | 'conciliacion' | 'logistica'
   | 'formularios'
   | 'agency'
+  | 'compliance_pro'
 
 export interface ModuleDefinition {
   id: CrmModule
@@ -79,6 +80,7 @@ export const ALL_MODULES: ModuleDefinition[] = [
   { id: 'custom_domain', label: 'Dominio Personalizado', description: 'Usa tu propio dominio', icon: '🌐', group: 'Administración' },
   { id: 'conocimiento', label: 'Conocimiento', description: 'Base de conocimientos y SOPs', icon: '🧠', group: 'Administración' },
   { id: 'agency', label: 'Agencia', description: 'Gestión de slots de cliente', icon: '🏢', group: 'Administración' },
+  { id: 'compliance_pro', label: 'Compliance PRO', description: 'Trazabilidad total, gates obligatorios, score dashboard y alertas inteligentes', icon: '🛡️', group: 'Compliance' },
   { id: 'whatsapp', label: 'WhatsApp', description: 'Integración oficial con WhatsApp', icon: '📱', group: 'Integraciones' },
   { id: 'meta_integration', label: 'Meta (FB/IG)', description: 'Facebook e Instagram Messenger', icon: '♾️', group: 'Integraciones' },
   { id: 'telegram', label: 'Telegram', description: 'Integración con Telegram Bot', icon: '✈️', group: 'Integraciones' },
@@ -104,8 +106,8 @@ const ALL_FEATURES_SET: CrmModule[] = ALL_MODULES.map(m => m.id)
 export const PLAN_MODULES: Record<string, CrmModule[]> = {
   [PLANS.TRIAL]: ALL_FEATURES_SET,
   [PLANS.ESENCIAL]: ALL_FEATURES_SET,
-  [PLANS.PROFESIONAL]: ALL_FEATURES_SET,
-  [PLANS.INFINITY]: ALL_FEATURES_SET,
+  [PLANS.PROFESIONAL]: [...ALL_FEATURES_SET, 'compliance_pro'],
+  [PLANS.INFINITY]: [...ALL_FEATURES_SET, 'compliance_pro'],
   [PLANS.BASICO]: [
     'leads', 'contactos', 'empresas', 'pipeline', 'tareas', 'analytics',
     'mensajes', 'citas', 'catalogo',
@@ -190,6 +192,7 @@ export const PLAN_LIMITS = {
     published_pages: 3,
     invoices: 50,
     contratos_sign: 20,
+    compliance_mode: false,
   },
   [PLANS.PROFESIONAL]: {
     leads: 5000,
@@ -211,6 +214,7 @@ export const PLAN_LIMITS = {
     published_pages: 10,
     invoices: 500,
     contratos_sign: 200,
+    compliance_mode: false,
   },
   [PLANS.INFINITY]: {
     leads: -1,
@@ -232,6 +236,7 @@ export const PLAN_LIMITS = {
     published_pages: -1,
     invoices: -1,
     contratos_sign: -1,
+    compliance_mode: true,
   },
   [PLANS.BASICO]: {
     leads: 1000,
@@ -437,6 +442,16 @@ export const ADDONS: AddOn[] = [
     intervalo: 'usuario/mes',
     icon: '👤',
     limitesExtra: { users: 1 },
+  },
+  {
+    id: 'compliance_pro',
+    nombre: 'Compliance PRO',
+    descripcion: 'Trazabilidad total, gates obligatorios, score dashboard, alertas inteligentes y certificación digital',
+    precio: 149,
+    moneda: 'EUR',
+    intervalo: 'mes',
+    icon: '🛡️',
+    limitesExtra: { compliance_mode: true },
   },
 ]
 
