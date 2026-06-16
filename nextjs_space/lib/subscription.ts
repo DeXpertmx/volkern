@@ -181,7 +181,7 @@ function getHardcodedPlanConfig(planSlug: string): PlanConfig {
   return {
     id: normalizedSlug,
     slug: normalizedSlug,
-    nombre: normalizedSlug === 'esencial' ? 'Esencial' : normalizedSlug === 'profesional' ? 'Profesional' : normalizedSlug === 'infinity' ? 'Infinity' : normalizedSlug,
+    nombre: normalizedSlug === 'esencial' ? 'Esencial' : normalizedSlug === 'profesional' ? 'Profesional' : normalizedSlug === 'infinity' ? 'Infinity' : normalizedSlug === 'scale' ? 'Scale' : normalizedSlug === 'compliance' ? 'Compliance Pro' : normalizedSlug,
     precio: prices?.monthly || 0,
     moneda: prices?.currency || 'eur',
     intervalo: prices ? 'mensual' : 'mensual',
