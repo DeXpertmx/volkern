@@ -16,9 +16,15 @@ export async function POST(request: NextRequest) {
 
     const { newPlanId } = await request.json()
 
-    const validPaidPlans = [PLANS.ESENCIAL, PLANS.PROFESIONAL, PLANS.INFINITY]
+    const validPaidPlans = [PLANS.ESENCIAL, PLANS.PROFESIONAL, PLANS.INFINITY, PLANS.SCALE, PLANS.COMPLIANCE]
     if (!validPaidPlans.includes(newPlanId)) {
       return NextResponse.json({ error: 'Plan inválido' }, { status: 400 })
+    }
+
+    // Los planes dinámicos (scale/compliance) se gestionan desde /precios, no desde esta API
+    const dynamicPlans = [PLANS.SCALE, PLANS.COMPLIANCE]
+    if (dynamicPlans.includes(newPlanId)) {
+      return NextResponse.json({ error: 'Cambio a plan dinámico no soportado desde esta API. Usa /precios para reconfigurar.' }, { status: 400 })
     }
 
     const user = await prisma.user.findUnique({
