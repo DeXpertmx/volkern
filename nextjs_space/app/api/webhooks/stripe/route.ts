@@ -249,13 +249,14 @@ export async function POST(request: NextRequest) {
           const session = event.data.object
 
           if (session.mode === 'subscription') {
-            const { tenantId: subTenantId, planId } = session.metadata || {}
+            const { tenantId: subTenantId, plan: planKey, planId } = session.metadata || {}
+            const resolvedPlan = planKey || planId
 
-            if (subTenantId && planId) {
+            if (subTenantId && resolvedPlan) {
               await prisma.tenant.update({
                 where: { id: subTenantId },
                 data: {
-                  plan: planId,
+                  plan: resolvedPlan,
                   estado: 'activo',
                   stripeCustomerId: session.customer as string
                 }
@@ -266,9 +267,9 @@ export async function POST(request: NextRequest) {
                   accion: 'actualizar',
                   entidad: 'Tenant',
                   entidadId: subTenantId,
-                  descripcion: `Suscripción activada para plan ${planId}`,
+                  descripcion: `Suscripción activada para plan ${resolvedPlan}`,
                   cambiosDespues: {
-                    planId,
+                    planId: resolvedPlan,
                     subscriptionId: session.subscription,
                     customerId: session.customer
                   },
@@ -332,7 +333,8 @@ export async function POST(request: NextRequest) {
         case 'customer.subscription.created':
         case 'customer.subscription.updated': {
           const subscription = event.data.object
-          const { tenantId: subTenantId, planId } = subscription.metadata || {}
+          const { tenantId: subTenantId, plan: planKey, planId } = subscription.metadata || {}
+          const resolvedPlan = planKey || planId
 
           if (subTenantId) {
             const updateData: any = {
@@ -340,8 +342,8 @@ export async function POST(request: NextRequest) {
               fechaVencimiento: new Date(subscription.current_period_end * 1000)
             }
 
-            if (planId) {
-              updateData.plan = planId
+            if (resolvedPlan) {
+              updateData.plan = resolvedPlan
             }
 
             await prisma.tenant.update({

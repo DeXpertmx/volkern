@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -7,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
-import { Check, CreditCard, Loader2, AlertCircle, TrendingUp } from 'lucide-react'
+import { Check, CreditCard, Loader2, AlertCircle, TrendingUp, ArrowRight, Shield, Sparkles } from 'lucide-react'
 import { PLANS, PLAN_FEATURES, PLAN_PRICES } from '@/lib/plans'
 import {
   AlertDialog,
@@ -20,6 +19,36 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { ComplianceProUpgrade } from '@/components/compliance/ComplianceProUpgrade'
+
+const NEW_PLANS = [PLANS.SCALE, PLANS.COMPLIANCE]
+const OLD_PLANS = [PLANS.ESENCIAL, PLANS.PROFESIONAL, PLANS.INFINITY]
+
+function isNewPlan(plan: string | undefined): boolean {
+  return plan ? NEW_PLANS.includes(plan) : false
+}
+
+function getPlanDisplayName(plan: string | undefined): string {
+  switch (plan) {
+    case 'scale': return 'Scale'
+    case 'compliance': return 'Compliance Pro'
+    case 'esencial': return 'Esencial'
+    case 'profesional': return 'Profesional'
+    case 'infinity': return 'Infinity'
+    case 'trial': return 'Prueba gratuita'
+    default: return plan || '—'
+  }
+}
+
+function getPlanEmoji(plan: string | undefined): string {
+  switch (plan) {
+    case 'scale': return '🚀'
+    case 'compliance': return '🔒'
+    case 'esencial': return '🟢'
+    case 'profesional': return '🔵'
+    case 'infinity': return '🟣'
+    default: return '📋'
+  }
+}
 
 export default function BillingPage() {
   const [status, setStatus] = useState<any>(null)
@@ -39,20 +68,19 @@ export default function BillingPage() {
     if (params.get('success') === 'true') {
       setSuccessPolling(true)
       let attempts = 0
-      const maxAttempts = 15 // 30 seconds max
+      const maxAttempts = 15
       const interval = setInterval(async () => {
         attempts++
         const data = await fetchStatus()
         if (data && (data.status === 'activo' || attempts >= maxAttempts)) {
-            setSuccessPolling(false)
-            clearInterval(interval)
-            // Clean URL
-            window.history.replaceState({}, '', '/dashboard/configuracion/billing')
-            if (data.status === 'activo') {
-              toast.success('¡Pago confirmado! Tu suscripción está activa.')
-            }
+          setSuccessPolling(false)
+          clearInterval(interval)
+          window.history.replaceState({}, '', '/dashboard/configuracion/billing')
+          if (data.status === 'activo') {
+            toast.success('¡Pago confirmado! Tu suscripción está activa.')
           }
-        }, 2000)
+        }
+      }, 2000)
       return () => clearInterval(interval)
     }
   }, [])
@@ -81,6 +109,7 @@ export default function BillingPage() {
     }
 
     setActionLoading(true)
+    setSelectedPlan(planId)
     try {
       const response = await fetch('/api/subscriptions/create', {
         method: 'POST',
@@ -94,7 +123,6 @@ export default function BillingPage() {
         throw new Error(data.error || 'Error al crear suscripción')
       }
 
-      // Redirigir a Stripe Checkout
       if (data.checkoutUrl) {
         window.location.href = data.checkoutUrl
       }
@@ -103,6 +131,7 @@ export default function BillingPage() {
       toast.error(error.message || 'Error al procesar la suscripción')
     } finally {
       setActionLoading(false)
+      setSelectedPlan(null)
     }
   }
 
@@ -158,7 +187,11 @@ export default function BillingPage() {
     }
   }
 
-  const plans = [
+  const currentPlan = status?.plan
+  const isNew = isNewPlan(currentPlan)
+
+  // Old plan plan list for backward compatibility
+  const oldPlans = [
     {
       id: PLANS.ESENCIAL,
       name: '🟢 Esencial',
@@ -208,13 +241,19 @@ export default function BillingPage() {
               <p className="text-sm text-green-800">Confirmando tu pago... esto puede tomar unos segundos.</p>
             </div>
           )}
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-2xl font-bold capitalize">{status?.plan || 'Trial'}</h3>
+                <span className="text-2xl">{getPlanEmoji(currentPlan)}</span>
+                <h3 className="text-2xl font-bold">{getPlanDisplayName(currentPlan)}</h3>
                 <Badge variant={status?.status === 'activo' ? 'default' : 'secondary'}>
                   {status?.status === 'trial' ? 'Prueba Gratuita' : status?.status}
                 </Badge>
+                {isNew && (
+                  <Badge variant="outline" className="border-purple-200 text-purple-700 bg-purple-50">
+                    Nuevo modelo
+                  </Badge>
+                )}
               </div>
               {status?.trial && (
                 <p className="text-sm text-gray-600 mt-1">
@@ -228,36 +267,52 @@ export default function BillingPage() {
               )}
             </div>
 
-          {status?.status === 'activo' && status?.subscription && (
-            <div className="space-y-3">
-              <div className="flex gap-2 flex-wrap">
-                {plans
-                  .filter(p => p.id !== status.plan)
-                  .map(p => (
-                    <Button
-                      key={p.id}
-                      variant="outline"
-                      onClick={() => handleChangePlan(p.id)}
-                      disabled={actionLoading}
-                      className="font-medium"
-                    >
-                      {actionLoading && selectedPlan === p.id ? (
-                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                      ) : null}
-                      Cambiar a {p.name}
-                    </Button>
-                  ))}
+            {status?.status === 'activo' && status?.subscription && (
+              <div className="space-y-3">
+                <div className="flex gap-2 flex-wrap">
+                  {isNew ? (
+                    <>
+                      {currentPlan === PLANS.SCALE && (
+                        <Button variant="outline" asChild className="font-medium border-indigo-200 text-indigo-700 hover:bg-indigo-50">
+                          <Link href="/precios" className="flex items-center gap-1">
+                            <Shield className="w-4 h-4" />
+                            Upgrade a Compliance Pro
+                          </Link>
+                        </Button>
+                      )}
+                      <Button variant="outline" size="sm" asChild>
+                        <Link href="/precios" className="flex items-center gap-1">
+                          Reconfigurar plan <ArrowRight className="w-3 h-3" />
+                        </Link>
+                      </Button>
+                    </>
+                  ) : oldPlans
+                    .filter(p => p.id !== status.plan)
+                    .map(p => (
+                      <Button
+                        key={p.id}
+                        variant="outline"
+                        onClick={() => handleChangePlan(p.id)}
+                        disabled={actionLoading}
+                        className="font-medium"
+                      >
+                        {actionLoading && selectedPlan === p.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                        ) : null}
+                        Cambiar a {p.name}
+                      </Button>
+                    ))}
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowCancelDialog(true)}
+                  disabled={actionLoading}
+                  className="text-red-600 border-red-200 hover:bg-red-50"
+                >
+                  Cancelar Suscripción
+                </Button>
               </div>
-              <Button
-                variant="outline"
-                onClick={() => setShowCancelDialog(true)}
-                disabled={actionLoading}
-                className="text-red-600 border-red-200 hover:bg-red-50"
-              >
-                Cancelar Suscripción
-              </Button>
-            </div>
-          )}
+            )}
           </div>
 
           {status?.subscription?.cancelAtPeriodEnd && (
@@ -278,59 +333,137 @@ export default function BillingPage() {
 
       {/* Plan Selection for Trial Users */}
       {status?.status === 'trial' && (
-        <Card className="border-indigo-200 bg-indigo-50/30">
+        <Card className={`border-2 ${isNew ? 'border-purple-200 bg-purple-50/30' : 'border-indigo-200 bg-indigo-50/30'}`}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-indigo-600" />
+              <Sparkles className="w-5 h-5 text-purple-600" />
               Elige tu plan
             </CardTitle>
             <CardDescription>
-              Tu prueba gratuita termina en {status.trial?.daysRemaining || '?'} días. Selecciona un plan para continuar sin interrupción.
+              {isNew
+                ? 'Configura tu plan según las necesidades de tu operación.'
+                : `Tu prueba gratuita termina en ${status.trial?.daysRemaining || '?'} días. Selecciona un plan para continuar sin interrupción.`
+              }
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {plans.map((plan) => (
-                <div key={plan.id} className={`bg-white rounded-xl p-5 border-2 ${plan.popular ? 'border-indigo-500 ring-2 ring-indigo-100' : 'border-gray-200'}`}>
-                  {plan.popular && (
-                    <Badge className="mb-2 bg-indigo-600 text-white">Más popular</Badge>
-                  )}
-                  <h3 className="text-lg font-bold">{plan.name}</h3>
-                  <p className="text-2xl font-black mt-2">{plan.price}<span className="text-sm font-normal text-gray-400">/mes</span></p>
-                  <ul className="mt-4 space-y-2 mb-6">
-                    {plan.features.slice(0, 5).map((f: string, i: number) => (
-                      <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
+            {isNew ? (
+              <div className="flex flex-col items-center text-center py-6 space-y-4">
+                <div className="flex gap-4">
+                  <div className="bg-white rounded-xl p-6 border-2 border-purple-200 ring-2 ring-purple-100 max-w-xs">
+                    <Badge className="mb-2 bg-purple-600 text-white">Recomendado</Badge>
+                    <h3 className="text-lg font-bold">🚀 Scale</h3>
+                    <p className="text-sm text-gray-500 mt-1">Operación centralizada</p>
+                    <p className="text-2xl font-black mt-3">Desde 49€<span className="text-sm font-normal text-gray-400">/mes</span></p>
+                    <ul className="mt-4 space-y-2 mb-6 text-left">
+                      <li className="flex items-start gap-2 text-sm text-gray-600">
                         <Check className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
-                        <span>{f}</span>
+                        <span>CRM, Ventas, Marketing, RRHH</span>
                       </li>
-                    ))}
-                  </ul>
-                  <Button
-                    onClick={() => handleSubscribe(plan.id)}
-                    disabled={actionLoading}
-                    className={`w-full font-bold ${plan.popular ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : ''}`}
-                    variant={plan.popular ? 'default' : 'outline'}
-                  >
-                    {actionLoading && selectedPlan === plan.id ? (
-                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                    ) : null}
-                    Elegir {plan.name}
-                  </Button>
+                      <li className="flex items-start gap-2 text-sm text-gray-600">
+                        <Check className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
+                        <span>Automatizaciones y webhooks</span>
+                      </li>
+                      <li className="flex items-start gap-2 text-sm text-gray-600">
+                        <Check className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
+                        <span>1-99 usuarios escalables</span>
+                      </li>
+                    </ul>
+                    <Button
+                      onClick={() => handleSubscribe(PLANS.SCALE)}
+                      disabled={actionLoading}
+                      className="w-full font-bold bg-purple-600 hover:bg-purple-700"
+                    >
+                      {actionLoading && selectedPlan === PLANS.SCALE ? (
+                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                      ) : null}
+                      Elegir Scale
+                    </Button>
+                  </div>
+                  <div className="bg-white rounded-xl p-6 border-2 border-indigo-200 max-w-xs">
+                    <h3 className="text-lg font-bold">🔒 Compliance Pro</h3>
+                    <p className="text-sm text-gray-500 mt-1">Control y auditoría total</p>
+                    <p className="text-2xl font-black mt-3">Desde 149€<span className="text-sm font-normal text-gray-400">/mes</span></p>
+                    <ul className="mt-4 space-y-2 mb-6 text-left">
+                      <li className="flex items-start gap-2 text-sm text-gray-600">
+                        <Check className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
+                        <span>Todo Scale + Compliance</span>
+                      </li>
+                      <li className="flex items-start gap-2 text-sm text-gray-600">
+                        <Check className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
+                        <span>Auditoría y trazabilidad</span>
+                      </li>
+                      <li className="flex items-start gap-2 text-sm text-gray-600">
+                        <Check className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
+                        <span>Soporte dedicado</span>
+                      </li>
+                    </ul>
+                    <Button
+                      onClick={() => handleSubscribe(PLANS.COMPLIANCE)}
+                      disabled={actionLoading}
+                      className="w-full font-bold"
+                      variant="outline"
+                    >
+                      {actionLoading && selectedPlan === PLANS.COMPLIANCE ? (
+                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                      ) : null}
+                      Elegir Compliance Pro
+                    </Button>
+                  </div>
                 </div>
-              ))}
-            </div>
+                <p className="text-sm text-gray-500">
+                  ¿Quieres personalizar usuarios y contactos?{' '}
+                  <Link href="/precios" className="text-purple-600 font-medium hover:underline">
+                    Configura tu plan exacto
+                  </Link>
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {oldPlans.map((plan) => (
+                  <div key={plan.id} className={`bg-white rounded-xl p-5 border-2 ${plan.popular ? 'border-indigo-500 ring-2 ring-indigo-100' : 'border-gray-200'}`}>
+                    {plan.popular && (
+                      <Badge className="mb-2 bg-indigo-600 text-white">Más popular</Badge>
+                    )}
+                    <h3 className="text-lg font-bold">{plan.name}</h3>
+                    <p className="text-2xl font-black mt-2">{plan.price}<span className="text-sm font-normal text-gray-400">/mes</span></p>
+                    <ul className="mt-4 space-y-2 mb-6">
+                      {plan.features.slice(0, 5).map((f: string, i: number) => (
+                        <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
+                          <Check className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
+                          <span>{f}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <Button
+                      onClick={() => handleSubscribe(plan.id)}
+                      disabled={actionLoading}
+                      className={`w-full font-bold ${plan.popular ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : ''}`}
+                      variant={plan.popular ? 'default' : 'outline'}
+                    >
+                      {actionLoading && selectedPlan === plan.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                      ) : null}
+                      Elegir {plan.name}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
 
-      {/* Compliance PRO Upgrade */}
-      <Card className="border-indigo-200 overflow-hidden">
-        <CardContent className="p-0">
-          <div className="p-6">
-            <ComplianceProUpgrade compact />
-          </div>
-        </CardContent>
-      </Card>
+      {/* Compliance PRO Upgrade (only for non-Compliance active users) */}
+      {status?.status === 'activo' && !isNew && (
+        <Card className="border-indigo-200 overflow-hidden">
+          <CardContent className="p-0">
+            <div className="p-6">
+              <ComplianceProUpgrade compact />
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Quick link a Uso y Límites */}
       <Card>

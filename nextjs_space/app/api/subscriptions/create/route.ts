@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
 
     const { planId, interval = 'monthly' } = await request.json()
 
-    const validPaidPlans = [PLANS.ESENCIAL, PLANS.PROFESIONAL, PLANS.INFINITY]
+    const validPaidPlans = [PLANS.ESENCIAL, PLANS.PROFESIONAL, PLANS.INFINITY, PLANS.SCALE, PLANS.COMPLIANCE]
     if (!validPaidPlans.includes(planId)) {
       return NextResponse.json({ error: 'Plan inválido' }, { status: 400 })
     }
@@ -50,47 +50,107 @@ export async function POST(request: NextRequest) {
       })
       customerId = customer.id
 
-      // Actualizar tenant con el customer ID
       await prisma.tenant.update({
         where: { id: tenant.id },
         data: { stripeCustomerId: customerId }
       })
     }
 
+    const origin = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://volkern.app'
+    const successUrl = `${origin}/dashboard/configuracion/billing?success=true`
+    const cancelUrl = `${origin}/dashboard/configuracion/billing?canceled=true`
+
+    const isDynamicPlan = [PLANS.SCALE, PLANS.COMPLIANCE].includes(planId)
+
+    if (isDynamicPlan) {
+      // ─── Planes nuevos: precio dinámico con price_data ──────
+      const planLabel = planId === 'compliance' ? 'Compliance Pro' : 'Scale'
+      const precioBase = planId === 'compliance' ? 299 : 147
+      const precioMensual = interval === 'yearly' ? Math.round(precioBase * 0.8) : precioBase
+
+      const checkoutSession = await stripe.checkout.sessions.create({
+        customer: customerId,
+        mode: 'subscription',
+        payment_method_types: ['card'],
+        line_items: [
+          {
+            price_data: {
+              currency: 'eur',
+              product_data: {
+                name: `Volkern ${planLabel}`,
+                description: 'Plan dinámico con todos los módulos incluidos',
+              },
+              recurring: {
+                interval: interval === 'yearly' ? 'year' : 'month',
+              },
+              unit_amount: Math.round(precioMensual * 100),
+            },
+            quantity: 1,
+          },
+        ],
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+        metadata: {
+          tenantId: tenant.id,
+          plan: planId,
+          interval,
+        },
+        subscription_data: {
+          metadata: {
+            tenantId: tenant.id,
+            plan: planId,
+            interval,
+          },
+        },
+      })
+
+      await prisma.auditLog.create({
+        data: {
+          accion: 'crear',
+          entidad: 'Subscription',
+          entidadId: checkoutSession.id,
+          descripcion: `Checkout de suscripción iniciado para plan ${planId}`,
+          cambiosDespues: { planId, sessionId: checkoutSession.id },
+          userId: user.id,
+          tenantId: tenant.id,
+        },
+      })
+
+      return NextResponse.json({
+        success: true,
+        checkoutUrl: checkoutSession.url,
+      })
+    }
+
+    // ─── Planes viejos: usar Stripe Price IDs fijos ──────
     const priceInfo = PLAN_PRICES[planId as keyof typeof PLAN_PRICES]
     const stripePriceId = interval === 'yearly' ? priceInfo.stripePriceYearlyId : priceInfo.stripePriceId
 
     if (!stripePriceId) {
       return NextResponse.json({ error: 'Price ID no configurado para este plan' }, { status: 500 })
     }
-    
+
     const checkoutSession = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: 'subscription',
       payment_method_types: ['card'],
-      line_items: [
-        {
-          price: stripePriceId,
-          quantity: 1
-        }
-      ],
-      success_url: `${process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://volkern.app'}/dashboard/configuracion/billing?success=true`,
-      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://volkern.app'}/dashboard/configuracion/billing?canceled=true`,
+      line_items: [{ price: stripePriceId, quantity: 1 }],
+      success_url: successUrl,
+      cancel_url: cancelUrl,
       metadata: {
         tenantId: tenant.id,
-        planId,
+        plan: planId,
         interval,
       },
       subscription_data: {
         metadata: {
           tenantId: tenant.id,
-          planId,
+          plan: planId,
           interval,
-        }
-      }
+        },
+      },
     })
 
-    // Log de auditoría
     await prisma.auditLog.create({
       data: {
         accion: 'crear',
@@ -99,16 +159,16 @@ export async function POST(request: NextRequest) {
         descripcion: `Checkout de suscripción iniciado para plan ${planId}`,
         cambiosDespues: {
           planId,
-          sessionId: checkoutSession.id
+          sessionId: checkoutSession.id,
         },
         userId: user.id,
-        tenantId: tenant.id
-      }
+        tenantId: tenant.id,
+      },
     })
 
     return NextResponse.json({
       success: true,
-      checkoutUrl: checkoutSession.url
+      checkoutUrl: checkoutSession.url,
     })
 
   } catch (error: any) {
