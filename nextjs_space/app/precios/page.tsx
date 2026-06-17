@@ -165,10 +165,10 @@ function DynamicSummary({
       <div className="mb-4">
         <div className="flex items-baseline gap-2">
           {billingInterval === 'yearly' && (
-            <span className="text-2xl font-black text-slate-500 line-through">€{fmtPrecio(precioOriginal)}/mes</span>
+            <span className="text-2xl font-black text-slate-400 line-through">€{fmtPrecio(precioOriginal)}/mes</span>
           )}
           <span className="text-6xl font-black text-white tracking-tight">€{fmtPrecio(precioMostrar)}</span>
-          <span className="text-slate-500 text-lg">/mes</span>
+          <span className="text-slate-400 text-lg">/mes</span>
         </div>
         {billingInterval === 'yearly' && (
           <p className="text-[11px] text-emerald-500 font-bold mt-1">
