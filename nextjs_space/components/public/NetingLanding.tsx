@@ -153,7 +153,7 @@ function TwentyOffBadge({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
 
 export default function NetingLanding() {
   const [billing, setBilling] = useState<'annual' | 'monthly'>('monthly');
-  const { deadline } = useCountdown();
+  const { time, deadline } = useCountdown();
 
   const isAnnual = billing === 'annual';
   const planData = isAnnual ? PRICING.annual : PRICING.monthly;
@@ -161,6 +161,27 @@ export default function NetingLanding() {
   const checkoutPrecio = isAnnual ? PRICING.annual.promo : PRICING.monthly.promo;
   const checkoutSetup = isAnnual ? PRICING.annual.setupPromo : PRICING.monthly.setupPromo;
   const promoCtaHref = `/checkout?usuarios=1&contactos=1000&plan=scale&interval=${checkoutInterval}&precio=${checkoutPrecio}&setup=${checkoutSetup}&promo=neting`;
+
+  /* ─── Modal de promoción expirada (solo si inició trial) ─────────────── */
+  const [showExpiredModal, setShowExpiredModal] = useState(false);
+
+  useEffect(() => {
+    if (!time.expired) return;
+    try {
+      const trialStarted = localStorage.getItem('neting_trial_started');
+      const modalDismissed = localStorage.getItem('neting_expired_modal_dismissed');
+      if (trialStarted === 'true' && modalDismissed !== 'true') {
+        // Pequeño delay para que el contador llegue visualmente a 0
+        const id = setTimeout(() => setShowExpiredModal(true), 1200);
+        return () => clearTimeout(id);
+      }
+    } catch {}
+  }, [time.expired]);
+
+  const dismissExpiredModal = () => {
+    try { localStorage.setItem('neting_expired_modal_dismissed', 'true'); } catch {}
+    setShowExpiredModal(false);
+  };
 
   return (
     <div
@@ -898,6 +919,106 @@ export default function NetingLanding() {
           </div>
         </section>
       </div>
+
+      {/* ═══ MODAL · Promoción expirada (solo si inició trial) ═══════════ */}
+      {showExpiredModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="expired-modal-title"
+          onKeyDown={(e) => { if (e.key === 'Escape') dismissExpiredModal(); }}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.92, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: 0.35, ease: 'easeOut' }}
+            className="vl-glass vl-ring-soft rounded-[28px] p-6 sm:p-10 max-w-lg w-full border border-rose-500/40 bg-gradient-to-b from-slate-900 to-slate-950 shadow-2xl shadow-rose-500/20"
+          >
+            {/* Icon + Title */}
+            <div className="text-center mb-6">
+              <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-rose-500/20 border border-rose-500/40 mb-4">
+                <AlertTriangle className="w-7 h-7 text-rose-300" aria-hidden="true" />
+              </div>
+              <h2 id="expired-modal-title" className="text-xl sm:text-2xl font-black text-white mb-2">
+                La promoción Neting ha terminado
+              </h2>
+              <p className="text-slate-400 text-sm leading-relaxed">
+                El plazo de la oferta con{' '}
+                <span className="text-emerald-400 font-bold">20% OFF</span> y{' '}
+                <span className="text-emerald-400 font-bold">Setup con descuento</span>{' '}
+                venció mientras estabas en prueba. Estos son los precios estándar actuales:
+              </p>
+            </div>
+
+            {/* Pricing cards — standard (no promo) */}
+            <div className="grid grid-cols-2 gap-3 mb-6">
+              {/* Mensual */}
+              <div className="vl-ring-soft rounded-xl p-4 bg-slate-950/60 border border-white/10 text-center">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Mensual</p>
+                <p className="text-2xl font-black text-white tabular-nums">€49</p>
+                <p className="text-xs text-slate-500">/mes</p>
+                <div className="mt-2 pt-2 border-t border-white/5">
+                  <p className="text-[10px] text-slate-500">Setup</p>
+                  <p className="text-sm font-bold text-slate-300">€299</p>
+                </div>
+              </div>
+              {/* Anual */}
+              <div className="vl-ring-soft rounded-xl p-4 bg-slate-950/60 border border-white/10 text-center relative">
+                <span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-amber-500 text-amber-950 text-[9px] font-black uppercase px-2 py-0.5 rounded-full whitespace-nowrap">
+                  -20% fact anual
+                </span>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 mt-1">Anual</p>
+                <p className="text-2xl font-black text-white tabular-nums">€588</p>
+                <p className="text-xs text-slate-500">/año (€49/mes)</p>
+                <div className="mt-2 pt-2 border-t border-white/5">
+                  <p className="text-[10px] text-slate-500">Setup</p>
+                  <p className="text-sm font-bold text-slate-300">€299</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Lo que pierdes */}
+            <div className="vl-ring-soft rounded-xl p-4 bg-rose-500/10 border border-rose-500/25 mb-6">
+              <p className="text-[10px] font-black text-rose-300 uppercase tracking-widest mb-2">
+                Lo que perdiste por no activar a tiempo
+              </p>
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <span className="text-slate-400">Mensual: </span>
+                  <span className="text-rose-300 line-through">€39</span>
+                  <span className="text-white font-bold"> → €49</span>
+                  <span className="text-rose-400 ml-1">+€10/mes</span>
+                </div>
+                <div>
+                  <span className="text-slate-400">Setup: </span>
+                  <span className="text-rose-300 line-through">€149-199</span>
+                  <span className="text-white font-bold"> → €299</span>
+                </div>
+              </div>
+            </div>
+
+            {/* CTA + Dismiss */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Link
+                href="/checkout?usuarios=1&contactos=1000&plan=scale&interval=monthly"
+                onClick={dismissExpiredModal}
+                className="vl-btn vl-btn-primary flex-1 justify-center text-sm py-3 group"
+              >
+                Activar con precio estándar
+                <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" aria-hidden="true" />
+              </Link>
+              <button
+                type="button"
+                onClick={dismissExpiredModal}
+                className="vl-btn vl-btn-secondary flex-1 justify-center text-sm py-3"
+              >
+                Cerrar
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }
