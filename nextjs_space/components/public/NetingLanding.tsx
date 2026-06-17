@@ -182,8 +182,8 @@ function PlanCard({
     <article
       className={`relative vl-glass vl-ring-soft rounded-[28px] p-6 sm:p-8 flex flex-col transition-all duration-300 ${
         recommended
-          ? 'border-2 border-blue-500/70 shadow-2xl shadow-blue-500/30 bg-blue-950/40 md:scale-105 md:hover:scale-[1.07]'
-          : 'border border-white/10 hover:border-white/20 hover:-translate-y-1'
+          ? 'border-2 border-blue-500 shadow-[0_0_0_1px_rgba(59,130,246,0.6),0_25px_60px_-10px_rgba(59,130,246,0.5)] bg-blue-950/50 hover:-translate-y-1 hover:shadow-[0_0_0_1px_rgba(59,130,246,0.8),0_30px_70px_-10px_rgba(59,130,246,0.6)]'
+          : 'border border-white/10 hover:border-white/20 hover:-translate-y-1 hover:shadow-xl hover:shadow-black/30'
       }`}
     >
       {badgeText && (
@@ -696,8 +696,8 @@ export default function NetingLanding() {
               </p>
             </div>
 
-            <div className="grid md:grid-cols-2 gap-6 md:gap-8 items-stretch">
-              {/* MENSUAL */}
+            <div className="grid md:grid-cols-2 gap-5 sm:gap-6 lg:gap-8 items-stretch">
+              {/* MENSUAL — side-by-side con el recomendado. Sin scale para no romper layout. */}
               <PlanCard
                 title="Mensual"
                 pricePromo={PRICING.monthly.promo}
