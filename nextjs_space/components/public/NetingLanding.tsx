@@ -647,24 +647,73 @@ export default function NetingLanding() {
 
                 {/* ─── RIGHT · Controls + Features ────────────────── */}
                 <div className="vl-pricing-controls">
-                  {/* Toggle Mensual / Anual */}
-                  <label className="vl-selector-field">
+                  {/* Toggle Mensual / Anual — segmentado visible */}
+                  <div className="flex flex-col gap-3">
                     <span className="vl-field-label">Ciclo de facturación</span>
-                    <select
-                      value={billing}
-                      onChange={(e) =>
-                        setBilling(e.target.value as 'annual' | 'monthly')
-                      }
-                      className="vl-field-select"
+                    <div
+                      role="radiogroup"
+                      aria-label="Ciclo de facturación"
+                      onKeyDown={(e) => {
+                        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                          e.preventDefault();
+                          setBilling((prev) => (prev === 'annual' ? 'monthly' : 'annual'));
+                        }
+                      }}
+                      className="relative flex rounded-full bg-slate-800/80 border border-white/10 p-1 shadow-inner"
                     >
-                      <option value="annual">
-                        Anual — Activas setup por €149
-                      </option>
-                      <option value="monthly">
-                        Mensual — Activas setup por €199
-                      </option>
-                    </select>
-                  </label>
+                      {/* Sliding background pill */}
+                      <div
+                        aria-hidden="true"
+                        className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 shadow-[0_0_18px_-3px_rgba(124,58,237,0.6)] transition-all duration-300 ease-out ${
+                          isAnnual ? 'left-1' : 'left-[calc(50%+0.25rem)]'
+                        }`}
+                      />
+                      {/* Botón Anual */}
+                      <button
+                        type="button"
+                        role="radio"
+                        aria-checked={isAnnual}
+                        tabIndex={isAnnual ? 0 : -1}
+                        onClick={() => setBilling('annual')}
+                        className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 rounded-full px-4 py-3 text-sm font-bold transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
+                          isAnnual
+                            ? 'text-white'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        🔥 Anual
+                        <span
+                          aria-hidden={!isAnnual}
+                          className={`absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap bg-gradient-to-r from-amber-400 to-orange-500 text-white text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full shadow-lg shadow-orange-500/40 transition-all duration-300 ${
+                            isAnnual ? 'opacity-100 scale-100' : 'opacity-0 scale-90 pointer-events-none'
+                          }`}
+                        >
+                          Máx ahorro
+                        </span>
+                      </button>
+                      {/* Botón Mensual */}
+                      <button
+                        type="button"
+                        role="radio"
+                        aria-checked={!isAnnual}
+                        tabIndex={!isAnnual ? 0 : -1}
+                        onClick={() => setBilling('monthly')}
+                        className={`relative z-10 flex-1 flex items-center justify-center rounded-full px-4 py-3 text-sm font-bold transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
+                          !isAnnual
+                            ? 'text-white'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        Mensual
+                      </button>
+                    </div>
+                    {/* Subtítulo dinámico según selección */}
+                    <p className="text-xs text-slate-400 text-center">
+                      {isAnnual
+                        ? 'Setup por €149 · €470/año (ahorras €118)'
+                        : 'Setup por €199 · €39/mes (ahorras €10/mes)'}
+                    </p>
+                  </div>
 
                   {/* Features checklist */}
                   <div className="vl-ring-soft vl-slider-field">
