@@ -103,7 +103,7 @@ export function CookieConsentBanner() {
                       <h3 className="text-lg font-bold text-white">🍪 Configuración de Privacidad</h3>
                       <button
                         onClick={() => setVisible(false)}
-                        className="text-slate-500 hover:text-white transition-colors p-1"
+                        className="text-slate-400 hover:text-white transition-colors p-1"
                         aria-label="Cerrar"
                       >
                         <X className="w-5 h-5" />
@@ -148,7 +148,7 @@ export function CookieConsentBanner() {
                   </div>
                   <button
                     onClick={() => setCustomizing(false)}
-                    className="text-slate-500 hover:text-white transition-colors p-1"
+                    className="text-slate-400 hover:text-white transition-colors p-1"
                     aria-label="Volver"
                   >
                     <X className="w-5 h-5" />
