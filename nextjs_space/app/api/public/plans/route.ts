@@ -1,36 +1,32 @@
 import { NextResponse } from 'next/server'
-import { PLANS, PLAN_FEATURES, PLAN_PRICES } from '@/lib/plans'
+import { PLANS, PLAN_FEATURES } from '@/lib/plans'
+import { calcularPrecio } from '@/lib/pricing-engine'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
+  // Usar configuración representativa para mostrar precios dinámicos
+  const scalePrice = calcularPrecio({ usuarios: 5, contactos: 5000, plan: 'scale' })
+  const compliancePrice = calcularPrecio({ usuarios: 5, contactos: 5000, plan: 'compliance' })
+
   const plans = [
     {
-      slug: PLANS.ESENCIAL,
-      name: 'Esencial',
-      price: PLAN_PRICES[PLANS.ESENCIAL].monthly,
-      priceYearly: PLAN_PRICES[PLANS.ESENCIAL].yearly,
+      slug: PLANS.SCALE,
+      name: 'Scale',
+      price: scalePrice.precio,
+      priceYearly: Math.round(scalePrice.precio * 0.8 * 12),
       currency: 'EUR',
-      features: PLAN_FEATURES[PLANS.ESENCIAL],
+      features: PLAN_FEATURES[PLANS.SCALE],
       popular: false,
     },
     {
-      slug: PLANS.PROFESIONAL,
-      name: 'Profesional',
-      price: PLAN_PRICES[PLANS.PROFESIONAL].monthly,
-      priceYearly: PLAN_PRICES[PLANS.PROFESIONAL].yearly,
+      slug: PLANS.COMPLIANCE,
+      name: 'Compliance Pro',
+      price: compliancePrice.precio,
+      priceYearly: Math.round(compliancePrice.precio * 0.8 * 12),
       currency: 'EUR',
-      features: PLAN_FEATURES[PLANS.PROFESIONAL],
+      features: PLAN_FEATURES[PLANS.COMPLIANCE],
       popular: true,
-    },
-    {
-      slug: PLANS.INFINITY,
-      name: 'Infinity',
-      price: PLAN_PRICES[PLANS.INFINITY].monthly,
-      priceYearly: PLAN_PRICES[PLANS.INFINITY].yearly,
-      currency: 'EUR',
-      features: PLAN_FEATURES[PLANS.INFINITY],
-      popular: false,
     },
   ]
 
