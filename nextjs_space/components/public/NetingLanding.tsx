@@ -153,7 +153,8 @@ function TwentyOffBadge({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
 
 export default function NetingLanding() {
   const [billing, setBilling] = useState<'annual' | 'monthly'>('monthly');
-  const promoCtaHref = '/signup?promo=neting&plan=crm-ventas';
+  const checkoutInterval = billing === 'annual' ? 'yearly' : 'monthly';
+  const promoCtaHref = `/checkout?usuarios=1&contactos=1000&plan=scale&interval=${checkoutInterval}`;
   const { deadline } = useCountdown();
 
   const isAnnual = billing === 'annual';
@@ -759,7 +760,7 @@ export default function NetingLanding() {
                       de suscripción.
                     </p>
                     <Link
-                      href={`${promoCtaHref}&cycle=${billing}`}
+                      href={promoCtaHref}
                       className="vl-btn vl-btn-primary w-full justify-center flex items-center text-lg shadow-[0_0_40px_-10px_rgba(124,58,237,0.5)] mt-5"
                     >
                       <Rocket
