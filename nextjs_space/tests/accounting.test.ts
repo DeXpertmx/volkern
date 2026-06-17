@@ -26,6 +26,12 @@ const mockFindUnique = vi.hoisted(() => vi.fn());
 const mockCount = vi.hoisted(() => vi.fn());
 const mockCreate = vi.hoisted(() => vi.fn());
 
+vi.mock('@/lib/accounting/initializer', () => ({
+  AccountingInitializer: {
+    initializeTenant: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
 vi.mock('@/lib/db', () => ({
   prisma: {
     tenant: {
