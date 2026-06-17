@@ -161,7 +161,7 @@ export function CookieConsentBanner() {
                     <div className="flex items-center justify-between">
                       <div>
                         <Label className="text-white font-bold cursor-pointer">Cookies Técnicas (Necesarias)</Label>
-                        <p className="text-xs text-slate-500 mt-1">Imprescindibles para el funcionamiento básico del sitio.</p>
+                        <p className="text-xs text-slate-400 mt-1">Imprescindibles para el funcionamiento básico del sitio.</p>
                       </div>
                       <Switch checked={true} disabled className="data-[state=checked]:bg-blue-600" />
                     </div>
@@ -180,7 +180,7 @@ export function CookieConsentBanner() {
                             Cookies de Analytics
                           </Label>
                         </div>
-                        <p className="text-xs text-slate-500 mt-1">Nos ayudan a entender cómo usas el sitio para mejorarlo.</p>
+                        <p className="text-xs text-slate-400 mt-1">Nos ayudan a entender cómo usas el sitio para mejorarlo.</p>
                       </div>
                       <Switch
                         id="analytics"
@@ -202,7 +202,7 @@ export function CookieConsentBanner() {
                         >
                           Cookies de Marketing
                         </Label>
-                        <p className="text-xs text-slate-500 mt-1">Permiten mostrarte contenido relevante y campañas.</p>
+                        <p className="text-xs text-slate-400 mt-1">Permiten mostrarte contenido relevante y campañas.</p>
                       </div>
                       <Switch
                         id="marketing"
@@ -224,7 +224,7 @@ export function CookieConsentBanner() {
                         >
                           Cookies Funcionales
                         </Label>
-                        <p className="text-xs text-slate-500 mt-1">Recuerdan tus preferencias para una experiencia personalizada.</p>
+                        <p className="text-xs text-slate-400 mt-1">Recuerdan tus preferencias para una experiencia personalizada.</p>
                       </div>
                       <Switch
                         id="functional"
