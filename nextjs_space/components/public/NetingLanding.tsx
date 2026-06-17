@@ -923,7 +923,7 @@ export default function NetingLanding() {
       {/* ═══ MODAL · Promoción expirada (solo si inició trial) ═══════════ */}
       {showExpiredModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-start justify-center p-4 bg-black/70 backdrop-blur-sm overflow-y-auto"
           role="dialog"
           aria-modal="true"
           aria-labelledby="expired-modal-title"
@@ -933,7 +933,7 @@ export default function NetingLanding() {
             initial={{ opacity: 0, scale: 0.92, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             transition={{ duration: 0.35, ease: 'easeOut' }}
-            className="vl-glass vl-ring-soft rounded-[28px] p-6 sm:p-10 max-w-lg w-full border border-rose-500/40 bg-gradient-to-b from-slate-900 to-slate-950 shadow-2xl shadow-rose-500/20"
+            className="vl-glass vl-ring-soft rounded-[28px] p-6 sm:p-10 max-w-lg w-full border border-rose-500/40 bg-gradient-to-b from-slate-900 to-slate-950 shadow-2xl shadow-rose-500/20 my-auto"
           >
             {/* Icon + Title */}
             <div className="text-center mb-6">
