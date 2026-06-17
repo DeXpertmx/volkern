@@ -102,7 +102,7 @@ describe('crmIntents', () => {
   it('cancelar_cita debe ser destructive=true', () => {
     const i = crmIntents.find(x => x.name === 'cancelar_cita')!;
     expect(i.destructive).toBe(true);
-    expect(i.requiredParams).toContain('citaId');
+    expect(i.requiredParams).toContain('nombre');
   });
 
   it('reagendar_cita debe ser destructive=true', () => {
@@ -208,8 +208,8 @@ describe('marketingIntents', () => {
     expect(Array.isArray(marketingIntents)).toBe(true);
   });
 
-  it('debe tener 3 intents', () => {
-    expect(marketingIntents.length).toBe(3);
+  it('debe tener 6 intents', () => {
+    expect(marketingIntents.length).toBe(6);
   });
 
   it('todos deben cumplir el schema', () => {
@@ -304,18 +304,18 @@ describe('erpIntents', () => {
     expect(i.requiredParams).toEqual([]);
   });
 
-  it('solo ajustar_stock debe ser destructive', () => {
+  it('solo ajustar_stock, consumir_inventario y verificar_mermas deben ser destructive', () => {
     const destructive = erpIntents.filter(i => i.destructive).map(i => i.name);
-    expect(destructive).toEqual(['ajustar_stock']);
+    expect(destructive).toEqual(['ajustar_stock', 'consumir_inventario', 'verificar_mermas']);
   });
 });
 
 // ─── Operations Intents ───────────────────────────────────────────────────
 
 describe('operationsIntents', () => {
-  it('debe ser un array de 2 intents', () => {
+  it('debe ser un array de 4 intents', () => {
     expect(Array.isArray(operationsIntents)).toBe(true);
-    expect(operationsIntents.length).toBe(2);
+    expect(operationsIntents.length).toBe(4);
   });
 
   it('debe incluir auditar_integridad', () => {

@@ -221,6 +221,8 @@ export async function PATCH(
 
     // Cambio de estado (ganado/perdido) — COMPLIANCE GATE
     if (estado !== undefined && estado !== dealActual.estado) {
+      dataToUpdate.estado = estado
+
       // Verificar compliance antes de cerrar el deal
       if (estado === 'ganado' || estado === 'perdido') {
         const gateResult = await ComplianceGate.check({
