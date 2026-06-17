@@ -6,6 +6,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { stripe } from '@/lib/stripe'
 import { PLAN_PRICES, PLANS } from '@/lib/plans'
+import { calcularPrecio } from '@/lib/pricing-engine'
 
 export async function POST(request: NextRequest) {
   try {
@@ -63,10 +64,29 @@ export async function POST(request: NextRequest) {
     const isDynamicPlan = [PLANS.SCALE, PLANS.COMPLIANCE].includes(planId)
 
     if (isDynamicPlan) {
-      // ─── Planes nuevos: precio dinámico con price_data ──────
+      // ─── Planes nuevos: precio dinámico con pricing engine ──────
       const planLabel = planId === 'compliance' ? 'Compliance Pro' : 'Scale'
-      const precioBase = planId === 'compliance' ? 299 : 147
-      const precioMensual = interval === 'yearly' ? Math.round(precioBase * 0.8) : precioBase
+
+      // Obtener datos reales del tenant para calcular el precio
+      const [actualUsers, actualLeads, actualContacts] = await Promise.all([
+        prisma.user.count({ where: { tenantId: tenant.id, estado: 'activo' } }),
+        prisma.lead.count({ where: { tenantId: tenant.id } }),
+        prisma.contact.count({ where: { tenantId: tenant.id } }),
+      ])
+
+      // Usar mínimos razonables si el tenant aún no tiene datos
+      const usuarios = Math.max(actualUsers, 1)
+      const contactos = Math.max(actualLeads + actualContacts, 1000)
+
+      const engineResult = calcularPrecio({
+        usuarios,
+        contactos,
+        plan: planId === 'compliance' ? 'compliance' : 'scale',
+      })
+
+      const precioMensual = interval === 'yearly'
+        ? Math.round(engineResult.precio * 0.8)
+        : engineResult.precio
 
       const checkoutSession = await stripe.checkout.sessions.create({
         customer: customerId,
@@ -78,7 +98,7 @@ export async function POST(request: NextRequest) {
               currency: 'eur',
               product_data: {
                 name: `Volkern ${planLabel}`,
-                description: 'Plan dinámico con todos los módulos incluidos',
+                description: `${usuarios} usuarios · ${contactos >= 1000 ? `${(contactos / 1000).toFixed(0)}.000` : contactos} contactos · ${planLabel}`,
               },
               recurring: {
                 interval: interval === 'yearly' ? 'year' : 'month',
