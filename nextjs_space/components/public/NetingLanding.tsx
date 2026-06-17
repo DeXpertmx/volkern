@@ -273,8 +273,12 @@ function PlanCard({
 }
 
 export default function NetingLanding() {
+  const [billing, setBilling] = useState<'annual' | 'monthly'>('annual');
   const promoCtaHref = '/signup?promo=neting&plan=crm-ventas';
   const { deadline } = useCountdown();
+
+  const isAnnual = billing === 'annual';
+  const planData = isAnnual ? PRICING.annual : PRICING.monthly;
 
   return (
     <div
@@ -678,72 +682,171 @@ export default function NetingLanding() {
           </motion.div>
         </section>
 
-        {/* ═══ SLIDE 5 · PRICING ════════════════════════════════════════════ */}
+        {/* ═══ SLIDE 5 · PRICING (estilo home — vl-pricing-section) ═══════ */}
         <section
           id="pricing"
           aria-labelledby="pricing-heading"
-          className="relative min-h-screen flex items-center justify-center px-6 pt-16 pb-16 snap-start"
+          className="relative min-h-screen flex items-center justify-center px-6 pt-16 pb-16 snap-start vl-pricing-section"
         >
           <div className="max-w-6xl w-full">
-            <div className="text-center mb-10">
+            <div className="text-center mb-10 lg:hidden">
               <TwentyOffBadge size="lg" />
-              <h2 id="pricing-heading" className="vl-h2 mt-5 text-white text-3xl sm:text-4xl">
-                Planes CRM Ventas · Neting
-              </h2>
-              <p className="vl-section-subtitle mt-3 max-w-2xl mx-auto">
-                Acceso completo, automatización incluida, actualizaciones. Con
-                Setup Asistido bonificado por tiempo limitado.
-              </p>
             </div>
 
-            <div className="grid md:grid-cols-2 gap-5 sm:gap-6 lg:gap-8 items-stretch">
-              {/* MENSUAL — side-by-side con el recomendado. Sin scale para no romper layout. */}
-              <PlanCard
-                title="Mensual"
-                pricePromo={PRICING.monthly.promo}
-                priceOriginal={PRICING.monthly.original}
-                suffix={PRICING.monthly.suffix}
-                setupPromo={PRICING.monthly.setupPromo}
-                setupOriginal={PRICING.monthly.setupOriginal}
-                ctaText="Elegir Mensual"
-                ctaHref={`${promoCtaHref}&cycle=monthly`}
-                features={[
-                  'Acceso completo al CRM y Ventas',
-                  'Pipeline visual de oportunidades',
-                  'Automatización de seguimiento',
-                  'Contactos y leads centralizados',
-                  'Reportes y analytics',
-                  'Actualizaciones incluidas',
-                ]}
-              />
+            <div className="vl-glass vl-ring-soft vl-pricing-box">
+              <div className="vl-pricing-grid">
+                {/* ─── LEFT · Info + Price Display ─────────────────── */}
+                <div className="vl-pricing-intro">
+                  <div className="vl-pricing-intro-copy">
+                    <p className="vl-pricing-eyebrow flex items-center gap-2 text-emerald-400">
+                      <Sparkles className="w-4 h-4" aria-hidden="true" /> Exclusivo Neting
+                    </p>
+                    <h2 id="pricing-heading" className="vl-h2">
+                      Planes CRM Ventas
+                    </h2>
+                    <p className="vl-pricing-text">
+                      Acceso completo, automatización incluida, actualizaciones.
+                      Con Setup Asistido bonificado por tiempo limitado.
+                    </p>
+                  </div>
 
-              {/* ANUAL · RECOMENDADO */}
-              <PlanCard
-                recommended
-                badgeText="🔥 Más recomendado"
-                title="Anual · Recomendado"
-                pricePromo={PRICING.annual.promo}
-                priceOriginal={PRICING.annual.original}
-                suffix={PRICING.annual.monthlyEquivalentSuffix}
-                setupPromo={PRICING.annual.setupPromo}
-                setupOriginal={PRICING.annual.setupOriginal}
-                ctaText="Activar Anual"
-                ctaHref={`${promoCtaHref}&cycle=annual`}
-                features={[
-                  'Todo lo del plan Mensual',
-                  'Equivale a €39/mes · 2 meses gratis',
-                  'Ahorro extra vs pago mensual',
-                  'Activación prioritaria del Setup',
-                  'Soporte preferencial Neting',
-                  'Acceso anticipado a nuevas funciones',
-                ]}
-              />
+                  <div className="vl-ring-soft vl-pricing-main-card relative overflow-hidden">
+                    {/* 20% OFF flotante (desktop) */}
+                    <div className="absolute top-4 right-4 hidden sm:block">
+                      <span className="inline-flex items-center gap-1.5 bg-gradient-to-r from-emerald-500 to-emerald-400 text-emerald-950 font-black uppercase tracking-wider rounded-full text-xs px-3 py-1 shadow-lg shadow-emerald-500/30">
+                        20% OFF Aplicado
+                      </span>
+                    </div>
+
+                    <div className="vl-price-label-row">
+                      <span className="vl-price-label">
+                        {isAnnual ? 'Suscripción Anual' : 'Suscripción Mensual'}
+                      </span>
+                      {isAnnual && (
+                        <span className="vl-billing-badge bg-amber-500/20 text-amber-300 border-amber-500/30 font-bold">
+                          🔥 Máximo ahorro
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Precio grande + tachado */}
+                    <div className="vl-price-display mt-2 flex items-end">
+                      <span className="vl-price-value text-white leading-none">
+                        €{planData.promo}
+                      </span>
+                      <div className="flex flex-col ml-3 pb-1">
+                        <span className="text-slate-400 line-through font-bold text-sm lg:text-base">
+                          Antes €{planData.original}
+                        </span>
+                        <span className="vl-price-suffix m-0 leading-none">
+                          {planData.monthlyEquivalentSuffix}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Ahorro */}
+                    <p className="vl-price-footnote text-emerald-400 font-medium">
+                      Ahorras €{planData.original - planData.promo} con la promo Neting
+                    </p>
+
+                    {/* Setup + extras */}
+                    <div className="vl-price-summary mt-2">
+                      <div className="vl-summary-item border-emerald-500/40 bg-emerald-500/10">
+                        <p className="vl-summary-label text-emerald-200 font-bold uppercase tracking-widest text-[10px]">
+                          Setup Asistido
+                        </p>
+                        <p className="vl-summary-value text-emerald-300 flex items-center gap-2 mt-0.5">
+                          <span className="line-through text-slate-400 text-sm">
+                            €{planData.setupOriginal}
+                          </span>
+                          <span className="font-black">€{planData.setupPromo}</span>
+                        </p>
+                      </div>
+                      <div className="vl-summary-item">
+                        <p className="vl-summary-label">Usuarios</p>
+                        <p className="vl-summary-value">Ilimitados</p>
+                      </div>
+                      <div className="vl-summary-item">
+                        <p className="vl-summary-label">Contactos</p>
+                        <p className="vl-summary-value">Ilimitados</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ─── RIGHT · Controls + Features ────────────────── */}
+                <div className="vl-pricing-controls">
+                  {/* Toggle Mensual / Anual */}
+                  <div className="pb-2">
+                    <label className="vl-selector-field">
+                      <span className="vl-field-label">Ciclo de facturación</span>
+                      <select
+                        value={billing}
+                        onChange={(e) =>
+                          setBilling(e.target.value as 'annual' | 'monthly')
+                        }
+                        className="vl-field-select"
+                      >
+                        <option value="annual">
+                          Anual — Activas setup por €149
+                        </option>
+                        <option value="monthly">
+                          Mensual — Activas setup por €199
+                        </option>
+                      </select>
+                    </label>
+                  </div>
+
+                  {/* Features checklist */}
+                  <div className="vl-ring-soft vl-slider-field pl-5 py-5 border-none bg-transparent">
+                    <span className="vl-field-label mb-4 block">
+                      ¿Qué incluye el plan?
+                    </span>
+                    <ul className="space-y-3.5">
+                      {[
+                        'Acceso completo a CRM y Ventas',
+                        'Pipeline visual de oportunidades',
+                        'Automatización de seguimiento',
+                        'Contactos y leads centralizados',
+                        'Reportes y analytics',
+                        isAnnual
+                          ? 'Acceso anticipado a funciones'
+                          : 'Actualizaciones periódicas',
+                      ].map((item, i) => (
+                        <li
+                          key={i}
+                          className="flex items-start gap-3 text-slate-200 text-sm"
+                        >
+                          <CheckCircle2
+                            className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5"
+                            aria-hidden="true"
+                          />
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* CTA final */}
+                  <div className="vl-pricing-assurance mt-auto pt-6 bg-transparent border-t border-white/10 rounded-none pb-0">
+                    <Link
+                      href={`${promoCtaHref}&cycle=${billing}`}
+                      className="vl-btn vl-btn-primary w-full justify-center flex items-center text-lg shadow-[0_0_40px_-10px_rgba(124,58,237,0.5)]"
+                    >
+                      <Rocket
+                        className="w-5 h-5 mr-3"
+                        aria-hidden="true"
+                      />
+                      Activar Plan {isAnnual ? 'Anual' : 'Mensual'}
+                    </Link>
+                    <p className="text-center text-xs text-slate-400 mt-4 max-w-[280px] mx-auto">
+                      IVA no incluido. Activación exclusiva cualificada en Neting.
+                      Pago vía Stripe.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
-
-            <p className="text-center text-slate-400 text-xs sm:text-sm mt-8 max-w-2xl mx-auto">
-              IVA no incluido. Activación exclusiva mediante recomendación en Neting.
-              Promoción válida hasta fin de mes.
-            </p>
           </div>
         </section>
 
