@@ -3,63 +3,71 @@
 import { useState } from 'react'
 import { useSession, signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { PLANS, PLAN_PRICES, PLAN_FEATURES, PLAN_LIMITS } from '@/lib/plans'
-import { Check, Loader2, ArrowRight } from 'lucide-react'
+import { PLANS, PLAN_FEATURES } from '@/lib/plans'
+import { Check, Loader2, ArrowRight, Zap, Shield } from 'lucide-react'
 import { PublicLayout } from '@/components/public/PublicLayout'
 
 const PLANS_DATA = [
   {
-    id: PLANS.ESENCIAL,
-    nombre: 'Esencial',
-    descripcion: 'Para autónomos y gestorías pequeñas que empiezan',
-    slug: PLANS.ESENCIAL,
-    precio: PLAN_PRICES[PLANS.ESENCIAL].monthly,
-    precioYearly: PLAN_PRICES[PLANS.ESENCIAL].yearly,
-    moneda: 'EUR',
-    intervalo: 'mensual',
-    limiteUsuarios: PLAN_LIMITS[PLANS.ESENCIAL].users,
-    limiteLeads: PLAN_LIMITS[PLANS.ESENCIAL].leads,
-    popular: false,
-  },
-  {
-    id: PLANS.PROFESIONAL,
-    nombre: 'Profesional',
-    descripcion: 'Para PYMES y gestorías en crecimiento',
-    slug: PLANS.PROFESIONAL,
-    precio: PLAN_PRICES[PLANS.PROFESIONAL].monthly,
-    precioYearly: PLAN_PRICES[PLANS.PROFESIONAL].yearly,
-    moneda: 'EUR',
-    intervalo: 'mensual',
-    limiteUsuarios: PLAN_LIMITS[PLANS.PROFESIONAL].users,
-    limiteLeads: PLAN_LIMITS[PLANS.PROFESIONAL].leads,
+    id: PLANS.SCALE,
+    nombre: 'Scale',
+    descripcion: 'Escala tu operación sin límites. Precio dinámico según usuarios y contactos.',
+    slug: PLANS.SCALE,
+    precioLabel: 'Desde €50+/mes',
+    precioYearlyLabel: 'Desde €40+/mes',
+    icon: Zap,
+    iconBg: 'bg-purple-500/10',
+    iconColor: 'text-purple-400',
+    badgeColor: 'bg-purple-600',
+    borderColor: 'border-purple-500',
+    bgColor: 'bg-purple-900/10',
+    shadowColor: 'shadow-purple-500/10',
     popular: true,
+    features: PLAN_FEATURES[PLANS.SCALE],
   },
   {
-    id: PLANS.INFINITY,
-    nombre: 'Infinity',
-    descripcion: 'Para empresas y despachos grandes',
-    slug: PLANS.INFINITY,
-    precio: PLAN_PRICES[PLANS.INFINITY].monthly,
-    precioYearly: PLAN_PRICES[PLANS.INFINITY].yearly,
-    moneda: 'EUR',
-    intervalo: 'mensual',
-    limiteUsuarios: PLAN_LIMITS[PLANS.INFINITY].users,
-    limiteLeads: PLAN_LIMITS[PLANS.INFINITY].leads,
+    id: PLANS.COMPLIANCE,
+    nombre: 'Compliance Pro',
+    descripcion: 'Control total, trazabilidad y auditoría. Precio dinámico con +25% sobre Scale.',
+    slug: PLANS.COMPLIANCE,
+    precioLabel: 'Desde €62+/mes',
+    precioYearlyLabel: 'Desde €50+/mes',
+    icon: Shield,
+    iconBg: 'bg-indigo-500/10',
+    iconColor: 'text-indigo-400',
+    badgeColor: 'bg-indigo-600',
+    borderColor: 'border-indigo-500',
+    bgColor: 'bg-indigo-900/10',
+    shadowColor: 'shadow-indigo-500/10',
     popular: false,
+    features: PLAN_FEATURES[PLANS.COMPLIANCE],
   },
   {
     id: 'compliance_pro',
     nombre: 'Compliance PRO',
-    descripcion: 'Control normativo, trazabilidad forense y auditoría avanzada para tu empresa',
+    descripcion: 'Add-on de trazabilidad forense y auditoría avanzada para tu plan base',
     slug: 'compliance_pro',
-    precio: 149,
-    precioYearly: 1430,
-    moneda: 'EUR',
-    intervalo: 'mensual',
-    limiteUsuarios: 'Add-on',
-    limiteLeads: 'Add-on',
+    precioLabel: '€149/mes',
+    precioYearlyLabel: '€1.430/año',
+    icon: Shield,
+    iconBg: 'bg-indigo-500/10',
+    iconColor: 'text-indigo-400',
+    badgeColor: 'bg-indigo-600',
+    borderColor: 'border-indigo-500/50',
+    bgColor: '',
+    shadowColor: '',
     popular: false,
     isAddon: true,
+    features: [
+      'Compliance Gate (procesos obligatorios)',
+      'Score de cumplimiento en tiempo real',
+      'Alertas inteligentes con 4 detectores',
+      'Trazabilidad SHA-256 encadenada',
+      'Panel de auditoría para el cliente',
+      'Exportación GDPR (acceso + olvido)',
+      'PDF certificado descargable',
+      'Webhooks auditables',
+    ],
   },
 ]
 
@@ -72,32 +80,18 @@ export default function PricingClient() {
   const handleSelect = async (plan: typeof PLANS_DATA[0]) => {
     setLoadingPlan(plan.id)
     try {
-      if (!session) {
-        await signIn('credentials', {
-          redirect: false,
-          plan: plan.slug,
-        })
-        return
-      }
       if (plan.isAddon) {
+        // Add-on: redirigir al dashboard de billing
+        if (!session) {
+          await signIn('credentials', { redirect: false })
+          return
+        }
         router.push('/dashboard/configuracion/billing')
         return
       }
-      const res = await fetch('/api/subscriptions/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          planSlug: plan.slug,
-          interval: isAnnual ? 'yearly' : 'monthly',
-        }),
-      })
-      if (!res.ok) throw new Error('Error creating subscription')
-      const data = await res.json()
-      if (data.url) {
-        window.location.href = data.url
-      }
-    } catch {
-      // Fallback redirect or show error
+
+      // Planes dinámicos: redirigir al configurador de precios
+      router.push('/precios')
     } finally {
       setLoadingPlan(null)
     }
@@ -111,6 +105,14 @@ export default function PricingClient() {
             <h1 className="text-4xl font-bold mb-4">Planes</h1>
             <p className="text-slate-400 text-lg">
               Elige el plan que mejor se adapte a tu negocio
+            </p>
+            <p className="text-slate-500 text-sm mt-2">
+              Los precios se calculan en tiempo real según usuarios y contactos.
+              <br />
+              <a href="/precios" className="text-purple-400 hover:text-purple-300 underline underline-offset-2">
+                Usa el configurador dinámico
+              </a>
+              {' '}para ver tu precio exacto.
             </p>
           </div>
 
@@ -130,103 +132,121 @@ export default function PricingClient() {
                   isAnnual ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'
                 }`}
               >
-                Anual
+                Anual <span className="text-[10px] text-purple-300 ml-0.5">-20%</span>
               </button>
             </div>
           </div>
 
-          <div className="grid md:grid-cols-4 gap-8 max-w-7xl mx-auto">
-            {PLANS_DATA.map((plan) => (
-              <div
-                key={plan.id}
-                className={`relative rounded-2xl border p-8 flex flex-col ${
-                  plan.popular
-                    ? 'border-purple-500 bg-purple-900/10 shadow-xl shadow-purple-500/10'
-                    : 'border-slate-800 bg-slate-900/50'
-                }`}
-              >
-                {plan.popular && (
-                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-purple-600 text-white text-xs font-bold px-4 py-1 rounded-full">
-                    MÁS POPULAR
-                  </span>
-                )}
-                {plan.isAddon && (
-                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-xs font-bold px-4 py-1 rounded-full">
-                    ADD-ON
-                  </span>
-                )}
+          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+            {PLANS_DATA.map((plan) => {
+              const Icon = plan.icon
 
-                <h3 className="text-2xl font-bold mb-2">{plan.nombre}</h3>
-                <p className="text-slate-400 text-sm mb-6">{plan.descripcion}</p>
-
-                <div className="mb-6">
-                  <span className="text-4xl font-bold">
-                    {isAnnual ? plan.precioYearly : plan.precio}
-                  </span>
-                  <span className="text-slate-400 ml-2">
-                    {plan.moneda}/{isAnnual ? 'año' : 'mes'}
-                  </span>
-                  {plan.isAddon && (
-                    <p className="text-xs text-slate-400 mt-1">+ plan base requerido</p>
-                  )}
-                </div>
-
-                <div className="flex-grow space-y-3 mb-8">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    Incluye
-                  </p>
-                  {plan.isAddon ? (
-                    <>
-                      {[
-                        'Compliance Gate (procesos obligatorios)',
-                        'Score de cumplimiento en tiempo real',
-                        'Alertas inteligentes con 4 detectores',
-                        'Trazabilidad SHA-256 encadenada',
-                        'Panel de auditoría para el cliente',
-                        'Exportación GDPR (acceso + olvido)',
-                        'PDF certificado descargable',
-                        'Webhooks auditables',
-                      ].map((feature, i) => (
-                        <div key={i} className="flex items-start gap-2">
-                          <Check className="w-4 h-4 text-green-400 mt-0.5 shrink-0" />
-                          <span className="text-sm text-slate-300">{feature}</span>
-                        </div>
-                      ))}
-                    </>
-                  ) : (
-                    (PLAN_FEATURES[plan.id as keyof typeof PLAN_FEATURES] || []).map(
-                      (feature: string, i: number) => (
-                        <div key={i} className="flex items-start gap-2">
-                          <Check className="w-4 h-4 text-green-400 mt-0.5 shrink-0" />
-                          <span className="text-sm text-slate-300">{feature}</span>
-                        </div>
-                      )
-                    )
-                  )}
-                </div>
-
-                <button
-                  onClick={() => handleSelect(plan)}
-                  disabled={loadingPlan === plan.id}
-                  className={`w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all ${
-                    plan.isAddon
-                      ? 'bg-indigo-600 hover:bg-indigo-500 text-white'
-                      : plan.popular
-                        ? 'bg-purple-600 hover:bg-purple-500 text-white'
-                        : 'bg-slate-800 hover:bg-slate-700 text-white'
-                  } disabled:opacity-50`}
+              return (
+                <div
+                  key={plan.id}
+                  className={`relative rounded-2xl border p-8 flex flex-col ${
+                    plan.popular
+                      ? `${plan.borderColor} ${plan.bgColor} ${plan.shadowColor} shadow-xl`
+                      : plan.isAddon
+                        ? `${plan.borderColor} bg-slate-900/50`
+                        : 'border-slate-800 bg-slate-900/50'
+                  }`}
                 >
-                  {loadingPlan === plan.id ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <>
-                      {plan.isAddon ? 'Activar Compliance PRO' : session ? 'Suscribirse' : 'Comenzar gratis'}
-                      <ArrowRight className="w-4 h-4" />
-                    </>
+                  {plan.popular && (
+                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-purple-600 text-white text-xs font-bold px-4 py-1 rounded-full">
+                      RECOMENDADO
+                    </span>
                   )}
-                </button>
-              </div>
-            ))}
+                  {plan.isAddon && (
+                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-xs font-bold px-4 py-1 rounded-full">
+                      ADD-ON
+                    </span>
+                  )}
+
+                  {/* Icon & Name */}
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className={`h-10 w-10 rounded-xl ${plan.iconBg} flex items-center justify-center`}>
+                      <Icon className={`h-5 w-5 ${plan.iconColor}`} />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold">{plan.nombre}</h3>
+                      {plan.isAddon && (
+                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">+ plan base requerido</p>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-slate-400 text-sm mb-6">{plan.descripcion}</p>
+
+                  {/* Price */}
+                  <div className="mb-6">
+                    {plan.isAddon ? (
+                      <>
+                        <span className="text-4xl font-bold">
+                          {isAnnual ? plan.precioYearlyLabel : plan.precioLabel}
+                        </span>
+                      </>
+                    ) : (
+                      <div>
+                        <span className="text-2xl font-bold text-purple-400">{isAnnual ? plan.precioYearlyLabel : plan.precioLabel}</span>
+                        <p className="text-xs text-slate-500 mt-1">
+                          Precio final según usuarios y contactos
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Features */}
+                  <div className="flex-grow space-y-3 mb-8">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                      Incluye
+                    </p>
+                    {plan.features.map((feature, i) => (
+                      <div key={i} className="flex items-start gap-2">
+                        <Check className={`w-4 h-4 mt-0.5 shrink-0 ${
+                          plan.isAddon ? 'text-green-400' : 'text-emerald-400'
+                        }`} />
+                        <span className="text-sm text-slate-300">{feature}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* CTA */}
+                  <button
+                    onClick={() => handleSelect(plan)}
+                    disabled={loadingPlan === plan.id}
+                    className={`w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all ${
+                      plan.isAddon
+                        ? 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                        : plan.popular
+                          ? 'bg-purple-600 hover:bg-purple-500 text-white'
+                          : 'bg-slate-800 hover:bg-slate-700 text-white'
+                    } disabled:opacity-50`}
+                  >
+                    {loadingPlan === plan.id ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <>
+                        {plan.isAddon
+                          ? 'Activar Compliance PRO'
+                          : 'Ver precio exacto'
+                        }
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Legacy note */}
+          <div className="mt-12 text-center">
+            <p className="text-xs text-slate-600">
+              ¿Tienes un plan Esencial, Profesional o Infinity?{' '}
+              <a href="/dashboard/configuracion/billing" className="text-purple-400 hover:text-purple-300 underline underline-offset-2">
+                Ver detalles en billing
+              </a>
+            </p>
           </div>
         </div>
       </div>
