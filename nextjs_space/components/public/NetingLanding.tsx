@@ -354,7 +354,174 @@ export default function NetingLanding() {
           </motion.div>
         </section>
 
-        {/* ═══ SLIDE 2 · ECOSISTEMA + CAPACIDADES ════════════════════════════ */}
+        {/* ═══ SLIDE 2 · BENEFICIO NETING ═════════════════════════════════════ */}
+        <section
+          id="beneficios"
+          aria-labelledby="beneficios-heading"
+          className="relative min-h-screen flex items-center justify-center px-6 pt-16 pb-16 snap-start"
+        >
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: '-100px' }}
+            transition={{ duration: 0.6 }}
+            className="max-w-6xl w-full"
+          >
+            <div className="text-center mb-10">
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/20 border border-amber-500/40 mb-4">
+                <Sparkles
+                  className="w-4 h-4 text-amber-300"
+                  aria-hidden="true"
+                />
+                <span className="text-amber-200 text-xs sm:text-sm font-black uppercase tracking-widest">
+                  El verdadero beneficio Neting
+                </span>
+              </div>
+              <h2
+                id="beneficios-heading"
+                className="vl-h2 text-white text-3xl sm:text-4xl mb-3"
+              >
+                Tu beneficio como miembro de Neting
+              </h2>
+              <p className="text-slate-300 text-base sm:text-lg max-w-2xl mx-auto">
+                Setup Asistido con descuento exclusivo + 20% OFF en tu plan
+                recurrente. Esto es lo que te llevas solo por ser miembro.
+              </p>
+            </div>
+
+            {/* ─── HERO BENEFIT · Setup con descuento ─────────────────────── */}
+            <div className="vl-glass vl-ring-soft rounded-[32px] p-6 sm:p-10 border-2 border-amber-500/40 bg-gradient-to-br from-amber-500/10 via-slate-950/60 to-slate-950/60 mb-6 relative overflow-hidden">
+              <div
+                className="absolute -top-12 -right-12 w-40 h-40 bg-amber-500/20 rounded-full blur-3xl pointer-events-none"
+                aria-hidden="true"
+              />
+              <div className="relative">
+                <div className="text-center mb-7">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/25 border border-emerald-500/60 mb-3">
+                    <BadgeDollarSign
+                      className="w-4 h-4 text-emerald-200"
+                      aria-hidden="true"
+                    />
+                    <span className="text-emerald-100 text-xs font-black uppercase tracking-widest">
+                      Beneficio #1 · Setup con descuento
+                    </span>
+                  </div>
+                  <h3 className="text-white text-2xl sm:text-3xl font-black leading-tight">
+                    Hasta{' '}
+                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-300 to-emerald-300">
+                      €150
+                    </span>{' '}
+                    menos en tu activación
+                  </h3>
+                  <p className="text-slate-400 text-sm sm:text-base mt-2 italic">
+                    Compara: precio de lista vs. precio Neting
+                  </p>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-5 sm:gap-6">
+                  {/* ANUAL · Máx ahorro */}
+                  <div className="vl-ring-soft rounded-2xl p-6 sm:p-8 bg-blue-950/50 border-2 border-blue-500/50 relative shadow-2xl shadow-blue-500/20">
+                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 inline-block bg-gradient-to-r from-amber-400 via-orange-500 to-rose-500 text-white font-black uppercase tracking-wider text-xs px-4 py-1.5 rounded-full shadow-lg shadow-orange-500/40 whitespace-nowrap">
+                      🔥 Máx. ahorro · Anual
+                    </span>
+                    <p className="text-blue-300 text-xs font-black uppercase tracking-widest mb-4 text-center mt-2">
+                      Si eliges Plan Anual
+                    </p>
+                    <div className="flex items-center justify-center gap-3 sm:gap-4 mb-4">
+                      <span className="text-slate-400 line-through font-bold text-2xl sm:text-3xl tabular-nums">
+                        €299
+                      </span>
+                      <ArrowRight
+                        className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-400"
+                        aria-hidden="true"
+                      />
+                      <span className="font-black text-white text-5xl sm:text-7xl leading-none tabular-nums">
+                        €149
+                      </span>
+                    </div>
+                    <div className="text-center">
+                      <span className="inline-block bg-emerald-500 text-emerald-950 text-sm font-black uppercase tracking-wider px-4 py-1.5 rounded-full shadow-md">
+                        Ahorras €150
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* MENSUAL */}
+                  <div className="vl-ring-soft rounded-2xl p-6 sm:p-8 bg-slate-950/50 border border-white/15">
+                    <p className="text-slate-300 text-xs font-black uppercase tracking-widest mb-4 text-center mt-2">
+                      Si eliges Plan Mensual
+                    </p>
+                    <div className="flex items-center justify-center gap-3 sm:gap-4 mb-4">
+                      <span className="text-slate-400 line-through font-bold text-2xl sm:text-3xl tabular-nums">
+                        €299
+                      </span>
+                      <ArrowRight
+                        className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-400"
+                        aria-hidden="true"
+                      />
+                      <span className="font-black text-white text-5xl sm:text-7xl leading-none tabular-nums">
+                        €199
+                      </span>
+                    </div>
+                    <div className="text-center">
+                      <span className="inline-block bg-emerald-500/30 text-emerald-200 text-sm font-black uppercase tracking-wider px-4 py-1.5 rounded-full border border-emerald-500/50">
+                        Ahorras €100
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* ─── SECONDARY BENEFIT · 20% OFF plan recurrente ───────────── */}
+            <div className="vl-glass vl-ring-soft rounded-[28px] p-6 sm:p-8 border border-emerald-500/30 bg-gradient-to-br from-emerald-950/30 to-slate-950/60 text-center">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 mb-3">
+                <Sparkles
+                  className="w-3.5 h-3.5 text-emerald-300"
+                  aria-hidden="true"
+                />
+                <span className="text-emerald-200 text-xs font-black uppercase tracking-widest">
+                  Beneficio #2 · Plan recurrente
+                </span>
+              </div>
+              <p className="text-white text-xl sm:text-2xl font-black mb-5">
+                + 20% OFF en tu suscripción
+              </p>
+              <div className="flex items-center justify-center gap-4 sm:gap-8 flex-wrap">
+                <div className="flex items-center gap-3">
+                  <span className="text-slate-400 line-through font-bold text-xl sm:text-2xl tabular-nums">
+                    €49/mes
+                  </span>
+                  <ArrowRight
+                    className="w-4 h-4 text-emerald-400"
+                    aria-hidden="true"
+                  />
+                  <span className="text-emerald-400 font-black text-2xl sm:text-3xl tabular-nums">
+                    €39/mes
+                  </span>
+                </div>
+                <div
+                  className="hidden sm:block w-px h-10 bg-white/15"
+                  aria-hidden="true"
+                />
+                <div className="flex items-center gap-3">
+                  <span className="text-slate-400 line-through font-bold text-xl sm:text-2xl tabular-nums">
+                    €588/año
+                  </span>
+                  <ArrowRight
+                    className="w-4 h-4 text-emerald-400"
+                    aria-hidden="true"
+                  />
+                  <span className="text-emerald-400 font-black text-2xl sm:text-3xl tabular-nums">
+                    €470/año
+                  </span>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </section>
+
+        {/* ═══ SLIDE 3 · ECOSISTEMA + CAPACIDADES ════════════════════════════ */}
         <section
           id="ecosistema"
           aria-labelledby="ecosistema-heading"
@@ -444,7 +611,7 @@ export default function NetingLanding() {
           </div>
         </section>
 
-        {/* ═══ SLIDE 3 · SETUP (ACTIVACIÓN) ═════════════════════════════════ */}
+        {/* ═══ SLIDE 4 · SETUP (ACTIVACIÓN) ═════════════════════════════════ */}
         <section
           id="setup"
           aria-labelledby="setup-heading"
@@ -458,13 +625,16 @@ export default function NetingLanding() {
             className="max-w-5xl w-full"
           >
             <div className="text-center mb-10">
-              <p className="vl-section-eyebrow mb-3">Setup Asistido · Bonificado en Neting</p>
+              <p className="vl-section-eyebrow mb-3">Setup Asistido · Con descuento Neting</p>
               <h2 id="setup-heading" className="vl-h2 mb-4 text-white text-3xl sm:text-4xl">
                 Activación inicial guiada
               </h2>
               <p className="text-slate-300 text-base sm:text-lg max-w-2xl mx-auto">
-                Para garantizar resultados desde el día 1, todos los clientes Neting
-                incluyen un proceso de activación inicial sin coste extra.
+                Para garantizar resultados desde el día 1, todos los clientes de la
+                promo Neting reciben el Setup Asistido con tarifa especial.
+                <span className="block mt-1 font-bold text-emerald-300">
+                  €299 → €199 (mensual) · €299 → €149 (anual)
+                </span>
               </p>
             </div>
 
@@ -508,7 +678,7 @@ export default function NetingLanding() {
           </motion.div>
         </section>
 
-        {/* ═══ SLIDE 4 · PRICING ════════════════════════════════════════════ */}
+        {/* ═══ SLIDE 5 · PRICING ════════════════════════════════════════════ */}
         <section
           id="pricing"
           aria-labelledby="pricing-heading"
@@ -577,7 +747,7 @@ export default function NetingLanding() {
           </div>
         </section>
 
-        {/* ═══ SLIDE 5 · CÓMO FUNCIONA + CTA FINAL + URGENCIA ═══════════════ */}
+        {/* ═══ SLIDE 6 · CÓMO FUNCIONA + CTA FINAL + URGENCIA ═══════════════ */}
         <section
           id="activar"
           aria-labelledby="activar-heading"
