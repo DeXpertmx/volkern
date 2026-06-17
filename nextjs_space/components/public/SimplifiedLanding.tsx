@@ -601,7 +601,7 @@ export default function SimplifiedLanding() {
       ════════════════════════════════════════════════════════════════════ */}
       <div className="py-10 bg-slate-950 border-t border-slate-900">
         <div className="container mx-auto px-6 text-center">
-          <p className="text-xl text-slate-500 font-medium">
+          <p className="text-xl text-slate-400 font-medium">
             Volkern no es otro software.{' '}
             <span className="text-slate-300">Es la forma de operar tu negocio.</span>
           </p>
