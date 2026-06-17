@@ -259,8 +259,9 @@ para nuevas suscripciones. Los tenants existentes fueron migrados al nuevo model
 
 <div class="card">
   <strong>Principio clave:</strong> El precio se adapta automáticamente al tamaño del cliente.
-  No hay módulos ocultos ni límites artificiales — todos los módulos están incluidos en ambos planes.
-  La única diferencia real entre Scale y Compliance es el <strong>modo compliance</strong>
+  No hay límites artificiales — todos los módulos están incluidos en todos los planes.
+  Scale incluye <strong>todos los módulos excepto <code>compliance_pro</code></strong>;
+  Compliance Pro incluye la totalidad (52 módulos) más el <strong>modo compliance</strong>
   (trazabilidad, auditoría, gates obligatorios).
 </div>
 
@@ -556,8 +557,8 @@ Los tenants existentes con estos planes fueron migrados automáticamente al nuev
 <table>
   <tr><th>Plan antiguo</th><th>→ Plan nuevo</th><th>Razón</th></tr>
   <tr><td>Esencial</td><td><strong>Scale</strong></td><td>Sin compliance, tope básico → escala ilimitada</td></tr>
-  <tr><td>Profesional</td><td><strong>Scale</strong></td><td>Sin compliance, gama media → escala ilimitada</td></tr>
-  <tr><td>Infinity</td><td><strong>Compliance Pro</strong></td><td>Tenía compliance_mode: true → Compliance Pro</td></tr>
+  <tr><td>Profesional (52 módulos)</td><td><strong>Scale</strong> (51 módulos)</td><td>Sin compliance, gama media → escala ilimitada. Pierde <code>compliance_pro</code> en la migración (solo disponible en Compliance Pro)</td></tr>
+  <tr><td>Infinity (52 módulos)</td><td><strong>Compliance Pro</strong> (52 módulos)</td><td>Tenía compliance_mode: true → Compliance Pro. Conserva <code>compliance_pro</code></td></tr>
 </table>
 
 <div class="card">
