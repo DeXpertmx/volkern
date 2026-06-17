@@ -102,13 +102,14 @@ function PricingSlider() {
                   <Users className="h-5 w-5 text-purple-400" />
                 </div>
                 <div>
-                  <p className="text-sm font-black text-white uppercase tracking-tight">Usuarios</p>
-                  <p className="text-xs text-slate-500">Miembros del equipo</p>
+                  <label htmlFor="sl-landing-usuarios" className="text-sm font-black text-white uppercase tracking-tight cursor-pointer">Usuarios</label>
+                  <p className="text-xs text-slate-400">Miembros del equipo</p>
                 </div>
               </div>
               <span className="text-2xl font-black text-white tabular-nums">{fmtUsuarios(users)}</span>
             </div>
             <input
+              id="sl-landing-usuarios"
               type="range"
               min={1}
               max={99}
@@ -119,8 +120,8 @@ function PricingSlider() {
               style={{ background: `linear-gradient(to right, #A855F7 0%, #A855F7 ${usuariosPct}%, #1E293B ${usuariosPct}%, #1E293B 100%)` }}
             />
             <div className="flex justify-between mt-1.5">
-              <span className="text-[10px] font-bold text-slate-600">1</span>
-              <span className="text-[10px] font-bold text-slate-600">99+</span>
+              <span className="text-[10px] font-bold text-slate-400">1</span>
+              <span className="text-[10px] font-bold text-slate-400">99+</span>
             </div>
           </div>
 
@@ -132,13 +133,14 @@ function PricingSlider() {
                   <BookOpen className="h-5 w-5 text-blue-400" />
                 </div>
                 <div>
-                  <p className="text-sm font-black text-white uppercase tracking-tight">Contactos</p>
-                  <p className="text-xs text-slate-500">Base de datos activa</p>
+                  <label htmlFor="sl-landing-contactos" className="text-sm font-black text-white uppercase tracking-tight cursor-pointer">Contactos</label>
+                  <p className="text-xs text-slate-400">Base de datos activa</p>
                 </div>
               </div>
               <span className="text-2xl font-black text-white tabular-nums">{fmtContactos(contacts)}</span>
             </div>
             <input
+              id="sl-landing-contactos"
               type="range"
               min={1000}
               max={99000}
@@ -149,8 +151,8 @@ function PricingSlider() {
               style={{ background: `linear-gradient(to right, #3B82F6 0%, #3B82F6 ${contactosPct}%, #1E293B ${contactosPct}%, #1E293B 100%)` }}
             />
             <div className="flex justify-between mt-1.5">
-              <span className="text-[10px] font-bold text-slate-600">1.000</span>
-              <span className="text-[10px] font-bold text-slate-600">99.000+</span>
+              <span className="text-[10px] font-bold text-slate-400">1.000</span>
+              <span className="text-[10px] font-bold text-slate-400">99.000+</span>
             </div>
           </div>
 
@@ -163,24 +165,28 @@ function PricingSlider() {
                 className={`flex-1 p-3 rounded-xl border transition-all text-left ${
                   plan === 'scale' ? 'border-purple-500 bg-purple-500/10' : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
                 }`}
+                aria-pressed={plan === 'scale'}
+                aria-label="Plan Scale"
               >
                 <div className="flex items-center gap-2 mb-1">
                   <Zap className={`h-4 w-4 ${plan === 'scale' ? 'text-purple-400' : 'text-slate-500'}`} />
                   <span className={`text-xs font-black uppercase ${plan === 'scale' ? 'text-white' : 'text-slate-400'}`}>Scale</span>
                 </div>
-                <p className="text-[10px] text-slate-500 leading-relaxed">Funcionalidades base</p>
+                <p className="text-[10px] text-slate-400 leading-relaxed">Funcionalidades base</p>
               </button>
               <button
                 onClick={() => setPlan('compliance')}
                 className={`flex-1 p-3 rounded-xl border transition-all text-left ${
                   plan === 'compliance' ? 'border-indigo-500 bg-indigo-500/10' : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
                 }`}
+                aria-pressed={plan === 'compliance'}
+                aria-label="Plan Compliance Pro"
               >
                 <div className="flex items-center gap-2 mb-1">
                   <ShieldCheck className={`h-4 w-4 ${plan === 'compliance' ? 'text-indigo-400' : 'text-slate-500'}`} />
                   <span className={`text-xs font-black uppercase ${plan === 'compliance' ? 'text-white' : 'text-slate-400'}`}>Compliance Pro</span>
                 </div>
-                <p className="text-[10px] text-slate-500 leading-relaxed">+25% control y auditoría</p>
+                <p className="text-[10px] text-slate-400 leading-relaxed">+25% control y auditoría</p>
               </button>
             </div>
           </div>
@@ -193,12 +199,14 @@ function PricingSlider() {
                 className={`px-5 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${
                   billingInterval === 'monthly' ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/25' : 'text-slate-400 hover:text-white'
                 }`}
+                aria-pressed={billingInterval === 'monthly'}
               >Mensual</button>
               <button
                 onClick={() => setBillingInterval('yearly')}
                 className={`px-5 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${
                   billingInterval === 'yearly' ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/25' : 'text-slate-400 hover:text-white'
                 }`}
+                aria-pressed={billingInterval === 'yearly'}
               >Anual <span className="text-[9px] text-purple-300 ml-0.5">-20%</span></button>
             </div>
           </div>
@@ -239,7 +247,7 @@ function PricingSlider() {
             )}
 
             <div className="space-y-3 mb-8">
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Incluye</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Incluye</p>
               {result.features.map((feature, i) => (
                 <div key={i} className="flex items-start gap-3">
                   <Check className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
@@ -254,7 +262,7 @@ function PricingSlider() {
                 <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Button>
             </Link>
-            <p className="text-xs text-slate-600 mt-4 text-center">Sin permanencia. Cancela cuando quieras.</p>
+            <p className="text-xs text-slate-400 mt-4 text-center">Sin permanencia. Cancela cuando quieras.</p>
           </div>
         </div>
       </div>
@@ -264,6 +272,8 @@ function PricingSlider() {
         <button
           onClick={() => setShowComparison(!showComparison)}
           className="w-full flex items-center justify-between p-4 rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-slate-700 transition-colors"
+          aria-expanded={showComparison}
+          aria-controls="sl-compare-table"
         >
           <div className="flex items-center gap-3">
             <BarChart3 className="h-5 w-5 text-slate-400" />
@@ -273,21 +283,21 @@ function PricingSlider() {
         </button>
 
         {showComparison && (
-          <div className="mt-4 rounded-2xl bg-slate-950/80 border border-slate-800 overflow-hidden animate-in fade-in duration-300">
+          <div id="sl-compare-table" className="mt-4 rounded-2xl bg-slate-950/80 border border-slate-800 overflow-hidden animate-in fade-in duration-300">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-slate-800">
-                  <th className="text-left p-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Funcionalidad</th>
-                  <th className="text-center p-4 text-[10px] font-black text-purple-400 uppercase tracking-widest bg-purple-500/5">Scale</th>
-                  <th className="text-center p-4 text-[10px] font-black text-indigo-400 uppercase tracking-widest bg-indigo-500/5">Compliance Pro</th>
+                  <th scope="col" className="text-left p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Funcionalidad</th>
+                  <th scope="col" className="text-center p-4 text-[10px] font-black text-purple-400 uppercase tracking-widest bg-purple-500/5">Scale</th>
+                  <th scope="col" className="text-center p-4 text-[10px] font-black text-indigo-400 uppercase tracking-widest bg-indigo-500/5">Compliance Pro</th>
                 </tr>
               </thead>
               <tbody>
                 {comparison.map((row, i) => (
                   <tr key={i} className="border-b border-slate-800/50 last:border-0 hover:bg-slate-800/20 transition-colors">
-                    <td className="p-4 text-sm font-medium text-slate-300">{row.feature}</td>
-                    <td className={`p-4 text-center text-sm font-bold bg-purple-500/5 ${row.scale === '✔' ? 'text-emerald-400' : row.scale === '—' ? 'text-slate-600' : 'text-slate-300'}`}>{row.scale}</td>
-                    <td className={`p-4 text-center text-sm font-bold bg-indigo-500/5 ${row.compliance === '✔' ? 'text-emerald-400' : row.compliance === '—' ? 'text-slate-600' : 'text-slate-300'}`}>{row.compliance}</td>
+                    <th scope="row" className="p-4 text-sm font-medium text-slate-300 text-left">{row.feature}</th>
+                    <td className={`p-4 text-center text-sm font-bold bg-purple-500/5 ${row.scale === '✔' ? 'text-emerald-400' : row.scale === '—' ? 'text-slate-500' : 'text-slate-300'}`}>{row.scale}</td>
+                    <td className={`p-4 text-center text-sm font-bold bg-indigo-500/5 ${row.compliance === '✔' ? 'text-emerald-400' : row.compliance === '—' ? 'text-slate-500' : 'text-slate-300'}`}>{row.compliance}</td>
                   </tr>
                 ))}
               </tbody>
