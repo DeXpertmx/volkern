@@ -47,7 +47,7 @@ const ALL_INCLUDED = [
   { label: 'RRHH', icon: Users },
   { label: 'Integraciones', icon: Zap },
   { label: 'Webhooks', icon: Layers },
-  { label: 'Compliance', icon: Shield },
+  { label: 'Compliance base', icon: Shield },
 ]
 
 const COMPARISON_ROWS = [
@@ -56,6 +56,7 @@ const COMPARISON_ROWS = [
   { feature: 'Ventas', scale: '✔', compliance: '✔' },
   { feature: 'Facturación', scale: '✔', compliance: '✔' },
   { feature: 'Firma digital', scale: '✔', compliance: '✔' },
+  { feature: 'Módulo Compliance PRO', scale: '—', compliance: '✔' },
   { feature: 'Auditoría', scale: '—', compliance: '✔' },
   { feature: 'Trazabilidad', scale: '—', compliance: '✔' },
   { feature: 'Control fiscal', scale: '—', compliance: '✔' },
@@ -124,6 +125,7 @@ function DynamicSummary({
   ]
 
   const COMPLIANCE_EXTRAS = [
+    { label: 'Módulo Compliance PRO' },
     { label: 'Auditoría completa' },
     { label: 'Trazabilidad de acciones' },
     { label: 'Control operativo' },
