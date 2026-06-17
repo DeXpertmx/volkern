@@ -58,6 +58,8 @@ function PlanSummary({
   billingInterval,
   precioMostrar,
   precioOriginal,
+  precioOverride,
+  setupCost,
 }: {
   usuarios: number
   contactos: number
@@ -65,6 +67,8 @@ function PlanSummary({
   billingInterval: 'monthly' | 'yearly'
   precioMostrar: number
   precioOriginal: number
+  precioOverride?: boolean
+  setupCost?: number
 }) {
   const isCompliance = plan === 'compliance'
 
@@ -157,23 +161,54 @@ function PlanSummary({
         )}
       </div>
 
-      {/* Price */}        <div className="border-t border-slate-800 pt-6">
+      {/* Price */}
+      <div className="border-t border-slate-800 pt-6">
+        {precioOverride && (
+          <div className="inline-flex items-center gap-1.5 bg-gradient-to-r from-emerald-500/20 to-emerald-400/10 text-emerald-300 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border border-emerald-500/30 mb-3">
+            🔥 Promo Neting · 20% OFF
+          </div>
+        )}
         <div className="flex items-baseline gap-2">
-          {billingInterval === 'yearly' && (
-            <span className="text-xl font-black text-slate-500 line-through">€{fmtPrecio(precioOriginal)}/mes</span>
+          {precioOverride && (
+            <span className="text-xl font-black text-slate-500 line-through">
+              €{fmtPrecio(Math.round(precioMostrar / 0.8))}
+              {billingInterval === 'yearly' ? '/año' : '/mes'}
+            </span>
           )}
           <span className="text-4xl font-black text-white tracking-tight">€{fmtPrecio(precioMostrar)}</span>
           <span className="text-slate-500">/{billingInterval === 'yearly' ? 'año' : 'mes'}</span>
         </div>
-        {billingInterval === 'yearly' && (
+        {precioOverride ? (
+          <p className="text-xs text-emerald-400 mt-1 font-medium">
+            Ahorras 20% con la promo Neting
+          </p>
+        ) : billingInterval === 'yearly' ? (
           <p className="text-xs text-emerald-500 mt-1">
             Ahorro aplicado · Pago anual único
           </p>
-        )}
-        {billingInterval === 'monthly' && (
+        ) : (
           <p className="text-xs text-slate-500 mt-1">
             Facturado mensualmente · Cancela cuando quieras
           </p>
+        )}
+        {/* Setup cost (Neting promo) */}
+        {setupCost && (
+          <div className="mt-3 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+            <p className="text-[10px] font-black text-emerald-300 uppercase tracking-widest mb-1">
+              Setup Asistido · Pago único
+            </p>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-slate-400 line-through">
+                €299
+              </span>
+              <span className="text-lg font-black text-emerald-400">
+                €{fmtPrecio(setupCost)}
+              </span>
+              <span className="text-[10px] font-black text-emerald-500 bg-emerald-500/20 px-1.5 py-0.5 rounded-full">
+                -{Math.round(((299 - setupCost) / 299) * 100)}%
+              </span>
+            </div>
+          </div>
         )}
       </div>
     </div>
@@ -194,7 +229,11 @@ function CheckoutForm() {
     plan: (searchParams.get('plan') || 'scale') as PlanTipo,
     interval: (searchParams.get('interval') || 'yearly') as 'monthly' | 'yearly',
     precio: parseInt(searchParams.get('precio') || '0'),
+    setup: parseInt(searchParams.get('setup') || '0'),
+    promo: searchParams.get('promo') || '',
   }
+
+  const isNetingPromo = pricingParams.promo === 'neting' && pricingParams.precio > 0;
 
   // If no pricing params, redirect to /precios
   const hasPricing = searchParams.has('usuarios')
@@ -229,17 +268,22 @@ function CheckoutForm() {
     billingCountry: 'ES',
   })
 
-  // Calculate price based on slider params + toggle
-  const result: PricingResult = useMemo(
-    () => calcularPrecio({
+  // Calculate price (skip for Neting promo — use URL precio instead)
+  const result = useMemo(
+    () => isNetingPromo ? null : calcularPrecio({
       usuarios: pricingParams.usuarios,
       contactos: pricingParams.contactos,
       plan: pricingParams.plan,
     }),
-    [pricingParams.usuarios, pricingParams.contactos, pricingParams.plan]
-  )
+    [isNetingPromo, pricingParams.usuarios, pricingParams.contactos, pricingParams.plan]
+  );
 
-  const precioMostrar = billingInterval === 'yearly' ? Math.round(result.precio * 0.8) : result.precio
+  // Lock billing interval to URL param when Neting promo
+  const effectiveBillingInterval = isNetingPromo ? pricingParams.interval : billingInterval;
+
+  const precioMostrar = isNetingPromo
+    ? pricingParams.precio
+    : billingInterval === 'yearly' ? Math.round((result?.precio ?? 0) * 0.8) : (result?.precio ?? 0);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -263,7 +307,8 @@ function CheckoutForm() {
           usuarios: pricingParams.usuarios,
           contactos: pricingParams.contactos,
           plan: pricingParams.plan,
-          interval: billingInterval,
+          interval: effectiveBillingInterval,
+          ...(isNetingPromo && { precio: pricingParams.precio, setup: pricingParams.setup, promo: 'neting' }),
         },
       }
 
@@ -350,9 +395,11 @@ function CheckoutForm() {
               usuarios={pricingParams.usuarios}
               contactos={pricingParams.contactos}
               plan={pricingParams.plan}
-              billingInterval={billingInterval}
+              billingInterval={effectiveBillingInterval}
               precioMostrar={precioMostrar}
-              precioOriginal={result.precio}
+              precioOriginal={result?.precio ?? 0}
+              precioOverride={isNetingPromo || undefined}
+              setupCost={isNetingPromo ? pricingParams.setup : undefined}
             />
             <div className="mt-6 space-y-3">
               <div className="flex items-center gap-3 p-4 rounded-xl bg-slate-900/60 border border-slate-800">
@@ -381,29 +428,37 @@ function CheckoutForm() {
             <div className="p-8 rounded-3xl bg-slate-900/60 border border-slate-800">
               <form onSubmit={handleSubmit} className="space-y-6">
 
-                {/* MONTHLY / YEARLY TOGGLE */}
-                <div className="flex justify-center mb-2">
-                  <div className="bg-slate-800/50 rounded-full p-1 flex gap-1">
-                    <button
-                      type="button"
-                      onClick={() => setBillingInterval('monthly')}
-                      className={`px-6 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${
-                        billingInterval === 'monthly'
-                          ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/25'
-                          : 'text-slate-400 hover:text-white'
-                      }`}
-                    >Mensual</button>
-                    <button
-                      type="button"
-                      onClick={() => setBillingInterval('yearly')}
-                      className={`px-6 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${
-                        billingInterval === 'yearly'
-                          ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/25'
-                          : 'text-slate-400 hover:text-white'
-                      }`}
-                    >Anual <span className="text-[9px] text-purple-300 ml-0.5">-20%</span></button>
+                {/* MONTHLY / YEARLY TOGGLE (locked for Neting promo) */}
+                {isNetingPromo ? (
+                  <div className="flex justify-center mb-2">
+                    <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-4 py-2 rounded-full">
+                      🔥 Plan {effectiveBillingInterval === 'yearly' ? 'Anual' : 'Mensual'} · Promo Neting
+                    </span>
                   </div>
-                </div>
+                ) : (
+                  <div className="flex justify-center mb-2">
+                    <div className="bg-slate-800/50 rounded-full p-1 flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setBillingInterval('monthly')}
+                        className={`px-6 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${
+                          billingInterval === 'monthly'
+                            ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/25'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >Mensual</button>
+                      <button
+                        type="button"
+                        onClick={() => setBillingInterval('yearly')}
+                        className={`px-6 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${
+                          billingInterval === 'yearly'
+                            ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/25'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >Anual <span className="text-[9px] text-purple-300 ml-0.5">-20%</span></button>
+                    </div>
+                  </div>
+                )}
 
                 {/* BLOQUE 1: DATOS BÁSICOS */}
                 <div>
