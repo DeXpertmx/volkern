@@ -151,127 +151,6 @@ function TwentyOffBadge({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
   );
 }
 
-interface PlanCardProps {
-  recommended?: boolean;
-  badgeText?: string;
-  title: string;
-  pricePromo: number;
-  priceOriginal: number;
-  suffix: string;
-  setupPromo: number;
-  setupOriginal: number;
-  ctaText: string;
-  ctaHref: string;
-  features: string[];
-}
-
-function PlanCard({
-  recommended,
-  badgeText,
-  title,
-  pricePromo,
-  priceOriginal,
-  suffix,
-  setupPromo,
-  setupOriginal,
-  ctaText,
-  ctaHref,
-  features,
-}: PlanCardProps) {
-  return (
-    <article
-      className={`relative vl-glass vl-ring-soft rounded-[28px] p-6 sm:p-8 flex flex-col transition-all duration-300 ${
-        recommended
-          ? 'border-2 border-blue-500 shadow-[0_0_0_1px_rgba(59,130,246,0.6),0_25px_60px_-10px_rgba(59,130,246,0.5)] bg-blue-950/50 hover:-translate-y-1 hover:shadow-[0_0_0_1px_rgba(59,130,246,0.8),0_30px_70px_-10px_rgba(59,130,246,0.6)]'
-          : 'border border-white/10 hover:border-white/20 hover:-translate-y-1 hover:shadow-xl hover:shadow-black/30'
-      }`}
-    >
-      {badgeText && (
-        <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-          <span className="inline-block bg-gradient-to-r from-amber-400 via-orange-500 to-rose-500 text-white font-black uppercase tracking-wider text-xs px-4 py-1.5 rounded-full shadow-lg shadow-orange-500/40">
-            {badgeText}
-          </span>
-        </div>
-      )}
-
-      <header className="mb-4">
-        <p
-          className={`text-xs font-black uppercase tracking-[0.22em] mb-2 ${
-            recommended ? 'text-blue-300' : 'text-slate-400'
-          }`}
-        >
-          {title}
-        </p>
-        <TwentyOffBadge size={recommended ? 'md' : 'sm'} />
-      </header>
-
-      <div className="mb-6">
-        <div className="flex items-end gap-3 flex-wrap">
-          <span className="font-black text-white leading-none text-5xl sm:text-6xl">
-            €{pricePromo}
-          </span>
-          <div className="flex flex-col mb-1.5">
-            <span className="text-slate-400 line-through font-bold text-base sm:text-lg tabular-nums">
-              €{priceOriginal}
-            </span>
-            <span className="text-slate-400 font-medium text-sm">{suffix}</span>
-          </div>
-        </div>
-        <p className={`text-xs mt-2 font-medium ${recommended ? 'text-blue-300' : 'text-slate-400'}`}>
-          Ahorras €{priceOriginal - pricePromo} con la promo Neting
-        </p>
-      </div>
-
-      <hr
-        className={`mb-6 ${recommended ? 'border-blue-500/30' : 'border-white/10'}`}
-      />
-
-      <div className="mb-6 bg-slate-950/40 border border-white/5 rounded-xl p-4">
-        <div className="flex items-center gap-2 mb-2">
-          <Settings className="w-4 h-4 text-blue-400" aria-hidden="true" />
-          <p className="text-white font-bold text-sm">Setup Asistido</p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-slate-400 line-through font-bold text-base tabular-nums">
-            €{setupOriginal}
-          </span>
-          <ArrowRight className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
-          <span className="text-emerald-400 font-black text-xl tabular-nums">
-            €{setupPromo}
-          </span>
-          <span className="bg-emerald-500/20 text-emerald-300 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full">
-            -{Math.round(((setupOriginal - setupPromo) / setupOriginal) * 100)}%
-          </span>
-        </div>
-      </div>
-
-      <ul className="space-y-3 mb-8 flex-1">
-        {features.map((f, i) => (
-          <li key={i} className="flex items-start gap-2.5 text-sm text-slate-300">
-            <CheckCircle2
-              className={`w-4 h-4 mt-0.5 shrink-0 ${
-                recommended ? 'text-blue-400' : 'text-emerald-400'
-              }`}
-              aria-hidden="true"
-            />
-            <span>{f}</span>
-          </li>
-        ))}
-      </ul>
-
-      <Link
-        href={ctaHref}
-        className={`vl-btn ${
-          recommended ? 'vl-btn-primary' : 'vl-btn-secondary'
-        } w-full text-center justify-center text-base sm:text-lg`}
-      >
-        <Rocket className="w-4 h-4 mr-2" aria-hidden="true" />
-        {ctaText}
-      </Link>
-    </article>
-  );
-}
-
 export default function NetingLanding() {
   const [billing, setBilling] = useState<'annual' | 'monthly'>('annual');
   const promoCtaHref = '/signup?promo=neting&plan=crm-ventas';
@@ -682,18 +561,14 @@ export default function NetingLanding() {
           </motion.div>
         </section>
 
-        {/* ═══ SLIDE 5 · PRICING (estilo home — vl-pricing-section) ═══════ */}
+        {/* ═══ SLIDE 5 · PRICING (calco exacto del home) ══════════════════ */}
         <section
           id="pricing"
           aria-labelledby="pricing-heading"
-          className="relative min-h-screen flex items-center justify-center px-6 pt-16 pb-16 snap-start vl-pricing-section"
+          className="vl-pricing-section snap-start"
+          style={{ minHeight: '100vh' }}
         >
-          <div className="max-w-6xl w-full">
-            <div className="text-center mb-10 lg:hidden">
-              <TwentyOffBadge size="lg" />
-            </div>
-
-            <div className="vl-glass vl-ring-soft vl-pricing-box">
+          <div className="vl-glass vl-ring-soft vl-pricing-box">
               <div className="vl-pricing-grid">
                 {/* ─── LEFT · Info + Price Display ─────────────────── */}
                 <div className="vl-pricing-intro">
@@ -710,9 +585,9 @@ export default function NetingLanding() {
                     </p>
                   </div>
 
-                  <div className="vl-ring-soft vl-pricing-main-card relative overflow-hidden">
+                  <div className="vl-ring-soft vl-pricing-main-card relative">
                     {/* 20% OFF flotante (desktop) */}
-                    <div className="absolute top-4 right-4 hidden sm:block">
+                    <div className="absolute top-4 right-4 hidden sm:block z-10">
                       <span className="inline-flex items-center gap-1.5 bg-gradient-to-r from-emerald-500 to-emerald-400 text-emerald-950 font-black uppercase tracking-wider rounded-full text-xs px-3 py-1 shadow-lg shadow-emerald-500/30">
                         20% OFF Aplicado
                       </span>
@@ -730,18 +605,14 @@ export default function NetingLanding() {
                     </div>
 
                     {/* Precio grande + tachado */}
-                    <div className="vl-price-display mt-2 flex items-end">
-                      <span className="vl-price-value text-white leading-none">
+                    <div className="vl-price-display">
+                      <span className="vl-price-value">
                         €{planData.promo}
                       </span>
-                      <div className="flex flex-col ml-3 pb-1">
-                        <span className="text-slate-400 line-through font-bold text-sm lg:text-base">
-                          Antes €{planData.original}
-                        </span>
-                        <span className="vl-price-suffix m-0 leading-none">
-                          {planData.monthlyEquivalentSuffix}
-                        </span>
-                      </div>
+                      <span className="vl-price-suffix">
+                        <span className="line-through text-slate-400 font-bold">Antes €{planData.original}</span>
+                        {' '}{planData.monthlyEquivalentSuffix}
+                      </span>
                     </div>
 
                     {/* Ahorro */}
@@ -750,12 +621,12 @@ export default function NetingLanding() {
                     </p>
 
                     {/* Setup + extras */}
-                    <div className="vl-price-summary mt-2">
+                    <div className="vl-price-summary">
                       <div className="vl-summary-item border-emerald-500/40 bg-emerald-500/10">
                         <p className="vl-summary-label text-emerald-200 font-bold uppercase tracking-widest text-[10px]">
                           Setup Asistido
                         </p>
-                        <p className="vl-summary-value text-emerald-300 flex items-center gap-2 mt-0.5">
+                        <p className="vl-summary-value text-emerald-300 flex items-center gap-2">
                           <span className="line-through text-slate-400 text-sm">
                             €{planData.setupOriginal}
                           </span>
@@ -777,29 +648,27 @@ export default function NetingLanding() {
                 {/* ─── RIGHT · Controls + Features ────────────────── */}
                 <div className="vl-pricing-controls">
                   {/* Toggle Mensual / Anual */}
-                  <div className="pb-2">
-                    <label className="vl-selector-field">
-                      <span className="vl-field-label">Ciclo de facturación</span>
-                      <select
-                        value={billing}
-                        onChange={(e) =>
-                          setBilling(e.target.value as 'annual' | 'monthly')
-                        }
-                        className="vl-field-select"
-                      >
-                        <option value="annual">
-                          Anual — Activas setup por €149
-                        </option>
-                        <option value="monthly">
-                          Mensual — Activas setup por €199
-                        </option>
-                      </select>
-                    </label>
-                  </div>
+                  <label className="vl-selector-field">
+                    <span className="vl-field-label">Ciclo de facturación</span>
+                    <select
+                      value={billing}
+                      onChange={(e) =>
+                        setBilling(e.target.value as 'annual' | 'monthly')
+                      }
+                      className="vl-field-select"
+                    >
+                      <option value="annual">
+                        Anual — Activas setup por €149
+                      </option>
+                      <option value="monthly">
+                        Mensual — Activas setup por €199
+                      </option>
+                    </select>
+                  </label>
 
                   {/* Features checklist */}
-                  <div className="vl-ring-soft vl-slider-field pl-5 py-5 border-none bg-transparent">
-                    <span className="vl-field-label mb-4 block">
+                  <div className="vl-ring-soft vl-slider-field">
+                    <span className="vl-field-label">
                       ¿Qué incluye el plan?
                     </span>
                     <ul className="space-y-3.5">
@@ -828,10 +697,21 @@ export default function NetingLanding() {
                   </div>
 
                   {/* CTA final */}
-                  <div className="vl-pricing-assurance mt-auto pt-6 bg-transparent border-t border-white/10 rounded-none pb-0">
+                  <div className="vl-pricing-assurance">
+                    <p className="vl-assurance-text">
+                      Activa tu plan ahora con{' '}
+                      <span className="vl-assurance-price">
+                        {isAnnual ? '€149' : '€199'}
+                      </span>{' '}
+                      de setup y{' '}
+                      <span className="vl-assurance-price">
+                        €{planData.promo}{planData.suffix}
+                      </span>{' '}
+                      de suscripción.
+                    </p>
                     <Link
                       href={`${promoCtaHref}&cycle=${billing}`}
-                      className="vl-btn vl-btn-primary w-full justify-center flex items-center text-lg shadow-[0_0_40px_-10px_rgba(124,58,237,0.5)]"
+                      className="vl-btn vl-btn-primary w-full justify-center flex items-center text-lg shadow-[0_0_40px_-10px_rgba(124,58,237,0.5)] mt-5"
                     >
                       <Rocket
                         className="w-5 h-5 mr-3"
@@ -847,7 +727,6 @@ export default function NetingLanding() {
                 </div>
               </div>
             </div>
-          </div>
         </section>
 
         {/* ═══ SLIDE 6 · CÓMO FUNCIONA + CTA FINAL + URGENCIA ═══════════════ */}
