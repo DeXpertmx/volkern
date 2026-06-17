@@ -665,7 +665,7 @@ export default function NetingLanding() {
                       <div
                         aria-hidden="true"
                         className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 shadow-[0_0_18px_-3px_rgba(124,58,237,0.6)] transition-all duration-300 ease-out ${
-                          isAnnual ? 'left-1' : 'left-[calc(50%+0.25rem)]'
+                          isAnnual ? 'left-1' : 'left-1/2'
                         }`}
                       />
                       {/* Botón Anual */}
