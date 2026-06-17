@@ -166,7 +166,6 @@ function PricingSlider() {
                   plan === 'scale' ? 'border-purple-500 bg-purple-500/10' : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
                 }`}
                 aria-pressed={plan === 'scale'}
-                aria-label="Plan Scale"
               >
                 <div className="flex items-center gap-2 mb-1">
                   <Zap className={`h-4 w-4 ${plan === 'scale' ? 'text-purple-400' : 'text-slate-500'}`} />
@@ -180,7 +179,6 @@ function PricingSlider() {
                   plan === 'compliance' ? 'border-indigo-500 bg-indigo-500/10' : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
                 }`}
                 aria-pressed={plan === 'compliance'}
-                aria-label="Plan Compliance Pro"
               >
                 <div className="flex items-center gap-2 mb-1">
                   <ShieldCheck className={`h-4 w-4 ${plan === 'compliance' ? 'text-indigo-400' : 'text-slate-500'}`} />
@@ -296,8 +294,8 @@ function PricingSlider() {
                 {comparison.map((row, i) => (
                   <tr key={i} className="border-b border-slate-800/50 last:border-0 hover:bg-slate-800/20 transition-colors">
                     <th scope="row" className="p-4 text-sm font-medium text-slate-300 text-left">{row.feature}</th>
-                    <td className={`p-4 text-center text-sm font-bold bg-purple-500/5 ${row.scale === '✔' ? 'text-emerald-400' : row.scale === '—' ? 'text-slate-500' : 'text-slate-300'}`}>{row.scale}</td>
-                    <td className={`p-4 text-center text-sm font-bold bg-indigo-500/5 ${row.compliance === '✔' ? 'text-emerald-400' : row.compliance === '—' ? 'text-slate-500' : 'text-slate-300'}`}>{row.compliance}</td>
+                    <td className={`p-4 text-center text-sm font-bold bg-purple-500/5 ${row.scale === '✔' ? 'text-emerald-400' : row.scale === '—' ? 'text-slate-400' : 'text-slate-300'}`}>{row.scale}</td>
+                    <td className={`p-4 text-center text-sm font-bold bg-indigo-500/5 ${row.compliance === '✔' ? 'text-emerald-400' : row.compliance === '—' ? 'text-slate-400' : 'text-slate-300'}`}>{row.compliance}</td>
                   </tr>
                 ))}
               </tbody>
