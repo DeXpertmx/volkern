@@ -224,7 +224,7 @@ function PricingSlider() {
 
             <div className="mb-2">
               <span className="text-6xl font-black text-white tracking-tight">€{fmtPrecio(precioMostrar)}</span>
-              <span className="text-slate-500 text-lg ml-1">/mes</span>
+              <span className="text-slate-400 text-lg ml-1">/mes</span>
             </div>
             {billingInterval === 'yearly' && (
               <p className="text-[11px] text-emerald-500 font-bold mb-4">Facturado anualmente · 20% de ahorro</p>
