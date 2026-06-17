@@ -25,7 +25,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="bg-slate-950 text-white min-h-screen flex flex-col">
       <header className="fixed top-0 left-0 right-0 z-50 bg-slate-950/80 backdrop-blur-md border-b border-slate-900">
-        <nav className="container mx-auto px-6 py-4 flex items-center justify-between">
+        <nav aria-label="Navegación principal" className="container mx-auto px-6 py-4 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
             <Image 
               src="/volkern-logo.png" 
@@ -43,6 +43,8 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               <button
                 onClick={() => setSolucionesOpen(!solucionesOpen)}
                 className="flex items-center gap-1 text-sm text-slate-400 hover:text-white transition-colors"
+                aria-expanded={solucionesOpen}
+                aria-label="Soluciones"
               >
                 Soluciones
                 <ChevronDown className="w-3.5 h-3.5 transition-transform group-hover:rotate-180" />
@@ -140,7 +142,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                 height={28} 
                 className="h-6 w-auto brightness-0 invert mb-4"
               />
-              <p className="text-sm text-slate-500 max-w-md leading-relaxed">
+              <p className="text-sm text-slate-400 max-w-md leading-relaxed">
                 El Sistema Operativo Empresarial que unifica Marketing, Ventas, 
                 Operaciones y Finanzas con IA propia y soberanía de datos.
               </p>
@@ -148,7 +150,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
 
             {/* Soluciones */}
             <div>
-              <h4 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Soluciones</h4>
+              <h4 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-4">Soluciones</h4>
               <ul className="space-y-2">
                 {verticalLinks.map((link) => (
                   <li key={link.href}>
@@ -162,7 +164,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
 
             {/* Enlaces */}
             <div>
-              <h4 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Enlaces</h4>
+              <h4 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-4">Enlaces</h4>
               <ul className="space-y-2">
                 <li><a href="/precios" className="text-sm text-slate-400 hover:text-white transition-colors">Precios</a></li>
                 <li><a href="/#demo" className="text-sm text-slate-400 hover:text-white transition-colors">Solicitar Demo</a></li>
@@ -172,10 +174,10 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="border-t border-slate-900 pt-6 flex flex-col md:flex-row items-center justify-between gap-4">
-            <p className="text-slate-500 text-sm">
+            <p className="text-slate-400 text-sm">
               &copy; {new Date().getFullYear()} Volkern Nexus Core. Todos los derechos reservados.
             </p>
-            <div className="flex justify-center gap-6 text-xs text-slate-600">
+            <div className="flex justify-center gap-6 text-xs text-slate-400">
               <a href="/privacy" className="hover:text-slate-400 transition-colors">Política de Privacidad</a>
               <a href="/terms" className="hover:text-slate-400 transition-colors">Términos de Servicio</a>
               <a href="/verifactu" className="hover:text-amber-400 transition-colors font-medium text-amber-500">Veri*Factu</a>

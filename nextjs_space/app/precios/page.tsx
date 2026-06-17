@@ -201,7 +201,7 @@ function DynamicSummary({
 
       {/* Features */}
       <div className="space-y-4 mb-8">
-        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
           Tu configuración incluye:
         </p>
 
@@ -299,16 +299,16 @@ function ComparisonTable() {
             <thead>
               <tr className="border-b border-slate-800">
                 <th className="text-left p-5 text-[11px] font-black text-slate-400 uppercase tracking-widest"></th>
-                <th className="text-center p-5 text-[11px] font-black text-purple-400 uppercase tracking-widest bg-purple-500/5 w-[30%]">Scale</th>
-                <th className="text-center p-5 text-[11px] font-black text-indigo-400 uppercase tracking-widest bg-indigo-500/5 w-[30%]">Compliance Pro</th>
+                <th scope="col" className="text-center p-5 text-[11px] font-black text-purple-400 uppercase tracking-widest bg-purple-500/5 w-[30%]">Scale</th>
+                <th scope="col" className="text-center p-5 text-[11px] font-black text-indigo-400 uppercase tracking-widest bg-indigo-500/5 w-[30%]">Compliance Pro</th>
               </tr>
             </thead>
             <tbody>
               {COMPARISON_ROWS.map((row, i) => (
                 <tr key={i} className="border-b border-slate-800/50 last:border-0 hover:bg-slate-800/20 transition-colors">
-                  <td className="p-4 text-sm font-medium text-slate-300">{row.feature}</td>
-                  <td className={`p-4 text-center text-sm font-bold bg-purple-500/5 ${row.scale === '✔' ? 'text-emerald-400' : 'text-slate-600'}`}>{row.scale}</td>
-                  <td className={`p-4 text-center text-sm font-bold bg-indigo-500/5 ${row.compliance === '✔' ? 'text-emerald-400' : 'text-slate-600'}`}>{row.compliance}</td>
+                  <th scope="row" className="p-4 text-sm font-medium text-slate-300 text-left">{row.feature}</th>
+                  <td className={`p-4 text-center text-sm font-bold bg-purple-500/5 ${row.scale === '✔' ? 'text-emerald-400' : 'text-slate-500'}`}>{row.scale}</td>
+                  <td className={`p-4 text-center text-sm font-bold bg-indigo-500/5 ${row.compliance === '✔' ? 'text-emerald-400' : 'text-slate-500'}`}>{row.compliance}</td>
                 </tr>
               ))}
             </tbody>
@@ -362,12 +362,15 @@ function FAQ() {
                 <button
                   onClick={() => setOpenIdx(isOpen ? null : i)}
                   className="w-full flex items-center justify-between p-5 text-left hover:bg-slate-800/30 transition-colors"
+                  aria-expanded={isOpen}
+                  aria-controls={`faq-answer-${i}`}
+                  id={`faq-question-${i}`}
                 >
                   <span className="text-sm font-bold text-white pr-4">{item.q}</span>
                   <ChevronDown className={`h-4 w-4 text-slate-400 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {isOpen && (
-                  <div className="px-5 pb-5 animate-in fade-in duration-200">
+                  <div id={`faq-answer-${i}`} className="px-5 pb-5 animate-in fade-in duration-200" role="region" aria-labelledby={`faq-question-${i}`}>
                     <p className="text-sm text-slate-400 leading-relaxed">{item.a}</p>
                   </div>
                 )}
@@ -424,15 +427,14 @@ export default function PreciosPage() {
         {/* ══════════ CONFIGURADOR ══════════════════════════════════════════ */}
         <section id="configurador" className="pb-8">
           <div className="container mx-auto px-4 lg:px-6 max-w-6xl">
-            <p className="text-center text-xs font-bold text-slate-500 uppercase tracking-widest mb-6">
+            <p className="text-center text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">
               Ajusta tu operación
             </p>
 
             <div className="grid lg:grid-cols-2 gap-10 lg:gap-16">
 
               {/* ── IZQUIERDA: Sliders ──────────────────────────────────── */}
-              <div className="space-y-6">
-                {/* Usuarios */}
+              <div className="space-y-6">                  {/* Usuarios */}
                 <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
@@ -440,13 +442,14 @@ export default function PreciosPage() {
                         <Users className="h-5 w-5 text-purple-400" />
                       </div>
                       <div>
-                        <p className="text-sm font-black text-white uppercase tracking-tight">Usuarios</p>
-                        <p className="text-xs text-slate-500">Miembros del equipo</p>
+                        <label htmlFor="range-usuarios" className="text-sm font-black text-white uppercase tracking-tight cursor-pointer">Usuarios</label>
+                        <p className="text-xs text-slate-400">Miembros del equipo</p>
                       </div>
                     </div>
                     <span className="text-2xl font-black text-white tabular-nums">{fmtUsuarios(usuarios)}</span>
                   </div>
                   <input
+                    id="range-usuarios"
                     type="range"
                     min={USUARIOS_MIN}
                     max={USUARIOS_MAX}
@@ -456,8 +459,8 @@ export default function PreciosPage() {
                     style={{ background: `linear-gradient(to right, #A855F7 0%, #A855F7 ${usuariosPct}%, #1E293B ${usuariosPct}%, #1E293B 100%)` }}
                   />
                   <div className="flex justify-between mt-1.5">
-                    <span className="text-[10px] font-bold text-slate-600">{USUARIOS_MIN}</span>
-                    <span className="text-[10px] font-bold text-slate-600">{USUARIOS_MAX}+</span>
+                    <span className="text-[10px] font-bold text-slate-400">{USUARIOS_MIN}</span>
+                    <span className="text-[10px] font-bold text-slate-400">{USUARIOS_MAX}+</span>
                   </div>
                 </div>
 
@@ -469,13 +472,14 @@ export default function PreciosPage() {
                         <BookOpen className="h-5 w-5 text-blue-400" />
                       </div>
                       <div>
-                        <p className="text-sm font-black text-white uppercase tracking-tight">Contactos</p>
-                        <p className="text-xs text-slate-500">Base de datos activa</p>
+                        <label htmlFor="range-contactos" className="text-sm font-black text-white uppercase tracking-tight cursor-pointer">Contactos</label>
+                        <p className="text-xs text-slate-400">Base de datos activa</p>
                       </div>
                     </div>
                     <span className="text-2xl font-black text-white tabular-nums">{fmtContactos(contactos)}</span>
                   </div>
                   <input
+                    id="range-contactos"
                     type="range"
                     min={CONTACTOS_MIN}
                     max={CONTACTOS_MAX}
@@ -486,8 +490,8 @@ export default function PreciosPage() {
                     style={{ background: `linear-gradient(to right, #3B82F6 0%, #3B82F6 ${contactosPct}%, #1E293B ${contactosPct}%, #1E293B 100%)` }}
                   />
                   <div className="flex justify-between mt-1.5">
-                    <span className="text-[10px] font-bold text-slate-600">{fmtContactos(CONTACTOS_MIN)}</span>
-                    <span className="text-[10px] font-bold text-slate-600">{fmtContactos(CONTACTOS_MAX)}+</span>
+                    <span className="text-[10px] font-bold text-slate-400">{fmtContactos(CONTACTOS_MIN)}</span>
+                    <span className="text-[10px] font-bold text-slate-400">{fmtContactos(CONTACTOS_MAX)}+</span>
                   </div>
                 </div>
 
@@ -502,12 +506,14 @@ export default function PreciosPage() {
                           ? 'border-purple-500 bg-purple-500/10 shadow-lg shadow-purple-500/5'
                           : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
                       }`}
+                      aria-pressed={plan === 'scale'}
+                      aria-label="Plan Scale"
                     >
                       <div className="flex items-center gap-2 mb-1">
                         <Zap className={`h-4 w-4 ${plan === 'scale' ? 'text-purple-400' : 'text-slate-500'}`} />
                         <span className={`text-sm font-black uppercase ${plan === 'scale' ? 'text-white' : 'text-slate-400'}`}>Scale</span>
                       </div>
-                      <p className="text-[11px] text-slate-500 leading-relaxed">Crecer y automatizar</p>
+                      <p className="text-[11px] text-slate-400 leading-relaxed">Crecer y automatizar</p>
                     </button>
                     <button
                       onClick={() => setPlan('compliance')}
@@ -516,12 +522,14 @@ export default function PreciosPage() {
                           ? 'border-indigo-500 bg-indigo-500/10 shadow-lg shadow-indigo-500/5'
                           : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
                       }`}
+                      aria-pressed={plan === 'compliance'}
+                      aria-label="Plan Compliance Pro"
                     >
                       <div className="flex items-center gap-2 mb-1">
                         <Shield className={`h-4 w-4 ${plan === 'compliance' ? 'text-indigo-400' : 'text-slate-500'}`} />
                         <span className={`text-sm font-black uppercase ${plan === 'compliance' ? 'text-white' : 'text-slate-400'}`}>Compliance Pro</span>
                       </div>
-                      <p className="text-[11px] text-slate-500 leading-relaxed">Control y trazabilidad</p>
+                      <p className="text-[11px] text-slate-400 leading-relaxed">Control y trazabilidad</p>
                     </button>
                   </div>
                 </div>
@@ -536,6 +544,7 @@ export default function PreciosPage() {
                           ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/25'
                           : 'text-slate-400 hover:text-white'
                       }`}
+                      aria-pressed={billingInterval === 'monthly'}
                     >Mensual</button>
                     <button
                       onClick={() => setBillingInterval('yearly')}
@@ -544,6 +553,7 @@ export default function PreciosPage() {
                           ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/25'
                           : 'text-slate-400 hover:text-white'
                       }`}
+                      aria-pressed={billingInterval === 'yearly'}
                     >Anual <span className="text-[9px] text-purple-300 ml-0.5">-20%</span></button>
                   </div>
                 </div>
