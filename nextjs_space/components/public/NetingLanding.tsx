@@ -172,7 +172,20 @@ export default function NetingLanding() {
       const modalDismissed = localStorage.getItem('neting_expired_modal_dismissed');
       if (trialStarted === 'true' && modalDismissed !== 'true') {
         // Pequeño delay para que el contador llegue visualmente a 0
-        const id = setTimeout(() => setShowExpiredModal(true), 1200);
+        const id = setTimeout(() => {
+          setShowExpiredModal(true);
+          // Trackear evento de analytics: usuario perdió la promo
+          // sendBeacon es más fiable que fetch (no bloquea, garantiza entrega)
+          try {
+            navigator.sendBeacon(
+              '/api/analytics/event',
+              JSON.stringify({
+                event: 'neting_promo_expired_modal_shown',
+                metadata: { billing, page: 'neting' },
+              })
+            );
+          } catch {}
+        }, 1200);
         return () => clearTimeout(id);
       }
     } catch {}
