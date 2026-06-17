@@ -152,7 +152,7 @@ function TwentyOffBadge({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
 }
 
 export default function NetingLanding() {
-  const [billing, setBilling] = useState<'annual' | 'monthly'>('annual');
+  const [billing, setBilling] = useState<'annual' | 'monthly'>('monthly');
   const promoCtaHref = '/signup?promo=neting&plan=crm-ventas';
   const { deadline } = useCountdown();
 
