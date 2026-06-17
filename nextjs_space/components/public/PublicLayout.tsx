@@ -150,7 +150,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
 
             {/* Soluciones */}
             <div>
-              <h4 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-4">Soluciones</h4>
+              <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-4">Soluciones</h3>
               <ul className="space-y-2">
                 {verticalLinks.map((link) => (
                   <li key={link.href}>
@@ -164,7 +164,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
 
             {/* Enlaces */}
             <div>
-              <h4 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-4">Enlaces</h4>
+              <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-4">Enlaces</h3>
               <ul className="space-y-2">
                 <li><a href="/precios" className="text-sm text-slate-400 hover:text-white transition-colors">Precios</a></li>
                 <li><a href="/#demo" className="text-sm text-slate-400 hover:text-white transition-colors">Solicitar Demo</a></li>
