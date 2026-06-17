@@ -82,13 +82,18 @@ describe('PLAN_MODULES', () => {
     }
   });
 
-  it('Esencial, Profesional e Infinity deben tener el mismo set completo de módulos', () => {
-    const esencial = new Set(PLAN_MODULES[PLANS.ESENCIAL]);
-    const profesional = new Set(PLAN_MODULES[PLANS.PROFESIONAL]);
-    const infinity = new Set(PLAN_MODULES[PLANS.INFINITY]);
-    expect(esencial).toEqual(profesional);
-    expect(profesional).toEqual(infinity);
-    expect(esencial.size).toBeGreaterThan(50);
+  it('Esencial no incluye compliance_pro; Profesional e Infinity sí', () => {
+    const esencial = PLAN_MODULES[PLANS.ESENCIAL];
+    const profesional = PLAN_MODULES[PLANS.PROFESIONAL];
+    const infinity = PLAN_MODULES[PLANS.INFINITY];
+    expect(esencial).not.toContain('compliance_pro');
+    expect(profesional).toContain('compliance_pro');
+    expect(infinity).toContain('compliance_pro');
+    expect(esencial.length).toBeGreaterThan(50);
+  });
+
+  it('Profesional e Infinity deben tener el mismo set de módulos', () => {
+    expect(new Set(PLAN_MODULES[PLANS.PROFESIONAL])).toEqual(new Set(PLAN_MODULES[PLANS.INFINITY]));
   });
 
   it('PRO_AGENCY debe incluir white_label y custom_domain', () => {
@@ -181,8 +186,10 @@ describe('PLAN_PRICES', () => {
     }
   });
 
-  it('yearly debe ser menor que monthly * 12 (descuento anual ~20%)', () => {
-    for (const price of Object.values(PLAN_PRICES)) {
+  it('yearly debe ser menor que monthly * 12 (descuento anual ~20%) — salta planes dinámicos (precio 0)', () => {
+    for (const [planKey, price] of Object.entries(PLAN_PRICES)) {
+      // Planes dinámicos (Scale/Compliance) tienen precio 0 porque usan pricing engine
+      if (price.monthly === 0) continue;
       expect(price.yearly).toBeLessThan(price.monthly * 12);
       const discount = 1 - (price.yearly / (price.monthly * 12));
       expect(discount).toBeGreaterThanOrEqual(0.19);

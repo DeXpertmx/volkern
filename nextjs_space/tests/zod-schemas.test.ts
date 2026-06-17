@@ -222,12 +222,12 @@ describe('Zod — Webhooks', () => {
 // ═══════════════════════════════════════════════════════════════════
 describe('Zod — Subscriptions', () => {
   describe('SubscriptionCreateSchema', () => {
-    it('debe aceptar plan starter', () => {
-      ok(SubscriptionCreateSchema, { planId: 'starter' });
+    it('debe aceptar plan esencial', () => {
+      ok(SubscriptionCreateSchema, { planId: 'esencial' });
     });
 
-    it('debe aceptar plan pro', () => {
-      ok(SubscriptionCreateSchema, { planId: 'pro' });
+    it('debe aceptar plan profesional', () => {
+      ok(SubscriptionCreateSchema, { planId: 'profesional' });
     });
 
     it('debe aceptar plan agency-slot', () => {

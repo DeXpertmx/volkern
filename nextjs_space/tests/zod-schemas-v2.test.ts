@@ -884,11 +884,11 @@ describe('Zod — Admin', () => {
       ok(TenantCreateSchema, valid);
     });
 
-    it('debe aplicar defaults: plan=starter, moneda=EUR, estado=activo, autoProvision=true', () => {
+    it('debe aplicar defaults: plan=trial, moneda=EUR, estado=activo, autoProvision=true', () => {
       const r = check(TenantCreateSchema, valid);
       expect(r.success).toBe(true);
       if (r.success) {
-        expect(r.data.plan).toBe('starter');
+        expect(r.data.plan).toBe('trial');
         expect(r.data.moneda).toBe('EUR');
         expect(r.data.estado).toBe('activo');
         expect(r.data.autoProvision).toBe(true);

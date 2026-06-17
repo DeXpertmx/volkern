@@ -141,9 +141,8 @@ describe('getPlanConfig("scale") — DB vs hardcoded fallback', () => {
     expect(config.modules).toEqual(expectedModules)
     expect(config.modules.length).toBe(expectedModules.length)
 
-    // Scale tiene compliance_pro porque PLAN_MODULES['scale'] = ALL_FEATURES_SET
-    // (todos los módulos de ALL_MODULES incluyendo compliance_pro)
-    expect(config.modules).toContain('compliance_pro')
+    // Scale NO incluye compliance_pro (solo disponible en Compliance Pro)
+    expect(config.modules).not.toContain('compliance_pro')
 
     // Scale DEBE tener módulos base
     expect(config.modules).toContain('leads')
@@ -184,16 +183,14 @@ describe('getPlanConfig("scale") — DB vs hardcoded fallback', () => {
     }
   })
 
-  it('DB: modules deben incluir todos los módulos base incluyendo compliance_pro (por merge con PLAN_MODULES)', async () => {
+  it('DB: modules deben incluir todos los módulos base (Scale no tiene compliance_pro)', async () => {
     const mockDbPlan = createMockScaleDbPlan()
     vi.mocked(globalPrisma.subscriptionPlan.findUnique).mockResolvedValue(mockDbPlan as any)
 
     const config = await getPlanConfig('scale')
 
-    // Aunque los features.modules en DB excluyen compliance_pro (51 módulos),
-    // mapDbPlanToConfig() mergea con PLAN_MODULES['scale'] que sí lo incluye.
-    // El resultado final tiene 52 módulos.
-    expect(config.modules).toContain('compliance_pro')
+    // Scale NO incluye compliance_pro (solo disponible en Compliance Pro)
+    expect(config.modules).not.toContain('compliance_pro')
 
     // Scale DEBE tener módulos esenciales
     expect(config.modules).toContain('leads')

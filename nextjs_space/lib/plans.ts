@@ -103,10 +103,13 @@ export const ALL_MODULES: ModuleDefinition[] = [
   { id: 'estrategia', label: 'Estrategia', description: 'Planificación estratégica y KPIs', icon: '🎯', group: 'Estrategia' },
 ]
 
-const ALL_FEATURES_SET: CrmModule[] = ALL_MODULES.map(m => m.id)
+// ALL_FEATURES_SET excluye compliance_pro para evitar duplicados en planes que lo agregan explícitamente
+const ALL_FEATURES_SET: CrmModule[] = ALL_MODULES
+  .map(m => m.id)
+  .filter(id => id !== 'compliance_pro')
 
 export const PLAN_MODULES: Record<string, CrmModule[]> = {
-  [PLANS.TRIAL]: ALL_FEATURES_SET,
+  [PLANS.TRIAL]: [...ALL_FEATURES_SET, 'compliance_pro'],
   [PLANS.ESENCIAL]: ALL_FEATURES_SET,
   [PLANS.PROFESIONAL]: [...ALL_FEATURES_SET, 'compliance_pro'],
   [PLANS.INFINITY]: [...ALL_FEATURES_SET, 'compliance_pro'],
