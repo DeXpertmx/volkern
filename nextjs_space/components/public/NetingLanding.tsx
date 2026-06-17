@@ -153,14 +153,14 @@ function TwentyOffBadge({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
 
 export default function NetingLanding() {
   const [billing, setBilling] = useState<'annual' | 'monthly'>('monthly');
-  const checkoutInterval = billing === 'annual' ? 'yearly' : 'monthly';
-  const checkoutPrecio = isAnnual ? PRICING.annual.promo : PRICING.monthly.promo;
-  const checkoutSetup = isAnnual ? PRICING.annual.setupPromo : PRICING.monthly.setupPromo;
-  const promoCtaHref = `/checkout?usuarios=1&contactos=1000&plan=scale&interval=${checkoutInterval}&precio=${checkoutPrecio}&setup=${checkoutSetup}&promo=neting`;
   const { deadline } = useCountdown();
 
   const isAnnual = billing === 'annual';
   const planData = isAnnual ? PRICING.annual : PRICING.monthly;
+  const checkoutInterval = billing === 'annual' ? 'yearly' : 'monthly';
+  const checkoutPrecio = isAnnual ? PRICING.annual.promo : PRICING.monthly.promo;
+  const checkoutSetup = isAnnual ? PRICING.annual.setupPromo : PRICING.monthly.setupPromo;
+  const promoCtaHref = `/checkout?usuarios=1&contactos=1000&plan=scale&interval=${checkoutInterval}&precio=${checkoutPrecio}&setup=${checkoutSetup}&promo=neting`;
 
   return (
     <div
