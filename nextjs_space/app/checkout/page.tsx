@@ -688,7 +688,12 @@ function CheckoutForm() {
                 {/* TRIAL */}
                 <div className="text-center pt-2 border-t border-slate-800">
                   <p className="text-xs text-slate-500 mb-3">¿No estás seguro?</p>
-                  <Link href="/signup">
+                  <Link
+                    href="/signup"
+                    onClick={() => {
+                      try { localStorage.setItem('neting_trial_started', 'true'); } catch {}
+                    }}
+                  >
                     <Button
                       type="button"
                       variant="outline"
