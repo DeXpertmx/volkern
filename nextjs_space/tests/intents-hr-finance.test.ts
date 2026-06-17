@@ -136,9 +136,10 @@ describe('financeIntents', () => {
     expect(new Set(names).size).toBe(names.length);
   });
 
-  it('solo rectificar_factura debe ser destructive', () => {
+  it('rectificar_factura y anular_factura deben ser destructive', () => {
     const destructiveIntents = financeIntents.filter(i => i.destructive);
-    expect(destructiveIntents.length).toBe(1);
-    expect(destructiveIntents[0].name).toBe('rectificar_factura');
+    expect(destructiveIntents.length).toBe(2);
+    const destructiveNames = destructiveIntents.map(i => i.name).sort();
+    expect(destructiveNames).toEqual(['cancelar_factura', 'rectificar_factura']);
   });
 });

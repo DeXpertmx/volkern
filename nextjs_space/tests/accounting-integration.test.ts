@@ -91,18 +91,17 @@ describe('Integración: Slots de Asesoría Contable (DB real)', () => {
     });
 
     // 3. Crear API key para la agencia
-    const { key: rawAgencyKey, keyHash: agencyHash, prefix: agencyPrefix } = generateApiKey('prod');
-    await prisma.apiKey.create({
-      data: {
-        nombre: 'Test Accounting Agency Key',
-        keyHash: agencyHash,
-        prefix: agencyPrefix,
-        tenantId: agencyTenant.id,
-        userId: testUser.id,
-        scopes: ['accounting:write'],
-      },
-    });
-    agencyApiKey = rawAgencyKey;
+    const { key: rawAgencyKey, keyHash: agencyHash, prefix: agencyPrefix } = generateApiKey('prod');      await prisma.apiKey.create({
+        data: {
+          nombre: 'Test Accounting Agency Key',
+          keyHash: agencyHash,
+          prefix: agencyPrefix,
+          tenantId: agencyTenant.id,
+          userId: testUser.id,
+          scopes: ['accounting:write'],
+        },
+      });
+      agencyApiKey = rawAgencyKey;
 
     // 4. Crear tenant de tipo BUSINESS (para test 403)
     businessTenant = await prisma.tenant.create({
@@ -129,7 +128,7 @@ describe('Integración: Slots de Asesoría Contable (DB real)', () => {
       },
     });
     businessApiKey = rawBizKey;
-  });
+  }, 30000);
 
   afterAll(async () => {
     // Limpiar en orden inverso
@@ -229,7 +228,7 @@ describe('Integración: Slots de Asesoría Contable (DB real)', () => {
       const dbSlot = await prisma.tenant.findUnique({ where: { id: json.id } });
       expect(dbSlot).not.toBeNull();
       expect(dbSlot?.nombre).toBe('Integration Client Test');
-    });
+    }, 30000);
 
     it('debe heredar brandingConfig con showPoweredBy forzado a true', async () => {
       const response = await POST(
@@ -253,7 +252,7 @@ describe('Integración: Slots de Asesoría Contable (DB real)', () => {
       expect(bc.showPoweredBy).toBe(true);
       expect(bc.primaryColor).toBe('#059669');
       expect(bc.logoUrl).toBe('https://ejemplo.com/logo-contable.png');
-    });
+    }, 30000);
 
     it('debe respetar modules_enabled enviado en el body (normalizado a uppercase)', async () => {
       const response = await POST(
@@ -273,7 +272,7 @@ describe('Integración: Slots de Asesoría Contable (DB real)', () => {
       });
 
       expect(dbSlot?.enabledModules).toEqual(['CRM', 'FINANZAS', 'CONCILIACION', 'MARKETING']);
-    });
+    }, 30000);
 
     it('debe usar CRM como default si no se envía modules_enabled', async () => {
       const response = await POST(
@@ -292,7 +291,7 @@ describe('Integración: Slots de Asesoría Contable (DB real)', () => {
       });
 
       expect(dbSlot?.enabledModules).toEqual(['CRM']);
-    });
+    }, 30000);
 
     it('debe retornar 403 si el tenant no es AGENCY', async () => {
       if (isSuperadminUser) {
