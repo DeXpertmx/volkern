@@ -1015,7 +1015,19 @@ export default function NetingLanding() {
             <div className="flex flex-col sm:flex-row gap-3">
               <Link
                 href="/checkout?usuarios=1&contactos=1000&plan=scale&interval=monthly"
-                onClick={dismissExpiredModal}
+                onClick={() => {
+                  // Trackear conversión post-promo: usuario acepta precio estándar
+                  try {
+                    navigator.sendBeacon(
+                      '/api/analytics/event',
+                      JSON.stringify({
+                        event: 'neting_promo_expired_standard_price_clicked',
+                        metadata: { billing, page: 'neting', source: 'expired_modal' },
+                      })
+                    );
+                  } catch {}
+                  dismissExpiredModal();
+                }}
                 className="vl-btn vl-btn-primary flex-1 justify-center text-sm py-3 group"
               >
                 Activar con precio estándar
