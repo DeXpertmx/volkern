@@ -31,11 +31,39 @@ const DEFAULTS = {
   RATE_LIMIT_MS: 2000,
 }
 
+const MISSING_ENTITY_PROMPTS: Record<string, string> = {
+  date: '📅 ¿Para qué fecha? (puedes decir "mañana", "hoy", o una fecha específica)',
+  time: '⏰ ¿A qué hora? (ej: 10:00, 14:30)',
+  service: '📋 ¿Qué servicio o producto necesitas?',
+  customer_name: '👤 ¿Cuál es tu nombre?',
+  nombre: '👤 ¿Cuál es el nombre?',
+  email: '📧 ¿Cuál es el correo electrónico?',
+  phone: '📱 ¿Cuál es el número de teléfono?',
+  telefono: '📱 ¿Cuál es el número de teléfono?',
+  monto: '💰 ¿Cuál es el monto?',
+  concepto: '📝 ¿Cuál es el concepto?',
+  titulo: '📝 ¿Cuál es el título?',
+  contexto: '📋 ¿Puedes darme más contexto?',
+  appointment_id: '🔖 ¿Cuál es el ID de la cita?',
+  leadId: '🔖 ¿Cuál es el ID del lead?',
+  producto: '🛒 ¿Qué producto?',
+  cantidad: '🔢 ¿Cuántos?',
+  contenido: '📝 ¿Cuál es el contenido?',
+  tipo: '📋 ¿De qué tipo es?',
+  motivo: '📋 ¿Cuál es el motivo?',
+}
+
 export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput> {
   const { tenantId, message, channel } = input
   const startTime = Date.now()
 
   try {
+    // Imports dinámicos para romper dependencia circular con lib/skills
+    const [{ intentClassifier }, { SkillOrchestratorAgent }, { ExecutionEngine }] = await Promise.all([
+      import('@/lib/agents/intent-classifier'),
+      import('@/lib/agents/skill-orchestrator'),
+      import('@/lib/agents/execution-engine'),
+    ])
     const config = await getOrCreateConfig(tenantId)
     if (!config.activo) {
       return { success: false, response: '', error: 'Chatbot desactivado' }
@@ -101,6 +129,134 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
       ).join('\n')
     }
 
+    // ═══ 1. CLASIFICAR INTENCIÓN ═══
+    const classification = await intentClassifier.classify({
+      message,
+      userId: input.userId || input.leadId || conv.id,
+      tenantId,
+      context: context.facts?.length > 0
+        ? 'Hechos conocidos: ' + context.facts.join(', ')
+        : undefined,
+    })
+
+    const isActionable = classification.intent !== 'consulta_general'
+      && classification.intent !== 'unknown'
+      && classification.confidence >= 0.5
+
+    // ═══ 2. SI ES UNA ACCIÓN CON PARÁMETROS COMPLETOS → EJECUTAR SKILL ═══
+    if (isActionable && !classification.needsMoreInfo) {
+      const planResult = await SkillOrchestratorAgent.createPlan(
+        {
+          intent: classification.intent,
+          entities: classification.extractedParams as Record<string, string>,
+          missingEntities: classification.missingParams,
+        },
+        {
+          collectedEntities: context.collectedEntities,
+          missingEntities: context.missingEntities,
+          tenantId,
+          userId: input.userId || conv.id,
+        },
+        tenantId
+      )
+
+      // Caso 2a: El orquestador devolvió un plan de ejecución
+      if (planResult.success && planResult.plan) {
+        const executionResult = await ExecutionEngine.run({
+          plan: planResult.plan,
+          userId: input.userId || conv.id,
+          tenantId,
+          sessionId: conv.id,
+        })
+
+        let finalMessage = executionResult.message
+        if (!finalMessage && executionResult.data) {
+          finalMessage = typeof executionResult.data === 'string'
+            ? executionResult.data
+            : JSON.stringify(executionResult.data)
+        }
+
+        const action: ChatbotOutput['action'] =
+          classification.intent === 'agendar_cita' ? 'agendar' :
+          classification.intent === 'contactar_humano' ? 'transferir' :
+          'ninguna'
+
+        await memory.addMessage({
+          conversationId: conv.id,
+          content: finalMessage,
+          direction: 'saliente',
+          channel,
+          metadata: { action, source: 'chatbot', intent: classification.intent },
+        })
+
+        await incrementStats(tenantId)
+
+        const elapsed = Date.now() - startTime
+        console.log(`[ChatbotService] ${channel} skill=${classification.intent} OK en ${elapsed}ms`)
+
+        return {
+          success: true,
+          response: finalMessage,
+          action,
+        }
+      }
+
+      // Caso 2b: El orquestador devolvió una respuesta directa (falta de acceso, etc.)
+      if (planResult.success && planResult.response) {
+        const finalMessage = planResult.response
+
+        await memory.addMessage({
+          conversationId: conv.id,
+          content: finalMessage,
+          direction: 'saliente',
+          channel,
+          metadata: { source: 'chatbot', intent: classification.intent },
+        })
+
+        await incrementStats(tenantId)
+
+        const elapsed = Date.now() - startTime
+        console.log(`[ChatbotService] ${channel} response=${classification.intent} OK en ${elapsed}ms`)
+
+        return {
+          success: true,
+          response: finalMessage,
+        }
+      }
+    }
+
+    // ═══ 3. SI ES UNA ACCIÓN CON PARÁMETROS FALTANTES → PREGUNTAR ═══
+    if (isActionable && classification.needsMoreInfo) {
+      // Guardar el intent pendiente en el contexto para multi-turno
+      await memory.updateContext(conv.id, {
+        pendingIntent: classification.intent,
+        missingEntities: classification.missingParams,
+        collectedEntities: classification.extractedParams,
+      })
+
+      const nextMissing = classification.missingParams[0]
+      const question = MISSING_ENTITY_PROMPTS[nextMissing]
+        || `❓ ¿Podrías proporcionarme ${nextMissing}?`
+      const finalMessage = `Entendido. ${question}`
+
+      await memory.addMessage({
+        conversationId: conv.id,
+        content: finalMessage,
+        direction: 'saliente',
+        channel,
+        metadata: { source: 'chatbot', intent: classification.intent, needsMoreInfo: true, missingEntity: nextMissing },
+      })
+
+      const elapsed = Date.now() - startTime
+      console.log(`[ChatbotService] ${channel} necesitaInfo=${nextMissing} en ${elapsed}ms`)
+
+      return {
+        success: true,
+        response: finalMessage,
+      }
+    }
+
+    // ═══ 4. CONSULTA GENERAL / SIMPLE → USAR LLM DIRECTAMENTE ═══
     const systemPrompt = buildSystemPrompt({
       config,
       tenant,
@@ -123,59 +279,25 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
     ]
 
     const llmResponse = await callAssistantWithFallback(llmMessages)
-    const rawResponse = llmResponse.choices?.[0]?.message?.content || 'Lo siento, no pude procesar tu mensaje.'
-
-    let finalMessage = rawResponse
-    let action: ChatbotOutput['action']
-    let actionData: Record<string, string> | undefined
-
-    const agendarMatch = rawResponse.match(/\[AGENDAR:([^|]+)\|([^|]+)\|([^\]]+)\]/)
-    if (agendarMatch) {
-      action = 'agendar'
-      actionData = {
-        servicio: agendarMatch[1].trim(),
-        fecha: agendarMatch[2].trim(),
-        hora: agendarMatch[3].trim(),
-      }
-      finalMessage = rawResponse.replace(/\[AGENDAR:[^\]]+\]/, '').trim()
-    }
-
-    if (rawResponse.includes('[TRANSFERIR]')) {
-      action = 'transferir'
-      finalMessage = rawResponse.replace('[TRANSFERIR]', '').trim()
-    }
-
-    if (!action) {
-      action = 'ninguna'
-    }
+    const finalMessage = llmResponse.choices?.[0]?.message?.content
+      || 'Lo siento, no pude procesar tu mensaje.'
 
     await memory.addMessage({
       conversationId: conv.id,
       content: finalMessage,
       direction: 'saliente',
       channel,
-      metadata: { action, source: 'chatbot' },
+      metadata: { source: 'chatbot', intent: classification.intent },
     })
 
-    if (action === 'agendar' && actionData && input.leadId) {
-      await handleBooking(tenantId, conv.id, input.leadId, services, actionData)
-    } else if (action === 'transferir' && input.leadId) {
-      await handleTransfer(tenantId, conv.id, input.leadId, input.contactName || input.contactPhone || 'Cliente')
-    }
-
-    await prisma.chatbotConfig.update({
-      where: { tenantId },
-      data: { totalConversaciones: { increment: 1 } },
-    }).catch(() => {})
+    await incrementStats(tenantId)
 
     const elapsed = Date.now() - startTime
-    console.log(`[ChatbotService] ${channel} OK en ${elapsed}ms`)
+    console.log(`[ChatbotService] ${channel} consulta OK en ${elapsed}ms (intent=${classification.intent})`)
 
     return {
       success: true,
       response: finalMessage,
-      action,
-      actionData,
     }
   } catch (error) {
     console.error('[ChatbotService] Error:', error)
@@ -229,20 +351,18 @@ INSTRUCCIONES:
 1. Responde SIEMPRE en español, sé directo y útil.
 2. ${formatGuide}
 3. Si el cliente pregunta por servicios, preséntalos con precio y duración.
-4. Si quiere agendar, responde con: [AGENDAR:nombre_servicio|fecha|hora]
-5. Si quiere hablar con un humano, responde con: [TRANSFERIR]
-6. Si preguntan sobre contabilidad, IVA, IRPF, impuestos o fiscales:
+4. Si preguntan sobre contabilidad, IVA, IRPF, impuestos o fiscales:
    - Explica tipos de IVA: 4% (superreducido), 10% (reducido), 21% (general), 0% (exento).
    - Modelo 303: declaración trimestral de IVA.
    - Modelo 130: pago fraccionado IRPF para autónomos.
    - Modelo 390: resumen anual de IVA.
    - Modelo 111: retenciones IRPF (alquileres, profesionales).
    - Verifactu: normativa española de facturación electrónica con hash SHA-256.
-7. Si preguntan sobre contabilidad general: PGC (Plan General Contable), balance de situación, cuenta de resultados (PyG), libro diario, asientos contables.
-8. Si preguntan sobre la plataforma Volkern, describe sus módulos (CRM, Contabilidad, Facturación Verifactu, Web Creator, etc.).
-9. NO inventes información. Si no sabes, di que lo consultarás con un asesor.
-10. NO recomiendes competidores. Solo habla de Volkern.
-11. Sé natural, no uses jerga técnica a menos que el cliente la use.
+5. Si preguntan sobre contabilidad general: PGC (Plan General Contable), balance de situación, cuenta de resultados (PyG), libro diario, asientos contables.
+6. Si preguntan sobre la plataforma Volkern, describe sus módulos (CRM, Contabilidad, Facturación Verifactu, Web Creator, etc.).
+7. NO inventes información. Si no sabes, di que lo consultarás con un asesor.
+8. NO recomiendes competidores. Solo habla de Volkern.
+9. Sé natural, no uses jerga técnica a menos que el cliente la use.
 
 FECHA: ${new Date().toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`
 }
@@ -310,6 +430,13 @@ export function parseFechaHora(fecha: string, hora: string): Date | null {
   }
 }
 
+async function incrementStats(tenantId: string) {
+  await prisma.chatbotConfig.update({
+    where: { tenantId },
+    data: { totalConversaciones: { increment: 1 } },
+  }).catch(() => {})
+}
+
 async function getOrCreateConfig(tenantId: string) {
   let config = await prisma.chatbotConfig.findUnique({ where: { tenantId } })
   if (!config) {
@@ -318,68 +445,6 @@ async function getOrCreateConfig(tenantId: string) {
     })
   }
   return config
-}
-
-async function handleBooking(
-  tenantId: string,
-  conversationId: string,
-  leadId: string,
-  services: any[],
-  data: { servicio: string; fecha: string; hora: string }
-): Promise<void> {
-  const service = services.find(s => s.nombre.toLowerCase().includes(data.servicio.toLowerCase()))
-  if (!service) return
-
-  const fechaHora = parseFechaHora(data.fecha, data.hora)
-  if (!fechaHora) return
-
-  const cita = await prisma.cita.create({
-    data: {
-      tenantId,
-      leadId,
-      servicioId: service.id,
-      tipo: 'servicio',
-      titulo: `${service.nombre} - Chatbot ${data.servicio}`,
-      fechaHora,
-      duracion: service.duracionMinutos,
-      estado: 'confirmada',
-      descripcion: 'Cita agendada vía chatbot',
-      origenCita: 'whatsapp',
-    },
-  })
-
-  await prisma.chatbotConfig.update({
-    where: { tenantId },
-    data: { totalCitasAgendadas: { increment: 1 } },
-  }).catch(() => {})
-
-  console.log('[ChatbotService] Cita creada:', cita.id)
-}
-
-async function handleTransfer(
-  tenantId: string,
-  conversationId: string,
-  leadId: string,
-  contactName: string
-): Promise<void> {
-  await prisma.task.create({
-    data: {
-      tenantId,
-      titulo: 'Cliente solicita atención humana',
-      descripcion: `El cliente ${contactName} solicitó hablar con un asesor desde el chatbot.`,
-      tipo: 'llamada',
-      fechaVencimiento: new Date(),
-      completada: false,
-      leadId,
-    },
-  })
-
-  await prisma.chatbotConfig.update({
-    where: { tenantId },
-    data: { totalTransferencias: { increment: 1 } },
-  }).catch(() => {})
-
-  console.log('[ChatbotService] Transferencia creada para:', contactName)
 }
 
 export async function getChatbotConfig(tenantId: string) {
