@@ -383,7 +383,7 @@ export default function EcosistemaLanding() {
 
             <h1 className="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight tracking-tight">
               <TypewriterText
-                text="Un solo sistema para gestionar y automatizar\ntodo tu negocio"
+                text={'Un solo sistema para gestionar y automatizar\ntodo tu negocio'}
                 speed={42}
                 heroMode
               />
