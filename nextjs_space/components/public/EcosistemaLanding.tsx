@@ -20,60 +20,19 @@ import {
   Layers,
   ArrowUpRight,
 } from 'lucide-react';
+import { SOLUTION_MODULES, COLOR_MAP } from '@/lib/soluciones';
 
-/* ─── Data ────────────────────────────────────────────────────────────────── */
+/* ─── Icon mapping ────────────────────────────────────────────────────────── */
 
-const ECOSYSTEM_MODULES = [
-  {
-    icon: Zap,
-    color: 'blue',
-    name: 'CRM & Ventas',
-    description: 'Gestiona oportunidades, automatiza seguimiento y cierra más negocios.',
-    href: '/soluciones/crm-ventas',
-  },
-  {
-    icon: PenTool,
-    color: 'purple',
-    name: 'Marketing',
-    description: 'Captación de leads, automatización de campañas y gestión de comunicación.',
-    href: '/soluciones/marketing',
-  },
-  {
-    icon: Building2,
-    color: 'emerald',
-    name: 'Real Estate',
-    description: 'Gestión de propiedades, clientes y procesos comerciales inmobiliarios.',
-    href: '/soluciones/real-estate',
-  },
-  {
-    icon: Calculator,
-    color: 'amber',
-    name: 'Accounting',
-    description: 'Control financiero, facturación y organización administrativa.',
-    href: '/soluciones/accounting',
-  },
-  {
-    icon: UserCheck,
-    color: 'rose',
-    name: 'Recursos Humanos',
-    description: 'Gestión de personal, procesos internos y seguimiento organizacional.',
-    href: '/soluciones/rrhh',
-  },
-  {
-    icon: Factory,
-    color: 'slate',
-    name: 'Industria',
-    description: 'Optimización de procesos operativos y control de producción.',
-    href: '/soluciones/industria',
-  },
-  {
-    icon: GraduationCap,
-    color: 'yellow',
-    name: 'Academy',
-    description: 'Formación, gestión de contenido y capacitación interna o externa.',
-    href: '/soluciones/academy',
-  },
-];
+const ICON_MAP: Record<string, React.ComponentType<any>> = {
+  Zap,
+  PenTool,
+  Building2,
+  Calculator,
+  UserCheck,
+  Factory,
+  GraduationCap,
+};
 
 const BENEFITS = [
   'Un solo sistema para todo',
@@ -104,17 +63,7 @@ const HOW_IT_WORKS = [
   },
 ];
 
-/* ─── Color helpers ───────────────────────────────────────────────────────── */
 
-const colorMap: Record<string, { bg: string; border: string; icon: string; glow: string; badge: string }> = {
-  blue: { bg: 'bg-blue-500/10', border: 'border-blue-500/20 hover:border-blue-500/40', icon: 'text-blue-400', glow: 'bg-blue-500/5', badge: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
-  purple: { bg: 'bg-purple-500/10', border: 'border-purple-500/20 hover:border-purple-500/40', icon: 'text-purple-400', glow: 'bg-purple-500/5', badge: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
-  emerald: { bg: 'bg-emerald-500/10', border: 'border-emerald-500/20 hover:border-emerald-500/40', icon: 'text-emerald-400', glow: 'bg-emerald-500/5', badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
-  amber: { bg: 'bg-amber-500/10', border: 'border-amber-500/20 hover:border-amber-500/40', icon: 'text-amber-400', glow: 'bg-amber-500/5', badge: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
-  rose: { bg: 'bg-rose-500/10', border: 'border-rose-500/20 hover:border-rose-500/40', icon: 'text-rose-400', glow: 'bg-rose-500/5', badge: 'bg-rose-500/10 text-rose-400 border-rose-500/20' },
-  slate: { bg: 'bg-slate-500/10', border: 'border-slate-500/20 hover:border-slate-500/40', icon: 'text-slate-400', glow: 'bg-slate-500/5', badge: 'bg-slate-500/10 text-slate-400 border-slate-500/20' },
-  yellow: { bg: 'bg-yellow-500/10', border: 'border-yellow-500/20 hover:border-yellow-500/40', icon: 'text-yellow-400', glow: 'bg-yellow-500/5', badge: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' },
-};
 
 /* ─── Section wrapper ─────────────────────────────────────────────────────── */
 
@@ -234,9 +183,9 @@ export default function EcosistemaLanding() {
             className="mt-16 relative max-w-4xl mx-auto hidden md:block"
           >
             <div className="grid grid-cols-4 gap-3 opacity-60">
-              {ECOSYSTEM_MODULES.slice(0, 4).map((mod, i) => {
-                const Icon = mod.icon;
-                const c = colorMap[mod.color];
+              {SOLUTION_MODULES.slice(0, 4).map((mod, i) => {
+                const Icon = ICON_MAP[mod.iconKey];
+                const c = COLOR_MAP[mod.color];
                 return (
                   <motion.div
                     key={mod.name}
@@ -306,9 +255,9 @@ export default function EcosistemaLanding() {
 
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Large card: CRM & Ventas (spans 2 cols on lg) */}
-              {ECOSYSTEM_MODULES.map((mod, i) => {
-                const Icon = mod.icon;
-                const c = colorMap[mod.color];
+              {SOLUTION_MODULES.map((mod, i) => {
+                const Icon = ICON_MAP[mod.iconKey];
+                const c = COLOR_MAP[mod.color];
                 const isLarge = i === 0;
                 return (
                   <motion.div
@@ -446,7 +395,7 @@ export default function EcosistemaLanding() {
                     description:
                       'Un cliente inicia con CRM para gestionar sus oportunidades. Automatiza seguimiento, cierra más negocios y organiza su pipeline.',
                     icon: Zap,
-                    color: colorMap.blue,
+                    color: COLOR_MAP.blue,
                   },
                   {
                     step: 'Fase 2',
@@ -454,7 +403,7 @@ export default function EcosistemaLanding() {
                     description:
                       'Luego agrega marketing para captar más leads. Campañas automatizadas que se conectan directamente con el CRM.',
                     icon: PenTool,
-                    color: colorMap.purple,
+                    color: COLOR_MAP.purple,
                   },
                   {
                     step: 'Fase 3',
@@ -462,7 +411,7 @@ export default function EcosistemaLanding() {
                     description:
                       'Después integra facturación, firma digital y más. Escala sin caos, con todos los datos conectados desde el día uno.',
                     icon: Layers,
-                    color: colorMap.emerald,
+                    color: COLOR_MAP.emerald,
                   },
                 ].map((item, i) => {
                   const Icon = item.icon;
@@ -611,7 +560,7 @@ export default function EcosistemaLanding() {
                 </p>
 
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                  <Link href="/#modulos">
+                  <Link href="/soluciones">
                     <Button
                       size="lg"
                       className="bg-blue-600 hover:bg-blue-500 text-white px-10 py-7 text-lg rounded-xl font-bold shadow-xl shadow-blue-600/30 group"
