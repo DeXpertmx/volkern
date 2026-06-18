@@ -233,13 +233,13 @@ function FloatingParticles() {
       drift: -40 + Math.random() * 80,
       // Staggered start
       delay: Math.random() * 8,
-      // Color tint: mostly blue, some purple, some emerald
+      // Color tint: mostly blue, some purple, some emerald (hex values for glow)
       color:
         i < 10
-          ? 'bg-blue-300'
+          ? '#93C5FD'
           : i < 14
-            ? 'bg-purple-300'
-            : 'bg-emerald-300',
+            ? '#C4B5FD'
+            : '#6EE7B7',
     }))
   );
 
@@ -251,14 +251,15 @@ function FloatingParticles() {
       {particles.map((p) => (
         <motion.div
           key={p.id}
-          className={`absolute rounded-full ${p.color}`}
+          className="absolute rounded-full"
           style={{
             width: p.size,
             height: p.size,
             left: `${p.x}%`,
             top: `${p.y}%`,
             opacity: p.opacity,
-            boxShadow: `0 0 ${p.size * 2}px currentColor`,
+            backgroundColor: p.color,
+            boxShadow: `0 0 ${p.size * 2}px ${p.color}`,
           }}
           animate={{
             y: ['0vh', '-120vh'],
