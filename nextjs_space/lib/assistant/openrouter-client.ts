@@ -64,7 +64,7 @@ export async function callOpenRouter(model: string, messages: OpenRouterMessage[
 }
 
 /**
- * Llama a google/gemma-4-31b-it:free via OpenRouter — modelo principal.
+ * Llama a google/gemma-4-31b-it:free via OpenRouter.
  */
 async function callGemma4(
   messages: OpenRouterMessage[]
@@ -73,7 +73,7 @@ async function callGemma4(
 }
 
 /**
- * Llama a nvidia/nemotron-3-ultra-550b-a55b:free via OpenRouter — modelo de respaldo.
+ * Llama a nvidia/nemotron-3-ultra-550b-a55b:free via OpenRouter.
  */
 async function callNemotron(
   messages: OpenRouterMessage[]
@@ -194,7 +194,7 @@ export async function callWebCreatorWithFallback(
 }
 
 /**
- * Llama a Google Gemini 2.5 Flash directamente (fallback cuando OpenRouter falla).
+ * Llama a Google Gemini 2.5 Flash directamente (fallback cuando OpenRouter falla o como último recurso).
  */
 async function callGemini25Flash(
   messages: OpenRouterMessage[]
@@ -259,17 +259,41 @@ async function callGemini25Flash(
 }
 
 /**
- * Pipeline de llamada con fallback:
- * 1. google/gemma-4-31b-it:free via OpenRouter (primario)
- * 2. nvidia/nemotron-3-ultra-550b-a55b:free via OpenRouter (respaldo)
- * 3. Google Gemini 2.5 Flash directo (respaldo final)
+ * Pipeline de llamada con fallback — DeepSeek V4 Flash prioritario:
+ * 1. DeepSeek V4 Flash directo (API nativa) — PRIMARIO
+ * 2. deepseek/deepseek-chat:free via OpenRouter (respaldo 1)
+ * 3. google/gemma-4-31b-it:free via OpenRouter (respaldo 2)
+ * 4. nvidia/nemotron-3-ultra-550b-a55b:free via OpenRouter (respaldo 3)
+ * 5. Google Gemini 2.5 Flash directo (respaldo final)
  */
 export async function callAssistantWithFallback(
   messages: OpenRouterMessage[]
 ): Promise<OpenRouterResponse> {
-  // 1. Intentar Gemma 4 via OpenRouter
+  // 1. DeepSeek V4 Flash directo
+  if (DEEPSEEK_API_KEY) {
+    try {
+      console.log('[AI] Intentando DeepSeek V4 Flash (API directa)...');
+      const response = await callDeepSeekV4FlashDirect(messages);
+      console.log('[AI] ✅ DeepSeek V4 Flash respondió correctamente');
+      return response;
+    } catch (deepseekError) {
+      console.warn('[AI] DeepSeek V4 Flash falló:', deepseekError);
+    }
+  }
+
+  // 2. DeepSeek Chat via OpenRouter
   try {
-    console.log('[AI] Intentando google/gemma-4-31b-it:free...');
+    console.log('[AI] Fallback a deepseek/deepseek-chat:free...');
+    const response = await callDeepSeekChat(messages);
+    console.log('[AI] ✅ DeepSeek Chat respondió correctamente');
+    return response;
+  } catch (deepseekChatError) {
+    console.warn('[AI] DeepSeek Chat falló:', deepseekChatError);
+  }
+
+  // 3. Gemma 4 via OpenRouter
+  try {
+    console.log('[AI] Fallback a google/gemma-4-31b-it:free...');
     const response = await callGemma4(messages);
     console.log('[AI] ✅ Gemma 4 respondió correctamente');
     return response;
@@ -277,9 +301,9 @@ export async function callAssistantWithFallback(
     console.warn('[AI] Gemma 4 falló:', gemmaError);
   }
 
-  // 2. Intentar Nemotron via OpenRouter
+  // 4. Nemotron via OpenRouter
   try {
-    console.log('[AI] Intentando nvidia/nemotron-3-ultra-550b-a55b:free...');
+    console.log('[AI] Fallback a nvidia/nemotron-3-ultra-550b-a55b:free...');
     const response = await callNemotron(messages);
     console.log('[AI] ✅ Nemotron respondió correctamente');
     return response;
@@ -287,9 +311,9 @@ export async function callAssistantWithFallback(
     console.warn('[AI] Nemotron falló:', nemotronError);
   }
 
-  // 3. Fallback final: Google Gemini 2.5 Flash directo
+  // 5. Fallback final: Google Gemini 2.5 Flash directo
   try {
-    console.log('[AI] Intentando Google Gemini 2.5 Flash...');
+    console.log('[AI] Fallback final a Google Gemini 2.5 Flash...');
     const response = await callGemini25Flash(messages);
     console.log('[AI] ✅ Gemini respondió correctamente');
     return response;
@@ -300,7 +324,7 @@ export async function callAssistantWithFallback(
 }
 
 /**
- * Pipeline genérico con modelo configurable y fallback a Nemotron / Gemini.
+ * Pipeline genérico con modelo configurable y fallback a DeepSeek Chat / Nemotron / Gemini.
  */
 export async function callOpenRouterWithFallback(
   model: string,
@@ -308,6 +332,7 @@ export async function callOpenRouterWithFallback(
   temperature = 0.7,
   maxTokens = 500
 ): Promise<OpenRouterResponse> {
+  // 1. Modelo configurado via OpenRouter
   try {
     console.log(`[AI] Intentando ${model} via OpenRouter...`);
     const response = await callOpenRouter(model, messages, temperature, maxTokens);
@@ -317,10 +342,22 @@ export async function callOpenRouterWithFallback(
     console.warn(`[AI] ${model} falló:`, openRouterError);
   }
 
-  // Fallback: nvidia/nemotron-3-ultra-550b-a55b:free via OpenRouter
+  // 2. DeepSeek Chat via OpenRouter
+  if (model !== 'deepseek/deepseek-chat:free') {
+    try {
+      console.log('[AI] Fallback a deepseek/deepseek-chat:free...');
+      const response = await callDeepSeekChat(messages);
+      console.log('[AI] ✅ DeepSeek Chat respondió correctamente');
+      return response;
+    } catch (dsChatError) {
+      console.warn('[AI] DeepSeek Chat falló:', dsChatError);
+    }
+  }
+
+  // 3. Nemotron via OpenRouter
   if (model !== 'nvidia/nemotron-3-ultra-550b-a55b:free') {
     try {
-      console.log('[AI] Intentando nvidia/nemotron-3-ultra-550b-a55b:free...');
+      console.log('[AI] Fallback a nvidia/nemotron-3-ultra-550b-a55b:free...');
       const response = await callNemotron(messages);
       console.log('[AI] ✅ Nemotron respondió correctamente');
       return response;
@@ -329,9 +366,9 @@ export async function callOpenRouterWithFallback(
     }
   }
 
-  // Fallback final: Google Gemini 2.5 Flash directo
+  // 4. Fallback final: Google Gemini 2.5 Flash directo
   try {
-    console.log('[AI] Intentando Google Gemini 2.5 Flash (fallback)...');
+    console.log('[AI] Fallback final a Google Gemini 2.5 Flash...');
     const response = await callGemini25Flash(messages);
     console.log('[AI] ✅ Gemini respondió correctamente');
     return response;
@@ -418,5 +455,5 @@ export async function generateQueryEmbedding(query: string): Promise<EmbeddingRe
 }
 
 // Para retrocompatibilidad
-export const callDeepSeekV4Flash = callGemma4;
+export const callDeepSeekV4Flash = callDeepSeekV4FlashDirect;
 export { callGemini25Flash };
