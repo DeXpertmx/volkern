@@ -213,6 +213,70 @@ const FadeIn = ({
   </motion.div>
 );
 
+/* ─── FloatingParticles ───────────────────────────────────────────────────── */
+
+function FloatingParticles() {
+  // Generate stable random particles on first render
+  const [particles] = useState(() =>
+    Array.from({ length: 16 }, (_, i) => ({
+      id: i,
+      // Random position within the viewport
+      x: Math.random() * 100,
+      y: Math.random() * 100,
+      // Random size (2-6px)
+      size: 2 + Math.random() * 4,
+      // Random opacity (0.1-0.35)
+      opacity: 0.1 + Math.random() * 0.25,
+      // Random duration for float animation (12-28s)
+      duration: 12 + Math.random() * 16,
+      // Random horizontal drift range (-40 to +40 vw)
+      drift: -40 + Math.random() * 80,
+      // Staggered start
+      delay: Math.random() * 8,
+      // Color tint: mostly blue, some purple, some emerald
+      color:
+        i < 10
+          ? 'bg-blue-300'
+          : i < 14
+            ? 'bg-purple-300'
+            : 'bg-emerald-300',
+    }))
+  );
+
+  return (
+    <div
+      className="absolute inset-0 pointer-events-none overflow-hidden"
+      aria-hidden="true"
+    >
+      {particles.map((p) => (
+        <motion.div
+          key={p.id}
+          className={`absolute rounded-full ${p.color}`}
+          style={{
+            width: p.size,
+            height: p.size,
+            left: `${p.x}%`,
+            top: `${p.y}%`,
+            opacity: p.opacity,
+            boxShadow: `0 0 ${p.size * 2}px currentColor`,
+          }}
+          animate={{
+            y: ['0vh', '-120vh'],
+            x: [`${p.x}%`, `${p.x + p.drift}%`],
+            opacity: [p.opacity, p.opacity * 0.3, p.opacity],
+          }}
+          transition={{
+            duration: p.duration,
+            delay: p.delay,
+            repeat: Infinity,
+            ease: 'linear',
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 /* ─── TimelineSection ─────────────────────────────────────────────────────── */
 
 function TimelineSection() {
@@ -375,6 +439,9 @@ export default function EcosistemaLanding() {
           }}
           className="absolute inset-0 opacity-[0.03]"
         />
+
+        {/* Floating glowing particles */}
+        <FloatingParticles />
 
         {/* Content with subtle parallax + fade */}
         <motion.div
