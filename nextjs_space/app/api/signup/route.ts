@@ -9,6 +9,102 @@ import { seedFormsForTenant } from '@/scripts/seed-formularios-demo'
 import { AccountingInitializer } from '@/lib/accounting/initializer'
 import { stripe, createSubscriptionCheckout } from '@/lib/stripe'
 import { calcularPrecio } from '@/lib/pricing-engine'
+import { sendEmail } from '@/lib/ses-email'
+
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://volkern.app'
+
+async function sendTrialWelcomeEmail(params: {
+  email: string
+  tenantName: string
+  tenantId: string
+  isCoupon: boolean
+  durationDays: number
+}): Promise<void> {
+  const { email, tenantName, tenantId, isCoupon, durationDays } = params
+  const checkoutUrl = `${APP_URL}/checkout?usuarios=5&contactos=5000&plan=scale&interval=yearly`
+  const dashboardUrl = `${APP_URL}/dashboard/onboarding-quick`
+  
+  const subject = isCoupon
+    ? `🎁 ¡Tu regalo Volkern está activo! — ${durationDays} días`
+    : `🚀 ¡Bienvenido a Volkern! — ${durationDays} días de prueba gratis`
+
+  const headerEmoji = isCoupon ? '🎁' : '🚀'
+  const headerTitle = isCoupon
+    ? '¡Tu regalo Volkern está activo!'
+    : '¡Bienvenido a Volkern!'
+  const headerSubtitle = isCoupon
+    ? `Disfruta ${durationDays} días de acceso completo`
+    : `Comienza tu prueba gratis de ${durationDays} días`
+
+  const actionBlock = isCoupon
+    ? `
+      <p style="font-size: 16px; color: #374151; margin: 16px 0;">
+        Tienes <strong>${durationDays} días</strong> de acceso completo a todas las funciones.
+        Sin límites. Sin compromiso.
+      </p>
+    `
+    : `
+      <p style="font-size: 16px; color: #374151; margin: 16px 0;">
+        Tienes <strong>${durationDays} días</strong> para explorar todas las funciones sin compromiso.
+        Sin tarjeta de crédito. Sin permanencia.
+      </p>
+      <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); padding: 20px; border-radius: 12px; margin: 24px 0; border-left: 4px solid #f59e0b; text-align: center;">
+        <p style="margin: 0 0 8px 0; color: #92400e; font-weight: bold; font-size: 14px;">💡 ¿Listo para activar tu plan?</p>
+        <p style="margin: 0 0 12px 0; color: #78350f; font-size: 13px;">
+          Activa tu suscripción antes de que termine la prueba y conserva toda tu configuración.
+        </p>
+        <a href="${checkoutUrl}" target="_blank" style="display: inline-block; background: #f59e0b; color: #78350f; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 14px;">
+          Activar mi plan ahora →
+        </a>
+      </div>
+    `
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+      <div style="text-align: center; margin-bottom: 30px;">
+        <h1 style="color: #7c3aed; margin: 0; font-size: 28px;">${headerEmoji} ${headerTitle}</h1>
+        <p style="color: #6b7280; font-size: 16px; margin-top: 8px;">${headerSubtitle}</p>
+      </div>
+
+      <p style="font-size: 16px; color: #374151;">Hola <strong>${tenantName}</strong>,</p>
+      
+      ${actionBlock}
+
+      <div style="background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%); padding: 24px; border-radius: 12px; margin: 24px 0; border-left: 4px solid #7c3aed;">
+        <h2 style="margin: 0 0 12px 0; color: #5b21b6; font-size: 18px;">⚡ Tu plataforma incluye</h2>
+        <ul style="margin: 0; padding-left: 20px; color: #374151; line-height: 1.8;">
+          <li>CRM completo con pipeline de ventas</li>
+          <li>Marketing automation y campañas</li>
+          <li>Facturación y firma digital</li>
+          <li>Integraciones y webhooks</li>
+          <li>Academia y RRHH</li>
+        </ul>
+      </div>
+
+      <div style="text-align: center; margin: 32px 0;">        <a href="${dashboardUrl}" target="_blank" style="display: inline-block; background: #7c3aed; color: white; padding: 14px 36px; border-radius: 10px; text-decoration: none; font-weight: bold; font-size: 16px;">
+          Ir a mi panel →</a>
+      </div>
+
+      <p style="color: #6b7280; font-size: 14px;">
+        Si tienes alguna duda, responde a este correo o contáctanos en 
+        <a href="mailto:soporte@volkern.app" style="color: #7c3aed;">soporte@volkern.app</a>.
+      </p>
+
+      <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;">
+
+      <p style="color: #9ca3af; font-size: 12px; text-align: center;">
+        Volkern — La plataforma todo en uno para tu negocio
+      </p>
+    </div>
+  `
+
+  await sendEmail({
+    to: email,
+    subject,
+    html,
+    tenantSubdomain: tenantId,
+  })
+}
 
 function generateSlug(companyName: string): string {
   return companyName
@@ -299,6 +395,20 @@ export async function POST(request: NextRequest) {
     AccountingInitializer.initializeTenant(result.tenant.id, 'NORMAL', 'NINGUNO').catch(err =>
       console.error('[Signup] Error initializing chart of accounts:', err.message)
     );
+
+    // ─── Enviar email de bienvenida (trial / cupón) ──────────────────────
+    // Solo para signups sin checkout — los que pagan reciben welcome del webhook
+    if (!pricing || couponData) {
+      sendTrialWelcomeEmail({
+        email: result.user.email,
+        tenantName: result.tenant.nombre,
+        tenantId: result.tenant.id,
+        isCoupon: result.couponUsed,
+        durationDays: couponData?.durationDays || TRIAL_DAYS,
+      }).catch(err =>
+        console.error('[Signup] Error sending trial welcome email:', err)
+      )
+    }
 
     // ─── Crear checkout de Stripe si hay pricing params y no hay cupón ──────
     let checkoutUrl: string | null = null
