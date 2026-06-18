@@ -21,7 +21,7 @@ interface ModuleItem {
 const BASE_PRICE = 50;
 const USER_INCREMENT = 20;
 const CONTACT_INCREMENT = 5;
-const ANNUAL_DISCOUNT = 0.4;
+const ANNUAL_DISCOUNT = 0.2;
 
 const MODULES: ModuleItem[] = [
   {
@@ -278,6 +278,14 @@ export function NewLanding() {
                     <p className="text-[10px] text-slate-500 text-center mt-4">
                       Usuarios adicionales desde €10/mes c/u
                     </p>
+
+                    {/* CTA → Checkout */}
+                    <a
+                      href={`/checkout?usuarios=${users}&contactos=${contacts}&plan=scale&interval=${billing === 'annual' ? 'yearly' : 'monthly'}&precio=${pricing.total}`}
+                      className="vl-btn vl-btn-primary w-full mt-5 text-center"
+                    >
+                      Ir a activar →
+                    </a>
                   </div>
                 </div>
 
@@ -399,7 +407,10 @@ export function NewLanding() {
                   Reduce complejidad, baja costos y opera con una única plataforma pensada para
                   crecer contigo.
                 </p>
-                <Link href="/signup" className="vl-final-cta-btn vl-btn">
+                <Link
+                  href={`/checkout?usuarios=${users}&contactos=${contacts}&plan=scale&interval=${billing === 'annual' ? 'yearly' : 'monthly'}&precio=${pricing.total}`}
+                  className="vl-final-cta-btn vl-btn"
+                >
                   Activar Volkern
                 </Link>
               </div>
