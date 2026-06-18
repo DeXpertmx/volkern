@@ -116,6 +116,20 @@ export function initCronJobs() {
   console.log('✅ [Scheduler] Churn rate semanal programado (Sun 01:00 AM)');
   console.log('✅ [Scheduler] Snapshot mensual programado (1st of month 02:00 AM)');
   console.log('✅ [Scheduler] Google Calendar webhook renewal programado (cada 12h)');
+
+  // 9. Analytics Cleanup — semanal, domingo a las 03:00 AM
+  cron.schedule('0 3 * * 0', async () => {
+    console.log('[Cron] 🧹 Limpiando eventos de analytics antiguos (>90 días)...');
+    try {
+      const { cleanupOldEvents } = await import('../analytics/store');
+      const deleted = await cleanupOldEvents(90);
+      console.log(`[Cron] ✅ Analytics cleanup: ${deleted} eventos eliminados.`);
+    } catch (error: any) {
+      console.error('[Cron] ❌ Error en analytics cleanup:', error.message);
+    }
+  });
+
+  console.log('✅ [Scheduler] Analytics cleanup programado (Sun 03:00 AM)');
 }
 
 /**
