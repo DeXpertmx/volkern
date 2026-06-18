@@ -151,17 +151,14 @@ function TimelineSection() {
         ].map((item, i) => {
           const Icon = item.icon;
           return (
-            <motion.div
+            <ScrollReveal
               key={item.step}
-              initial={{ opacity: 0, y: 30, scale: 0.95 }}
-              whileInView={{ opacity: 1, y: 0, scale: 1 }}
-              viewport={{ once: true, margin: '-60px' }}
-              transition={{
-                type: 'spring',
-                stiffness: 100,
-                damping: 14,
-                delay: i * 0.2,
-              }}
+              variant="fadeInUpScale"
+              delay={i * 0.2}
+              spring
+              stiffness={100}
+              damping={14}
+              viewportMargin="-60px"
               className="relative p-6 bg-slate-950 border border-slate-800 rounded-3xl hover:border-blue-500/20 transition-colors duration-300"
             >
               {/* Animated dot on the timeline — pulses when entering viewport */}
@@ -207,7 +204,7 @@ function TimelineSection() {
               <p className="text-sm text-slate-400 leading-relaxed">
                 {item.description}
               </p>
-            </motion.div>
+            </ScrollReveal>
           );
         })}
       </div>
@@ -522,12 +519,10 @@ export default function EcosistemaLanding() {
               {HOW_IT_WORKS.map((item, i) => {
                 const IconEl = item.icon;
                 return (
-                  <motion.div
+                  <ScrollReveal
                     key={item.step}
-                    initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ duration: 0.4, delay: i * 0.15 }}
+                    variant="fadeInUp"
+                    delay={i * 0.15}
                     className="relative p-8 bg-slate-950 border border-slate-800 rounded-3xl text-center group hover:border-blue-500/30 transition-colors duration-300"
                   >
                     {/* Step number badge */}
@@ -550,7 +545,7 @@ export default function EcosistemaLanding() {
                     <p className="text-slate-400 text-sm leading-relaxed">
                       {item.description}
                     </p>
-                  </motion.div>
+                  </ScrollReveal>
                 );
               })}
             </div>
@@ -600,17 +595,14 @@ export default function EcosistemaLanding() {
 
                 <div className="space-y-4">
                   {BENEFITS.map((benefit, i) => (
-                    <motion.div
+                    <ScrollReveal
                       key={i}
-                      initial={{ opacity: 0, y: 30, scale: 0.96 }}
-                      whileInView={{ opacity: 1, y: 0, scale: 1 }}
-                      viewport={{ once: true, margin: '-40px' }}
-                      transition={{
-                        type: 'spring',
-                        stiffness: 120,
-                        damping: 14,
-                        delay: i * 0.12,
-                      }}
+                      variant="fadeInUpScale"
+                      delay={i * 0.12}
+                      spring
+                      stiffness={120}
+                      damping={14}
+                      viewportMargin="-40px"
                       className="flex items-center gap-4 p-4 rounded-2xl bg-slate-900/40 border border-slate-800 hover:border-blue-500/20 transition-colors"
                     >
                       <motion.div
@@ -630,7 +622,7 @@ export default function EcosistemaLanding() {
                       <span className="text-sm font-medium text-slate-200">
                         {benefit}
                       </span>
-                    </motion.div>
+                    </ScrollReveal>
                   ))}
                 </div>
               </div>
