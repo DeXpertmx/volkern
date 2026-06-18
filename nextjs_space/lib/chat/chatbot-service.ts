@@ -5,6 +5,9 @@ import { ChatMemoryService } from '@/lib/chat/chat-memory'
 import { extractFacts, formatFacts } from '@/lib/agents/fact-extractor'
 import { rerankResults, buildKbBlock } from '@/lib/knowledge/reranker'
 import { needsSummarization, generateSummary, buildSummaryBlock } from '@/lib/chat/conversation-summarizer'
+import { analyzeConversation } from '@/lib/chat/conversation-analyzer'
+import { detectPatterns } from '@/lib/chat/pattern-detector'
+import { generateSuggestions } from '@/lib/chat/improvement-engine'
 
 export interface ChatbotInput {
   tenantId: string
@@ -211,6 +214,54 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
       }
     }
 
+    // ═══ HELPER FASE 3: Análisis post-conversación y detección de patrones (fire-and-forget) ═══
+    const triggerPostAnalysis = () => {
+      // Ejecutar en background sin bloquear la respuesta
+      Promise.resolve().then(async () => {
+        try {
+          const allMessages = await memory.getMessages(conv.id, 50)
+          if (allMessages.length < 4) return // Muy pocos mensajes para analizar
+
+          const auditLogs = await prisma.chatbotAuditLog.findMany({
+            where: {
+              tenantId,
+              sessionId: conv.id,
+              createdAt: { gte: new Date(Date.now() - 3600000) },
+            },
+            select: { intent: true, skillExecuted: true, status: true, errorMessage: true },
+            take: 50,
+          })
+
+          // 1. Analizar conversación
+          const analysis = await analyzeConversation(
+            conv.id,
+            tenantId,
+            allMessages.map(m => ({ role: m.role, content: m.content, timestamp: m.timestamp })),
+            auditLogs
+          )
+
+          // 2. Detectar patrones (cada ~10 conversaciones)
+          const totalAnalyses = await prisma.chatbotAuditLog.count({
+            where: { tenantId, event: 'conversation_analysis', createdAt: { gte: new Date(Date.now() - 86400000) } },
+          })
+
+          if (totalAnalyses % 10 === 0 && totalAnalyses > 0) {
+            const patterns = await detectPatterns(tenantId)
+            if (patterns.length > 0) {
+              await generateSuggestions(tenantId, patterns)
+            }
+          }
+
+          // 3. Si la conversación terminó (estado cerrada), cerrar análisis
+          if (analysis.resolved || analysis.sentiment === 'frustrated') {
+            await memory.closeConversation(conv.id)
+          }
+        } catch (err) {
+          console.warn('[ChatbotService] Error en post-analysis:', err)
+        }
+      })
+    }
+
     // ═══ 2. SI ES UNA ACCIÓN CON PARÁMETROS COMPLETOS → EJECUTAR SKILL ═══
     if (isActionable && !classification.needsMoreInfo) {
       const planResult = await SkillOrchestratorAgent.createPlan(
@@ -259,6 +310,7 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
 
         await incrementStats(tenantId)
         triggerSummary() // Resumen automático (fire-and-forget)
+        triggerPostAnalysis() // Fase 3: Análisis post-conversación (fire-and-forget)
 
         const elapsed = Date.now() - startTime
         console.log(`[ChatbotService] ${channel} skill=${classification.intent} OK en ${elapsed}ms`)
@@ -284,6 +336,7 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
 
         await incrementStats(tenantId)
         triggerSummary() // Resumen automático (fire-and-forget)
+        triggerPostAnalysis() // Fase 3: Análisis post-conversación (fire-and-forget)
 
         const elapsed = Date.now() - startTime
         console.log(`[ChatbotService] ${channel} response=${classification.intent} OK en ${elapsed}ms`)
@@ -318,6 +371,7 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
       })
 
       triggerSummary() // Resumen automático (fire-and-forget)
+      triggerPostAnalysis() // Fase 3: Análisis post-conversación (fire-and-forget)
 
       const elapsed = Date.now() - startTime
       console.log(`[ChatbotService] ${channel} necesitaInfo=${nextMissing} en ${elapsed}ms`)
@@ -365,6 +419,7 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
 
     await incrementStats(tenantId)
     triggerSummary() // Resumen automático (fire-and-forget)
+    triggerPostAnalysis() // Fase 3: Análisis post-conversación (fire-and-forget)
 
     const elapsed = Date.now() - startTime
     console.log(`[ChatbotService] ${channel} consulta OK en ${elapsed}ms (intent=${classification.intent})`)
