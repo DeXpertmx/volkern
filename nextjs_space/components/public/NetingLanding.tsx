@@ -18,6 +18,7 @@ import {
   Briefcase,
 } from 'lucide-react';
 import { verticalLinks } from '@/lib/navigation';
+import SetupBasico from '@/components/public/SetupBasico';
 import './landing-new.css';
 
 /* ───────────────────────────────────────────────────────────────────────────
@@ -678,6 +679,11 @@ export default function NetingLanding() {
                         <p className="vl-summary-label">Contactos</p>
                         <p className="vl-summary-value">2.000</p>
                       </div>
+                    </div>
+
+                    {/* Setup básico */}
+                    <div className="mt-5">
+                      <SetupBasico />
                     </div>
                   </div>
                 </div>

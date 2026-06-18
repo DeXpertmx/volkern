@@ -26,6 +26,7 @@ import {
   Monitor,
   BarChart3,
 } from 'lucide-react'
+import SetupBasico from '@/components/public/SetupBasico'
 
 /* ─── Constantes ───────────────────────────────────────────────────────────── */
 
@@ -228,6 +229,11 @@ function DynamicSummary({
             <span className="text-sm text-indigo-300">{f.label}</span>
           </div>
         ))}
+      </div>
+
+      {/* Setup básico */}
+      <div className="mb-6">
+        <SetupBasico />
       </div>
 
       {/* CTA */}
