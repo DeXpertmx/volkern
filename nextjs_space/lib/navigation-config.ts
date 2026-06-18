@@ -174,6 +174,7 @@ export const HUBS: HubConfig[] = [
       '/dashboard/telefonia',
       '/dashboard/automatizaciones',
       '/dashboard/chatbot',
+      '/dashboard/chatbot/analytics',
       '/dashboard/connect'
     ],
     items: [
@@ -182,6 +183,7 @@ export const HUBS: HubConfig[] = [
       { name: 'Telefonía', href: '/dashboard/telefonia', icon: Phone, planModule: 'telefonia', description: 'Central telefónica VoIP' },
       { name: 'Automatizaciones', href: '/dashboard/automatizaciones', icon: Workflow, planModule: 'automatizaciones', description: 'Flujos de trabajo automáticos' },
       { name: 'Chatbot', href: '/dashboard/chatbot', icon: Bot, planModule: 'chatbot_whatsapp', description: 'Asistente inteligente' },
+      { name: 'Analytics del Chatbot', href: '/dashboard/chatbot/analytics', icon: PieChart, planModule: 'chatbot_whatsapp', description: 'Métricas, patrones y sugerencias' },
       { name: 'Chat en vivo', href: '/dashboard/live-chat', icon: Headset, planModule: 'mensajes', description: 'Chat en tiempo real con visitantes' },
     ]
   },
