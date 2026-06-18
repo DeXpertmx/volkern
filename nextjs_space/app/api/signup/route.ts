@@ -21,7 +21,7 @@ function generateSlug(companyName: string): string {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { email, password, fullName, companyName, couponCode, pricing } = body
+    const { email, password, fullName, companyName, couponCode, pricing, legalConsent } = body
 
     if (!email || !password || !fullName || !companyName) {
       return NextResponse.json(
@@ -280,7 +280,8 @@ export async function POST(request: NextRequest) {
             plan: tenant.plan,
             trialEnds: fechaFin.toISOString(),
             modules: modules,
-            couponCode: couponData?.code || null
+            couponCode: couponData?.code || null,
+            legalConsent: legalConsent || null,
           },
           userId: user.id,
           tenantId: tenant.id

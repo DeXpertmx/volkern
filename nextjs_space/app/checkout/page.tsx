@@ -254,6 +254,8 @@ function CheckoutForm() {
   const [loading, setLoading] = useState(false)
   const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>(pricingParams.interval || 'yearly')
   const [showBilling, setShowBilling] = useState(false)
+  const [acceptedTerms, setAcceptedTerms] = useState(false)
+  const [requestedImmediateStart, setRequestedImmediateStart] = useState(false)
   const [formData, setFormData] = useState({
     fullName: '',
     companyName: '',
@@ -298,12 +300,27 @@ function CheckoutForm() {
       return
     }
 
+    if (!acceptedTerms) {
+      toast.error('Debes aceptar los Términos y Condiciones y la Política de Reembolsos')
+      return
+    }
+
+    if (!requestedImmediateStart) {
+      toast.error('Debes confirmar que solicitas el inicio inmediato del servicio')
+      return
+    }
+
     setLoading(true)
 
     try {
       const payload = {
         ...formData,
         couponCode: undefined,
+        legalConsent: {
+          acceptedTerms,
+          requestedImmediateStart,
+          consentedAt: new Date().toISOString(),
+        },
         pricing: {
           usuarios: pricingParams.usuarios,
           contactos: pricingParams.contactos,
@@ -653,6 +670,50 @@ function CheckoutForm() {
                   </p>
                 </div>
 
+                {/* ═══ CHECKBOXES LEGALES ═════════════════════════════════ */}
+                <div className="space-y-4">
+                  {/* Checkbox 1: Términos + Reembolsos */}
+                  <label className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-all ${
+                    acceptedTerms
+                      ? 'bg-emerald-500/5 border-emerald-500/30'
+                      : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
+                  }`}>
+                    <input
+                      type="checkbox"
+                      checked={acceptedTerms}
+                      onChange={(e) => setAcceptedTerms(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-800 text-emerald-500 focus:ring-emerald-500/50 cursor-pointer"
+                    />
+                    <span className="text-xs text-slate-400 leading-relaxed">
+                      Acepto los{' '}
+                      <Link href="/terms" target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-slate-300 hover:text-white underline transition">Términos y Condiciones</Link>
+                      {' '}y la{' '}
+                      <Link href="/reembolsos" target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-slate-300 hover:text-white underline transition">Política de Reembolsos</Link>.
+                      Entiendo que dispongo de un plazo de 14 días naturales para ejercer mi derecho de desistimiento,
+                      aplicable únicamente al primer pago, y sujeto a las condiciones establecidas.
+                    </span>
+                  </label>
+
+                  {/* Checkbox 2: Renuncia al desistimiento (CLAVE) */}
+                  <label className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-all ${
+                    requestedImmediateStart
+                      ? 'bg-amber-500/5 border-amber-500/30'
+                      : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
+                  }`}>
+                    <input
+                      type="checkbox"
+                      checked={requestedImmediateStart}
+                      onChange={(e) => setRequestedImmediateStart(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-800 text-amber-500 focus:ring-amber-500/50 cursor-pointer"
+                    />
+                    <span className="text-xs text-slate-400 leading-relaxed">
+                      <strong className="text-amber-300">Solicito expresamente</strong> que el servicio comience de forma inmediata y
+                      reconozco que, al tratarse de contenido digital y/o servicios ejecutados,
+                      pierdo mi derecho de desistimiento en la parte del servicio que haya sido prestada o utilizada.
+                    </span>
+                  </label>
+                </div>
+
                 {/* CTA PRINCIPAL */}
                 <Button
                   type="submit"
@@ -676,28 +737,21 @@ function CheckoutForm() {
                   )}
                 </Button>
 
-                {/* MICROCOPY */}
-                <p className="text-xs text-center text-slate-600">
-                  Puedes cambiar tu configuración en cualquier momento.
+                {/* MICROCOPY LEGAL POST-BOTÓN */}
+                <p className="text-[10px] text-center text-slate-600 leading-relaxed">
+                  🔒 Pago seguro · Cancelación en cualquier momento · No se realizan reembolsos por periodos ya iniciados ni por servicios ejecutados.
+                </p>
+                <p className="text-[9px] text-center text-slate-700">
+                  El acceso al servicio se activará inmediatamente tras el pago.
                 </p>
 
-                {/* SEGURIDAD */}
-                <div className="flex items-center justify-center gap-4 text-[10px] text-slate-500">
-                  <span>🔒 Pago seguro</span>
-                  <span>·</span>
-                  <span>⚡ Activación inmediata</span>
-                  <span>·</span>
-                  <span>🔄 Sin permanencia</span>
-                </div>
-
                 {/* LEGAL */}
-                <p className="text-[10px] text-center text-slate-600 mt-2">
-                  Al activar aceptas los{' '}
-                  <Link href="/terms" className="text-slate-400 hover:text-white underline transition">Términos</Link>
+                <p className="text-[10px] text-center text-slate-600">
+                  <Link href="/terms" target="_blank" className="text-slate-500 hover:text-white underline transition">Términos</Link>
                   {' · '}
-                  <Link href="/privacy" className="text-slate-400 hover:text-white underline transition">Privacidad</Link>
+                  <Link href="/privacy" target="_blank" className="text-slate-500 hover:text-white underline transition">Privacidad</Link>
                   {' · '}
-                  <Link href="/reembolsos" className="text-slate-400 hover:text-white underline transition">Reembolsos</Link>
+                  <Link href="/reembolsos" target="_blank" className="text-slate-500 hover:text-white underline transition">Reembolsos</Link>
                 </p>
 
                 {/* TRIAL */}
