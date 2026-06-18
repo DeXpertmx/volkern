@@ -690,6 +690,16 @@ function CheckoutForm() {
                   <span>🔄 Sin permanencia</span>
                 </div>
 
+                {/* LEGAL */}
+                <p className="text-[10px] text-center text-slate-600 mt-2">
+                  Al activar aceptas los{' '}
+                  <Link href="/terms" className="text-slate-400 hover:text-white underline transition">Términos</Link>
+                  {' · '}
+                  <Link href="/privacy" className="text-slate-400 hover:text-white underline transition">Privacidad</Link>
+                  {' · '}
+                  <Link href="/reembolsos" className="text-slate-400 hover:text-white underline transition">Reembolsos</Link>
+                </p>
+
                 {/* TRIAL */}
                 <div className="text-center pt-2 border-t border-slate-800">
                   <p className="text-xs text-slate-500 mb-3">¿No estás seguro?</p>
