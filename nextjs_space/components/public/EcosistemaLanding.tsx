@@ -30,29 +30,30 @@ import BackToTop from '@/components/public/BackToTop';
 
 /* ─── TypewriterText ──────────────────────────────────────────────────────── */
 
+/**
+ * Scroll-triggered typewriter effect.
+ * Types text character by character when the element enters the viewport.
+ * For the Hero (above the fold), set heroMode to start immediately.
+ */
 function TypewriterText({
   text,
-  speed = 45,
-  startDelay = 400,
+  speed = 40,
   className = '',
   cursorColor = 'bg-blue-400',
+  heroMode = false,
 }: {
   text: string;
   speed?: number;
-  startDelay?: number;
   className?: string;
   cursorColor?: string;
+  heroMode?: boolean;
 }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const inView = useInView(ref, { once: true, margin: '-80px' });
+  const started = heroMode || inView;
   const [displayed, setDisplayed] = useState('');
-  const [started, setStarted] = useState(false);
 
-  // Initial delay before typing starts
-  useEffect(() => {
-    const t = setTimeout(() => setStarted(true), startDelay);
-    return () => clearTimeout(t);
-  }, [startDelay]);
-
-  // Type character by character
+  // Type character by character once in view
   useEffect(() => {
     if (!started) return;
     if (displayed.length >= text.length) return;
@@ -66,7 +67,7 @@ function TypewriterText({
   const lines = displayed.split('\n');
 
   return (
-    <span className={className}>
+    <span ref={ref} className={className}>
       {lines.map((line, i) => (
         <React.Fragment key={i}>
           {i > 0 && <br />}
@@ -394,7 +395,7 @@ export default function EcosistemaLanding() {
               <TypewriterText
                 text="Un solo sistema para gestionar y automatizar\ntodo tu negocio"
                 speed={42}
-                startDelay={300}
+                heroMode
               />
             </h1>
 
@@ -469,10 +470,7 @@ export default function EcosistemaLanding() {
               Visión general
             </span>
             <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
-              Deja de usar múltiples{' '}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-500">
-                herramientas desconectadas
-              </span>
+              <TypewriterText text="Deja de usar múltiples herramientas desconectadas" speed={35} />
             </h2>
             <p className="text-lg text-slate-400 max-w-xl mx-auto leading-relaxed">
               Con Volkern puedes comenzar con un módulo y escalar a un ecosistema
@@ -534,10 +532,7 @@ export default function EcosistemaLanding() {
                 Estructura del ecosistema
               </span>
               <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
-                Todos los módulos.{' '}
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-500">
-                  Una sola plataforma.
-                </span>
+                <TypewriterText text="Todos los módulos. Una sola plataforma." speed={35} />
               </h2>
               <p className="text-lg text-slate-400 max-w-xl mx-auto">
                 Cada área de tu negocio tiene su espacio, pero toda la información
@@ -616,7 +611,7 @@ export default function EcosistemaLanding() {
                 Cómo funciona
               </span>
               <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
-                Escala sin cambiar de sistema
+                <TypewriterText text="Escala sin cambiar de sistema" speed={35} />
               </h2>
               <p className="text-lg text-slate-400 max-w-xl mx-auto">
                 Tres pasos para transformar tu operación sin fricción.
@@ -674,10 +669,7 @@ export default function EcosistemaLanding() {
                 Caso de uso
               </span>
               <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
-                Crece sin{' '}
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-500">
-                  cambiar de sistema
-                </span>
+                <TypewriterText text="Crece sin cambiar de sistema" speed={35} />
               </h2>
               <p className="text-lg text-slate-400 max-w-xl mx-auto">
                 Así escala una empresa real con Volkern.
@@ -703,10 +695,7 @@ export default function EcosistemaLanding() {
                   Beneficios del ecosistema
                 </span>
                 <h2 className="text-3xl md:text-4xl font-bold text-white mb-8">
-                  Menos herramientas.{' '}
-                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-500">
-                    Más control.
-                  </span>
+                  <TypewriterText text="Menos herramientas. Más control." speed={35} />
                 </h2>
 
                 <div className="space-y-4">
@@ -785,10 +774,7 @@ export default function EcosistemaLanding() {
                 <Sparkles className="w-14 h-14 text-blue-400 mx-auto mb-6" />
 
                 <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
-                  Empieza con el módulo{' '}
-                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-500">
-                    que necesitas hoy
-                  </span>
+                  <TypewriterText text="Empieza con el módulo que necesitas hoy" speed={35} />
                 </h2>
 
                 <p className="text-lg text-slate-400 mb-10 max-w-xl mx-auto leading-relaxed">
