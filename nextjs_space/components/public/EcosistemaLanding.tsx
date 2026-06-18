@@ -770,15 +770,31 @@ export default function EcosistemaLanding() {
                   {BENEFITS.map((benefit, i) => (
                     <motion.div
                       key={i}
-                      initial={{ opacity: 0, x: -10 }}
-                      whileInView={{ opacity: 1, x: 0 }}
-                      viewport={{ once: true }}
-                      transition={{ duration: 0.3, delay: i * 0.1 }}
+                      initial={{ opacity: 0, y: 30, scale: 0.96 }}
+                      whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                      viewport={{ once: true, margin: '-40px' }}
+                      transition={{
+                        type: 'spring',
+                        stiffness: 120,
+                        damping: 14,
+                        delay: i * 0.12,
+                      }}
                       className="flex items-center gap-4 p-4 rounded-2xl bg-slate-900/40 border border-slate-800 hover:border-blue-500/20 transition-colors"
                     >
-                      <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                      <motion.div
+                        initial={{ scale: 0, rotate: -90 }}
+                        whileInView={{ scale: 1, rotate: 0 }}
+                        viewport={{ once: true, margin: '-40px' }}
+                        transition={{
+                          type: 'spring',
+                          stiffness: 200,
+                          damping: 15,
+                          delay: i * 0.12 + 0.15,
+                        }}
+                        className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0"
+                      >
                         <Check className="w-4 h-4 text-emerald-400" />
-                      </div>
+                      </motion.div>
                       <span className="text-sm font-medium text-slate-200">
                         {benefit}
                       </span>
