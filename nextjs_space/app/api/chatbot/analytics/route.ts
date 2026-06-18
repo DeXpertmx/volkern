@@ -5,6 +5,7 @@
  * GET  /api/chatbot/analytics?type=patterns — Patrones detectados
  * GET  /api/chatbot/analytics?type=suggestions — Sugerencias de mejora
  * GET  /api/chatbot/analytics?type=conversations — Análisis de conversaciones
+ * GET  /api/chatbot/analytics?type=alerts — Historial de alertas enviadas
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -49,6 +50,30 @@ export async function GET(request: NextRequest) {
       case 'conversations': {
         const analyses = await getRecentAnalyses(user.tenantId, hours);
         return NextResponse.json({ analyses, total: analyses.length });
+      }
+
+      case 'alerts': {
+        const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+        const alerts = await prisma.chatbotAuditLog.findMany({
+          where: {
+            tenantId: user.tenantId,
+            event: 'pattern_alert_sent',
+            createdAt: { gte: since },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 100,
+        });
+
+        const formatted = alerts.map(a => ({
+          id: a.id,
+          severity: a.severity,
+          patternCount: (a.metadata as any)?.patternCount || 0,
+          severities: (a.metadata as any)?.severities || [],
+          channels: (a.metadata as any)?.channels || [],
+          sentAt: a.createdAt,
+        }));
+
+        return NextResponse.json({ alerts: formatted, total: formatted.length });
       }
 
       case 'overview':

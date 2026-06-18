@@ -129,6 +129,15 @@ interface ConversationAnalysis {
   analyzedAt: string;
 }
 
+interface AlertEntry {
+  id: string;
+  severity: string;
+  patternCount: number;
+  severities: string[];
+  channels: string[];
+  sentAt: string;
+}
+
 // ─── Constants ──────────────────────────────────────────
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -204,6 +213,7 @@ export default function ChatbotAnalyticsPage() {
   const [patterns, setPatterns] = useState<Pattern[]>([]);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [conversations, setConversations] = useState<ConversationAnalysis[]>([]);
+  const [alerts, setAlerts] = useState<AlertEntry[]>([]);
   const [activeTab, setActiveTab] = useState('overview');
   const [runningDetection, setRunningDetection] = useState(false);
 
@@ -253,11 +263,22 @@ export default function ChatbotAnalyticsPage() {
     }
   }, [period]);
 
+  const fetchAlerts = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/chatbot/analytics?type=alerts&hours=${period}`);
+      if (!res.ok) throw new Error('Error fetching alerts');
+      const data = await res.json();
+      setAlerts(data.alerts || []);
+    } catch (e) {
+      console.error('Error loading alerts:', e);
+    }
+  }, [period]);
+
   const loadAll = useCallback(async () => {
     setLoading(true);
-    await Promise.all([fetchOverview(), fetchPatterns(), fetchSuggestions(), fetchConversations()]);
+    await Promise.all([fetchOverview(), fetchPatterns(), fetchSuggestions(), fetchConversations(), fetchAlerts()]);
     setLoading(false);
-  }, [fetchOverview, fetchPatterns, fetchSuggestions, fetchConversations]);
+  }, [fetchOverview, fetchPatterns, fetchSuggestions, fetchConversations, fetchAlerts]);
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
@@ -280,7 +301,7 @@ export default function ChatbotAnalyticsPage() {
       if (!res.ok) throw new Error('Error running detection');
       const data = await res.json();
       toast.success(`${data.patternsDetected} patrones detectados, ${data.suggestionsGenerated} sugerencias generadas`);
-      await Promise.all([fetchOverview(), fetchPatterns(), fetchSuggestions()]);
+      await Promise.all([fetchOverview(), fetchPatterns(), fetchSuggestions(), fetchAlerts()]);
     } catch (e) {
       toast.error('Error al ejecutar detección');
     } finally {
@@ -644,7 +665,7 @@ export default function ChatbotAnalyticsPage() {
 
       {/* ═══ Main Tabs ═══ */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3 lg:grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4 lg:grid-cols-4">
           <TabsTrigger value="patterns" className="gap-2">
             <AlertTriangle className="h-4 w-4" />
             Patrones
@@ -664,6 +685,13 @@ export default function ChatbotAnalyticsPage() {
             Conversaciones
             {conversations.length > 0 && (
               <Badge variant="secondary" className="ml-1 text-xs">{conversations.length}</Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="alerts" className="gap-2">
+            <Bell className="h-4 w-4" />
+            Alertas
+            {alerts.length > 0 && (
+              <Badge variant="secondary" className="ml-1 text-xs">{alerts.length}</Badge>
             )}
           </TabsTrigger>
         </TabsList>
@@ -974,6 +1002,146 @@ export default function ChatbotAnalyticsPage() {
             </>
           )}
         </TabsContent>
+
+        {/* ─── Alerts Tab ──────────────────────────────── */}
+        <TabsContent value="alerts" className="space-y-4">
+          {alerts.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <BellOff className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Sin alertas enviadas</h3>
+                <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                  No se han enviado alertas en el período seleccionado.
+                  Activa las notificaciones y ejecuta un análisis para recibir alertas
+                  cuando se detecten patrones críticos.
+                </p>
+                <div className="flex items-center justify-center gap-3 mt-4">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      // Find and click the header's Alertas button to open the config dialog
+                      const headerAlertBtn = document.querySelector('[data-alert-config-trigger]') as HTMLButtonElement
+                      headerAlertBtn?.click()
+                    }}
+                    className="gap-2"
+                  >
+                    <Bell className="h-4 w-4" />
+                    Configurar alertas
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleRunDetection}
+                    disabled={runningDetection}
+                    className="gap-2"
+                  >
+                    {runningDetection ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-4 w-4" />
+                    )}
+                    Ejecutar análisis
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Bell className="h-5 w-5 text-primary" />
+                  Historial de Alertas
+                </CardTitle>
+                <CardDescription>
+                  Notificaciones enviadas automáticamente cuando se detectaron patrones anómalos
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b text-left">
+                        <th className="pb-3 font-medium text-muted-foreground">Severidad</th>
+                        <th className="pb-3 font-medium text-muted-foreground">Patrones</th>
+                        <th className="pb-3 font-medium text-muted-foreground hidden sm:table-cell">Canales</th>
+                        <th className="pb-3 font-medium text-muted-foreground hidden md:table-cell">Severidades</th>
+                        <th className="pb-3 font-medium text-muted-foreground text-right">Enviado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {alerts.map((alert, i) => (
+                        <tr key={alert.id} className={cn(
+                          'border-b last:border-0 transition-colors hover:bg-muted/50',
+                          i % 2 === 0 ? 'bg-background' : 'bg-muted/20'
+                        )}>
+                          <td className="py-3 pr-4">
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                'text-xs',
+                                alert.severity === 'critical' ? 'bg-red-500/15 text-red-600 border-red-200 dark:border-red-800' :
+                                alert.severity === 'high' ? 'bg-orange-500/15 text-orange-600 border-orange-200 dark:border-orange-800' :
+                                'bg-yellow-500/15 text-yellow-600 border-yellow-200 dark:border-yellow-800'
+                              )}
+                            >
+                              {alert.severity === 'critical' ? 'Crítico' :
+                               alert.severity === 'high' ? 'Alto' :
+                               alert.severity === 'medium' ? 'Medio' : 'Info'}
+                            </Badge>
+                          </td>
+                          <td className="py-3 pr-4">
+                            <span className="font-mono font-bold text-lg">{alert.patternCount}</span>
+                          </td>
+                          <td className="py-3 pr-4 hidden sm:table-cell">
+                            <div className="flex gap-1.5 flex-wrap">
+                              {alert.channels.map(ch => (
+                                <span
+                                  key={ch}
+                                  className={cn(
+                                    'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium',
+                                    ch === 'in_app' ? 'bg-blue-500/10 text-blue-600' :
+                                    ch === 'telegram' ? 'bg-sky-500/10 text-sky-600' :
+                                    'bg-emerald-500/10 text-emerald-600'
+                                  )}
+                                >
+                                  {ch === 'in_app' ? 'In-App' : ch === 'telegram' ? 'Telegram' : 'Email'}
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="py-3 pr-4 hidden md:table-cell">
+                            <div className="flex gap-1 flex-wrap">
+                              {alert.severities.map((sev, si) => (
+                                <span
+                                  key={si}
+                                  className={cn(
+                                    'inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono',
+                                    sev === 'critical' ? 'bg-red-500/10 text-red-600' :
+                                    sev === 'high' ? 'bg-orange-500/10 text-orange-600' :
+                                    sev === 'medium' ? 'bg-yellow-500/10 text-yellow-600' :
+                                    'bg-blue-500/10 text-blue-600'
+                                  )}
+                                >
+                                  {sev === 'critical' ? 'C' : sev === 'high' ? 'A' : sev === 'medium' ? 'M' : 'B'}
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="py-3 text-right text-muted-foreground whitespace-nowrap">
+                            {formatDate(alert.sentAt)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-xs text-muted-foreground mt-4 text-center">
+                  {alerts.length} alerta(s) enviada(s) en el período seleccionado
+                </p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
       </Tabs>
     </div>
   );
@@ -1106,6 +1274,7 @@ function NotificationConfigDialog() {
         <Button
           variant="outline"
           size="sm"
+          data-alert-config-trigger
           className={cn(
             'gap-2',
             config?.enabled && 'border-amber-400 text-amber-600 dark:text-amber-400'
