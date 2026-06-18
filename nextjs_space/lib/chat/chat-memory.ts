@@ -6,12 +6,23 @@ export interface ChatMemoryMessage {
   timestamp: Date
 }
 
+export interface ConversationSummary {
+  text: string
+  topics: string[]
+  decisions: string[]
+  customerInfo: Record<string, string>
+  timestamp: number
+  summarizedMessages: number
+  version: number
+}
+
 export interface ChatMemoryContext {
   lastIntent?: string
   pendingIntent?: string
   collectedEntities: Record<string, string>
   missingEntities: string[]
   facts: string[]
+  summary?: ConversationSummary | null
 }
 
 const MAX_HISTORY = 30
@@ -115,6 +126,7 @@ export class ChatMemoryService {
       collectedEntities: metadata.collectedEntities || {},
       missingEntities: metadata.missingEntities || [],
       facts: metadata.facts || [],
+      summary: metadata.summary || null,
     }
   }
 
@@ -174,12 +186,35 @@ export class ChatMemoryService {
   buildPrompt(context: ChatMemoryContext, recentMessages: ChatMemoryMessage[]): string {
     const parts: string[] = []
 
+    // ═══ RESUMEN DE CONVERSACIÓN (si existe) ═══
+    if (context.summary?.text) {
+      parts.push('=== RESUMEN DE LA CONVERSACIÓN ANTERIOR ===')
+      parts.push(context.summary.text)
+
+      if (context.summary.decisions.length > 0) {
+        parts.push('')
+        parts.push('Decisiones/Acciones:')
+        context.summary.decisions.forEach((d) => parts.push(`- ${d}`))
+      }
+
+      if (Object.keys(context.summary.customerInfo).length > 0) {
+        parts.push('')
+        parts.push('Datos del cliente:')
+        Object.entries(context.summary.customerInfo).forEach(([k, v]) => parts.push(`- ${k}: ${v}`))
+      }
+
+      parts.push('=== FIN DEL RESUMEN ===')
+      parts.push('')
+    }
+
+    // ═══ FACTS (información del cliente) ═══
     if (context.facts.length > 0) {
-      parts.push('Información conocida del cliente:')
+      parts.push('INFORMACIÓN DEL CLIENTE:')
       context.facts.forEach((f) => parts.push(`- ${f}`))
       parts.push('')
     }
 
+    // ═══ ACCIÓN PENDIENTE ═══
     if (context.pendingIntent && context.missingEntities.length > 0) {
       parts.push(
         `Acción pendiente: ${context.pendingIntent}. Falta información: ${context.missingEntities.join(', ')}.`
@@ -187,6 +222,7 @@ export class ChatMemoryService {
       parts.push('')
     }
 
+    // ═══ ÚLTIMOS MENSAJES ═══
     parts.push('Últimos mensajes:')
     recentMessages.slice(-8).forEach((m) => {
       const prefix = m.role === 'user' ? 'Cliente' : 'Tú'
