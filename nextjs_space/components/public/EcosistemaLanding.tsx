@@ -610,10 +610,20 @@ export default function EcosistemaLanding() {
 
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Large card: CRM & Ventas (spans 2 cols on lg) */}
+              {/*
+                Column-based stagger (lg: CRM spans cols 0-1):
+                  Row 0: CRM(col 0-1) | Marketing(col 2) | Real Estate(col 3)
+                  Row 1: Accounting(col 0) | RRHH(col 1) | Industria(col 2) | Academy(col 3)
+                delay = col * 0.10 + row * 0.06  → appears by column, top-to-bottom
+              */}
               {SOLUTION_MODULES.map((mod, i) => {
                 const Icon = ICON_MAP[mod.iconKey];
                 const c = COLOR_MAP[mod.color];
                 const isLarge = i === 0;
+                // lg column & row for this index (4-col grid, CRM spans cols 0-1)
+                const col = [0, 2, 3, 0, 1, 2, 3][i];
+                const row = [0, 0, 0, 1, 1, 1, 1][i];
+                const staggerDelay = col * 0.10 + row * 0.06;
                 return (
                   <motion.div
                     key={mod.name}
@@ -629,7 +639,7 @@ export default function EcosistemaLanding() {
                       type: 'spring',
                       stiffness: 100,
                       damping: 14,
-                      delay: i * 0.12,
+                      delay: staggerDelay,
                     }}
                     className={`group relative p-6 rounded-3xl border ${c.border} bg-slate-900/40 hover:bg-slate-900/80 transition-all duration-300 ${
                       isLarge ? 'lg:col-span-2' : ''
