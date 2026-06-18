@@ -22,6 +22,7 @@ import {
   Calendar,
   Zap,
   ChevronRight,
+  ChevronLeft,
   Filter,
   BarChart3,
   PieChart as PieChartIcon,
@@ -1096,9 +1097,12 @@ export default function ChatbotAnalyticsPage() {
 
 // ═══ Alert History Card with Filters ═══════════════════════
 
+const ITEMS_PER_PAGE = 50
+
 function AlertHistoryCard({ alerts }: { alerts: AlertEntry[] }) {
   const [severityFilter, setSeverityFilter] = useState<string | null>(null)
   const [channelFilter, setChannelFilter] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
 
   // Collect unique severities and channels from all alerts
   const allSeverities = Array.from(new Set(alerts.map(a => a.severity)))
@@ -1112,6 +1116,16 @@ function AlertHistoryCard({ alerts }: { alerts: AlertEntry[] }) {
   })
 
   const hasActiveFilters = severityFilter !== null || channelFilter !== null
+
+  // Pagination
+  const totalPages = Math.max(1, Math.ceil(filteredAlerts.length / ITEMS_PER_PAGE))
+  const safePage = Math.min(page, totalPages)
+  const paginatedAlerts = filteredAlerts.slice((safePage - 1) * ITEMS_PER_PAGE, safePage * ITEMS_PER_PAGE)
+
+  // Reset page when filters change
+  useEffect(() => { setPage(1) }, [severityFilter, channelFilter])
+
+  const needsPagination = filteredAlerts.length > ITEMS_PER_PAGE
 
   return (
     <Card>
@@ -1230,7 +1244,7 @@ function AlertHistoryCard({ alerts }: { alerts: AlertEntry[] }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredAlerts.map((alert, i) => (
+                  {paginatedAlerts.map((alert, i) => (
                     <tr key={alert.id} className={cn(
                       'border-b last:border-0 transition-colors hover:bg-muted/50',
                       i % 2 === 0 ? 'bg-background' : 'bg-muted/20'
@@ -1294,10 +1308,72 @@ function AlertHistoryCard({ alerts }: { alerts: AlertEntry[] }) {
                 </tbody>
               </table>
             </div>
-            <p className="text-xs text-muted-foreground mt-4 text-center">
-              {filteredAlerts.length} alerta(s) de {alerts.length} en el período seleccionado
-              {hasActiveFilters && ' (filtradas)'}
-            </p>
+
+            {/* Pagination controls */}
+            <div className="flex items-center justify-between mt-4">
+              <p className="text-xs text-muted-foreground">
+                Mostrando {paginatedAlerts.length} de {filteredAlerts.length} alerta(s)
+                {hasActiveFilters && ' (filtradas)'}
+                {needsPagination && ` · Pág. ${safePage} de ${totalPages}`}
+              </p>
+
+              {needsPagination && (
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    disabled={safePage <= 1}
+                    className="h-8 gap-1 text-xs"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                    Anterior
+                  </Button>
+
+                  {/* Page number buttons */}
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1)
+                      .filter(p => {
+                        // Show first, last, current, and neighbors
+                        if (p === 1 || p === totalPages) return true
+                        if (Math.abs(p - safePage) <= 1) return true
+                        return false
+                      })
+                      .reduce<(number | 'ellipsis')[]>((acc, p, idx, arr) => {
+                        if (idx > 0 && arr[idx - 1] !== p - 1) acc.push('ellipsis')
+                        acc.push(p)
+                        return acc
+                      }, [])}
+                      .map((item, i) =>
+                        item === 'ellipsis' ? (
+                          <span key={`e${i}`} className="px-1 text-xs text-muted-foreground">···</span>
+                        ) : (
+                          <Button
+                            key={item}
+                            variant={safePage === item ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => setPage(item)}
+                            className="h-8 w-8 min-w-0 p-0 text-xs"
+                          >
+                            {item}
+                          </Button>
+                        )
+                      )}
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                    disabled={safePage >= totalPages}
+                    className="h-8 gap-1 text-xs"
+                  >
+                    Siguiente
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              )}
+            </div>
           </>
         )}
       </CardContent>
