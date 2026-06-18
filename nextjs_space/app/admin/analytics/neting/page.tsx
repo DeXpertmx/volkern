@@ -10,6 +10,7 @@ import {
   Calendar,
   Monitor,
   MapPin,
+  Trash2,
 } from 'lucide-react';
 
 interface AnalyticsEvent {
@@ -66,6 +67,7 @@ export default function NetingAnalyticsPage() {
   const [data, setData] = useState<NetingAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [clearing, setClearing] = useState(false);
 
   const load = async () => {
     try {
@@ -89,6 +91,23 @@ export default function NetingAnalyticsPage() {
   useEffect(() => {
     load();
   }, []);
+
+  const clearAll = async () => {
+    if (!confirm('¿Estás seguro? Esto eliminará todos los eventos de analytics del store en memoria.')) return;
+    try {
+      setClearing(true);
+      const res = await fetch('/api/admin/analytics/neting', { method: 'DELETE' });
+      if (res.ok) {
+        await load();
+      } else {
+        setError('Error al limpiar los eventos.');
+      }
+    } catch {
+      setError('Error de conexión al limpiar eventos.');
+    } finally {
+      setClearing(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -137,15 +156,28 @@ export default function NetingAnalyticsPage() {
             Eventos de la landing de promoción Neting
           </p>
         </div>
-        <button
-          onClick={load}
-          className="p-3 rounded-2xl bg-white border border-slate-100 text-slate-400 hover:text-[#1A365D] hover:border-[#1A365D]/20 transition-all group"
-        >
-          <RefreshCcw
-            size={18}
-            className="group-hover:rotate-180 transition-transform duration-500"
-          />
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={clearAll}
+            disabled={clearing || !data || data.summary.totalEvents === 0}
+            className="p-3 rounded-2xl bg-white border border-slate-100 text-rose-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition-all group disabled:opacity-30 disabled:cursor-not-allowed"
+            title="Limpiar todos los eventos"
+          >
+            <Trash2
+              size={18}
+              className={clearing ? 'animate-pulse' : ''}
+            />
+          </button>
+          <button
+            onClick={load}
+            className="p-3 rounded-2xl bg-white border border-slate-100 text-slate-400 hover:text-[#1A365D] hover:border-[#1A365D]/20 transition-all group"
+          >
+            <RefreshCcw
+              size={18}
+              className="group-hover:rotate-180 transition-transform duration-500"
+            />
+          </button>
+        </div>
       </div>
 
       {/* KPI Cards */}

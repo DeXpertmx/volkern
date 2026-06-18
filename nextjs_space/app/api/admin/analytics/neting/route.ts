@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { getEvents, getEventCounts } from '@/lib/analytics/store';
+import { getEvents, getEventCounts, clearEvents } from '@/lib/analytics/store';
 
 /**
  * GET /api/admin/analytics/neting
@@ -70,6 +70,55 @@ export async function GET(req: NextRequest) {
     console.error('Error fetching Neting analytics:', error);
     return NextResponse.json(
       { error: 'Error al obtener analytics de Neting' },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * DELETE /api/admin/analytics/neting
+ * Resetea el store en memoria de eventos de analytics.
+ * Requiere sesión con rol Superadmin/Admin.
+ */
+export async function DELETE(req: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: 'No autorizado: inicia sesión primero' },
+        { status: 401 }
+      );
+    }
+
+    const { prisma } = await import('@/lib/db');
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { role: { select: { nombre: true } } },
+    });
+
+    const roleName = user?.role?.nombre;
+    if (
+      roleName !== 'Superadmin' &&
+      roleName !== 'Admin' &&
+      roleName !== 'Administrador'
+    ) {
+      return NextResponse.json(
+        { error: 'Acceso denegado: requiere rol de Superadmin o Admin' },
+        { status: 403 }
+      );
+    }
+
+    clearEvents();
+
+    return NextResponse.json({
+      ok: true,
+      message: 'Store de eventos limpiado correctamente',
+    });
+  } catch (error: any) {
+    console.error('Error clearing Neting analytics:', error);
+    return NextResponse.json(
+      { error: 'Error al limpiar eventos de Neting' },
       { status: 500 }
     );
   }
