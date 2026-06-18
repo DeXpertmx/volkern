@@ -26,6 +26,7 @@ import {
   User,
   Phone,
 } from 'lucide-react'
+import SetupBasico from '@/components/public/SetupBasico'
 import {
   calcularPrecio,
   type PlanTipo,
@@ -401,6 +402,10 @@ function CheckoutForm() {
               precioOverride={isNetingPromo || undefined}
               setupCost={isNetingPromo ? pricingParams.setup : undefined}
             />
+            <div className="mt-6">
+              <SetupBasico />
+            </div>
+
             <div className="mt-6 space-y-3">
               <div className="flex items-center gap-3 p-4 rounded-xl bg-slate-900/60 border border-slate-800">
                 <div className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
