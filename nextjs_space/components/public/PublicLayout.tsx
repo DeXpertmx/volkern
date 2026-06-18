@@ -75,7 +75,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
             </div>
 
             <a href="/precios" className="text-sm text-slate-400 hover:text-white transition-colors">Precios</a>
-            <a href="/#real-estate" className="text-sm text-slate-400 hover:text-white transition-colors">Ecosistema</a>
+            <a href="/ecosistema" className="text-sm text-slate-400 hover:text-white transition-colors">Ecosistema</a>
             <a href="/#demo" className="text-sm text-slate-400 hover:text-white transition-colors">Demo</a>
             <a href="/auth/login" className="text-sm font-medium bg-slate-900 px-4 py-2 rounded-lg border border-slate-800 hover:bg-slate-800 transition-all">
               Login

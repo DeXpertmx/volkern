@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ArrowRight, PlayCircle } from 'lucide-react';
 
@@ -39,10 +40,12 @@ export const Hero = () => {
               <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </Button>
             
-            <Button variant="outline" size="lg" className="border-slate-800 text-slate-300 hover:bg-slate-900 px-8 py-6 text-lg rounded-xl">
-              <PlayCircle className="mr-2 w-5 h-5" />
-              Ver Ecosistema
-            </Button>
+            <Link href="/ecosistema">
+              <Button variant="outline" size="lg" className="border-slate-800 text-slate-300 hover:bg-slate-900 px-8 py-6 text-lg rounded-xl">
+                <PlayCircle className="mr-2 w-5 h-5" />
+                Ver Ecosistema
+              </Button>
+            </Link>
           </div>
         </motion.div>
 
