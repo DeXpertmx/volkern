@@ -33,6 +33,7 @@ import {
   Send,
   CheckCircle,
   X,
+  Download,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -169,6 +170,13 @@ const PATTERN_LABELS: Record<string, string> = {
 const SENTIMENT_COLORS = ['#22c55e', '#3b82f6', '#f59e0b', '#ef4444'];
 const PIE_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
+const SEVERITY_LABELS: Record<string, string> = {
+  critical: 'Crítico',
+  high: 'Alto',
+  medium: 'Medio',
+  low: 'Bajo',
+}
+
 // ─── Helpers ────────────────────────────────────────────
 
 function formatDate(dateStr: string): string {
@@ -188,6 +196,37 @@ function getSentimentLabel(score: number): { label: string; color: string } {
   if (score >= 45) return { label: 'Neutral', color: 'text-blue-600' };
   if (score >= 25) return { label: 'Negativo', color: 'text-orange-600' };
   return { label: 'Frustrado', color: 'text-red-600' };
+}
+
+/** Generate and download a CSV file from the filtered alerts */
+function exportAlertsToCSV(alerts: AlertEntry[], filename: string) {
+  const headers = ['Fecha', 'Severidad', 'Patrones', 'Canales', 'Severidades']
+  const rows = alerts.map(a => [
+    new Date(a.sentAt).toLocaleString('es-ES', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    }),
+    SEVERITY_LABELS[a.severity] || a.severity,
+    String(a.patternCount),
+    a.channels.map(ch => ch === 'in_app' ? 'In-App' : ch === 'telegram' ? 'Telegram' : 'Email').join(' / '),
+    a.severities.map(s => SEVERITY_LABELS[s] || s).join(' / '),
+  ])
+
+  const csvContent = [
+    headers.join(','),
+    ...rows.map(row => row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(',')),
+  ].join('\n')
+
+  // BOM for proper Spanish character encoding
+  const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
 }
 
 function getPatternIcon(type: string) {
@@ -1074,16 +1113,6 @@ function AlertHistoryCard({ alerts }: { alerts: AlertEntry[] }) {
 
   const hasActiveFilters = severityFilter !== null || channelFilter !== null
 
-  const sevLabel = (sev: string) => {
-    switch (sev) {
-      case 'critical': return 'Crítico'
-      case 'high': return 'Alto'
-      case 'medium': return 'Medio'
-      case 'low': return 'Bajo'
-      default: return sev
-    }
-  }
-
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -1097,17 +1126,35 @@ function AlertHistoryCard({ alerts }: { alerts: AlertEntry[] }) {
               Notificaciones enviadas automáticamente cuando se detectaron patrones anómalos
             </CardDescription>
           </div>
-          {hasActiveFilters && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => { setSeverityFilter(null); setChannelFilter(null) }}
-              className="gap-1 shrink-0 text-xs"
-            >
-              <X className="h-3 w-3" />
-              Limpiar filtros
-            </Button>
-          )}
+          <div className="flex items-center gap-2 shrink-0">
+            {filteredAlerts.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const dateStr = new Date().toISOString().slice(0, 10)
+                  const countLabel = hasActiveFilters ? `_${filteredAlerts.length}de${alerts.length}` : ''
+                  exportAlertsToCSV(filteredAlerts, `alertas_chatbot_${dateStr}${countLabel}.csv`)
+                  toast.success(`${filteredAlerts.length} alertas exportadas a CSV`)
+                }}
+                className="gap-1.5 text-xs"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Exportar CSV
+              </Button>
+            )}
+            {hasActiveFilters && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => { setSeverityFilter(null); setChannelFilter(null) }}
+                className="gap-1 text-xs"
+              >
+                <X className="h-3 w-3" />
+                Limpiar
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Filter bar */}
@@ -1130,7 +1177,7 @@ function AlertHistoryCard({ alerts }: { alerts: AlertEntry[] }) {
                     : 'bg-muted text-muted-foreground border-border hover:bg-muted/80'
                 )}
               >
-                {sevLabel(sev)}
+                {SEVERITY_LABELS[sev] || sev}
               </button>
             ))}
           </div>
@@ -1198,9 +1245,7 @@ function AlertHistoryCard({ alerts }: { alerts: AlertEntry[] }) {
                             'bg-yellow-500/15 text-yellow-600 border-yellow-200 dark:border-yellow-800'
                           )}
                         >
-                          {alert.severity === 'critical' ? 'Crítico' :
-                           alert.severity === 'high' ? 'Alto' :
-                           alert.severity === 'medium' ? 'Medio' : 'Info'}
+                          {SEVERITY_LABELS[alert.severity] || alert.severity}
                         </Badge>
                       </td>
                       <td className="py-3 pr-4">
