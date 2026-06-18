@@ -43,9 +43,10 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const limit = parseInt(searchParams.get('limit') || '100');
     const eventPrefix = searchParams.get('prefix') || 'neting';
+    const since = searchParams.get('since') || undefined;
 
-    const events = await getEvents({ eventPrefix, limit });
-    const counts = await getEventCounts({ eventPrefix });
+    const events = await getEvents({ eventPrefix, since, limit });
+    const counts = await getEventCounts({ eventPrefix, since });
 
     // Calcular tasa de conversión post-promo
     const modalShown = counts['neting_promo_expired_modal_shown'] || 0;
