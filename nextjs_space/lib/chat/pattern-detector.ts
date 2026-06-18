@@ -380,7 +380,7 @@ async function getAuditLogs(tenantId: string, since: Date): Promise<any[]> {
 }
 
 async function getConversationAnalyses(tenantId: string, since: Date): Promise<any[]> {
-  return prisma.chatbotAuditLog.findMany({
+  const records = await prisma.chatbotAuditLog.findMany({
     where: {
       tenantId,
       event: 'conversation_analysis',
@@ -389,6 +389,12 @@ async function getConversationAnalyses(tenantId: string, since: Date): Promise<a
     orderBy: { createdAt: 'desc' },
     take: 500,
   })
+
+  // Aplanar metadata para que los detectores accedan directamente a sentiment, resolved, etc.
+  return records.map(record => ({
+    ...record,
+    ...((record.metadata as Record<string, unknown>) || {}),
+  }))
 }
 
 async function saveDetectedPatterns(tenantId: string, patterns: DetectedPattern[]): Promise<void> {
