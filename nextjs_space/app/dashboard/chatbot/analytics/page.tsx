@@ -30,6 +30,8 @@ import {
   ArrowDown,
   Bell,
   BellOff,
+  Send,
+  CheckCircle,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -1000,6 +1002,8 @@ function NotificationConfigDialog() {
   const [config, setConfig] = useState<PatternAlertConfig>(DEFAULT_PATTERN_ALERT_CONFIG)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [testResults, setTestResults] = useState<Record<string, { success: boolean; error?: string }> | null>(null)
 
   const fetchConfig = useCallback(async () => {
     setLoading(true)
@@ -1228,14 +1232,86 @@ function NotificationConfigDialog() {
           </div>
         </div>
 
-        <div className="flex justify-end gap-3">
-          <Button variant="outline" onClick={() => setOpen(false)}>
-            Cancelar
+        {/* Test results feedback */}
+        {testResults && (
+          <div className="rounded-lg border p-4 space-y-2">
+            <p className="text-sm font-medium flex items-center gap-2">
+              {Object.values(testResults).every(r => r.success) ? (
+                <><CheckCircle className="h-4 w-4 text-emerald-500" /> Canales verificados</>
+              ) : (
+                <><AlertTriangle className="h-4 w-4 text-amber-500" /> Algunos canales fallaron</>
+              )}
+            </p>
+            <div className="space-y-1.5">
+              {Object.entries(testResults).map(([ch, result]) => (
+                <div key={ch} className="flex items-center gap-2 text-xs">
+                  <span className={cn(
+                    'inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-medium',
+                    result.success
+                      ? 'bg-emerald-500/10 text-emerald-600'
+                      : 'bg-red-500/10 text-red-600'
+                  )}>
+                    {result.success ? '✅' : '❌'} {ch === 'in_app' ? 'In-App' : ch === 'telegram' ? 'Telegram' : 'Email'}
+                  </span>
+                  {result.error && (
+                    <span className="text-muted-foreground">{result.error}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex justify-between gap-3">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={async () => {
+              setTesting(true)
+              setTestResults(null)
+              try {
+                const res = await fetch('/api/chatbot/analytics/notifications-config', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(config),
+                })
+                if (res.ok) {
+                  const data = await res.json()
+                  setTestResults(data.results || {})
+                  if (data.success) {
+                    toast.success('Notificación de prueba enviada')
+                  } else {
+                    toast.error(data.message || 'Error al enviar prueba')
+                  }
+                } else {
+                  toast.error('Error al enviar notificación de prueba')
+                }
+              } catch (e) {
+                toast.error('Error de conexión')
+              } finally {
+                setTesting(false)
+              }
+            }}
+            disabled={testing || !config.enabled}
+            className="gap-2"
+          >
+            {testing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+            {testing ? 'Enviando...' : 'Probar notificaciones'}
           </Button>
-          <Button onClick={saveConfig} disabled={saving}>
-            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Guardar
-          </Button>
+
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={() => { setOpen(false); setTestResults(null) }}>
+              Cerrar
+            </Button>
+            <Button onClick={saveConfig} disabled={saving}>
+              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Guardar
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

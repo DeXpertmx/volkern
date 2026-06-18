@@ -64,3 +64,91 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: 'Error al guardar configuración' }, { status: 500 })
   }
 }
+
+/**
+ * POST /api/chatbot/analytics/notifications-config
+ * Envía una notificación de prueba a los canales configurados
+ */
+export async function POST(request: Request) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.tenantId || !session?.user?.id) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    }
+
+    const tenantId = session.user.tenantId
+    const userId = session.user.id
+    const body = await request.json()
+    const config: PatternAlertConfig = { ...DEFAULT_CONFIG, ...body }
+    const results: Record<string, any> = {}
+
+    if (config.channels.includes('in_app')) {
+      // Crear notificación in-app de prueba
+      const notification = await prisma.inAppNotification.create({
+        data: {
+          tenantId,
+          userId,
+          title: '🔔 Prueba de alerta — Patrones del Chatbot',
+          body: 'Esta es una notificación de prueba. Si ves esto, las alertas in-app funcionan correctamente.\n\nRecibirás este tipo de alertas cuando se detecten patrones críticos en el chatbot.',
+          type: 'info',
+          data: { source: 'pattern_alert_test' },
+          actionUrl: '/dashboard/chatbot/analytics',
+        },
+      })
+      results.in_app = { success: true, id: notification.id }
+    }
+
+    if (config.channels.includes('telegram')) {
+      try {
+        const { notifyByTelegram } = await import('@/lib/skills/notification-layer')
+        const { SkillContext } = await import('@/lib/skills/context')
+        const ctx = new SkillContext({ tenantId, userId })
+        const result = await notifyByTelegram(
+          '🔔 *Prueba de Alerta — Chatbot Analytics*\n\n✅ Las alertas de patrones críticos del chatbot funcionan correctamente.\n\nRecibirás este tipo de notificaciones cuando se detecten patrones anómalos en el asistente IA.',
+          ctx
+        )
+        results.telegram = { success: result.success, error: result.error }
+      } catch (err) {
+        results.telegram = { success: false, error: String(err) }
+      }
+    }
+
+    if (config.channels.includes('email')) {
+      try {
+        // Obtener email del usuario actual
+        const user = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { email: true },
+        })
+        if (user?.email) {
+          const { notifyByEmail } = await import('@/lib/skills/notification-layer')
+          const { SkillContext } = await import('@/lib/skills/context')
+          const ctx = new SkillContext({ tenantId, userId })
+          const result = await notifyByEmail(
+            user.email,
+            '🔔 Prueba de Alerta — Chatbot Analytics',
+            '✅ Las alertas de patrones críticos del chatbot funcionan correctamente.\n\nRecibirás este tipo de notificaciones cuando se detecten patrones anómalos en el asistente IA.',
+            ctx
+          )
+          results.email = { success: result.success, error: result.error }
+        } else {
+          results.email = { success: false, error: 'Usuario sin email configurado' }
+        }
+      } catch (err) {
+        results.email = { success: false, error: String(err) }
+      }
+    }
+
+    const allOk = Object.values(results).every((r: any) => r.success !== false)
+    return NextResponse.json({
+      success: allOk,
+      results,
+      message: allOk
+        ? 'Notificaciones de prueba enviadas correctamente'
+        : 'Algunos canales fallaron. Revisa la configuración.',
+    })
+  } catch (error) {
+    console.error('[PatternAlertsConfig] Error sending test:', error)
+    return NextResponse.json({ error: 'Error al enviar notificación de prueba' }, { status: 500 })
+  }
+}
