@@ -13,10 +13,26 @@ export type RevealVariant =
   | 'fadeInRight'
   | 'scalePop';
 
+/** HTML elements that ScrollReveal can render as */
+export type RevealAs =
+  | 'div'
+  | 'section'
+  | 'li'
+  | 'p'
+  | 'span'
+  | 'article'
+  | 'header'
+  | 'footer'
+  | 'main'
+  | 'aside'
+  | 'nav';
+
 interface ScrollRevealProps {
   children: React.ReactNode;
   /** Animation variant. Default: 'fadeIn' */
   variant?: RevealVariant;
+  /** HTML element to render as. Default: 'div' */
+  as?: RevealAs;
   /** Delay in seconds before animation starts */
   delay?: number;
   /** Use spring physics instead of ease-based transition */
@@ -65,19 +81,22 @@ const variantMap: Record<RevealVariant, Variants> = {
 /**
  * Scroll-triggered reveal animation.
  *
- * Wraps children in a `motion.div` that fades in when entering the viewport
- * (once, with configurable margin).
+ * Wraps children in a motion element (default `<div>`) that animates in
+ * when entering the viewport (once, with configurable margin).
  *
  * @example
  * // Basic fade-in
  * <ScrollReveal><Section /></ScrollReveal>
+ *
+ * // Render as a semantic element
+ * <ScrollReveal as="section"><Content /></ScrollReveal>
  *
  * // Spring fade-up with delay
  * <ScrollReveal variant="fadeInUp" delay={0.2} spring><Card /></ScrollReveal>
  *
  * // Staggered list — compute delay from index
  * {items.map((item, i) => (
- *   <ScrollReveal key={i} variant="fadeInUpScale" delay={i * 0.12} spring>
+ *   <ScrollReveal key={i} variant="fadeInUpScale" delay={i * 0.12} spring as="li">
  *     <Card />
  *   </ScrollReveal>
  * ))}
@@ -85,6 +104,7 @@ const variantMap: Record<RevealVariant, Variants> = {
 export default function ScrollReveal({
   children,
   variant = 'fadeIn',
+  as: Tag = 'div',
   delay = 0,
   spring = false,
   stiffness = 100,
@@ -98,8 +118,10 @@ export default function ScrollReveal({
     ? { type: 'spring' as const, stiffness, damping, delay }
     : { duration: variant === 'fadeIn' ? 0.6 : 0.4, delay, ease: 'easeOut' as const };
 
+  const MotionTag = motion[Tag] as typeof motion.div;
+
   return (
-    <motion.div
+    <MotionTag
       variants={variants}
       initial="hidden"
       whileInView="visible"
@@ -108,6 +130,6 @@ export default function ScrollReveal({
       className={className}
     >
       {children}
-    </motion.div>
+    </MotionTag>
   );
 }
