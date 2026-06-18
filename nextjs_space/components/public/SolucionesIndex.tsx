@@ -20,6 +20,7 @@ import {
 import { SOLUTION_MODULES, COLOR_MAP } from '@/lib/soluciones';
 import BackToTop from '@/components/public/BackToTop';
 import FloatingParticles from '@/components/public/FloatingParticles';
+import ScrollReveal from '@/components/public/ScrollReveal';
 
 /* ─── Icon mapping ────────────────────────────────────────────────────────── */
 
@@ -133,13 +134,7 @@ export default function SolucionesIndex() {
       ════════════════════════════════════════════════════════════════════ */}
       <section className="py-16 md:py-24 bg-slate-950">
         <div className="container mx-auto px-6">
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: '-80px' }}
-            transition={{ duration: 0.6, ease: 'easeOut' }}
-            className="max-w-3xl mx-auto text-center"
-          >
+          <ScrollReveal className="max-w-3xl mx-auto text-center">
             <div className="bg-gradient-to-r from-blue-900/40 via-slate-900 to-indigo-900/40 border border-slate-800 rounded-3xl p-10 md:p-14 relative overflow-hidden">
               <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[400px] h-[150px] bg-blue-600/10 blur-[100px] rounded-full pointer-events-none" />
 
@@ -166,7 +161,7 @@ export default function SolucionesIndex() {
                 </Link>
               </div>
             </div>
-          </motion.div>
+          </ScrollReveal>
         </div>
       </section>
 

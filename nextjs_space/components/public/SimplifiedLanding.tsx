@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowRight, Check, Zap, ShieldCheck, Users, BookOpen, BarChart3, ChevronDown, Sparkles, Monitor, TrendingUp, Settings, Rocket, Layers } from 'lucide-react';
 import { calcularPrecio, getMensajeLimite, getComparisonTable, type PlanTipo } from '@/lib/pricing-engine';
 import BackToTop from '@/components/public/BackToTop';
+import ScrollReveal from '@/components/public/ScrollReveal';
 
 /* ─── Constants ───────────────────────────────────────────────────────────── */
 
@@ -316,16 +317,6 @@ const Section = ({ id, className, children, dark }: { id?: string; className?: s
   </section>
 );
 
-const FadeIn = ({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) => (
-  <motion.div
-    initial={{ opacity: 0, y: 24 }}
-    whileInView={{ opacity: 1, y: 0 }}
-    viewport={{ once: true, margin: '-80px' }}
-    transition={{ duration: 0.6, delay, ease: 'easeOut' }}
-  >
-    {children}
-  </motion.div>
-);
 
 /* ─── Component ───────────────────────────────────────────────────────────── */
 
@@ -391,7 +382,7 @@ export default function SimplifiedLanding() {
          VALUE GROUPED — 4 columnas
       ════════════════════════════════════════════════════════════════════ */}
       <Section dark>
-        <FadeIn>
+        <ScrollReveal>
           <div className="max-w-5xl mx-auto">
             <div className="text-center mb-14">
               <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
@@ -432,14 +423,14 @@ export default function SimplifiedLanding() {
               })}
             </div>
           </div>
-        </FadeIn>
+        </ScrollReveal>
       </Section>
 
       {/* ═══════════════════════════════════════════════════════════════════
          HOW IT WORKS — 3 pasos
       ════════════════════════════════════════════════════════════════════ */}
       <Section id="como-funciona">
-        <FadeIn>
+        <ScrollReveal>
           <div className="max-w-4xl mx-auto">
             <div className="text-center mb-14">
               <span className="inline-block py-1 px-3 rounded-full bg-blue-500/10 text-blue-400 text-sm font-medium mb-6 border border-blue-500/20">
@@ -494,14 +485,14 @@ export default function SimplifiedLanding() {
               })}
             </div>
           </div>
-        </FadeIn>
+        </ScrollReveal>
       </Section>
 
       {/* ═══════════════════════════════════════════════════════════════════
          MODULES — simplificado, baja prioridad
       ════════════════════════════════════════════════════════════════════ */}
       <Section dark>
-        <FadeIn>
+        <ScrollReveal>
           <div className="max-w-4xl mx-auto text-center">
             <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
               Todo lo que incluye Volkern
@@ -523,14 +514,14 @@ export default function SimplifiedLanding() {
               ))}
             </div>
           </div>
-        </FadeIn>
+        </ScrollReveal>
       </Section>
 
       {/* ═══════════════════════════════════════════════════════════════════
          MID CTA
       ════════════════════════════════════════════════════════════════════ */}
       <Section>
-        <FadeIn>
+        <ScrollReveal>
           <div className="max-w-3xl mx-auto text-center">
             <div className="bg-gradient-to-r from-blue-900/30 via-slate-900 to-purple-900/30 border border-slate-800 rounded-3xl p-12 md:p-16">
               <Sparkles className="w-12 h-12 text-blue-400 mx-auto mb-6" />
@@ -548,14 +539,14 @@ export default function SimplifiedLanding() {
               </Link>
             </div>
           </div>
-        </FadeIn>
+        </ScrollReveal>
       </Section>
 
       {/* ═══════════════════════════════════════════════════════════════════
          PRICING (sliders interactivos)
       ════════════════════════════════════════════════════════════════════ */}
       <Section dark id="pricing">
-        <FadeIn>
+        <ScrollReveal>
           <div className="max-w-4xl mx-auto">
             <div className="text-center mb-10">
               <span className="inline-block py-1 px-3 rounded-full bg-blue-500/10 text-blue-400 text-sm font-medium mb-6 border border-blue-500/20">
@@ -570,14 +561,14 @@ export default function SimplifiedLanding() {
 
             <PricingSlider />
           </div>
-        </FadeIn>
+        </ScrollReveal>
       </Section>
 
       {/* ═══════════════════════════════════════════════════════════════════
          CTA FINAL
       ════════════════════════════════════════════════════════════════════ */}
       <Section>
-        <FadeIn>
+        <ScrollReveal>
           <div className="max-w-3xl mx-auto text-center">
             <div className="bg-gradient-to-r from-blue-900/40 via-slate-900 to-indigo-900/40 border border-slate-800 rounded-3xl p-12 md:p-16">
               <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
@@ -594,7 +585,7 @@ export default function SimplifiedLanding() {
               </Link>
             </div>
           </div>
-        </FadeIn>
+        </ScrollReveal>
       </Section>
 
       {/* ═══════════════════════════════════════════════════════════════════
