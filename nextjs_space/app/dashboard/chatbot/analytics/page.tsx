@@ -230,6 +230,77 @@ function exportAlertsToCSV(alerts: AlertEntry[], filename: string) {
   URL.revokeObjectURL(url)
 }
 
+/** Generate and download a CSV file from the detected patterns */
+function exportPatternsToCSV(patterns: Pattern[], filename: string) {
+  const headers = ['Tipo', 'Severidad', 'Descripción', 'Valor', 'Umbral', 'Recomendación', 'Detectado']
+  const rows = patterns.map(p => [
+    PATTERN_LABELS[p.type] || p.type,
+    SEVERITY_LABELS[p.severity] || p.severity,
+    p.description,
+    String(p.value) + '%',
+    String(p.threshold) + '%',
+    p.recommendation,
+    new Date(p.detectedAt).toLocaleString('es-ES', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    }),
+  ])
+
+  const csvContent = [
+    headers.join(','),
+    ...rows.map(row => row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(',')),
+  ].join('\n')
+
+  const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+/** Generate and download a CSV file from the suggestions */
+function exportSuggestionsToCSV(suggestions: Suggestion[], filename: string) {
+  const headers = ['Título', 'Tipo', 'Prioridad', 'Estado', 'Categoría', 'Descripción', 'Impacto Estimado', 'Creado']
+  const rows = suggestions.map(s => [
+    s.title,
+    s.type,
+    s.priority,
+    s.status === 'pending' ? 'Pendiente' :
+      s.status === 'in_progress' ? 'En progreso' :
+      s.status === 'applied' ? 'Aplicada' : 'Descartada',
+    s.category === 'knowledge_base' ? 'Base de conocimiento' :
+      s.category === 'training' ? 'Entrenamiento' :
+      s.category === 'configuration' ? 'Configuración' :
+      s.category === 'skill' ? 'Skill' :
+      s.category === 'threshold' ? 'Threshold' : 'Infraestructura',
+    s.description,
+    s.estimatedImpact,
+    new Date(s.createdAt).toLocaleString('es-ES', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    }),
+  ])
+
+  const csvContent = [
+    headers.join(','),
+    ...rows.map(row => row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(',')),
+  ].join('\n')
+
+  const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
 function getPatternIcon(type: string) {
   switch (type) {
     case 'high_unknown_rate': return <Search className="h-4 w-4" />;
@@ -764,69 +835,92 @@ export default function ChatbotAnalyticsPage() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid grid-cols-1 gap-4">
-              {patterns.map((pattern, i) => (
-                <Card key={i} className="hover:shadow-md transition-shadow">
-                  <CardContent className="pt-6">
-                    <div className="flex items-start gap-4">
-                      <div className={cn(
-                        'p-2.5 rounded-xl',
-                        pattern.severity === 'critical' ? 'bg-red-100 dark:bg-red-900/30' :
-                        pattern.severity === 'high' ? 'bg-orange-100 dark:bg-orange-900/30' :
-                        'bg-yellow-100 dark:bg-yellow-900/30'
-                      )}>
-                        {getPatternIcon(pattern.type)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h4 className="font-semibold">
-                            {PATTERN_LABELS[pattern.type] || pattern.type}
-                          </h4>
-                          <Badge
-                            variant="outline"
-                            className={cn('text-xs', SEVERITY_COLORS[pattern.severity] || '')}
-                          >
-                            {pattern.severity}
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-muted-foreground mt-1">{pattern.description}</p>
-
-                        {/* Value bar */}
-                        <div className="mt-3 flex items-center gap-3">
-                          <div className="flex-1">
-                            <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                              <div
-                                className={cn(
-                                  'h-full rounded-full',
-                                  pattern.value >= 70 ? 'bg-red-500' :
-                                  pattern.value >= 40 ? 'bg-orange-500' : 'bg-yellow-500'
-                                )}
-                                style={{ width: `${Math.min(pattern.value, 100)}%` }}
-                              />
-                            </div>
+            <Card>
+              <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-primary" />
+                  Patrones Detectados
+                </CardTitle>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const dateStr = new Date().toISOString().slice(0, 10)
+                    exportPatternsToCSV(patterns, `patrones_chatbot_${dateStr}.csv`)
+                    toast.success(`${patterns.length} patrones exportados a CSV`)
+                  }}
+                  className="gap-1.5 text-xs"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Exportar CSV
+                </Button>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 gap-4">
+                  {patterns.map((pattern, i) => (
+                    <Card key={i} className="hover:shadow-md transition-shadow">
+                      <CardContent className="pt-6">
+                        <div className="flex items-start gap-4">
+                          <div className={cn(
+                            'p-2.5 rounded-xl',
+                            pattern.severity === 'critical' ? 'bg-red-100 dark:bg-red-900/30' :
+                            pattern.severity === 'high' ? 'bg-orange-100 dark:bg-orange-900/30' :
+                            'bg-yellow-100 dark:bg-yellow-900/30'
+                          )}>
+                            {getPatternIcon(pattern.type)}
                           </div>
-                          <span className="text-xs font-mono font-bold">{pattern.value}%</span>
-                          <span className="text-xs text-muted-foreground">
-                            umbral: {pattern.threshold}%
-                          </span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h4 className="font-semibold">
+                                {PATTERN_LABELS[pattern.type] || pattern.type}
+                              </h4>
+                              <Badge
+                                variant="outline"
+                                className={cn('text-xs', SEVERITY_COLORS[pattern.severity] || '')}
+                              >
+                                {pattern.severity}
+                              </Badge>
+                            </div>
+                            <p className="text-sm text-muted-foreground mt-1">{pattern.description}</p>
+
+                            {/* Value bar */}
+                            <div className="mt-3 flex items-center gap-3">
+                              <div className="flex-1">
+                                <div className="h-2 bg-secondary rounded-full overflow-hidden">
+                                  <div
+                                    className={cn(
+                                      'h-full rounded-full',
+                                      pattern.value >= 70 ? 'bg-red-500' :
+                                      pattern.value >= 40 ? 'bg-orange-500' : 'bg-yellow-500'
+                                    )}
+                                    style={{ width: `${Math.min(pattern.value, 100)}%` }}
+                                  />
+                                </div>
+                              </div>
+                              <span className="text-xs font-mono font-bold">{pattern.value}%</span>
+                              <span className="text-xs text-muted-foreground">
+                                umbral: {pattern.threshold}%
+                              </span>
+                            </div>
+
+                            <Separator className="my-3" />
+
+                            <div className="flex items-start gap-2">
+                              <Lightbulb className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+                              <p className="text-sm text-muted-foreground">{pattern.recommendation}</p>
+                            </div>
+
+                            <p className="text-xs text-muted-foreground mt-2">
+                              Detectado {formatDate(pattern.detectedAt)}
+                            </p>
+                          </div>
                         </div>
-
-                        <Separator className="my-3" />
-
-                        <div className="flex items-start gap-2">
-                          <Lightbulb className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
-                          <p className="text-sm text-muted-foreground">{pattern.recommendation}</p>
-                        </div>
-
-                        <p className="text-xs text-muted-foreground mt-2">
-                          Detectado {formatDate(pattern.detectedAt)}
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           )}
         </TabsContent>
 
@@ -844,77 +938,100 @@ export default function ChatbotAnalyticsPage() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {suggestions.map((suggestion) => (
-                <Card key={suggestion.id} className="hover:shadow-md transition-shadow group">
-                  <CardContent className="pt-6">
-                    <div className="flex items-start gap-3">
-                      <div className={cn(
-                        'p-2 rounded-lg shrink-0',
-                        suggestion.priority === 'critical' ? 'bg-red-100 dark:bg-red-900/30' :
-                        suggestion.priority === 'high' ? 'bg-orange-100 dark:bg-orange-900/30' :
-                        suggestion.priority === 'medium' ? 'bg-yellow-100 dark:bg-yellow-900/30' :
-                        'bg-blue-100 dark:bg-blue-900/30'
-                      )}>
-                        <Lightbulb className={cn(
-                          'h-5 w-5',
-                          suggestion.priority === 'critical' ? 'text-red-600' :
-                          suggestion.priority === 'high' ? 'text-orange-600' :
-                          suggestion.priority === 'medium' ? 'text-yellow-600' :
-                          'text-blue-600'
-                        )} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h4 className="font-semibold text-sm">{suggestion.title}</h4>
-                          <Badge
-                            variant="outline"
-                            className={cn('text-xs', STATUS_COLORS[suggestion.status] || '')}
-                          >
-                            {suggestion.status === 'pending' ? 'Pendiente' :
-                             suggestion.status === 'in_progress' ? 'En progreso' :
-                             suggestion.status === 'applied' ? 'Aplicada' : 'Descartada'}
-                          </Badge>
-                          <Badge variant="outline" className="text-xs">{suggestion.priority}</Badge>
+            <Card>
+              <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Lightbulb className="h-5 w-5 text-primary" />
+                  Sugerencias de Mejora
+                </CardTitle>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const dateStr = new Date().toISOString().slice(0, 10)
+                    exportSuggestionsToCSV(suggestions, `sugerencias_chatbot_${dateStr}.csv`)
+                    toast.success(`${suggestions.length} sugerencias exportadas a CSV`)
+                  }}
+                  className="gap-1.5 text-xs"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Exportar CSV
+                </Button>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {suggestions.map((suggestion) => (
+                    <Card key={suggestion.id} className="hover:shadow-md transition-shadow group">
+                      <CardContent className="pt-6">
+                        <div className="flex items-start gap-3">
+                          <div className={cn(
+                            'p-2 rounded-lg shrink-0',
+                            suggestion.priority === 'critical' ? 'bg-red-100 dark:bg-red-900/30' :
+                            suggestion.priority === 'high' ? 'bg-orange-100 dark:bg-orange-900/30' :
+                            suggestion.priority === 'medium' ? 'bg-yellow-100 dark:bg-yellow-900/30' :
+                            'bg-blue-100 dark:bg-blue-900/30'
+                          )}>
+                            <Lightbulb className={cn(
+                              'h-5 w-5',
+                              suggestion.priority === 'critical' ? 'text-red-600' :
+                              suggestion.priority === 'high' ? 'text-orange-600' :
+                              suggestion.priority === 'medium' ? 'text-yellow-600' :
+                              'text-blue-600'
+                            )} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h4 className="font-semibold text-sm">{suggestion.title}</h4>
+                              <Badge
+                                variant="outline"
+                                className={cn('text-xs', STATUS_COLORS[suggestion.status] || '')}
+                              >
+                                {suggestion.status === 'pending' ? 'Pendiente' :
+                                 suggestion.status === 'in_progress' ? 'En progreso' :
+                                 suggestion.status === 'applied' ? 'Aplicada' : 'Descartada'}
+                              </Badge>
+                              <Badge variant="outline" className="text-xs">{suggestion.priority}</Badge>
+                            </div>
+
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {suggestion.description}
+                            </p>
+
+                            <Separator className="my-2" />
+
+                            <div className="space-y-1">
+                              <p className="text-xs font-medium text-muted-foreground">
+                                Impacto estimado:
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {suggestion.estimatedImpact}
+                              </p>
+                            </div>
+
+                            <details className="mt-2">
+                              <summary className="text-xs text-primary cursor-pointer hover:underline">
+                                Ver guía de implementación
+                              </summary>
+                              <pre className="mt-2 text-xs bg-muted p-3 rounded-lg whitespace-pre-wrap font-sans">
+                                {suggestion.implementationGuide}
+                              </pre>
+                            </details>
+
+                            <p className="text-xs text-muted-foreground mt-2">
+                              {formatDate(suggestion.createdAt)} • {suggestion.category === 'knowledge_base' ? 'Base de conocimiento' :
+                               suggestion.category === 'training' ? 'Entrenamiento' :
+                               suggestion.category === 'configuration' ? 'Configuración' :
+                               suggestion.category === 'skill' ? 'Skill' :
+                               suggestion.category === 'threshold' ? 'Threshold' : 'Infraestructura'}
+                            </p>
+                          </div>
                         </div>
-
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {suggestion.description}
-                        </p>
-
-                        <Separator className="my-2" />
-
-                        <div className="space-y-1">
-                          <p className="text-xs font-medium text-muted-foreground">
-                            Impacto estimado:
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {suggestion.estimatedImpact}
-                          </p>
-                        </div>
-
-                        <details className="mt-2">
-                          <summary className="text-xs text-primary cursor-pointer hover:underline">
-                            Ver guía de implementación
-                          </summary>
-                          <pre className="mt-2 text-xs bg-muted p-3 rounded-lg whitespace-pre-wrap font-sans">
-                            {suggestion.implementationGuide}
-                          </pre>
-                        </details>
-
-                        <p className="text-xs text-muted-foreground mt-2">
-                          {formatDate(suggestion.createdAt)} • {suggestion.category === 'knowledge_base' ? 'Base de conocimiento' :
-                           suggestion.category === 'training' ? 'Entrenamiento' :
-                           suggestion.category === 'configuration' ? 'Configuración' :
-                           suggestion.category === 'skill' ? 'Skill' :
-                           suggestion.category === 'threshold' ? 'Threshold' : 'Infraestructura'}
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           )}
         </TabsContent>
 
