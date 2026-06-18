@@ -483,6 +483,19 @@ model AuditLog {
   @@index([fechaCreacion])
 }
 
+model PublicAnalyticsEvent {
+  id        String   @id @default(cuid())
+  event     String
+  metadata  Json?    @default("{}")
+  ip        String   @default("unknown")
+  userAgent String   @default("unknown")
+  referer   String   @default("direct")
+  timestamp DateTime @default(now())
+
+  @@index([event])
+  @@index([timestamp])
+}
+
 model Lead {
   id                   String               @id @default(cuid())
   nombre               String
