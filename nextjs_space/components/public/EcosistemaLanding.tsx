@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef } from 'react';
 import {
   motion,
   useScroll,
@@ -29,104 +29,8 @@ import { SOLUTION_MODULES, COLOR_MAP } from '@/lib/soluciones';
 import BackToTop from '@/components/public/BackToTop';
 import FloatingParticles from '@/components/public/FloatingParticles';
 import ScrollReveal from '@/components/public/ScrollReveal';
-
-/* ─── TypewriterText ──────────────────────────────────────────────────────── */
-
-/**
- * Scroll-triggered typewriter effect.
- * Types text character by character when the element enters the viewport.
- * For the Hero (above the fold), set heroMode to start immediately.
- */
-function TypewriterText({
-  text,
-  speed = 40,
-  className = '',
-  cursorColor = 'bg-blue-400',
-  heroMode = false,
-}: {
-  text: string;
-  speed?: number;
-  className?: string;
-  cursorColor?: string;
-  heroMode?: boolean;
-}) {
-  const ref = useRef<HTMLSpanElement>(null);
-  const inView = useInView(ref, { once: true, margin: '-80px' });
-  const started = heroMode || inView;
-  const [displayed, setDisplayed] = useState('');
-
-  // Type character by character once in view
-  useEffect(() => {
-    if (!started) return;
-    if (displayed.length >= text.length) return;
-    const t = setTimeout(() => {
-      setDisplayed(text.slice(0, displayed.length + 1));
-    }, speed);
-    return () => clearTimeout(t);
-  }, [started, displayed, text, speed]);
-
-  const done = displayed.length >= text.length;
-  const lines = displayed.split('\n');
-
-  return (
-    <span ref={ref} className={className}>
-      {lines.map((line, i) => (
-        <React.Fragment key={i}>
-          {i > 0 && <br />}
-          {line}
-        </React.Fragment>
-      ))}
-      {!done && (
-        <span
-          className={`inline-block w-[3px] h-[0.85em] ${cursorColor} ml-1 align-middle animate-pulse`}
-          aria-hidden="true"
-        />
-      )}
-    </span>
-  );
-}
-
-/* ─── CountUp ─────────────────────────────────────────────────────────────── */
-
-function CountUp({
-  target,
-  suffix = '',
-  prefix = '',
-}: {
-  target: number;
-  suffix?: string;
-  prefix?: string;
-}) {
-  const ref = useRef<HTMLSpanElement>(null);
-  const isInView = useInView(ref, { once: true, margin: '-50px' });
-  const [count, setCount] = useState(0);
-
-  useEffect(() => {
-    if (!isInView) return;
-    let start = 0;
-    const durationMs = 2000;
-    const stepMs = 16;
-    const increment = target / (durationMs / stepMs);
-    const timer = setInterval(() => {
-      start += increment;
-      if (start >= target) {
-        setCount(target);
-        clearInterval(timer);
-      } else {
-        setCount(Math.floor(start));
-      }
-    }, stepMs);
-    return () => clearInterval(timer);
-  }, [isInView, target]);
-
-  return (
-    <span ref={ref} className="tabular-nums">
-      {prefix}
-      {count.toLocaleString('es-ES')}
-      {suffix}
-    </span>
-  );
-}
+import TypewriterText from '@/components/public/TypewriterText';
+import CountUp from '@/components/public/CountUp';
 
 /* ─── Data ────────────────────────────────────────────────────────────────── */
 
