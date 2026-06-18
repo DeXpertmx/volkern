@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createLogger } from '@/lib/skills/observability';
+import { addEvent } from '@/lib/analytics/store';
 
 const analyticsLogger = createLogger('analytics-public');
 
@@ -20,14 +21,29 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const timestamp = new Date().toISOString();
+    const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+    const userAgent = req.headers.get('user-agent') || 'unknown';
+    const referer = req.headers.get('referer') || 'direct';
+
     // Log estructurado con metadata de request
     analyticsLogger.info(`[Analytics] ${event}`, null, {
       event,
       metadata: metadata || {},
-      ip: req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown',
-      userAgent: req.headers.get('user-agent') || 'unknown',
-      referer: req.headers.get('referer') || 'direct',
-      timestamp: new Date().toISOString(),
+      ip,
+      userAgent,
+      referer,
+      timestamp,
+    });
+
+    // Guardar en store en memoria para el dashboard
+    addEvent({
+      event,
+      metadata: metadata || {},
+      ip,
+      userAgent,
+      referer,
+      timestamp,
     });
 
     return NextResponse.json({ ok: true });
