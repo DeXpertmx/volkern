@@ -28,6 +28,61 @@ import {
 import { SOLUTION_MODULES, COLOR_MAP } from '@/lib/soluciones';
 import BackToTop from '@/components/public/BackToTop';
 
+/* ─── TypewriterText ──────────────────────────────────────────────────────── */
+
+function TypewriterText({
+  text,
+  speed = 45,
+  startDelay = 400,
+  className = '',
+  cursorColor = 'bg-blue-400',
+}: {
+  text: string;
+  speed?: number;
+  startDelay?: number;
+  className?: string;
+  cursorColor?: string;
+}) {
+  const [displayed, setDisplayed] = useState('');
+  const [started, setStarted] = useState(false);
+
+  // Initial delay before typing starts
+  useEffect(() => {
+    const t = setTimeout(() => setStarted(true), startDelay);
+    return () => clearTimeout(t);
+  }, [startDelay]);
+
+  // Type character by character
+  useEffect(() => {
+    if (!started) return;
+    if (displayed.length >= text.length) return;
+    const t = setTimeout(() => {
+      setDisplayed(text.slice(0, displayed.length + 1));
+    }, speed);
+    return () => clearTimeout(t);
+  }, [started, displayed, text, speed]);
+
+  const done = displayed.length >= text.length;
+  const lines = displayed.split('\n');
+
+  return (
+    <span className={className}>
+      {lines.map((line, i) => (
+        <React.Fragment key={i}>
+          {i > 0 && <br />}
+          {line}
+        </React.Fragment>
+      ))}
+      {!done && (
+        <span
+          className={`inline-block w-[3px] h-[0.85em] ${cursorColor} ml-1 align-middle animate-pulse`}
+          aria-hidden="true"
+        />
+      )}
+    </span>
+  );
+}
+
 /* ─── CountUp ─────────────────────────────────────────────────────────────── */
 
 function CountUp({
@@ -225,12 +280,11 @@ export default function EcosistemaLanding() {
             </span>
 
             <h1 className="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight tracking-tight">
-              Un solo sistema para{' '}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-400 to-indigo-500">
-                gestionar y automatizar
-              </span>
-              <br />
-              todo tu negocio
+              <TypewriterText
+                text="Un solo sistema para gestionar y automatizar\ntodo tu negocio"
+                speed={42}
+                startDelay={300}
+              />
             </h1>
 
             <p className="text-xl text-slate-400 max-w-2xl mx-auto mb-10 leading-relaxed">
