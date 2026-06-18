@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/db'
-import { PLANS, PLAN_LIMITS, TRIAL_DAYS, getPlanConfig } from '@/lib/plans'
+import { PLANS, PLAN_LIMITS, TRIAL_DAYS, PLAN_MODULES, getPlanConfig } from '@/lib/plans'
 import { getDefaultModules } from '@/lib/onboarding-modules'
 import { seedFormsForTenant } from '@/scripts/seed-formularios-demo'
 import { AccountingInitializer } from '@/lib/accounting/initializer'
@@ -132,6 +132,14 @@ export async function POST(request: NextRequest) {
     let limites = trialConfig.limites
     let modules = getDefaultModules()
     let fechaFin: Date
+
+    // Si el usuario contrató un plan específico (via checkout), activar sus módulos
+    if (pricing?.plan && !couponData) {
+      const planKey = pricing.plan as keyof typeof PLAN_MODULES
+      if (PLAN_MODULES[planKey]) {
+        modules = PLAN_MODULES[planKey]
+      }
+    }
     
     if (couponData) {
       // Usar configuración del cupón de regalo

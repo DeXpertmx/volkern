@@ -160,7 +160,7 @@ export default function NetingLanding() {
   const checkoutInterval = billing === 'annual' ? 'yearly' : 'monthly';
   const checkoutPrecio = isAnnual ? PRICING.annual.promo : PRICING.monthly.promo;
   const checkoutSetup = isAnnual ? PRICING.annual.setupPromo : PRICING.monthly.setupPromo;
-  const promoCtaHref = `/checkout?usuarios=1&contactos=1000&plan=scale&interval=${checkoutInterval}&precio=${checkoutPrecio}&setup=${checkoutSetup}&promo=neting`;
+  const promoCtaHref = `/checkout?usuarios=3&contactos=2000&plan=scale&interval=${checkoutInterval}&precio=${checkoutPrecio}&setup=${checkoutSetup}&promo=neting`;
 
   /* ─── Modal de promoción expirada (solo si inició trial) ─────────────── */
   const [showExpiredModal, setShowExpiredModal] = useState(false);
@@ -672,11 +672,11 @@ export default function NetingLanding() {
                       </div>
                       <div className="vl-summary-item">
                         <p className="vl-summary-label">Usuarios</p>
-                        <p className="vl-summary-value">Ilimitados</p>
+                        <p className="vl-summary-value">3 incluidos</p>
                       </div>
                       <div className="vl-summary-item">
                         <p className="vl-summary-label">Contactos</p>
-                        <p className="vl-summary-value">Ilimitados</p>
+                        <p className="vl-summary-value">2.000</p>
                       </div>
                     </div>
                   </div>
@@ -1014,7 +1014,7 @@ export default function NetingLanding() {
             {/* CTA + Dismiss */}
             <div className="flex flex-col sm:flex-row gap-3">
               <Link
-                href="/checkout?usuarios=1&contactos=1000&plan=scale&interval=monthly"
+                href="/checkout?usuarios=3&contactos=2000&plan=scale&interval=monthly"
                 onClick={() => {
                   // Trackear conversión post-promo: usuario acepta precio estándar
                   try {
