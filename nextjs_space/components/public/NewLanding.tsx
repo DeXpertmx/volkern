@@ -273,6 +273,11 @@ export function NewLanding() {
                     <div className="mt-5">
                       <SetupBasico />
                     </div>
+
+                    {/* Usuarios adicionales footnote */}
+                    <p className="text-[10px] text-slate-500 text-center mt-4">
+                      Usuarios adicionales desde €10/mes c/u
+                    </p>
                   </div>
                 </div>
 
