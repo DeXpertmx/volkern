@@ -11,6 +11,7 @@ import {
   Monitor,
   MapPin,
   Trash2,
+  Filter,
 } from 'lucide-react';
 
 interface AnalyticsEvent {
@@ -68,12 +69,34 @@ export default function NetingAnalyticsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [clearing, setClearing] = useState(false);
+  const [since, setSince] = useState<string>(''); // ISO string, '' = sin filtro
+
+  const DATE_PRESETS = [
+    { label: '7 días', days: 7 },
+    { label: '30 días', days: 30 },
+    { label: '90 días', days: 90 },
+    { label: 'Todo', days: 0 },
+  ] as const;
+
+  const applyPreset = (days: number) => {
+    if (days === 0) {
+      setSince('');
+    } else {
+      const d = new Date();
+      d.setDate(d.getDate() - days);
+      d.setHours(0, 0, 0, 0);
+      setSince(d.toISOString());
+    }
+  };
 
   const load = async () => {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch('/api/admin/analytics/neting');
+      const params = new URLSearchParams();
+      if (since) params.set('since', since);
+      const qs = params.toString();
+      const res = await fetch(`/api/admin/analytics/neting${qs ? '?' + qs : ''}`);
       if (res.ok) {
         setData(await res.json());
       } else if (res.status === 403) {
@@ -90,7 +113,7 @@ export default function NetingAnalyticsPage() {
 
   useEffect(() => {
     load();
-  }, []);
+  }, [since]);
 
   const clearAll = async () => {
     if (!confirm('¿Estás seguro? Esto eliminará todos los eventos de analytics del store en memoria.')) return;
@@ -142,6 +165,11 @@ export default function NetingAnalyticsPage() {
     );
   }
 
+const ACTIVE_PRESET_CLASS =
+    'bg-[#1A365D] text-white border-[#1A365D] shadow-md';
+  const INACTIVE_PRESET_CLASS =
+    'bg-white text-slate-500 border-slate-200 hover:border-[#1A365D]/30 hover:text-[#1A365D]';
+
   const s = data!.summary;
 
   return (
@@ -178,6 +206,46 @@ export default function NetingAnalyticsPage() {
             />
           </button>
         </div>
+      </div>
+
+      {/* Date filter bar */}
+      <div className="flex items-center gap-4 flex-wrap">
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white border border-slate-100">
+          <Filter size={14} className="text-slate-400" />
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+            Período
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {DATE_PRESETS.map((preset) => {
+            const presetSince =
+              preset.days === 0
+                ? ''
+                : (() => {
+                    const d = new Date();
+                    d.setDate(d.getDate() - preset.days);
+                    d.setHours(0, 0, 0, 0);
+                    return d.toISOString();
+                  })();
+            const isActive = since === presetSince;
+            return (
+              <button
+                key={preset.label}
+                onClick={() => applyPreset(preset.days)}
+                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${
+                  isActive ? ACTIVE_PRESET_CLASS : INACTIVE_PRESET_CLASS
+                }`}
+              >
+                {preset.label}
+              </button>
+            );
+          })}
+        </div>
+        {since && (
+          <span className="text-[10px] text-slate-400 font-medium">
+            Desde {new Date(since).toLocaleDateString('es-ES')}
+          </span>
+        )}
       </div>
 
       {/* KPI Cards */}
