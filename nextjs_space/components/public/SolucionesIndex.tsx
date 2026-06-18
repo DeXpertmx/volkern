@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { SOLUTION_MODULES, COLOR_MAP } from '@/lib/soluciones';
 import BackToTop from '@/components/public/BackToTop';
+import FloatingParticles from '@/components/public/FloatingParticles';
 
 /* ─── Icon mapping ────────────────────────────────────────────────────────── */
 
@@ -44,6 +45,9 @@ export default function SolucionesIndex() {
         {/* Background orbs */}
         <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-blue-600/12 blur-[130px] rounded-full pointer-events-none" />
         <div className="absolute bottom-0 right-1/4 w-[300px] h-[300px] bg-purple-600/8 blur-[100px] rounded-full pointer-events-none" />
+
+        {/* Floating glowing particles — same as Ecosistema Hero */}
+        <FloatingParticles />
 
         <div className="container mx-auto px-6 relative z-10 text-center">
           <motion.div
