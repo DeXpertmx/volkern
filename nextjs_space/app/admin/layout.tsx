@@ -75,7 +75,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { name: 'Billing Global', href: '/admin/billing', icon: BarChart3 },
     { name: 'Seguridad', href: '/admin/seguridad', icon: ShieldAlert },
     { name: 'Auditoría IA', href: '/admin/auditoria', icon: ShieldCheck },
-    { name: 'Configuración', href: '/admin/settings', icon: Settings }
+    { name: 'Configuración', href: '/admin/settings', icon: Settings },
+    { name: 'Neting Analytics', href: '/admin/analytics/neting', icon: BarChart3 }
   ];
 
   return (
