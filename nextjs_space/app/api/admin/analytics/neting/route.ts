@@ -57,9 +57,25 @@ export async function GET(req: NextRequest) {
         ? ((standardPriceClicked / modalShown) * 100).toFixed(1)
         : '0.0';
 
+    // Agrupar eventos por día para el gráfico de timeline
+    const dailyMap = new Map<string, { modalShown: number; standardPriceClicked: number }>();
+    for (const ev of events) {
+      const day = ev.timestamp.slice(0, 10); // YYYY-MM-DD
+      if (!dailyMap.has(day)) {
+        dailyMap.set(day, { modalShown: 0, standardPriceClicked: 0 });
+      }
+      const entry = dailyMap.get(day)!;
+      if (ev.event === 'neting_promo_expired_modal_shown') entry.modalShown++;
+      else if (ev.event === 'neting_promo_expired_standard_price_clicked') entry.standardPriceClicked++;
+    }
+    const dailyTimeline = Array.from(dailyMap.entries())
+      .map(([date, counts]) => ({ date, ...counts }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
     return NextResponse.json({
       events,
       counts,
+      dailyTimeline,
       summary: {
         modalShown,
         standardPriceClicked,
