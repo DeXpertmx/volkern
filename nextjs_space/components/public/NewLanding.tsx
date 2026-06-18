@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
 import SetupBasico from '@/components/public/SetupBasico';
+import { calcularPrecio, type PlanTipo } from '@/lib/pricing-engine';
 import './landing-new.css';
 
 /* ─── Types ───────────────────────────────────────────────────────────────── */
@@ -18,11 +19,6 @@ interface ModuleItem {
 }
 
 /* ─── Constants ───────────────────────────────────────────────────────────── */
-const BASE_PRICE = 50;
-const USER_INCREMENT = 20;
-const CONTACT_INCREMENT = 5;
-const ANNUAL_DISCOUNT = 0.2;
-
 const MODULES: ModuleItem[] = [
   {
     title: 'Ventas & CRM',
@@ -74,12 +70,19 @@ const MODULES: ModuleItem[] = [
   },
 ];
 
-function formatNumber(value: number): string {
-  return new Intl.NumberFormat('es-ES').format(value);
+function fmtPrecio(n: number) {
+  return n.toLocaleString('es-ES')
 }
 
-function getSymbol(currency: Currency): string {
-  return currency === 'USD' ? '$' : '€';
+function fmtUsuarios(n: number) {
+  if (n >= 99) return '99+'
+  return String(n)
+}
+
+function fmtContactos(n: number) {
+  if (n >= 99000) return '99.000+'
+  if (n >= 1000) return `${(n / 1000).toFixed(0)}.000`
+  return n.toLocaleString('es-ES')
 }
 
 /* ─── Component ───────────────────────────────────────────────────────────── */
@@ -88,35 +91,36 @@ export function NewLanding() {
   const [billing, setBilling] = useState<Billing>('monthly');
   const [users, setUsers] = useState(1);
   const [contacts, setContacts] = useState(1000);
+  const [plan, setPlan] = useState<PlanTipo>('scale');
 
   /* ─── Pricing calculations ──────────────────────────────────────────────── */
+  const result = useMemo(
+    () => calcularPrecio({ usuarios: users, contactos: contacts, plan }),
+    [users, contacts, plan]
+  )
+
   const pricing = useMemo(() => {
-    const additionalUsers = Math.max(0, users - 1);
-    const additionalContacts = Math.max(0, (contacts - 1000) / 1000);
+    const precioMostrar = billing === 'annual'
+      ? Math.round(result.precio * 0.8)
+      : result.precio
 
-    const userCost = additionalUsers * USER_INCREMENT;
-    const contactCost = additionalContacts * CONTACT_INCREMENT;
-    const subtotal = BASE_PRICE + userCost + contactCost;
-    const total =
-      billing === 'annual'
-        ? Math.round(subtotal * (1 - ANNUAL_DISCOUNT))
-        : Math.round(subtotal);
-
-    const symbol = getSymbol(currency);
-    const replacementBase = 180;
+    const symbol = currency === 'USD' ? '$' : '€';
 
     return {
       symbol,
-      total,
-      userCost,
-      contactCost,
-      replacement: symbol + replacementBase + '/mes',
-      billingLabel: billing === 'annual' ? 'Anual -40%' : 'Mensual',
+      total: result.precio,
+      mostrar: precioMostrar,
+      nivel: result.nivel,
+      mensaje: result.mensaje,
+      features: result.features,
+      esMaximo: result.esMaximo,
+      billingLabel: billing === 'annual' ? 'Anual -20%' : 'Mensual',
       suffix: billing === 'annual' ? '/mes facturado anual' : '/mes',
-      usersLabel: users + (users === 1 ? ' usuario' : ' usuarios'),
-      contactsLabel: formatNumber(contacts) + ' contactos',
+      usersLabel: fmtUsuarios(users) + (users === 1 ? ' usuario' : ' usuarios'),
+      contactsLabel: fmtContactos(contacts) + ' contactos',
+      planLabel: plan === 'compliance' ? 'Compliance Pro' : 'Scale',
     };
-  }, [currency, billing, users, contacts]);
+  }, [result, billing, currency, users, contacts, plan]);
 
   return (
     <div className="vl-landing">
@@ -235,37 +239,29 @@ export function NewLanding() {
 
                   <div className="vl-ring-soft vl-pricing-main-card">
                     <div className="vl-price-label-row">
-                      <span className="vl-price-label">Precio estimado</span>
+                      <div className="flex items-center gap-2">
+                        <span className="vl-price-label">Precio estimado</span>
+                        <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
+                          plan === 'compliance'
+                            ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30'
+                            : 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+                        }`}>{pricing.planLabel}</span>
+                      </div>
                       <span className="vl-billing-badge">{pricing.billingLabel}</span>
                     </div>
                     <div className="vl-price-display">
                       <span className="vl-price-value">
-                        {pricing.symbol + pricing.total}
+                        {pricing.symbol + pricing.mostrar}
                       </span>
                       <span className="vl-price-suffix">{pricing.suffix}</span>
                     </div>
                     <p className="vl-price-footnote">
-                      Reemplaza herramientas de más de{' '}
-                      <span className="vl-replacement-price">{pricing.replacement}</span>
+                      {pricing.mensaje}
                     </p>
                     <div className="vl-price-summary">
-                      <div className="vl-summary-item">
-                        <p className="vl-summary-label">Base</p>
-                        <p className="vl-summary-value">
-                          {pricing.symbol + BASE_PRICE}
-                        </p>
-                      </div>
-                      <div className="vl-summary-item">
-                        <p className="vl-summary-label">Usuarios</p>
-                        <p className="vl-summary-value">
-                          {pricing.symbol + pricing.userCost}
-                        </p>
-                      </div>
-                      <div className="vl-summary-item">
-                        <p className="vl-summary-label">Contactos</p>
-                        <p className="vl-summary-value">
-                          {pricing.symbol + pricing.contactCost}
-                        </p>
+                      <div className="vl-summary-item border-emerald-500/40 bg-emerald-500/10">
+                        <p className="vl-summary-label">Capacidad</p>
+                        <p className="vl-summary-value">{pricing.usersLabel} · {pricing.contactsLabel}</p>
                       </div>
                     </div>
 
@@ -281,7 +277,7 @@ export function NewLanding() {
 
                     {/* CTA → Checkout */}
                     <a
-                      href={`/checkout?usuarios=${users}&contactos=${contacts}&plan=scale&interval=${billing === 'annual' ? 'yearly' : 'monthly'}&precio=${pricing.total}`}
+                      href={`/checkout?usuarios=${users}&contactos=${contacts}&plan=${plan}&interval=${billing === 'annual' ? 'yearly' : 'monthly'}&precio=${pricing.mostrar}`}
                       className="vl-btn vl-btn-primary w-full mt-5 text-center"
                     >
                       Ir a activar →
@@ -369,12 +365,45 @@ export function NewLanding() {
                     </div>
                   </div>
 
+                  {/* Plan toggle */}
+                  <div className="vl-ring-soft vl-slider-field">
+                    <div className="vl-slider-header">
+                      <span className="vl-slider-label">Modalidad</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setPlan('scale')}
+                        className={`flex-1 p-3 rounded-xl border transition-all text-left ${
+                          plan === 'scale'
+                            ? 'border-purple-500 bg-purple-500/10'
+                            : 'border-slate-700/50 bg-slate-800/30 hover:border-slate-600'
+                        }`}
+                        aria-pressed={plan === 'scale'}
+                      >
+                        <p className={`text-xs font-black uppercase ${plan === 'scale' ? 'text-white' : 'text-slate-400'}`}>Scale</p>
+                        <p className="text-[10px] text-slate-500 mt-0.5">Funcionalidades base</p>
+                      </button>
+                      <button
+                        onClick={() => setPlan('compliance')}
+                        className={`flex-1 p-3 rounded-xl border transition-all text-left ${
+                          plan === 'compliance'
+                            ? 'border-indigo-500 bg-indigo-500/10'
+                            : 'border-slate-700/50 bg-slate-800/30 hover:border-slate-600'
+                        }`}
+                        aria-pressed={plan === 'compliance'}
+                      >
+                        <p className={`text-xs font-black uppercase ${plan === 'compliance' ? 'text-white' : 'text-slate-400'}`}>Compliance</p>
+                        <p className="text-[10px] text-slate-500 mt-0.5">+25% control</p>
+                      </button>
+                    </div>
+                  </div>
+
                   <div className="vl-pricing-assurance">
                     <p className="vl-assurance-text">
                       Volkern no es una herramienta más. Es la capa operativa que unifica
                       ventas, marketing, comunicación, automatización e IA para que pagar{' '}
                       <span className="vl-assurance-price">
-                        {pricing.symbol + pricing.total}
+                        {pricing.symbol + pricing.mostrar}
                       </span>{' '}
                       se sienta ridículamente rentable.
                     </p>
@@ -408,7 +437,7 @@ export function NewLanding() {
                   crecer contigo.
                 </p>
                 <Link
-                  href={`/checkout?usuarios=${users}&contactos=${contacts}&plan=scale&interval=${billing === 'annual' ? 'yearly' : 'monthly'}&precio=${pricing.total}`}
+                  href={`/checkout?usuarios=${users}&contactos=${contacts}&plan=${plan}&interval=${billing === 'annual' ? 'yearly' : 'monthly'}&precio=${pricing.mostrar}`}
                   className="vl-final-cta-btn vl-btn"
                 >
                   Activar Volkern
