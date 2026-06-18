@@ -51,6 +51,76 @@ async function markEventProcessed(
   })
 }
 
+async function sendWelcomeEmail(tenantId: string, plan: string): Promise<void> {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { nombre: true, billingEmail: true }
+  })
+
+  if (!tenant?.billingEmail) return
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://volkern.app'
+  const dashboardUrl = `${appUrl}/dashboard/onboarding-quick`
+  const PLAN_NAMES: Record<string, string> = {
+    scale: 'Scale',
+    compliance: 'Compliance Pro',
+    esencial: 'Esencial',
+    profesional: 'Profesional',
+    infinity: 'Infinity',
+  }
+  const planName = PLAN_NAMES[plan] || plan
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+      <div style="text-align: center; margin-bottom: 30px;">
+        <h1 style="color: #7c3aed; margin: 0; font-size: 28px;">🎉 ¡Bienvenido a Volkern!</h1>
+        <p style="color: #6b7280; font-size: 16px; margin-top: 8px;">Tu plataforma todo en uno está lista</p>
+      </div>
+
+      <p style="font-size: 16px; color: #374151;">Hola <strong>${tenant.nombre}</strong>,</p>
+      <p style="font-size: 16px; color: #374151;">
+        Tu cuenta ha sido activada correctamente con el plan <strong>${planName}</strong>.
+        Todo está configurado y listo para que empieces a operar.
+      </p>
+
+      <div style="background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%); padding: 24px; border-radius: 12px; margin: 24px 0; border-left: 4px solid #7c3aed;">
+        <h2 style="margin: 0 0 12px 0; color: #5b21b6; font-size: 18px;">⚡ Tu configuración incluye</h2>
+        <ul style="margin: 0; padding-left: 20px; color: #374151; line-height: 1.8;">
+          <li>Configuración inicial del CRM</li>
+          <li>Pipeline de ventas estándar</li>
+          <li>Automatización básica</li>
+          <li>1 canal de comunicación activo</li>
+          <li>Sesión de onboarding en vivo</li>
+        </ul>
+      </div>
+
+      <div style="text-align: center; margin: 32px 0;">
+        <a href="${dashboardUrl}" style="display: inline-block; background: #7c3aed; color: white; padding: 14px 36px; border-radius: 10px; text-decoration: none; font-weight: bold; font-size: 16px;">
+          Ir a mi panel →
+        </a>
+      </div>
+
+      <p style="color: #6b7280; font-size: 14px;">
+        Si tienes alguna duda, responde a este correo o contáctanos en 
+        <a href="mailto:soporte@volkern.app" style="color: #7c3aed;">soporte@volkern.app</a>.
+      </p>
+
+      <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;">
+
+      <p style="color: #9ca3af; font-size: 12px; text-align: center;">
+        Volkern — La plataforma todo en uno para tu negocio
+      </p>
+    </div>
+  `
+
+  await sendEmail({
+    to: tenant.billingEmail,
+    subject: `🎉 ¡Bienvenido a Volkern! — Plan ${planName} activado`,
+    html,
+    tenantSubdomain: tenantId,
+  })
+}
+
 async function handleTrialExpiration(tenantId: string): Promise<void> {
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
@@ -277,6 +347,11 @@ export async function POST(request: NextRequest) {
                   tenantId: subTenantId
                 }
               })
+
+              // Enviar email de bienvenida
+              await sendWelcomeEmail(subTenantId, resolvedPlan).catch(err =>
+                console.error('[StripeWebhook] Error sending welcome email:', err)
+              )
 
               console.log('Subscription activated for tenant:', subTenantId)
             }
