@@ -121,3 +121,27 @@ export async function clearEvents(): Promise<void> {
     console.error('[analytics/store] Error clearing events from DB:', e);
   }
 }
+
+/**
+ * Elimina eventos de analytics con más de `days` días de antigüedad.
+ * Solo limpia la BD; la cache en memoria se rehidratará en el próximo acceso.
+ */
+export async function cleanupOldEvents(days: number = 90): Promise<number> {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  try {
+    const result = await prisma.publicAnalyticsEvent.deleteMany({
+      where: { timestamp: { lt: cutoff } },
+    });
+    if (result.count > 0) {
+      console.log(`[analytics/store] Cleanup: deleted ${result.count} events older than ${days} days (before ${cutoff.toISOString()})`);
+      // Invalidar cache para que se rehidrate sin los eventos viejos
+      memoryCache = [];
+      cacheHydrated = false;
+    }
+    return result.count;
+  } catch (e) {
+    console.error('[analytics/store] Error cleaning up old events:', e);
+    return 0;
+  }
+}
