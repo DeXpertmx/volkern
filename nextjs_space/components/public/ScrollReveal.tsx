@@ -27,12 +27,15 @@ export type RevealAs =
   | 'aside'
   | 'nav';
 
+/** Accepts a string HTML tag or a custom motion-wrapped component (e.g. motion(Link)) */
+export type RevealAsProp = RevealAs | React.ComponentType<any>;
+
 interface ScrollRevealProps {
   children: React.ReactNode;
   /** Animation variant. Default: 'fadeIn' */
   variant?: RevealVariant;
-  /** HTML element to render as. Default: 'div' */
-  as?: RevealAs;
+  /** HTML element to render as, or a custom motion component (e.g. motion(Link)). Default: 'div' */
+  as?: RevealAsProp;
   /** Delay in seconds before animation starts */
   delay?: number;
   /** Use spring physics instead of ease-based transition */
@@ -91,6 +94,10 @@ const variantMap: Record<RevealVariant, Variants> = {
  * // Render as a semantic element
  * <ScrollReveal as="section"><Content /></ScrollReveal>
  *
+ * // Render as a custom motion component (e.g. motion-wrapped Next.js Link)
+ * const MotionLink = motion(Link);
+ * <ScrollReveal as={MotionLink} href="/page"><Card /></ScrollReveal>
+ *
  * // Spring fade-up with delay
  * <ScrollReveal variant="fadeInUp" delay={0.2} spring><Card /></ScrollReveal>
  *
@@ -118,7 +125,8 @@ export default function ScrollReveal({
     ? { type: 'spring' as const, stiffness, damping, delay }
     : { duration: variant === 'fadeIn' ? 0.6 : 0.4, delay, ease: 'easeOut' as const };
 
-  const MotionTag = motion[Tag] as typeof motion.div;
+  const MotionTag: React.ComponentType<any> =
+    typeof Tag === 'string' ? (motion as Record<string, React.ComponentType<any>>)[Tag] : Tag;
 
   return (
     <MotionTag
