@@ -1,10 +1,11 @@
 /**
- * In-memory analytics event store.
+ * Hybrid analytics event store — memory + PostgreSQL.
  *
- * Accumula eventos de analytics en memoria para consulta en tiempo real
- * desde el dashboard de admin. Los eventos también se escriben a los logs
- * estructurados vía console.info (StructuredLogger).
+ * Los eventos se persisten en la tabla PublicAnalyticsEvent y se cachean
+ * en memoria para consultas rápidas desde el dashboard. Sobreviven reinicios.
  */
+
+import { prisma } from '@/lib/db';
 
 export interface AnalyticsEvent {
   event: string;
@@ -17,21 +18,63 @@ export interface AnalyticsEvent {
 
 const MAX_EVENTS = 1000;
 
-const store: AnalyticsEvent[] = [];
+// Cache en memoria (más recientes primero)
+let memoryCache: AnalyticsEvent[] = [];
+let cacheHydrated = false;
 
-export function addEvent(event: AnalyticsEvent): void {
-  store.push(event);
-  if (store.length > MAX_EVENTS) {
-    store.shift();
+/** Hidrata la cache desde la BD al iniciar el módulo */
+async function hydrateCache(): Promise<void> {
+  if (cacheHydrated) return;
+  try {
+    const rows = await prisma.publicAnalyticsEvent.findMany({
+      orderBy: { timestamp: 'desc' },
+      take: MAX_EVENTS,
+      select: { event: true, metadata: true, ip: true, userAgent: true, referer: true, timestamp: true },
+    });
+    memoryCache = rows.map((r) => ({
+      event: r.event,
+      metadata: (r.metadata as Record<string, unknown>) || {},
+      ip: r.ip,
+      userAgent: r.userAgent,
+      referer: r.referer,
+      timestamp: r.timestamp.toISOString(),
+    }));
+    cacheHydrated = true;
+  } catch (e) {
+    console.error('[analytics/store] Error hydrating cache from DB:', e);
+    cacheHydrated = true; // evitar reintentos infinitos si la BD falla
   }
 }
 
-export function getEvents(filter?: {
+/** Añade un evento — persiste en BD (async) + cache en memoria (sync) */
+export function addEvent(event: AnalyticsEvent): void {
+  // Guardar en memoria inmediatamente
+  memoryCache.unshift(event);
+  if (memoryCache.length > MAX_EVENTS) memoryCache.pop();
+
+  // Persistir en BD de forma asíncrona (fire-and-forget)
+  prisma.publicAnalyticsEvent
+    .create({
+      data: {
+        event: event.event,
+        metadata: event.metadata || {},
+        ip: event.ip,
+        userAgent: event.userAgent,
+        referer: event.referer,
+        timestamp: new Date(event.timestamp),
+      },
+    })
+    .catch((e) => console.error('[analytics/store] Error persisting event:', e));
+}
+
+/** Obtiene eventos de la cache en memoria */
+export async function getEvents(filter?: {
   eventPrefix?: string;
   since?: string;
   limit?: number;
-}): AnalyticsEvent[] {
-  let result = [...store];
+}): Promise<AnalyticsEvent[]> {
+  await hydrateCache();
+  let result = [...memoryCache];
 
   if (filter?.eventPrefix) {
     result = result.filter((e) => e.event.startsWith(filter.eventPrefix!));
@@ -40,9 +83,6 @@ export function getEvents(filter?: {
     result = result.filter((e) => e.timestamp >= filter.since!);
   }
 
-  // Más recientes primero
-  result.reverse();
-
   if (filter?.limit && filter.limit > 0) {
     result = result.slice(0, filter.limit);
   }
@@ -50,11 +90,13 @@ export function getEvents(filter?: {
   return result;
 }
 
-export function getEventCounts(filter?: {
+/** Obtiene conteos por tipo de evento desde la cache */
+export async function getEventCounts(filter?: {
   eventPrefix?: string;
   since?: string;
-}): Record<string, number> {
-  let events = [...store];
+}): Promise<Record<string, number>> {
+  await hydrateCache();
+  let events = [...memoryCache];
   if (filter?.eventPrefix) {
     events = events.filter((e) => e.event.startsWith(filter.eventPrefix!));
   }
@@ -69,6 +111,13 @@ export function getEventCounts(filter?: {
   return counts;
 }
 
-export function clearEvents(): void {
-  store.length = 0;
+/** Limpia todos los eventos — BD + memoria */
+export async function clearEvents(): Promise<void> {
+  memoryCache = [];
+  cacheHydrated = false;
+  try {
+    await prisma.publicAnalyticsEvent.deleteMany();
+  } catch (e) {
+    console.error('[analytics/store] Error clearing events from DB:', e);
+  }
 }
