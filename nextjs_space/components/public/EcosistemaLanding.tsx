@@ -212,6 +212,117 @@ const FadeIn = ({
   </motion.div>
 );
 
+/* ─── TimelineSection ─────────────────────────────────────────────────────── */
+
+function TimelineSection() {
+  const lineRef = useRef<HTMLDivElement>(null);
+  const lineInView = useInView(lineRef, { once: true, margin: '-80px' });
+
+  return (
+    <div className="relative">
+      {/* Animated connector line — draws from left to right */}
+      <div ref={lineRef} className="hidden md:block absolute top-10 left-[15%] right-[15%] h-px overflow-hidden">
+        <motion.div
+          initial={{ scaleX: 0 }}
+          animate={lineInView ? { scaleX: 1 } : {}}
+          transition={{ duration: 1.2, delay: 0.3, ease: 'easeInOut' }}
+          className="h-full bg-gradient-to-r from-blue-500/40 via-purple-500/40 to-emerald-500/40 origin-left"
+        />
+      </div>
+
+      <div className="grid md:grid-cols-3 gap-6">
+        {[
+          {
+            step: 'Fase 1',
+            title: 'CRM y Ventas',
+            description:
+              'Un cliente inicia con CRM para gestionar sus oportunidades. Automatiza seguimiento, cierra más negocios y organiza su pipeline.',
+            icon: Zap,
+            color: COLOR_MAP.blue,
+          },
+          {
+            step: 'Fase 2',
+            title: 'Marketing integrado',
+            description:
+              'Luego agrega marketing para captar más leads. Campañas automatizadas que se conectan directamente con el CRM.',
+            icon: PenTool,
+            color: COLOR_MAP.purple,
+          },
+          {
+            step: 'Fase 3',
+            title: 'Operaciones completas',
+            description:
+              'Después integra facturación, firma digital y más. Escala sin caos, con todos los datos conectados desde el día uno.',
+            icon: Layers,
+            color: COLOR_MAP.emerald,
+          },
+        ].map((item, i) => {
+          const Icon = item.icon;
+          return (
+            <motion.div
+              key={item.step}
+              initial={{ opacity: 0, y: 30, scale: 0.95 }}
+              whileInView={{ opacity: 1, y: 0, scale: 1 }}
+              viewport={{ once: true, margin: '-60px' }}
+              transition={{
+                type: 'spring',
+                stiffness: 100,
+                damping: 14,
+                delay: i * 0.2,
+              }}
+              className="relative p-6 bg-slate-950 border border-slate-800 rounded-3xl hover:border-blue-500/20 transition-colors duration-300"
+            >
+              {/* Animated dot on the timeline — pulses when entering viewport */}
+              <motion.div
+                initial={{ scale: 0 }}
+                whileInView={{ scale: 1 }}
+                viewport={{ once: true }}
+                transition={{
+                  type: 'spring',
+                  stiffness: 300,
+                  damping: 15,
+                  delay: 0.5 + i * 0.25,
+                }}
+                className="hidden md:flex absolute -top-[22px] left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-slate-950 border-2 border-blue-500 items-center justify-center"
+              >
+                <motion.div
+                  animate={{ opacity: [0.4, 1, 0.4], scale: [1, 1.3, 1] }}
+                  transition={{
+                    repeat: Infinity,
+                    duration: 2,
+                    delay: i * 0.3,
+                    ease: 'easeInOut',
+                  }}
+                  className="w-2 h-2 rounded-full bg-blue-500"
+                />
+              </motion.div>
+
+              <span
+                className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${item.color.badge} mb-4`}
+              >
+                {item.step}
+              </span>
+
+              <div
+                className={`w-10 h-10 rounded-xl ${item.color.bg} border ${item.color.border} flex items-center justify-center mb-4`}
+              >
+                <Icon className={`w-5 h-5 ${item.color.icon}`} />
+              </div>
+
+              <h3 className="text-white font-bold text-base mb-2">
+                {item.title}
+              </h3>
+              <p className="text-sm text-slate-400 leading-relaxed">
+                {item.description}
+              </p>
+            </motion.div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /* ─── Component ───────────────────────────────────────────────────────────── */
 
 export default function EcosistemaLanding() {
@@ -553,7 +664,7 @@ export default function EcosistemaLanding() {
       </Section>
 
       {/* ═══════════════════════════════════════════════════════════════════
-         CASO DE USO — timeline horizontal
+         CASO DE USO — timeline horizontal animado
       ════════════════════════════════════════════════════════════════════ */}
       <Section>
         <FadeIn>
@@ -573,76 +684,8 @@ export default function EcosistemaLanding() {
               </p>
             </div>
 
-            {/* Horizontal timeline */}
-            <div className="relative">
-              {/* Line connector */}
-              <div className="hidden md:block absolute top-10 left-[15%] right-[15%] h-px bg-gradient-to-r from-blue-500/40 via-purple-500/40 to-emerald-500/40" />
-
-              <div className="grid md:grid-cols-3 gap-6">
-                {[
-                  {
-                    step: 'Fase 1',
-                    title: 'CRM y Ventas',
-                    description:
-                      'Un cliente inicia con CRM para gestionar sus oportunidades. Automatiza seguimiento, cierra más negocios y organiza su pipeline.',
-                    icon: Zap,
-                    color: COLOR_MAP.blue,
-                  },
-                  {
-                    step: 'Fase 2',
-                    title: 'Marketing integrado',
-                    description:
-                      'Luego agrega marketing para captar más leads. Campañas automatizadas que se conectan directamente con el CRM.',
-                    icon: PenTool,
-                    color: COLOR_MAP.purple,
-                  },
-                  {
-                    step: 'Fase 3',
-                    title: 'Operaciones completas',
-                    description:
-                      'Después integra facturación, firma digital y más. Escala sin caos, con todos los datos conectados desde el día uno.',
-                    icon: Layers,
-                    color: COLOR_MAP.emerald,
-                  },
-                ].map((item, i) => {
-                  const Icon = item.icon;
-                  return (
-                    <motion.div
-                      key={item.step}
-                      initial={{ opacity: 0, y: 20 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true }}
-                      transition={{ duration: 0.4, delay: i * 0.15 }}
-                      className="relative p-6 bg-slate-950 border border-slate-800 rounded-3xl hover:border-blue-500/20 transition-colors duration-300"
-                    >
-                      {/* Dot on the timeline */}
-                      <div className="hidden md:flex absolute -top-[22px] left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-slate-950 border-2 border-blue-500 items-center justify-center">
-                        <div className="w-2 h-2 rounded-full bg-blue-500" />
-                      </div>
-
-                      <span
-                        className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${item.color.badge} mb-4`}
-                      >
-                        {item.step}
-                      </span>
-
-                      <div
-                        className={`w-10 h-10 rounded-xl ${item.color.bg} border ${item.color.border} flex items-center justify-center mb-4`}
-                      >
-                        <Icon className={`w-5 h-5 ${item.color.icon}`} />
-                      </div>
-
-                      <h3 className="text-white font-bold text-base mb-2">
-                        {item.title}
-                      </h3>
-                      <p className="text-sm text-slate-400 leading-relaxed">
-                        {item.description}
-                      </p>
-                    </motion.div>
-                  );
-                })}
-              </div>
-            </div>
+            {/* Horizontal timeline with animated line */}
+            <TimelineSection />
           </div>
         </FadeIn>
       </Section>
