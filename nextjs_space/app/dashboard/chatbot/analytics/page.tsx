@@ -262,6 +262,41 @@ function exportPatternsToCSV(patterns: Pattern[], filename: string) {
   URL.revokeObjectURL(url)
 }
 
+/** Generate and download a CSV file from the conversation analyses */
+function exportConversationsToCSV(conversations: ConversationAnalysis[], filename: string) {
+  const headers = ['ID', 'Sentimiento', 'Score', 'Resuelta', 'Mensajes', 'Duración (min)', 'Temas', 'Analizado']
+  const rows = conversations.map(c => [
+    c.conversationId,
+    c.sentiment === 'positive' ? 'Positivo' :
+      c.sentiment === 'neutral' ? 'Neutral' :
+      c.sentiment === 'negative' ? 'Negativo' : 'Frustrado',
+    String(c.sentimentScore),
+    c.resolved ? 'Sí' : 'No',
+    String(c.totalMessages),
+    String(c.durationMinutes),
+    c.topics.join(' / '),
+    new Date(c.analyzedAt).toLocaleString('es-ES', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    }),
+  ])
+
+  const csvContent = [
+    headers.join(','),
+    ...rows.map(row => row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(',')),
+  ].join('\n')
+
+  const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
 /** Generate and download a CSV file from the suggestions */
 function exportSuggestionsToCSV(suggestions: Suggestion[], filename: string) {
   const headers = ['Título', 'Tipo', 'Prioridad', 'Estado', 'Categoría', 'Descripción', 'Impacto Estimado', 'Creado']
@@ -1049,16 +1084,32 @@ export default function ChatbotAnalyticsPage() {
               </CardContent>
             </Card>
           ) : (
-            <>
-              {/* Conversation metrics bar chart */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Resolución por Sentimiento</CardTitle>
+            <Card>
+              <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
+                <div>
+                  <CardTitle className="text-lg">Conversaciones Analizadas</CardTitle>
                   <CardDescription>
-                    Conversaciones agrupadas por sentimiento y estado de resolución
+                    {conversations.length} conversaciones analizadas · gráfico de resolución y análisis recientes
                   </CardDescription>
-                </CardHeader>
-                <CardContent>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const dateStr = new Date().toISOString().slice(0, 10)
+                    exportConversationsToCSV(conversations, `conversaciones_chatbot_${dateStr}.csv`)
+                    toast.success(`${conversations.length} conversaciones exportadas a CSV`)
+                  }}
+                  className="gap-1.5 text-xs"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Exportar CSV
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Conversation metrics bar chart */}
+                <div>
+                  <h4 className="text-sm font-medium mb-3">Resolución por Sentimiento</h4>
                   <ResponsiveContainer width="100%" height={280}>
                     <BarChart
                       data={(() => {
@@ -1097,67 +1148,62 @@ export default function ChatbotAnalyticsPage() {
                       <Bar dataKey="Resueltas" fill="#22c55e" radius={[4, 4, 0, 0]} name="Resueltas" />
                     </BarChart>
                   </ResponsiveContainer>
-                </CardContent>
-              </Card>
+                </div>
 
-              {/* Recent conversation analyses */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Análisis Recientes</CardTitle>
-                  <CardDescription>
-                    Últimas conversaciones analizadas por el sistema
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {conversations.slice(0, 10).map((conv, i) => (
-                    <div
-                      key={conv.conversationId || i}
-                      className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className={cn(
-                          'p-1.5 rounded-lg shrink-0',
-                          conv.sentimentScore >= 70 ? 'bg-emerald-100 dark:bg-emerald-900/30' :
-                          conv.sentimentScore >= 45 ? 'bg-blue-100 dark:bg-blue-900/30' :
-                          conv.sentimentScore >= 25 ? 'bg-yellow-100 dark:bg-yellow-900/30' :
-                          'bg-red-100 dark:bg-red-900/30'
-                        )}>
-                          {conv.sentimentScore >= 70 ? (
-                            <Heart className="h-4 w-4 text-emerald-600" />
-                          ) : conv.sentimentScore >= 45 ? (
-                            <Heart className="h-4 w-4 text-blue-600" />
-                          ) : (
-                            <HeartCrack className="h-4 w-4 text-red-600" />
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium truncate max-w-[200px]">
-                              {conv.topics?.slice(0, 2).join(', ') || 'Sin temas'}
-                            </span>
-                            {conv.resolved ? (
-                              <Badge variant="outline" className="text-xs bg-emerald-500/10 text-emerald-600 border-emerald-200">
-                                Resuelta
-                              </Badge>
+                {/* Recent conversation analyses */}
+                <div>
+                  <h4 className="text-sm font-medium mb-3">Análisis Recientes</h4>
+                  <div className="space-y-3">
+                    {conversations.slice(0, 10).map((conv, i) => (
+                      <div
+                        key={conv.conversationId || i}
+                        className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={cn(
+                            'p-1.5 rounded-lg shrink-0',
+                            conv.sentimentScore >= 70 ? 'bg-emerald-100 dark:bg-emerald-900/30' :
+                            conv.sentimentScore >= 45 ? 'bg-blue-100 dark:bg-blue-900/30' :
+                            conv.sentimentScore >= 25 ? 'bg-yellow-100 dark:bg-yellow-900/30' :
+                            'bg-red-100 dark:bg-red-900/30'
+                          )}>
+                            {conv.sentimentScore >= 70 ? (
+                              <Heart className="h-4 w-4 text-emerald-600" />
+                            ) : conv.sentimentScore >= 45 ? (
+                              <Heart className="h-4 w-4 text-blue-600" />
                             ) : (
-                              <Badge variant="outline" className="text-xs bg-red-500/10 text-red-600 border-red-200">
-                                No resuelta
-                              </Badge>
+                              <HeartCrack className="h-4 w-4 text-red-600" />
                             )}
                           </div>
-                          <p className="text-xs text-muted-foreground">
-                            {conv.totalMessages} mensajes · {conv.durationMinutes} min · Score: {conv.sentimentScore}
-                          </p>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium truncate max-w-[200px]">
+                                {conv.topics?.slice(0, 2).join(', ') || 'Sin temas'}
+                              </span>
+                              {conv.resolved ? (
+                                <Badge variant="outline" className="text-xs bg-emerald-500/10 text-emerald-600 border-emerald-200">
+                                  Resuelta
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-xs bg-red-500/10 text-red-600 border-red-200">
+                                  No resuelta
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              {conv.totalMessages} mensajes · {conv.durationMinutes} min · Score: {conv.sentimentScore}
+                            </p>
+                          </div>
                         </div>
+                        <span className="text-xs text-muted-foreground shrink-0 ml-2">
+                          {formatDate(conv.analyzedAt)}
+                        </span>
                       </div>
-                      <span className="text-xs text-muted-foreground shrink-0 ml-2">
-                        {formatDate(conv.analyzedAt)}
-                      </span>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            </>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           )}
         </TabsContent>
 
