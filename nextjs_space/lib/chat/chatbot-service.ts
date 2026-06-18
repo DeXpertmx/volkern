@@ -2,6 +2,9 @@ import { prisma } from '@/lib/db'
 import { KnowledgeService } from '@/lib/knowledge/knowledge-service'
 import { callAssistantWithFallback, OpenRouterMessage } from '@/lib/assistant/openrouter-client'
 import { ChatMemoryService } from '@/lib/chat/chat-memory'
+import { extractFacts, formatFacts } from '@/lib/agents/fact-extractor'
+import { rerankResults, buildKbBlock } from '@/lib/knowledge/reranker'
+import { needsSummarization, generateSummary, buildSummaryBlock } from '@/lib/chat/conversation-summarizer'
 
 export interface ChatbotInput {
   tenantId: string
@@ -26,7 +29,7 @@ export interface ChatbotOutput {
 }
 
 const DEFAULTS = {
-  MAX_HISTORY: 10,
+  MAX_HISTORY: 20,
   AGENT_TIMEOUT_MS: 8000,
   RATE_LIMIT_MS: 2000,
 }
@@ -117,18 +120,6 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
     const context = await memory.getContext(conv.id)
     const recentMessages = await memory.getMessages(conv.id, DEFAULTS.MAX_HISTORY)
 
-    const kbArticles = await KnowledgeService.searchSemantic(tenantId, message).catch(err => {
-      console.warn('[ChatbotService] Error en búsqueda semántica de KB:', err)
-      return []
-    })
-
-    let kbSection = ''
-    if (kbArticles.length > 0) {
-      kbSection = '\n\nINFORMACIÓN DE REFERENCIA:\n' + kbArticles.map(a =>
-        `[${a.category}] ${a.title}: ${a.content.substring(0, 400)}`
-      ).join('\n')
-    }
-
     // ═══ 1. CLASIFICAR INTENCIÓN ═══
     const classification = await intentClassifier.classify({
       message,
@@ -139,9 +130,86 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
         : undefined,
     })
 
+    // ═══ FASE 2: EXTRAER FACTS DEL CLIENTE (en paralelo) ═══
+    const newFacts = await extractFacts(message, context.facts, {
+      intent: classification.intent,
+      tenantName: tenant?.nombre,
+    })
+
+    if (newFacts.length > 0) {
+      const factStrings = formatFacts(newFacts)
+      for (const fact of factStrings) {
+        await memory.addFact(conv.id, fact)
+      }
+      // Recargar contexto con los nuevos facts
+      context.facts = [...context.facts, ...factStrings]
+    }
+
+    // ═══ FASE 2: RAG CON RE-RANKING (en paralelo) ═══
+    const kbArticles = await KnowledgeService.searchSemantic(tenantId, message).catch(err => {
+      console.warn('[ChatbotService] Error en búsqueda semántica de KB:', err)
+      return []
+    })
+
+    let kbSection = ''
+    if (kbArticles.length > 0) {
+      // Pasar por el reranker para mejorar relevancia
+      const conversationContext = context.facts.length > 0
+        ? context.facts.slice(-5).join('. ')
+        : undefined
+
+      const rankedResults = await rerankResults(
+        message,
+        kbArticles.map(a => ({
+          ...a,
+          similarity: (a as any).similarity,
+        })),
+        conversationContext
+      ).catch(err => {
+        console.warn('[ChatbotService] Error en reranker, usando resultados originales:', err)
+        return null
+      })
+
+      if (rankedResults && rankedResults.length > 0) {
+        kbSection = buildKbBlock(rankedResults)
+      } else {
+        // Fallback: estructura original
+        kbSection = '\n\nINFORMACIÓN DE REFERENCIA:\n' + kbArticles.slice(0, 3).map(a =>
+          `[${a.category}] ${a.title}: ${a.content.substring(0, 400)}`
+        ).join('\n')
+      }
+    }
+
+    // ═══ FASE 2: RESUMEN AUTOMÁTICO ═══
+    let summaryBlock = ''
+    if (context.summary?.text) {
+      summaryBlock = buildSummaryBlock(context.summary)
+    }
+
+    // Verificar si necesitamos generar/actualizar resumen
+    const shouldSummarize = needsSummarization(
+      recentMessages.length,
+      context.summary?.version
+    )
+
     const isActionable = classification.intent !== 'consulta_general'
       && classification.intent !== 'unknown'
       && classification.confidence >= 0.5
+
+    // ═══ HELPER: Generar resumen si es necesario (fire-and-forget) ═══
+    const triggerSummary = () => {
+      if (shouldSummarize) {
+        generateSummary(
+          recentMessages.map(m => ({ role: m.role, content: m.content })),
+          context.summary
+        ).then(async (newSummary) => {
+          await memory.updateContext(conv.id, { summary: newSummary })
+          console.log(`[ChatbotService] ✅ Resumen generado (${newSummary.summarizedMessages} mensajes resumidos)`)
+        }).catch(err => {
+          console.warn('[ChatbotService] Error generando resumen:', err)
+        })
+      }
+    }
 
     // ═══ 2. SI ES UNA ACCIÓN CON PARÁMETROS COMPLETOS → EJECUTAR SKILL ═══
     if (isActionable && !classification.needsMoreInfo) {
@@ -190,6 +258,7 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
         })
 
         await incrementStats(tenantId)
+        triggerSummary() // Resumen automático (fire-and-forget)
 
         const elapsed = Date.now() - startTime
         console.log(`[ChatbotService] ${channel} skill=${classification.intent} OK en ${elapsed}ms`)
@@ -214,6 +283,7 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
         })
 
         await incrementStats(tenantId)
+        triggerSummary() // Resumen automático (fire-and-forget)
 
         const elapsed = Date.now() - startTime
         console.log(`[ChatbotService] ${channel} response=${classification.intent} OK en ${elapsed}ms`)
@@ -247,6 +317,8 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
         metadata: { source: 'chatbot', intent: classification.intent, needsMoreInfo: true, missingEntity: nextMissing },
       })
 
+      triggerSummary() // Resumen automático (fire-and-forget)
+
       const elapsed = Date.now() - startTime
       console.log(`[ChatbotService] ${channel} necesitaInfo=${nextMissing} en ${elapsed}ms`)
 
@@ -263,6 +335,7 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
       services,
       context,
       kbSection,
+      summaryBlock,
       channel,
       contactName: input.contactName,
     })
@@ -291,6 +364,7 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
     })
 
     await incrementStats(tenantId)
+    triggerSummary() // Resumen automático (fire-and-forget)
 
     const elapsed = Date.now() - startTime
     console.log(`[ChatbotService] ${channel} consulta OK en ${elapsed}ms (intent=${classification.intent})`)
@@ -315,10 +389,11 @@ function buildSystemPrompt(params: {
   services: any[]
   context: any
   kbSection: string
+  summaryBlock?: string
   channel: string
   contactName?: string
 }): string {
-  const { config, tenant, services, context, kbSection, channel, contactName } = params
+  const { config, tenant, services, context, kbSection, summaryBlock, channel, contactName } = params
 
   const servicesInfo = services.map(s =>
     `- ${s.nombre}: ${s.descripcion || 'Sin descripción'} | ${s.duracionMinutos || '?'} min | $${s.precio} ${s.moneda || 'EUR'}`
@@ -330,8 +405,11 @@ function buildSystemPrompt(params: {
     : 'Usa formato markdown simple. Responde en 2-3 párrafos.'
 
   let memorySection = ''
+  if (summaryBlock) {
+    memorySection += `\n\n${summaryBlock}`
+  }
   if (context.facts?.length > 0) {
-    memorySection = '\n\nINFORMACIÓN DEL CLIENTE:\n' + context.facts.map((f: string) => `- ${f}`).join('\n')
+    memorySection += '\n\nINFORMACIÓN DEL CLIENTE:\n' + context.facts.map((f: string) => `- ${f}`).join('\n')
   }
   if (context.pendingIntent && context.missingEntities?.length > 0) {
     memorySection += `\n\nACCIÓN PENDIENTE: ${context.pendingIntent}. Falta: ${context.missingEntities.join(', ')}.`
