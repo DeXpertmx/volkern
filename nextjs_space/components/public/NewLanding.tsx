@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
+import SetupBasico from '@/components/public/SetupBasico';
 import './landing-new.css';
 
 /* ─── Types ───────────────────────────────────────────────────────────────── */
@@ -266,6 +267,11 @@ export function NewLanding() {
                           {pricing.symbol + pricing.contactCost}
                         </p>
                       </div>
+                    </div>
+
+                    {/* Setup básico */}
+                    <div className="mt-5">
+                      <SetupBasico />
                     </div>
                   </div>
                 </div>
