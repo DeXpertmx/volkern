@@ -593,10 +593,11 @@ export default function EcosistemaLanding() {
                   <TypewriterText text="Menos herramientas. Más control." speed={35} />
                 </h2>
 
-                <div className="space-y-4">
+                <ul className="space-y-4 list-none pl-0">
                   {BENEFITS.map((benefit, i) => (
                     <ScrollReveal
                       key={i}
+                      as="li"
                       variant="fadeInUpScale"
                       delay={i * 0.12}
                       spring
@@ -624,7 +625,7 @@ export default function EcosistemaLanding() {
                       </span>
                     </ScrollReveal>
                   ))}
-                </div>
+                </ul>
               </div>
             </ScrollReveal>
 
