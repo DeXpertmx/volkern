@@ -1,7 +1,12 @@
 'use client';
 
-import React from 'react';
-import { motion } from 'framer-motion';
+import React, { useRef, useEffect, useState } from 'react';
+import {
+  motion,
+  useScroll,
+  useTransform,
+  useInView,
+} from 'framer-motion';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,7 +27,49 @@ import {
 } from 'lucide-react';
 import { SOLUTION_MODULES, COLOR_MAP } from '@/lib/soluciones';
 
-/* ─── Icon mapping ────────────────────────────────────────────────────────── */
+/* ─── CountUp ─────────────────────────────────────────────────────────────── */
+
+function CountUp({
+  target,
+  suffix = '',
+  prefix = '',
+}: {
+  target: number;
+  suffix?: string;
+  prefix?: string;
+}) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const isInView = useInView(ref, { once: true, margin: '-50px' });
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    if (!isInView) return;
+    let start = 0;
+    const durationMs = 2000;
+    const stepMs = 16;
+    const increment = target / (durationMs / stepMs);
+    const timer = setInterval(() => {
+      start += increment;
+      if (start >= target) {
+        setCount(target);
+        clearInterval(timer);
+      } else {
+        setCount(Math.floor(start));
+      }
+    }, stepMs);
+    return () => clearInterval(timer);
+  }, [isInView, target]);
+
+  return (
+    <span ref={ref} className="tabular-nums">
+      {prefix}
+      {count.toLocaleString('es-ES')}
+      {suffix}
+    </span>
+  );
+}
+
+/* ─── Data ────────────────────────────────────────────────────────────────── */
 
 const ICON_MAP: Record<string, React.ComponentType<any>> = {
   Zap,
@@ -40,6 +87,12 @@ const BENEFITS = [
   'Mayor control del negocio',
   'Automatización entre áreas',
   'Escalabilidad real',
+];
+
+const STATS = [
+  { target: 500, suffix: '+', label: 'Empresas activas', icon: Users },
+  { target: 7, suffix: '', label: 'Módulos integrados', icon: Layers },
+  { target: 24, suffix: '/7', label: 'Soporte continuo', icon: Zap },
 ];
 
 const HOW_IT_WORKS = [
@@ -106,28 +159,58 @@ const FadeIn = ({
 /* ─── Component ───────────────────────────────────────────────────────────── */
 
 export default function EcosistemaLanding() {
+  /* ─── Parallax scroll tracking ─────────────────────────────────────────── */
+  const heroRef = useRef<HTMLElement>(null);
+  const { scrollYProgress } = useScroll({
+    target: heroRef,
+    offset: ['start start', 'end start'],
+  });
+  const orbY1 = useTransform(scrollYProgress, [0, 1], [0, -180]);
+  const orbY2 = useTransform(scrollYProgress, [0, 1], [0, -120]);
+  const orbY3 = useTransform(scrollYProgress, [0, 1], [0, -60]);
+  const gridY = useTransform(scrollYProgress, [0, 1], [0, -30]);
+  const contentY = useTransform(scrollYProgress, [0, 0.7], [0, 60]);
+  const contentOpacity = useTransform(scrollYProgress, [0, 0.5], [1, 0.4]);
+
   return (
     <>
       {/* ═══════════════════════════════════════════════════════════════════
-         HERO
+         HERO — con parallax
       ════════════════════════════════════════════════════════════════════ */}
-      <section className="relative min-h-[90vh] flex items-center justify-center pt-24 overflow-hidden bg-slate-950">
-        {/* Animated background orbs */}
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[900px] h-[500px] bg-blue-600/15 blur-[140px] rounded-full pointer-events-none" />
-        <div className="absolute top-1/3 right-1/4 w-[400px] h-[400px] bg-purple-600/10 blur-[120px] rounded-full pointer-events-none" />
-        <div className="absolute bottom-1/4 left-1/4 w-[300px] h-[300px] bg-emerald-600/8 blur-[100px] rounded-full pointer-events-none" />
+      <section
+        ref={heroRef}
+        className="relative min-h-[90vh] flex items-center justify-center pt-24 overflow-hidden bg-slate-950"
+      >
+        {/* Parallax background orbs */}
+        <motion.div
+          style={{ y: orbY1 }}
+          className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[900px] h-[500px] bg-blue-600/15 blur-[140px] rounded-full pointer-events-none"
+        />
+        <motion.div
+          style={{ y: orbY2 }}
+          className="absolute top-1/3 right-1/4 w-[400px] h-[400px] bg-purple-600/10 blur-[120px] rounded-full pointer-events-none"
+        />
+        <motion.div
+          style={{ y: orbY3 }}
+          className="absolute bottom-1/4 left-1/4 w-[300px] h-[300px] bg-emerald-600/8 blur-[100px] rounded-full pointer-events-none"
+        />
 
-        {/* Grid pattern overlay */}
-        <div
-          className="absolute inset-0 opacity-[0.03]"
+        {/* Parallax grid pattern */}
+        <motion.div
           style={{
+            y: gridY,
             backgroundImage:
               'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)',
             backgroundSize: '60px 60px',
           }}
+          className="absolute inset-0 opacity-[0.03]"
         />
 
-        <div className="container mx-auto px-6 relative z-10 text-center">
+        {/* Content with subtle parallax + fade */}
+        <motion.div
+          style={{ y: contentY, opacity: contentOpacity }}
+          className="container mx-auto px-6 relative z-10 text-center"
+        >
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
@@ -205,7 +288,7 @@ export default function EcosistemaLanding() {
               })}
             </div>
           </motion.div>
-        </div>
+        </motion.div>
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════════
@@ -229,6 +312,47 @@ export default function EcosistemaLanding() {
             </p>
           </div>
         </FadeIn>
+      </Section>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+         STATS BAR — animated counters
+      ════════════════════════════════════════════════════════════════════ */}
+      <Section dark>
+        <div className="max-w-4xl mx-auto">
+          <div className="grid sm:grid-cols-3 gap-6">
+            {STATS.map((stat, i) => {
+              const Icon = stat.icon;
+              return (
+                <motion.div
+                  key={stat.label}
+                  initial={{ opacity: 0, y: 30 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: '-60px' }}
+                  transition={{
+                    type: 'spring',
+                    stiffness: 80,
+                    damping: 14,
+                    delay: i * 0.15,
+                  }}
+                  className="text-center p-8 rounded-3xl bg-slate-900/40 border border-slate-800 hover:border-blue-500/20 transition-colors duration-500"
+                >
+                  <div className="w-12 h-12 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mx-auto mb-4">
+                    <Icon className="w-6 h-6 text-blue-400" />
+                  </div>
+                  <p className="text-4xl md:text-5xl font-black text-white mb-1">
+                    <CountUp
+                      target={stat.target}
+                      suffix={stat.suffix}
+                    />
+                  </p>
+                  <p className="text-xs font-black text-slate-400 uppercase tracking-widest">
+                    {stat.label}
+                  </p>
+                </motion.div>
+              );
+            })}
+          </div>
+        </div>
       </Section>
 
       {/* ═══════════════════════════════════════════════════════════════════
@@ -262,10 +386,20 @@ export default function EcosistemaLanding() {
                 return (
                   <motion.div
                     key={mod.name}
-                    initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ duration: 0.4, delay: i * 0.08 }}
+                    initial={{ opacity: 0, y: 40, scale: 0.92 }}
+                    whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                    viewport={{ once: true, margin: '-60px' }}
+                    whileHover={{
+                      y: -6,
+                      scale: 1.03,
+                      transition: { type: 'spring', stiffness: 300, damping: 20 },
+                    }}
+                    transition={{
+                      type: 'spring',
+                      stiffness: 100,
+                      damping: 14,
+                      delay: i * 0.12,
+                    }}
                     className={`group relative p-6 rounded-3xl border ${c.border} bg-slate-900/40 hover:bg-slate-900/80 transition-all duration-300 ${
                       isLarge ? 'lg:col-span-2' : ''
                     }`}
@@ -525,7 +659,9 @@ export default function EcosistemaLanding() {
 
                     <div className="flex items-center gap-2 text-sm text-blue-400 font-medium">
                       <Users className="w-4 h-4" />
-                      <span>+500 empresas ya confían en Volkern</span>
+                      <span>
+                        <CountUp target={500} prefix="+" /> empresas ya confían en Volkern
+                      </span>
                     </div>
                   </div>
                 </div>
