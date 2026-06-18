@@ -77,6 +77,8 @@ function SignupForm() {
   })
 
   const [loading, setLoading] = useState(false)
+  const [acceptedTerms, setAcceptedTerms] = useState(false)
+  const [requestedImmediateStart, setRequestedImmediateStart] = useState(false)
   const [formData, setFormData] = useState({
     companyName: '',
     fullName: '',
@@ -127,13 +129,28 @@ function SignupForm() {
       return
     }
 
+    if (!acceptedTerms) {
+      toast.error('Debes aceptar los Términos y Condiciones y la Política de Reembolsos')
+      return
+    }
+
+    if (!requestedImmediateStart) {
+      toast.error('Debes confirmar que solicitas el inicio inmediato del servicio')
+      return
+    }
+
     setLoading(true)
 
     try {
       // Construir payload con pricing params si vienen del slider
       const payload: any = {
         ...formData,
-        couponCode: formData.couponCode.trim() || undefined
+        couponCode: formData.couponCode.trim() || undefined,
+        legalConsent: {
+          acceptedTerms,
+          requestedImmediateStart,
+          consentedAt: new Date().toISOString(),
+        },
       }
       if (pricingParams.usuarios) {
         payload.pricing = {
@@ -330,6 +347,50 @@ function SignupForm() {
               )}
             </div>
 
+            {/* ═══ CHECKBOXES LEGALES ═════════════════════════════════ */}
+            <div className="space-y-3">
+              {/* Checkbox 1: Términos + Reembolsos */}
+              <label className={`flex items-start gap-2.5 p-3 rounded-lg border cursor-pointer transition-all ${
+                acceptedTerms
+                  ? 'bg-emerald-50 border-emerald-300'
+                  : 'bg-white border-gray-200 hover:border-gray-300'
+              }`}>
+                <input
+                  type="checkbox"
+                  checked={acceptedTerms}
+                  onChange={(e) => setAcceptedTerms(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                />
+                <span className="text-xs text-gray-600 leading-relaxed">
+                  Acepto los{' '}
+                  <Link href="/terms" target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-purple-600 hover:underline font-medium">Términos y Condiciones</Link>
+                  {' '}y la{' '}
+                  <Link href="/reembolsos" target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-purple-600 hover:underline font-medium">Política de Reembolsos</Link>.
+                  Entiendo que dispongo de un plazo de 14 días naturales para ejercer mi derecho de desistimiento,
+                  aplicable únicamente al primer pago.
+                </span>
+              </label>
+
+              {/* Checkbox 2: Renuncia al desistimiento (CLAVE) */}
+              <label className={`flex items-start gap-2.5 p-3 rounded-lg border cursor-pointer transition-all ${
+                requestedImmediateStart
+                  ? 'bg-amber-50 border-amber-300'
+                  : 'bg-white border-gray-200 hover:border-gray-300'
+              }`}>
+                <input
+                  type="checkbox"
+                  checked={requestedImmediateStart}
+                  onChange={(e) => setRequestedImmediateStart(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-gray-300 text-amber-500 focus:ring-amber-500 cursor-pointer"
+                />
+                <span className="text-xs text-gray-600 leading-relaxed">
+                  <strong className="text-amber-600">Solicito expresamente</strong> que el servicio comience de forma inmediata y
+                  reconozco que, al tratarse de contenido digital y/o servicios ejecutados,
+                  pierdo mi derecho de desistimiento en la parte del servicio que haya sido prestada o utilizada.
+                </span>
+              </label>
+            </div>
+
             <Button 
               type="submit" 
               className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
@@ -347,15 +408,17 @@ function SignupForm() {
               )}
             </Button>
 
-            <p className="text-xs text-center text-gray-600">
-              Al crear una cuenta, aceptas nuestros{' '}
-              <Link href="/terms" className="text-purple-600 hover:underline">
-                Términos de Servicio
-              </Link>{' '}
-              y{' '}
-              <Link href="/privacy" className="text-purple-600 hover:underline">
-                Política de Privacidad
-              </Link>
+            <p className="text-[10px] text-center text-gray-500 leading-relaxed">
+              El acceso al servicio se activará inmediatamente tras el registro.
+              {' '}No se realizan reembolsos por periodos ya iniciados ni por servicios ejecutados.
+            </p>
+
+            <p className="text-xs text-center text-gray-500">
+              <Link href="/terms" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-purple-600 underline transition">Términos</Link>
+              {' · '}
+              <Link href="/privacy" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-purple-600 underline transition">Privacidad</Link>
+              {' · '}
+              <Link href="/reembolsos" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-purple-600 underline transition">Reembolsos</Link>
             </p>
 
             <div className="text-center text-sm">
