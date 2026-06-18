@@ -28,6 +28,7 @@ import {
 import { SOLUTION_MODULES, COLOR_MAP } from '@/lib/soluciones';
 import BackToTop from '@/components/public/BackToTop';
 import FloatingParticles from '@/components/public/FloatingParticles';
+import ScrollReveal from '@/components/public/ScrollReveal';
 
 /* ─── TypewriterText ──────────────────────────────────────────────────────── */
 
@@ -197,22 +198,7 @@ const Section = ({
   </section>
 );
 
-const FadeIn = ({
-  children,
-  delay = 0,
-}: {
-  children: React.ReactNode;
-  delay?: number;
-}) => (
-  <motion.div
-    initial={{ opacity: 0, y: 24 }}
-    whileInView={{ opacity: 1, y: 0 }}
-    viewport={{ once: true, margin: '-80px' }}
-    transition={{ duration: 0.6, delay, ease: 'easeOut' }}
-  >
-    {children}
-  </motion.div>
-);
+
 
 /* ─── TimelineSection ─────────────────────────────────────────────────────── */
 
@@ -468,7 +454,7 @@ export default function EcosistemaLanding() {
          VISIÓN GENERAL
       ════════════════════════════════════════════════════════════════════ */}
       <Section dark>
-        <FadeIn>
+        <ScrollReveal>
           <div className="max-w-3xl mx-auto text-center">
             <span className="inline-block py-1 px-3 rounded-full bg-blue-500/10 text-blue-400 text-sm font-medium mb-6 border border-blue-500/20">
               Visión general
@@ -481,7 +467,7 @@ export default function EcosistemaLanding() {
               completo conforme crece tu negocio. Sin migraciones. Sin fricción.
             </p>
           </div>
-        </FadeIn>
+        </ScrollReveal>
       </Section>
 
       {/* ═══════════════════════════════════════════════════════════════════
@@ -493,17 +479,13 @@ export default function EcosistemaLanding() {
             {STATS.map((stat, i) => {
               const Icon = stat.icon;
               return (
-                <motion.div
+                <ScrollReveal
                   key={stat.label}
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, margin: '-60px' }}
-                  transition={{
-                    type: 'spring',
-                    stiffness: 80,
-                    damping: 14,
-                    delay: i * 0.15,
-                  }}
+                  variant="fadeInUp"
+                  delay={i * 0.15}
+                  spring
+                  stiffness={80}
+                  viewportMargin="-60px"
                   className="text-center p-8 rounded-3xl bg-slate-900/40 border border-slate-800 hover:border-blue-500/20 transition-colors duration-500"
                 >
                   <div className="w-12 h-12 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mx-auto mb-4">
@@ -518,7 +500,7 @@ export default function EcosistemaLanding() {
                   <p className="text-xs font-black text-slate-400 uppercase tracking-widest">
                     {stat.label}
                   </p>
-                </motion.div>
+                </ScrollReveal>
               );
             })}
           </div>
@@ -529,7 +511,7 @@ export default function EcosistemaLanding() {
          ESTRUCTURA DEL ECOSISTEMA — Grid de módulos
       ════════════════════════════════════════════════════════════════════ */}
       <Section id="modulos">
-        <FadeIn>
+        <ScrollReveal>
           <div className="max-w-5xl mx-auto">
             <div className="text-center mb-14">
               <span className="inline-block py-1 px-3 rounded-full bg-blue-500/10 text-blue-400 text-sm font-medium mb-6 border border-blue-500/20">
@@ -611,14 +593,14 @@ export default function EcosistemaLanding() {
               })}
             </div>
           </div>
-        </FadeIn>
+        </ScrollReveal>
       </Section>
 
       {/* ═══════════════════════════════════════════════════════════════════
          CÓMO FUNCIONA — 3 pasos
       ════════════════════════════════════════════════════════════════════ */}
       <Section dark id="como-funciona">
-        <FadeIn>
+        <ScrollReveal>
           <div className="max-w-4xl mx-auto">
             <div className="text-center mb-14">
               <span className="inline-block py-1 px-3 rounded-full bg-blue-500/10 text-blue-400 text-sm font-medium mb-6 border border-blue-500/20">
@@ -669,14 +651,14 @@ export default function EcosistemaLanding() {
               })}
             </div>
           </div>
-        </FadeIn>
+        </ScrollReveal>
       </Section>
 
       {/* ═══════════════════════════════════════════════════════════════════
          CASO DE USO — timeline horizontal animado
       ════════════════════════════════════════════════════════════════════ */}
       <Section>
-        <FadeIn>
+        <ScrollReveal>
           <div className="max-w-4xl mx-auto">
             <div className="text-center mb-14">
               <span className="inline-block py-1 px-3 rounded-full bg-blue-500/10 text-blue-400 text-sm font-medium mb-6 border border-blue-500/20">
@@ -693,7 +675,7 @@ export default function EcosistemaLanding() {
             {/* Horizontal timeline with animated line */}
             <TimelineSection />
           </div>
-        </FadeIn>
+        </ScrollReveal>
       </Section>
 
       {/* ═══════════════════════════════════════════════════════════════════
@@ -703,7 +685,7 @@ export default function EcosistemaLanding() {
         <div className="max-w-5xl mx-auto">
           <div className="grid lg:grid-cols-2 gap-12 items-start">
             {/* Beneficios */}
-            <FadeIn>
+            <ScrollReveal>
               <div>
                 <span className="inline-block py-1 px-3 rounded-full bg-blue-500/10 text-blue-400 text-sm font-medium mb-6 border border-blue-500/20">
                   Beneficios del ecosistema
@@ -748,10 +730,10 @@ export default function EcosistemaLanding() {
                   ))}
                 </div>
               </div>
-            </FadeIn>
+            </ScrollReveal>
 
             {/* Diferencial */}
-            <FadeIn delay={0.2}>
+            <ScrollReveal delay={0.2}>
               <div className="lg:pt-12">
                 <div className="p-8 rounded-3xl bg-gradient-to-br from-blue-900/30 via-slate-900 to-purple-900/30 border border-slate-800 relative overflow-hidden">
                   {/* Glow */}
@@ -785,7 +767,7 @@ export default function EcosistemaLanding() {
                   </div>
                 </div>
               </div>
-            </FadeIn>
+            </ScrollReveal>
           </div>
         </div>
       </Section>
@@ -794,7 +776,7 @@ export default function EcosistemaLanding() {
          CTA
       ════════════════════════════════════════════════════════════════════ */}
       <Section>
-        <FadeIn>
+        <ScrollReveal>
           <div className="max-w-3xl mx-auto text-center">
             <div className="bg-gradient-to-r from-blue-900/40 via-slate-900 to-indigo-900/40 border border-slate-800 rounded-3xl p-12 md:p-16 relative overflow-hidden">
               {/* Glow effects */}
@@ -834,7 +816,7 @@ export default function EcosistemaLanding() {
               </div>
             </div>
           </div>
-        </FadeIn>
+        </ScrollReveal>
       </Section>
 
       {/* ═══════════════════════════════════════════════════════════════════
@@ -847,13 +829,7 @@ export default function EcosistemaLanding() {
       ════════════════════════════════════════════════════════════════════ */}
       <div className="py-14 bg-slate-950 border-t border-slate-900">
         <div className="container mx-auto px-6 text-center">
-          <motion.p
-            initial={{ opacity: 0, y: 10 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-            className="text-xl md:text-2xl text-slate-400 font-medium max-w-2xl mx-auto leading-relaxed"
-          >
+          <ScrollReveal variant="fadeInUp" viewportMargin="-40px" className="text-xl md:text-2xl text-slate-400 font-medium max-w-2xl mx-auto leading-relaxed">
             Tu negocio no necesita más herramientas.{' '}
             <br />
             <span className="text-white font-bold">
@@ -863,7 +839,7 @@ export default function EcosistemaLanding() {
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-500 font-bold">
               Ese sistema es Volkern.
             </span>
-          </motion.p>
+          </ScrollReveal>
         </div>
       </div>
     </>
