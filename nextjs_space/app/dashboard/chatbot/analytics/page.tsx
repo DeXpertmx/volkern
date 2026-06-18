@@ -28,6 +28,8 @@ import {
   Activity,
   ArrowUp,
   ArrowDown,
+  Bell,
+  BellOff,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -51,6 +53,16 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -341,6 +353,8 @@ export default function ChatbotAnalyticsPage() {
             )}
             {runningDetection ? 'Analizando...' : 'Ejecutar análisis'}
           </Button>
+
+          <NotificationConfigDialog />
         </div>
       </div>
 
@@ -961,4 +975,269 @@ export default function ChatbotAnalyticsPage() {
       </Tabs>
     </div>
   );
+}
+
+// ═══ Notification Config Dialog ═══════════════════════════
+
+const DEFAULT_PATTERN_ALERT_CONFIG: PatternAlertConfig = {
+  enabled: false,
+  severities: ['critical', 'high'],
+  channels: ['in_app'],
+  patternTypes: [],
+  cooldownMinutes: 60,
+}
+
+interface PatternAlertConfig {
+  enabled: boolean
+  severities: string[]
+  channels: string[]
+  patternTypes: string[]
+  cooldownMinutes: number
+}
+
+function NotificationConfigDialog() {
+  const [open, setOpen] = useState(false)
+  const [config, setConfig] = useState<PatternAlertConfig>(DEFAULT_PATTERN_ALERT_CONFIG)
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  const fetchConfig = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/chatbot/analytics/notifications-config')
+      if (res.ok) {
+        const data = await res.json()
+        setConfig({ ...DEFAULT_PATTERN_ALERT_CONFIG, ...data })
+      }
+    } catch (e) {
+      console.error('Error loading notification config:', e)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (open) fetchConfig()
+  }, [open, fetchConfig])
+
+  const saveConfig = async () => {
+    if (!config) return
+    setSaving(true)
+    try {
+      const res = await fetch('/api/chatbot/analytics/notifications-config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config),
+      })
+      if (res.ok) {
+        toast.success('Configuración de notificaciones guardada')
+        setOpen(false)
+      } else {
+        toast.error('Error al guardar configuración')
+      }
+    } catch (e) {
+      toast.error('Error al guardar configuración')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const toggleSeverity = (sev: string) => {
+    if (!config) return
+    setConfig({
+      ...config,
+      severities: config.severities.includes(sev)
+        ? config.severities.filter(s => s !== sev)
+        : [...config.severities, sev],
+    })
+  }
+
+  const toggleChannel = (ch: string) => {
+    if (!config) return
+    setConfig({
+      ...config,
+      channels: config.channels.includes(ch)
+        ? config.channels.filter(c => c !== ch)
+        : [...config.channels, ch],
+    })
+  }
+
+  const severityBadge = (sev: string) => {
+    const colors: Record<string, string> = {
+      critical: 'bg-red-500/15 text-red-600 border-red-300',
+      high: 'bg-orange-500/15 text-orange-600 border-orange-300',
+      medium: 'bg-yellow-500/15 text-yellow-600 border-yellow-300',
+      low: 'bg-blue-500/15 text-blue-600 border-blue-300',
+    }
+    return (
+      <button
+        type="button"
+        onClick={() => toggleSeverity(sev)}
+        className={cn(
+          'px-3 py-1.5 rounded-full text-xs font-medium border transition-all',
+          config?.severities.includes(sev)
+            ? colors[sev] || 'bg-primary/15 text-primary border-primary'
+            : 'bg-muted text-muted-foreground border-border opacity-60 hover:opacity-100'
+        )}
+      >
+        {sev === 'critical' ? 'Crítico' :
+         sev === 'high' ? 'Alto' :
+         sev === 'medium' ? 'Medio' : 'Bajo'}
+      </button>
+    )
+  }
+
+  const channelLabel = (ch: string) => {
+    switch (ch) {
+      case 'in_app': return { icon: Bell, label: 'In-App' }
+      case 'telegram': return { icon: MessageSquare, label: 'Telegram' }
+      case 'email': return { icon: MessageSquare, label: 'Email' }
+      default: return { icon: Bell, label: ch }
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          className={cn(
+            'gap-2',
+            config?.enabled && 'border-amber-400 text-amber-600 dark:text-amber-400'
+          )}
+        >
+          {config?.enabled ? (
+            <Bell className="h-4 w-4" />
+          ) : (
+            <BellOff className="h-4 w-4" />
+          )}
+          Alertas
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[500px]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Bell className="h-5 w-5 text-primary" />
+            Alertas de Patrones Críticos
+          </DialogTitle>
+          <DialogDescription>
+            Configura notificaciones automáticas cuando se detecten patrones anómalos en el chatbot.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-6 py-4">
+          {/* Enable toggle */}
+          <div className="flex items-center justify-between">
+            <div>
+              <Label className="text-base font-medium">Notificaciones activas</Label>
+              <p className="text-sm text-muted-foreground">
+                Recibe alertas cuando se detecten patrones críticos
+              </p>
+            </div>
+            <Switch
+              checked={config.enabled}
+              onCheckedChange={(checked) => setConfig({ ...config, enabled: checked })}
+            />
+          </div>
+
+          <Separator />
+
+          {/* Severity filter */}
+          <div>
+            <Label className="text-base font-medium">Severidad mínima</Label>
+            <p className="text-sm text-muted-foreground mb-3">
+              ¿Qué nivel de severidad debe tener un patrón para notificar?
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {severityBadge('critical')}
+              {severityBadge('high')}
+              {severityBadge('medium')}
+              {severityBadge('low')}
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Channels */}
+          <div>
+            <Label className="text-base font-medium">Canales de notificación</Label>
+            <p className="text-sm text-muted-foreground mb-3">
+              ¿Cómo quieres recibir las alertas?
+            </p>
+            <div className="space-y-3">
+              {['in_app', 'telegram', 'email'].map(ch => {
+                const info = channelLabel(ch)
+                const Icon = info.icon
+                const enabled = config.channels.includes(ch)
+                return (
+                  <div
+                    key={ch}
+                    className={cn(
+                      'flex items-center justify-between p-3 rounded-lg border transition-colors cursor-pointer',
+                      enabled
+                        ? 'border-primary/30 bg-primary/5'
+                        : 'border-border bg-card hover:bg-muted/50'
+                    )}
+                    onClick={() => toggleChannel(ch)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        'p-1.5 rounded-lg',
+                        enabled ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+                      )}>
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">{info.label}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {ch === 'in_app' ? 'Notificaciones dentro de la plataforma' :
+                           ch === 'telegram' ? 'Mensaje via Telegram (requiere integración)' :
+                           'Correo electrónico'}
+                        </p>
+                      </div>
+                    </div>
+                    <Switch checked={enabled} onCheckedChange={() => toggleChannel(ch)} />
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Cooldown */}
+          <div>
+            <Label className="text-base font-medium">Enfriamiento</Label>
+            <p className="text-sm text-muted-foreground mb-2">
+              Esperar antes de re-notificar sobre el mismo tipo de patrón
+            </p>
+            <select
+              value={config.cooldownMinutes}
+              onChange={(e) => setConfig({ ...config, cooldownMinutes: parseInt(e.target.value) })}
+              className="border rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary w-full"
+            >
+              <option value="15">15 minutos</option>
+              <option value="30">30 minutos</option>
+              <option value="60">1 hora</option>
+              <option value="180">3 horas</option>
+              <option value="360">6 horas</option>
+              <option value="720">12 horas</option>
+              <option value="1440">24 horas</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-3">
+          <Button variant="outline" onClick={() => setOpen(false)}>
+            Cancelar
+          </Button>
+          <Button onClick={saveConfig} disabled={saving}>
+            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Guardar
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
 }

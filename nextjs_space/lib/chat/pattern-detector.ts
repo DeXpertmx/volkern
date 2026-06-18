@@ -122,6 +122,11 @@ export async function detectPatterns(
     if (patterns.length > 0) {
       await saveDetectedPatterns(tenantId, patterns)
       console.log(`[PatternDetector] ✅ ${patterns.length} patrones detectados para tenant ${tenantId}`)
+
+      // Enviar notificaciones si hay patrones críticos/altos configurados
+      await sendPatternAlerts(tenantId, patterns).catch(err =>
+        console.error('[PatternDetector] Error enviando alertas:', err)
+      )
     } else {
       console.log(`[PatternDetector] ✅ Sin patrones anómalos para tenant ${tenantId}`)
     }
@@ -419,6 +424,134 @@ async function saveDetectedPatterns(tenantId: string, patterns: DetectedPattern[
     }
   } catch (error) {
     console.error('[PatternDetector] Error guardando patrones:', error)
+  }
+}
+
+// ==================== ALERTAS ====================
+
+interface PatternAlertConfig {
+  enabled: boolean
+  severities: string[]
+  channels: string[]
+  patternTypes: string[]
+  cooldownMinutes: number
+}
+
+const CONFIG_KEY = 'chatbot_pattern_alerts_config'
+
+/**
+ * Envía notificaciones cuando se detectan patrones según la configuración del tenant.
+ * Soporta notificaciones in-app y Telegram.
+ */
+async function sendPatternAlerts(tenantId: string, patterns: DetectedPattern[]): Promise<void> {
+  try {
+    // Cargar configuración de alertas
+    const record = await prisma.configuracion.findUnique({
+      where: { tenantId_clave: { tenantId, clave: CONFIG_KEY } },
+    })
+    if (!record) return // Sin configuración, no enviar
+
+    const config: PatternAlertConfig = JSON.parse(record.valor)
+    if (!config.enabled) return
+
+    // Filtrar patrones por severidad configurada
+    const notifiablePatterns = patterns.filter(p =>
+      config.severities.includes(p.severity) &&
+      (config.patternTypes.length === 0 || config.patternTypes.includes(p.type))
+    )
+    if (notifiablePatterns.length === 0) return
+
+    // Verificar cooldown cross-channel (basado en chatbotAuditLog)
+    const cooldownSince = new Date(Date.now() - config.cooldownMinutes * 60 * 1000)
+    const recentAlert = await prisma.chatbotAuditLog.findFirst({
+      where: {
+        tenantId,
+        event: 'pattern_alert_sent',
+        createdAt: { gte: cooldownSince },
+      },
+    })
+    if (recentAlert) {
+      console.log(`[PatternDetector] Alertas enviadas recientemente, saltando notificación (cooldown: ${config.cooldownMinutes}min)`)
+      return
+    }
+
+    // Construir mensaje de alerta
+    const criticalCount = notifiablePatterns.filter(p => p.severity === 'critical').length
+    const highCount = notifiablePatterns.filter(p => p.severity === 'high').length
+    const totalCount = notifiablePatterns.length
+
+    const title = `🚨 ${totalCount} patrón(es) anómalo(s) detectado(s)`
+    const body = notifiablePatterns
+      .slice(0, 5)
+      .map(p => `• [${p.severity.toUpperCase()}] ${p.description} (${p.value}%)`)
+      .join('\n')
+    const fullBody = `${body}\n\n${criticalCount} críticos, ${highCount} altos — Revisa el dashboard de analytics.`
+
+    // Enviar por cada canal configurado
+    const sendPromises: Promise<any>[] = []
+
+    if (config.channels.includes('in_app')) {
+      // Obtener usuarios admin del tenant para notificar
+      const adminUsers = await prisma.user.findMany({
+        where: { tenantId, role: { nombre: { in: ['admin', 'superadmin'] } } },
+        select: { id: true },
+      })
+
+      for (const user of adminUsers) {
+        sendPromises.push(
+          prisma.inAppNotification.create({
+            data: {
+              tenantId,
+              userId: user.id,
+              title,
+              body: fullBody,
+              type: 'warning',
+              data: {
+                source: 'pattern_detector',
+                patterns: notifiablePatterns.map(p => ({
+                  type: p.type,
+                  severity: p.severity,
+                  value: p.value,
+                  description: p.description,
+                })),
+                dashboardUrl: '/dashboard/chatbot/analytics',
+              },
+              actionUrl: '/dashboard/chatbot/analytics',
+            },
+          })
+        )
+      }
+    }
+
+    if (config.channels.includes('telegram')) {
+      const { notifyByTelegram } = await import('@/lib/skills/notification-layer')
+      const { SkillContext } = await import('@/lib/skills/context')
+      const ctx = new SkillContext({ tenantId })
+      sendPromises.push(
+        notifyByTelegram(
+          `*${title}*\n\n${fullBody}\n\n🔗 [Ver dashboard](https://volkern.app/dashboard/chatbot/analytics)`,
+          ctx
+        )
+      )
+    }
+    // Registrar alerta enviada para cooldown cross-channel
+    await prisma.chatbotAuditLog.create({
+      data: {
+        tenantId,
+        event: 'pattern_alert_sent',
+        severity: notifiablePatterns.some(p => p.severity === 'critical') ? 'critical' as any : 'high' as any,
+        metadata: {
+          patternCount: notifiablePatterns.length,
+          severities: notifiablePatterns.map(p => p.severity),
+          channels: config.channels,
+        },
+      },
+    }).catch(() => {})
+
+    await Promise.allSettled(sendPromises)
+    console.log(`[PatternDetector] ✅ ${sendPromises.length} notificaciones enviadas para tenant ${tenantId}`)
+  } catch (error) {
+    console.error('[PatternDetector] Error enviando alertas:', error)
   }
 }
 
