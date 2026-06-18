@@ -437,6 +437,7 @@ export default function DeleteDataPage() {
               <ul className="space-y-2 text-sm">
                 <li><Link href="/terms" className="hover:text-white transition">Términos de Servicio</Link></li>
                 <li><Link href="/privacy" className="hover:text-white transition">Política de Privacidad</Link></li>
+                <li><Link href="/reembolsos" className="hover:text-white transition">Política de Reembolsos</Link></li>
                 <li><Link href="/delete-data" className="hover:text-white transition">Eliminación de Datos</Link></li>
               </ul>
             </div>

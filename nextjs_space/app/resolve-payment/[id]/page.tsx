@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -179,7 +180,7 @@ export default function ResolvePaymentPage() {
 
         <div className="flex justify-center gap-6 text-[10px] text-slate-400 font-bold uppercase tracking-widest">
           <span className="hover:text-primary transition-colors cursor-pointer">Soporte Técnico</span>
-          <span className="hover:text-primary transition-colors cursor-pointer">Política de Reembolso</span>
+          <Link href="/reembolsos" className="hover:text-primary transition-colors">Política de Reembolso</Link>
           <span className="hover:text-primary transition-colors cursor-pointer">Seguridad Nexus</span>
         </div>
       </div>
