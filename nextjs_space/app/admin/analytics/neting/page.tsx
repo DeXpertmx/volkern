@@ -12,7 +12,17 @@ import {
   MapPin,
   Trash2,
   Filter,
+  TrendingUp,
 } from 'lucide-react';
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts';
 
 interface AnalyticsEvent {
   event: string;
@@ -23,9 +33,16 @@ interface AnalyticsEvent {
   timestamp: string;
 }
 
+interface DailyPoint {
+  date: string;
+  modalShown: number;
+  standardPriceClicked: number;
+}
+
 interface NetingAnalytics {
   events: AnalyticsEvent[];
   counts: Record<string, number>;
+  dailyTimeline: DailyPoint[];
   summary: {
     modalShown: number;
     standardPriceClicked: number;
@@ -58,10 +75,40 @@ function formatDate(iso: string): string {
   });
 }
 
-function shortUA(ua: string): string {
-  if (ua === 'unknown') return '—';
-  if (ua.length > 50) return ua.slice(0, 47) + '…';
-  return ua;
+function formatTimelineDate(iso: string): string {
+  const d = new Date(iso + 'T00:00:00');
+  return d.toLocaleDateString('es-ES', {
+    day: '2-digit',
+    month: 'short',
+  });
+}
+
+// Tooltip personalizado para el gráfico de timeline
+function TimelineTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-slate-900 text-white p-3 rounded-xl shadow-xl text-xs space-y-1">
+      <p className="font-black">
+        {new Date(label + 'T00:00:00').toLocaleDateString('es-ES', {
+          weekday: 'short',
+          day: 'numeric',
+          month: 'long',
+        })}
+      </p>
+      {payload.map((p: any) => (
+        <div key={p.dataKey} className="flex items-center justify-between gap-4">
+          <span className="flex items-center gap-1.5">
+            <span
+              className="w-2.5 h-2.5 rounded-full"
+              style={{ backgroundColor: p.color }}
+            />
+            {p.name}
+          </span>
+          <span className="font-black tabular-nums">{p.value}</span>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export default function NetingAnalyticsPage() {
@@ -317,6 +364,115 @@ const ACTIVE_PRESET_CLASS =
             Eventos Neting registrados
           </p>
         </div>
+      </div>
+
+      {/* Timeline Chart — eventos por día */}
+      <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
+        <div className="p-8 border-b border-slate-50">
+          <div className="flex items-center gap-3 mb-1">
+            <div className="p-2 bg-indigo-50 rounded-xl text-indigo-500">
+              <TrendingUp size={20} />
+            </div>
+            <div>
+              <h3 className="text-xl font-black text-[#1A365D] uppercase tracking-tighter">
+                Tendencia diaria
+              </h3>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                Eventos por día — visualiza picos y patrones de tráfico
+              </p>
+            </div>
+          </div>
+          {/* Leyenda */}
+          <div className="flex items-center gap-4 mt-3 text-[10px] font-bold">
+            <span className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-sm" style={{ background: '#F59E0B' }} />
+              Modal visto
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-sm" style={{ background: '#10B981' }} />
+              Precio estándar
+            </span>
+          </div>
+        </div>
+
+        {data!.dailyTimeline.length === 0 ? (
+          <div className="p-16 text-center">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-slate-50 mb-4">
+              <TrendingUp size={28} className="text-slate-300" />
+            </div>
+            <p className="text-sm font-bold text-slate-400">
+              No hay datos para mostrar en el gráfico
+            </p>
+            <p className="text-xs text-slate-400 mt-1">
+              El gráfico se generará cuando haya eventos en el rango de fechas seleccionado.
+            </p>
+          </div>
+        ) : (
+          <div className="p-6">
+            <ResponsiveContainer width="100%" height={280}>
+              <AreaChart
+                data={data!.dailyTimeline}
+                margin={{ top: 5, right: 10, left: 0, bottom: 5 }}
+              >
+                <defs>
+                  <linearGradient id="gradientModal" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#F59E0B" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="gradientPrice" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10B981" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
+                <XAxis
+                  dataKey="date"
+                  tickFormatter={formatTimelineDate}
+                  tick={{ fontSize: 10, fill: '#94A3B8', fontWeight: 700 }}
+                  tickLine={false}
+                  axisLine={{ stroke: '#E2E8F0' }}
+                />
+                <YAxis
+                  tick={{ fontSize: 10, fill: '#94A3B8', fontWeight: 700 }}
+                  tickLine={false}
+                  axisLine={{ stroke: '#E2E8F0' }}
+                  allowDecimals={false}
+                />
+                <Tooltip content={<TimelineTooltip />} />
+                <Area
+                  type="monotone"
+                  dataKey="modalShown"
+                  name="Modal visto"
+                  stroke="#F59E0B"
+                  strokeWidth={2}
+                  fill="url(#gradientModal)"
+                  dot={{ r: 3, fill: '#F59E0B', strokeWidth: 0 }}
+                  activeDot={{
+                    r: 5,
+                    strokeWidth: 2,
+                    stroke: 'white',
+                    fill: '#F59E0B',
+                  }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="standardPriceClicked"
+                  name="Precio estándar"
+                  stroke="#10B981"
+                  strokeWidth={2}
+                  fill="url(#gradientPrice)"
+                  dot={{ r: 3, fill: '#10B981', strokeWidth: 0 }}
+                  activeDot={{
+                    r: 5,
+                    strokeWidth: 2,
+                    stroke: 'white',
+                    fill: '#10B981',
+                  }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </div>
 
       {/* Event Timeline */}
