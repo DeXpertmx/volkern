@@ -32,6 +32,7 @@ import {
   BellOff,
   Send,
   CheckCircle,
+  X,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -1046,105 +1047,217 @@ export default function ChatbotAnalyticsPage() {
               </CardContent>
             </Card>
           ) : (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Bell className="h-5 w-5 text-primary" />
-                  Historial de Alertas
-                </CardTitle>
-                <CardDescription>
-                  Notificaciones enviadas automáticamente cuando se detectaron patrones anómalos
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b text-left">
-                        <th className="pb-3 font-medium text-muted-foreground">Severidad</th>
-                        <th className="pb-3 font-medium text-muted-foreground">Patrones</th>
-                        <th className="pb-3 font-medium text-muted-foreground hidden sm:table-cell">Canales</th>
-                        <th className="pb-3 font-medium text-muted-foreground hidden md:table-cell">Severidades</th>
-                        <th className="pb-3 font-medium text-muted-foreground text-right">Enviado</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {alerts.map((alert, i) => (
-                        <tr key={alert.id} className={cn(
-                          'border-b last:border-0 transition-colors hover:bg-muted/50',
-                          i % 2 === 0 ? 'bg-background' : 'bg-muted/20'
-                        )}>
-                          <td className="py-3 pr-4">
-                            <Badge
-                              variant="outline"
-                              className={cn(
-                                'text-xs',
-                                alert.severity === 'critical' ? 'bg-red-500/15 text-red-600 border-red-200 dark:border-red-800' :
-                                alert.severity === 'high' ? 'bg-orange-500/15 text-orange-600 border-orange-200 dark:border-orange-800' :
-                                'bg-yellow-500/15 text-yellow-600 border-yellow-200 dark:border-yellow-800'
-                              )}
-                            >
-                              {alert.severity === 'critical' ? 'Crítico' :
-                               alert.severity === 'high' ? 'Alto' :
-                               alert.severity === 'medium' ? 'Medio' : 'Info'}
-                            </Badge>
-                          </td>
-                          <td className="py-3 pr-4">
-                            <span className="font-mono font-bold text-lg">{alert.patternCount}</span>
-                          </td>
-                          <td className="py-3 pr-4 hidden sm:table-cell">
-                            <div className="flex gap-1.5 flex-wrap">
-                              {alert.channels.map(ch => (
-                                <span
-                                  key={ch}
-                                  className={cn(
-                                    'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium',
-                                    ch === 'in_app' ? 'bg-blue-500/10 text-blue-600' :
-                                    ch === 'telegram' ? 'bg-sky-500/10 text-sky-600' :
-                                    'bg-emerald-500/10 text-emerald-600'
-                                  )}
-                                >
-                                  {ch === 'in_app' ? 'In-App' : ch === 'telegram' ? 'Telegram' : 'Email'}
-                                </span>
-                              ))}
-                            </div>
-                          </td>
-                          <td className="py-3 pr-4 hidden md:table-cell">
-                            <div className="flex gap-1 flex-wrap">
-                              {alert.severities.map((sev, si) => (
-                                <span
-                                  key={si}
-                                  className={cn(
-                                    'inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono',
-                                    sev === 'critical' ? 'bg-red-500/10 text-red-600' :
-                                    sev === 'high' ? 'bg-orange-500/10 text-orange-600' :
-                                    sev === 'medium' ? 'bg-yellow-500/10 text-yellow-600' :
-                                    'bg-blue-500/10 text-blue-600'
-                                  )}
-                                >
-                                  {sev === 'critical' ? 'C' : sev === 'high' ? 'A' : sev === 'medium' ? 'M' : 'B'}
-                                </span>
-                              ))}
-                            </div>
-                          </td>
-                          <td className="py-3 text-right text-muted-foreground whitespace-nowrap">
-                            {formatDate(alert.sentAt)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <p className="text-xs text-muted-foreground mt-4 text-center">
-                  {alerts.length} alerta(s) enviada(s) en el período seleccionado
-                </p>
-              </CardContent>
-            </Card>
+            <AlertHistoryCard alerts={alerts} />
           )}
         </TabsContent>
       </Tabs>
     </div>
   );
+}
+
+// ═══ Alert History Card with Filters ═══════════════════════
+
+function AlertHistoryCard({ alerts }: { alerts: AlertEntry[] }) {
+  const [severityFilter, setSeverityFilter] = useState<string | null>(null)
+  const [channelFilter, setChannelFilter] = useState<string | null>(null)
+
+  // Collect unique severities and channels from all alerts
+  const allSeverities = Array.from(new Set(alerts.map(a => a.severity)))
+  const allChannels = Array.from(new Set(alerts.flatMap(a => a.channels)))
+
+  // Filter alerts
+  const filteredAlerts = alerts.filter(alert => {
+    if (severityFilter && alert.severity !== severityFilter) return false
+    if (channelFilter && !alert.channels.includes(channelFilter)) return false
+    return true
+  })
+
+  const hasActiveFilters = severityFilter !== null || channelFilter !== null
+
+  const sevLabel = (sev: string) => {
+    switch (sev) {
+      case 'critical': return 'Crítico'
+      case 'high': return 'Alto'
+      case 'medium': return 'Medio'
+      case 'low': return 'Bajo'
+      default: return sev
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Bell className="h-5 w-5 text-primary" />
+              Historial de Alertas
+            </CardTitle>
+            <CardDescription>
+              Notificaciones enviadas automáticamente cuando se detectaron patrones anómalos
+            </CardDescription>
+          </div>
+          {hasActiveFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => { setSeverityFilter(null); setChannelFilter(null) }}
+              className="gap-1 shrink-0 text-xs"
+            >
+              <X className="h-3 w-3" />
+              Limpiar filtros
+            </Button>
+          )}
+        </div>
+
+        {/* Filter bar */}
+        <div className="flex flex-wrap items-center gap-3 pt-2">
+          {/* Severity filters */}
+          <div className="flex items-center gap-1.5">
+            <Filter className="h-3.5 w-3.5 text-muted-foreground" />
+            {allSeverities.map(sev => (
+              <button
+                key={sev}
+                type="button"
+                onClick={() => setSeverityFilter(severityFilter === sev ? null : sev)}
+                className={cn(
+                  'px-2.5 py-1 rounded-full text-xs font-medium border transition-all',
+                  severityFilter === sev
+                    ? sev === 'critical' ? 'bg-red-500/15 text-red-600 border-red-300' :
+                      sev === 'high' ? 'bg-orange-500/15 text-orange-600 border-orange-300' :
+                      sev === 'medium' ? 'bg-yellow-500/15 text-yellow-600 border-yellow-300' :
+                      'bg-blue-500/15 text-blue-600 border-blue-300'
+                    : 'bg-muted text-muted-foreground border-border hover:bg-muted/80'
+                )}
+              >
+                {sevLabel(sev)}
+              </button>
+            ))}
+          </div>
+
+          {/* Channel filters */}
+          <div className="flex items-center gap-1.5 ml-2">
+            {allChannels.map(ch => (
+              <button
+                key={ch}
+                type="button"
+                onClick={() => setChannelFilter(channelFilter === ch ? null : ch)}
+                className={cn(
+                  'px-2.5 py-1 rounded-full text-xs font-medium border transition-all',
+                  channelFilter === ch
+                    ? ch === 'in_app' ? 'bg-blue-500/15 text-blue-600 border-blue-300' :
+                      ch === 'telegram' ? 'bg-sky-500/15 text-sky-600 border-sky-300' :
+                      'bg-emerald-500/15 text-emerald-600 border-emerald-300'
+                    : 'bg-muted text-muted-foreground border-border hover:bg-muted/80'
+                )}
+              >
+                {ch === 'in_app' ? 'In-App' : ch === 'telegram' ? 'Telegram' : 'Email'}
+              </button>
+            ))}
+          </div>
+
+          {hasActiveFilters && (
+            <span className="text-xs text-muted-foreground ml-auto">
+              {filteredAlerts.length} de {alerts.length} alertas
+            </span>
+          )}
+        </div>
+      </CardHeader>
+
+      <CardContent>
+        {filteredAlerts.length === 0 ? (
+          <div className="py-8 text-center text-sm text-muted-foreground">
+            Ninguna alerta coincide con los filtros seleccionados
+          </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left">
+                    <th className="pb-3 font-medium text-muted-foreground">Severidad</th>
+                    <th className="pb-3 font-medium text-muted-foreground">Patrones</th>
+                    <th className="pb-3 font-medium text-muted-foreground hidden sm:table-cell">Canales</th>
+                    <th className="pb-3 font-medium text-muted-foreground hidden md:table-cell">Severidades</th>
+                    <th className="pb-3 font-medium text-muted-foreground text-right">Enviado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredAlerts.map((alert, i) => (
+                    <tr key={alert.id} className={cn(
+                      'border-b last:border-0 transition-colors hover:bg-muted/50',
+                      i % 2 === 0 ? 'bg-background' : 'bg-muted/20'
+                    )}>
+                      <td className="py-3 pr-4">
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            'text-xs',
+                            alert.severity === 'critical' ? 'bg-red-500/15 text-red-600 border-red-200 dark:border-red-800' :
+                            alert.severity === 'high' ? 'bg-orange-500/15 text-orange-600 border-orange-200 dark:border-orange-800' :
+                            'bg-yellow-500/15 text-yellow-600 border-yellow-200 dark:border-yellow-800'
+                          )}
+                        >
+                          {alert.severity === 'critical' ? 'Crítico' :
+                           alert.severity === 'high' ? 'Alto' :
+                           alert.severity === 'medium' ? 'Medio' : 'Info'}
+                        </Badge>
+                      </td>
+                      <td className="py-3 pr-4">
+                        <span className="font-mono font-bold text-lg">{alert.patternCount}</span>
+                      </td>
+                      <td className="py-3 pr-4 hidden sm:table-cell">
+                        <div className="flex gap-1.5 flex-wrap">
+                          {alert.channels.map(ch => (
+                            <span
+                              key={ch}
+                              className={cn(
+                                'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium',
+                                ch === 'in_app' ? 'bg-blue-500/10 text-blue-600' :
+                                ch === 'telegram' ? 'bg-sky-500/10 text-sky-600' :
+                                'bg-emerald-500/10 text-emerald-600'
+                              )}
+                            >
+                              {ch === 'in_app' ? 'In-App' : ch === 'telegram' ? 'Telegram' : 'Email'}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="py-3 pr-4 hidden md:table-cell">
+                        <div className="flex gap-1 flex-wrap">
+                          {alert.severities.map((sev, si) => (
+                            <span
+                              key={si}
+                              className={cn(
+                                'inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono',
+                                sev === 'critical' ? 'bg-red-500/10 text-red-600' :
+                                sev === 'high' ? 'bg-orange-500/10 text-orange-600' :
+                                sev === 'medium' ? 'bg-yellow-500/10 text-yellow-600' :
+                                'bg-blue-500/10 text-blue-600'
+                              )}
+                            >
+                              {sev === 'critical' ? 'C' : sev === 'high' ? 'A' : sev === 'medium' ? 'M' : 'B'}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="py-3 text-right text-muted-foreground whitespace-nowrap">
+                        {formatDate(alert.sentAt)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-muted-foreground mt-4 text-center">
+              {filteredAlerts.length} alerta(s) de {alerts.length} en el período seleccionado
+              {hasActiveFilters && ' (filtradas)'}
+            </p>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  )
 }
 
 // ═══ Notification Config Dialog ═══════════════════════════
