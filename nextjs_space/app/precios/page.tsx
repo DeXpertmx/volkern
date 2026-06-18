@@ -236,6 +236,11 @@ function DynamicSummary({
         <SetupBasico />
       </div>
 
+      {/* Usuarios adicionales footnote */}
+      <p className="text-[10px] text-slate-500 text-center mb-6">
+        Usuarios adicionales desde €10/mes c/u
+      </p>
+
       {/* CTA */}
       <button
         onClick={() => {
