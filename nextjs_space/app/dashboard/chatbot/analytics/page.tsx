@@ -1103,13 +1103,17 @@ export default function ChatbotAnalyticsPage() {
 
 function PatternsCard({ patterns }: { patterns: Pattern[] }) {
   const [patternFilter, setPatternFilter] = useState<string | null>(null)
+  const [typeFilter, setTypeFilter] = useState<string | null>(null)
   const [patternSearch, setPatternSearch] = useState('')
   const [debouncedSearch, flushSearch] = useDebounce(patternSearch, 300)
 
-  const hasPatternFilter = patternFilter !== null || debouncedSearch.trim() !== ''
+  const hasPatternFilter = patternFilter !== null || typeFilter !== null || debouncedSearch.trim() !== ''
+
+  const allTypes = Array.from(new Set(patterns.map(p => p.type)))
 
   const filteredPatterns = patterns.filter(p => {
     if (patternFilter && p.severity !== patternFilter) return false
+    if (typeFilter && p.type !== typeFilter) return false
     if (debouncedSearch.trim()) {
       const q = debouncedSearch.trim().toLowerCase()
       const matches =
@@ -1186,6 +1190,25 @@ function PatternsCard({ patterns }: { patterns: Pattern[] }) {
                 )}
               >
                 {SEVERITY_LABELS[sev] || sev}
+              </button>
+            ))}
+          </div>
+
+          {/* Type filter */}
+          <div className="flex items-center gap-1.5">
+            {allTypes.map(type => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setTypeFilter(typeFilter === type ? null : type)}
+                className={cn(
+                  'px-2.5 py-1 rounded-full text-xs font-medium border transition-all',
+                  typeFilter === type
+                    ? 'bg-purple-500/15 text-purple-600 border-purple-300'
+                    : 'bg-muted text-muted-foreground border-border hover:bg-muted/80'
+                )}
+              >
+                {PATTERN_LABELS[type] || type}
               </button>
             ))}
           </div>
