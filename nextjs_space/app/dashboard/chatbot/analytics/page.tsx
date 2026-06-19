@@ -870,92 +870,7 @@ export default function ChatbotAnalyticsPage() {
               </CardContent>
             </Card>
           ) : (
-            <Card>
-              <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5 text-primary" />
-                  Patrones Detectados
-                </CardTitle>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    const dateStr = new Date().toISOString().slice(0, 10)
-                    exportPatternsToCSV(patterns, `patrones_chatbot_${dateStr}.csv`)
-                    toast.success(`${patterns.length} patrones exportados a CSV`)
-                  }}
-                  className="gap-1.5 text-xs"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  Exportar CSV
-                </Button>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 gap-4">
-                  {patterns.map((pattern, i) => (
-                    <Card key={i} className="hover:shadow-md transition-shadow">
-                      <CardContent className="pt-6">
-                        <div className="flex items-start gap-4">
-                          <div className={cn(
-                            'p-2.5 rounded-xl',
-                            pattern.severity === 'critical' ? 'bg-red-100 dark:bg-red-900/30' :
-                            pattern.severity === 'high' ? 'bg-orange-100 dark:bg-orange-900/30' :
-                            'bg-yellow-100 dark:bg-yellow-900/30'
-                          )}>
-                            {getPatternIcon(pattern.type)}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <h4 className="font-semibold">
-                                {PATTERN_LABELS[pattern.type] || pattern.type}
-                              </h4>
-                              <Badge
-                                variant="outline"
-                                className={cn('text-xs', SEVERITY_COLORS[pattern.severity] || '')}
-                              >
-                                {pattern.severity}
-                              </Badge>
-                            </div>
-                            <p className="text-sm text-muted-foreground mt-1">{pattern.description}</p>
-
-                            {/* Value bar */}
-                            <div className="mt-3 flex items-center gap-3">
-                              <div className="flex-1">
-                                <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                                  <div
-                                    className={cn(
-                                      'h-full rounded-full',
-                                      pattern.value >= 70 ? 'bg-red-500' :
-                                      pattern.value >= 40 ? 'bg-orange-500' : 'bg-yellow-500'
-                                    )}
-                                    style={{ width: `${Math.min(pattern.value, 100)}%` }}
-                                  />
-                                </div>
-                              </div>
-                              <span className="text-xs font-mono font-bold">{pattern.value}%</span>
-                              <span className="text-xs text-muted-foreground">
-                                umbral: {pattern.threshold}%
-                              </span>
-                            </div>
-
-                            <Separator className="my-3" />
-
-                            <div className="flex items-start gap-2">
-                              <Lightbulb className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
-                              <p className="text-sm text-muted-foreground">{pattern.recommendation}</p>
-                            </div>
-
-                            <p className="text-xs text-muted-foreground mt-2">
-                              Detectado {formatDate(pattern.detectedAt)}
-                            </p>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+            <PatternsCard patterns={patterns} />
           )}
         </TabsContent>
 
@@ -973,100 +888,7 @@ export default function ChatbotAnalyticsPage() {
               </CardContent>
             </Card>
           ) : (
-            <Card>
-              <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Lightbulb className="h-5 w-5 text-primary" />
-                  Sugerencias de Mejora
-                </CardTitle>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    const dateStr = new Date().toISOString().slice(0, 10)
-                    exportSuggestionsToCSV(suggestions, `sugerencias_chatbot_${dateStr}.csv`)
-                    toast.success(`${suggestions.length} sugerencias exportadas a CSV`)
-                  }}
-                  className="gap-1.5 text-xs"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  Exportar CSV
-                </Button>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  {suggestions.map((suggestion) => (
-                    <Card key={suggestion.id} className="hover:shadow-md transition-shadow group">
-                      <CardContent className="pt-6">
-                        <div className="flex items-start gap-3">
-                          <div className={cn(
-                            'p-2 rounded-lg shrink-0',
-                            suggestion.priority === 'critical' ? 'bg-red-100 dark:bg-red-900/30' :
-                            suggestion.priority === 'high' ? 'bg-orange-100 dark:bg-orange-900/30' :
-                            suggestion.priority === 'medium' ? 'bg-yellow-100 dark:bg-yellow-900/30' :
-                            'bg-blue-100 dark:bg-blue-900/30'
-                          )}>
-                            <Lightbulb className={cn(
-                              'h-5 w-5',
-                              suggestion.priority === 'critical' ? 'text-red-600' :
-                              suggestion.priority === 'high' ? 'text-orange-600' :
-                              suggestion.priority === 'medium' ? 'text-yellow-600' :
-                              'text-blue-600'
-                            )} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <h4 className="font-semibold text-sm">{suggestion.title}</h4>
-                              <Badge
-                                variant="outline"
-                                className={cn('text-xs', STATUS_COLORS[suggestion.status] || '')}
-                              >
-                                {suggestion.status === 'pending' ? 'Pendiente' :
-                                 suggestion.status === 'in_progress' ? 'En progreso' :
-                                 suggestion.status === 'applied' ? 'Aplicada' : 'Descartada'}
-                              </Badge>
-                              <Badge variant="outline" className="text-xs">{suggestion.priority}</Badge>
-                            </div>
-
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {suggestion.description}
-                            </p>
-
-                            <Separator className="my-2" />
-
-                            <div className="space-y-1">
-                              <p className="text-xs font-medium text-muted-foreground">
-                                Impacto estimado:
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {suggestion.estimatedImpact}
-                              </p>
-                            </div>
-
-                            <details className="mt-2">
-                              <summary className="text-xs text-primary cursor-pointer hover:underline">
-                                Ver guía de implementación
-                              </summary>
-                              <pre className="mt-2 text-xs bg-muted p-3 rounded-lg whitespace-pre-wrap font-sans">
-                                {suggestion.implementationGuide}
-                              </pre>
-                            </details>
-
-                            <p className="text-xs text-muted-foreground mt-2">
-                              {formatDate(suggestion.createdAt)} • {suggestion.category === 'knowledge_base' ? 'Base de conocimiento' :
-                               suggestion.category === 'training' ? 'Entrenamiento' :
-                               suggestion.category === 'configuration' ? 'Configuración' :
-                               suggestion.category === 'skill' ? 'Skill' :
-                               suggestion.category === 'threshold' ? 'Threshold' : 'Infraestructura'}
-                            </p>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+            <SuggestionsCard suggestions={suggestions} />
           )}
         </TabsContent>
 
@@ -1256,6 +1078,286 @@ export default function ChatbotAnalyticsPage() {
       </Tabs>
     </div>
   );
+}
+
+// ═══ Patterns Card with Filter ═══════════════════════════
+
+function PatternsCard({ patterns }: { patterns: Pattern[] }) {
+  const [patternFilter, setPatternFilter] = useState<string | null>(null)
+  const filteredPatterns = patternFilter
+    ? patterns.filter(p => p.severity === patternFilter)
+    : patterns
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex-row items-center justify-between space-y-0 flex">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-primary" />
+            Patrones Detectados
+          </CardTitle>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const dateStr = new Date().toISOString().slice(0, 10)
+              exportPatternsToCSV(filteredPatterns, `patrones_chatbot_${dateStr}.csv`)
+              toast.success(`${filteredPatterns.length} patrones exportados a CSV`)
+            }}
+            className="gap-1.5 text-xs"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Exportar CSV
+          </Button>
+        </div>
+
+        {/* Severity filter bar */}
+        <div className="flex flex-wrap items-center gap-3 pt-2">
+          <div className="flex items-center gap-1.5">
+            <Filter className="h-3.5 w-3.5 text-muted-foreground" />
+            {['critical','high','medium','low'].filter(s => patterns.some(p => p.severity === s)).map(sev => (
+              <button
+                key={sev}
+                type="button"
+                onClick={() => setPatternFilter(patternFilter === sev ? null : sev)}
+                className={cn(
+                  'px-2.5 py-1 rounded-full text-xs font-medium border transition-all',
+                  patternFilter === sev
+                    ? sev === 'critical' ? 'bg-red-500/15 text-red-600 border-red-300' :
+                      sev === 'high' ? 'bg-orange-500/15 text-orange-600 border-orange-300' :
+                      sev === 'medium' ? 'bg-yellow-500/15 text-yellow-600 border-yellow-300' :
+                      'bg-blue-500/15 text-blue-600 border-blue-300'
+                    : 'bg-muted text-muted-foreground border-border hover:bg-muted/80'
+                )}
+              >
+                {SEVERITY_LABELS[sev] || sev}
+              </button>
+            ))}
+          </div>
+          {patternFilter && (
+            <span className="text-xs text-muted-foreground">
+              {filteredPatterns.length} de {patterns.length} patrones
+            </span>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent>
+        {filteredPatterns.length === 0 && patternFilter ? (
+          <div className="py-8 text-center text-sm text-muted-foreground">
+            Ningún patrón coincide con el filtro seleccionado
+          </div>
+        ) : (
+        <div className="grid grid-cols-1 gap-4">
+          {filteredPatterns.map((pattern, i) => (
+            <Card key={i} className="hover:shadow-md transition-shadow">
+              <CardContent className="pt-6">
+                <div className="flex items-start gap-4">
+                  <div className={cn(
+                    'p-2.5 rounded-xl',
+                    pattern.severity === 'critical' ? 'bg-red-100 dark:bg-red-900/30' :
+                    pattern.severity === 'high' ? 'bg-orange-100 dark:bg-orange-900/30' :
+                    'bg-yellow-100 dark:bg-yellow-900/30'
+                  )}>
+                    {getPatternIcon(pattern.type)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="font-semibold">
+                        {PATTERN_LABELS[pattern.type] || pattern.type}
+                      </h4>
+                      <Badge
+                        variant="outline"
+                        className={cn('text-xs', SEVERITY_COLORS[pattern.severity] || '')}
+                      >
+                        {pattern.severity}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-1">{pattern.description}</p>
+
+                    {/* Value bar */}
+                    <div className="mt-3 flex items-center gap-3">
+                      <div className="flex-1">
+                        <div className="h-2 bg-secondary rounded-full overflow-hidden">
+                          <div
+                            className={cn(
+                              'h-full rounded-full',
+                              pattern.value >= 70 ? 'bg-red-500' :
+                              pattern.value >= 40 ? 'bg-orange-500' : 'bg-yellow-500'
+                            )}
+                            style={{ width: `${Math.min(pattern.value, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                      <span className="text-xs font-mono font-bold">{pattern.value}%</span>
+                      <span className="text-xs text-muted-foreground">
+                        umbral: {pattern.threshold}%
+                      </span>
+                    </div>
+
+                    <Separator className="my-3" />
+
+                    <div className="flex items-start gap-2">
+                      <Lightbulb className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+                      <p className="text-sm text-muted-foreground">{pattern.recommendation}</p>
+                    </div>
+
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Detectado {formatDate(pattern.detectedAt)}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// ═══ Suggestions Card with Filter ═════════════════════════
+
+function SuggestionsCard({ suggestions }: { suggestions: Suggestion[] }) {
+  const [suggestionFilter, setSuggestionFilter] = useState<string | null>(null)
+  const filteredSuggestions = suggestionFilter
+    ? suggestions.filter(s => s.priority === suggestionFilter)
+    : suggestions
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex-row items-center justify-between space-y-0 flex">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Lightbulb className="h-5 w-5 text-primary" />
+            Sugerencias de Mejora
+          </CardTitle>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const dateStr = new Date().toISOString().slice(0, 10)
+              exportSuggestionsToCSV(filteredSuggestions, `sugerencias_chatbot_${dateStr}.csv`)
+              toast.success(`${filteredSuggestions.length} sugerencias exportadas a CSV`)
+            }}
+            className="gap-1.5 text-xs"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Exportar CSV
+          </Button>
+        </div>
+
+        {/* Priority filter bar */}
+        <div className="flex flex-wrap items-center gap-3 pt-2">
+          <div className="flex items-center gap-1.5">
+            <Filter className="h-3.5 w-3.5 text-muted-foreground" />
+            {['critical','high','medium','low'].filter(p => suggestions.some(s => s.priority === p)).map(pri => (
+              <button
+                key={pri}
+                type="button"
+                onClick={() => setSuggestionFilter(suggestionFilter === pri ? null : pri)}
+                className={cn(
+                  'px-2.5 py-1 rounded-full text-xs font-medium border transition-all',
+                  suggestionFilter === pri
+                    ? pri === 'critical' ? 'bg-red-500/15 text-red-600 border-red-300' :
+                      pri === 'high' ? 'bg-orange-500/15 text-orange-600 border-orange-300' :
+                      pri === 'medium' ? 'bg-yellow-500/15 text-yellow-600 border-yellow-300' :
+                      'bg-blue-500/15 text-blue-600 border-blue-300'
+                    : 'bg-muted text-muted-foreground border-border hover:bg-muted/80'
+                )}
+              >
+                {SEVERITY_LABELS[pri] || pri}
+              </button>
+            ))}
+          </div>
+          {suggestionFilter && (
+            <span className="text-xs text-muted-foreground">
+              {filteredSuggestions.length} de {suggestions.length} sugerencias
+            </span>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent>
+        {filteredSuggestions.length === 0 && suggestionFilter ? (
+          <div className="py-8 text-center text-sm text-muted-foreground">
+            Ninguna sugerencia coincide con el filtro seleccionado
+          </div>
+        ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {filteredSuggestions.map((suggestion) => (
+            <Card key={suggestion.id} className="hover:shadow-md transition-shadow group">
+              <CardContent className="pt-6">
+                <div className="flex items-start gap-3">
+                  <div className={cn(
+                    'p-2 rounded-lg shrink-0',
+                    suggestion.priority === 'critical' ? 'bg-red-100 dark:bg-red-900/30' :
+                    suggestion.priority === 'high' ? 'bg-orange-100 dark:bg-orange-900/30' :
+                    suggestion.priority === 'medium' ? 'bg-yellow-100 dark:bg-yellow-900/30' :
+                    'bg-blue-100 dark:bg-blue-900/30'
+                  )}>
+                    <Lightbulb className={cn(
+                      'h-5 w-5',
+                      suggestion.priority === 'critical' ? 'text-red-600' :
+                      suggestion.priority === 'high' ? 'text-orange-600' :
+                      suggestion.priority === 'medium' ? 'text-yellow-600' :
+                      'text-blue-600'
+                    )} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="font-semibold text-sm">{suggestion.title}</h4>
+                      <Badge
+                        variant="outline"
+                        className={cn('text-xs', STATUS_COLORS[suggestion.status] || '')}
+                      >
+                        {suggestion.status === 'pending' ? 'Pendiente' :
+                         suggestion.status === 'in_progress' ? 'En progreso' :
+                         suggestion.status === 'applied' ? 'Aplicada' : 'Descartada'}
+                      </Badge>
+                      <Badge variant="outline" className="text-xs">{suggestion.priority}</Badge>
+                    </div>
+
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {suggestion.description}
+                    </p>
+
+                    <Separator className="my-2" />
+
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-muted-foreground">
+                        Impacto estimado:
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {suggestion.estimatedImpact}
+                      </p>
+                    </div>
+
+                    <details className="mt-2">
+                      <summary className="text-xs text-primary cursor-pointer hover:underline">
+                        Ver guía de implementación
+                      </summary>
+                      <pre className="mt-2 text-xs bg-muted p-3 rounded-lg whitespace-pre-wrap font-sans">
+                        {suggestion.implementationGuide}
+                      </pre>
+                    </details>
+
+                    <p className="text-xs text-muted-foreground mt-2">
+                      {formatDate(suggestion.createdAt)} • {suggestion.category === 'knowledge_base' ? 'Base de conocimiento' :
+                       suggestion.category === 'training' ? 'Entrenamiento' :
+                       suggestion.category === 'configuration' ? 'Configuración' :
+                       suggestion.category === 'skill' ? 'Skill' :
+                       suggestion.category === 'threshold' ? 'Threshold' : 'Infraestructura'}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        )}
+      </CardContent>
+    </Card>
+  )
 }
 
 // ═══ Alert History Card with Filters ═══════════════════════
