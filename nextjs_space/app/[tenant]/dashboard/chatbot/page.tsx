@@ -116,6 +116,10 @@ export default function ChatbotPage() {
   const [ragTestResults, setRagTestResults] = useState<(KnowledgeArticle & { similarity?: number })[] | null>(null);
   const [ragTestLoading, setRagTestLoading] = useState(false);
 
+  // Bulk toggle
+  const [bulkCategory, setBulkCategory] = useState<string>('Todas');
+  const [bulkLoading, setBulkLoading] = useState(false);
+
   // Cargar configuración
   useEffect(() => {
     loadConfig();
@@ -236,6 +240,47 @@ export default function ChatbotPage() {
       }
       toast.error('Error al cambiar visibilidad');
     }
+  };
+
+  const toggleAllPublic = async (category: string, makePublic: boolean) => {
+    const targets = category === 'Todas'
+      ? kbArticles
+      : kbArticles.filter(a => a.category === category);
+    if (targets.length === 0) return;
+
+    const action = makePublic ? 'públicos' : 'privados';
+    if (!confirm(`¿Hacer ${action} ${targets.length} artículo(s)${category !== 'Todas' ? ' de ' + category : ''}?`)) return;
+
+    setBulkLoading(true);
+    setKbArticles(prev => prev.map(a =>
+      (category === 'Todas' || a.category === category) ? { ...a, isPublic: makePublic } : a
+    ));
+    if (kbSelectedArticle && (category === 'Todas' || kbSelectedArticle.category === category)) {
+      setKbSelectedArticle({ ...kbSelectedArticle, isPublic: makePublic });
+    }
+
+    let failed = 0;
+    for (const article of targets) {
+      try {
+        const res = await fetch(`/api/knowledge/${article.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ isPublic: makePublic }),
+        });
+        if (!res.ok) failed++;
+      } catch {
+        failed++;
+      }
+    }
+
+    if (failed > 0) {
+      toast.error(`${failed} de ${targets.length} artículos fallaron al actualizar`);
+      fetchKnowledgeArticles();
+    } else {
+      toast.success(`${targets.length} artículo(s) ahora ${action}`);
+    }
+    setBulkLoading(false);
+    setBulkCategory('Todas');
   };
 
   const publicArticles = kbArticles.filter(a => a.isPublic);
@@ -803,6 +848,42 @@ export default function ChatbotPage() {
                       className="pl-10"
                     />
                   </div>
+
+                  {/* Bulk actions bar */}
+                  {kbArticles.length > 0 && (
+                    <div className="flex items-center gap-2 p-2 bg-muted/50 rounded-lg">
+                      <select
+                        value={bulkCategory}
+                        onChange={(e) => setBulkCategory(e.target.value)}
+                        className="text-xs border rounded px-2 py-1.5 bg-background"
+                      >
+                        <option value="Todas">Todas las categorías</option>
+                        {[...new Set(kbArticles.map(a => a.category))].sort().map(cat => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                      </select>
+                      <div className="flex-1" />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-xs h-8"
+                        disabled={bulkLoading}
+                        onClick={() => toggleAllPublic(bulkCategory, true)}
+                      >
+                        {bulkLoading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                        Hacer públicos
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-xs h-8"
+                        disabled={bulkLoading}
+                        onClick={() => toggleAllPublic(bulkCategory, false)}
+                      >
+                        Hacer privados
+                      </Button>
+                    </div>
+                  )}
 
                   {/* Lista de artículos */}
                   {kbLoading ? (
