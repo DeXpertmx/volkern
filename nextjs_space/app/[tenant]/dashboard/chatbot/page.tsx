@@ -208,6 +208,36 @@ export default function ChatbotPage() {
     }
   };
 
+  const togglePublic = async (article: KnowledgeArticle) => {
+    const newValue = !article.isPublic;
+    setKbArticles(prev => prev.map(a => a.id === article.id ? { ...a, isPublic: newValue } : a));
+    if (kbSelectedArticle?.id === article.id) {
+      setKbSelectedArticle({ ...kbSelectedArticle, isPublic: newValue });
+    }
+    try {
+      const res = await fetch(`/api/knowledge/${article.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isPublic: newValue }),
+      });
+      if (!res.ok) {
+        setKbArticles(prev => prev.map(a => a.id === article.id ? { ...a, isPublic: !newValue } : a));
+        if (kbSelectedArticle?.id === article.id) {
+          setKbSelectedArticle(prev => prev ? { ...prev, isPublic: !newValue } : null);
+        }
+        toast.error('Error al cambiar visibilidad');
+      } else {
+        toast.success(newValue ? 'Artículo ahora es público (RAG activo)' : 'Artículo ahora es privado');
+      }
+    } catch {
+      setKbArticles(prev => prev.map(a => a.id === article.id ? { ...a, isPublic: !newValue } : a));
+      if (kbSelectedArticle?.id === article.id) {
+        setKbSelectedArticle(prev => prev ? { ...prev, isPublic: !newValue } : null);
+      }
+      toast.error('Error al cambiar visibilidad');
+    }
+  };
+
   const publicArticles = kbArticles.filter(a => a.isPublic);
   const privateArticles = kbArticles.filter(a => !a.isPublic);
 
@@ -809,11 +839,13 @@ export default function ChatbotPage() {
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1">
                                 <h4 className="font-semibold text-sm truncate">{article.title}</h4>
-                                {article.isPublic ? (
-                                  <Badge variant="default" className="text-xs shrink-0 bg-green-600">RAG</Badge>
-                                ) : (
-                                  <Badge variant="outline" className="text-xs shrink-0">Privado</Badge>
-                                )}
+                                <Switch
+                                  checked={article.isPublic}
+                                  onCheckedChange={() => togglePublic(article)}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="scale-75 shrink-0"
+                                  aria-label={article.isPublic ? 'Hacer privado' : 'Hacer público'}
+                                />
                               </div>
                               <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
                                 {article.content.substring(0, 200)}
