@@ -178,6 +178,29 @@ const SEVERITY_LABELS: Record<string, string> = {
   low: 'Bajo',
 }
 
+const CATEGORY_LABELS: Record<string, string> = {
+  knowledge_base: 'Base de conocimiento',
+  training: 'Entrenamiento',
+  configuration: 'Configuración',
+  skill: 'Skill',
+  threshold: 'Threshold',
+  infrastructure: 'Infraestructura',
+}
+
+const STATUS_FILTER_LABELS: Record<string, string> = {
+  pending: 'Pendiente',
+  in_progress: 'En progreso',
+  applied: 'Aplicada',
+  dismissed: 'Descartada',
+}
+
+const STATUS_FILTER_COLORS: Record<string, string> = {
+  pending: 'bg-yellow-500/15 text-yellow-600 border-yellow-300',
+  in_progress: 'bg-blue-500/15 text-blue-600 border-blue-300',
+  applied: 'bg-emerald-500/15 text-emerald-600 border-emerald-300',
+  dismissed: 'bg-gray-500/15 text-gray-500 border-gray-300',
+}
+
 // ─── Helpers ────────────────────────────────────────────
 
 function formatDate(dateStr: string): string {
@@ -304,14 +327,8 @@ function exportSuggestionsToCSV(suggestions: Suggestion[], filename: string) {
     s.title,
     s.type,
     s.priority,
-    s.status === 'pending' ? 'Pendiente' :
-      s.status === 'in_progress' ? 'En progreso' :
-      s.status === 'applied' ? 'Aplicada' : 'Descartada',
-    s.category === 'knowledge_base' ? 'Base de conocimiento' :
-      s.category === 'training' ? 'Entrenamiento' :
-      s.category === 'configuration' ? 'Configuración' :
-      s.category === 'skill' ? 'Skill' :
-      s.category === 'threshold' ? 'Threshold' : 'Infraestructura',
+    STATUS_FILTER_LABELS[s.status] || s.status,
+    CATEGORY_LABELS[s.category] || s.category,
     s.description,
     s.estimatedImpact,
     new Date(s.createdAt).toLocaleString('es-ES', {
@@ -1275,15 +1292,6 @@ function SuggestionsCard({ suggestions }: { suggestions: Suggestion[] }) {
 
   const hasAnyFilter = priorityFilter !== null || statusFilter !== null || debouncedSearch.trim() !== ''
 
-  const CATEGORY_LABELS: Record<string, string> = {
-    knowledge_base: 'Base de conocimiento',
-    training: 'Entrenamiento',
-    configuration: 'Configuración',
-    skill: 'Skill',
-    threshold: 'Threshold',
-    infrastructure: 'Infraestructura',
-  }
-
   const filteredSuggestions = suggestions.filter(s => {
     if (priorityFilter && s.priority !== priorityFilter) return false
     if (statusFilter && s.status !== statusFilter) return false
@@ -1297,20 +1305,6 @@ function SuggestionsCard({ suggestions }: { suggestions: Suggestion[] }) {
     }
     return true
   })
-
-  const STATUS_FILTER_LABELS: Record<string, string> = {
-    pending: 'Pendiente',
-    in_progress: 'En progreso',
-    applied: 'Aplicada',
-    dismissed: 'Descartada',
-  }
-
-  const STATUS_FILTER_COLORS: Record<string, string> = {
-    pending: 'bg-yellow-500/15 text-yellow-600 border-yellow-300',
-    in_progress: 'bg-blue-500/15 text-blue-600 border-blue-300',
-    applied: 'bg-emerald-500/15 text-emerald-600 border-emerald-300',
-    dismissed: 'bg-gray-500/15 text-gray-500 border-gray-300',
-  }
 
   return (
     <Card>
@@ -1440,9 +1434,7 @@ function SuggestionsCard({ suggestions }: { suggestions: Suggestion[] }) {
                         variant="outline"
                         className={cn('text-xs', STATUS_COLORS[suggestion.status] || '')}
                       >
-                        {suggestion.status === 'pending' ? 'Pendiente' :
-                         suggestion.status === 'in_progress' ? 'En progreso' :
-                         suggestion.status === 'applied' ? 'Aplicada' : 'Descartada'}
+                        {STATUS_FILTER_LABELS[suggestion.status] || suggestion.status}
                       </Badge>
                       <Badge variant="outline" className="text-xs">{suggestion.priority}</Badge>
                     </div>
@@ -1472,11 +1464,7 @@ function SuggestionsCard({ suggestions }: { suggestions: Suggestion[] }) {
                     </details>
 
                     <p className="text-xs text-muted-foreground mt-2">
-                      {formatDate(suggestion.createdAt)} • {suggestion.category === 'knowledge_base' ? 'Base de conocimiento' :
-                       suggestion.category === 'training' ? 'Entrenamiento' :
-                       suggestion.category === 'configuration' ? 'Configuración' :
-                       suggestion.category === 'skill' ? 'Skill' :
-                       suggestion.category === 'threshold' ? 'Threshold' : 'Infraestructura'}
+                      {formatDate(suggestion.createdAt)} • {CATEGORY_LABELS[suggestion.category] || suggestion.category}
                     </p>
                   </div>
                 </div>
