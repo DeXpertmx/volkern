@@ -1085,13 +1085,20 @@ export default function ChatbotAnalyticsPage() {
 function PatternsCard({ patterns }: { patterns: Pattern[] }) {
   const [patternFilter, setPatternFilter] = useState<string | null>(null)
   const [patternSearch, setPatternSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
 
-  const hasPatternFilter = patternFilter !== null || patternSearch.trim() !== ''
+  // Debounce search input by 300ms
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(patternSearch), 300)
+    return () => clearTimeout(timer)
+  }, [patternSearch])
+
+  const hasPatternFilter = patternFilter !== null || debouncedSearch.trim() !== ''
 
   const filteredPatterns = patterns.filter(p => {
     if (patternFilter && p.severity !== patternFilter) return false
-    if (patternSearch.trim()) {
-      const q = patternSearch.trim().toLowerCase()
+    if (debouncedSearch.trim()) {
+      const q = debouncedSearch.trim().toLowerCase()
       const matches =
         p.description.toLowerCase().includes(q) ||
         (PATTERN_LABELS[p.type] || p.type).toLowerCase().includes(q) ||
@@ -1139,7 +1146,7 @@ function PatternsCard({ patterns }: { patterns: Pattern[] }) {
             {patternSearch && (
               <button
                 type="button"
-                onClick={() => setPatternSearch('')}
+                onClick={() => { setPatternSearch(''); setDebouncedSearch(''); }}
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               >
                 <X className="h-3 w-3" />
@@ -1258,8 +1265,15 @@ function SuggestionsCard({ suggestions }: { suggestions: Suggestion[] }) {
   const [priorityFilter, setPriorityFilter] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<string | null>(null)
   const [suggestionSearch, setSuggestionSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
 
-  const hasAnyFilter = priorityFilter !== null || statusFilter !== null || suggestionSearch.trim() !== ''
+  // Debounce search input by 300ms
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(suggestionSearch), 300)
+    return () => clearTimeout(timer)
+  }, [suggestionSearch])
+
+  const hasAnyFilter = priorityFilter !== null || statusFilter !== null || debouncedSearch.trim() !== ''
 
   const CATEGORY_LABELS: Record<string, string> = {
     knowledge_base: 'Base de conocimiento',
@@ -1273,8 +1287,8 @@ function SuggestionsCard({ suggestions }: { suggestions: Suggestion[] }) {
   const filteredSuggestions = suggestions.filter(s => {
     if (priorityFilter && s.priority !== priorityFilter) return false
     if (statusFilter && s.status !== statusFilter) return false
-    if (suggestionSearch.trim()) {
-      const q = suggestionSearch.trim().toLowerCase()
+    if (debouncedSearch.trim()) {
+      const q = debouncedSearch.trim().toLowerCase()
       const matches =
         s.title.toLowerCase().includes(q) ||
         s.description.toLowerCase().includes(q) ||
@@ -1336,7 +1350,7 @@ function SuggestionsCard({ suggestions }: { suggestions: Suggestion[] }) {
             {suggestionSearch && (
               <button
                 type="button"
-                onClick={() => setSuggestionSearch('')}
+                onClick={() => { setSuggestionSearch(''); setDebouncedSearch(''); }}
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               >
                 <X className="h-3 w-3" />
