@@ -1219,10 +1219,30 @@ function PatternsCard({ patterns }: { patterns: Pattern[] }) {
 // ═══ Suggestions Card with Filter ═════════════════════════
 
 function SuggestionsCard({ suggestions }: { suggestions: Suggestion[] }) {
-  const [suggestionFilter, setSuggestionFilter] = useState<string | null>(null)
-  const filteredSuggestions = suggestionFilter
-    ? suggestions.filter(s => s.priority === suggestionFilter)
-    : suggestions
+  const [priorityFilter, setPriorityFilter] = useState<string | null>(null)
+  const [statusFilter, setStatusFilter] = useState<string | null>(null)
+
+  const hasAnyFilter = priorityFilter !== null || statusFilter !== null
+
+  const filteredSuggestions = suggestions.filter(s => {
+    if (priorityFilter && s.priority !== priorityFilter) return false
+    if (statusFilter && s.status !== statusFilter) return false
+    return true
+  })
+
+  const STATUS_FILTER_LABELS: Record<string, string> = {
+    pending: 'Pendiente',
+    in_progress: 'En progreso',
+    applied: 'Aplicada',
+    dismissed: 'Descartada',
+  }
+
+  const STATUS_FILTER_COLORS: Record<string, string> = {
+    pending: 'bg-yellow-500/15 text-yellow-600 border-yellow-300',
+    in_progress: 'bg-blue-500/15 text-blue-600 border-blue-300',
+    applied: 'bg-emerald-500/15 text-emerald-600 border-emerald-300',
+    dismissed: 'bg-gray-500/15 text-gray-500 border-gray-300',
+  }
 
   return (
     <Card>
@@ -1247,18 +1267,19 @@ function SuggestionsCard({ suggestions }: { suggestions: Suggestion[] }) {
           </Button>
         </div>
 
-        {/* Priority filter bar */}
+        {/* Filter bars */}
         <div className="flex flex-wrap items-center gap-3 pt-2">
+          {/* Priority filter */}
           <div className="flex items-center gap-1.5">
             <Filter className="h-3.5 w-3.5 text-muted-foreground" />
             {['critical','high','medium','low'].filter(p => suggestions.some(s => s.priority === p)).map(pri => (
               <button
                 key={pri}
                 type="button"
-                onClick={() => setSuggestionFilter(suggestionFilter === pri ? null : pri)}
+                onClick={() => setPriorityFilter(priorityFilter === pri ? null : pri)}
                 className={cn(
                   'px-2.5 py-1 rounded-full text-xs font-medium border transition-all',
-                  suggestionFilter === pri
+                  priorityFilter === pri
                     ? pri === 'critical' ? 'bg-red-500/15 text-red-600 border-red-300' :
                       pri === 'high' ? 'bg-orange-500/15 text-orange-600 border-orange-300' :
                       pri === 'medium' ? 'bg-yellow-500/15 text-yellow-600 border-yellow-300' :
@@ -1270,7 +1291,27 @@ function SuggestionsCard({ suggestions }: { suggestions: Suggestion[] }) {
               </button>
             ))}
           </div>
-          {suggestionFilter && (
+
+          {/* Status filter */}
+          <div className="flex items-center gap-1.5">
+            {['pending','in_progress','applied','dismissed'].filter(st => suggestions.some(s => s.status === st)).map(st => (
+              <button
+                key={st}
+                type="button"
+                onClick={() => setStatusFilter(statusFilter === st ? null : st)}
+                className={cn(
+                  'px-2.5 py-1 rounded-full text-xs font-medium border transition-all',
+                  statusFilter === st
+                    ? STATUS_FILTER_COLORS[st] || ''
+                    : 'bg-muted text-muted-foreground border-border hover:bg-muted/80'
+                )}
+              >
+                {STATUS_FILTER_LABELS[st] || st}
+              </button>
+            ))}
+          </div>
+
+          {hasAnyFilter && (
             <span className="text-xs text-muted-foreground">
               {filteredSuggestions.length} de {suggestions.length} sugerencias
             </span>
@@ -1278,9 +1319,9 @@ function SuggestionsCard({ suggestions }: { suggestions: Suggestion[] }) {
         </div>
       </CardHeader>
       <CardContent>
-        {filteredSuggestions.length === 0 && suggestionFilter ? (
+        {filteredSuggestions.length === 0 && hasAnyFilter ? (
           <div className="py-8 text-center text-sm text-muted-foreground">
-            Ninguna sugerencia coincide con el filtro seleccionado
+            Ninguna sugerencia coincide con los filtros seleccionados
           </div>
         ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
