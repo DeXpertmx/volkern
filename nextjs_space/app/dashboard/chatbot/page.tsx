@@ -38,6 +38,7 @@ import {
   FileText,
   Tag,
   Eye,
+  FlaskConical,
 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
@@ -110,6 +111,11 @@ export default function ChatbotPage() {
   const [kbSearch, setKbSearch] = useState('');
   const [kbSelectedArticle, setKbSelectedArticle] = useState<KnowledgeArticle | null>(null);
 
+  // Probar RAG
+  const [ragTestQuery, setRagTestQuery] = useState('');
+  const [ragTestResults, setRagTestResults] = useState<(KnowledgeArticle & { similarity?: number })[] | null>(null);
+  const [ragTestLoading, setRagTestLoading] = useState(false);
+
   // Cargar configuración
   useEffect(() => {
     loadConfig();
@@ -179,6 +185,26 @@ export default function ChatbotPage() {
       console.error('Error cargando artículos:', error);
     } finally {
       setKbLoading(false);
+    }
+  };
+
+  const testRagSearch = async () => {
+    if (!ragTestQuery.trim()) return;
+    try {
+      setRagTestLoading(true);
+      setRagTestResults(null);
+      const params = new URLSearchParams({ q: ragTestQuery, semantic: 'true' });
+      const res = await fetch(`/api/knowledge?${params.toString()}`);
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setRagTestResults(data);
+      } else {
+        toast.error('Error al probar RAG');
+      }
+    } catch (error) {
+      toast.error('Error al probar RAG');
+    } finally {
+      setRagTestLoading(false);
     }
   };
 
@@ -898,6 +924,58 @@ export default function ChatbotPage() {
                   </CardContent>
                 </Card>
               )}
+
+              {/* Probar RAG */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <FlaskConical className="h-4 w-4 text-primary" />
+                    Probar RAG
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Ej: ¿Qué es el modelo 303?"
+                      value={ragTestQuery}
+                      onChange={(e) => setRagTestQuery(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') testRagSearch(); }}
+                      className="text-xs"
+                    />
+                    <Button size="sm" onClick={testRagSearch} disabled={ragTestLoading || !ragTestQuery.trim()}>
+                      {ragTestLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
+                    </Button>
+                  </div>
+
+                  {ragTestResults !== null && (
+                    <div className="space-y-2 max-h-[250px] overflow-y-auto">
+                      {ragTestResults.length === 0 ? (
+                        <p className="text-xs text-muted-foreground text-center py-3">
+                          No se encontraron artículos relevantes para esta consulta
+                        </p>
+                      ) : (
+                        ragTestResults.map((article, idx) => (
+                          <div key={article.id} className="p-2 rounded border bg-muted/50 text-xs">
+                            <div className="flex items-center justify-between gap-2 mb-1">
+                              <span className="font-medium truncate">{article.title}</span>
+                              {article.similarity !== undefined && (
+                                <Badge variant={article.similarity > 0.6 ? 'default' : 'secondary'} className="text-[10px] shrink-0">
+                                  {Math.round(article.similarity * 100)}%
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-muted-foreground line-clamp-2">{article.content.substring(0, 150)}</p>
+                            <div className="flex items-center gap-1 mt-1">
+                              <Badge variant="outline" className="text-[10px]">{article.category}</Badge>
+                              <span className="text-[10px] text-muted-foreground">#{idx + 1}</span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
 
               {/* Cómo funciona */}
               <Card>
