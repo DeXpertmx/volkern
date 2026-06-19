@@ -110,6 +110,7 @@ export async function POST(request: NextRequest) {
       puedeTransferirHumano,
       maxMensajesPorConversacion,
       tiempoEsperaTransferencia,
+      ragActivo,
     } = body;
 
     const config = await prisma.chatbotConfig.upsert({
@@ -131,6 +132,7 @@ export async function POST(request: NextRequest) {
         puedeTransferirHumano: puedeTransferirHumano ?? undefined,
         maxMensajesPorConversacion: maxMensajesPorConversacion ?? undefined,
         tiempoEsperaTransferencia: tiempoEsperaTransferencia ?? undefined,
+        ragActivo: ragActivo ?? undefined,
       },
       create: {
         tenantId: user.tenantId,
@@ -150,6 +152,7 @@ export async function POST(request: NextRequest) {
         puedeTransferirHumano: puedeTransferirHumano ?? true,
         maxMensajesPorConversacion: maxMensajesPorConversacion ?? 50,
         tiempoEsperaTransferencia: tiempoEsperaTransferencia ?? 300,
+        ragActivo: ragActivo ?? true,
       }
     });
 

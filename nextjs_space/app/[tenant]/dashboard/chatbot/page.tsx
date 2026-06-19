@@ -71,6 +71,7 @@ interface ChatbotConfig {
   totalConversaciones: number;
   totalCitasAgendadas: number;
   totalTransferencias: number;
+  ragActivo: boolean;
 }
 
 interface Servicio {
@@ -564,6 +565,19 @@ export default function ChatbotPage() {
                 <Switch
                   checked={config.puedeTransferirHumano}
                   onCheckedChange={(checked) => setConfig({ ...config, puedeTransferirHumano: checked })}
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-4 border rounded-lg">
+                <div>
+                  <p className="font-medium">RAG Activo (Knowledge Base)</p>
+                  <p className="text-sm text-muted-foreground">
+                    El chatbot buscará en los artículos de conocimiento para responder con información precisa de tu empresa
+                  </p>
+                </div>
+                <Switch
+                  checked={config.ragActivo}
+                  onCheckedChange={(checked) => setConfig({ ...config, ragActivo: checked })}
                 />
               </div>
 
