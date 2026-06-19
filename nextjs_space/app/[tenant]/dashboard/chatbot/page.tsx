@@ -32,6 +32,12 @@ import {
   Globe,
   AlertTriangle,
   ExternalLink,
+  BookOpen,
+  Database,
+  Search,
+  FileText,
+  Tag,
+  Eye,
 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
@@ -74,6 +80,18 @@ interface Servicio {
   precio: number;
 }
 
+interface KnowledgeArticle {
+  id: string;
+  title: string;
+  content: string;
+  category: string;
+  tags: string[];
+  isPublic: boolean;
+  vectorId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export default function ChatbotPage() {
   const { data: session } = useSession() || {};
   const [loading, setLoading] = useState(true);
@@ -84,6 +102,12 @@ export default function ChatbotPage() {
   const [tenantId, setTenantId] = useState('');
   const [isHired, setIsHired] = useState(true);
   const [copied, setCopied] = useState(false);
+
+  // Knowledge Base
+  const [kbArticles, setKbArticles] = useState<KnowledgeArticle[]>([]);
+  const [kbLoading, setKbLoading] = useState(false);
+  const [kbSearch, setKbSearch] = useState('');
+  const [kbSelectedArticle, setKbSelectedArticle] = useState<KnowledgeArticle | null>(null);
 
   // Cargar configuración
   useEffect(() => {
@@ -138,6 +162,35 @@ export default function ChatbotPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const fetchKnowledgeArticles = async () => {
+    try {
+      setKbLoading(true);
+      const params = new URLSearchParams();
+      if (kbSearch) params.set('q', kbSearch);
+      const res = await fetch(`/api/knowledge?${params.toString()}`);
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setKbArticles(data);
+      }
+    } catch (error) {
+      console.error('Error cargando artículos:', error);
+    } finally {
+      setKbLoading(false);
+    }
+  };
+
+  const publicArticles = kbArticles.filter(a => a.isPublic);
+  const privateArticles = kbArticles.filter(a => !a.isPublic);
+
+  const CATEGORY_COLORS: Record<string, string> = {
+    FISCAL: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
+    ACCOUNTING: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
+    POLICY: 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
+    SOP: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
+    TECHNICAL: 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300',
+    CULTURE: 'bg-pink-100 text-pink-700 dark:bg-pink-900 dark:text-pink-300',
   };
 
   if (loading) {
@@ -323,6 +376,10 @@ export default function ChatbotPage() {
           <TabsTrigger value="embeber" className="gap-2">
             <Code className="h-4 w-4" />
             Embeber
+          </TabsTrigger>
+          <TabsTrigger value="conocimiento" className="gap-2" onClick={() => { if (kbArticles.length === 0) fetchKnowledgeArticles(); }}>
+            <Database className="h-4 w-4" />
+            Conocimiento
           </TabsTrigger>
         </TabsList>
 
@@ -636,6 +693,225 @@ export default function ChatbotPage() {
                 </div>
               </CardContent>
             </Card>
+          </div>
+        </TabsContent>
+
+        {/* Conocimiento (RAG) Tab */}
+        <TabsContent value="conocimiento">
+          <div className="grid gap-6 md:grid-cols-3">
+            {/* Panel izquierdo: Lista de artículos */}
+            <div className="md:col-span-2 space-y-4">
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Database className="h-5 w-5 text-primary" />
+                        Base de Conocimiento (RAG)
+                      </CardTitle>
+                      <CardDescription>
+                        Estos artículos son usados por el chatbot para responder con información precisa de tu empresa
+                      </CardDescription>
+                    </div>
+                    <Button variant="outline" size="sm" asChild>
+                      <a href="/dashboard/knowledge" className="flex items-center gap-2">
+                        <ExternalLink className="h-4 w-4" />
+                        Gestionar Artículos
+                      </a>
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Barra de búsqueda */}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Buscar artículos..."
+                      value={kbSearch}
+                      onChange={(e) => setKbSearch(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') fetchKnowledgeArticles(); }}
+                      className="pl-10"
+                    />
+                  </div>
+
+                  {/* Lista de artículos */}
+                  {kbLoading ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                    </div>
+                  ) : kbArticles.length === 0 ? (
+                    <div className="text-center py-12 border-2 border-dashed rounded-lg">
+                      <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                      <h3 className="text-lg font-semibold mb-2">Sin artículos de conocimiento</h3>
+                      <p className="text-sm text-muted-foreground mb-4 max-w-md mx-auto">
+                        Crea artículos en el Knowledge Hub para que el chatbot pueda responder con información real de tu empresa.
+                      </p>
+                      <Button variant="outline" size="sm" asChild>
+                        <a href="/dashboard/knowledge">
+                          <BookOpen className="h-4 w-4 mr-2" />
+                          Ir al Knowledge Hub
+                        </a>
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2">
+                      {kbArticles.map((article) => (
+                        <div
+                          key={article.id}
+                          className={`p-4 rounded-lg border cursor-pointer transition-all hover:shadow-md ${
+                            kbSelectedArticle?.id === article.id
+                              ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                              : 'hover:border-primary/50'
+                          }`}
+                          onClick={() => setKbSelectedArticle(article)}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <h4 className="font-semibold text-sm truncate">{article.title}</h4>
+                                {article.isPublic ? (
+                                  <Badge variant="default" className="text-xs shrink-0 bg-green-600">RAG</Badge>
+                                ) : (
+                                  <Badge variant="outline" className="text-xs shrink-0">Privado</Badge>
+                                )}
+                              </div>
+                              <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
+                                {article.content.substring(0, 200)}
+                              </p>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <Badge variant="secondary" className={`text-xs ${CATEGORY_COLORS[article.category] || ''}`}>
+                                  {article.category}
+                                </Badge>
+                                {article.tags?.slice(0, 3).map((tag: string) => (
+                                  <span key={tag} className="text-xs text-muted-foreground flex items-center gap-1">
+                                    <Tag className="h-3 w-3" />
+                                    {tag}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                            <FileText className="h-5 w-5 text-muted-foreground shrink-0 mt-1" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Panel derecho: Preview y stats */}
+            <div className="space-y-4">
+              {/* Stats */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <BarChart3 className="h-4 w-4 text-primary" />
+                    Estado del RAG
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-950 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <Database className="h-4 w-4 text-green-600" />
+                      <span className="text-sm">Artículos RAG</span>
+                    </div>
+                    <span className="font-bold text-lg text-green-700 dark:text-green-300">{publicArticles.length}</span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <Eye className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm">Privados</span>
+                    </div>
+                    <span className="font-bold text-lg text-muted-foreground">{privateArticles.length}</span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-950 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <Zap className="h-4 w-4 text-blue-600" />
+                      <span className="text-sm">Con embeddings</span>
+                    </div>
+                    <span className="font-bold text-lg text-blue-700 dark:text-blue-300">
+                      {kbArticles.filter(a => a.vectorId).length}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Preview del artículo seleccionado */}
+              {kbSelectedArticle ? (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm font-medium">Vista Previa</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div>
+                      <h4 className="font-semibold">{kbSelectedArticle.title}</h4>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Badge variant="secondary" className={`text-xs ${CATEGORY_COLORS[kbSelectedArticle.category] || ''}`}>
+                          {kbSelectedArticle.category}
+                        </Badge>
+                        {kbSelectedArticle.isPublic ? (
+                          <Badge variant="default" className="text-xs bg-green-600">RAG activo</Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-xs">No disponible para RAG</Badge>
+                        )}
+                      </div>
+                    </div>
+                    <div className="bg-muted rounded-lg p-3 max-h-[300px] overflow-y-auto">
+                      <p className="text-sm whitespace-pre-wrap text-muted-foreground">
+                        {kbSelectedArticle.content}
+                      </p>
+                    </div>
+                    {kbSelectedArticle.tags?.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {kbSelectedArticle.tags.map((tag: string) => (
+                          <Badge key={tag} variant="outline" className="text-xs">{tag}</Badge>
+                        ))}
+                      </div>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Creado: {new Date(kbSelectedArticle.createdAt).toLocaleDateString('es-MX')}
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card className="border-dashed">
+                  <CardContent className="flex flex-col items-center justify-center py-8 text-center">
+                    <FileText className="h-8 w-8 text-muted-foreground mb-3" />
+                    <p className="text-sm text-muted-foreground">
+                      Selecciona un artículo para ver su contenido
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Cómo funciona */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm font-medium">¿Cómo funciona el RAG?</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3 text-sm text-muted-foreground">
+                    <div className="flex gap-2">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">1</span>
+                      <p>El cliente hace una pregunta al chatbot</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">2</span>
+                      <p>El motor busca en los artículos <strong>RAG</strong> usando similitud semántica</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">3</span>
+                      <p>Los artículos más relevantes se inyectan en el prompt del asistente</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">4</span>
+                      <p>El chatbot responde con información precisa basada en tus artículos</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </div>
         </TabsContent>
       </Tabs>
