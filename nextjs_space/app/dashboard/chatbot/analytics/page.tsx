@@ -1084,9 +1084,22 @@ export default function ChatbotAnalyticsPage() {
 
 function PatternsCard({ patterns }: { patterns: Pattern[] }) {
   const [patternFilter, setPatternFilter] = useState<string | null>(null)
-  const filteredPatterns = patternFilter
-    ? patterns.filter(p => p.severity === patternFilter)
-    : patterns
+  const [patternSearch, setPatternSearch] = useState('')
+
+  const hasPatternFilter = patternFilter !== null || patternSearch.trim() !== ''
+
+  const filteredPatterns = patterns.filter(p => {
+    if (patternFilter && p.severity !== patternFilter) return false
+    if (patternSearch.trim()) {
+      const q = patternSearch.trim().toLowerCase()
+      const matches =
+        p.description.toLowerCase().includes(q) ||
+        (PATTERN_LABELS[p.type] || p.type).toLowerCase().includes(q) ||
+        p.recommendation.toLowerCase().includes(q)
+      if (!matches) return false
+    }
+    return true
+  })
 
   return (
     <Card>
@@ -1111,8 +1124,30 @@ function PatternsCard({ patterns }: { patterns: Pattern[] }) {
           </Button>
         </div>
 
-        {/* Severity filter bar */}
+        {/* Search + Severity filter bar */}
         <div className="flex flex-wrap items-center gap-3 pt-2">
+          {/* Search input */}
+          <div className="relative flex-1 min-w-[180px] max-w-[280px]">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Buscar patrones..."
+              value={patternSearch}
+              onChange={e => setPatternSearch(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 text-xs border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+            {patternSearch && (
+              <button
+                type="button"
+                onClick={() => setPatternSearch('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+
+          {/* Severity filter */}
           <div className="flex items-center gap-1.5">
             <Filter className="h-3.5 w-3.5 text-muted-foreground" />
             {['critical','high','medium','low'].filter(s => patterns.some(p => p.severity === s)).map(sev => (
@@ -1134,7 +1169,8 @@ function PatternsCard({ patterns }: { patterns: Pattern[] }) {
               </button>
             ))}
           </div>
-          {patternFilter && (
+
+          {hasPatternFilter && (
             <span className="text-xs text-muted-foreground">
               {filteredPatterns.length} de {patterns.length} patrones
             </span>
@@ -1142,9 +1178,9 @@ function PatternsCard({ patterns }: { patterns: Pattern[] }) {
         </div>
       </CardHeader>
       <CardContent>
-        {filteredPatterns.length === 0 && patternFilter ? (
+        {filteredPatterns.length === 0 && hasPatternFilter ? (
           <div className="py-8 text-center text-sm text-muted-foreground">
-            Ningún patrón coincide con el filtro seleccionado
+            Ningún patrón coincide con la búsqueda o filtro seleccionado
           </div>
         ) : (
         <div className="grid grid-cols-1 gap-4">
@@ -1221,12 +1257,30 @@ function PatternsCard({ patterns }: { patterns: Pattern[] }) {
 function SuggestionsCard({ suggestions }: { suggestions: Suggestion[] }) {
   const [priorityFilter, setPriorityFilter] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<string | null>(null)
+  const [suggestionSearch, setSuggestionSearch] = useState('')
 
-  const hasAnyFilter = priorityFilter !== null || statusFilter !== null
+  const hasAnyFilter = priorityFilter !== null || statusFilter !== null || suggestionSearch.trim() !== ''
+
+  const CATEGORY_LABELS: Record<string, string> = {
+    knowledge_base: 'Base de conocimiento',
+    training: 'Entrenamiento',
+    configuration: 'Configuración',
+    skill: 'Skill',
+    threshold: 'Threshold',
+    infrastructure: 'Infraestructura',
+  }
 
   const filteredSuggestions = suggestions.filter(s => {
     if (priorityFilter && s.priority !== priorityFilter) return false
     if (statusFilter && s.status !== statusFilter) return false
+    if (suggestionSearch.trim()) {
+      const q = suggestionSearch.trim().toLowerCase()
+      const matches =
+        s.title.toLowerCase().includes(q) ||
+        s.description.toLowerCase().includes(q) ||
+        (CATEGORY_LABELS[s.category] || s.category).toLowerCase().includes(q)
+      if (!matches) return false
+    }
     return true
   })
 
@@ -1267,8 +1321,29 @@ function SuggestionsCard({ suggestions }: { suggestions: Suggestion[] }) {
           </Button>
         </div>
 
-        {/* Filter bars */}
+        {/* Search + Filter bars */}
         <div className="flex flex-wrap items-center gap-3 pt-2">
+          {/* Search input */}
+          <div className="relative flex-1 min-w-[180px] max-w-[280px]">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Buscar sugerencias..."
+              value={suggestionSearch}
+              onChange={e => setSuggestionSearch(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 text-xs border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+            {suggestionSearch && (
+              <button
+                type="button"
+                onClick={() => setSuggestionSearch('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+
           {/* Priority filter */}
           <div className="flex items-center gap-1.5">
             <Filter className="h-3.5 w-3.5 text-muted-foreground" />
@@ -1321,7 +1396,7 @@ function SuggestionsCard({ suggestions }: { suggestions: Suggestion[] }) {
       <CardContent>
         {filteredSuggestions.length === 0 && hasAnyFilter ? (
           <div className="py-8 text-center text-sm text-muted-foreground">
-            Ninguna sugerencia coincide con los filtros seleccionados
+            Ninguna sugerencia coincide con la búsqueda o filtros seleccionados
           </div>
         ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
