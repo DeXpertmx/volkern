@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 
+import { useDebounce } from '@/hooks/use-debounce';
+
 import {
   Bot,
   MessageSquare,
@@ -1102,13 +1104,7 @@ export default function ChatbotAnalyticsPage() {
 function PatternsCard({ patterns }: { patterns: Pattern[] }) {
   const [patternFilter, setPatternFilter] = useState<string | null>(null)
   const [patternSearch, setPatternSearch] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
-
-  // Debounce search input by 300ms
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(patternSearch), 300)
-    return () => clearTimeout(timer)
-  }, [patternSearch])
+  const [debouncedSearch, flushSearch] = useDebounce(patternSearch, 300)
 
   const hasPatternFilter = patternFilter !== null || debouncedSearch.trim() !== ''
 
@@ -1163,7 +1159,7 @@ function PatternsCard({ patterns }: { patterns: Pattern[] }) {
             {patternSearch && (
               <button
                 type="button"
-                onClick={() => { setPatternSearch(''); setDebouncedSearch(''); }}
+                onClick={() => { setPatternSearch(''); flushSearch(); }}
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               >
                 <X className="h-3 w-3" />
@@ -1282,13 +1278,7 @@ function SuggestionsCard({ suggestions }: { suggestions: Suggestion[] }) {
   const [priorityFilter, setPriorityFilter] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<string | null>(null)
   const [suggestionSearch, setSuggestionSearch] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
-
-  // Debounce search input by 300ms
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(suggestionSearch), 300)
-    return () => clearTimeout(timer)
-  }, [suggestionSearch])
+  const [debouncedSearch, flushSearch] = useDebounce(suggestionSearch, 300)
 
   const hasAnyFilter = priorityFilter !== null || statusFilter !== null || debouncedSearch.trim() !== ''
 
@@ -1344,7 +1334,7 @@ function SuggestionsCard({ suggestions }: { suggestions: Suggestion[] }) {
             {suggestionSearch && (
               <button
                 type="button"
-                onClick={() => { setSuggestionSearch(''); setDebouncedSearch(''); }}
+                onClick={() => { setSuggestionSearch(''); flushSearch(); }}
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               >
                 <X className="h-3 w-3" />
