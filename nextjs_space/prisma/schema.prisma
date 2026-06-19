@@ -3459,6 +3459,7 @@ model ChatbotConfig {
   totalConversaciones        Int      @default(0)
   totalCitasAgendadas        Int      @default(0)
   totalTransferencias        Int      @default(0)
+  ragActivo                  Boolean  @default(true)
   fechaCreacion              DateTime @default(now())
   fechaActualizacion         DateTime @updatedAt
   horariosPersonalizados     Json?

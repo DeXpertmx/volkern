@@ -149,10 +149,13 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
     }
 
     // ═══ FASE 2: RAG CON RE-RANKING (en paralelo) ═══
-    const kbArticles = await KnowledgeService.searchSemantic(tenantId, message).catch(err => {
-      console.warn('[ChatbotService] Error en búsqueda semántica de KB:', err)
-      return []
-    })
+    // Solo buscar en KB si el RAG está activo en la configuración
+    const kbArticles = config.ragActivo !== false
+      ? await KnowledgeService.searchSemantic(tenantId, message).catch(err => {
+          console.warn('[ChatbotService] Error en búsqueda semántica de KB:', err)
+          return []
+        })
+      : []
 
     let kbSection = ''
     if (kbArticles.length > 0) {
