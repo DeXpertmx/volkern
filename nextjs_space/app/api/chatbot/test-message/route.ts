@@ -1,31 +1,14 @@
 export const dynamic = 'force-dynamic';
 /**
  * API para probar el chatbot desde la interfaz de administración
- * No envía mensajes por WhatsApp, solo simula la conversación
+ * Usa el motor local con RAG, embeddings e intención
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import OpenAI from 'openai';
-
-let _client: OpenAI | null = null;
-
-function getClient(): OpenAI {
-  if (!_client) {
-    const apiKey = process.env.OPENROUTER_API_KEY || '';
-    _client = new OpenAI({
-      apiKey,
-      baseURL: 'https://openrouter.ai/api/v1',
-      defaultHeaders: {
-        'HTTP-Referer': 'https://volkern.app',
-        'X-Title': 'Volkern Test Chatbot',
-      },
-    });
-  }
-  return _client;
-}
+import { processMessage } from '@/lib/chat/chatbot-service';
 
 export async function POST(request: NextRequest) {
   try {
@@ -45,70 +28,33 @@ export async function POST(request: NextRequest) {
     }
 
     const tenantId = user.tenantId;
-    const { message, conversationHistory = [] } = await request.json();
+    const { message } = await request.json();
 
     if (!message || typeof message !== 'string') {
       return NextResponse.json({ error: 'Mensaje requerido' }, { status: 400 });
     }
 
-    // Cargar configuración del chatbot
-    let config = await prisma.chatbotConfig.findUnique({
-      where: { tenantId }
+    // Procesar con el motor local (RAG + embeddings + intención + LLM con fallback)
+    const result = await processMessage({
+      tenantId,
+      message,
+      channel: 'api',
+      metadata: { isTest: true },
     });
 
-    if (!config) {
-      config = await prisma.chatbotConfig.create({
-        data: {
-          tenantId,
-          activo: true,
-          nombreAsistente: 'Asistente Virtual',
-        }
+    if (!result.success) {
+      return NextResponse.json({
+        success: false,
+        response: result.response || 'Lo siento, no pude procesar tu mensaje.',
+        error: result.error,
       });
     }
 
-    // Cargar tenant y servicios
-    const tenant = await prisma.tenant.findUnique({
-      where: { id: tenantId }
-    });
-
-    const servicios = await prisma.servicio.findMany({
-      where: { tenantId, activo: true }
-    });
-
-    // Construir prompt del sistema
-    const systemPrompt = buildSystemPrompt(config, tenant, servicios);
-
-    // Construir mensajes para el LLM
-    const messages: any[] = [
-      { role: 'system', content: systemPrompt },
-      ...conversationHistory.slice(-8).map((m: any) => ({
-        role: m.role,
-        content: m.content
-      })),
-      { role: 'user', content: message }
-    ];
-
-    // Llamar al LLM
-    const completion = await getClient().chat.completions.create({
-      model: 'deepseek/deepseek-v4-flash:free',
-      messages,
-      temperature: 0.7,
-      max_tokens: 500,
-    });
-
-    const response = completion.choices[0]?.message?.content || 'Lo siento, no pude procesar tu mensaje.';
-
-    // Actualizar estadísticas (solo conversaciones)
-    await prisma.chatbotConfig.update({
-      where: { id: config.id },
-      data: {
-        totalConversaciones: { increment: 1 }
-      }
-    });
-
     return NextResponse.json({
       success: true,
-      response,
+      response: result.response,
+      fueraHorario: result.fueraHorario || false,
+      action: result.action || 'ninguna',
     });
 
   } catch (error) {
@@ -118,33 +64,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
-
-function buildSystemPrompt(config: any, tenant: any, servicios: any[]): string {
-  const serviciosList = servicios.map(s => 
-    `- ${s.nombre}: ${s.duracionMinutos} minutos, $${s.precio}`
-  ).join('\n');
-
-  return `Eres ${config.nombreAsistente}, un asistente virtual profesional de ${tenant?.nombre || 'nuestra empresa'}.
-
-${config.contextoNegocio ? `CONTEXTO DEL NEGOCIO:\n${config.contextoNegocio}\n` : ''}
-${config.personalidad ? `PERSONALIDAD Y TONO:\n${config.personalidad}\n` : ''}
-
-SERVICIOS DISPONIBLES:
-${serviciosList || 'No hay servicios configurados actualmente.'}
-
-CAPACIDADES:
-- ${config.puedeAgendarCitas ? 'Puedes' : 'NO puedes'} agendar citas
-- ${config.puedeMostrarServicios ? 'Puedes' : 'NO puedes'} mostrar información de servicios
-- ${config.puedeTransferirHumano ? 'Puedes' : 'NO puedes'} transferir a un agente humano
-
-INSTRUCCIONES:
-1. Sé amable, profesional y conciso
-2. Responde en español
-3. Si te preguntan sobre servicios, proporciona información útil
-4. Si quieren agendar, guíalos en el proceso
-5. Si necesitan hablar con un humano, ofrece esa opción
-6. IMPORTANTE: Esto es una prueba desde el panel de administración, no una conversación real de WhatsApp
-
-Responde de manera natural y útil.`;
 }
