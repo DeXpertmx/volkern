@@ -29,6 +29,8 @@ import {
   Pencil,
   Trash2,
   X,
+  Zap,
+  AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -457,11 +459,34 @@ export default function KnowledgeHubPage() {
                 <DialogTitle className="text-xl font-black uppercase tracking-tight">
                   {selectedArticle.title}
                 </DialogTitle>
-                <DialogDescription className="text-[9px] font-bold uppercase tracking-widest text-slate-400">
-                  Actualizado {new Date(selectedArticle.updatedAt).toLocaleDateString('es-ES', {
-                    day: 'numeric', month: 'long', year: 'numeric',
-                  })}
-                  {selectedArticle.vectorId && ' · Embedding generado'}
+                <DialogDescription className="text-[9px] font-bold uppercase tracking-widest">
+                  <span className="text-slate-400">
+                    Actualizado {new Date(selectedArticle.updatedAt).toLocaleDateString('es-ES', {
+                      day: 'numeric', month: 'long', year: 'numeric',
+                    })}
+                  </span>
+                  {' '}
+                  <span className="text-slate-400">·</span>
+                  {' '}
+                  {(() => {
+                    const EMBEDDING_STALE_MS = 30 * 24 * 60 * 60 * 1000;
+                    let isStale = false;
+                    if (selectedArticle.vectorId) {
+                      try {
+                        const parsed = JSON.parse(selectedArticle.vectorId);
+                        if (parsed.ts) {
+                          isStale = Date.now() - parsed.ts > EMBEDDING_STALE_MS;
+                        }
+                      } catch {}
+                    }
+                    if (!selectedArticle.vectorId) {
+                      return <span className="text-slate-400">Sin embedding</span>;
+                    }
+                    if (isStale) {
+                      return <span className="text-amber-500">Embedding desactualizado <AlertTriangle className="h-2.5 w-2.5 inline -mt-0.5" title="Embedding desactualizado (+30 días)" /></span>;
+                    }
+                    return <span className="text-green-600">Embedding generado <Zap className="h-2.5 w-2.5 inline -mt-0.5" /></span>;
+                  })()}
                 </DialogDescription>
               </DialogHeader>
               <div className="mt-6 space-y-6">
