@@ -157,6 +157,14 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
         })
       : []
 
+    // ═══ FASE 2b: CATÁLOGO VISIBLE PARA CHATBOT ═══
+    const catalogItems = config.ragActivo !== false
+      ? await KnowledgeService.searchCatalogItems(tenantId, message).catch(err => {
+          console.warn('[ChatbotService] Error en búsqueda de catálogo:', err)
+          return []
+        })
+      : []
+
     let kbSection = ''
     if (kbArticles.length > 0) {
       // Pasar por el reranker para mejorar relevancia
@@ -184,6 +192,14 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
           `[${a.category}] ${a.title}: ${a.content.substring(0, 400)}`
         ).join('\n')
       }
+    }
+
+    // ═══ Inyectar resultados del catálogo ═══
+    let catalogSection = ''
+    if (catalogItems.length > 0) {
+      catalogSection = '\n\nCATÁLOGO DE PRODUCTOS/SERVICIOS DISPONIBLES:\n' + catalogItems.map(item =>
+        `[${item.category}] ${item.title}: ${(item.content || '').substring(0, 400)}`
+      ).join('\n')
     }
 
     // ═══ FASE 2: RESUMEN AUTOMÁTICO ═══
@@ -392,6 +408,7 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
       services,
       context,
       kbSection,
+      catalogSection,
       summaryBlock,
       channel,
       contactName: input.contactName,
@@ -447,11 +464,12 @@ function buildSystemPrompt(params: {
   services: any[]
   context: any
   kbSection: string
+  catalogSection?: string
   summaryBlock?: string
   channel: string
   contactName?: string
 }): string {
-  const { config, tenant, services, context, kbSection, summaryBlock, channel, contactName } = params
+  const { config, tenant, services, context, kbSection, catalogSection, summaryBlock, channel, contactName } = params
 
   const servicesInfo = services.map(s =>
     `- ${s.nombre}: ${s.descripcion || 'Sin descripción'} | ${s.duracionMinutos || '?'} min | $${s.precio} ${s.moneda || 'EUR'}`
@@ -476,7 +494,7 @@ function buildSystemPrompt(params: {
   return `Eres ${config.nombreAsistente || 'Asistente Virtual'}, el asistente inteligente de ${tenant?.nombre || 'la empresa'}.
 
 ${config.contextoNegocio || 'Ayudas a clientes con información y gestión de servicios.'}
-${config.personalidad || 'Eres cordial, profesional, conciso y resolutivo.'}${kbSection}
+${config.personalidad || 'Eres cordial, profesional, conciso y resolutivo.'}${kbSection}${catalogSection || ''}
 
 CLIENTE: ${contactName || 'Cliente'}${memorySection}
 
