@@ -998,7 +998,7 @@ export default function ChatbotPage() {
 
               {/* Preview del artículo seleccionado */}
               {kbSelectedArticle ? (
-                <Card>
+                <Card key={kbSelectedArticle.id} className="animate-in fade-in-0 slide-in-from-top-2 duration-300">
                   <CardHeader>
                     <CardTitle className="text-sm font-medium">Vista Previa</CardTitle>
                   </CardHeader>
