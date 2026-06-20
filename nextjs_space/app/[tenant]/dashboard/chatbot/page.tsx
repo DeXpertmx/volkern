@@ -120,6 +120,7 @@ export default function ChatbotPage() {
   // Bulk toggle
   const [bulkCategory, setBulkCategory] = useState<string>('Todas');
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkReindexing, setBulkReindexing] = useState(false);
 
   // Reindex state
   const [reindexingId, setReindexingId] = useState<string | null>(null);
@@ -284,6 +285,54 @@ export default function ChatbotPage() {
       toast.success(`${targets.length} artículo(s) ahora ${action}`);
     }
     setBulkLoading(false);
+    setBulkCategory('Todas');
+  };
+
+  const reindexAll = async (category: string) => {
+    const targets = category === 'Todas'
+      ? kbArticles
+      : kbArticles.filter(a => a.category === category);
+    if (targets.length === 0) return;
+
+    if (!confirm(`¿Reindexar ${targets.length} artículo(s)${category !== 'Todas' ? ' de ' + category : ''}? Esto regenerará los embeddings vía API.`)) return;
+
+    setBulkReindexing(true);
+    let failed = 0;
+    const updatedVectorIds: Record<string, string> = {};
+
+    for (const article of targets) {
+      try {
+        const res = await fetch(`/api/knowledge/${article.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: article.title, content: article.content }),
+        });
+        if (res.ok) {
+          const updated = await res.json();
+          if (updated.vectorId) updatedVectorIds[article.id] = updated.vectorId;
+        } else {
+          failed++;
+        }
+      } catch {
+        failed++;
+      }
+    }
+
+    if (Object.keys(updatedVectorIds).length > 0) {
+      setKbArticles(prev => prev.map(a =>
+        updatedVectorIds[a.id] ? { ...a, vectorId: updatedVectorIds[a.id] } : a
+      ));
+      if (kbSelectedArticle && updatedVectorIds[kbSelectedArticle.id]) {
+        setKbSelectedArticle(prev => prev ? { ...prev, vectorId: updatedVectorIds[kbSelectedArticle.id] } : null);
+      }
+    }
+
+    if (failed > 0) {
+      toast.error(`${failed} de ${targets.length} artículos fallaron al reindexar`);
+    } else {
+      toast.success(`${targets.length} artículo(s) reindexado(s) correctamente`);
+    }
+    setBulkReindexing(false);
     setBulkCategory('Todas');
   };
 
@@ -930,7 +979,7 @@ export default function ChatbotPage() {
                         variant="outline"
                         size="sm"
                         className="text-xs h-8"
-                        disabled={bulkLoading}
+                        disabled={bulkLoading || bulkReindexing}
                         onClick={() => toggleAllPublic(bulkCategory, true)}
                       >
                         {bulkLoading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
@@ -940,10 +989,20 @@ export default function ChatbotPage() {
                         variant="outline"
                         size="sm"
                         className="text-xs h-8"
-                        disabled={bulkLoading}
+                        disabled={bulkLoading || bulkReindexing}
                         onClick={() => toggleAllPublic(bulkCategory, false)}
                       >
                         Hacer privados
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-xs h-8"
+                        disabled={bulkLoading || bulkReindexing}
+                        onClick={() => reindexAll(bulkCategory)}
+                      >
+                        {bulkReindexing ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                        Reindexar cat.
                       </Button>
                     </div>
                   )}
