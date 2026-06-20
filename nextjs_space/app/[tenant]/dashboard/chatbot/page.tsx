@@ -121,6 +121,9 @@ export default function ChatbotPage() {
   const [bulkCategory, setBulkCategory] = useState<string>('Todas');
   const [bulkLoading, setBulkLoading] = useState(false);
 
+  // Reindex state
+  const [reindexingId, setReindexingId] = useState<string | null>(null);
+
   // Cargar configuración
   useEffect(() => {
     loadConfig();
@@ -282,6 +285,31 @@ export default function ChatbotPage() {
     }
     setBulkLoading(false);
     setBulkCategory('Todas');
+  };
+
+  const reindexArticle = async (article: KnowledgeArticle) => {
+    setReindexingId(article.id);
+    try {
+      const res = await fetch(`/api/knowledge/${article.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: article.title, content: article.content }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setKbArticles(prev => prev.map(a => a.id === article.id ? { ...a, vectorId: updated.vectorId } : a));
+        if (kbSelectedArticle?.id === article.id) {
+          setKbSelectedArticle(prev => prev ? { ...prev, vectorId: updated.vectorId } : null);
+        }
+        toast.success('Embedding regenerado correctamente');
+      } else {
+        toast.error('Error al regenerar embedding');
+      }
+    } catch {
+      toast.error('Error al regenerar embedding');
+    } finally {
+      setReindexingId(null);
+    }
   };
 
   const publicArticles = kbArticles.filter(a => a.isPublic);
@@ -1092,6 +1120,18 @@ export default function ChatbotPage() {
                             <span className="text-muted-foreground">Sin embedding</span>
                           </>
                         )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 text-[10px] ml-auto"
+                          disabled={reindexingId === kbSelectedArticle.id}
+                          onClick={(e) => { e.stopPropagation(); reindexArticle(kbSelectedArticle); }}
+                        >
+                          {reindexingId === kbSelectedArticle.id ? (
+                            <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                          ) : null}
+                          Reindexar
+                        </Button>
                       </div>
                       <p className="text-xs text-muted-foreground">
                         Creado: {new Date(kbSelectedArticle.createdAt).toLocaleDateString('es-MX')}
