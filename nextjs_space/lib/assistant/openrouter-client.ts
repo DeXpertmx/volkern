@@ -6,8 +6,29 @@ const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_BASE_URL = 'https://api.deepseek.com/v1';
 
 export interface OpenRouterMessage {
-  role: 'system' | 'user' | 'assistant';
+  role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
+  name?: string;
+  tool_call_id?: string;
+  tool_calls?: OpenRouterToolCall[];
+}
+
+export interface OpenRouterToolCall {
+  id: string;
+  type: 'function';
+  function: {
+    name: string;
+    arguments: string;
+  };
+}
+
+export interface OpenRouterTool {
+  type: 'function';
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, any>;
+  };
 }
 
 export interface OpenRouterResponse {
@@ -16,6 +37,7 @@ export interface OpenRouterResponse {
     message: {
       content: string;
       role: string;
+      tool_calls?: OpenRouterToolCall[];
     };
     finish_reason: string;
   }[];
@@ -86,10 +108,24 @@ async function callNemotron(
  * Usa DEEPSEEK_API_KEY del environment.
  */
 async function callDeepSeekV4FlashDirect(
-  messages: OpenRouterMessage[]
+  messages: OpenRouterMessage[],
+  tools?: OpenRouterTool[]
 ): Promise<OpenRouterResponse> {
   if (!DEEPSEEK_API_KEY) {
     throw new Error('DEEPSEEK_API_KEY no configurada');
+  }
+
+  const body: any = {
+    model: 'deepseek-chat',
+    messages,
+    temperature: 0.4,
+    max_tokens: 8192,
+    top_p: 0.9
+  };
+
+  if (tools && tools.length > 0) {
+    body.tools = tools;
+    body.tool_choice = 'auto';
   }
 
   const response = await fetch(`${DEEPSEEK_BASE_URL}/chat/completions`, {
@@ -98,13 +134,7 @@ async function callDeepSeekV4FlashDirect(
       'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      model: 'deepseek-chat',
-      messages,
-      temperature: 0.4,
-      max_tokens: 8192,
-      top_p: 0.9
-    })
+    body: JSON.stringify(body)
   });
 
   if (!response.ok) {
@@ -321,6 +351,121 @@ export async function callAssistantWithFallback(
     console.error('[AI] ❌ Todos los modelos fallaron:', geminiError);
     throw geminiError;
   }
+}
+
+/**
+ * Pipeline con soporte de function/tool calling para el chatbot.
+ * 
+ * 1. Intenta DeepSeek V4 Flash con tools → si el LLM pide ejecutar tools, las ejecuta
+ *    y alimenta los resultados de vuelta (máx 2 iteraciones del loop).
+ * 2. Si DeepSeek falla o no hay tool calls, fallback a callAssistantWithFallback (sin tools).
+ *
+ * @param messages - Historial de la conversación
+ * @param tools - Definiciones de herramientas disponibles para el LLM
+ * @param executeTool - Callback que ejecuta una herramienta y retorna el resultado como string
+ */
+export async function callAssistantWithToolLoop(
+  messages: OpenRouterMessage[],
+  tools: OpenRouterTool[],
+  executeTool: (name: string, args: Record<string, any>) => Promise<string>
+): Promise<OpenRouterResponse> {
+  // 1. Intentar DeepSeek V4 Flash con tools
+  if (DEEPSEEK_API_KEY) {
+    try {
+      console.log('[AI ToolLoop] Intentando DeepSeek V4 Flash con tools...');
+      const response = await callDeepSeekV4FlashDirect(messages, tools);
+      const choice = response.choices?.[0];
+
+      // ¿El LLM decidió llamar una herramienta?
+      if (choice?.message?.tool_calls && choice.message.tool_calls.length > 0) {
+        console.log(`[AI ToolLoop] 🔧 LLM solicita ${choice.message.tool_calls.length} tool(s): ${choice.message.tool_calls.map(t => t.function.name).join(', ')}`);
+        const toolResult = await runToolLoop(choice.message.tool_calls, executeTool, messages, tools);
+        if (toolResult) return toolResult;
+      }
+
+      // Sin tool calls: respuesta directa
+      if (choice?.message?.content) {
+        console.log('[AI ToolLoop] ✅ DeepSeek respondió directamente (sin tools)');
+        return response;
+      }
+    } catch (err) {
+      console.warn('[AI ToolLoop] DeepSeek con tools falló:', err);
+    }
+  }
+
+  // 2. Fallback: llamada normal sin tools
+  console.log('[AI ToolLoop] Fallback a callAssistantWithFallback (sin tools)...');
+  return callAssistantWithFallback(messages);
+}
+
+/**
+ * Ejecuta el loop de tool calls: ejecuta herramientas, alimenta resultados, re-consulta al LLM.
+ * Máximo 2 iteraciones para evitar bucles infinitos.
+ */
+async function runToolLoop(
+  toolCalls: OpenRouterToolCall[],
+  executeTool: (name: string, args: Record<string, any>) => Promise<string>,
+  originalMessages: OpenRouterMessage[],
+  tools: OpenRouterTool[],
+  maxIterations = 2
+): Promise<OpenRouterResponse | null> {
+  const messages = [...originalMessages];
+  let currentToolCalls = toolCalls;
+
+  for (let i = 0; i < maxIterations; i++) {
+    // Añadir mensaje del assistant con tool_calls
+    messages.push({
+      role: 'assistant' as const,
+      content: '',
+      tool_calls: currentToolCalls,
+    });
+
+    // Ejecutar cada tool call y añadir resultado
+    for (const tc of currentToolCalls) {
+      let args: Record<string, any> = {};
+      try {
+        args = JSON.parse(tc.function.arguments);
+      } catch {
+        console.warn(`[AI ToolLoop] JSON inválido en argumentos de ${tc.function.name}: ${tc.function.arguments}`);
+      }
+
+      const result = await executeTool(tc.function.name, args);
+
+      messages.push({
+        role: 'tool' as const,
+        content: result,
+        tool_call_id: tc.id,
+        name: tc.function.name,
+      });
+    }
+
+    // Re-consultar al LLM con los resultados
+    try {
+      const response = await callDeepSeekV4FlashDirect(messages, tools);
+      const choice = response.choices?.[0];
+
+      // ¿Más tool calls?
+      if (choice?.message?.tool_calls && choice.message.tool_calls.length > 0) {
+        console.log(`[AI ToolLoop] 🔧 Iteración ${i + 1}: LLM pide ${choice.message.tool_calls.length} tool(s) más`);
+        currentToolCalls = choice.message.tool_calls;
+        continue;
+      }
+
+      // Respuesta final
+      if (choice?.message?.content) {
+        console.log(`[AI ToolLoop] ✅ Respuesta final tras ${i + 1} iteraciones de tools`);
+        return response;
+      }
+
+      return null;
+    } catch (err) {
+      console.warn(`[AI ToolLoop] Error en iteración ${i + 1}:`, err);
+      return null;
+    }
+  }
+
+  console.warn(`[AI ToolLoop] ⚠️ Límite de ${maxIterations} iteraciones alcanzado`);
+  return null;
 }
 
 /**

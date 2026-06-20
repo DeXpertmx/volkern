@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/db'
 import { KnowledgeService } from '@/lib/knowledge/knowledge-service'
-import { callAssistantWithFallback, OpenRouterMessage } from '@/lib/assistant/openrouter-client'
+import { callAssistantWithFallback, callAssistantWithToolLoop, OpenRouterMessage, OpenRouterTool } from '@/lib/assistant/openrouter-client'
 import { ChatMemoryService } from '@/lib/chat/chat-memory'
 import { extractFacts, formatFacts } from '@/lib/agents/fact-extractor'
 import { rerankResults, buildKbBlock } from '@/lib/knowledge/reranker'
@@ -401,7 +401,7 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
       }
     }
 
-    // ═══ 4. CONSULTA GENERAL / SIMPLE → USAR LLM DIRECTAMENTE ═══
+    // ═══ 4. CONSULTA GENERAL / SIMPLE → USAR LLM CON TOOL CALLING ═══
     const systemPrompt = buildSystemPrompt({
       config,
       tenant,
@@ -425,7 +425,89 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
       { role: 'user', content: message },
     ]
 
-    const llmResponse = await callAssistantWithFallback(llmMessages)
+    // Definir herramienta buscar_catalogo para el LLM
+    const CATALOG_TOOLS: OpenRouterTool[] = [{
+      type: 'function',
+      function: {
+        name: 'buscar_catalogo',
+        description: 'Busca productos, servicios o propiedades en el catálogo de la empresa. Usa esta herramienta cuando el cliente pregunte por precios, disponibilidad, productos específicos, propiedades inmobiliarias, servicios ofrecidos, o quiera ver qué hay disponible. Soporta filtros por tipo, precio, ciudad, habitaciones, etc.',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: {
+              type: 'string',
+              description: 'Texto libre de búsqueda (ej: "apartamentos en Madrid", "cafetera", "plan de marketing")'
+            },
+            tipo: {
+              type: 'string',
+              description: 'Tipo de ítem: inmueble, servicio, producto_terminado, materia_prima, insumo, cita, academia',
+              enum: ['inmueble', 'servicio', 'producto_terminado', 'materia_prima', 'insumo', 'cita', 'academia']
+            },
+            precioMin: {
+              type: 'number',
+              description: 'Precio mínimo en la moneda del catálogo'
+            },
+            precioMax: {
+              type: 'number',
+              description: 'Precio máximo en la moneda del catálogo'
+            },
+            categoria: {
+              type: 'string',
+              description: 'Categoría del catálogo (ej: "venta", "alquiler", "marketing", "consultoría")'
+            },
+            ciudad: {
+              type: 'string',
+              description: 'Ciudad o ubicación para filtrar (ej: "Madrid", "Barcelona", "Ciudad de México")'
+            },
+            habitaciones: {
+              type: 'string',
+              description: 'Número de habitaciones (para inmuebles)'
+            },
+            etiqueta: {
+              type: 'string',
+              description: 'Etiqueta o tag del catálogo (ej: "destacado", "oferta", "nuevo")'
+            }
+          },
+          required: []
+        }
+      }
+    }]
+
+    // Callback que ejecuta buscarCatalogo cuando el LLM lo solicita
+    const executeTool = async (toolName: string, toolArgs: Record<string, any>): Promise<string> => {
+      if (toolName === 'buscar_catalogo') {
+        try {
+          // Mapear argumentos del LLM al formato de buscarCatalogo
+          const filtrosCustom: Record<string, string> = {}
+          if (toolArgs.ciudad) filtrosCustom.ciudad = toolArgs.ciudad
+          if (toolArgs.habitaciones) filtrosCustom.habitaciones = toolArgs.habitaciones
+
+          const { skills } = await import('@/lib/skills')
+          const result = await skills.buscar_catalogo({
+            tenantId,
+            query: toolArgs.query,
+            tipo: toolArgs.tipo,
+            precioMin: toolArgs.precioMin,
+            precioMax: toolArgs.precioMax,
+            categoria: toolArgs.categoria,
+            etiqueta: toolArgs.etiqueta,
+            filtrosCustom: Object.keys(filtrosCustom).length > 0 ? filtrosCustom : undefined,
+            limit: 8,
+          })
+
+          if (result.success && result.message) {
+            return result.message
+          }
+          return result.message || `No se encontraron resultados en el catálogo. Responde al cliente indicando que no hay coincidencias y sugiere afinar la búsqueda.`
+        } catch (err) {
+          console.warn('[ChatbotService] Error ejecutando buscar_catalogo tool:', err)
+          return `Error al consultar el catálogo. Responde al cliente que hubo un problema técnico y que lo intentará de nuevo en unos momentos, o que puede contactar a un asesor humano.`
+        }
+      }
+      return JSON.stringify({ error: `Herramienta desconocida: ${toolName}` })
+    }
+
+    const llmResponse = await callAssistantWithToolLoop(llmMessages, CATALOG_TOOLS, executeTool)
     const finalMessage = llmResponse.choices?.[0]?.message?.content
       || 'Lo siento, no pude procesar tu mensaje.'
 
