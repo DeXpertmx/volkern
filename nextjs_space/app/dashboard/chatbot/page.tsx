@@ -1014,9 +1014,17 @@ export default function ChatbotPage() {
                         <Badge variant="secondary" className={`text-xs ${CATEGORY_COLORS[kbSelectedArticle.category] || ''}`}>
                           {kbSelectedArticle.category}
                         </Badge>
-                        <span className={`text-[10px] font-medium ${kbSelectedArticle.isPublic ? 'text-green-600' : 'text-muted-foreground'}`}>
-                          {kbSelectedArticle.isPublic ? 'RAG' : 'PRIV'}
-                        </span>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span className={`text-[10px] font-medium ${kbSelectedArticle.isPublic ? 'text-green-600' : 'text-muted-foreground'}`}>
+                            {kbSelectedArticle.isPublic ? 'RAG' : 'PRIV'}
+                          </span>
+                          <Switch
+                            checked={kbSelectedArticle.isPublic}
+                            onCheckedChange={() => togglePublic(kbSelectedArticle)}
+                            className="scale-75"
+                            aria-label={kbSelectedArticle.isPublic ? 'Hacer privado' : 'Hacer público'}
+                          />
+                        </div>
                       </div>
                     </div>
                     <div className="bg-muted rounded-lg p-3 max-h-[300px] overflow-y-auto">
