@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/db'
 import { KnowledgeService } from '@/lib/knowledge/knowledge-service'
 import { callAssistantWithFallback, callAssistantWithToolLoop, OpenRouterMessage, OpenRouterTool } from '@/lib/assistant/openrouter-client'
-import { ChatMemoryService } from '@/lib/chat/chat-memory'
+import { ChatMemoryService, filterClickedQuickReplies, isQuickReplyMatch } from '@/lib/chat/chat-memory'
 import { extractFacts, formatFacts } from '@/lib/agents/fact-extractor'
 import { rerankResults, buildKbBlock } from '@/lib/knowledge/reranker'
 import { needsSummarization, generateSummary, buildSummaryBlock } from '@/lib/chat/conversation-summarizer'
@@ -123,6 +123,25 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
 
     const context = await memory.getContext(conv.id)
     const recentMessages = await memory.getMessages(conv.id, DEFAULTS.MAX_HISTORY)
+
+    // ═══ Click vs free-text tracking ═══
+    // Detect if the user's message resolves to one of the chips we last offered.
+    // If yes: mark it as clicked (so we can dedupe it on the next offer).
+    // If no (free text): clear the clicked list so each new search can re-explore.
+    const lastOffered = context.lastOfferedQuickReplies ?? []
+    const isClick =
+      lastOffered.length > 0 &&
+      lastOffered.some(offered => isQuickReplyMatch(offered, message))
+
+    if (isClick) {
+      await memory.markClickedQuickReply(conv.id, message)
+      context.clickedQuickReplies = [...context.clickedQuickReplies, message]
+      context.lastOfferedQuickReplies = undefined
+    } else if (message.trim().length > 0 && context.clickedQuickReplies.length > 0) {
+      // Free-text — reset the session so subsequent offers are not artificially constrained
+      await memory.clearClickedQuickReplies(conv.id)
+      context.clickedQuickReplies = []
+    }
 
     // ═══ 1. CLASIFICAR INTENCIÓN ═══
     const classification = await intentClassifier.classify({
@@ -340,11 +359,21 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
           executionResult.data?.quickReplies ||
           executionResult.data?.data?.quickReplies;
 
+        // Dedup against chips the user has already clicked in this session
+        const dedupedQuickReplies = filterClickedQuickReplies(
+          orchestratorQuickReplies,
+          context.clickedQuickReplies,
+        )
+
+        if (dedupedQuickReplies?.length) {
+          await memory.recordOfferedQuickReplies(conv.id, dedupedQuickReplies)
+        }
+
         return {
           success: true,
           response: finalMessage,
           action,
-          quickReplies: orchestratorQuickReplies,
+          quickReplies: dedupedQuickReplies,
         }
       }
 
@@ -540,10 +569,19 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
     const elapsed = Date.now() - startTime
     console.log(`[ChatbotService] ${channel} consulta OK en ${elapsed}ms (intent=${classification.intent})`)
 
+    const dedupedQuickReplies = filterClickedQuickReplies(
+      catalogQuickReplies,
+      context.clickedQuickReplies,
+    )
+
+    if (dedupedQuickReplies?.length) {
+      await memory.recordOfferedQuickReplies(conv.id, dedupedQuickReplies)
+    }
+
     return {
       success: true,
       response: finalMessage,
-      quickReplies: catalogQuickReplies,
+      quickReplies: dedupedQuickReplies,
     }
   } catch (error) {
     console.error('[ChatbotService] Error:', error)

@@ -22,7 +22,66 @@ export interface ChatMemoryContext {
   collectedEntities: Record<string, string>
   missingEntities: string[]
   facts: string[]
+  /**
+   * Quick reply chips the bot offered in the LAST assistant message.
+   * Used to detect incoming clicks (when the user's next message matches one of these).
+   */
+  lastOfferedQuickReplies?: string[]
+  /**
+   * Quick reply chips the user has clicked since the last free-text input.
+   * Cleared whenever the user types free text so each search session can re-explore.
+   * Filtered out from subsequent `quickReplies` so the LLM doesn't regenerate them.
+   */
+  clickedQuickReplies: string[]
   summary?: ConversationSummary | null
+}
+
+function normalizeReply(s: string): string {
+  return s.trim().toLowerCase()
+}
+
+/**
+ * Returns true when the user's text resolves to one of the chips that were offered.
+ *
+ * Handles bidirectional truncation: the catalog may produce chips whose text
+ * ends with "..." (long-label truncation by some channels), AND for Telegram
+ * the stored `lastOfferedQuickReplies` carries the truncated safeText while
+ * incoming click messages carry that same truncated form. We compare against a
+ * common prefix after stripping trailing "..." on either side.
+ */
+export function isQuickReplyMatch(offered: string, message: string): boolean {
+  const ELLIPSIS = '...'
+  const stripEllipsis = (s: string) => (s.endsWith(ELLIPSIS) && s.length > 3 ? s.slice(0, -3) : s)
+  const offeredStripped = stripEllipsis(offered)
+  const messageStripped = stripEllipsis(message)
+  const o = normalizeReply(offeredStripped)
+  const m = normalizeReply(messageStripped)
+  if (o === m) return true
+  // If EITHER side was truncated (lost data), allow prefix match in either
+  // direction. Without this, Telegram clicks on long chips would never match,
+  // because the stored offered is the full text but the click carries the
+  // truncated form.
+  const offeredTruncated = offeredStripped !== offered
+  const messageTruncated = messageStripped !== message
+  if (offeredTruncated || messageTruncated) {
+    if (o.startsWith(m) || m.startsWith(o)) return true
+  }
+  return false
+}
+
+/**
+ * Filters out chips that the user has already clicked within this search session.
+ * Returns the filtered list verbatim (possibly empty) — never falls back to the
+ * originals, since that would betray the user's "no regenerating clicked chips"
+ * requirement when the catalog happens to produce an identical set.
+ */
+export function filterClickedQuickReplies(
+  replies: string[] | undefined,
+  clicked: string[] | undefined
+): string[] | undefined {
+  if (!replies || replies.length === 0) return replies
+  if (!clicked || clicked.length === 0) return replies
+  return replies.filter(r => !clicked.some(c => isQuickReplyMatch(c, r)))
 }
 
 const MAX_HISTORY = 30
@@ -126,6 +185,8 @@ export class ChatMemoryService {
       collectedEntities: metadata.collectedEntities || {},
       missingEntities: metadata.missingEntities || [],
       facts: metadata.facts || [],
+      lastOfferedQuickReplies: metadata.lastOfferedQuickReplies || undefined,
+      clickedQuickReplies: metadata.clickedQuickReplies || [],
       summary: metadata.summary || null,
     }
   }
@@ -167,6 +228,46 @@ export class ChatMemoryService {
       ctx.facts.push(fact)
       await this.updateContext(conversationId, { facts: ctx.facts })
     }
+  }
+
+  /**
+   * Persist the chip set the bot just offered so the next incoming message
+   * can be classified as a click vs free text.
+   */
+  async recordOfferedQuickReplies(conversationId: string, replies: string[]): Promise<void> {
+    if (!replies || replies.length === 0) return
+    await this.updateContext(conversationId, {
+      lastOfferedQuickReplies: replies,
+    })
+  }
+
+  /**
+   * Record that the user clicked a chip. Idempotent — same chip clicked twice
+   * doesn't duplicate. Clears `lastOfferedQuickReplies` because the offer
+   * has been resolved by this click.
+   */
+  async markClickedQuickReply(conversationId: string, reply: string): Promise<void> {
+    const ctx = await this.getContext(conversationId)
+    const target = normalizeReply(reply)
+    const alreadyClicked = ctx.clickedQuickReplies.some(c => normalizeReply(c) === target)
+    const updated = alreadyClicked
+      ? ctx.clickedQuickReplies
+      : [...ctx.clickedQuickReplies, reply]
+    await this.updateContext(conversationId, {
+      clickedQuickReplies: updated,
+      lastOfferedQuickReplies: undefined,
+    })
+  }
+
+  /**
+   * Reset the clicked-quick-replies log on free-text input so the user
+   * can re-explore the same filters in a new search session.
+   */
+  async clearClickedQuickReplies(conversationId: string): Promise<void> {
+    await this.updateContext(conversationId, {
+      clickedQuickReplies: [],
+      lastOfferedQuickReplies: undefined,
+    })
   }
 
   async closeConversation(conversationId: string): Promise<void> {
