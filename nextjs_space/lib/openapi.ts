@@ -656,6 +656,139 @@ registry.registerPath({
   },
 });
 
+// ─── External Partner API v1 ────────────────────────────────
+// Endpoints expuestos a integradores externos (ERPs, POS, e-commerce)
+// que facturan a través de Volkern con Verifactu.
+//
+// NOTA: el body schema se redeclara LOCALMENTE con `.openapi()` metadata
+// completa. El autoritativo para VALIDACIÓN en runtime sigue siendo
+// `ExternalInvoiceCreateSchema` en `lib/validation/schemas/finance.ts`.
+// Esta duplicación es intencional: `@asteasolutions/zod-to-openapi` v8
+// no maneja bien ZodEffects (`.refine()`) ni `z.coerce.*` cuando el schema
+// cruza límites de módulo. Cualquier cambio en campos/reglas debe
+// replicarse en ambos sitios (cubierto por tests/zod-schemas-v4.test.ts).
+
+const ExternalInvoiceItemOpenAPISchema = registry.register(
+  'ExternalInvoiceItem',
+  z.object({
+    name: z.string().min(1).openapi({ description: 'Nombre / concepto del item', example: 'Servicio de consultoría' }),
+    quantity: z.coerce.number().min(1).default(1).openapi({ description: 'Cantidad (mínimo 1, default 1, acepta string coerced). Debe coincidir 1:1 con ExternalInvoiceCreateSchema.InvoiceItemSchema.quantity.', example: 2 }),
+    price: z.coerce.number().min(0.01).openapi({ description: 'Precio unitario (mínimo 0.01, acepta string coerced). Debe coincidir 1:1 con ExternalInvoiceCreateSchema.InvoiceItemSchema.price.', example: 100 }),
+    taxRate: z.coerce.number().min(0).max(100).default(21).openapi({ description: 'IVA % por línea (0-100, default 21). El total de la línea = quantity * price * (1 + taxRate/100).', example: 21 }),
+  })
+);
+
+const ExternalInvoiceCreateOpenAPISchema = registry.register(
+  'ExternalInvoiceCreate',
+  z.object({
+    leadId: z.string().optional().openapi({
+      description: 'CUID del lead existente. Requerido si no se envía `contactId`. Uno de los dos es obligatorio.',
+      example: 'cm123leadabc456def789ghi',
+    }),
+    contactId: z.string().optional().openapi({
+      description: 'CUID del contacto existente. Requerido si no se envía `leadId`. Uno de los dos es obligatorio.',
+      example: 'cm123contactabc456def789',
+    }),
+    amount: z.coerce.number().positive().openapi({
+      description: 'Importe total de la factura (>0). Acepta string coerced a number (e.g. "750.50" → 750.5). Si envías `items`, este campo es opcional y se calcula del desglose.',
+      example: 750.5,
+    }),
+    currency: z.string().length(3).optional().default('EUR').openapi({
+      description: 'Código de moneda ISO 4217 (3 caracteres, default EUR).',
+      example: 'EUR',
+    }),
+    description: z.string().optional().default('Factura externa').openapi({
+      description: 'Descripción de la factura (default "Factura externa").',
+      example: 'Servicios prestados mayo 2026',
+    }),
+    items: z.array(ExternalInvoiceItemOpenAPISchema).optional().openapi({
+      description: 'Desglose opcional de líneas. Si omites, se crea una sola línea con `amount` y `taxRate=21%`.',
+    }),
+    dueDate: z.string().datetime().optional().openapi({
+      description: 'Fecha de vencimiento ISO 8601. Si se omite, se calcula automáticamente.',
+      example: '2026-06-15T23:59:59Z',
+    }),
+  })
+);
+
+registry.registerPath({
+  method: 'post',
+  path: '/v1/invoices',
+  summary: 'Crear factura (API externa v1)',
+  description:
+    'Crea una factura para un lead o contacto existente. Compatible con Verifactu: la factura se sella y se reporta automáticamente a AEAT.\n\n' +
+    '**Reglas de validación**:\n' +
+    '- `leadId` o `contactId` requerido (al menos uno).\n' +
+    '- `amount` debe ser > 0. Acepta string coerced → number.\n' +
+    '- `currency` exactamente 3 caracteres (default `EUR`).\n' +
+    '- `items` opcional: si se omite, se crea una sola línea con `amount` y `taxRate=21%`.\n\n' +
+    '**Autenticación**: Bearer API Key (`Authorization: Bearer vk_prod_xxx...`). Genera la key en `/dashboard/developers`.',
+  tags: ['External API v1'],
+  security: [{ bearerAuth: [] }],
+  request: {
+    headers: z.object({
+      authorization: z.string().optional().openapi({
+        description: 'Bearer API Key. Formato: `Authorization: Bearer vk_prod_xxx...`',
+        example: 'Bearer vk_prod_abc123...',
+      }),
+      'idempotency-key': z.string().uuid().optional().openapi({
+        description: 'Opcional. UUID v4 idempotency key por invoice. Si repites el request dentro de 24h con la misma key, devolvemos el resultado cacheado sin crear una factura nueva.',
+      }),
+    }),
+    body: {
+      content: { 'application/json': { schema: ExternalInvoiceCreateOpenAPISchema } },
+    },
+  },
+  responses: {
+    201: {
+      description: 'Factura creada y encolada para Verifactu',
+      content: {
+        'application/json': {
+          schema: z.object({
+            success: z.boolean().openapi({ example: true }),
+            message: z.string().openapi({ example: 'Factura creada correctamente' }),
+            invoice: z.object({
+              id: z.string().openapi({ description: 'ID interno Volkern de la factura' }),
+              numero: z.string().openapi({ description: 'Número correlativo', example: 'F-00042' }),
+              fingerprint: z.string().openapi({ description: 'SHA-256 hex que enlaza con la factura anterior (Verifactu chain)' }),
+              status: z.enum(['queued', 'processing', 'accepted_by_aeat', 'rejected_by_aeat']).openapi({
+                description: 'Estado actual. Webhooks (opcionales) emitidos en `invoice.accepted` y `invoice.rejected`.',
+              }),
+              aeat_csv_url: z.string().url().nullable().openapi({
+                description: 'URL al CSV validado por AEAT (se rellena async tras aceptación).',
+              }),
+            }),
+          }),
+        },
+      },
+    },
+    400: { description: 'Datos inválidos (leadId/contactId requerido, amount>0, currency 3 chars, etc.)' },
+    401: { description: 'API key ausente, inválida o revocada' },
+    403: { description: 'Scope insuficiente o límite de plan alcanzado' },
+    409: { description: 'Conflicto por Idempotency-Key reutilizada con payload distinto' },
+    429: { description: 'Rate limit excedido (ver headers `X-RateLimit-*`)' },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/v1/invoices/{id}',
+  summary: 'Consultar estado de factura (API externa v1)',
+  description: 'Devuelve el estado actual y metadatos de una factura previamente creada vía POST /v1/invoices.',
+  tags: ['External API v1'],
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: z.object({
+      id: z.string().openapi({ description: 'ID interno Volkern de la factura', example: 'cm123abc...' }),
+    }),
+  },
+  responses: {
+    200: { description: 'Factura encontrada' },
+    401: { description: 'API key inválida' },
+    404: { description: 'Factura no encontrada (o pertenece a otro tenant)' },
+  },
+});
+
 // ─── Generar Documento ──────────────────────────────────────
 
 const generator = new OpenApiGeneratorV3(registry.definitions);
@@ -711,6 +844,7 @@ Autenticación mediante sesión (NextAuth) o API Key.
     { name: 'Webhooks', description: 'Webhooks de integración (Stripe, Telegram, etc.)' },
     { name: 'Auth', description: 'Autenticación y registro' },
     { name: 'Sistema', description: 'Endpoints de sistema y monitoreo' },
+    { name: 'External API v1', description: 'Endpoints públicos expuestos a integradores externos (ERPs, POS, e-commerce). Autenticación: Bearer API Key.' },
   ],
   // Seguridad: Bearer token o cookie de sesión
   components: {
