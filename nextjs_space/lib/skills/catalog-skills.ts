@@ -538,13 +538,180 @@ export async function buscarCatalogo(input: BuscarCatalogoInput) {
   const resumen = formattedItems.map(i => `• ${i.resumen}`).join('\n');
   const mensaje = `🔍 *Resultados${query ? ` para "${query}"` : ''}* (${total} encontrados):\n\n${resumen}${total > limit ? `\n\n_...y ${total - limit} más. Afina tu búsqueda para ver resultados más específicos._` : ''}`;
 
+  // ═══ 6. Generar quick replies basados en los resultados ═══
+  const quickReplies = generateCatalogQuickReplies(items, total, limit, query, tipo, precioMin, precioMax, categoria, filtrosCustom);
+
   return {
     success: true,
     message: mensaje,
     items: formattedItems,
     total,
     hasMore: total > limit,
+    quickReplies,
   };
+}
+
+// ============== QUICK REPLIES GENERATOR ==============
+
+/**
+ * Genera quick replies (botones sugeridos) basados en los resultados del catálogo
+ * para que el cliente pueda filtrar más sin tener que escribir.
+ *
+ * Estrategia de generación (máx 6 replies, priorizados):
+ * 1. Ciudades/ubicaciones encontradas (hasta 2)
+ * 2. Rangos de precio sugeridos (hasta 2)
+ * 3. Tipos de ítem disponibles (hasta 2)
+ * 4. Categorías disponibles (hasta 1)
+ * 5. Opción "Ver todos" si hay más resultados
+ */
+function generateCatalogQuickReplies(
+  items: Array<{
+    nombre: string;
+    tipo: string;
+    precioBase: number;
+    categorias: string[];
+    customFieldValues: any;
+  }>,
+  total: number,
+  limit: number,
+  currentQuery?: string,
+  currentTipo?: string,
+  currentPrecioMin?: number,
+  currentPrecioMax?: number,
+  currentCategoria?: string,
+  currentFiltrosCustom?: Record<string, string>,
+): string[] {
+  const replies: string[] = [];
+  const MAX_REPLIES = 6;
+
+  // ═══ Extraer ciudades de customFieldValues ═══
+  if (!currentFiltrosCustom?.ciudad) {
+    const ciudades = new Map<string, number>();
+    for (const item of items) {
+      if (item.customFieldValues) {
+        const cv = item.customFieldValues as Record<string, any>;
+        const ciudad = cv.ciudad;
+        if (ciudad && typeof ciudad === 'string') {
+          const ciudadLower = ciudad.trim();
+          ciudades.set(ciudadLower, (ciudades.get(ciudadLower) || 0) + 1);
+        }
+      }
+    }
+
+    // Top 2 ciudades por frecuencia
+    const topCiudades = [...ciudades.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 2);
+
+    for (const [ciudad, count] of topCiudades) {
+      if (replies.length >= MAX_REPLIES) break;
+      const ciudadCapitalizada = ciudad.charAt(0).toUpperCase() + ciudad.slice(1);
+      replies.push(`📍 Solo en ${ciudadCapitalizada} (${count})`);
+    }
+  }
+
+  // ═══ Rangos de precio sugeridos (si no hay filtro de precio) ═══
+  if (currentPrecioMin === undefined && currentPrecioMax === undefined && items.length > 1) {
+    const precios = items.map(i => i.precioBase).filter(p => p > 0).sort((a, b) => a - b);
+
+    if (precios.length >= 2) {
+      const min = precios[0];
+      const max = precios[precios.length - 1];
+      const range = max - min;
+
+      if (range > 0 && replies.length < MAX_REPLIES) {
+        // Bajo: hasta el percentil 33
+        const lowCutoff = precios[Math.floor(precios.length * 0.33)];
+        const midCutoff = precios[Math.floor(precios.length * 0.66)];
+
+        if (lowCutoff > min && lowCutoff !== max) {
+          replies.push(`💰 Hasta ${formatPrice(lowCutoff)}`);
+        }
+        if (midCutoff > lowCutoff && replies.length < MAX_REPLIES && midCutoff !== max) {
+          replies.push(`💰 Entre ${formatPrice(lowCutoff)}-${formatPrice(midCutoff)}`);
+        }
+        if (max > midCutoff && replies.length < MAX_REPLIES && max !== lowCutoff) {
+          replies.push(`💰 Más de ${formatPrice(midCutoff)}`);
+        }
+      } else if (precios.length > 0 && replies.length < MAX_REPLIES) {
+        // Un solo precio o precios iguales - ofrecer por debajo/encima
+        const precio = precios[0];
+        replies.push(`💰 Menos de ${formatPrice(precio * 0.8)}`);
+      }
+    }
+  }
+
+  // ═══ Tipos de ítem disponibles (si no hay filtro de tipo) ═══
+  if (!currentTipo && replies.length < MAX_REPLIES) {
+    const tipos = new Map<string, number>();
+    for (const item of items) {
+      if (item.tipo) {
+        tipos.set(item.tipo, (tipos.get(item.tipo) || 0) + 1);
+      }
+    }
+
+    // Mostrar tipos más frecuentes (hasta 2, omitiendo el más común si es casi todo)
+    const sortedTipos = [...tipos.entries()].sort((a, b) => b[1] - a[1]);
+    const tipoLabels: Record<string, string> = {
+      inmueble: '🏠 Solo inmuebles',
+      servicio: '🔧 Solo servicios',
+      producto_terminado: '📦 Solo productos',
+      materia_prima: '🧱 Solo materias primas',
+      insumo: '⚙️ Solo insumos',
+      cita: '📅 Solo citas',
+      academia: '🎓 Solo academia',
+    };
+
+    for (const [tipo, count] of sortedTipos) {
+      if (replies.length >= MAX_REPLIES) break;
+      // No mostrar si es el único tipo presente
+      if (sortedTipos.length <= 1) break;
+      const label = tipoLabels[tipo] || `📋 Solo ${tipo} (${count})`;
+      if (!replies.some(r => r.includes(`Solo ${tipo}`))) {
+        replies.push(label + (tipoLabels[tipo] ? '' : ''));
+      }
+    }
+  }
+
+  // ═══ Categorías disponibles (si no hay filtro de categoría) ═══
+  if (!currentCategoria && replies.length < MAX_REPLIES) {
+    const cats = new Map<string, number>();
+    for (const item of items) {
+      if (item.categorias) {
+        for (const cat of item.categorias) {
+          cats.set(cat, (cats.get(cat) || 0) + 1);
+        }
+      }
+    }
+
+    const topCat = [...cats.entries()].sort((a, b) => b[1] - a[1])[0];
+    if (topCat && topCat[1] >= 2) {
+      const catCapitalizada = topCat[0].charAt(0).toUpperCase() + topCat[0].slice(1);
+      replies.push(`📂 Cat: ${catCapitalizada} (${topCat[1]})`);
+    }
+  }
+
+  // ═══ Ver todos si hay más resultados de los mostrados ═══
+  if (total > limit && replies.length < MAX_REPLIES) {
+    replies.push('🔍 Ver todos los resultados');
+  }
+
+  // ═══ Limpiar query actual si aplica ═══
+  if (currentQuery && replies.length < MAX_REPLIES) {
+    replies.push('🔄 Nueva búsqueda');
+  }
+
+  return replies.slice(0, MAX_REPLIES);
+}
+
+/**
+ * Formatea un precio de forma legible: 150000 → "150K", 2500 → "2.5K", 50 → "50"
+ */
+function formatPrice(price: number): string {
+  if (price >= 1000000) return `${(price / 1000000).toFixed(1)}M`;
+  if (price >= 10000) return `${Math.round(price / 1000)}K`;
+  if (price >= 1000) return `${(Math.round(price / 100) / 10)}K`;
+  return `${price}`;
 }
 
 // ============== HELPERS ==============
