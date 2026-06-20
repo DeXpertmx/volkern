@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ChatTestWidget } from '@/components/chatbot/ChatTestWidget';
 import { HorariosEditor } from '@/components/chatbot/HorariosEditor';
 import {
@@ -857,16 +858,17 @@ export default function ChatbotPage() {
                   {/* Bulk actions bar */}
                   {kbArticles.length > 0 && (
                     <div className="flex items-center gap-2 p-2 bg-muted/50 rounded-lg">
-                      <select
-                        value={bulkCategory}
-                        onChange={(e) => setBulkCategory(e.target.value)}
-                        className="text-xs border rounded px-2 py-1.5 bg-background"
-                      >
-                        <option value="Todas">Todas las categorías</option>
-                        {[...new Set(kbArticles.map(a => a.category))].sort().map(cat => (
-                          <option key={cat} value={cat}>{cat}</option>
-                        ))}
-                      </select>
+                      <Select value={bulkCategory} onValueChange={setBulkCategory}>
+                        <SelectTrigger className="text-xs h-8 w-[180px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Todas">Todas las categorías</SelectItem>
+                          {[...new Set(kbArticles.map(a => a.category))].sort().map(cat => (
+                            <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <div className="flex-1" />
                       <Button
                         variant="outline"
