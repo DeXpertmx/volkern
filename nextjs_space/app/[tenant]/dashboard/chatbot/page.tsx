@@ -1042,9 +1042,30 @@ export default function ChatbotPage() {
                         ))}
                       </div>
                     )}
-                    <p className="text-xs text-muted-foreground">
-                      Creado: {new Date(kbSelectedArticle.createdAt).toLocaleDateString('es-MX')}
-                    </p>
+                    <div className="space-y-1.5 pt-2 border-t">
+                      <div className="flex items-center gap-2 text-xs">
+                        {kbSelectedArticle.vectorId ? (
+                          <>
+                            <Zap className="h-3 w-3 text-green-600" />
+                            <span className="text-green-600 font-medium">Indexado</span>
+                            <span className="text-muted-foreground truncate" title={kbSelectedArticle.vectorId}>
+                              ({kbSelectedArticle.vectorId.substring(0, 12)}&hellip;)
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <Zap className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-muted-foreground">Sin embedding</span>
+                          </>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Creado: {new Date(kbSelectedArticle.createdAt).toLocaleDateString('es-MX')}
+                        {kbSelectedArticle.updatedAt !== kbSelectedArticle.createdAt && (
+                          <> &middot; Actualizado: {new Date(kbSelectedArticle.updatedAt).toLocaleDateString('es-MX')}</>
+                        )}
+                      </p>
+                    </div>
                   </CardContent>
                 </Card>
               ) : (
