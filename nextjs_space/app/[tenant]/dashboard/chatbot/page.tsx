@@ -287,6 +287,39 @@ export default function ChatbotPage() {
   const publicArticles = kbArticles.filter(a => a.isPublic);
   const privateArticles = kbArticles.filter(a => !a.isPublic);
 
+  // Índice del artículo seleccionado para navegación con teclado
+  const kbSelectedIndex = kbArticles.findIndex(a => a.id === kbSelectedArticle?.id);
+
+  // Scroll al artículo seleccionado
+  useEffect(() => {
+    if (kbSelectedArticle) {
+      document.getElementById(`kb-article-${kbSelectedArticle.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [kbSelectedArticle]);
+
+  // Atajos de teclado: flechas arriba/abajo para navegar entre artículos
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Solo activo en la pestaña Conocimiento
+      if (!document.querySelector('button[value="conocimiento"][data-state="active"]')) return;
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (kbArticles.length === 0) return;
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const nextIdx = kbSelectedIndex < 0 ? 0 : (kbSelectedIndex + 1) % kbArticles.length;
+        setKbSelectedArticle(kbArticles[nextIdx]);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const prevIdx = kbSelectedIndex < 0 ? kbArticles.length - 1 : (kbSelectedIndex - 1 + kbArticles.length) % kbArticles.length;
+        setKbSelectedArticle(kbArticles[prevIdx]);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [kbArticles, kbSelectedIndex]);
+
   const CATEGORY_COLORS: Record<string, string> = {
     FISCAL: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
     ACCOUNTING: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
@@ -911,6 +944,7 @@ export default function ChatbotPage() {
                       {kbArticles.map((article) => (
                         <div
                           key={article.id}
+                          id={`kb-article-${article.id}`}
                           className={`p-4 rounded-lg border cursor-pointer transition-all hover:shadow-md ${
                             kbSelectedArticle?.id === article.id
                               ? 'border-primary bg-primary/5 ring-1 ring-primary'
