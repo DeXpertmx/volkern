@@ -1000,7 +1000,15 @@ export default function ChatbotPage() {
               {kbSelectedArticle ? (
                 <Card key={kbSelectedArticle.id} className="animate-in fade-in-0 slide-in-from-top-2 duration-300">
                   <CardHeader>
-                    <CardTitle className="text-sm font-medium">Vista Previa</CardTitle>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-sm font-medium">Vista Previa</CardTitle>
+                      <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
+                        <a href="/dashboard/knowledge" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1">
+                          <ExternalLink className="h-3 w-3" />
+                          Editar
+                        </a>
+                      </Button>
+                    </div>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <div>
