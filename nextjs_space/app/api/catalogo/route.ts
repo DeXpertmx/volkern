@@ -6,6 +6,7 @@ import { authenticateRequest } from '@/lib/api-key-auth';
 import { getFiscalConfig } from '@/lib/fiscal-engine';
 import { ItemIntegrityService } from '@/lib/security/item-integrity';
 import { checkFeatureLimit } from '@/lib/subscription';
+import { EmbeddingService } from '@/lib/knowledge/embedding-service';
 
 // GET - Listar ítems del catálogo
 export async function GET(req: NextRequest) {
@@ -244,6 +245,32 @@ export async function POST(req: NextRequest) {
     // 🧠 AI Indexing Stub: Si hay documento técnico, solicitar indexación al MCP
     if (media?.documento_tecnico) {
       console.log(`[MCP] Requesting indexing for document: ${media.documento_tecnico} (Item: ${item.id})`);
+    }
+
+    // 🔍 Embedding: Generar si el ítem es visible para el chatbot
+    if (visibleInChatbot) {
+      EmbeddingService.generateForCatalogItem({
+        nombre,
+        descripcion,
+        precioBase: parseFloat(precioBase),
+        moneda: moneda || fiscalConfig.currencyCode,
+        duracionMinutos: duracionMinutos ? parseInt(duracionMinutos) : null,
+        modalidad: modalidad || null,
+        categorias: categorias || [],
+      }).then(vectorId => {
+        if (vectorId) {
+          prisma.catalogoItem.update({
+            where: { id: item.id },
+            data: { vectorId },
+          }).then(() => {
+            console.log(`[Catalogo] ✅ Embedding generado para ítem "${nombre}" (${item.id})`)
+          }).catch(err => {
+            console.warn(`[Catalogo] Error guardando embedding para "${nombre}":`, err)
+          })
+        }
+      }).catch(err => {
+        console.warn(`[Catalogo] Error generando embedding para "${nombre}":`, err)
+      })
     }
 
     return NextResponse.json(item, { status: 201 });

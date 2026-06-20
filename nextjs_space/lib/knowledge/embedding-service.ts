@@ -141,6 +141,107 @@ export class EmbeddingService {
   }
 
   /**
+   * Genera embeddings para ítems del catálogo visibles para el chatbot que aún no tengan vectorId.
+   *
+   * Pipeline:
+   * 1. Consulta CatalogoItem con visibleInChatbot=true, activo=true y vectorId=null
+   * 2. Construye texto: nombre + descripción + precio + categorías
+   * 3. Genera embedding vía generateForArticle (mismo pipeline que KB)
+   * 4. Actualiza el vectorId del ítem
+   *
+   * @param tenantId - ID del tenant (opcional, si no se pasa se procesan todos)
+   * @returns Número de embeddings generados
+   */
+  static async generateCatalogEmbeddings(tenantId?: string): Promise<number> {
+    const prisma = (await import('@/lib/db')).prisma
+
+    const where: any = {
+      visibleInChatbot: true,
+      activo: true,
+      vectorId: null,
+    }
+    if (tenantId) where.tenantId = tenantId
+
+    const items = await prisma.catalogoItem.findMany({
+      where,
+      select: {
+        id: true,
+        nombre: true,
+        descripcion: true,
+        precioBase: true,
+        moneda: true,
+        categorias: true,
+        duracionMinutos: true,
+        modalidad: true,
+      },
+    })
+
+    if (items.length === 0) {
+      console.log('[EmbeddingService] 📦 Sin ítems de catálogo pendientes de embedding')
+      return 0
+    }
+
+    let generated = 0
+
+    for (const item of items) {
+      try {
+        const vectorId = await EmbeddingService.generateForCatalogItem({
+          nombre: item.nombre,
+          descripcion: item.descripcion,
+          precioBase: item.precioBase,
+          moneda: item.moneda || undefined,
+          duracionMinutos: item.duracionMinutos,
+          modalidad: item.modalidad,
+          categorias: item.categorias,
+        })
+
+        if (!vectorId) continue
+
+        await prisma.catalogoItem.update({
+          where: { id: item.id },
+          data: { vectorId },
+        })
+
+        generated++
+        console.log(`[EmbeddingService] ✅ Embedding catálogo: [${item.nombre.substring(0, 50)}]`)
+      } catch (error) {
+        console.warn(`[EmbeddingService] ⚠️ Error generando embedding para "${item.nombre}":`, error)
+      }
+    }
+
+    console.log(`[EmbeddingService] 📦 ${generated} embeddings de catálogo generados (de ${items.length} pendientes)`)
+    return generated
+  }
+
+  /**
+   * Genera embedding para un solo ítem del catálogo.
+   * Útil para triggers en create/update.
+   */
+  static async generateForCatalogItem(item: {
+    nombre: string
+    descripcion?: string | null
+    precioBase: number
+    moneda?: string
+    duracionMinutos?: number | null
+    modalidad?: string | null
+    categorias?: string[]
+  }): Promise<string | null> {
+    try {
+      const contentParts: string[] = []
+      if (item.descripcion) contentParts.push(item.descripcion)
+      contentParts.push(`Precio: ${item.precioBase} ${item.moneda || 'EUR'}`)
+      if (item.duracionMinutos) contentParts.push(`Duración: ${item.duracionMinutos} min`)
+      if (item.modalidad) contentParts.push(`Modalidad: ${item.modalidad}`)
+      if (item.categorias?.length) contentParts.push(`Categorías: ${item.categorias.join(', ')}`)
+
+      return await EmbeddingService.generateForArticle(item.nombre, contentParts.join('. '))
+    } catch (error) {
+      console.warn(`[EmbeddingService] ⚠️ Error generando embedding para catálogo "${item.nombre}":`, error)
+      return null
+    }
+  }
+
+  /**
    * Fallback: búsqueda textual simple cuando no hay embeddings disponibles.
    * Usa contains en título, contenido y tags.
    */

@@ -163,8 +163,9 @@ export class KnowledgeService {
    *
    * Pipeline:
    * 1. Consulta CatalogoItem con visibleInChatbot=true y activo=true
-   * 2. Filtra por coincidencia textual contra nombre, descripcion, categorias, etiquetas
-   * 3. Retorna resultados formateados compatibles con el pipeline de RAG
+   * 2. Si hay items con vectorId, usa búsqueda semántica vía EmbeddingService.searchArticles()
+   * 3. Fallback: búsqueda textual por nombre, descripción, categorías y etiquetas
+   * 4. Retorna resultados formateados compatibles con el pipeline de RAG
    *    (misma estructura que KB articles: { id, title, content, category, tags })
    *
    * El contenido incluye precio, moneda y tipo para que el LLM tenga contexto completo.
@@ -187,39 +188,15 @@ export class KnowledgeService {
         etiquetas: true,
         duracionMinutos: true,
         modalidad: true,
+        vectorId: true,
       },
       orderBy: [{ destacado: 'desc' }, { nombre: 'asc' }],
     })
 
     if (items.length === 0) return []
 
-    const queryLower = query.toLowerCase()
-
-    // Filtrar y rankear por relevancia textual
-    const scored = items.map(item => {
-      let score = 0
-      const nombre = (item.nombre || '').toLowerCase()
-      const descripcion = (item.descripcion || '').toLowerCase()
-      const categorias = (item.categorias || []).join(' ').toLowerCase()
-      const etiquetas = (item.etiquetas || []).join(' ').toLowerCase()
-      const tipo = (item.tipo || '').toLowerCase()
-
-      // Palabras clave de la query
-      const queryWords = queryLower.split(/\s+/).filter(w => w.length > 1)
-
-      for (const word of queryWords) {
-        if (nombre.includes(word)) score += 10
-        if (descripcion.includes(word)) score += 5
-        if (categorias.includes(word)) score += 3
-        if (etiquetas.includes(word)) score += 3
-        if (tipo === word) score += 8
-      }
-
-      // Bonus por match exacto
-      if (nombre === queryLower) score += 20
-      if (nombre.includes(queryLower)) score += 15
-
-      // Construir contenido legible para el LLM
+    // Mapear a formato compatible con searchArticles
+    const articlesForSemantic = items.map(item => {
       const contentParts: string[] = []
       if (item.descripcion) contentParts.push(item.descripcion)
       contentParts.push(`Precio: ${item.precioBase} ${item.moneda || 'EUR'}`)
@@ -233,18 +210,35 @@ export class KnowledgeService {
         content: contentParts.join('. '),
         category: item.tipo,
         tags: [...(item.categorias || []), ...(item.etiquetas || [])],
-        _score: score,
+        vectorId: item.vectorId,
       }
     })
 
-    // Filtrar solo resultados con score > 0 y ordenar por score descendente
-    const relevant = scored
-      .filter(s => s._score > 0)
-      .sort((a, b) => b._score - a._score)
-      .slice(0, 5)
+    const itemsWithEmbeddings = articlesForSemantic.filter(a => a.vectorId)
 
-    // Remover el campo interno _score antes de retornar
-    return relevant.map(({ _score, ...rest }) => rest)
+    // Si hay ítems con embeddings, intentar búsqueda semántica primero
+    if (itemsWithEmbeddings.length > 0) {
+      try {
+        const semanticResults = await EmbeddingService.searchArticles(
+          query,
+          itemsWithEmbeddings,
+          5,
+          0.3
+        )
+
+        if (semanticResults.length > 0) {
+          console.log(`[KnowledgeService] 🔍 Catálogo semántico: "${query.substring(0, 40)}..." → ${semanticResults.length} resultados`)
+          return semanticResults
+        }
+      } catch (error) {
+        console.warn('[KnowledgeService] Búsqueda semántica de catálogo falló, usando fallback textual:', error)
+      }
+    }
+
+    // Fallback: búsqueda textual
+    const textualResults = EmbeddingService.searchTextual(query, articlesForSemantic, 5)
+    console.log(`[KnowledgeService] 🔍 Catálogo textual: "${query.substring(0, 40)}..." → ${textualResults.length} resultados`)
+    return textualResults
   }
 
   /**
