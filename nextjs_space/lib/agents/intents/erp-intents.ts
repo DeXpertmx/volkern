@@ -69,6 +69,20 @@ export const erpIntents: IntentSchema[] = [
     destructive: false
   },
   {
+    name: 'buscar_catalogo',
+    description: 'Buscar en el catálogo de productos/servicios con filtros dinámicos (precio, tipo, ciudad, habitaciones). Ideal para chatbots de inmobiliaria, ecommerce o agencias.',
+    requiredParams: [],
+    optionalParams: ['query', 'tipo', 'precioMin', 'precioMax', 'categoria', 'ciudad', 'habitaciones'],
+    examples: [
+      'busca propiedades en Madrid con 3 habitaciones',
+      'qué servicios de marketing tienen',
+      'muéstrame productos de tipo inmueble por menos de 300000',
+      'busca en el catálogo cafeteras',
+      'qué apartamentos tienen en Barcelona'
+    ],
+    destructive: false
+  },
+  {
     name: 'gestionar_catalogo',
     description: 'Exportar catálogo, ver definiciones o ver ítems del catálogo',
     requiredParams: [],

@@ -698,6 +698,7 @@ export const skills = {
   get_catalog_field_definitions: catalogSkills.getFieldDefinitions,
   get_catalog_item: catalogSkills.getCatalogItem,
   search_catalog: catalogSkills.searchCatalog,
+  buscar_catalogo: catalogSkills.buscarCatalogo,
   
   // WebCreator AI
   generate_landing_draft: webCreatorSkills.generateLandingDraft,
@@ -853,6 +854,7 @@ export function listSkills(): Array<{ name: SkillName; description: string; cate
     { name: 'get_catalog_field_definitions', description: 'Obtener definiciones de campos personalizados del catálogo', category: 'catalog' },
     { name: 'get_catalog_item', description: 'Obtener un ítem del catálogo por ID', category: 'catalog' },
     { name: 'search_catalog', description: 'Buscar en el catálogo con filtros', category: 'catalog' },
+    { name: 'buscar_catalogo', description: 'Buscar en el catálogo con filtros dinámicos (precio, tipo, ciudad) para el chatbot', category: 'catalog' },
     // AI
     { name: 'execute_chatbot_response', description: 'Procesar mensaje del chatbot y responder', category: 'ai' },
     // Advanced composite skills
@@ -950,7 +952,7 @@ export { createTask, completeTask, createNote } from './task-skills';
 export { completeDiagnosis } from './diagnosis-skills';
 export { createBooking, confirmBooking, cancelBooking } from './booking-skills';
 export { createDeal, updateDeal, getDeal, listDeals } from './deal-skills';
-export { exportCatalog, getFieldDefinitions, getCatalogItem, searchCatalog } from './catalog-skills';
+export { exportCatalog, getFieldDefinitions, getCatalogItem, searchCatalog, buscarCatalogo } from './catalog-skills';
 
 // ============== COMPONENTES DE MADUREZ ==============
 

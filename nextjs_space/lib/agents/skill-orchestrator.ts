@@ -89,7 +89,7 @@ const INTENT_TO_SKILL: Record<string, string> = {
   // ─── CRM: Interacciones ───
   'consultar_estado_pedido': 'get_deal',
   'consultar_servicios': 'export_catalog',
-  'consultar_precio': 'search_catalog',
+  'consultar_precio': 'buscar_catalogo',
   'contactar_humano': 'transfer_to_human',
 
   // ─── Finanzas: Facturación & Veri*factu ───
@@ -113,7 +113,8 @@ const INTENT_TO_SKILL: Record<string, string> = {
   'ajustar_stock': 'adjust_stock',
   'consumir_inventario': 'process_inventory_consumption',
   'watchdog_inventario': 'inventory_watchdog',
-  'buscar_producto': 'search_catalog',
+  'buscar_producto': 'buscar_catalogo',
+  'buscar_catalogo': 'buscar_catalogo',
   'gestionar_catalogo': 'export_catalog',
 
   // ─── ERP: Producción & Calidad ───
@@ -672,6 +673,8 @@ export const SkillOrchestratorAgent = {
         'diagnosticos_lead': 'crm',
         'consultar_servicios': 'catalog',
         'consultar_precio': 'catalog',
+        'buscar_producto': 'catalog',
+        'buscar_catalogo': 'catalog',
         'consultar_estado_pedido': 'deals',
         'contactar_humano': 'crm',
 
@@ -768,8 +771,9 @@ export const SkillOrchestratorAgent = {
       'reagendar_cita': '📅 No tienes acceso al módulo de *Citas*. Contacta al administrador.',
       'confirmar_cita': '📅 No tienes acceso al módulo de *Citas*. Contacta al administrador.',
       'consultar_servicios': '📋 No tienes acceso al *Catálogo*. Contacta al administrador.',
-      'consultar_precio': '💰 No tienes acceso al módulo de *Precios*. Contacta al administrador.',
+      'consultar_precio': '📋 No tienes acceso al *Catálogo*. Contacta al administrador.',
       'buscar_producto': '📋 No tienes acceso al *Catálogo*. Contacta al administrador.',
+      'buscar_catalogo': '📋 No tienes acceso al *Catálogo*. Contacta al administrador.',
       'gestionar_catalogo': '📋 No tienes acceso al *Catálogo*. Contacta al administrador.',
       'crear_negocio': '📊 No tienes acceso al *Pipeline de Ventas*. Contacta al administrador.',
       'actualizar_negocio': '📊 No tienes acceso al *Pipeline de Ventas*. Contacta al administrador.',
@@ -899,6 +903,9 @@ Puedo ayudarte con:
 
       // Catálogo
       'export_catalog': 'Exportar catálogo',
+      'consultar_precio': 'Buscar en catálogo',
+      'buscar_producto': 'Buscar en catálogo',
+      'buscar_catalogo': 'Buscar en catálogo',
       'search_catalog': 'Buscar en catálogo',
 
       // Facturación
