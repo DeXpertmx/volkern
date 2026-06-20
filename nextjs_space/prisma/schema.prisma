@@ -3188,6 +3188,7 @@ model CatalogoItem {
   unidad                      String                        @default("unidad")
   activo                      Boolean                       @default(true)
   destacado                   Boolean                       @default(false)
+  visibleInChatbot            Boolean                       @default(false)
   fechaCreacion               DateTime                      @default(now())
   fechaActualizacion          DateTime                      @updatedAt
   customFieldValues           Json?

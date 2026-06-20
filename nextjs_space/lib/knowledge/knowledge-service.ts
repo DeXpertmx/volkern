@@ -159,6 +159,95 @@ export class KnowledgeService {
   }
 
   /**
+   * Busca ítems del catálogo visibles para el chatbot.
+   *
+   * Pipeline:
+   * 1. Consulta CatalogoItem con visibleInChatbot=true y activo=true
+   * 2. Filtra por coincidencia textual contra nombre, descripcion, categorias, etiquetas
+   * 3. Retorna resultados formateados compatibles con el pipeline de RAG
+   *    (misma estructura que KB articles: { id, title, content, category, tags })
+   *
+   * El contenido incluye precio, moneda y tipo para que el LLM tenga contexto completo.
+   */
+  static async searchCatalogItems(tenantId: string, query: string) {
+    const items = await prisma.catalogoItem.findMany({
+      where: {
+        tenantId,
+        activo: true,
+        visibleInChatbot: true,
+      },
+      select: {
+        id: true,
+        nombre: true,
+        descripcion: true,
+        tipo: true,
+        precioBase: true,
+        moneda: true,
+        categorias: true,
+        etiquetas: true,
+        duracionMinutos: true,
+        modalidad: true,
+      },
+      orderBy: [{ destacado: 'desc' }, { nombre: 'asc' }],
+    })
+
+    if (items.length === 0) return []
+
+    const queryLower = query.toLowerCase()
+
+    // Filtrar y rankear por relevancia textual
+    const scored = items.map(item => {
+      let score = 0
+      const nombre = (item.nombre || '').toLowerCase()
+      const descripcion = (item.descripcion || '').toLowerCase()
+      const categorias = (item.categorias || []).join(' ').toLowerCase()
+      const etiquetas = (item.etiquetas || []).join(' ').toLowerCase()
+      const tipo = (item.tipo || '').toLowerCase()
+
+      // Palabras clave de la query
+      const queryWords = queryLower.split(/\s+/).filter(w => w.length > 1)
+
+      for (const word of queryWords) {
+        if (nombre.includes(word)) score += 10
+        if (descripcion.includes(word)) score += 5
+        if (categorias.includes(word)) score += 3
+        if (etiquetas.includes(word)) score += 3
+        if (tipo === word) score += 8
+      }
+
+      // Bonus por match exacto
+      if (nombre === queryLower) score += 20
+      if (nombre.includes(queryLower)) score += 15
+
+      // Construir contenido legible para el LLM
+      const contentParts: string[] = []
+      if (item.descripcion) contentParts.push(item.descripcion)
+      contentParts.push(`Precio: ${item.precioBase} ${item.moneda || 'EUR'}`)
+      if (item.duracionMinutos) contentParts.push(`Duración: ${item.duracionMinutos} min`)
+      if (item.modalidad) contentParts.push(`Modalidad: ${item.modalidad}`)
+      if (item.categorias?.length) contentParts.push(`Categorías: ${item.categorias.join(', ')}`)
+
+      return {
+        id: item.id,
+        title: item.nombre,
+        content: contentParts.join('. '),
+        category: item.tipo,
+        tags: [...(item.categorias || []), ...(item.etiquetas || [])],
+        _score: score,
+      }
+    })
+
+    // Filtrar solo resultados con score > 0 y ordenar por score descendente
+    const relevant = scored
+      .filter(s => s._score > 0)
+      .sort((a, b) => b._score - a._score)
+      .slice(0, 5)
+
+    // Remover el campo interno _score antes de retornar
+    return relevant.map(({ _score, ...rest }) => rest)
+  }
+
+  /**
    * Busca artículos por contexto o tags (Legacy)
    */
   static async searchKnowledge(tenantId: string, query: string) {
