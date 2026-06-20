@@ -1114,6 +1114,7 @@ export default function ChatbotPage() {
                         const EMBEDDING_STALE_MS = 30 * 24 * 60 * 60 * 1000;
                         let isStale = false;
                         let daysStale = 0;
+                        let generatedAt = '';
                         if (kbSelectedArticle.vectorId) {
                           try {
                             const parsed = JSON.parse(kbSelectedArticle.vectorId);
@@ -1121,6 +1122,10 @@ export default function ChatbotPage() {
                               const age = Date.now() - parsed.ts;
                               isStale = age > EMBEDDING_STALE_MS;
                               daysStale = Math.ceil(age / (24 * 60 * 60 * 1000));
+                              generatedAt = new Date(parsed.ts).toLocaleString('es-MX', {
+                                day: 'numeric', month: 'short', year: 'numeric',
+                                hour: '2-digit', minute: '2-digit',
+                              });
                             }
                           } catch {}
                         }
@@ -1137,7 +1142,7 @@ export default function ChatbotPage() {
                               <AlertTriangle className="h-3 w-3 text-amber-500" title={`Embedding desactualizado (+${daysStale} días)`} />
                             )}
                             {hasEmbedding && (
-                              <span className="text-muted-foreground truncate" title={kbSelectedArticle.vectorId!}>
+                              <span className="text-muted-foreground truncate" title={generatedAt || kbSelectedArticle.vectorId!}>
                                 ({kbSelectedArticle.vectorId!.substring(0, 12)}&hellip;)
                               </span>
                             )}
