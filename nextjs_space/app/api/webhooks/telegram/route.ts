@@ -2,6 +2,12 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
+import {
+  buildQuickReplyMarkup,
+  clearReplyMarkup,
+  parseQuickReplyCallback,
+  sendBotMessage,
+} from '@/lib/telegram/quick-replies'
 
 /**
  * Webhook directo de Telegram — pipeline unificado
@@ -12,12 +18,6 @@ import prisma from '@/lib/db'
  * 3. callback_query (qr:...) → quick reply del chatbot (re-envía el texto al pipeline unificado)
  * 4. Mensajes normales → chatbot-service unificado (tool calling + quick replies como inline_keyboard)
  */
-
-// Prefijo para callback_data de quick replies generadas por el chatbot
-const QUICK_REPLY_PREFIX = 'qr:'
-
-// Límite real de Telegram para mensajes de texto (cortamos ligeramente por seguridad)
-const TELEGRAM_MAX_TEXT_LENGTH = 4000
 
 // Timeout para la pipeline unificada (Telegram cierra el webhook a los 30s)
 const PIPELINE_TIMEOUT_MS = 25000
@@ -111,116 +111,7 @@ async function findTelegramContext(chatId: string): Promise<TelegramContext | nu
   return null
 }
 
-/**
- * Envía un mensaje a un chat vía la API oficial de Telegram Bot.
- * Trunca el texto al límite de Telegram para evitar recortes silenciosos.
- * Intenta primero con parse_mode='Markdown' (que renderiza *bold*); si Telegram
- * rechaza el mensaje por el modo, reintenta en texto plano.
- */
-async function sendTelegramMessage(
-  chatId: string,
-  text: string,
-  botToken: string,
-  replyMarkup?: Record<string, unknown>
-): Promise<{ success: boolean; error?: string }> {
-  const url = `https://api.telegram.org/bot${botToken}/sendMessage`
 
-  const safeText =
-    text.length > TELEGRAM_MAX_TEXT_LENGTH
-      ? text.substring(0, TELEGRAM_MAX_TEXT_LENGTH - 3) + '...'
-      : text
-
-  const baseBody: Record<string, unknown> = {
-    chat_id: chatId,
-    text: safeText,
-    parse_mode: 'Markdown',
-  }
-  if (replyMarkup) {
-    baseBody.reply_markup = replyMarkup
-  }
-
-  // Primer intento: con Markdown
-  const first = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(baseBody),
-  })
-
-  if (first.ok) return { success: true }
-
-  // Si falló por el modo de parseo, reintentamos en texto plano
-  const data = await first.json().catch(() => null)
-  const description = data?.description || ''
-  const isParseError =
-    typeof description === 'string' &&
-    (description.includes("can't parse") ||
-      description.includes('parse_mode') ||
-      description.includes('Markdown'))
-
-  if (isParseError) {
-    const { parse_mode, ...plainBody } = baseBody
-    const second = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(plainBody),
-    })
-    if (second.ok) return { success: true }
-    const err2 = await second.json().catch(() => null)
-    console.error('[TelegramWebhook] Error enviando mensaje (plain):', err2?.description || second.statusText)
-    return { success: false, error: err2?.description || 'sendMessage failed' }
-  }
-
-  console.error('[TelegramWebhook] Error enviando mensaje:', description || first.statusText)
-  return { success: false, error: description || 'sendMessage failed' }
-}
-
-/**
- * Limpia el reply_markup de un mensaje (útil tras hacer click en un quick reply).
- */
-async function clearReplyMarkup(
-  chatId: string,
-  messageId: number,
-  botToken: string
-): Promise<void> {
-  const url = `https://api.telegram.org/bot${botToken}/editMessageReplyMarkup`
-  try {
-    await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        message_id: messageId,
-        reply_markup: { inline_keyboard: [] },
-      }),
-    })
-  } catch (err) {
-    console.warn('[TelegramWebhook] No se pudo limpiar reply_markup:', err)
-  }
-}
-
-/**
- * Convierte los quickReplies del chatbot al formato inline_keyboard de Telegram.
- * - Max 8 botones por inline_keyboard (recomendación Telegram).
- * - Texto del botón y callback_data máx 64 bytes (límite Telegram).
- *
- * Para garantizar que el callback round-trippea exactamente el texto visible,
- * truncamos al MISMO límite tanto el título como el callback_data.
- */
-function buildTelegramQuickReplyMarkup(quickReplies: string[]): Record<string, unknown> {
-  // 60 chars para el texto + prefijo "qr:" (3) = 63 < 64 bytes límite Telegram
-  const TEXT_LIMIT = 56
-  const buttons = quickReplies.slice(0, 8).map((reply) => {
-    const safeText =
-      reply.length > TEXT_LIMIT ? reply.substring(0, TEXT_LIMIT - 3) + '...' : reply
-    return [
-      {
-        text: safeText,
-        callback_data: (QUICK_REPLY_PREFIX + safeText).substring(0, 64),
-      },
-    ]
-  })
-  return { inline_keyboard: buttons }
-}
 
 /**
  * Procesa un mensaje (texto del usuario o callback_data de quick reply)
@@ -260,16 +151,16 @@ async function processAndReply(
 
     const replyMarkup =
       result.quickReplies && result.quickReplies.length > 0
-        ? buildTelegramQuickReplyMarkup(result.quickReplies)
+        ? buildQuickReplyMarkup(result.quickReplies)
         : undefined
 
-    await sendTelegramMessage(chatId, replyText, ctx.botToken, replyMarkup)
+    await sendBotMessage(chatId, replyText, ctx.botToken, replyMarkup)
   } catch (error) {
     const isTimeout = error instanceof Error && error.message === 'PIPELINE_TIMEOUT'
     console.error('[TelegramWebhook] Error en processAndReply:', error)
 
     try {
-      await sendTelegramMessage(
+      await sendBotMessage(
         chatId,
         isTimeout
           ? '⏳ Estoy tardando más de lo normal. Por favor, intenta de nuevo en unos segundos.'
@@ -301,9 +192,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true })
     }
 
-      // 1a. Quick reply del chatbot (callback_data empieza con "qr:")
-      if (callback_query.data?.startsWith(QUICK_REPLY_PREFIX)) {
-        const messageText = callback_query.data.substring(QUICK_REPLY_PREFIX.length)
+      // 1a. Quick reply del chatbot (callback_data "qr:<texto>")
+      const messageText = parseQuickReplyCallback(callback_query.data)
+      if (messageText !== null) {
         const chatId = callback_query.message.chat.id.toString()
         const senderName =
           callback_query.from.first_name +
@@ -470,7 +361,7 @@ export async function POST(request: NextRequest) {
           const botToken = creds.bot_token
           if (botToken) {
             try {
-              await sendTelegramMessage(
+              await sendBotMessage(
                 chatId,
                 `✅ *¡Configuración completa!*\n\nAhora recibirás notificaciones de Volkern en este chat.\n\n📱 *Tu Chat ID:* \`${chatId}\``,
                 botToken
@@ -486,7 +377,7 @@ export async function POST(request: NextRequest) {
         const ctx = await findTelegramContext(chatId)
         if (ctx) {
           try {
-            await sendTelegramMessage(
+            await sendBotMessage(
               chatId,
               `⚠️ No se encontró una integración de Telegram activa para vincular tu cuenta.`,
               ctx.botToken
