@@ -1014,6 +1014,9 @@ export default function ChatbotPage() {
                         <Badge variant="secondary" className={`text-xs ${CATEGORY_COLORS[kbSelectedArticle.category] || ''}`}>
                           {kbSelectedArticle.category}
                         </Badge>
+                        <span className={`text-[10px] font-medium ${kbSelectedArticle.isPublic ? 'text-green-600' : 'text-muted-foreground'}`}>
+                          {kbSelectedArticle.isPublic ? 'RAG' : 'PRIV'}
+                        </span>
                         {kbSelectedArticle.isPublic ? (
                           <Badge variant="default" className="text-xs bg-green-600">RAG activo</Badge>
                         ) : (
