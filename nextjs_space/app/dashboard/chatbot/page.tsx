@@ -925,13 +925,17 @@ export default function ChatbotPage() {
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1">
                                 <h4 className="font-semibold text-sm truncate">{article.title}</h4>
-                                <Switch
-                                  checked={article.isPublic}
-                                  onCheckedChange={() => togglePublic(article)}
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="scale-75 shrink-0"
-                                  aria-label={article.isPublic ? 'Hacer privado' : 'Hacer público'}
-                                />
+                                <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                  <span className={`text-[10px] font-medium ${article.isPublic ? 'text-green-600' : 'text-muted-foreground'}`}>
+                                    {article.isPublic ? 'RAG' : 'PRIV'}
+                                  </span>
+                                  <Switch
+                                    checked={article.isPublic}
+                                    onCheckedChange={() => togglePublic(article)}
+                                    className="scale-75"
+                                    aria-label={article.isPublic ? 'Hacer privado' : 'Hacer público'}
+                                  />
+                                </div>
                               </div>
                               <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
                                 {article.content.substring(0, 200)}
