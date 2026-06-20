@@ -122,6 +122,7 @@ export async function POST(req: NextRequest) {
       unidad = 'unidad',
       activo = true,
       destacado = false,
+      visibleInChatbot = false,
       media,
       pricing,
       customFieldValues,
@@ -189,6 +190,7 @@ export async function POST(req: NextRequest) {
         unidad,
         activo,
         destacado,
+        visibleInChatbot,
         // Nuevos campos Fase 1
         customFieldValues: customFieldValues || null,
         categorias: categorias || [],
