@@ -15,6 +15,7 @@ interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  quickReplies?: string[];
 }
 
 export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }: ChatTestWidgetProps) {
@@ -31,8 +32,7 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
 
   if (!activo) return null;
 
-  const sendMessage = async () => {
-    const text = input.trim();
+  const sendText = async (text: string) => {
     if (!text || loading) return;
 
     const userMsg: ChatMessage = { role: 'user', content: text, timestamp: new Date() };
@@ -59,6 +59,7 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
         role: 'assistant',
         content: data.response || 'Sin respuesta',
         timestamp: new Date(),
+        quickReplies: data.quickReplies,
       };
       setMessages(prev => [...prev, assistantMsg]);
     } catch (error) {
@@ -67,6 +68,8 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
       setLoading(false);
     }
   };
+
+  const sendMessage = () => sendText(input.trim());
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -158,6 +161,20 @@ export function ChatTestWidget({ nombreAsistente = 'Asistente', activo = true }:
                   )}
                 </div>
               ))
+            )}
+            {messages.length > 0 && messages[messages.length - 1]?.quickReplies && messages[messages.length - 1].quickReplies!.length > 0 && !loading && (
+              <div className="flex flex-wrap gap-1.5 px-1 mt-1">
+                {messages[messages.length - 1].quickReplies!.map((reply, i) => (
+                  <button
+                    key={i}
+                    onClick={() => sendText(reply)}
+                    disabled={loading}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium bg-primary/10 hover:bg-primary/20 text-primary rounded-full border border-primary/20 hover:border-primary/40 transition-all duration-200 cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {reply}
+                  </button>
+                ))}
+              </div>
             )}
             {loading && (
               <div className="flex gap-2 justify-start">

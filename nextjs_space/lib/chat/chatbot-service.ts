@@ -29,6 +29,7 @@ export interface ChatbotOutput {
   actionData?: Record<string, string>
   error?: string
   fueraHorario?: boolean
+  quickReplies?: string[]
 }
 
 const DEFAULTS = {
@@ -334,10 +335,16 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
         const elapsed = Date.now() - startTime
         console.log(`[ChatbotService] ${channel} skill=${classification.intent} OK en ${elapsed}ms`)
 
+        // Extraer quickReplies del resultado del skill (si existen)
+        const orchestratorQuickReplies: string[] | undefined =
+          executionResult.data?.quickReplies ||
+          executionResult.data?.data?.quickReplies;
+
         return {
           success: true,
           response: finalMessage,
           action,
+          quickReplies: orchestratorQuickReplies,
         }
       }
 
@@ -474,6 +481,8 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
     }]
 
     // Callback que ejecuta buscarCatalogo cuando el LLM lo solicita
+    let catalogQuickReplies: string[] | undefined;
+
     const executeTool = async (toolName: string, toolArgs: Record<string, any>): Promise<string> => {
       if (toolName === 'buscar_catalogo') {
         try {
@@ -494,6 +503,11 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
             filtrosCustom: Object.keys(filtrosCustom).length > 0 ? filtrosCustom : undefined,
             limit: 8,
           })
+
+          // Capturar quickReplies generados
+          if (result.quickReplies && result.quickReplies.length > 0) {
+            catalogQuickReplies = result.quickReplies
+          }
 
           if (result.success && result.message) {
             return result.message
@@ -529,6 +543,7 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
     return {
       success: true,
       response: finalMessage,
+      quickReplies: catalogQuickReplies,
     }
   } catch (error) {
     console.error('[ChatbotService] Error:', error)

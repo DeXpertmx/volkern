@@ -55,6 +55,7 @@ export async function POST(request: NextRequest) {
       response: result.response,
       fueraHorario: result.fueraHorario || false,
       action: result.action || 'ninguna',
+      quickReplies: result.quickReplies,
     });
 
   } catch (error) {
