@@ -3189,6 +3189,7 @@ model CatalogoItem {
   activo                      Boolean                       @default(true)
   destacado                   Boolean                       @default(false)
   visibleInChatbot            Boolean                       @default(false)
+  vectorId                    String?
   fechaCreacion               DateTime                      @default(now())
   fechaActualizacion          DateTime                      @updatedAt
   customFieldValues           Json?

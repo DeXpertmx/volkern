@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
 import { ItemIntegrityService } from '@/lib/security/item-integrity';
+import { EmbeddingService } from '@/lib/knowledge/embedding-service';
 
 // GET - Obtener ítem específico
 export async function GET(
@@ -217,6 +218,57 @@ export async function PATCH(
         }
       },
     });
+
+    // 🔍 Embedding: Actualizar según cambio de visibilidad o contenido
+    const embeddingChanged =
+      visibleInChatbot !== undefined ||
+      nombre !== undefined ||
+      descripcion !== undefined ||
+      precioBase !== undefined ||
+      moneda !== undefined ||
+      categorias !== undefined ||
+      duracionMinutos !== undefined ||
+      modalidad !== undefined
+
+    if (embeddingChanged) {
+      const finalVisible = visibleInChatbot !== undefined ? visibleInChatbot : existing.visibleInChatbot
+
+      if (finalVisible) {
+        // Generar/regenerar embedding (fire-and-forget)
+        EmbeddingService.generateForCatalogItem({
+          nombre: nombre || existing.nombre,
+          descripcion: descripcion !== undefined ? descripcion : existing.descripcion,
+          precioBase: precioBase !== undefined ? parseFloat(precioBase) : existing.precioBase,
+          moneda: moneda || existing.moneda,
+          duracionMinutos: duracionMinutos !== undefined ? (duracionMinutos ? parseInt(duracionMinutos) : null) : existing.duracionMinutos,
+          modalidad: modalidad !== undefined ? (modalidad || null) : existing.modalidad,
+          categorias: categorias || existing.categorias,
+        }).then(vectorId => {
+          if (vectorId) {
+            prisma.catalogoItem.update({
+              where: { id: item.id },
+              data: { vectorId },
+            }).then(() => {
+              console.log(`[Catalogo] ✅ Embedding actualizado para "${item.nombre}"`)
+            }).catch(err => {
+              console.warn(`[Catalogo] Error guardando embedding para "${item.nombre}":`, err)
+            })
+          }
+        }).catch(err => {
+          console.warn(`[Catalogo] Error generando embedding para "${item.nombre}":`, err)
+        })
+      } else {
+        // visibleInChatbot pasó a false: limpiar vectorId
+        prisma.catalogoItem.update({
+          where: { id: item.id },
+          data: { vectorId: null },
+        }).then(() => {
+          console.log(`[Catalogo] 🧹 Embedding limpiado para "${item.nombre}" (ya no visible en chatbot)`)
+        }).catch(err => {
+          console.warn(`[Catalogo] Error limpiando embedding para "${item.nombre}":`, err)
+        })
+      }
+    }
 
     // 🧠 AI Indexing Stub: Si hay documento técnico, solicitar indexación al MCP
     if (media?.documento_tecnico) {
