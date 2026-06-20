@@ -19,7 +19,7 @@ import { useFiscalConfig } from '@/hooks/use-fiscal-config';
 import {
   Plus, Search, Package, Briefcase, Calendar, GraduationCap, Edit2, Trash2,
   Star, Clock, Euro, DollarSign, Tag, Filter, Loader2, Image as ImageIcon,
-  Video, FileText, X, Percent, Layers, Settings2, Upload, ShieldCheck
+  Video, FileText, X, Percent, Layers, Settings2, Upload, ShieldCheck, MessageCircle
 } from 'lucide-react';
 import { ImageUploader } from '@/components/ui/image-uploader';
 
@@ -80,6 +80,7 @@ interface CatalogoItem {
   unidad: string;
   activo: boolean;
   destacado: boolean;
+  visibleInChatbot: boolean;
   // Nuevos campos Fase 1
   customFieldValues: CustomFieldValues | null;
   categorias: string[];
@@ -203,6 +204,7 @@ export default function CatalogoPage() {
     unidad: 'unidad',
     activo: true,
     destacado: false,
+    visibleInChatbot: false,
     isManufactured: false,
     costOfAcquisition: '',
   });
@@ -362,6 +364,7 @@ export default function CatalogoPage() {
       unidad: item.unidad,
       activo: item.activo,
       destacado: item.destacado,
+      visibleInChatbot: item.visibleInChatbot ?? false,
       isManufactured: item.isManufactured,
       costOfAcquisition: item.costOfAcquisition?.toString() || '',
     });
@@ -424,6 +427,7 @@ export default function CatalogoPage() {
       unidad: 'unidad',
       activo: true,
       destacado: false,
+      visibleInChatbot: false,
       isManufactured: false,
       costOfAcquisition: '',
     });
@@ -456,6 +460,7 @@ export default function CatalogoPage() {
         pricing: pricing.tipo !== 'unico' || pricing.descuentos.length > 0 ? pricing : null,
         metadata: Object.keys(metadata).length > 0 ? metadata : null,
         // Onboarding 2.0 / MRP
+        visibleInChatbot: form.visibleInChatbot,
         isManufactured: form.isManufactured,
         costOfAcquisition: parseFloat(form.costOfAcquisition || '0'),
         inventoryConfig: {
@@ -938,6 +943,17 @@ export default function CatalogoPage() {
                       onCheckedChange={(v) => setForm({ ...form, activo: v })}
                     />
                     <Label>Activo</Label>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      checked={form.visibleInChatbot}
+                      onCheckedChange={(v) => setForm({ ...form, visibleInChatbot: v })}
+                    />
+                    <Label className="flex items-center gap-1.5">
+                      <MessageCircle className="h-3.5 w-3.5 text-violet-500" />
+                      Visible en chatbot
+                    </Label>
                   </div>
                 </div>
 

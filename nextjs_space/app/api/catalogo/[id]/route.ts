@@ -88,6 +88,7 @@ export async function PATCH(
       unidad,
       activo,
       destacado,
+      visibleInChatbot,
       media,
       pricing,
       customFieldValues,
@@ -145,6 +146,7 @@ export async function PATCH(
     if (unidad !== undefined) updateData.unidad = unidad;
     if (activo !== undefined) updateData.activo = activo;
     if (destacado !== undefined) updateData.destacado = destacado;
+    if (visibleInChatbot !== undefined) updateData.visibleInChatbot = visibleInChatbot;
     // Nuevos campos Fase 1
     if (customFieldValues !== undefined) updateData.customFieldValues = customFieldValues;
     if (categorias !== undefined) updateData.categorias = categorias;
