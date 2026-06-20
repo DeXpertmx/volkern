@@ -1110,34 +1110,52 @@ export default function ChatbotPage() {
                       </div>
                     )}
                     <div className="space-y-1.5 pt-2 border-t">
-                      <div className="flex items-center gap-2 text-xs">
-                        {kbSelectedArticle.vectorId ? (
-                          <>
-                            <Zap className="h-3 w-3 text-green-600" />
-                            <span className="text-green-600 font-medium">Indexado</span>
-                            <span className="text-muted-foreground truncate" title={kbSelectedArticle.vectorId}>
-                              ({kbSelectedArticle.vectorId.substring(0, 12)}&hellip;)
+                      {(() => {
+                        const EMBEDDING_STALE_MS = 30 * 24 * 60 * 60 * 1000;
+                        let isStale = false;
+                        let daysStale = 0;
+                        if (kbSelectedArticle.vectorId) {
+                          try {
+                            const parsed = JSON.parse(kbSelectedArticle.vectorId);
+                            if (parsed.ts) {
+                              const age = Date.now() - parsed.ts;
+                              isStale = age > EMBEDDING_STALE_MS;
+                              daysStale = Math.ceil(age / (24 * 60 * 60 * 1000));
+                            }
+                          } catch {}
+                        }
+                        const hasEmbedding = !!kbSelectedArticle.vectorId;
+                        const accentColor = hasEmbedding ? (isStale ? 'text-amber-500' : 'text-green-600') : 'text-muted-foreground';
+
+                        return (
+                          <div className="flex items-center gap-2 text-xs">
+                            <Zap className={`h-3 w-3 ${accentColor}`} />
+                            <span className={`font-medium ${accentColor}`}>
+                              {hasEmbedding ? 'Indexado' : 'Sin embedding'}
                             </span>
-                          </>
-                        ) : (
-                          <>
-                            <Zap className="h-3 w-3 text-muted-foreground" />
-                            <span className="text-muted-foreground">Sin embedding</span>
-                          </>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 text-[10px] ml-auto"
-                          disabled={reindexingId === kbSelectedArticle.id}
-                          onClick={(e) => { e.stopPropagation(); reindexArticle(kbSelectedArticle); }}
-                        >
-                          {reindexingId === kbSelectedArticle.id ? (
-                            <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                          ) : null}
-                          Reindexar
-                        </Button>
-                      </div>
+                            {isStale && (
+                              <AlertTriangle className="h-3 w-3 text-amber-500" title={`Embedding desactualizado (+${daysStale} días)`} />
+                            )}
+                            {hasEmbedding && (
+                              <span className="text-muted-foreground truncate" title={kbSelectedArticle.vectorId!}>
+                                ({kbSelectedArticle.vectorId!.substring(0, 12)}&hellip;)
+                              </span>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 text-[10px] ml-auto"
+                              disabled={reindexingId === kbSelectedArticle.id}
+                              onClick={(e) => { e.stopPropagation(); reindexArticle(kbSelectedArticle); }}
+                            >
+                              {reindexingId === kbSelectedArticle.id ? (
+                                <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                              ) : null}
+                              Reindexar
+                            </Button>
+                          </div>
+                        );
+                      })()}
                       <p className="text-xs text-muted-foreground">
                         Creado: {new Date(kbSelectedArticle.createdAt).toLocaleDateString('es-MX')}
                         {kbSelectedArticle.updatedAt !== kbSelectedArticle.createdAt && (
