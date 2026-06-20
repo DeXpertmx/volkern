@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import useSWR from 'swr';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -77,6 +78,22 @@ export default function KnowledgeHubPage() {
   if (activeCategory) queryParams.set('category', activeCategory);
   const queryKey = `/api/knowledge${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
   const { data: articles, isLoading, mutate } = useSWR(queryKey, fetcher);
+
+  // Pre-seleccionar artículo vía query param ?edit={id}
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const editId = searchParams.get('edit');
+    if (!editId) return;
+
+    fetch(`/api/knowledge/${editId}`)
+      .then(res => res.json())
+      .then(article => {
+        if (article && article.id) {
+          openEdit(article);
+        }
+      })
+      .catch(err => console.warn('[Knowledge Hub] No se pudo cargar artículo vía ?edit:', err));
+  }, []);
 
   function resetForm() {
     setFormTitle('');
