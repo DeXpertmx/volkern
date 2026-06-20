@@ -7,6 +7,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "NODE_OPTIONS='--max-old-space-size=8192' npx tsc --noEmit --project tsconfig.check.json",
+    "prebuild": "npm run openapi:generate",
     "prepare": "husky || true",
     "postinstall": "patch-package",
     "test": "vitest run",
@@ -17,7 +18,8 @@
     "test:e2e:tab-sync:ci": "bash scripts/run-e2e-tab-sync-ci.sh",
     "test:e2e": "bash scripts/run-e2e-all.sh",
     "turbo:clean": "rm -rf .turbo node_modules/.cache/turbo",
-    "fix-finanzas-orden": "npx tsx scripts/fix-finanzas-orden.ts"
+    "fix-finanzas-orden": "npx tsx scripts/fix-finanzas-orden.ts",
+    "openapi:generate": "tsx scripts/generate-openapi.mjs"
   },
   "engines": {
     "node": "22.x"
