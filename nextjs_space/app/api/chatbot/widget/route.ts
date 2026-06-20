@@ -131,6 +131,7 @@ export async function POST(request: NextRequest) {
       sessionId: sessionId || uuidv4(),
       fueraHorario: result.fueraHorario || false,
       action: result.action || 'ninguna',
+      quickReplies: result.quickReplies,
     }, { headers: corsHeaders });
 
   } catch (error) {

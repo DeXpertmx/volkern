@@ -10,22 +10,14 @@
 
 import { prisma } from '@/lib/db';
 import { eventBus, EVENTS } from '@/lib/skills/event-bus';
-import { GemmaRouterAgent, DetectedIntent } from './gemma-router';
-import { SkillOrchestratorAgent, ExecutionPlan } from './skill-orchestrator';
-import { ExecutionEngine } from './execution-engine';
-// @ts-expect-error - types not matching actual exports
-// eslint-disable-next-line no-duplicate-imports
-import type { ExecutionResult } from './execution-engine';
-// @ts-expect-error - types not matching actual exports
-import type { ResponseFormatter } from './response-formatter';
 import { ChatbotAuditLogger } from './audit-logger';
 import { SecurityCheckpointAgent } from './security-checkpoint';
-import { ConversationContextAgent } from './conversation-context';
 import { syncOutgoingChatwootMessage } from '@/lib/skills/chatwoot-sync-skill';
 import {
   buildWelcomeButtons,
   buildServicesList,
   buildPostBookingButtons,
+  buildQuickReplyButtons,
   detectInteractiveContext,
 } from '@/lib/messaging/interactive';
 import { processMessage as unifiedProcessMessage } from '@/lib/chat/chatbot-service';
@@ -209,159 +201,54 @@ async function processMessage(payload: ChatwootMessagePayload) {
       return;
     }
 
-    // 2. Obtener o crear contexto de conversación con el agente mejorado
-    const context = await ConversationContextAgent.load({
-      conversationId,
-      userId: user.id,
-      tenantId
-    });
-    
-    // Agregar mensaje del usuario al historial
-    await ConversationContextAgent.addMessage(context, 'user', content);
-
-    // 3. Detectar intent con Gemma (usando resumen del contexto)
-    const contextSummary = ConversationContextAgent.getSummary(context);
-    
-    const intentResult = await GemmaRouterAgent.detectIntent(content, {
-      pendingIntent: contextSummary.pendingIntent,
-      collectedEntities: contextSummary.entities,
-      missingEntities: contextSummary.missing
-    });
-
-    if (!intentResult.success || !intentResult.data) {
-      await logAudit(tenantId, user.id, context, 'unknown', content, undefined, 'ERROR', intentResult.error);
-
-      const fallbackMsg = intentResult.fallbackMessage || '🤔 No entendí bien tu mensaje. ¿Puedes reformularlo?';
-      await sendResponseToChatwoot(tenantId, conversationId, fallbackMsg, payload);
-      return;
-    }
-
-    const { intent, entities, missingEntities, confidence } = intentResult.data;
-
-    // 4. SECURITY: Validar con SecurityCheckpointAgent
-    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
-    if (!tenant) {
-      await sendResponseToChatwoot(tenantId, conversationId, '❌ Error de configuración', payload);
-      return;
-    }
-
-    try {
-      await SecurityCheckpointAgent.validate({
-        user: {
-          id: user.id,
-          tenantId: user.tenantId,
-          role: (user.metadata as any)?.role,
-          metadata: user.metadata
-        },
-        tenant: {
-          id: tenant.id,
-          plan: tenant.plan,
-          estado: tenant.estado
-        },
-        intent,
-        entities
-      });
-    } catch (securityError: any) {
-      console.error('[Gemma] Security validation failed:', securityError.message);
-      await logAudit(tenantId, user.id, context, intent, content, entities, 'BLOCKED_SECURITY', securityError.message);
-      
-      const errorMsg = securityError.message.includes('Rate limit')
-        ? '⏳ Demasiadas solicitudes. Por favor, espera un momento.'
-        : '🔒 No tienes permisos para realizar esta acción.';
-      
-      await sendResponseToChatwoot(tenantId, conversationId, errorMsg, payload);
-      return;
-    }
-
-    // 4b. Loggear intent detectado
-    await logAudit(tenantId, user.id, context, intent, content, entities, 'PENDING');
-
-    // 5. Actualizar contexto con el intent detectado
-    await ConversationContextAgent.updateIntent(context, intent, entities, missingEntities);
-
-    // 6. Si hay missing entities, pedir la faltante (flujo multi-turno)
-    if (missingEntities.length > 0) {
-      const nextEntity = missingEntities[0];
-      const prompt = getPromptForEntity(nextEntity);
-
-      await sendResponseToChatwoot(tenantId, conversationId, prompt, payload);
-      return;
-    }
-
-    // 7. Construir plan de ejecución
-    const planResult = await (SkillOrchestratorAgent as any).buildExecutionPlan(
-      intentResult.data,
-      { ...context, userId: user.id } as any,
-      tenantId
-    );
-
-    if (!planResult.success) {
-      await logAudit(tenantId, user.id, context, intent, content, entities, 'ERROR', planResult.error);
-      await sendResponseToChatwoot(tenantId, conversationId, planResult.error || 'Error desconocido', payload);
-      return;
-    }
-
-    // Si hay response en lugar de plan, retornarlo
-    if (planResult.response) {
-      // Limpiar contexto (intento completado)
-      await ConversationContextAgent.update(context, {
-        pendingIntent: undefined,
-        missingEntities: []
-      });
-
-      await logAudit(tenantId, user.id, context, intent, content, entities, 'SUCCESS', undefined, planResult.response);
-      await sendResponseToChatwoot(tenantId, conversationId, planResult.response, payload);
-      return;
-    }
-
-    if (!planResult.plan) {
-      await sendResponseToChatwoot(tenantId, conversationId, '❌ No pude procesar tu solicitud.', payload);
-      return;
-    }
-
-    // 8. Ejecutar el plan
-    const executionResult = await (ExecutionEngine as any).execute(
-      planResult.plan,
-      {
-        tenantId,
-        userId: user.id,
-        telegramUserId: telegramChatId,
-        sessionId: conversationId
-      }
-    );
-
-    // 9. Formatear y enviar respuesta
-    let responseText: string;
-
-    if (executionResult.success) {
-      responseText = (ExecutionEngine as any).formatSkillResult(planResult.plan.skillName, executionResult.data);
-      // Limpiar contexto (intento completado)
-      await ConversationContextAgent.update(context, {
-        pendingIntent: undefined,
-        missingEntities: []
-      });
-    } else {
-      responseText = executionResult.error || '❌ Ocurrió un error al procesar tu solicitud.';
-    }
-
-    // Agregar respuesta al historial
-    await ConversationContextAgent.addMessage(context, 'assistant', responseText);
-
-    // 10. Enviar respuesta
-    await sendResponseToChatwoot(tenantId, conversationId, responseText, payload);
-
-    // 11. Loggear resultado final
-    await logAudit(
+    // 2. Usar el pipeline unificado (mismo que WhatsApp)
+    const result = await unifiedProcessMessage({
       tenantId,
-      user.id,
-      context,
-      intent,
-      content,
-      entities,
-      executionResult.success ? 'SUCCESS' : 'ERROR',
-      executionResult.error,
-      responseText
-    );
+      message: content,
+      channel: 'telegram',
+      contactName: metadata?.contact?.name || user.metadata?.telegram?.firstName,
+      contactPhone: metadata?.contact?.phone || undefined,
+      contactEmail: metadata?.contact?.email || undefined,
+      userId: user.id,
+      conversationId,
+    });
+
+    if (!result.success) {
+      if (result.error !== 'rate_limit') {
+        await logAudit(tenantId, user.id, { conversationId }, 'consulta_general', content, undefined, 'ERROR', result.error);
+        await sendResponseToChatwoot(tenantId, conversationId, result.response || 'Lo siento, no pude procesar tu mensaje.', payload);
+      }
+      return;
+    }
+
+    if (result.fueraHorario && result.response) {
+      await sendResponseToChatwoot(tenantId, conversationId, result.response, payload);
+      return;
+    }
+
+    // 3. Convertir quickReplies a botones interactivos para Telegram
+    let interactiveData: { contentType: string; contentAttributes: Record<string, any> } | undefined;
+    if (result.quickReplies && result.quickReplies.length > 0) {
+      const buttons = result.quickReplies.slice(0, 3).map((reply, i) => ({
+        id: `qr_${i}`,
+        title: reply.length > 20 ? reply.substring(0, 17) + '...' : reply,
+        type: 'reply' as const,
+      }));
+      interactiveData = buildQuickReplyButtons(
+        result.response.length > 900 ? result.response.substring(0, 897) + '...' : result.response,
+        buttons,
+        undefined,
+        'Toca una opción para filtrar'
+      );
+    }
+
+    // 4. Enviar respuesta
+    await sendResponseToChatwoot(tenantId, conversationId, result.response, payload, interactiveData);
+
+    // 5. Loggear resultado
+    await logAudit(tenantId, user.id, { conversationId }, result.response ? 'success' : 'consulta_general', content, undefined, 'SUCCESS', undefined, result.response);
+
+    console.log('[Gemma/Telegram] ✅ Respuesta enviada vía pipeline unificado', interactiveData ? '(interactiva)' : '');
 
   } catch (error) {
     console.error('[Gemma] Error fatal:', error);
@@ -430,7 +317,20 @@ async function processWhatsAppMessage(payload: ChatwootMessagePayload) {
     const interactiveCtx = detectInteractiveContext(content, result.response, services.length > 0);
     let interactiveData: { contentType: string; contentAttributes: Record<string, any> } | undefined;
 
-    if (interactiveCtx.showWelcome) {
+    // Prioridad: quick replies del catálogo > contexto interactivo
+    if (result.quickReplies && result.quickReplies.length > 0) {
+      const buttons = result.quickReplies.slice(0, 3).map((reply, i) => ({
+        id: `qr_${i}`,
+        title: reply.length > 20 ? reply.substring(0, 17) + '...' : reply,
+        type: 'reply' as const,
+      }));
+      interactiveData = buildQuickReplyButtons(
+        result.response.length > 900 ? result.response.substring(0, 897) + '...' : result.response,
+        buttons,
+        undefined,
+        'Toca una opción para filtrar'
+      );
+    } else if (interactiveCtx.showWelcome) {
       interactiveData = buildWelcomeButtons(tenant?.nombre || '', 'Asistente Virtual');
     } else if (interactiveCtx.showServices && services.length > 0) {
       interactiveData = buildServicesList(services as any, tenant?.nombre || '');
@@ -585,18 +485,6 @@ async function sendFallbackResponse(
   } catch (error) {
     console.error('[Gemma] Error enviando fallback response:', error);
   }
-}
-
-function getPromptForEntity(entity: string): string {
-  const prompts: Record<string, string> = {
-    date: '📅 ¿Para qué fecha te gustaría? (puedes decir "mañana", "hoy", o una fecha específica como "15/05")',
-    time: '⏰ ¿A qué hora te viene bien? (por ejemplo, 10:00, 14:30)',
-    service: '📋 ¿Qué servicio necesitas?',
-    customer_name: '👤 ¿Cuál es tu nombre?',
-    phone: '📱 ¿Cuál es tu número de teléfono?',
-    email: '📧 ¿Cuál es tu correo electrónico?'
-  };
-  return prompts[entity] || `❓ ¿Podrías proporcionarme ${entity}?`;
 }
 
 // ============================================================

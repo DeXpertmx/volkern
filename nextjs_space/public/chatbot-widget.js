@@ -281,6 +281,38 @@
       fill: white;
     }
 
+    .volkern-quick-replies {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 4px 0 8px 0;
+    }
+
+    .volkern-quick-reply-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 500;
+      background: ${customColor}15;
+      color: ${customColor};
+      border: 1px solid ${customColor}30;
+      border-radius: 16px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .volkern-quick-reply-chip:hover {
+      background: ${customColor}25;
+      border-color: ${customColor}50;
+      transform: scale(1.02);
+    }
+
+    .volkern-quick-reply-chip:active {
+      transform: scale(0.97);
+    }
+
     #volkern-powered {
       text-align: center;
       padding: 8px;
@@ -399,9 +431,13 @@
   }
 
   // Agregar mensaje a la UI
-  function addMessage(role, content) {
-    messages.push({ role, content });
+  function addMessage(role, content, quickReplies) {
+    messages.push({ role, content, quickReplies });
     const messagesContainer = document.getElementById('volkern-chat-messages');
+    
+    // Limpiar quick replies anteriores
+    const oldReplies = messagesContainer.querySelectorAll('.volkern-quick-replies');
+    oldReplies.forEach(el => el.remove());
     
     const messageEl = document.createElement('div');
     messageEl.className = 'volkern-message ' + role;
@@ -413,6 +449,27 @@
     `;
     
     messagesContainer.appendChild(messageEl);
+    
+    // Agregar quick replies si existen
+    if (quickReplies && quickReplies.length > 0) {
+      const repliesEl = document.createElement('div');
+      repliesEl.className = 'volkern-quick-replies';
+      
+      quickReplies.forEach(function(reply) {
+        const chip = document.createElement('button');
+        chip.className = 'volkern-quick-reply-chip';
+        chip.textContent = reply;
+        chip.addEventListener('click', function() {
+          if (isLoading) return;
+          addMessage('user', reply);
+          sendTextMessage(reply);
+        });
+        repliesEl.appendChild(chip);
+      });
+      
+      messagesContainer.appendChild(repliesEl);
+    }
+    
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
   }
 
@@ -438,6 +495,45 @@
   function hideTyping() {
     const typingEl = document.getElementById('volkern-typing-indicator');
     if (typingEl) typingEl.remove();
+  }
+
+  // Enviar texto como mensaje (usado por quick replies)
+  async function sendTextMessage(text) {
+    if (!text || isLoading) return;
+    isLoading = true;
+    showTyping();
+    
+    try {
+      const response = await fetch(WIDGET_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Widget-Key': widgetKey
+        },
+        body: JSON.stringify({
+          message: text,
+          sessionId,
+          conversationHistory: messages.slice(-8)
+        })
+      });
+      
+      const data = await response.json();
+      
+      hideTyping();
+      
+      if (data.success && data.response) {
+        addMessage('assistant', data.response, data.quickReplies);
+        if (data.sessionId) sessionId = data.sessionId;
+      } else {
+        addMessage('assistant', 'Lo siento, hubo un error. Por favor intenta de nuevo.');
+      }
+    } catch (error) {
+      hideTyping();
+      addMessage('assistant', 'Error de conexión. Por favor intenta de nuevo.');
+      console.error('Volkern Widget: Error al enviar mensaje', error);
+    } finally {
+      isLoading = false;
+    }
   }
 
   // Enviar mensaje
@@ -471,7 +567,7 @@
       hideTyping();
       
       if (data.success && data.response) {
-        addMessage('assistant', data.response);
+        addMessage('assistant', data.response, data.quickReplies);
         if (data.sessionId) sessionId = data.sessionId;
       } else {
         addMessage('assistant', 'Lo siento, hubo un error. Por favor intenta de nuevo.');
