@@ -1012,11 +1012,6 @@ export default function ChatbotPage() {
                         <span className={`text-[10px] font-medium ${kbSelectedArticle.isPublic ? 'text-green-600' : 'text-muted-foreground'}`}>
                           {kbSelectedArticle.isPublic ? 'RAG' : 'PRIV'}
                         </span>
-                        {kbSelectedArticle.isPublic ? (
-                          <Badge variant="default" className="text-xs bg-green-600">RAG activo</Badge>
-                        ) : (
-                          <Badge variant="outline" className="text-xs">No disponible para RAG</Badge>
-                        )}
                       </div>
                     </div>
                     <div className="bg-muted rounded-lg p-3 max-h-[300px] overflow-y-auto">
