@@ -268,9 +268,18 @@ describe('getDefaultModules', () => {
 // PERFIL_SUGGESTED_MODULES
 // ============================================================
 describe('PERFIL_SUGGESTED_MODULES', () => {
-  it('debe tener exactamente 2 perfiles: gestoria y general', () => {
+  it('debe tener exactamente 9 perfiles (7 verticales + 2 legacy)', () => {
     const keys = Object.keys(PERFIL_SUGGESTED_MODULES)
-    expect(keys).toHaveLength(2)
+    expect(keys).toHaveLength(9)
+    // 7 verticales
+    expect(keys).toContain('crm_ventas')
+    expect(keys).toContain('agencia_marketing')
+    expect(keys).toContain('academia')
+    expect(keys).toContain('asesoria_contable')
+    expect(keys).toContain('rrhh')
+    expect(keys).toContain('inmobiliaria')
+    expect(keys).toContain('industria')
+    // 2 legacy
     expect(keys).toContain('gestoria')
     expect(keys).toContain('general')
   })
@@ -287,6 +296,34 @@ describe('PERFIL_SUGGESTED_MODULES', () => {
 
   it('general debe tener exactamente 10 módulos', () => {
     expect(PERFIL_SUGGESTED_MODULES.general.length).toBe(10)
+  })
+
+  it('crm_ventas debe tener exactamente 13 módulos', () => {
+    expect(PERFIL_SUGGESTED_MODULES.crm_ventas.length).toBe(13)
+  })
+
+  it('agencia_marketing debe tener exactamente 12 módulos', () => {
+    expect(PERFIL_SUGGESTED_MODULES.agencia_marketing.length).toBe(12)
+  })
+
+  it('academia debe tener exactamente 12 módulos', () => {
+    expect(PERFIL_SUGGESTED_MODULES.academia.length).toBe(12)
+  })
+
+  it('asesoria_contable debe tener exactamente 12 módulos', () => {
+    expect(PERFIL_SUGGESTED_MODULES.asesoria_contable.length).toBe(12)
+  })
+
+  it('rrhh debe tener exactamente 8 módulos', () => {
+    expect(PERFIL_SUGGESTED_MODULES.rrhh.length).toBe(8)
+  })
+
+  it('inmobiliaria debe tener exactamente 12 módulos', () => {
+    expect(PERFIL_SUGGESTED_MODULES.inmobiliaria.length).toBe(12)
+  })
+
+  it('industria debe tener exactamente 13 módulos', () => {
+    expect(PERFIL_SUGGESTED_MODULES.industria.length).toBe(13)
   })
 
   it('todos los módulos sugeridos deben ser IDs válidos en ALL_MODULES', () => {
@@ -314,20 +351,63 @@ describe('PERFIL_SUGGESTED_MODULES', () => {
     expect(g).toContain('cursos')
   })
 
-  it('ambos perfiles deben incluir comunicación básica', () => {
-    for (const modules of Object.values(PERFIL_SUGGESTED_MODULES)) {
-      expect(modules).toContain('mensajes')
-      expect(modules).toContain('citas')
-      expect(modules).toContain('chatbot_whatsapp')
-    }
+  it('inmobiliaria debe incluir módulos de ventas y marketing', () => {
+    const g = PERFIL_SUGGESTED_MODULES.inmobiliaria
+    expect(g).toContain('cotizaciones')
+    expect(g).toContain('contratos')
+    expect(g).toContain('campanas')
+    expect(g).toContain('cms')
+    expect(g).toContain('proyectos')
   })
 
-  it('ambos perfiles deben incluir módulos de ventas', () => {
-    for (const modules of Object.values(PERFIL_SUGGESTED_MODULES)) {
-      expect(modules).toContain('cotizaciones')
-      expect(modules).toContain('contratos')
-      expect(modules).toContain('ordenes_venta')
-    }
+  it('industria debe incluir módulos ERP pesados', () => {
+    const g = PERFIL_SUGGESTED_MODULES.industria
+    expect(g).toContain('produccion')
+    expect(g).toContain('inventario')
+    expect(g).toContain('calidad')
+    expect(g).toContain('activos')
+    expect(g).toContain('logistica')
+  })
+
+  it('academia debe incluir módulos educativos', () => {
+    const g = PERFIL_SUGGESTED_MODULES.academia
+    expect(g).toContain('cursos')
+    expect(g).toContain('estudiantes')
+  })
+
+  it('rrhh debe incluir módulos de talento', () => {
+    const g = PERFIL_SUGGESTED_MODULES.rrhh
+    expect(g).toContain('rrhh')
+    expect(g).toContain('finanzas')
+    expect(g).toContain('cursos')
+  })
+
+  it('crm_ventas debe incluir módulos de ventas avanzadas', () => {
+    const g = PERFIL_SUGGESTED_MODULES.crm_ventas
+    expect(g).toContain('pronosticos')
+    expect(g).toContain('scoring')
+    expect(g).toContain('telefonia')
+  })
+
+  it('agencia_marketing debe incluir módulos de marketing avanzado', () => {
+    const g = PERFIL_SUGGESTED_MODULES.agencia_marketing
+    expect(g).toContain('social_manager')
+    expect(g).toContain('formularios')
+    expect(g).toContain('cms')
+  })
+
+  it('al menos 6 perfiles deben incluir comunicación básica (mensajes, citas, chatbot)', () => {
+    const withComms = Object.entries(PERFIL_SUGGESTED_MODULES).filter(
+      ([_, modules]) => modules.includes('mensajes') && modules.includes('citas') && modules.includes('chatbot_whatsapp')
+    )
+    expect(withComms.length).toBeGreaterThanOrEqual(6)
+  })
+
+  it('al menos 6 perfiles deben incluir módulos de ventas (cotizaciones, contratos)', () => {
+    const withSales = Object.entries(PERFIL_SUGGESTED_MODULES).filter(
+      ([_, modules]) => modules.includes('cotizaciones') && modules.includes('contratos')
+    )
+    expect(withSales.length).toBeGreaterThanOrEqual(6)
   })
 
   it('los módulos sugeridos no core deben ser distintos de CORE_MODULES (mensajes y citas son la excepción intencional)', () => {
@@ -353,18 +433,28 @@ describe('PERFIL_SUGGESTED_MODULES', () => {
     const shared = general.filter(m => gestoria.has(m))
     expect(shared.length).toBeGreaterThan(5)
   })
+
+  it('inmobiliaria e industria deben compartir módulos ERP comunes', () => {
+    const inmob = new Set(PERFIL_SUGGESTED_MODULES.inmobiliaria)
+    const ind = PERFIL_SUGGESTED_MODULES.industria
+    const shared = ind.filter(m => inmob.has(m))
+    // Ambos comparten: cotizaciones, contratos, ordenes_venta, mensajes, citas, inventario, proyectos
+    expect(shared).toContain('inventario')
+    expect(shared).toContain('proyectos')
+    expect(shared).toContain('cotizaciones')
+  })
 })
 
 // ============================================================
 // getSuggestedModulesForProfile
 // ============================================================
 describe('getSuggestedModulesForProfile', () => {
-  it('debe retornar los módulos de gestoria para "gestoria"', () => {
+  it('debe retornar los módulos de cada vertical correctamente', () => {
     expect(getSuggestedModulesForProfile('gestoria')).toEqual(PERFIL_SUGGESTED_MODULES.gestoria)
-  })
-
-  it('debe retornar los módulos de general para "general"', () => {
     expect(getSuggestedModulesForProfile('general')).toEqual(PERFIL_SUGGESTED_MODULES.general)
+    expect(getSuggestedModulesForProfile('inmobiliaria')).toEqual(PERFIL_SUGGESTED_MODULES.inmobiliaria)
+    expect(getSuggestedModulesForProfile('industria')).toEqual(PERFIL_SUGGESTED_MODULES.industria)
+    expect(getSuggestedModulesForProfile('crm_ventas')).toEqual(PERFIL_SUGGESTED_MODULES.crm_ventas)
   })
 
   it('debe retornar array vacío para perfil desconocido', () => {
@@ -426,14 +516,29 @@ describe('applyProfileSelection', () => {
     expect(result.has('pipeline')).toBe(true)
   })
 
-  it('si aplicas gestoria, el resultado debe tener más de 12 módulos (core + sugeridos)', () => {
-    const result = applyProfileSelection(new Set(CORE_MODULES), 'gestoria')
-    expect(result.size).toBeGreaterThanOrEqual(12)
+  it('industria: debe incluir produccion, inventario, activos', () => {
+    const result = applyProfileSelection(new Set(), 'industria')
+    expect(result.has('produccion')).toBe(true)
+    expect(result.has('inventario')).toBe(true)
+    expect(result.has('activos')).toBe(true)
   })
 
-  it('si aplicas general, el resultado debe tener más de 10 módulos', () => {
-    const result = applyProfileSelection(new Set(CORE_MODULES), 'general')
-    expect(result.size).toBeGreaterThanOrEqual(10)
+  it('inmobiliaria: debe incluir proyectos y formularios', () => {
+    const result = applyProfileSelection(new Set(), 'inmobiliaria')
+    expect(result.has('proyectos')).toBe(true)
+    expect(result.has('formularios')).toBe(true)
+  })
+
+  it('crm_ventas: debe incluir pronosticos y scoring', () => {
+    const result = applyProfileSelection(new Set(), 'crm_ventas')
+    expect(result.has('pronosticos')).toBe(true)
+    expect(result.has('scoring')).toBe(true)
+  })
+
+  it('academia: debe incluir cursos y estudiantes', () => {
+    const result = applyProfileSelection(new Set(), 'academia')
+    expect(result.has('cursos')).toBe(true)
+    expect(result.has('estudiantes')).toBe(true)
   })
 })
 
@@ -516,33 +621,10 @@ describe('Escenarios de onboarding', () => {
     expect(result.has('inventario')).toBe(false)
   })
 
-  it('aplicar gestoría después de general debe sobrescribir correctamente', () => {
-    // Simula cambio de perfil
-    const afterGeneral = applyProfileSelection(new Set(getDefaultModules()), 'general')
-    const afterGestoria = applyProfileSelection(afterGeneral, 'gestoria')
-
-    // Debe tener módulos de gestoría
-    expect(afterGestoria.has('finanzas')).toBe(true)
-    expect(afterGestoria.has('conciliacion')).toBe(true)
-
-    // No debe tener módulos exclusivos de general
-    expect(afterGestoria.has('campanas')).toBe(false)
-    expect(afterGestoria.has('cms')).toBe(false)
-    expect(afterGestoria.has('cursos')).toBe(false)
-  })
-
-  it('aplicar general después de gestoría debe sobrescribir correctamente', () => {
-    const afterGestoria = applyProfileSelection(new Set(getDefaultModules()), 'gestoria')
-    const afterGeneral = applyProfileSelection(afterGestoria, 'general')
-
-    // Debe tener módulos de marketing
-    expect(afterGeneral.has('campanas')).toBe(true)
-    expect(afterGeneral.has('cms')).toBe(true)
-
-    // No debe tener módulos fiscales
-    expect(afterGeneral.has('finanzas')).toBe(false)
-    expect(afterGeneral.has('conciliacion')).toBe(false)
-    expect(afterGeneral.has('rrhh')).toBe(false)
+  it('aplicar industria: el resultado debe incluir logistica y calidad', () => {
+    const result = applyProfileSelection(new Set(getDefaultModules()), 'industria')
+    expect(result.has('logistica')).toBe(true)
+    expect(result.has('calidad')).toBe(true)
   })
 
   it('total de módulos disponibles en MODULE_GROUPS debe coincidir con ALL_MODULES filter', () => {

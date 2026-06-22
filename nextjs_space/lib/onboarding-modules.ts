@@ -97,6 +97,53 @@ export const MODULE_GROUPS: ModuleGroup[] = [
 ]
 
 export const PERFIL_SUGGESTED_MODULES: Record<string, string[]> = {
+  // ─── Verticales ──────────────────────────────────────────────────────────
+  crm_ventas: [
+    'cotizaciones', 'contratos', 'ordenes_venta', 'pronosticos', 'scoring',
+    'mensajes', 'citas', 'chatbot_whatsapp', 'telefonia', 'catalogo',
+    'campanas', 'email_marketing',
+    'automatizaciones',
+  ],
+  agencia_marketing: [
+    'campanas', 'email_marketing', 'cms', 'social_manager', 'formularios',
+    'mensajes', 'citas', 'chatbot_whatsapp',
+    'cotizaciones', 'contratos',
+    'cursos',
+    'automatizaciones',
+  ],
+  academia: [
+    'cursos', 'estudiantes',
+    'mensajes', 'citas', 'chatbot_whatsapp',
+    'campanas', 'email_marketing', 'cms', 'formularios',
+    'cotizaciones', 'contratos', 'ordenes_venta',
+  ],
+  asesoria_contable: [
+    'finanzas', 'conciliacion', 'rrhh',
+    'citas', 'mensajes', 'chatbot_whatsapp', 'catalogo',
+    'cotizaciones', 'contratos', 'ordenes_venta',
+    'inventario', 'proyectos',
+  ],
+  rrhh: [
+    'rrhh', 'finanzas',
+    'mensajes', 'citas', 'chatbot_whatsapp',
+    'cursos',
+    'contratos',
+    'formularios',
+  ],
+  inmobiliaria: [
+    'cotizaciones', 'contratos', 'ordenes_venta',
+    'mensajes', 'citas', 'chatbot_whatsapp',
+    'campanas', 'email_marketing', 'cms', 'formularios',
+    'proyectos', 'inventario',
+  ],
+  industria: [
+    'produccion', 'inventario', 'proyectos', 'calidad', 'activos', 'logistica',
+    'finanzas', 'conciliacion',
+    'mensajes', 'citas',
+    'cotizaciones', 'contratos', 'ordenes_venta',
+  ],
+
+  // ─── Legacy (mantener compatibilidad) ────────────────────────────────────
   gestoria: [
     'finanzas', 'conciliacion', 'rrhh', 'citas', 'mensajes',
     'chatbot_whatsapp', 'catalogo', 'cotizaciones', 'contratos',
