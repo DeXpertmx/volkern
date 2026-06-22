@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Volkern Partner API — Integración SaaS-a-SaaS RRHH</title>
+  <meta name="description" content="Documentación de integración de la Volkern Partner API para Restauranteros SaaS. Endpoints REST para marcajes de asistencia, gestión de empleados, cálculo de nóminas y envío AEAT vía Verifactu.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://docs.volkern.app/api/partner">
+  <style>
+    :root {
+      --bg: #ffffff;
+      --text: #1a1a2e;
+      --heading: #0f172a;
+      --border: #e2e8f0;
+      --code-bg: #f1f5f9;
+      --pre-bg: #1e293b;
+      --pre-text: #e2e8f0;
+      --link: #2563eb;
+      --link-hover: #1d4ed8;
+      --blockquote-bg: #eff6ff;
+      --blockquote-border: #60a5fa;
+      --blockquote-text: #1e40af;
+      --th-bg: #f8fafc;
+      --sidebar-bg: #f8fafc;
+      --sidebar-link: #475569;
+      --sidebar-active: #2563eb;
+      --badge-bg: #dbeafe;
+      --badge-text: #1e40af;
+      --note-bg: #fefce8;
+      --note-border: #facc15;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      font-size: 15px;
+      line-height: 1.7;
+      color: var(--text);
+      background: var(--bg);
+      display: flex;
+      min-height: 100vh;
+    }
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 260px;
+      min-width: 260px;
+      background: var(--sidebar-bg);
+      border-right: 1px solid var(--border);
+      padding: 24px 16px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      font-size: 13px;
+    }
+    .sidebar h2 {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #94a3b8;
+      margin-bottom: 16px;
+      font-weight: 700;
+    }
+    .sidebar a {
+      display: block;
+      color: var(--sidebar-link);
+      text-decoration: none;
+      padding: 4px 8px;
+      border-radius: 4px;
+      margin-bottom: 2px;
+      transition: background 0.15s;
+    }
+    .sidebar a:hover { background: #e2e8f0; }
+    .sidebar a.h2 { padding-left: 8px; font-weight: 600; margin-top: 8px; }
+    .sidebar a.h3 { padding-left: 20px; }
+    .sidebar a.h4 { padding-left: 32px; font-size: 12px; color: #94a3b8; }
+    /* ── Main ── */
+    .main {
+      flex: 1;
+      max-width: 860px;
+      padding: 40px 48px 80px;
+      margin: 0 auto;
+    }
+    h1 { font-size: 28px; border-bottom: 2px solid #2563eb; padding-bottom: 10px; color: var(--heading); margin: 36px 0 20px; }
+    h1:first-child { margin-top: 0; }
+    h2 { font-size: 20px; border-bottom: 1px solid var(--border); padding-bottom: 6px; color: var(--heading); margin: 32px 0 14px; }
+    h3 { font-size: 16px; color: var(--heading); margin: 24px 0 10px; }
+    h4 { font-size: 14px; color: #334155; margin: 18px 0 8px; }
+    p { margin: 10px 0; }
+    a { color: var(--link); text-decoration: none; }
+    a:hover { text-decoration: underline; color: var(--link-hover); }
+    code {
+      background: var(--code-bg);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+      font-size: 13px;
+    }
+    pre {
+      background: var(--pre-bg);
+      color: var(--pre-text);
+      padding: 16px 20px;
+      border-radius: 8px;
+      overflow-x: auto;
+      font-size: 13px;
+      line-height: 1.5;
+      margin: 14px 0;
+      position: relative;
+    }
+    pre code { background: transparent; padding: 0; color: inherit; font-size: inherit; }
+    .copy-btn {
+      position: absolute;
+      top: 8px;
+      right: 12px;
+      background: #334155;
+      color: #e2e8f0;
+      border: none;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    pre:hover .copy-btn { opacity: 1; }
+    .copy-btn:hover { background: #475569; }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 14px 0;
+      font-size: 14px;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 8px 12px;
+      text-align: left;
+    }
+    th {
+      background: var(--th-bg);
+      font-weight: 700;
+      color: var(--heading);
+    }
+    tr:hover { background: #f8fafc; }
+    blockquote {
+      border-left: 4px solid var(--blockquote-border);
+      margin: 14px 0;
+      padding: 10px 18px;
+      background: var(--blockquote-bg);
+      color: var(--blockquote-text);
+      border-radius: 0 6px 6px 0;
+    }
+    blockquote p { margin: 4px 0; }
+    hr { border: none; border-top: 1px solid var(--border); margin: 28px 0; }
+    ul, ol { padding-left: 24px; margin: 8px 0; }
+    li { margin: 3px 0; }
+    strong { color: var(--heading); }
+    img { max-width: 100%; border-radius: 6px; }
+    .badge {
+      display: inline-block;
+      background: var(--badge-bg);
+      color: var(--badge-text);
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-left: 6px;
+    }
+    .note {
+      background: var(--note-bg);
+      border: 1px solid var(--note-border);
+      border-radius: 8px;
+      padding: 12px 18px;
+      margin: 14px 0;
+      font-size: 14px;
+    }
+    /* ── Header ── */
+    .page-header {
+      text-align: center;
+      padding: 40px 0 30px;
+      border-bottom: 3px solid #2563eb;
+      margin-bottom: 36px;
+    }
+    .page-header h1 { font-size: 32px; border: none; margin: 0 0 8px; color: #0f172a; }
+    .page-header p { color: #64748b; font-size: 15px; margin: 4px 0; }
+    /* ── Mobile ── */
+    @media (max-width: 900px) {
+      body { flex-direction: column; }
+      .sidebar { display: none; }
+      .main { padding: 20px 16px 60px; }
+      h1 { font-size: 22px; }
+      h2 { font-size: 18px; }
+      pre { font-size: 12px; padding: 12px 14px; }
+    }
+    /* ── Print ── */
+    @media print {
+      .sidebar, .copy-btn { display: none; }
+      .main { max-width: 100%; padding: 0; }
+    }
+  </style>
+</head>
+<body>
+<nav class="sidebar" id="sidebar">
+  <h2>📖 Partner API</h2>
+  <div id="sidebar-links"></div>
+</nav>
+<main class="main">
+  <div class="page-header">
+    <h1>🔌 Volkern Partner API</h1>
+    <p>Documentación de integración SaaS-a-SaaS — RRHH, Nómina y Verifactu para Restauranteros</p>
+    <p><small>Última actualización: Julio 2026 · Base URL: <code>https://api.volkern.com/api/v1/partner</code></small></p>
+  </div>
+<h1>Volkern Partner API — Volkern Hostelería (industria restaurantera) {#volkern-partner-api-volkern-hostelería-industria-restaurantera}</h1>
+<blockquote>
+<p><strong>Audience</strong>: Equipo de ingeniería de <strong>Volkern Hostelería</strong> (SaaS restaurantero<br>interno de Volkern) que se integra con <strong>Volkern Core</strong> (HR / Payroll / Verifactu).</p>
+<p><strong>Propósito de este documento</strong>: Describir los endpoints REST que Volkern Core<br>expone bajo <code>/api/v1/partner/*</code> para que un software externo (SaaS-a-SaaS)<br>— caso de uso inicial: Volkern Hostelería — pueda:</p>
+<ol>
+<li>Registrar marcajes de asistencia (entrada/salida) de los empleados<br>del tenant en Volkern Core (Phase 1).</li>
+<li>Lanzar el cálculo de nómina y enviar a AEAT vía Verifactu (Phase 2).</li>
+<li>Onboarding self-service de nuevos tenants (Phase 3).</li>
+</ol>
+<p><strong>Última actualización</strong>: 2026-07-02 (Phase 1 + Phase 1.5 implementados).</p>
+<p><strong>Source-of-truth de contratos</strong>: <code>app/api/v1/partner/**/route.ts</code> +<br><code>lib/api-keys.ts</code> (lista de scopes partner).</p>
+</blockquote>
+<hr>
+<h2>0. Convenciones generales {#0-convenciones-generales}</h2>
+<ul>
+<li><strong>Base URL</strong>:<ul>
+<li>Producción: <code>https://api.volkern.com/api/v1/partner</code></li>
+<li>Sandbox: <code>https://sandbox.volkern.com/api/v1/partner</code> (próximamente)</li>
+<li>Local: <code>http://localhost:3000/api/v1/partner</code></li>
+</ul>
+</li>
+<li><strong>Autenticación</strong>: API Key per-tenant via header <code>x-api-key</code> (recomendado)<br>o <code>Authorization: Bearer vk_live_...</code>. Formato: prefijo <code>vk_live_</code> o <code>vk_prod_</code><br>seguido de 64 hex chars (generada por <code>generateApiKey()</code> en <code>lib/api-keys.ts</code>).</li>
+<li><strong>Multi-tenancy</strong>: 1 Restaurantero SaaS = 1 Tenant Volkern = 1 API Key. El<br>Restaurantero SaaS NO opera múltiples tenants Volkern con la misma key.</li>
+<li><strong>CORS</strong>: middleware global (<code>/middleware.ts</code>) permite<br><code>Access-Control-Allow-Origin: &lt;origen SaaS&gt;</code> y<br><code>Access-Control-Allow-Headers: Content-Type, Authorization, X-API-Key, X-Tenant-Id, X-Idempotency-Key, x-request-id</code>.</li>
+<li><strong>Idempotency</strong>: header <code>x-idempotency-key</code> (RFC Stripe-style, TTL 24h).<br>Si repites la misma key dentro de 24h recibes la respuesta cacheada con<br><code>idempotent: true</code>.</li>
+<li><strong>Rate limit edge</strong>: 30 req/min por IP (ver <code>middleware.ts</code> PUBLIC_API_RATE_LIMITED).<br>Limit específico por API Key se añadirá en Phase 1.5 si los benchmarks lo exigen.</li>
+<li><strong>Errores</strong>: mapping RGPD-aware (200/400/401/403/404/429). Mensajes en<br>castellano legibles para humanos + códigos machine-readable para retry logic.</li>
+</ul>
+<hr>
+<h2>1. Marcaje de asistencia — <code>POST /api/v1/partner/attendance/punch</code> {#1-marcaje-de-asistencia-post-api-v1-partner-attendance-punch}</h2>
+<p>Endpoint principal de <strong>Phase 1</strong> (implementado el 2026-07-02). Reutiliza 100%<br>del <code>AttendanceService</code> existente: GPS bounds, geofencing, impossible-travel,<br>rate-limit, LOPDGDD Art. 88 — toda la lógica está probada en<br><code>tests/attendance-punch-rgpd.test.ts</code>.</p>
+<h3>1.1 Auth {#1-1-auth}</h3>
+<ul>
+<li>Header: <code>x-api-key: vk_live_&lt;64hex&gt;</code></li>
+<li>O: <code>Authorization: Bearer vk_live_&lt;64hex&gt;</code></li>
+<li>Scope requerido: <strong><code>attendance:write</code></strong> (ver <code>lib/api-keys.ts</code>).</li>
+<li>Si llega por sesión NextAuth (no API Key): <code>401 Unauthorized</code> (rechazo explícito).</li>
+</ul>
+<h3>1.2 Request {#1-2-request}</h3>
+<pre><code>POST /api/v1/partner/attendance/punch
+x-api-key: vk_live_&lt;64hex&gt;
+x-idempotency-key: punch-emp123-2026-07-02T13-04-00Z   ← recomendado, UUID v4 estable
+Content-Type: application/json
+
+{
+  &quot;employeeId&quot;: &quot;ckl5g8z3p0001...&quot;,        // Volkern Employee.id
+                                           //  (use GET /api/v1/partner/employees en Phase 1.5 para mapear externalEmployeeId)
+  &quot;type&quot;: &quot;IN&quot;,                           // &quot;IN&quot; o &quot;OUT&quot;
+  &quot;method&quot;: &quot;KIOSK_TABLET_1&quot;,             // opcional, default &quot;PARTNER_APP&quot; (auditoría)
+  &quot;locationLat&quot;: 40.4168,                 // opcional pero recomendado
+  &quot;locationLng&quot;: -3.7038,
+  &quot;clientTimestamp&quot;: &quot;2026-07-02T13:04:00.000Z&quot;  // opcional; server usa su reloj oficial
+}
+</code></pre>
+<h3>1.3 Response 200 {#1-3-response-200}</h3>
+<pre><code class="language-json">{
+  &quot;ok&quot;: true,
+  &quot;id&quot;: &quot;ckl5h8z3p...log&quot;,
+  &quot;isAnomaly&quot;: false,
+  &quot;anomalyType&quot;: null,
+  &quot;message&quot;: &quot;Marcaje Entrada registrado con éxito.&quot;,
+  &quot;idempotent&quot;: false            // true sólo si vino de cache de idempotency
+}
+</code></pre>
+<h3>1.4 Errores {#1-4-errores}</h3>
+<table>
+<thead>
+<tr>
+<th>HTTP</th>
+<th><code>error</code></th>
+<th>Cuándo</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>400</td>
+<td>Datos inválidos / <code>GPS_REQUIRED</code> / <code>GPS_OUT_OF_RANGE</code> / <code>NO_BASE_LOCATION</code></td>
+<td>body Zod falla, falta GPS, geofence violado, empleado sin base configurada</td>
+</tr>
+<tr>
+<td>401</td>
+<td>API key inválida / inactiva / expirada / sesión no permitida</td>
+<td>Auth falla o llegó por sesión NextAuth</td>
+</tr>
+<tr>
+<td>403</td>
+<td><code>NOTICE_NOT_ACKNOWLEDGED</code> + <code>required_action</code></td>
+<td>Empleado no firmó LOPDGDD Art. 88</td>
+</tr>
+<tr>
+<td>404</td>
+<td>Empleado no encontrado en este tenant</td>
+<td><code>employeeId</code> no existe en Volkern</td>
+</tr>
+<tr>
+<td>429</td>
+<td><code>RATE_LIMITED</code> (header <code>retry-after: 30</code>)</td>
+<td>Anti-doble-tap del tenant (<code>attendanceRules.minPunchIntervalSec</code>)</td>
+</tr>
+</tbody></table>
+<h3>1.5 Ejemplo — Restaurantero SaaS en Python {#1-5-ejemplo-restaurantero-saas-en-python}</h3>
+<pre><code class="language-python">import os
+import uuid
+import requests
+from datetime import datetime, timezone
+
+API_BASE = os.environ[&quot;VOLKERN_API_BASE&quot;]   # https://api.volkern.com
+API_KEY  = os.environ[&quot;VOLKERN_API_KEY&quot;]    # vk_live_xxx…
+
+def registrar_marcaje(employee_id: str, tipo: str, lat: float, lng: float):
+    idem = f&quot;punch-{employee_id}-{int(datetime.now(timezone.utc).timestamp())}&quot;
+    r = requests.post(
+        f&quot;{API_BASE}/api/v1/partner/attendance/punch&quot;,
+        headers={
+            &quot;x-api-key&quot;:            API_KEY,
+            &quot;x-idempotency-key&quot;:    idem,                # dedupe post-retries
+            &quot;Content-Type&quot;:         &quot;application/json&quot;,
+        },
+        json={
+            &quot;employeeId&quot;:   employee_id,
+            &quot;type&quot;:         tipo,                          # &quot;IN&quot; o &quot;OUT&quot;
+            &quot;locationLat&quot;:  lat,
+            &quot;locationLng&quot;:  lng,
+            &quot;method&quot;:       &quot;KIOSK_TABLET&quot;,
+        },
+        timeout=5,
+    )
+    r.raise_for_status()
+    return r.json()
+</code></pre>
+<h3>1.6 Ejemplo — curl + Node.js (fetch nativo) {#1-6-ejemplo-curl-node-js-fetch-nativo}</h3>
+<pre><code class="language-bash"># Happy path: IN punch desde un kiosko de Hostelería {#happy-path-in-punch-desde-un-kiosko-de-hostelería}
+curl -X POST https://api.volkern.com/api/v1/partner/attendance/punch \
+  -H &quot;x-api-key: vk_live_&lt;tu-key&gt;&quot; \
+  -H &quot;x-idempotency-key: punch-emp123-2026-07-02T13-04-00Z&quot; \
+  -H &quot;Content-Type: application/json&quot; \
+  -d &#39;{
+    &quot;employeeId&quot;: &quot;ckl5g8z3p0001...&quot;,
+    &quot;type&quot;: &quot;IN&quot;,
+    &quot;locationLat&quot;: 40.4168,
+    &quot;locationLng&quot;: -3.7038,
+    &quot;method&quot;: &quot;KIOSK_TABLET_1&quot;
+  }&#39;
+
+# Respuesta: {#respuesta}
+# { &quot;ok&quot;: true, &quot;id&quot;: &quot;ckl5h8z3p...log&quot;, &quot;isAnomaly&quot;: false, {#ok-true-id-ckl5h8z3p-log-isanomaly-false}
+# &quot;anomalyType&quot;: null, &quot;message&quot;: &quot;Marcaje Entrada registrado con éxito.&quot;, {#anomalytype-null-message-marcaje-entrada-registrado-con-éxito}
+# &quot;idempotent&quot;: false } {#idempotent-false}
+</code></pre>
+<pre><code class="language-javascript">// Node 18+ (fetch nativo)
+const res = await fetch(&#39;https://api.volkern.com/api/v1/partner/attendance/punch&#39;, {
+  method: &#39;POST&#39;,
+  headers: {
+    &#39;x-api-key&#39;: process.env.VOLKERN_API_KEY,
+    &#39;x-idempotency-key&#39;: `punch-${employeeId}-${Date.now()}`,
+    &#39;Content-Type&#39;: &#39;application/json&#39;,
+  },
+  body: JSON.stringify({
+    employeeId, type: &#39;IN&#39;, locationLat: 40.4168, locationLng: -3.7038,
+  }),
+});
+const json = await res.json();
+if (!res.ok) throw new Error(`Volkern error: ${res.status} ${json.error}`);
+</code></pre>
+<h3>1.7 Volumen esperado (50 Restauranteros × hostelería) {#1-7-volumen-esperado-50-restauranteros-hostelería}</h3>
+<ul>
+<li>~30k-50k marcajes / día (50 tenants × 100 empleados × 4 marcajes/día)</li>
+<li>Ráfagas en comida (13:00-14:30) + cena (21:00-22:30) — p95 &lt; 400ms objetivo</li>
+<li>El middleware edge (<code>/middleware.ts</code>) tiene rate-limit por IP; añadir<br>rate-limit por <code>apiKeyId</code> es extensión natural cuando se necesiten SLAs<br>por Restaurantero.</li>
+</ul>
+<hr>
+<h2>1.8 Marcaje con <code>externalEmployeeId</code> — flujo end-to-end (Phase 1 + 1.5) {#1-8-marcaje-con-externalemployeeid-flujo-end-to-end-phase-1-1-5}</h2>
+<p>El Restaurantero SaaS típicamente conoce empleados por su ID propio (p. ej.<br><code>EMP-1234</code>). Tras Phase 1.5 puede:</p>
+<pre><code class="language-python"># 1. Lookup una sola vez al onboarding del restaurante o cuando contratan {#1-lookup-una-sola-vez-al-onboarding-del-restaurante-o-cuando-contratan}
+# un empleado nuevo. {#un-empleado-nuevo}
+lookup = requests.get(f&quot;{API_BASE}/api/v1/partner/employees&quot;,
+    params={&quot;externalEmployeeId&quot;: &quot;EMP-1234&quot;},
+    headers={&quot;x-api-key&quot;: API_KEY},
+).json()
+
+volkern_employee_id = lookup[&quot;data&quot;][0][&quot;id&quot;]
+
+# 2. Cache en el SaaS de Hostelería (no volver a pedir cada marcaje). {#2-cache-en-el-saas-de-hostelería-no-volver-a-pedir-cada-marcaje}
+# 3. Cada marcaje usa volkern_employee_id como employeeId. {#3-cada-marcaje-usa-volkern-employee-id-como-employeeid}
+punch = requests.post(f&quot;{API_BASE}/api/v1/partner/attendance/punch&quot;,
+    headers={&quot;x-api-key&quot;: API_KEY, &quot;x-idempotency-key&quot;: idem},
+    json={&quot;employeeId&quot;: volkern_employee_id, &quot;type&quot;: &quot;IN&quot;,
+          &quot;locationLat&quot;: 40.4168, &quot;locationLng&quot;: -3.7038}
+).json()
+</code></pre>
+<h2>1.9 Empleados — Reference Phase 1.5 {#1-9-empleados-reference-phase-1-5}</h2>
+<h3>1.9.1 <code>GET /api/v1/partner/employees</code> {#1-9-1-get-api-v1-partner-employees}</h3>
+<p><strong>Auth</strong>: API Key per-tenant. Scope requerido: <strong><code>employees:read</code></strong>.</p>
+<p>Tres modos de lookup soportados:</p>
+<pre><code># 1) Single lookup {#1-single-lookup}
+GET /api/v1/partner/employees?externalEmployeeId=EMP-1234
+
+# 2) Bulk lookup (≤ 50) {#2-bulk-lookup-50}
+GET /api/v1/partner/employees?externalEmployeeId=EMP-1,EMP-2,EMP-3
+
+# 3) List paginado (todos los empleados sincronizados con este partner) {#3-list-paginado-todos-los-empleados-sincronizados-con-este-partner}
+GET /api/v1/partner/employees?limit=25&amp;cursor=ckl5g8z3p...
+</code></pre>
+<blockquote>
+<p>⚙️ <strong>GET listado paginado</strong> (sin <code>externalEmployeeId</code>) devuelve<br><strong>solo empleados sincronizados con un partner externo</strong> (aquellos con<br><code>externalEmployeeId != null</code>). Los empleados legacy creados vía UI interna<br><strong>NO</strong> aparecen en el listado — comportamiento intencional (consulta<br><code>GET /api/erp/hr/employees/{id}</code> para esos casos).</p>
+</blockquote>
+<p><strong>Response 200</strong> (single mode):</p>
+<pre><code class="language-json">{
+  &quot;schemaVersion&quot;: &quot;2026-07-02&quot;,
+  &quot;count&quot;: 1,
+  &quot;data&quot;: [
+    {
+      &quot;id&quot;: &quot;ckl5g8z3p...&quot;,
+      &quot;tenantId&quot;: &quot;tenant-1&quot;,
+      &quot;externalEmployeeId&quot;: &quot;EMP-1234&quot;,
+      &quot;fullName&quot;: &quot;María Pérez&quot;,
+      &quot;email&quot;: &quot;maria@volkern.es&quot;,
+      &quot;jobTitle&quot;: &quot;Camarera&quot;,
+      &quot;role&quot;: &quot;WAITER&quot;,
+      &quot;department&quot;: &quot;DINING&quot;,
+      &quot;hiringDate&quot;: &quot;2025-12-01T00:00:00.000Z&quot;,
+      &quot;isActive&quot;: true,
+      &quot;baseGPSLat&quot;: 40.4168,
+      &quot;baseGPSLng&quot;: -3.7038,
+      &quot;createdAt&quot;: &quot;2025-12-01T10:00:00.000Z&quot;,
+      &quot;updatedAt&quot;: &quot;2026-06-30T13:04:00.000Z&quot;
+    }
+  ]
+}
+</code></pre>
+<blockquote>
+<p>⚠️ Por RGPD Art. 5 §1.c <strong>NO</strong> se devuelven: <code>salaryEncrypted</code>,<br><code>governmentIdEncrypted</code>, <code>bankDetailsEncrypted</code>, ni biometría.</p>
+</blockquote>
+<p><strong>Errores</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>HTTP</th>
+<th>Causa</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>400</td>
+<td><code>externalEmployeeId</code> &gt;80 chars o <code>limit&gt;100</code></td>
+</tr>
+<tr>
+<td>401</td>
+<td>Sesión NextAuth o API Key inválida</td>
+</tr>
+<tr>
+<td>501</td>
+<td>(futuro si se añade GET listing con más fields)</td>
+</tr>
+</tbody></table>
+<h3>1.9.2 <code>POST /api/v1/partner/employees</code> (upsert idempotente) {#1-9-2-post-api-v1-partner-employees-upsert-idempotente}</h3>
+<p><strong>Auth</strong>: API Key per-tenant. Scope requerido: <strong><code>employees:write</code></strong>.</p>
+<p><strong>Body</strong>:</p>
+<pre><code class="language-json">{
+  &quot;externalEmployeeId&quot;: &quot;EMP-NUEVO-5678&quot;,
+  &quot;fullName&quot;: &quot;Carlos García&quot;,
+  &quot;email&quot;: &quot;carlos@volkern.es&quot;,
+  &quot;jobTitle&quot;: &quot;Cocinero&quot;,
+  &quot;role&quot;: &quot;KITCHEN&quot;,
+  &quot;department&quot;: &quot;KITCHEN&quot;,
+  &quot;hiringDate&quot;: &quot;2026-07-02T09:00:00.000Z&quot;,
+  &quot;isActive&quot;: true,
+  &quot;baseGPSLat&quot;: 40.4168,
+  &quot;baseGPSLng&quot;: -3.7038
+}
+</code></pre>
+<p><strong>Semántica</strong>:</p>
+<ul>
+<li>Si <code>externalEmployeeId</code> ya existe en este tenant → <strong>PATCH semantics</strong>:<br>solo se actualizan los campos enviados. Campos no enviados se preservan<br>intactos en la DB.</li>
+<li>Si no existe → <strong>CREATE</strong> con los defaults:<br><code>role=OPERATOR, department=GENERAL, isActive=true, hiringDate=now</code>.</li>
+</ul>
+<p><strong>Semántica de <code>null</code> vs ausencia</strong>:</p>
+<ul>
+<li><strong>Key ausente</strong> (no aparece en el JSON) → no tocar el campo (PATCH skip).</li>
+<li><strong>Key con <code>null</code></strong> → limpiar el campo en DB (clear). Solo aplica a columnas<br>nullable: <code>email</code>, <code>mobilePhone</code>, <code>jobTitle</code>, <code>baseGPSLat</code>, <code>baseGPSLng</code>.</li>
+<li><strong>Key con valor</strong> → asignar valor.</li>
+</ul>
+<p><code>null</code> no se acepta en columnas <strong>non-nullable</strong> (<code>role</code>, <code>department</code>,<br><code>isActive</code>, <code>hiringDate</code>, <code>fullName</code>); se rechaza con <strong>400</strong> en Zod. Si<br>necesitas “resetear” uno de estos campos, lo más sencillo es enviar un valor<br>por defecto (p. ej. <code>isActive: true</code> para desactivar un empleado, podría<br>usarse <code>archiveEmployee()</code> externo cuando se implemente si quieres<br>mantenerlo en DB).</p>
+<p><strong>Response 200</strong>:</p>
+<pre><code class="language-json">{
+  &quot;schemaVersion&quot;: &quot;2026-07-02&quot;,
+  &quot;created&quot;: true,
+  &quot;employee&quot;: {
+    &quot;id&quot;: &quot;ckl5h8z3p...&quot;,
+    &quot;tenantId&quot;: &quot;tenant-1&quot;,
+    &quot;externalEmployeeId&quot;: &quot;EMP-NUEVO-5678&quot;,
+    &quot;fullName&quot;: &quot;Carlos García&quot;,
+    &quot;email&quot;: &quot;carlos@volkern.es&quot;,
+    ...
+  }
+}
+</code></pre>
+<p>Cuando la respuesta vino de cache de idempotency, se añade <code>&quot;idempotent&quot;: true</code>.</p>
+<p><strong>Idempotency-Key</strong>: recomendado</p>
+<pre><code>x-idempotency-key: employee-EMP-NUEVO-5678-v1
+</code></pre>
+<p>Si lo reintentan con la misma key, reciben la respuesta original cacheada<br>(TTL 24h).</p>
+<p><strong>Errores</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>HTTP</th>
+<th>Causa</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>400</td>
+<td>Zod falla (fullName vacío, longitudes, etc.)</td>
+</tr>
+<tr>
+<td>400</td>
+<td><code>x-idempotency-key</code> &gt;255 chars</td>
+</tr>
+<tr>
+<td>401</td>
+<td>Sesión NextAuth o API Key inválida</td>
+</tr>
+<tr>
+<td>409</td>
+<td>Conflicto de unicidad no resuelto (raro, reintentar)</td>
+</tr>
+</tbody></table>
+<h3>1.9.3 Race condition handling (SaaS reintentos) {#1-9-3-race-condition-handling-saas-reintentos}</h3>
+<p><code>prisma employee.create</code> puede lanzar <code>P2002</code> si dos POSTs concurrentes<br>intentan crear el <code>externalEmployeeId</code> a la vez. El partner endpoint <strong>recupera<br>automáticamente</strong> leyedo la fila ganadora y aplicando el update. Lo mismo con<br><code>idempotencyKey.create</code> → cache hit race-safe.</p>
+<hr>
+<h2>2. Scope necesario por endpoint (resumen) {#2-scope-necesario-por-endpoint-resumen}</h2>
+<table>
+<thead>
+<tr>
+<th>Endpoint</th>
+<th>Scope</th>
+<th>Phase</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>POST /api/v1/partner/attendance/punch</code></td>
+<td><code>attendance:write</code></td>
+<td>✅ 1</td>
+</tr>
+<tr>
+<td><code>GET  /api/v1/partner/employees</code></td>
+<td><code>employees:read</code></td>
+<td>✅ 1.5</td>
+</tr>
+<tr>
+<td><code>POST /api/v1/partner/employees</code></td>
+<td><code>employees:write</code></td>
+<td>✅ 1.5</td>
+</tr>
+<tr>
+<td><code>POST /api/v1/partner/payroll/run</code></td>
+<td><code>payroll:run</code></td>
+<td>✅ 2</td>
+</tr>
+<tr>
+<td><code>GET  /api/v1/partner/payroll/{id}/receipts</code></td>
+<td><code>payroll:read</code></td>
+<td>✅ 2</td>
+</tr>
+<tr>
+<td><code>GET  /api/v1/partner/payroll/{id}/aeat-status</code></td>
+<td><code>payroll:read</code></td>
+<td>✅ 2</td>
+</tr>
+<tr>
+<td><code>POST /api/v1/partner/onboard/tenant</code></td>
+<td><code>partners:onboard</code></td>
+<td>⏳ 3</td>
+</tr>
+<tr>
+<td><code>GET  /api/v1/partner/audit-log</code></td>
+<td><code>audit:read</code></td>
+<td>⏳ 3</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>3. Roadmap detallado {#3-roadmap-detallado}</h2>
+<h3>Phase 1.5 — Empleados + listado ✅ IMPLEMENTADO {#phase-1-5-empleados-listado-implementado}</h3>
+<ul>
+<li>✅ <code>GET /api/v1/partner/employees?externalEmployeeId=...</code> → lookup<br>bidirectional para que el Restaurantero SaaS pueda mapear su <code>employee_id</code><br>interno al <code>Volkern Employee.id</code> sin mantener su propia tabla de mapping.<br>Acepta <code>externalEmployeeId=X,Y,Z</code> (bulk lookup hasta 50) y list paginado<br>con cursor.</li>
+<li>✅ <code>POST /api/v1/partner/employees</code> → alta/actualización de empleado en<br>Volkern desde el SaaS partner con persistencia de<br><code>Employee.externalEmployeeId</code>. Semántica upsert idempotente:<ul>
+<li>Si existe <code>(tenantId, externalEmployeeId) → PATCH semantics</code> (solo los<br>campos enviados se actualizan — el partner no necesita mandar todo).</li>
+<li>Si no existe → CREATE.</li>
+</ul>
+</li>
+<li>✅ Migration Prisma añadida:<br><code>prisma/migrations/20260702000001_add_employee_external_id/migration.sql</code><br>añade columna <code>externalEmployeeId String?</code> + <code>@@unique([tenantId, externalEmployeeId])</code><ul>
+<li><code>@@index([tenantId, externalEmployeeId])</code>.</li>
+</ul>
+</li>
+<li>✅ Idempotency cache scope namespace-separado: <code>partner.employees.upsert</code><br>(no choca con <code>partner.attendance.punch</code>).</li>
+<li>✅ Data minimization RGPD Art. 5 §1.c: nunca se exponen campos cifrados<br>(<code>salaryEncrypted</code>, <code>governmentIdEncrypted</code>, <code>bankDetailsEncrypted</code>,<br>biometría retirada) en la respuesta al partner.</li>
+<li>✅ AuditLog RGPD Art. 30: cada GET y POST escribe<br><code>accion=PARTNER_EMPLOYEE_LOOKUP | PARTNER_EMPLOYEE_UPSERT</code>.</li>
+</ul>
+<h3>Phase 2 — Nómina + AEAT Verifactu ✅ IMPLEMENTADO {#phase-2-nómina-aeat-verifactu-implementado}</h3>
+<ul>
+<li>✅ <code>POST /api/v1/partner/payroll/run</code> — calcula nóminas mensuales y las<br>envía a AEAT del tenant. El flow es:<ul>
+<li>Lookup empleados por <code>externalEmployeeId</code> (creates cache Volkern).</li>
+<li>Per empleado: <code>PayrollEngineES.calculatePayroll(employeeId, tenantId, period)</code><br>(lee <code>EmployeePayrollProfileES</code> + tramos).</li>
+<li>Persist <code>PayrollRecordES</code> (status=DRAFT, fiscalStatus=PENDING) + lines<br>(engine lines + overrides del partner con <code>isOverride=true</code>).</li>
+<li><code>PayrollSealer.sealPayroll(recordId, payload, note)</code> (encadenado SHA-256,<br>auditHash + chainedHash + AuditLog <code>PAYROLL_HARDENED_SEAL</code>).</li>
+<li><code>shipNominaToAEAT({tenantId, payrollRecordId, runId, apiKeyId})</code> → genera<br>XML VeriFactu con prefijo <code>NOM-</code> y delega envío en<br><code>InvoicingService.shipToAEAT</code> + <code>AEATClient.sendSoap</code>.</li>
+<li>Final: <code>PayrollRunES.status=AEAT_SUBMITTED</code>.</li>
+</ul>
+</li>
+<li>✅ <code>GET /api/v1/partner/payroll/{runId}/receipts</code> — devuelve recibos<br>sanitizados por empleado (totales + lines conceptuales, <strong>sin cifrados</strong>).</li>
+<li>✅ <code>GET /api/v1/partner/payroll/{runId}/aeat-status</code> — distribución<br><code>PENDING|SIGNED|ARCHIVED</code> por record + <code>summary</code> humano-friendly.</li>
+<li>✅ Idempotency scope namespace-separado: <code>partner.payroll.run</code>.</li>
+<li>✅ AuditLog RGPD Art. 30: cada POST/GET escribe <code>PARTNER_PAYROLL_RUN | PARTNER_PAYROLL_RECEIPTS | PARTNER_PAYROLL_AEAT_STATUS | PARTNER_PAYROLL_AEAT_SUBMIT</code>.</li>
+<li>✅ Data minimization: NUNCA salaryEncrypted / governmentIdEncrypted /<br>bankDetailsEncrypted se exponen al partner.</li>
+</ul>
+<h3>Phase 2.5 — SILTRA + Modelo 111 (roadmap) {#phase-2-5-siltra-modelo-111-roadmap}</h3>
+<ul>
+<li>Sustituir <code>AEATXmlGenerator</code> placeholder por <code>lib/fiscal/siltra/xml-generator.ts</code><br>para TGSS (SILTRA/Creta) + <code>lib/fiscal/aeat/modelos/irpf-111.ts</code> para<br>retenciones IRPF mensuales. Mismo contrato partner; canal interno cambia.</li>
+<li>Async worker con reintentos + reconciliación polling via webhook AEAT.</li>
+<li>Phase 2 actual es “first happy path” para validar contrato con los primeros<br>Restauranteros.</li>
+</ul>
+<h3>Phase 3 — Onboarding self-service + Compliance {#phase-3-onboarding-self-service-compliance}</h3>
+<ul>
+<li><code>POST /api/v1/partner/onboard/tenant</code><ul>
+<li>Auth scope: <code>partners:onboard</code> (admin Volkern flag-only, NO auto-servicio).</li>
+<li>Crea <code>Tenant</code> + <code>ApiKey</code> + <code>ConvenioConfig</code> por convenio hostelería elegido.</li>
+<li>Devuelve <code>{ tenantId, apiKey, convenioCode }</code> para que el Restaurantero<br>SaaS pueda comunicar al usuario &quot;Tu cuenta en Volkern está activa, esta<br>es tu key&quot;.</li>
+</ul>
+</li>
+<li><code>GET /api/v1/partner/audit-log</code><ul>
+<li>Auth scope: <code>audit:read</code>.</li>
+<li>Devuelve los <code>AuditLog</code> del tenant asociados al <code>apiKeyId</code> del partner.</li>
+<li>Cumplimiento RGPD Art. 30 — registro de actividades de tratamiento.</li>
+</ul>
+</li>
+</ul>
+<h3>Convenios hostelería — Configuración por tenant {#convenios-hostelería-configuración-por-tenant}</h3>
+<ul>
+<li>Campo: <code>Tenant.configuracion.convenioCode: enum</code><ul>
+<li><code>ES_HOSTELERIA_ESTATAL</code> (default)</li>
+<li><code>ES_HOSTELERIA_CAT</code>, <code>ES_HOSTELERIA_MAD</code>, <code>ES_HOSTELERIA_PV</code>, <code>ES_HOSTELERIA_AND</code></li>
+<li><code>CUSTOM</code> (convenio de empresa específico)</li>
+</ul>
+</li>
+<li><code>lib/finance/payroll/es/payroll-engine-es.ts</code> leerá este campo para<br>seleccionar las tablas salariales aplicables (estatal vs CCAA).</li>
+</ul>
+<h3>Idempotency-Key — Recomendaciones {#idempotency-key-recomendaciones}</h3>
+<ul>
+<li>Generar UUID v4 estable por <strong>acción</strong>, no por intento.</li>
+<li>Formatos recomendados:<ul>
+<li>Marcajes: <code>punch-{employeeExternalId}-{ISO8601 timestamp local}</code></li>
+<li>Nóminas: <code>payroll-{period}-{tenantShortCode}</code> (idempotente por mes)</li>
+<li>Onboarding: <code>onboard-{cif}-{nombreCorto}</code> (idempotente por restaurante)</li>
+</ul>
+</li>
+<li>Permite dedupe robusto si la red del restaurante cae y el Restaurantero<br>SaaS reintenta la misma operación varias veces en segundos.</li>
+</ul>
+<hr>
+<h2>4. Compliance y RGPD — Lo que el equipo de Hostelería debe saber {#4-compliance-y-rgpd-lo-que-el-equipo-de-hostelería-debe-saber}</h2>
+<ul>
+<li><strong>Art. 28 RGPD (Encargado del tratamiento)</strong>: La integración SaaS-a-SaaS<br>entre Volkern Hostelería y Volkern Core requiere un <strong>DPA</strong> (Data Processing<br>Agreement). Se firmará automáticamente en el endpoint<br><code>/api/v1/partner/onboard/tenant</code> cuando esté implementado (Phase 3).</li>
+<li><strong>Art. 30 RGPD (Registro de actividades)</strong>: Cada llamada API genera un<br><code>AuditLog</code> con <code>{ tenantId, apiKeyId, action, ipAddress, userAgent, timestamp }</code> — disponible vía <code>GET /api/v1/partner/audit-log</code> desde Phase 3.</li>
+<li><strong>Art. 88 LOPDGDD + geolocalización</strong>: Marcajes siguen exigiendo GPS válido,<br>empleado con <code>noticeAcknowledgedAt</code>, y rate-limit anti-doble-tap. Si el<br>empleado no firma la cláusula, devolvemos <code>403 NOTICE_NOT_ACKNOWLEDGED</code><br>con <code>required_action: /dashboard/rrhh/mi-asistencia</code> — el Restaurantero<br>SaaS debe mostrar ese mensaje en su UI.</li>
+<li><strong>Art. 9 RGPD (datos biométricos)</strong>: NO se capturan selfies ni face match.<br>Solo GPS — patrón heredado del endpoint interno (<code>attendance-service.ts</code><br>RGPD-sainetizado en Julio 2026).</li>
+</ul>
+<hr>
+<h2>5. Sandbox y onboarding de los 50 Restauranteros {#5-sandbox-y-onboarding-de-los-50-restauranteros}</h2>
+<ul>
+<li>Onboarding por Restaurantero: vía panel admin Volkern o vía endpoint<br>self-service Phase 3 (<code>POST /api/v1/partner/onboard/tenant</code>).</li>
+<li>API Key entregada: scopes por defecto<br><code>[attendance:write, attendance:read, employees:write, employees:read, payroll:run, payroll:read, audit:read]</code>.</li>
+<li>Sandbox URL (próximamente): <code>https://sandbox.volkern.com/api/v1/partner</code><br>con datos sintéticos aislados por tenant — pensado para que el equipo de<br>Volkern Hostelería pueda integration-test antes de tocar producción.</li>
+<li><strong>SLA objetivo</strong>: 99.5% uptime, p95 &lt; 400ms, p99 &lt; 1s sobre ~50k<br>marcajes/día cuando los 50 Restauranteros estén operativos (~mes 6).</li>
+</ul>
+<hr>
+<h2>6. Cambios incompatibles hacia atrás {#6-cambios-incompatibles-hacia-atrás}</h2>
+<ul>
+<li>Versión v1 (este documento). Cambios incompatibles se publicarán como v2<br>con nuevo prefijo <code>/api/v1/partner/v2/*</code>.</li>
+<li>Scopes añadidos son retrocompatibles — denegar uno que ya estaba presente<br>requeriría rotación explícita de keys.</li>
+</ul>
+<h2>Rate Limiting (Edge Middleware — Upstash Redis REST) {#rate-limiting-edge-middleware-upstash-redis-rest}</h2>
+<p>Volkern Partner API aplica rate-limit por <strong>API key + scope</strong> en el middleware edge antes de <code>withTenantAuth</code>. Aislara cada Restaurantero SaaS y protege SLA durante el rollout a 50 tenants.</p>
+<h3>Per-scope limits (single source-of-truth: <code>lib/rate-limit/partner-rate-limit-config.ts</code>) {#per-scope-limits-single-source-of-truth-lib-rate-limit-partner-rate-limit-config-ts}</h3>
+<table>
+<thead>
+<tr>
+<th>Scope</th>
+<th>Path</th>
+<th>N req/min</th>
+<th>Fail policy</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>payroll:run</code></td>
+<td>POST <code>/api/v1/partner/payroll/run</code></td>
+<td>10</td>
+<td><strong>CLOSED</strong></td>
+</tr>
+<tr>
+<td><code>payroll:read</code></td>
+<td>GET <code>/api/v1/partner/payroll/[runId]/{receipts,aeat-status}</code></td>
+<td>60</td>
+<td>OPEN</td>
+</tr>
+<tr>
+<td><code>attendance:write</code></td>
+<td>POST <code>/api/v1/partner/attendance/punch</code></td>
+<td>300</td>
+<td>OPEN</td>
+</tr>
+<tr>
+<td><code>attendance:read</code></td>
+<td>GET <code>/api/v1/partner/attendance/*</code></td>
+<td>120</td>
+<td>OPEN</td>
+</tr>
+<tr>
+<td><code>employees:write</code></td>
+<td>POST/PUT <code>/api/v1/partner/employees</code></td>
+<td>30</td>
+<td>OPEN</td>
+</tr>
+<tr>
+<td><code>employees:read</code></td>
+<td>GET <code>/api/v1/partner/employees</code></td>
+<td>120</td>
+<td>OPEN</td>
+</tr>
+<tr>
+<td><code>default</code></td>
+<td>(catch-all)</td>
+<td>60</td>
+<td>OPEN</td>
+</tr>
+</tbody></table>
+<p><strong>Fail-CLOSED</strong> para <code>payroll:run</code>: si Upstash no responde en 300ms o devuelve 5xx, el rate-limiter devuelve <code>429 RATE_LIMITER_UNAVAILABLE</code>. Por qué: nóminas mensuales con cómputo AEAT pesado — preferimos rechazar preventivamente durante un outage Upstash a poner en stress el motor de nóminas. El resto es OPEN por UX.</p>
+<h3>Isolation {#isolation}</h3>
+<p>Cada <code>apiKeyId</code> se deriva vía <code>SHA-256(apiKey + UPSTASH_SALT).substring(0, 16)</code> (Web Crypto API, edge-safe). El bucket Upstash es <code>volkern:rl:partner:&lt;scope&gt;:&lt;apiKeyId&gt;</code>. PII del apiKey NUNCA aparece en headers <code>X-RateLimit-*</code> ni en logs Redis.</p>
+<h3>Response headers {#response-headers}</h3>
+<p>Todas las respuestas (permitidas o 429) llevan <code>X-RateLimit-Limit</code>, <code>X-RateLimit-Remaining</code>, <code>X-RateLimit-Reset</code>, <code>x-rate-limit-scope</code>. Adicional solo en 429: <code>Retry-After</code> + body <code>code: RATE_LIMIT_EXCEEDED</code> (límite real) o <code>RATE_LIMITER_UNAVAILABLE</code> (Upstash caído).</p>
+<h3>Algorithm {#algorithm}</h3>
+<p>Sliding window via Upstash Redis Sorted Set. Pipeline <code>/pipeline</code> atómico (4 comandos): <code>ZREMRANGEBYSCORE → ZCARD → ZADD → EXPIRE</code>. Si <code>count_old+1 &gt; limit</code> → 429.</p>
+<h3>Edge Runtime compat {#edge-runtime-compat}</h3>
+<p>NO <code>ioredis</code> (TCP). NO Prisma. NO <code>crypto.createHash</code>. Sí <code>fetch</code> + <code>AbortController</code>. Sí <code>crypto.subtle.digest</code>.</p>
+<h3>Env vars requeridos (producción) {#env-vars-requeridos-producción}</h3>
+<p><code>UPSTASH_REDIS_REST_URL</code>, <code>UPSTASH_REDIS_REST_TOKEN</code>, <code>UPSTASH_SALT</code>. Sin ellos, <code>payroll:run</code> rechaza todo y el resto pasa con warn.</p>
+<h3>Ajustar límites temporales {#ajustar-límites-temporales}</h3>
+<p>Editar <code>PARTNER_RATE_LIMITS</code> en <code>lib/rate-limit/partner-rate-limit-config.ts</code>.</p>
+<h2>Rate Limiting (Edge Middleware — Upstash Redis REST) {#rate-limiting-edge-middleware-upstash-redis-rest}</h2>
+<p>Volkern Partner API aplica rate-limit por <strong>API key + scope</strong> en el middleware edge antes de <code>withTenantAuth</code>. Esto aislara cada Restaurantero SaaS y protege SLA durante el rollout a 50 tenants.</p>
+<h3>Per-scope limits (single source-of-truth: <code>lib/rate-limit/partner-rate-limit-config.ts</code>) {#per-scope-limits-single-source-of-truth-lib-rate-limit-partner-rate-limit-config-ts}</h3>
+<table>
+<thead>
+<tr>
+<th>Scope</th>
+<th>Path</th>
+<th>N req/min</th>
+<th>Fail policy</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>payroll:run</code></td>
+<td>POST <code>/api/v1/partner/payroll/run</code></td>
+<td>10</td>
+<td><strong>CLOSED</strong></td>
+</tr>
+<tr>
+<td><code>payroll:read</code></td>
+<td>GET <code>/api/v1/partner/payroll/[runId]/{receipts,aeat-status}</code></td>
+<td>60</td>
+<td>OPEN</td>
+</tr>
+<tr>
+<td><code>attendance:write</code></td>
+<td>POST <code>/api/v1/partner/attendance/punch</code></td>
+<td>300</td>
+<td>OPEN</td>
+</tr>
+<tr>
+<td><code>attendance:read</code></td>
+<td>GET <code>/api/v1/partner/attendance/*</code></td>
+<td>120</td>
+<td>OPEN</td>
+</tr>
+<tr>
+<td><code>employees:write</code></td>
+<td>POST/PUT <code>/api/v1/partner/employees</code></td>
+<td>30</td>
+<td>OPEN</td>
+</tr>
+<tr>
+<td><code>employees:read</code></td>
+<td>GET <code>/api/v1/partner/employees</code></td>
+<td>120</td>
+<td>OPEN</td>
+</tr>
+<tr>
+<td><code>default</code></td>
+<td>(catch-all)</td>
+<td>60</td>
+<td>OPEN</td>
+</tr>
+</tbody></table>
+<p><strong>Fail-CLOSED</strong> significa: si Upstash no responde en 300ms o devuelve 5xx, el rate-limiter devuelve <code>429 RATE_LIMITER_UNAVAILABLE</code>. Por qué para <code>payroll:run</code>: nóminas mensuales con cómputo AEAT pesado — durante un outage Upstash queremos rechazar tráfico preventivamente para no poner en stress el motor de nóminas (que también podría degradarse). El resto es OPEN por UX: una integración legítimamente ocupada no debe quedar bloqueada por un Redis caído.</p>
+<h3>Isolation {#isolation}</h3>
+<p>Cada <code>apiKeyId</code> se deriva vía <code>SHA-256(apiKey + UPSTASH_SALT).substring(0, 16)</code> (Web Crypto API, edge-safe). El bucket Upstash es <code>volkern:rl:partner:&lt;scope&gt;:&lt;apiKeyId&gt;</code>. PII del apiKey NUNCA aparece en headers <code>X-RateLimit-*</code> ni en logs Redis.</p>
+<h3>Response headers (estándar industria) {#response-headers-estándar-industria}</h3>
+<p>Todas las respuestas (permitidas o 429) llevan:</p>
+<ul>
+<li><code>X-RateLimit-Limit</code>: límite del scope.</li>
+<li><code>X-RateLimit-Remaining</code>: slots restantes en la ventana sliding.</li>
+<li><code>X-RateLimit-Reset</code>: epoch seconds cuando la ventana reinicia.</li>
+<li><code>x-rate-limit-scope</code>: scope del bucket (debugging).</li>
+</ul>
+<p>Adicional sólo en 429:</p>
+<ul>
+<li><code>Retry-After</code>: segundos hasta poder reintentar.</li>
+<li>body <code>code</code>: <code>RATE_LIMIT_EXCEEDED</code> (límite real) o <code>RATE_LIMITER_UNAVAILABLE</code> (Upstash caído).</li>
+</ul>
+<h3>Algorithm {#algorithm}</h3>
+<p>Sliding window via Upstash Redis Sorted Set. Pipeline <code>/pipeline</code> atómico (4 comandos):</p>
+<ol>
+<li><code>ZREMRANGEBYSCORE key -inf (now-60000)</code> — purga entries viejos.</li>
+<li><code>ZCARD key</code> — count viejo antes del insert.</li>
+<li><code>ZADD key now &lt;random_member&gt;</code> — añade el request actual.</li>
+<li><code>EXPIRE key TTL</code> — autolimpia.</li>
+</ol>
+<p>Si <code>count_old+1 &gt; limit</code> → 429. Sliding window garantiza que el rate vuelve a estar disponible gradualmente (no &quot;fixed time reset&quot; brusco).</p>
+<h3>Edge Runtime {#edge-runtime}</h3>
+<p>El middleware corre en Next.js Edge Runtime. Por eso:</p>
+<ul>
+<li><strong>NO</strong> usa <code>ioredis</code> (TCP no soportado en edge).</li>
+<li><strong>NO</strong> usa Prisma (Node-only).</li>
+<li><strong>NO</strong> usa <code>crypto.createHash</code> (Node crypto module).</li>
+<li><strong>SÍ</strong> usa <code>fetch</code> + <code>AbortController</code> (Web API estándar).</li>
+<li><strong>SÍ</strong> usa <code>crypto.subtle.digest(&#39;SHA-256&#39;, ...)</code> (Web Crypto API).</li>
+</ul>
+<h3>Env vars requeridos (producción) {#env-vars-requeridos-producción}</h3>
+<pre><code>UPSTASH_REDIS_REST_URL=https://your-instance.upstash.io
+UPSTASH_REDIS_REST_TOKEN=&lt;rest-token&gt;
+UPSTASH_SALT=&lt;rotate-me-in-each-env&gt;
+</code></pre>
+<p>Sin <code>UPSTASH_REDIS_REST_URL</code>+<code>TOKEN</code> configurados en producción, <code>payroll:run</code> rechaza todo (fail-closed) y el resto deja pasar (warning en logs). Esto es operacionalmente inaceptable durante rollout — configúralos ANTES de habilitar partner APIs para nuevos Restauranteros.</p>
+<h3>Cómo ajustar límites temporales {#cómo-ajustar-límites-temporales}</h3>
+<p>Editar <code>PARTNER_RATE_LIMITS</code> en <code>lib/rate-limit/partner-rate-limit-config.ts</code>. Una vez desplegado, Upstash ve el nuevo <code>limit</code> pero los buckets sliding ya tienen cuenta histórica — los clientes deben esperar 60s para refrescar. Para un Restaurantero específico entrando en bargaining, considera temporalmente subir el <code>limit</code> y desplegar.</p>
+<blockquote>
+<p><strong>Nota sobre <code>RATE_LIMITER_UNAVAILABLE</code>:</strong> cuando el rate-limiter devuelve 429 con <code>code: RATE_LIMITER_UNAVAILABLE</code> (solo en <code>payroll:run</code> con Upstash caido), el header <code>X-RateLimit-Reset</code> se acerca al backoff ~1s (no la ventana completa de 60s). Razon: reintentar dentro del mismo ventana sliding no sirve de nada si Upstash sigue caido. Los partners SaaS deben esperar ~1s.</p>
+</blockquote>
+<blockquote>
+<p><strong>Race condition note (Usage endpoint):</strong> <code>GET /api/v1/partner/usage</code> ejecuta <code>inspectPartnerRateLimit</code> SIN hacer <code>ZADD</code> (read-only). Si un SaaS llama <code>GET /usage</code> mientras simultáneamente un write pasa el check en el mismo bucket (<code>volkern:rl:partner:&lt;scope&gt;:&lt;apiKeyId&gt;</code>), el contador visto puede ser ±1 vs el valor real exacto — <code>inspectPartnerRateLimit</code> y <code>checkPartnerRateLimit</code> ejecutan pipelines atómicos independientes, así que el orden de arrival determina si vemos <code>count_old</code> o <code>count_old + 1</code>. ±1 es aceptable para uso informativo; NO para lógica de throttling estricta. Si necesitas exactitud, combina con <code>X-RateLimit-Remaining</code> del write response (que SI incluye la entry recién insertada).</p>
+</blockquote>
+
+</main>
+<script>
+  // ── Copy button for code blocks ──
+  document.querySelectorAll('pre').forEach(pre => {
+    const btn = document.createElement('button');
+    btn.className = 'copy-btn';
+    btn.textContent = 'Copiar';
+    btn.addEventListener('click', () => {
+      const code = pre.querySelector('code') || pre;
+      navigator.clipboard.writeText(code.textContent).then(() => {
+        btn.textContent = '✓ Copiado';
+        setTimeout(() => btn.textContent = 'Copiar', 2000);
+      });
+    });
+    pre.appendChild(btn);
+  });
+
+  // ── Auto-generate sidebar from headings ──
+  const sidebar = document.getElementById('sidebar-links');
+  const headings = document.querySelectorAll('.main h2, .main h3, .main h4');
+  headings.forEach(h => {
+    const level = h.tagName.toLowerCase();
+    const text = h.textContent;
+    const id = text.toLowerCase().replace(/[^a-z0-9áéíóúñ]+/g, '-').replace(/(^-|-$)/g, '');
+    h.id = id;
+    const a = document.createElement('a');
+    a.href = '#' + id;
+    a.textContent = text;
+    a.className = level;
+    sidebar.appendChild(a);
+  });
+
+  // ── Highlight current section on scroll ──
+  const links = sidebar.querySelectorAll('a');
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      const id = entry.target.id;
+      const link = sidebar.querySelector('a[href="#' + id + '"]');
+      if (link) {
+        if (entry.isIntersecting) {
+          links.forEach(l => l.style.color = '');
+          link.style.color = 'var(--sidebar-active)';
+          link.style.fontWeight = '600';
+        }
+      }
+    });
+  }, { rootMargin: '-80px 0px -70% 0px' });
+  headings.forEach(h => observer.observe(h));
+</script>
+</body>
+</html>
