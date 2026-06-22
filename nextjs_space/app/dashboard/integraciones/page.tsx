@@ -1233,6 +1233,63 @@ export default function IntegracionesPage() {
         </CardContent>
       </Card>
 
+      {/* Banner de Partner API */}
+      <Card className="bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200">
+        <CardHeader>
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-amber-600 rounded-lg">
+                <Users className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <CardTitle className="text-xl">Partner API — RRHH y Nómina</CardTitle>
+                <CardDescription>
+                  Documentación para integración SaaS-a-SaaS: marcajes de asistencia, empleados, nóminas y envío AEAT vía Verifactu
+                </CardDescription>
+              </div>
+            </div>
+            <Button 
+              onClick={() => window.open('/api/partner', '_blank')}
+              className="bg-amber-600 hover:bg-amber-700"
+            >
+              <ExternalLink className="h-4 w-4 mr-2" />
+              Ver Documentación
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid md:grid-cols-3 gap-4 text-sm">
+            <div className="flex items-start gap-2">
+              <Check className="h-5 w-5 text-green-600 mt-0.5" />
+              <div>
+                <p className="font-medium">Marcajes de asistencia</p>
+                <p className="text-muted-foreground text-xs">
+                  POST /api/v1/partner/attendance/punch con GPS, geofencing y RGPD
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start gap-2">
+              <Check className="h-5 w-5 text-green-600 mt-0.5" />
+              <div>
+                <p className="font-medium">Gestión de empleados</p>
+                <p className="text-muted-foreground text-xs">
+                  GET/POST /api/v1/partner/employees con lookup por externalEmployeeId
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start gap-2">
+              <Check className="h-5 w-5 text-green-600 mt-0.5" />
+              <div>
+                <p className="font-medium">Nómina + AEAT</p>
+                <p className="text-muted-foreground text-xs">
+                  Payroll run con sellado SHA-256, XML Verifactu y envío a AEAT
+                </p>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Webhook URL */}
       {webhookUrl && (
         <Card>
