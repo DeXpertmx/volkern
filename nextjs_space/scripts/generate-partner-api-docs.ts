@@ -321,6 +321,15 @@ function main() {
     try { fs.unlinkSync(tmpHtml); } catch {}
   }
 
+  // 4. Auto-stage generated files for pre-commit hook
+  try {
+    const filesToStage = [...HTML_BOTH, PDF_OUT].map((f) => path.join(cwd, f));
+    execSync(`git add ${filesToStage.join(" ")}`, { stdio: "pipe", timeout: 5_000 });
+    console.log("📦 Archivos auto-stageados para commit.");
+  } catch {
+    // Not a git repo or git not available — silently skip staging
+  }
+
   console.log("\n📊 Documentación Partner API regenerada correctamente.");
   console.log("   HTML → https://volkern.app/api/partner");
 }

@@ -46,6 +46,7 @@
     "eslint-config-next": "14.2.28",
     "eslint-plugin-prettier": "5.1.3",
     "eslint-plugin-react-hooks": "4.6.0",
+    "husky": "^9.1.7",
     "marked": "^18.0.5",
     "patch-package": "^8.0.1",
     "pino-pretty": "^13.1.3",
@@ -223,6 +224,9 @@
   "lint-staged": {
     "*.{ts,tsx}": [
       "eslint --fix --max-warnings 50"
+    ],
+    "docs/PARTNER-API.md": [
+      "npm run generate-partner-docs"
     ]
   },
   "browserslist": [
