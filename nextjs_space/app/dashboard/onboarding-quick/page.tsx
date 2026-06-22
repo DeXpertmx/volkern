@@ -10,6 +10,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Loader2, CheckCircle2, MessageCircle, ArrowRight, Bot, Zap,
   Building2, Calculator, FileKey, Users, Upload, LayoutGrid, CheckSquare, Square,
+  PenTool, GraduationCap, Factory, UserCheck,
 } from 'lucide-react'
 import {
   MODULE_GROUPS,
@@ -19,6 +20,28 @@ import {
 
 type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
 
+type VerticalProfile = 'crm_ventas' | 'agencia_marketing' | 'academia' | 'asesoria_contable' | 'rrhh' | 'inmobiliaria' | 'industria' | 'gestoria' | 'general'
+
+const VERTICAL_CARDS: { id: VerticalProfile; title: string; subtitle: string; icon: React.ElementType; color: string; bgClass: string; borderColor: string }[] = [
+  { id: 'crm_ventas', title: 'CRM Ventas', subtitle: 'Pipeline que convierte', icon: Zap, color: 'cyan', bgClass: 'from-cyan-500/20 to-sky-500/10 border-cyan-500/30 hover:border-cyan-400', borderColor: 'border-cyan-400' },
+  { id: 'agencia_marketing', title: 'Agencia de Marketing', subtitle: 'Automatización multicanal', icon: PenTool, color: 'purple', bgClass: 'from-purple-500/20 to-violet-500/10 border-purple-500/30 hover:border-purple-400', borderColor: 'border-purple-400' },
+  { id: 'academia', title: 'Academia LMS', subtitle: 'Educación que escala', icon: GraduationCap, color: 'amber', bgClass: 'from-amber-500/20 to-yellow-500/10 border-amber-500/30 hover:border-amber-400', borderColor: 'border-amber-400' },
+  { id: 'asesoria_contable', title: 'Asesoría Contable', subtitle: 'Digitaliza tu gestoría', icon: Calculator, color: 'blue', bgClass: 'from-blue-500/20 to-indigo-500/10 border-blue-500/30 hover:border-blue-400', borderColor: 'border-blue-400' },
+  { id: 'rrhh', title: 'RRHH', subtitle: 'Capital humano inteligente', icon: UserCheck, color: 'rose', bgClass: 'from-rose-500/20 to-pink-500/10 border-rose-500/30 hover:border-rose-400', borderColor: 'border-rose-400' },
+  { id: 'inmobiliaria', title: 'Inmobiliaria', subtitle: 'ERP inmobiliario completo', icon: Building2, color: 'emerald', bgClass: 'from-emerald-500/20 to-green-500/10 border-emerald-500/30 hover:border-emerald-400', borderColor: 'border-emerald-400' },
+  { id: 'industria', title: 'Industria', subtitle: 'ERP industrial completo', icon: Factory, color: 'orange', bgClass: 'from-orange-500/20 to-amber-500/10 border-orange-500/30 hover:border-orange-400', borderColor: 'border-orange-400' },
+]
+
+const VERTICAL_COLORS: Record<string, { gradient: string; iconBg: string; iconColor: string }> = {
+  cyan: { gradient: 'bg-gradient-to-r from-cyan-600 to-sky-600', iconBg: 'bg-cyan-500/20', iconColor: 'text-cyan-400' },
+  purple: { gradient: 'bg-gradient-to-r from-purple-600 to-violet-600', iconBg: 'bg-purple-500/20', iconColor: 'text-purple-400' },
+  amber: { gradient: 'bg-gradient-to-r from-amber-600 to-yellow-600', iconBg: 'bg-amber-500/20', iconColor: 'text-amber-400' },
+  blue: { gradient: 'bg-gradient-to-r from-blue-600 to-indigo-600', iconBg: 'bg-blue-500/20', iconColor: 'text-blue-400' },
+  rose: { gradient: 'bg-gradient-to-r from-rose-600 to-pink-600', iconBg: 'bg-rose-500/20', iconColor: 'text-rose-400' },
+  emerald: { gradient: 'bg-gradient-to-r from-emerald-600 to-green-600', iconBg: 'bg-emerald-500/20', iconColor: 'text-emerald-400' },
+  orange: { gradient: 'bg-gradient-to-r from-orange-600 to-amber-600', iconBg: 'bg-orange-500/20', iconColor: 'text-orange-400' },
+}
+
 export default function OnboardingQuickPage() {
   const router = useRouter()
   const [step, setStep] = useState<Step>(1)
@@ -27,7 +50,7 @@ export default function OnboardingQuickPage() {
   const [botUsername, setBotUsername] = useState('')
   const [polling, setPolling] = useState(false)
   const [provisionError, setProvisionError] = useState<string | null>(null)
-  const [perfil, setPerfil] = useState<'gestoria' | 'general' | null>(null)
+  const [perfil, setPerfil] = useState<VerticalProfile | null>(null)
   const [selectedModules, setSelectedModules] = useState<Set<string>>(new Set())
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['CRM Esencial']))
   const [nif, setNif] = useState('')
@@ -64,7 +87,7 @@ export default function OnboardingQuickPage() {
           if (data.hasFirstMessage) {
             setPolling(false)
             if (pollingInterval.current) clearInterval(pollingInterval.current)
-            if (perfil === 'gestoria') setStep(6)
+            if (perfil === 'gestoria' || perfil === 'asesoria_contable') setStep(6)
             else router.push('/dashboard')
           }
         }
@@ -115,13 +138,18 @@ export default function OnboardingQuickPage() {
     setStep(2)
   }
 
-  const handleSelectProfile = (p: 'gestoria' | 'general') => {
+  const handleSelectProfile = (p: VerticalProfile) => {
     setPerfil(p)
     // Pre-select suggested modules based on profile
     const suggested = PERFIL_SUGGESTED_MODULES[p] || []
     setSelectedModules(new Set(suggested))
-    // Expand relevant groups
-    setExpandedGroups(new Set(['CRM Esencial', 'Ventas y Documentos', 'Comunicación', p === 'gestoria' ? 'Contabilidad y ERP' : 'Marketing']))
+    // Expand relevant groups based on vertical
+    const erpVerticals: VerticalProfile[] = ['asesoria_contable', 'gestoria', 'industria', 'rrhh', 'inmobiliaria']
+    const marketingVerticals: VerticalProfile[] = ['agencia_marketing', 'crm_ventas', 'academia']
+    const groups = new Set(['CRM Esencial', 'Ventas y Documentos', 'Comunicación'])
+    if (erpVerticals.includes(p)) groups.add('Contabilidad y ERP')
+    if (marketingVerticals.includes(p)) groups.add('Marketing')
+    setExpandedGroups(groups)
   }
 
   const handleProvision = async () => {
@@ -211,29 +239,43 @@ export default function OnboardingQuickPage() {
                   <h1 className="text-3xl font-bold text-white text-center mb-3">Bienvenido a Volkern</h1>
                   <p className="text-slate-300 text-center mb-8">Configuremos tu espacio de trabajo en menos de 2 minutos</p>
 
-                  <div className="space-y-3 mb-8">
-                    <p className="text-sm text-slate-400 mb-2">¿Cuál es tu perfil?</p>
-                    <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                      <Card className={`p-4 cursor-pointer transition-colors ${perfil === 'gestoria' ? 'bg-purple-600/20 border-purple-500' : 'bg-slate-800/50 border-slate-700 hover:border-purple-500'}`} onClick={() => handleSelectProfile('gestoria')}>
-                        <div className="flex items-center gap-4">
-                          <div className="w-12 h-12 bg-indigo-500/20 rounded-xl flex items-center justify-center"><Building2 className="h-6 w-6 text-indigo-400" /></div>
-                          <div><p className="font-semibold text-white">Gestoría / Asesoría</p><p className="text-sm text-slate-400">Contabilidad, IVA, certificados AEAT, clientes</p></div>
-                        </div>
-                      </Card>
-                    </motion.div>
-                    <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                      <Card className={`p-4 cursor-pointer transition-colors ${perfil === 'general' ? 'bg-purple-600/20 border-purple-500' : 'bg-slate-800/50 border-slate-700 hover:border-purple-500'}`} onClick={() => handleSelectProfile('general')}>
-                        <div className="flex items-center gap-4">
-                          <div className="w-12 h-12 bg-teal-500/20 rounded-xl flex items-center justify-center"><Zap className="h-6 w-6 text-teal-400" /></div>
-                          <div><p className="font-semibold text-white">General / Otro</p><p className="text-sm text-slate-400">CRM, citas, chatbot, web creator</p></div>
-                        </div>
-                      </Card>
-                    </motion.div>
+                  <div className="mb-6">
+                    <p className="text-sm text-slate-400 mb-3">¿Cuál es tu vertical?</p>
+                    <div className="grid grid-cols-1 gap-2 max-h-[360px] overflow-y-auto pr-1">
+                      {VERTICAL_CARDS.map(v => {
+                        const Icon = v.icon
+                        const colors = VERTICAL_COLORS[v.color]
+                        const isSelected = perfil === v.id
+                        return (
+                          <motion.div key={v.id} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}>
+                            <Card
+                              className={`p-3 cursor-pointer transition-all border ${isSelected ? `bg-gradient-to-r ${v.bgClass} ${v.borderColor} shadow-lg` : `bg-slate-800/50 border-slate-700 ${v.bgClass}`}`}
+                              onClick={() => handleSelectProfile(v.id)}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${colors.iconBg}`}>
+                                  <Icon className={`h-5 w-5 ${colors.iconColor}`} />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-semibold text-white text-sm">{v.title}</p>
+                                  <p className="text-xs text-slate-400 truncate">{v.subtitle}</p>
+                                </div>
+                                {isSelected && (
+                                  <div className="w-5 h-5 rounded-full bg-violet-500 flex items-center justify-center flex-shrink-0">
+                                    <CheckCircle2 className="h-3.5 w-3.5 text-white" />
+                                  </div>
+                                )}
+                              </div>
+                            </Card>
+                          </motion.div>
+                        )
+                      })}
+                    </div>
                   </div>
 
                   {perfil && (
                     <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mb-6">
-                      {perfil === 'gestoria' && (
+                      {(perfil === 'asesoria_contable' || perfil === 'gestoria') && (
                         <div className="space-y-3 mb-4">
                           <Input placeholder="Nombre de la gestoría" value={nombreEmpresa} onChange={e => setNombreEmpresa(e.target.value)} className="bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500" />
                           <Input placeholder="NIF / CIF" value={nif} onChange={e => setNif(e.target.value)} className="bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500" />
