@@ -2,6 +2,13 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { getToken } from 'next-auth/jwt'
 import { checkEdgeRateLimit } from '@/lib/edge-rate-limiter'
+import {
+  PARTNER_RATE_LIMITS,
+  getScopeFromPath,
+  hashApiKeyEdge,
+  extractApiKeyFromHeaders,
+} from '@/lib/rate-limit/partner-rate-limit-config'
+import { checkPartnerRateLimit } from '@/lib/rate-limit/upstash-edge-rate-limit'
 
 const RESERVED = new Set(['www', 'app', 'api', 'auth', 'login', 'register', 'dashboard', 'webcreator', 'admin'])
 
@@ -103,6 +110,57 @@ export async function middleware(request: NextRequest) {
 
   // Check if it's an API route that requires no auth
   if (pathname.startsWith('/api/')) {
+    // --- Rate-limit per-API-key (Redis via Upstash) ---
+    if (pathname.startsWith('/api/v1/partner/')) {
+      const apiKey = extractApiKeyFromHeaders(request.headers);
+      if (apiKey) {
+        const scope = getScopeFromPath(pathname, request.method);
+        const policy = PARTNER_RATE_LIMITS[scope] ?? PARTNER_RATE_LIMITS.default;
+        const apiKeyId = await hashApiKeyEdge(apiKey);
+        const rl = await checkPartnerRateLimit(apiKeyId, scope, policy);
+        if (!rl.allowed) {
+          const retryAfter = Math.max(1, Math.ceil((rl.resetAt - Date.now()) / 1000));
+          return NextResponse.json(
+            {
+              error: rl.error === 'RATE_LIMITER_UNAVAILABLE' ? 'Service Unavailable' : 'Rate limit exceeded',
+              message: rl.error === 'RATE_LIMITER_UNAVAILABLE'
+                ? 'No se pudo verificar capacidad para esta operación de nóminas. Intenta en 1 minuto.'
+                : `Demasiadas solicitudes. Límite: ${rl.limit} req/min por API key (scope=${scope}). Reintenta en ${retryAfter}s.`,
+              code: rl.error ?? 'RATE_LIMIT_EXCEEDED',
+            },
+            {
+              status: 429,
+              headers: {
+                ...corsHeaders,
+                'X-RateLimit-Limit': String(rl.limit),
+                'X-RateLimit-Remaining': '0',
+                'X-RateLimit-Reset': String(Math.floor(rl.resetAt / 1000)),
+                'Retry-After': String(retryAfter),
+                'x-request-id': requestId,
+                'x-rate-limit-scope': scope,
+                // Propaga también el apiKeyId hashado en el 429 para que
+                // observaciones del SaaS (Datadog/Honeycomb custom headers,
+                // logs de error) puedan correlacionar 429 → bucket en Upstash
+                // sin requerir una segunda request a GET /api/v1/partner/usage.
+                'x-rate-limit-key': apiKeyId,
+              },
+            }
+          );
+        }
+        const res = NextResponse.next();
+        res.headers.set('X-RateLimit-Limit', String(rl.limit));
+        res.headers.set('X-RateLimit-Remaining', String(rl.remaining));
+        res.headers.set('X-RateLimit-Reset', String(Math.floor(rl.resetAt / 1000)));
+        res.headers.set('x-rate-limit-scope', scope);
+        // Propaga el apiKeyId (hash SHA-256) para que handlers Partner
+        // posteriores como GET /api/v1/partner/usage lo reusen sin re-hash.
+        res.headers.set('x-rate-limit-key', apiKeyId);
+        res.headers.set('x-tenant-subdomain', subdomain || '');
+        if (xTenantId) res.headers.set('x-tenant-id', xTenantId);
+        res.headers.set('x-api-key', apiKey);
+        return withHeaders(res);
+      }
+    }
     // Rate limiting para endpoints públicos expuestos (basado en IP, sin tenant)
     const needsRateLimit = PUBLIC_API_RATE_LIMITED.some(prefix =>
       pathname.startsWith(prefix)
