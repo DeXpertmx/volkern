@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { toast } from 'sonner'
-import { Building2, Mail, Lock, User, Loader2, Zap, Shield, Users, BookOpen } from 'lucide-react'
+import { Building2, Mail, Lock, User, Loader2, Zap, Shield, Users, BookOpen, PenTool, GraduationCap, Calculator, Factory, UserCheck, CheckCircle2, LayoutGrid } from 'lucide-react'
 
 /* ─── Plan Summary Card ──────────────────────────────────────────────────── */
 
@@ -89,6 +89,7 @@ function SignupForm() {
   })
   const [couponValid, setCouponValid] = useState<any>(null)
   const [validatingCoupon, setValidatingCoupon] = useState(false)
+  const [selectedVertical, setSelectedVertical] = useState<string | null>(null)
 
   const validateCoupon = async () => {
     if (!formData.couponCode.trim()) return
@@ -160,6 +161,9 @@ function SignupForm() {
           interval: pricingParams.interval || 'monthly'
         }
       }
+      if (selectedVertical) {
+        payload.vertical = selectedVertical
+      }
 
       const response = await fetch('/api/signup', {
         method: 'POST',
@@ -195,7 +199,7 @@ function SignupForm() {
       }
 
       // Sin checkout → redirigir al onboarding simplificado (cupón / trial)
-      router.push('/dashboard/onboarding-quick')
+      router.push(`/dashboard/onboarding-quick${selectedVertical ? `?vertical=${selectedVertical}` : ''}`)
       
     } catch (error: any) {
       console.error('Error en signup:', error)
@@ -231,6 +235,49 @@ function SignupForm() {
         <CardContent>
           {/* Resumen del plan elegido */}
           <PlanSummary searchParams={pricingParams} />
+
+          {/* ─── Vertical Selector ────────────────────────────────────── */}
+          <div className="mb-5">
+            <div className="flex items-center gap-2 mb-2">
+              <LayoutGrid className="h-3.5 w-3.5 text-purple-500" />
+              <span className="text-xs font-medium text-gray-500">¿Cuál es tu sector? (opcional)</span>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              {[
+                { id: 'crm_ventas', label: 'CRM Ventas', icon: Zap, color: 'border-cyan-300 bg-cyan-50', iconColor: 'text-cyan-500' },
+                { id: 'agencia_marketing', label: 'Agencia Marketing', icon: PenTool, color: 'border-purple-300 bg-purple-50', iconColor: 'text-purple-500' },
+                { id: 'academia', label: 'Academia', icon: GraduationCap, color: 'border-amber-300 bg-amber-50', iconColor: 'text-amber-500' },
+                { id: 'asesoria_contable', label: 'Asesoría Contable', icon: Calculator, color: 'border-blue-300 bg-blue-50', iconColor: 'text-blue-500' },
+                { id: 'rrhh', label: 'RRHH', icon: UserCheck, color: 'border-rose-300 bg-rose-50', iconColor: 'text-rose-500' },
+                { id: 'inmobiliaria', label: 'Inmobiliaria', icon: Building2, color: 'border-emerald-300 bg-emerald-50', iconColor: 'text-emerald-500' },
+                { id: 'industria', label: 'Industria', icon: Factory, color: 'border-orange-300 bg-orange-50', iconColor: 'text-orange-500' },
+              ].map(v => {
+                const Icon = v.icon
+                const isSelected = selectedVertical === v.id
+                return (
+                  <button
+                    key={v.id}
+                    type="button"
+                    onClick={() => setSelectedVertical(isSelected ? null : v.id)}
+                    className={`flex items-center gap-2 p-2 rounded-lg border text-left transition-all text-xs ${
+                      isSelected
+                        ? `${v.color} shadow-sm ring-1 ring-offset-1 ring-purple-300`
+                        : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    <Icon className={`h-3.5 w-3.5 flex-shrink-0 ${isSelected ? v.iconColor : 'text-gray-400'}`} />
+                    <span className={`font-medium truncate ${isSelected ? 'text-gray-800' : 'text-gray-600'}`}>{v.label}</span>
+                    {isSelected && <CheckCircle2 className="h-3 w-3 text-purple-500 ml-auto flex-shrink-0" />}
+                  </button>
+                )
+              })}
+            </div>
+            {selectedVertical && (
+              <p className="text-[10px] text-gray-400 mt-1.5">
+                Los módulos de esta vertical se pre-seleccionarán en el siguiente paso.
+              </p>
+            )}
+          </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
