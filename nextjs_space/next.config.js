@@ -37,6 +37,17 @@ const nextConfig = {
   // resolverse correctamente desde node_modules
   serverExternalPackages: ['pino', 'thread-stream'],
 
+  // ═══ Rewrites ═══════════════════════════════════════
+  // Mapear rutas de documentación a archivos estáticos en public/
+  async rewrites() {
+    return [
+      {
+        source: '/api/partner',
+        destination: '/docs/partner-api.html',
+      },
+    ];
+  },
+
   // ═══ Redirects (301) ═══════════════════════════════════
   // Redirigir rutas antiguas de landings verticales a /soluciones/
   async redirects() {

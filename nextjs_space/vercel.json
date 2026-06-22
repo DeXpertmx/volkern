@@ -8,12 +8,6 @@
       "path": "/api/cron/cleanup-attendance",
       "schedule": "0 3 * * *"
     }
-  ],
-  "rewrites": [
-    {
-      "source": "/api/partner",
-      "destination": "/docs/partner-api.html"
-    }
   ]
 }
 
