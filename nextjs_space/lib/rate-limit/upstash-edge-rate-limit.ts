@@ -18,7 +18,6 @@
 
 import type { RateLimitPolicy } from "./partner-rate-limit-config";
 import { UPSTASH_FETCH_TIMEOUT_MS } from "./partner-rate-limit-config";
-import { logger } from "@/lib/logger";
 
 /* ─── Write-side (existente): checkPartnerRateLimit ──────────────────────── */
 
@@ -174,9 +173,9 @@ export async function checkPartnerRateLimit(
   } catch (err: unknown) {
     clearTimeout(timeoutId);
     const message = err instanceof Error ? err.message : String(err);
-    logger.warn(
-      { scope, failClosed: policy.failClosed, error: message },
-      "[PartnerRateLimit] Upstash unreachable",
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[PartnerRateLimit] Upstash unreachable for scope=${scope}, failClosed=${policy.failClosed}: ${message}`,
     );
 
     if (policy.failClosed) {
@@ -331,9 +330,9 @@ export async function inspectPartnerRateLimit(
   } catch (err: unknown) {
     clearTimeout(timeoutId);
     const message = err instanceof Error ? err.message : String(err);
-    logger.warn(
-      { error: message },
-      "[PartnerRateLimit] inspectPartnerRateLimit failed",
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[PartnerRateLimit] inspectPartnerRateLimit failed: ${message}`,
     );
     return {
       buckets: fallbackBuckets("unavailable"),
