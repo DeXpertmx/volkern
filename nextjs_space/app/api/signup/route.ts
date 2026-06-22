@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/db'
 import { PLANS, PLAN_LIMITS, TRIAL_DAYS, PLAN_MODULES, getPlanConfig } from '@/lib/plans'
-import { getDefaultModules } from '@/lib/onboarding-modules'
+import { getDefaultModules, PERFIL_SUGGESTED_MODULES } from '@/lib/onboarding-modules'
 import { seedFormsForTenant } from '@/scripts/seed-formularios-demo'
 import { AccountingInitializer } from '@/lib/accounting/initializer'
 import { stripe, createSubscriptionCheckout } from '@/lib/stripe'
@@ -117,7 +117,7 @@ function generateSlug(companyName: string): string {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { email, password, fullName, companyName, couponCode, pricing, legalConsent } = body
+    const { email, password, fullName, companyName, couponCode, pricing, legalConsent, vertical } = body
 
     if (!email || !password || !fullName || !companyName) {
       return NextResponse.json(
@@ -228,6 +228,16 @@ export async function POST(request: NextRequest) {
     let limites = trialConfig.limites
     let modules = getDefaultModules()
     let fechaFin: Date
+
+    // Si el usuario seleccionó una vertical, usar sus módulos sugeridos + core defaults
+    if (vertical && PERFIL_SUGGESTED_MODULES[vertical]) {
+      const verticalModules = PERFIL_SUGGESTED_MODULES[vertical]
+      const coreSet = new Set(getDefaultModules())
+      for (const mod of verticalModules) {
+        coreSet.add(mod)
+      }
+      modules = Array.from(coreSet)
+    }
 
     // Si el usuario contrató un plan específico (via checkout), activar sus módulos
     if (pricing?.plan && !couponData) {
@@ -375,6 +385,7 @@ export async function POST(request: NextRequest) {
             slug: tenant.slug,
             plan: tenant.plan,
             trialEnds: fechaFin.toISOString(),
+            vertical: vertical || null,
             modules: modules,
             couponCode: couponData?.code || null,
             legalConsent: legalConsent || null,

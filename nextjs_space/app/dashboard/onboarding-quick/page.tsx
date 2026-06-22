@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -44,6 +44,7 @@ const VERTICAL_COLORS: Record<string, { gradient: string; iconBg: string; iconCo
 
 export default function OnboardingQuickPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [step, setStep] = useState<Step>(1)
   const [loading, setLoading] = useState(false)
   const [token, setToken] = useState('')
@@ -61,6 +62,15 @@ export default function OnboardingQuickPage() {
 
   const provisionStarted = useRef(false)
   const pollingInterval = useRef<NodeJS.Timeout>()
+
+  // Pre-select vertical from signup query param
+  useEffect(() => {
+    const verticalParam = searchParams.get('vertical')
+    if (verticalParam && PERFIL_SUGGESTED_MODULES[verticalParam]) {
+      handleSelectProfile(verticalParam as VerticalProfile)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
 
   useEffect(() => {
     if (step === 2 && !provisionStarted.current) {
