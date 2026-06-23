@@ -161,6 +161,24 @@ export const AVAILABLE_SCOPES = [
   // Contabilidad
   'accounting:read',
   'accounting:write',
+
+  // ─── Partner API (Volkern Hostelería — integración SaaS-a-SaaS) ──────────────
+  // Estos scopes se usan exclusivamente en rutas `/api/v1/partner/*` consumibles
+  // por software externo integrado con Volkern vía API Key per-tenant.
+  //
+  // Modelo de amenaza:
+  //  - 1 Restaurantero SaaS = 1 Tenant Volkern → 1 API Key por Restaurantero.
+  //  - Scope `partners:onboard` está restringido a flag de servicio explícito
+  //    (no auto-servicio: solo provisionado por admin Volkern tras contrato).
+  //  - `payroll:run` puede sellar nómina + enviar AEAT → auditable vía `audit:read`.
+  //  - Scopes se evalúan contra el API key del partner, no contra el session user.
+  'partners:onboard',     // POST /api/v1/partner/onboard/tenant — provisionar tenant+apiKey
+  'attendance:write',     // POST /api/v1/partner/attendance/punch (idempotente)
+  'attendance:read',      // GET marcajes históricos por externalEmployeeId
+  'employees:write',      // Alta/baja empleados Volkern desde SaaS partner
+  'employees:read',
+  'payroll:run',          // POST /api/v1/partner/payroll/run → engine + Verifactu + AEAT submit
+  'audit:read',           // GET /api/v1/partner/audit-log (RGPD Art. 30 — registro de accesos)
 ] as const;
 
 export type ApiKeyScope = typeof AVAILABLE_SCOPES[number];

@@ -385,6 +385,12 @@ export async function startTenantTrial(tenantId: string, diasTrial: number = TRI
   return service.startTrial(diasTrial);
 }
 
+/**
+ * @deprecated since 2026-06-21 — el handler `app/api/cron/trials` que invocaba esta
+ * función fue eliminado por dead-code cleanup. Ningún caller activo en el codebase.
+ * Mantener como referencia hasta próxima limpieza mayor (puede ser eliminada sin
+ * reemplazo; la lógica equivalente no se ha re-activado en otro lugar).
+ */
 export async function processExpiredTrials(): Promise<{ processed: number; errors: string[] }> {
   const errors: string[] = [];
   let processed = 0;
@@ -420,6 +426,12 @@ export async function processExpiredTrials(): Promise<{ processed: number; error
   return { processed, errors };
 }
 
+/**
+ * @deprecated since 2026-06-21 — el handler `app/api/cron/trials` que invocaba esta
+ * función fue eliminado por dead-code cleanup. Ningún caller activo en el codebase.
+ * Mantener como referencia hasta próxima limpieza mayor (puede ser eliminada sin
+ * reemplazo; la lógica equivalente no se ha re-activado en otro lugar).
+ */
 export async function sendTrialReminders(): Promise<{ sent: number; errors: string[] }> {
   const errors: string[] = [];
   let sent = 0;

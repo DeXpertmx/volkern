@@ -66,18 +66,23 @@ export async function activateIndustrialModules(tenantId: string) {
     })
   ));
   
-  // Inicializar reglas de asistencia por defecto
+  // Inicializar reglas de asistencia por defecto.
+  // COMPLIANCE-NOTE (RGPD/LOPDGDD, Julio 2026): ya no activamos `requireSelfie` ni
+  // `randomPulsesPerDay` (los challenges ya no aplican). Activamos sólo GPS con
+  // retención 4 años (RD-Ley 8/2010 + LISOS prescripción laboral) y cooldown 30s
+  // para evitar doble-tap accidental.
   await globalPrisma.attendanceRules.upsert({
     where: { tenantId },
     update: {},
     create: {
       tenantId,
-      requireSelfie: true,
       requireGPS: true,
-      randomPulsesPerDay: 2,
       gracePeriodMinutes: 3,
-      antiSpoofingLevel: 'HIGH'
-    }
+      antiSpoofingLevel: 'HIGH',
+      minPunchIntervalSec: 30,
+      retentionDays: 1460,
+      noticeVersion: 'v1-2026-gps-only',
+    },
   });
 }
 
