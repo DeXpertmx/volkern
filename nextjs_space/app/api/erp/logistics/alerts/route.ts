@@ -23,7 +23,7 @@ export const GET = withTenantAuth(async (request, auth) => {
     // ── 1. ITV próximas a vencer (CRITICAL) ──
     const expiringItv = await (prisma as any).erp_fleet_vehicles.findMany({
       where: {
-        tenantId: auth.tenantId,
+        tenantId: auth.tenant!.id,
         status: { not: 'RETIRED' },
         itvExpiration: {
           not: null,
@@ -62,7 +62,7 @@ export const GET = withTenantAuth(async (request, auth) => {
     // ── 2. Mantenimiento programado (WARNING) ──
     const pendingMaintenance = await (prisma as any).erp_maintenance_orders.findMany({
       where: {
-        tenantId: auth.tenantId,
+        tenantId: auth.tenant!.id,
         status: 'PLANNED',
         plannedDate: { lte: days7 },
       },
@@ -93,7 +93,7 @@ export const GET = withTenantAuth(async (request, auth) => {
 
     // ── 3. Capacidad de almacén (INFO) ──
     const warehouses = await prisma.warehouse.findMany({
-      where: { tenantId: auth.tenantId, active: true },
+      where: { tenantId: auth.tenant!.id, active: true },
       include: {
         _count: { select: { stockLevels: true } },
       },
@@ -103,7 +103,7 @@ export const GET = withTenantAuth(async (request, auth) => {
       // Calcular niveles de ocupación y stock bajo
       const lowStockItems = await (prisma as any).erp_stock_levels.count({
         where: {
-          tenantId: auth.tenantId,
+          tenantId: auth.tenant!.id,
           warehouseId: wh.id,
           quantity: { lte: 5, gt: 0 },
         },
@@ -126,7 +126,7 @@ export const GET = withTenantAuth(async (request, auth) => {
     // ── 4. Envíos pendientes de asignación (WARNING) ──
     const pendingShipments = await (prisma as any).erp_shipments.count({
       where: {
-        tenantId: auth.tenantId,
+        tenantId: auth.tenant!.id,
         status: { in: ['PENDING', 'PREPARING', 'PROCESSING'] },
       },
     });
@@ -147,7 +147,7 @@ export const GET = withTenantAuth(async (request, auth) => {
     // ── 5. Seguros por vencer (INFO) ──
     const expiringInsurance = await (prisma as any).erp_fleet_vehicles.findMany({
       where: {
-        tenantId: auth.tenantId,
+        tenantId: auth.tenant!.id,
         status: { not: 'RETIRED' },
         insuranceExpiration: {
           not: null,
@@ -178,7 +178,7 @@ export const GET = withTenantAuth(async (request, auth) => {
     // ── 6. Envíos en tránsito (INFO) ──
     const inTransit = await (prisma as any).erp_shipments.count({
       where: {
-        tenantId: auth.tenantId,
+        tenantId: auth.tenant!.id,
         status: 'SHIPPED',
       },
     });

@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
  */
 export const GET = withTenantAuth(async (req, auth) => {
   try {
-    const summary = await ComplianceAlertsEngine.detectAll(auth.tenantId)
+    const summary = await ComplianceAlertsEngine.detectAll(auth.tenant!.id)
 
     return NextResponse.json({ success: true, ...summary })
   } catch (error) {

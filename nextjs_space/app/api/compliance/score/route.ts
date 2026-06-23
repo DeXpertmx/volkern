@@ -4,10 +4,16 @@ import { withTenantAuth } from '@/lib/api-key-auth'
 
 export const GET = withTenantAuth(async (req, auth) => {
   try {
-    const report = await ComplianceScoreService.calculate(auth.tenantId)
+    // `withTenantAuth` garantiza `auth.valid === true` antes de invocar el
+    // handler, y populate `tenant`/`user` en todos los branches (sesión, JWT,
+    // API key). Por eso `!.id` es seguro aquí.
+    const tenantId = auth.tenant!.id
+    const userId = auth.user!.id
+
+    const report = await ComplianceScoreService.calculate(tenantId)
 
     // Persistir el score para tracking de tendencia
-    await ComplianceScoreService.persistScore(auth.tenantId, auth.userId, report.overall)
+    await ComplianceScoreService.persistScore(tenantId, userId, report.overall)
 
     return NextResponse.json({ success: true, report })
   } catch (error) {

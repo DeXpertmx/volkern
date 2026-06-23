@@ -16,7 +16,7 @@ export const POST = withTenantAuth(async (request, auth) => {
     // Buscar envíos en tránsito con coordenadas GPS
     const inTransit = await (prisma as any).erp_shipments.findMany({
       where: {
-        tenantId: auth.tenantId,
+        tenantId: auth.tenant!.id,
         status: 'SHIPPED',
         dispatchedAt: { not: null },
         deliveredAt: null,

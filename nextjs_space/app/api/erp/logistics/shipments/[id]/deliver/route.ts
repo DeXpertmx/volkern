@@ -5,7 +5,7 @@ import { LogisticsService } from '@/lib/erp/logistics-service';
 export const POST = withTenantAuth(async (request, auth, { params }) => {
   try {
     const body = await request.json();
-    const result = await LogisticsService.confirmDelivery(params.id, auth.tenantId, {
+    const result = await LogisticsService.confirmDelivery(params.id, auth.tenant!.id, {
       receiverName: body.receiverName,
       evidenceUrl: body.evidenceUrl,
       signatureHash: body.signatureHash,

@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
  */
 export const GET = withTenantAuth(async (req, auth) => {
   try {
-    const tenantId = auth.tenantId
+    const tenantId = auth.tenant!.id
 
     // Estadísticas de webhooks desde audit logs
     const [totalDispatched, totalDelivered, totalFailed, recentDeliveries] = await Promise.all([

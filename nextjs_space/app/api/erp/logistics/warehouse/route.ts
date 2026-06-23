@@ -6,7 +6,7 @@ import { prisma } from '@/lib/db';
 export const GET = withTenantAuth(async (request, auth) => {
   try {
     const warehouses = await prisma.warehouse.findMany({
-      where: { tenantId: auth.tenantId, active: true },
+      where: { tenantId: auth.tenant!.id, active: true },
       include: {
         _count: { select: { stockLevels: true } },
       },
@@ -20,7 +20,7 @@ export const GET = withTenantAuth(async (request, auth) => {
 export const POST = withTenantAuth(async (request, auth) => {
   try {
     const body = await request.json();
-    const movements = await LogisticsService.receiveGoods(auth.tenantId, body);
+    const movements = await LogisticsService.receiveGoods(auth.tenant!.id, body);
     return NextResponse.json({ movements }, { status: 201 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 400 });
