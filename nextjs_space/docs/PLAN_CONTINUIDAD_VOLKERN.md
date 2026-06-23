@@ -6,7 +6,7 @@
 **Versión:** 1.0  
 **Fecha de creación:** 17 de mayo de 2026  
 **Clasificación:** CRÍTICO - Solo para herederos/responsables designados  
-**Ubicación física de este documento:** En poder del heredero legal +抄送 a abogado
+**Ubicación física de este documento:** En poder del heredero legal, con copia al abogado
 
 ---
 
@@ -162,7 +162,7 @@ Contiene 19 documentos técnicos en formato MD y PDF:
 Ubicación: `/home/dexpert/Volkern/nextjs_space/documentacion_comercial/`
 
 - **Whitepaper comercial:** Presentación ejecutiva para prospectos
-- **Fichas por módulo:** Descripción comercial de cada功能
+- **Fichas por módulo:** Descripción comercial de cada módulo
 - **Propuestas:** Propuestas comerciales modelo
 
 ## 3.3 Manuales Operativos (Carpeta `manuales_operativos/`)
@@ -190,7 +190,7 @@ Ubicación: `/home/dexpert/Volkern/nextjs_space/manuales_operativos/`
 ### Paso 3: Propuesta y Negociación
 - Generar propuesta personalizada (usar plantilla en `documentacion_comercial/`)
 - Negociar precio y términos
-- Cerrar与否
+- Cerrar trato
 
 ### Paso 4: Onboarding
 - Crear tenant en Volkern

@@ -197,14 +197,14 @@ interface FacturaVerifactu {
 
 | Código | Descripción | Aplica |
 |--------|-------------|--------|
-| 01 | Operación de养殖 usual | No |
+| 01 | Operación de régimen común | No |
 | 02 | Factura mensual | No |
 | 03 | Factura trimestral | No |
 | 04 | Bienes en régimen de depósito | No |
 | 05 | Destino especial | No |
 | 06 | Agencias de viajes | No |
 | 07 | Rég. especial de agencias de viajes II | No |
-| 08 | Rég. especial de工作组 de turismo | No |
+| 08 | Rég. especial de operaciones de turismo | No |
 | 09 | RÉGIMEN SIMPLIFICADO | Sí |
 | 10 | RÉGIMEN GENERAL | Sí |
 
@@ -318,7 +318,7 @@ interface NominaVerifactu {
 
 ### 5.3 Integración con Sistema Red
 
-El sistema genera automáticamente el fichero de送了 a la Seguridad Social en formato SILTRON:
+El sistema genera automáticamente el fichero de envío a la Seguridad Social en formato SILTRON:
 
 ```
 // Generación de fichero SILTRON
@@ -391,7 +391,7 @@ El sistema de facturación implementa una extensión de Prisma que garantiza la 
 
 **Código del control:**
 ```typescript
-// Billing Lock Extension -拦截 todas las operaciones de update/delete
+// Billing Lock Extension - intercepta todas las operaciones de update/delete
 query: {
   invoice: {
     async update({ args, query }) {

@@ -140,7 +140,7 @@ Se identificaron y eliminaron 4 rutas de API que eran exclusivamente para desarr
 | Fase 2 (light) | 1 día | Build caching | ✅ Completado |
 | Fase 3 | 1 semana | -30% bundle (~300MB) | ✅ Completado |
 | Fase 4 | 1-2 semanas | -70% deploy | ✅ Completado |
-| CI/CD | 1 día | Deploy automático | ✅ Completado |
+| CI/CD | 1 día | Deploy manual a Vercel (CLI) | ✅ Documentado en `docs/DEPLOY.md` |
 
 ---
 
