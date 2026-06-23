@@ -770,11 +770,6 @@ export default function ChatbotAnalyticsPage() {
                 </div>
               );
             })()}
-            ) : (
-              <div className="h-[240px] flex items-center justify-center text-sm text-muted-foreground">
-                No hay datos de conversaciones en este período
-              </div>
-            )}
           </CardContent>
         </Card>
 
@@ -1739,7 +1734,7 @@ function AlertHistoryCard({ alerts }: { alerts: AlertEntry[] }) {
                         if (idx > 0 && arr[idx - 1] !== p - 1) acc.push('ellipsis')
                         acc.push(p)
                         return acc
-                      }, [])}
+                      }, [])
                       .map((item, i) =>
                         item === 'ellipsis' ? (
                           <span key={`e${i}`} className="px-1 text-xs text-muted-foreground">···</span>

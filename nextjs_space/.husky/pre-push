@@ -1,0 +1,12 @@
+#!/bin/sh
+# Pre-push validation: typecheck + lint:docs + bash fixture
+set -e
+echo "[pre-push] running npm run typecheck..."
+npm run typecheck
+echo "[pre-push] running npm run lint:docs..."
+npm run lint:docs
+echo "[pre-push] running bash tests/fence-states.test.sh..."
+bash tests/fence-states.test.sh
+echo "[pre-push] running npx vitest run --bail=5..."
+npx vitest run --bail=5
+echo "[pre-push] all checks passed."

@@ -10,6 +10,7 @@ scripts/diagnose-calendar-sync.ts
 50-api-keys.txt
 traccar-data/
 tests/lint/
-# scratch/ + .husky/ = locally-managed tooling only
+# scratch/ = locally-managed tooling only
 scratch/
-.husky/
+# .husky/ is TRACKED — contains shared quality gates (typecheck, lint, fixture, vitest)
+# Husky v9 requires .husky/ to be committed so hooks are shared across developers.
