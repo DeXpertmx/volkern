@@ -6,3 +6,10 @@ coverage/
 .env*
 traccar-device-mapping.json
 scripts/diagnose-calendar-sync.ts
+# secrets / artifacts / build outputs (chore local-only-noise)
+50-api-keys.txt
+traccar-data/
+tests/lint/
+# scratch/ + .husky/ = locally-managed tooling only
+scratch/
+.husky/
