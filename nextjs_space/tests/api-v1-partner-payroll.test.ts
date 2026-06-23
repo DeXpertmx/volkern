@@ -19,7 +19,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // ── Mocks hoisted ──────────────────────────────────────────────────────────
-const __mockPrisma = {
+// Wrap en `vi.hoisted` para que el factory de `vi.mock("@/lib/db", ...)`
+// pueda resolver `__mockPrisma` cuando Vitest eleva los mocks al top del
+// archivo. Sin el hoist, vitest resuelve el factory antes de que el let
+// exista y los mocks prisma NO se aplican.
+const __mockPrisma = vi.hoisted(() => ({
   payrollRunES: {
     findUnique: vi.fn(),
     upsert: vi.fn(),
@@ -46,7 +50,7 @@ const __mockPrisma = {
   auditLog: {
     create: vi.fn(),
   },
-};
+}));
 
 vi.mock("@/lib/db", () => ({ prisma: __mockPrisma }));
 
@@ -106,8 +110,10 @@ vi.mock("@/lib/api-key-auth", () => ({
 
 // lib/finance/payroll/es/payroll-engine-es — mock calculatePayroll to return DRAFT.
 const MOCK_ENGINE_RESULT = {
-  grossTotal: { toNumber: () => 1813.0 },
-  netTotal: { toNumber: () => 1389.0 },
+  // toFixed(2) incluido: la route usa .toFixed(2) en el push a records.
+  // Sin toFixed, lanza TypeError → catch (empErr) → errors[] (no records).
+  grossTotal: { toNumber: () => 1813.0, toFixed: (_d?: number) => "1813.00" },
+  netTotal: { toNumber: () => 1389.0, toFixed: (_d?: number) => "1389.00" },
   socialSecurityWorker: { toNumber: () => 115.13 },
   socialSecurityEmp: { toNumber: () => 427.85 },
   irpfTotal: { toNumber: () => 308.86 },
@@ -469,6 +475,29 @@ describe("Volkern Partner API — /payroll (Phase 2)", () => {
         }
         return { configuracion: { convenioCode: "ES_HOSTELERIA_ESTATAL" } };
       });
+      // Re-establecer mocks de módulos externos limpiados por vi.clearAllMocks().
+      // PayrollEngineES.calculatePayroll, PayrollSealer.sealPayroll, shipNominaToAEAT
+      // se definieron en vi.mock() factories al cargar el archivo, pero beforeEach
+      // ejecuta clearAllMocks() que los resetear a undefined. Los re-mockeamos aquí.
+      (await import("@/lib/finance/payroll/es/payroll-engine-es")).PayrollEngineES
+        .calculatePayroll.mockResolvedValue(MOCK_ENGINE_RESULT);
+      (await import("@/lib/finance/payroll/es/payroll-sealer")).PayrollSealer
+        .sealPayroll.mockImplementation(async (recordId: string) => ({
+          id: recordId,
+          auditHash: `mockhash_${recordId.slice(0, 6)}`.padEnd(64, "0"),
+          chainedHash: "0".repeat(64),
+          sealedAt: new Date(),
+          status: "SEALED",
+        }));
+      (await import("@/lib/erp/aeat-nomina-adapter")).shipNominaToAEAT
+        .mockImplementation(async (opts: { payrollRecordId: string; runId: string }) => ({
+          submissionId: `${opts.runId}:${opts.payrollRecordId}:test`,
+          status: "ACCEPTED" as const,
+          message: "mock AEAT submission",
+        }));
+      (await import("@/lib/security/vault")).VaultService
+        .decrypt.mockReturnValue("12345678A");
+
       __mockPrisma.payrollLineES.createMany.mockResolvedValue({ count: 4 });
       __mockPrisma.payrollRunES.update.mockResolvedValueOnce({
         id: "run-1",
@@ -514,20 +543,22 @@ describe("Volkern Partner API — /payroll (Phase 2)", () => {
       expect(json.records[0].recordId).toBe("rec-A");
       // RGPD: cifrados NO deben aparecer en la respuesta.
       expect(json.records[0]).not.toHaveProperty("salaryEncrypted");
-      // AuditLog PARTNER_PAYROLL_RUN escrito. NOTA: en objectContaining,
-      // keys DUPLICADAS solo mantienen la última — por eso combinamos las
-      // dos expectativas en un solo stringMatching con regex AND.
+      expect(json.errors).toHaveLength(0);
+      // AuditLog PARTNER_PAYROLL_RUN escrito (RGPD Art. 30).
+      // El `extra` que escribe writePartnerAuditLog contiene {total, accepted, errors, convenio}.
+      // La identidad del run va en `entidadId`, no en metadata.
       expect(__mockPrisma.auditLog.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            accion: "PARTNER_PAYROLL_RUN",metadata: expect.objectContaining({
-                      run: "run-1",
-                      period: "2026-07",
-                      total: 2,
-                      accepted: 2,
-                      errors: 0,
-                      convenio: "ES_HOSTELERIA_ESTATAL",
-                    }),
+            accion: "PARTNER_PAYROLL_RUN",
+            entidad: "PayrollRunES",
+            entidadId: "run-1",
+            metadata: expect.objectContaining({
+              total: 2,
+              accepted: 2,
+              errors: [],
+              convenio: "ES_HOSTELERIA_ESTATAL",
+            }),
           }),
         })
       );

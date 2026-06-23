@@ -9,7 +9,15 @@ export default defineConfig({
       '@': path.resolve(__dirname, './'),
     },
     setupFiles: ['./tests/setup.ts'],
-    exclude: ['app-movil/**', 'node_modules/**', '.opencode/**', 'mcp-server/**'],
+    exclude: [
+      '**/node_modules/**', // recursive: cubre gemma-app/node_modules/, mcp-server/node_modules/, etc.
+      'app-movil/**',
+      '.opencode/**',
+      'mcp-server/**',
+      'dist/**',
+      '.next/**',
+      'coverage/**',
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'text-summary', 'lcov'],

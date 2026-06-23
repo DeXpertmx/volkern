@@ -45,6 +45,13 @@ const nextConfig = {
         source: '/api/partner',
         destination: '/docs/partner-api.html',
       },
+      // Alias: /docs/partner → /docs/redoc (la UI interactiva Redoc).
+      // Mantiene compatibilidad con enlaces legacy a /docs/partner en docs
+      // y README; /docs/redoc sigue siendo la URL canónica.
+      {
+        source: '/docs/partner',
+        destination: '/docs/redoc',
+      },
     ];
   },
 
