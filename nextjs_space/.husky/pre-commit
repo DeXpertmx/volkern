@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+# Husky 9 pre-commit hook — previene contaminación CJK en docs/.
+# See: scripts/check-docs-no-cjk.sh
+bash scripts/check-docs-no-cjk.sh
