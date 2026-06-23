@@ -8,6 +8,14 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { 
   User, 
   ArrowLeft, 
@@ -340,7 +348,8 @@ export default function LeadDetailPage({
                   email: lead.email,
                   telefono: lead.telefono || '',
                   empresa: lead.empresa || '',
-                  contextoProyecto: lead.contextoProyecto || ''
+                  contextoProyecto: lead.contextoProyecto || '',
+                  metadataExterna: lead.metadataExterna || {}
                 });
               }} variant="outline" size="sm">
                 <X className="h-4 w-4 mr-2" />
@@ -433,7 +442,7 @@ export default function LeadDetailPage({
                           {field.type === 'select' ? (
                             <Select 
                               value={formData.metadataExterna?.[field.fieldKey] || ''} 
-                              onValueChange={(val) => setFormData({
+                              onValueChange={(val: string) => setFormData({
                                 ...formData, 
                                 metadataExterna: { ...formData.metadataExterna, [field.fieldKey]: val }
                               })}
@@ -460,7 +469,7 @@ export default function LeadDetailPage({
                             <div className="flex items-center space-x-2 pt-2">
                               <Switch 
                                 checked={formData.metadataExterna?.[field.fieldKey] === true || formData.metadataExterna?.[field.fieldKey] === 'true'}
-                                onCheckedChange={(val) => setFormData({
+                                onCheckedChange={(val: boolean) => setFormData({
                                   ...formData, 
                                   metadataExterna: { ...formData.metadataExterna, [field.fieldKey]: val }
                                 })}

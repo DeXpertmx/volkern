@@ -111,10 +111,10 @@ export class ComplianceAlertsEngine {
     const blocks = await prisma.auditLog.findMany({
       where: {
         tenantId,
-        action: 'COMPLIANCE_BLOCKED',
-        createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+        accion: 'COMPLIANCE_BLOCKED',
+        fechaCreacion: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { fechaCreacion: 'desc' },
       take: 10,
     })
 
@@ -145,17 +145,17 @@ export class ComplianceAlertsEngine {
       select: {
         id: true,
         titulo: true,
-        stage: true,
-        updatedAt: true,
+        etapa: true,
+        fechaActualizacion: true,
       },
-      orderBy: { updatedAt: 'desc' },
+      orderBy: { fechaActualizacion: 'desc' },
       take: 50,
     })
 
     // No se puede detectar saltos de etapa sin historial; esto es referencial
     const saltosRapidos = stageChanges.filter(d => {
-      const diffHours = (Date.now() - new Date(d.updatedAt).getTime()) / (1000 * 3600)
-      return diffHours < 1 && d.stage === 'closed_won'
+      const diffHours = (Date.now() - new Date(d.fechaActualizacion).getTime()) / (1000 * 3600)
+      return diffHours < 1 && d.etapa === 'closed_won'
     })
 
     if (saltosRapidos.length > 3) {
@@ -185,8 +185,8 @@ export class ComplianceAlertsEngine {
     const usuariosSinRol = await prisma.user.findMany({
       where: {
         tenantId,
-        active: true,
-        rol: null,
+        estado: 'activo',
+        roleId: null,
       },
       select: { id: true, name: true, email: true },
     })
@@ -199,7 +199,7 @@ export class ComplianceAlertsEngine {
           auditLogs: {
             some: {
               tenantId,
-              createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+              fechaCreacion: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
             },
           },
         },
@@ -232,7 +232,7 @@ export class ComplianceAlertsEngine {
         tenantId,
         entidad: 'User',
         accion: { in: ['DELETE', 'UPDATE'] },
-        createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
+        fechaCreacion: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
       },
       distinct: ['userId'],
       take: 10,
@@ -267,16 +267,16 @@ export class ComplianceAlertsEngine {
         tenantId,
         estado: { in: ['borrador', 'enviado'] },
         firmadoPorCliente: false,
-        createdAt: { lte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+        fechaCreacion: { lte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
       },
       select: {
         id: true,
         titulo: true,
         estado: true,
-        createdAt: true,
+        fechaCreacion: true,
         dealId: true,
       },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { fechaCreacion: 'asc' },
       take: 10,
     })
 
@@ -286,11 +286,11 @@ export class ComplianceAlertsEngine {
         category: 'proceso',
         severity: contractsPending.length > 5 ? 'CRITICAL' : 'WARNING',
         title: `${contractsPending.length} contrato(s) pendientes de firma`,
-        description: `${contractsPending.length} contratos llevan más de 7 días en estado "${contractsPending[0].estado}" sin firmar. El más antiguo tiene ${Math.floor((Date.now() - new Date(contractsPending[0].createdAt).getTime()) / (1000 * 60 * 60 * 24))} días.`,
+        description: `${contractsPending.length} contratos llevan más de 7 días en estado "${contractsPending[0].estado}" sin firmar. El más antiguo tiene ${Math.floor((Date.now() - new Date(contractsPending[0].fechaCreacion).getTime()) / (1000 * 60 * 60 * 24))} días.`,
         detectedAt: new Date().toISOString(),
         metadata: {
           count: contractsPending.length,
-          oldestDays: Math.floor((Date.now() - new Date(contractsPending[0].createdAt).getTime()) / (1000 * 60 * 60 * 24)),
+          oldestDays: Math.floor((Date.now() - new Date(contractsPending[0].fechaCreacion).getTime()) / (1000 * 60 * 60 * 24)),
           contratos: contractsPending.slice(0, 5).map(c => c.titulo || c.id),
         },
         action: {
@@ -305,7 +305,7 @@ export class ComplianceAlertsEngine {
       where: {
         tenantId,
         estado: 'borrador',
-        createdAt: { lte: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) },
+        fechaCreacion: { lte: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) },
       },
     })
 
@@ -328,33 +328,33 @@ export class ComplianceAlertsEngine {
     const dealsStuck = await prisma.deal.findMany({
       where: {
         tenantId,
-        stage: { notIn: ['closed_won', 'closed_lost'] },
-        updatedAt: { lte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
+        etapa: { notIn: ['closed_won', 'closed_lost'] },
+        fechaActualizacion: { lte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
       },
       select: {
         id: true,
         titulo: true,
-        stage: true,
-        amount: true,
-        updatedAt: true,
+        etapa: true,
+        valor: true,
+        fechaActualizacion: true,
       },
-      orderBy: { updatedAt: 'asc' },
+      orderBy: { fechaActualizacion: 'asc' },
       take: 10,
     })
 
     if (dealsStuck.length > 0) {
-      const totalAmount = dealsStuck.reduce((sum, d) => sum + (d.amount || 0), 0)
+      const totalAmount = dealsStuck.reduce((sum, d) => sum + (d.valor || 0), 0)
       alerts.push({
         id: `proceso-deals-${Date.now()}`,
         category: 'proceso',
         severity: dealsStuck.length > 5 ? 'CRITICAL' : 'WARNING',
         title: `${dealsStuck.length} deal(s) estancados >30 días`,
-        description: `${dealsStuck.length} deals no han cambiado de etapa en más de 30 días. Valor total estimado: ${totalAmount.toLocaleString()} ${dealsStuck[0]?.amount ? '€' : 'en riesgo'}.`,
+        description: `${dealsStuck.length} deals no han cambiado de etapa en más de 30 días. Valor total estimado: ${totalAmount.toLocaleString()} ${dealsStuck[0]?.valor ? '€' : 'en riesgo'}.`,
         detectedAt: new Date().toISOString(),
         metadata: {
           count: dealsStuck.length,
           totalAmount,
-          deals: dealsStuck.slice(0, 5).map(d => ({ id: d.id, title: d.titulo, stage: d.stage, amount: d.amount })),
+          deals: dealsStuck.slice(0, 5).map(d => ({ id: d.id, title: d.titulo, stage: d.etapa, amount: d.valor })),
         },
         action: {
           label: 'Ir a Pipeline',
@@ -430,16 +430,16 @@ export class ComplianceAlertsEngine {
     const modeChanges = await prisma.auditLog.findMany({
       where: {
         tenantId,
-        action: 'COMPLIANCE_MODE_CHANGED',
-        createdAt: { gte: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) },
+        accion: 'COMPLIANCE_MODE_CHANGED',
+        fechaCreacion: { gte: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { fechaCreacion: 'desc' },
       take: 5,
       select: {
         id: true,
         descripcion: true,
         metadata: true,
-        createdAt: true,
+        fechaCreacion: true,
       },
     })
 
@@ -453,8 +453,8 @@ export class ComplianceAlertsEngine {
         category: 'cambio_critico',
         severity: 'INFO',
         title: `Modo Compliance cambiado a "${newMode}"`,
-        description: latest.descripcion || `Cambio de modo registrado el ${new Date(latest.createdAt).toLocaleString('es-ES')}`,
-        detectedAt: latest.createdAt.toISOString(),
+        description: latest.descripcion || `Cambio de modo registrado el ${new Date(latest.fechaCreacion).toLocaleString('es-ES')}`,
+        detectedAt:      latest.fechaCreacion.toISOString(),
         metadata: meta || undefined,
         action: {
           label: 'Ver Configuración',
@@ -464,7 +464,7 @@ export class ComplianceAlertsEngine {
 
       // Si hay múltiples cambios en poco tiempo, alertar
       if (modeChanges.length >= 3) {
-        const firstDate = new Date(modeChanges[modeChanges.length - 1].createdAt)
+        const firstDate = new Date(modeChanges[modeChanges.length - 1].fechaCreacion)
         const daysSpan = Math.ceil((Date.now() - firstDate.getTime()) / (1000 * 60 * 60 * 24))
         if (daysSpan <= 7) {
           alerts.push({
@@ -489,9 +489,9 @@ export class ComplianceAlertsEngine {
       where: {
         tenantId,
         accion: { in: ['DELETE', 'delete'] },
-        createdAt: { gte: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) },
+        fechaCreacion: { gte: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { fechaCreacion: 'desc' },
       take: 20,
     })
 
