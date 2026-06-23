@@ -1,0 +1,48 @@
+-- CreateIndex
+-- Modelo: AuditLog (Prisma, sin `@map`) → tabla "AuditLog" (Postgres, quoted PascalCase).
+-- Composite @@index([tenantId, accion, fechaCreacion]) requerido por los
+-- queries en `lib/compliance-score.ts` para que el cálculo de score de
+-- compliance no degrade a Seq Scan cuando AuditLog crezca:
+--
+--   • scoreAlertas (7d):
+--       SELECT count(*) FROM "AuditLog"
+--       WHERE "tenantId" = $1 AND "accion" = 'COMPLIANCE_BLOCKED'
+--         AND "fechaCreacion" >= now() - interval '7 days';
+--
+--   • getTrend (cálculo de tendencia del score):
+--       SELECT "metadata" FROM "AuditLog"
+--       WHERE "tenantId" = $1 AND "accion" = 'COMPLIANCE_SCORE'
+--       ORDER BY "fechaCreacion" DESC LIMIT 1;
+--
+-- Con el índice compuesto (tenantId, accion, fechaCreacion) Postgres puede
+-- servir ambas queries con Index Scan + bounded range, sin tocar el heap
+-- completo. Cubre además cualquier filtro futuro por
+-- (tenantId, accion=X, fechaCreacion>=Y).
+--
+-- Naming convention (auditada 2026-06-23, ver §7.3 de CRON-MAINTENANCE.md):
+--   <Table>_<col1>_<col2>_<col3>_idx     (= mismo formato que los cinco
+--                                          @@index preexistentes del modelo).
+-- Tabla Postgres sin `@map` → nombre literal del modelo: "AuditLog".
+--
+-- Decisión: CREATE INDEX estándar (sin CONCURRENTLY), siguiendo el precedente
+-- de `prisma/migrations/20260702000000_add_attendance_composite_index/migration.sql`.
+--
+-- Trade-off: lock de writes breve durante la construcción del B-Tree sobre
+-- millones de filas de AuditLog (tabla de altísimo write-throughput: cada
+-- attendance-punch, decision de IA, webhook, login genera un row). Lock del
+-- orden de segundos cuando el dataset es ≤~1M filas y la operación cabe en
+-- main memory. Aplicar en ventana off-peak. Si la tabla crece a >100M filas
+-- en producción, mover a `migrations/manual/` con `CREATE INDEX CONCURRENTLY`
+-- + `prisma migrate resolve --applied`.
+--
+-- Estrategia defensiva en runtime: el cálculo de score por tenant lee
+-- siempre con `tenantId` en la primera posición del WHERE, lo que permite
+-- a Postgres usar este índice incluso cuando `tenantId IS NULL`
+-- no aparece en el filtro (no aplicable aquí — los queries siempre
+-- incluyen `tenantId = X`, no `IS NULL`).
+--
+-- Regresión: si alguien renombra la columna o cambia la acción, las dos
+-- queries afectadas siguen usando Index Scan si Prisma las reescribe al
+-- mismo predicado. No requiere cambios en código de aplicación.
+CREATE INDEX "AuditLog_tenantId_accion_fechaCreacion_idx"
+  ON "AuditLog" ("tenantId", "accion", "fechaCreacion");

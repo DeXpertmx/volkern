@@ -518,6 +518,13 @@ model AuditLog {
   @@index([entidad])
   @@index([entidadId])
   @@index([fechaCreacion])
+  // Índice compuesto requerido por los queries en `lib/compliance-score.ts`:
+  //   • scoreAlertas:        where:{tenantId, accion:'COMPLIANCE_BLOCKED', fechaCreacion:{gte:...}}
+  //   • getTrend:            where:{tenantId, accion:'COMPLIANCE_SCORE'}, orderBy:{fechaCreacion:'desc'}
+  // Sin este índice, ambas queries degradan a Seq Scan cuando AuditLog tenga
+  // >~100k filas. Cobertura: cualquier filtro por (tenantId, accion) con
+  // rango temporal puede usarlo como Index Scan.
+  @@index([tenantId, accion, fechaCreacion])
 }
 
 model PublicAnalyticsEvent {
