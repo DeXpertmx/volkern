@@ -6,11 +6,13 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
+    "lint:docs": "bash scripts/check-docs-no-cjk.sh",
     "typecheck": "NODE_OPTIONS='--max-old-space-size=8192' npx tsc --noEmit --project tsconfig.check.json",
     "prebuild": "npm run openapi:generate",
     "prepare": "husky || true",
     "postinstall": "patch-package",
-    "test": "vitest run",
+    "test:bash": "bash tests/fence-states.test.sh",
+    "test": "vitest run && bash tests/fence-states.test.sh",
     "test:e2e:reconciliation": "bash scripts/run-e2e-reconciliation.sh",
     "test:e2e:reconciliation:ci": "bash scripts/run-e2e-reconciliation-ci.sh",
     "test:e2e:reconciliation:browser": "bash scripts/run-e2e-reconciliation-browser.sh",
@@ -227,6 +229,9 @@
     ],
     "docs/PARTNER-API.md": [
       "npm run generate-partner-docs"
+    ],
+    "docs/**/*.{md,txt,markdown}": [
+      "bash scripts/check-docs-no-cjk.sh"
     ]
   },
   "browserslist": [
