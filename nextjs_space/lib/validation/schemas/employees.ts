@@ -62,7 +62,14 @@ export const ExpenseCreateSchema = z.object({
 });
 
 /**
- * Schema para registrar asistencia (punch)
+ * Schema para registrar asistencia (punch).
+ *
+ * COMPLIANCE-NOTE (RGPD Julio 2026): `selfieBase64` se ha retirado. La captura
+ * facial/biométrica estaba prohibida tras la auditoría RGPD/LOPDGDD.
+ * El único dato personal que aceptamos actualmente es la geolocalización GPS
+ * en el momento del marcaje, validada contra un radio autorizado de planta
+ * (geofencing). Ver `lib/erp/attendance-service.ts` para los detalles del
+ * flujo de aprobación.
  */
 export const AttendancePunchSchema = z.object({
   employeeId: CommonSchemas.id,
@@ -72,7 +79,6 @@ export const AttendancePunchSchema = z.object({
     latitud: z.number().min(-90).max(90),
     longitud: z.number().min(-180).max(180),
   }).optional(),
-  selfieBase64: z.string().optional(),
 });
 
 /**

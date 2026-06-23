@@ -51,7 +51,7 @@ export async function rerankResults(
   if (results.length === 1) {
     // Con un solo resultado, evaluar si es relevante
     const relevance = await evaluateSingleResult(query, results[0], conversationContext)
-    return relevance.score >= MIN_RELEVANCE_SCORE ? [relevance] : []
+    return relevance.relevanceScore >= MIN_RELEVANCE_SCORE ? [relevance] : []
   }
 
   // Limitar inputs para no saturar el contexto del LLM

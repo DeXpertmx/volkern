@@ -120,7 +120,7 @@ export class ComplianceScoreService {
       const recentAudits = await prisma.auditLog.count({
         where: {
           tenantId,
-          createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
+          fechaCreacion: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
         },
       })
       details.push({
@@ -131,11 +131,11 @@ export class ComplianceScoreService {
       if (recentAudits === 0) score -= 15
     }
 
-    // 1.2 Hash chain — verificar que haya integrity hash en contratos
+    // 1.2 Hash chain — verificar que haya audit hash en contratos
     const contratosConHash = await prisma.contrato.count({
       where: {
         tenantId,
-        integrityHash: { not: null },
+        auditHash: { not: null },
       },
     })
     const totalContratos = await prisma.contrato.count({
@@ -239,13 +239,13 @@ export class ComplianceScoreService {
       else if (ratio < 0.6) score -= 10
     }
 
-    // 2.3 Documentos en WebCreator
-    const documentosWeb = await prisma.documento.count({
-      where: { tenantId, deletedAt: null },
+    // 2.3 Páginas activas en WebCreator (proxy razonable: `Documento` no existe como modelo Prisma)
+    const documentosWeb = await prisma.page.count({
+      where: { tenantId, estado: { not: 'draft' } },
     })
     details.push({
-      label: 'Documentos activos (WebCreator)',
-      value: documentosWeb > 0 ? `${documentosWeb} documentos` : 'Sin documentos',
+      label: 'Páginas activas (WebCreator)',
+      value: documentosWeb > 0 ? `${documentosWeb} publicadas` : 'Sin páginas',
       status: documentosWeb > 0 ? 'good' : 'warning',
     })
     if (documentosWeb === 0) score -= 10
@@ -344,13 +344,13 @@ export class ComplianceScoreService {
 
     // 4.1 Usuarios con roles asignados
     const totalUsuarios = await prisma.user.count({
-      where: { tenantId, active: true },
+      where: { tenantId, estado: 'activo' },
     })
     const usuariosConRol = await prisma.user.count({
       where: {
         tenantId,
-        active: true,
-        rol: { not: null },
+        estado: 'activo',
+        roleId: { not: null },
       },
     })
 
@@ -432,8 +432,8 @@ export class ComplianceScoreService {
     const blocksRecientes = await prisma.auditLog.count({
       where: {
         tenantId,
-        action: 'COMPLIANCE_BLOCKED',
-        createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+        accion: 'COMPLIANCE_BLOCKED',
+        fechaCreacion: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
       },
     })
     details.push({
@@ -511,9 +511,9 @@ export class ComplianceScoreService {
       const prevLog = await prisma.auditLog.findFirst({
         where: {
           tenantId,
-          action: 'COMPLIANCE_SCORE',
+          accion: 'COMPLIANCE_SCORE',
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { fechaCreacion: 'desc' },
         select: { metadata: true },
       })
 
@@ -541,10 +541,10 @@ export class ComplianceScoreService {
         data: {
           tenantId,
           userId,
-          action: 'COMPLIANCE_SCORE',
-          entity: 'Tenant',
-          entityId: tenantId,
-          description: `Compliance Score calculado: ${score}%`,
+          accion: 'COMPLIANCE_SCORE',
+          entidad: 'Tenant',
+          entidadId: tenantId,
+          descripcion: `Compliance Score calculado: ${score}%`,
           metadata: { score, timestamp: new Date().toISOString() },
         },
       })
