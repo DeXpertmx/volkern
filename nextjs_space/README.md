@@ -189,13 +189,22 @@ yarn start  # Next.js en puerto 3000
 # Configurar Nginx + SSL + Systemd (ver docs/DEPLOY-GUIDE.md)
 ```
 
-### Opción 2: Vercel
+### Opción 2: Vercel (manual)
 
-Conectar repositorio → Configurar variables de entorno → Deploy automático.
+> ⚠️ **No hay auto-deploy desde GitHub** a día de hoy. Cada release
+> requiere ejecutar `vercel deploy --prod --yes` después del `git push`.
+> `git push origin master` solo sube el código al repo — no dispara build.
 
-> ⚠️ Limitaciones: Sin WebSocket, Redis requiere Upstash, límite de 250MB.
+```bash
+git push origin master                 # solo sube a GitHub
+vercel deploy --prod --yes            # deploy manual a volkern.app
+```
 
-📘 [Guía completa de deploy](docs/DEPLOY-GUIDE.md)
+> Limitaciones: Sin WebSocket nativo en serverless, Redis requiere Upstash,
+> límite de build 250MB.
+
+📘 **Flujo detallado y troubleshooting:** [`docs/DEPLOY.md`](docs/DEPLOY.md)
+📘 Deploy self-hosted (VPS/Docker): [`docs/DEPLOY-GUIDE.md`](docs/DEPLOY-GUIDE.md)
 
 ---
 

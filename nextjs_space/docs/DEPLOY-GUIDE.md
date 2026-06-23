@@ -188,9 +188,14 @@ sudo systemctl status volkern
 
 Configurar todas las variables de entorno en el dashboard de Vercel.
 
-### 3. Deploy Automático
+### 3. Deploy Manual
 
-Vercel deploya automáticamente desde `main` branch.
+> ⚠️ **No hay auto-deploy desde GitHub** a día de hoy. Cada release requiere
+> ejecutar manualmente `vercel deploy --prod --yes` después del `git push`.
+>
+> Ver [`DEPLOY.md`](DEPLOY.md) para el flujo completo paso a paso,
+> troubleshooting detallado (branch mismatch, cache invalidation, anti-SSRF),
+> y los comandos de diagnóstico (`vercel ls`, `vercel inspect`, etc.).
 
 ### 4. Limitaciones
 
