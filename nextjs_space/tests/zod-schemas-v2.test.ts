@@ -826,12 +826,26 @@ describe('Zod — Employees', () => {
       }, 'ubicacion');
     });
 
-    it('debe aceptar con selfieBase64 y timestamp', () => {
+    it('NO acepta selfieBase64 (RGPD: campo retirado en Julio 2026)', () => {
+      // selfieBase64 fue eliminado de AttendancePunchSchema por RGPD Art. 9.
+      // Zod ignora campos extra silenciosamente por defecto (no es strict()),
+      // pero queremos asegurar que el SCHEMA en sí NO declara la clave.
+      const declaredKeys = Object.keys(
+        (AttendancePunchSchema as any).shape ?? {},
+      );
+      expect(declaredKeys).not.toContain('selfieBase64');
+      // Y que sigue aceptando un marcaje GPS válido SIN selfieBase64.
       ok(AttendancePunchSchema, {
         ...valid,
-        selfieBase64: 'data:image/jpeg;base64,/9j/...',
         timestamp: '2024-06-15T09:00:00.000Z',
       });
+    });
+
+    it('rechaza coordenadas fuera de bounds RGPD/Earth (lat>90)', () => {
+      fail(AttendancePunchSchema, {
+        ...valid,
+        ubicacion: { latitud: 91, longitud: 0 },
+      }, 'ubicacion');
     });
   });
 
