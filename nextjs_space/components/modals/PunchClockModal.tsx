@@ -39,17 +39,21 @@ export function PunchClockModal({ isOpen, onOpenChange, type, employeeId, onSucc
       })
 
       // 2. ENVIAR A API
+      // El backend ya no acepta `evidenceUrl` ni selfie; sólo necesitamos GPS.
       const res = await fetch('/api/erp/attendance/punch', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          // Idempotency-Key evita doble-marcaje si la red hace retry en el navegador.
+          'x-idempotency-key': crypto.randomUUID(),
+        },
         body: JSON.stringify({
           employeeId,
           type,
           method: 'WEB',
           locationLat: position.coords.latitude,
           locationLng: position.coords.longitude,
-          evidenceUrl: null // Foto desactivada por políticas de privacidad
-        })
+        }),
       })
 
       const result = await res.json()
