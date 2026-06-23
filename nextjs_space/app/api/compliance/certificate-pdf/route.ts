@@ -12,7 +12,7 @@ import { ComplianceScoreService } from '@/lib/compliance-score'
  */
 export const GET = withTenantAuth(async (req, auth) => {
   try {
-    const tenantId = auth.tenantId
+    const tenantId = auth.tenant!.id
 
     // Obtener datos del score
     const report = await ComplianceScoreService.calculate(tenantId)

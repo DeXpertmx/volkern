@@ -19,7 +19,7 @@ export const GET = withTenantAuth(async (request, auth) => {
     if (search) {
       const shipment = await (prisma as any).erp_shipments.findFirst({
         where: {
-          tenantId: auth.tenantId,
+          tenantId: auth.tenant!.id,
           OR: [
             { trackingNumber: { contains: search, mode: 'insensitive' } },
             { batchNumber: { contains: search, mode: 'insensitive' } },
@@ -63,7 +63,7 @@ export const GET = withTenantAuth(async (request, auth) => {
     // ── Listar eventos de tracking recientes ──
     const [shipments, total] = await Promise.all([
       (prisma as any).erp_shipments.findMany({
-        where: { tenantId: auth.tenantId },
+        where: { tenantId: auth.tenant!.id },
         include: {
           erp_delivery_confirmations: {
             take: 1,
@@ -74,7 +74,7 @@ export const GET = withTenantAuth(async (request, auth) => {
         take: limit,
         skip,
       }),
-      (prisma as any).erp_shipments.count({ where: { tenantId: auth.tenantId } }),
+      (prisma as any).erp_shipments.count({ where: { tenantId: auth.tenant!.id } }),
     ]);
 
     // Compose tracking events from shipments (with GPS data + display city names)

@@ -4,7 +4,7 @@ import { FleetService } from '@/lib/erp/fleet-service';
 
 export const GET = withTenantAuth(async (request, auth, { params }) => {
   try {
-    const vehicle = await FleetService.getVehicle(params.id, auth.tenantId);
+    const vehicle = await FleetService.getVehicle(params.id, auth.tenant!.id);
     if (!vehicle) {
       return NextResponse.json({ error: 'Vehículo no encontrado' }, { status: 404 });
     }
@@ -20,11 +20,11 @@ export const PATCH = withTenantAuth(async (request, auth, { params }) => {
 
     // Si es registro de kilometraje, usar método específico
     if (body.currentKm !== undefined) {
-      const updated = await FleetService.recordKm(params.id, auth.tenantId, body.currentKm);
+      const updated = await FleetService.recordKm(params.id, auth.tenant!.id, body.currentKm);
       return NextResponse.json({ vehicle: updated });
     }
 
-    const vehicle = await FleetService.updateVehicle(params.id, auth.tenantId, body);
+    const vehicle = await FleetService.updateVehicle(params.id, auth.tenant!.id, body);
     return NextResponse.json({ vehicle });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 400 });

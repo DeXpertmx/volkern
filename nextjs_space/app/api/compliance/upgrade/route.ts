@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
  */
 export const POST = withTenantAuth(async (req, auth) => {
   try {
-    const tenantId = auth.tenantId
+    const tenantId = auth.tenant!.id
 
     // 1. Verificar que el tenant existe
     const tenant = await globalPrisma.tenant.findUnique({
@@ -97,7 +97,7 @@ export const POST = withTenantAuth(async (req, auth) => {
     const { AuditService } = await import('@/lib/audit-service')
     await AuditService.log({
       tenantId,
-      userId: auth.userId,
+      userId: auth.user!.id,
       action: 'COMPLIANCE_PRO_ACTIVATED',
       entity: 'Tenant',
       entityId: tenantId,

@@ -9,8 +9,8 @@ import { AuditService } from '@/lib/audit-service'
  */
 export const GET = withTenantAuth(async (req, auth) => {
   try {
-    const userId = auth.userId
-    const tenantId = auth.tenantId
+    const userId = auth.user!.id
+    const tenantId = auth.tenant!.id
 
     const exportData = await AuditService.getUserDataExport(userId, tenantId)
 

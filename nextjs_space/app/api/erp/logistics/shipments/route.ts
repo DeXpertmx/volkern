@@ -11,7 +11,7 @@ export const GET = withTenantAuth(async (request, auth) => {
     const page = parseInt(searchParams.get('page') || '1');
     const skip = (page - 1) * limit;
 
-    const where: any = { tenantId: auth.tenantId };
+    const where: any = { tenantId: auth.tenant!.id };
     if (status) where.status = status;
 
     const [shipments, total] = await Promise.all([
@@ -45,7 +45,7 @@ export const GET = withTenantAuth(async (request, auth) => {
 export const POST = withTenantAuth(async (request, auth) => {
   try {
     const body = await request.json();
-    const shipment = await LogisticsService.createShipment(body.salesOrderId, auth.tenantId, {
+    const shipment = await LogisticsService.createShipment(body.salesOrderId, auth.tenant!.id, {
       carrier: body.carrier,
       trackingNumber: body.trackingNumber,
     });
