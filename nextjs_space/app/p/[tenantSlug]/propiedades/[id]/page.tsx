@@ -97,6 +97,7 @@ export default async function PropertyDetailPage({ params }: Props) {
       id: true,
       nombre: true,
       moneda: true,
+      brandingConfig: true,
     },
   });
 
@@ -113,7 +114,7 @@ export default async function PropertyDetailPage({ params }: Props) {
   const relatedProperties = await getRelatedProperties(tenant.id, property);
 
   const branding = await getEffectiveBranding(tenant.id);
-  const brandingColor = branding.primaryColor;
+  const brandingColor = branding.primaryColor!;
 
   // Obtener imágenes del array media
   const images = Array.isArray(property.media)

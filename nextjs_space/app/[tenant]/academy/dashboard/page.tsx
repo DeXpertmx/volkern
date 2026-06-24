@@ -202,7 +202,7 @@ export default function AcademyDashboardPage() {
                   <span>Progreso de Ruta</span>
                   <span>85%</span>
                 </div>
-                <Progress value={85} className="h-2 bg-white/10" indicatorClassName="bg-emerald-500" />
+                <Progress value={85} className="h-2 bg-white/10" />
               </div>
               <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black h-12 rounded-xl">
                 Continuar Ruta
@@ -276,7 +276,7 @@ function CourseProgressCard({ title, instructor, progress, image, nextLesson }: 
             <Badge variant="outline" className="text-xs font-bold text-slate-400 border-slate-200">{progress}%</Badge>
           </div>
           <p className="text-sm text-slate-500 font-medium mb-4">Instructor: {instructor}</p>
-          <Progress value={progress} className="h-2 bg-slate-100" indicatorClassName="bg-emerald-600" />
+          <Progress value={progress} className="h-2 bg-slate-100" />
         </div>
         <div className="flex items-center justify-between mt-6 bg-slate-50 rounded-xl p-3 px-4">
           <div className="flex items-center gap-3">

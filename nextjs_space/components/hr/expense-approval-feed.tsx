@@ -95,7 +95,7 @@ export function ExpenseApprovalFeed() {
   return (
     <div className="relative h-full w-full max-w-md mx-auto perspective-1000 py-10">
       <AnimatePresence>
-        {displayClaims.map((claim, idx) => {
+        {displayClaims.map((claim: any, idx: number) => {
           if (idx < currentIndex) return null
           if (idx > currentIndex + 1) return null // Solo renderizamos el actual y el siguiente para performance
 

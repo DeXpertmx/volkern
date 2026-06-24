@@ -4,8 +4,10 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Users, Calendar, TrendingUp, Send, Lock, Unlock, GripVertical, Rocket, ShieldCheck } from 'lucide-react'
-import { ResponsiveGridLayout, useContainerWidth } from 'react-grid-layout';
+import { ResponsiveGridLayout as RGL, useContainerWidth } from 'react-grid-layout';
 import type { ResponsiveLayouts } from 'react-grid-layout';
+
+const ResponsiveGridLayout = RGL as any;
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 
@@ -182,7 +184,6 @@ export function DashboardContent() {
       </div>
 
       <ResponsiveGridLayout
-        // @ts-expect-error react-grid-layout v2.x API breaking change
         className="layout"
         layouts={layouts}
         breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
