@@ -30,12 +30,12 @@ export class GemmaSupportService {
     `;
 
     try {
-      const response = await callGemma({
+      const response = await (callGemma as any)({
         prompt,
         temperature: 0.2
       });
 
-      const triage = JSON.parse(response.text);
+      const triage = JSON.parse((response as any).text);
 
       // Actualizar ticket con la prioridad sugerida
       await prisma.supportTicket.update({
@@ -98,8 +98,8 @@ export class GemmaSupportService {
     `;
 
     try {
-      const response = await callGemma({ prompt });
-      return response.text;
+      const response = await (callGemma as any)({ prompt });
+      return (response as any).text;
     } catch (error) {
       return "No se pudo generar una sugerencia en este momento.";
     }

@@ -11,10 +11,10 @@ export class PackSystem {
 
     const tenant = await prisma.tenant.findUnique({
       where: { id: tenantId },
-      select: { config: true }
+      select: { config: true } as any
     })
 
-    const config = (tenant?.config as any) || {}
+    const config = ((tenant as any)?.config as any) || {}
     const packData = config.volkern_pack || config.pack
 
     if (!packData) {
@@ -81,7 +81,7 @@ export class PackSystem {
 
   static async getTriggers(tenantId: string, eventType: string): Promise<PackTrigger[]> {
     const pack = await this.loadPack(tenantId)
-    return pack.triggers.filter(t => t.trigger === eventType)
+    return pack!.triggers.filter(t => t.trigger === eventType)
   }
 
   static evaluateCondition(condition: TriggerCondition, data: Record<string, unknown>): boolean {
@@ -113,7 +113,7 @@ export class PackSystem {
   static async savePack(tenantId: string, pack: VolkernPack): Promise<void> {
     await prisma.tenant.update({
       where: { id: tenantId },
-      data: { configuracion: { volkern_pack: pack } }
+      data: { configuracion: { volkern_pack: pack } as any }
     })
     this.packs.set(tenantId, pack)
   }

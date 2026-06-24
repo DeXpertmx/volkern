@@ -137,7 +137,7 @@ export class InvoicingService {
 
     const creds = integration.credenciales as any
     const gcEnvironment = creds.environment === 'live' ? GoCardlessEnvironment.Live : GoCardlessEnvironment.Sandbox
-    const client = gocardless(creds.accessToken, gcEnvironment)
+    const client = (gocardlessModule as any)(creds.accessToken, gcEnvironment)
 
     const cliente = await this.getClienteFiscal(leadId, contactId, tenantId)
 
@@ -246,7 +246,7 @@ export class InvoicingService {
       AEATXmlGenerator.generateAltaFactura(data),
       p12Base64,
       password
-    );
+    ) as any;
 
     if (new Date(expiresAt) < new Date()) {
       throw new Error(`Certificado expirado el ${expiresAt}`);

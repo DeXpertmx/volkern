@@ -161,7 +161,7 @@ function mapDbPlanToConfig(plan: DbSubscriptionPlan): PlanConfig {
       automations_count: parsedFeatures?.automations_count ?? (plan.automationsHabilitado ? -1 : 0),
       pages: parsedFeatures?.pages ?? 10,
       ...parsedFeatures?.raw_limits
-    },
+    } as any,
     modules,
     stripePriceId: parsedFeatures?.stripePriceId || '',
     stripePriceYearlyId: parsedFeatures?.stripePriceYearlyId || '',
@@ -169,7 +169,7 @@ function mapDbPlanToConfig(plan: DbSubscriptionPlan): PlanConfig {
       whitelabel: plan.whitelabelHabilitado,
       customDomain: plan.dominioPersonalizadoHabilitado
     }
-  };
+  } as any;
 }
 
 function getHardcodedPlanConfig(planSlug: string): PlanConfig {
@@ -189,7 +189,7 @@ function getHardcodedPlanConfig(planSlug: string): PlanConfig {
     modules,
     stripePriceId: prices?.stripePriceId || '',
     stripePriceYearlyId: prices?.stripePriceYearlyId || '',
-  };
+  } as any;
 }
 
 export async function getTenantEffectiveLimits(tenantId: string): Promise<Record<string, number>> {
@@ -199,7 +199,7 @@ export async function getTenantEffectiveLimits(tenantId: string): Promise<Record
   });
 
   if (!tenant) {
-    return PLAN_LIMITS[PLANS.ESENCIAL];
+    return PLAN_LIMITS[PLANS.ESENCIAL] as any;
   }
 
   const planConfig = await getPlanConfig(tenant.plan);
@@ -402,20 +402,20 @@ export async function getAllPlanLimits(): Promise<Record<string, Record<string, 
     const limits: Record<string, Record<string, number>> = {};
     for (const plan of dbPlans) {
       const config = mapDbPlanToConfig(plan);
-      limits[plan.slug] = config.limites;
+      limits[plan.slug] = config.limites as any;
     }
 
     const hardcodedPlans = Object.keys(PLAN_LIMITS) as (keyof typeof PLAN_LIMITS)[];
     for (const planKey of hardcodedPlans) {
       if (!limits[planKey]) {
-        limits[planKey] = PLAN_LIMITS[planKey];
+        limits[planKey] = PLAN_LIMITS[planKey] as any;
       }
     }
 
-    return limits;
+    return limits as any;
   } catch (error) {
     console.error('[Subscription] Error fetching all plans:', error);
-    return PLAN_LIMITS;
+    return PLAN_LIMITS as any;
   }
 }
 

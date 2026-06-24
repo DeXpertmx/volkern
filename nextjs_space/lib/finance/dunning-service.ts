@@ -9,7 +9,7 @@ export class DunningService {
   static async handlePaymentFailure(subscriptionId: string, error?: string) {
     console.log(`[DunningService] Procesando fallo de pago para suscripción: ${subscriptionId}`)
     
-    const subscription = await prisma.clientSubscription.findUnique({
+    const subscription = await (prisma as any).clientSubscription.findUnique({
       where: { id: subscriptionId },
       include: { 
         contact: true, 
@@ -39,7 +39,7 @@ export class DunningService {
     // Si ya superó los 3 intentos sin éxito, se pausa definitivamente
     const newStatus = nextAttemptNumber > 3 ? 'PAUSED' : 'GRACE_PERIOD'
 
-    await prisma.clientSubscription.update({
+    await (prisma as any).clientSubscription.update({
       where: { id: subscriptionId },
       data: {
         estado: newStatus,
@@ -64,7 +64,7 @@ export class DunningService {
   static async handlePaymentSuccess(subscriptionId: string) {
     console.log(`[DunningService] Pago exitoso detectado. Reactivando suscripción: ${subscriptionId}`)
     
-    await prisma.clientSubscription.update({
+    await (prisma as any).clientSubscription.update({
       where: { id: subscriptionId },
       data: {
         estado: 'activa',
@@ -74,7 +74,7 @@ export class DunningService {
     })
 
     // Registrar en auditoría
-    const subscription = await prisma.clientSubscription.findUnique({
+    const subscription = await (prisma as any).clientSubscription.findUnique({
       where: { id: subscriptionId },
       include: { tenant: true }
     })
