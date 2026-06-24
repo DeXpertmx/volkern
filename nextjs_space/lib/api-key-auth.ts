@@ -231,7 +231,7 @@ export async function validateApiKey(
       apiKey: { id: dbApiKey.id, nombre: dbApiKey.nombre, scopes: dbApiKey.scopes },
       agencyContext: context.agencyContext,
       db: tDb.client,
-      vaultSeed: tDb.vaultSeed
+      vaultSeed: (tDb as any).vaultSeed
     };
 
   } catch (error: unknown) {
@@ -298,7 +298,7 @@ export async function authenticateRequest(
       let impersonatedId = null;
       try {
         const cookieStore = cookies();
-        impersonatedId = cookieStore.get('volkern_impersonate_id')?.value;
+        impersonatedId = (cookieStore as any).get('volkern_impersonate_id')?.value;
       } catch (e) {}
 
       const headerId = request.headers.get('X-Impersonate-Tenant-Id');
@@ -329,7 +329,7 @@ export async function authenticateRequest(
         },
         agencyContext: context.agencyContext,
         db: tDb.client,
-        vaultSeed: tDb.vaultSeed
+        vaultSeed: (tDb as any).vaultSeed
       };
     }
   } catch (e: unknown) {
@@ -419,7 +419,7 @@ export async function authenticateRequest(
             },
             agencyContext: false,
             db: tDb.client,
-            vaultSeed: tDb.vaultSeed
+            vaultSeed: (tDb as any).vaultSeed
           };
         }
       } catch (e: unknown) {

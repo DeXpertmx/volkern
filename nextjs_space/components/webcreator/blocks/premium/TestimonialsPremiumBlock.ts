@@ -71,8 +71,8 @@ export const createTestimonialsPremiumBlock = (editor: Editor) => {
         script: function(this: any) {
           const el = this;
           const update = () => {
-            const get = (a) => el.getAttribute(a);
-            const set = (sel, val) => {
+            const get = (a: any) => el.getAttribute(a);
+            const set = (sel: any, val: any) => {
               if (!val) return;
               const target = el.querySelector(sel);
               if (target) target.innerText = val;

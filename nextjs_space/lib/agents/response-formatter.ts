@@ -299,9 +299,9 @@ export class ResponseFormatterAgent {
 
     let text = '';
     try {
-      if (action === 'error') {
+      if ((action as string) === 'error') {
         text = typeof template === 'function' ? template(error) : template || this.getDefaultResponse(action, success);
-      } else if (action === 'execute' || action === 'success') {
+      } else if ((action as string) === 'execute' || (action as string) === 'success') {
         text = typeof template === 'function' ? template(data) : template || this.getDefaultResponse(action, success);
       } else {
         text = typeof template === 'function' ? template({ data, error, missingParams, confirmationId }) : template || this.getDefaultResponse(action, success);
@@ -514,7 +514,7 @@ export class ResponseFormatterAgent {
     const response = await this.format(params);
     try {
       await prisma.chatbotAuditLog.create({
-        data: { event: 'response_formatted', userId: params.userId, tenantId: params.tenantId, intent: params.intent, metadata: { action: params.action, success: params.success, responseType: response.type }, severity: params.success ? 'info' : 'warning' }
+        data: { event: 'response_formatted', userId: params.userId, tenantId: params.tenantId, intent: params.intent, metadata: { action: params.action, success: params.success, responseType: response.type }, severity: params.success ? 'info' : 'warning' } as any
       });
     } catch (e) { console.error('Error logging response:', e); }
     return response;

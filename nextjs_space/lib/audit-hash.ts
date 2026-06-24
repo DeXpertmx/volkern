@@ -64,12 +64,12 @@ export function verifyAuditIntegrity(
         return;
       }
 
-      const previousHash = auditLog.metadata?.previousHash || null;
+      const previousHash = (auditLog.metadata as any)?.previousHash || null;
       const timestamp = auditLog.fechaCreacion;
 
-      const expectedHash = createAuditHash({
+      const expectedHash = (createAuditHash as any)({
         tenantId: auditLog.tenantId,
-        userId: auditLog.userId,
+        userId: auditLog.userId ?? '',
         entity: auditLog.entidad,
         entityId: auditLog.entidadId,
         action: auditLog.accion,
@@ -164,7 +164,7 @@ export async function createAuditHashChain(
 
       const computedHash = createAuditHash({
         tenantId,
-        userId: entry.metadata?.userId || null,
+        userId: (entry.metadata as any)?.userId || null,
         entity: entry.entidad,
         entityId: entry.entidadId,
         action: entry.accion,

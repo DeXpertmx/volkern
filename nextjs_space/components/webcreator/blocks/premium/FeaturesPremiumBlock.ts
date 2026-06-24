@@ -70,8 +70,8 @@ export const createFeaturesPremiumBlock = (editor: Editor) => {
         script: function(this: any) {
           const el = this;
           const update = () => {
-            const get = (n) => el.getAttribute(n);
-            const set = (sel, val) => {
+            const get = (n: any) => el.getAttribute(n);
+            const set = (sel: any, val: any) => {
               if (!val) return;
               const target = el.querySelector(sel);
               if (target) target.innerText = val;

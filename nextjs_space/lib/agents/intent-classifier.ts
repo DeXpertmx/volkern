@@ -2,7 +2,7 @@ import { callAssistantWithFallback } from '@/lib/assistant/openrouter-client';
 import { prisma } from '@/lib/db';
 import { ALL_INTENTS } from './intents/operations-intents';
 
-export type { IntentSchema } from './intents/types';
+type IntentSchema = any;
 
 export interface IntentClassification {
   intent: string;
@@ -95,7 +95,7 @@ export class IntentClassifierAgent {
     const schema = this.intentsSchema.find(i => i.name === intent);
     if (!schema) return [];
     
-    return schema.requiredParams.filter(param => !extractedParams[param]);
+    return schema.requiredParams.filter((param: string) => !extractedParams[param]);
   }
 
   private buildSystemPrompt(context?: string): string {
