@@ -151,7 +151,7 @@ export class AuditService {
         log.userAgent ? `"${log.userAgent.replace(/"/g, '""')}"` : '',
         log.fechaCreacion.toISOString(),
         log.hash || '',
-        log.metadata?.previousHash || ''
+        (log.metadata as any)?.previousHash || ''
       ].join(','));
 
       return [headers, ...rows].join('\n');
@@ -170,7 +170,7 @@ export class AuditService {
         where: { id: log.id },
         data: {
           metadata: {
-            ...log.metadata,
+            ...(log.metadata as any),
             anonymizedAt: new Date().toISOString(),
             originalUserId: log.userId
           },

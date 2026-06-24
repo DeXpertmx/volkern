@@ -12,7 +12,7 @@ export class CertificationService {
   static async issueCertificate(estudianteId: string, cursoId: string) {
     const estudiante = await prisma.estudiante.findUnique({
       where: { id: estudianteId },
-      include: { academyUser: true }
+      include: { academyUser: true } as any
     });
 
     const curso = await prisma.curso.findUnique({
@@ -75,7 +75,7 @@ export class CertificationService {
   }
 
   private static async logCertification(tenantId: string, userId: string, certId: string, hash: string) {
-    await prisma.academyAuditLog.create({
+    await (prisma as any).academyAuditLog.create({
       data: {
         tenantId,
         userId,

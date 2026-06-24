@@ -6,6 +6,7 @@ import {
 } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+// @ts-expect-error — no declaration file for @changey/react-leaflet-markercluster
 import MarkerClusterGroup from '@changey/react-leaflet-markercluster'
 import '@changey/react-leaflet-markercluster/dist/styles.min.css'
 import { Loader2, Clock, Truck, CheckCircle2, Navigation, FileText } from 'lucide-react'
@@ -146,8 +147,7 @@ function TempTimelineChart({ waypoints }: { waypoints: Array<{ lat: number; lng:
         })}
         {/* Min label */}
         <text
-          x={padX}
-          y={height + 8}
+          x={padX}                  y={svgHeight + 8}
           fill="rgb(148 163 184)"
           fontSize="8"
           fontFamily="monospace"

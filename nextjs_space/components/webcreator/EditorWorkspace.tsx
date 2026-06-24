@@ -634,7 +634,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
           }
           
           // Fix image sources before saving - ensure all images have proper src
-          editor.getAllModels().forEach((comp: any) => {
+          (editor as any).getAllModels().forEach((comp: any) => {
             const tagName = comp.get?.('tagName');
             if (tagName?.toLowerCase() === 'img') {
               const attrs = comp.get?.('attributes') || {};
@@ -712,7 +712,7 @@ document.addEventListener('click', function(e) {
           }
           
           // Fix image sources before publishing
-          editor.getAllModels().forEach((comp: any) => {
+          (editor as any).getAllModels().forEach((comp: any) => {
             const tagName = comp.get?.('tagName');
             if (tagName?.toLowerCase() === 'img') {
               const attrs = comp.get?.('attributes') || {};

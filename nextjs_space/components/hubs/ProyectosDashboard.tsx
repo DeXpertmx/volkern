@@ -139,7 +139,7 @@ export default function ProyectosDashboard() {
         <div className="flex items-center gap-2">
            <div className="flex bg-slate-100 rounded-xl p-1 mr-2">
               <Button 
-                variant={view === 'grid' ? 'white' : 'ghost'} 
+                variant={view === 'grid' ? 'white' as any : 'ghost'} 
                 size="sm" 
                 className={`rounded-lg text-[10px] font-bold px-3 ${view === 'grid' ? 'shadow-sm' : ''}`}
                 onClick={() => setView('grid')}
@@ -147,7 +147,7 @@ export default function ProyectosDashboard() {
                 <LayoutGrid className="w-3 h-3 mr-1" /> Rejilla
               </Button>
               <Button 
-                variant={view === 'kanban' ? 'white' : 'ghost'} 
+                variant={view === 'kanban' ? 'white' as any : 'ghost'} 
                 size="sm" 
                 className={`rounded-lg text-[10px] font-bold px-3 ${view === 'kanban' ? 'shadow-sm' : ''}`}
                 onClick={() => setView('kanban')}

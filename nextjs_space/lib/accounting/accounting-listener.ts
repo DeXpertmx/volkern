@@ -23,7 +23,7 @@ export function initializeAccountingListeners() {
       skillsLogger.error(`[Accounting] Failed to create auto-entry for invoice: ${payload.numero}`, {
         error: error.message,
         tenantId: payload.tenantId
-      });
+      } as any);
     }
   });
 
@@ -40,7 +40,7 @@ export function initializeAccountingListeners() {
       skillsLogger.error(`[Accounting] Failed to process payment entry`, {
         error: error.message,
         tenantId: payload.tenantId
-      });
+      } as any);
     }
   });
 
