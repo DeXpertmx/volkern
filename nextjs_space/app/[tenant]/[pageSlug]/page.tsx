@@ -22,18 +22,18 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (!page) return { title: 'Página no encontrada' };
 
   return {
-    title: page.metaTitulo || page.titulo,
-    description: page.metaDescripcion || page.descripcion,
-    keywords: page.metaKeywords,
+    title: page.metaTitulo ?? page.titulo,
+    description: page.metaDescripcion ?? page.descripcion,
+    keywords: page.metaKeywords ?? undefined,
     openGraph: {
-      title: page.metaTitulo || page.titulo,
-      description: page.metaDescripcion || page.descripcion,
+      title: (page.metaTitulo ?? page.titulo) as any,
+      description: (page.metaDescripcion ?? page.descripcion) as any,
       images: page.metaImagen ? [{ url: page.metaImagen }] : [],
     },
     twitter: {
       card: 'summary_large_image',
-      title: page.metaTitulo || page.titulo,
-      description: page.metaDescripcion || page.descripcion,
+      title: (page.metaTitulo ?? page.titulo) as any,
+      description: (page.metaDescripcion ?? page.descripcion) as any,
       images: page.metaImagen ? [page.metaImagen] : [],
     },
   };
@@ -69,7 +69,7 @@ export default async function PublicPage({ params }: PageProps) {
     notFound();
   }
 
-  const isGrapes = page.contenido?.format === 'grapesjs';
+  const isGrapes = (page.contenido as any)?.format === 'grapesjs';
 
   return (
     <>

@@ -240,11 +240,11 @@ export const createBookingBlock = (editor: Editor) => {
               clone.removeAttribute('data-v-template');
               
               const fNombre = clone.querySelector('[data-v-field="nombre"]');
-              if (fNombre) fNombre.innerText = s.nombre;
+              if (fNombre) (fNombre as any).innerText = s.nombre;
               const fMeta = clone.querySelector('[data-v-field="meta"]');
-              if (fMeta) fMeta.innerText = `${s.duracionMinutos} MIN`;
+              if (fMeta) (fMeta as any).innerText = `${s.duracionMinutos} MIN`;
               const fPrecio = clone.querySelector('[data-v-field="precio"]');
-              if (fPrecio) fPrecio.innerText = `${s.moneda} ${s.precio}`;
+              if (fPrecio) (fPrecio as any).innerText = `${s.moneda} ${s.precio}`;
               
               clone.addEventListener('click', () => {
                 data.service = s.nombre;

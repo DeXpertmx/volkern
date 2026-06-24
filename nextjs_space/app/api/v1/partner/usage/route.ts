@@ -37,8 +37,8 @@ export const GET = withTenantAuth(
     if (partnerErr) return partnerErr;
 
     const tenantId = auth.tenant!.id;
-    const apiKeyId = auth.apiKey.id;
-    const apiKeyName = auth.apiKey.nombre;
+    const apiKeyId = (auth.apiKey as any).id;
+    const apiKeyName = (auth.apiKey as any).nombre;
     const { ipAddress, userAgent } = getRequestMetadata(request);
 
     // Header `x-rate-limit-key` propagado por middleware con el hash SHA-256
@@ -84,7 +84,7 @@ export const GET = withTenantAuth(
       apiKeyId: hashedId,
       scope,
       policy: PARTNER_RATE_LIMITS[scope],
-    }));
+    } as any));
 
     let result;
     try {

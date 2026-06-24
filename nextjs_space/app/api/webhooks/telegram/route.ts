@@ -260,14 +260,14 @@ export async function POST(request: NextRequest) {
 
         const item = await prisma.catalogoItem.findUnique({
           where: { id: itemId },
-          select: { nombre: true, sku: true, precio: true },
+          select: { nombre: true, sku: true, precio: true } as any,
         })
 
-        const expense = await skills.create_expense({
+        const expense = await (skills.create_expense as any)({
           tenantId,
           createdById: admin.id,
           description: `COMPRA PROACTIVA (Watchdog): ${item?.nombre || 'Item'} - SKU: ${item?.sku}`,
-          amount: item?.precio || 0,
+          amount: (item as any)?.precio || 0,
           category: 'Proactivo',
           status: 'PENDING_RECEIPT' as any,
           supplierId: 'watchdog-system',
