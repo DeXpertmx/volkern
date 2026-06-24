@@ -7,7 +7,6 @@ import {
   MoreHorizontal, 
   ChevronRight, 
   Info,
-  Dialpad
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -72,7 +71,7 @@ export default function TelephonyDashboardPage() {
     }
   };
 
-  const handleTabChange = (value) => {
+  const handleTabChange = (value: string) => {
     setActiveTab(value);
     fetchCalls(value);
   };
@@ -84,7 +83,7 @@ export default function TelephonyDashboardPage() {
       location: 'Venezuela',
       startTime: Date.now(),
       status: 'connected'
-    });
+    } as any);
     setShowDialer(false);
   };
 
@@ -119,7 +118,7 @@ export default function TelephonyDashboardPage() {
 
       {/* Stats Cards */}
       <CallSummaryCards 
-        stats={{ ...stats, ...balance }} 
+        stats={{ ...(stats as any), ...(balance as any) } as any} 
         balanceLoading={balanceLoading} 
       />
 

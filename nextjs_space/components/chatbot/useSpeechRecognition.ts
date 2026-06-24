@@ -56,7 +56,7 @@ export function useSpeechRecognition(options?: {
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    const supported = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+    const supported = !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
     setIsSupported(supported);
   }, []);
 
@@ -71,7 +71,7 @@ export function useSpeechRecognition(options?: {
       return;
     }
 
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
       setError('Reconocimiento de voz no disponible');
       return;

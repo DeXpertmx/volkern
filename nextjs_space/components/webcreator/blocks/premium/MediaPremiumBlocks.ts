@@ -78,8 +78,8 @@ export const createMediaPremiumBlocks = (editor: Editor) => {
       },
       init() {
         const tb = this.get('toolbar');
-        if (!tb.find((i: any) => i.command === 'add-img-premium')) {
-          tb.push(
+        if (!tb || !tb.find((i: any) => i.command === 'add-img-premium')) {
+          tb?.push(
             { attributes: { class: 'fa fa-plus', title: 'Añadir Imagen' }, command: 'add-img-premium' },
             { attributes: { class: 'fa fa-trash', title: 'Limpiar Todo' }, command: 'clear-img-premium' }
           );
@@ -190,8 +190,8 @@ export const createMediaPremiumBlocks = (editor: Editor) => {
       },
       init() {
         const tb = this.get('toolbar');
-        if (!tb.find((i: any) => i.command === 'add-img-premium')) {
-          tb.push(
+        if (!tb || !tb.find((i: any) => i.command === 'add-img-premium')) {
+          tb?.push(
             { attributes: { class: 'fa fa-plus', title: 'Añadir Imagen' }, command: 'add-img-premium' },
             { attributes: { class: 'fa fa-trash', title: 'Limpiar Todo' }, command: 'clear-img-premium' }
           );

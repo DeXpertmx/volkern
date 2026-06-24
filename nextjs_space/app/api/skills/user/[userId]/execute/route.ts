@@ -12,7 +12,7 @@ export async function POST(req: NextRequest, { params }: { params: { userId: str
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
 
-    let args = {};
+    let args: any = {};
     try {
       args = await req.json();
     } catch {

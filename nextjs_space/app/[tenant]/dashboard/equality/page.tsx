@@ -156,7 +156,7 @@ export default function EqualityManagementPage() {
                 </CardHeader>
                 <CardContent className="p-8 space-y-8">
                    <div className="space-y-4">
-                      <Label className="text-[11px] font-black uppercase text-slate-400 tracking-widest">Hechos Reportados (Inmutable)</Label>
+                      <span className="text-[11px] font-black uppercase text-slate-400 tracking-widest">Hechos Reportados (Inmutable)</span>
                       <div className="p-6 rounded-3xl bg-slate-50 border border-slate-100 text-slate-700 leading-relaxed font-medium">
                          {selected.description}
                       </div>
@@ -175,7 +175,7 @@ export default function EqualityManagementPage() {
 
                    <div className="pt-8 border-t border-slate-50 space-y-6">
                       <div className="space-y-4">
-                         <Label className="text-[11px] font-black uppercase text-slate-400 tracking-widest">Notas de Resolución y Seguimiento</Label>
+                         <span className="text-[11px] font-black uppercase text-slate-400 tracking-widest">Notas de Resolución y Seguimiento</span>
                          <textarea 
                            className="w-full min-h-[120px] p-6 rounded-3xl bg-white border border-slate-200 focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all text-sm font-medium"
                            placeholder="Describe las acciones tomadas para resolver este caso..."
