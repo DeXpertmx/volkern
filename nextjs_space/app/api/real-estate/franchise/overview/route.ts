@@ -101,7 +101,7 @@ export const GET = withTenantAuth(async (req, auth) => {
       })),
       recentLeads: recentLeads.map(l => ({
         ...l,
-        oficina: tenantNames.get(l.tenantId) || '—',
+        oficina: tenantNames.get(l.tenantId ?? '') || '—',
       })),
       dealsByStage: dealsByStage.map(d => ({
         etapa: d.etapa,

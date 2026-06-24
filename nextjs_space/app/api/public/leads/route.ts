@@ -59,7 +59,7 @@ export async function POST(req: Request) {
       email: lead.email,
       source: fuente,
       timestamp: new Date()
-    });
+    } as any);
 
     // 4. Notificación inmediata vía Telegram Watchdog
     await TelegramWatchdog.sendLeadAlert(targetTenantId, {

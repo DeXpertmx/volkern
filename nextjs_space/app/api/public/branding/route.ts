@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       nombreEmpresa: branding.companyName || globalConfig?.nombreEmpresa || 'Volkern',
-      logoUrl: getFullUrl(branding.logoUrl) || globalConfig?.logoUrl || '/volkern-logo.png',
+      logoUrl: getFullUrl(branding.logoUrl ?? null) || globalConfig?.logoUrl || '/volkern-logo.png',
       colorPrimario: branding.primaryColor || globalConfig?.colorPrimario || '#3b82f6',
     });
 

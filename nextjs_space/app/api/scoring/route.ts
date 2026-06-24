@@ -49,6 +49,7 @@ export async function POST(request: NextRequest) {
         const servicesInfo = services.map(s => `- ${s.nombre}: ${s.descripcion} ($${s.precio})`).join('\n');
 
         // 3. Llamar a OpenRouter (DeepSeek V4 Flash con fallback Gemini)
+        const systemPrompt = 'Eres un asesor de ventas experto. Basado en el historial de la conversación, sugiere la mejor respuesta para el asesor.';
         const suggestion = await callLlm(systemPrompt, `Basado en este historial, ¿cuál debería ser mi siguiente respuesta como asesor?:\n\n${historyText}`, {
           temperature: 0.7,
           maxTokens: 500,

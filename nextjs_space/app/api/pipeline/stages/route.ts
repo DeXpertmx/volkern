@@ -162,6 +162,7 @@ export const POST = withTenantAuth(async (req, auth) => {
 export const PATCH = withTenantAuth(async (req, auth) => {
   try {
     const tenantId = auth.tenant!.id;
+    const user = auth.user!;
     const body = await req.json()
     const { id, nombre, descripcion, orden, probabilidad, color, pipelineId, activo } = body
 
