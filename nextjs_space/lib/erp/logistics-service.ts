@@ -10,7 +10,7 @@ export class LogisticsService {
    */
   static async createShipment(salesOrderId: string, tenantId: string, data: { carrier?: string, trackingNumber?: string }) {
     return await prisma.$transaction(async (tx) => {
-      const order = await tx.salesOrder.findUnique({
+      const order = await tx.erp_sales_orders.findUnique({
         where: { id: salesOrderId, tenantId },
         include: { 
           items: { include: { catalogItem: true } },
@@ -29,7 +29,7 @@ export class LogisticsService {
           }
         } else if (res.workOrderId) {
           // Si es MTO, debe estar terminada (status READY en el item)
-          const item = order.items.find(i => i.id === res.salesOrderItemId);
+          const item = order.items.find((i: any) => i.id === res.salesOrderItemId);
           if (item?.status !== 'READY') {
             throw new Error(`El ítem ${item?.catalogItem.nombre} aún no está fabricado o aprobado.`);
           }
@@ -37,7 +37,7 @@ export class LogisticsService {
       }
 
       // 1. Crear el Shipment
-      const shipment = await tx.shipment.create({
+      const shipment = await tx.erp_shipments.create({
         data: {
           tenantId,
           salesOrderId,
@@ -55,7 +55,7 @@ export class LogisticsService {
         await StockService.registerMovement({
           tenantId,
           warehouseId: 'MAIN_WH',
-          catalogoItemId: order.items.find(i => i.id === res.salesOrderItemId)!.catalogItemId,
+          catalogoItemId: order.items.find((i: any) => i.id === res.salesOrderItemId)!.catalogItemId,
           lotId: res.lotId || undefined,
           quantity: -res.reservedQty,
           type: 'OUT',
@@ -64,20 +64,20 @@ export class LogisticsService {
         });
 
         // Marcar reserva como consumida
-        await tx.orderReservation.update({
+        await tx.erp_order_reservations.update({
           where: { id: res.id },
           data: { status: 'CONSUMED' }
         });
 
         // Actualizar item de pedido
-        await tx.salesOrderItem.update({
+        await tx.erp_sales_order_items.update({
           where: { id: res.salesOrderItemId },
           data: { status: 'SHIPPED' }
         });
       }
 
       // 3. Actualizar estado del pedido
-      await tx.salesOrder.update({
+      await tx.erp_sales_orders.update({
         where: { id: salesOrderId },
         data: { status: 'SHIPPED' }
       });
@@ -92,7 +92,7 @@ export class LogisticsService {
   static async confirmDelivery(shipmentId: string, tenantId: string, evidence: { receiverName: string, evidenceUrl?: string, signatureHash?: string }) {
     return await prisma.$transaction(async (tx) => {
       // 1. Crear registro formal de confirmación (Audit Trail)
-      const confirmation = await tx.deliveryConfirmation.create({
+      const confirmation = await tx.erp_delivery_confirmations.create({
         data: {
           tenantId,
           shipmentId,
@@ -104,7 +104,7 @@ export class LogisticsService {
       });
 
       // 2. Actualizar el Shipment
-      const shipment = await tx.shipment.update({
+      const shipment = await tx.erp_shipments.update({
         where: { id: shipmentId, tenantId },
         data: {
           status: 'DELIVERED',
@@ -116,14 +116,14 @@ export class LogisticsService {
       });
 
       // 3. Si todos los shipments del pedido están entregados, cerrar pedido y consolidar costos
-      const allShipments = await tx.shipment.findMany({
+      const allShipments = await tx.erp_shipments.findMany({
         where: { salesOrderId: shipment.salesOrderId, tenantId }
       });
 
-      const allDelivered = allShipments.every(s => s.status === 'DELIVERED');
+      const allDelivered = allShipments.every((s: any) => s.status === 'DELIVERED');
 
       if (allDelivered) {
-        const order = await tx.salesOrder.findUnique({
+        const order = await tx.erp_sales_orders.findUnique({
           where: { id: shipment.salesOrderId },
           include: { 
             items: { include: { catalogItem: true } },
@@ -134,7 +134,7 @@ export class LogisticsService {
         if (order) {
           let totalCost = 0;
           for (const item of order.items) {
-            const res = order.reservations.find(r => r.salesOrderItemId === item.id);
+            const res = order.reservations.find((r: any) => r.salesOrderItemId === item.id);
             if (res?.workOrder) {
               // Si fue fabricado, tomamos el costo real de la OP
               totalCost += res.workOrder.quantityToMake * (item.catalogItem.precio / 2); // Simulación
@@ -146,7 +146,7 @@ export class LogisticsService {
 
           const realMargin = order.grandTotal - totalCost;
 
-          await tx.salesOrder.update({
+          await tx.erp_sales_orders.update({
             where: { id: shipment.salesOrderId },
             data: { 
               status: 'DELIVERED',
@@ -206,7 +206,7 @@ export class LogisticsService {
    */
   static async preparePicking(salesOrderId: string, tenantId: string, warehouseId: string) {
     return await prisma.$transaction(async (tx) => {
-      const order = await tx.salesOrder.findUnique({
+      const order = await tx.erp_sales_orders.findUnique({
         where: { id: salesOrderId, tenantId },
         include: { items: true },
       });
