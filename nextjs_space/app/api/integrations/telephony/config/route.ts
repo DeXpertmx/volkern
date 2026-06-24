@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
 
     const integration = await prisma.integration.findFirst({
       where: {
-        tenantId: user.tenantId,
+        tenantId: user.tenantId!,
         tipo: 'telefonia_zadarma',
       },
     });
@@ -53,17 +53,17 @@ export async function POST(req: NextRequest) {
 
     const { apiKey, apiSecret, fromExtension, recordingEnabled, activo } = body;
 
-    const integration = await prisma.integration.upsert({
+    const integration = await (prisma.integration.upsert as any)({
       where: {
         // Since there's no unique constraint on (tenantId, tipo), we find it first
         id: (await prisma.integration.findFirst({
-          where: { tenantId: user.tenantId, tipo: 'telefonia_zadarma' }
+          where: { tenantId: user.tenantId!, tipo: 'telefonia_zadarma' }
         }))?.id || 'new-id'
       },
       create: {
-        tenantId: user.tenantId,
+        tenantId: user.tenantId!,
         tipo: 'telefonia_zadarma',
-        activo: activo ?? true,
+        activo: (activo ?? true) as any,
         credenciales: {
           apiKey,
           apiSecret,
@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
         }
       },
       update: {
-        activo: activo ?? true,
+        activo: (activo ?? true) as any,
         credenciales: {
           apiKey,
           apiSecret,

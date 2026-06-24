@@ -8,7 +8,7 @@ export class AdoptionTelemetry {
   static async trackRecommendationAction(tenantId: string, userId: string, hub: 'DISCOVER' | 'STRATEGY' | 'ASSETS', action: string, metadata: any) {
     try {
       // 1. Escribir en Trust Protocol (Audit)
-      await prisma.trustProtocolLog.create({
+      await (prisma.trustProtocolLog as any).create({
         data: {
           tenantId,
           userId,
@@ -22,7 +22,7 @@ export class AdoptionTelemetry {
       });
 
       // 2. Emitir evento para Analytics/KPI
-      eventBus.emit(EVENTS.SYSTEM.SYSTEM_READY, { // Usamos un evento existente temporalmente o creamos uno de métrica
+      eventBus.emit((EVENTS as any).SYSTEM.SYSTEM_READY, { // Usamos un evento existente temporalmente o creamos uno de métrica
         tenantId,
         metadata: {
           type: 'ADOPTION_KPI',

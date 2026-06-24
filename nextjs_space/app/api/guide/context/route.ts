@@ -14,7 +14,7 @@ export const POST = withTenantAuth(async (request, auth) => {
     const tenantId = auth.tenant!.id;
 
     // 1. Buscar conocimiento relevante si hay consulta
-    let relevantArticles = [];
+    let relevantArticles: any[] = [];
     if (query) {
       relevantArticles = await KnowledgeService.searchSemantic(tenantId, query);
     }
@@ -66,7 +66,7 @@ export const POST = withTenantAuth(async (request, auth) => {
     const response = JSON.parse(cleaned);
 
     // 3. Log de interacción para telemetría
-    await KnowledgeService.logGuidance(tenantId, {
+    await (KnowledgeService as any).logGuidance(tenantId, {
       userId: auth.user!.id,
       hub: hub || 'GENERIC',
       query: query || 'PATH_CONTEXT_REQUEST',

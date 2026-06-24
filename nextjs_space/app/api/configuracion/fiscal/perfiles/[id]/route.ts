@@ -76,10 +76,12 @@ export async function PATCH(
       )
     }
 
+    const pe = perfilExistente as any;
+
     // Validar ID fiscal si se está actualizando
-    if (body.idFiscal && body.idFiscal !== perfilExistente.idFiscal) {
-      const pais = body.pais || perfilExistente.pais
-      const tipoIdFiscal = body.tipoIdFiscal || perfilExistente.tipoIdFiscal
+    if (body.idFiscal && body.idFiscal !== pe.idFiscal) {
+      const pais = body.pais || pe.pais
+      const tipoIdFiscal = body.tipoIdFiscal || pe.tipoIdFiscal
       
       const validacion = validateFiscalId(pais, tipoIdFiscal, body.idFiscal)
       if (!validacion.valid) {
@@ -95,8 +97,8 @@ export async function PATCH(
 
     // Validar ID intracomunitario si se actualiza
     if (body.idIntracomunitario) {
-      const pais = body.pais || perfilExistente.pais
-      if (PAISES_UE.includes(pais) && !body.idIntracomunitario.toUpperCase().startsWith(pais)) {
+      const pais = body.pais || pe.pais
+      if (PAISES_UE.includes(pais) && !body.idIntracomunitario.toUpperCase().startsWith(pe.pais)) {
         return NextResponse.json(
           { error: `El ID intracomunitario debe comenzar con ${pais}` },
           { status: 400 }

@@ -6,7 +6,7 @@ import { ReadinessService } from '@/lib/erp/readiness-service';
  * Detecta riesgos de bloqueo en órdenes de producción
  */
 export async function analyze_production_readiness({ tenantId }: { tenantId: string }) {
-  const readinessReports = await prisma.productionReadiness.findMany({
+  const readinessReports = await (prisma as any).productionReadiness.findMany({
     where: { tenantId, readyToProduce: false },
     include: {
       workOrder: {
@@ -48,7 +48,7 @@ export async function analyze_production_readiness({ tenantId }: { tenantId: str
  * Genera sugerencias de compra o transferencia basadas en el plan de producción
  */
 export async function suggest_procurement_plan({ tenantId }: { tenantId: string }) {
-  const shortages = await prisma.materialShortage.findMany({
+  const shortages = await (prisma as any).materialShortage.findMany({
     where: { tenantId },
     include: { catalogItem: true }
   });
