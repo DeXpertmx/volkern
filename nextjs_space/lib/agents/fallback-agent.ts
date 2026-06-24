@@ -87,7 +87,7 @@ export class FallbackAgent {
   private async logFallback(context: { userId: string; tenantId: string; errorType: string; originalMessage: string; severity: string; shouldRetry: boolean; shouldEscalate: boolean; response: string; attempts?: number; error?: Error }): Promise<void> {
     try {
       await prisma.chatbotAuditLog.create({
-        data: { event: 'fallback_triggered', userId: context.userId, tenantId: context.tenantId, severity: context.severity as any, metadata: { errorType: context.errorType, originalMessage: context.originalMessage.substring(0, 200), shouldRetry: context.shouldRetry, shouldEscalate: context.shouldEscalate, attempts: context.attempts || 0, response: context.response.substring(0, 200), errorMessage: context.error?.message } }
+        data: { intent: 'fallback_triggered', userId: context.userId, tenantId: context.tenantId, skillParams: { errorType: context.errorType, originalMessage: context.originalMessage.substring(0, 200), shouldRetry: context.shouldRetry, shouldEscalate: context.shouldEscalate, attempts: context.attempts || 0, response: context.response.substring(0, 200), errorMessage: context.error?.message } } as any
       });
       if (context.severity === 'critical') await this.notifyAdmins(context);
     } catch (e) { console.error('Error logging fallback:', e); }
@@ -99,17 +99,19 @@ export class FallbackAgent {
 
   async getFallbackStats(tenantId: string, hours: number = 24): Promise<any> {
     const since = new Date(Date.now() - hours * 60 * 60 * 1000);
-    const logs = await prisma.chatbotAuditLog.findMany({ where: { tenantId, event: 'fallback_triggered', createdAt: { gte: since } }, select: { severity: true, metadata: true, createdAt: true } });
+    const logs = await prisma.chatbotAuditLog.findMany({ where: { tenantId, intent: 'fallback_triggered', createdAt: { gte: since } } as any, select: { skillParams: true, createdAt: true } as any });
     
     const stats = { total: logs.length, bySeverity: {} as Record<string, number>, byErrorType: {} as Record<string, number>, byHour: {} as Record<string, number>, escalationRate: 0 };
     let escalationCount = 0;
     
     for (const log of logs) {
-      stats.bySeverity[log.severity] = (stats.bySeverity[log.severity] || 0) + 1;
-      const errorType = (log.metadata as any)?.errorType || 'unknown';
+      const meta = log.skillParams as any;
+      const sev = meta?.severity || 'low';
+      stats.bySeverity[sev] = (stats.bySeverity[sev] || 0) + 1;
+      const errorType = meta?.errorType || 'unknown';
       stats.byErrorType[errorType] = (stats.byErrorType[errorType] || 0) + 1;
-      stats.byHour[log.createdAt.getHours()] = (stats.byHour[log.createdAt.getHours()] || 0) + 1;
-      if ((log.metadata as any)?.shouldEscalate) escalationCount++;
+      stats.byHour[(log as any).createdAt.getHours()] = (stats.byHour[(log as any).createdAt.getHours()] || 0) + 1;
+      if (meta?.shouldEscalate) escalationCount++;
     }
     
     stats.escalationRate = logs.length > 0 ? escalationCount / logs.length : 0;

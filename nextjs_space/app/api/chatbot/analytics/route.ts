@@ -25,12 +25,13 @@ export async function GET(request: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
-      select: { tenantId: true, rol: true },
+      select: { tenantId: true, role: true },
     });
 
     if (!user?.tenantId) {
       return NextResponse.json({ error: 'Usuario sin tenant' }, { status: 400 });
     }
+    const tid = user.tenantId as string;
 
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type') || 'overview';
@@ -38,17 +39,17 @@ export async function GET(request: NextRequest) {
 
     switch (type) {
       case 'patterns': {
-        const patterns = await getRecentPatterns(user.tenantId, hours);
+        const patterns = await getRecentPatterns(tid as any, hours);
         return NextResponse.json({ patterns, total: patterns.length });
       }
 
       case 'suggestions': {
-        const suggestions = await getRecentSuggestions(user.tenantId, hours);
+        const suggestions = await getRecentSuggestions(tid as any, hours);
         return NextResponse.json({ suggestions, total: suggestions.length });
       }
 
       case 'conversations': {
-        const analyses = await getRecentAnalyses(user.tenantId, hours);
+        const analyses = await getRecentAnalyses(tid as any, hours);
         return NextResponse.json({ analyses, total: analyses.length });
       }
 
@@ -56,20 +57,20 @@ export async function GET(request: NextRequest) {
         const since = new Date(Date.now() - hours * 60 * 60 * 1000);
         const alerts = await prisma.chatbotAuditLog.findMany({
           where: {
-            tenantId: user.tenantId,
-            event: 'pattern_alert_sent',
+            tenantId: tid,
+            intent: 'pattern_alert_sent',
             createdAt: { gte: since },
-          },
+          } as any,
           orderBy: { createdAt: 'desc' },
           take: 100,
         });
 
         const formatted = alerts.map(a => ({
           id: a.id,
-          severity: a.severity,
-          patternCount: (a.metadata as any)?.patternCount || 0,
-          severities: (a.metadata as any)?.severities || [],
-          channels: (a.metadata as any)?.channels || [],
+          severity: (a as any).skillParams ? (a.skillParams as any).severity : null,
+          patternCount: (a.skillParams as any)?.patternCount || 0,
+          severities: (a.skillParams as any)?.severities || [],
+          channels: (a.skillParams as any)?.channels || [],
           sentAt: a.createdAt,
         }));
 
@@ -78,11 +79,10 @@ export async function GET(request: NextRequest) {
 
       case 'overview':
       default: {
-        // Overview: métricas agregadas
         const [analyses, patterns, suggestions] = await Promise.all([
-          getRecentAnalyses(user.tenantId, hours),
-          getRecentPatterns(user.tenantId, hours),
-          getRecentSuggestions(user.tenantId, hours),
+          getRecentAnalyses(tid as any, hours),
+          getRecentPatterns(tid as any, hours),
+          getRecentSuggestions(tid as any, hours),
         ]);
 
         const totalConversations = analyses.length;
@@ -133,7 +133,7 @@ export async function POST(request: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
-      select: { tenantId: true, rol: true },
+      select: { tenantId: true, role: true },
     });
 
     if (!user?.tenantId) {
@@ -142,19 +142,20 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json().catch(() => ({}));
     const action = body.action || 'detect_patterns';
+    const tid = user.tenantId as string;
 
     switch (action) {
       case 'detect_patterns': {
         const hours = body.hours || 48;
-        const patterns = await detectPatterns(user.tenantId, { hours });
+        const patterns = await detectPatterns(tid, { hours });
         return NextResponse.json({ patterns, total: patterns.length });
       }
 
       case 'generate_suggestions': {
         // Primero detectar patrones, luego generar sugerencias
         const hours = body.hours || 48;
-        const patterns = await detectPatterns(user.tenantId, { hours });
-        const suggestions = await generateSuggestions(user.tenantId, patterns);
+        const patterns = await detectPatterns(tid, { hours });
+        const suggestions = await generateSuggestions(tid, patterns);
         return NextResponse.json({ 
           patternsDetected: patterns.length, 
           suggestionsGenerated: suggestions.length,

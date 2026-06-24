@@ -64,16 +64,16 @@ export async function projectFinancialForecast(input: { tenantId: string }) {
     // Simplificación: Obtenemos el forecast basado en el pipeline actual (Lead Value) y gastos fijos
     const leads = await prisma.lead.aggregate({
       where: { tenantId: input.tenantId, estado: 'ganado' }, // En un sistema real usaríamos el funnel
-      _sum: { valorEstimado: true }
+      _sum: { valorEstimado: true } as any
     });
 
     const expenses = await prisma.expense.aggregate({
-      where: { tenantId: input.tenantId, type: 'RECURRING' },
+      where: { tenantId: input.tenantId, type: 'RECURRING' } as any,
       _sum: { amount: true }
     });
 
-    const expectedIn = leads._sum.valorEstimado || 5000; // Mock base si no hay
-    const committedOut = expenses._sum.amount || 1200;
+    const expectedIn = (leads._sum as any)?.valorEstimado || 5000;
+    const committedOut = (expenses._sum as any)?.amount || 1200;
 
     const runwayDays = committedOut > 0 ? (expectedIn / (committedOut / 30)) : 365;
 
@@ -160,11 +160,11 @@ async function getGlobalFinancialSummaryInternal(tenantId: string, period: strin
   ]);
 
   // Descifrar nómina (Simulación de suma masiva en Bóveda para reporte)
-  const { VaultService } = await import('@/lib/security/vault');
+  const { VaultService: VS } = await import('@/lib/security/vault');
   let totalPayroll = new Decimal(0);
   for (const emp of payroll) {
     if (emp.salaryEncrypted) {
-      const sal = parseFloat(VaultService.decrypt(emp.salaryEncrypted));
+      const sal = parseFloat((VS as any).decrypt(emp.salaryEncrypted));
       totalPayroll = totalPayroll.add(isNaN(sal) ? 0 : sal);
     }
   }

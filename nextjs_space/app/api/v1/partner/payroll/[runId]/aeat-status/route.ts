@@ -36,8 +36,8 @@ export const GET = withTenantAuth(
     }
 
     const tenantId = auth.tenant!.id;
-    const apiKeyId = auth.apiKey.id;
-    const apiKeyName = auth.apiKey.nombre;
+    const apiKeyId = auth.apiKey!.id;
+    const apiKeyName = auth.apiKey!.nombre;
     const { ipAddress, userAgent } = getRequestMetadata(request);
 
     const url = new URL(request.url);
@@ -52,6 +52,8 @@ export const GET = withTenantAuth(
         apiKeyId,
         apiKeyName,
         outcome: "rejected",
+        accion: "PAYROLL_AEAT_STATUS" as any,
+        entidad: "PayrollRun" as any,
         entidadId: "PENDING",
         httpStatus: 400,
         rejectionReason: "missing_run_id",
@@ -65,7 +67,7 @@ export const GET = withTenantAuth(
     }
 
     try {
-      const run = await prisma.payrollRunES.findUnique({
+      const run = await (prisma as any).payrollRunES.findUnique({
         where: { id: runId },
         include: {
           records: {
@@ -89,6 +91,8 @@ export const GET = withTenantAuth(
           apiKeyId,
           apiKeyName,
           outcome: "rejected",
+        accion: "PAYROLL_AEAT_STATUS" as any,
+        entidad: "PayrollRun" as any,
           entidadId: runId,
           httpStatus: 404,
           rejectionReason: "run_not_found",
@@ -117,6 +121,8 @@ export const GET = withTenantAuth(
         apiKeyId,
         apiKeyName,
         outcome: "success",
+        accion: "PAYROLL_AEAT_STATUS" as any,
+        entidad: "PayrollRun" as any,
         entidadId: run.id,
         httpStatus: 200,
         ipAddress,
@@ -165,6 +171,8 @@ export const GET = withTenantAuth(
         apiKeyId,
         apiKeyName,
         outcome: "error",
+        accion: "PAYROLL_AEAT_STATUS" as any,
+        entidad: "PayrollRun" as any,
         entidadId: runId,
         httpStatus: 500,
         rejectionReason: msg,
