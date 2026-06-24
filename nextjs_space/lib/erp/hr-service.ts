@@ -107,7 +107,7 @@ export class HRService {
   }) {
     return await prisma.erp_vacation_requests.create({
       data
-    });
+    } as any);
   }
 
   /**
@@ -233,7 +233,7 @@ export class HRService {
   }) {
     return await prisma.erp_expense_claims.create({
       data
-    });
+    } as any);
   }
 
   /**
@@ -297,7 +297,7 @@ export class HRService {
         userEmail: 'SYSTEM', // Opcional: obtener email del autorizador
         ipAddress: 'VAULT_INTERNAL',
         integrityCheck: integrityHash
-      }
+      } as any
     });
 
     return expense;
@@ -384,7 +384,7 @@ export class HRService {
         tenantId,
         level: 'INFO',
         message: `[VOICE_CMD] Autorización masiva ejecutada. ${verified.length} gastos procesados por VISION-LOCK. ${doubtful.length} en revisión manual.`,
-      }
+      } as any
     });
 
     return {

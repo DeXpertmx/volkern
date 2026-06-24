@@ -53,9 +53,9 @@ export const createTestimonialsCarouselBlock = (editor: Editor) => {
              const quotesStr = el.getAttribute('data-quotes');
              const authorsStr = el.getAttribute('data-authors');
              if (track && quotesStr && authorsStr) {
-                const quotes = quotesStr.split('|').map((s) => s.trim());
-                const authors = authorsStr.split('|').map((s) => s.trim());
-                track.innerHTML = quotes.map((q, i) => `
+                const quotes = quotesStr.split('|').map((s: string) => s.trim());
+                const authors = authorsStr.split('|').map((s: string) => s.trim());
+                track.innerHTML = quotes.map((q: string, i: number) => `
                   <div class="premium-testimonial-slide">
                     <blockquote class="premium-testimonial-quote">"${q}"</blockquote>
                     <p class="premium-testimonial-author">${authors[i] || 'Anónimo'}</p>
@@ -66,7 +66,7 @@ export const createTestimonialsCarouselBlock = (editor: Editor) => {
           };
 
           const renderNav = (count: number) => {
-            nav.innerHTML = Array.from({length: count}).map((_, i) => `
+                nav.innerHTML = Array.from({length: count}).map((_: any, i: number) => `
               <button class="premium-testimonial-dot ${i===0?'active':''}" data-idx="${i}"></button>
             `).join('');
             nav.querySelectorAll('button').forEach((b:any) => {

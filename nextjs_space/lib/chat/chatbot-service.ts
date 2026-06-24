@@ -225,13 +225,13 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
     // ═══ FASE 2: RESUMEN AUTOMÁTICO ═══
     let summaryBlock = ''
     if (context.summary?.text) {
-      summaryBlock = buildSummaryBlock(context.summary)
+      summaryBlock = buildSummaryBlock(context.summary as any)
     }
 
     // Verificar si necesitamos generar/actualizar resumen
     const shouldSummarize = needsSummarization(
       recentMessages.length,
-      context.summary?.version
+      (context.summary as any)?.version
     )
 
     const isActionable = classification.intent !== 'consulta_general'
@@ -243,7 +243,7 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
       if (shouldSummarize) {
         generateSummary(
           recentMessages.map(m => ({ role: m.role, content: m.content })),
-          context.summary
+          context.summary as any
         ).then(async (newSummary) => {
           await memory.updateContext(conv.id, { summary: newSummary })
           console.log(`[ChatbotService] ✅ Resumen generado (${newSummary.summarizedMessages} mensajes resumidos)`)
@@ -276,18 +276,18 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
             conv.id,
             tenantId,
             allMessages.map(m => ({ role: m.role, content: m.content, timestamp: m.timestamp })),
-            auditLogs
+            auditLogs as any
           )
 
           // 2. Detectar patrones (cada ~10 conversaciones)
           const totalAnalyses = await prisma.chatbotAuditLog.count({
-            where: { tenantId, event: 'conversation_analysis', createdAt: { gte: new Date(Date.now() - 86400000) } },
+            where: { tenantId, event: 'conversation_analysis', createdAt: { gte: new Date(Date.now() - 86400000) } } as any,
           })
 
           if (totalAnalyses % 10 === 0 && totalAnalyses > 0) {
-            const patterns = await detectPatterns(tenantId)
+            const patterns = await detectPatterns(tenantId) as any
             if (patterns.length > 0) {
-              await generateSuggestions(tenantId, patterns)
+              await generateSuggestions(tenantId, patterns as any)
             }
           }
 
