@@ -19,7 +19,7 @@ export const GET = withTenantAuth(async (req, auth) => {
     AdoptionTelemetry.trackHubView(tenantId, currentUser.id, 'SALES').catch(() => {});
 
     // Verificar permiso de ver deals (pipeline)
-    if (!hasPermission(currentUser, 'leads', 'ver')) {
+    if (!hasPermission(currentUser as any, 'leads', 'ver')) {
       return NextResponse.json({ error: 'Sin permiso para ver el pipeline' }, { status: 403 })
     }
 
@@ -38,7 +38,7 @@ export const GET = withTenantAuth(async (req, auth) => {
     }
 
     // Aislamiento de propiedad: Agentes solo ven sus propios deals
-    if (canOnlySeeOwnLeads(currentUser)) {
+    if (canOnlySeeOwnLeads(currentUser as any)) {
       where.usuarioAsignadoId = currentUser.id
     } else if (usuarioAsignadoId) {
       where.usuarioAsignadoId = usuarioAsignadoId
@@ -127,7 +127,7 @@ export const POST = withTenantAuth(async (req, auth) => {
     const currentUser = auth.user!;
 
     // Verificar permiso de crear deals (pipeline)
-    if (!hasPermission(currentUser, 'leads', 'crear')) {
+    if (!hasPermission(currentUser as any, 'leads', 'crear')) {
       return NextResponse.json({ error: 'Sin permiso para crear deals' }, { status: 403 })
     }
 
@@ -224,10 +224,10 @@ export const POST = withTenantAuth(async (req, auth) => {
         usuarioAsignadoId: usuarioAsignadoId || currentUser.id,
         titulo,
         descripcion,
-        valor: parseFloat(valor),
+        valor: parseFloat(valor as any),
         moneda,
         etapa,
-        probabilidad: parseInt(probabilidad),
+        probabilidad: parseInt(probabilidad as any),
         prioridad,
         fechaEstimadaCierre: fechaEstimadaCierre ? new Date(fechaEstimadaCierre) : null,
         origen,

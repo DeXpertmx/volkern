@@ -50,11 +50,11 @@ export async function GET(
         moneda: cita.servicio.moneda,
       } : null,
       lead: {
-        id: cita.lead.id,
-        nombre: cita.lead.nombre,
-        email: cita.lead.email,
-        telefono: cita.lead.telefono || '',
-        notas: cita.lead.notas || '',
+        id: cita.lead!.id,
+        nombre: cita.lead!.nombre,
+        email: cita.lead!.email,
+        telefono: cita.lead!.telefono || '',
+        notas: cita.lead!.notas || '',
       }
     })
 
