@@ -119,9 +119,9 @@ const globalForPrisma = globalThis as unknown as {
 if (!globalForPrisma.tenantCache) {
   globalForPrisma.tenantCache = new LRUCache<string, CachedTenantClient>({
     max: 20, // Reducido para evitar agotar el pool de Postgres local (default 100)
-    dispose: (client) => {
-      if (client.$disconnect) client.$disconnect().catch(() => {});
-    }
+        dispose: (client) => {
+          if (client.client?.$disconnect) client.client.$disconnect().catch(() => {});
+        }
   });
 }
 const clientCacheV3 = globalForPrisma.tenantCache;

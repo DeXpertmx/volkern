@@ -1,3 +1,4 @@
+// @ts-expect-error — no declaration file for nordigen-node
 import NordigenClient from 'nordigen-node';
 import { prisma } from '@/lib/db';
 import { skillsLogger } from '@/lib/skills/observability';
@@ -91,8 +92,7 @@ export class NordigenService {
    * Sincroniza todas las conexiones activas
    */
   static async syncAllConnections() {
-    const connections = await prisma.bankConnection.findMany({
-      where: { providerId: { not: null } }
+    const connections = await prisma.bankConnection.findMany({          where: { providerId: { not: null as any } }
     });
 
     const results = [];

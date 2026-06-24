@@ -2,7 +2,7 @@ import { prisma } from '../../db'
 import { AIEngine } from './ai-engine'
 import { VolkernEvent } from '../types'
 
-const QUEUE: Array<{ event: VolkernEvent; resolve: (v: unknown) => void }> = []
+const QUEUE: Array<{ event: VolkernEvent; resolve: (v: any) => void }> = []
 let PROCESSOR_INTERVAL: NodeJS.Timeout | null = null
 
 export class AIQueue {
@@ -32,7 +32,7 @@ export class AIQueue {
           model: item.event.data.model as any
         }, item.event.tenant_id)
 
-        await prisma.systemAlert.create({
+        await (prisma.systemAlert.create as any)({
           data: {
             level: 'INFO',
             message: `AI Queue processed: ${item.event.event}`,

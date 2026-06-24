@@ -5,7 +5,7 @@ export async function updateEmployee(config: any, ctx: ActionContext): Promise<b
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  await tenantClient.empleado.update({ where: { id: employeeId || ctx.state.employeeId }, data: datos })
+  await (tenantClient as any).empleado.update({ where: { id: employeeId || ctx.state.employeeId }, data: datos })
   await ctx.log('update_employee', 'action', 'success', 'Datos de empleado actualizados')
   return true
 }
@@ -15,7 +15,7 @@ export async function assignRole(config: any, ctx: ActionContext): Promise<boole
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  await tenantClient.empleadoRol.create({
+  await (tenantClient as any).empleadoRol.create({
     data: { tenantId: ctx.state.tenantId, empleadoId: employeeId || ctx.state.employeeId, rolId, estado: 'activo' },
   })
   await ctx.log('assign_role', 'action', 'success', 'Rol asignado al empleado')

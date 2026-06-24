@@ -51,11 +51,10 @@ export class SchedulingService {
     let currentTime = startOfDay(new Date());
 
     // Asignación simple: Distribuir en la primera línea disponible
-    for (const wo of scoredOrders) {
-      const line = lines[assignments.length % lines.length];
-      const durationHours = wo.quantityToMake * 0.5; // 30 min por unidad
+    for (const wo of scoredOrders) {          const line: any = lines[assignments.length % lines.length];
+          const durationHours = wo.quantityToMake * 0.5; // 30 min por unidad
 
-      const assignment = await (prisma as any).erp_schedule_assignments.create({
+          const assignment: any = await (prisma as any).erp_schedule_assignments.create({
         data: {
           id: `ASG-${wo.id}-${Date.now()}`,
           tenantId,

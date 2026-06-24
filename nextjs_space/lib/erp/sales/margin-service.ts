@@ -8,9 +8,8 @@ export class MarginService {
   /**
    * Calcula el margen operativo de un pedido basándose en la BoM actual de sus productos.
    */
-  static async calculateOrderMargin(orderId: string, tenantId: string) {
-    const order = await prisma.salesOrder.findUnique({
-      where: { id: orderId, tenantId },
+  static async calculateOrderMargin(orderId: string, tenantId: string) {        const order = await (prisma as any).salesOrder.findUnique({
+          where: { id: orderId, tenantId },
       include: { 
         items: {
           include: {
@@ -65,8 +64,8 @@ export class MarginService {
     const marginAlert = grossMargin < 15; // Alerta si es inferior al 15%
 
     // Actualizar el pedido con las métricas
-    return await prisma.salesOrder.update({
-      where: { id: orderId },
+    return await (prisma as any).salesOrder.update({
+          where: { id: orderId },
       data: {
         realMargin,
         grossMargin,

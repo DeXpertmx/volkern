@@ -16,8 +16,8 @@ export async function generateSimpleInvoice(config: any, ctx: ActionContext): Pr
   try {
     await InvoicingService.createInvoice({
       tenantId,
-      leadId: ctx.state.leadId,
-      contactId: ctx.state.contactId,
+      leadId: ctx.state.leadId as string | undefined,
+      contactId: ctx.state.contactId as string | undefined,
       amount: amount || 0,
       currency,
       description: description || 'Factura generada desde automatización',
@@ -38,7 +38,7 @@ export async function sendGoCardlessMandate(config: any, ctx: ActionContext): Pr
   if (!tenantId) return false
 
   try {
-    const { authorizationUrl } = await InvoicingService.getOrCreateGoCardlessMandateLink(tenantId, leadId, contactId)
+    const { authorizationUrl } = await InvoicingService.getOrCreateGoCardlessMandateLink(tenantId, leadId as string | undefined, contactId as string | undefined)
     const message = `Hola, para procesar tus pagos por domiciliación bancaria, por favor autoriza el mandato aquí: ${authorizationUrl}`
 
     if (channel === 'whatsapp') {
