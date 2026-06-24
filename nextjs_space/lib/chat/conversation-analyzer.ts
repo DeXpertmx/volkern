@@ -208,10 +208,8 @@ async function saveAnalysis(analysis: ConversationAnalysis): Promise<void> {
     await prisma.chatbotAuditLog.create({
       data: {
         tenantId: analysis.tenantId,
-        event: 'conversation_analysis',
-        severity: analysis.sentiment === 'frustrated' ? 'high' :
-                 analysis.sentiment === 'negative' ? 'medium' : 'info',
-        metadata: {
+        intent: 'conversation_analysis',
+        skillParams: {
           conversationId: analysis.conversationId,
           sentiment: analysis.sentiment,
           sentimentScore: analysis.sentimentScore,
@@ -226,8 +224,8 @@ async function saveAnalysis(analysis: ConversationAnalysis): Promise<void> {
           requiredHumanTransfer: analysis.requiredHumanTransfer,
           topics: analysis.topics,
           recommendations: analysis.recommendations,
-        },
-      },
+        } as any,
+      } as any,
     })
   } catch (error) {
     console.error('[ConversationAnalyzer] Error guardando análisis:', error)
@@ -256,7 +254,7 @@ export async function getRecentAnalyses(
     const logs = await prisma.chatbotAuditLog.findMany({
       where: {
         tenantId,
-        event: 'conversation_analysis',
+        intent: 'conversation_analysis',
         createdAt: { gte: since },
       },
       orderBy: { createdAt: 'desc' },
@@ -264,21 +262,21 @@ export async function getRecentAnalyses(
     })
 
     return logs.map(log => ({
-      conversationId: (log.metadata as any)?.conversationId || '',
+      conversationId: (log.skillParams as any)?.conversationId || '',
       tenantId,
-      sentiment: (log.metadata as any)?.sentiment || 'neutral',
-      sentimentScore: (log.metadata as any)?.sentimentScore || 50,
-      resolved: (log.metadata as any)?.resolved ?? false,
-      resolutionConfidence: (log.metadata as any)?.resolutionConfidence || 0,
-      intentsDetected: (log.metadata as any)?.intentsDetected || [],
-      skillsUsed: (log.metadata as any)?.skillsUsed || [],
-      fallbackCount: (log.metadata as any)?.fallbackCount || 0,
-      unknownCount: (log.metadata as any)?.unknownCount || 0,
-      totalMessages: (log.metadata as any)?.totalMessages || 0,
-      durationMinutes: (log.metadata as any)?.durationMinutes || 0,
-      requiredHumanTransfer: (log.metadata as any)?.requiredHumanTransfer || false,
-      topics: (log.metadata as any)?.topics || [],
-      recommendations: (log.metadata as any)?.recommendations || [],
+      sentiment: (log.skillParams as any)?.sentiment || 'neutral',
+      sentimentScore: (log.skillParams as any)?.sentimentScore || 50,
+      resolved: (log.skillParams as any)?.resolved ?? false,
+      resolutionConfidence: (log.skillParams as any)?.resolutionConfidence || 0,
+      intentsDetected: (log.skillParams as any)?.intentsDetected || [],
+      skillsUsed: (log.skillParams as any)?.skillsUsed || [],
+      fallbackCount: (log.skillParams as any)?.fallbackCount || 0,
+      unknownCount: (log.skillParams as any)?.unknownCount || 0,
+      totalMessages: (log.skillParams as any)?.totalMessages || 0,
+      durationMinutes: (log.skillParams as any)?.durationMinutes || 0,
+      requiredHumanTransfer: (log.skillParams as any)?.requiredHumanTransfer || false,
+      topics: (log.skillParams as any)?.topics || [],
+      recommendations: (log.skillParams as any)?.recommendations || [],
       analyzedAt: log.createdAt,
     }))
   } catch {

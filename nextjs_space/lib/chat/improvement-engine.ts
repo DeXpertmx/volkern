@@ -390,9 +390,9 @@ async function saveSuggestion(suggestion: ImprovementSuggestion): Promise<void> 
     const existing = await prisma.chatbotAuditLog.findFirst({
       where: {
         tenantId: suggestion.tenantId,
-        event: 'improvement_suggestion',
+        intent: 'improvement_suggestion',
         createdAt: { gte: new Date(Date.now() - DEFAULTS.MIN_INTERVAL_HOURS * 60 * 60 * 1000) },
-        metadata: {
+        skillParams: {
           path: ['type'],
           equals: suggestion.type,
         },
@@ -407,22 +407,22 @@ async function saveSuggestion(suggestion: ImprovementSuggestion): Promise<void> 
     await prisma.chatbotAuditLog.create({
       data: {
         tenantId: suggestion.tenantId,
-        event: 'improvement_suggestion',
-        severity: suggestion.priority === 'critical' ? 'critical' :
-                 suggestion.priority === 'high' ? 'high' : 'info',
-        metadata: {
+        intent: 'improvement_suggestion',
+        skillParams: {
           id: suggestion.id,
           type: suggestion.type,
           title: suggestion.title,
           description: suggestion.description,
           priority: suggestion.priority,
+          severity: suggestion.priority === 'critical' ? 'critical' :
+                   suggestion.priority === 'high' ? 'high' : 'info',
           status: suggestion.status,
           implementationGuide: suggestion.implementationGuide,
           estimatedImpact: suggestion.estimatedImpact,
           category: suggestion.category,
           sourcePattern: suggestion.sourcePattern,
-        },
-      },
+        } as any,
+      } as any,
     })
   } catch (error) {
     console.error('[ImprovementEngine] Error guardando sugerencia:', error)
@@ -441,7 +441,7 @@ export async function getRecentSuggestions(
     const logs = await prisma.chatbotAuditLog.findMany({
       where: {
         tenantId,
-        event: 'improvement_suggestion',
+        intent: 'improvement_suggestion',
         createdAt: { gte: since },
       },
       orderBy: { createdAt: 'desc' },
@@ -449,17 +449,17 @@ export async function getRecentSuggestions(
     })
 
     return logs.map(log => ({
-      id: (log.metadata as any)?.id || generateId(),
+      id: (log.skillParams as any)?.id || generateId(),
       tenantId,
-      type: (log.metadata as any)?.type || 'add_training_examples',
-      title: (log.metadata as any)?.title || 'Sugerencia sin título',
-      description: (log.metadata as any)?.description || '',
-      priority: (log.metadata as any)?.priority || 'medium',
-      status: (log.metadata as any)?.status || 'pending',
-      implementationGuide: (log.metadata as any)?.implementationGuide || '',
-      estimatedImpact: (log.metadata as any)?.estimatedImpact || '',
-      category: (log.metadata as any)?.category || 'configuration',
-      sourcePattern: (log.metadata as any)?.sourcePattern || '',
+      type: (log.skillParams as any)?.type || 'add_training_examples',
+      title: (log.skillParams as any)?.title || 'Sugerencia sin título',
+      description: (log.skillParams as any)?.description || '',
+      priority: (log.skillParams as any)?.priority || 'medium',
+      status: (log.skillParams as any)?.status || 'pending',
+      implementationGuide: (log.skillParams as any)?.implementationGuide || '',
+      estimatedImpact: (log.skillParams as any)?.estimatedImpact || '',
+      category: (log.skillParams as any)?.category || 'configuration',
+      sourcePattern: (log.skillParams as any)?.sourcePattern || '',
       createdAt: log.createdAt,
     }))
   } catch {
@@ -479,8 +479,8 @@ export async function updateSuggestionStatus(
     const existing = await prisma.chatbotAuditLog.findFirst({
       where: {
         tenantId,
-        event: 'improvement_suggestion',
-        metadata: { path: ['id'], equals: suggestionId },
+        intent: 'improvement_suggestion',
+        skillParams: { path: ['id'], equals: suggestionId },
       },
     })
 
@@ -489,8 +489,8 @@ export async function updateSuggestionStatus(
     await prisma.chatbotAuditLog.update({
       where: { id: existing.id },
       data: {
-        metadata: {
-          ...(existing.metadata as any),
+        skillParams: {
+          ...(existing.skillParams as any),
           status,
         },
       },
