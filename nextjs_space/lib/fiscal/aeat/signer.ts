@@ -1,6 +1,8 @@
 import * as crypto from 'crypto';
+// @ts-ignore - xmldom no tiene tipos
 import { DOMParser, XMLSerializer } from 'xmldom';
 import { SignedXml } from 'xml-crypto';
+// @ts-ignore - node-forge no tiene tipos
 import * as forge from 'node-forge';
 import { AEAT_CONFIG } from './config';
 
@@ -46,7 +48,7 @@ export class AEATSigner {
       sig.canonicalizationAlgorithm = AEAT_CONFIG.algorithms.canonicalization;
       
       // Referencia al documento completo
-      sig.addReference(
+      (sig as any).addReference(
         "//*[local-name(.)='RegistroFactura']",
         [AEAT_CONFIG.algorithms.canonicalization],
         AEAT_CONFIG.algorithms.digest,
@@ -70,14 +72,14 @@ export class AEATSigner {
 </ds:Object>`.trim();
 
       // Referencia a las propiedades firmadas
-      sig.addReference(
+      (sig as any).addReference(
         `//*[@Id='${signedPropertiesId}']`,
         [AEAT_CONFIG.algorithms.canonicalization],
         AEAT_CONFIG.algorithms.digest
       );
 
       // 5. Insertar KeyInfo (Certificado)
-      sig.keyInfoProvider = {
+      (sig as any).keyInfoProvider = {
         getKeyInfo: () => {
           return `<ds:X509Data><ds:X509Certificate>${certBase64}</ds:X509Certificate></ds:X509Data>`;
         },
@@ -97,7 +99,7 @@ export class AEATSigner {
         xml: xadesSignedXml,
         certFingerprint: forge.md.sha256.create().update(certBase64).digest().toHex(),
         expiresAt: certBag.cert.validity.notAfter
-      };
+      } as any;
     } catch (error: any) {
       console.error('Error al firmar XML:', error);
       throw new Error(`Falla en firma XAdES: ${error.message}`);

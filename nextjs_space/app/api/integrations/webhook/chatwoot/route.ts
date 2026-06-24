@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
 
     // 🔄 Verificar idempotencia para message.created
     if (data.event === 'message_created') {
-      const messageId = String(data.message?.id || data.id);
+      const messageId = String((data as any).message?.id || data.id);
       if (messageId && isIdempotent(messageId)) {
         console.log(`[ChatwootWebhook] Mensaje idempotente: ${messageId}`);
         return NextResponse.json({ ok: true, idempotent: true });
@@ -140,13 +140,13 @@ export async function POST(request: NextRequest) {
           { configuracion: { path: ['chatwootAccountId'], equals: chatwootAccountId } },
           { metadata: { path: ['chatwootAccountId'], equals: chatwootAccountId } }
         ]
-      },
+      } as any,
       include: {
         integrations: {
           where: { tipo: 'chatwoot', activo: true },
           select: { credenciales: true }
         }
-      }
+      } as any
     });
 
     // Si no encuentra por configuración, buscar en integrations
@@ -174,8 +174,8 @@ export async function POST(request: NextRequest) {
           chatwootApiKey = cred?.apiToken || cred?.accessToken;
         }
       }
-    } else if (tenant?.integrations?.[0]) {
-      const cred = tenant.integrations[0].credenciales as any;
+    } else if ((tenant as any)?.integrations?.[0]) {
+      const cred = (tenant as any).integrations[0].credenciales as any;
       chatwootApiKey = cred?.apiToken || cred?.accessToken;
     }
 
@@ -188,8 +188,8 @@ export async function POST(request: NextRequest) {
     }
 
     // 🔐 SEGURIDAD: Verificar aislamiento por account
-    const expectedAccountId = (tenant?.configuracion as any)?.chatwootAccountId || 
-                               (tenant?.metadata as any)?.chatwootAccountId;
+    const expectedAccountId = ((tenant as any)?.configuracion as any)?.chatwootAccountId || 
+                               ((tenant as any)?.metadata as any)?.chatwootAccountId;
     
     if (expectedAccountId && expectedAccountId !== chatwootAccountId) {
       console.error(`[ChatwootWebhook] Cross-tenant attempt! account_id mismatch`);
@@ -255,7 +255,7 @@ async function processWebhook(
     rawBody,
     webhookSecret,
     apiAccessToken: apiKey,
-  });
+  } as any);
 
   return NextResponse.json({
     success: result.success,
@@ -263,5 +263,5 @@ async function processWebhook(
     skillExecuted: result.skillExecuted,
     eventEmitted: result.eventEmitted,
     error: result.error,
-  });
+  } as any);
 }
