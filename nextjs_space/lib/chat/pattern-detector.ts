@@ -388,7 +388,7 @@ async function getConversationAnalyses(tenantId: string, since: Date): Promise<a
   const records = await prisma.chatbotAuditLog.findMany({
     where: {
       tenantId,
-      event: 'conversation_analysis',
+      intent: 'conversation_analysis',
       createdAt: { gte: since },
     },
     orderBy: { createdAt: 'desc' },
@@ -398,7 +398,7 @@ async function getConversationAnalyses(tenantId: string, since: Date): Promise<a
   // Aplanar metadata para que los detectores accedan directamente a sentiment, resolved, etc.
   return records.map(record => ({
     ...record,
-    ...((record.metadata as Record<string, unknown>) || {}),
+    ...((record.skillParams as Record<string, unknown>) || {}),
   }))
 }
 
@@ -409,17 +409,17 @@ async function saveDetectedPatterns(tenantId: string, patterns: DetectedPattern[
       await prisma.chatbotAuditLog.create({
         data: {
           tenantId,
-          event: 'detected_pattern',
-          severity: pattern.severity as any,
-          metadata: {
+          intent: 'detected_pattern',
+          skillParams: {
             type: pattern.type,
+            severity: pattern.severity,
             description: pattern.description,
             value: pattern.value,
             threshold: pattern.threshold,
             context: pattern.context,
             recommendation: pattern.recommendation,
           },
-        },
+        } as any,
       })
     }
   } catch (error) {
@@ -466,7 +466,7 @@ async function sendPatternAlerts(tenantId: string, patterns: DetectedPattern[]):
     const recentAlert = await prisma.chatbotAuditLog.findFirst({
       where: {
         tenantId,
-        event: 'pattern_alert_sent',
+        intent: 'pattern_alert_sent',
         createdAt: { gte: cooldownSince },
       },
     })
@@ -538,14 +538,13 @@ async function sendPatternAlerts(tenantId: string, patterns: DetectedPattern[]):
     await prisma.chatbotAuditLog.create({
       data: {
         tenantId,
-        event: 'pattern_alert_sent',
-        severity: notifiablePatterns.some(p => p.severity === 'critical') ? 'critical' as any : 'high' as any,
-        metadata: {
+        intent: 'pattern_alert_sent',
+        skillParams: {
           patternCount: notifiablePatterns.length,
           severities: notifiablePatterns.map(p => p.severity),
           channels: config.channels,
         },
-      },
+      } as any,
     }).catch(() => {})
 
     await Promise.allSettled(sendPromises)
@@ -567,7 +566,7 @@ export async function getRecentPatterns(
     const logs = await prisma.chatbotAuditLog.findMany({
       where: {
         tenantId,
-        event: 'detected_pattern',
+        intent: 'detected_pattern',
         createdAt: { gte: since },
       },
       orderBy: { createdAt: 'desc' },
@@ -575,13 +574,13 @@ export async function getRecentPatterns(
     })
 
     return logs.map(log => ({
-      type: (log.metadata as any)?.type || 'unknown',
-      severity: log.severity as any,
-      description: (log.metadata as any)?.description || '',
-      value: (log.metadata as any)?.value || 0,
-      threshold: (log.metadata as any)?.threshold || 0,
-      context: (log.metadata as any)?.context || {},
-      recommendation: (log.metadata as any)?.recommendation || '',
+      type: (log.skillParams as any)?.type || 'unknown',
+      severity: (log.skillParams as any)?.severity || 'low',
+      description: (log.skillParams as any)?.description || '',
+      value: (log.skillParams as any)?.value || 0,
+      threshold: (log.skillParams as any)?.threshold || 0,
+      context: (log.skillParams as any)?.context || {},
+      recommendation: (log.skillParams as any)?.recommendation || '',
       detectedAt: log.createdAt,
     }))
   } catch {
