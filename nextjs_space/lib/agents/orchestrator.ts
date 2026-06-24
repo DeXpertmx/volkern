@@ -38,7 +38,7 @@ export class MinimaxOrchestratorAgent {
     try {
       const rateCheck = await rateLimiter.check({ userId, chatId, tenantId, isAuthenticated });
       if (!rateCheck.allowed) {
-        const response = await responseFormatter.format({ intent: 'rate_limited', action: 'error', success: false, error: rateCheck.message });
+        const response = await responseFormatter.format({ intent: 'rate_limited', action: 'error' as any, success: false, error: rateCheck.message });
         return { success: false, response: `${response.emoji} ${response.text}`, metadata: { rateLimited: true, resetAfter: rateCheck.resetAfterSeconds } };
       }
 
@@ -78,7 +78,7 @@ export class MinimaxOrchestratorAgent {
       const confidenceVerdict = await confidenceChecker.check({ intent: classification.intent, confidence: classification.confidence, message, userId, tenantId, hasAllRequiredParams: !classification.needsMoreInfo });
 
       if (confidenceVerdict.action !== 'execute') {
-        const response = await responseFormatter.format({ intent: classification.intent, action: confidenceVerdict.action as any, success: false, missingParams: classification.missingParams });
+        const response = await responseFormatter.format({ intent: classification.intent as any, action: confidenceVerdict.action as any, success: false as any, missingParams: classification.missingParams as any });
         return { success: false, response: `${response.emoji} ${response.text}`, shouldWaitForMoreInfo: confidenceVerdict.action === 'ask_clarification', metadata: { confidence: classification.confidence, action: confidenceVerdict.action } };
       }
 
@@ -100,7 +100,7 @@ export class MinimaxOrchestratorAgent {
       }
 
       if (!validation.isValid) {
-        const response = await responseFormatter.format({ intent: classification.intent, action: 'error', success: false, error: validation.message });
+        const response = await responseFormatter.format({ intent: classification.intent, action: 'error' as any, success: false, error: validation.message });
         return { success: false, response: `${response.emoji} ${response.text}` };
       }
 
@@ -111,13 +111,13 @@ export class MinimaxOrchestratorAgent {
       }
 
       if (classification.intent === 'consulta_general' || classification.intent === 'unknown') {
-        const response = await responseFormatter.format({ intent: classification.intent, action: 'success', success: true });
+        const response = await responseFormatter.format({ intent: classification.intent, action: 'success' as any, success: true });
         await this.clearPendingContext(userId);
         return { success: true, response: `${response.emoji} ${response.text}`, action: classification.intent };
       }
 
       const skillResult = await this.executeSkill(classification.intent, extraction.entities, tenantId);
-      const response = await responseFormatter.format({ intent: classification.intent, action: 'execute', success: true, data: skillResult });
+      const response = await responseFormatter.format({ intent: classification.intent, action: 'execute' as any, success: true, data: skillResult });
 
       await this.clearPendingContext(userId);
       this.retryCount.delete(userId);
@@ -127,7 +127,7 @@ export class MinimaxOrchestratorAgent {
 
     } catch (error) {
       const attemptCount = this.retryCount.get(userId) || 0;
-      const fallbackResult = await fallbackAgent.handle({ userId, tenantId, originalMessage: message, error: error as Error, errorType: this.determineErrorType(error), attempts: attemptCount, timestamp: new Date(), intent: 'unknown' });
+      const fallbackResult = await fallbackAgent.handle({ userId, tenantId, originalMessage: message, error: error as Error,      errorType: this.determineErrorType(error) as any, attempts: attemptCount, timestamp: new Date(), intent: 'unknown' });
 
       if (fallbackResult.shouldRetry && attemptCount < 3) {
         this.retryCount.set(userId, attemptCount + 1);
@@ -135,7 +135,7 @@ export class MinimaxOrchestratorAgent {
         return this.process({ ...request, context: `[Reintento ${attemptCount + 1}] ${context || ''}` });
       }
 
-      const response = await responseFormatter.format({ intent: 'consulta_general', action: 'fallback_to_human', success: false, error: fallbackResult.response });
+      const response = await responseFormatter.format({ intent: 'consulta_general' as any, action: 'fallback_to_human' as any, success: false as any, error: fallbackResult.response });
       await this.logError({ userId, tenantId, message, error: error as Error, fallbackResult });
       this.retryCount.delete(userId);
 
@@ -240,9 +240,9 @@ export class MinimaxOrchestratorAgent {
 
     if (intent === 'buscar_lead' && (!params.email || !params.nombre)) {
       const leads = await prisma.lead.findMany({
-        where: { tenantId },
+        where: { tenantId } as any,
         take: 10,
-        select: { id: true, nombre: true, name: true, email: true, phone: true, telefono: true, stage: true }
+        select: { id: true, nombre: true, name: true, email: true, phone: true, telefono: true, stage: true } as any
       });
       return { leads, count: leads.length };
     }
@@ -259,7 +259,7 @@ export class MinimaxOrchestratorAgent {
       return { success: true, cita: updated, message: `Cita reprogramada para ${fechaHora.toLocaleString()}` };
     }
 
-    if (!skillName || !skills[skillName]) throw new Error(`No hay skill para ${intent}`);
+    if (!skillName || !(skills as any)[skillName]) throw new Error(`No hay skill para ${intent}`);
     const normalizedParams = this.normalizeParams(params);
     return await executeSkill(skillName as any, { ...normalizedParams, tenantId });
   }
@@ -293,7 +293,7 @@ export class MinimaxOrchestratorAgent {
   private async handlePendingConfirmation(request: OrchestratorRequest, pending: any): Promise<OrchestratorResponse> {
     const result = await commandValidator.validate({ intent: pending.intent, params: pending.params, message: request.message, userId: request.userId, tenantId: request.tenantId, isReauth: true, confirmationResponse: request.message });
     if (result.isValid) return this.process({ ...request, message: pending.originalMessage, context: `[Confirmado: ${request.message}]` });
-    const response = await responseFormatter.format({ intent: pending.intent, action: 'error', success: false, error: result.message });
+    const response = await responseFormatter.format({ intent: pending.intent as any, action: 'error' as any, success: false as any, error: result.message });
     return { success: false, response: `${response.emoji} ${response.text}` };
   }
 
@@ -304,16 +304,16 @@ export class MinimaxOrchestratorAgent {
   private async savePendingContext(userId: string, ctx: any): Promise<void> {
     try {
       await prisma.chatbotAuditLog.upsert({ 
-        where: { id: `ctx_${userId}` }, 
-        update: { detectedEntities: ctx }, 
+        where: { id: `ctx_${userId}` } as any, 
+        update: { detectedEntities: ctx as any }, 
         create: { 
           id: `ctx_${userId}`,
           status: 'PENDING_CONTEXT', 
           userId, 
           tenantId: 'pending', 
-          detectedEntities: ctx,
+          detectedEntities: ctx as any,
           createdAt: new Date()
-        } 
+        } as any
       });
     } catch (e) { console.error('Error saving pending context:', e); }
   }
@@ -385,8 +385,8 @@ export class MinimaxOrchestratorAgent {
 
   async getStats(tenantId: string, hours: number = 24): Promise<any> {
     const since = new Date(Date.now() - hours * 60 * 60 * 1000);
-    const logs = await prisma.chatbotAuditLog.findMany({ where: { tenantId, event: { in: ['orchestrator_success', 'orchestrator_error'] }, createdAt: { gte: since } } });
-    const successCount = logs.filter(l => l.event === 'orchestrator_success').length;
+    const logs = await prisma.chatbotAuditLog.findMany({ where: { tenantId, event: { in: ['orchestrator_success', 'orchestrator_error'] } as any, createdAt: { gte: since } } as any });
+    const successCount = logs.filter((l: any) => l.event === 'orchestrator_success').length;
     const total = logs.length;
     return { total, successRate: total > 0 ? (successCount / total) * 100 : 100 };
   }

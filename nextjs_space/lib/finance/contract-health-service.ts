@@ -11,7 +11,7 @@ export class ContractHealthService {
       include: { 
         clientSubscription: { include: { attempts: true } },
         contact: true
-      }
+      } as any
     })
 
     if (!contract) return 0
@@ -20,16 +20,16 @@ export class ContractHealthService {
 
     // 1. Comportamiento de Pago (40%) - El pilar de la salud financiera
     let paymentScore = 100
-    if (contract.clientSubscription) {
-      const recentFailures = contract.clientSubscription.attempts.filter(a => 
+    if ((contract as any).clientSubscription) {
+      const recentFailures = (contract as any).clientSubscription.attempts.filter((a: any) => 
         a.estado === 'FAILED' && 
         differenceInDays(new Date(), new Date(a.fechaIntento)) < 90
       ).length
       paymentScore -= (recentFailures * 30)
       
       // Penalización inmediata si está en periodo de gracia
-      if (contract.clientSubscription.estado === 'GRACE_PERIOD') paymentScore -= 20
-      if (contract.clientSubscription.estado === 'PAUSED') paymentScore = 0
+      if ((contract as any).clientSubscription.estado === 'GRACE_PERIOD') paymentScore -= 20
+      if ((contract as any).clientSubscription.estado === 'PAUSED') paymentScore = 0
     }
     score += (Math.max(0, paymentScore) * 0.40)
 
@@ -47,7 +47,7 @@ export class ContractHealthService {
     // 3. Suministro de Datos (20%) - Integridad operativa
     let dataScore = 100
     if (!contract.snapshotNif || !contract.snapshotDireccion) dataScore -= 40
-    if (!contract.contact?.email || !contract.contact?.telefono) dataScore -= 30
+    if (!(contract as any).contact?.email || !(contract as any).contact?.telefono) dataScore -= 30
     if (!contract.metodoPago) dataScore -= 30
     score += (Math.max(0, dataScore) * 0.20)
 
@@ -92,7 +92,7 @@ export class ContractHealthService {
   static async getExecutiveMetrics(tenantId: string) {
     const contracts = await prisma.contrato.findMany({
       where: { tenantId, estado: 'vigente' },
-      include: { clientSubscription: true }
+      include: { clientSubscription: true } as any
     })
 
     let totalRevenueAtRisk = 0

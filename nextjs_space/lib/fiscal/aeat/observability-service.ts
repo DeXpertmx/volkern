@@ -5,7 +5,18 @@ import { aeatQueue } from '@/lib/queues/aeat-queue';
  * Servicio de Observabilidad y Alertas para Veri*factu
  */
 export class AEATObservabilityService {
-  
+  static CONSTANTS = {
+    CERT_CRITICAL_DAYS: 7,
+    CERT_WARNING_DAYS: 30,
+    ERROR_RATE_WARNING: 0.05,
+    ERROR_RATE_CRITICAL: 0.1,
+    QUEUE_WARNING: 50,
+    QUEUE_CRITICAL: 100,
+    MIN_REQUESTS_WARNING: 10,
+    JOB_AGE_CRITICAL_MS: 30 * 60 * 1000,
+    JOB_AGE_WARNING_MS: 15 * 60 * 1000,
+  };
+
   /**
    * Obtiene métricas en tiempo real para el Dashboard de Auditoría
    */
@@ -14,7 +25,7 @@ export class AEATObservabilityService {
       prisma.invoice.groupBy({
         by: ['aeatStatus'],
         _count: true,
-        where: { verifactuVersion: '2' }
+        where: { verifactuVersion: '2' as any }
       }),
       aeatQueue.getJobCounts('waiting', 'active', 'failed', 'delayed')
     ]);
@@ -101,9 +112,7 @@ export class AEATObservabilityService {
     const errorSeverity = AEATAnomalyDetector.evaluate(errorRate, errorBaseline, {
       warning: this.CONSTANTS.ERROR_RATE_WARNING,
       critical: this.CONSTANTS.ERROR_RATE_CRITICAL
-    });
-
-    if (errorSeverity !== 'OK' && recentSent >= this.CONSTANTS.MIN_REQUESTS_WARNING) {
+    });      if (errorSeverity !== 'OK' && recentSent >= this.CONSTANTS.MIN_REQUESTS_WARNING as any) {
       alerts.push({ 
         type: `HIGH_ERROR_${errorSeverity}`, 
         severity: errorSeverity, 

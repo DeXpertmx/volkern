@@ -35,11 +35,11 @@ import { OrgChart } from '@/components/hr/OrgChart'
 // Layout Inicial de RRHH (12 columnas)
 const HR_DEFAULT_LAYOUTS: { lg: Layout[] } = {
   lg: [
-    { i: 'tinder', x: 0, y: 0, w: 4, h: 6 },
-    { i: 'ia-analytics', x: 4, y: 0, w: 8, h: 6 },
-    { i: 'calendar', x: 0, y: 6, w: 8, h: 6, minW: 6, minH: 4 },
-    { i: 'kill-switch', x: 8, y: 6, w: 4, h: 6 },
-    { i: 'audit', x: 0, y: 12, w: 12, h: 4 },
+    { i: 'tinder', x: 0, y: 0, w: 4, h: 6 } as any,
+    { i: 'ia-analytics', x: 4, y: 0, w: 8, h: 6 } as any,
+    { i: 'calendar', x: 0, y: 6, w: 8, h: 6, minW: 6, minH: 4 } as any,
+    { i: 'kill-switch', x: 8, y: 6, w: 4, h: 6 } as any,
+    { i: 'audit', x: 0, y: 12, w: 12, h: 4 } as any,
   ]
 }
 
@@ -91,8 +91,8 @@ export default function HRMDashboard() {
 
   const onLayoutChange = (currentLayout: Layout[], allLayouts: { [key: string]: Layout[] }) => {
     if (!isLocked) {
-      setLayouts(allLayouts)
-      persistLayout(allLayouts)
+      setLayouts(allLayouts as any)
+      persistLayout(allLayouts as any)
     }
   }
 
@@ -109,8 +109,10 @@ export default function HRMDashboard() {
 
   if (!mounted) return null
 
+  const GridLayout = ResponsiveGridLayout as any;
+
   return (
-    <div className="space-y-8 pb-20" ref={containerRef}>
+    <div className="space-y-8 pb-20" ref={containerRef as any}>
       <VacationRequestModal 
         open={isVacationModalOpen} 
         setOpen={setIsVacationModalOpen}
@@ -194,9 +196,9 @@ export default function HRMDashboard() {
                </Button>
             </div>
             
-            <ResponsiveGridLayout
+            <GridLayout
               className="layout"
-              layouts={layouts}
+              layouts={layouts as any}
               breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
               cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
               rowHeight={100}
@@ -204,7 +206,7 @@ export default function HRMDashboard() {
               draggableHandle=".drag-handle"
               isDraggable={!isLocked}
               isResizable={!isLocked}
-              onLayoutChange={onLayoutChange}
+              onLayoutChange={onLayoutChange as any}
               margin={[24, 24]}
               compactType="vertical"
             >
@@ -268,7 +270,7 @@ export default function HRMDashboard() {
                   <TrustProtocolLogs category="hr" />
                 </WidgetWrapper>
               </div>
-            </ResponsiveGridLayout>
+            </GridLayout>
           </motion.div>
         ) : activeTab === 'nominas' ? (
           <motion.div
