@@ -33,7 +33,7 @@ export class PackMarketplace {
         level: 'INFO',
         message: `Pack published: ${packName}`,
         metadata: { tenantId, packName, pack }
-      }
+      } as any
     })
   }
 
@@ -48,8 +48,8 @@ export class PackMarketplace {
 
     return alerts.map(a => ({
       id: a.id,
-      tenantId: a.metadata?.tenantId as string,
-      packName: a.metadata?.packName as string,
+      tenantId: (a as any).metadata?.tenantId as string,
+      packName: (a as any).metadata?.packName as string,
       description: '',
       industry: 'general',
       complexity: 'medium' as const,

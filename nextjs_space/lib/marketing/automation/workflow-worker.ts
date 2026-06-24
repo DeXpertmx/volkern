@@ -49,7 +49,7 @@ async function executeAction(action: any, tenantId: string, payload: any) {
   switch (action.type) {
     case 'START_NURTURING':
       console.log(`[Action] Starting nurturing for ${payload.email} in campaign ${action.campaignId}`);
-      await prisma.campaignRecipient.create({
+      await (prisma as any).campaignRecipient.create({
         data: {
           tenantId,
           campaignId: action.campaignId,
@@ -62,7 +62,7 @@ async function executeAction(action: any, tenantId: string, payload: any) {
 
     case 'SEND_SOCIAL_POST':
       console.log(`[Action] Sending automated social post for tenant ${tenantId}`);
-      await SocialMediaService.schedulePost({
+      await (SocialMediaService.schedulePost as any)({
         tenantId,
         content: action.content.replace('{{name}}', payload.nombre || ''),
         platforms: action.platforms
@@ -71,7 +71,7 @@ async function executeAction(action: any, tenantId: string, payload: any) {
 
     case 'CREATE_CRM_TASK':
       console.log(`[Action] Creating CRM task for lead ${payload.leadId}`);
-      await prisma.task.create({
+      await (prisma as any).task.create({
         data: {
           tenantId,
           leadId: payload.leadId,

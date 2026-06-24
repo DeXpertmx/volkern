@@ -82,13 +82,13 @@ export class AEAAIOpsService {
   static async getFiscalForecast(tenantId: string) {
     const windowStart = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // 30 días
     const invoices = await prisma.invoice.findMany({
-      where: { tenantId, createdAt: { gte: windowStart }, aeatStatus: 'ACCEPTED' },
-      select: { totalAmount: true, createdAt: true }
+      where: { tenantId, createdAt: { gte: windowStart }, aeatStatus: 'ACCEPTED' } as any,
+      select: { totalAmount: true, createdAt: true } as any
     });
 
     if (invoices.length < 5) return null;
 
-    const totalInvoiced = invoices.reduce((sum, inv) => sum + Number(inv.totalAmount || 0), 0);
+    const totalInvoiced = invoices.reduce((sum, inv) => sum + Number((inv as any).totalAmount || 0), 0);
     const estimatedVAT = totalInvoiced * 0.21; // Simplificado
 
     return {

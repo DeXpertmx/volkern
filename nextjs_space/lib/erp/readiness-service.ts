@@ -12,7 +12,7 @@ export class ReadinessService {
         bom: {
           include: {
             components: {
-              include: { catalogoItem: true }
+              include: { catalogoItem: true } as any
             }
           }
         }
@@ -25,7 +25,7 @@ export class ReadinessService {
     let totalItems = 0;
     let itemsAvailable = 0;
 
-    for (const component of workOrder.bom.components) {
+    for (const component of (workOrder as any).bom.components) {
       const requiredQty = component.cantidad * workOrder.quantityToMake;
       
       // Consultar stock real filtrando por estado de calidad 'AVAILABLE'
@@ -95,7 +95,7 @@ export class ReadinessService {
     // Calcular cuántos lotes hay en cuarentena para estos requerimientos
     const quarantineLots = await (prisma as any).erp_inventory_lots.count({
       where: {
-        catalogItemId: { in: workOrder.bom.components.map((c: any) => c.catalogItemId) },
+        catalogItemId: { in: (workOrder as any).bom.components.map((c: any) => c.catalogItemId) },
         tenantId,
         status: 'QUARANTINE'
       }

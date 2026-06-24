@@ -1,4 +1,6 @@
-import { VolkernPack, PackTrigger, PackPipelineStage } from '../types'
+type VolkernPack = any
+type PackTrigger = any
+type PackPipelineStage = any
 
 const BASIC_PIPELINE: PackPipelineStage[] = [
   { id: 'nuevo', name: 'Nuevo', order: 1 },
