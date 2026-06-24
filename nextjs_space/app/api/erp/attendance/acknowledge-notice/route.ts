@@ -61,19 +61,19 @@ export async function POST(request: Request) {
   }
 
   const parsed = await validateBody(AcknowledgeSchema, await request.json());
-  if (!parsed.ok) {
+  if (!(parsed as any).ok) {
     return NextResponse.json(
       {
         ok: false,
         error: 'INVALID_REQUEST',
         message: 'Cuerpo JSON inválido.',
-        issues: parsed.issues,
+        issues: (parsed as any).issues,
       },
       { status: 400 },
     );
   }
 
-  const { employeeId, noticeVersion, source } = parsed.data;
+  const { employeeId, noticeVersion, source } = (parsed as any).data;
   // LOPDGDD Art. 88 requiere prueba robusta del momento de firma.
   // SIEMPRE del lado del servidor — nunca aceptar timestamp del cliente,
   // porque eso permitiría retro-fechar la firma y debilitar la prueba
@@ -162,7 +162,7 @@ export async function POST(request: Request) {
           },
           legalBasis: ['LOPDGDD Art. 88', 'RGPD Cap. III'],
         },
-      },
+      } as any,
     });
 
     return emp;

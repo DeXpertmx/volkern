@@ -37,12 +37,11 @@ export function setTenantContext(context: TenantContextData): void {
 }
 
 export function getTenantContext(): TenantContextData | null {
-  const store = dbContext.getStore() as DbStore | undefined;
-  if (store?.tenantId) {
+  const store = dbContext.getStore() as DbStore | undefined;    if (store?.tenantId) {
     return {
       tenantId: store.tenantId,
-      tenant: store.tenant,
-      source: store.source
+      tenant: (store as any).tenant,
+      source: (store as any).source
     };
   }
   return tenantContextStore;
@@ -105,7 +104,7 @@ export async function extractTenantFromRequest(request: NextRequest): Promise<{
   } catch {}
 
   try {
-    const token = await getToken({ secret: process.env.NEXTAUTH_SECRET });
+    const token = await getToken({ secret: process.env.NEXTAUTH_SECRET } as any);
     if (token?.tenantId) {
       const user = await prisma.user.findUnique({
         where: { id: token.sub! },

@@ -19,7 +19,7 @@ export async function GET(req: Request) {
         nombre: true,
         // En Volkern, el stock puede estar en StockLevel vinculado al Warehouse
         stockLevels: {
-          select: { cantidad: true }
+          select: { cantidad: true } as any
         }
       }
     });
@@ -29,7 +29,7 @@ export async function GET(req: Request) {
     }
 
     // Sumar stock de todos los almacenes
-    const totalStock = item.stockLevels.reduce((sum, level) => sum + level.cantidad, 0);
+    const totalStock = (item as any).stockLevels.reduce((sum: number, level: any) => sum + level.cantidad, 0);
 
     return NextResponse.json({ 
       productId, 

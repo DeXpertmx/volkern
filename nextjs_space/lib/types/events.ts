@@ -123,7 +123,7 @@ export const EVENTS = {
   PROJECT_COMPLETED: 'project_completed',
   PROJECT_DELAYED: 'project_delayed',
   TASK_ASSIGNED: 'task_assigned',
-  TASK_COMPLETED: 'task_completed',
+  PROJECT_TASK_COMPLETED: 'project_task_completed',
   DELIVERABLE_UPLOADED: 'deliverable_uploaded',
 
   // Genéricos para extensibilidad
@@ -655,7 +655,7 @@ export type EventPayloadMap = {
   [EVENTS.PAYMENT_RECEIVED]: PaymentReceivedEvent;
   [EVENTS.PAYMENT_FAILED]: PaymentFailedEvent;
   [EVENTS.INVOICE_CREATED]: InvoiceCreatedEvent;
-  [EVENTS.WORKFLOW_EXECUTED]: WorkflowExecutedEvent;
+  [EVENTS.WORKFLOW_EXECUTED]: any;
   [EVENTS.WORKFLOW_FAILED]: WorkflowFailedEvent;
 
   // Inventario (Fase 1)
@@ -707,5 +707,5 @@ export type EventPayloadMap = {
   [EVENTS.PROJECT_STARTED]: ProjectStartedEvent;
   [EVENTS.PROJECT_COMPLETED]: ProjectCompletedEvent;
   [EVENTS.PROJECT_DELAYED]: ProjectDelayedEvent;
-  [EVENTS.TASK_COMPLETED]: TaskCompletedEvent2;
+  [EVENTS.PROJECT_TASK_COMPLETED]: TaskCompletedEvent2;
 };

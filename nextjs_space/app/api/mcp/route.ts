@@ -146,10 +146,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
+  let auth: any;
   
   try {
     // Autenticar
-    const auth = await authenticateRequest(request, ['mcp:execute']);
+    auth = await authenticateRequest(request, ['mcp:execute']);
     if (!auth.valid) {
       return NextResponse.json(
         { error: 'No autorizado', details: auth.error },
@@ -285,8 +286,8 @@ export async function POST(request: NextRequest) {
     console.error('[MCP API] Error en POST:', error);
     
     await logMCPAudit(
-      auth?.tenant?.id || 'unknown',
-      auth?.user?.id,
+      auth?.tenant?.id || 'unknown' as any,
+      auth?.user?.id as any,
       'tool_execution',
       undefined,
       'error',

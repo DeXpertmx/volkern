@@ -34,7 +34,7 @@ export const POST = withTenantAuth(async (request, auth) => {
         endDate: body.fechaFin ? new Date(body.fechaFin) : null,
         createdBy: auth.user!.id,
         active: body.activo ?? true,
-      }
+      } as any
     });
 
     return NextResponse.json(benefit);
