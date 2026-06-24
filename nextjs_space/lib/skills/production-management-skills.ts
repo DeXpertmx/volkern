@@ -15,7 +15,7 @@ export async function calculate_production_cost({ tenantId, bomId, quantity }: {
 
   if (!bom) throw new Error('BoM no encontrado');
 
-  const components = bom.components as any[];
+  const components = (bom as any).components as any[];
   let totalMaterialCost = new Decimal(0);
 
   // Consultar costos de componentes en el catálogo
@@ -60,7 +60,7 @@ export async function verify_waste_integrity({ tenantId, workOrderId, wasteImage
   if (!wo) throw new Error('Orden no encontrada');
 
   // Ejecutar Análisis de Visión Forense e Industrial
-  const bomItems = (wo.bom.components as any[]).map(c => c.itemId);
+  const bomItems = ((wo.bom as any).components as any[]).map(c => c.itemId);
   const analysis = await VisionService.analyzeScrapEvidence(wasteImage, { bomItems });
 
   return {

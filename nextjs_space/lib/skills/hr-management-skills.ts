@@ -60,8 +60,8 @@ export async function get_employee_confidential_data({ tenantId, employeeId, use
 
   return {
     fullName: employee.fullName,
-    salary: employee.salaryEncrypted ? VaultService.decrypt(employee.salaryEncrypted) : 'NO_DATA',
-    contractUrl: employee.contractUrlEncrypted ? VaultService.decrypt(employee.contractUrlEncrypted) : 'NO_DATA'
+    salary: employee.salaryEncrypted ? (VaultService.decrypt as any)(employee.salaryEncrypted) : 'NO_DATA',
+    contractUrl: employee.contractUrlEncrypted ? (VaultService.decrypt as any)(employee.contractUrlEncrypted) : 'NO_DATA'
   };
 }
 

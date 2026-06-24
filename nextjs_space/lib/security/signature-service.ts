@@ -13,7 +13,7 @@ export class SignatureService {
       'signature-salt-v1',
       'volkern-digital-signature-context',
       32
-    );
+    ) as unknown as Buffer;
   }
 
   /**
@@ -107,7 +107,7 @@ export class SignatureService {
     const tsa = await this.requestCertifiedTimestamp(params.documentHash);
     
     // 2. Upsert con Metadatos Forenses
-    return await prisma.digitalSignature.upsert({
+    return await (prisma as any).digitalSignature.upsert({
       where: { documentHash: params.documentHash },
       update: {}, 
       create: {

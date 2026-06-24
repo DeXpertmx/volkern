@@ -56,7 +56,7 @@ export async function inventoryWatchdog(input: {
       const actionUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://volkern.app'}/dashboard/catalogo?search=${sku}`;
 
       const users = await prisma.user.findMany({
-        where: { tenantId, role: 'ADMIN' },
+        where: { tenantId, role: 'ADMIN' as any },
         take: 1
       });
 
@@ -77,9 +77,9 @@ export async function inventoryWatchdog(input: {
             type: 'user', 
             id: admin.id, 
             email: admin.email, 
-            name: admin.name,
-            telegramChatId: (admin.metadata as any)?.telegram_chat_id 
-          },
+            name: admin.name ?? undefined,
+            telegramChatId: (admin.metadata as any)?.telegram_chat_id,
+          } as any,
           {
             title: `⚠️ Alerta de Inventario: ${itemName}`,
             body: proactiveMessage,
@@ -87,7 +87,7 @@ export async function inventoryWatchdog(input: {
             actions: [
               { label: '🛒 Ver en Catálogo', url: actionUrl }
             ]
-          },
+          } as any,
           { channel: 'in_app', priority: 'high' },
           context
         ).catch(console.error);

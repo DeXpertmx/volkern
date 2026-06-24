@@ -49,12 +49,12 @@ export async function audit_finance_integrity({ tenantId }: { tenantId: string }
     });
 
     // 2. Notificación Inmediata vía Telegram
-    const creds = await loadTelegramCredentials(tenantId);
+    const creds = await (loadTelegramCredentials as any)(tenantId);
     if (creds?.admin_chat_id) {
       await sendTelegramMessage(creds.admin_chat_id, message, creds.bot_token);
     }
 
-    skillsLogger.error(`[ForensicAudit] Brecha detectada`, { tenantId, breaches: [...resultInvoices.breaches, ...expenseBreaches, ...ledgerBreaches] });
+    skillsLogger.error(`[ForensicAudit] Brecha detectada`, { tenantId, breaches: [...resultInvoices.breaches, ...expenseBreaches, ...ledgerBreaches] } as any);
   }
 
   return {
