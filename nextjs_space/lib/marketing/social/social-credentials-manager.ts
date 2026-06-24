@@ -24,9 +24,9 @@ export class SocialCredentialsManager {
 
     if (!tenant) throw new Error('Tenant no encontrado');
 
-    const encryptedAccessToken = VaultService.encrypt(accessToken, tenantId, tenant.vaultSeed);
+    const encryptedAccessToken = VaultService.encrypt(accessToken, tenantId, tenant.vaultSeed!);
     const encryptedRefreshToken = refreshToken 
-      ? VaultService.encrypt(refreshToken, tenantId, tenant.vaultSeed)
+      ? VaultService.encrypt(refreshToken, tenantId, tenant.vaultSeed!)
       : null;
 
     const expiresAt = expiresIn ? new Date(Date.now() + expiresIn * 1000) : null;

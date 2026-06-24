@@ -42,8 +42,8 @@ export class FiscalIntelligenceService {
             invoiceId: invoice.id,
             fiscalUuid: fiscalData.uuid,
             type: 'SALE_TIMBRADA'
-          }
-        }
+          } as any
+        } as any
       })
     } catch (error) {
       console.error('[FiscalIntelligence] Error al crear registro de rentabilidad:', error)
@@ -61,8 +61,8 @@ export class FiscalIntelligenceService {
         currency: invoice.moneda,
         uuid: fiscalData.uuid,
         customer: invoice.contact?.nombre || invoice.lead?.nombre
-      }
-    })
+      } as any
+    } as any)
 
     console.log(`[FiscalIntelligence] Ingestión completada para factura ${invoice.id}`)
   }

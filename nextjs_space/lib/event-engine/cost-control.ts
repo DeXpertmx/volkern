@@ -28,8 +28,8 @@ export class CostControl {
   static async checkAIAction(tenantId: string, agent: string): Promise<CostCheckResult> {
     const tenant = await prisma.tenant.findUnique({
       where: { id: tenantId },
-      select: { plan: true, subscription: true }
-    })
+      select: { plan: true, subscription: true } as any
+    }) as any
 
     const plan = tenant?.plan || PLANS.ESENCIAL
     const config = await this.getConfig(tenantId, plan)
@@ -83,10 +83,10 @@ export class CostControl {
 
     await prisma.systemAlert.create({
       data: {
-        level: 'INFO',
+        level: 'INFO' as any,
         message: `[CostControl] AI action recorded: ${agent}`,
-        metadata: { tenantId, agent, daily: counter.daily, monthly: counter.monthly }
-      }
+        metadata: { tenantId, agent, daily: counter.daily, monthly: counter.monthly } as any
+      } as any
     })
   }
 
@@ -112,12 +112,12 @@ export class CostControl {
     if (!plan) {
       const tenant = await prisma.tenant.findUnique({
         where: { id: tenantId },
-        select: { plan: true }
-      })
+        select: { plan: true } as any
+      }) as any
       plan = tenant?.plan || PLANS.ESENCIAL
     }
 
-    const limits = await getPlanConfig(plan)
+    const limits = await getPlanConfig(plan!)
     const aiLimit = limits.limites?.ai_calls_per_month || limits.limites?.automation_runs
 
     return {

@@ -135,7 +135,7 @@ export class GemmaService {
     for (const dir of docsDirs) {
       if (!fs.existsSync(dir)) continue;
       
-      const files = fs.readdirSync(dir).filter(f => f.endsWith('.md'));
+      const files = fs.readdirSync(dir).filter((f: string) => f.endsWith('.md'));
       
       for (const file of files) {
         const filePath = path.join(dir, file);
@@ -151,7 +151,7 @@ export class GemmaService {
         
         if (queryMatch || hubMatch) {
           // Extraer primeras líneas relevantes
-          const lines = content.split('\n').filter(l => l.trim() && !l.startsWith('#'));
+          const lines = content.split('\n').filter((l: string) => l.trim() && !l.startsWith('#'));
           const snippet = lines.slice(0, 5).join(' ').substring(0, 300);
           relevantDocs.push(`📄 ${file.replace('.md', '')}: ${snippet}...`);
         }

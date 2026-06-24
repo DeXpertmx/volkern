@@ -909,8 +909,8 @@ export async function syncFromGoogleToVolkern(userId: string, forceFullSync: boo
       }
 
       // Guardar nextSyncToken de la última respuesta para la metadata final
-      nextSyncToken = response.data.nextSyncToken;
-      pageToken = response.data.nextPageToken;
+      nextSyncToken = (response.data.nextSyncToken as any) as string | undefined;
+      pageToken = (response.data.nextPageToken as any) as string | undefined;
 
       // Pequeña pausa para no exceder rate limits de Google API
       if (pageToken) {
