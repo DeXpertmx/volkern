@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { checkFeatureLimit, FeatureName, FEATURE_LABELS } from '@/lib/subscription';
 import { withTenantAuth } from '@/lib/api-key-auth';
 
-export const POST = withTenantAuth(async (request: NextRequest, auth) => {
+export const POST = withTenantAuth((async (request: NextRequest, auth: any) => {
   try {
     const { feature, amount = 1 } = await request.json();
 
@@ -62,9 +62,9 @@ export const POST = withTenantAuth(async (request: NextRequest, auth) => {
       { status: 500 }
     );
   }
-}, ['subscriptions:read']);
+}) as any, ['subscriptions:read']);
 
-export const GET = withTenantAuth(async (request: NextRequest, auth) => {
+export const GET = withTenantAuth((async (request: NextRequest, auth: any) => {
   try {
     const { searchParams } = new URL(request.url);
     const feature = searchParams.get('feature') as FeatureName;
@@ -93,4 +93,4 @@ export const GET = withTenantAuth(async (request: NextRequest, auth) => {
       { status: 500 }
     );
   }
-}, ['subscriptions:read']);
+}) as any, ['subscriptions:read']);

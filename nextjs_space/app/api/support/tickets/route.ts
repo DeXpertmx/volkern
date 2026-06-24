@@ -22,8 +22,8 @@ export const GET = withTenantAuth(async (request, auth) => {
     const tickets = await prisma.supportTicket.findMany({
       where: {
         tenantId,
-        status: status || undefined,
-        priority: priority || undefined
+        status: (status || undefined) as any,
+        priority: (priority || undefined) as any
       },
       include: {
         creator: { select: { name: true, email: true } },

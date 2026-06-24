@@ -9,7 +9,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const subscription = await prisma.clientSubscription.findUnique({
+    const subscription = await (prisma as any).clientSubscription.findUnique({
       where: { id: params.id },
       select: {
         id: true,
@@ -41,7 +41,7 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-    const subscription = await prisma.clientSubscription.findUnique({
+    const subscription = await (prisma as any).clientSubscription.findUnique({
       where: { id: params.id }
     })
 

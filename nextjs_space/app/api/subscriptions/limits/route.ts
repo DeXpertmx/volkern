@@ -8,7 +8,7 @@ import {
 } from '@/lib/subscription';
 import { withTenantAuth } from '@/lib/api-key-auth';
 
-export const GET = withTenantAuth(async (request: NextRequest, auth) => {
+export const GET = withTenantAuth((async (request: NextRequest, auth: any) => {
   try {
     const tenantId = auth.tenant!.id;
     
@@ -29,9 +29,9 @@ export const GET = withTenantAuth(async (request: NextRequest, auth) => {
       { status: 500 }
     );
   }
-}, ['subscriptions:read']);
+}) as any, ['subscriptions:read']);
 
-export const POST = withTenantAuth(async (request: NextRequest, auth) => {
+export const POST = withTenantAuth((async (request: NextRequest, auth: any) => {
   try {
     const { feature, amount = 1 } = await request.json();
 
@@ -90,4 +90,4 @@ export const POST = withTenantAuth(async (request: NextRequest, auth) => {
       { status: 500 }
     );
   }
-}, ['subscriptions:read']);
+}) as any, ['subscriptions:read']);
