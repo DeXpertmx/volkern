@@ -15,20 +15,20 @@ export const GET = withTenantAuth(async (req, auth) => {
     // Estadísticas de webhooks desde audit logs
     const [totalDispatched, totalDelivered, totalFailed, recentDeliveries] = await Promise.all([
       prisma.auditLog.count({
-        where: { tenantId, action: 'WEBHOOK_DISPATCHED' },
+        where: { tenantId, accion: 'WEBHOOK_DISPATCHED' } as any,
       }),
       prisma.auditLog.count({
-        where: { tenantId, action: 'WEBHOOK_DELIVERED' },
+        where: { tenantId, accion: 'WEBHOOK_DELIVERED' } as any,
       }),
       prisma.auditLog.count({
-        where: { tenantId, action: 'WEBHOOK_FAILED' },
+        where: { tenantId, accion: 'WEBHOOK_FAILED' } as any,
       }),
       prisma.auditLog.count({
         where: {
           tenantId,
-          action: { in: ['WEBHOOK_DISPATCHED', 'WEBHOOK_DELIVERED', 'WEBHOOK_FAILED'] },
-          createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
-        },
+          accion: { in: ['WEBHOOK_DISPATCHED', 'WEBHOOK_DELIVERED', 'WEBHOOK_FAILED'] },
+          fechaCreacion: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+        } as any,
       }),
     ])
 
@@ -36,17 +36,17 @@ export const GET = withTenantAuth(async (req, auth) => {
     const recent = await prisma.auditLog.findMany({
       where: {
         tenantId,
-        action: { in: ['WEBHOOK_DISPATCHED', 'WEBHOOK_DELIVERED', 'WEBHOOK_FAILED'] },
-      },
-      orderBy: { createdAt: 'desc' },
+        accion: { in: ['WEBHOOK_DISPATCHED', 'WEBHOOK_DELIVERED', 'WEBHOOK_FAILED'] },
+      } as any,
+      orderBy: { fechaCreacion: 'desc' } as any,
       take: 15,
       select: {
         id: true,
-        action: true,
-        description: true,
+        accion: true,
+        descripcion: true,
         metadata: true,
-        createdAt: true,
-      },
+        fechaCreacion: true,
+      } as any,
     })
 
     return NextResponse.json({
@@ -60,7 +60,7 @@ export const GET = withTenantAuth(async (req, auth) => {
       },
       recent: recent.map(r => ({
         ...r,
-        createdAt: r.createdAt.toISOString(),
+        createdAt: (r as any).fechaCreacion?.toISOString(),
       })),
     })
   } catch (error) {

@@ -91,7 +91,7 @@ export class TelegramGatewayAgent {
       // 6. Verificar rate limit
       const rateLimitResult = await rateLimiter.checkLimit(
         tenantId,
-        'telegram_message'
+        'telegram_message' as any
       );
 
       if (!rateLimitResult.allowed) {
@@ -157,9 +157,12 @@ export class TelegramGatewayAgent {
           data: {
             tenantId,
             userId: parsed.telegramUserId,
-            action: 'FISCAL_RETRY_FAILED',
+            accion: 'FISCAL_RETRY_FAILED',
+            entidad: 'Invoice',
+            entidadId: tenantId,
+            descripcion: 'Reintento masivo de facturas fallidas vía Telegram',
             metadata: { count: failedInvoices.length, chatId: parsed.chatId }
-          }
+          } as any
         });
 
         await this.sendMessage(parsed.chatId, msg, tenantId);
@@ -188,9 +191,12 @@ export class TelegramGatewayAgent {
           data: {
             tenantId,
             userId: parsed.telegramUserId,
-            action: 'FISCAL_INCIDENT_ACK',
+            accion: 'FISCAL_INCIDENT_ACK',
+            entidad: 'FiscalIncident',
+            entidadId: incident.id,
+            descripcion: 'Incidente fiscal reconocido vía Telegram',
             metadata: { incidentId: incident.id, chatId: parsed.chatId }
-          }
+          } as any
         });
 
         const msg = `🤝 Incidente ${incident.id} reconocido. El equipo de guardia ya está al tanto.`;
@@ -282,7 +288,7 @@ export class TelegramGatewayAgent {
     tenantId: string,
     parsed: ParsedMessage
   ): Promise<any> {
-    let user = await prisma.telegramUser.findUnique({
+    let user = await (prisma as any).telegramUser.findUnique({
       where: {
         tenantId_telegramUserId: {
           tenantId,
@@ -292,7 +298,7 @@ export class TelegramGatewayAgent {
     });
 
     if (!user) {
-      user = await prisma.telegramUser.create({
+      user = await (prisma as any).telegramUser.create({
         data: {
           tenantId,
           telegramUserId: parsed.telegramUserId,
@@ -305,7 +311,7 @@ export class TelegramGatewayAgent {
       });
     } else {
       // Actualizar información
-      user = await prisma.telegramUser.update({
+      user = await (prisma as any).telegramUser.update({
         where: { id: user.id },
         data: {
           telegramUsername: parsed.username,
@@ -331,14 +337,14 @@ export class TelegramGatewayAgent {
   }
 
   private static async blockTelegramUser(userId: string): Promise<void> {
-    await prisma.telegramUser.update({
+    await (prisma as any).telegramUser.update({
       where: { id: userId },
       data: { isBlocked: true }
     });
   }
 
   private static async updateUserStats(userId: string): Promise<void> {
-    await prisma.telegramUser.update({
+    await (prisma as any).telegramUser.update({
       where: { id: userId },
       data: {
         totalMessages: { increment: 1 },

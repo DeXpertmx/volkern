@@ -81,7 +81,7 @@ async function getTargetAudience(
               email: true,
               telefono: true,
               empresa: true,
-              perfilFiscal: { select: { idFiscal: true } }
+              perfilFiscal: { select: { idFiscal: true } as any }
             }
           })
           const estudiantes = await tenantClient.estudiante.findMany({
@@ -119,7 +119,7 @@ async function getTargetAudience(
               email: true,
               telefono: true,
               empresa: true,
-              perfilFiscal: { select: { idFiscal: true } }
+              perfilFiscal: { select: { idFiscal: true } as any }
             }
           })
           destinatarios.push(...leadsWithScore.map((l: any) => ({
@@ -143,7 +143,7 @@ async function getTargetAudience(
               email: true,
               telefono: true,
               empresa: true,
-              perfilFiscal: { select: { idFiscal: true } }
+              perfilFiscal: { select: { idFiscal: true } as any }
             }
           })
           destinatarios.push(...leadsByEstado.map((l: any) => ({
@@ -185,7 +185,7 @@ async function getTargetAudience(
                 email: true,
                 telefono: true,
                 empresa: true,
-                perfilFiscal: { select: { idFiscal: true } }
+                perfilFiscal: { select: { idFiscal: true } as any }
               }
             })
             destinatarios.push(...customLeads.map((l: any) => ({
@@ -292,7 +292,7 @@ async function getChatwootCredentials(tenantId: string) {
 
       for (const channel of channels) {
         if (channel.chatwootInboxId) {
-          inboxIds[channel.tipo] = channel.chatwootInboxId;
+          inboxIds[(channel as any).tipo] = channel.chatwootInboxId;
         }
       }
 
@@ -410,7 +410,7 @@ async function sendMessage(
         return { success: false, error: 'Chatwoot no configurado para este tenant' };
       }
 
-      return await sendViaChatwoot(canal, destinatario, contenido, chatwootCreds);
+      return await sendViaChatwoot(canal, destinatario, contenido, chatwootCreds as any);
     } catch (error: any) {
       console.error(`[CampaignEngine] Error en sendMessage (${canal}):`, error);
       return { success: false, error: error.message };
@@ -422,7 +422,7 @@ async function sendMessage(
     const chatwootCreds = await getChatwootCredentials(tenantId);
     
     if (chatwootCreds && chatwootCreds.accountId && chatwootCreds.accountToken) {
-      const chatwootResult = await sendViaChatwoot(canal, destinatario, contenido, chatwootCreds);
+      const chatwootResult = await sendViaChatwoot(canal, destinatario, contenido, chatwootCreds as any);
       
       if (chatwootResult.success) {
         return chatwootResult;

@@ -6,7 +6,7 @@ export async function createSupportTicket(config: any, ctx: ActionContext): Prom
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  const ticket = await tenantClient.soporteTicket.create({
+  const ticket = await (tenantClient as any).soporteTicket.create({
     data: {
       tenantId: ctx.state.tenantId, titulo, descripcion,
       prioridad: prioridad || 'media', categoria: categoria || 'general',
@@ -22,7 +22,7 @@ export async function assignTicket(config: any, ctx: ActionContext): Promise<boo
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  await tenantClient.soporteTicket.update({
+  await (tenantClient as any).soporteTicket.update({
     where: { id: ticketId || ctx.state.ticketId },
     data: { asignadoA, estado: 'asignado' },
   })
@@ -35,7 +35,7 @@ export async function escalateTicket(config: any, ctx: ActionContext): Promise<b
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  await tenantClient.soporteTicket.update({
+  await (tenantClient as any).soporteTicket.update({
     where: { id: ticketId || ctx.state.ticketId },
     data: { nivelEscalacion: nivel, estado: 'escalado', notas: motivo },
   })
@@ -48,18 +48,18 @@ export async function notifySLA(config: any, ctx: ActionContext): Promise<boolea
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  const ticket = await tenantClient.soporteTicket.findUnique({
+  const ticket = await (tenantClient as any).soporteTicket.findUnique({
     where: { id: ticketId || ctx.state.ticketId },
     include: { asignadoA: true },
   })
 
   if (ticket) {
     const { notifyByTelegram, notifyByEmail } = await import('@/lib/skills/notification-layer')
-    const context = createSystemContext(ctx.state.tenantId)
+    const context = createSystemContext(ctx.state.tenantId as any)
     const message = `⚠️ *Alerta SLA ${tipoAlerta}*\n\nTicket: ${ticket.titulo}\nAsignado a: ${ticket.asignadoA?.nombre || 'Sin asignar'}`
 
     notifyByTelegram(message, context).catch(() => {})
-    if (ticket.asignadoA?.email) notifyByEmail(ticket.asignadoA.email, 'Alerta SLA', message, context).catch(() => {})
+    if (ticket.asignadoA?.email) (notifyByEmail as any)(ticket.asignadoA.email, 'Alerta SLA', message, context).catch(() => {})
   }
   await ctx.log('notify_sla', 'action', 'success', 'Alerta SLA enviada')
   return true
@@ -70,7 +70,7 @@ export async function closeTicket(config: any, ctx: ActionContext): Promise<bool
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  await tenantClient.soporteTicket.update({
+  await (tenantClient as any).soporteTicket.update({
     where: { id: ticketId || ctx.state.ticketId },
     data: { estado: 'cerrado', solucion, satisfaccionCliente: satisfaccion, fechaCierre: new Date() },
   })
@@ -83,15 +83,15 @@ export async function createTaskFromTicket(config: any, ctx: ActionContext): Pro
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  const ticket = await tenantClient.soporteTicket.findUnique({ where: { id: ticketId || ctx.state.ticketId } })
-  await tenantClient.tarea.create({
+  const ticket = await (tenantClient as any).soporteTicket.findUnique({ where: { id: ticketId || ctx.state.ticketId } })
+  await (tenantClient as any).tarea.create({
     data: {
-      tenantId: ctx.state.tenantId,
+      tenantId: ctx.state.tenantId as any,
       titulo: titulo || `Tarea desde ticket: ${ticket?.titulo}`,
       descripcion: `Derivado del ticket ${ticketId || ctx.state.ticketId}`,
       asignadoA, fechaVencimiento, estado: 'pendiente',
       prioridad: ticket?.prioridad || 'media',
-    },
+    } as any,
   })
   await ctx.log('create_task_from_ticket', 'action', 'success', 'Tarea creada desde ticket')
   return true

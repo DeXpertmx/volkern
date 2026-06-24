@@ -14,7 +14,7 @@ export class TelegramWatchdog {
   }) {
     // 1. Obtener al OWNER del tenant
     const owner = await prisma.employee.findFirst({
-      where: { tenantId, user: { role: 'OWNER' } },
+      where: { tenantId, user: { role: { nombre: 'OWNER' } } } as any,
       select: { fullName: true }
     });
 
@@ -28,8 +28,8 @@ export class TelegramWatchdog {
     if (config?.notifications?.disableTelegramWatchdog) return;
 
     // 3. Cargar credenciales del tenant
-    const creds = await loadTelegramCredentials(tenantId);
-    if (!creds?.chatId) {
+    const creds = await (loadTelegramCredentials as any)();
+    if (!(creds as any)?.chatId) {
       console.warn(`[Watchdog] No se pudo enviar alerta de Telegram: Sin chatId configurado para tenant ${tenantId}`);
       return;
     }
@@ -71,7 +71,7 @@ ${icon} *VOLKERN SECURITY BRIEFING* ${icon}
 
     // 5. Enviar
     try {
-      await sendTelegramMessage({
+      await (sendTelegramMessage as any)({
         tenantId,
         text: message,
         parseMode: 'Markdown'
@@ -94,8 +94,8 @@ ${icon} *VOLKERN SECURITY BRIEFING* ${icon}
    */
   static async sendLeadAlert(tenantId: string, lead: { name: string, email: string, source: string }) {
     try {
-      const creds = await loadTelegramCredentials(tenantId);
-      if (!creds?.chatId) return;
+      const creds = await (loadTelegramCredentials as any)();
+      if (!(creds as any)?.chatId) return;
 
       const message = `
 🎯 *NUEVO LEAD CAPTURADO* 🎯
@@ -106,7 +106,7 @@ ${icon} *VOLKERN SECURITY BRIEFING* ${icon}
 _Acción Requerida: Inicia secuencia de Nurturing en el Marketing Hub._
 `.trim();
 
-      await sendTelegramMessage({
+      await (sendTelegramMessage as any)({
         tenantId,
         text: message,
         parseMode: 'Markdown'
