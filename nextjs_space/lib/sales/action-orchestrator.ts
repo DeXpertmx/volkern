@@ -36,7 +36,7 @@ export class ActionOrchestrator {
               descripcion: `${payload.descripcion}\n\n[IA Rationale]: ${metadata.rationale}`,
               fechaVencimiento: new Date(Date.now() + (payload.delayHours || 24) * 60 * 60 * 1000),
               prioridad: payload.prioridad || 'media'
-            }
+            } as any
           });
           break;
 
@@ -50,7 +50,7 @@ export class ActionOrchestrator {
               asunto: payload.asunto,
               contenido: payload.contenido,
               metadatos: { generatedBy: 'Gemma 4', sentiment: deal.aiSentiment, confidence: metadata.confidence }
-            }
+            } as any
           });
           break;
 
@@ -85,7 +85,7 @@ export class ActionOrchestrator {
         evidence: metadata.evidence,
         confidence: metadata.confidence,
         isAutoExecuted: isAuto
-      }
+      } as any
     });
 
     return { result, isAutoExecuted: isAuto, outcome };

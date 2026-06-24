@@ -225,7 +225,7 @@ export async function prequalifyLead(input: PrequalifyLeadInput) {
         sentimiento: 'urgente',
         fechaProcesamiento: new Date().toISOString()
       }
-    }
+    } as any
   });
 
   // 2. Actualizar Valor del Negocio (Ventas)
@@ -254,7 +254,7 @@ export async function prequalifyLead(input: PrequalifyLeadInput) {
   }
 
   // 3. Consultar Catálogo
-  let catalogItems = [];
+  let catalogItems: any[] = [];
   if (catalogSearch) {
     catalogItems = await prisma.catalogoItem.findMany({
       where: {

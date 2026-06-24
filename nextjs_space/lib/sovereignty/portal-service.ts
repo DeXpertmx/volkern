@@ -35,8 +35,8 @@ export class PortalService {
         salesOrderId,
         token: newToken,
         isActive: true,
-        expiresAt: null, // Sovereignty doesn't expire by default unless revoked
-      }
+        expiresAt: null,
+      } as any
     });
 
     return newToken;
@@ -144,7 +144,7 @@ export class PortalService {
         verifiedHash: providedHash,
         status,
         verifiedAt: new Date()
-      }
+      } as any
     });
 
     return {
@@ -181,7 +181,7 @@ export class PortalService {
         description: data.description,
         evidenceUrl: data.evidenceUrl,
         status: 'OPEN'
-      }
+      } as any
     });
   }
 }
