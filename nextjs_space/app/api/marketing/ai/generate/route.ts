@@ -15,7 +15,7 @@ export async function POST(req: Request) {
     const result = await skills.generate_marketing_copy({
       topic: prompt,
       platform: platform as any,
-      tenantId: session.user.tenantId,
+      tenantId: session.user.tenantId!,
       tone: 'professional'
     });
 

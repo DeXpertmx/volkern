@@ -67,7 +67,7 @@ export const POST = withTenantAuth(async (request, auth) => {
       return NextResponse.json({ error: 'Faltan campos obligatorios' }, { status: 400 });
     }
 
-    const expense = await skills.create_expense({
+    const expense = await (skills as any).create_expense({
       tenantId: auth.tenant!.id,
       createdById: auth.user!.id,
       supplierId: body.supplierId,

@@ -10,7 +10,7 @@ import { verifyFinancialIntegrity } from '@/lib/security/integrity-service';
 export const GET = withTenantAuth(async (request, auth) => {
   try {
     const tenantId = auth.tenant!.id;
-    const user = { id: auth.user!.id, role: auth.user!.role, email: auth.user!.email || '' };
+    const user = { id: auth.user!.id, role: auth.user!.role, email: auth.user!.email || '' } as any;
 
     // 🛡️ VALIDAR ACCESO
     const security = await validateFinancialSecurity(tenantId, user);

@@ -8,7 +8,7 @@ export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
   
   const allowedRoles = ['ADMIN', 'OWNER', 'MARKETING_MANAGER'];
-  if (!session?.user || !allowedRoles.includes(session.user.role)) {
+  if (!session?.user || !allowedRoles.includes(session.user.role || '')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

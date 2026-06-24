@@ -53,7 +53,7 @@ export const GET = withTenantAuth(async (request, auth, { params }) => {
     }, 0);
 
     // 4. Calcular Otros Gastos (Expense records)
-    const otherCosts = project.expenses.reduce((acc, exp) => acc + exp.monto, 0);
+    const otherCosts = (project.expenses as any[]).reduce((acc: number, exp: any) => acc + exp.monto, 0);
 
     const totalCosts = materialCosts + otherCosts;
     const netMargin = totalInvoiced - totalCosts;

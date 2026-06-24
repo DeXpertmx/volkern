@@ -10,7 +10,7 @@ export async function GET() {
 
   try {
     const advice = await skills.advise_on_automation_rules({
-      tenantId: session.user.tenantId
+      tenantId: session.user.tenantId!
     });
     return NextResponse.json(advice);
   } catch (error: any) {

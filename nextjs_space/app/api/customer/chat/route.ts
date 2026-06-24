@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
             const parsed = parseInmueble(p);
             return `- ${parsed.propertyType || 'Inmueble'} en ${parsed.operationType || 'venta'}
   Precio: ${parsed.precioBase?.toLocaleString('es-ES') || '?'} €
-  Ubicación: ${[parsed.city, parsed.area].filter(Boolean).join(', ') || 'N/A'}
+  Ubicación: ${[parsed.city, (parsed as any).area].filter(Boolean).join(', ') || 'N/A'}
   ${parsed.bedrooms ? parsed.bedrooms + ' habs' : ''} ${parsed.bathrooms ? '/ ' + parsed.bathrooms + ' baños' : ''} ${parsed.areaM2 ? '/ ' + parsed.areaM2 + ' m²' : ''}`;
           }).join('\n\n');
 

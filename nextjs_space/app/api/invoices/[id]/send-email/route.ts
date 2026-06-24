@@ -46,6 +46,7 @@ interface InvoiceMetadata {
   isManual?: boolean;
   tipoDescuento?: 'linea' | 'total';
   descuentoGlobal?: number;
+  clienteEmail?: string;
 }
 
 // ─── Generar HTML de la factura (misma plantilla que el PDF) ──

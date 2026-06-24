@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
     const claim = await HRService.submitExpenseClaim({
       ...body,
       tenantId: (session.user as any).tenantId
-    })
+    } as any)
     return NextResponse.json(claim)
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })

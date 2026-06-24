@@ -31,7 +31,7 @@ export async function POST(req: Request) {
         email: email.toLowerCase(),
         reason,
         source: 'MANUAL'
-      }
+      } as any
     });
     return NextResponse.json(suppression);
   } catch (error: any) {
