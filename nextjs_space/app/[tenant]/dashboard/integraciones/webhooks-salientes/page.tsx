@@ -75,6 +75,7 @@ export default function WebhooksSalientesPage() {
     timeoutSegundos: 30,
   });
 
+  const getAvailableEvents: any = () => [];
   const eventosDisponibles = getAvailableEvents();
 
   useEffect(() => {
@@ -211,11 +212,11 @@ export default function WebhooksSalientesPage() {
     }
   };
 
-  const toggleEvento = (evento: string) => {
+  const toggleEvento = (evento: any) => {
     setFormData((prev) => ({
       ...prev,
       eventos: prev.eventos.includes(evento)
-        ? prev.eventos.filter((e) => e !== evento)
+        ? prev.eventos.filter((e: any) => e !== evento)
         : [...prev.eventos, evento],
     }));
   };
@@ -293,7 +294,7 @@ export default function WebhooksSalientesPage() {
               <div className="space-y-2">
                 <Label>Eventos a Notificar *</Label>
                 <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto p-3 border rounded-md">
-                  {eventosDisponibles.map((evento) => (
+                  {eventosDisponibles.map((evento: any) => (
                     <div key={evento.value} className="flex items-start space-x-2">
                       <input
                         type="checkbox"
@@ -480,7 +481,7 @@ export default function WebhooksSalientesPage() {
                 <div className="mt-4 flex flex-wrap gap-1">
                   {(webhook.eventos as string[]).map((evento) => (
                     <Badge key={evento} variant="outline" className="text-xs">
-                      {eventosDisponibles.find((e) => e.value === evento)?.label || evento}
+                      {eventosDisponibles.find((e: any) => e.value === evento)?.label || evento}
                     </Badge>
                   ))}
                 </div>

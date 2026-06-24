@@ -7,7 +7,7 @@ import 'leaflet-polylinedecorator'
 
 interface PolylineDecoratorProps {
   positions: [number, number][]
-  patterns?: L.PolylineDecoratorPattern[]
+  patterns?: any[]
   color?: string
 }
 
@@ -26,7 +26,7 @@ export default function PolylineDecorator({
   useEffect(() => {
     if (!map || positions.length < 2) return
 
-    const defaultPatterns: L.PolylineDecoratorPattern[] = [
+    const defaultPatterns: any[] = [
       {
         offset: '15%',
         repeat: '30%',
@@ -43,7 +43,7 @@ export default function PolylineDecorator({
       },
     ]
 
-    const decorator = L.polylineDecorator(positions, {
+    const decorator = (L.polylineDecorator as any)(positions, {
       patterns: patterns || defaultPatterns,
     }).addTo(map)
 
