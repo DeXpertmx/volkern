@@ -18,10 +18,10 @@ class VolkernEventEngine {
 
     await prisma.systemAlert.create({
       data: {
-        level: 'INFO',
+        level: 'INFO' as any,
         message: `Event: ${event.event} for tenant ${event.tenant_id}`,
-        metadata: { event: event.event, data: event.data }
-      }
+        metadata: { event: event.event, data: event.data } as any
+      } as any
     })
 
     const actions = await this.findMatchingActions(event)
@@ -47,10 +47,10 @@ class VolkernEventEngine {
       if (!result.success) {
         await prisma.systemAlert.create({
           data: {
-            level: 'WARN',
+            level: 'WARN' as any,
             message: `Action failed: ${action.type} - ${result.error}`,
-            metadata: { event: event.event, action: action.type, error: result.error }
-          }
+            metadata: { event: event.event, action: action.type, error: result.error } as any
+          } as any
         })
       }
     }

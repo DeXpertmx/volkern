@@ -20,9 +20,9 @@ export class SocialMediaService {
       throw new Error(`Configuración de ${platform} no activa o inexistente para el tenant ${tenantId}`);
     }
 
-    const accessToken = VaultService.decrypt(config.accessToken, tenantId, config.tenant.vaultSeed);
+    const accessToken = VaultService.decrypt(config.accessToken, tenantId, config.tenant.vaultSeed!);
     const refreshToken = config.refreshToken 
-      ? VaultService.decrypt(config.refreshToken, tenantId, config.tenant.vaultSeed)
+      ? VaultService.decrypt(config.refreshToken, tenantId, config.tenant.vaultSeed!)
       : null;
 
     return { ...config, accessToken, refreshToken };

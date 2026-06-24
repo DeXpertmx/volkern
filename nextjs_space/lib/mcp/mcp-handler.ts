@@ -9,6 +9,7 @@
  * LLM/Agent → MCP Server → Skills → Core → EventBus
  */
 
+import { prisma } from '@/lib/db';
 import { skills, executeSkill, listSkills, SkillName } from '@/lib/skills';
 
 // ============== TIPOS MCP ==============
@@ -656,7 +657,7 @@ export const MCP_TOOLS: MCPTool[] = [
       properties: {
         tenantId: { type: 'string', description: 'ID del tenant' },
         userId: { type: 'string', description: 'ID del usuario firmante (OWNER)' },
-        documentType: { type: 'string', enum: ['ACTA_ENTREGA', 'APROBACION_VACACIONES'] },
+        documentType: { type: 'string', description: 'Tipo de documento a sellar (opcional)', enum: ['ACTA_ENTREGA', 'APROBACION_VACACIONES'] },
         context: { type: 'object', description: 'Datos dinámicos para el acta (assetName, employeeName, etc.)' },
       },
       required: ['tenantId', 'userId', 'documentType', 'context'],
