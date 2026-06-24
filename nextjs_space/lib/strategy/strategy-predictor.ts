@@ -8,8 +8,8 @@ export class StrategyPredictor {
   static async predictCashflow(tenantId: string) {
     // 1. Obtener facturas pendientes (Entradas)
     const pendingInvoices = await prisma.invoice.findMany({
-      where: { tenantId, status: 'OPEN' },
-      select: { total: true, dueDate: true }
+      where: { tenantId, status: 'OPEN' } as any,
+      select: { total: true, dueDate: true } as any
     })
 
     // 2. Obtener gastos proyectados y nóminas (Salidas)
@@ -21,8 +21,8 @@ export class StrategyPredictor {
       const limitDate = new Date(now.getTime() + days * 24 * 60 * 60 * 1000)
       
       const expectedInflow = pendingInvoices
-        .filter(inv => new Date(inv.dueDate) <= limitDate)
-        .reduce((acc, inv) => acc.plus(new Decimal(inv.total.toString())), new Decimal(0))
+        .filter(inv => new Date((inv as any).dueDate) <= limitDate)
+        .reduce((acc, inv) => acc.plus(new Decimal((inv as any).total.toString())), new Decimal(0))
       
       const expectedOutflow = averagePayroll.mul(Math.ceil(days / 30))
       

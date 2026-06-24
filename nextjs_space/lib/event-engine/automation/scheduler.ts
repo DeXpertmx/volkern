@@ -36,7 +36,7 @@ export class AutomationScheduler {
         level: 'INFO',
         message: `Cron job created: ${job.name}`,
         metadata: { jobId: id, schedule: job.schedule }
-      }
+      } as any
     })
 
     return newJob
@@ -72,7 +72,7 @@ export class AutomationScheduler {
             level: 'INFO',
             message: `Cron job executed: ${job.name}`,
             metadata: { jobId: job.id, event: job.event }
-          }
+          } as any
         })
       } catch (error) {
         console.error(`[Scheduler] Job error: ${job.id}`, error)
@@ -141,12 +141,12 @@ export class AutomationScheduler {
       where: {
         message: { contains: 'Cron job created:' },
         metadata: { path: ['tenantId'], tenantId }
-      },
+      } as any,
       take: 50
     })
 
     for (const alert of alerts) {
-      const job = alert.metadata as any
+      const job = (alert as any).metadata as any
       if (job?.jobId && job?.schedule && job?.activo) {
         this.startJob(job)
       }

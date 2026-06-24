@@ -5,7 +5,7 @@ import { prisma } from '@/lib/db';
  * Detecta causas de baja rentabilidad en órdenes de producción
  */
 export async function analyze_production_profitability({ tenantId }: { tenantId: string }) {
-  const lowMarginOrders = await prisma.productionCosting.findMany({
+  const lowMarginOrders = await (prisma as any).productionCosting.findMany({
     where: { 
       tenantId,
       margin: { lt: 20 } // Menos del 20% de margen
@@ -26,7 +26,7 @@ export async function analyze_production_profitability({ tenantId }: { tenantId:
     return { status: 'OPTIMAL', message: 'Todas las órdenes recientes mantienen márgenes saludables (>20%).' };
   }
 
-  const analysis = lowMarginOrders.map(order => {
+  const analysis = lowMarginOrders.map((order: any) => {
     let rootCause = 'Varianza de costo general';
     if (order.scrapCost > (order.totalCost * 0.1)) rootCause = 'Exceso de merma detectado por VISION-LOCK';
     if (order.laborCost > (order.estimatedCost * 0.5)) rootCause = 'Desviación significativa en tiempo de mano de obra';
@@ -46,6 +46,6 @@ export async function analyze_production_profitability({ tenantId }: { tenantId:
   return {
     status: 'ATTENTION_REQUIRED',
     analysis,
-    summary: `Se han detectado ${lowMarginOrders.length} órdenes con rentabilidad comprometida. El impacto total de la varianza es de ${lowMarginOrders.reduce((acc, o) => acc + o.variance, 0).toFixed(2)}€.`
+    summary: `Se han detectado ${lowMarginOrders.length} órdenes con rentabilidad comprometida. El impacto total de la varianza es de ${lowMarginOrders.reduce((acc: number, o: any) => acc + o.variance, 0).toFixed(2)}€.`
   };
 }
