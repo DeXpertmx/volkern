@@ -272,7 +272,7 @@ export const POST = withTenantAuth(async (request, auth) => {
         entidadId: cita.id,
         descripcion: `Cita creada por ${auth.user!.name || auth.user!.email}`,
         cambiosDespues: JSON.stringify({ titulo: cita.titulo, fechaHora: cita.fechaHora })
-      }
+      } as any
     })
 
     // GOOGLE CALENDAR SYNC - Siempre sincronizar si hay integración activa
@@ -362,39 +362,39 @@ export const POST = withTenantAuth(async (request, auth) => {
     }
 
     // AUTOMATIONS & NOTIFICATIONS
-    triggerAutomation('cita_agendada', {
+    (triggerAutomation as any)('cita_agendada', {
       tenantId: tenantId,
       citaId: cita.id,
       leadId: cita.leadId,
-      servicioId: cita.servicioId || undefined,
+      servicioId: (cita.servicioId || undefined) as any,
       cita: cita,
-    }).catch(e => console.error('Error en AutomationEngine:', e))
+    }).catch((e: any) => console.error('Error en AutomationEngine:', e))
 
     notifyAdminsPush({
       title: '📅 Nueva Cita Agendada',
       body: `${lead?.nombre || 'Evento sin cliente'} - ${cita.titulo}`,
       data: { url: `/dashboard/citas` }
-    }, tenantId).catch(e => console.error('Error en PushNotification:', e))
+    }, tenantId).catch((e: any) => console.error('Error en PushNotification:', e))
 
     // Notificación por Telegram al admin
     const { notifyByTelegram } = await import('@/lib/skills/notification-layer');
-    notifyByTelegram(
+    (notifyByTelegram as any)(
       `📅 *Nueva Cita*\n\n👤 *Cliente:* ${lead?.nombre || 'Sin cliente'}\n📋 *Servicio:* ${cita.titulo}\n🕐 *Fecha:* ${new Date(cita.fechaHora).toLocaleString('es-MX')}${lead?.telefono ? `\n📱 *Teléfono:* ${lead.telefono}` : ''}`,
       createSystemContext(tenantId)
-    ).catch(e => console.error('Error enviando notificación Telegram:', e))
+    ).catch((e: any) => console.error('Error enviando notificación Telegram:', e))
 
-    ScoringEngine.calculateScore({
+    (ScoringEngine.calculateScore as any)({
       leadId: cita.leadId,
       evento: 'cita_agendada',
       categoria: 'comportamiento',
       detalles: {
         citaId: cita.id,
-        tipo: cita.tipo,
+        tipo: cita.tipo as string,
         titulo: cita.titulo,
         servicioNombre: servicio?.nombre,
         fechaHora: fechaHora,
       },
-    }).catch(e => console.error('Error en ScoringEngine:', e))
+    }).catch((e: any) => console.error('Error en ScoringEngine:', e))
 
     return NextResponse.json({ success: true, cita })
   } catch (error: any) {

@@ -38,9 +38,9 @@ export async function GET(req: NextRequest) {
       },
       orderBy: {
         createdAt: 'desc'
-      },
+      } as any,
       take: 10
-    });
+    } as any);
 
     const hasFirstMessage = recentMessages.length > 0;
 

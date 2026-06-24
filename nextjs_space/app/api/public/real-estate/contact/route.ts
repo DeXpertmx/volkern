@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
         email,
         telefono: phone || "",
         notas: `[Portal Inmobiliario] ${message || "Sin mensaje adicional"}${propertyName ? `\nPropiedad: ${propertyName}` : ""}${preferredDate ? `\nFecha preferida de visita: ${preferredDate}` : ""}`,
-        fuente: "portal_inmobiliario",
+        fuente: "portal_inmobiliario" as any,
         metadataExterna: {
           propertyId: propertyId || null,
           propertyName,
@@ -97,8 +97,8 @@ export async function POST(req: NextRequest) {
           sourceUrl: req.headers.get("referer") || "",
           userAgent: req.headers.get("user-agent") || "",
           ip: req.headers.get("x-forwarded-for") || "unknown",
-        },
-      });
+        } as any,
+      } as any);
 
       // 5. Si hay propiedad, registrar interés en metadata
       if (propertyId && lead) {
@@ -136,10 +136,10 @@ export async function POST(req: NextRequest) {
           tenantId: tenant.id,
           leadId: lead.id,
           email: lead.email,
-          source: "portal_inmobiliario",
+          source: "portal_inmobiliario" as any,
           propertyId: propertyId || null,
           timestamp: new Date(),
-        });
+        } as any);
       }
 
       return NextResponse.json({

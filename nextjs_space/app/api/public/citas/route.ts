@@ -281,9 +281,9 @@ export const POST = withPublicTenant(async (request, tenantId) => {
       tenantId: tenantId,
       citaId: cita.id,
       leadId: cita.leadId,
-      servicioId: cita.servicioId || undefined,
+      servicioId: (cita.servicioId || undefined) as any,
       cita: cita
-    }).catch(e => console.error('Error Automation:', e))
+    } as any).catch(e => console.error('Error Automation:', e))
 
     ScoringEngine.recalculateLeadScore(leadId).catch(e => console.error('Error Scoring:', e))
 

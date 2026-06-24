@@ -46,9 +46,9 @@ export const POST = withTenantAuth(async (request, auth) => {
     const signResult = await PDFService.generateSignedActa({
       tenantId: auth.tenant!.id,
       documentType: 'NOMINA',
-      title: `NÓMINA: ${employee.user.name}`,
+      title: `NÓMINA: ${employee.user!.name}`,
       content: [],
-      signerName: 'CEO Volkern',
+      signerName: (employee.user as any)?.name || 'CEO Volkern',
       signerId: employee.id, // En producción sería el ID del administrador
       operatorNote: operatorNote,
       payrollData: {
@@ -90,7 +90,7 @@ export const POST = withTenantAuth(async (request, auth) => {
            signatureId: signResult.signatureId,
            evaluatedAt: new Date().toISOString()
         }
-      }
+      } as any
     });
 
     // 6. Disparar Alerta de Telegram si hay anomalías justificadas (Fase 5)
