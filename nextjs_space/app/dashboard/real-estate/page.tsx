@@ -757,7 +757,7 @@ function CommissionSection({
                       ))}
                     </Pie>
                     <Tooltip
-                      formatter={(value: number) => [formatCurrency(value), 'Comisiones']}
+                      formatter={((value: number) => [formatCurrency(value), 'Comisiones']) as any}
                       contentStyle={{
                         borderRadius: '12px',
                         border: 'none',
@@ -816,7 +816,7 @@ function CommissionSection({
                   />
                   <YAxis tick={{ fontSize: 11 }} />
                   <Tooltip
-                    formatter={(value: number) => [formatCurrency(value), '']}
+                    formatter={((value: number) => [formatCurrency(value), '']) as any}
                     contentStyle={{
                       borderRadius: '12px',
                       border: 'none',

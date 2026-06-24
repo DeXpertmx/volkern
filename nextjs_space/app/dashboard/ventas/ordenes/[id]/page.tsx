@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ArrowLeft, Clock, FileText, Download, Send, Edit } from 'lucide-react';
+import { ArrowLeft, Clock, FileText, Download, Send, Edit, CheckCircle } from 'lucide-react';
 import { DocumentPreview } from '@/components/document-preview';
 import { DocumentTimeline, TimelineEvent } from '@/components/document-timeline';
 
@@ -263,7 +263,7 @@ export default function OrdenDetallePage() {
                 cantidad: item.cantidad,
                 precio: item.precioUnitario,
                 total: item.total
-              }))}
+              } as any))}
               totals={{
                 subtotal: orden.subtotal,
                 impuesto: orden.totalImpuestos,
