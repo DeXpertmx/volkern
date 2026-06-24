@@ -25,11 +25,11 @@ export async function notifyProjectTeam(config: any, ctx: ActionContext): Promis
 
   const notifModule = await import('@/lib/skills/notification-layer') as any
   const { notifyByTelegram, sendEmail } = notifModule
-  const context = createSystemContext(ctx.state.tenantId)
+  const context = createSystemContext(ctx.state.tenantId as string)
 
   for (const miembro of proyecto?.miembros || []) {
     if (miembro.usuario?.email) {
-      await sendEmail(miembro.usuario.email!, `Actualización del proyecto: ${proyecto?.nombre ?? ''}`, mensaje, ctx.state.tenantId)
+      await sendEmail(miembro.usuario.email! as string, `Actualización del proyecto: ${proyecto?.nombre ?? ''}`, mensaje, ctx.state.tenantId as string)
     }
   }
   notifyByTelegram(mensaje, context).catch(() => {})
@@ -73,7 +73,7 @@ export async function notifyMilestone(config: any, ctx: ActionContext): Promise<
   })
 
   const { notifyByTelegram } = await import('@/lib/skills/notification-layer') as any
-  const context = createSystemContext(ctx.state.tenantId)
+  const context = createSystemContext(ctx.state.tenantId as string)
 
   const message = tipoNotificacion === 'proximamente'
     ? `📌 *Hito Próximo*\n\nProyecto: ${hito?.proyecto?.nombre ?? ''}\nHito: ${hito?.nombre ?? ''}\nFecha: ${new Date(hito?.fechaEntrega as any).toLocaleDateString()}`
