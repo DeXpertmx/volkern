@@ -20,17 +20,17 @@ export const aeatQueue = new Queue('aeat-shipment', {
 
 // Programar Health Check Diario (8:00 AM) - Resumen Completo
 aeatQueue.add('daily_health_check', {}, {
-  repeat: { cron: '0 8 * * *' }
+  repeat: { pattern: '0 8 * * *' }
 });
 
 // Programar Monitoreo Continuo (Cada 5 min) - Alertas Críticas
 aeatQueue.add('continuous_monitor', {}, {
-  repeat: { cron: '*/5 * * * *' }
+  repeat: { pattern: '*/5 * * * *' }
 });
 
 // Programar Agregación de Métricas (Cada Hora)
 aeatQueue.add('aggregate_metrics', {}, {
-  repeat: { cron: '0 * * * *' }
+  repeat: { pattern: '0 * * * *' }
 });
 
 /**
@@ -50,7 +50,7 @@ export const aeatWorker = new Worker('aeat-shipment', async (job) => {
 
     await prisma.systemMetric.createMany({
       data: [
-        { metricType: 'aeat_error_rate', value: metrics.database.error / (metrics.database.total || 1), metadata: { hourOfDay } },
+        { metricType: 'aeat_error_rate', value: Number(metrics.database.error) / (Number(metrics.database.total) || 1), metadata: { hourOfDay } },
         { metricType: 'queue_size', value: metrics.queue.waiting, metadata: { hourOfDay } }
       ]
     });
@@ -97,7 +97,7 @@ export const aeatWorker = new Worker('aeat-shipment', async (job) => {
       report += `${healthIcon} <b>Health Score: ${healthScore}/100</b>\n\n`;
 
       // Métricas y Baselines
-      const errorRate = (metrics.database.error / (metrics.database.total || 1) * 100).toFixed(1);
+      const errorRate = (Number(metrics.database.error) / (Number(metrics.database.total) || 1) * 100).toFixed(1);
       report += `📈 Error Rate: ${errorRate}%${errorBaseline ? ` (vs ${(errorBaseline.avg * 100).toFixed(1)}%)` : ''}\n`;
       report += `📦 Cola: ${metrics.queue.waiting}\n`;
       
@@ -121,7 +121,9 @@ export const aeatWorker = new Worker('aeat-shipment', async (job) => {
   }
 
   const { invoiceId, tenantId } = job.data;
-  // ... resto de la lógica de envío ...
+
+  const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } });
+  if (!invoice) throw new Error(`Invoice ${invoiceId} not found`);
 
   try {
     const response = await InvoicingService.shipToAEAT(tenantId, {

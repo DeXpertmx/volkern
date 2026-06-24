@@ -74,7 +74,7 @@ async function checkIdempotencyCache(opts: {
   idempotencyKey: string | null;
 }) {
   if (!opts.idempotencyKey) return null;
-  const cached = await prisma.payrollRunES.findUnique({
+  const cached = await (prisma as any).payrollRunES.findUnique({
     where: {
       tenantId_idempotencyKey: {
         tenantId: opts.tenantId,
@@ -90,7 +90,7 @@ async function loadEmployeesByExternalIds(
   externalIds: string[]
 ) {
   return prisma.employee.findMany({
-    where: { tenantId, externalEmployeeId: { in: externalIds } },
+    where: { tenantId, externalEmployeeId: { in: externalIds } } as any,
   });
 }
 
@@ -106,8 +106,8 @@ export const POST = withTenantAuth(
     }
 
     const tenantId = auth.tenant!.id;
-    const apiKeyId = auth.apiKey.id;
-    const apiKeyName = auth.apiKey.nombre;
+    const apiKeyId = auth.apiKey!.id;
+    const apiKeyName = auth.apiKey!.nombre;
     const { ipAddress, userAgent } = getRequestMetadata(request);
 
     try {
@@ -219,7 +219,7 @@ export const POST = withTenantAuth(
       }
 
       // Idempotencia a nivel (tenantId, period): si hay run sellado, devolver 409.
-      const existing = await prisma.payrollRunES.findUnique({
+      const existing = await (prisma as any).payrollRunES.findUnique({
         where: { tenantId_period: { tenantId, period: body.period } },
       });
       if (existing && existing.status === "SEALED") {
@@ -243,7 +243,7 @@ export const POST = withTenantAuth(
       }
 
       // Lookup empleados por externalEmployeeId
-      const employees = await loadEmployeesByExternalIds(tenantId, externalIds);
+      const employees = await loadEmployeesByExternalIds(tenantId, externalIds) as any[];
       const employeesFound = new Set(
         employees.map((e) => e.externalEmployeeId).filter(Boolean) as string[]
       );
@@ -287,7 +287,7 @@ export const POST = withTenantAuth(
 
       // Crear PayrollRunES (UPSERT por tenant+period para soportar reintentos
       // de runs no sellados).
-      const run = await prisma.payrollRunES.upsert({
+      const run = await (prisma as any).payrollRunES.upsert({
         where: { tenantId_period: { tenantId, period: body.period } },
         create: {
           tenantId,
@@ -338,7 +338,7 @@ export const POST = withTenantAuth(
           );
 
           // 2. Persist PayrollRecordES (status=DRAFT, fiscalStatus=PENDING)
-          const record = await prisma.payrollRecordES.create({
+          const record = await (prisma as any).payrollRecordES.create({
             data: {
               tenantId,
               employeeId: employee.id,
@@ -364,7 +364,7 @@ export const POST = withTenantAuth(
           });
 
           // 3. Persist PayrollLineES (engine lines + overrides with isOverride=true)
-          await prisma.payrollLineES.createMany({
+          await (prisma as any).payrollLineES.createMany({
             data: [
               ...calc.lines.map((line: any) => ({
                 payrollRecordId: record.id,
@@ -441,7 +441,7 @@ export const POST = withTenantAuth(
       }
 
       // Update Run con contadores finales.
-      const finalRun = await prisma.payrollRunES.update({
+      const finalRun = await (prisma as any).payrollRunES.update({
         where: { id: run.id },
         data: {
           status: "AEAT_SUBMITTED",
@@ -451,7 +451,7 @@ export const POST = withTenantAuth(
           lastError:
             errors.length > 0
               ? errors.map((e) => `${e.externalEmployeeId}: ${e.reason}`).join("; ")
-              : null,
+              : undefined,
         },
       });
 

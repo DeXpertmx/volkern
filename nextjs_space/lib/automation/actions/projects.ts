@@ -6,7 +6,7 @@ export async function createProject(config: any, ctx: ActionContext): Promise<bo
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  await tenantClient.proyecto.create({
+  await (tenantClient as any).proyecto.create({
     data: { tenantId: ctx.state.tenantId, nombre, descripcion, fechaInicio: fechaInicio || new Date(), fechaFin, presupuesto, estado: 'planificacion' },
   })
   await ctx.log('create_project', 'action', 'success', `Proyecto "${nombre}" creado`)
@@ -18,17 +18,18 @@ export async function notifyProjectTeam(config: any, ctx: ActionContext): Promis
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  const proyecto = await tenantClient.proyecto.findUnique({
+  const proyecto = await (tenantClient as any).proyecto.findUnique({
     where: { id: projectId || ctx.state.projectId },
     include: { miembros: { include: { usuario: true } } },
   })
 
-  const { notifyByTelegram, sendEmail } = await import('@/lib/skills/notification-layer')
+  const notifModule = await import('@/lib/skills/notification-layer') as any
+  const { notifyByTelegram, sendEmail } = notifModule
   const context = createSystemContext(ctx.state.tenantId)
 
   for (const miembro of proyecto?.miembros || []) {
     if (miembro.usuario?.email) {
-      await sendEmail(miembro.usuario.email, `Actualización del proyecto: ${proyecto?.nombre}`, mensaje, ctx.state.tenantId)
+      await sendEmail(miembro.usuario.email!, `Actualización del proyecto: ${proyecto?.nombre ?? ''}`, mensaje, ctx.state.tenantId)
     }
   }
   notifyByTelegram(mensaje, context).catch(() => {})
@@ -41,7 +42,7 @@ export async function updateProgress(config: any, ctx: ActionContext): Promise<b
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  await tenantClient.proyecto.update({
+  await (tenantClient as any).proyecto.update({
     where: { id: projectId || ctx.state.projectId },
     data: { progreso: progreso || 0, notasActualizacion: notas, ultimaActualizacion: new Date() },
   })
@@ -54,7 +55,7 @@ export async function createMilestone(config: any, ctx: ActionContext): Promise<
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  await tenantClient.proyectoHito.create({
+  await (tenantClient as any).proyectoHito.create({
     data: { tenantId: ctx.state.tenantId, proyectoId: projectId || ctx.state.projectId, nombre, descripcion, fechaEntrega: fechaEntrega || new Date(), estado: 'pendiente' },
   })
   await ctx.log('create_milestone', 'action', 'success', `Hito "${nombre}" creado`)
@@ -66,17 +67,17 @@ export async function notifyMilestone(config: any, ctx: ActionContext): Promise<
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  const hito = await tenantClient.proyectoHito.findUnique({
+  const hito = await (tenantClient as any).proyectoHito.findUnique({
     where: { id: milestoneId || ctx.state.milestoneId },
     include: { proyecto: true },
   })
 
-  const { notifyByTelegram } = await import('@/lib/skills/notification-layer')
+  const { notifyByTelegram } = await import('@/lib/skills/notification-layer') as any
   const context = createSystemContext(ctx.state.tenantId)
 
   const message = tipoNotificacion === 'proximamente'
-    ? `📌 *Hito Próximo*\n\nProyecto: ${hito?.proyecto?.nombre}\nHito: ${hito?.nombre}\nFecha: ${new Date(hito?.fechaEntrega).toLocaleDateString()}`
-    : `✅ *Hito Completado*\n\nProyecto: ${hito?.proyecto?.nombre}\nHito: ${hito?.nombre}`
+    ? `📌 *Hito Próximo*\n\nProyecto: ${hito?.proyecto?.nombre ?? ''}\nHito: ${hito?.nombre ?? ''}\nFecha: ${new Date(hito?.fechaEntrega as any).toLocaleDateString()}`
+    : `✅ *Hito Completado*\n\nProyecto: ${hito?.proyecto?.nombre ?? ''}\nHito: ${hito?.nombre ?? ''}`
   notifyByTelegram(message, context).catch(() => {})
   await ctx.log('notify_milestone', 'action', 'success', 'Notificación de hito enviada')
   return true
@@ -87,7 +88,7 @@ export async function generateProjectReport(config: any, ctx: ActionContext): Pr
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  const proyecto = await tenantClient.proyecto.findUnique({
+  const proyecto = await (tenantClient as any).proyecto.findUnique({
     where: { id: projectId || ctx.state.projectId },
     include: { hitos: true, tareas: true, miembros: true },
   })
@@ -105,7 +106,7 @@ export async function generateProjectReport(config: any, ctx: ActionContext): Pr
     tipo: tipoReporte || 'general', fecha: new Date(),
   }
 
-  await tenantClient.reporteProyecto.create({
+  await (tenantClient as any).reporteProyecto.create({
     data: { tenantId: ctx.state.tenantId, proyectoId: proyecto?.id, tipo: tipoReporte, datos: JSON.stringify(reporte) },
   })
   await ctx.log('generate_project_report', 'action', 'success', 'Reporte de proyecto generado')
@@ -117,7 +118,7 @@ export async function createProjectTask(config: any, ctx: ActionContext): Promis
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  await tenantClient.proyectoTarea.create({
+  await (tenantClient as any).proyectoTarea.create({
     data: { tenantId: ctx.state.tenantId, proyectoId: projectId || ctx.state.projectId, titulo, descripcion, asignadoA, fechaVencimiento, prioridad: prioridad || 'media', estado: 'pendiente' },
   })
   await ctx.log('create_project_task', 'action', 'success', `Tarea "${titulo}" creada en proyecto`)
@@ -129,7 +130,7 @@ export async function assignDeliverable(config: any, ctx: ActionContext): Promis
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  await tenantClient.proyectoEntregable.create({
+  await (tenantClient as any).proyectoEntregable.create({
     data: {
       tenantId: ctx.state.tenantId, projectId: projectId || ctx.state.projectId,
       milestoneId: milestoneId || ctx.state.milestoneId,
