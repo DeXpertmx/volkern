@@ -13,8 +13,7 @@ export async function POST(req: Request) {
     
     // Simulación: No guardamos en DB ni encolamos nada real
     // Solo evaluamos las condiciones
-    const engine = new AutomationRuleEngine();
-    const isMatch = engine['evaluateConditions'](rule.conditions, entityData);
+    const isMatch = await (AutomationRuleEngine as any).evaluateConditions(rule.conditions, entityData);
 
     return NextResponse.json({
       isMatch,

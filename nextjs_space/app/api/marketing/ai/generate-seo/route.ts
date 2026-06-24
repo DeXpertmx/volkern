@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     const seo = await skills.generate_seo_metadata({
       pageTitle,
       contentSnippet,
-      tenantId: session.user.tenantId
+      tenantId: session.user.tenantId!
     });
 
     return NextResponse.json(seo);

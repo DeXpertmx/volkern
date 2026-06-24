@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     const block = await skills.generate_web_creator_block({
       description,
       category,
-      tenantId: session.user.tenantId
+      tenantId: session.user.tenantId!
     });
 
     return NextResponse.json(block);

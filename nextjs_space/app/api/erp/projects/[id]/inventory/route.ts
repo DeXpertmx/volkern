@@ -18,7 +18,7 @@ export const GET = withTenantAuth(async (request, auth, { params }) => {
       },
       include: {
         catalogoItem: { select: { id: true, nombre: true, sku: true } },
-        warehouse: { select: { id: true, nombre: true } }
+        warehouse: { select: { id: true, nombre: true } } as any
       },
       orderBy: { createdAt: 'desc' }
     });
