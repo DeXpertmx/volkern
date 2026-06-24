@@ -15,8 +15,8 @@ export class LogisticsService {
         include: { 
           items: { include: { catalogItem: true } },
           reservations: { include: { lot: true } }
-        }
-      });
+        } as any
+      }) as any;
 
       if (!order) throw new Error('Pedido no encontrado');
       if (order.status !== 'PROCESSING') throw new Error('El pedido no está en procesamiento');
@@ -47,7 +47,7 @@ export class LogisticsService {
           status: 'SHIPPED',
           dispatchedAt: new Date()
         }
-      });
+      } as any);
 
       // 2. Consumir el stock físicamente y actualizar estados
       for (const res of order.reservations) {
@@ -101,7 +101,7 @@ export class LogisticsService {
           signatureHash: evidence.signatureHash,
           notes: 'Entrega confirmada vía sistema móvil'
         }
-      });
+      } as any);
 
       // 2. Actualizar el Shipment
       const shipment = await tx.erp_shipments.update({
@@ -118,7 +118,7 @@ export class LogisticsService {
       // 3. Si todos los shipments del pedido están entregados, cerrar pedido y consolidar costos
       const allShipments = await tx.erp_shipments.findMany({
         where: { salesOrderId: shipment.salesOrderId, tenantId }
-      });
+      }) as any[];
 
       const allDelivered = allShipments.every((s: any) => s.status === 'DELIVERED');
 
@@ -128,8 +128,8 @@ export class LogisticsService {
           include: { 
             items: { include: { catalogItem: true } },
             reservations: { include: { workOrder: true } }
-          }
-        });
+          } as any
+        }) as any;
 
         if (order) {
           let totalCost = 0;
@@ -208,8 +208,8 @@ export class LogisticsService {
     return await prisma.$transaction(async (tx) => {
       const order = await tx.erp_sales_orders.findUnique({
         where: { id: salesOrderId, tenantId },
-        include: { items: true },
-      });
+        include: { items: true } as any,
+      }) as any;
 
       if (!order) throw new Error('Pedido no encontrado');
 

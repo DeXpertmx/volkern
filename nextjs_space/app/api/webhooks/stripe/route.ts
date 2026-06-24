@@ -302,10 +302,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    stripeEventId = event.data.object?.id || event.id
-    tenantId = event.data.object?.metadata?.tenantId || event.data.object?.tenantId
+    const obj = event.data.object as any
+    stripeEventId = obj?.id || event.id
+    tenantId = obj?.metadata?.tenantId || obj?.tenantId
 
-    const alreadyProcessed = await checkIfEventProcessed(stripeEventId, tenantId)
+    const alreadyProcessed = await checkIfEventProcessed(stripeEventId!, tenantId)
     if (alreadyProcessed) {
       console.log(`Duplicate webhook event skipped: ${stripeEventId}`)
       return NextResponse.json({ received: true, skipped: true, duplicate: true })
@@ -316,7 +317,7 @@ export async function POST(request: NextRequest) {
     try {
       switch (event.type) {
         case 'checkout.session.completed': {
-          const session = event.data.object
+          const session = event.data.object as any
 
           if (session.mode === 'subscription') {
             const { tenantId: subTenantId, plan: planKey, planId } = session.metadata || {}
@@ -342,7 +343,7 @@ export async function POST(request: NextRequest) {
                     planId: resolvedPlan,
                     subscriptionId: session.subscription,
                     customerId: session.customer
-                  },
+                  } as any,
                   userId: 'system',
                   tenantId: subTenantId
                 }
@@ -372,7 +373,7 @@ export async function POST(request: NextRequest) {
                 }
               })
 
-              if (cita.montoPagado && cita.stripePaymentId && cita.servicio) {
+              if (cita.montoPagado && cita.stripePaymentId && cita.servicio && cita.lead) {
                 await sendPaymentConfirmation({
                   lead: { nombre: cita.lead.nombre, email: cita.lead.email },
                   servicio: {
@@ -392,8 +393,8 @@ export async function POST(request: NextRequest) {
 
                 await triggerAutomation('pago_recibido', {
                   citaId: cita.id,
-                  leadId: cita.leadId,
-                  servicioId: cita.servicioId || undefined,
+                  leadId: cita.leadId!,
+                  servicioId: cita.servicioId as any,
                   cita: cita,
                   montoPagado: cita.montoPagado,
                 })
@@ -407,14 +408,15 @@ export async function POST(request: NextRequest) {
 
         case 'customer.subscription.created':
         case 'customer.subscription.updated': {
-          const subscription = event.data.object
+          const subscription = event.data.object as any
           const { tenantId: subTenantId, plan: planKey, planId } = subscription.metadata || {}
           const resolvedPlan = planKey || planId
 
           if (subTenantId) {
+            const currentPeriodEnd = subscription.current_period_end as number
             const updateData: any = {
               estado: subscription.status === 'active' ? 'activo' : 'suspendido',
-              fechaVencimiento: new Date(subscription.current_period_end * 1000)
+              fechaVencimiento: new Date(currentPeriodEnd * 1000)
             }
 
             if (resolvedPlan) {
@@ -430,7 +432,7 @@ export async function POST(request: NextRequest) {
               subTenantId,
               subscription.id,
               subscription.status,
-              subscription.current_period_end,
+              currentPeriodEnd,
               planId
             )
 
@@ -440,7 +442,7 @@ export async function POST(request: NextRequest) {
         }
 
         case 'customer.subscription.deleted': {
-          const subscription = event.data.object
+          const subscription = event.data.object as any
           const { tenantId: subTenantId } = subscription.metadata || {}
 
           if (subTenantId) {
@@ -472,11 +474,11 @@ export async function POST(request: NextRequest) {
         }
 
         case 'invoice.payment_succeeded': {
-          const invoice = event.data.object
+          const invoice = event.data.object as any
           const subscription = invoice.subscription
 
           if (subscription) {
-            const fullSubscription = await stripe.subscriptions.retrieve(subscription as string)
+            const fullSubscription = await stripe.subscriptions.retrieve(subscription as string) as any
             const { tenantId: subTenantId } = fullSubscription.metadata || {}
 
             if (subTenantId) {
@@ -499,11 +501,11 @@ export async function POST(request: NextRequest) {
         }
 
         case 'invoice.payment_failed': {
-          const invoice = event.data.object
+          const invoice = event.data.object as any
           const subscription = invoice.subscription
 
           if (subscription) {
-            const fullSubscription = await stripe.subscriptions.retrieve(subscription as string)
+            const fullSubscription = await stripe.subscriptions.retrieve(subscription as string) as any
             const { tenantId: subTenantId } = fullSubscription.metadata || {}
 
             if (subTenantId) {
@@ -549,11 +551,11 @@ export async function POST(request: NextRequest) {
       }
     } catch (processingError) {
       console.error('Event processing error:', processingError)
-      await markEventProcessed(stripeEventId, event.type, tenantId, String(processingError))
+      await markEventProcessed(stripeEventId || '', event.type, tenantId || '', String(processingError))
       throw processingError
     }
 
-    await markEventProcessed(stripeEventId!, event.type, tenantId, null)
+    await markEventProcessed(stripeEventId || '', event.type, tenantId || '', null)
 
     return NextResponse.json(result)
 
