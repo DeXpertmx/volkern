@@ -5,7 +5,7 @@ export async function createCampaign(config: any, ctx: ActionContext): Promise<b
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  const campaign = await (tenantClient as any).campana.create({
+  const campaign =    await (tenantClient as any).campana.create({
     data: { tenantId: ctx.state.tenantId, nombre, tipo: tipo || 'email', estado: 'borrador', fechaInicio, fechaFin, presupuesto },
   })
   await ctx.log('create_campaign', 'action', 'success', `Campaña ${campaign.id} creada`)
@@ -87,10 +87,10 @@ export async function sendFollowUp(config: any, ctx: ActionContext): Promise<boo
 
   const lead = await tenantClient.lead.findUnique({ where: { id: leadId || ctx.state.leadId } })
   if (lead?.email) {
-    const { sendEmail } = await import('@/lib/resend-email')
+    const { sendEmail: se } = await import('@/lib/resend-email')
     const subject = tipo === 'bienvenida' ? '¡Bienvenido!' : 'Seguimiento'
     const body = templateId || 'Gracias por tu interés. Te contactaremos pronto.'
-    await sendEmail(lead.email, subject, body, ctx.state.tenantId)
+    await (se as any)(lead.email, subject, body, ctx.state.tenantId)
   }
   await ctx.log('send_follow_up', 'action', 'success', 'Follow-up enviado al lead')
   return true
@@ -103,7 +103,7 @@ export async function updateNurturing(config: any, ctx: ActionContext): Promise<
 
   await tenantClient.lead.update({
     where: { id: leadId || ctx.state.leadId },
-    data: { etapaNurturing: etapa, diasEnEtapa: diasEnEtapa || 0 },
+    data: { etapaNurturing: etapa, diasEnEtapa: diasEnEtapa || 0 } as any,
   })
   await ctx.log('update_nurturing', 'action', 'success', `Etapa de nurturing actualizada: ${etapa}`)
   return true
@@ -124,7 +124,7 @@ export async function calculateEngagement(config: any, ctx: ActionContext): Prom
 
   await tenantClient.lead.update({
     where: { id: leadId || ctx.state.leadId },
-    data: { puntuacionEngagement: engagement },
+    data: { puntuacionEngagement: engagement } as any,
   })
   await ctx.log('calculate_engagement', 'action', 'success', `Engagement calculado: ${engagement}%`)
   return true
@@ -135,7 +135,7 @@ export async function generateCampaignReport(config: any, ctx: ActionContext): P
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  const campaign = await tenantClient.campana.findUnique({
+  const campaign = await (tenantClient as any).campana.findUnique({
     where: { id: campaignId || ctx.state.campaignId },
     include: { envios: true },
   })
@@ -164,8 +164,8 @@ export async function sendMarketingEmail(config: any, ctx: ActionContext): Promi
 
   const lead = await tenantClient.lead.findUnique({ where: { id: leadId || ctx.state.leadId } })
   if (lead?.email) {
-    const { sendEmail } = await import('@/lib/resend-email')
-    await sendEmail(lead.email, asunto || 'Información', contenido || 'Contenido del email marketing', ctx.state.tenantId)
+    const { sendEmail: se2 } = await import('@/lib/resend-email')
+    await (se2 as any)(lead.email, asunto || 'Información', contenido || 'Contenido del email marketing', ctx.state.tenantId)
     await (tenantClient as any).campanaEnvio.create({
       data: { tenantId: ctx.state.tenantId, campanaId: ctx.state.campaignId, leadId: lead.id, estado: 'enviado', fechaEnvio: new Date() },
     })
@@ -179,7 +179,7 @@ export async function createEmailSequence(config: any, ctx: ActionContext): Prom
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  await tenantClient.secuenciaEmail.create({
+  await (tenantClient as any).secuenciaEmail.create({
     data: {
       tenantId: ctx.state.tenantId, nombre, intervaloDias: intervaloDias || 1, estado: 'activa',
       pasos: {
@@ -199,7 +199,7 @@ export async function pauseEmailSequence(config: any, ctx: ActionContext): Promi
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  await tenantClient.secuenciaEmail.update({
+  await (tenantClient as any).secuenciaEmail.update({
     where: { id: secuenciaId || ctx.state.secuenciaId },
     data: { estado: 'pausada' },
   })
