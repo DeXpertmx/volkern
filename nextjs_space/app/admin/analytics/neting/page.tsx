@@ -531,7 +531,7 @@ const ACTIVE_PRESET_CLASS =
                     <div className="flex items-center gap-4 mt-1.5 flex-wrap">
                       <span className="inline-flex items-center gap-1 text-[10px] text-slate-400">
                         <Monitor size={10} />
-                        {shortUA(ev.userAgent)}
+                        {ev.userAgent}
                       </span>
                       <span className="inline-flex items-center gap-1 text-[10px] text-slate-400">
                         <MapPin size={10} />

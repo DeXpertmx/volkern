@@ -63,7 +63,7 @@ export const POST = withTenantAuth(async (request, auth) => {
       resourceType: 'Asset',
       resourceId: asset.id,
       details: `Nuevo activo registrado: ${asset.name} (${asset.serialNumber || 'S/N'})`
-    });
+    } as any);
     
     return NextResponse.json(asset);
   } catch (error) {

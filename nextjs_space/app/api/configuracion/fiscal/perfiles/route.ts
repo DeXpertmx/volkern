@@ -150,7 +150,7 @@ export const POST = withTenantAuth(async (req, auth) => {
         motivoExencion: exentoImpuestos ? motivoExencion : null,
         aplicaRetencion,
         idFiscalValidado: validacion.valid
-      },
+      } as any,
       include: {
         lead: { select: { id: true, nombre: true, email: true } },
         contact: { select: { id: true, nombre: true, email: true } }

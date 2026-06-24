@@ -108,7 +108,7 @@ export default function AcademyLoginPage() {
 
               <div className="space-y-2">
                 <div className="flex justify-between items-center ml-1">
-                  <Label htmlFor="password" name="password" className="text-slate-700 font-bold">Contraseña</Label>
+                  <Label htmlFor="password" className="text-slate-700 font-bold">Contraseña</Label>
                   <Button variant="link" className="p-0 h-auto text-xs text-emerald-600 font-bold hover:text-emerald-700">
                     Recuperar acceso
                   </Button>

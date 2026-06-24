@@ -78,7 +78,7 @@ export const POST = withTenantAuth(async (request, auth) => {
     const allowedRoles = ['Admin', 'Owner', 'Operator', 'Superadmin'];
     const userRole = auth.user?.role?.nombre;
     
-    if (!allowedRoles.includes(userRole)) {
+    if (!allowedRoles.includes(userRole || '')) {
       return NextResponse.json({ error: 'No tienes permisos para crear canales' }, { status: 403 });
     }
 
@@ -102,7 +102,7 @@ export const POST = withTenantAuth(async (request, auth) => {
 
       // Si es público y se requiere, suscribir a otros (opcional en el body)
       if (body.userIds && Array.isArray(body.userIds)) {
-        const otherSubs = body.userIds
+        const otherSubs = (body.userIds as string[])
           .filter((id: string) => id !== userId)
           .map((id: string) => ({
             tenantId,

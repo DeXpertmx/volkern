@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
       servicioNombre: cita.servicio.nombre,
       precio: cita.servicio.precio,
       moneda: cita.servicio.moneda,
-      leadId: cita.lead.id,
+      leadId: cita.lead!.id,
       citaId: cita.id,
       successUrl: `${origin}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
       cancelUrl: `${origin}/payment/cancel?cita_id=${cita.id}`
