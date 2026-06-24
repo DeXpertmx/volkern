@@ -13,8 +13,8 @@ const CHROME_PATH =
 let browserInstance: Browser | null = null;
 
 async function getBrowser(): Promise<Browser> {
-  if (browserInstance?.isConnected()) {
-    return browserInstance;
+  if ((browserInstance as any)?.isConnected?.()) {
+    return browserInstance as Browser;
   }
   browserInstance = await puppeteer.launch({
     headless: true,
@@ -61,7 +61,7 @@ export async function generatePdf(
     const mergedOptions = { ...defaultOptions, ...options };
 
     await page.setContent(htmlContent, {
-      waitUntil: 'networkidle0',
+      waitUntil: 'networkidle0' as any,
       timeout: 30000,
     });
 

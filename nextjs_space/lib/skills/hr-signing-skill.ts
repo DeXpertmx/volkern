@@ -17,7 +17,7 @@ export async function orchestrate_digital_signature(params: {
     let context: PDFContext;
 
     if (params.entityType === 'VACATION') {
-      const vacation = await prisma.vacationRequest.findUnique({
+      const vacation = await (prisma as any).vacationRequest.findUnique({
         where: { id: params.entityId },
         include: { employee: true }
       });
@@ -45,7 +45,7 @@ export async function orchestrate_digital_signature(params: {
     const result = await PDFService.generateSignedActa(context);
 
     // 3. Registrar en el Trust Protocol (Integrity Graph)
-    await prisma.trustProtocolLog.create({
+    await (prisma.trustProtocolLog.create as any)({
       data: {
         tenantId: params.tenantId,
         level: 'INFO',

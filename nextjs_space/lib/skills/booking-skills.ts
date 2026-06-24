@@ -228,7 +228,7 @@ export async function confirmBooking(input: ConfirmBookingInput) {
       estado: 'confirmada',
       googleCalendarEventId,
       linkReunion,
-    },
+    } as any,
   });
 
   // 3. Emitir evento
@@ -238,7 +238,7 @@ export async function confirmBooking(input: ConfirmBookingInput) {
     timestamp: new Date(),
     source,
     bookingId,
-    leadId: cita.leadId,
+    leadId: cita.leadId as any,
     googleEventId: googleCalendarEventId,
   };
   eventBus.emitEvent(EVENTS.BOOKING_CONFIRMED, eventPayload);
@@ -270,7 +270,7 @@ export async function cancelBooking(input: CancelBookingInput) {
     data: {
       estado: 'cancelada',
       descripcion: motivo ? `${cita.descripcion || ''}\n\nCancelada: ${motivo}`.trim() : cita.descripcion,
-    },
+    } as any,
   });
 
   // 3. Emitir evento
@@ -491,15 +491,14 @@ export async function autoScheduleAppointment(input: AutoScheduleInput) {
   // 4. Crear cita usando el skill existente
   const bookingResult = await createBooking({
     tenantId,
-    leadId,
     nombre: lead.nombre,
     email: lead.email,
-    telefono: lead.telefono || undefined,
+    telefono: lead.telefono ?? undefined,
     titulo,
     fechaHora: new Date(selectedSlot),
     userId,
     source
-  });
+  } as any);
 
   // 5. Enviar email vía Resend (Notificación Zero-Touch)
   if (lead.email) {
