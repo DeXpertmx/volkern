@@ -17,7 +17,7 @@ export class SalesOrderService {
     userId?: string;
     reason?: string;
   }) {
-    const order = await prisma.salesOrder.findUnique({
+    const order = await (prisma as any).salesOrder.findUnique({
       where: { id: data.orderId, tenantId: data.tenantId }
     });
 
@@ -37,14 +37,14 @@ export class SalesOrderService {
     }
 
     // Actualizar pedido
-    const updatedOrder = await prisma.salesOrder.update({
+    const updatedOrder = await (prisma as any).salesOrder.update({
       where: { id: data.orderId },
       data: { status: data.newStatus },
       include: { items: true }
     });
 
     // Crear log de auditoría
-    await prisma.salesOrderAudit.create({
+    await (prisma as any).salesOrderAudit.create({
       data: {
         tenantId: data.tenantId,
         salesOrderId: data.orderId,
@@ -66,14 +66,14 @@ export class SalesOrderService {
    * Obtiene el resumen operativo de ventas para el Hub.
    */
   static async getSalesSummary(tenantId: string) {
-    const orders = await prisma.salesOrder.findMany({
+    const orders = await (prisma as any).salesOrder.findMany({
       where: { tenantId },
       include: { contact: true, items: true }
     });
 
-    const totalRevenue = orders.reduce((sum, o) => sum + o.totalPrice, 0);
-    const avgMargin = orders.reduce((sum, o) => sum + (o.grossMargin || 0), 0) / (orders.length || 1);
-    const alerts = orders.filter(o => o.marginAlert).length;
+    const totalRevenue = orders.reduce((sum: number, o: any) => sum + o.totalPrice, 0);
+    const avgMargin = orders.reduce((sum: number, o: any) => sum + (o.grossMargin || 0), 0) / (orders.length || 1);
+    const alerts = orders.filter((o: any) => o.marginAlert).length;
 
     return {
       orders,

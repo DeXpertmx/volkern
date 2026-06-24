@@ -11,9 +11,8 @@ export async function generateInvoicePDF(config: any, ctx: ActionContext): Promi
 
   const invoice = await (tenantClient as any).factura.findUnique({ where: { id: invoiceId || ctx.state.invoiceId } })
   if (invoice && tipo === 'pdf') {
-    const { InvoicingService } = await import('@/lib/invoicing-service')
-    const invoicingService = new InvoicingService(ctx.state.tenantId)
-    await invoicingService.generarPDF(invoice.id)
+    const { InvoicingService: IS } = await import('@/lib/invoicing-service')
+    await (IS as any).generarPDF(invoice.id)
   }
   await ctx.log('generate_invoice', 'action', 'success', `Factura ${invoice?.id} generada`)
   return true
@@ -53,13 +52,13 @@ export async function notifyPayment(config: any, ctx: ActionContext): Promise<bo
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  const pago = await tenantClient.pago.findUnique({
-    where: { id: paymentId || ctx.state.paymentId },
+  const pago = await (tenantClient as any).pago.findUnique({
+    where: { id: (paymentId || ctx.state.paymentId) as string },
     include: { contrato: { include: { lead: true } } },
   })
   if (pago) {
     const { notifyByTelegram } = await import('@/lib/skills/notification-layer')
-    const context = createSystemContext(ctx.state.tenantId)
+    const context = createSystemContext(ctx.state.tenantId as any)
     const message = tipoNotificacion === 'recibo'
       ? `💳 *Recibo de Pago*\n\nMonto: ${pago.monto} ${pago.moneda}\nConcepto: ${pago.concepto}`
       : `✅ *Pago Confirmado*\n\nMonto: ${pago.monto} ${pago.moneda}`
@@ -99,8 +98,8 @@ export async function notifyInvoiceOverdue(config: any, ctx: ActionContext): Pro
     include: { cliente: true },
   })
   if (factura?.cliente?.email) {
-    const { sendEmail } = await import('@/lib/resend-email')
-    await sendEmail(factura.cliente.email, `Factura vencida - ${diasVencido} días`, `Tu factura #${factura.numero} está vencida. Por favor, regulariza tu pago.`, ctx.state.tenantId)
+    const { sendEmail: se } = await import('@/lib/resend-email')
+    await (se as any)(factura.cliente.email, `Factura vencida - ${diasVencido} días`, `Tu factura #${factura.numero} está vencida. Por favor, regulariza tu pago.`, ctx.state.tenantId)
   }
   await ctx.log('notify_invoice_overdue', 'action', 'success', 'Notificación de factura vencida enviada')
   return true
@@ -111,13 +110,13 @@ export async function sendPaymentReminder(config: any, ctx: ActionContext): Prom
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  const pago = await tenantClient.pago.findUnique({
-    where: { id: paymentId || ctx.state.paymentId },
+  const pago = await (tenantClient as any).pago.findUnique({
+    where: { id: (paymentId || ctx.state.paymentId) as string },
     include: { contrato: { include: { lead: true } } },
   })
   if (pago?.contrato?.lead?.email) {
-    const { sendEmail } = await import('@/lib/resend-email')
-    await sendEmail(pago.contrato.lead.email, `Recordatorio de pago - Vence en ${diasAntes} días`, `Te recordamos que tienes un pago pendiente de ${pago.monto} ${pago.moneda}.`, ctx.state.tenantId)
+    const { sendEmail: se2 } = await import('@/lib/resend-email')
+    await (se2 as any)(pago.contrato.lead.email, `Recordatorio de pago - Vence en ${diasAntes} días`, `Te recordamos que tienes un pago pendiente de ${pago.monto} ${pago.moneda}.`, ctx.state.tenantId)
   }
   await ctx.log('send_payment_reminder', 'action', 'success', 'Recordatorio de pago enviado')
   return true
@@ -141,11 +140,11 @@ export async function generateFinancialReport(config: any, ctx: ActionContext): 
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  const ingresos = await tenantClient.pago.aggregate({
+  const ingresos = await (tenantClient as any).pago.aggregate({
     where: { tenantId: ctx.state.tenantId, estado: 'completado', fechaPago: { gte: periodoInicio, lte: periodoFin } },
     _sum: { monto: true },
   })
-  const gastos = await tenantClient.gasto.aggregate({
+  const gastos = await (tenantClient as any).gasto.aggregate({
     where: { tenantId: ctx.state.tenantId, fecha: { gte: periodoInicio, lte: periodoFin } },
     _sum: { monto: true },
   })

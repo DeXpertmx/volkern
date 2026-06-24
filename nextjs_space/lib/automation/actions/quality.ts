@@ -6,7 +6,7 @@ export async function createInspection(config: any, ctx: ActionContext): Promise
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  await tenantClient.inspeccion.create({
+  await (tenantClient as any).inspeccion.create({
     data: { tenantId: ctx.state.tenantId, area, tipo: tipo || 'rutina', estado: 'programada', fechaProgramada: new Date(), criterios: criterios || [] },
   })
   await ctx.log('create_inspection', 'action', 'success', `Inspección creada para ${area}`)
@@ -18,7 +18,7 @@ export async function registerNonConformity(config: any, ctx: ActionContext): Pr
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  await tenantClient.noConformidad.create({
+  await (tenantClient as any).noConformidad.create({
     data: { tenantId: ctx.state.tenantId, inspeccionId: inspeccionId || ctx.state.inspeccionId, descripcion, severidad: severidad || 'media', estado: 'abierta', fechaDeteccion: new Date() },
   })
   await ctx.log('register_non_conformity', 'action', 'success', 'No conformidad registrada')
@@ -30,8 +30,8 @@ export async function closeNonConformity(config: any, ctx: ActionContext): Promi
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  await tenantClient.noConformidad.update({
-    where: { id: nonConformityId || ctx.state.nonConformityId },
+  await (tenantClient as any).noConformidad.update({
+    where: { id: (nonConformityId || ctx.state.nonConformityId) as string },
     data: { estado: 'cerrada', solucion, eficaciaVerificacion: eficacia, fechaCierre: new Date() },
   })
   await ctx.log('close_non_conformity', 'action', 'success', 'No conformidad cerrada')
@@ -43,9 +43,9 @@ export async function notifyQualityAlert(config: any, ctx: ActionContext): Promi
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  const nc = await tenantClient.noConformidad.findUnique({ where: { id: nonConformityId || ctx.state.nonConformityId } })
+  const nc = await (tenantClient as any).noConformidad.findUnique({ where: { id: (nonConformityId || ctx.state.nonConformityId) as string } })
   const { notifyByTelegram } = await import('@/lib/skills/notification-layer')
-  const context = createSystemContext(ctx.state.tenantId)
+  const context = createSystemContext(ctx.state.tenantId as any)
 
   const message = `🔴 *Alerta de Calidad*\n\nTipo: ${tipoAlerta || 'No Conformidad'}\nSeveridad: ${nc?.severidad}\nDescripción: ${nc?.descripcion}`
   notifyByTelegram(message, context).catch(() => {})
@@ -61,8 +61,8 @@ export async function generateQualityReport(config: any, ctx: ActionContext): Pr
   const startDate = new Date()
   startDate.setDate(startDate.getDate() - (periodo || 30))
 
-  const inspecciones = await tenantClient.inspeccion.count({ where: { tenantId: ctx.state.tenantId, createdAt: { gte: startDate } } })
-  const noConformidades = await tenantClient.noConformidad.count({ where: { tenantId: ctx.state.tenantId, createdAt: { gte: startDate } } })
+  const inspecciones = await (tenantClient as any).inspeccion.count({ where: { tenantId: ctx.state.tenantId, createdAt: { gte: startDate } } })
+  const noConformidades = await (tenantClient as any).noConformidad.count({ where: { tenantId: ctx.state.tenantId, createdAt: { gte: startDate } } })
 
   const reporte = {
     tipo: tipo || 'mensual', periodo: periodo || 30,
@@ -70,7 +70,7 @@ export async function generateQualityReport(config: any, ctx: ActionContext): Pr
     tasaConformidad: inspecciones > 0 ? ((inspecciones - noConformidades) / inspecciones) * 100 : 0,
     fecha: new Date(),
   }
-  await tenantClient.reporteCalidad.create({ data: { tenantId: ctx.state.tenantId, tipo, datos: JSON.stringify(reporte) } })
+  await (tenantClient as any).reporteCalidad.create({ data: { tenantId: ctx.state.tenantId, tipo, datos: JSON.stringify(reporte) } })
   await ctx.log('generate_quality_report', 'action', 'success', 'Reporte de calidad generado')
   return true
 }
@@ -80,7 +80,7 @@ export async function scheduleCalibration(config: any, ctx: ActionContext): Prom
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  await tenantClient.calibracionProgramada.create({
+  await (tenantClient as any).calibracionProgramada.create({
     data: {
       tenantId: ctx.state.tenantId, equipoId: equipoId || ctx.state.equipoId,
       frecuenciaDias: frecuenciaDias || 180,
