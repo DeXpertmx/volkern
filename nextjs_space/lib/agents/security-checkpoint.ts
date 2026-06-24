@@ -238,8 +238,8 @@ export class SecurityCheckpointAgent {
         select: { role: true }
       });
 
-      const isOwner = appointment.userId === userId;
-      const isAdmin = user?.role === 'admin' || user?.role === 'owner';
+      const isOwner = (appointment as any).userId === userId;
+      const isAdmin = (user?.role as any)?.nombre === 'admin' || (user?.role as any)?.nombre === 'owner';
 
       if (!isOwner && !isAdmin) {
         throw new Error('SECURITY_ERROR: No tienes acceso a esta cita');
