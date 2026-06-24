@@ -202,13 +202,13 @@ export class ConfidenceCheckerAgent {
       select: {
         intent: true,
         metadata: true
-      }
+      } as any
     });
     
     const statsByIntent: Record<string, { count: number; avgConfidence: number; lowCount: number }> = {};
     
     for (const log of logs) {
-      const conf = log.metadata?.confidence;
+      const conf = (log.metadata as any)?.confidence;
       if (!conf || !log.intent) continue;
       
       if (!statsByIntent[log.intent]) {
