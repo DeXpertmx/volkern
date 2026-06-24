@@ -10,7 +10,7 @@ import crypto from 'crypto';
  */
 export async function orchestrate_secure_payroll({ tenantId, employeeId, ctx }: { tenantId: string, employeeId: string, ctx: SkillContext }) {
   // 🛡️ SECURITY PROTOCOL: Bloqueo si no es OWNER
-  if (ctx.user?.role !== 'OWNER' && ctx.user?.role !== 'ADMIN') {
+  if ((ctx as any).user?.role !== 'OWNER' && (ctx as any).user?.role !== 'ADMIN') {
     throw new Error('ACCESO DENEGADO: Este skill requiere privilegios de OWNER/ADMIN.');
   }
 
@@ -24,7 +24,7 @@ export async function orchestrate_secure_payroll({ tenantId, employeeId, ctx }: 
   // 1. Acceso seguro al Salario en "The Vault"
   let decryptedSalary = 0;
   if (employee.salaryEncrypted) {
-    const raw = VaultService.decrypt(employee.salaryEncrypted, tenantId, employee.tenant.vaultSeed || '');
+    const raw = VaultService.decrypt(employee.salaryEncrypted, tenantId, (employee.tenant as any).vaultSeed || '');
     decryptedSalary = parseFloat(raw) || 0;
   }
 

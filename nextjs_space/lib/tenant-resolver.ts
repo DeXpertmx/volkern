@@ -47,7 +47,7 @@ export async function resolveTenantFromRequest(
 
   if (!tenantId) {
     try {
-      const token = await getToken({ secret: process.env.NEXTAUTH_SECRET });
+      const token = await getToken({ secret: process.env.NEXTAUTH_SECRET! } as any);
       if (token?.tenantId) {
         tenantId = token.tenantId as string;
         source = 'session';
@@ -230,7 +230,7 @@ export async function validateTenantHierarchy(
     return { allowed: true, reason: 'agency_context' };
   }
 
-  if (requester.accountType === 'SUPERADMIN') {
+  if (requester.accountType as any === 'SUPERADMIN') {
     return { allowed: true, reason: 'superadmin_context' };
   }
 
