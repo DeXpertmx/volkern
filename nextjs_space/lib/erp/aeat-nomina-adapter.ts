@@ -196,12 +196,12 @@ export async function shipNominaToAEAT(
 
     if (fiscalStatus === "PENDING") {
       // Incrementar errorCount a nivel run si la respuesta es ambigua.
-      await prisma.payrollRunES.update({
+      await (prisma as any).payrollRunES.update({
         where: { id: opts.runId },
         data: { errorCount: { increment: 1 } },
       });
     } else {
-      await prisma.payrollRunES.update({
+      await (prisma as any).payrollRunES.update({
         where: { id: opts.runId },
         data: { acceptedCount: { increment: 1 } },
       });
@@ -217,7 +217,7 @@ export async function shipNominaToAEAT(
     };
   } catch (err) {
     // sendSoap ROMPE → marcamos errorCount++ + fiscalStatus queda PENDING.
-    await prisma.payrollRunES.update({
+    await (prisma as any).payrollRunES.update({
       where: { id: opts.runId },
       data: {
         errorCount: { increment: 1 },

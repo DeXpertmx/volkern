@@ -39,7 +39,7 @@ export class StripeBankingService {
 
       return session;
     } catch (error) {
-      skillsLogger.error('Error creando sesión de Stripe Financial Connections', { error, tenantId });
+      skillsLogger.error('Error creando sesión de Stripe Financial Connections', { error, tenantId } as any);
       throw error;
     }
   }
@@ -75,7 +75,7 @@ export class StripeBankingService {
 
       return connections;
     } catch (error) {
-      skillsLogger.error('Error procesando callback de Stripe', { error, sessionId });
+      skillsLogger.error('Error procesando callback de Stripe', { error, sessionId } as any);
       throw error;
     }
   }
@@ -144,7 +144,7 @@ export class StripeBankingService {
 
       return newTransactions;
     } catch (error) {
-      skillsLogger.error('Error sincronizando transacciones de Stripe', { error, bankConnectionId });
+      skillsLogger.error('Error sincronizando transacciones de Stripe', { error, bankConnectionId } as any);
       throw error;
     }
   }

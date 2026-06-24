@@ -41,7 +41,7 @@ export class PlaidBankingService {
       const response = await client.linkTokenCreate(request);
       return response.data.link_token;
     } catch (error: any) {
-      skillsLogger.error('Error creating Plaid link token', { error: error.response?.data || error.message });
+      skillsLogger.error('Error creating Plaid link token', { error: error.response?.data || error.message } as any);
       throw error;
     }
   }
@@ -74,7 +74,7 @@ export class PlaidBankingService {
 
       return connection;
     } catch (error: any) {
-      skillsLogger.error('Error exchanging Plaid public token', { error: error.response?.data || error.message });
+      skillsLogger.error('Error exchanging Plaid public token', { error: error.response?.data || error.message } as any);
       throw error;
     }
   }
@@ -134,7 +134,7 @@ export class PlaidBankingService {
 
       return transactions.length;
     } catch (error: any) {
-      skillsLogger.error('Error syncing Plaid transactions', { error: error.response?.data || error.message });
+      skillsLogger.error('Error syncing Plaid transactions', { error: error.response?.data || error.message } as any);
       throw error;
     }
   }
