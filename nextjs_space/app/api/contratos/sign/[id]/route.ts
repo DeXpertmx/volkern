@@ -33,7 +33,7 @@ export const POST = withTenantAuth(async (request, auth, { params }) => {
     const [contrato, tenant] = await Promise.all([
       prisma.contrato.findUnique({
         where: { id: contractId, tenantId },
-        include: { items: true, contact: true }
+        include: { items: true, contact: true } as any
       }),
       prisma.tenant.findUnique({
         where: { id: tenantId },
@@ -61,7 +61,7 @@ export const POST = withTenantAuth(async (request, auth, { params }) => {
       total: contrato.total,
       snapshotNif: contrato.snapshotNif,
       snapshotNombre: contrato.snapshotNombre,
-      items: contrato.items.map(i => ({ sku: i.sku, total: i.total })),
+      items: (contrato as any).items.map((i: any) => ({ sku: i.sku, total: i.total })),
       operatorNote: operatorNote || '',
       timestamp: new Date().toISOString()
     });
@@ -128,7 +128,7 @@ export const POST = withTenantAuth(async (request, auth, { params }) => {
           titulo: 'Venta Cerrada: Contrato Firmado',
           descripcion: `El contrato ${contrato.numero} ha sido sellado digitalmente. El deal se marca como GANADO automáticamente.`,
           userId
-        }
+        } as any
       });
     }
 

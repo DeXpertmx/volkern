@@ -85,7 +85,7 @@ export const POST = withTenantAuth(async (request, auth) => {
 
     const snapshotNombre = contact.nombre;
     const snapshotNif = nif;
-    const snapshotDireccion = contact.perfilFiscal?.direccion || contact.ubicacion || '';
+    const snapshotDireccion = (contact as any).perfilFiscal?.direccion || contact.ubicacion || '';
     const snapshotMetadata = {
       email: contact.email,
       telefono: contact.telefono,
@@ -184,7 +184,7 @@ export const POST = withTenantAuth(async (request, auth) => {
         clienteNombre: snapshotNombre,
         clienteEmail: contact.email,
         clienteTelefono: contact.telefono,
-        clienteEmpresa: contact.company?.nombre || contact.clienteEmpresa,
+        clienteEmpresa: (contact as any).company?.nombre || (contact as any).clienteEmpresa,
         creadoPorId: userId,
         items: {
           create: finalItems.map((item: any, index: number) => ({
@@ -205,7 +205,7 @@ export const POST = withTenantAuth(async (request, auth) => {
         deal: true,
         contact: true,
         cotizacion: true
-      }
+      } as any
     });
 
     // 7. Audit Log
