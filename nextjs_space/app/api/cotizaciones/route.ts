@@ -157,9 +157,9 @@ export const POST = withTenantAuth(async (req, auth) => {
 
       const concepto = item.concepto || catalogoItem?.nombre
       const descripcionItem = item.descripcion ?? catalogoItem?.descripcion
-      const cantidad = parseFloat(item.cantidad) || 1
-      const precioUnitario = parseFloat(item.precioUnitario) ?? catalogoItem?.precioBase ?? 0
-      const descuentoItem = parseFloat(item.descuento || 0)
+      const cantidad = parseFloat(item.cantidad as any) || 1
+      const precioUnitario = parseFloat(item.precioUnitario as any) ?? catalogoItem?.precioBase ?? 0
+      const descuentoItem = parseFloat((item.descuento as any) || 0)
       const categoria = item.categoria || catalogoItem?.categoriaFiscal
       const sku = item.sku || catalogoItem?.sku
       const tasaImpuestoId = item.tasaImpuestoId || catalogoItem?.tasaImpuestoId
@@ -170,7 +170,7 @@ export const POST = withTenantAuth(async (req, auth) => {
       }
       subtotalItem = Math.round(subtotalItem * 100) / 100
 
-      let porcentajeImpuesto = parseFloat(item.porcentajeImpuesto || 0)
+      let porcentajeImpuesto = parseFloat((item.porcentajeImpuesto as any) || 0)
       if (catalogoItem?.tasaImpuesto && !item.porcentajeImpuesto) {
         porcentajeImpuesto = catalogoItem.tasaImpuesto.porcentaje
       }
@@ -195,7 +195,7 @@ export const POST = withTenantAuth(async (req, auth) => {
         categoria,
         sku,
         aplicaRetencion: item.aplicaRetencion || false,
-        porcentajeRetencion: parseFloat(item.porcentajeRetencion || 0),
+        porcentajeRetencion: parseFloat((item.porcentajeRetencion as any) || 0),
         montoRetencion: 0,
       })
 
@@ -258,7 +258,7 @@ export const POST = withTenantAuth(async (req, auth) => {
         items: {
           create: processedItems,
         },
-      },
+      } as any,
       include: {
         items: {
           include: {

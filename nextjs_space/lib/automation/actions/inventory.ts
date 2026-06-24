@@ -6,10 +6,10 @@ export async function notifyLowStock(config: any, ctx: ActionContext): Promise<b
   const message = `⚠️ *Alerta de Stock Bajo*\n\n📦 *Producto:* ${itemNombre || ctx.state.itemNombre}\n📊 *Stock Actual:* ${cantidadActual || ctx.state.cantidadActual}\n📉 *Mínimo:* ${cantidadMinima || ctx.state.cantidadMinima}\n🏭 *Almacén:* ${almacenNombre || ctx.state.almacenNombre || 'Principal'}`
 
   const { notifyByTelegram, notifyByEmail } = await import('@/lib/skills/notification-layer')
-  const context = createSystemContext(ctx.state.tenantId)
+  const context = createSystemContext(ctx.state.tenantId as any)
 
   if (config.enviarTelegram) notifyByTelegram(message, context).catch(() => {})
-  if (config.enviarEmail && ctx.state.userEmail) notifyByEmail(ctx.state.userEmail, 'Alerta de Stock Bajo', message, context).catch(() => {})
+  if (config.enviarEmail && ctx.state.userEmail) (notifyByEmail as any)(ctx.state.userEmail, 'Alerta de Stock Bajo', message, context).catch(() => {})
 
   await ctx.log('notify_low_stock', 'action', 'success', `Notificación de stock bajo enviada para ${itemNombre || ctx.state.itemNombre}`)
   return true
@@ -26,7 +26,7 @@ export async function updateInventory(config: any, ctx: ActionContext): Promise<
   else if (tipo === 'set') updateData.cantidad = cantidad
   if (motivo) updateData.ultimaActualizacion = motivo
 
-  await tenantClient.inventarioItem.update({ where: { id: itemId || ctx.state.itemId }, data: updateData })
+  await (tenantClient as any).inventarioItem.update({ where: { id: itemId || ctx.state.itemId }, data: updateData })
   await ctx.log('update_inventory', 'action', 'success', `Inventario actualizado: ${tipo} ${cantidad}`)
   return true
 }
@@ -36,7 +36,7 @@ export async function createPurchaseOrder(config: any, ctx: ActionContext): Prom
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  const order = await tenantClient.compra.create({
+  const order = await (tenantClient as any).compra.create({
     data: {
       tenantId: ctx.state.tenantId, proveedorId, estado: 'pendiente', notas,
       fechaEntrega: config.fechaEntrega,
@@ -52,7 +52,7 @@ export async function adjustStock(config: any, ctx: ActionContext): Promise<bool
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  await tenantClient.inventarioMovimiento.create({
+  await (tenantClient as any).inventarioMovimiento.create({
     data: {
       tenantId: ctx.state.tenantId, itemId: itemId || ctx.state.itemId,
       tipo: tipo || 'ajuste', cantidad, motivo: motivo || 'Ajuste manual', usuarioId: ctx.state.userId,

@@ -353,7 +353,7 @@ class RBACService {
 
     // Check team access
     if (resource.teamIds && resource.teamIds.length > 0) {
-      const userTeamIds = this.context.user.role?.metadata?.teamIds as string[] | undefined;
+      const userTeamIds = (this.context.user.role as any)?.metadata?.teamIds as string[] | undefined;
       if (userTeamIds) {
         return resource.teamIds.some(tid => userTeamIds.includes(tid));
       }
@@ -520,7 +520,7 @@ class RBACService {
       whitelabel: { ver: false, gestionar: false },
       telefonia: { ver: false, crear: false, editar: false, eliminar: false, asignar: false, exportar: false, gestionar: false },
       pages: { ver: false, crear: false, editar: false, eliminar: false, exportar: false, gestionar: false, publicar: false },
-    };
+    } as any;
   }
 
   /**

@@ -231,9 +231,9 @@ export async function POST(req: NextRequest) {
 
     for (let i = 0; i < items.length; i++) {
       const item = items[i]
-      const cantidad = parseFloat(item.cantidad) || 1
-      const precioUnitario = parseFloat(item.precioUnitario) || 0
-      const descuentoItem = parseFloat(item.descuento) || 0
+      const cantidad = parseFloat(item.cantidad as any) || 1
+      const precioUnitario = parseFloat(item.precioUnitario as any) || 0
+      const descuentoItem = parseFloat(item.descuento as any) || 0
 
       // Calcular subtotal del item
       let subtotalItem = cantidad * precioUnitario
@@ -262,7 +262,7 @@ export async function POST(req: NextRequest) {
           porcentajeImpuesto = tasa.porcentaje
         }
       } else if (item.porcentajeImpuesto !== undefined) {
-        porcentajeImpuesto = parseFloat(item.porcentajeImpuesto)
+        porcentajeImpuesto = parseFloat(item.porcentajeImpuesto as any)
       } else if (perfilFiscalCliente?.defaultIva) {
         porcentajeImpuesto = Number(perfilFiscalCliente.defaultIva)
       }
@@ -279,7 +279,7 @@ export async function POST(req: NextRequest) {
 
       if (aplicaRetencion) {
         if (item.porcentajeRetencion !== undefined) {
-          porcentajeRetencion = parseFloat(item.porcentajeRetencion)
+          porcentajeRetencion = parseFloat(item.porcentajeRetencion as any)
         } else if (perfilFiscalCliente?.defaultIrpf) {
           porcentajeRetencion = Number(perfilFiscalCliente.defaultIrpf)
         }
@@ -308,7 +308,7 @@ export async function POST(req: NextRequest) {
         subtotal: subtotalItem,
         total: totalItem,
         orden: i
-      })
+      } as any)
 
       subtotalOrden += subtotalItem
       totalImpuestosOrden += montoImpuesto
@@ -364,7 +364,7 @@ export async function POST(req: NextRequest) {
         items: {
           create: itemsProcessed
         }
-      },
+      } as any,
       include: {
         lead: { select: { id: true, nombre: true, email: true } },
         contact: { select: { id: true, nombre: true, email: true } },

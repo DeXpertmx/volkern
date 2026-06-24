@@ -109,7 +109,7 @@ export class FiscalCalendarService {
       type: 'annual',
       annualDueDayMonth: { day: 30, month: 1 },
     },
-  };
+  } as any;
 
   /**
    * Calcula el año fiscal para un trimestre.
@@ -162,7 +162,7 @@ export class FiscalCalendarService {
     }
 
     // Modelo 347 (anual - vence 31 marzo)
-    const model347 = this.MODELS['347'];
+    const model347 = this.MODELS['347'] as any;
     const due347 = new Date(year + 1, model347.annualDueDayMonth!.month - 1, model347.annualDueDayMonth!.day);
     const diff347 = Math.ceil((due347.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     if (diff347 >= -90) {
@@ -179,7 +179,7 @@ export class FiscalCalendarService {
     }
 
     // Modelo 390 (anual - vence 30 enero)
-    const model390 = this.MODELS['390'];
+    const model390 = this.MODELS['390'] as any;
     const due390 = new Date(year + 1, model390.annualDueDayMonth!.month - 1, model390.annualDueDayMonth!.day);
     const diff390 = Math.ceil((due390.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     if (diff390 >= -90) {
@@ -320,8 +320,8 @@ export class FiscalCalendarService {
     skillsLogger.info('[FiscalCalendar] Scanning for upcoming fiscal deadlines...');
 
     const tenants = tenantId 
-      ? await prisma.tenant.findMany({ where: { id: tenantId }, include: { users: { where: { role: 'OWNER' }, take: 1 } } })
-      : await prisma.tenant.findMany({ include: { users: { where: { role: 'OWNER' }, take: 1 } } });
+      ? await prisma.tenant.findMany({ where: { id: tenantId }, include: { users: { where: { role: 'OWNER' as any }, take: 1 } } })
+      : await prisma.tenant.findMany({ include: { users: { where: { role: 'OWNER' as any }, take: 1 } } });
 
     let totalNotified = 0;
     const now = new Date();
@@ -329,7 +329,7 @@ export class FiscalCalendarService {
 
     for (const tenant of tenants) {
       const summary = await this.getCalendarSummary(tenant.id);
-      const owner = tenant.users[0];
+      const owner = (tenant as any).users[0];
       if (!owner) continue;
 
       // Comprobar notificaciones recientes para evitar duplicados
