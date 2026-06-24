@@ -94,14 +94,14 @@ export const createPricingPremiumBlock = (editor: Editor) => {
         script: function(this: any) {
           const el = this;
           const update = () => {
-            const get = (a) => el.getAttribute(a);
-            const set = (sel, val) => {
+            const get = (a: string) => el.getAttribute(a);
+            const set = (sel: string, val: string | null) => {
               if (!val) return;
               const target = el.querySelector(sel);
               if (target) target.innerText = val;
             };
             const currency = get('data-currency');
-            if (currency) el.querySelectorAll('[data-v-curr]').forEach((c) => c.innerText = currency);
+            if (currency) el.querySelectorAll('[data-v-curr]').forEach((c: any) => c.innerText = currency);
             
             set('[data-v-p1-n]', get('data-p1-name'));
             set('[data-v-p1-p]', get('data-p1-price'));

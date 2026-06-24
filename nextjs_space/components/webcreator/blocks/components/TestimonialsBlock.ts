@@ -103,16 +103,16 @@ export const createTestimonialsBlock = (editor: Editor) => {
               clone.classList.remove('v-editor-preview');
 
               const fContenido = clone.querySelector('[data-v-field="contenido"]');
-              if (fContenido) fContenido.innerText = `"${t.contenido}"`;
+              if (fContenido) (fContenido as any).innerText = `"${t.contenido}"`;
 
               const fNombre = clone.querySelector('[data-v-field="nombre"]');
-              if (fNombre) fNombre.innerText = t.nombre;
+              if (fNombre) (fNombre as any).innerText = t.nombre;
 
               const fEmpresa = clone.querySelector('[data-v-field="empresa"]');
-              if (fEmpresa) fEmpresa.innerText = t.empresa;
+              if (fEmpresa) (fEmpresa as any).innerText = t.empresa;
 
               const fInicial = clone.querySelector('[data-v-field="inicial"]');
-              if (fInicial) fInicial.innerText = t.nombre.charAt(0);
+              if (fInicial) (fInicial as any).innerText = t.nombre.charAt(0);
 
               container.appendChild(clone);
             });
