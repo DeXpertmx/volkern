@@ -45,7 +45,7 @@ export const GET = withTenantAuth(async (req, auth) => {
         metadata: true,
         timezone: true
       }
-    });
+    }) as any;
 
     if (!user) {
       return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 });
@@ -64,7 +64,7 @@ export const GET = withTenantAuth(async (req, auth) => {
     const responseUser = {
       ...user,
       isTwoFactorEnabled,
-      timezone: user.timezone || currentUser.timezone, // Utilizar el valor fresco de DB
+      timezone: user.timezone || (currentUser as any).timezone, // Utilizar el valor fresco de DB
       tenant: {
         id: activeTenant.id,
         nombre: activeTenant.nombre,
@@ -118,12 +118,12 @@ export const PATCH = withTenantAuth(async (req, auth) => {
           include: { tenant: true }
         });
 
-        if (userWithTenant?.tenant && !userWithTenant.metadata?.chatwootEmailInboxId) {
+        if (userWithTenant?.tenant && !(userWithTenant.metadata as any)?.chatwootEmailInboxId) {
           console.log('[EmailProvisioning] Detectada configuración de email, creando inbox en Chatwoot...');
           
           // Buscar integración de comuniciones para el tenant
           const integration = await prisma.integration.findFirst({
-            where: { tenantId: userWithTenant.tenantId as string, tipo: 'chatwoot', activo: true }
+            where: { tenantId:        userWithTenant.tenantId as string, tipo: 'chatwoot', activo: true }
           });
 
           if (integration && (integration.configuracion as any)?.accountToken) {

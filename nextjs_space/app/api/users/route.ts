@@ -25,7 +25,7 @@ export const GET = withTenantAuth(async (req, auth) => {
     }
 
     // Verificar permiso
-    if (!hasPermission(currentUser, 'equipo', 'ver')) {
+    if (!hasPermission(currentUser as any, 'equipo', 'ver')) {
       console.log(`Permiso denegado para usuario ${currentUser.email} en modulo equipo`);
       return NextResponse.json({ error: 'Sin permiso para ver el equipo' }, { status: 403 });
     }
@@ -88,7 +88,7 @@ export const POST = withTenantAuth(async (req, auth) => {
     const currentUser = auth.user!;
 
     // Verificar permiso
-    if (!hasPermission(currentUser, 'equipo', 'invitar')) {
+    if (!hasPermission(currentUser as any, 'equipo', 'invitar')) {
       return NextResponse.json({ error: 'Sin permiso para invitar usuarios' }, { status: 403 });
     }
 

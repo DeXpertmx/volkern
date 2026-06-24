@@ -114,7 +114,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Return full permissions
-    const permissions = rbac.getRolePermissions(userContext.role);
+    const permissions = rbac.getRolePermissions(userContext.role!);
 
     return NextResponse.json({
       success: true,
@@ -247,7 +247,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Return full permissions if no specific check
-    const permissions = rbac.getRolePermissions(userContext.role);
+    const permissions = rbac.getRolePermissions(userContext.role!);
 
     return NextResponse.json({
       success: true,
