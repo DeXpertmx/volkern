@@ -48,8 +48,8 @@ export async function GET(
             where: {
                 tenantId: user.tenantId,
                 activo: true,
-                tipo: { in: ['servicio', 'cita'] }
-            },
+                tipo: { in: ['servicio', 'cita'] },
+            } as any,
             orderBy: { nombre: 'asc' }
         })
 

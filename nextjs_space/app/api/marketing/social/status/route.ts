@@ -9,7 +9,7 @@ export async function GET() {
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    const status = await SocialCredentialsManager.getStatus(session.user.tenantId);
+    const status = await SocialCredentialsManager.getStatus(session.user.tenantId!);
     return NextResponse.json(status);
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

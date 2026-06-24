@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
       if (toCreate.length > 0) {
         await prisma.tenantFeature.createMany({
           data: toCreate.map(feature => ({
-            tenantId: user.tenantId,
+            tenantId: user.tenantId!,
             feature,
             habilitado: true,
           })),

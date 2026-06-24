@@ -9,7 +9,7 @@ export async function GET() {
   
   // Seguridad: Solo MARKETING_MANAGER o superior
   const allowedRoles = ['ADMIN', 'OWNER', 'MARKETING_MANAGER'];
-  if (!session?.user || !allowedRoles.includes(session.user.role)) {
+  if (!session?.user || !allowedRoles.includes(session.user.role || '')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

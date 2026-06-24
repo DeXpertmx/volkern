@@ -43,9 +43,10 @@ export async function POST(request: NextRequest) {
         // 2. Formatear el historial para el prompt
         const historyText = conversacion.mensajes
             .map((m) => `${m.direccion === 'saliente' ? 'Asesor' : (conversacion.lead?.nombre || 'Cliente')}: ${m.contenido}`)
-            .join('\n');
+            .join('\\n');
 
         // 3. Llamar a OpenRouter (DeepSeek V4 Flash con fallback Gemini)
+        const systemPrompt = 'Eres un asistente que resume conversaciones de atención al cliente de forma clara y concisa.';
         const summary = await callLlm(systemPrompt, `Por favor resume esta conversación:\n\n${historyText}`, {
           temperature: 0.5,
           maxTokens: 500,

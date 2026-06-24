@@ -13,7 +13,7 @@ export async function POST(req: Request) {
     const { platform, content, mediaUrls, scheduledAt } = body;
 
     const post = await SocialMediaService.schedulePost({
-      tenantId: session.user.tenantId,
+      tenantId: session.user.tenantId!,
       platform,
       content,
       mediaUrls,

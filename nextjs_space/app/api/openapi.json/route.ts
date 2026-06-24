@@ -181,7 +181,7 @@ const AUTO_SCHEMAS = buildComponentSchemas([
     schema,
     description: `Misc schema: ${name}`,
   })),
-]);
+] as any);
 
 // ─── Merge con spec estático ────────────────────────────────
 
