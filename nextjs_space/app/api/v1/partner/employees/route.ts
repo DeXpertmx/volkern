@@ -5,6 +5,7 @@ import { withTenantAuth } from "@/lib/api-key-auth";
 import { prisma } from "@/lib/db";
 import {
   PartnerEmployeeUpsertSchema,
+  PartnerEmployeeUpsertInput,
   PartnerEmployeeLookupSchema,
   sanitizeEmployeeForPartner,
   PARTNER_EMPLOYEES_SCHEMA_VERSION,
@@ -195,8 +196,8 @@ export const GET = withTenantAuth(
     }
 
     const tenantId = auth.tenant!.id;
-    const apiKeyId = auth.apiKey.id;
-    const apiKeyName = auth.apiKey.nombre;
+    const apiKeyId = auth.apiKey!.id;
+    const apiKeyName = auth.apiKey!.nombre;
     const { ipAddress, userAgent } = getRequestMetadata(request);
 
     let externalEmployeeIdForAudit = "UNKNOWN";
@@ -215,6 +216,8 @@ export const GET = withTenantAuth(
           apiKeyId,
           apiKeyName,
           accion: "PARTNER_EMPLOYEE_LOOKUP",
+          entidad: "Employee",
+          entidadId: "UNKNOWN",
           outcome: "rejected",
           httpStatus: 400,
           rejectionReason: "zod_validation_failed",
@@ -239,11 +242,11 @@ export const GET = withTenantAuth(
           where: {
             tenantId,
             externalEmployeeId: { in: idList },
-          },
+          } as any,
           orderBy: { updatedAt: "desc" },
         });
         const byExternalId = new Map(
-          employees.map((e) => [
+          employees.map((e: any) => [
             e.externalEmployeeId ?? "__null__",
             sanitizeEmployeeForPartner(e),
           ])
@@ -261,6 +264,8 @@ export const GET = withTenantAuth(
           apiKeyId,
           apiKeyName,
           accion: "PARTNER_EMPLOYEE_LOOKUP",
+          entidad: "Employee",
+          entidadId: externalEmployeeIdForAudit,
           outcome: "success",
           httpStatus: 200,
           ipAddress,
@@ -268,7 +273,7 @@ export const GET = withTenantAuth(
         });
         return NextResponse.json({
           schemaVersion: PARTNER_EMPLOYEES_SCHEMA_VERSION,
-          count: data.filter((d) => !("notFound" in d)).length,
+          count: data.filter((d: any) => !("notFound" in d)).length,
           data,
         });
       }
@@ -277,7 +282,7 @@ export const GET = withTenantAuth(
       // partner externo (externalEmployeeId != null). Empleados legacy
       // (creados vía UI interna) NO aparecen aquí. Intencional.
       const employees = await prisma.employee.findMany({
-        where: { tenantId, externalEmployeeId: { not: null } },
+        where: { tenantId, externalEmployeeId: { not: null } } as any,
         orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
         take: limit + 1,
         ...(cursor
@@ -296,6 +301,8 @@ export const GET = withTenantAuth(
         apiKeyId,
         apiKeyName,
         accion: "PARTNER_EMPLOYEE_LOOKUP",
+        entidad: "Employee",
+        entidadId: `list_${limit}`,
         outcome: "success",
         httpStatus: 200,
         ipAddress,
@@ -304,7 +311,7 @@ export const GET = withTenantAuth(
       return NextResponse.json({
         schemaVersion: PARTNER_EMPLOYEES_SCHEMA_VERSION,
         count: page.length,
-        data: page.map(sanitizeEmployeeForPartner),
+        data: page.map((e: any) => sanitizeEmployeeForPartner(e)),
         nextCursor,
       });
     } catch (error: unknown) {
@@ -314,6 +321,8 @@ export const GET = withTenantAuth(
         apiKeyId,
         apiKeyName,
         accion: "PARTNER_EMPLOYEE_LOOKUP",
+        entidad: "Employee",
+        entidadId: externalEmployeeIdForAudit,
         outcome: "error",
         httpStatus: 500,
         rejectionReason: reason,
@@ -341,8 +350,8 @@ export const POST = withTenantAuth(
     }
 
     const tenantId = auth.tenant!.id;
-    const apiKeyId = auth.apiKey.id;
-    const apiKeyName = auth.apiKey.nombre;
+    const apiKeyId = auth.apiKey!.id;
+    const apiKeyName = auth.apiKey!.nombre;
     const { ipAddress, userAgent } = getRequestMetadata(request);
 
     let externalEmployeeIdForAudit = "UNKNOWN";
@@ -356,6 +365,8 @@ export const POST = withTenantAuth(
           apiKeyId,
           apiKeyName,
           accion: "PARTNER_EMPLOYEE_UPSERT",
+          entidad: "Employee",
+          entidadId: "UNKNOWN",
           outcome: "rejected",
           httpStatus: 400,
           rejectionReason: "idempotency_key_too_long",
@@ -377,6 +388,8 @@ export const POST = withTenantAuth(
           apiKeyId,
           apiKeyName,
           accion: "PARTNER_EMPLOYEE_UPSERT",
+          entidad: "Employee",
+          entidadId: "UNKNOWN",
           outcome: "rejected",
           httpStatus: 400,
           rejectionReason: "zod_validation_failed",
@@ -402,6 +415,8 @@ export const POST = withTenantAuth(
           apiKeyId,
           apiKeyName,
           accion: "PARTNER_EMPLOYEE_UPSERT",
+          entidad: "Employee",
+          entidadId: body.externalEmployeeId,
           outcome: "success",
           httpStatus: 200,
           rejectionReason: "idempotency_cache_hit",
@@ -421,7 +436,7 @@ export const POST = withTenantAuth(
             tenantId,
             externalEmployeeId: body.externalEmployeeId,
           },
-        },
+        } as any,
       });
 
       // PATCH semantics estrictas: solo campos enviados. `null` = clear.
@@ -441,7 +456,7 @@ export const POST = withTenantAuth(
         // CREATE path con defaults explícitos del handler (NO del Zod schema).
         // Importante: usamos `body.x ?? default` solo en CREATE; en UPDATE
         // un campo ausente significa skip (por eso buildPatchData distingue).
-        const createData: Prisma.EmployeeCreateInput = {
+        const createData = {
           tenantId,
           externalEmployeeId: body.externalEmployeeId,
           fullName: body.fullName,
@@ -456,7 +471,7 @@ export const POST = withTenantAuth(
           isActive: body.isActive ?? true,
           baseGPSLat: body.baseGPSLat ?? null,
           baseGPSLng: body.baseGPSLng ?? null,
-        };
+        } as any;
         try {
           employee = await prisma.employee.create({ data: createData });
           created = true;
@@ -474,7 +489,7 @@ export const POST = withTenantAuth(
                   tenantId,
                   externalEmployeeId: body.externalEmployeeId,
                 },
-              },
+              } as any,
             });
             if (!winner) throw err; // No esperado; re-lanzamos.
             employee = await prisma.employee.update({
@@ -488,7 +503,7 @@ export const POST = withTenantAuth(
         }
       }
 
-      const sanitized = sanitizeEmployeeForPartner(employee);
+      const sanitized = sanitizeEmployeeForPartner(employee as any);
       const responseBody = {
         schemaVersion: PARTNER_EMPLOYEES_SCHEMA_VERSION,
         created,
@@ -502,12 +517,14 @@ export const POST = withTenantAuth(
           idempotencyKey,
           response: responseBody,
         });
-        if (persist.race) {
+        if ("race" in persist) {
           await writePartnerAuditLog({
             tenantId,
             apiKeyId,
             apiKeyName,
             accion: "PARTNER_EMPLOYEE_UPSERT",
+            entidad: "Employee",
+            entidadId: body.externalEmployeeId,
             outcome: "success",
             httpStatus: 200,
             rejectionReason: "p2002_race_recovery",
@@ -519,7 +536,7 @@ export const POST = withTenantAuth(
             idempotent: true,
           });
         }
-        if (persist.degraded) {
+        if ("degraded" in persist) {
           headers["X-Idempotency-Degraded"] = "true";
         }
       }
@@ -529,6 +546,8 @@ export const POST = withTenantAuth(
         apiKeyId,
         apiKeyName,
         accion: "PARTNER_EMPLOYEE_UPSERT",
+        entidad: "Employee",
+        entidadId: body.externalEmployeeId,
         outcome: "success",
         httpStatus: 200,
         rejectionReason: created ? "create" : "update",
@@ -553,6 +572,8 @@ export const POST = withTenantAuth(
         apiKeyId,
         apiKeyName,
         accion: "PARTNER_EMPLOYEE_UPSERT",
+        entidad: "Employee",
+        entidadId: externalEmployeeIdForAudit,
         outcome: "error",
         httpStatus,
         rejectionReason: code,

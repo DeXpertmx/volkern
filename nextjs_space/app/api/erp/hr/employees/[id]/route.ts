@@ -82,42 +82,42 @@ export const PATCH = withTenantAuth(async (req, auth, params) => {
       ...updateData 
     } = data;
 
-    // Convertir fechas si existen y son válidas
-    if (updateData.birthDate) updateData.birthDate = new Date(updateData.birthDate);
-    if (updateData.visaExpiry) updateData.visaExpiry = new Date(updateData.visaExpiry);
-    if (updateData.hiringDate) updateData.hiringDate = new Date(updateData.hiringDate);
+    // Convertir fechas si existen y son válidas (as any needed: passthrough schema yields {} types)
+    if ((updateData as any).birthDate) (updateData as any).birthDate = new Date((updateData as any).birthDate);
+    if ((updateData as any).visaExpiry) (updateData as any).visaExpiry = new Date((updateData as any).visaExpiry);
+    if ((updateData as any).hiringDate) (updateData as any).hiringDate = new Date((updateData as any).hiringDate);
 
     // Limpiar campos que puedan ser strings vacíos pero que Prisma espera como Date o Null
-    if (updateData.birthDate && isNaN(updateData.birthDate.getTime())) delete updateData.birthDate;
-    if (updateData.visaExpiry && isNaN(updateData.visaExpiry.getTime())) delete updateData.visaExpiry;
-    if (updateData.hiringDate && isNaN(updateData.hiringDate.getTime())) delete updateData.hiringDate;
+    if ((updateData as any).birthDate && isNaN(((updateData as any).birthDate as Date).getTime())) delete (updateData as any).birthDate;
+    if ((updateData as any).visaExpiry && isNaN(((updateData as any).visaExpiry as Date).getTime())) delete (updateData as any).visaExpiry;
+    if ((updateData as any).hiringDate && isNaN(((updateData as any).hiringDate as Date).getTime())) delete (updateData as any).hiringDate;
 
     // Normalizar managerId
-    if (updateData.managerId === "" || updateData.managerId === "none") {
-      updateData.managerId = null;
+    if ((updateData as any).managerId === "" || (updateData as any).managerId === "none") {
+      (updateData as any).managerId = null;
     }
 
     // Asegurar tipos de datos para campos numéricos y evitar NaNs
-    if (updateData.childrenCount !== undefined) updateData.childrenCount = parseInt(updateData.childrenCount);
-    if (updateData.distanceToWork !== undefined) updateData.distanceToWork = parseFloat(updateData.distanceToWork);
-    if (updateData.salary !== undefined) updateData.salary = updateData.salary ? new Prisma.Decimal(updateData.salary) : null;
-    if (updateData.vacationQuota !== undefined) updateData.vacationQuota = parseInt(updateData.vacationQuota);
-    if (updateData.vacationUsed !== undefined) updateData.vacationUsed = parseInt(updateData.vacationUsed);
-    if (updateData.irpfrate !== undefined) updateData.irpfrate = updateData.irpfrate ? new Prisma.Decimal(updateData.irpfrate) : null;
-    if (updateData.ssrate !== undefined) updateData.ssrate = updateData.ssrate ? new Prisma.Decimal(updateData.ssrate) : null;
+    if ((updateData as any).childrenCount !== undefined) (updateData as any).childrenCount = parseInt((updateData as any).childrenCount as string);
+    if ((updateData as any).distanceToWork !== undefined) (updateData as any).distanceToWork = parseFloat((updateData as any).distanceToWork as string);
+    if ((updateData as any).salary !== undefined) (updateData as any).salary = (updateData as any).salary ? new Prisma.Decimal((updateData as any).salary) : null;
+    if ((updateData as any).vacationQuota !== undefined) (updateData as any).vacationQuota = parseInt((updateData as any).vacationQuota as string);
+    if ((updateData as any).vacationUsed !== undefined) (updateData as any).vacationUsed = parseInt((updateData as any).vacationUsed as string);
+    if ((updateData as any).irpfrate !== undefined) (updateData as any).irpfrate = (updateData as any).irpfrate ? new Prisma.Decimal((updateData as any).irpfrate) : null;
+    if ((updateData as any).ssrate !== undefined) (updateData as any).ssrate = (updateData as any).ssrate ? new Prisma.Decimal((updateData as any).ssrate) : null;
 
     // Eliminar NaNs y valores problemáticos
-    Object.keys(updateData).forEach(key => {
-      if (updateData[key] === undefined || (typeof updateData[key] === 'number' && isNaN(updateData[key]))) {
-        delete updateData[key];
+    const ud = updateData as any;
+    Object.keys(ud).forEach(key => {
+      if (ud[key] === undefined || (typeof ud[key] === 'number' && isNaN(ud[key]))) {
+        delete ud[key];
       }
     });
 
     // Si managerId es null o vacío, lo manejamos con precaución
-    if (updateData.managerId === "" || updateData.managerId === "none" || updateData.managerId === null) {
-      delete updateData.managerId;
-      // Si queremos desconectar explícitamente el manager
-      (updateData as any).manager = { disconnect: true };
+    if (ud.managerId === "" || ud.managerId === "none" || ud.managerId === null) {
+      delete ud.managerId;
+      ud.manager = { disconnect: true };
     }
     // Debug: Verificar estado del Vault antes de ejecutar la escritura
     const { dbContext: _ctx } = await import('@/lib/db');
@@ -129,7 +129,7 @@ export const PATCH = withTenantAuth(async (req, auth, params) => {
         id: employeeId,
         tenantId: tenantId
       },
-      data: updateData
+      data: updateData as any
     });
 
     return NextResponse.json(updatedEmployee);
