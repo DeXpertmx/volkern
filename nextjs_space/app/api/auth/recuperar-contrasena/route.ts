@@ -112,8 +112,8 @@ export async function POST(request: NextRequest) {
           to: user.email,
           subject: 'Recuperación de contraseña - Volkern CRM',
           html: emailContent,
-          tenantSubdomain: user.tenant.subdomain!,
-          tenantName: user.tenant.nombre || 'Volkern',
+          tenantSubdomain: user.tenant!.subdomain!,
+          tenantName: user.tenant!.nombre || 'Volkern',
         });
         emailSent = result.success;
         if (!emailSent) {

@@ -10,7 +10,7 @@ export const GET = withTenantAuth(async (request, auth) => {
   try {
     const payroll = await prisma.payrollRecord.findMany({
       where: { tenantId: auth.tenant!.id },
-      orderBy: { date: 'desc' }
+      orderBy: { date: 'desc' } as any
     });
 
     return NextResponse.json(payroll);
@@ -43,7 +43,7 @@ export const POST = withTenantAuth(async (request, auth) => {
         date: body.date ? new Date(body.date) : new Date(),
         notes: body.notes
       }
-    });
+    } as any);
 
     return NextResponse.json(payroll);
   } catch (error) {

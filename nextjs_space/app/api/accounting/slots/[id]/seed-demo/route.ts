@@ -13,7 +13,7 @@ export const POST = withTenantAuth(async (req, auth) => {
       return NextResponse.json({ error: 'Solo disponible para cuentas de Asesoría' }, { status: 403 })
     }
 
-    const slotId = req.nextUrl.pathname.split('/').at(-2)
+    const slotId = (req as any).nextUrl.pathname.split('/').at(-2)
     if (!slotId) {
       return NextResponse.json({ error: 'ID de slot no proporcionado' }, { status: 400 })
     }
@@ -30,7 +30,7 @@ export const POST = withTenantAuth(async (req, auth) => {
 
     const accounts = await prisma.accountingAccount.findMany({
       where: { tenantId: slotId, balance: { not: 0 } },
-      orderBy: [{ group: 'asc' }, { code: 'asc' }],
+      orderBy: [{ group: 'asc' }, { code: 'asc' }] as any,
     })
 
     return NextResponse.json({

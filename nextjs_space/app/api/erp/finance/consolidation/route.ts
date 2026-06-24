@@ -12,7 +12,7 @@ import { generateIntegrityHash } from '@/lib/security/integrity-service';
 export const GET = withTenantAuth(async (request, auth) => {
   try {
     const tenantId = auth.tenant!.id;
-    const user = { id: auth.user!.id, role: auth.user!.role, email: auth.user!.email || '' };
+    const user = { id: auth.user!.id, role: auth.user!.role, email: auth.user!.email || '' } as unknown as { id: string; role: string; email: string };
 
     // 🛡️ ACTIVAR ESCUDO FINANCIERO (Modo Fortaleza)
     const security = await validateFinancialSecurity(tenantId, user);
@@ -28,7 +28,7 @@ export const GET = withTenantAuth(async (request, auth) => {
     const periodEnd = now;
 
     // Ejecutar Skills de Consolidación (The Financial Brain)
-    const pnl = await skills.analyze_global_profitability({ tenantId, period: months > 1 ? 'last_quarter' : 'current_month' });
+    const pnl = await (skills as any).analyze_global_profitability({ tenantId, period: months > 1 ? 'last_quarter' : 'current_month' });
     const cashFlow = await skills.project_financial_forecast({ tenantId });
     const tax = await skills.tax_prospector({ tenantId, region: 'ES' }); // Default ES, se puede parametrizar
 
