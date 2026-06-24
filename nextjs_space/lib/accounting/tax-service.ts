@@ -359,7 +359,7 @@ export class TaxService {
           quarter,
           filedAt: new Date().toISOString()
         }
-      }
+      } as any
     });
   }
 
@@ -408,7 +408,7 @@ export class TaxService {
         const perfil = inv.contact.perfilFiscal;
         clientMap.set(contactId, {
           nombre: inv.contact.nombre,
-          nif: perfil?.idFiscal || perfil?.idIntracomunitario || '',
+          nif: (perfil as any)?.idFiscal || (perfil as any)?.idIntracomunitario || '',
           country: perfil?.country || 'ES',
           count: 1,
           total: Number(inv.monto),
@@ -507,7 +507,7 @@ export class TaxService {
           year,
           filedAt: new Date().toISOString()
         }
-      }
+      } as any
     });
   }
 
@@ -529,16 +529,16 @@ export class TaxService {
         country: { not: 'ES' },
         idIntracomunitario: { not: null },
       },
-      select: { contactId: true, country: true, idIntracomunitario: true, idFiscal: true }
+      select: { contactId: true, country: true, idIntracomunitario: true, idFiscal: true } as any
     });
 
     const contactIds = euProfiles
-      .filter(p => p.contactId && this.isEuCountry(p.country))
-      .map(p => p.contactId!);
+      .filter((p: any) => p.contactId && this.isEuCountry(p.country))
+      .map((p: any) => p.contactId!);
 
     const profileMap = new Map(euProfiles
-      .filter(p => p.contactId && this.isEuCountry(p.country))
-      .map(p => [p.contactId!, p])
+      .filter((p: any) => p.contactId && this.isEuCountry(p.country))
+      .map((p: any) => [p.contactId!, p])
     );
 
     const invoices = contactIds.length > 0 ? await prisma.invoice.findMany({
@@ -554,7 +554,7 @@ export class TaxService {
     }) : [];
 
     const deliveries: Modelo349Delivery[] = invoices.map(inv => {
-      const profile = profileMap.get(inv.contactId!);
+      const profile = profileMap.get(inv.contactId!) as any;
       return {
         clientName: inv.contact?.nombre || 'Sin nombre',
         clientNif: profile?.idFiscal || '',
@@ -638,7 +638,7 @@ export class TaxService {
           quarter,
           filedAt: new Date().toISOString()
         }
-      }
+      } as any
     });
   }
 
@@ -711,7 +711,7 @@ export class TaxService {
           year,
           filedAt: new Date().toISOString()
         }
-      }
+      } as any
     });
   }
 }

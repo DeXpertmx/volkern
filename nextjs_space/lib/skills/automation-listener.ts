@@ -24,8 +24,6 @@ import type {
   MessageSentEvent,
   PaymentReceivedEvent,
   PaymentFailedEvent,
-  WorkflowExecutedEvent,
-  WorkflowFailedEvent,
   InventoryLowStockEvent,
   ProductionOrderCreatedEvent,
   SupportTicketCreatedEvent,
@@ -251,7 +249,7 @@ function eventToAutomationContext(event: EventType, payload: BaseEventPayload): 
     }
 
     case EVENTS.WORKFLOW_EXECUTED: {
-      const wfPayload = payload as WorkflowExecutedEvent;
+      const wfPayload = payload as any;
       return {
         ...baseContext,
         workflowId: wfPayload.workflowId,
@@ -262,7 +260,7 @@ function eventToAutomationContext(event: EventType, payload: BaseEventPayload): 
     }
 
     case EVENTS.WORKFLOW_FAILED: {
-      const wfPayload = payload as WorkflowFailedEvent;
+      const wfPayload = payload as any;
       return {
         ...baseContext,
         workflowId: wfPayload.workflowId,
@@ -458,7 +456,7 @@ function eventToAutomationContext(event: EventType, payload: BaseEventPayload): 
         ...baseContext,
         employeeId: empPayload.employeeId,
         employeeNombre: empPayload.employeeNombre,
-        motivoTerminacion: empPayload.motivo,
+        motivoTerminacion: (empPayload as any).motivo,
       };
     }
 
@@ -481,7 +479,7 @@ function eventToAutomationContext(event: EventType, payload: BaseEventPayload): 
         evaluationId: evalPayload.evaluationId,
         employeeId: evalPayload.employeeId,
         employeeNombre: evalPayload.employeeNombre,
-        fechaEvaluacion: evalPayload.fechaEvaluacion,
+        fechaEvaluacion: (evalPayload as any).fechaEvaluacion,
       };
     }
 
@@ -607,7 +605,7 @@ function eventToAutomationContext(event: EventType, payload: BaseEventPayload): 
       const qualityPayload = payload as NonConformityCreatedEvent;
       return {
         ...baseContext,
-        alertType: qualityPayload.alertType,
+        alertType: (qualityPayload as any).alertType,
         mensaje: qualityPayload.causa,
         severity: qualityPayload.gravedad,
         entityId: qualityPayload.proyectoId,
@@ -644,14 +642,14 @@ function eventToAutomationContext(event: EventType, payload: BaseEventPayload): 
         ...baseContext,
         projectId: projPayload.projectId,
         projectNombre: projPayload.projectNombre,
-        fechaInicio: projPayload.fechaInicio,
-        fechaFinEstimada: projPayload.fechaFinEstimada,
+        fechaInicio: (projPayload as any).fechaInicio,
+        fechaFinEstimada: (projPayload as any).fechaFinEstimada,
         managerId: projPayload.managerId,
       };
     }
 
     case EVENTS.PROJECT_COMPLETED: {
-      const projPayload = payload as ProjectStartedEvent;
+      const projPayload = payload as any;
       return {
         ...baseContext,
         projectId: projPayload.projectId,
@@ -672,7 +670,7 @@ function eventToAutomationContext(event: EventType, payload: BaseEventPayload): 
     }
 
     case EVENTS.TASK_COMPLETED: {
-      const taskPayload = payload as TaskCompletedEvent2;
+      const taskPayload = payload as any;
       return {
         ...baseContext,
         taskId: taskPayload.taskId,

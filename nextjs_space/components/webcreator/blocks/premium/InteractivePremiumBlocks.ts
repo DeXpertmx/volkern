@@ -56,11 +56,11 @@ export const createInteractivePremiumBlocks = (editor: Editor) => {
           const update = () => {
             const names = el.getAttribute('data-tab-names');
             if (names && nav && content) {
-              const list = names.split(',').map((s) => s.trim());
-              nav.innerHTML = list.map((n, i) => `
+              const list = names.split(',').map((s: string) => s.trim());
+              nav.innerHTML = list.map((n: string, i: number) => `
                     <button class="premium-tab-btn ${i === 0 ? 'active' : ''}" data-idx="${i}">${n}</button>
                 `).join('');
-              content.innerHTML = list.map((_, i) => `
+              content.innerHTML = list.map((_: string, i: number) => `
                     <div class="premium-tab-pane ${i === 0 ? 'active' : ''}" data-idx="${i}">${el.getAttribute(`data-tab-${i + 1}`) || 'Contenido pendiente...'}</div>
                 `).join('');
               bind();
@@ -198,8 +198,8 @@ export const createInteractivePremiumBlocks = (editor: Editor) => {
             if (items) {
               const listEl = el.querySelector('[data-v-list]');
               if (listEl) {
-                const list = items.split(',').map((s) => s.trim());
-                listEl.innerHTML = list.map(i => `
+                const list = items.split(',').map((s: string) => s.trim());
+                listEl.innerHTML = list.map((i: string) => `
                         <li class="premium-toc-item">${i}</li>
                     `).join('');
               }
