@@ -212,7 +212,7 @@ export class SaaSMetricsService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const metrics = await globalPrisma.saaSMetric.upsert({
+    const metrics = await (globalPrisma as any).saaSMetric.upsert({
       where: {
         tenantId_date: {
           tenantId: tenantId || 'global',
@@ -248,10 +248,10 @@ export class SaaSMetricsService {
     });
 
     return {
-      ...metrics,
+      ...(metrics as any),
       churnRate,
-      date: metrics.date
-    };
+      date: (metrics as any).date
+    } as SaaSMetrics;
   }
 
   static async getMetricsHistory(periodDays: number = 30): Promise<MetricHistoryItem[]> {
@@ -290,7 +290,7 @@ export class SaaSMetricsService {
 
     if (todayMetrics) {
       const churnRate = await this.calculateChurnRate();
-      return { ...todayMetrics, churnRate, date: todayMetrics.date };
+      return { ...todayMetrics, churnRate, date: todayMetrics.date } as SaaSMetrics;
     }
 
     return await this.recordMetrics();
@@ -309,7 +309,7 @@ export class SaaSMetricsService {
   static async createSnapshot(): Promise<void> {
     const currentMetrics = await this.getCurrentMetrics();
 
-    await globalPrisma.saaSMetricSnapshot.create({
+    await (globalPrisma as any).saaSMetricSnapshot.create({
       data: {
         date: new Date(),
         metrics: currentMetrics,

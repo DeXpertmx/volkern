@@ -161,7 +161,7 @@ export class ScoringEngine {
 
       // Determinar la categoría del lead
       const nuevaCategoria = await this.determineCategory(updateData.puntuacion);
-      updateData.categoria = nuevaCategoria;
+      updateData.categoria = nuevaCategoria ?? undefined;
 
       // Actualizar el score
       const updatedScore = await prisma.leadScore.update({
@@ -178,7 +178,7 @@ export class ScoringEngine {
           cambio: puntosGanados,
           razon: razonCambio,
           categoria: categoria,
-          detalles: detalles || {},
+          detalles: (detalles || {}) as any,
         },
       });
 
@@ -562,7 +562,7 @@ DEALS: ${lead.deals.length} registrados.`;
           cambio: aiResult.puntuacion - puntuacionAnterior,
           razon: `IA: ${aiResult.razon}`,
           categoria: 'ia_evaluation',
-          detalles: aiResult as unknown as Record<string, unknown>,
+          detalles: aiResult as any,
         },
       });
 

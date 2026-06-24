@@ -62,12 +62,12 @@ export async function deleteUserData(params: DeleteUserDataParams): Promise<Dele
     if (leads.length > 0) {
       const leadIds = leads.map(l => l.id)
 
-      const messagesDeleted = await prisma.mensaje.count({
+      const messagesDeleted = await (prisma as any).mensaje.count({
         where: { leadId: { in: leadIds } }
       })
       deletedRecords.messages = messagesDeleted
 
-      await prisma.mensaje.deleteMany({
+      await (prisma as any).mensaje.deleteMany({
         where: { leadId: { in: leadIds } }
       })
 
@@ -174,7 +174,7 @@ export async function processDataDeletionRequest(requestId: string): Promise<boo
           ...(request.deletionDetails as object || {}),
           processedAt: new Date().toISOString(),
           result
-        }
+        } as any
       }
     })
 

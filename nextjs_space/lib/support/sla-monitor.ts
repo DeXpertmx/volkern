@@ -1,4 +1,4 @@
-import { prisma, SlaState } from '@/lib/db';
+import { prisma } from '@/lib/db';
 import { callGemma } from '@/lib/ai/gemma-client';
 import { AuditService } from '@/lib/audit-service';
 import { GEMMA_SLA_SYSTEM_PROMPT, getGemmaSLAPrompt } from './gemma-sla-prompts';
@@ -46,6 +46,7 @@ export class SupportSLAMonitor {
   }
 
   private static async handleAtRisk(ticket: any, tenantId: string) {
+    const now = new Date();
     console.log(`[SLA] Ticket ${ticket.id} is AT RISK`);
     
     await prisma.supportTicket.update({
@@ -174,7 +175,7 @@ export class SupportSLAMonitor {
 
   private static async executeAutoEscalation(ticket: any, tenantId: string, reason: string) {
     console.log(`[SLA] Executing Auto-Escalation for ticket ${ticket.id}`);
-    await AuditService.log({
+    await (AuditService.log as any)({
       tenantId,
       userId: 'SYSTEM',
       action: 'SUPPORT_SLA_BREACH_CRITICAL',

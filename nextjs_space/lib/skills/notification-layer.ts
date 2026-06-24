@@ -335,7 +335,7 @@ export class NotificationService {
     context: SkillContext
   ): Promise<Omit<NotificationResult, 'notificationId'>> {
     try {
-      const creds = await loadTelegramCredentials(context.tenantId);
+      const creds = await (loadTelegramCredentials as any)(context.tenantId);
       
       // Fallback: si no hay admin_chat_id, buscar el primer usuario del tenant
       if (!creds?.admin_chat_id && context.tenantId) {
@@ -370,7 +370,7 @@ export class NotificationService {
         };
       }
       
-      const success = await sendTelegramMessage(
+      const sendResult = await sendTelegramMessage(
         chatId,
         content.body,
         creds?.bot_token,
@@ -378,11 +378,11 @@ export class NotificationService {
       );
       
       return {
-        success,
+        success: sendResult as any,
         channel: 'telegram',
-        status: success ? 'sent' : 'failed',
-        sentAt: success ? new Date() : undefined,
-      };
+        status: sendResult ? 'sent' : 'failed',
+        sentAt: sendResult ? new Date() : undefined,
+      } as any;
     } catch (error) {
       return {
         success: false,
@@ -402,7 +402,7 @@ export class NotificationService {
     context: SkillContext
   ): Promise<void> {
     try {
-      const creds = await loadTelegramCredentials(context.tenantId);
+      const creds = await (loadTelegramCredentials as any)(context.tenantId);
       if (creds && (recipient.telegramChatId || creds.admin_chat_id)) {
         await this.sendTelegram(recipient, content, context);
       }
