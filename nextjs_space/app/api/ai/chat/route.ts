@@ -516,7 +516,7 @@ Continúa con la misma intención (${pendingCtx.intent}) y completa los parámet
     // Intentar parsear JSON de la respuesta
     const safeMessage = (rawContent || '').substring(0, 500)
 
-    let aiResult = { intent: 'consulta_general' as const, confidence: 0.5, needsMoreInfo: false, requiresConfirmation: false, params: {} as Record<string, any>, message: safeMessage }
+    let aiResult = { intent: 'consulta_general' as const, confidence: 0.5, needsMoreInfo: false, requiresConfirmation: false, params: {} as Record<string, any>, message: safeMessage } as any
 
     const jsonMatch = rawContent?.match(/\{[\s\S]*\}/)
     if (jsonMatch) {

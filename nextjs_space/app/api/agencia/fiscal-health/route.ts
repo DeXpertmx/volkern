@@ -39,7 +39,7 @@ export async function GET() {
         tenants: summary,
         totalSummary: {
             total: tenants.length,
-            integros: summary.filter(t => t.status === 'ÍNTEGRA').length,
+            integros: summary.filter(t => t.status === 'ÍNTEGRA' as any).length,
             comprometidos: summary.filter(t => t.status === 'COMPROMETIDA').length
         }
     });

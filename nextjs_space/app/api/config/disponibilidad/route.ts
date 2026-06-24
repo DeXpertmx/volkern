@@ -9,7 +9,7 @@ export const GET = withTenantAuth(async (request, auth) => {
     const tenantId = auth.tenant!.id;
     const userId = auth.user!.id;
 
-    let timezone = auth.user!.timezone || 'America/Mexico_City';
+    let timezone = (auth.user as any).timezone || 'America/Mexico_City';
 
     const config = await prisma.configuracion.findMany({
       where: {

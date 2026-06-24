@@ -105,7 +105,7 @@ export const POST = withTenantAuth(async (request, auth) => {
         linkedin,
         notas,
         tags
-      },
+      } as any,
       include: {
         company: {
           select: {
@@ -128,7 +128,7 @@ export const POST = withTenantAuth(async (request, auth) => {
       entityId: contact.id,
       description: `Contacto "${nombre}" creado`,
       changesAfter: { nombre, email, tipo },
-      ipAddress: requestIp,
+      ipAddress: (requestIp as string) || '',
       userAgent
     });
 

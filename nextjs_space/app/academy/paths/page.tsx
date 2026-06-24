@@ -121,7 +121,7 @@ export default function AcademyPathsPage() {
                               <span>Progreso en Ruta</span>
                               <span>{path.progress}%</span>
                            </div>
-                           <Progress value={path.progress} className="h-2 bg-slate-100" indicatorClassName="bg-emerald-500" />
+                           <Progress value={path.progress} className="h-2 bg-slate-100" />
                         </div>
                       )}
 

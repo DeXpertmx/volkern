@@ -34,11 +34,11 @@ export async function GET(req: Request) {
         total: true,
         fechaFin: true,
         contact: { select: { nombre: true } }
-      }
+      } as any,
     })
 
     // Calcular health score individual para expiraciones
-    const expiringWithHealth = await Promise.all(expiringSoon.map(async (c) => ({
+    const expiringWithHealth: any[] = await Promise.all((expiringSoon as any[]).map(async (c: any) => ({
       ...c,
       healthScore: await ContractHealthService.calculateHealthScore(c.id)
     })))
