@@ -17,7 +17,7 @@ import { CatalogSearchSelect, CatalogoItemResult } from '@/components/catalogo/C
 import {
   FileText, Plus, Trash2, Calculator, ArrowLeft, ArrowRight, Save, Send,
   Building2, User, AlertCircle, Globe, Info, Package, CheckCircle2, RefreshCw,
-  Settings2, Calendar
+  Settings2, Calendar, ShieldCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';

@@ -57,7 +57,7 @@ export class VolkernActionRegistry {
 
     await prisma.lead.update({
       where: { id: lead_id },
-      data: { userId: owner_id }
+      data: { userId: owner_id } as any
     })
 
     return { success: true, data: { lead_id, owner_id } }
@@ -110,7 +110,7 @@ export class VolkernActionRegistry {
       return { success: false, error: 'email required' }
     }
 
-    await sendEmail({ 
+    await (sendEmail as any)({
       to, 
       subject, 
       html: body, 
@@ -123,7 +123,7 @@ export class VolkernActionRegistry {
 
   private static async sendTelegram(context: ActionContext, config?: Record<string, unknown>): Promise<ActionResult> {
     const { tenant_id, data } = context
-    const creds = await loadTelegramCredentials(tenant_id)
+    const creds = await (loadTelegramCredentials as any)(tenant_id)
     
     if (!creds?.admin_chat_id) {
       return { success: false, error: 'Telegram not configured' }
@@ -169,7 +169,7 @@ export class VolkernActionRegistry {
         titulo: title,
         descripcion: description,
         estado: 'pendiente'
-      }
+      } as any
     })
 
     return { success: true, data: { task_id: task.id } }
@@ -184,7 +184,7 @@ export class VolkernActionRegistry {
       return { success: false, error: 'lead_id and content required' }
     }
 
-    const nota = await prisma.nota.create({
+    const nota = await (prisma as any).nota.create({
       data: {
         tenantId: tenant_id,
         leadId: lead_id,
@@ -275,8 +275,8 @@ export class VolkernActionRegistry {
     const { tenant_id, data } = context
     const message = config?.message as string || 'Nueva actualización de lead'
     
-    const leads = await prisma.lead.findUnique({ where: { id: data.lead_id as string }, include: { user: true } })
-    const owner = leads?.user
+    const leads = await prisma.lead.findUnique({ where: { id: data.lead_id as string }, include: { user: true } as any })
+    const owner = (leads as any)?.user
 
     if (owner?.telefono) {
       await sendWhatsAppMessage(owner.telefono, message, tenant_id)

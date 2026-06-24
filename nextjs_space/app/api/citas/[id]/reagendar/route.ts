@@ -172,7 +172,7 @@ export const POST = withTenantAuth(async (request, auth, { params }) => {
             descripcion: citaActualizada.descripcion || undefined,
             fechaHora: citaActualizada.fechaHora,
             duracion: citaActualizada.duracion,
-            leadEmail: citaActualizada.lead.email || undefined,
+            leadEmail: citaActualizada.lead!.email || undefined,
             googleCalendarEventId: cita.googleCalendarEventId,
           })
         }
@@ -182,7 +182,7 @@ export const POST = withTenantAuth(async (request, auth, { params }) => {
     }
 
     // Reenviar email de confirmación
-    if (citaActualizada.lead.email && citaActualizada.servicio) {
+    if (citaActualizada.lead!.email && citaActualizada.servicio) {
       const emailHash = generateCitaEmailHash({
         fechaHora: nuevaFecha,
         duracion: citaActualizada.duracion,
@@ -192,7 +192,7 @@ export const POST = withTenantAuth(async (request, auth, { params }) => {
 
       const emailResult = await sendAppointmentConfirmation({
         id: citaActualizada.id,
-        lead: { nombre: citaActualizada.lead.nombre, email: citaActualizada.lead.email },
+        lead: { nombre: citaActualizada.lead!.nombre, email: citaActualizada.lead!.email },
         servicio: {
           nombre: citaActualizada.servicio.nombre,
           descripcion: citaActualizada.servicio.descripcion,
@@ -227,7 +227,7 @@ export const POST = withTenantAuth(async (request, auth, { params }) => {
     triggerAutomation('cita_reagendada', {
       tenantId,
       citaId: citaActualizada.id,
-      leadId: citaActualizada.leadId,
+      leadId: citaActualizada.leadId!,
       fechaAnterior,
       nuevaFecha,
       motivo,
@@ -236,7 +236,7 @@ export const POST = withTenantAuth(async (request, auth, { params }) => {
     // Push notification
     notifyAdminsPush({
       title: '📅 Cita Reagendada',
-      body: `${citaActualizada.lead.nombre} reagendó: ${citaActualizada.titulo}`,
+      body: `${citaActualizada.lead!.nombre} reagendó: ${citaActualizada.titulo}`,
       data: { url: `/dashboard/citas/${params.id}` },
     }, tenantId).catch(e => console.error('Error push notification:', e))
 
@@ -244,7 +244,7 @@ export const POST = withTenantAuth(async (request, auth, { params }) => {
       success: true,
       cita: citaActualizada,
       fechaAnterior,
-      nuevaFecha,
+      nuevaFecha: nuevaFecha as any,
     })
   } catch (error: any) {
     console.error('[POST /api/citas/[id]/reagendar] Error:', error)

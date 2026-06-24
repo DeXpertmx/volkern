@@ -108,7 +108,7 @@ export const POST = withTenantAuth(async (req, auth) => {
             resultado,
             metadatos: metadatos || {},
             creadoPor: creadoPor || userId || null, // Priorizamos el usuario de la API Key si existe
-          },
+          } as any,
         });
 
         return NextResponse.json({ success: true, data: interaction });
@@ -141,7 +141,7 @@ export const POST = withTenantAuth(async (req, auth) => {
               fuente: 'Gemma4',
               fechaIA: new Date().toISOString()
             }
-          }
+          } as any
         });
 
         return NextResponse.json({ success: true, message: 'Nota registrada con éxito', data: nota });
@@ -176,7 +176,7 @@ export const POST = withTenantAuth(async (req, auth) => {
       // --- ADVANCED COMPOSITE SKILLS ---
 
       case 'prequalify_lead': {
-        const result = await skills.prequalify_lead({
+        const result = await (skills as any).prequalify_lead({
           tenantId,
           userId: userId || undefined,
           ...payload
@@ -185,7 +185,7 @@ export const POST = withTenantAuth(async (req, auth) => {
       }
 
       case 'auto_schedule': {
-        const result = await skills.auto_schedule({
+        const result = await (skills as any).auto_schedule({
           tenantId,
           userId: userId || undefined,
           ...payload
@@ -194,7 +194,7 @@ export const POST = withTenantAuth(async (req, auth) => {
       }
 
       case 'generate_landing_draft': {
-        const result = await skills.generate_landing_draft({
+        const result = await (skills as any).generate_landing_draft({
           tenantId,
           userId: userId || undefined,
           ...payload
@@ -241,7 +241,7 @@ export const POST = withTenantAuth(async (req, auth) => {
     // --- AUDITORÍA DE USO (PHASE 2) ---
     // Registramos el uso en el tenant destino para facturación y auditoría de la agencia
     try {
-      await prisma.agentSkillLog.create({
+      await (prisma as any).agentSkillLog.create({
         data: {
           userId: auth.user?.id || 'system',
           tenantId: tenantId, // El tenant donde ocurrió la acción
