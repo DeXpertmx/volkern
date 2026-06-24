@@ -30,7 +30,7 @@ export class AcademyAuthService {
         firstName: data.firstName,
         lastName: data.lastName,
         role: 'LEARNER'
-      }
+      } as any
     });
 
     // Automatically create an Estudiante profile
@@ -71,7 +71,7 @@ export class AcademyAuthService {
       { 
         uid: user.id, 
         tid: user.tenantId, 
-        eid: user.estudiante?.id,
+        eid: (user as any).estudiante?.id,
         role: user.role 
       }, 
       JWT_SECRET, 
@@ -102,7 +102,7 @@ export class AcademyAuthService {
         firstName: user.firstName,
         lastName: user.lastName,
         role: user.role,
-        estudianteId: user.Estudiante?.id
+        estudianteId: (user as any).Estudiante?.id
       },
       token
     };
@@ -117,10 +117,10 @@ export class AcademyAuthService {
       
       const session = await prisma.erp_academy_sessions.findUnique({
         where: { token, revoked: false },
-        include: { user: true }
+        include: { user: true } as any
       });
 
-      if (!session || session.expiresAt < new Date() || session.user.status !== 'ACTIVE') {
+      if (!session || session.expiresAt < new Date() || (session.user as any).status !== 'ACTIVE') {
         return null;
       }
 
@@ -129,7 +129,7 @@ export class AcademyAuthService {
         tenantId: decoded.tid,
         estudianteId: decoded.eid,
         role: decoded.role
-      };
+      } as any;
     } catch (error) {
       return null;
     }

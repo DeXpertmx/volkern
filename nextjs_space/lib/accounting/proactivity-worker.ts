@@ -17,7 +17,7 @@ export class AccountingProactivityWorker {
     
     const tenants = await prisma.tenant.findMany({
       include: {
-        users: { where: { role: 'OWNER' }, take: 1 }
+        users: { where: { role: 'OWNER' as any }, take: 1 }
       }
     });
 
@@ -28,7 +28,7 @@ export class AccountingProactivityWorker {
       
       for (const match of tenantSuggestions) {
         if (match.confidence >= 0.9) {
-          const owner = tenant.users[0];
+          const owner = (tenant as any).users[0];
           if (owner) {
             await notificationService.send(
               { type: 'user', id: owner.id },
@@ -62,7 +62,7 @@ export class AccountingProactivityWorker {
     
     const tenants = await prisma.tenant.findMany({
       include: {
-        users: { where: { role: 'OWNER' }, take: 1 }
+        users: { where: { role: 'OWNER' as any }, take: 1 }
       }
     });
 

@@ -10,7 +10,7 @@ export class OrchestrationService {
    * Analiza un pedido y decide la estrategia de cumplimiento (STOCK vs PRODUCTION).
    */
   static async analyzeFulfillment(orderId: string, tenantId: string) {
-    const order = await prisma.salesOrder.findUnique({
+    const order = await (prisma as any).salesOrder.findUnique({
       where: { id: orderId, tenantId },
       include: {
         items: {
@@ -55,7 +55,7 @@ export class OrchestrationService {
       fulfillmentDate.setDate(fulfillmentDate.getDate() + estDays);
 
       // Actualizar ítem con la estrategia decidida
-      await prisma.salesOrderItem.update({
+      await (prisma as any).salesOrderItem.update({
         where: { id: item.id },
         data: {
           orchestrationStrategy: strategy,
@@ -78,7 +78,7 @@ export class OrchestrationService {
     finalDeliveryPromise.setDate(finalDeliveryPromise.getDate() + maxLeadTimeDays + 1);
 
     // Actualizar el pedido
-    return await prisma.salesOrder.update({
+    return await (prisma as any).salesOrder.update({
       where: { id: orderId },
       data: {
         deliveryPromise: finalDeliveryPromise,
@@ -92,7 +92,7 @@ export class OrchestrationService {
    * Ejecuta las acciones operativas derivadas de la orquestación (ej. crear WorkOrders).
    */
   static async executeOrchestration(orderId: string, tenantId: string) {
-    const order = await prisma.salesOrder.findUnique({
+    const order = await (prisma as any).salesOrder.findUnique({
       where: { id: orderId, tenantId },
       include: {
         items: {

@@ -17,7 +17,7 @@ export class AIEngine {
           tenant_id: tenantId,
           data: { prompt: request.prompt, model: request.model }
         }
-        AIQueue.enqueue(event).then(result => resolve(result as AIResponse))
+        AIQueue.enqueue(event).then(result => resolve(result as unknown as AIResponse))
       })
     }
 
@@ -91,9 +91,9 @@ export class AIEngine {
       content: result.content,
       model: 'gemma',
       usage: {
-        prompt_tokens: result.usage?.prompt_tokens || 0,
-        completion_tokens: result.usage?.completion_tokens || 0,
-        total_tokens: result.usage?.total_tokens || 0
+        prompt_tokens: (result as any).usage?.prompt_tokens || 0,
+        completion_tokens: (result as any).usage?.completion_tokens || 0,
+        total_tokens: (result as any).usage?.total_tokens || 0
       }
     }
   }

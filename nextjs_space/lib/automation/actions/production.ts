@@ -6,7 +6,7 @@ export async function createProductionOrder(config: any, ctx: ActionContext): Pr
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  const order = await tenantClient.produccionOrden.create({
+  const order = await (tenantClient as any).produccionOrden.create({
     data: {
       tenantId: ctx.state.tenantId, productoId, cantidad: cantidad || 1,
       prioridad: prioridad || 'normal', estado: 'pendiente',
@@ -22,7 +22,7 @@ export async function updateProductionOrderStatus(config: any, ctx: ActionContex
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  await tenantClient.produccionOrden.update({
+  await (tenantClient as any).produccionOrden.update({
     where: { id: orderId || ctx.state.productionOrderId },
     data: { estado, notas, fechaFin: estado === 'completada' ? new Date() : undefined },
   })
@@ -33,7 +33,7 @@ export async function updateProductionOrderStatus(config: any, ctx: ActionContex
 export async function notifyProduction(config: any, ctx: ActionContext): Promise<boolean> {
   const { message, tipo } = config
   const { notifyByTelegram } = await import('@/lib/skills/notification-layer')
-  const context = createSystemContext(ctx.state.tenantId)
+  const context = createSystemContext(ctx.state.tenantId as any)
 
   const msg = message || `📦 *Actualización de Producción*\n\nEstado: ${tipo || 'Actualización'}`
   notifyByTelegram(msg, context).catch(() => {})
@@ -46,7 +46,7 @@ export async function registerProduction(config: any, ctx: ActionContext): Promi
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  await tenantClient.produccionRegistro.create({
+  await (tenantClient as any).produccionRegistro.create({
     data: {
       tenantId: ctx.state.tenantId, ordenId: orderId || ctx.state.productionOrderId,
       cantidad: cantidadProducida, calidad, notas, fecha: new Date(),
