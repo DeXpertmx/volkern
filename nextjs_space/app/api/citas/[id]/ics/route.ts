@@ -13,7 +13,7 @@ function generateICS(cita: any): string {
   const uid = `${cita.id}@volkern.app`
   const now = formatDate(new Date())
 
-  let ics = `BEGIN:VCALENDAR
+  const ics = `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Volkern//ES
 CALSCALE:GREGORIAN

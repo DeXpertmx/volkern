@@ -230,7 +230,7 @@ export async function PATCH(
       // Actualizar totales
       const descuentoGlobal = body.descuentoGlobal ?? ordenExistente.descuentoGlobal
       const tipoDescuento = body.tipoDescuento ?? ordenExistente.tipoDescuento
-      let descuentoGlobalMonto = tipoDescuento === 'porcentaje' 
+      const descuentoGlobalMonto = tipoDescuento === 'porcentaje' 
         ? subtotalOrden * (descuentoGlobal / 100) 
         : descuentoGlobal
 

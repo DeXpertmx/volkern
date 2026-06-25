@@ -110,8 +110,8 @@ export async function POST(req: NextRequest) {
       const montoImpuesto = Math.round(subtotalItem * (porcentajeImpuesto / 100) * 100) / 100
 
       // Retenciones
-      let aplicaRetencion = item.aplicaRetencion || perfilFiscalCliente?.aplicaRetencion || false
-      let porcentajeRetencion = item.porcentajeRetencion || 0
+      const aplicaRetencion = item.aplicaRetencion || perfilFiscalCliente?.aplicaRetencion || false
+      const porcentajeRetencion = item.porcentajeRetencion || 0
       let montoRetencion = 0
       if (aplicaRetencion && porcentajeRetencion > 0) {
         montoRetencion = Math.round(subtotalItem * (porcentajeRetencion / 100) * 100) / 100
@@ -224,7 +224,7 @@ export async function POST(req: NextRequest) {
       const pagos = []
       const inicio = new Date(fechaInicio)
       const fin = new Date(fechaFin)
-      let fechaPago = new Date(inicio)
+      const fechaPago = new Date(inicio)
       let numeroPago = 1
 
       // Calcular monto por pago

@@ -234,7 +234,7 @@ export async function POST(request: Request) {
   const startedAt = Date.now();
   let responseStatus = 0;
   let responseBody = '';
-  let responseHeaders: Record<string, string> = {};
+  const responseHeaders: Record<string, string> = {};
   let errorMessage: string | null = null;
   let successFlag = false;
 

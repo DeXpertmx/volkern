@@ -222,7 +222,7 @@ export async function POST(request: NextRequest) {
       _max: { orden: true }
     });
 
-    let ordenInicial = (maxOrden._max.orden ?? 0) + 1;
+    const ordenInicial = (maxOrden._max.orden ?? 0) + 1;
 
     // Crear campos
     const creados = await prisma.$transaction(

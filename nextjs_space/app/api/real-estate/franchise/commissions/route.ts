@@ -22,7 +22,7 @@ export const GET = withTenantAuth(async (req, auth) => {
     const incluirHijas = searchParams.get('incluirHijas') !== 'false';
 
     // Determinar qué tenants incluir
-    let tenantIds = [tenantId];
+    const tenantIds = [tenantId];
     if (incluirHijas) {
       const children = await prisma.tenant.findMany({
         where: { parentId: tenantId },

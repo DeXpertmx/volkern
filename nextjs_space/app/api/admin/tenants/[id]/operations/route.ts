@@ -35,7 +35,7 @@ export const POST = withTenantAuth(async (req, auth, context) => {
       return NextResponse.json({ error: 'Tenant no encontrado' }, { status: 404 });
     }
 
-    let result: any = { success: true };
+    const result: any = { success: true };
 
     switch (operation) {
       case 'provision_db':

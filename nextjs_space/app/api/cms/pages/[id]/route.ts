@@ -20,7 +20,7 @@ export const GET = withTenantAuth(async (req, auth, context) => {
     const tenantId = auth.tenant!.id;
 
     // 1. Intentar buscar en la DB del Tenant
-    let page = await prisma.page.findUnique({
+    const page = await prisma.page.findUnique({
       where: { id }
     });
 

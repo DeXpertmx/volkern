@@ -59,7 +59,7 @@ export const POST = withTenantAuth(async (request, auth) => {
           : origin
 
       // Progreso actual basado en distancia recorrida
-      let progress = calcProgress(origin, dest, currentPos)
+      const progress = calcProgress(origin, dest, currentPos)
       if (progress >= 1) {
         // Ya llegó — auto-completar si no estaba marcado
         if (s.status !== 'DELIVERED') {

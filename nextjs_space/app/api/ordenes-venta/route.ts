@@ -249,7 +249,7 @@ export async function POST(req: NextRequest) {
       // Obtener tasa de impuesto
       let porcentajeImpuesto = 0
       let montoImpuesto = 0
-      let tasaImpuestoId = item.tasaImpuestoId || null
+      const tasaImpuestoId = item.tasaImpuestoId || null
 
       // Si el cliente es exento o aplica reverse charge, IVA = 0
       if (perfilFiscalCliente?.exentoImpuestos || aplicaReverseCharge) {
@@ -273,7 +273,7 @@ export async function POST(req: NextRequest) {
       }
 
       // Calcular retención si aplica
-      let aplicaRetencion = item.aplicaRetencion || perfilFiscalCliente?.aplicaRetencion || (Number(perfilFiscalCliente?.defaultIrpf) > 0)
+      const aplicaRetencion = item.aplicaRetencion || perfilFiscalCliente?.aplicaRetencion || (Number(perfilFiscalCliente?.defaultIrpf) > 0)
       let porcentajeRetencion = 0
       let montoRetencion = 0
 

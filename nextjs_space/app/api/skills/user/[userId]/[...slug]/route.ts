@@ -117,7 +117,7 @@ export async function POST(
 function generateOpenApiSpec(userId: string, baseUrl: string) {
   const availableSkills = listSkills();
   
-  let yaml = `openapi: 3.0.1
+  const yaml = `openapi: 3.0.1
 info:
   title: Volkern Agent Skills
   description: API Gateway para la ejecución de herramientas operativas de Volkern CRM/ERP.

@@ -115,7 +115,7 @@ export async function GET(req: NextRequest) {
       });
 
       // 6. Ordenar en memoria
-      let sorted = [...filtered];
+      const sorted = [...filtered];
       switch (sort) {
         case "precio_asc":
           sorted.sort((a, b) => a.precioBase - b.precioBase);

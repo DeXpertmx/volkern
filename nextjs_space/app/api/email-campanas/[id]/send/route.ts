@@ -51,7 +51,7 @@ export async function POST(
     }
 
     // Obtener leads destinatarios
-    let leadsQuery: any = {
+    const leadsQuery: any = {
       tenantId: user.tenantId,
       email: { not: '' }
     };

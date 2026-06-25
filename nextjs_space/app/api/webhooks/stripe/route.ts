@@ -312,7 +312,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true, skipped: true, duplicate: true })
     }
 
-    let result = { received: true }
+    const result = { received: true }
 
     try {
       switch (event.type) {
