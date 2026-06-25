@@ -117,7 +117,7 @@ async function trackTenantRequest(
 
     const userId = resolved.user?.id || 'SYSTEM';
     
-    await AuditService.log({
+    await (AuditService.log as any)({
       tenantId: resolved.tenantId,
       userId,
       action: `REQUEST_${request.method}`,

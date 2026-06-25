@@ -91,7 +91,7 @@ export class SupportService {
 
       // Protocolo de Confianza: Si es cierre de ticket crítico, auditar
       if (ticket.priority === 'CRITICAL' && (newStatus === 'RESOLVED' || newStatus === 'CLOSED')) {
-        await AuditService.log({
+        await (AuditService.log as any)({
           tenantId,
           userId,
           action: 'SUPPORT_TICKET_RESOLVE_CRITICAL',

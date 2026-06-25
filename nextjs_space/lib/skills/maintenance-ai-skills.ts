@@ -6,7 +6,7 @@ import { MaintenanceService } from '@/lib/erp/maintenance-service';
  * Analiza el historial de un activo para predecir fallos inminentes
  */
 export async function predict_asset_failure({ tenantId, assetId }: { tenantId: string, assetId: string }) {
-  const asset = await prisma.industrialAsset.findUnique({
+  const asset = await (prisma as any).industrialAsset.findUnique({
     where: { id: assetId, tenantId },
     include: {
       maintenanceOrders: { orderBy: { plannedDate: 'desc' }, take: 5 },

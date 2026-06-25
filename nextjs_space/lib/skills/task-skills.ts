@@ -84,7 +84,7 @@ export async function createTask(input: CreateTaskInput) {
       fechaVencimiento,
       asignadoA,
       completada: false,
-    },
+    } as any,
   });
 
   // 3. Emitir evento
@@ -140,8 +140,8 @@ export async function completeTask(input: CompleteTaskInput) {
     timestamp: new Date(),
     source,
     taskId,
-    leadId: task.leadId,
-    completadoPor: userId,
+    leadId: task.leadId ?? '',
+    completadoPor: userId ?? '',
   };
   eventBus.emitEvent(EVENTS.TASK_COMPLETED, eventPayload);
 

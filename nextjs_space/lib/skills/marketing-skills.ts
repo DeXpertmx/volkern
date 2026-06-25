@@ -188,7 +188,7 @@ export async function advise_on_automation_rules(params: {
     where: {
       tenantId: params.tenantId,
       updatedAt: { lt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } // 30 días
-    }
+    } as any
   });
 
   const suggestions = [];

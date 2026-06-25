@@ -60,7 +60,7 @@ export class PayrollClosureService {
     const invalidExpenses = expenses.filter(e => !e.fingerprint || e.verificationStatus !== 'VALIDATED');
 
     if (invalidExpenses.length > 0) {
-      skillsLogger.error(`Cierre bloqueado: ${invalidExpenses.length} tickets no superaron Veri*factu`, {
+      skillsLogger.error(`Cierre bloqueado: ${invalidExpenses.length} tickets no superaron Veri*factu`, undefined, null, {
         tenantId,
         employeeId,
         period: `${month}/${year}`

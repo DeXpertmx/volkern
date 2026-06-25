@@ -102,8 +102,8 @@ const updateLeadWrapper = async (input: { tenantId: string; email?: string; nomb
     });
     
     if (found) {
-      targetEmail = found.email;
-      if (!targetNombre) targetNombre = found.nombre;
+      targetEmail = found.email!;
+      if (!targetNombre) targetNombre = found.nombre ?? '';
     }
   }
 
@@ -214,9 +214,9 @@ const createTaskWrapper = async (input: { tenantId: string; titulo: string; emai
     timestamp: new Date(),
     source: 'app',
     taskId: task.id,
-    leadId: task.leadId,
+    leadId: task.leadId ?? '',
     titulo: task.titulo,
-    tipo: task.tipo,
+    tipo: task.tipo ?? '',
     fechaVencimiento: task.fechaVencimiento,
   });
 
