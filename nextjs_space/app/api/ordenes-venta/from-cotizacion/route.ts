@@ -129,8 +129,8 @@ export async function POST(req: NextRequest) {
       const montoImpuesto = Math.round(subtotalItem * (porcentajeImpuesto / 100) * 100) / 100
 
       // Retenciones
-      let aplicaRetencion = item.aplicaRetencion || perfilFiscalCliente?.aplicaRetencion || false
-      let porcentajeRetencion = item.porcentajeRetencion || 0
+      const aplicaRetencion = item.aplicaRetencion || perfilFiscalCliente?.aplicaRetencion || false
+      const porcentajeRetencion = item.porcentajeRetencion || 0
       let montoRetencion = 0
       if (aplicaRetencion && porcentajeRetencion > 0) {
         montoRetencion = Math.round(subtotalItem * (porcentajeRetencion / 100) * 100) / 100
@@ -163,7 +163,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Aplicar descuento global de la cotización
-    let descuentoGlobal = cotizacion.descuentoPorcentaje || 0
+    const descuentoGlobal = cotizacion.descuentoPorcentaje || 0
     let descuentoGlobalMonto = 0
     if (descuentoGlobal > 0) {
       descuentoGlobalMonto = subtotalOrden * (descuentoGlobal / 100)

@@ -53,7 +53,7 @@ function extractContactInfo(text: string) {
 
 // POST - Escanear tarjeta física y crear lead
 export async function POST(request: NextRequest) {
-  let worker: any = null
+  const worker: any = null
   
   try {
     const session = await getServerSession(authOptions)

@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
     const branding = await getEffectiveBranding(tenant.id);
 
     // 3. Obtener configuración global como fallback
-    let globalConfig = await prisma.whitelabelConfig.findFirst({
+    const globalConfig = await prisma.whitelabelConfig.findFirst({
       orderBy: { fechaCreacion: 'desc' }
     });
 

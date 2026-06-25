@@ -559,7 +559,7 @@ const cancelBookingWrapper = async (input: {
   const { prisma } = await import('@/lib/db')
 
   // 1. Buscar lead/contacto por nombre o email
-  let leadIds: string[] = []
+  const leadIds: string[] = []
 
   if (email) {
     const lead = await prisma.lead.findFirst({ where: { tenantId, email: { equals: email, mode: 'insensitive' } } })

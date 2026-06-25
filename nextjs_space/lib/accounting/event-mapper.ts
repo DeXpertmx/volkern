@@ -102,7 +102,7 @@ export class AccountingEventMapper {
     const meta = expense.metadata as Record<string, unknown> | null;
     const confirmedCode = meta?.confirmedAccountCode as string | undefined;
 
-    let expenseAccount = confirmedCode ?? this.fallbackAccountForCategory(expense.category);
+    const expenseAccount = confirmedCode ?? this.fallbackAccountForCategory(expense.category);
 
     return await EntryManager.createEntry({
       tenantId,

@@ -27,7 +27,7 @@ export const GET = withTenantAuth(async (request, auth) => {
     const query = searchParams.get('q')
     const etapa = searchParams.get('etapa')
 
-    let whereClause: any = {
+    const whereClause: any = {
       tenantId: auth.tenant!.id,
     }
 

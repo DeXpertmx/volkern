@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
     // Enriquecer cada lead
     for (const lead of leads) {
       try {
-        let enrichedData: any = {};
+        const enrichedData: any = {};
 
         // Si tiene email, verificarlo
         if (lead.email) {

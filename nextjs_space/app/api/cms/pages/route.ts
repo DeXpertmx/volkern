@@ -135,7 +135,7 @@ export const POST = withTenantAuth(async (req, auth) => {
     }
 
     // Generar slug único (validando contra la DB del tenant o global según corresponda)
-    let baseSlug = titulo
+    const baseSlug = titulo
       .toLowerCase()
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')

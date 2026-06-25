@@ -9,7 +9,7 @@ export const GET = withTenantAuth(async (request, auth) => {
     const { searchParams } = new URL(request.url)
     const tipo = searchParams.get('tipo') // 'person', 'company', or null for all
 
-    let whereClause: any = {
+    const whereClause: any = {
       tenantId: auth.tenant!.id,
     }
 

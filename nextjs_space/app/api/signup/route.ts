@@ -207,7 +207,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Generar slug único para el tenant
-    let baseSlug = generateSlug(companyName)
+    const baseSlug = generateSlug(companyName)
     let slug = baseSlug
     let counter = 1
 
@@ -224,7 +224,7 @@ export async function POST(request: NextRequest) {
     const trialStart = new Date()
     const trialEnd = new Date()
     
-    let planSlug = PLANS.TRIAL
+    const planSlug = PLANS.TRIAL
     let limites = trialConfig.limites
     let modules = getDefaultModules()
     let fechaFin: Date
