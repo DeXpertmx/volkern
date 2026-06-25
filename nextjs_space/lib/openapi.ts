@@ -793,7 +793,7 @@ registry.registerPath({
 
 const generator = new OpenApiGeneratorV3(registry.definitions);
 
-export const openApiDocument = generator.generateDocument({
+export const openApiDocument = (generator.generateDocument as any)({
   openapi: '3.0.3',
   info: {
     title: 'Volkern CRM API',

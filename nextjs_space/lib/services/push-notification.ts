@@ -28,7 +28,7 @@ async function getUserWithContact(userId: string): Promise<UserWithEmail | null>
       telefono: true,
       tenantId: true
     }
-  });
+  }) as Promise<UserWithEmail | null>;
 }
 
 export async function sendPushNotification(userId: string, payload: PushNotificationPayload) {

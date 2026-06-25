@@ -103,7 +103,7 @@ export async function syncIncomingChatwootMessage(payload: {
         });
 
         // Registrar interacción en el timeline
-        await prisma.interaction.create({
+        await (prisma.interaction.create as any)({
             data: {
                 tenantId: tenantId,
                 leadId: conversation.leadId,

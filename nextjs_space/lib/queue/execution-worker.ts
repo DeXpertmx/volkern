@@ -253,7 +253,7 @@ async function writeExecutionLog(entry: LogEntry): Promise<void> {
             nodeType: entry.nodeType,
             status: entry.status,
             message: entry.message,
-            data: entry.data,
+            data: entry.data as any,
           },
         });
       },

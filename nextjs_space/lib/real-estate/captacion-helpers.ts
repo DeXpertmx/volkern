@@ -260,7 +260,7 @@ export async function createCaptacion(
       documentoHash: data.documentoHash || null,
       notasCliente: data.notasCliente || null,
       notasInternas: data.notasInternas || null,
-      metadata: data.metadata || null,
+      metadata: (data.metadata ?? null) as any,
     },
     include: CAPTACION_INCLUDE,
   });

@@ -499,7 +499,7 @@ export async function listLeads(input: {
       skip,
       orderBy: { [orderByField]: sortOrder },
       include: {
-        _count: { select: { deals: true, Task: true, citas: true } },
+        _count: { select: { deals: true, Task: true, citas: true } } as any,
       },
     }),
     prisma.lead.count({ where }),
