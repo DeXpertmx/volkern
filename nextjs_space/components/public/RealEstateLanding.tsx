@@ -152,7 +152,7 @@ export default function RealEstateLanding() {
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/auth/signup">
+              <Link href="/auth/signup?vertical=inmobiliaria">
                 <Button size="lg" className="bg-emerald-600 hover:bg-emerald-500 text-white px-10 py-7 text-lg rounded-xl font-bold shadow-xl shadow-emerald-600/30 group">
                   Activar mi sistema inmobiliario
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -458,7 +458,7 @@ export default function RealEstateLanding() {
               <p className="text-lg text-slate-400 mb-10 max-w-xl mx-auto">
                 Todo en un solo lugar. Sin complicaciones.
               </p>
-              <Link href="/auth/signup">
+              <Link href="/auth/signup?vertical=inmobiliaria">
                 <Button size="lg" className="bg-emerald-600 hover:bg-emerald-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-emerald-600/30 group">
                   Activar Volkern para inmobiliarias
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -482,7 +482,7 @@ export default function RealEstateLanding() {
               Empieza a operar con control, velocidad y claridad.
             </p>
             <div className="mt-8">
-              <Link href="/auth/signup">
+              <Link href="/auth/signup?vertical=inmobiliaria">
                 <Button size="lg" className="bg-emerald-600 hover:bg-emerald-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-emerald-600/30 group">
                   Activar mi sistema inmobiliario
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />

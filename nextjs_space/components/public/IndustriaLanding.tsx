@@ -118,7 +118,7 @@ export default function IndustriaLanding() {
               Reduce errores y mejora la eficiencia de tu operación.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/auth/signup">
+              <Link href="/auth/signup?vertical=industria">
                 <Button size="lg" className="bg-orange-600 hover:bg-orange-500 text-white px-10 py-7 text-lg rounded-xl font-bold shadow-xl shadow-orange-600/30 group">
                   Activar mi sistema operativo
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -367,7 +367,7 @@ export default function IndustriaLanding() {
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-red-400">con control</span>
               </h2>
               <p className="text-lg text-slate-400 mb-10 max-w-xl mx-auto">Centraliza tu operación y elimina la improvisación.</p>
-              <Link href="/auth/signup">
+              <Link href="/auth/signup?vertical=industria">
                 <Button size="lg" className="bg-orange-600 hover:bg-orange-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-orange-600/30 group">
                   Activar Volkern para industria
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -386,7 +386,7 @@ export default function IndustriaLanding() {
             <p className="text-2xl text-slate-300 font-medium leading-relaxed mb-2">Más control.</p>
             <p className="text-2xl text-slate-300 font-medium leading-relaxed mb-8">Mejor operación.</p>
             <p className="text-lg text-orange-400 font-medium mb-8">Volkern convierte tu operación en un sistema eficiente.</p>
-            <Link href="/auth/signup">
+            <Link href="/auth/signup?vertical=industria">
               <Button size="lg" className="bg-orange-600 hover:bg-orange-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-orange-600/30 group">
                 Activar mi sistema operativo
                 <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />

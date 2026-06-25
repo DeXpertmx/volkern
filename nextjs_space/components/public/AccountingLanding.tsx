@@ -134,7 +134,7 @@ export default function AccountingLanding() {
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/auth/signup">
+              <Link href="/auth/signup?vertical=asesoria_contable">
                 <Button size="lg" className="bg-blue-600 hover:bg-blue-500 text-white px-10 py-7 text-lg rounded-xl font-bold shadow-xl shadow-blue-600/30 group">
                   Activar mi sistema contable
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -495,7 +495,7 @@ export default function AccountingLanding() {
               <p className="text-lg text-slate-400 mb-10 max-w-xl mx-auto">
                 Centraliza tu despacho y elimina el caos operativo.
               </p>
-              <Link href="/auth/signup">
+              <Link href="/auth/signup?vertical=asesoria_contable">
                 <Button size="lg" className="bg-blue-600 hover:bg-blue-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-blue-600/30 group">
                   Activar Volkern para contabilidad
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -525,7 +525,7 @@ export default function AccountingLanding() {
               Volkern es la base para una operación contable moderna.
             </p>
             <div className="mt-2">
-              <Link href="/auth/signup">
+              <Link href="/auth/signup?vertical=asesoria_contable">
                 <Button size="lg" className="bg-blue-600 hover:bg-blue-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-blue-600/30 group">
                   Activar mi sistema contable
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />

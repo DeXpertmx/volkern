@@ -118,7 +118,7 @@ export default function MarketingLanding() {
               Deja de perder oportunidades por falta de control.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/auth/signup">
+              <Link href="/auth/signup?vertical=agencia_marketing">
                 <Button size="lg" className="bg-purple-600 hover:bg-purple-500 text-white px-10 py-7 text-lg rounded-xl font-bold shadow-xl shadow-purple-600/30 group">
                   Activar mi sistema de marketing
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -367,7 +367,7 @@ export default function MarketingLanding() {
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-fuchsia-400">con menos esfuerzo</span>
               </h2>
               <p className="text-lg text-slate-400 mb-10 max-w-xl mx-auto">Centraliza tu marketing y deja de perder oportunidades.</p>
-              <Link href="/auth/signup">
+              <Link href="/auth/signup?vertical=agencia_marketing">
                 <Button size="lg" className="bg-purple-600 hover:bg-purple-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-purple-600/30 group">
                   Activar Volkern para marketing
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -386,7 +386,7 @@ export default function MarketingLanding() {
             <p className="text-2xl text-slate-300 font-medium leading-relaxed mb-2">Más conversión.</p>
             <p className="text-2xl text-slate-300 font-medium leading-relaxed mb-8">Menos herramientas.</p>
             <p className="text-lg text-purple-400 font-medium mb-8">Volkern es tu sistema de marketing completo.</p>
-            <Link href="/auth/signup">
+            <Link href="/auth/signup?vertical=agencia_marketing">
               <Button size="lg" className="bg-purple-600 hover:bg-purple-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-purple-600/30 group">
                 Activar mi sistema de marketing
                 <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />

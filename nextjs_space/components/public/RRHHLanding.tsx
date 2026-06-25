@@ -119,7 +119,7 @@ export default function RRHHLanding() {
               Trabaja con control, claridad y estructura desde el primer día.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/auth/signup">
+              <Link href="/auth/signup?vertical=rrhh">
                 <Button size="lg" className="bg-rose-600 hover:bg-rose-500 text-white px-10 py-7 text-lg rounded-xl font-bold shadow-xl shadow-rose-600/30 group">
                   Activar mi sistema de RRHH
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -371,7 +371,7 @@ export default function RRHHLanding() {
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-rose-400 to-pink-400">como un sistema</span>
               </h2>
               <p className="text-lg text-slate-400 mb-10 max-w-xl mx-auto">Centraliza tu operación interna y elimina el caos.</p>
-              <Link href="/auth/signup">
+              <Link href="/auth/signup?vertical=rrhh">
                 <Button size="lg" className="bg-rose-600 hover:bg-rose-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-rose-600/30 group">
                   Activar Volkern para RRHH
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -390,7 +390,7 @@ export default function RRHHLanding() {
             <p className="text-2xl text-slate-300 font-medium leading-relaxed mb-2">Más control.</p>
             <p className="text-2xl text-slate-300 font-medium leading-relaxed mb-8">Mejores equipos.</p>
             <p className="text-lg text-rose-400 font-medium mb-8">Volkern es la base de una operación interna eficiente.</p>
-            <Link href="/auth/signup">
+            <Link href="/auth/signup?vertical=rrhh">
               <Button size="lg" className="bg-rose-600 hover:bg-rose-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-rose-600/30 group">
                 Activar mi sistema de RRHH
                 <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />

@@ -118,7 +118,7 @@ export default function AcademyLanding() {
               Todo en un solo lugar.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/auth/signup">
+              <Link href="/auth/signup?vertical=academia">
                 <Button size="lg" className="bg-amber-600 hover:bg-amber-500 text-white px-10 py-7 text-lg rounded-xl font-bold shadow-xl shadow-amber-600/30 group">
                   Crear mi academia
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -368,7 +368,7 @@ export default function AcademyLanding() {
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-400">tu conocimiento hoy</span>
               </h2>
               <p className="text-lg text-slate-400 mb-10 max-w-xl mx-auto">Crea tu academia y automatiza tu negocio.</p>
-              <Link href="/auth/signup">
+              <Link href="/auth/signup?vertical=academia">
                 <Button size="lg" className="bg-amber-600 hover:bg-amber-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-amber-600/30 group">
                   Activar Volkern Academy
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -386,7 +386,7 @@ export default function AcademyLanding() {
             <p className="text-2xl text-slate-300 font-medium leading-relaxed mb-2">Tu conocimiento tiene valor.</p>
             <p className="text-2xl text-amber-400 font-semibold leading-relaxed mb-8">Ahora necesitas un sistema.</p>
             <p className="text-lg text-slate-400 font-medium mb-8">Volkern convierte contenido en ingresos.</p>
-            <Link href="/auth/signup">
+            <Link href="/auth/signup?vertical=academia">
               <Button size="lg" className="bg-amber-600 hover:bg-amber-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-amber-600/30 group">
                 Crear mi academia
                 <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />

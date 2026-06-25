@@ -251,6 +251,7 @@ function SignupForm() {
                 { id: 'rrhh', label: 'RRHH', icon: UserCheck, color: 'border-rose-300 bg-rose-50', iconColor: 'text-rose-500' },
                 { id: 'inmobiliaria', label: 'Inmobiliaria', icon: Building2, color: 'border-emerald-300 bg-emerald-50', iconColor: 'text-emerald-500' },
                 { id: 'industria', label: 'Industria', icon: Factory, color: 'border-orange-300 bg-orange-50', iconColor: 'text-orange-500' },
+                { id: 'facturacion', label: 'Facturación', icon: Calculator, color: 'border-green-300 bg-green-50', iconColor: 'text-green-500' },
               ].map(v => {
                 const Icon = v.icon
                 const isSelected = selectedVertical === v.id

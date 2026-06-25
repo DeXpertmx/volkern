@@ -142,6 +142,12 @@ export const PERFIL_SUGGESTED_MODULES: Record<string, string[]> = {
     'mensajes', 'citas',
     'cotizaciones', 'contratos', 'ordenes_venta',
   ],
+  facturacion: [
+    'cotizaciones', 'contratos', 'ordenes_venta',
+    'catalogo',
+    'mensajes', 'citas',
+    'finanzas',
+  ],
 
   // ─── Legacy (mantener compatibilidad) ────────────────────────────────────
   gestoria: [
