@@ -4,11 +4,20 @@
  * Usa la base de datos real para verificar que los endpoints GET y POST /api/accounting/slots
  * funcionan correctamente, respetan límites, heredan configuración y fuerzan showPoweredBy=true.
  */
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { prisma } from '@/lib/db';
 import { generateApiKey } from '@/lib/api-keys';
 import { GET, POST } from '@/app/api/accounting/slots/route';
 import { GET as GET_BRANDING, PATCH as PATCH_BRANDING } from '@/app/api/accounting/settings/branding/route';
+
+// El slot route handler llama a AccountingInitializer.initializeTenant() que ejecuta
+// ~300 upserts del PGC. Eso excede el timeout de 30s en Neon — mockeamos el inicializador
+// porque la responsabilidad del test es verificar que el slot se crea en DB, no las cuentas.
+vi.mock('@/lib/accounting/initializer', () => ({
+  AccountingInitializer: {
+    initializeTenant: vi.fn().mockResolvedValue(undefined),
+  },
+}));
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
