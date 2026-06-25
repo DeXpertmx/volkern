@@ -4,7 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, X, ChevronDown, Building2, Calculator, PenTool, GraduationCap, Factory, UserCheck, Zap } from 'lucide-react';
+import { Menu, X, ChevronDown, Building2, Calculator, PenTool, GraduationCap, Factory, UserCheck, Zap, Receipt, Truck } from 'lucide-react';
 
 import { verticalLinks } from '@/lib/navigation';
 
@@ -16,6 +16,8 @@ const verticalIcons: Record<string, any> = {
   '/soluciones/industria': Factory,
   '/soluciones/rrhh': UserCheck,
   '/soluciones/crm-ventas': Zap,
+  '/soluciones/facturacion': Receipt,
+  '/soluciones/logistica': Truck,
 };
 
 export function PublicLayout({ children }: { children: React.ReactNode }) {
