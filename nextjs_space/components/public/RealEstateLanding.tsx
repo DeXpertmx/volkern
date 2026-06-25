@@ -6,8 +6,9 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import {
   ArrowRight, Check, Zap, MessageCircle, Users, BarChart3,
-  TrendingUp, Clock, AlertTriangle, Search, CalendarCheck,
-  Target, Home, FileSignature, Layers, ShieldCheck,
+  TrendingUp, Clock, AlertTriangle, Search,
+  Home, FileSignature, Layers, ShieldCheck,
+  Star, Quote, Building2, MapPin, Key,
 } from 'lucide-react';
 
 /* ─── Data ────────────────────────────────────────────────────────────────── */
@@ -30,30 +31,10 @@ const CAPABILITIES = [
 ];
 
 const FLOW_STEPS = [
-  {
-    number: '1',
-    title: 'Captas leads',
-    description: 'Desde web, campañas o formularios',
-    icon: Search,
-  },
-  {
-    number: '2',
-    title: 'Se organizan automáticamente',
-    description: 'Todo entra al CRM sin perder información',
-    icon: Layers,
-  },
-  {
-    number: '3',
-    title: 'Das seguimiento',
-    description: 'Llamadas, mensajes y recordatorios centralizados',
-    icon: MessageCircle,
-  },
-  {
-    number: '4',
-    title: 'Cierras más ventas',
-    description: 'Con procesos claros y sin perder oportunidades',
-    icon: TrendingUp,
-  },
+  { number: '1', title: 'Captas leads', description: 'Desde web, campañas o formularios', icon: Search },
+  { number: '2', title: 'Se organizan automáticamente', description: 'Todo entra al CRM sin perder información', icon: Layers },
+  { number: '3', title: 'Das seguimiento', description: 'Llamadas, mensajes y recordatorios centralizados', icon: MessageCircle },
+  { number: '4', title: 'Cierras más ventas', description: 'Con procesos claros y sin perder oportunidades', icon: TrendingUp },
 ];
 
 const MODULES = [
@@ -74,6 +55,18 @@ const BENEFITS = [
   { icon: ShieldCheck, text: 'Mantienes el control' },
   { icon: Clock, text: 'Reduces errores' },
   { icon: BarChart3, text: 'Cierras más operaciones' },
+];
+
+const USE_CASES = [
+  { icon: Building2, title: 'Inmobiliarias con +20 propiedades', desc: 'Centraliza leads, propiedades y seguimiento. Ideal para equipos que gestionan captación y venta.' },
+  { icon: Key, title: 'Agentes independientes', desc: 'Gestiona tu cartera de clientes y propiedades sin depender de la agencia. Todo en tu bolsillo.' },
+  { icon: MapPin, title: 'Promotoras y constructoras', desc: 'Controla el ciclo completo: captación de leads → visita → reserva → firma. Sin perder un cliente.' },
+];
+
+const TESTIMONIALS = [
+  { quote: 'Con 45 propiedades en cartera, Volkern nos dio el orden que necesitábamos. Cada lead tiene seguimiento y cada propiedad su estado.', name: 'Fernando Rojas', role: 'Director, Inmobiliaria Rojas', avatar: 'FR' },
+  { quote: 'Antes perdíamos el 20% de los leads por falta de seguimiento. Ahora todo está automatizado. Cerramos un 35% más.', name: 'Lucía Montes', role: 'Agente Inmobiliaria, Premium Homes', avatar: 'LM' },
+  { quote: 'CRM + propiedades + firma digital en un solo sitio. Por €59/mes reemplazamos 4 herramientas.', name: 'Óscar Núñez', role: 'CEO, Grupo Habitat', avatar: 'ON' },
 ];
 
 const COMPETITOR_TOOLS = [
@@ -111,50 +104,40 @@ const FadeIn = ({ children, delay = 0 }: { children: React.ReactNode; delay?: nu
 export default function RealEstateLanding() {
   return (
     <>
-      {/* ═══════════════════════════════════════════════════════════════════
-         HERO
-      ════════════════════════════════════════════════════════════════════ */}
+      {/* ═══ HERO ═══ */}
       <section className="relative min-h-[90vh] flex items-center justify-center pt-24 overflow-hidden bg-slate-950">
-        {/* Background image */}
         <div className="absolute inset-0">
-          <img
-            src="/real-estate.png"
-            alt=""
-            className="w-full h-full object-cover"
-          />
+          <img src="/real-estate.png" alt="" className="w-full h-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-b from-slate-950/80 via-slate-950/70 to-slate-950/95" />
         </div>
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[900px] h-[500px] bg-emerald-600/15 blur-[140px] rounded-full pointer-events-none" />
-
         <div className="container mx-auto px-6 relative z-10 text-center">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, ease: 'easeOut' }}
-          >
-            <span className="inline-flex items-center gap-2 py-1.5 px-4 rounded-full bg-emerald-500/10 text-emerald-400 text-sm font-medium mb-6 border border-emerald-500/20">
+          <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, ease: 'easeOut' }}>
+            <span className="inline-flex items-center gap-2 py-1.5 px-4 rounded-full bg-emerald-500/10 text-emerald-400 text-sm font-medium mb-4 border border-emerald-500/20">
               <Home className="w-4 h-4" />
-              Inmobiliarias
+              Ideal para inmobiliarias y agentes
             </span>
-
+            <span className="block mb-6">
+              <span className="inline-flex items-center gap-1.5 py-1 px-3 rounded-full bg-amber-500/10 text-amber-400 text-xs font-semibold border border-amber-500/20">
+                ⚡ 14 días gratis · Sin tarjeta
+              </span>
+            </span>
             <h1 className="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight tracking-tight">
               Cierra más propiedades{' '}
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">
                 sin perder clientes en el proceso
               </span>
             </h1>
-
             <p className="text-xl text-slate-400 max-w-3xl mx-auto mb-4 leading-relaxed">
               Centraliza leads, propiedades, seguimiento y comunicación en un solo sistema.
             </p>
             <p className="text-lg text-slate-500 max-w-2xl mx-auto mb-10">
-              Deja de usar múltiples herramientas y empieza a vender con control.
+              Desde <span className="text-white font-bold">€59/mes</span>. 14 días gratis. Sin tarjeta.
             </p>
-
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link href="/auth/signup?vertical=inmobiliaria">
                 <Button size="lg" className="bg-emerald-600 hover:bg-emerald-500 text-white px-10 py-7 text-lg rounded-xl font-bold shadow-xl shadow-emerald-600/30 group">
-                  Activar mi sistema inmobiliario
+                  Probar 14 días gratis
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </Button>
               </Link>
@@ -168,32 +151,21 @@ export default function RealEstateLanding() {
         </div>
       </section>
 
-      {/* ═══════════════════════════════════════════════════════════════════
-         PROBLEMA (Conexión)
-      ════════════════════════════════════════════════════════════════════ */}
+      {/* ═══ PROBLEMA ═══ */}
       <Section>
         <FadeIn>
           <div className="max-w-4xl mx-auto">
-            <span className="inline-block py-1 px-3 rounded-full bg-red-500/10 text-red-400 text-sm font-medium mb-6 border border-red-500/20">
-              El problema
-            </span>
+            <span className="inline-block py-1 px-3 rounded-full bg-red-500/10 text-red-400 text-sm font-medium mb-6 border border-red-500/20">El problema</span>
             <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
               Estás perdiendo oportunidades{' '}
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-rose-400">sin darte cuenta</span>
             </h2>
-
             <div className="grid md:grid-cols-2 gap-4 mb-10">
               {PAIN_POINTS.map((p, i) => {
                 const Icon = p.icon;
                 return (
-                  <motion.div
-                    key={i}
-                    initial={{ opacity: 0, y: 15 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ duration: 0.4, delay: i * 0.08 }}
-                    className="flex items-center gap-4 p-5 bg-slate-900/50 border border-slate-800 rounded-xl hover:border-red-500/20 transition-colors"
-                  >
+                  <motion.div key={i} initial={{ opacity: 0, y: 15 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.4, delay: i * 0.08 }}
+                    className="flex items-center gap-4 p-5 bg-slate-900/50 border border-slate-800 rounded-xl hover:border-red-500/20 transition-colors">
                     <div className="w-10 h-10 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-center flex-shrink-0">
                       <Icon className="w-5 h-5 text-red-400" />
                     </div>
@@ -202,7 +174,6 @@ export default function RealEstateLanding() {
                 );
               })}
             </div>
-
             <div className="text-center">
               <div className="inline-flex items-center gap-2 bg-red-500/10 border border-red-500/20 rounded-full px-6 py-3">
                 <AlertTriangle className="w-5 h-5 text-red-400" />
@@ -213,33 +184,20 @@ export default function RealEstateLanding() {
         </FadeIn>
       </Section>
 
-      {/* ═══════════════════════════════════════════════════════════════════
-         SOLUCIÓN
-      ════════════════════════════════════════════════════════════════════ */}
+      {/* ═══ SOLUCIÓN ═══ */}
       <Section dark>
         <FadeIn>
           <div className="max-w-4xl mx-auto">
-            <span className="inline-block py-1 px-3 rounded-full bg-emerald-500/10 text-emerald-400 text-sm font-medium mb-6 border border-emerald-500/20">
-              La solución
-            </span>
+            <span className="inline-block py-1 px-3 rounded-full bg-emerald-500/10 text-emerald-400 text-sm font-medium mb-6 border border-emerald-500/20">La solución</span>
             <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
               Todo tu negocio inmobiliario{' '}
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">en un solo lugar</span>
             </h2>
-            <p className="text-lg text-slate-400 max-w-2xl mb-12 leading-relaxed">
-              Con Volkern puedes:
-            </p>
-
+            <p className="text-lg text-slate-400 max-w-2xl mb-12 leading-relaxed">Con Volkern puedes:</p>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {CAPABILITIES.map((cap, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  whileInView={{ opacity: 1, scale: 1 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.3, delay: i * 0.05 }}
-                  className="flex items-center gap-3 p-5 bg-slate-950 border border-slate-800 rounded-xl hover:border-emerald-500/30 transition-colors group"
-                >
+                <motion.div key={i} initial={{ opacity: 0, scale: 0.95 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} transition={{ duration: 0.3, delay: i * 0.05 }}
+                  className="flex items-center gap-3 p-5 bg-slate-950 border border-slate-800 rounded-xl hover:border-emerald-500/30 transition-colors group">
                   <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-500/20 transition-colors">
                     <Check className="w-4 h-4 text-emerald-400" />
                   </div>
@@ -251,43 +209,27 @@ export default function RealEstateLanding() {
         </FadeIn>
       </Section>
 
-      {/* ═══════════════════════════════════════════════════════════════════
-         FLUJO (Clave para conversión)
-      ════════════════════════════════════════════════════════════════════ */}
+      {/* ═══ FLUJO ═══ */}
       <Section id="flow">
         <FadeIn>
           <div className="max-w-4xl mx-auto">
-            <span className="inline-block py-1 px-3 rounded-full bg-blue-500/10 text-blue-400 text-sm font-medium mb-6 border border-blue-500/20">
-              Cómo funciona
-            </span>
+            <span className="inline-block py-1 px-3 rounded-full bg-blue-500/10 text-blue-400 text-sm font-medium mb-6 border border-blue-500/20">Cómo funciona</span>
             <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
               Así funciona Volkern{' '}
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">en tu día a día</span>
             </h2>
-
             <div className="relative">
               {FLOW_STEPS.map((step, i) => {
                 const Icon = step.icon;
                 return (
-                  <motion.div
-                    key={i}
-                    initial={{ opacity: 0, x: i % 2 === 0 ? -20 : 20 }}
-                    whileInView={{ opacity: 1, x: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ duration: 0.5, delay: i * 0.15 }}
-                    className="flex items-start gap-6 mb-10 last:mb-0"
-                  >
-                    {/* Number + Connector */}
+                  <motion.div key={i} initial={{ opacity: 0, x: i % 2 === 0 ? -20 : 20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: i * 0.15 }}
+                    className="flex items-start gap-6 mb-10 last:mb-0">
                     <div className="flex flex-col items-center">
                       <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center flex-shrink-0">
                         <span className="text-xl font-bold text-emerald-400">{step.number}</span>
                       </div>
-                      {i < FLOW_STEPS.length - 1 && (
-                        <div className="w-0.5 h-10 bg-gradient-to-b from-emerald-500/30 to-slate-800 mt-2" />
-                      )}
+                      {i < FLOW_STEPS.length - 1 && <div className="w-0.5 h-10 bg-gradient-to-b from-emerald-500/30 to-slate-800 mt-2" />}
                     </div>
-
-                    {/* Content */}
                     <div className="flex-1 pb-2">
                       <h3 className="text-xl font-bold text-white mb-1">{step.title}</h3>
                       <p className="text-slate-400">{step.description}</p>
@@ -300,30 +242,16 @@ export default function RealEstateLanding() {
         </FadeIn>
       </Section>
 
-      {/* ═══════════════════════════════════════════════════════════════════
-         MÓDULOS (Valor percibido)
-      ════════════════════════════════════════════════════════════════════ */}
+      {/* ═══ MÓDULOS ═══ */}
       <Section dark>
         <FadeIn>
           <div className="max-w-4xl mx-auto">
-            <span className="inline-block py-1 px-3 rounded-full bg-purple-500/10 text-purple-400 text-sm font-medium mb-6 border border-purple-500/20">
-              Valor percibido
-            </span>
-            <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
-              Todo lo que{' '}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-fuchsia-400">incluye</span>
-            </h2>
-
+            <span className="inline-block py-1 px-3 rounded-full bg-purple-500/10 text-purple-400 text-sm font-medium mb-6 border border-purple-500/20">Valor percibido</span>
+            <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">Todo lo que <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-fuchsia-400">incluye</span></h2>
             <div className="grid sm:grid-cols-2 gap-3">
               {MODULES.map((mod, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, x: -10 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.3, delay: i * 0.04 }}
-                  className="flex items-center gap-3 p-4 bg-slate-900/50 border border-slate-800 rounded-xl hover:border-purple-500/20 transition-colors group"
-                >
+                <motion.div key={i} initial={{ opacity: 0, x: -10 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.3, delay: i * 0.04 }}
+                  className="flex items-center gap-3 p-4 bg-slate-900/50 border border-slate-800 rounded-xl hover:border-purple-500/20 transition-colors group">
                   <div className="w-8 h-8 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center flex-shrink-0 group-hover:bg-purple-500/20 transition-colors">
                     <Layers className="w-4 h-4 text-purple-400" />
                   </div>
@@ -335,32 +263,18 @@ export default function RealEstateLanding() {
         </FadeIn>
       </Section>
 
-      {/* ═══════════════════════════════════════════════════════════════════
-         BENEFICIOS (Emoción)
-      ════════════════════════════════════════════════════════════════════ */}
+      {/* ═══ BENEFICIOS ═══ */}
       <Section>
         <FadeIn>
           <div className="max-w-4xl mx-auto text-center">
-            <span className="inline-block py-1 px-3 rounded-full bg-amber-500/10 text-amber-400 text-sm font-medium mb-6 border border-amber-500/20">
-              Beneficios
-            </span>
-            <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
-              Diseñado para vender más,{' '}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-400">no para complicarte</span>
-            </h2>
-
+            <span className="inline-block py-1 px-3 rounded-full bg-amber-500/10 text-amber-400 text-sm font-medium mb-6 border border-amber-500/20">Beneficios</span>
+            <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">Diseñado para vender más,{' '}<span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-400">no para complicarte</span></h2>
             <div className="grid sm:grid-cols-3 lg:grid-cols-5 gap-4 max-w-4xl mx-auto">
               {BENEFITS.map((b, i) => {
                 const Icon = b.icon;
                 return (
-                  <motion.div
-                    key={i}
-                    initial={{ opacity: 0, y: 15 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ duration: 0.4, delay: i * 0.06 }}
-                    className="p-6 bg-slate-900/50 border border-slate-800 rounded-2xl hover:border-amber-500/20 transition-all duration-300 group"
-                  >
+                  <motion.div key={i} initial={{ opacity: 0, y: 15 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.4, delay: i * 0.06 }}
+                    className="p-6 bg-slate-900/50 border border-slate-800 rounded-2xl hover:border-amber-500/20 transition-all duration-300 group">
                     <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto mb-4 group-hover:bg-amber-500/20 transition-colors">
                       <Icon className="w-6 h-6 text-amber-400" />
                     </div>
@@ -373,94 +287,132 @@ export default function RealEstateLanding() {
         </FadeIn>
       </Section>
 
-      {/* ═══════════════════════════════════════════════════════════════════
-         BLOQUE DE VALOR — Comparación de costos
-      ════════════════════════════════════════════════════════════════════ */}
+      {/* ═══ CASOS DE USO ═══ */}
       <Section dark>
         <FadeIn>
-          <div className="max-w-3xl mx-auto">
-            <span className="inline-block py-1 px-3 rounded-full bg-emerald-500/10 text-emerald-400 text-sm font-medium mb-6 border border-emerald-500/20">
-              Todo lo que reemplaza Volkern
-            </span>
-            <h2 className="text-4xl md:text-5xl font-bold text-white mb-12">
-              Todo lo que{' '}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">reemplaza Volkern</span>
+          <div className="max-w-4xl mx-auto">
+            <span className="inline-block py-1 px-3 rounded-full bg-blue-500/10 text-blue-400 text-sm font-medium mb-6 border border-blue-500/20">¿Para quién es?</span>
+            <h2 className="text-4xl md:text-5xl font-bold text-white mb-10">
+              Hecho para el sector{' '}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">inmobiliario profesional</span>
             </h2>
-
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
-              <div className="grid grid-cols-3 gap-4 px-6 py-4 border-b border-slate-800 bg-slate-900/50">
-                <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Herramienta</span>
-                <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider text-right">Costo/mes</span>
-                <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider text-right">Con Volkern</span>
-              </div>
-
-              {COMPETITOR_TOOLS.map((tool, i) => (
-                <motion.div
-                  key={tool.name}
-                  initial={{ opacity: 0, x: -10 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.3, delay: i * 0.05 }}
-                  className="grid grid-cols-3 gap-4 px-6 py-4 border-b border-slate-800/50 last:border-b-0 hover:bg-slate-800/30 transition-colors"
-                >
-                  <span className="text-slate-300 font-medium">{tool.name}</span>
-                  <span className="text-red-400 text-right font-mono font-semibold">€{tool.price}</span>
-                  <span className="text-emerald-400 text-right font-mono font-semibold flex items-center justify-end gap-2">
-                    <Check className="w-4 h-4" /> Incluido
-                  </span>
-                </motion.div>
-              ))}
-
-              <div className="grid grid-cols-3 gap-4 px-6 py-5 bg-slate-800/50 border-t-2 border-emerald-500/30">
-                <span className="text-white font-bold text-lg">Total</span>
-                <span className="text-red-400 text-right font-bold text-lg font-mono">€{TOTAL_COMPETITOR}+</span>
-                <span className="text-emerald-400 text-right font-bold text-lg font-mono">€50/mes</span>
-              </div>
+            <div className="grid md:grid-cols-3 gap-6">
+              {USE_CASES.map((uc, i) => {
+                const Icon = uc.icon;
+                return (
+                  <motion.div key={i} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.4, delay: i * 0.1 }}
+                    className="p-8 bg-slate-900/50 border border-slate-800 rounded-2xl hover:border-blue-500/20 transition-colors group text-center">
+                    <div className="w-14 h-14 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mx-auto mb-4 group-hover:bg-blue-500/20 transition-colors">
+                      <Icon className="w-7 h-7 text-blue-400" />
+                    </div>
+                    <h3 className="text-xl font-bold text-white mb-3">{uc.title}</h3>
+                    <p className="text-slate-400 leading-relaxed">{uc.desc}</p>
+                  </motion.div>
+                );
+              })}
             </div>
           </div>
         </FadeIn>
       </Section>
 
-      {/* ═══════════════════════════════════════════════════════════════════
-         PRUEBA / CONFIANZA
-      ════════════════════════════════════════════════════════════════════ */}
+      {/* ═══ BLOQUE DE VALOR ═══ */}
+      <Section>
+        <FadeIn>
+          <div className="max-w-3xl mx-auto">
+            <span className="inline-block py-1 px-3 rounded-full bg-emerald-500/10 text-emerald-400 text-sm font-medium mb-6 border border-emerald-500/20">Comparación de costos</span>
+            <h2 className="text-4xl md:text-5xl font-bold text-white mb-12">Todo lo que{' '}<span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">reemplaza Volkern</span></h2>
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
+              <div className="grid grid-cols-3 gap-4 px-6 py-4 border-b border-slate-800 bg-slate-900/50">
+                <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Alternativa</span>
+                <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider text-right">Coste/mes</span>
+                <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider text-right">Con Volkern</span>
+              </div>
+              {COMPETITOR_TOOLS.map((tool, i) => (
+                <motion.div key={tool.name} initial={{ opacity: 0, x: -10 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.3, delay: i * 0.05 }}
+                  className="grid grid-cols-3 gap-4 px-6 py-4 border-b border-slate-800/50 last:border-b-0 hover:bg-slate-800/30 transition-colors">
+                  <span className="text-slate-300 font-medium">{tool.name}</span>
+                  <span className="text-red-400 text-right font-mono font-semibold">€{tool.price}</span>
+                  <span className="text-emerald-400 text-right font-mono font-semibold flex items-center justify-end gap-2"><Check className="w-4 h-4" /> Incluido</span>
+                </motion.div>
+              ))}
+              <div className="grid grid-cols-3 gap-4 px-6 py-5 bg-slate-800/50 border-t-2 border-emerald-500/30">
+                <span className="text-white font-bold text-lg">Total</span>
+                <span className="text-red-400 text-right font-bold text-lg font-mono">€{TOTAL_COMPETITOR}+</span>
+                <span className="text-emerald-400 text-right font-bold text-lg font-mono">€59/mes</span>
+              </div>
+            </div>
+            <p className="text-center text-slate-500 text-sm mt-4">14 días de prueba gratis. Sin compromiso. Cancela cuando quieras.</p>
+          </div>
+        </FadeIn>
+      </Section>
+
+      {/* ═══ TESTIMONIOS ═══ */}
+      <Section dark>
+        <FadeIn>
+          <div className="max-w-4xl mx-auto">
+            <span className="inline-block py-1 px-3 rounded-full bg-purple-500/10 text-purple-400 text-sm font-medium mb-6 border border-purple-500/20">Lo que dicen</span>
+            <h2 className="text-4xl md:text-5xl font-bold text-white mb-10 text-center">
+              Inmobiliarias y agentes{' '}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-fuchsia-400">ya cierran con Volkern</span>
+            </h2>
+            <div className="grid md:grid-cols-3 gap-6">
+              {TESTIMONIALS.map((t, i) => (
+                <motion.div key={i} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.4, delay: i * 0.1 }}
+                  className="p-8 bg-slate-900/50 border border-slate-800 rounded-2xl hover:border-purple-500/20 transition-colors flex flex-col">
+                  <Quote className="w-8 h-8 text-purple-500/30 mb-4 flex-shrink-0" />
+                  <p className="text-slate-300 leading-relaxed mb-6 flex-1 italic">&ldquo;{t.quote}&rdquo;</p>
+                  <div className="flex items-center gap-1 mb-1">
+                    {[...Array(5)].map((_, j) => (
+                      <Star key={j} className="w-4 h-4 text-amber-400 fill-amber-400" />
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-3 mt-3">
+                    <div className="w-10 h-10 rounded-full bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-sm font-bold text-purple-400 flex-shrink-0">
+                      {t.avatar}
+                    </div>
+                    <div>
+                      <p className="text-white font-semibold text-sm">{t.name}</p>
+                      <p className="text-slate-500 text-xs">{t.role}</p>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </FadeIn>
+      </Section>
+
+      {/* ═══ PRUEBA / CONFIANZA ═══ */}
       <Section>
         <FadeIn>
           <div className="max-w-3xl mx-auto text-center">
             <div className="p-10 bg-slate-900/30 border border-slate-800 rounded-3xl">
               <ShieldCheck className="w-10 h-10 text-emerald-400 mx-auto mb-6" />
-              <h3 className="text-3xl font-bold text-white mb-4">
-                Centralizar ya no es una opción
-              </h3>
-              <p className="text-lg text-slate-300 leading-relaxed max-w-lg mx-auto">
-                Las inmobiliarias que organizan su operación venden más.
-              </p>
-              <p className="text-slate-500 mt-2">
-                Volkern te da la estructura para hacerlo.
-              </p>
+              <h3 className="text-3xl font-bold text-white mb-4">Centralizar ya no es una opción</h3>
+              <p className="text-lg text-slate-300 leading-relaxed max-w-lg mx-auto">Las inmobiliarias que organizan su operación venden más.</p>
+              <p className="text-slate-500 mt-2">Volkern te da la estructura para hacerlo.</p>
             </div>
           </div>
         </FadeIn>
       </Section>
 
-      {/* ═══════════════════════════════════════════════════════════════════
-         CTA FUERTE
-      ════════════════════════════════════════════════════════════════════ */}
+      {/* ═══ CTA ═══ */}
       <Section dark>
         <FadeIn>
           <div className="max-w-3xl mx-auto text-center">
             <div className="bg-gradient-to-r from-emerald-900/40 via-slate-900 to-teal-900/40 border border-slate-800 rounded-3xl p-12 md:p-16">
               <Home className="w-12 h-12 text-emerald-400 mx-auto mb-6" />
               <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
-                Empieza a gestionar tu inmobiliaria{' '}
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">como un sistema</span>
+                Empieza a vender más propiedades{' '}
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">con control total</span>
               </h2>
-              <p className="text-lg text-slate-400 mb-10 max-w-xl mx-auto">
-                Todo en un solo lugar. Sin complicaciones.
+              <p className="text-lg text-slate-400 mb-4 max-w-xl mx-auto">
+                <span className="text-white font-bold">14 días gratis</span>. Sin tarjeta. Sin compromiso.
               </p>
+              <p className="text-slate-500 text-sm mb-10">Luego €59/mes. Incluye CRM, propiedades, firma digital y más.</p>
               <Link href="/auth/signup?vertical=inmobiliaria">
                 <Button size="lg" className="bg-emerald-600 hover:bg-emerald-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-emerald-600/30 group">
-                  Activar Volkern para inmobiliarias
+                  Probar 14 días gratis
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </Button>
               </Link>
@@ -469,22 +421,16 @@ export default function RealEstateLanding() {
         </FadeIn>
       </Section>
 
-      {/* ═══════════════════════════════════════════════════════════════════
-         CIERRE
-      ════════════════════════════════════════════════════════════════════ */}
+      {/* ═══ CIERRE ═══ */}
       <Section>
         <FadeIn>
           <div className="max-w-2xl mx-auto text-center">
-            <p className="text-2xl text-slate-300 font-medium leading-relaxed mb-2">
-              Deja de perder oportunidades por falta de seguimiento.
-            </p>
-            <p className="text-xl text-emerald-400 font-semibold">
-              Empieza a operar con control, velocidad y claridad.
-            </p>
+            <p className="text-2xl text-slate-300 font-medium leading-relaxed mb-2">Deja de perder oportunidades por falta de seguimiento.</p>
+            <p className="text-xl text-emerald-400 font-semibold">Empieza a operar con control, velocidad y claridad.</p>
             <div className="mt-8">
               <Link href="/auth/signup?vertical=inmobiliaria">
                 <Button size="lg" className="bg-emerald-600 hover:bg-emerald-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-emerald-600/30 group">
-                  Activar mi sistema inmobiliario
+                  Probar 14 días gratis
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </Button>
               </Link>

@@ -6,9 +6,9 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import {
   ArrowRight, Check, Zap, MessageCircle, Users, BarChart3,
-  TrendingUp, Clock, AlertTriangle, Search, FileText,
-  Target, PenTool, Layers, ShieldCheck,
-  History, Eye, Globe,
+  TrendingUp, Clock, AlertTriangle,
+  Target, PenTool, Layers, ShieldCheck, Globe,
+  Star, Quote, Megaphone, Share2, MousePointerClick,
 } from 'lucide-react';
 
 /* ─── Data ────────────────────────────────────────────────────────────────── */
@@ -18,7 +18,7 @@ const PAIN_POINTS = [
   { icon: Globe, text: 'Campañas desconectadas' },
   { icon: Layers, text: 'Datos dispersos' },
   { icon: Clock, text: 'Procesos manuales' },
-  { icon: Eye, text: 'Falta de visibilidad real' },
+  { icon: Target, text: 'Falta de visibilidad real' },
 ];
 
 const CAPABILITIES = [
@@ -56,6 +56,18 @@ const BENEFITS = [
   { icon: BarChart3, text: 'Tomas decisiones con datos' },
 ];
 
+const USE_CASES = [
+  { icon: Megaphone, title: 'Agencias de marketing', desc: 'Gestiona campañas para múltiples clientes desde un solo dashboard. Unifica CRM, email y analítica.' },
+  { icon: Share2, title: 'Equipos de growth', desc: 'Automatiza el funnel completo: captación → nurture → conversión. Sin cambiar de herramienta.' },
+  { icon: MousePointerClick, title: 'Consultores de marketing', desc: 'Lleva el control de leads y conversiones de cada cliente. Reportes profesionales en un clic.' },
+];
+
+const TESTIMONIALS = [
+  { quote: 'Gestionamos 15 clientes desde un solo sistema. Antes era un caos con 4 herramientas distintas.', name: 'Patricia Vega', role: 'CEO, Agencia Digital Norte', avatar: 'PV' },
+  { quote: 'La automatización de seguimiento nos ahorra 20h/semana. Los leads ya no se enfrían.', name: 'Roberto Almeida', role: 'Director de Marketing, InnoGroup', avatar: 'RA' },
+  { quote: 'Por €49/mes tenemos CRM + email + automatización. Nuestro stack anterior costaba casi €200.', name: 'Sofía Castillo', role: 'Growth Lead, StartupHub', avatar: 'SC' },
+];
+
 const COMPETITOR_TOOLS = [
   { name: 'CRM', price: 50 },
   { name: 'Email marketing', price: 30 },
@@ -89,7 +101,6 @@ export default function MarketingLanding() {
     <>
       {/* ═══ HERO ═══ */}
       <section className="relative min-h-[90vh] flex items-center justify-center pt-24 overflow-hidden bg-slate-950">
-        {/* Background image */}
         <div className="absolute inset-0">
           <img
             src="/marketing.png"
@@ -101,9 +112,14 @@ export default function MarketingLanding() {
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[900px] h-[500px] bg-purple-600/15 blur-[140px] rounded-full pointer-events-none" />
         <div className="container mx-auto px-6 relative z-10 text-center">
           <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, ease: 'easeOut' }}>
-            <span className="inline-flex items-center gap-2 py-1.5 px-4 rounded-full bg-purple-500/10 text-purple-400 text-sm font-medium mb-6 border border-purple-500/20">
+            <span className="inline-flex items-center gap-2 py-1.5 px-4 rounded-full bg-purple-500/10 text-purple-400 text-sm font-medium mb-4 border border-purple-500/20">
               <PenTool className="w-4 h-4" />
-              Marketing
+              Ideal para agencias y equipos de marketing
+            </span>
+            <span className="block mb-6">
+              <span className="inline-flex items-center gap-1.5 py-1 px-3 rounded-full bg-amber-500/10 text-amber-400 text-xs font-semibold border border-amber-500/20">
+                ⚡ 14 días gratis · Sin tarjeta
+              </span>
             </span>
             <h1 className="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight tracking-tight">
               Lanza, automatiza y convierte campañas{' '}
@@ -115,12 +131,12 @@ export default function MarketingLanding() {
               Gestiona leads, campañas, seguimiento y comunicación sin cambiar de herramienta.
             </p>
             <p className="text-lg text-slate-500 max-w-2xl mx-auto mb-10">
-              Deja de perder oportunidades por falta de control.
+              Desde <span className="text-white font-bold">€49/mes</span>. 14 días gratis. Sin tarjeta.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link href="/auth/signup?vertical=agencia_marketing">
                 <Button size="lg" className="bg-purple-600 hover:bg-purple-500 text-white px-10 py-7 text-lg rounded-xl font-bold shadow-xl shadow-purple-600/30 group">
-                  Activar mi sistema de marketing
+                  Probar 14 días gratis
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </Button>
               </Link>
@@ -270,16 +286,44 @@ export default function MarketingLanding() {
         </FadeIn>
       </Section>
 
-      {/* ═══ BLOQUE DE VALOR ═══ */}
+      {/* ═══ CASOS DE USO ═══ */}
       <Section dark>
         <FadeIn>
+          <div className="max-w-4xl mx-auto">
+            <span className="inline-block py-1 px-3 rounded-full bg-blue-500/10 text-blue-400 text-sm font-medium mb-6 border border-blue-500/20">¿Para quién es?</span>
+            <h2 className="text-4xl md:text-5xl font-bold text-white mb-10">
+              Hecho para los que{' '}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">convierten leads en clientes</span>
+            </h2>
+            <div className="grid md:grid-cols-3 gap-6">
+              {USE_CASES.map((uc, i) => {
+                const Icon = uc.icon;
+                return (
+                  <motion.div key={i} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.4, delay: i * 0.1 }}
+                    className="p-8 bg-slate-900/50 border border-slate-800 rounded-2xl hover:border-blue-500/20 transition-colors group text-center">
+                    <div className="w-14 h-14 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mx-auto mb-4 group-hover:bg-blue-500/20 transition-colors">
+                      <Icon className="w-7 h-7 text-blue-400" />
+                    </div>
+                    <h3 className="text-xl font-bold text-white mb-3">{uc.title}</h3>
+                    <p className="text-slate-400 leading-relaxed">{uc.desc}</p>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </div>
+        </FadeIn>
+      </Section>
+
+      {/* ═══ BLOQUE DE VALOR ═══ */}
+      <Section>
+        <FadeIn>
           <div className="max-w-3xl mx-auto">
-            <span className="inline-block py-1 px-3 rounded-full bg-purple-500/10 text-purple-400 text-sm font-medium mb-6 border border-purple-500/20">Todo lo que reemplaza Volkern</span>
+            <span className="inline-block py-1 px-3 rounded-full bg-purple-500/10 text-purple-400 text-sm font-medium mb-6 border border-purple-500/20">Comparación de costos</span>
             <h2 className="text-4xl md:text-5xl font-bold text-white mb-12">Todo lo que <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-fuchsia-400">reemplaza Volkern</span></h2>
             <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
               <div className="grid grid-cols-3 gap-4 px-6 py-4 border-b border-slate-800 bg-slate-900/50">
-                <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Herramienta</span>
-                <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider text-right">Costo/mes</span>
+                <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Alternativa</span>
+                <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider text-right">Coste/mes</span>
                 <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider text-right">Con Volkern</span>
               </div>
               {COMPETITOR_TOOLS.map((tool, i) => (
@@ -293,8 +337,45 @@ export default function MarketingLanding() {
               <div className="grid grid-cols-3 gap-4 px-6 py-5 bg-slate-800/50 border-t-2 border-purple-500/30">
                 <span className="text-white font-bold text-lg">Total</span>
                 <span className="text-red-400 text-right font-bold text-lg font-mono">€{TOTAL_COMPETITOR}+</span>
-                <span className="text-purple-400 text-right font-bold text-lg font-mono">€50/mes</span>
+                <span className="text-purple-400 text-right font-bold text-lg font-mono">€49/mes</span>
               </div>
+            </div>
+            <p className="text-center text-slate-500 text-sm mt-4">14 días de prueba gratis. Sin compromiso. Cancela cuando quieras.</p>
+          </div>
+        </FadeIn>
+      </Section>
+
+      {/* ═══ TESTIMONIOS ═══ */}
+      <Section dark>
+        <FadeIn>
+          <div className="max-w-4xl mx-auto">
+            <span className="inline-block py-1 px-3 rounded-full bg-purple-500/10 text-purple-400 text-sm font-medium mb-6 border border-purple-500/20">Lo que dicen</span>
+            <h2 className="text-4xl md:text-5xl font-bold text-white mb-10 text-center">
+              Marketers y agencias{' '}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-fuchsia-400">ya usan Volkern</span>
+            </h2>
+            <div className="grid md:grid-cols-3 gap-6">
+              {TESTIMONIALS.map((t, i) => (
+                <motion.div key={i} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.4, delay: i * 0.1 }}
+                  className="p-8 bg-slate-900/50 border border-slate-800 rounded-2xl hover:border-purple-500/20 transition-colors flex flex-col">
+                  <Quote className="w-8 h-8 text-purple-500/30 mb-4 flex-shrink-0" />
+                  <p className="text-slate-300 leading-relaxed mb-6 flex-1 italic">&ldquo;{t.quote}&rdquo;</p>
+                  <div className="flex items-center gap-1 mb-1">
+                    {[...Array(5)].map((_, j) => (
+                      <Star key={j} className="w-4 h-4 text-amber-400 fill-amber-400" />
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-3 mt-3">
+                    <div className="w-10 h-10 rounded-full bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-sm font-bold text-purple-400 flex-shrink-0">
+                      {t.avatar}
+                    </div>
+                    <div>
+                      <p className="text-white font-semibold text-sm">{t.name}</p>
+                      <p className="text-slate-500 text-xs">{t.role}</p>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
             </div>
           </div>
         </FadeIn>
@@ -366,10 +447,13 @@ export default function MarketingLanding() {
                 Empieza a convertir más{' '}
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-fuchsia-400">con menos esfuerzo</span>
               </h2>
-              <p className="text-lg text-slate-400 mb-10 max-w-xl mx-auto">Centraliza tu marketing y deja de perder oportunidades.</p>
+              <p className="text-lg text-slate-400 mb-4 max-w-xl mx-auto">
+                <span className="text-white font-bold">14 días gratis</span>. Sin tarjeta. Sin compromiso.
+              </p>
+              <p className="text-slate-500 text-sm mb-10">Luego €49/mes. Incluye CRM, email, automatización, chat y más.</p>
               <Link href="/auth/signup?vertical=agencia_marketing">
                 <Button size="lg" className="bg-purple-600 hover:bg-purple-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-purple-600/30 group">
-                  Activar Volkern para marketing
+                  Probar 14 días gratis
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </Button>
               </Link>
@@ -388,7 +472,7 @@ export default function MarketingLanding() {
             <p className="text-lg text-purple-400 font-medium mb-8">Volkern es tu sistema de marketing completo.</p>
             <Link href="/auth/signup?vertical=agencia_marketing">
               <Button size="lg" className="bg-purple-600 hover:bg-purple-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-purple-600/30 group">
-                Activar mi sistema de marketing
+                Probar 14 días gratis
                 <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Button>
             </Link>

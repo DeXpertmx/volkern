@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import {
   ArrowRight, Check, Zap, TrendingUp, Clock, AlertTriangle,
   FileText, Layers, ShieldCheck, Receipt, FileSignature,
+  Star, Quote, Store, Briefcase, Wrench,
 } from 'lucide-react';
 
 const PAIN_POINTS = [
@@ -52,6 +53,18 @@ const BENEFITS = [
   { icon: Receipt, text: 'Todo listo para la AEAT' },
 ];
 
+const USE_CASES = [
+  { icon: Store, title: 'Autónomos y freelancers', desc: 'Factura a tus clientes sin depender de un gestor para cada factura. En 30 segundos tienes tu factura lista.' },
+  { icon: Briefcase, title: 'Pequeños comercios', desc: 'Controla ventas, clientes y cobros desde un solo lugar. Sin Excels ni programas complicados.' },
+  { icon: Wrench, title: 'Profesionales liberales', desc: 'Abogados, consultores, arquitectos — factura por proyecto y lleva el control de cada cliente.' },
+];
+
+const TESTIMONIALS = [
+  { quote: 'De pasar 3 horas al mes facturando a hacerlo en 10 minutos. Volkern Factura cambió mi rutina por completo.', name: 'María López', role: 'Diseñadora freelance', avatar: 'ML' },
+  { quote: 'Antes usaba 3 herramientas. Ahora cliente, factura y cobro están en el mismo sitio. Por €19 al mes es un regalo.', name: 'Carlos Ruiz', role: 'Tienda de informática', avatar: 'CR' },
+  { quote: 'Mis clientes reciben la factura al instante y yo sé quién ha pagado y quién no. Sin perseguir a nadie.', name: 'Ana García', role: 'Consultora fiscal', avatar: 'AG' },
+];
+
 const COMPETITOR_TOOLS = [
   { name: 'Programa de facturación', price: 30 },
   { name: 'Excel / Google Sheets', price: 0 },
@@ -88,9 +101,14 @@ export default function FacturacionLanding() {
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[900px] h-[500px] bg-green-600/15 blur-[140px] rounded-full pointer-events-none" />
         <div className="container mx-auto px-6 relative z-10 text-center">
           <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, ease: 'easeOut' }}>
-            <span className="inline-flex items-center gap-2 py-1.5 px-4 rounded-full bg-green-500/10 text-green-400 text-sm font-medium mb-6 border border-green-500/20">
+            <span className="inline-flex items-center gap-2 py-1.5 px-4 rounded-full bg-green-500/10 text-green-400 text-sm font-medium mb-4 border border-green-500/20">
               <Receipt className="w-4 h-4" />
-              Facturación
+              Ideal para autónomos y pymes
+            </span>
+            <span className="block mb-6">
+              <span className="inline-flex items-center gap-1.5 py-1 px-3 rounded-full bg-amber-500/10 text-amber-400 text-xs font-semibold border border-amber-500/20">
+                ⚡ 14 días gratis · Sin tarjeta
+              </span>
             </span>
             <h1 className="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight tracking-tight">
               Facturas en segundos,{' '}
@@ -102,12 +120,12 @@ export default function FacturacionLanding() {
               Crea facturas profesionales, controla cobros y ten tus impuestos listos.
             </p>
             <p className="text-lg text-slate-500 max-w-2xl mx-auto mb-10">
-              Sin complicaciones. Sin Excels. Sin perder horas.
+              Desde <span className="text-white font-bold">€19/mes</span>. Sin complicaciones. Sin Excels. Sin perder horas.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link href="/auth/signup?vertical=facturacion">
                 <Button size="lg" className="bg-green-600 hover:bg-green-500 text-white px-10 py-7 text-lg rounded-xl font-bold shadow-xl shadow-green-600/30 group">
-                  Activar Volkern Factura
+                  Probar 14 días gratis
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </Button>
               </Link>
@@ -257,19 +275,47 @@ export default function FacturacionLanding() {
         </FadeIn>
       </Section>
 
-      {/* ═══ BLOQUE DE VALOR ═══ */}
+      {/* ═══ CASOS DE USO ═══ */}
       <Section dark>
         <FadeIn>
+          <div className="max-w-4xl mx-auto">
+            <span className="inline-block py-1 px-3 rounded-full bg-blue-500/10 text-blue-400 text-sm font-medium mb-6 border border-blue-500/20">¿Para quién es?</span>
+            <h2 className="text-4xl md:text-5xl font-bold text-white mb-10">
+              Hecho para{' '}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">los que facturan de verdad</span>
+            </h2>
+            <div className="grid md:grid-cols-3 gap-6">
+              {USE_CASES.map((uc, i) => {
+                const Icon = uc.icon;
+                return (
+                  <motion.div key={i} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.4, delay: i * 0.1 }}
+                    className="p-8 bg-slate-900/50 border border-slate-800 rounded-2xl hover:border-blue-500/20 transition-colors group text-center">
+                    <div className="w-14 h-14 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mx-auto mb-4 group-hover:bg-blue-500/20 transition-colors">
+                      <Icon className="w-7 h-7 text-blue-400" />
+                    </div>
+                    <h3 className="text-xl font-bold text-white mb-3">{uc.title}</h3>
+                    <p className="text-slate-400 leading-relaxed">{uc.desc}</p>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </div>
+        </FadeIn>
+      </Section>
+
+      {/* ═══ BLOQUE DE VALOR ═══ */}
+      <Section>
+        <FadeIn>
           <div className="max-w-3xl mx-auto">
-            <span className="inline-block py-1 px-3 rounded-full bg-green-500/10 text-green-400 text-sm font-medium mb-6 border border-green-500/20">Todo lo que reemplaza Volkern Factura</span>
+            <span className="inline-block py-1 px-3 rounded-full bg-green-500/10 text-green-400 text-sm font-medium mb-6 border border-green-500/20">Comparación de costos</span>
             <h2 className="text-4xl md:text-5xl font-bold text-white mb-12">
               Reemplaza{' '}
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-400">esto</span>
             </h2>
             <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
               <div className="grid grid-cols-3 gap-4 px-6 py-4 border-b border-slate-800 bg-slate-900/50">
-                <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Herramienta</span>
-                <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider text-right">Costo/mes</span>
+                <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Alternativa</span>
+                <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider text-right">Coste/mes</span>
                 <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider text-right">Con Volkern</span>
               </div>
               {COMPETITOR_TOOLS.map((tool, i) => (
@@ -283,8 +329,45 @@ export default function FacturacionLanding() {
               <div className="grid grid-cols-3 gap-4 px-6 py-5 bg-slate-800/50 border-t-2 border-green-500/30">
                 <span className="text-white font-bold text-lg">Total</span>
                 <span className="text-red-400 text-right font-bold text-lg font-mono">€{TOTAL_COMPETITOR}+</span>
-                <span className="text-green-400 text-right font-bold text-lg font-mono">€25/mes</span>
+                <span className="text-green-400 text-right font-bold text-lg font-mono">€19/mes</span>
               </div>
+            </div>
+            <p className="text-center text-slate-500 text-sm mt-4">14 días de prueba gratis. Sin compromiso. Cancela cuando quieras.</p>
+          </div>
+        </FadeIn>
+      </Section>
+
+      {/* ═══ TESTIMONIOS ═══ */}
+      <Section dark>
+        <FadeIn>
+          <div className="max-w-4xl mx-auto">
+            <span className="inline-block py-1 px-3 rounded-full bg-purple-500/10 text-purple-400 text-sm font-medium mb-6 border border-purple-500/20">Lo que dicen</span>
+            <h2 className="text-4xl md:text-5xl font-bold text-white mb-10 text-center">
+              Profesionales como tú{' '}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-fuchsia-400">ya facturan con Volkern</span>
+            </h2>
+            <div className="grid md:grid-cols-3 gap-6">
+              {TESTIMONIALS.map((t, i) => (
+                <motion.div key={i} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.4, delay: i * 0.1 }}
+                  className="p-8 bg-slate-900/50 border border-slate-800 rounded-2xl hover:border-purple-500/20 transition-colors flex flex-col">
+                  <Quote className="w-8 h-8 text-purple-500/30 mb-4 flex-shrink-0" />
+                  <p className="text-slate-300 leading-relaxed mb-6 flex-1 italic">&ldquo;{t.quote}&rdquo;</p>
+                  <div className="flex items-center gap-1 mb-1">
+                    {[...Array(5)].map((_, j) => (
+                      <Star key={j} className="w-4 h-4 text-amber-400 fill-amber-400" />
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-3 mt-3">
+                    <div className="w-10 h-10 rounded-full bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-sm font-bold text-purple-400 flex-shrink-0">
+                      {t.avatar}
+                    </div>
+                    <div>
+                      <p className="text-white font-semibold text-sm">{t.name}</p>
+                      <p className="text-slate-500 text-xs">{t.role}</p>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
             </div>
           </div>
         </FadeIn>
@@ -320,13 +403,16 @@ export default function FacturacionLanding() {
             <div className="bg-gradient-to-r from-green-900/40 via-slate-900 to-emerald-900/40 border border-slate-800 rounded-3xl p-12 md:p-16">
               <Receipt className="w-12 h-12 text-green-400 mx-auto mb-6" />
               <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
-                Empieza a facturar{' '}
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-400">sin estrés</span>
+                Tu primera factura{' '}
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-400">en menos de 5 minutos</span>
               </h2>
-              <p className="text-lg text-slate-400 mb-10 max-w-xl mx-auto">Tu primera factura en menos de 5 minutos.</p>
+              <p className="text-lg text-slate-400 mb-4 max-w-xl mx-auto">
+                Empieza hoy con <span className="text-white font-bold">14 días gratis</span>. Sin tarjeta. Sin compromiso.
+              </p>
+              <p className="text-slate-500 text-sm mb-10">Luego €19/mes. Cancela cuando quieras.</p>
               <Link href="/auth/signup?vertical=facturacion">
                 <Button size="lg" className="bg-green-600 hover:bg-green-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-green-600/30 group">
-                  Activar Volkern Factura
+                  Probar 14 días gratis
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </Button>
               </Link>
@@ -344,7 +430,7 @@ export default function FacturacionLanding() {
             <p className="text-lg text-green-400 font-medium mb-8">Volkern Factura. Simple. Rápido. Sin errores.</p>
             <Link href="/auth/signup?vertical=facturacion">
               <Button size="lg" className="bg-green-600 hover:bg-green-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-green-600/30 group">
-                Activar Volkern Factura
+                Probar 14 días gratis
                 <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Button>
             </Link>

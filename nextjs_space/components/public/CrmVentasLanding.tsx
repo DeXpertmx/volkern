@@ -6,8 +6,9 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import {
   ArrowRight, Check, Zap, MessageCircle, Users, BarChart3,
-  TrendingUp, Clock, AlertTriangle, Search, FileText,
-  Target, Layers, ShieldCheck, Phone, Eye,
+  TrendingUp, Clock, AlertTriangle, FileText,
+  Target, Layers, ShieldCheck, Eye,
+  Star, Quote, Building2, Handshake, PhoneCall,
 } from 'lucide-react';
 
 /* ─── Data ────────────────────────────────────────────────────────────────── */
@@ -57,6 +58,18 @@ const BENEFITS = [
   { icon: BarChart3, text: 'Tomas decisiones con datos reales' },
 ];
 
+const USE_CASES = [
+  { icon: Building2, title: 'Equipos comerciales B2B', desc: 'Ideal para equipos de 2-50 vendedores que gestionan pipeline complejo y necesitan visibilidad.' },
+  { icon: Handshake, title: 'PYMES con proceso de venta', desc: 'Negocios que venden productos o servicios y necesitan estructura de seguimiento.' },
+  { icon: PhoneCall, title: 'Ventas consultivas', desc: 'Para ventas de ciclo largo donde cada interacción cuenta y nada se puede olvidar.' },
+];
+
+const TESTIMONIALS = [
+  { quote: 'Pasamos de perder el 30% de los leads a tener todo bajo control. El pipeline nos da visibilidad que antes no teníamos.', name: 'Javier Medina', role: 'Director Comercial, TechSolutions', avatar: 'JM' },
+  { quote: 'Mis vendedores saben exactamente qué hacer cada día. Ya no dependo de que me cuenten — lo veo todo en el dashboard.', name: 'Laura Castillo', role: 'CEO, Distribuidora Norte', avatar: 'LC' },
+  { quote: 'Integramos CRM, email y telefonía en un solo sitio. Antes pagábamos €190/mes en 3 herramientas. Ahora €49.', name: 'Diego Morales', role: 'Gerente de Ventas, Grupo Atlas', avatar: 'DM' },
+];
+
 const COMPETITOR_TOOLS = [
   { name: 'CRM', price: 50 },
   { name: 'Automatización', price: 40 },
@@ -90,7 +103,6 @@ export default function CrmVentasLanding() {
     <>
       {/* ═══ HERO ═══ */}
       <section className="relative min-h-[90vh] flex items-center justify-center pt-24 overflow-hidden bg-slate-950">
-        {/* Background image */}
         <div className="absolute inset-0">
           <img
             src="/ventas.png"
@@ -102,9 +114,14 @@ export default function CrmVentasLanding() {
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[900px] h-[500px] bg-cyan-600/15 blur-[140px] rounded-full pointer-events-none" />
         <div className="container mx-auto px-6 relative z-10 text-center">
           <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, ease: 'easeOut' }}>
-            <span className="inline-flex items-center gap-2 py-1.5 px-4 rounded-full bg-cyan-500/10 text-cyan-400 text-sm font-medium mb-6 border border-cyan-500/20">
+            <span className="inline-flex items-center gap-2 py-1.5 px-4 rounded-full bg-cyan-500/10 text-cyan-400 text-sm font-medium mb-4 border border-cyan-500/20">
               <Zap className="w-4 h-4" />
-              CRM Ventas
+              Ideal para equipos comerciales
+            </span>
+            <span className="block mb-6">
+              <span className="inline-flex items-center gap-1.5 py-1 px-3 rounded-full bg-amber-500/10 text-amber-400 text-xs font-semibold border border-amber-500/20">
+                ⚡ 14 días gratis · Sin tarjeta
+              </span>
             </span>
             <h1 className="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight tracking-tight">
               Convierte más oportunidades en ventas{' '}
@@ -116,12 +133,12 @@ export default function CrmVentasLanding() {
               Gestiona tus leads, controla tu pipeline y cierra más ventas sin perder oportunidades.
             </p>
             <p className="text-lg text-slate-500 max-w-2xl mx-auto mb-10">
-              Deja de improvisar tu proceso comercial.
+              Desde <span className="text-white font-bold">€49/mes</span>. 14 días gratis. Sin tarjeta.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link href="/auth/signup?vertical=crm_ventas">
                 <Button size="lg" className="bg-cyan-600 hover:bg-cyan-500 text-white px-10 py-7 text-lg rounded-xl font-bold shadow-xl shadow-cyan-600/30 group">
-                  Activar mi sistema de ventas
+                  Probar 14 días gratis
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </Button>
               </Link>
@@ -271,16 +288,44 @@ export default function CrmVentasLanding() {
         </FadeIn>
       </Section>
 
-      {/* ═══ BLOQUE DE VALOR ═══ */}
+      {/* ═══ CASOS DE USO ═══ */}
       <Section dark>
         <FadeIn>
+          <div className="max-w-4xl mx-auto">
+            <span className="inline-block py-1 px-3 rounded-full bg-blue-500/10 text-blue-400 text-sm font-medium mb-6 border border-blue-500/20">¿Para quién es?</span>
+            <h2 className="text-4xl md:text-5xl font-bold text-white mb-10">
+              Hecho para equipos{' '}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">que venden en serio</span>
+            </h2>
+            <div className="grid md:grid-cols-3 gap-6">
+              {USE_CASES.map((uc, i) => {
+                const Icon = uc.icon;
+                return (
+                  <motion.div key={i} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.4, delay: i * 0.1 }}
+                    className="p-8 bg-slate-900/50 border border-slate-800 rounded-2xl hover:border-blue-500/20 transition-colors group text-center">
+                    <div className="w-14 h-14 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mx-auto mb-4 group-hover:bg-blue-500/20 transition-colors">
+                      <Icon className="w-7 h-7 text-blue-400" />
+                    </div>
+                    <h3 className="text-xl font-bold text-white mb-3">{uc.title}</h3>
+                    <p className="text-slate-400 leading-relaxed">{uc.desc}</p>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </div>
+        </FadeIn>
+      </Section>
+
+      {/* ═══ BLOQUE DE VALOR ═══ */}
+      <Section>
+        <FadeIn>
           <div className="max-w-3xl mx-auto">
-            <span className="inline-block py-1 px-3 rounded-full bg-cyan-500/10 text-cyan-400 text-sm font-medium mb-6 border border-cyan-500/20">Todo lo que reemplaza Volkern</span>
+            <span className="inline-block py-1 px-3 rounded-full bg-cyan-500/10 text-cyan-400 text-sm font-medium mb-6 border border-cyan-500/20">Comparación de costos</span>
             <h2 className="text-4xl md:text-5xl font-bold text-white mb-12">Todo lo que <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400">reemplaza Volkern</span></h2>
             <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
               <div className="grid grid-cols-3 gap-4 px-6 py-4 border-b border-slate-800 bg-slate-900/50">
-                <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Herramienta</span>
-                <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider text-right">Costo/mes</span>
+                <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Alternativa</span>
+                <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider text-right">Coste/mes</span>
                 <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider text-right">Con Volkern</span>
               </div>
               {COMPETITOR_TOOLS.map((tool, i) => (
@@ -294,8 +339,45 @@ export default function CrmVentasLanding() {
               <div className="grid grid-cols-3 gap-4 px-6 py-5 bg-slate-800/50 border-t-2 border-cyan-500/30">
                 <span className="text-white font-bold text-lg">Total</span>
                 <span className="text-red-400 text-right font-bold text-lg font-mono">€{TOTAL_COMPETITOR}+</span>
-                <span className="text-cyan-400 text-right font-bold text-lg font-mono">€50/mes</span>
+                <span className="text-cyan-400 text-right font-bold text-lg font-mono">€49/mes</span>
               </div>
+            </div>
+            <p className="text-center text-slate-500 text-sm mt-4">14 días de prueba gratis. Sin compromiso. Cancela cuando quieras.</p>
+          </div>
+        </FadeIn>
+      </Section>
+
+      {/* ═══ TESTIMONIOS ═══ */}
+      <Section dark>
+        <FadeIn>
+          <div className="max-w-4xl mx-auto">
+            <span className="inline-block py-1 px-3 rounded-full bg-purple-500/10 text-purple-400 text-sm font-medium mb-6 border border-purple-500/20">Lo que dicen</span>
+            <h2 className="text-4xl md:text-5xl font-bold text-white mb-10 text-center">
+              Equipos comerciales{' '}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-fuchsia-400">ya venden con Volkern</span>
+            </h2>
+            <div className="grid md:grid-cols-3 gap-6">
+              {TESTIMONIALS.map((t, i) => (
+                <motion.div key={i} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.4, delay: i * 0.1 }}
+                  className="p-8 bg-slate-900/50 border border-slate-800 rounded-2xl hover:border-purple-500/20 transition-colors flex flex-col">
+                  <Quote className="w-8 h-8 text-purple-500/30 mb-4 flex-shrink-0" />
+                  <p className="text-slate-300 leading-relaxed mb-6 flex-1 italic">&ldquo;{t.quote}&rdquo;</p>
+                  <div className="flex items-center gap-1 mb-1">
+                    {[...Array(5)].map((_, j) => (
+                      <Star key={j} className="w-4 h-4 text-amber-400 fill-amber-400" />
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-3 mt-3">
+                    <div className="w-10 h-10 rounded-full bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-sm font-bold text-purple-400 flex-shrink-0">
+                      {t.avatar}
+                    </div>
+                    <div>
+                      <p className="text-white font-semibold text-sm">{t.name}</p>
+                      <p className="text-slate-500 text-xs">{t.role}</p>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
             </div>
           </div>
         </FadeIn>
@@ -365,12 +447,15 @@ export default function CrmVentasLanding() {
               <Zap className="w-12 h-12 text-cyan-400 mx-auto mb-6" />
               <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
                 Empieza a vender{' '}
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400">con estructura</span>
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400">con estructura hoy</span>
               </h2>
-              <p className="text-lg text-slate-400 mb-10 max-w-xl mx-auto">Centraliza tu proceso comercial y deja de perder oportunidades.</p>
+              <p className="text-lg text-slate-400 mb-4 max-w-xl mx-auto">
+                <span className="text-white font-bold">14 días gratis</span>. Sin tarjeta. Sin compromiso.
+              </p>
+              <p className="text-slate-500 text-sm mb-10">Luego €49/mes. Incluye CRM, pipeline, email, telefonía y más.</p>
               <Link href="/auth/signup?vertical=crm_ventas">
                 <Button size="lg" className="bg-cyan-600 hover:bg-cyan-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-cyan-600/30 group">
-                  Activar Volkern para ventas
+                  Probar 14 días gratis
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </Button>
               </Link>
@@ -389,7 +474,7 @@ export default function CrmVentasLanding() {
             <p className="text-lg text-cyan-400 font-medium mb-8">Volkern convierte tu proceso comercial en un sistema.</p>
             <Link href="/auth/signup?vertical=crm_ventas">
               <Button size="lg" className="bg-cyan-600 hover:bg-cyan-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-cyan-600/30 group">
-                Activar mi sistema de ventas
+                Probar 14 días gratis
                 <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Button>
             </Link>
