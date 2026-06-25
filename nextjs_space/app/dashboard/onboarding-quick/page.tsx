@@ -20,7 +20,7 @@ import {
 
 type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
 
-type VerticalProfile = 'crm_ventas' | 'agencia_marketing' | 'academia' | 'asesoria_contable' | 'rrhh' | 'inmobiliaria' | 'industria' | 'gestoria' | 'general'
+type VerticalProfile = 'crm_ventas' | 'agencia_marketing' | 'academia' | 'asesoria_contable' | 'rrhh' | 'inmobiliaria' | 'industria' | 'facturacion' | 'gestoria' | 'general'
 
 const VERTICAL_CARDS: { id: VerticalProfile; title: string; subtitle: string; icon: React.ElementType; color: string; bgClass: string; borderColor: string }[] = [
   { id: 'crm_ventas', title: 'CRM Ventas', subtitle: 'Pipeline que convierte', icon: Zap, color: 'cyan', bgClass: 'from-cyan-500/20 to-sky-500/10 border-cyan-500/30 hover:border-cyan-400', borderColor: 'border-cyan-400' },
@@ -30,6 +30,7 @@ const VERTICAL_CARDS: { id: VerticalProfile; title: string; subtitle: string; ic
   { id: 'rrhh', title: 'RRHH', subtitle: 'Capital humano inteligente', icon: UserCheck, color: 'rose', bgClass: 'from-rose-500/20 to-pink-500/10 border-rose-500/30 hover:border-rose-400', borderColor: 'border-rose-400' },
   { id: 'inmobiliaria', title: 'Inmobiliaria', subtitle: 'ERP inmobiliario completo', icon: Building2, color: 'emerald', bgClass: 'from-emerald-500/20 to-green-500/10 border-emerald-500/30 hover:border-emerald-400', borderColor: 'border-emerald-400' },
   { id: 'industria', title: 'Industria', subtitle: 'ERP industrial completo', icon: Factory, color: 'orange', bgClass: 'from-orange-500/20 to-amber-500/10 border-orange-500/30 hover:border-orange-400', borderColor: 'border-orange-400' },
+  { id: 'facturacion', title: 'Facturación', subtitle: 'Facturas y cobros sin estrés', icon: Calculator, color: 'green', bgClass: 'from-green-500/20 to-emerald-500/10 border-green-500/30 hover:border-green-400', borderColor: 'border-green-400' },
 ]
 
 const VERTICAL_COLORS: Record<string, { gradient: string; iconBg: string; iconColor: string }> = {
@@ -40,6 +41,7 @@ const VERTICAL_COLORS: Record<string, { gradient: string; iconBg: string; iconCo
   rose: { gradient: 'bg-gradient-to-r from-rose-600 to-pink-600', iconBg: 'bg-rose-500/20', iconColor: 'text-rose-400' },
   emerald: { gradient: 'bg-gradient-to-r from-emerald-600 to-green-600', iconBg: 'bg-emerald-500/20', iconColor: 'text-emerald-400' },
   orange: { gradient: 'bg-gradient-to-r from-orange-600 to-amber-600', iconBg: 'bg-orange-500/20', iconColor: 'text-orange-400' },
+  green: { gradient: 'bg-gradient-to-r from-green-600 to-emerald-600', iconBg: 'bg-green-500/20', iconColor: 'text-green-400' },
 }
 
 export default function OnboardingQuickPage() {

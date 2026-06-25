@@ -119,7 +119,7 @@ export default function CrmVentasLanding() {
               Deja de improvisar tu proceso comercial.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/auth/signup">
+              <Link href="/auth/signup?vertical=crm_ventas">
                 <Button size="lg" className="bg-cyan-600 hover:bg-cyan-500 text-white px-10 py-7 text-lg rounded-xl font-bold shadow-xl shadow-cyan-600/30 group">
                   Activar mi sistema de ventas
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -368,7 +368,7 @@ export default function CrmVentasLanding() {
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400">con estructura</span>
               </h2>
               <p className="text-lg text-slate-400 mb-10 max-w-xl mx-auto">Centraliza tu proceso comercial y deja de perder oportunidades.</p>
-              <Link href="/auth/signup">
+              <Link href="/auth/signup?vertical=crm_ventas">
                 <Button size="lg" className="bg-cyan-600 hover:bg-cyan-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-cyan-600/30 group">
                   Activar Volkern para ventas
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -387,7 +387,7 @@ export default function CrmVentasLanding() {
             <p className="text-2xl text-slate-300 font-medium leading-relaxed mb-2">Más seguimiento.</p>
             <p className="text-2xl text-slate-300 font-medium leading-relaxed mb-8">Más cierres.</p>
             <p className="text-lg text-cyan-400 font-medium mb-8">Volkern convierte tu proceso comercial en un sistema.</p>
-            <Link href="/auth/signup">
+            <Link href="/auth/signup?vertical=crm_ventas">
               <Button size="lg" className="bg-cyan-600 hover:bg-cyan-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-cyan-600/30 group">
                 Activar mi sistema de ventas
                 <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
