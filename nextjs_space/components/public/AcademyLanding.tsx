@@ -6,8 +6,9 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import {
   ArrowRight, Check, Zap, MessageCircle, Users, BarChart3,
-  TrendingUp, Clock, AlertTriangle, Search, FileText,
+  TrendingUp, Clock, AlertTriangle,
   Target, GraduationCap, Layers, ShieldCheck, ShoppingCart, BookOpen,
+  Star, Quote, Play, Monitor, Lightbulb,
 } from 'lucide-react';
 
 /* ─── Data ────────────────────────────────────────────────────────────────── */
@@ -56,6 +57,18 @@ const BENEFITS = [
   { icon: BarChart3, text: 'Escalas sin fricción' },
 ];
 
+const USE_CASES = [
+  { icon: Play, title: 'Creadores de cursos', desc: 'Convierte tu conocimiento en ingresos recurrentes. Crea, vende y entrega sin depender de 4 plataformas.' },
+  { icon: Monitor, title: 'Escuelas de formación', desc: 'Gestiona programas, alumnos, pagos y certificados desde un solo lugar. Ideal para academias presenciales y online.' },
+  { icon: Lightbulb, title: 'Coaches y consultores', desc: 'Vende sesiones, cursos y membresías. Integra pagos, comunidad y seguimiento sin herramientas separadas.' },
+];
+
+const TESTIMONIALS = [
+  { quote: 'Pasé de usar Teachable + Mailchimp + Stripe por separado a tenerlo todo en Volkern. Mis alumnos lo agradecen.', name: 'Carmen Díaz', role: 'Creadora de cursos online', avatar: 'CD' },
+  { quote: 'Automaticé las inscripciones y pagos. Ahora los alumnos acceden al instante. Cero fricción.', name: 'Alberto Rubio', role: 'Director, Escuela de Negocios', avatar: 'AR' },
+  { quote: 'Por €49/mes tengo LMS + CRM + pagos integrados. Mi stack anterior costaba más de €220.', name: 'Marta Soler', role: 'Coach certificada', avatar: 'MS' },
+];
+
 const COMPETITOR_TOOLS = [
   { name: 'Plataforma de cursos', price: 50 },
   { name: 'CRM', price: 50 },
@@ -89,7 +102,6 @@ export default function AcademyLanding() {
     <>
       {/* ═══ HERO ═══ */}
       <section className="relative min-h-[90vh] flex items-center justify-center pt-24 overflow-hidden bg-slate-950">
-        {/* Background image */}
         <div className="absolute inset-0">
           <img
             src="/academia.png"
@@ -101,9 +113,14 @@ export default function AcademyLanding() {
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[900px] h-[500px] bg-amber-600/15 blur-[140px] rounded-full pointer-events-none" />
         <div className="container mx-auto px-6 relative z-10 text-center">
           <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, ease: 'easeOut' }}>
-            <span className="inline-flex items-center gap-2 py-1.5 px-4 rounded-full bg-amber-500/10 text-amber-400 text-sm font-medium mb-6 border border-amber-500/20">
+            <span className="inline-flex items-center gap-2 py-1.5 px-4 rounded-full bg-amber-500/10 text-amber-400 text-sm font-medium mb-4 border border-amber-500/20">
               <GraduationCap className="w-4 h-4" />
-              Academia
+              Ideal para creadores y escuelas
+            </span>
+            <span className="block mb-6">
+              <span className="inline-flex items-center gap-1.5 py-1 px-3 rounded-full bg-amber-500/10 text-amber-400 text-xs font-semibold border border-amber-500/20">
+                ⚡ 14 días gratis · Sin tarjeta
+              </span>
             </span>
             <h1 className="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight tracking-tight">
               Crea, vende y automatiza tu academia{' '}
@@ -115,12 +132,12 @@ export default function AcademyLanding() {
               Convierte tu conocimiento en ingresos recurrentes sin depender de múltiples herramientas.
             </p>
             <p className="text-lg text-slate-500 max-w-2xl mx-auto mb-10">
-              Todo en un solo lugar.
+              Desde <span className="text-white font-bold">€49/mes</span>. 14 días gratis. Sin tarjeta.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link href="/auth/signup?vertical=academia">
                 <Button size="lg" className="bg-amber-600 hover:bg-amber-500 text-white px-10 py-7 text-lg rounded-xl font-bold shadow-xl shadow-amber-600/30 group">
-                  Crear mi academia
+                  Probar 14 días gratis
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </Button>
               </Link>
@@ -270,16 +287,44 @@ export default function AcademyLanding() {
         </FadeIn>
       </Section>
 
-      {/* ═══ BLOQUE DE VALOR ═══ */}
+      {/* ═══ CASOS DE USO ═══ */}
       <Section dark>
         <FadeIn>
+          <div className="max-w-4xl mx-auto">
+            <span className="inline-block py-1 px-3 rounded-full bg-blue-500/10 text-blue-400 text-sm font-medium mb-6 border border-blue-500/20">¿Para quién es?</span>
+            <h2 className="text-4xl md:text-5xl font-bold text-white mb-10">
+              Hecho para los que{' '}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">enseñan y monetizan</span>
+            </h2>
+            <div className="grid md:grid-cols-3 gap-6">
+              {USE_CASES.map((uc, i) => {
+                const Icon = uc.icon;
+                return (
+                  <motion.div key={i} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.4, delay: i * 0.1 }}
+                    className="p-8 bg-slate-900/50 border border-slate-800 rounded-2xl hover:border-blue-500/20 transition-colors group text-center">
+                    <div className="w-14 h-14 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mx-auto mb-4 group-hover:bg-blue-500/20 transition-colors">
+                      <Icon className="w-7 h-7 text-blue-400" />
+                    </div>
+                    <h3 className="text-xl font-bold text-white mb-3">{uc.title}</h3>
+                    <p className="text-slate-400 leading-relaxed">{uc.desc}</p>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </div>
+        </FadeIn>
+      </Section>
+
+      {/* ═══ BLOQUE DE VALOR ═══ */}
+      <Section>
+        <FadeIn>
           <div className="max-w-3xl mx-auto">
-            <span className="inline-block py-1 px-3 rounded-full bg-amber-500/10 text-amber-400 text-sm font-medium mb-6 border border-amber-500/20">Todo lo que reemplaza Volkern</span>
+            <span className="inline-block py-1 px-3 rounded-full bg-amber-500/10 text-amber-400 text-sm font-medium mb-6 border border-amber-500/20">Comparación de costos</span>
             <h2 className="text-4xl md:text-5xl font-bold text-white mb-12">Todo lo que <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-400">reemplaza Volkern</span></h2>
             <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
               <div className="grid grid-cols-3 gap-4 px-6 py-4 border-b border-slate-800 bg-slate-900/50">
-                <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Herramienta</span>
-                <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider text-right">Costo/mes</span>
+                <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Alternativa</span>
+                <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider text-right">Coste/mes</span>
                 <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider text-right">Con Volkern</span>
               </div>
               {COMPETITOR_TOOLS.map((tool, i) => (
@@ -293,8 +338,45 @@ export default function AcademyLanding() {
               <div className="grid grid-cols-3 gap-4 px-6 py-5 bg-slate-800/50 border-t-2 border-amber-500/30">
                 <span className="text-white font-bold text-lg">Total</span>
                 <span className="text-red-400 text-right font-bold text-lg font-mono">€{TOTAL_COMPETITOR}+</span>
-                <span className="text-amber-400 text-right font-bold text-lg font-mono">€50/mes</span>
+                <span className="text-amber-400 text-right font-bold text-lg font-mono">€49/mes</span>
               </div>
+            </div>
+            <p className="text-center text-slate-500 text-sm mt-4">14 días de prueba gratis. Sin compromiso. Cancela cuando quieras.</p>
+          </div>
+        </FadeIn>
+      </Section>
+
+      {/* ═══ TESTIMONIOS ═══ */}
+      <Section dark>
+        <FadeIn>
+          <div className="max-w-4xl mx-auto">
+            <span className="inline-block py-1 px-3 rounded-full bg-purple-500/10 text-purple-400 text-sm font-medium mb-6 border border-purple-500/20">Lo que dicen</span>
+            <h2 className="text-4xl md:text-5xl font-bold text-white mb-10 text-center">
+              Creadores y escuelas{' '}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-fuchsia-400">ya enseñan con Volkern</span>
+            </h2>
+            <div className="grid md:grid-cols-3 gap-6">
+              {TESTIMONIALS.map((t, i) => (
+                <motion.div key={i} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.4, delay: i * 0.1 }}
+                  className="p-8 bg-slate-900/50 border border-slate-800 rounded-2xl hover:border-purple-500/20 transition-colors flex flex-col">
+                  <Quote className="w-8 h-8 text-purple-500/30 mb-4 flex-shrink-0" />
+                  <p className="text-slate-300 leading-relaxed mb-6 flex-1 italic">&ldquo;{t.quote}&rdquo;</p>
+                  <div className="flex items-center gap-1 mb-1">
+                    {[...Array(5)].map((_, j) => (
+                      <Star key={j} className="w-4 h-4 text-amber-400 fill-amber-400" />
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-3 mt-3">
+                    <div className="w-10 h-10 rounded-full bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-sm font-bold text-purple-400 flex-shrink-0">
+                      {t.avatar}
+                    </div>
+                    <div>
+                      <p className="text-white font-semibold text-sm">{t.name}</p>
+                      <p className="text-slate-500 text-xs">{t.role}</p>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
             </div>
           </div>
         </FadeIn>
@@ -367,10 +449,13 @@ export default function AcademyLanding() {
                 Empieza a monetizar{' '}
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-400">tu conocimiento hoy</span>
               </h2>
-              <p className="text-lg text-slate-400 mb-10 max-w-xl mx-auto">Crea tu academia y automatiza tu negocio.</p>
+              <p className="text-lg text-slate-400 mb-4 max-w-xl mx-auto">
+                <span className="text-white font-bold">14 días gratis</span>. Sin tarjeta. Sin compromiso.
+              </p>
+              <p className="text-slate-500 text-sm mb-10">Luego €49/mes. Incluye LMS, CRM, pagos y automatización.</p>
               <Link href="/auth/signup?vertical=academia">
                 <Button size="lg" className="bg-amber-600 hover:bg-amber-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-amber-600/30 group">
-                  Activar Volkern Academy
+                  Probar 14 días gratis
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </Button>
               </Link>
@@ -388,7 +473,7 @@ export default function AcademyLanding() {
             <p className="text-lg text-slate-400 font-medium mb-8">Volkern convierte contenido en ingresos.</p>
             <Link href="/auth/signup?vertical=academia">
               <Button size="lg" className="bg-amber-600 hover:bg-amber-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-amber-600/30 group">
-                Crear mi academia
+                Probar 14 días gratis
                 <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Button>
             </Link>
