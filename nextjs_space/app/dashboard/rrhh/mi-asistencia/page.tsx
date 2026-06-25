@@ -65,7 +65,7 @@ export default async function MiAsistenciaPage({ searchParams }: PageProps) {
 
   // ── 2) Estado de firma ────────────────────────────────────────────────────
   const acceptedPolicies: string[] = Array.isArray(employee?.acceptedPolicies)
-    ? (employee.acceptedPolicies as unknown as string[])
+    ? (employee!.acceptedPolicies as unknown as string[])
     : [];
 
   const hasSigned = !!employee?.noticeAcknowledgedAt;

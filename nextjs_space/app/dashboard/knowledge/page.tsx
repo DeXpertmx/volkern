@@ -483,7 +483,7 @@ export default function KnowledgeHubPage() {
                       return <span className="text-slate-400">Sin embedding</span>;
                     }
                     if (isStale) {
-                      return <span className="text-amber-500">Embedding desactualizado <AlertTriangle className="h-2.5 w-2.5 inline -mt-0.5" title="Embedding desactualizado (+30 días)" /></span>;
+                      return <span className="text-amber-500">Embedding desactualizado <AlertTriangle className="h-2.5 w-2.5 inline -mt-0.5" /></span>;
                     }
                     return <span className="text-green-600">Embedding generado <Zap className="h-2.5 w-2.5 inline -mt-0.5" /></span>;
                   })()}

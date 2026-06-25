@@ -34,8 +34,8 @@ export default function RedocPage() {
       {/* El custom element <redoc> se monta con el spec URL relativo
           al mismo origen /docs/redoc → /openapi.json. */}
       <div id="redoc-container" className="w-full">
-        {/* @ts-expect-error - <redoc> es un custom element registrado
-            por el bundle Redocly. */}
+        {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
+        {/* @ts-ignore El custom element lo registra Redocly en runtime */}
         <redoc
           spec-url="/openapi.json"
           hide-download-button="false"

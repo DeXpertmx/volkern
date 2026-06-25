@@ -18,7 +18,7 @@ export async function GET(request: Request) {
       subdomain: true,
       plan: true,
       logo: true
-    }
+    } as any
   })
 
   if (!tenant) {
