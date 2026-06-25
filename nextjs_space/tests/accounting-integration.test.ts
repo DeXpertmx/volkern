@@ -51,7 +51,10 @@ let isSuperadminUser = false;
 
 // ─── Setup / Teardown ─────────────────────────────────────────────────────
 
-describe('Integración: Slots de Asesoría Contable (DB real)', () => {
+if (!process.env.INTEGRATION_TESTS) {
+  describe.skip('Integración: Slots de Asesoría Contable (DB real)', () => {});
+} else {
+  describe('Integración: Slots de Asesoría Contable (DB real)', () => {
   beforeAll(async () => {
     // 1. Obtener usuario base
     testUser =
@@ -455,3 +458,4 @@ describe('Integración: Slots de Asesoría Contable (DB real)', () => {
     });
   });
 });
+}
