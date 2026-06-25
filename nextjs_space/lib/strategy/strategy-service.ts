@@ -41,7 +41,7 @@ export class StrategyService {
       const operationalCost = supportHours * hourlyRate;
 
       // Los gastos ya están incluidos en el proyecto via include
-      const directCosts = (project.expenses || []).reduce((sum, exp) => sum + (exp.amount || 0), 0);
+      const directCosts = (project.expenses || []).reduce((sum, exp) => sum + Number(exp.amount || 0), 0);
 
       const margin = revenue - directCosts - operationalCost;
       const roi = directCosts + operationalCost > 0 ? (margin / (directCosts + operationalCost)) * 100 : 0;
@@ -95,7 +95,7 @@ export class StrategyService {
 
       // Gastos recurrentes (Nóminas, etc.)
       const payrolls = await prisma.employee.findMany({ where: { tenantId } });
-      const monthlyPayroll = payrolls.reduce((sum, e) => sum + (e.salary || 0), 0);
+      const monthlyPayroll = payrolls.reduce((sum, e) => sum + Number(e.salary ?? 0), 0);
       const expectedOutflow = monthlyPayroll * (days / 30);
 
       const netBalance = currentBalance + expectedInflow - expectedOutflow;

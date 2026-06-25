@@ -194,7 +194,7 @@ export async function trackOrder(input: {
   const where: any = { tenantId };
   if (trackingNumber) where.trackingNumber = trackingNumber;
   if (orderRef) {
-    const salesOrder = await prisma.salesOrder.findFirst({
+    const salesOrder = await (prisma as any).salesOrder.findFirst({
       where: { tenantId, batchNumber: orderRef },
     });
     if (salesOrder) where.salesOrderId = salesOrder.id;
