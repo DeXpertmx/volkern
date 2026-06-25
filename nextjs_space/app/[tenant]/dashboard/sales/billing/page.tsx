@@ -1,7 +1,6 @@
 'use client';
 
 import { DirectInvoiceForm } from '@/components/finance/DirectInvoiceForm';
-import { FiscalPreviewer } from '@/components/finance/FiscalPreviewer';
 import { 
   Receipt, 
   ShieldCheck, 
