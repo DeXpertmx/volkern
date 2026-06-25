@@ -153,7 +153,7 @@ export class PayrollService {
       if (isWeekend(day)) return;
 
       const hasClockIn = attendanceLogs.some(log => isSameDay(log.timestamp, day));
-      const isOnVacation = approvedVacations.some(v => 
+      const isOnVacation = approvedVacations.some((v: any) => 
         day >= v.startDate && day <= v.endDate
       );
 

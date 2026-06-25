@@ -1,4 +1,5 @@
 import * as https from 'https';
+// @ts-ignore - no declaration file for node-forge
 import * as forge from 'node-forge';
 import { AEAT_CONFIG } from './config';
 

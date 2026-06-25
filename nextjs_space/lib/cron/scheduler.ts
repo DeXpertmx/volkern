@@ -208,8 +208,8 @@ export async function runGhostingRadar() {
             descripcion: `Gemma 4 detectó inactividad de ${lead.horasInactivo}h. 
 Sugerencia de Proactividad: El cliente parece haber dejado de responder. Revisa el historial para enviar un mensaje de rescate.`,
             fechaVencimiento: new Date(Date.now() + 1000 * 60 * 60 * 5), // Vence en 5 horas
-            prioridad: 'alta' as any, // Algunos esquemas usan enums o strings con prioridad
-          }
+            prioridad: 'alta',
+          } as any
         });
         totalAlerts++;
       }

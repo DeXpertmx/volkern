@@ -48,7 +48,7 @@ export class BillingService {
     // 1. Logging Forense del inicio del proceso
     const systemUser = await prisma.user.findFirst({ where: { tenantId } })
     
-    await prisma.auditLog.create({
+    await (prisma.auditLog.create as any)({
       data: {
         tenantId,
         userId: systemUser?.id || 'SYSTEM',
@@ -71,8 +71,8 @@ export class BillingService {
     try {
       const invoice = await InvoicingService.createInvoice({
         tenantId,
-        contactId,
-        amount: total,
+        contactId: contactId ?? undefined,
+        amount: total ?? undefined,
         currency: moneda || 'EUR',
         description: `Factura orden de venta ${numero}`,
         items: ordenVenta.items.map(item => ({

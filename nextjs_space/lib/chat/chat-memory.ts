@@ -158,7 +158,7 @@ export class ChatMemoryService {
         contenido: params.content,
         direccion: params.direction,
         canal: params.channel,
-        metadatos: params.metadata ?? {},
+        metadatos: (params.metadata ?? {}) as any,
       },
     })
 
