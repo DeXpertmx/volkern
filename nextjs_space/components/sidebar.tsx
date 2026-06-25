@@ -297,22 +297,23 @@ export function Sidebar() {
                   const effectiveAccountType = sessionAccountType || userAccountType;
                   const roleName = (session?.user as any)?.roleName;
 
-                  if (hub.requiredAccountType === 'SUPERADMIN') {
+                  const reqAccountType = hub.requiredAccountType as string;
+                  if (reqAccountType === 'SUPERADMIN') {
                     return roleName === 'Superadmin' || roleName === 'Admin';
                   }
 
                   // Mientras carga, permitir ver hubs si no hay accountType aún
                   if (isLoadingModules && !effectiveAccountType) {
-                    return hub.requiredAccountType !== 'SUPERADMIN' || roleName === 'Superadmin' || roleName === 'Admin';
+                    return reqAccountType !== 'SUPERADMIN' || roleName === 'Superadmin' || roleName === 'Admin';
                   }
 
-                  if (hub.requiredAccountType === 'AGENCY') {
+                  if (reqAccountType === 'AGENCY') {
                     const isAgencyAccount = effectiveAccountType === 'AGENCY';
                     const hasAgencyModule = activeModules.includes('agency');
                     return (isAgencyAccount && hasAgencyModule) || roleName === 'Superadmin';
                   }
 
-                  if (hub.requiredAccountType === 'BUSINESS') {
+                  if (reqAccountType === 'BUSINESS') {
                     const isBusiness = effectiveAccountType === 'BUSINESS' || effectiveAccountType === 'AGENCY' || roleName === 'Superadmin' || roleName === 'Admin' || roleName === 'Administrador';
                     if (!isBusiness) return false;
                     

@@ -126,7 +126,7 @@ export default function ScrollReveal({
     : { duration: variant === 'fadeIn' ? 0.6 : 0.4, delay, ease: 'easeOut' as const };
 
   const MotionTag: React.ComponentType<any> =
-    typeof Tag === 'string' ? (motion as Record<string, React.ComponentType<any>>)[Tag] : Tag;
+    typeof Tag === 'string' ? (motion as unknown as Record<string, React.ComponentType<any>>)[Tag] : Tag;
 
   return (
     <MotionTag

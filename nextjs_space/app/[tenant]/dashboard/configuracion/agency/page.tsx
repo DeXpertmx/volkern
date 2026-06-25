@@ -566,7 +566,8 @@ export default function AgencyConfigPage() {
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                if (confirmToggle?.action === 'activate') {
+                if (!confirmToggle) return;
+                if (confirmToggle.action === 'activate') {
                   handleActivate(confirmToggle.id)
                 } else {
                   handleDeactivate(confirmToggle.id)

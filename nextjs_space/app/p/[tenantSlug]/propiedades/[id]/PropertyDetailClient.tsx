@@ -329,7 +329,6 @@ export default function PropertyDetailClient({
                       value={contactForm.name}
                       onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:outline-none"
-                      style={{ focusRingColor: brandingColor }}
                       placeholder="Tu nombre"
                     />
                   </div>

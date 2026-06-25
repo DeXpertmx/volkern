@@ -167,7 +167,7 @@ export function NotificationConfig() {
                       </div>
                       <Switch
                         checked={channelConfig.enabled}
-                        onCheckedChange={(checked) => updateChannel(channel.id, 'enabled', checked)}
+                        onCheckedChange={(checked) => updateChannel(channel.id, 'enabled', checked as any)}
                       />
                     </div>
                     <CardDescription>{channel.description}</CardDescription>
@@ -180,7 +180,7 @@ export function NotificationConfig() {
                           <Input
                             id={`${channel.id}-${field.key}`}
                             type={field.type}
-                            value={channelConfig[field.key as keyof ChannelConfig] || ''}
+                            value={String(channelConfig[field.key as keyof ChannelConfig] || '')}
                             onChange={(e) => updateChannel(channel.id, field.key, e.target.value)}
                             placeholder={field.placeholder}
                           />
