@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { 
   Share2, 
   Plus, 
-  Calendar, 
   BarChart3, 
   Settings2, 
   Facebook, 
@@ -13,7 +12,6 @@ import {
   Linkedin, 
   LayoutGrid,
   Clock,
-  Send,
   MoreVertical,
   CheckCircle2,
   AlertCircle,
@@ -31,8 +29,23 @@ import { toast } from 'sonner'
 export default function SocialDashboardPage() {
   const [activeTab, setActiveTab] = useState('overview')
   const [isCreatorOpen, setIsCreatorOpen] = useState(false)
-  const [posts, setPosts] = useState<any[]>([])
-  const [configs, setConfigs] = useState<Record<string, any>>({})
+  interface PostData {
+    id: string
+    content: string
+    status: string
+    platforms: string[]
+    mediaUrls?: string[]
+    createdAt: string
+  }
+  interface SocialConfig {
+    platform: string
+    isActive?: boolean
+    profileId?: string
+    profileName?: string
+    profileImage?: string
+  }
+  const [posts, setPosts] = useState<PostData[]>([])
+  const [configs, setConfigs] = useState<Record<string, SocialConfig>>({})
   const [loading, setLoading] = useState(true)
 
   const fetchPosts = async () => {
@@ -47,7 +60,7 @@ export default function SocialDashboardPage() {
 
       if (postsData.success) setPosts(postsData.posts)
       if (configsData.success) {
-        const map: Record<string, any> = {}
+        const map: Record<string, SocialConfig> = {}
         for (const c of configsData.configs) map[c.platform] = c
         setConfigs(map)
       }
