@@ -1,4 +1,6 @@
 import { vi } from 'vitest';
+import 'dotenv/config';
+
 
 // Mock Next.js headers/cookies
 vi.mock('next/headers', () => ({

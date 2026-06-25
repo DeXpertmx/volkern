@@ -13,6 +13,7 @@
     "postinstall": "patch-package",
     "test:bash": "bash tests/fence-states.test.sh",
     "test": "vitest run && bash tests/fence-states.test.sh",
+    "test:integration": "INTEGRATION_TESTS=true npx vitest run tests/accounting-integration.test.ts",
     "test:e2e:reconciliation": "bash scripts/run-e2e-reconciliation.sh",
     "test:e2e:reconciliation:ci": "bash scripts/run-e2e-reconciliation-ci.sh",
     "test:e2e:reconciliation:browser": "bash scripts/run-e2e-reconciliation-browser.sh",
