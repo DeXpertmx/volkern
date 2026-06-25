@@ -116,7 +116,7 @@ export async function testTenantIsolation(
 
   const leakedRows = await client.$queryRaw<Array<{ count: number }>>`
     SELECT COUNT(*)::int as count
-    FROM ${client.$queryRaw(tableName)}
+    FROM ${client.$queryRaw([tableName] as any)}
     WHERE "tenantId" IS NOT NULL
       AND "tenantId" != ${tenantId}
   `;

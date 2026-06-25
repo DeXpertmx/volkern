@@ -94,7 +94,7 @@ RESPONDE EN ESTE FORMATO JSON:
    */
   static async sendGlobalBriefing() {
     const users = await prisma.user.findMany({
-      where: { active: true, tenantId: { not: null } }
+      where: { active: true, tenantId: { not: null } } as any
     });
 
     for (const user of users) {

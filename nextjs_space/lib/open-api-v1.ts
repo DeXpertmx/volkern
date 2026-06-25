@@ -42,7 +42,7 @@ export const bodySchemaV1Json = zodToJsonSchema(ExternalInvoiceCreateSchema, {
   errorMessages: false,        // Solo tipos/constraints, no textos de error
   topLevelAnyOf: false,
   definitions: false,
-});
+} as any);
 
 // ─── Documento OpenAPI 3.0 completo ──────────────────────────────
 

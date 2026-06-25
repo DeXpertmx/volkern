@@ -42,7 +42,7 @@ export class VaultService {
     // Info: tenantId + domain separation
     return Buffer.from(crypto.hkdfSync(
       'sha256',
-      MASTER_KEY,
+      MASTER_KEY!,
       Buffer.from(vaultSeed + TENANT_PEPPER), // Salt combinado
       Buffer.from(`${tenantId}:finance-vault-v2`), // Info (Domain Separation)
       32

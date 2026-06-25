@@ -203,7 +203,7 @@ export async function seedAllRealEstateTenants() {
   const tenantsWithProperties = await globalPrisma.tenant.findMany({
     where: {
       activo: true,
-    },
+    } as any,
     select: { id: true },
   });
 

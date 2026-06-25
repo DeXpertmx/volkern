@@ -63,7 +63,7 @@ class SocialPostingService {
         status: allSuccess ? 'published' : (someSuccess ? 'partial' : 'failed'),
         publishedAt: someSuccess ? new Date() : undefined,
         errorLog: allSuccess ? null : JSON.stringify(results),
-        metadata: { results }
+        metadata: { results } as any
       }
     });
 
