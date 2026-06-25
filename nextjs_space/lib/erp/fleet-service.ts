@@ -119,7 +119,7 @@ export class FleetService {
   /**
    * Regenerar el deviceKey GPS de un vehículo
    */
-  static async regenerateGpsDeviceKey(vehicleId: string, tenantId: string) {
+  static async regenerateGpsDeviceKey(vehicleId: string, tenantId: string): Promise<{ gpsDeviceId: string; plate: string }> {
     const vehicle = await (prisma as any).erp_fleet_vehicles.findUnique({
       where: { id: vehicleId, tenantId },
     });

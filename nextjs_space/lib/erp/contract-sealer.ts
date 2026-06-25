@@ -61,7 +61,7 @@ export class ContractSealer {
           }
         }
       }),
-      prisma.auditLog.create({
+      (prisma.auditLog.create as any)({
         data: {
           tenantId: contract.tenantId,
           userId: userId,

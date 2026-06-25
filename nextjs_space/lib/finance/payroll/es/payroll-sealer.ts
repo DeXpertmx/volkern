@@ -61,7 +61,7 @@ export class PayrollSealer {
           operatorNote: operatorNote
         }
       }),
-      prisma.auditLog.create({
+      (prisma.auditLog.create as any)({
         data: {
           tenantId: record.tenantId,
           userId: userId,

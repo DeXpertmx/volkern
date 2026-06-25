@@ -92,7 +92,7 @@ export async function sendTelegram(config: any, ctx: ActionContext, attempt = 1)
   const processedMessage = replaceVariables(message, ctx.state)
 
   try {
-    const creds = await loadTelegramCredentials(tenantId)
+    const creds = await loadTelegramCredentials()
     const finalChatId = chatId || creds?.admin_chat_id
     if (!finalChatId) {
       console.error('[Automation] No chatId provided for sendTelegram')

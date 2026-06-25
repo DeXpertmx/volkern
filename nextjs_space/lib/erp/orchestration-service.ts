@@ -62,7 +62,7 @@ export class OrchestrationService {
       if (item.catalogItem.isManufactured) {
         // ESTRATEGIA: PRODUCCIÓN CONTRA PEDIDO (MTO)
         // Buscar BoM activo para el producto
-        const bom = await tx.billOfMaterials.findFirst({
+        const bom = await (tx.billOfMaterials.findFirst as any)({
           where: { productId: item.catalogItemId, tenantId, active: true }
         });
 

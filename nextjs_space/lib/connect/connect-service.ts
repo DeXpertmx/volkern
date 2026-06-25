@@ -140,7 +140,7 @@ export class ConnectService {
         data: {
           tenantId: data.tenantId,
           name: data.name,
-          type: data.type
+          type: data.type as any
         }
       });
 

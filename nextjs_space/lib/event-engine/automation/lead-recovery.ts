@@ -67,7 +67,7 @@ export class LeadRecoveryService {
       }
     }
 
-    await prisma.systemAlert.create({
+    await (prisma.systemAlert.create as any)({
       data: {
         level: 'INFO',
         message: `Lead recovery scan: ${recovered}/${leadsInactivos.length} recovered`,
