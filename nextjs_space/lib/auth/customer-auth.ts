@@ -25,7 +25,7 @@ export class CustomerAuthService {
   }) {
     const hashedPassword = await bcrypt.hash(data.password, 12);
 
-    return await prisma.erp_customer_users.create({
+    return await (prisma.erp_customer_users.create as any)({
       data: {
         tenantId: data.tenantId,
         email: data.email.toLowerCase(),

@@ -699,7 +699,6 @@ export const SkillOrchestratorAgent = {
         'ajustar_stock': 'inventory',
         'consumir_inventario': 'inventory',
         'watchdog_inventario': 'inventory',
-        'buscar_producto': 'catalog',
         'gestionar_catalogo': 'catalog',
 
         // ERP - Producción & Calidad

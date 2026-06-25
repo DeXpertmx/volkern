@@ -19,7 +19,7 @@ interface TrialBalanceReport {
 export async function getTrialBalance(tenantId: string): Promise<TrialBalanceReport> {
   const accounts = await prisma.accountingAccount.findMany({
     where: { tenantId },
-    orderBy: [{ group: 'asc' }, { code: 'asc' }],
+    orderBy: { group: 'asc' as any, code: 'asc' } as any,
   })
 
   const rows: TrialBalanceRow[] = accounts.map((a) => {

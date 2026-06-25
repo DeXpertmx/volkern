@@ -57,7 +57,7 @@ export function addEvent(event: AnalyticsEvent): void {
     .create({
       data: {
         event: event.event,
-        metadata: event.metadata || {},
+        metadata: (event.metadata || {}) as any,
         ip: event.ip,
         userAgent: event.userAgent,
         referer: event.referer,

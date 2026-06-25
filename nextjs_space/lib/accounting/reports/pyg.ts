@@ -30,7 +30,7 @@ const INGRESO_GROUPS: { label: string; groupFilter: (g: number) => boolean }[] =
 export async function getPyG(tenantId: string): Promise<PyGReport> {
   const accounts = await prisma.accountingAccount.findMany({
     where: { tenantId, type: { in: ['GASTO', 'INGRESO'] } },
-    orderBy: [{ group: 'asc' }, { code: 'asc' }],
+    orderBy: { group: 'asc' as any, code: 'asc' } as any,
   })
 
   const gastos = accounts.filter((a) => a.type === 'GASTO' && Number(a.balance) !== 0)
