@@ -46,6 +46,7 @@ import {
   Sun,
   Snowflake,
   Moon,
+  type LucideIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -84,7 +85,7 @@ interface Stats {
   }>;
 }
 
-const categoryIcons: Record<string, any> = {
+const categoryIcons: Record<string, LucideIcon> = {
   Flame: Flame,
   Sun: Sun,
   Snowflake: Snowflake,
