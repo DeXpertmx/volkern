@@ -134,7 +134,7 @@ export class PiiFilter {
       (a, b) => b.placeholder.length - a.placeholder.length
     )
     for (const match of sorted) {
-      result = result.replaceAll(match.placeholder, match.original)
+      result = result.split(match.placeholder).join(match.original)
     }
     return result
   }

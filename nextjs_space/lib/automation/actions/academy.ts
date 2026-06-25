@@ -80,7 +80,7 @@ export async function notifyCertification(config: any, ctx: ActionContext): Prom
   if (inscripcion) {
     const { notifyByTelegram } = await import('@/lib/skills/notification-layer')
     const { sendEmail } = await import('@/lib/resend-email')
-    const context = createSystemContext(ctx.state.tenantId)
+    const context = createSystemContext(ctx.state.tenantId!)
     const message = '🎓 *¡Felicitaciones!*\n\nHas completado el curso y puedes descargar tu certificado.'
     notifyByTelegram(message, context).catch(() => {})
 

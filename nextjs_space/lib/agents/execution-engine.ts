@@ -229,7 +229,7 @@ export const ExecutionEngine = {
         message: last.output.message,
         skill: last.action,
         data: last.output.data || undefined,
-        error: last.output.error || false
+        error: !!last.output.error || false
       };
     }
 

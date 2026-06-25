@@ -109,7 +109,7 @@ export class ReconciliationService {
 
       case 'STRIPE': {
         const session = await StripeBankingService.createConnectSession(tenantId);
-        return { sessionId: session.id, url: session.url || null };
+        return { sessionId: session.id, url: (session as any).url || null };
       }
 
       case 'NORDIGEN': {

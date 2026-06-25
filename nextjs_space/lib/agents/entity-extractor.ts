@@ -241,7 +241,7 @@ export class EntityExtractorAgent {
 
   private async logExtraction(data: { message: string; intent: string; entities: Partial<ExtractedEntities>; missingParams: string[]; duration: number }): Promise<void> {
     try {
-      await prisma.chatbotAuditLog.create({
+      await (prisma.chatbotAuditLog.create as any)({
         data: {
           event: 'entity_extraction',
           metadata: { message: data.message.substring(0, 200), intent: data.intent, entities: data.entities, missingParams: data.missingParams, durationMs: data.duration },

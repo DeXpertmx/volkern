@@ -18,7 +18,7 @@ export async function seedDemoAccountingData(tenantId: string) {
         credit: l.credit,
       }))
     )
-    return EntryManager.createEntry({
+    return (EntryManager.createEntry as any)({
       tenantId,
       date: new Date(date),
       description: desc,

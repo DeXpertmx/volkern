@@ -271,7 +271,7 @@ export const ConversationContextAgent = {
         collectedEntities: context.collectedEntities,
         missingEntities: context.missingEntities,
         facts: context.facts,
-      },
+      } as any,
       context.history.map((m) => ({
         role: m.role,
         content: m.message,
