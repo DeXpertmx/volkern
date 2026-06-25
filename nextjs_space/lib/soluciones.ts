@@ -69,6 +69,14 @@ export const SOLUTION_MODULES: SolutionModule[] = [
       'Formación, gestión de contenido y capacitación interna o externa.',
     href: '/soluciones/academy',
   },
+  {
+    iconKey: 'Receipt',
+    color: 'green',
+    name: 'Facturación',
+    description:
+      'Facturación, cobros y catálogo para autónomos y pymes. Sin complicaciones.',
+    href: '/soluciones/facturacion',
+  },
 ];
 
 export const COLOR_MAP: Record<
@@ -123,6 +131,13 @@ export const COLOR_MAP: Record<
     icon: 'text-yellow-400',
     glow: 'bg-yellow-500/5',
     badge: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
+  },
+  green: {
+    bg: 'bg-green-500/10',
+    border: 'border-green-500/20 hover:border-green-500/40',
+    icon: 'text-green-400',
+    glow: 'bg-green-500/5',
+    badge: 'bg-green-500/10 text-green-400 border-green-500/20',
   },
 };
 

@@ -15,4 +15,5 @@ export const verticalLinks: VerticalLink[] = [
   { name: 'Industria', href: '/soluciones/industria' },
   { name: 'Recursos Humanos', href: '/soluciones/rrhh' },
   { name: 'CRM Ventas', href: '/soluciones/crm-ventas' },
+  { name: 'Facturación', href: '/soluciones/facturacion' },
 ]

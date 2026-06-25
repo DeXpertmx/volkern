@@ -13,6 +13,7 @@ import {
   Factory,
   UserCheck,
   Zap,
+  Receipt,
   Sparkles,
   ArrowUpRight,
   Layers,
@@ -32,6 +33,7 @@ const ICON_MAP: Record<string, React.ComponentType<any>> = {
   UserCheck,
   Factory,
   GraduationCap,
+  Receipt,
 };
 
 /* ─── Component ───────────────────────────────────────────────────────────── */
