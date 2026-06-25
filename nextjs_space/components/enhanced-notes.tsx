@@ -114,7 +114,7 @@ export function EnhancedNotes({ leadId, contactId }: EnhancedNotesProps) {
           </div>
         ) : (
           <div className="space-y-3">
-            {notes.map((note) => (
+            {notes.map((note: any) => (
               <SmartNoteCard key={note.id} note={note} />
             ))}
           </div>

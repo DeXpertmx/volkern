@@ -149,7 +149,7 @@ export const createServicesBlock = (editor: Editor) => {
             });
           };
 
-          loadServices();
+          load();
         }
       }
     }

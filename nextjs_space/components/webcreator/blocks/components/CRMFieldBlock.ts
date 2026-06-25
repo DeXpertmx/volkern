@@ -30,7 +30,7 @@ export const createCRMFieldBlock = (editor: Editor) => {
           <label class="v-field-label" data-gjs-editable="true">Nuevo Campo CRM</label>
           <input type="text" class="v-field-input" placeholder="Ingrese dato..." data-volkern-map="campo_personalizado">
         </div>
-      `
+      ` as any
     }
   });
 
@@ -43,7 +43,7 @@ export const createCRMFieldBlock = (editor: Editor) => {
             name: 'data-volkern-map',
             label: 'Vincular con CRM',
             placeholder: 'ej: nombre, email, telefono',
-            target: '.v-field-input'
+            target: '.v-field-input' as any
           }
         ]
       }

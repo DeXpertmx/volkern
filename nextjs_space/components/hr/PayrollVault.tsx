@@ -178,7 +178,7 @@ export function PayrollVault() {
 
         <TabsContent value="vault">
           <div className="grid grid-cols-1 gap-4">
-            {payrolls.map((p) => (
+            {payrolls.map((p: any) => (
               <Card key={p.id} className="group border shadow-sm hover:shadow-xl hover:border-primary/20 transition-all rounded-[1.5rem] bg-white overflow-hidden">
                 <CardContent className="p-0">
                    <div className="flex items-center justify-between p-6">

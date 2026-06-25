@@ -70,7 +70,7 @@ export default function CalidadDashboard() {
     if (tabId === 'inspecciones') url.searchParams.delete('section');
     else url.searchParams.set('section', tabId);
     window.history.pushState({}, '', url);
-    window.dispatchEvent(new PopStateEvent('popstate'));
+    window.dispatchEvent(new PopStateEvent('popstate') as PopStateEvent);
   }
 
   return (
@@ -252,7 +252,7 @@ function NonConformities({ issues, loading }: { issues: any[], loading: boolean 
     title: i.description,
     level: i.severity,
     status: i.status,
-    date: new Date(i.createdAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'SHORT' }).toUpperCase()
+    date: new Date(i.createdAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }).toUpperCase()
   }))
 
   return (

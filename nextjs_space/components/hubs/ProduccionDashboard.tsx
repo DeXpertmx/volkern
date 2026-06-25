@@ -1080,7 +1080,7 @@ export default function ProduccionDashboard() {
                   <input 
                     type="file" 
                     accept="image/*" 
-                    capture="camera"
+                    capture="environment"
                     className="absolute inset-0 opacity-0 z-20 cursor-pointer"
                     required
                   />

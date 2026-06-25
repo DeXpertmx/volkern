@@ -106,7 +106,7 @@ function ContactoSelector({
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Nuevo contacto inline
-  const [newContact, setNewContact] = useState({ nombre: '', email: '', telefono: '', tipo: 'person' as const });
+  const [newContact, setNewContact] = useState({ nombre: '', email: '', telefono: '', tipo: 'person' as 'person' | 'company' });
   const [newFiscal, setNewFiscal] = useState({ nif: '', razonSocial: '', direccionFiscal: '', ciudadFiscal: '', pais: 'España', tipoIdFiscal: 'NIF' });
   const [creating, setCreating] = useState(false);
 

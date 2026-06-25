@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { History, ShieldAlert, Bot, User, CheckCircle, Clock } from 'lucide-react';
+import { History, ShieldAlert, Bot, User, CheckCircle, Clock, ShieldCheck } from 'lucide-react';
 
 interface AuditLog {
   id: string;
