@@ -1199,7 +1199,7 @@ export default function ChatbotPage() {
                               {hasEmbedding ? 'Indexado' : 'Sin embedding'}
                             </span>
                             {isStale && (
-                              <AlertTriangle className="h-3 w-3 text-amber-500" title={`Embedding desactualizado (+${daysStale} días)`} />
+                              <AlertTriangle className="h-3 w-3 text-amber-500" />
                             )}
                             {hasEmbedding && (
                               <span className="text-muted-foreground truncate" title={generatedAt || kbSelectedArticle.vectorId!}>

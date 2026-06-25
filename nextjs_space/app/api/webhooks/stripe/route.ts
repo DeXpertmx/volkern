@@ -383,12 +383,12 @@ export async function POST(request: NextRequest) {
                   },
                   montoPagado: cita.montoPagado,
                   stripePaymentId: cita.stripePaymentId,
-                  tenantId: cita.tenantId || ''
+                  tenantId: cita.tenantId ?? ''
                 })
 
                 await prisma.lead.update({
-                  where: { id: cita.leadId },
-                  data: { estado: 'convertido' }
+                  where: { id: cita.leadId! },
+                  data: { estado: 'convertido' } as any
                 })
 
                 await triggerAutomation('pago_recibido', {

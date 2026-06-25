@@ -36,7 +36,7 @@ function generateMonthsBack(count: number): string[] {
 
 // ─── Route ───────────────────────────────────────────────────────────────────
 
-export const GET = withTenantAuth(async (_request: NextRequest, auth) => {
+export const GET = (withTenantAuth as any)(async (_request: NextRequest, auth: any) => {
   try {
     const tenantId = auth.tenant!.id
     const months = generateMonthsBack(MONTHS_BACK)

@@ -165,7 +165,7 @@ export const POST = withTenantAuth(
               rejectedCount: cached.rejectedCount,
               errorCount: cached.errorCount,
               createdAt: cached.createdAt.toISOString(),
-              submittedAt: cached.submittedAt?.toISOString() ?? null,
+              submittedAt: cached.submittedAt?.toISOString() ?? undefined,
             },
           });
         }
@@ -399,7 +399,7 @@ export const POST = withTenantAuth(
             await PayrollSealer.sealPayroll(
               record.id,
               apiKeyId, // UserId = apiKeyId
-              body.operatorNote ?? null
+              body.operatorNote ?? undefined
             );
           } catch (sealErr) {
             const msg = sealErr instanceof Error ? sealErr.message : "SEAL_ERROR";
@@ -468,8 +468,8 @@ export const POST = withTenantAuth(
           convenioCode: finalRun.convenioCode,
           createdAt: finalRun.createdAt.toISOString(),
           completedAt: finalRun.completedAt?.toISOString() ?? null,
-          submittedAt: finalRun.submittedAt?.toISOString() ?? null,
-          externalRunRef: finalRun.externalRunRef,
+          submittedAt: finalRun.submittedAt?.toISOString() ?? undefined,
+          externalRunRef: finalRun.externalRunRef ?? undefined,
         },
         records,
         errors,

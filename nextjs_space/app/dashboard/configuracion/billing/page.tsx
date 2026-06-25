@@ -24,7 +24,7 @@ const NEW_PLANS = [PLANS.SCALE, PLANS.COMPLIANCE]
 const OLD_PLANS = [PLANS.ESENCIAL, PLANS.PROFESIONAL, PLANS.INFINITY]
 
 function isNewPlan(plan: string | undefined): boolean {
-  return plan ? NEW_PLANS.includes(plan) : false
+  return plan ? (NEW_PLANS as string[]).includes(plan) : false
 }
 
 function getPlanDisplayName(plan: string | undefined): string {

@@ -41,7 +41,7 @@ export const POST = withTenantAuth(async (request, auth, { params }) => {
         resourceType: 'SupportTicket',
         resourceId: id,
         details: `Escalado manual ejecutado por ${auth.user?.name}. Nota: ${body.note}`
-      });
+      } as any);
 
       return NextResponse.json(ticket);
     });

@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSuggestedUpgrade, getTenantPlan, FEATURE_LABELS, FeatureName } from '@/lib/subscription';
 import { withTenantAuth } from '@/lib/api-key-auth';
 
-export const GET = withTenantAuth(async (request: NextRequest, auth) => {
+export const GET = (withTenantAuth as any)(async (request: NextRequest, auth: any) => {
   try {
     const tenantId = auth.tenant!.id;
     

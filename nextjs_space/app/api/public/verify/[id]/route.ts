@@ -9,7 +9,7 @@ export async function GET(
   try {
     const { id } = params
 
-    const signature = await prisma.digitalSignature.findUnique({
+    const signature = await (prisma as any).digitalSignature.findUnique({
       where: { id },
       include: {
         tenant: {

@@ -11,8 +11,8 @@ export default function LiveChatPage() {
   
   return (
     <HubCockpit 
-      title={liveChatItem.name}
-      description={liveChatItem.description}
+      title={liveChatItem.name!}
+      description={liveChatItem.description!}
       items={[]} // No sub-items for now
       icon={Headset}
       dashboard={<LiveChatManager />}
