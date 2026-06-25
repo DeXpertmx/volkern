@@ -22,7 +22,7 @@ describe('PatternDetector — detectPatterns', () => {
   it('debe devolver array vacío si hay pocos logs (< minSamples)', async () => {
     const { prisma } = await import('@/lib/db')
     vi.mocked(prisma.chatbotAuditLog.findMany).mockImplementation(async ({ where }: any) => {
-      if (where?.event === 'conversation_analysis') return []
+      if (where?.intent === 'conversation_analysis') return []
       return [] // audit logs vacíos
     })
 
@@ -45,7 +45,7 @@ describe('PatternDetector — detectPatterns', () => {
     }))
 
     vi.mocked(prisma.chatbotAuditLog.findMany).mockImplementation(async ({ where }: any) => {
-      if (where?.event === 'conversation_analysis') return []
+      if (where?.intent === 'conversation_analysis') return []
       return auditLogs
     })
 
@@ -70,7 +70,7 @@ describe('PatternDetector — detectPatterns', () => {
     }))
 
     vi.mocked(prisma.chatbotAuditLog.findMany).mockImplementation(async ({ where }: any) => {
-      if (where?.event === 'conversation_analysis') return []
+      if (where?.intent === 'conversation_analysis') return []
       return auditLogs
     })
 
@@ -100,7 +100,7 @@ describe('PatternDetector — detectPatterns', () => {
       event: 'conversation_analysis',
       createdAt: new Date(),
       severity: 'high',
-      metadata: {
+      skillParams: {
         sentiment: i < 3 ? 'negative' : 'neutral',
         sentimentScore: i < 3 ? 15 : 40,
         resolved: false,
@@ -113,7 +113,7 @@ describe('PatternDetector — detectPatterns', () => {
     let callCount = 0
     vi.mocked(prisma.chatbotAuditLog.findMany).mockImplementation(async ({ where }: any) => {
       callCount++
-      if (where?.event === 'conversation_analysis') return analyses
+      if (where?.intent === 'conversation_analysis') return analyses
       return auditLogs
     })
 
@@ -135,7 +135,7 @@ describe('PatternDetector — detectPatterns', () => {
     }))
 
     vi.mocked(prisma.chatbotAuditLog.findMany).mockImplementation(async ({ where }: any) => {
-      if (where?.event === 'conversation_analysis') return []
+      if (where?.intent === 'conversation_analysis') return []
       return auditLogs
     })
 
@@ -165,8 +165,9 @@ describe('PatternDetector — getRecentPatterns', () => {
         id: 'pattern-1',
         severity: 'high',
         createdAt: new Date('2026-06-15T10:00:00Z'),
-        metadata: {
+        skillParams: {
           type: 'high_unknown_rate',
+          severity: 'high',
           description: '50% de mensajes clasificados como unknown',
           value: 50,
           threshold: 30,

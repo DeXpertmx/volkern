@@ -138,7 +138,7 @@ describe('ConversationAnalyzer — getRecentAnalyses', () => {
         id: 'log-1',
         tenantId: 'tenant-1',
         createdAt: new Date('2026-06-15T10:00:00Z'),
-        metadata: {
+        skillParams: {
           conversationId: 'conv-1',
           sentiment: 'positive',
           sentimentScore: 85,
