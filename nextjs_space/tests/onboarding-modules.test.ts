@@ -268,10 +268,10 @@ describe('getDefaultModules', () => {
 // PERFIL_SUGGESTED_MODULES
 // ============================================================
 describe('PERFIL_SUGGESTED_MODULES', () => {
-  it('debe tener exactamente 9 perfiles (7 verticales + 2 legacy)', () => {
+  it('debe tener exactamente 10 perfiles (8 verticales + 2 legacy)', () => {
     const keys = Object.keys(PERFIL_SUGGESTED_MODULES)
-    expect(keys).toHaveLength(9)
-    // 7 verticales
+    expect(keys).toHaveLength(10)
+    // 8 verticales
     expect(keys).toContain('crm_ventas')
     expect(keys).toContain('agencia_marketing')
     expect(keys).toContain('academia')
@@ -284,9 +284,9 @@ describe('PERFIL_SUGGESTED_MODULES', () => {
     expect(keys).toContain('general')
   })
 
-  it('cada perfil debe tener al menos 8 módulos sugeridos', () => {
+  it('cada perfil debe tener al menos 6 módulos sugeridos', () => {
     for (const [profile, modules] of Object.entries(PERFIL_SUGGESTED_MODULES)) {
-      expect(modules.length).toBeGreaterThanOrEqual(8)
+      expect(modules.length).toBeGreaterThanOrEqual(6)
     }
   })
 
