@@ -36,8 +36,17 @@ import { toast } from 'sonner'
 import { apiFetch } from '@/lib/api-client'
 import { DashboardLayout } from '@/components/dashboard-layout'
 
+interface QuizData {
+  id: string;
+  titulo: string;
+  descripcion?: string;
+  tipoQuiz: string;
+  tiempoLimiteMinutos?: number;
+  _count: { preguntas: number; intentos: number };
+}
+
 export default function QuizzesPage() {
-  const [quizzes, setQuizzes] = useState<any[]>([])
+  const [quizzes, setQuizzes] = useState<QuizData[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
 
