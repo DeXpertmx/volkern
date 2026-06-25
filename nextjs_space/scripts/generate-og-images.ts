@@ -85,6 +85,12 @@ const OG_DEFS: OgDef[] = [
     tagline: 'Controla rutas, vehículos y entregas en tiempo real. Desde €59/mes.',
     color: '#14B8A6',
   },
+  {
+    slug: 'precios',
+    vertical: 'Precios',
+    tagline: '8 verticales. Precios claros desde €19/mes. 14 días gratis sin permanencia.',
+    color: '#6366F1',
+  },
 ]
 
 // ─── SVG template ───────────────────────────────────────────────────────────
