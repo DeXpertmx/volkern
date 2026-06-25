@@ -110,10 +110,9 @@ describe('ImprovementEngine — generateSuggestions', () => {
     // Simular que ya hay 10 sugerencias recientes (MAX_SUGGESTIONS)
     const existingSuggestions = Array.from({ length: 10 }, (_, i) => ({
       id: `sug-${i}`,
-      event: 'improvement_suggestion',
       severity: 'info',
       createdAt: new Date(),
-      metadata: {
+      skillParams: {
         id: `imp_${i}`,
         type: 'add_training_examples',
         title: `Sugerencia ${i}`,
@@ -157,7 +156,7 @@ describe('ImprovementEngine — getRecentSuggestions', () => {
         event: 'improvement_suggestion',
         severity: 'high',
         createdAt: new Date('2026-06-15T10:00:00Z'),
-        metadata: {
+        skillParams: {
           id: 'imp_abc123',
           type: 'add_training_examples',
           title: 'Mejorar clasificación de intents',
@@ -197,7 +196,7 @@ describe('ImprovementEngine — updateSuggestionStatus', () => {
     const { prisma } = await import('@/lib/db')
     vi.mocked(prisma.chatbotAuditLog.findFirst).mockResolvedValueOnce({
       id: 'sug-1',
-      metadata: { id: 'imp_abc', status: 'pending', type: 'add_training_examples' },
+      skillParams: { id: 'imp_abc', status: 'pending', type: 'add_training_examples' },
     })
 
     const result = await updateSuggestionStatus('tenant-1', 'imp_abc', 'applied')
@@ -206,7 +205,7 @@ describe('ImprovementEngine — updateSuggestionStatus', () => {
       expect.objectContaining({
         where: { id: 'sug-1' },
         data: expect.objectContaining({
-          metadata: expect.objectContaining({
+          skillParams: expect.objectContaining({
             status: 'applied',
           }),
         }),
