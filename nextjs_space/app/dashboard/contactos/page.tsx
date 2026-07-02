@@ -21,7 +21,8 @@ import {
   Upload,
   Loader2,
   HelpCircle,
-  ShieldCheck
+  ShieldCheck,
+  X
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -104,7 +105,11 @@ export default function ContactosPage() {
   const [filteredContacts, setFilteredContacts] = useState<Contact[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
+  // Clave para persistencia en localStorage
+  const FILTERS_KEY = 'volkern-contacts-filters'
+
   const [tipoFilter, setTipoFilter] = useState<string>('all')
+  const [filtersRestored, setFiltersRestored] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingContact, setEditingContact] = useState<Contact | null>(null)
   const [companies, setCompanies] = useState<Contact[]>([])
@@ -142,6 +147,35 @@ export default function ContactosPage() {
   useEffect(() => {
     filterContacts()
   }, [searchTerm, tipoFilter, contacts])
+
+  // Restaurar filtros guardados tras montaje (evita SSR mismatch)
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(FILTERS_KEY)
+      if (saved) {
+        const filters = JSON.parse(saved)
+        if (filters.searchTerm) setSearchTerm(filters.searchTerm)
+        if (filters.tipoFilter) setTipoFilter(filters.tipoFilter)
+      }
+    } catch {}
+    setFiltersRestored(true)
+  }, [])
+
+  // Persistir filtros cuando cambian
+  useEffect(() => {
+    if (!filtersRestored) return
+    try {
+      localStorage.setItem(FILTERS_KEY, JSON.stringify({
+        searchTerm,
+        tipoFilter,
+      }))
+    } catch {}
+  }, [searchTerm, tipoFilter, filtersRestored])
+
+  const clearFilters = () => {
+    setSearchTerm('')
+    setTipoFilter('all')
+  }
 
   const fetchContacts = async () => {
     try {
@@ -461,6 +495,18 @@ export default function ContactosPage() {
       {/* Filtros y acciones */}
       <Card>
         <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-lg">Filtros y Acciones</CardTitle>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearFilters}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-3.5 w-3.5 mr-1" />
+              Limpiar filtros
+            </Button>
+          </div>
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="flex-1 flex flex-col md:flex-row gap-4">
               {/* Búsqueda */}

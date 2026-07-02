@@ -41,6 +41,7 @@ export function LeadsContent() {
   const [leads, setLeads] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('')
   const [selectedEstado, setSelectedEstado] = useState('all')
   const [selectedAssignment, setSelectedAssignment] = useState('all')
   const [empresaFilter, setEmpresaFilter] = useState('')
@@ -85,6 +86,14 @@ export function LeadsContent() {
     setFiltersRestored(true)
   }, [])
 
+  // Debounce del input de búsqueda (300ms)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchTerm])
+
   // Persistir filtros cuando cambian
   useEffect(() => {
     if (!filtersRestored) return
@@ -108,8 +117,8 @@ export function LeadsContent() {
         if (selectedEstado !== 'all') {
           params.append('estado', selectedEstado)
         }
-        if (searchTerm) {
-          params.append('search', searchTerm)
+        if (debouncedSearchTerm) {
+          params.append('search', debouncedSearchTerm)
         }
         if (selectedAssignment === 'my-leads') {
           params.append('assignedToMe', 'true')
@@ -133,7 +142,7 @@ export function LeadsContent() {
     }
 
     fetchLeads()
-  }, [selectedEstado, searchTerm, selectedAssignment, empresaFilter])
+  }, [selectedEstado, debouncedSearchTerm, selectedAssignment, empresaFilter])
 
   // Importar desde archivo CSV
   const handleImportLeadsCSV = async (event: React.ChangeEvent<HTMLInputElement>) => {
