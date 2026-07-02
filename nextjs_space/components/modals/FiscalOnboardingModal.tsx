@@ -42,6 +42,11 @@ interface FiscalOnboardingModalProps {
   onConfirm: (fiscalData: any) => void
   leadName: string
   isConverting: boolean
+  leadEmpresa?: string | null
+  leadDireccion?: string | null
+  leadCiudad?: string | null
+  leadCodigoPostal?: string | null
+  leadPais?: string | null
 }
 
 export function FiscalOnboardingModal({
@@ -49,7 +54,12 @@ export function FiscalOnboardingModal({
   onClose,
   onConfirm,
   leadName,
-  isConverting
+  isConverting,
+  leadEmpresa,
+  leadDireccion,
+  leadCiudad,
+  leadCodigoPostal,
+  leadPais
 }: FiscalOnboardingModalProps) {
   const [step, setStep] = useState(1)
   const [formData, setFormData] = useState({
@@ -67,6 +77,12 @@ export function FiscalOnboardingModal({
     recargoEquivalencia: false,
     emailFacturacion: '',
     iban: '',
+    // Campos de empresa (del lead)
+    empresaNombre: leadEmpresa || '',
+    empresaDireccion: leadDireccion || '',
+    empresaCiudad: leadCiudad || '',
+    empresaCodigoPostal: leadCodigoPostal || '',
+    empresaPais: leadPais || '',
     // Campos México
     rfc: '',
     regimenFiscal: '601', // General de Ley Personas Morales
@@ -375,6 +391,60 @@ export function FiscalOnboardingModal({
                   onChange={(e) => setFormData({ ...formData, province: e.target.value })}
                 />
               </div>
+
+              {/* Dirección de la Empresa (datos del lead) */}
+              {leadEmpresa && (
+                <div className="pt-4 border-t space-y-4 animate-in fade-in duration-300">
+                  <h3 className="text-sm font-bold text-emerald-800 flex items-center gap-2">
+                    <Building className="h-4 w-4" /> Datos de la Empresa: {leadEmpresa}
+                  </h3>
+                  <p className="text-[10px] text-muted-foreground">
+                    Estos datos vienen del lead y se usarán para crear el perfil fiscal de la empresa.
+                  </p>
+                  <div className="space-y-2">
+                    <Label htmlFor="empresaDireccion">Dirección de la Empresa</Label>
+                    <Input
+                      id="empresaDireccion"
+                      placeholder="Calle, número, colonia"
+                      className="h-11"
+                      value={formData.empresaDireccion}
+                      onChange={(e) => setFormData({ ...formData, empresaDireccion: e.target.value })}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="empresaCiudad">Ciudad</Label>
+                      <Input
+                        id="empresaCiudad"
+                        placeholder="Ciudad"
+                        className="h-11"
+                        value={formData.empresaCiudad}
+                        onChange={(e) => setFormData({ ...formData, empresaCiudad: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="empresaCodigoPostal">Código Postal</Label>
+                      <Input
+                        id="empresaCodigoPostal"
+                        placeholder="C.P."
+                        className="h-11"
+                        value={formData.empresaCodigoPostal}
+                        onChange={(e) => setFormData({ ...formData, empresaCodigoPostal: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="empresaPais">País</Label>
+                    <Input
+                      id="empresaPais"
+                      placeholder="México, España, etc."
+                      className="h-11"
+                      value={formData.empresaPais}
+                      onChange={(e) => setFormData({ ...formData, empresaPais: e.target.value })}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

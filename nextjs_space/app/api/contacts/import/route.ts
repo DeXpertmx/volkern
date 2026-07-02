@@ -40,7 +40,11 @@ export const POST = withTenantAuth(async (request: Request, auth) => {
         const email = getValue(['email', 'correo', 'correo electronico'])
         const telefono = getValue(['telefono', 'phone', 'celular'])
         const cargo = getValue(['cargo', 'puesto', 'position', 'job title'])
-        const ubicacion = getValue(['ubicacion', 'location', 'ciudad', 'direccion'])
+        const ubicacion = getValue(['ubicacion', 'location'])
+        const direccion = getValue(['direccion', 'address', 'calle'])
+        const ciudad = getValue(['ciudad', 'city', 'poblacion'])
+        const codigoPostal = getValue(['codigopostal', 'cp', 'codigo postal', 'zip', 'zipcode', 'postal code'])
+        const pais = getValue(['pais', 'country'])
         const linkedin = getValue(['linkedin'])
         const notas = getValue(['notas', 'notes', 'descripcion'])
         const tags = getValue(['tags', 'etiquetas'])
@@ -71,6 +75,10 @@ export const POST = withTenantAuth(async (request: Request, auth) => {
               telefono: telefono || undefined,
               cargo: cargo || undefined,
               ubicacion: ubicacion || undefined,
+              direccion: direccion || undefined,
+              ciudad: ciudad || undefined,
+              codigoPostal: codigoPostal || undefined,
+              pais: pais || undefined,
               linkedin: linkedin || undefined,
               notas: notas || undefined,
               tags: tags || undefined,
@@ -87,6 +95,10 @@ export const POST = withTenantAuth(async (request: Request, auth) => {
               tipo,
               cargo,
               ubicacion,
+              direccion,
+              ciudad,
+              codigoPostal,
+              pais,
               linkedin,
               notas,
               tags,

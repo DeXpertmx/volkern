@@ -157,7 +157,7 @@ export const PATCH = withTenantAuth(async (request, auth, { params }) => {
     const userId = auth.user?.id;
     const body = await request.json();
 
-    const { nombre, email, telefono, tipo, companyId, cargo, ubicacion, linkedin, notas, tags, perfilFiscal } = body;
+    const { nombre, email, telefono, tipo, companyId, cargo, ubicacion, direccion, ciudad, codigoPostal, pais, linkedin, notas, tags, perfilFiscal } = body;
 
     const contact = await prisma.contact.findFirst({
       where: {
@@ -182,6 +182,10 @@ export const PATCH = withTenantAuth(async (request, auth, { params }) => {
     if (companyId !== undefined) updateData.companyId = companyId;
     if (cargo !== undefined) updateData.cargo = cargo;
     if (ubicacion !== undefined) updateData.ubicacion = ubicacion;
+    if (direccion !== undefined) updateData.direccion = direccion;
+    if (ciudad !== undefined) updateData.ciudad = ciudad;
+    if (codigoPostal !== undefined) updateData.codigoPostal = codigoPostal;
+    if (pais !== undefined) updateData.pais = pais;
     if (linkedin !== undefined) updateData.linkedin = linkedin;
     if (notas !== undefined) updateData.notas = notas;
     if (tags !== undefined) updateData.tags = tags;

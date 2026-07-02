@@ -12,6 +12,10 @@ export const ContactCreateSchema = z.object({
   companyId: CommonSchemas.id.optional().nullable(),
   cargo: z.string().max(255).optional().nullable(),
   ubicacion: z.string().max(255).optional().nullable(),
+  direccion: z.string().max(500).optional().nullable(),
+  ciudad: z.string().max(255).optional().nullable(),
+  codigoPostal: z.string().max(20).optional().nullable(),
+  pais: z.string().max(100).optional().nullable(),
   linkedin: z.preprocess(
     (val) => (val === '' || val === null || val === undefined ? undefined : val),
     z.string().url('LinkedIn URL inválida').optional()
@@ -89,6 +93,10 @@ export const ContactImportSchema = z.object({
     tipo: z.enum(['person', 'company']).optional().default('person'),
     empresa: z.string().optional().nullable(),
     cargo: z.string().optional().nullable(),
+    direccion: z.string().optional().nullable(),
+    ciudad: z.string().optional().nullable(),
+    codigoPostal: z.string().optional().nullable(),
+    pais: z.string().optional().nullable(),
     tags: z.string().optional().nullable(),
   })).min(1, 'Al menos un contacto requerido').max(500, 'Máximo 500 contactos por importación'),
 });

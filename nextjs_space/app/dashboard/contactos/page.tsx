@@ -20,7 +20,8 @@ import {
   Download,
   Upload,
   Loader2,
-  HelpCircle
+  HelpCircle,
+  ShieldCheck
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -61,6 +62,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
@@ -74,9 +76,17 @@ interface Contact {
   tipo: string
   cargo?: string | null
   ubicacion?: string | null
+  direccion?: string | null
+  ciudad?: string | null
+  codigoPostal?: string | null
+  pais?: string | null
   linkedin?: string | null
   notas?: string | null
   tags?: string | null
+  perfilFiscal?: {
+    id: string
+    idFiscalValidado: boolean
+  } | null
   company?: {
     id: string
     nombre: string
@@ -109,9 +119,19 @@ export default function ContactosPage() {
     companyId: '',
     cargo: '',
     ubicacion: '',
+    direccion: '',
+    ciudad: '',
+    codigoPostal: '',
+    pais: '',
     linkedin: '',
     notas: '',
     tags: ''
+  })
+  const [createFiscalProfile, setCreateFiscalProfile] = useState(false)
+  const [fiscalData, setFiscalData] = useState({
+    fiscalType: 'EMPRESA',
+    fiscalNif: '',
+    fiscalRazonSocial: '',
   })
 
   useEffect(() => {
@@ -197,13 +217,27 @@ export default function ContactosPage() {
       // Limpiar datos antes de enviar
       const dataToSend = {
         ...formData,
-        companyId: formData.companyId || null, // Enviar null si está vacío
+        companyId: formData.companyId || null,
         telefono: formData.telefono || null,
         cargo: formData.cargo || null,
         ubicacion: formData.ubicacion || null,
+        direccion: formData.direccion || null,
+        ciudad: formData.ciudad || null,
+        codigoPostal: formData.codigoPostal || null,
+        pais: formData.pais || null,
         linkedin: formData.linkedin || null,
         notas: formData.notas || null,
         tags: formData.tags || null,
+        createFiscalProfile: editingContact ? false : createFiscalProfile,
+        fiscalData: createFiscalProfile ? {
+          tipo: fiscalData.fiscalType,
+          nif: fiscalData.fiscalNif || '',
+          razonSocial: fiscalData.fiscalRazonSocial || formData.nombre,
+          address: formData.direccion || '',
+          city: formData.ciudad || '',
+          zipCode: formData.codigoPostal || '',
+          country: formData.pais || 'ES',
+        } : null,
       }
       
       const res = await apiFetch(url, {
@@ -242,10 +276,15 @@ export default function ContactosPage() {
       companyId: contact.company?.id || '',
       cargo: contact.cargo || '',
       ubicacion: contact.ubicacion || '',
+      direccion: contact.direccion || '',
+      ciudad: contact.ciudad || '',
+      codigoPostal: contact.codigoPostal || '',
+      pais: contact.pais || '',
       linkedin: contact.linkedin || '',
       notas: contact.notas || '',
       tags: contact.tags || ''
     })
+    setCreateFiscalProfile(false)
     setIsDialogOpen(true)
   }
 
@@ -280,9 +319,19 @@ export default function ContactosPage() {
       companyId: '',
       cargo: '',
       ubicacion: '',
+      direccion: '',
+      ciudad: '',
+      codigoPostal: '',
+      pais: '',
       linkedin: '',
       notas: '',
       tags: ''
+    })
+    setCreateFiscalProfile(false)
+    setFiscalData({
+      fiscalType: 'EMPRESA',
+      fiscalNif: '',
+      fiscalRazonSocial: '',
     })
     setEditingContact(null)
   }
@@ -323,7 +372,7 @@ export default function ContactosPage() {
   }
 
   const downloadTemplate = () => {
-    const headers = 'nombre,email,telefono,tipo,empresa,cargo,ubicacion,linkedin,tags,notas'
+    const headers = 'nombre,email,telefono,tipo,empresa,cargo,direccion,ciudad,codigoPostal,pais,ubicacion,linkedin,tags,notas'
     const csvContent = 'data:text/csv;charset=utf-8,' + headers
     const encodedUri = encodeURI(csvContent)
     const link = document.createElement('a')
@@ -622,6 +671,60 @@ export default function ContactosPage() {
                     </>
                   )}
 
+                  {/* Dirección completa */}
+                  <div className="space-y-4 pt-2">
+                    <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                      <MapPin className="h-4 w-4" />
+                      {formData.tipo === 'company' ? 'Dirección de la Empresa' : 'Dirección'}
+                    </h4>
+                    <div>
+                      <Label htmlFor="direccion">Dirección</Label>
+                      <Input
+                        id="direccion"
+                        value={formData.direccion}
+                        onChange={(e) =>
+                          setFormData({ ...formData, direccion: e.target.value })
+                        }
+                        placeholder="Calle, número, colonia"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="ciudad">Ciudad</Label>
+                        <Input
+                          id="ciudad"
+                          value={formData.ciudad}
+                          onChange={(e) =>
+                            setFormData({ ...formData, ciudad: e.target.value })
+                          }
+                          placeholder="Ciudad"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="codigoPostal">Código Postal</Label>
+                        <Input
+                          id="codigoPostal"
+                          value={formData.codigoPostal}
+                          onChange={(e) =>
+                            setFormData({ ...formData, codigoPostal: e.target.value })
+                          }
+                          placeholder="C.P."
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <Label htmlFor="pais">País</Label>
+                      <Input
+                        id="pais"
+                        value={formData.pais}
+                        onChange={(e) =>
+                          setFormData({ ...formData, pais: e.target.value })
+                        }
+                        placeholder="México, España, etc."
+                      />
+                    </div>
+                  </div>
+
                   {/* Ubicación y LinkedIn */}
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -632,7 +735,7 @@ export default function ContactosPage() {
                         onChange={(e) =>
                           setFormData({ ...formData, ubicacion: e.target.value })
                         }
-                        placeholder="Ciudad, País"
+                        placeholder="Región, zona"
                       />
                     </div>
                     <div>
@@ -673,6 +776,71 @@ export default function ContactosPage() {
                       rows={3}
                     />
                   </div>
+
+                  {/* Perfil Fiscal (solo creación) */}
+                  {!editingContact && (
+                    <div className="pt-4 border-t space-y-4">
+                      <div className="flex items-center gap-3">
+                        <Checkbox
+                          id="createFiscal"
+                          checked={createFiscalProfile}
+                          onCheckedChange={(checked) => setCreateFiscalProfile(!!checked)}
+                        />
+                        <div>
+                          <Label htmlFor="createFiscal" className="font-medium flex items-center gap-1.5">
+                            <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                            Crear perfil fiscal Veri*factu
+                          </Label>
+                          <p className="text-xs text-muted-foreground">
+                            Genera el perfil fiscal usando los datos de dirección del formulario
+                          </p>
+                        </div>
+                      </div>
+
+                      {createFiscalProfile && (
+                        <div className="pl-8 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                              <Label htmlFor="fiscalType" className="text-xs">Tipo Fiscal</Label>
+                              <Select
+                                value={fiscalData.fiscalType}
+                                onValueChange={(v) => setFiscalData({ ...fiscalData, fiscalType: v })}
+                              >
+                                <SelectTrigger id="fiscalType" className="h-9 text-sm">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="EMPRESA">Empresa</SelectItem>
+                                  <SelectItem value="AUTONOMO">Autónomo</SelectItem>
+                                  <SelectItem value="PARTICULAR">Particular</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label htmlFor="fiscalNif" className="text-xs">NIF / CIF</Label>
+                              <Input
+                                id="fiscalNif"
+                                value={fiscalData.fiscalNif}
+                                onChange={(e) => setFiscalData({ ...fiscalData, fiscalNif: e.target.value.toUpperCase() })}
+                                placeholder="B12345678"
+                                className="h-9 text-sm font-mono"
+                              />
+                            </div>
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="fiscalRazonSocial" className="text-xs">Razón Social</Label>
+                            <Input
+                              id="fiscalRazonSocial"
+                              value={fiscalData.fiscalRazonSocial}
+                              onChange={(e) => setFiscalData({ ...fiscalData, fiscalRazonSocial: e.target.value })}
+                              placeholder={formData.nombre || 'Razón social'}
+                              className="h-9 text-sm"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <DialogFooter>
                     <Button
@@ -745,7 +913,12 @@ export default function ContactosPage() {
                             )}
                           </div>
                           <div>
-                            <p className="font-medium">{contact.nombre}</p>
+                            <p className="font-medium flex items-center gap-1.5">
+                              {contact.nombre}
+                              {contact.perfilFiscal && (
+                                <ShieldCheck className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                              )}
+                            </p>
                             <p className="text-sm text-muted-foreground">
                               {contact.email}
                             </p>

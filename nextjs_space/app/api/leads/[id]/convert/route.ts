@@ -43,6 +43,12 @@ export async function POST(
       );
     }
 
+    // Resolver datos de dirección de empresa: preferir edits del modal, fallback al lead
+    const empresaDireccion = fiscalData?.empresaDireccion || lead.direccion || null;
+    const empresaCiudad = fiscalData?.empresaCiudad || lead.ciudad || null;
+    const empresaCodigoPostal = fiscalData?.empresaCodigoPostal || lead.codigoPostal || null;
+    const empresaPais = fiscalData?.empresaPais || lead.pais || null;
+
     // Verificar si ya fue convertido
     if (lead.status === 'converted') {
       return NextResponse.json(
@@ -61,13 +67,118 @@ export async function POST(
 
     // Si no existe, crear el contacto con gobernanza fiscal
     if (!contact) {
+      // Si el lead tiene empresa, buscar o crear la empresa primero
+      let companyId: string | null = null;
+      if (lead.empresa) {
+        const existingCompany = await prisma.contact.findFirst({
+          where: {
+            tenantId: user.tenantId,
+            tipo: 'company',
+            nombre: lead.empresa
+          }
+        });
+
+        if (existingCompany) {
+          companyId = existingCompany.id;
+          // Actualizar datos de dirección de la empresa existente si no los tiene
+          if (empresaDireccion || empresaCiudad || empresaCodigoPostal || empresaPais) {
+            await prisma.contact.update({
+              where: { id: existingCompany.id },
+              data: {
+                direccion: existingCompany.direccion || empresaDireccion,
+                ciudad: existingCompany.ciudad || empresaCiudad,
+                codigoPostal: existingCompany.codigoPostal || empresaCodigoPostal,
+                pais: existingCompany.pais || empresaPais,
+              }
+            });
+          }
+          // Crear o actualizar PerfilFiscalCliente de la empresa
+          if (empresaDireccion || empresaCiudad || empresaCodigoPostal || empresaPais) {
+            const existingFiscalProfile = await prisma.perfilFiscalCliente.findFirst({
+              where: { contactId: existingCompany.id, tenantId: user.tenantId }
+            });
+            if (existingFiscalProfile) {
+              await prisma.perfilFiscalCliente.update({
+                where: { id: existingFiscalProfile.id },
+                data: {
+                  address: existingFiscalProfile.address || empresaDireccion,
+                  city: existingFiscalProfile.city || empresaCiudad,
+                  zipCode: existingFiscalProfile.zipCode || empresaCodigoPostal,
+                  country: existingFiscalProfile.country || empresaPais || 'ES',
+                }
+              });
+            } else {
+              await prisma.perfilFiscalCliente.create({
+                data: {
+                  tenantId: user.tenantId,
+                  contactId: existingCompany.id,
+                  tipo: 'EMPRESA',
+                  razonSocial: existingCompany.nombre,
+                  country: empresaPais || 'ES',
+                  tipoIdFiscal: 'NIF',
+                  nif: '',
+                  address: empresaDireccion,
+                  city: empresaCiudad,
+                  zipCode: empresaCodigoPostal,
+                  idFiscalValidado: false,
+                  defaultIva: 21.0,
+                  defaultIrpf: 0.0,
+                  recargoEquivalencia: false,
+                }
+              });
+            }
+          }
+        } else {
+          const newCompany = await prisma.contact.create({
+            data: {
+              tenantId: user.tenantId,
+              nombre: lead.empresa,
+              email: `empresa-${lead.empresa.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()}-${Date.now()}@volkern.app`,
+              telefono: lead.telefono,
+              tipo: 'company',
+              ubicacion: lead.ubicacion || null,
+              direccion: empresaDireccion,
+              ciudad: empresaCiudad,
+              codigoPostal: empresaCodigoPostal,
+              pais: empresaPais,
+              notas: `Empresa creada automáticamente desde lead: ${lead.nombre}`,
+              tags: lead.tags
+            }
+          });
+          companyId = newCompany.id;
+
+          // Crear PerfilFiscalCliente para la empresa
+          if (empresaDireccion || empresaCiudad || empresaCodigoPostal || empresaPais) {
+            await prisma.perfilFiscalCliente.create({
+              data: {
+                tenantId: user.tenantId,
+                contactId: newCompany.id,
+                tipo: 'EMPRESA',
+                razonSocial: lead.empresa,
+                country: empresaPais || 'ES',
+                tipoIdFiscal: 'NIF',
+                nif: '',
+                address: empresaDireccion,
+                city: empresaCiudad,
+                zipCode: empresaCodigoPostal,
+                idFiscalValidado: false,
+                defaultIva: 21.0,
+                defaultIrpf: 0.0,
+                recargoEquivalencia: false,
+              }
+            });
+          }
+        }
+      }
+
       contact = await prisma.contact.create({
         data: {
           tenantId: user.tenantId,
           nombre: lead.nombre,
           email: lead.email,
           telefono: lead.telefono,
-          tipo: fiscalData?.fiscalType === 'EMPRESA' ? 'company' : 'person',
+          tipo: 'person',
+          companyId: companyId,
           isTaxValidated: !!fiscalData,
           cargo: lead.cargo,
           ubicacion: lead.ubicacion,

@@ -26,6 +26,10 @@ export interface CreateContactInput {
   tipo?: 'person' | 'company';
   cargo?: string;
   ubicacion?: string;
+  direccion?: string;
+  ciudad?: string;
+  codigoPostal?: string;
+  pais?: string;
   linkedin?: string;
   notas?: string;
   tags?: string;
@@ -74,7 +78,7 @@ export interface ConvertLeadInput {
  * Crear un nuevo contacto
  */
 export async function createContact(input: CreateContactInput) {
-  const { tenantId, nombre, email, telefono, tipo, cargo, ubicacion, linkedin, notas, tags, companyId, userId, source = 'app' } = input;
+  const { tenantId, nombre, email, telefono, tipo, cargo, ubicacion, direccion, ciudad, codigoPostal, pais, linkedin, notas, tags, companyId, userId, source = 'app' } = input;
 
   // 1. Validación
   if (!tenantId) throw new Error('tenantId es requerido');
@@ -99,6 +103,10 @@ export async function createContact(input: CreateContactInput) {
       tipo: tipo || 'person',
       cargo,
       ubicacion,
+      direccion,
+      ciudad,
+      codigoPostal,
+      pais,
       linkedin,
       notas,
       tags,
@@ -151,6 +159,10 @@ export async function updateContact(input: UpdateContactInput) {
       tipo: data.tipo,
       cargo: data.cargo,
       ubicacion: data.ubicacion,
+      direccion: data.direccion,
+      ciudad: data.ciudad,
+      codigoPostal: data.codigoPostal,
+      pais: data.pais,
       linkedin: data.linkedin,
       notas: data.notas,
       tags: data.tags,

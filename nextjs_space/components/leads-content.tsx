@@ -11,8 +11,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog'
+import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Users, Search, Eye, Mail, Phone, UserCheck, Download, Upload, HelpCircle, Loader2, Save, MessageSquare, Send, RefreshCw, TrendingUp, BarChart3, Clock, Trash2, Flame, Sparkles, PhoneCall } from 'lucide-react'
+import { Users, Search, Eye, Mail, Phone, UserCheck, Download, Upload, HelpCircle, Loader2, Save, MessageSquare, Send, RefreshCw, TrendingUp, BarChart3, Clock, Trash2, Flame, Sparkles, PhoneCall, Plus, Building2, MapPin, Globe, X } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import Link from 'next/link'
@@ -33,12 +34,16 @@ export function LeadsContent() {
   const { data: session } = useSession() || {}
   const [activeTab, setActiveTab] = useState('mis-leads')
 
+  // Clave para persistencia en localStorage
+  const FILTERS_KEY = 'volkern-leads-filters'
+
   // Estado para leads del CRM
   const [leads, setLeads] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedEstado, setSelectedEstado] = useState('all')
   const [selectedAssignment, setSelectedAssignment] = useState('all')
+  const [empresaFilter, setEmpresaFilter] = useState('')
 
   // Estado para estadísticas
   const [stats, setStats] = useState<any>(null)
@@ -46,8 +51,58 @@ export function LeadsContent() {
   const [importing, setImporting] = useState(false)
   const [callingLeadId, setCallingLeadId] = useState<string | null>(null)
 
+  // Estado para crear nuevo lead
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [isCreating, setIsCreating] = useState(false)
+  const [newLead, setNewLead] = useState({
+    nombre: '',
+    email: '',
+    telefono: '',
+    cargo: '',
+    empresa: '',
+    direccion: '',
+    ciudad: '',
+    codigoPostal: '',
+    pais: '',
+    fuente: '',
+    notas: ''
+  })
+
+  // Restaurar filtros guardados tras montaje (evita SSR mismatch)
+  const [filtersRestored, setFiltersRestored] = useState(false)
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(FILTERS_KEY)
+      if (saved) {
+        const filters = JSON.parse(saved)
+        if (filters.searchTerm) setSearchTerm(filters.searchTerm)
+        if (filters.selectedEstado) setSelectedEstado(filters.selectedEstado)
+        if (filters.selectedAssignment) setSelectedAssignment(filters.selectedAssignment)
+        if (filters.empresaFilter) setEmpresaFilter(filters.empresaFilter)
+        if (filters.activeTab) setActiveTab(filters.activeTab)
+      }
+    } catch {}
+    setFiltersRestored(true)
+  }, [])
+
+  // Persistir filtros cuando cambian
+  useEffect(() => {
+    if (!filtersRestored) return
+    try {
+      localStorage.setItem(FILTERS_KEY, JSON.stringify({
+        searchTerm,
+        selectedEstado,
+        selectedAssignment,
+        empresaFilter,
+        activeTab,
+      }))
+    } catch {}
+  }, [searchTerm, selectedEstado, selectedAssignment, empresaFilter, activeTab, filtersRestored])
+
+  // Cargar leads cuando cambian los filtros
   useEffect(() => {
     const fetchLeads = async () => {
+      setIsLoading(true)
       try {
         const params = new URLSearchParams()
         if (selectedEstado !== 'all') {
@@ -60,6 +115,9 @@ export function LeadsContent() {
           params.append('assignedToMe', 'true')
         } else if (selectedAssignment === 'unassigned') {
           params.append('unassigned', 'true')
+        }
+        if (empresaFilter) {
+          params.append('empresa', empresaFilter)
         }
 
         const response = await apiFetch(`/api/leads?${params.toString()}`)
@@ -75,16 +133,9 @@ export function LeadsContent() {
     }
 
     fetchLeads()
-  }, [selectedEstado, searchTerm, selectedAssignment])
+  }, [selectedEstado, searchTerm, selectedAssignment, empresaFilter])
 
-  const handleSearch = () => {
-    setIsLoading(true)
-    // El useEffect se encargará de hacer el fetch
-  }
-
-
-
-  // Nueva función para importar desde archivo CSV
+  // Importar desde archivo CSV
   const handleImportLeadsCSV = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
@@ -125,8 +176,71 @@ export function LeadsContent() {
     window.open('/api/leads/export', '_blank')
   }
 
+  const handleCreateLead = async () => {
+    if (!newLead.nombre.trim() || !newLead.email.trim()) {
+      toast.error('Nombre y email son obligatorios')
+      return
+    }
+
+    setIsCreating(true)
+    try {
+      const response = await apiFetch('/api/leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nombre: newLead.nombre,
+          email: newLead.email,
+          telefono: newLead.telefono || undefined,
+          cargo: newLead.cargo || undefined,
+          empresa: newLead.empresa || undefined,
+          direccion: newLead.direccion || undefined,
+          ciudad: newLead.ciudad || undefined,
+          codigoPostal: newLead.codigoPostal || undefined,
+          pais: newLead.pais || undefined,
+          fuente: newLead.fuente || undefined,
+          notas: newLead.notas || undefined,
+        })
+      })
+
+      if (response.ok) {
+        const createdLead = await response.json()
+        toast.success('Lead creado exitosamente')
+        setIsCreateDialogOpen(false)
+        setNewLead({
+          nombre: '',
+          email: '',
+          telefono: '',
+          cargo: '',
+          empresa: '',
+          direccion: '',
+          ciudad: '',
+          codigoPostal: '',
+          pais: '',
+          fuente: '',
+          notas: ''
+        })
+        // Refrescar lista
+        setIsLoading(true)
+        const leadsResponse = await apiFetch('/api/leads')
+        if (leadsResponse.ok) {
+          const leadsData = await leadsResponse.json()
+          setLeads(leadsData)
+        }
+        setIsLoading(false)
+      } else {
+        const data = await response.json()
+        toast.error(data.error || 'Error al crear lead')
+      }
+    } catch (error) {
+      console.error('Error creating lead:', error)
+      toast.error('Error al crear el lead')
+    } finally {
+      setIsCreating(false)
+    }
+  }
+
   const downloadTemplate = () => {
-    const headers = 'nombre,email,telefono,empresa,cargo,fuente,ubicacion,notas'
+    const headers = 'nombre,email,telefono,empresa,cargo,direccion,ciudad,codigoPostal,pais,fuente,ubicacion,notas'
     const csvContent = 'data:text/csv;charset=utf-8,' + headers
     const encodedUri = encodeURI(csvContent)
     const link = document.createElement('a')
@@ -184,6 +298,14 @@ export function LeadsContent() {
     }
   }, [activeTab])
 
+  // Limpiar todos los filtros
+  const clearFilters = () => {
+    setSearchTerm('')
+    setSelectedEstado('all')
+    setSelectedAssignment('all')
+    setEmpresaFilter('')
+  }
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -219,6 +341,172 @@ export function LeadsContent() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="default" size="sm">
+                <Plus className="h-4 w-4 mr-2" />
+                Nuevo Lead
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Plus className="h-5 w-5" />
+                  Nuevo Lead
+                </DialogTitle>
+                <DialogDescription>
+                  Registra un nuevo lead con sus datos personales y de empresa.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-6 py-4">
+                {/* Datos Personales */}
+                <div className="space-y-4">
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                    Datos Personales
+                  </h3>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="new-nombre">Nombre *</Label>
+                      <Input
+                        id="new-nombre"
+                        value={newLead.nombre}
+                        onChange={(e) => setNewLead({ ...newLead, nombre: e.target.value })}
+                        placeholder="Nombre completo"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="new-email">Email *</Label>
+                      <Input
+                        id="new-email"
+                        type="email"
+                        value={newLead.email}
+                        onChange={(e) => setNewLead({ ...newLead, email: e.target.value })}
+                        placeholder="email@ejemplo.com"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="new-telefono">Teléfono</Label>
+                      <Input
+                        id="new-telefono"
+                        value={newLead.telefono}
+                        onChange={(e) => setNewLead({ ...newLead, telefono: e.target.value })}
+                        placeholder="+52 123 456 7890"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="new-cargo">Cargo</Label>
+                      <Input
+                        id="new-cargo"
+                        value={newLead.cargo}
+                        onChange={(e) => setNewLead({ ...newLead, cargo: e.target.value })}
+                        placeholder="Director, Gerente, etc."
+                      />
+                    </div>
+                    <div className="space-y-2 sm:col-span-2">
+                      <Label htmlFor="new-fuente">Fuente</Label>
+                      <Input
+                        id="new-fuente"
+                        value={newLead.fuente}
+                        onChange={(e) => setNewLead({ ...newLead, fuente: e.target.value })}
+                        placeholder="Web, Referido, LinkedIn, etc."
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Datos de Empresa */}
+                <div className="space-y-4 pt-4 border-t">
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                    <Building2 className="h-4 w-4" />
+                    Datos de Empresa
+                  </h3>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2 sm:col-span-2">
+                      <Label htmlFor="new-empresa">Nombre de Empresa</Label>
+                      <Input
+                        id="new-empresa"
+                        value={newLead.empresa}
+                        onChange={(e) => setNewLead({ ...newLead, empresa: e.target.value })}
+                        placeholder="Nombre de la empresa"
+                      />
+                    </div>
+                    <div className="space-y-2 sm:col-span-2">
+                      <Label htmlFor="new-direccion" className="flex items-center gap-1">
+                        <MapPin className="h-3.5 w-3.5" />
+                        Dirección
+                      </Label>
+                      <Input
+                        id="new-direccion"
+                        value={newLead.direccion}
+                        onChange={(e) => setNewLead({ ...newLead, direccion: e.target.value })}
+                        placeholder="Calle, número, colonia"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="new-ciudad">Ciudad</Label>
+                      <Input
+                        id="new-ciudad"
+                        value={newLead.ciudad}
+                        onChange={(e) => setNewLead({ ...newLead, ciudad: e.target.value })}
+                        placeholder="Ciudad"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="new-cp">Código Postal</Label>
+                      <Input
+                        id="new-cp"
+                        value={newLead.codigoPostal}
+                        onChange={(e) => setNewLead({ ...newLead, codigoPostal: e.target.value })}
+                        placeholder="C.P."
+                      />
+                    </div>
+                    <div className="space-y-2 sm:col-span-2">
+                      <Label htmlFor="new-pais" className="flex items-center gap-1">
+                        <Globe className="h-3.5 w-3.5" />
+                        País
+                      </Label>
+                      <Input
+                        id="new-pais"
+                        value={newLead.pais}
+                        onChange={(e) => setNewLead({ ...newLead, pais: e.target.value })}
+                        placeholder="México, España, etc."
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Notas */}
+                <div className="space-y-2 pt-4 border-t">
+                  <Label htmlFor="new-notas">Notas</Label>
+                  <Textarea
+                    id="new-notas"
+                    value={newLead.notas}
+                    onChange={(e) => setNewLead({ ...newLead, notas: e.target.value })}
+                    placeholder="Notas adicionales sobre el lead..."
+                    rows={3}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button onClick={handleCreateLead} disabled={isCreating}>
+                  {isCreating ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Creando...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4 mr-2" />
+                      Crear Lead
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
           <Button variant="outline" size="sm" onClick={handleExportLeads}>
             <Download className="h-4 w-4 mr-2" />
             Exportar
@@ -299,7 +587,18 @@ export function LeadsContent() {
           {/* Filtros */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Filtros</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg">Filtros</CardTitle>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearFilters}
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-3.5 w-3.5 mr-1" />
+                  Limpiar filtros
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="grid gap-4 md:grid-cols-4">
@@ -341,11 +640,18 @@ export function LeadsContent() {
                     <option value="unassigned">Sin asignar</option>
                   </select>
                 </div>
-                <div className="flex items-end">
-                  <Button className="w-full" onClick={handleSearch}>
-                    <Search className="h-4 w-4 mr-2" />
-                    Filtrar
-                  </Button>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2 mt-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center gap-1">
+                    <Building2 className="h-3.5 w-3.5" />
+                    Empresa
+                  </label>
+                  <Input
+                    placeholder="Filtrar por empresa..."
+                    value={empresaFilter}
+                    onChange={(e) => setEmpresaFilter(e.target.value)}
+                  />
                 </div>
               </div>
             </CardContent>
@@ -399,6 +705,7 @@ export function LeadsContent() {
                         <TableHead>Nombre</TableHead>
                         <TableHead>Email</TableHead>
                         <TableHead>Teléfono</TableHead>
+                        <TableHead>Empresa</TableHead>
                         <TableHead>Estado</TableHead>
                         <TableHead>Score</TableHead>
                         <TableHead>Asignado a</TableHead>
@@ -425,6 +732,16 @@ export function LeadsContent() {
                               </div>
                             ) : (
                               <span className="text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {lead.empresa ? (
+                              <div className="flex items-center">
+                                <Building2 className="h-4 w-4 mr-2 text-muted-foreground" />
+                                <span className="text-sm">{lead.empresa}</span>
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground text-sm">-</span>
                             )}
                           </TableCell>
                           <TableCell>

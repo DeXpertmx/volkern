@@ -558,6 +558,10 @@ model Lead {
   linkedin             String?
   metadataExterna      Json?
   ubicacion            String?
+  direccion            String?
+  ciudad               String?
+  codigoPostal         String?
+  pais                 String?
   fechaUltimaActividad DateTime             @default(now())
   scoreValue           Int                  @default(0)
   aiStrategy           String?
@@ -664,6 +668,10 @@ model Contact {
   companyId                      String?
   cargo                          String?
   ubicacion                      String?
+  direccion                      String?
+  ciudad                         String?
+  codigoPostal                   String?
+  pais                           String?
   linkedin                       String?
   notas                          String?
   tags                           String?

@@ -28,7 +28,10 @@ import {
   X,
   Trash2,
   UserCheck,
-  PhoneCall
+  PhoneCall,
+  Building2,
+  MapPin,
+  Globe
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -60,6 +63,10 @@ interface Lead {
   email: string;
   telefono: string | null;
   empresa: string | null;
+  direccion: string | null;
+  ciudad: string | null;
+  codigoPostal: string | null;
+  pais: string | null;
   contextoProyecto: string | null;
   notas: string | null;
   estado: string;
@@ -101,6 +108,10 @@ export default function LeadDetailPage({
     email: '',
     telefono: '',
     empresa: '',
+    direccion: '',
+    ciudad: '',
+    codigoPostal: '',
+    pais: '',
     contextoProyecto: '',
     metadataExterna: {} as any
   });
@@ -144,6 +155,10 @@ export default function LeadDetailPage({
         email: data.email,
         telefono: data.telefono || '',
         empresa: data.empresa || '',
+        direccion: data.direccion || '',
+        ciudad: data.ciudad || '',
+        codigoPostal: data.codigoPostal || '',
+        pais: data.pais || '',
         contextoProyecto: data.contextoProyecto || '',
         metadataExterna: data.metadataExterna || {}
       });
@@ -348,6 +363,10 @@ export default function LeadDetailPage({
                   email: lead.email,
                   telefono: lead.telefono || '',
                   empresa: lead.empresa || '',
+                  direccion: lead.direccion || '',
+                  ciudad: lead.ciudad || '',
+                  codigoPostal: lead.codigoPostal || '',
+                  pais: lead.pais || '',
                   contextoProyecto: lead.contextoProyecto || '',
                   metadataExterna: lead.metadataExterna || {}
                 });
@@ -418,6 +437,50 @@ export default function LeadDetailPage({
                     value={formData.empresa}
                     onChange={(e) => setFormData({ ...formData, empresa: e.target.value })}
                     placeholder="Nombre de la empresa"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="direccion" className="flex items-center gap-1">
+                    <MapPin className="h-3.5 w-3.5" />
+                    Dirección
+                  </Label>
+                  <Input
+                    id="direccion"
+                    value={formData.direccion}
+                    onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
+                    placeholder="Calle, número, colonia"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="ciudad">Ciudad</Label>
+                    <Input
+                      id="ciudad"
+                      value={formData.ciudad}
+                      onChange={(e) => setFormData({ ...formData, ciudad: e.target.value })}
+                      placeholder="Ciudad"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="codigoPostal">Código Postal</Label>
+                    <Input
+                      id="codigoPostal"
+                      value={formData.codigoPostal}
+                      onChange={(e) => setFormData({ ...formData, codigoPostal: e.target.value })}
+                      placeholder="C.P."
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="pais" className="flex items-center gap-1">
+                    <Globe className="h-3.5 w-3.5" />
+                    País
+                  </Label>
+                  <Input
+                    id="pais"
+                    value={formData.pais}
+                    onChange={(e) => setFormData({ ...formData, pais: e.target.value })}
+                    placeholder="México, España, etc."
                   />
                 </div>
                 <div className="space-y-2">
@@ -543,8 +606,37 @@ export default function LeadDetailPage({
                 )}
                 {lead.empresa && (
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground mb-1">Empresa</p>
+                    <p className="text-sm font-medium text-muted-foreground mb-1 flex items-center gap-1">
+                      <Building2 className="h-4 w-4" />
+                      Empresa
+                    </p>
                     <p className="text-base">{lead.empresa}</p>
+                  </div>
+                )}
+                {lead.direccion && (
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground mb-1 flex items-center gap-1">
+                      <MapPin className="h-4 w-4" />
+                      Dirección
+                    </p>
+                    <p className="text-base">{lead.direccion}</p>
+                  </div>
+                )}
+                {(lead.ciudad || lead.codigoPostal) && (
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground mb-1">Ciudad / C.P.</p>
+                    <p className="text-base">
+                      {[lead.ciudad, lead.codigoPostal].filter(Boolean).join(', ')}
+                    </p>
+                  </div>
+                )}
+                {lead.pais && (
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground mb-1 flex items-center gap-1">
+                      <Globe className="h-4 w-4" />
+                      País
+                    </p>
+                    <p className="text-base">{lead.pais}</p>
                   </div>
                 )}
                 {lead.contextoProyecto && (
@@ -724,6 +816,11 @@ export default function LeadDetailPage({
         isOpen={isFiscalModalOpen}
         onClose={() => setIsFiscalModalOpen(false)}
         leadName={lead.nombre}
+        leadEmpresa={lead.empresa}
+        leadDireccion={lead.direccion}
+        leadCiudad={lead.ciudad}
+        leadCodigoPostal={lead.codigoPostal}
+        leadPais={lead.pais}
         onConfirm={handleFiscalConfirm}
         isConverting={isConverting}
       />

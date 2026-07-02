@@ -44,6 +44,9 @@ export const GET = withTenantAuth(async (request, auth) => {
             nombre: true
           }
         },
+        perfilFiscal: {
+          select: { id: true, idFiscalValidado: true }
+        },
         _count: {
           select: {
             deals: true,
@@ -76,7 +79,7 @@ export const POST = withTenantAuth(async (request, auth) => {
     const data = validateBody(ContactCreateSchema, body);
     if (data instanceof NextResponse) return data;
 
-    const { nombre, email, telefono, tipo, companyId, cargo, ubicacion, linkedin, notas, tags } = data;
+    const { nombre, email, telefono, tipo, companyId, cargo, ubicacion, direccion, ciudad, codigoPostal, pais, linkedin, notas, tags } = data;
 
     // Verificar si el email ya existe en la DB del tenant
     const existingContact = await prisma.contact.findFirst({
@@ -92,6 +95,8 @@ export const POST = withTenantAuth(async (request, auth) => {
       );
     }
 
+    const { createFiscalProfile, fiscalData: fiscalProfileData } = body;
+
     const contact = await prisma.contact.create({
       data: {
         tenantId, // Mantenemos tenantId para consistencia de esquema
@@ -102,9 +107,14 @@ export const POST = withTenantAuth(async (request, auth) => {
         companyId,
         cargo,
         ubicacion,
+        direccion,
+        ciudad,
+        codigoPostal,
+        pais,
         linkedin,
         notas,
-        tags
+        tags,
+        isTaxValidated: !!createFiscalProfile,
       } as any,
       include: {
         company: {
@@ -115,6 +125,29 @@ export const POST = withTenantAuth(async (request, auth) => {
         }
       }
     });
+
+    // Crear PerfilFiscalCliente si se solicitó
+    if (createFiscalProfile && fiscalProfileData) {
+      await prisma.perfilFiscalCliente.create({
+        data: {
+          tenantId,
+          contactId: contact.id,
+          tipo: fiscalProfileData.tipo || 'EMPRESA',
+          razonSocial: fiscalProfileData.razonSocial || nombre,
+          country: fiscalProfileData.country || 'ES',
+          tipoIdFiscal: fiscalProfileData.tipo === 'PARTICULAR' ? 'NIF' : 'CIF',
+          nif: fiscalProfileData.nif || '',
+          address: fiscalProfileData.address || null,
+          city: fiscalProfileData.city || null,
+          zipCode: fiscalProfileData.zipCode || null,
+          idFiscalValidado: true,
+          fechaValidacion: new Date(),
+          defaultIva: 21.0,
+          defaultIrpf: 0.0,
+          recargoEquivalencia: false,
+        }
+      });
+    }
 
     // Audit log
     const { AuditService } = await import('@/lib/audit-service');
