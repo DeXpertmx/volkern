@@ -182,6 +182,11 @@ export async function POST(
           isTaxValidated: !!fiscalData,
           cargo: lead.cargo,
           ubicacion: lead.ubicacion,
+          // Transferir datos de dirección del lead al contacto
+          direccion: empresaDireccion,
+          ciudad: empresaCiudad,
+          codigoPostal: empresaCodigoPostal,
+          pais: empresaPais,
           linkedin: lead.linkedin,
           notas: lead.notas,
           tags: lead.tags
