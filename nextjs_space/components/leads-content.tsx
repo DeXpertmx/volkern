@@ -315,19 +315,19 @@ export function LeadsContent() {
         <div className="flex items-center gap-2">
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
             <DialogTrigger asChild>
-              <Button variant="default" size="sm">
-                <Plus className="h-4 w-4 mr-2" />
-                Nuevo Lead
+              <Button variant="default" size="sm" className="gap-2">
+                <Plus className="h-4 w-4" />
+                Agregar Lead
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <Plus className="h-5 w-5" />
-                  Nuevo Lead
+                <DialogTitle className="flex items-center gap-2 text-xl">
+                  <Users className="h-5 w-5 text-primary" />
+                  Agregar Nuevo Lead
                 </DialogTitle>
                 <DialogDescription>
-                  Registra un nuevo lead con sus datos personales y de empresa.
+                  Registra un nuevo lead manualmente. Los datos de empresa y dirección se transferirán automáticamente al convertirlo en contacto.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-6 py-4">
@@ -386,11 +386,12 @@ export function LeadsContent() {
                   </div>
                 </div>
 
-                {/* Datos de Empresa */}
+                {/* Datos de Empresa y Dirección */}
                 <div className="space-y-4 pt-4 border-t">
                   <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
                     <Building2 className="h-4 w-4" />
-                    Datos de Empresa
+                    Empresa y Dirección
+                    <span className="text-xs font-normal normal-case text-muted-foreground/70">(opcional — se transfiere al convertir)</span>
                   </h3>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2 sm:col-span-2">
@@ -701,7 +702,7 @@ export function LeadsContent() {
                         <TableHead>Nombre</TableHead>
                         <TableHead>Email</TableHead>
                         <TableHead>Teléfono</TableHead>
-                        <TableHead>Empresa</TableHead>
+                        <TableHead>Empresa / Ciudad</TableHead>
                         <TableHead>Estado</TableHead>
                         <TableHead>Score</TableHead>
                         <TableHead>Asignado a</TableHead>
@@ -741,9 +742,22 @@ export function LeadsContent() {
                           </TableCell>
                           <TableCell>
                             {lead.empresa ? (
-                              <div className="flex items-center">
-                                <Building2 className="h-4 w-4 mr-2 text-muted-foreground" />
-                                <span className="text-sm">{lead.empresa}</span>
+                              <div className="flex flex-col gap-0.5">
+                                <div className="flex items-center">
+                                  <Building2 className="h-4 w-4 mr-1.5 text-muted-foreground shrink-0" />
+                                  <span className="text-sm font-medium">{lead.empresa}</span>
+                                </div>
+                                {(lead.ciudad || lead.pais) && (
+                                  <div className="flex items-center text-xs text-muted-foreground ml-5.5">
+                                    <MapPin className="h-3 w-3 mr-1 shrink-0" />
+                                    <span>{[lead.ciudad, lead.pais].filter(Boolean).join(', ')}</span>
+                                  </div>
+                                )}
+                              </div>
+                            ) : lead.ciudad ? (
+                              <div className="flex items-center text-sm text-muted-foreground">
+                                <MapPin className="h-3.5 w-3.5 mr-1.5 shrink-0" />
+                                <span>{[lead.ciudad, lead.pais].filter(Boolean).join(', ')}</span>
                               </div>
                             ) : (
                               <span className="text-muted-foreground text-sm">-</span>
