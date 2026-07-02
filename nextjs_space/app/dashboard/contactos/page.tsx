@@ -68,6 +68,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
+import { useFiltersPersistence } from '@/lib/hooks/useFiltersPersistence'
 
 interface Contact {
   id: string
@@ -104,12 +105,10 @@ export default function ContactosPage() {
   const [contacts, setContacts] = useState<Contact[]>([])
   const [filteredContacts, setFilteredContacts] = useState<Contact[]>([])
   const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState('')
-  // Clave para persistencia en localStorage
-  const FILTERS_KEY = 'volkern-contacts-filters'
-
-  const [tipoFilter, setTipoFilter] = useState<string>('all')
-  const [filtersRestored, setFiltersRestored] = useState(false)
+  const [filters, setFilter, clearFilters, filtersRestored] = useFiltersPersistence('contacts-filters', {
+    searchTerm: '',
+    tipoFilter: 'all',
+  })
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingContact, setEditingContact] = useState<Contact | null>(null)
   const [companies, setCompanies] = useState<Contact[]>([])
@@ -146,36 +145,7 @@ export default function ContactosPage() {
 
   useEffect(() => {
     filterContacts()
-  }, [searchTerm, tipoFilter, contacts])
-
-  // Restaurar filtros guardados tras montaje (evita SSR mismatch)
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(FILTERS_KEY)
-      if (saved) {
-        const filters = JSON.parse(saved)
-        if (filters.searchTerm) setSearchTerm(filters.searchTerm)
-        if (filters.tipoFilter) setTipoFilter(filters.tipoFilter)
-      }
-    } catch {}
-    setFiltersRestored(true)
-  }, [])
-
-  // Persistir filtros cuando cambian
-  useEffect(() => {
-    if (!filtersRestored) return
-    try {
-      localStorage.setItem(FILTERS_KEY, JSON.stringify({
-        searchTerm,
-        tipoFilter,
-      }))
-    } catch {}
-  }, [searchTerm, tipoFilter, filtersRestored])
-
-  const clearFilters = () => {
-    setSearchTerm('')
-    setTipoFilter('all')
-  }
+  }, [filters.searchTerm, filters.tipoFilter, contacts])
 
   const fetchContacts = async () => {
     try {
@@ -211,18 +181,18 @@ export default function ContactosPage() {
     let filtered = contacts
 
     // Filtrar por búsqueda
-    if (searchTerm) {
+    if (filters.searchTerm) {
       filtered = filtered.filter(
         (contact) =>
-          contact.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          contact.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (contact.telefono && contact.telefono.toLowerCase().includes(searchTerm.toLowerCase()))
+          contact.nombre.toLowerCase().includes((filters.searchTerm || '').toLowerCase()) ||
+          contact.email.toLowerCase().includes((filters.searchTerm || '').toLowerCase()) ||
+          (contact.telefono && contact.telefono.toLowerCase().includes((filters.searchTerm || '').toLowerCase()))
       )
     }
 
     // Filtrar por tipo
-    if (tipoFilter !== 'all') {
-      filtered = filtered.filter((contact) => contact.tipo === tipoFilter)
+    if (filters.tipoFilter !== 'all') {
+      filtered = filtered.filter((contact) => contact.tipo === filters.tipoFilter)
     }
 
     setFilteredContacts(filtered)
@@ -371,7 +341,7 @@ export default function ContactosPage() {
   }
 
   const handleExport = () => {
-    const url = `/api/contacts/export${tipoFilter !== 'all' ? `?tipo=${tipoFilter}` : ''}`
+    const url = `/api/contacts/export${filters.tipoFilter !== 'all' ? `?tipo=${filters.tipoFilter}` : ''}`
     window.open(url, '_blank')
   }
 
@@ -514,14 +484,14 @@ export default function ContactosPage() {
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Buscar por nombre, email o teléfono..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  value={filters.searchTerm || ''}
+                  onChange={(e) => setFilter('searchTerm', e.target.value)}
                   className="pl-10"
                 />
               </div>
 
               {/* Filtro por tipo */}
-              <Select value={tipoFilter} onValueChange={setTipoFilter}>
+              <Select value={filters.tipoFilter || 'all'} onValueChange={(v) => setFilter('tipoFilter', v)}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="Tipo de contacto" />
                 </SelectTrigger>
@@ -917,11 +887,11 @@ export default function ContactosPage() {
               <UserCheck className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-medium mb-2">No hay contactos</h3>
               <p className="text-muted-foreground mb-4">
-                {searchTerm || tipoFilter !== 'all'
+                {filters.searchTerm || filters.tipoFilter !== 'all'
                   ? 'No se encontraron contactos con los filtros seleccionados'
                   : 'Comienza creando tu primer contacto'}
               </p>
-              {!searchTerm && tipoFilter === 'all' && (
+              {!filters.searchTerm && filters.tipoFilter === 'all' && (
                 <Button onClick={handleOpenDialog}>
                   <Plus className="h-4 w-4 mr-2" />
                   Crear Primer Contacto
