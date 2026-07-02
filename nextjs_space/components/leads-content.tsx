@@ -13,12 +13,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Users, Search, Eye, Mail, Phone, UserCheck, Download, Upload, HelpCircle, Loader2, Save, MessageSquare, Send, RefreshCw, TrendingUp, BarChart3, Clock, Trash2, Flame, Sparkles, PhoneCall, Plus, Building2, MapPin, Globe, X } from 'lucide-react'
+import { Users, Search, Eye, Mail, Phone, UserCheck, Download, Upload, HelpCircle, Loader2, Save, MessageSquare, Send, RefreshCw, TrendingUp, BarChart3, Clock, Trash2, Flame, Sparkles, PhoneCall, Plus, Building2, MapPin, Globe, X, Calendar } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { apiFetch } from '@/lib/api-client'
+import { useDebounce } from '@/lib/hooks/useDebounce'
+import { useFiltersPersistence } from '@/lib/hooks/useFiltersPersistence'
 
 const estadoColors: Record<string, string> = {
   'nuevo': 'bg-blue-100 text-blue-800',
@@ -32,19 +34,20 @@ const estadoColors: Record<string, string> = {
 
 export function LeadsContent() {
   const { data: session } = useSession() || {}
-  const [activeTab, setActiveTab] = useState('mis-leads')
 
-  // Clave para persistencia en localStorage
-  const FILTERS_KEY = 'volkern-leads-filters'
-
-  // Estado para leads del CRM
   const [leads, setLeads] = useState([])
   const [isLoading, setIsLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState('')
-  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('')
-  const [selectedEstado, setSelectedEstado] = useState('all')
-  const [selectedAssignment, setSelectedAssignment] = useState('all')
-  const [empresaFilter, setEmpresaFilter] = useState('')
+
+  const [filters, setFilter, clearFilters, filtersRestored] = useFiltersPersistence('leads-filters', {
+    searchTerm: '',
+    selectedEstado: 'all',
+    selectedAssignment: 'all',
+    empresaFilter: '',
+    fechaDesde: '',
+    fechaHasta: '',
+    activeTab: 'mis-leads',
+  })
+  const debouncedSearchTerm = useDebounce(filters.searchTerm || '', 300)
 
   // Estado para estadísticas
   const [stats, setStats] = useState<any>(null)
@@ -69,44 +72,6 @@ export function LeadsContent() {
     notas: ''
   })
 
-  // Restaurar filtros guardados tras montaje (evita SSR mismatch)
-  const [filtersRestored, setFiltersRestored] = useState(false)
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(FILTERS_KEY)
-      if (saved) {
-        const filters = JSON.parse(saved)
-        if (filters.searchTerm) setSearchTerm(filters.searchTerm)
-        if (filters.selectedEstado) setSelectedEstado(filters.selectedEstado)
-        if (filters.selectedAssignment) setSelectedAssignment(filters.selectedAssignment)
-        if (filters.empresaFilter) setEmpresaFilter(filters.empresaFilter)
-        if (filters.activeTab) setActiveTab(filters.activeTab)
-      }
-    } catch {}
-    setFiltersRestored(true)
-  }, [])
-
-  // Debounce del input de búsqueda (300ms)
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearchTerm(searchTerm)
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [searchTerm])
-
-  // Persistir filtros cuando cambian
-  useEffect(() => {
-    if (!filtersRestored) return
-    try {
-      localStorage.setItem(FILTERS_KEY, JSON.stringify({
-        searchTerm,
-        selectedEstado,
-        selectedAssignment,
-        empresaFilter,
-        activeTab,
-      }))
-    } catch {}
-  }, [searchTerm, selectedEstado, selectedAssignment, empresaFilter, activeTab, filtersRestored])
 
   // Cargar leads cuando cambian los filtros
   useEffect(() => {
@@ -114,19 +79,25 @@ export function LeadsContent() {
       setIsLoading(true)
       try {
         const params = new URLSearchParams()
-        if (selectedEstado !== 'all') {
-          params.append('estado', selectedEstado)
+        if (filters.selectedEstado !== 'all') {
+          params.append('estado', filters.selectedEstado ?? 'all')
         }
         if (debouncedSearchTerm) {
           params.append('search', debouncedSearchTerm)
         }
-        if (selectedAssignment === 'my-leads') {
+        if (filters.selectedAssignment === 'my-leads') {
           params.append('assignedToMe', 'true')
-        } else if (selectedAssignment === 'unassigned') {
+        } else if (filters.selectedAssignment === 'unassigned') {
           params.append('unassigned', 'true')
         }
-        if (empresaFilter) {
-          params.append('empresa', empresaFilter)
+        if (filters.empresaFilter) {
+          params.append('empresa', filters.empresaFilter ?? '')
+        }
+        if (filters.fechaDesde) {
+          params.append('fechaDesde', filters.fechaDesde ?? '')
+        }
+        if (filters.fechaHasta) {
+          params.append('fechaHasta', filters.fechaHasta ?? '')
         }
 
         const response = await apiFetch(`/api/leads?${params.toString()}`)
@@ -142,7 +113,7 @@ export function LeadsContent() {
     }
 
     fetchLeads()
-  }, [selectedEstado, debouncedSearchTerm, selectedAssignment, empresaFilter])
+  }, [filters.selectedEstado, debouncedSearchTerm, filters.selectedAssignment, filters.empresaFilter, filters.fechaDesde, filters.fechaHasta])
 
   // Importar desde archivo CSV
   const handleImportLeadsCSV = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -302,18 +273,10 @@ export function LeadsContent() {
 
   // Cargar estadísticas al cambiar a la tab de estadísticas
   useEffect(() => {
-    if (activeTab === 'estadisticas' && !stats) {
+    if (filters.activeTab === 'estadisticas' && !stats) {
       loadStats()
     }
-  }, [activeTab])
-
-  // Limpiar todos los filtros
-  const clearFilters = () => {
-    setSearchTerm('')
-    setSelectedEstado('all')
-    setSelectedAssignment('all')
-    setEmpresaFilter('')
-  }
+  }, [filters.activeTab])
 
   if (isLoading) {
     return (
@@ -578,7 +541,7 @@ export function LeadsContent() {
       </div>
 
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+      <Tabs value={filters.activeTab || 'mis-leads'} onValueChange={(v) => setFilter('activeTab', v)} className="space-y-6">
         <TabsList className="grid w-full max-w-lg grid-cols-2">
           <TabsTrigger value="mis-leads">
             <Users className="h-4 w-4 mr-2" />
@@ -618,8 +581,8 @@ export function LeadsContent() {
                     <Input
                       placeholder="Buscar por nombre o email..."
                       className="pl-10"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
+                      value={filters.searchTerm || ''}
+                      onChange={(e) => setFilter('searchTerm', e.target.value)}
                     />
                   </div>
                 </div>
@@ -627,8 +590,8 @@ export function LeadsContent() {
                   <label className="text-sm font-medium">Estado</label>
                   <select
                     className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm"
-                    value={selectedEstado}
-                    onChange={(e) => setSelectedEstado(e.target.value)}
+                    value={filters.selectedEstado || 'all'}
+                    onChange={(e) => setFilter('selectedEstado', e.target.value)}
                   >
                     <option value="all">Todos los estados</option>
                     <option value="nuevo">Nuevo</option>
@@ -641,8 +604,8 @@ export function LeadsContent() {
                   <label className="text-sm font-medium">Asignación</label>
                   <select
                     className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm"
-                    value={selectedAssignment}
-                    onChange={(e) => setSelectedAssignment(e.target.value)}
+                    value={filters.selectedAssignment || 'all'}
+                    onChange={(e) => setFilter('selectedAssignment', e.target.value)}
                   >
                     <option value="all">Todos los leads</option>
                     <option value="my-leads">Mis leads</option>
@@ -650,7 +613,7 @@ export function LeadsContent() {
                   </select>
                 </div>
               </div>
-              <div className="grid gap-4 md:grid-cols-2 mt-4">
+              <div className="grid gap-4 md:grid-cols-3 mt-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium flex items-center gap-1">
                     <Building2 className="h-3.5 w-3.5" />
@@ -658,8 +621,32 @@ export function LeadsContent() {
                   </label>
                   <Input
                     placeholder="Filtrar por empresa..."
-                    value={empresaFilter}
-                    onChange={(e) => setEmpresaFilter(e.target.value)}
+                    value={filters.empresaFilter || ''}
+                    onChange={(e) => setFilter('empresaFilter', e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center gap-1">
+                    <Calendar className="h-3.5 w-3.5" />
+                    Fecha desde
+                  </label>
+                  <Input
+                    type="date"
+                    value={filters.fechaDesde || ''}
+                    onChange={(e) => setFilter('fechaDesde', e.target.value)}
+                    className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center gap-1">
+                    <Calendar className="h-3.5 w-3.5" />
+                    Fecha hasta
+                  </label>
+                  <Input
+                    type="date"
+                    value={filters.fechaHasta || ''}
+                    onChange={(e) => setFilter('fechaHasta', e.target.value)}
+                    className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm"
                   />
                 </div>
               </div>
@@ -726,7 +713,16 @@ export function LeadsContent() {
                     <TableBody>
                       {leads.map((lead: any) => (
                         <TableRow key={lead.id} className="hover:bg-muted/50">
-                          <TableCell className="font-medium">{lead.nombre}</TableCell>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-1.5">
+                              {lead.nombre}
+                              {lead.empresa && (
+                                <span title="Tiene empresa asociada">
+                                  <Building2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                </span>
+                              )}
+                            </div>
+                          </TableCell>
                           <TableCell>
                             <div className="flex items-center">
                               <Mail className="h-4 w-4 mr-2 text-muted-foreground" />

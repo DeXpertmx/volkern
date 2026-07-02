@@ -24,20 +24,42 @@ export const GET = withTenantAuth(async (request, auth) => {
     AdoptionTelemetry.trackHubView(tenantId, auth.user!.id, 'LEADS').catch(() => {});
 
     const { searchParams } = new URL(request.url)
-    const query = searchParams.get('q')
-    const etapa = searchParams.get('etapa')
+    const query = searchParams.get('search')
+    const estado = searchParams.get('estado')
     const empresa = searchParams.get('empresa')
+    const assignedToMe = searchParams.get('assignedToMe')
+    const unassigned = searchParams.get('unassigned')
+    const fechaDesde = searchParams.get('fechaDesde')
+    const fechaHasta = searchParams.get('fechaHasta')
 
     const whereClause: any = {
       tenantId: auth.tenant!.id,
     }
 
-    if (etapa && etapa !== 'todos') {
-      whereClause.estado = etapa
+    if (estado && estado !== 'all') {
+      whereClause.estado = estado
     }
 
     if (empresa) {
       whereClause.empresa = { contains: empresa, mode: 'insensitive' }
+    }
+
+    if (assignedToMe === 'true') {
+      whereClause.asignadoUsuarioId = auth.user!.id
+    } else if (unassigned === 'true') {
+      whereClause.asignadoUsuarioId = null
+    }
+
+    // Filtro por rango de fechas (fechaCreacion)
+    if (fechaDesde || fechaHasta) {
+      const fechaFilter: any = {}
+      if (fechaDesde) {
+        fechaFilter.gte = new Date(fechaDesde + 'T00:00:00.000Z')
+      }
+      if (fechaHasta) {
+        fechaFilter.lte = new Date(fechaHasta + 'T23:59:59.999Z')
+      }
+      whereClause.fechaCreacion = fechaFilter
     }
 
     if (query) {
