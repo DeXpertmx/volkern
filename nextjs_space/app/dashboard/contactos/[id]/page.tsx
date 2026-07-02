@@ -16,6 +16,8 @@ import {
   Edit,
   Trash2,
   Plus,
+  Save,
+  X,
   TrendingUp,
   DollarSign,
   Tag,
@@ -89,6 +91,10 @@ interface Contact {
   tipo: string
   cargo?: string | null
   ubicacion?: string | null
+  direccion?: string | null
+  ciudad?: string | null
+  codigoPostal?: string | null
+  pais?: string | null
   linkedin?: string | null
   notas?: string | null
   tags?: string | null
@@ -160,6 +166,21 @@ export default function ContactoDetallePage() {
   const [deals, setDeals] = useState<Deal[]>([])
   const [loading, setLoading] = useState(true)
   const [isCreatingDeal, setIsCreatingDeal] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editForm, setEditForm] = useState({
+    nombre: '',
+    email: '',
+    telefono: '',
+    cargo: '',
+    ubicacion: '',
+    direccion: '',
+    ciudad: '',
+    codigoPostal: '',
+    pais: '',
+    linkedin: '',
+    notas: '',
+    tags: ''
+  })
 
   // Form para crear deal
   const [dealForm, setDealForm] = useState({
@@ -205,7 +226,22 @@ export default function ContactoDetallePage() {
       const contactData = await contactRes.json()
       
       if (contactData.success) {
-        setContact(contactData.data)
+        const c = contactData.data;
+        setContact(c)
+        setEditForm({
+          nombre: c.nombre || '',
+          email: c.email || '',
+          telefono: c.telefono || '',
+          cargo: c.cargo || '',
+          ubicacion: c.ubicacion || '',
+          direccion: c.direccion || '',
+          ciudad: c.ciudad || '',
+          codigoPostal: c.codigoPostal || '',
+          pais: c.pais || '',
+          linkedin: c.linkedin || '',
+          notas: c.notas || '',
+          tags: c.tags || ''
+        })
       } else {
         toast.error('Error al cargar contacto')
         router.push('/dashboard/contactos')
@@ -372,6 +408,46 @@ export default function ContactoDetallePage() {
     }
   }
 
+  const handleSaveInline = async () => {
+    if (!contact) return
+    if (!editForm.nombre.trim() || !editForm.email.trim()) {
+      toast.error('Nombre y email son obligatorios')
+      return
+    }
+    try {
+      const res = await fetch(`/api/contacts/${contactId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nombre: editForm.nombre,
+          email: editForm.email,
+          telefono: editForm.telefono || null,
+          cargo: editForm.cargo || null,
+          ubicacion: editForm.ubicacion || null,
+          direccion: editForm.direccion || null,
+          ciudad: editForm.ciudad || null,
+          codigoPostal: editForm.codigoPostal || null,
+          pais: editForm.pais || null,
+          linkedin: editForm.linkedin || null,
+          notas: editForm.notas || null,
+          tags: editForm.tags || null,
+        })
+      })
+
+      if (res.ok) {
+        toast.success('Contacto actualizado')
+        setIsEditing(false)
+        fetchContactData()
+      } else {
+        const data = await res.json()
+        toast.error(data.error || 'Error al actualizar')
+      }
+    } catch (error) {
+      console.error('Error updating contact:', error)
+      toast.error('Error al actualizar contacto')
+    }
+  }
+
   const formatCurrency = (valor: number, moneda: string) => {
     return new Intl.NumberFormat('es-MX', {
       style: 'currency',
@@ -482,9 +558,169 @@ export default function ContactoDetallePage() {
           {/* Información Básica */}
           <Card>
             <CardHeader>
-              <CardTitle>Información de Contacto</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle>Información de Contacto</CardTitle>
+                {!isEditing ? (
+                  <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                    <Edit className="h-4 w-4 mr-2" />
+                    Editar
+                  </Button>
+                ) : (
+                  <div className="flex gap-2">
+                    <Button variant="default" size="sm" onClick={handleSaveInline}>
+                      <Save className="h-4 w-4 mr-2" />
+                      Guardar
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => {
+                      setIsEditing(false)
+                      if (contact) {
+                        setEditForm({
+                          nombre: contact.nombre || '',
+                          email: contact.email || '',
+                          telefono: contact.telefono || '',
+                          cargo: contact.cargo || '',
+                          ubicacion: contact.ubicacion || '',
+                          direccion: contact.direccion || '',
+                          ciudad: contact.ciudad || '',
+                          codigoPostal: contact.codigoPostal || '',
+                          pais: contact.pais || '',
+                          linkedin: contact.linkedin || '',
+                          notas: contact.notas || '',
+                          tags: contact.tags || ''
+                        })
+                      }
+                    }}>
+                      <X className="h-4 w-4 mr-2" />
+                      Cancelar
+                    </Button>
+                  </div>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
+              {isEditing ? (
+                <>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-nombre">
+                        {contact.tipo === 'company' ? 'Nombre de Empresa' : 'Nombre Completo'}
+                      </Label>
+                      <Input
+                        id="edit-nombre"
+                        value={editForm.nombre}
+                        onChange={(e) => setEditForm({ ...editForm, nombre: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-email">Email</Label>
+                      <Input
+                        id="edit-email"
+                        type="email"
+                        value={editForm.email}
+                        onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-telefono">Teléfono</Label>
+                      <Input
+                        id="edit-telefono"
+                        value={editForm.telefono}
+                        onChange={(e) => setEditForm({ ...editForm, telefono: e.target.value })}
+                      />
+                    </div>
+                    {contact.tipo === 'person' && (
+                      <div className="space-y-2">
+                        <Label htmlFor="edit-cargo">Cargo</Label>
+                        <Input
+                          id="edit-cargo"
+                          value={editForm.cargo}
+                          onChange={(e) => setEditForm({ ...editForm, cargo: e.target.value })}
+                        />
+                      </div>
+                    )}
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-ubicacion">Ubicación</Label>
+                      <Input
+                        id="edit-ubicacion"
+                        value={editForm.ubicacion}
+                        onChange={(e) => setEditForm({ ...editForm, ubicacion: e.target.value })}
+                        placeholder="Región, zona"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-linkedin">LinkedIn</Label>
+                      <Input
+                        id="edit-linkedin"
+                        value={editForm.linkedin}
+                        onChange={(e) => setEditForm({ ...editForm, linkedin: e.target.value })}
+                        placeholder="URL de perfil"
+                      />
+                    </div>
+                  </div>
+
+                  <Separator />
+                  <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                    <MapPin className="h-4 w-4" />
+                    {contact.tipo === 'company' ? 'Dirección de la Empresa' : 'Dirección'}
+                  </h4>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2 md:col-span-2">
+                      <Label htmlFor="edit-direccion">Dirección</Label>
+                      <Input
+                        id="edit-direccion"
+                        value={editForm.direccion}
+                        onChange={(e) => setEditForm({ ...editForm, direccion: e.target.value })}
+                        placeholder="Calle, número, colonia"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-ciudad">Ciudad</Label>
+                      <Input
+                        id="edit-ciudad"
+                        value={editForm.ciudad}
+                        onChange={(e) => setEditForm({ ...editForm, ciudad: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-cp">Código Postal</Label>
+                      <Input
+                        id="edit-cp"
+                        value={editForm.codigoPostal}
+                        onChange={(e) => setEditForm({ ...editForm, codigoPostal: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <Label htmlFor="edit-pais">País</Label>
+                      <Input
+                        id="edit-pais"
+                        value={editForm.pais}
+                        onChange={(e) => setEditForm({ ...editForm, pais: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <Separator />
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-tags">Tags</Label>
+                    <Input
+                      id="edit-tags"
+                      value={editForm.tags}
+                      onChange={(e) => setEditForm({ ...editForm, tags: e.target.value })}
+                      placeholder="cliente, partner, prospecto"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-notas">Notas</Label>
+                    <Textarea
+                      id="edit-notas"
+                      value={editForm.notas}
+                      onChange={(e) => setEditForm({ ...editForm, notas: e.target.value })}
+                      rows={3}
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="flex items-start gap-3">
                   <Mail className="h-5 w-5 text-muted-foreground mt-0.5" />
@@ -524,6 +760,21 @@ export default function ContactoDetallePage() {
                         Ubicación
                       </p>
                       <p className="text-sm">{contact.ubicacion}</p>
+                    </div>
+                  </div>
+                )}
+
+                {(contact.direccion || contact.ciudad || contact.codigoPostal || contact.pais) && (
+                  <div className="flex items-start gap-3 col-span-2">
+                    <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">
+                        Dirección
+                      </p>
+                      <p className="text-sm">
+                        {[contact.direccion, contact.ciudad, contact.codigoPostal, contact.pais]
+                          .filter(Boolean).join(', ')}
+                      </p>
                     </div>
                   </div>
                 )}
@@ -618,6 +869,8 @@ export default function ContactoDetallePage() {
                       <p className="text-sm whitespace-pre-wrap">{contact.notas}</p>
                     </div>
                   </div>
+                </>
+              )}
                 </>
               )}
             </CardContent>

@@ -26,6 +26,7 @@ export const GET = withTenantAuth(async (request, auth) => {
     const { searchParams } = new URL(request.url)
     const query = searchParams.get('q')
     const etapa = searchParams.get('etapa')
+    const empresa = searchParams.get('empresa')
 
     const whereClause: any = {
       tenantId: auth.tenant!.id,
@@ -33,6 +34,10 @@ export const GET = withTenantAuth(async (request, auth) => {
 
     if (etapa && etapa !== 'todos') {
       whereClause.estado = etapa
+    }
+
+    if (empresa) {
+      whereClause.empresa = { contains: empresa, mode: 'insensitive' }
     }
 
     if (query) {
@@ -97,6 +102,10 @@ export const POST = withTenantAuth(async (request, auth) => {
       contextoProyecto,
       cargo,
       ubicacion,
+      direccion,
+      ciudad,
+      codigoPostal,
+      pais,
       linkedin,
       scoreValue,
       fuente,
@@ -138,6 +147,10 @@ export const POST = withTenantAuth(async (request, auth) => {
       if (contextoProyecto) updateData.contextoProyecto = contextoProyecto
       if (cargo) updateData.cargo = cargo
       if (ubicacion) updateData.ubicacion = ubicacion
+      if (direccion) updateData.direccion = direccion
+      if (ciudad) updateData.ciudad = ciudad
+      if (codigoPostal) updateData.codigoPostal = codigoPostal
+      if (pais) updateData.pais = pais
       if (linkedin) updateData.linkedin = linkedin
       if (scoreValue !== undefined) updateData.scoreValue = scoreValue
       if (fuente) updateData.fuente = fuente
@@ -179,6 +192,10 @@ export const POST = withTenantAuth(async (request, auth) => {
           contextoProyecto: contextoProyecto || null,
           cargo: cargo || null,
           ubicacion: ubicacion || null,
+          direccion: direccion || null,
+          ciudad: ciudad || null,
+          codigoPostal: codigoPostal || null,
+          pais: pais || null,
           linkedin: linkedin || null,
           scoreValue: scoreValue || 0,
           fuente: fuente || null,
