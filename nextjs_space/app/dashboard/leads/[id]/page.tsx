@@ -79,6 +79,8 @@ interface Lead {
   metadataExterna?: any;
   aiStrategy?: string | null;
   riskLevel?: number;
+  fuente?: string | null;
+  canal?: string | null;
 }
 
 interface Cita {
@@ -113,6 +115,8 @@ export default function LeadDetailPage({
     codigoPostal: '',
     pais: '',
     contextoProyecto: '',
+    fuente: '',
+    canal: '',
     metadataExterna: {} as any
   });
   const [fieldDefinitions, setFieldDefinitions] = useState<FieldDefinition[]>([]);
@@ -160,6 +164,8 @@ export default function LeadDetailPage({
         codigoPostal: data.codigoPostal || '',
         pais: data.pais || '',
         contextoProyecto: data.contextoProyecto || '',
+        fuente: data.fuente || '',
+        canal: data.canal || '',
         metadataExterna: data.metadataExterna || {}
       });
     } catch (error) {
@@ -368,6 +374,8 @@ export default function LeadDetailPage({
                   codigoPostal: lead.codigoPostal || '',
                   pais: lead.pais || '',
                   contextoProyecto: lead.contextoProyecto || '',
+                  fuente: lead.fuente || '',
+                  canal: lead.canal || '',
                   metadataExterna: lead.metadataExterna || {}
                 });
               }} variant="outline" size="sm">
@@ -482,6 +490,37 @@ export default function LeadDetailPage({
                     onChange={(e) => setFormData({ ...formData, pais: e.target.value })}
                     placeholder="México, España, etc."
                   />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="fuente">Fuente</Label>
+                    <Input
+                      id="fuente"
+                      value={formData.fuente}
+                      onChange={(e) => setFormData({ ...formData, fuente: e.target.value })}
+                      placeholder="Google, Campaña, etc."
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="canal">Canal de Origen</Label>
+                    <select
+                      id="canal"
+                      className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm"
+                      value={formData.canal}
+                      onChange={(e) => setFormData({ ...formData, canal: e.target.value })}
+                    >
+                      <option value="">Seleccionar canal...</option>
+                      <option value="web">Web</option>
+                      <option value="referido">Referido</option>
+                      <option value="whatsapp">WhatsApp</option>
+                      <option value="telefono">Teléfono</option>
+                      <option value="email">Email</option>
+                      <option value="linkedin">LinkedIn</option>
+                      <option value="redes_sociales">Redes Sociales</option>
+                      <option value="evento">Evento</option>
+                      <option value="otro">Otro</option>
+                    </select>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="contextoProyecto">Contexto del Proyecto</Label>
@@ -637,6 +676,18 @@ export default function LeadDetailPage({
                       País
                     </p>
                     <p className="text-base">{lead.pais}</p>
+                  </div>
+                )}
+                {lead.fuente && (
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground mb-1">Fuente</p>
+                    <p className="text-base">{lead.fuente}</p>
+                  </div>
+                )}
+                {lead.canal && (
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground mb-1">Canal de Origen</p>
+                    <p className="text-base capitalize">{lead.canal}</p>
                   </div>
                 )}
                 {lead.contextoProyecto && (

@@ -24,8 +24,8 @@ export const GET = withTenantAuth(async (request, auth) => {
     AdoptionTelemetry.trackHubView(tenantId, auth.user!.id, 'LEADS').catch(() => {});
 
     const { searchParams } = new URL(request.url)
-    const query = searchParams.get('search')
-    const estado = searchParams.get('estado')
+    const query = searchParams.get('search') || searchParams.get('q')
+    const estado = searchParams.get('estado') || searchParams.get('etapa')
     const empresa = searchParams.get('empresa')
     const assignedToMe = searchParams.get('assignedToMe')
     const unassigned = searchParams.get('unassigned')
@@ -36,7 +36,7 @@ export const GET = withTenantAuth(async (request, auth) => {
       tenantId: auth.tenant!.id,
     }
 
-    if (estado && estado !== 'all') {
+    if (estado && estado !== 'all' && estado !== 'todos') {
       whereClause.estado = estado
     }
 
@@ -131,6 +131,7 @@ export const POST = withTenantAuth(async (request, auth) => {
       linkedin,
       scoreValue,
       fuente,
+      canal,
       etapa,
       metadataExterna
     } = data;
@@ -176,6 +177,7 @@ export const POST = withTenantAuth(async (request, auth) => {
       if (linkedin) updateData.linkedin = linkedin
       if (scoreValue !== undefined) updateData.scoreValue = scoreValue
       if (fuente) updateData.fuente = fuente
+      if (canal) updateData.canal = canal
       if (etapa) updateData.estado = etapa
       if (metadataExterna) updateData.metadataExterna = metadataExterna
       if (notas) {
@@ -221,6 +223,7 @@ export const POST = withTenantAuth(async (request, auth) => {
           linkedin: linkedin || null,
           scoreValue: scoreValue || 0,
           fuente: fuente || null,
+          canal: canal || null,
           estado: etapa || 'nuevo',
           tenantId: auth.tenant!.id,
           metadataExterna: metadataExterna || {},

@@ -18,6 +18,7 @@ export const LeadCreateSchema = z.object({
   linkedin: z.string().url('LinkedIn URL inválida').optional().nullable(),
   notas: z.string().max(10000).optional().nullable(),
   fuente: z.string().max(100).optional().nullable(),
+  canal: z.enum(['web', 'referido', 'whatsapp', 'telefono', 'email', 'linkedin', 'redes_sociales', 'evento', 'otro']).optional().nullable(),
   etapa: z.string().max(50).optional().nullable(),
   scoreValue: z.number().int().optional(),
   contextoProyecto: z.string().max(5000).optional().nullable(),

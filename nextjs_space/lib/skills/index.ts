@@ -141,19 +141,34 @@ const updateLeadWrapper = async (input: { tenantId: string; email?: string; nomb
   throw new Error(`No se encontró ningún contacto ni lead para actualizar.`);
 };
 
-const createLeadWrapper = async (input: { tenantId: string; nombre: string; email: string; telefono?: string; notas?: string; contexto?: string; empresa?: string }) => {
-  const { contexto, notas, ...rest } = input;
+const createLeadWrapper = async (input: { tenantId: string; nombre: string; email: string; telefono?: string; notas?: string; contexto?: string; empresa?: string; origen?: string; fuente?: string }) => {
+  const { contexto, notas, origen, ...rest } = input;
   return contactSkills.createLead({
     ...rest,
+    fuente: origen || rest.fuente,
     notas: contexto || notas
   });
 };
 
-const createTaskWrapper = async (input: { tenantId: string; titulo: string; email?: string; descripcion?: string; fechaVencimiento?: string | Date; prioridad?: string; userId?: string; timezone?: string }) => {
-  const { tenantId, email, titulo, descripcion, fechaVencimiento, userId, timezone } = input;
+const createTaskWrapper = async (input: { 
+  tenantId: string; 
+  titulo: string; 
+  email?: string; 
+  leadId?: string;
+  contactId?: string;
+  descripcion?: string; 
+  fechaVencimiento?: string | Date; 
+  prioridad?: string; 
+  userId?: string; 
+  asignadoAId?: string;
+  timezone?: string;
+  tipo?: string;
+}) => {
+  const { tenantId, email, leadId, contactId, titulo, descripcion, fechaVencimiento, userId, asignadoAId, timezone, tipo } = input;
   
   let lead = null;
   let contact = null;
+  const { prisma } = await import('@/lib/db');
 
   if (email) {
     // Buscar lead o contacto
@@ -164,6 +179,16 @@ const createTaskWrapper = async (input: { tenantId: string; titulo: string; emai
     
     if (!lead && !contact) {
       throw new Error(`No se encontró ningún lead o contacto con el correo ${email}`);
+    }
+  } else if (leadId) {
+    lead = await prisma.lead.findFirst({ where: { id: leadId, tenantId } });
+    if (!lead) {
+      throw new Error(`No se encontró ningún lead con el id ${leadId}`);
+    }
+  } else if (contactId) {
+    contact = await prisma.contact.findFirst({ where: { id: contactId, tenantId } });
+    if (!contact) {
+      throw new Error(`No se encontró ningún contacto con el id ${contactId}`);
     }
   }
 
@@ -193,16 +218,24 @@ const createTaskWrapper = async (input: { tenantId: string; titulo: string; emai
     fecha.setDate(fecha.getDate() + 1); // Por defecto mañana si no viene
   }
 
-  const { prisma } = await import('@/lib/db');
+  // Validar y normalizar el tipo de tarea
+  const tiposValidos = ['llamada', 'email', 'reunion', 'recordatorio'];
+  let tipoFinal = tipo?.toLowerCase() || 'recordatorio';
+  if (tipoFinal === 'seguimiento') tipoFinal = 'recordatorio';
+  if (!tiposValidos.includes(tipoFinal)) {
+    tipoFinal = 'recordatorio';
+  }
+
   const task = await prisma.task.create({
     data: {
       tenantId,
       leadId: lead ? lead.id : null,
       contactId: contact ? contact.id : null,
       titulo,
-      tipo: 'seguimiento',
+      tipo: tipoFinal,
       descripcion,
       fechaVencimiento: fecha,
+      asignadoA: asignadoAId || userId,
       completada: false,
     }
   });

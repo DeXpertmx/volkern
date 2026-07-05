@@ -33,9 +33,9 @@ interface Interaction {
 
 interface AuditLog {
   id: string;
-  fechaCreacion: Date;
-  accion: string;
-  descripcion: string;
+  createdAt: string;
+  action: string;
+  description: string;
   user: {
     name: string | null;
     email: string;
@@ -111,7 +111,7 @@ export function UnifiedTimeline({ leadId, contactId }: UnifiedTimelineProps) {
         ...auditLogs.map(log => ({
           id: log.id,
           type: 'audit' as const,
-          date: new Date(log.fechaCreacion),
+          date: new Date(log.createdAt),
           data: log
         }))
       ].sort((a, b) => b.date.getTime() - a.date.getTime());
@@ -346,7 +346,7 @@ export function UnifiedTimeline({ leadId, contactId }: UnifiedTimelineProps) {
                               Evento del Sistema
                             </Badge>
                             <Badge className="text-xs bg-amber-100 text-amber-800">
-                              {auditLog.accion}
+                              {auditLog.action}
                             </Badge>
                           </div>
                           <span className="text-xs text-muted-foreground">
@@ -355,7 +355,7 @@ export function UnifiedTimeline({ leadId, contactId }: UnifiedTimelineProps) {
                         </div>
                         <p className="text-sm">
                           <span className="font-medium">{auditLog.user.name || auditLog.user.email}</span>
-                          {' '}{auditLog.descripcion}
+                          {' '}{auditLog.description}
                         </p>
                       </div>
                     </div>

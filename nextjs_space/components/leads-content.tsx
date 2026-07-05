@@ -69,6 +69,7 @@ export function LeadsContent() {
     codigoPostal: '',
     pais: '',
     fuente: '',
+    canal: '',
     notas: ''
   })
 
@@ -178,6 +179,7 @@ export function LeadsContent() {
           codigoPostal: newLead.codigoPostal || undefined,
           pais: newLead.pais || undefined,
           fuente: newLead.fuente || undefined,
+          canal: newLead.canal || undefined,
           notas: newLead.notas || undefined,
         })
       })
@@ -197,6 +199,7 @@ export function LeadsContent() {
           codigoPostal: '',
           pais: '',
           fuente: '',
+          canal: '',
           notas: ''
         })
         // Refrescar lista
@@ -374,14 +377,34 @@ export function LeadsContent() {
                         placeholder="Director, Gerente, etc."
                       />
                     </div>
-                    <div className="space-y-2 sm:col-span-2">
+                    <div className="space-y-2">
                       <Label htmlFor="new-fuente">Fuente</Label>
                       <Input
                         id="new-fuente"
                         value={newLead.fuente}
                         onChange={(e) => setNewLead({ ...newLead, fuente: e.target.value })}
-                        placeholder="Web, Referido, LinkedIn, etc."
+                        placeholder="Google, Campaña, etc."
                       />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="new-canal">Canal de Origen</Label>
+                      <select
+                        id="new-canal"
+                        className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm"
+                        value={newLead.canal}
+                        onChange={(e) => setNewLead({ ...newLead, canal: e.target.value })}
+                      >
+                        <option value="">Seleccionar canal...</option>
+                        <option value="web">Web</option>
+                        <option value="referido">Referido</option>
+                        <option value="whatsapp">WhatsApp</option>
+                        <option value="telefono">Teléfono</option>
+                        <option value="email">Email</option>
+                        <option value="linkedin">LinkedIn</option>
+                        <option value="redes_sociales">Redes Sociales</option>
+                        <option value="evento">Evento</option>
+                        <option value="otro">Otro</option>
+                      </select>
                     </div>
                   </div>
                 </div>

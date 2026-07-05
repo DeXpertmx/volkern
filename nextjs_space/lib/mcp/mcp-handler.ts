@@ -151,7 +151,7 @@ export const MCP_TOOLS: MCPTool[] = [
         nombre: { type: 'string', description: 'Nombre del lead' },
         email: { type: 'string', description: 'Email del lead' },
         telefono: { type: 'string', description: 'Teléfono (opcional)' },
-        fuente: { type: 'string', description: 'De dónde vino: web, referido, redes_sociales, etc.' },
+        origen: { type: 'string', description: 'De dónde vino el lead: web, email, referido, redes_sociales, etc.' },
         interes: { type: 'string', description: 'En qué está interesado (opcional)' },
         notas: { type: 'string', description: 'Notas adicionales (opcional)' },
         tenantId: { type: 'string', description: 'ID del tenant' },
@@ -298,11 +298,13 @@ export const MCP_TOOLS: MCPTool[] = [
   // ========== TAREAS ==========
   {
     name: 'create_task',
-    description: 'Crear una tarea asociada a un lead',
+    description: 'Crear una tarea asociada a un lead o contacto. Se debe proporcionar email, leadId o contactId.',
     inputSchema: {
       type: 'object',
       properties: {
-        leadId: { type: 'string', description: 'ID del lead' },
+        email: { type: 'string', description: 'Email del lead o contacto (opcional si hay leadId/contactId)' },
+        leadId: { type: 'string', description: 'ID del lead (opcional)' },
+        contactId: { type: 'string', description: 'ID del contacto (opcional)' },
         titulo: { type: 'string', description: 'Título de la tarea' },
         descripcion: { type: 'string', description: 'Descripción (opcional)' },
         tipo: { type: 'string', description: 'Tipo de tarea', enum: ['llamada', 'email', 'reunion', 'seguimiento', 'otro'] },
@@ -312,7 +314,7 @@ export const MCP_TOOLS: MCPTool[] = [
         userId: { type: 'string', description: 'ID del usuario creador (opcional)' },
         source: { type: 'string', description: 'Fuente', enum: ['api', 'app', 'automation', 'mcp', 'webhook'] },
       },
-      required: ['leadId', 'titulo', 'tenantId'],
+      required: ['titulo', 'tenantId'],
     },
   },
   {

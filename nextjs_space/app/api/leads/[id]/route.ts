@@ -109,7 +109,7 @@ async function updateLeadHandler(
     }
 
     const body = await request.json()
-    const { nombre, email, telefono, empresa, contextoProyecto, notas, estado, scoreValue, tags, origen, ciudad, pais, direccion, codigoPostal, metadataExterna } = body
+    const { nombre, email, telefono, empresa, contextoProyecto, notas, estado, scoreValue, tags, origen, ciudad, pais, direccion, codigoPostal, metadataExterna, canal, fuente } = body
 
     // Verificar que el lead existe y pertenece al tenant
     const existingLead = await prisma.lead.findUnique({
@@ -145,6 +145,8 @@ async function updateLeadHandler(
         ...(direccion !== undefined && { direccion }),
         ...(codigoPostal !== undefined && { codigoPostal }),
         ...(metadataExterna !== undefined && { metadataExterna }),
+        ...(canal !== undefined && { canal }),
+        ...(fuente !== undefined && { fuente }),
         fechaUltimaActividad: new Date(),
       }
     })
