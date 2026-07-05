@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import {
   ArrowLeft,
@@ -161,6 +162,11 @@ export default function ContactoDetallePage() {
   const router = useRouter()
   const params = useParams()
   const contactId = params?.id as string
+
+  const { data: session } = useSession()
+  // @ts-ignore - roles/permissions might be in session.user
+  const userPermissions = session?.user?.role?.permissions || []
+  const hasDeletePermission = userPermissions.some((p: any) => p.code === 'contacts:delete' || p.code === 'admin') || session?.user?.role === 'OWNER'
 
   const [contact, setContact] = useState<Contact | null>(null)
   const [deals, setDeals] = useState<Deal[]>([])
@@ -384,14 +390,23 @@ export default function ContactoDetallePage() {
     }
   }
 
+  // Delete justification modal state
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
+  const [deleteJustification, setDeleteJustification] = useState('')
+  const [deleting, setDeleting] = useState(false)
+
   const handleDeleteContact = async () => {
-    if (!confirm('¿Estás seguro de eliminar este contacto? Esta acción no se puede deshacer.')) {
+    if (!deleteJustification.trim()) {
+      toast.error('Debes proporcionar una justificación para eliminar el contacto')
       return
     }
 
     try {
+      setDeleting(true)
       const res = await fetch(`/api/contacts/${contactId}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ justification: deleteJustification })
       })
 
       const data = await res.json()
@@ -405,6 +420,8 @@ export default function ContactoDetallePage() {
     } catch (error) {
       console.error('Error al eliminar:', error)
       toast.error('Error al eliminar contacto')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -521,12 +538,66 @@ export default function ContactoDetallePage() {
             <ShieldCheck className="h-4 w-4 mr-2" />
             Editar Datos Fiscales
           </Button>
-          <Button variant="destructive" onClick={handleDeleteContact}>
-            <Trash2 className="h-4 w-4 mr-2" />
-            Eliminar
-          </Button>
+          {hasDeletePermission && (
+            <Button variant="destructive" onClick={() => setIsDeleteModalOpen(true)}>
+              <Trash2 className="h-4 w-4 mr-2" />
+              Eliminar
+            </Button>
+          )}
         </div>
       </div>
+
+      {/* Modal de Justificación para Eliminar */}
+      <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="h-5 w-5" />
+              Eliminar Contacto
+            </DialogTitle>
+            <DialogDescription>
+              Esta acción es irreversible. Para proceder, debes proporcionar una justificación que quedará registrada en el historial de auditoría.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="p-3 bg-muted rounded-lg">
+              <p className="text-sm font-medium">{contact.nombre}</p>
+              <p className="text-xs text-muted-foreground">{contact.email}</p>
+            </div>
+            <div>
+              <Label htmlFor="delete-justification">Motivo de la eliminación *</Label>
+              <Textarea
+                id="delete-justification"
+                value={deleteJustification}
+                onChange={(e) => setDeleteJustification(e.target.value)}
+                placeholder="Ej: Solicitud del cliente, duplicado, datos incorrectos..."
+                rows={3}
+                className="mt-1"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setIsDeleteModalOpen(false)
+              setDeleteJustification('')
+            }}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteContact}
+              disabled={deleting || !deleteJustification.trim()}
+            >
+              {deleting ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+              ) : (
+                <Trash2 className="h-4 w-4 mr-2" />
+              )}
+              Confirmar Eliminación
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Tabs defaultValue="general" className="w-full">
         <TabsList className="mb-4">

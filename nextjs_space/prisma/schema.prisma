@@ -555,6 +555,7 @@ model Lead {
   cargo                String?
   empresa              String?
   fuente               String?
+  canal                String?
   linkedin             String?
   metadataExterna      Json?
   ubicacion            String?
