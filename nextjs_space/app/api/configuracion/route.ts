@@ -57,7 +57,12 @@ export const GET = withTenantAuth(async (request, auth) => {
 export const POST = withTenantAuth(async (request, auth) => {
   try {
     const tenantId = auth.tenant!.id;
-    const data = await request.json();
+    let body = await request.json();
+
+    // Si el body viene envuelto en { section, data }, extraer solo data
+    if (body.section && body.data && typeof body.data === 'object') {
+      body = body.data;
+    }
 
     // Helper para extraer S3 key de URL firmada si es necesario
     const extractS3Key = (valor: string | undefined) => {
@@ -79,7 +84,7 @@ export const POST = withTenantAuth(async (request, auth) => {
     };
 
     // Guardar cada configuración en la DB aislada del tenant
-    for (const [clave, valor] of Object.entries(data)) {
+    for (const [clave, valor] of Object.entries(body)) {
       if (valor !== undefined && valor !== null) {
         let valorFinal: string;
         

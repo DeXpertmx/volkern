@@ -122,6 +122,9 @@ export function Sidebar() {
       const roleName = (session?.user as any)?.roleName;
       if (item.requiredAccountType === 'SUPERADMIN') {
         if (roleName !== 'Superadmin' && roleName !== 'Admin') return false
+      } else if (item.requiredAccountType === 'AGENCY') {
+        // AGENCY items only visible if the tenant IS an agency (not just because the user is Admin)
+        if (effectiveAccountType !== 'AGENCY' && roleName !== 'Superadmin') return false
       } else if (effectiveAccountType !== item.requiredAccountType) {
         if (roleName !== 'Superadmin' && roleName !== 'Admin') return false
       }

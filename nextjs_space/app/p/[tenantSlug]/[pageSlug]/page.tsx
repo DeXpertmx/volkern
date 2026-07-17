@@ -1,5 +1,6 @@
 import { Metadata } from 'next';
 import { globalPrisma, getTenantDb, dbContext } from "@/lib/db";
+import { resolveTenantBySlug } from '@/lib/real-estate/portal-utils';
 import PageClient from './PageClient';
 import { notFound } from 'next/navigation';
 
@@ -43,10 +44,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
  * Helper para obtener datos de la página (Server Side)
  */
 async function getPageData(tenantSlug: string, pageSlug: string) {
-  const tenant = await globalPrisma.tenant.findUnique({
-    where: { slug: tenantSlug },
-    select: { id: true }
-  });
+  const tenant = await resolveTenantBySlug(tenantSlug);
 
   if (!tenant) return null;
 

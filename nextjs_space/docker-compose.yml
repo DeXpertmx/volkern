@@ -110,10 +110,32 @@ services:
       file: docker-compose.apprise.yml
       service: apprise-api
 
+  # ─── Caddy (reverse proxy, SSL automático) ─────────────────
+  # Maneja dominios personalizados y SSL con Let's Encrypt.
+  # Descomenta para exponer en puertos 80/443 en vez de 3000.
+  # caddy:
+  #   image: caddy:2-alpine
+  #   container_name: volkern-caddy
+  #   restart: unless-stopped
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - ./Caddyfile:/etc/caddy/Caddyfile:ro
+  #     - caddy-data:/data
+  #     - caddy-config:/config
+  #   depends_on:
+  #     app:
+  #       condition: service_healthy
+
 volumes:
   postgres-data:
     driver: local
   traccar-logs:
+    driver: local
+  caddy-data:
+    driver: local
+  caddy-config:
     driver: local
 
 networks:

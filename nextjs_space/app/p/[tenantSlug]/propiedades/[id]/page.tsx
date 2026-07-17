@@ -2,6 +2,7 @@ import { Metadata } from 'next';
 import { globalPrisma } from '@/lib/db';
 import { notFound } from 'next/navigation';
 import { parseInmueble } from '@/lib/real-estate/property-helpers';
+import { resolveTenantBySlug } from '@/lib/real-estate/portal-utils';
 import { getEffectiveBranding } from '@/lib/branding';
 import PropertyDetailClient from './PropertyDetailClient';
 
@@ -15,10 +16,7 @@ interface Props {
  * Metadatos SEO dinámicos
  */
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const tenant = await globalPrisma.tenant.findUnique({
-    where: { slug: params.tenantSlug },
-    select: { id: true, nombre: true },
-  });
+  const tenant = await resolveTenantBySlug(params.tenantSlug);
 
   let title = 'Propiedad | Volkern';
   let description = 'Detalle de propiedad inmobiliaria';
@@ -91,15 +89,7 @@ async function getRelatedProperties(tenantId: string, property: any, limit = 3) 
 }
 
 export default async function PropertyDetailPage({ params }: Props) {
-  const tenant = await globalPrisma.tenant.findUnique({
-    where: { slug: params.tenantSlug },
-    select: {
-      id: true,
-      nombre: true,
-      moneda: true,
-      brandingConfig: true,
-    },
-  });
+  const tenant = await resolveTenantBySlug(params.tenantSlug);
 
   if (!tenant) {
     notFound();

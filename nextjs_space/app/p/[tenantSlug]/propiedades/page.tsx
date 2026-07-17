@@ -2,6 +2,7 @@ import { Metadata } from 'next';
 import { globalPrisma } from '@/lib/db';
 import { notFound } from 'next/navigation';
 import { parseInmuebles } from '@/lib/real-estate/property-helpers';
+import { resolveTenantBySlug } from '@/lib/real-estate/portal-utils';
 import { getEffectiveBranding } from '@/lib/branding';
 import HeroCarousel from './HeroCarousel';
 
@@ -23,10 +24,7 @@ interface Props {
  * Metadatos SEO dinámicos
  */
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const tenant = await globalPrisma.tenant.findUnique({
-    where: { slug: params.tenantSlug },
-    select: { id: true, nombre: true },
-  });
+  const tenant = await resolveTenantBySlug(params.tenantSlug);
 
   if (!tenant) return { title: 'Propiedades no encontradas' };
 
@@ -154,17 +152,7 @@ async function getHeroProperties(tenantId: string) {
 }
 
 export default async function PropertyListingPage({ params, searchParams }: Props) {
-  const tenant = await globalPrisma.tenant.findUnique({
-    where: { slug: params.tenantSlug },
-    select: {
-      id: true,
-      nombre: true,
-      brandingConfig: true,
-      moneda: true,
-      baseLatitude: true,
-      baseLongitude: true,
-    },
-  });
+  const tenant = await resolveTenantBySlug(params.tenantSlug);
 
   if (!tenant) {
     notFound();

@@ -65,6 +65,7 @@ interface RealEstateConfig {
   defaultSplitAgent: number
   defaultSplitAgency: number
   portalSlug: string
+  portalCustomDomain: string
   portalEnabled: boolean
   portalTheme: Record<string, any>
   exportFormats: string[]
@@ -116,6 +117,7 @@ export default function RealEstateConfigDashboard() {
     defaultSplitAgent: 50,
     defaultSplitAgency: 50,
     portalSlug: 'propiedades',
+    portalCustomDomain: '',
     portalEnabled: true,
     portalTheme: {},
     exportFormats: ['xml', 'csv'],
@@ -208,6 +210,7 @@ export default function RealEstateConfigDashboard() {
             defaultSplitAgent: config.defaultSplitAgent,
             defaultSplitAgency: config.defaultSplitAgency,
             portalSlug: config.portalSlug,
+            portalCustomDomain: config.portalCustomDomain,
             portalEnabled: config.portalEnabled,
             autoExportEnabled: config.autoExportEnabled,
             autoExportFormat: config.autoExportFormat,
@@ -604,6 +607,27 @@ export default function RealEstateConfigDashboard() {
                 </div>
                 <p className="text-xs text-muted-foreground">
                   URL pública: /p/{config.portalSlug || 'propiedades'}/propiedades
+                </p>
+              </div>
+
+              <Separator />
+              <div className="space-y-3">
+                <Label htmlFor="portal-custom-domain" className="text-sm font-medium">
+                  <Globe className="h-4 w-4 inline-block mr-1.5 -mt-0.5 text-muted-foreground" />
+                  Dominio Personalizado
+                </Label>
+                <Input
+                  id="portal-custom-domain"
+                  value={config.portalCustomDomain}
+                  onChange={(e) => setConfig(prev => ({ ...prev, portalCustomDomain: e.target.value }))}
+                  className="max-w-sm font-mono"
+                  placeholder="propiedades.tudominio.com"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Crea un registro CNAME apuntando tu dominio a <code className="text-xs bg-muted px-1 py-0.5 rounded">{process.env.NEXT_PUBLIC_APP_URL?.replace(/https?:\/\//, '') || 'volkern.app'}</code>
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  El portal se servirá en <code className="text-xs bg-muted px-1 py-0.5 rounded">{config.portalCustomDomain || 'tu-dominio.com'}</code>
                 </p>
               </div>
 
