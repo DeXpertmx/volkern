@@ -17,14 +17,9 @@ export const GET = withTenantAuth(async (request, auth) => {
     
     // Convertir array a objeto
     const configObj = config.reduce((acc: any, item) => {
-      // Intentar parsear JSON para campos que lo requieren
-      if (item.clave === 'horariosAtencion') {
-        try {
-          acc[item.clave] = JSON.parse(item.valor);
-        } catch {
-          acc[item.clave] = item.valor;
-        }
-      } else {
+      try {
+        acc[item.clave] = JSON.parse(item.valor);
+      } catch {
         acc[item.clave] = item.valor;
       }
       return acc;
@@ -91,7 +86,7 @@ export const POST = withTenantAuth(async (request, auth) => {
         if (clave === 'logo_corporativo') {
           valorFinal = extractS3Key(String(valor)) || String(valor);
         } 
-        else if (clave === 'horariosAtencion' && typeof valor === 'object') {
+        else if (typeof valor === 'object' && valor !== null) {
           valorFinal = JSON.stringify(valor);
         } 
         else {
