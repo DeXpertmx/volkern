@@ -28,10 +28,10 @@ export function LeadAssignment({ leadId, currentAssignedTo, onAssignmentChange }
 
   const fetchUsers = async () => {
     try {
-      const res = await fetch('/api/users');
+      const res = await fetch('/api/team/members');
       if (!res.ok) throw new Error('Error al cargar usuarios');
       const data = await res.json();
-      setUsers(data.users || []);
+      setUsers(data.members || []);
     } catch (error) {
       console.error('Error fetching users:', error);
     } finally {

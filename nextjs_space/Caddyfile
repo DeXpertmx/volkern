@@ -1,0 +1,21 @@
+# ═══════════════════════════════════════════════════════════════
+# Volkern — Caddy Reverse Proxy
+# ═══════════════════════════════════════════════════════════════
+# Uso:   docker compose up -d
+# SSL automático para cualquier dominio que apunte al servidor.
+# ═══════════════════════════════════════════════════════════════
+
+{
+    # Email para notificaciones de Let's Encrypt
+    email admin@volkern.app
+}
+
+# Redirigir HTTP → HTTPS
+:80 {
+    redir https://{host}{uri}
+}
+
+# HTTPS con auto-SSL — sirve cualquier dominio
+:443 {
+    reverse_proxy app:3000
+}

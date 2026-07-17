@@ -9,3 +9,5 @@ build/
 *.log
 .DS_Store
 fluy_crm.zip
+.vercel
+.env*

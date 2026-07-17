@@ -22,6 +22,16 @@ function getSubdomain(host: string): string | null {
   return null
 }
 
+function isCustomDomain(host: string): boolean {
+  if (!host) return false
+  const h = host.replace(/:.*/, '').toLowerCase()
+  const appHost = (process.env.NEXT_PUBLIC_APP_URL || '').replace(/https?:\/\//, '')
+  if (h === 'localhost' || h === appHost) return false
+  if (h.endsWith('.localhost')) return false
+  if (h.endsWith('.volkern.app') || h.endsWith('.volkern.com')) return false
+  return true
+}
+
 const PUBLIC = new Set(['/', '/pricing', '/features', '/about', '/contact', '/login', '/signup', '/booking'])
 
 // Rate limiting: endpoints públicos más expuestos a abuso
@@ -42,6 +52,37 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const host = request.headers.get('host') || ''
   const subdomain = getSubdomain(host)
+
+  // ─── Custom domain resolution ─────────────────────────────────────────
+  // Detecta dominios personalizados (no locales, no volkern.app, no subdominios)
+  // y reescribe internamente a /p/{tenantSlug}{pathname}
+  if (
+    isCustomDomain(host) &&
+    !pathname.startsWith('/api/') &&
+    !pathname.startsWith('/p/') &&
+    !pathname.startsWith('/_next/') &&
+    !pathname.startsWith('/.well-known/') &&
+    !pathname.match(/\.\w+$/)
+  ) {
+    try {
+      const cleanHost = host.replace(/:.*/, '')
+      const resolveUrl = new URL('/api/configuracion/resolve-domain', request.nextUrl.origin)
+      resolveUrl.searchParams.set('domain', cleanHost)
+      const domainRes = await fetch(resolveUrl.toString(), { signal: AbortSignal.timeout(5000) })
+      if (domainRes.ok) {
+        const { tenantSlug } = await domainRes.json()
+        if (tenantSlug) {
+          const rewritten = new URL(request.url)
+          // Si es la raíz, redirige a propiedades por defecto
+          const targetPath = pathname === '/' ? '/propiedades' : pathname
+          rewritten.pathname = `/p/${tenantSlug}${targetPath}`
+          return NextResponse.rewrite(rewritten)
+        }
+      }
+    } catch (e) {
+      console.error('[middleware] custom domain resolution error:', e)
+    }
+  }
 
   // Generate requestId for tracing
   const requestId = `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`

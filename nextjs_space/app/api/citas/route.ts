@@ -210,8 +210,9 @@ export const POST = withTenantAuth(async (request, auth) => {
       }
     }
 
-    // No permitir citas en el pasado
-    if (fechaHoraDate < new Date()) {
+    // No permitir citas en el pasado (margen de 5 minutos para diferencias de zona horaria del cliente)
+    const ahora = new Date(Date.now() - 5 * 60 * 1000)
+    if (fechaHoraDate < ahora) {
       return NextResponse.json(
         { error: 'No se pueden agendar citas en el pasado' },
         { status: 400 }
@@ -377,11 +378,15 @@ export const POST = withTenantAuth(async (request, auth) => {
     }, tenantId).catch((e: any) => console.error('Error en PushNotification:', e))
 
     // Notificación por Telegram al admin
-    const { notifyByTelegram } = await import('@/lib/skills/notification-layer');
-    (notifyByTelegram as any)(
-      `📅 *Nueva Cita*\n\n👤 *Cliente:* ${lead?.nombre || 'Sin cliente'}\n📋 *Servicio:* ${cita.titulo}\n🕐 *Fecha:* ${new Date(cita.fechaHora).toLocaleString('es-MX')}${lead?.telefono ? `\n📱 *Teléfono:* ${lead.telefono}` : ''}`,
-      createSystemContext(tenantId)
-    ).catch((e: any) => console.error('Error enviando notificación Telegram:', e))
+    try {
+      const { notifyByTelegram } = await import('@/lib/skills/notification-layer');
+      (notifyByTelegram as any)(
+        `📅 *Nueva Cita*\n\n👤 *Cliente:* ${lead?.nombre || 'Sin cliente'}\n📋 *Servicio:* ${cita.titulo}\n🕐 *Fecha:* ${new Date(cita.fechaHora).toLocaleString('es-MX')}${lead?.telefono ? `\n📱 *Teléfono:* ${lead.telefono}` : ''}`,
+        createSystemContext(tenantId)
+      ).catch((e: any) => console.error('Error enviando notificación Telegram:', e))
+    } catch (telegramImportError: any) {
+      console.error('[POST /api/citas] Error importando notification-layer:', telegramImportError)
+    }
 
     (ScoringEngine.calculateScore as any)({
       leadId: cita.leadId,
@@ -398,7 +403,18 @@ export const POST = withTenantAuth(async (request, auth) => {
 
     return NextResponse.json({ success: true, cita })
   } catch (error: any) {
-    console.error('[POST /api/citas] Error:', error)
-    return NextResponse.json({ error: 'Error al crear cita' }, { status: 500 })
+    console.error('[POST /api/citas] Error completo:', {
+      message: error?.message,
+      stack: error?.stack,
+      code: error?.code,
+      name: error?.name,
+    })
+    return NextResponse.json(
+      { 
+        error: 'Error al crear cita',
+        ...(process.env.NODE_ENV === 'development' && { details: error?.message, code: error?.code })
+      },
+      { status: 500 }
+    )
   }
 }, ['citas:write'])

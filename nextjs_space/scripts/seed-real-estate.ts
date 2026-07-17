@@ -704,7 +704,7 @@ export async function seedRealEstate(tenantId: string) {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/(^-|-$)/g, '')
       .slice(0, 80);
-    const propertyId = `inm-${slug}`;
+    const propertyId = `inm-${tenantId}-${slug}`;
 
     // Imágenes de ejemplo según la ciudad
     const cityImages: Record<string, string[]> = {
