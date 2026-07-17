@@ -170,6 +170,9 @@ export default function RealEstateConfigDashboard() {
 
       if (configRes.status === 'fulfilled' && configRes.value.ok) {
         const cfg = await configRes.value.json()
+        if (typeof cfg.exportFormats === 'string') {
+          cfg.exportFormats = cfg.exportFormats.split(',').map((s: string) => s.trim())
+        }
         setConfig(prev => ({
           ...prev,
           ...cfg,
