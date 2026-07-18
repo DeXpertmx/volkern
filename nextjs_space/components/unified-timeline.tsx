@@ -29,6 +29,7 @@ interface Interaction {
   resultado: string | null;
   creadoPor: string | null;
   fechaCreacion: string;
+  metadatos: Record<string, unknown> | null;
 }
 
 interface AuditLog {
@@ -304,6 +305,43 @@ export function UnifiedTimeline({ leadId, contactId }: UnifiedTimelineProps) {
                   const interaction = event.data as Interaction;
                   const InteractionIcon = getInteractionIcon(interaction.tipo);
                   const colorClass = getInteractionColor(interaction.tipo);
+
+                  if (interaction.tipo === 'email') {
+                    const meta = interaction.metadatos as Record<string, unknown> | null;
+                    const sender = (meta?.direccion || meta?.from || '') as string;
+                    const subject = (meta?.asunto || meta?.subject || '') as string;
+                    const body = interaction.contenido;
+
+                    return (
+                      <div key={event.id} className="relative pl-14">
+                        <div className={`absolute left-4 top-1 w-5 h-5 rounded-full bg-white border-2 flex items-center justify-center ${colorClass.replace('text-', 'border-')}`}>
+                          <InteractionIcon className={`h-3 w-3 ${colorClass}`} />
+                        </div>
+                        <div className="bg-white border rounded-lg p-4 hover:shadow-sm transition-shadow">
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="text-xs">Email</Badge>
+                              {interaction.resultado && getResultadoBadge(interaction.resultado)}
+                            </div>
+                            <span className="text-xs text-muted-foreground">
+                              {format(event.date, "dd MMM yyyy, HH:mm", { locale: es })}
+                            </span>
+                          </div>
+                          {sender && (
+                            <p className="text-xs text-muted-foreground mb-1">
+                              <span className="font-semibold">De:</span> {sender}
+                            </p>
+                          )}
+                          {subject && (
+                            <p className="text-sm font-medium mb-2">
+                              <span className="font-semibold">Asunto:</span> {subject}
+                            </p>
+                          )}
+                          <p className="text-sm whitespace-pre-wrap text-gray-700 line-clamp-3">{body}</p>
+                        </div>
+                      </div>
+                    );
+                  }
 
                   return (
                     <div key={event.id} className="relative pl-14">
