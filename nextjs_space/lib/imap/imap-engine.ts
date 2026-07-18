@@ -1,6 +1,7 @@
 import { ImapFlow } from 'imapflow';
 import { prisma } from '@/lib/db';
 import { simpleParser } from 'mailparser';
+import type { ParsedMail } from 'mailparser';
 
 interface SmtpConfig {
   host: string
@@ -64,13 +65,16 @@ async function processEmail(tenantId: string, cfg: SmtpConfig) {
     await client.connect()
     const lock = await client.getMailboxLock('INBOX')
     try {
-      const messages = await client.search({ unseen: true })
-      if (messages.length === 0) return
+      const messages = await client.search({ seen: false })
+      if (!messages || messages.length === 0) return
 
       for (const seq of messages) {
         try {
-          const msg = await client.fetchOne(seq, { source: true, envelope: true })
-          const parsed = await simpleParser(msg.source)
+          const msg = await client.fetchOne(seq, { source: true })
+          if (!msg || !msg.source) continue
+
+          const sourceBuf = Buffer.isBuffer(msg.source) ? msg.source : Buffer.from(msg.source)
+          const parsed: ParsedMail = await simpleParser(sourceBuf)
 
           const fromEmail = extractEmailAddress(parsed.from?.text || '')
           if (!fromEmail) continue
@@ -123,7 +127,7 @@ export async function pollAllTenants() {
   console.log('[IMAP] Iniciando polling para todos los tenants...')
 
   const tenants = await prisma.tenant.findMany({
-    where: { plan: { not: null } },
+    where: { estado: 'activo' },
     select: { id: true },
   })
 
