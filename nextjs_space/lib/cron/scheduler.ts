@@ -130,6 +130,19 @@ export function initCronJobs() {
   });
 
   console.log('✅ [Scheduler] Analytics cleanup programado (Sun 03:00 AM)');
+
+  // 10. IMAP Email Polling — cada 5 minutos
+  cron.schedule('*/5 * * * *', async () => {
+    console.log('[Cron] 📬 Polling IMAP para todos los tenants...');
+    try {
+      const { pollAllTenants } = await import('../imap/imap-engine');
+      await pollAllTenants();
+    } catch (error: any) {
+      console.error('[Cron] ❌ Error en IMAP polling:', error.message);
+    }
+  });
+
+  console.log('✅ [Scheduler] IMAP Polling programado (cada 5 min)');
 }
 
 /**
