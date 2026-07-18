@@ -269,7 +269,8 @@ export class NotificationService {
         subject: content.subject || 'Notificación',
         html: content.html || content.body,
         text: content.body,
-        tenantSubdomain: _context.tenantId, // Usamos el ID como identificador de inquilino para SES
+        tenantSubdomain: _context.tenantId,
+        tenantId: _context.tenantId,
       });
       
       if (!result.success) {
