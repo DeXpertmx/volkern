@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
   User, 
   ArrowLeft, 
@@ -47,6 +48,7 @@ import { LeadAttachments } from '@/components/dashboard/LeadAttachments';
 import { AISuggestionCard } from '@/components/ai/AISuggestionCard';
 import { RoleplaySimulator } from '@/components/training/RoleplaySimulator';
 import { FiscalOnboardingModal } from '@/components/modals/FiscalOnboardingModal';
+import { PAISES } from '@/lib/constants/geo';
 
 interface FieldDefinition {
   id: string;
@@ -93,6 +95,10 @@ interface Cita {
     precio: number;
     moneda: string;
   } | null;
+}
+
+function getPaisLabel(code: string): string {
+  return PAISES.find(p => p.value === code)?.label || code
 }
 
 export default function LeadDetailPage({
@@ -484,12 +490,21 @@ export default function LeadDetailPage({
                     <Globe className="h-3.5 w-3.5" />
                     País
                   </Label>
-                  <Input
-                    id="pais"
+                  <Select
                     value={formData.pais}
-                    onChange={(e) => setFormData({ ...formData, pais: e.target.value })}
-                    placeholder="México, España, etc."
-                  />
+                    onValueChange={(v) => setFormData({ ...formData, pais: v })}
+                  >
+                    <SelectTrigger id="pais">
+                      <SelectValue placeholder="Selecciona un país" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <ScrollArea className="h-64">
+                        {PAISES.map((p) => (
+                          <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                        ))}
+                      </ScrollArea>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -675,7 +690,7 @@ export default function LeadDetailPage({
                       <Globe className="h-4 w-4" />
                       País
                     </p>
-                    <p className="text-base">{lead.pais}</p>
+                    <p className="text-base">{getPaisLabel(lead.pais)}</p>
                   </div>
                 )}
                 {lead.fuente && (

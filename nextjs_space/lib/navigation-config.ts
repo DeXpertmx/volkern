@@ -64,7 +64,8 @@ import {
   MapPin,
   Ship,
   Radio,
-  Scale
+  Scale,
+  Mail
 } from 'lucide-react'
 import type { PermissionModule } from '@/lib/permissions'
 
@@ -495,6 +496,7 @@ export const HUBS: HubConfig[] = [
     items: [
       { name: 'Empresa', href: '/dashboard/configuracion?section=empresa', icon: Building, description: 'Datos empresariales' },
       { name: 'Horarios', href: '/dashboard/configuracion?section=horarios', icon: Clock, description: 'Disponibilidad' },
+      { name: 'Correo SMTP', href: '/dashboard/configuracion?section=email', icon: Mail, description: 'Servidor de correo saliente' },
       { name: 'Notificaciones', href: '/dashboard/configuracion?section=notificaciones', icon: Bell, description: 'Alertas y correos' },
       { name: 'Config. Fiscal', href: '/dashboard/configuracion?section=fiscal', icon: Calculator, description: 'Facturación e impuestos' },
       { name: 'Telefonía', href: '/dashboard/configuracion?section=telefonia', icon: PhoneCall, description: 'Líneas y desvíos' },

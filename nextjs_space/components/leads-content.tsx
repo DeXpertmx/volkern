@@ -9,6 +9,14 @@ import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
@@ -21,6 +29,7 @@ import { toast } from 'sonner'
 import { apiFetch } from '@/lib/api-client'
 import { useDebounce } from '@/lib/hooks/useDebounce'
 import { useFiltersPersistence } from '@/lib/hooks/useFiltersPersistence'
+import { PAISES } from '@/lib/constants/geo'
 
 const estadoColors: Record<string, string> = {
   'nuevo': 'bg-blue-100 text-blue-800',
@@ -30,6 +39,10 @@ const estadoColors: Record<string, string> = {
   'agendado': 'bg-purple-100 text-purple-800',
   'pagado': 'bg-emerald-100 text-emerald-800',
   'inactivo': 'bg-gray-100 text-gray-800'
+}
+
+function getPaisLabel(code: string): string {
+  return PAISES.find(p => p.value === code)?.label || code
 }
 
 export function LeadsContent() {
@@ -461,12 +474,21 @@ export function LeadsContent() {
                         <Globe className="h-3.5 w-3.5" />
                         País
                       </Label>
-                      <Input
-                        id="new-pais"
+                      <Select
                         value={newLead.pais}
-                        onChange={(e) => setNewLead({ ...newLead, pais: e.target.value })}
-                        placeholder="México, España, etc."
-                      />
+                        onValueChange={(v) => setNewLead({ ...newLead, pais: v })}
+                      >
+                        <SelectTrigger id="new-pais">
+                          <SelectValue placeholder="Selecciona un país" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <ScrollArea className="h-64">
+                            {PAISES.map((p) => (
+                              <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                            ))}
+                          </ScrollArea>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                 </div>
@@ -773,14 +795,14 @@ export function LeadsContent() {
                                 {(lead.ciudad || lead.pais) && (
                                   <div className="flex items-center text-xs text-muted-foreground ml-5.5">
                                     <MapPin className="h-3 w-3 mr-1 shrink-0" />
-                                    <span>{[lead.ciudad, lead.pais].filter(Boolean).join(', ')}</span>
+                                    <span>{[lead.ciudad, getPaisLabel(lead.pais)].filter(Boolean).join(', ')}</span>
                                   </div>
                                 )}
                               </div>
                             ) : lead.ciudad ? (
                               <div className="flex items-center text-sm text-muted-foreground">
                                 <MapPin className="h-3.5 w-3.5 mr-1.5 shrink-0" />
-                                <span>{[lead.ciudad, lead.pais].filter(Boolean).join(', ')}</span>
+                                <span>{[lead.ciudad, getPaisLabel(lead.pais)].filter(Boolean).join(', ')}</span>
                               </div>
                             ) : (
                               <span className="text-muted-foreground text-sm">-</span>

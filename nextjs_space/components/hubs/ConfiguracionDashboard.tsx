@@ -20,6 +20,7 @@ import {
   Loader2,
   LayoutGrid,
   Info,
+  Mail,
 } from "lucide-react";
 import { toast } from "sonner";
 import { WhitelabelConfig } from "@/components/whitelabel-config";
@@ -35,6 +36,7 @@ import { LeadFieldsConfig } from "@/components/dashboard/LeadFieldsConfig";
 import { ImageUploader } from "@/components/ui/image-uploader";
 import EqualityConfigSection from "@/components/equality/EqualityConfigSection";
 import { NotificationConfig } from "@/components/dashboard/notifications/NotificationConfig";
+import { EmailSmtpConfig } from "@/components/dashboard/email/EmailSmtpConfig";
 import Link from "next/link";
 import { Switch } from "@/components/ui/switch";
 import { ALL_MODULES } from "@/lib/plans";
@@ -375,6 +377,8 @@ export function ConfiguracionDashboard({ activeSection }: ConfiguracionDashboard
               <NotificationConfig />
             </div>
           )}
+
+          {activeSection === "email" && <EmailSmtpConfig />}
 
           {activeSection === "billing" && (
             <div className="p-12 text-center">
