@@ -20,7 +20,16 @@ interface Servicio {
   duracionMinutos: number
   precio: number
   moneda: string
+  modalidad?: string
 }
+
+const tipoOptions = [
+  { value: 'reunion', label: 'Reunion', color: 'bg-blue-500' },
+  { value: 'llamada', label: 'Llamada', color: 'bg-green-500' },
+  { value: 'demo', label: 'Demo', color: 'bg-purple-500' },
+  { value: 'servicio', label: 'Servicio', color: 'bg-orange-500' },
+  { value: 'otro', label: 'Otro', color: 'bg-gray-500' },
+]
 
 interface Lead {
   id: string
@@ -36,6 +45,7 @@ export default function EmbedBookingPage() {
   const [step, setStep] = useState<'services' | 'datetime' | 'contact' | 'payment' | 'success'>('services')
   const [servicios, setServicios] = useState<Servicio[]>([])
   const [selectedServicio, setSelectedServicio] = useState<Servicio | null>(null)
+  const [selectedTipo, setSelectedTipo] = useState('')
   const [selectedDate, setSelectedDate] = useState('')
   const [selectedTime, setSelectedTime] = useState('')
   const [availableSlots, setAvailableSlots] = useState<string[]>([])
@@ -230,6 +240,9 @@ export default function EmbedBookingPage() {
           tenantId: tenantId,
           leadId: lead.id,
           servicioId: selectedServicio?.id,
+          catalogoItemId: selectedServicio?.id,
+          tipo: selectedTipo || (selectedServicio?.modalidad === 'virtual' ? 'llamada' : 
+                selectedServicio?.modalidad === 'presencial' ? 'reunion' : 'servicio'),
           fechaHora: fechaHora.toISOString(),
         }),
       })
@@ -345,7 +358,26 @@ export default function EmbedBookingPage() {
         <CardContent>
           {step === 'services' && (
             <div className="space-y-4">
-              <h3 className="font-semibold text-lg mb-4">Selecciona un servicio</h3>
+              <div className="mb-4">
+                <h3 className="font-semibold text-lg mb-3">Motivo de la Cita</h3>
+                <div className="flex flex-wrap gap-2">
+                  {tipoOptions.map((t) => (
+                    <button
+                      key={t.value}
+                      onClick={() => setSelectedTipo(t.value)}
+                      className={`
+                        px-4 py-2 rounded-lg text-sm font-medium border transition-all
+                        ${selectedTipo === t.value
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'bg-background hover:bg-muted border-input text-muted-foreground hover:text-foreground'}
+                      `}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <h3 className="font-semibold text-lg mb-4">Selecciona un servicio o producto</h3>
               {servicios.length === 0 ? (
                 <p className="text-center text-muted-foreground py-8">
                   No hay servicios disponibles en este momento.

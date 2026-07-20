@@ -33,7 +33,16 @@ interface Servicio {
     duracionMinutos: number
     precio: number
     moneda: string
+    modalidad?: string
 }
+
+const tipoOptions = [
+    { value: 'reunion', label: 'Reunion', color: 'bg-blue-500' },
+    { value: 'llamada', label: 'Llamada', color: 'bg-green-500' },
+    { value: 'demo', label: 'Demo', color: 'bg-purple-500' },
+    { value: 'servicio', label: 'Servicio', color: 'bg-orange-500' },
+    { value: 'otro', label: 'Otro', color: 'bg-gray-500' },
+]
 
 export default function UserBookingPage() {
     const params = useParams()
@@ -44,6 +53,7 @@ export default function UserBookingPage() {
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
     const [servicios, setServicios] = useState<Servicio[]>([])
     const [selectedServicio, setSelectedServicio] = useState<Servicio | null>(null)
+    const [selectedTipo, setSelectedTipo] = useState('')
     const [selectedDate, setSelectedDate] = useState('')
     const [selectedTime, setSelectedTime] = useState('')
     const [availableSlots, setAvailableSlots] = useState<string[]>([])
@@ -132,6 +142,9 @@ export default function UserBookingPage() {
                     tenantId: userProfile.tenantId,
                     usuarioAsignadoId: userProfile.id,
                     servicioId: selectedServicio.id,
+                    catalogoItemId: selectedServicio.id,
+                    tipo: selectedTipo || (selectedServicio.modalidad === 'virtual' ? 'llamada' : 
+                          selectedServicio.modalidad === 'presencial' ? 'reunion' : 'servicio'),
                     fechaHora: fechaHora.toISOString(),
                     leadData: {
                         nombre: contactData.nombre,
@@ -296,39 +309,66 @@ export default function UserBookingPage() {
                                 exit={{ opacity: 0, x: -20 }}
                                 className="space-y-6"
                             >
-                                <div className="text-center mb-8">
-                                    <h2 className="text-2xl font-bold">Selecciona un Servicio</h2>
-                                    <p className="text-gray-400 mt-1">¿Cómo puedo ayudarte hoy?</p>
+                                <div className="text-center mb-6">
+                                    <h2 className="text-2xl font-bold">Motivo de la Cita</h2>
+                                    <p className="text-gray-400 mt-1">Selecciona el tipo de cita</p>
                                 </div>
-                                <div className="grid md:grid-cols-2 gap-4">
-                                    {servicios.map((s) => (
-                                        <div
-                                            key={s.id}
-                                            onClick={() => { setSelectedServicio(s); setStep(2); }}
+                                <div className="flex flex-wrap justify-center gap-3 mb-10">
+                                    {tipoOptions.map((t) => (
+                                        <button
+                                            key={t.value}
+                                            onClick={() => setSelectedTipo(t.value)}
                                             className={`
-                        group relative p-6 rounded-2xl border transition-all duration-300 cursor-pointer overflow-hidden
-                        ${selectedServicio?.id === s.id
-                                                    ? 'bg-purple-600/20 border-purple-500 shadow-xl'
-                                                    : 'bg-gray-900/40 border-gray-800 hover:border-gray-700 hover:bg-gray-800/40'}
-                      `}
+                                                px-6 py-3 rounded-xl font-medium text-sm border transition-all
+                                                ${selectedTipo === t.value
+                                                    ? 'bg-purple-600 border-purple-500 shadow-lg shadow-purple-900/30 scale-105'
+                                                    : 'bg-gray-900/40 border-gray-800 hover:border-gray-600 text-gray-400 hover:text-white'}
+                                            `}
                                         >
-                                            <div className="flex justify-between items-start mb-4">
-                                                <div className="p-3 bg-purple-500/10 rounded-xl group-hover:scale-110 transition-transform">
-                                                    <Sparkles className="w-6 h-6 text-purple-400" />
-                                                </div>
-                                                <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/20">
-                                                    {s.duracionMinutos} min
-                                                </Badge>
-                                            </div>
-                                            <h3 className="text-xl font-bold mb-2">{s.nombre}</h3>
-                                            <p className="text-gray-400 text-sm mb-4 line-clamp-2">{s.descripcion}</p>
-                                            <div className="flex items-center justify-between mt-auto pt-4 border-t border-gray-800/50">
-                                                <span className="text-lg font-bold">${s.precio} <span className="text-xs text-gray-500">{s.moneda}</span></span>
-                                                <ChevronRight className="w-5 h-5 text-gray-600 group-hover:translate-x-1 transition-transform" />
-                                            </div>
-                                        </div>
+                                            {t.label}
+                                        </button>
                                     ))}
                                 </div>
+
+                                <div className="text-center mb-6">
+                                    <h2 className="text-2xl font-bold">Selecciona un Servicio o Producto</h2>
+                                    <p className="text-gray-400 mt-1">¿Cómo puedo ayudarte hoy?</p>
+                                </div>
+                                {servicios.length === 0 ? (
+                                    <div className="text-center py-12 text-gray-500">
+                                        <p className="text-lg">No hay servicios disponibles</p>
+                                    </div>
+                                ) : (
+                                    <div className="grid md:grid-cols-2 gap-4">
+                                        {servicios.map((s) => (
+                                            <div
+                                                key={s.id}
+                                                onClick={() => { setSelectedServicio(s); setStep(2); }}
+                                                className={`
+                            group relative p-6 rounded-2xl border transition-all duration-300 cursor-pointer overflow-hidden
+                            ${selectedServicio?.id === s.id
+                                                        ? 'bg-purple-600/20 border-purple-500 shadow-xl'
+                                                        : 'bg-gray-900/40 border-gray-800 hover:border-gray-700 hover:bg-gray-800/40'}
+                          `}
+                                            >
+                                                <div className="flex justify-between items-start mb-4">
+                                                    <div className="p-3 bg-purple-500/10 rounded-xl group-hover:scale-110 transition-transform">
+                                                        <Sparkles className="w-6 h-6 text-purple-400" />
+                                                    </div>
+                                                    <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/20">
+                                                        {s.duracionMinutos} min
+                                                    </Badge>
+                                                </div>
+                                                <h3 className="text-xl font-bold mb-2">{s.nombre}</h3>
+                                                <p className="text-gray-400 text-sm mb-4 line-clamp-2">{s.descripcion}</p>
+                                                <div className="flex items-center justify-between mt-auto pt-4 border-t border-gray-800/50">
+                                                    <span className="text-lg font-bold">${s.precio} <span className="text-xs text-gray-500">{s.moneda}</span></span>
+                                                    <ChevronRight className="w-5 h-5 text-gray-600 group-hover:translate-x-1 transition-transform" />
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </motion.div>
                         )}
 
@@ -346,7 +386,7 @@ export default function UserBookingPage() {
                                     </Button>
                                     <div className="text-right">
                                         <h2 className="text-2xl font-bold">Fecha y Hora</h2>
-                                        <p className="text-gray-400 text-sm">{selectedServicio?.nombre}</p>
+                                        <p className="text-gray-400 text-sm">{selectedServicio?.nombre}{selectedTipo ? ` • ${tipoOptions.find(t => t.value === selectedTipo)?.label || selectedTipo}` : ''}</p>
                                     </div>
                                 </div>
 
