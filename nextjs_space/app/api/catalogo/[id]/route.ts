@@ -141,12 +141,40 @@ export async function PATCH(
     } = data;
 
     // Verificar que el ítem existe y pertenece al tenant
-    const existing = await prisma.catalogoItem.findFirst({
+    let existing = await prisma.catalogoItem.findFirst({
       where: {
         id: params.id,
         tenantId: auth.tenant!.id,
       },
     });
+
+    // Fallback a Servicio legacy: auto-migrar a CatalogoItem
+    if (!existing) {
+      const legacy = await prisma.servicio.findFirst({
+        where: { id: params.id, tenantId: auth.tenant!.id },
+      })
+      if (legacy) {
+        existing = await prisma.catalogoItem.create({
+          data: {
+            id: legacy.id,
+            tenantId: legacy.tenantId!,
+            nombre: legacy.nombre,
+            descripcion: legacy.descripcion,
+            tipo: 'servicio',
+            precioBase: legacy.precio,
+            moneda: legacy.moneda || 'EUR',
+            duracionMinutos: legacy.duracionMinutos,
+            modalidad: legacy.modalidad || 'presencial',
+            activo: legacy.activo,
+          },
+        })
+        // Vincular Servicio legacy al nuevo CatalogoItem
+        await prisma.servicio.update({
+          where: { id: legacy.id },
+          data: { catalogoItemId: existing.id },
+        })
+      }
+    }
 
     if (!existing) {
       return NextResponse.json({ error: 'Ítem no encontrado' }, { status: 404 });
@@ -331,7 +359,7 @@ export async function DELETE(
     }
 
     // Verificar que el ítem existe y pertenece al tenant
-    const existing = await prisma.catalogoItem.findFirst({
+    let existing = await prisma.catalogoItem.findFirst({
       where: {
         id: params.id,
         tenantId: auth.tenant!.id,
@@ -348,35 +376,57 @@ export async function DELETE(
       },
     });
 
+    let isLegacy = false
+    if (!existing) {
+      // Fallback: verificar en Servicio legacy
+      const legacy = await prisma.servicio.findFirst({
+        where: { id: params.id, tenantId: auth.tenant!.id },
+      })
+      if (legacy) {
+        existing = {
+          id: legacy.id,
+          tenantId: legacy.tenantId!,
+          _count: { citas: 0, cotizacionItems: 0, contratoItems: 0, ordenVentaItems: 0 },
+        } as any
+        isLegacy = true
+      }
+    }
+
     if (!existing) {
       return NextResponse.json({ error: 'Ítem no encontrado' }, { status: 404 });
     }
 
-    // Verificar si el ítem está en uso
-    const totalUso = 
-      existing._count.citas +
-      existing._count.cotizacionItems +
-      existing._count.contratoItems +
-      existing._count.ordenVentaItems;
+    // Verificar si el ítem está en uso (solo para CatalogoItem real)
+    if (!isLegacy) {
+      const totalUso = 
+        (existing as any)._count.citas +
+        (existing as any)._count.cotizacionItems +
+        (existing as any)._count.contratoItems +
+        (existing as any)._count.ordenVentaItems;
 
-    if (totalUso > 0) {
-      return NextResponse.json(
-        { 
-          error: 'No se puede eliminar el ítem porque está en uso',
-          detalles: {
-            citas: existing._count.citas,
-            cotizaciones: existing._count.cotizacionItems,
-            contratos: existing._count.contratoItems,
-            ordenesVenta: existing._count.ordenVentaItems,
-          }
-        },
-        { status: 400 }
-      );
+      if (totalUso > 0) {
+        return NextResponse.json(
+          { 
+            error: 'No se puede eliminar el ítem porque está en uso',
+            detalles: {
+              citas: (existing as any)._count.citas,
+              cotizaciones: (existing as any)._count.cotizacionItems,
+              contratos: (existing as any)._count.contratoItems,
+              ordenesVenta: (existing as any)._count.ordenVentaItems,
+            }
+          },
+          { status: 400 }
+        );
+      }
+
+      await prisma.catalogoItem.delete({
+        where: { id: params.id },
+      });
+    } else {
+      await prisma.servicio.delete({
+        where: { id: params.id },
+      });
     }
-
-    await prisma.catalogoItem.delete({
-      where: { id: params.id },
-    });
 
     return NextResponse.json({ success: true });
   } catch (error) {
