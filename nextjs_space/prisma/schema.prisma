@@ -7212,6 +7212,7 @@ model AdSchedule {
   timezone          String       @default("America/Mexico_City")
   action            String       // ACTIVATE | PAUSE
   enabled           Boolean      @default(true)
+  triggerCount      Int          @default(0)
   lastTriggeredAt   DateTime?
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt

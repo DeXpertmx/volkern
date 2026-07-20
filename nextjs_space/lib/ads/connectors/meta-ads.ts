@@ -64,12 +64,23 @@ async function metaFetch<T>(url: string, options: RequestInit = {}): Promise<T> 
     },
   });
 
+  const json = await response.json();
+
+  // Meta a veces retorna 200 con { error: {...} }
+  if (json.error) {
+    const msg = json.error.error_user_msg || json.error.message || `HTTP ${response.status}`;
+    const code = json.error.code || response.status;
+    if (code === 190 || code === 102 || code === 401) {
+      throw new MetaAuthError(msg, code);
+    }
+    throw new MetaApiError(msg, code, response.status);
+  }
+
   if (!response.ok) {
-    const errorBody = (await response.json().catch(() => ({}))) as MetaErrorResponse;
+    const errorBody = json as MetaErrorResponse;
     const msg = errorBody.error?.message || `HTTP ${response.status}`;
     const code = errorBody.error?.code || response.status;
 
-    // Si es error de auth expirado, propagamos para que el sync engine lo maneje
     if (code === 190 || code === 102 || code === 401) {
       throw new MetaAuthError(msg, code);
     }
@@ -77,7 +88,7 @@ async function metaFetch<T>(url: string, options: RequestInit = {}): Promise<T> 
     throw new MetaApiError(msg, code, response.status);
   }
 
-  return response.json() as Promise<T>;
+  return json as T;
 }
 
 class MetaApiError extends Error {

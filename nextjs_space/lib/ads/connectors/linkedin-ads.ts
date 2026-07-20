@@ -530,13 +530,21 @@ export class LinkedInAdsConnector implements AdPlatformConnector {
       const accountUrn = buildAccountUrn(accountId);
 
       // ─── 1. Obtener campañas ─────────────────────────────────────
-      const campaignsUrl = `${BASE_URL}/adCampaignsV2?q=search&search.account=${encodeURIComponent(accountUrn)}`;
-      const campaignsData = await linkedinFetch<{
-        elements?: LinkedInCampaign[];
-        start?: number;
-      }>(campaignsUrl, accessToken);
+      const allCampaigns: LinkedInCampaign[] = [];
+      let start = 0;
+      const count = 100;
+      while (true) {
+        const campaignsUrl = `${BASE_URL}/adCampaignsV2?q=search&search.account=${encodeURIComponent(accountUrn)}&start=${start}&count=${count}`;
+        const campaignsData = await linkedinFetch<{
+          elements?: LinkedInCampaign[];
+          start?: number;
+        }>(campaignsUrl, accessToken);
+        allCampaigns.push(...(campaignsData.elements || []));
+        if (!campaignsData.elements || campaignsData.elements.length === 0) break;
+        start += count;
+      }
 
-      for (const camp of campaignsData.elements || []) {
+      for (const camp of allCampaigns) {
         const externalId = camp.id;
         const status = LINKEDIN_STATUS_MAP[camp.status || ''] || 'ACTIVE';
         const objective = LINKEDIN_OBJECTIVE_MAP[camp.objectiveType || ''] || 'CONVERSIONS';
@@ -599,12 +607,20 @@ export class LinkedInAdsConnector implements AdPlatformConnector {
 
         try {
           // LinkedIn ad creative groups endpoint
-          const groupsUrl = `${BASE_URL}/adCreativesV2?q=search&search.campaign=${encodeURIComponent('urn:li:sponsoredCampaign:' + localCamp.externalId)}`;
-          const groupsData = await linkedinFetch<{
-            elements?: LinkedInCreativeGroup[];
-          }>(groupsUrl, accessToken);
+          const allGroups: LinkedInCreativeGroup[] = [];
+          let groupStart = 0;
+          const groupCount = 100;
+          while (true) {
+            const groupsUrl = `${BASE_URL}/adCreativesV2?q=search&search.campaign=${encodeURIComponent('urn:li:sponsoredCampaign:' + localCamp.externalId)}&start=${groupStart}&count=${groupCount}`;
+            const groupsData = await linkedinFetch<{
+              elements?: LinkedInCreativeGroup[];
+            }>(groupsUrl, accessToken);
+            allGroups.push(...(groupsData.elements || []));
+            if (!groupsData.elements || groupsData.elements.length === 0) break;
+            groupStart += groupCount;
+          }
 
-          for (const group of groupsData.elements || []) {
+          for (const group of allGroups) {
             const groupExternalId = group.id;
             const status = LINKEDIN_STATUS_MAP[group.status || ''] || 'PAUSED';
 
@@ -637,13 +653,21 @@ export class LinkedInAdsConnector implements AdPlatformConnector {
       }
 
       // ─── 3. Obtener anuncios (ad creatives) ──────────────────────
-      const creativesUrl = `${BASE_URL}/adCreativesV2?q=search&search.account=${encodeURIComponent(accountUrn)}`;
+      const allCreatives: LinkedInCreative[] = [];
+      let creativeStart = 0;
+      const creativeCount = 100;
       try {
-        const creativesData = await linkedinFetch<{
-          elements?: LinkedInCreative[];
-        }>(creativesUrl, accessToken);
+        while (true) {
+          const creativesUrl = `${BASE_URL}/adCreativesV2?q=search&search.account=${encodeURIComponent(accountUrn)}&start=${creativeStart}&count=${creativeCount}`;
+          const creativesData = await linkedinFetch<{
+            elements?: LinkedInCreative[];
+          }>(creativesUrl, accessToken);
+          allCreatives.push(...(creativesData.elements || []));
+          if (!creativesData.elements || creativesData.elements.length === 0) break;
+          creativeStart += creativeCount;
+        }
 
-        for (const creative of creativesData.elements || []) {
+        for (const creative of allCreatives) {
           const externalId = creative.id;
           const creativeGroupExternalId = creative.creativeGroup || '';
 

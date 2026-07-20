@@ -169,6 +169,53 @@ export function initCronJobs() {
   });
 
   console.log('✅ [Scheduler] AB Test Auto-Evaluation programado (cada 30 min)');
+
+  // 13. Watchdog Budget Evaluation — cada 30 minutos
+  cron.schedule('*/30 * * * *', async () => {
+    console.log('[Cron] 🐕 Evaluando reglas watchdog de presupuesto...');
+    try {
+      const { BudgetWatchdog } = await import('../ads/budget-watchdog');
+      const tenants = await prisma.tenant.findMany({
+        where: { estado: 'activo' },
+        select: { id: true },
+      });
+      for (const t of tenants) {
+        await BudgetWatchdog.evaluateAll(t.id).catch((err: any) =>
+          console.error(`[Cron] Error watchdog para tenant ${t.id}:`, err.message)
+        );
+      }
+    } catch (error: any) {
+      console.error('[Cron] ❌ Error en watchdog evaluation:', error.message);
+    }
+  });
+
+  console.log('✅ [Scheduler] Watchdog Evaluation programado (cada 30 min)');
+
+  // 14. ADS Sync Campaigns — cada 1 hora
+  cron.schedule('0 * * * *', async () => {
+    console.log('[Cron] 🔄 Sincronizando campañas ADS...');
+    try {
+      const { runSyncCampaigns } = await import('../ads/cron/ads-jobs');
+      await runSyncCampaigns();
+    } catch (error: any) {
+      console.error('[Cron] ❌ Error en ADS sync:', error.message);
+    }
+  });
+
+  console.log('✅ [Scheduler] ADS Sync programado (cada 1 hora)');
+
+  // 15. ADS Full Sync — cada 6 horas
+  cron.schedule('0 */6 * * *', async () => {
+    console.log('[Cron] 🔄 Sincronización completa ADS...');
+    try {
+      const { runFullSync } = await import('../ads/cron/ads-jobs');
+      await runFullSync();
+    } catch (error: any) {
+      console.error('[Cron] ❌ Error en ADS full sync:', error.message);
+    }
+  });
+
+  console.log('✅ [Scheduler] ADS Full Sync programado (cada 6 horas)');
 }
 
 /**

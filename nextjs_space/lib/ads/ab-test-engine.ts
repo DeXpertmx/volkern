@@ -1,4 +1,7 @@
 import { prisma } from '@/lib/db';
+import { logger } from '@/lib/logger';
+import { getConnector } from './connectors';
+import type { AdPlatform } from './types';
 
 function chiSquarePValue(chi2: number, df: number): number {
   const n = df / 2;
@@ -53,7 +56,7 @@ export async function calculateSignificance(testId: string): Promise<Significanc
     spend: v.currentSpend,
   }));
 
-  if (variants.length < 2) {
+  if (variants.length < 2 || variants.every(v => v.impressions === 0)) {
     return {
       winnerId: null,
       winnerLabel: null,
@@ -62,7 +65,7 @@ export async function calculateSignificance(testId: string): Promise<Significanc
       chiSquare: 0,
       pValue: 1,
       metric: test.metric,
-      variantResults: [],
+      variantResults: variants.map(v => ({ label: v.label, value: 0, isWinner: false })),
     };
   }
 
@@ -194,7 +197,10 @@ export async function calculateSignificance(testId: string): Promise<Significanc
 export async function declareWinner(testId: string, variantId?: string) {
   const test = await prisma.adABTest.findUnique({
     where: { id: testId },
-    include: { variants: true },
+    include: {
+      variants: true,
+      campaign: { include: { platform: { select: { platform: true } } } },
+    },
   });
   if (!test) throw new Error('Test no encontrado');
 
@@ -212,6 +218,27 @@ export async function declareWinner(testId: string, variantId?: string) {
 
   const winner = test.variants.find(v => v.id === winnerId);
   if (!winner) throw new Error('Variante ganadora no encontrada');
+
+  const losingVariants = test.variants.filter(v => v.id !== winnerId);
+
+  // Pausar variantes perdedoras en la plataforma
+  const connector = getConnector(test.campaign.platform.platform as AdPlatform);
+  for (const loser of losingVariants) {
+    if (loser.adSetId) {
+      try {
+        await connector.pauseCampaign(loser.adSetId, loser.adSetId);
+      } catch (err) {
+        logger.warn({ variantId: loser.id, err }, 'No se pudo pausar variante perdedora en la plataforma');
+      }
+    }
+    if (loser.adId) {
+      try {
+        await connector.pauseCampaign(loser.adId, loser.adId);
+      } catch (err) {
+        logger.warn({ variantId: loser.id, err }, 'No se pudo pausar anuncio perdedor en la plataforma');
+      }
+    }
+  }
 
   await prisma.adABTest.update({
     where: { id: testId },
