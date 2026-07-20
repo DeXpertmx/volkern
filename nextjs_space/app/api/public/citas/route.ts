@@ -82,9 +82,29 @@ export const POST = withPublicTenant(async (request, tenantId) => {
 
     if (servicioId) {
       // 1. Intentar buscar en la tabla Servicio (Legacy)
-      servicio = await prisma.servicio.findFirst({
+      const legacyServicio = await prisma.servicio.findFirst({
         where: { id: servicioId, tenantId: tenantId }
       })
+
+      if (legacyServicio) {
+        let bookingPlatform: string | null = null
+        let bookingLocation: string | null = null
+        // Si el Servicio legacy tiene catalogoItemId vinculado, leer metadata de allí
+        if (legacyServicio.catalogoItemId) {
+          const linkedCat = await prisma.catalogoItem.findUnique({
+            where: { id: legacyServicio.catalogoItemId },
+            select: { metadata: true }
+          })
+          const meta = (linkedCat?.metadata as any) || {}
+          bookingPlatform = meta.bookingPlatform || null
+          bookingLocation = meta.bookingLocation || null
+        }
+        servicio = {
+          ...legacyServicio,
+          bookingPlatform,
+          bookingLocation,
+        }
+      }
 
       if (!servicio) {
         // 2. Intentar buscar en la tabla CatalogoItem (Onboarding 2.0)
@@ -93,6 +113,7 @@ export const POST = withPublicTenant(async (request, tenantId) => {
         })
 
         if (catalogoItem) {
+          const bookingMeta = (catalogoItem.metadata as any) || {}
           servicio = {
             id: catalogoItem.id,
             nombre: catalogoItem.nombre,
@@ -100,7 +121,9 @@ export const POST = withPublicTenant(async (request, tenantId) => {
             descripcion: catalogoItem.descripcion,
             precio: catalogoItem.precioBase,
             moneda: catalogoItem.moneda,
-            modalidad: catalogoItem.modalidad || 'virtual'
+            modalidad: catalogoItem.modalidad || 'virtual',
+            bookingPlatform: bookingMeta.bookingPlatform || null,
+            bookingLocation: bookingMeta.bookingLocation || null,
           }
           isFromCatalogo = true
         }
@@ -176,6 +199,11 @@ export const POST = withPublicTenant(async (request, tenantId) => {
       }
     }
 
+    // Leer config de plataforma/ubicación desde el servicio
+    const bookingPlatform = (servicio as any)?.bookingPlatform || null
+    const bookingLocation = (servicio as any)?.bookingLocation || null
+    const modalidad = (servicio as any)?.modalidad || 'virtual'
+
     // Crear la cita en la DB del Tenant
     const cita = await prisma.cita.create({
       data: {
@@ -187,8 +215,11 @@ export const POST = withPublicTenant(async (request, tenantId) => {
         fechaHora: new Date(fechaHora),
         duracion: duracion,
         titulo: titulo || servicio?.nombre || 'Cita',
-        tipo: tipo || 'virtual',
+        tipo: tipo || (modalidad === 'virtual' ? 'llamada' : modalidad === 'presencial' ? 'reunion' : 'servicio'),
         descripcion: notas || null,
+        ubicacion: (modalidad === 'presencial' || modalidad === 'hibrido') ? (bookingLocation || null) : null,
+        tipoLinkReunion: (modalidad === 'virtual' || modalidad === 'hibrido') ? (bookingPlatform || 'ninguno') : 'ninguno',
+        linkReunion: null,
         estado: 'pendiente'
       },
       include: {
