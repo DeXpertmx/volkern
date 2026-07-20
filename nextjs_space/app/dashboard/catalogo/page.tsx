@@ -162,6 +162,15 @@ const MODALIDADES = [
   { value: 'hibrido', label: 'Híbrido' },
 ];
 
+const PLATAFORMAS_REUNION = [
+  { value: 'google_meet', label: 'Google Meet' },
+  { value: 'zoom', label: 'Zoom' },
+  { value: 'microsoft_teams', label: 'Microsoft Teams' },
+  { value: 'whatsapp', label: 'WhatsApp' },
+  { value: 'telegram', label: 'Telegram' },
+  { value: 'otro', label: 'Otra plataforma' },
+];
+
 const TIPOS_PRECIO = [
   { value: 'unico', label: 'Pago Único' },
   { value: 'recurrente', label: 'Recurrente (suscripción)' },
@@ -953,6 +962,34 @@ export default function CatalogoPage() {
                             <SelectItem value="hibrido">Híbrido</SelectItem>
                           </SelectContent>
                         </Select>
+                      </div>
+                    )}
+                    {(form.modalidad === 'virtual' || form.modalidad === 'hibrido') && (
+                      <div>
+                        <Label>Plataforma de reunión</Label>
+                        <Select
+                          value={metadata.bookingPlatform || ''}
+                          onValueChange={(v) => setMetadata({ ...metadata, bookingPlatform: v })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar plataforma" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {PLATAFORMAS_REUNION.map(p => (
+                              <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    {(form.modalidad === 'presencial' || form.modalidad === 'hibrido') && (
+                      <div>
+                        <Label>Ubicación / Dirección</Label>
+                        <Input
+                          value={metadata.bookingLocation || ''}
+                          onChange={(e) => setMetadata({ ...metadata, bookingLocation: e.target.value })}
+                          placeholder="Calle, número, ciudad, código postal"
+                        />
                       </div>
                     )}
                   </>
