@@ -200,6 +200,18 @@ export class MinimaxOrchestratorAgent {
       'generar_web_block': 'generate_web_creator_block',
       'generar_seo': 'generate_seo_metadata',
       'sugerir_automatizacion': 'advise_on_automation_rules',
+
+      // ADS Schedules
+      'programar_campania': 'create_ad_schedule',
+      'listar_horarios': 'list_ad_schedules',
+      'eliminar_horario': 'delete_ad_schedule',
+
+      // ADS AB Tests
+      'crear_test_ab': 'create_ab_test',
+      'iniciar_test_ab': 'start_ab_test',
+      'evaluar_test_ab': 'calculate_ab_test_significance',
+      'declarar_ganador': 'declare_ab_test_winner',
+
       'resumen_rrhh': 'get_hr_daily_brief',
       'aprobar_vacaciones': 'approve_vacation_voice',
       'riesgo_rotacion': 'talent_retention_risk',

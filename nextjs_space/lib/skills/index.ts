@@ -39,6 +39,7 @@ import * as auditSkills from './audit-skills';
 import * as vaultPayrollSkills from './vault-payroll-skills';
 import * as operationalSkills from './operational-skills';
 import * as marketingSkills from './marketing-skills';
+import * as adSkills from './ads-skills';
 import * as realEstateSkills from './real-estate-skills';
 import * as logisticsSkills from './logistics-skills';
 import * as interactionSkills from './interaction-skills';
@@ -818,6 +819,16 @@ export const skills = {
   generate_web_creator_block: marketingSkills.generate_web_creator_block,
   generate_seo_metadata: marketingSkills.generate_seo_metadata,
   advise_on_automation_rules: marketingSkills.advise_on_automation_rules,
+
+  // ─── ADS Skills ───────────────────────────────────────────────────
+  create_ad_schedule: adSkills.create_ad_schedule,
+  list_ad_schedules: adSkills.list_ad_schedules,
+  toggle_ad_schedule: adSkills.toggle_ad_schedule,
+  delete_ad_schedule: adSkills.delete_ad_schedule,
+  create_ab_test: adSkills.create_ab_test,
+  start_ab_test: adSkills.start_ab_test,
+  calculate_ab_test_significance: adSkills.calculate_ab_test_significance,
+  declare_ab_test_winner: adSkills.declare_ab_test_winner,
 } as const;
 
 export type SkillName = keyof typeof skills;
@@ -967,6 +978,16 @@ export function listSkills(): Array<{ name: SkillName; description: string; cate
     { name: 'generate_web_creator_block', description: 'Generar bloques HTML para Web Creator con IA', category: 'marketing' },
     { name: 'generate_seo_metadata', description: 'Generar metadatos SEO con IA', category: 'marketing' },
     { name: 'advise_on_automation_rules', description: 'Analizar tenant y sugerir reglas de automatización', category: 'marketing' },
+
+    // ADS Skills
+    { name: 'create_ad_schedule', description: 'Crear programación horaria para campaña', category: 'marketing' },
+    { name: 'list_ad_schedules', description: 'Listar programaciones de campañas', category: 'marketing' },
+    { name: 'toggle_ad_schedule', description: 'Activar o desactivar una programación', category: 'marketing' },
+    { name: 'delete_ad_schedule', description: 'Eliminar una programación', category: 'marketing' },
+    { name: 'create_ab_test', description: 'Crear un test A/B para campaña publicitaria', category: 'marketing' },
+    { name: 'start_ab_test', description: 'Iniciar un test A/B', category: 'marketing' },
+    { name: 'calculate_ab_test_significance', description: 'Calcular significancia estadística de un test A/B', category: 'marketing' },
+    { name: 'declare_ab_test_winner', description: 'Declarar ganador de un test A/B', category: 'marketing' },
   ];
 }
 

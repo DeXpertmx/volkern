@@ -82,4 +82,95 @@ export const marketingIntents: IntentSchema[] = [
     ],
     destructive: false
   },
+
+  // ========== ADS SCHEDULES ==========
+  {
+    name: 'programar_campania',
+    description: 'Crear o modificar programación horaria para activar/pausar campañas publicitarias',
+    requiredParams: ['campania', 'accion'],
+    optionalParams: ['dias', 'horaInicio', 'horaFin', 'zonaHoraria'],
+    examples: [
+      'programa mi campaña de Meta para que se active en horario laboral',
+      'pausa mi campaña de Google Ads los fines de semana',
+      'activa la campaña de verano solo de lunes a viernes de 9 a 18',
+      'programa la campaña de Facebook para que se pause por la noche'
+    ],
+    destructive: false
+  },
+  {
+    name: 'listar_horarios',
+    description: 'Listar todas las programaciones activas de campañas',
+    requiredParams: [],
+    optionalParams: [],
+    examples: [
+      'muéstrame las programaciones activas',
+      'qué campañas tienen horarios programados',
+      'lista las programaciones de mis campañas'
+    ],
+    destructive: false
+  },
+  {
+    name: 'eliminar_horario',
+    description: 'Eliminar una programación horaria de campaña',
+    requiredParams: ['programacion'],
+    optionalParams: [],
+    examples: [
+      'elimina la programación de la campaña de verano',
+      'borra el horario de la campaña de Meta',
+      'cancela la programación nocturna'
+    ],
+    destructive: true
+  },
+
+  // ========== ADS A/B TESTS ==========
+  {
+    name: 'crear_test_ab',
+    description: 'Crear un test A/B para campañas publicitarias con variantes',
+    requiredParams: ['campania', 'nombre'],
+    optionalParams: ['metrica', 'variantes', 'autoDeclarar'],
+    examples: [
+      'crea un test A/B para la campaña de verano',
+      'quiero hacer un test A/B en mi campaña de Facebook',
+      'crea un test con dos variantes para la campaña de Google Ads',
+      'configura un test A/B que declare ganador automáticamente'
+    ],
+    destructive: false
+  },
+  {
+    name: 'iniciar_test_ab',
+    description: 'Iniciar un test A/B en estado borrador',
+    requiredParams: ['test'],
+    optionalParams: [],
+    examples: [
+      'inicia el test A/B de la campaña de verano',
+      'activa el test A/B que creé',
+      'pon en marcha el test de la campaña de Facebook'
+    ],
+    destructive: false
+  },
+  {
+    name: 'evaluar_test_ab',
+    description: 'Calcular significancia estadística de un test A/B',
+    requiredParams: ['test'],
+    optionalParams: [],
+    examples: [
+      'cómo va el test A/B de la campaña de productos',
+      'dame la significancia del test de la campaña de verano',
+      'qué variante va ganando en mi test A/B',
+      'el test A/B ya tiene significancia estadística?'
+    ],
+    destructive: false
+  },
+  {
+    name: 'declarar_ganador',
+    description: 'Declarar un ganador en un test A/B (opcional: especificar variante)',
+    requiredParams: ['test'],
+    optionalParams: ['variante'],
+    examples: [
+      'declara ganador el test A/B de la campaña de verano',
+      'qué variante ganó el test? declárala ganadora',
+      'declara ganadora la variante B del test de Facebook'
+    ],
+    destructive: true
+  },
 ];
