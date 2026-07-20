@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
       where.etiquetas = { has: etiqueta };
     }
 
-    const [items, total] = await Promise.all([
+    const [catalogoItems, catalogoCount, serviciosLegacy] = await Promise.all([
       prisma.catalogoItem.findMany({
         where,
         include: {
@@ -73,7 +73,79 @@ export async function GET(req: NextRequest) {
         take: limit,
       }),
       prisma.catalogoItem.count({ where }),
+      prisma.servicio.findMany({
+        where: {
+          tenantId: auth.tenant!.id,
+          activo: activo !== null ? activo === 'true' : undefined,
+          ...(search ? {
+            OR: [
+              { nombre: { contains: search, mode: 'insensitive' } },
+              { descripcion: { contains: search, mode: 'insensitive' } },
+            ]
+          } : {}),
+        },
+      }),
     ]);
+
+    // Mapear Servicio legacy a forma CatalogoItem, deduplicando
+    const catalogoIds = new Set(catalogoItems.map(c => c.id))
+    const legacyMap = new Map<string, typeof catalogoItems[0]>()
+    for (const s of serviciosLegacy) {
+      if (s.catalogoItemId && catalogoIds.has(s.catalogoItemId)) continue
+      const key = s.catalogoItemId || s.id
+      if (legacyMap.has(key)) continue
+      legacyMap.set(key, {
+        id: s.catalogoItemId || s.id,
+        tenantId: s.tenantId || '',
+        nombre: s.nombre,
+        descripcion: s.descripcion,
+        tipo: 'servicio' as const,
+        precioBase: s.precio,
+        moneda: s.moneda || 'EUR',
+        duracionMinutos: s.duracionMinutos,
+        modalidad: s.modalidad || 'presencial',
+        activo: s.activo,
+        sku: null,
+        codigoBarras: null,
+        categoria: null,
+        categorias: [],
+        etiquetas: [],
+        destacado: false,
+        metadata: null,
+        imagenUrl: null,
+        galeriaUrls: null,
+        manageStock: false,
+        stockActual: 0,
+        stockMinimo: 0,
+        costoUnitario: null,
+        fechaCreacion: null as any,
+        fechaActualizacion: null as any,
+        unidadMedida: null,
+        peso: null,
+        alto: null,
+        ancho: null,
+        profundo: null,
+        tasaImpuestoId: null,
+        ownerContactId: null,
+        tasaImpuesto: null,
+        ownerContact: null,
+      })
+    }
+
+    let items: any[]
+    let total: number
+
+    // Si hay filtro de tipo, incluir Servicio legacy solo si corresponde
+    if (tipo && tipo !== 'servicio') {
+      items = catalogoItems
+      total = catalogoCount
+    } else {
+      items = [...catalogoItems, ...Array.from(legacyMap.values())]
+      total = catalogoCount + legacyMap.size
+    }
+
+    // Ordenar por nombre
+    items.sort((a, b) => a.nombre.localeCompare(b.nombre))
 
     // Obtener categorías y etiquetas únicas para filtros
     const allItems = await prisma.catalogoItem.findMany({
