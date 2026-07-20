@@ -58,21 +58,34 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Cargar servicios activos del tenant desde CatalogoItem
+    // Cargar servicios activos del tenant desde CatalogoItem y Servicio legacy
     console.log('🔍 Buscando servicios activos...')
-    const servicios = await prisma.catalogoItem.findMany({
-      where: {
-        tenantId: tenantId,
-        activo: true,
-        tipo: { in: ['servicio', 'cita', 'producto'] },
-      } as any,
-      orderBy: {
-        nombre: 'asc'
-      }
-    })
+    const [catalogoItems, serviciosLegacy] = await Promise.all([
+      prisma.catalogoItem.findMany({
+        where: {
+          tenantId: tenantId,
+          activo: true,
+          tipo: { in: ['servicio', 'cita', 'producto'] },
+        } as any,
+        orderBy: { nombre: 'asc' }
+      }),
+      prisma.servicio.findMany({
+        where: {
+          tenantId: tenantId,
+          activo: true,
+        },
+        orderBy: { nombre: 'asc' }
+      })
+    ])
 
-    console.log(`✅ ${servicios.length} servicios encontrados`)
-    console.log('Servicios:', servicios.map(s => ({ id: s.id, nombre: s.nombre })))
+    // Deduplicar: si un Servicio legacy tiene catalogoItemId, omitirlo
+    const catalogoIds = new Set(catalogoItems.map(c => c.id))
+    const servicios = [
+      ...catalogoItems,
+      ...serviciosLegacy.filter(s => !s.catalogoItemId || !catalogoIds.has(s.catalogoItemId))
+    ]
+
+    console.log(`✅ ${servicios.length} servicios encontrados (${catalogoItems.length} de catálogo, ${serviciosLegacy.length - serviciosLegacy.filter(s => s.catalogoItemId && catalogoIds.has(s.catalogoItemId)).length} legacy)`)
     console.log('========== FIN PUBLIC SERVICIOS ==========')
 
     return NextResponse.json(servicios, {
