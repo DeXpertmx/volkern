@@ -240,8 +240,8 @@ export default function EmbedBookingPage() {
           leadId: lead.id,
           servicioId: selectedServicio?.id,
           catalogoItemId: selectedServicio?.id,
-          tipo: selectedTipo || (selectedServicio?.modalidad === 'virtual' ? 'llamada' : 
-                selectedServicio?.modalidad === 'presencial' ? 'reunion' : 'servicio'),
+          tipo: selectedServicio?.modalidad === 'virtual' ? 'llamada' : 
+                selectedServicio?.modalidad === 'presencial' ? 'reunion' : 'servicio',
           fechaHora: fechaHora.toISOString(),
         }),
       })
@@ -357,25 +357,6 @@ export default function EmbedBookingPage() {
         <CardContent>
           {step === 'services' && (
             <div className="space-y-4">
-              <div className="mb-4">
-                <h3 className="font-semibold text-lg mb-3">Motivo de la Cita</h3>
-                <div className="flex flex-wrap gap-2">
-                  {tipoOptions.map((t) => (
-                    <button
-                      key={t.value}
-                      onClick={() => setSelectedTipo(t.value)}
-                      className={`
-                        px-4 py-2 rounded-lg text-sm font-medium border transition-all
-                        ${selectedTipo === t.value
-                          ? 'bg-primary text-primary-foreground border-primary'
-                          : 'bg-background hover:bg-muted border-input text-muted-foreground hover:text-foreground'}
-                      `}
-                    >
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
               <h3 className="font-semibold text-lg mb-4">Selecciona un servicio o producto</h3>
               {servicios.length === 0 ? (
                 <p className="text-center text-muted-foreground py-8">
@@ -412,7 +393,7 @@ export default function EmbedBookingPage() {
               )}
               <Button
                 onClick={() => setStep('datetime')}
-                disabled={!selectedTipo || !selectedServicio}
+                disabled={!selectedServicio}
                 className="w-full mt-4"
               >
                 Continuar

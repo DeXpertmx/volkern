@@ -143,8 +143,8 @@ export default function UserBookingPage() {
                     usuarioAsignadoId: userProfile.id,
                     servicioId: selectedServicio.id,
                     catalogoItemId: selectedServicio.id,
-                    tipo: selectedTipo || (selectedServicio.modalidad === 'virtual' ? 'llamada' : 
-                          selectedServicio.modalidad === 'presencial' ? 'reunion' : 'servicio'),
+                    tipo: selectedServicio.modalidad === 'virtual' ? 'llamada' : 
+                          selectedServicio.modalidad === 'presencial' ? 'reunion' : 'servicio',
                     fechaHora: fechaHora.toISOString(),
                     leadData: {
                         nombre: contactData.nombre,
@@ -309,29 +309,7 @@ export default function UserBookingPage() {
                                 exit={{ opacity: 0, x: -20 }}
                                 className="space-y-6"
                             >
-                                {/* Tipo de Cita / Motivo Selector */}
-                                <div className="text-center mb-6">
-                                    <h2 className="text-2xl font-bold">Motivo de la Cita</h2>
-                                    <p className="text-gray-400 mt-1">Selecciona el tipo de cita</p>
-                                </div>
-                                <div className="flex flex-wrap justify-center gap-3 mb-10">
-                                    {tipoOptions.map((t) => (
-                                        <button
-                                            key={t.value}
-                                            onClick={() => setSelectedTipo(t.value)}
-                                            className={`
-                                                px-6 py-3 rounded-xl font-medium text-sm border transition-all
-                                                ${selectedTipo === t.value
-                                                    ? 'bg-purple-600 border-purple-500 shadow-lg shadow-purple-900/30 scale-105'
-                                                    : 'bg-gray-900/40 border-gray-800 hover:border-gray-600 text-gray-400 hover:text-white'}
-                                            `}
-                                        >
-                                            {t.label}
-                                        </button>
-                                    ))}
-                                </div>
-
-                                <div className="text-center mb-6">
+                                <div className="text-center mb-8">
                                     <h2 className="text-2xl font-bold">Selecciona un Servicio o Producto</h2>
                                     <p className="text-gray-400 mt-1">¿Cómo puedo ayudarte hoy?</p>
                                 </div>
@@ -373,7 +351,7 @@ export default function UserBookingPage() {
                                 <div className="flex justify-center pt-4">
                                     <Button
                                         onClick={() => setStep(2)}
-                                        disabled={!selectedTipo || !selectedServicio}
+                                        disabled={!selectedServicio}
                                         className="h-14 px-12 bg-purple-600 hover:bg-purple-500 text-lg rounded-2xl transition-all shadow-xl shadow-purple-900/20"
                                     >
                                         Continuar <ArrowRight className="ml-2 w-5 h-5" />
@@ -396,7 +374,7 @@ export default function UserBookingPage() {
                                     </Button>
                                     <div className="text-right">
                                         <h2 className="text-2xl font-bold">Fecha y Hora</h2>
-                                        <p className="text-gray-400 text-sm">{selectedServicio?.nombre}{selectedTipo ? ` • ${tipoOptions.find(t => t.value === selectedTipo)?.label || selectedTipo}` : ''}</p>
+                                        <p className="text-gray-400 text-sm">{selectedServicio?.nombre}</p>
                                     </div>
                                 </div>
 

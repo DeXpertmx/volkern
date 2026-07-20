@@ -132,17 +132,9 @@ export async function GET(req: NextRequest) {
       })
     }
 
-    let items: any[]
-    let total: number
-
-    // Si hay filtro de tipo, incluir Servicio legacy solo si corresponde
-    if (tipo && tipo !== 'servicio') {
-      items = catalogoItems
-      total = catalogoCount
-    } else {
-      items = [...catalogoItems, ...Array.from(legacyMap.values())]
-      total = catalogoCount + legacyMap.size
-    }
+    // Incluir siempre Servicio legacy independientemente del filtro tipo
+    const items = [...catalogoItems, ...Array.from(legacyMap.values())]
+    const total = catalogoCount + legacyMap.size
 
     // Ordenar por nombre
     items.sort((a, b) => a.nombre.localeCompare(b.nombre))

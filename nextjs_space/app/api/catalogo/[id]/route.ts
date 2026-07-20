@@ -17,7 +17,7 @@ export async function GET(
       return NextResponse.json({ error: auth.error }, { status: 401 });
     }
 
-    const item = await prisma.catalogoItem.findFirst({
+    let item: any = await prisma.catalogoItem.findFirst({
       where: {
         id: params.id,
         tenantId: auth.tenant!.id,
@@ -51,6 +51,42 @@ export async function GET(
         }
       },
     });
+
+    // Fallback a Servicio legacy si no se encuentra en CatalogoItem
+    if (!item) {
+      const legacy = await prisma.servicio.findFirst({
+        where: { id: params.id, tenantId: auth.tenant!.id },
+      })
+      if (legacy) {
+        item = {
+          id: legacy.id,
+          tenantId: legacy.tenantId,
+          nombre: legacy.nombre,
+          descripcion: legacy.descripcion,
+          tipo: 'servicio',
+          precioBase: legacy.precio,
+          moneda: legacy.moneda || 'EUR',
+          duracionMinutos: legacy.duracionMinutos,
+          modalidad: legacy.modalidad || 'presencial',
+          activo: legacy.activo,
+          sku: null,
+          categorias: [],
+          etiquetas: [],
+          destacado: false,
+          imagenUrl: null,
+          galeriaUrls: null,
+          manageStock: false,
+          stockActual: 0,
+          stockMinimo: 0,
+          costoUnitario: null,
+          tasaImpuesto: null,
+          ownerContact: null,
+          _count: { servicios: 0, cursos: 0, citas: 0, cotizacionItems: 0, contratoItems: 0, ordenVentaItems: 0 },
+          inventoryConfig: null,
+          billOfMaterials: [],
+        }
+      }
+    }
 
     if (!item) {
       return NextResponse.json({ error: 'Ítem no encontrado' }, { status: 404 });
