@@ -173,7 +173,6 @@ export default function EmbedBookingPage() {
 
   const handleServiceSelect = (servicio: Servicio) => {
     setSelectedServicio(servicio)
-    setStep('datetime')
   }
 
   const handleDateTimeConfirm = () => {
@@ -387,7 +386,11 @@ export default function EmbedBookingPage() {
                   {servicios.map((servicio) => (
                     <div
                       key={servicio.id}
-                      className="border rounded-lg p-4 hover:bg-muted/50 cursor-pointer transition-colors"
+                      className={`border rounded-lg p-4 cursor-pointer transition-colors ${
+                        selectedServicio?.id === servicio.id
+                          ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                          : 'hover:bg-muted/50'
+                      }`}
                       onClick={() => handleServiceSelect(servicio)}
                     >
                       <div className="flex justify-between items-start mb-2">
@@ -407,6 +410,13 @@ export default function EmbedBookingPage() {
                   ))}
                 </div>
               )}
+              <Button
+                onClick={() => setStep('datetime')}
+                disabled={!selectedTipo || !selectedServicio}
+                className="w-full mt-4"
+              >
+                Continuar
+              </Button>
             </div>
           )}
 
