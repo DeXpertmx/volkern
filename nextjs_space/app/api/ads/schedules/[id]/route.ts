@@ -3,6 +3,8 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
+import { validateBody } from '@/lib/validation';
+import { AdScheduleUpdateSchema } from '@/lib/validation/schemas/ads';
 
 export const GET = withTenantAuth(async (req, auth, { params }: any) => {
   try {
@@ -28,7 +30,9 @@ export const PATCH = withTenantAuth(async (req, auth, { params }: any) => {
       return NextResponse.json({ error: 'No encontrado' }, { status: 404 });
     }
 
-    const body = await req.json();
+    const raw = await req.json();
+    const body = validateBody(AdScheduleUpdateSchema, raw);
+    if (body instanceof Response) return body;
     const schedule = await prisma.adSchedule.update({
       where: { id },
       data: {

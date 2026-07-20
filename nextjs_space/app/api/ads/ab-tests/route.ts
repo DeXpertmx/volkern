@@ -3,6 +3,8 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
+import { validateBody } from '@/lib/validation';
+import { AdABTestCreateSchema } from '@/lib/validation/schemas/ads';
 
 export const GET = withTenantAuth(async (req, auth) => {
   try {
@@ -33,7 +35,9 @@ export const GET = withTenantAuth(async (req, auth) => {
 export const POST = withTenantAuth(async (req, auth) => {
   try {
     const tenantId = auth.tenant!.id;
-    const body = await req.json();
+    const raw = await req.json();
+    const body = validateBody(AdABTestCreateSchema, raw);
+    if (body instanceof Response) return body;
 
     const test = await prisma.adABTest.create({
       data: {

@@ -1063,6 +1063,20 @@ export class GoogleAdsConnector implements AdPlatformConnector {
     const developerToken = process.env.ADS_GOOGLE_DEVELOPER_TOKEN || '';
     const budgetMicros = Math.round(budget * 1_000_000);
 
+    // El externalId es el ID de la campaña, no del presupuesto.
+    // Buscamos el campaignBudget real asociado a la campaña.
+    const budgetQuery = `
+      SELECT campaign.campaignBudget
+      FROM campaign
+      WHERE campaign.id = '${externalId}'
+    `;
+    const budgetRows = await searchGoogleAds(accountId, accessToken, developerToken, budgetQuery);
+    const budgetResourceName = budgetRows[0]?.campaign?.campaignBudget;
+    if (!budgetResourceName) {
+      throw new Error(`Campaign budget not found for campaign ${externalId}`);
+    }
+    const budgetId = budgetResourceName.split('/').pop();
+
     await mutateGoogleAds<{ results?: Array<Record<string, unknown>> }>(
       accountId,
       accessToken,
@@ -1071,7 +1085,7 @@ export class GoogleAdsConnector implements AdPlatformConnector {
       [{
         updateMask: 'amountMicros',
         update: {
-          resourceName: `customers/${accountId}/campaignBudgets/${externalId}`,
+          resourceName: `customers/${accountId}/campaignBudgets/${budgetId}`,
           amountMicros: budgetMicros.toString(),
         },
       }],

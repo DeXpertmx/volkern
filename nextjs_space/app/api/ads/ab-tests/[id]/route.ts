@@ -3,6 +3,8 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
+import { validateBody } from '@/lib/validation';
+import { AdABTestUpdateSchema } from '@/lib/validation/schemas/ads';
 
 export const GET = withTenantAuth(async (req, auth, { params }: any) => {
   try {
@@ -31,24 +33,28 @@ export const PATCH = withTenantAuth(async (req, auth, { params }: any) => {
       return NextResponse.json({ error: 'No encontrado' }, { status: 404 });
     }
 
-    const body = await req.json();
+    const raw = await req.json();
+    const body = validateBody(AdABTestUpdateSchema, raw);
+    if (body instanceof Response) return body;
+    const updateData: any = {};
 
-    if (body.status === 'RUNNING' && existing.status === 'DRAFT') {
-      body.startDate = new Date();
+    if (body.name !== undefined) updateData.name = body.name;
+    if (body.description !== undefined) updateData.description = body.description;
+    if (body.status !== undefined) {
+      updateData.status = body.status;
+      if (body.status === 'RUNNING' && existing.status === 'DRAFT') {
+        updateData.startDate = new Date();
+      }
     }
+    if (body.metric !== undefined) updateData.metric = body.metric;
+    if (body.significanceThreshold !== undefined) updateData.significanceThreshold = body.significanceThreshold;
+    if (body.trafficSplit !== undefined) updateData.trafficSplit = body.trafficSplit;
+    if (body.autoDeclare !== undefined) updateData.autoDeclare = body.autoDeclare;
+    if (body.endDate !== undefined) updateData.endDate = body.endDate ? new Date(body.endDate) : null;
 
     const test = await prisma.adABTest.update({
       where: { id },
-      data: {
-        name: body.name,
-        description: body.description,
-        status: body.status,
-        metric: body.metric,
-        significanceThreshold: body.significanceThreshold,
-        trafficSplit: body.trafficSplit,
-        autoDeclare: body.autoDeclare,
-        endDate: body.endDate ? new Date(body.endDate) : undefined,
-      },
+      data: updateData,
       include: { variants: true },
     });
 
