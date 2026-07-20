@@ -150,6 +150,8 @@ export const HUBS: HubConfig[] = [
     ],
     items: [
       { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3, planModule: 'analytics', description: 'Métricas y KPIs de ventas' },
+      { name: 'Discover', href: '/dashboard/discover', icon: Radio, planModule: 'scoring', description: 'Inteligencia CRM y señales de compra' },
+      { name: 'Importar Datos', href: '/dashboard/importar', icon: FileWarning, description: 'Importación masiva de leads y contactos' },
       { name: 'Tareas', href: '/dashboard/tareas', icon: ListTodo, planModule: 'tareas', description: 'Gestión de pendientes y seguimientos' },
       { name: 'Leads', href: '/dashboard/leads', icon: Users, planModule: 'leads', description: 'Gestión de prospectos' },
       { name: 'Contactos', href: '/dashboard/contactos', icon: UserCheck, planModule: 'contactos', description: 'Base de datos de contactos' },
@@ -185,6 +187,7 @@ export const HUBS: HubConfig[] = [
       { name: 'Automatizaciones', href: '/dashboard/automatizaciones', icon: Workflow, planModule: 'automatizaciones', description: 'Flujos de trabajo automáticos' },
       { name: 'Chatbot', href: '/dashboard/chatbot', icon: Bot, planModule: 'chatbot_whatsapp', description: 'Asistente inteligente' },
       { name: 'Analytics del Chatbot', href: '/dashboard/chatbot/analytics', icon: PieChart, planModule: 'chatbot_whatsapp', description: 'Métricas, patrones y sugerencias' },
+      { name: 'Plaudern IA', href: '/dashboard/plaudern', icon: Bot, planModule: 'chatbot_whatsapp', description: 'Agente conversacional IA' },
       { name: 'Chat en vivo', href: '/dashboard/live-chat', icon: Headset, planModule: 'mensajes', description: 'Chat en tiempo real con visitantes' },
     ]
   },

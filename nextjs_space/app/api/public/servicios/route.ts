@@ -58,15 +58,16 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Cargar servicios activos del tenant
+    // Cargar servicios activos del tenant desde CatalogoItem
     console.log('🔍 Buscando servicios activos...')
-    const servicios = await prisma.servicio.findMany({
+    const servicios = await prisma.catalogoItem.findMany({
       where: {
         tenantId: tenantId,
-        activo: true
-      },
+        activo: true,
+        tipo: { in: ['servicio', 'cita', 'producto'] },
+      } as any,
       orderBy: {
-        fechaCreacion: 'desc'
+        nombre: 'asc'
       }
     })
 
