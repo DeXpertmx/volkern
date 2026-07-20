@@ -582,8 +582,8 @@ export default function CatalogoPage() {
     return `${symbol}${price.toLocaleString('es-ES', { minimumFractionDigits: 2 })}`;
   };
 
-  const showDuracion = form.tipo === 'cita' || form.tipo === 'servicio';
-  const showModalidad = form.tipo === 'cita' || form.tipo === 'servicio';
+  const showDuracion = form.tipo === 'cita' || (form.tipo === 'servicio' && (form.unidad === 'hora' || form.unidad === 'sesion'));
+  const showModalidad = form.tipo === 'cita';
 
   return (
     <div className="p-6 space-y-6">
@@ -908,6 +908,38 @@ export default function CatalogoPage() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {showDuracion && (
+                  <>
+                    <div>
+                      <Label>Duración (minutos)</Label>
+                      <Input
+                        type="number"
+                        min={15}
+                        step={5}
+                        value={form.duracionMinutos}
+                        onChange={(e) => setForm({ ...form, duracionMinutos: e.target.value })}
+                        placeholder="Mínimo 15 min"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">Mínimo 15 minutos</p>
+                    </div>
+                    {showModalidad && (
+                      <div>
+                        <Label>Modalidad</Label>
+                        <Select value={form.modalidad} onValueChange={(v) => setForm({ ...form, modalidad: v })}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar modalidad" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="presencial">Presencial</SelectItem>
+                            <SelectItem value="virtual">Virtual</SelectItem>
+                            <SelectItem value="hibrido">Híbrido</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </>
+                )}
 
                 <div className="flex flex-col gap-4">
                   <div className="flex items-center space-x-2 pt-2">
