@@ -344,7 +344,7 @@ export default function UserBookingPage() {
                                         {servicios.map((s) => (
                                             <div
                                                 key={s.id}
-                                                onClick={() => { setSelectedServicio(s); setStep(2); }}
+                                                onClick={() => { setSelectedServicio(s); }}
                                                 className={`
                             group relative p-6 rounded-2xl border transition-all duration-300 cursor-pointer overflow-hidden
                             ${selectedServicio?.id === s.id
@@ -370,6 +370,15 @@ export default function UserBookingPage() {
                                         ))}
                                     </div>
                                 )}
+                                <div className="flex justify-center pt-4">
+                                    <Button
+                                        onClick={() => setStep(2)}
+                                        disabled={!selectedTipo || !selectedServicio}
+                                        className="h-14 px-12 bg-purple-600 hover:bg-purple-500 text-lg rounded-2xl transition-all shadow-xl shadow-purple-900/20"
+                                    >
+                                        Continuar <ArrowRight className="ml-2 w-5 h-5" />
+                                    </Button>
+                                </div>
                             </motion.div>
                         )}
 
