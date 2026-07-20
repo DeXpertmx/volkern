@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { useFiscalConfig } from '@/hooks/use-fiscal-config';
+import { MONEDAS_POR_PAIS } from '@/lib/fiscal-validation';
 import {
   Plus, Search, Package, Briefcase, Calendar, GraduationCap, Edit2, Trash2,
   Star, Clock, Euro, DollarSign, Tag, Filter, Loader2, Image as ImageIcon,
@@ -161,6 +162,12 @@ const MODALIDADES = [
   { value: 'virtual', label: 'Virtual' },
   { value: 'hibrido', label: 'Híbrido' },
 ];
+
+const MONEDAS = Object.values(
+  Object.fromEntries(
+    Object.entries(MONEDAS_POR_PAIS).map(([, v]) => [v.codigo, v])
+  )
+);
 
 const PLATAFORMAS_REUNION = [
   { value: 'google_meet', label: 'Google Meet' },
@@ -1386,9 +1393,20 @@ export default function CatalogoPage() {
                           step="0.01"
                           value={form.precioBase}
                           onChange={(e) => setForm({ ...form, precioBase: e.target.value })}
-                          className="font-bold text-lg"
+                          className="font-bold text-lg flex-1"
                         />
-                        <span className="font-bold">{form.moneda}</span>
+                        <Select value={form.moneda} onValueChange={(v) => setForm({ ...form, moneda: v })}>
+                          <SelectTrigger className="w-28">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {MONEDAS.map(m => (
+                              <SelectItem key={m.codigo} value={m.codigo}>
+                                {m.simbolo} {m.codigo}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
                     
@@ -1402,7 +1420,7 @@ export default function CatalogoPage() {
                           onChange={(e) => setForm({ ...form, costOfAcquisition: e.target.value })}
                           placeholder="0.00"
                         />
-                        <span className="text-muted-foreground">{form.moneda}</span>
+                        <span className="text-muted-foreground w-28 text-right">{form.moneda}</span>
                       </div>
                       <p className="text-[10px] text-muted-foreground mt-1">
                         Utilizado para el cálculo de margen neto por la IA.
