@@ -16,6 +16,7 @@ export type PermissionModule =
   | 'cursos' 
   | 'automatizaciones' 
   | 'campanas' 
+  | 'ads'
   | 'mensajes' 
   | 'analytics' 
   | 'configuracion' 

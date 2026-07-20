@@ -393,6 +393,13 @@ model Tenant {
   equalityComplaints             EqualityComplaint[]
   equalityConfig                 EqualityConfig?
   idempotencyKeys                IdempotencyKey[]
+  adPlatformConnections          AdPlatformConnection[]
+  adCampaigns                    AdCampaign[]
+  adInsights                     AdInsight[]
+  adBudgetRules                  AdBudgetRule[]
+  adRecommendations              AdRecommendation[]
+  adSchedules                    AdSchedule[]
+  adABTests                      AdABTest[]
 }
 
 model AttendanceRules {
@@ -6946,4 +6953,322 @@ model ImportLog {
 
   @@index([tenantId])
   @@map("import_logs")
+}
+
+// ─── ADS INTELLIGENCE MODULE ──────────────────────────────────────────
+// Conexión OAuth a cada plataforma de anuncios (Meta Ads, Google Ads, LinkedIn Ads, TikTok Ads)
+model AdPlatformConnection {
+  id              String   @id @default(cuid())
+  tenantId        String
+  platform        String   // META, GOOGLE, LINKEDIN, TIKTOK
+  accountId       String   // ID de la cuenta de anuncios en la plataforma
+  accountName     String?
+  accessToken     String   // Cifrado en Vault
+  refreshToken    String?
+  tokenExpiresAt  DateTime?
+  status          String   @default("CONNECTED") // CONNECTED, EXPIRED, DISCONNECTED, ERROR
+  metadata        Json?    @default("{}")
+  lastSyncedAt    DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  adCampaigns     AdCampaign[]
+  adInsights      AdInsight[]
+
+  @@unique([tenantId, platform, accountId])
+  @@index([tenantId])
+  @@index([platform])
+  @@index([status])
+  @@map("ad_platform_connections")
+}
+
+// Campaña de anuncios en una plataforma (1:1 con campaña en Meta/Google/LinkedIn/TikTok)
+model AdCampaign {
+  id                String              @id @default(cuid())
+  tenantId          String
+  platformId        String
+  externalId        String?             // ID en la plataforma (campaign_id de Meta, etc.)
+  name              String
+  status            String              @default("ACTIVE") // ACTIVE, PAUSED, ARCHIVED, DELETED
+  buyType           String?             // AUCTION, FIXED_CPM, etc.
+  objective         String?             // CONVERSIONS, TRAFFIC, AWARENESS, LEAD_GENERATION, etc.
+  dailyBudget       Float?
+  lifetimeBudget    Float?
+  startDate         DateTime?
+  endDate           DateTime?
+  bidStrategy       String?             // LOWEST_COST, COST_CAP, BID_CAP, etc.
+  bidAmount         Float?
+  optimizationGoal  String?             // CONVERSIONS, IMPRESSIONS, CLICKS, etc.
+  trackingTemplate  String?
+  isVolkernManaged  Boolean             @default(true) // Si Volkern puede auto-gestionarla
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  syncedAt          DateTime?           // Última sincronización con la plataforma
+  platform          AdPlatformConnection @relation(fields: [platformId], references: [id], onDelete: Cascade)
+  tenant            Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  adSets            AdSet[]
+  adInsights        AdInsight[]
+  budgetAlerts      AdBudgetExecution[]
+  schedules         AdSchedule[]
+  abTests           AdABTest[]
+
+  @@index([tenantId])
+  @@index([platformId])
+  @@index([status])
+  @@index([objective])
+  @@map("ad_campaigns")
+}
+
+// Ad set en Meta / Ad group en Google
+model AdSet {
+  id                String   @id @default(cuid())
+  campaignId        String
+  externalId        String?  // ID en la plataforma
+  name              String
+  status            String   @default("ACTIVE") // ACTIVE, PAUSED, ARCHIVED
+  dailyBudget       Float?
+  lifetimeBudget    Float?
+  bidAmount         Float?
+  bidStrategy       String?
+  targeting         Json?    // Segmentación: edad, género, intereses, ubicaciones, etc.
+  placements        Json?    // Placement: feed, stories, reels, search, display, etc.
+  startDate         DateTime?
+  endDate           DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  campaign          AdCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  ads               Ad[]
+  adInsights        AdInsight[]
+
+  @@index([campaignId])
+  @@index([status])
+  @@map("ad_sets")
+}
+
+// Anuncio individual (creative + copy)
+model Ad {
+  id                String   @id @default(cuid())
+  adSetId           String
+  externalId        String?  // ID en la plataforma
+  name              String
+  status            String   @default("ACTIVE") // ACTIVE, PAUSED, ARCHIVED, REJECTED
+  creativeType      String?  // IMAGE, VIDEO, CAROUSEL, COLLECTION, TEXT
+  creativeUrl       String?
+  headline          String?
+  primaryText       String?
+  callToAction      String?  // LEARN_MORE, SIGN_UP, CONTACT_US, etc.
+  destinationUrl    String?
+  displayUrl        String?
+  imageHash         String?
+  videoId           String?
+  thumbnailUrl      String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  adSet             AdSet    @relation(fields: [adSetId], references: [id], onDelete: Cascade)
+  adInsights        AdInsight[]
+
+  @@index([adSetId])
+  @@index([status])
+  @@map("ads")
+}
+
+// Métricas históricas por intervalo diario
+model AdInsight {
+  id                String              @id @default(cuid())
+  tenantId          String
+  platformId        String
+  campaignId        String?
+  adSetId           String?
+  adId              String?
+  dateStart         DateTime            // Inicio del período
+  dateEnd           DateTime            // Fin del período
+  impressions       Int                 @default(0)
+  clicks            Int                 @default(0)
+  spend             Float               @default(0)       // Gasto en moneda local
+  reach             Int                 @default(0)
+  frequency         Float               @default(0)
+  cpc               Float               @default(0)       // Costo por click
+  cpm               Float               @default(0)       // Costo por 1000 impresiones
+  ctr               Float               @default(0)       // Click-through rate
+  conversions       Int                 @default(0)
+  conversionRate    Float               @default(0)
+  cpa               Float               @default(0)       // Costo por adquisición
+  roas              Float               @default(0)       // Return on Ad Spend
+  revenue           Float               @default(0)       // Ingresos atribuidos
+  leads             Int                 @default(0)
+  costPerLead       Float               @default(0)
+  qualityRank       Float?
+  engagementRate    Float?
+  videoPlays        Int?
+  videoAvgWatchTime Float?
+  canvas            Json?               // Desnormalizado para eficiencia
+  createdAt         DateTime            @default(now())
+  platform          AdPlatformConnection @relation(fields: [platformId], references: [id], onDelete: Cascade)
+  campaign          AdCampaign?          @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  adSet             AdSet?               @relation(fields: [adSetId], references: [id], onDelete: SetNull)
+  ad                Ad?                  @relation(fields: [adId], references: [id], onDelete: SetNull)
+  tenant            Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, platformId, dateStart])
+  @@index([campaignId, dateStart])
+  @@index([platformId, dateStart])
+  @@index([adSetId])
+  @@index([adId])
+  @@map("ad_insights")
+}
+
+// Regla de auto-apagado basada en condiciones de rendimiento
+model AdBudgetRule {
+  id                String                @id @default(cuid())
+  tenantId          String
+  name              String
+  description       String?
+  isActive          Boolean               @default(true)
+  scope             String                // CAMPAIGN, AD_SET, AD, ACCOUNT
+  scopeId           String?               // campaignId, adSetId, adId, null = toda la cuenta
+  condition         Json                  // { metric: "cpa", operator: ">", value: 500, window: "7d" }
+  action            String                // PAUSE, REDUCE_BUDGET_PERCENTAGE, NOTIFY_ONLY
+  actionValue       Float?
+  cooldownHours     Int                   @default(24)
+  lastTriggeredAt   DateTime?
+  executionCount    Int                   @default(0)
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  tenant            Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  executions        AdBudgetExecution[]
+
+  @@index([tenantId])
+  @@index([isActive])
+  @@index([scope])
+  @@map("ad_budget_rules")
+}
+
+// Log de cada ejecución de una regla de watchdog
+model AdBudgetExecution {
+  id                String      @id @default(cuid())
+  ruleId            String
+  campaignId        String?
+  adSetId           String?
+  adId              String?
+  condition         Json
+  metricCurrent     Float
+  metricThreshold   Float
+  action            String
+  actionResult      String      // SUCCESS, FAILED, SKIPPED
+  actionDetail      String?
+  previousBudget    Float?
+  newBudget         Float?
+  previousStatus    String?
+  newStatus         String?
+  executedAt        DateTime    @default(now())
+  rule              AdBudgetRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  campaign          AdCampaign?  @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  @@index([ruleId])
+  @@index([campaignId])
+  @@index([executedAt])
+  @@map("ad_budget_executions")
+}
+
+// Recomendaciones generadas por IA para optimización de campañas
+model AdRecommendation {
+  id                String      @id @default(cuid())
+  tenantId          String
+  campaignId        String?
+  adSetId           String?
+  adId              String?
+  type              String      // BUDGET, TARGETING, CREATIVE, BID, SCHEDULE, PLATFORM
+  title             String
+  description       String
+  impact            String      // HIGH, MEDIUM, LOW
+  confidence        Float
+  metric            String      // projectedCpa, projectedRoas, projectedCtr, etc.
+  projectedValue    Float
+  currentValue      Float
+  implementation    Json?
+  isApplied         Boolean     @default(false)
+  isDismissed       Boolean     @default(false)
+  appliedAt         DateTime?
+  createdAt         DateTime    @default(now())
+  tenant            Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([type])
+  @@index([impact])
+  @@index([isApplied])
+  @@map("ad_recommendations")
+}
+
+// Programación horaria para campañas (encender/apagar en bloques)
+model AdSchedule {
+  id                String       @id @default(cuid())
+  tenantId          String
+  campaignId        String
+  adSetId           String?
+  name              String
+  daysOfWeek        Json         // ["MON","TUE","WED","THU","FRI","SAT","SUN"]
+  startTime         String       // "09:00" en 24h
+  endTime           String       // "18:00"
+  timezone          String       @default("America/Mexico_City")
+  action            String       // ACTIVATE | PAUSE
+  enabled           Boolean      @default(true)
+  lastTriggeredAt   DateTime?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  tenant            Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campaign          AdCampaign   @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([campaignId])
+  @@index([enabled])
+  @@map("ad_schedules")
+}
+
+// Test A/B para campañas de anuncios
+model AdABTest {
+  id                    String          @id @default(cuid())
+  tenantId              String
+  campaignId            String
+  name                  String
+  description           String?
+  status                String          @default("DRAFT") // DRAFT | RUNNING | COMPLETED | CANCELLED
+  metric                String          // CTR | CPC | CPA | ROAS | CONVERSIONS
+  significanceThreshold Float           @default(0.95)
+  trafficSplit          String          // FIFTY_FIFTY | CUSTOM
+  winnerId              String?         // variantId ganadora
+  declaredAt            DateTime?
+  autoDeclare           Boolean         @default(false)
+  startDate             DateTime?
+  endDate               DateTime?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  tenant                Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campaign              AdCampaign      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  variants              AdABTestVariant[]
+
+  @@index([tenantId])
+  @@index([campaignId])
+  @@index([status])
+  @@map("ad_ab_tests")
+}
+
+// Variante individual dentro de un A/B test
+model AdABTestVariant {
+  id                String     @id @default(cuid())
+  abTestId          String
+  adSetId           String?    // Ad set asociado (cada variante = ad set separado)
+  adId              String?    // O un anuncio específico
+  label             String     // "A", "B", "C", etc.
+  trafficAllocation Float?     // Porcentaje de tráfico (null = equitativo)
+  currentImpressions Int       @default(0)
+  currentClicks     Int        @default(0)
+  currentConversions Int       @default(0)
+  currentSpend      Float      @default(0)
+  currentMetric     Float?     // Valor actual de la métrica objetivo
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  abTest            AdABTest   @relation(fields: [abTestId], references: [id], onDelete: Cascade)
+
+  @@index([abTestId])
+  @@map("ad_ab_test_variants")
 }

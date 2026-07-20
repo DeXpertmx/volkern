@@ -25,4 +25,5 @@ export * from './finance';
 export * from './erp';
 export * from './integraciones';
 export * from './equality';
+export * from './ads';
 export * from './misc';

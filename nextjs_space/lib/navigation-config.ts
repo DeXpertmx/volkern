@@ -196,11 +196,13 @@ export const HUBS: HubConfig[] = [
     description: 'Campañas, constructor web y presencia social.',
     basePaths: [
       '/dashboard/campanas',
+      '/dashboard/ads',
       '/dashboard/webcreator',
       '/dashboard/social'
     ],
     items: [
       { name: 'Campañas', href: '/dashboard/campanas', icon: Send, planModule: 'campanas', description: 'Email marketing y campañas' },
+      { name: 'ADS Intelligence', href: '/dashboard/ads', icon: TrendingUp, planModule: 'ads', description: 'Campañas de anuncios pagados con IA' },
       { name: 'Constructor Web', href: '/dashboard/webcreator', icon: Sparkles, planModule: 'cms', description: 'Diseño de landing pages' },
       { name: 'Hub Social', href: '/dashboard/social', icon: Share2, planModule: 'social_manager', description: 'Gestión de redes sociales' },
       { name: 'Configuración', href: '/dashboard/social/settings', icon: Settings2, description: 'Conectar redes sociales y APIs' },

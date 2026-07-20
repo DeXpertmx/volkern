@@ -143,6 +143,32 @@ export function initCronJobs() {
   });
 
   console.log('✅ [Scheduler] IMAP Polling programado (cada 5 min)');
+
+  // 11. Ad Schedule Evaluation — cada 5 minutos
+  cron.schedule('*/5 * * * *', async () => {
+    console.log('[Cron] ⏰ Evaluando schedules de campañas...');
+    try {
+      const { evaluateSchedules } = await import('../ads/schedule-engine');
+      await evaluateSchedules();
+    } catch (error: any) {
+      console.error('[Cron] ❌ Error en schedule evaluation:', error.message);
+    }
+  });
+
+  console.log('✅ [Scheduler] Ad Schedule Evaluation programado (cada 5 min)');
+
+  // 12. AB Test Auto-Evaluation — cada 30 minutos
+  cron.schedule('*/30 * * * *', async () => {
+    console.log('[Cron] 🧪 Evaluando tests A/B activos...');
+    try {
+      const { evaluateActiveTests } = await import('../ads/ab-test-engine');
+      await evaluateActiveTests();
+    } catch (error: any) {
+      console.error('[Cron] ❌ Error en AB test evaluation:', error.message);
+    }
+  });
+
+  console.log('✅ [Scheduler] AB Test Auto-Evaluation programado (cada 30 min)');
 }
 
 /**
