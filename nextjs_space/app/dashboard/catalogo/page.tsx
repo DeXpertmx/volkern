@@ -607,7 +607,7 @@ export default function CatalogoPage() {
   };
 
   const showDuracion = form.tipo === 'cita' || (form.tipo === 'servicio' && (form.unidad === 'hora' || form.unidad === 'sesion'));
-  const showModalidad = form.tipo === 'cita';
+  const showModalidad = form.tipo === 'cita' || (form.tipo === 'servicio' && (form.unidad === 'hora' || form.unidad === 'sesion'));
 
   return (
     <div className="p-6 space-y-6">
