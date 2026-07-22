@@ -21,11 +21,7 @@ export const PATCH = withTenantAuth(async (request, auth) => {
     }
 
     const body = await request.json();
-    const { layout } = body;
-
-    if (!layout) {
-      return NextResponse.json({ error: 'Layout no proporcionado' }, { status: 400 });
-    }
+    const { layout, isLocked } = body;
 
     const tenantId = auth.tenant!.id;
     const userId = auth.user!.id;
@@ -38,15 +34,15 @@ export const PATCH = withTenantAuth(async (request, auth) => {
 
     const currentMetadata = (user?.metadata as Record<string, any>) || {};
     const layoutKey = `${type}Layout_${tenantId}`;
+    const lockKey = `${type}LayoutLocked_${tenantId}`;
+
+    const updateData: Record<string, any> = { ...currentMetadata };
+    if (layout !== undefined) updateData[layoutKey] = layout;
+    if (typeof isLocked === 'boolean') updateData[lockKey] = isLocked;
     
     await prisma.user.update({
       where: { id: userId },
-      data: {
-        metadata: {
-          ...currentMetadata,
-          [layoutKey]: layout
-        }
-      }
+      data: { metadata: updateData }
     });
 
     return NextResponse.json({ success: true, type, key: layoutKey });
@@ -76,9 +72,11 @@ export const GET = withTenantAuth(async (request, auth) => {
 
     const metadata = (user?.metadata as Record<string, any>) || {};
     const layoutKey = `${type}Layout_${tenantId}`;
+    const lockKey = `${type}LayoutLocked_${tenantId}`;
 
     return NextResponse.json({ 
-      layout: metadata[layoutKey] || null, 
+      layout: metadata[layoutKey] || null,
+      isLocked: typeof metadata[lockKey] === 'boolean' ? metadata[lockKey] : null,
       type,
       tenantId 
     });

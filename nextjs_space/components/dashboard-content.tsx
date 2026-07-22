@@ -62,7 +62,8 @@ export function DashboardContent() {
     proximasCitas: []
   })
   const [isLoading, setIsLoading] = useState(true)
-  const [isLocked, setIsLocked] = useState(false)
+  const [isLocked, setIsLocked] = useState(true)
+  const [lockLoaded, setLockLoaded] = useState(false)
   const [layouts, setLayouts] = useState<ResponsiveLayouts>(defaultLayouts)
   const [mounted, setMounted] = useState(false)
   
@@ -89,11 +90,18 @@ export function DashboardContent() {
         }
 
         if (layoutRes.ok) {
-          const { layout } = await layoutRes.json();
+          const { layout, isLocked: savedLocked } = await layoutRes.json();
           if (layout) setLayouts(layout);
+          if (typeof savedLocked === 'boolean') {
+            setIsLocked(savedLocked);
+          }
+          setLockLoaded(true);
+        } else {
+          setLockLoaded(true);
         }
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
+        setLockLoaded(true);
       } finally {
         setIsLoading(false);
       }
@@ -102,14 +110,14 @@ export function DashboardContent() {
     fetchData();
   }, [mounted]);
 
-  // API Persistence con Debounce
+  // Persist layout + lock state
   const persistLayout = useMemo(
-    () => debounce(async (newLayouts: any) => {
+    () => debounce(async (newLayouts: any, locked: boolean) => {
       try {
         await fetch('/api/v1/user/layout', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ layout: newLayouts })
+          body: JSON.stringify({ layout: newLayouts, isLocked: locked })
         });
         console.log('💾 Layout guardado automáticamente.');
       } catch (e) {
@@ -122,7 +130,7 @@ export function DashboardContent() {
   const onLayoutChange = (_currentLayout: any, allLayouts: ResponsiveLayouts) => {
     if (!isLocked) {
       setLayouts(allLayouts);
-      persistLayout(allLayouts);
+      persistLayout(allLayouts, isLocked);
     }
   };
 
@@ -174,7 +182,11 @@ export function DashboardContent() {
           )}
           <Button 
             variant={isLocked ? "outline" : "default"}
-            onClick={() => setIsLocked(!isLocked)}
+            onClick={() => {
+              const next = !isLocked;
+              setIsLocked(next);
+              persistLayout(layouts, next);
+            }}
             className="gap-2 shadow-xl hover:scale-105 transition-transform"
           >
             {isLocked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
