@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Users, Calendar, TrendingUp, Send, Lock, Unlock, GripVertical, Rocket, ShieldCheck } from 'lucide-react'
+import { Users, Calendar, TrendingUp, Send, Lock, Unlock, GripVertical, Rocket, ShieldCheck, X, Plus } from 'lucide-react'
 import { ResponsiveGridLayout as RGL, useContainerWidth } from 'react-grid-layout';
 import type { ResponsiveLayouts } from 'react-grid-layout';
 
@@ -12,6 +12,7 @@ import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 
 import debounce from 'lodash.debounce'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { DashboardStats } from '@/components/dashboard-stats'
 import { DayNavigationAppointments } from '@/components/day-navigation-appointments'
 import { UsageLimits } from '@/components/usage-limits'
@@ -32,6 +33,26 @@ interface DashboardStatsData {
   totalCampanas?: number
   campanasActivas?: number
   campanasCompletadas?: number
+}
+
+const ALL_WIDGET_IDS = [
+  'actions', 'stat-leads', 'stat-citas', 'stat-campanas', 'stat-ingresos',
+  'limits', 'integrity', 'charts', 'appointments', 'inventory', 'map', 'audit'
+]
+
+const WIDGET_LABELS: Record<string, string> = {
+  actions: 'Acciones Rápidas',
+  'stat-leads': 'Total Leads',
+  'stat-citas': 'Citas Hoy',
+  'stat-campanas': 'Campañas Activas',
+  'stat-ingresos': 'Ingresos del Mes',
+  limits: 'Límites de Uso',
+  integrity: 'Gráfica de Integridad',
+  charts: 'Ingresos Diarios',
+  appointments: 'Próximas Citas',
+  inventory: 'Inventario',
+  map: 'Mapa Operativo',
+  audit: 'Logs de Protocolo',
 }
 
 // Layout eXpert Universal (12 columnas)
@@ -63,10 +84,16 @@ export function DashboardContent() {
   })
   const [isLoading, setIsLoading] = useState(true)
   const [isLocked, setIsLocked] = useState(true)
-  const [lockLoaded, setLockLoaded] = useState(false)
   const [layouts, setLayouts] = useState<ResponsiveLayouts>(defaultLayouts)
+  const [visibleWidgets, setVisibleWidgets] = useState<string[]>(ALL_WIDGET_IDS)
   const [mounted, setMounted] = useState(false)
-  
+
+  const layoutsRef = useRef(layouts)
+  useEffect(() => { layoutsRef.current = layouts }, [layouts])
+
+  const visibleRef = useRef(visibleWidgets)
+  useEffect(() => { visibleRef.current = visibleWidgets }, [visibleWidgets])
+
   const { width, containerRef } = useContainerWidth() as { width: number | undefined; containerRef: React.RefObject<HTMLDivElement | null> };
 
   useEffect(() => {
@@ -90,18 +117,13 @@ export function DashboardContent() {
         }
 
         if (layoutRes.ok) {
-          const { layout, isLocked: savedLocked } = await layoutRes.json();
+          const { layout, isLocked: savedLocked, visibleWidgets: savedVisible } = await layoutRes.json();
           if (layout) setLayouts(layout);
-          if (typeof savedLocked === 'boolean') {
-            setIsLocked(savedLocked);
-          }
-          setLockLoaded(true);
-        } else {
-          setLockLoaded(true);
+          if (typeof savedLocked === 'boolean') setIsLocked(savedLocked);
+          if (Array.isArray(savedVisible) && savedVisible.length > 0) setVisibleWidgets(savedVisible);
         }
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
-        setLockLoaded(true);
       } finally {
         setIsLoading(false);
       }
@@ -110,36 +132,71 @@ export function DashboardContent() {
     fetchData();
   }, [mounted]);
 
-  // Persist layout + lock state
+  const saveToApi = useCallback(async (data: { layout?: any; isLocked?: boolean; visibleWidgets?: string[] }) => {
+    try {
+      await fetch('/api/v1/user/layout', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+    } catch (e) {
+      console.error('Error al persistir layout:', e);
+    }
+  }, [])
+
   const persistLayout = useMemo(
-    () => debounce(async (newLayouts: any, locked: boolean) => {
-      try {
-        await fetch('/api/v1/user/layout', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ layout: newLayouts, isLocked: locked })
-        });
-        console.log('💾 Layout guardado automáticamente.');
-      } catch (e) {
-        console.error('Error al persistir layout:', e);
-      }
+    () => debounce(async (newLayouts: any, locked: boolean, widgets: string[]) => {
+      await saveToApi({ layout: newLayouts, isLocked: locked, visibleWidgets: widgets });
+      console.log('💾 Layout guardado automáticamente.');
     }, 2000),
-    []
+    [saveToApi]
   );
 
   const onLayoutChange = (_currentLayout: any, allLayouts: ResponsiveLayouts) => {
     if (!isLocked) {
       setLayouts(allLayouts);
-      persistLayout(allLayouts, isLocked);
+      persistLayout(allLayouts, isLocked, visibleRef.current);
     }
   };
+
+  const toggleLock = () => {
+    const next = !isLocked;
+    setIsLocked(next);
+    commitLayout(layoutsRef.current, next, visibleRef.current);
+  }
+
+  const commitLayout = (layout: any, locked: boolean, widgets: string[]) => {
+    persistLayout.cancel?.();
+    saveToApi({ layout, isLocked: locked, visibleWidgets: widgets });
+  }
+
+  const hideWidget = (id: string) => {
+    const next = visibleRef.current.filter(w => w !== id);
+    setVisibleWidgets(next);
+    commitLayout(layoutsRef.current, isLocked, next);
+  }
+
+  const showWidget = (id: string) => {
+    const next = [...visibleRef.current, id];
+    setVisibleWidgets(next);
+    commitLayout(layoutsRef.current, isLocked, next);
+  }
 
   const WidgetWrapper = ({ id, children, noPadding = false }: { id: string, children: React.ReactNode, noPadding?: boolean }) => (
     <div key={id} className={`group relative h-full w-full ${noPadding ? '' : 'overflow-hidden'}`}>
       {!isLocked && (
-        <div className="drag-handle absolute top-2 left-2 z-[60] opacity-0 group-hover:opacity-100 bg-background/90 shadow-lg border-2 border-primary/20 rounded-md p-1.5 transition-all cursor-grab active:cursor-grabbing hover:scale-110 active:scale-95">
-          <GripVertical className="h-4 w-4 text-primary" />
-        </div>
+        <>
+          <div className="drag-handle absolute top-2 left-2 z-[60] opacity-0 group-hover:opacity-100 bg-background/90 shadow-lg border-2 border-primary/20 rounded-md p-1.5 transition-all cursor-grab active:cursor-grabbing hover:scale-110 active:scale-95">
+            <GripVertical className="h-4 w-4 text-primary" />
+          </div>
+          <button
+            onClick={() => hideWidget(id)}
+            className="absolute top-2 right-2 z-[60] opacity-0 group-hover:opacity-100 bg-destructive/90 text-destructive-foreground rounded-md p-1 transition-all hover:scale-110 active:scale-95"
+            title="Ocultar widget"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </>
       )}
       {children}
     </div>
@@ -162,6 +219,8 @@ export function DashboardContent() {
 
   if (!mounted || isLoading) return <DashboardSkeleton />;
 
+  const hiddenWidgets = ALL_WIDGET_IDS.filter(id => !visibleRef.current.includes(id));
+
   return (
     <div className="space-y-6" ref={containerRef as React.Ref<HTMLDivElement>}>
       <div className="flex justify-between items-center mb-6">
@@ -180,13 +239,31 @@ export function DashboardContent() {
               <Rocket className="h-3 w-3" /> MODO EDICIÓN ACTIVO
             </div>
           )}
+          {!isLocked && hiddenWidgets.length > 0 && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="secondary" size="sm" className="gap-1.5 shadow-xl hover:scale-105 transition-transform text-xs">
+                  <Plus className="h-3.5 w-3.5" />
+                  Añadir Widget
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-56 p-2">
+                <p className="text-xs font-semibold text-muted-foreground px-2 pb-2">Widgets ocultos</p>
+                {hiddenWidgets.map(id => (
+                  <button
+                    key={id}
+                    onClick={() => showWidget(id)}
+                    className="w-full text-left px-2 py-1.5 text-sm rounded hover:bg-accent transition-colors"
+                  >
+                    {WIDGET_LABELS[id] || id}
+                  </button>
+                ))}
+              </PopoverContent>
+            </Popover>
+          )}
           <Button 
             variant={isLocked ? "outline" : "default"}
-            onClick={() => {
-              const next = !isLocked;
-              setIsLocked(next);
-              persistLayout(layouts, next);
-            }}
+            onClick={toggleLock}
             className="gap-2 shadow-xl hover:scale-105 transition-transform"
           >
             {isLocked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
@@ -195,100 +272,126 @@ export function DashboardContent() {
         </div>
       </div>
 
-      <ResponsiveGridLayout
-        className="layout"
-        layouts={layouts}
-        breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
-        cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
-        rowHeight={100}
-        width={width || 1280}
-        draggableHandle=".drag-handle"
-        isDraggable={!isLocked}
-        isResizable={!isLocked}
-        onLayoutChange={onLayoutChange}
-        margin={[20, 20]}
-        compactType="vertical"
-      >
-        <div key="actions">
-          <WidgetWrapper id="actions"><QuickActions /></WidgetWrapper>
-        </div>
+      <div className={isLocked ? 'touch-none select-none' : ''}>
+        <ResponsiveGridLayout
+          className="layout"
+          layouts={layouts}
+          breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
+          cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
+          rowHeight={100}
+          width={width || 1280}
+          draggableHandle={isLocked ? undefined : ".drag-handle"}
+          isDraggable={!isLocked}
+          isResizable={!isLocked}
+          onLayoutChange={onLayoutChange}
+          margin={[20, 20]}
+          compactType="vertical"
+        >
+          {visibleWidgets.includes('actions') && (
+            <div key="actions">
+              <WidgetWrapper id="actions"><QuickActions /></WidgetWrapper>
+            </div>
+          )}
 
-        <div key="stat-leads">
-          <WidgetWrapper id="stat-leads">
-            <StatCard title="Total Leads" value={stats.totalLeads} description="Leads capturados" icon={Users} colorClass="bg-blue-500/20" borderClass="hover:border-blue-500/30" />
-          </WidgetWrapper>
-        </div>
+          {visibleWidgets.includes('stat-leads') && (
+            <div key="stat-leads">
+              <WidgetWrapper id="stat-leads">
+                <StatCard title="Total Leads" value={stats.totalLeads} description="Leads capturados" icon={Users} colorClass="bg-blue-500/20" borderClass="hover:border-blue-500/30" />
+              </WidgetWrapper>
+            </div>
+          )}
 
-        <div key="stat-citas">
-          <WidgetWrapper id="stat-citas">
-            <StatCard title="Citas Hoy" value={stats.citasHoy} description="Citas programadas hoy" icon={Calendar} colorClass="bg-purple-500/20" borderClass="hover:border-purple-500/30" />
-          </WidgetWrapper>
-        </div>
+          {visibleWidgets.includes('stat-citas') && (
+            <div key="stat-citas">
+              <WidgetWrapper id="stat-citas">
+                <StatCard title="Citas Hoy" value={stats.citasHoy} description="Citas programadas hoy" icon={Calendar} colorClass="bg-purple-500/20" borderClass="hover:border-purple-500/30" />
+              </WidgetWrapper>
+            </div>
+          )}
 
-        <div key="stat-campanas">
-          <WidgetWrapper id="stat-campanas">
-            <StatCard title="Campañas Activas" value={stats.campanasActivas || 0} description="Campañas en ejecución" icon={Send} colorClass="bg-emerald-500/20" borderClass="hover:border-emerald-500/30" />
-          </WidgetWrapper>
-        </div>
+          {visibleWidgets.includes('stat-campanas') && (
+            <div key="stat-campanas">
+              <WidgetWrapper id="stat-campanas">
+                <StatCard title="Campañas Activas" value={stats.campanasActivas || 0} description="Campañas en ejecución" icon={Send} colorClass="bg-emerald-500/20" borderClass="hover:border-emerald-500/30" />
+              </WidgetWrapper>
+            </div>
+          )}
 
-        <div key="stat-ingresos">
-          <WidgetWrapper id="stat-ingresos">
-            <StatCard title="Ingresos del Mes" value={`$${stats.ingresosMes?.toFixed(2) || '0.00'}`} description="Revenue generado" icon={TrendingUp} colorClass="bg-orange-500/20" borderClass="hover:border-orange-500/30" />
-          </WidgetWrapper>
-        </div>
+          {visibleWidgets.includes('stat-ingresos') && (
+            <div key="stat-ingresos">
+              <WidgetWrapper id="stat-ingresos">
+                <StatCard title="Ingresos del Mes" value={`$${stats.ingresosMes?.toFixed(2) || '0.00'}`} description="Revenue generado" icon={TrendingUp} colorClass="bg-orange-500/20" borderClass="hover:border-orange-500/30" />
+              </WidgetWrapper>
+            </div>
+          )}
 
-        <div key="limits">
-          <WidgetWrapper id="limits"><UsageLimits /></WidgetWrapper>
-        </div>
+          {visibleWidgets.includes('limits') && (
+            <div key="limits">
+              <WidgetWrapper id="limits"><UsageLimits /></WidgetWrapper>
+            </div>
+          )}
 
-        <div key="integrity">
-          <WidgetWrapper id="integrity"><IntegrityGraph /></WidgetWrapper>
-        </div>
+          {visibleWidgets.includes('integrity') && (
+            <div key="integrity">
+              <WidgetWrapper id="integrity"><IntegrityGraph /></WidgetWrapper>
+            </div>
+          )}
 
-        <div key="charts">
-          <WidgetWrapper id="charts">
-            <Card className="h-full border-2 border-primary/5 bg-background/50 backdrop-blur-sm">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-bold flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4 text-emerald-500" />
-                  Ingresos Diarios (30d)
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="h-full pb-10">
-                <DashboardStats data={stats.ingresosDiarios || []} />
-              </CardContent>
-            </Card>
-          </WidgetWrapper>
-        </div>
+          {visibleWidgets.includes('charts') && (
+            <div key="charts">
+              <WidgetWrapper id="charts">
+                <Card className="h-full border-2 border-primary/5 bg-background/50 backdrop-blur-sm">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-bold flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4 text-emerald-500" />
+                      Ingresos Diarios (30d)
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="h-full pb-10">
+                    <DashboardStats data={stats.ingresosDiarios || []} />
+                  </CardContent>
+                </Card>
+              </WidgetWrapper>
+            </div>
+          )}
 
-        <div key="appointments">
-          <WidgetWrapper id="appointments">
-            <Card className="h-full overflow-hidden border-2 border-primary/5 bg-background/50 backdrop-blur-sm">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-bold flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-purple-500" />
-                  Próximas Citas
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="scrollbar-thin">
-                <DayNavigationAppointments />
-              </CardContent>
-            </Card>
-          </WidgetWrapper>
-        </div>
+          {visibleWidgets.includes('appointments') && (
+            <div key="appointments">
+              <WidgetWrapper id="appointments">
+                <Card className="h-full overflow-hidden border-2 border-primary/5 bg-background/50 backdrop-blur-sm">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-bold flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-purple-500" />
+                      Próximas Citas
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="scrollbar-thin">
+                    <DayNavigationAppointments />
+                  </CardContent>
+                </Card>
+              </WidgetWrapper>
+            </div>
+          )}
 
-        <div key="inventory">
-          <WidgetWrapper id="inventory"><InventoryWatchdog /></WidgetWrapper>
-        </div>
+          {visibleWidgets.includes('inventory') && (
+            <div key="inventory">
+              <WidgetWrapper id="inventory"><InventoryWatchdog /></WidgetWrapper>
+            </div>
+          )}
 
-        <div key="map">
-          <WidgetWrapper id="map"><OperationalMap /></WidgetWrapper>
-        </div>
+          {visibleWidgets.includes('map') && (
+            <div key="map">
+              <WidgetWrapper id="map"><OperationalMap /></WidgetWrapper>
+            </div>
+          )}
 
-        <div key="audit">
-          <WidgetWrapper id="audit"><TrustProtocolLogs /></WidgetWrapper>
-        </div>
-      </ResponsiveGridLayout>
+          {visibleWidgets.includes('audit') && (
+            <div key="audit">
+              <WidgetWrapper id="audit"><TrustProtocolLogs /></WidgetWrapper>
+            </div>
+          )}
+        </ResponsiveGridLayout>
+      </div>
     </div>
   )
 }
