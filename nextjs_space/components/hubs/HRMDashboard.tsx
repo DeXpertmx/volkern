@@ -66,8 +66,9 @@ export default function HRMDashboard() {
       try {
         const res = await fetch('/api/v1/user/layout?type=hr')
         if (res.ok) {
-          const { layout } = await res.json()
+          const { layout, isLocked: savedLocked } = await res.json()
           if (layout) setLayouts(layout)
+          if (typeof savedLocked === 'boolean') setIsLocked(savedLocked)
         }
       } catch (e) {
         console.error('Error fetching HR layout:', e)
@@ -77,12 +78,12 @@ export default function HRMDashboard() {
   }, [mounted])
 
   // Persistir Layout de RRHH (Debounced)
-  const persistLayout = useMemo(() => debounce(async (newLayouts: any) => {
+  const persistLayout = useMemo(() => debounce(async (newLayouts: any, locked: boolean) => {
     try {
       await fetch('/api/v1/user/layout?type=hr', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ layout: newLayouts })
+        body: JSON.stringify({ layout: newLayouts, isLocked: locked })
       })
     } catch (e) {
       console.error('Error persisting HR layout:', e)
@@ -92,7 +93,7 @@ export default function HRMDashboard() {
   const onLayoutChange = (currentLayout: Layout[], allLayouts: { [key: string]: Layout[] }) => {
     if (!isLocked) {
       setLayouts(allLayouts as any)
-      persistLayout(allLayouts as any)
+      persistLayout(allLayouts as any, isLocked)
     }
   }
 
@@ -188,7 +189,11 @@ export default function HRMDashboard() {
             <div className="flex justify-end mb-6">
                <Button 
                   variant={isLocked ? "outline" : "default"}
-                  onClick={() => setIsLocked(!isLocked)}
+                   onClick={() => {
+                     const next = !isLocked;
+                     setIsLocked(next);
+                     if (layouts) persistLayout(layouts, next);
+                   }}
                   className="rounded-xl font-bold uppercase text-[9px] h-9 px-4 transition-all"
                >
                   {isLocked ? <Lock className="w-3 h-3 mr-2" /> : <Unlock className="w-3 h-3 mr-2" />}
