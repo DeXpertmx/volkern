@@ -21,7 +21,7 @@ export const PATCH = withTenantAuth(async (request, auth) => {
     }
 
     const body = await request.json();
-    const { layout, isLocked } = body;
+    const { layout, isLocked, visibleWidgets } = body;
 
     const tenantId = auth.tenant!.id;
     const userId = auth.user!.id;
@@ -35,10 +35,12 @@ export const PATCH = withTenantAuth(async (request, auth) => {
     const currentMetadata = (user?.metadata as Record<string, any>) || {};
     const layoutKey = `${type}Layout_${tenantId}`;
     const lockKey = `${type}LayoutLocked_${tenantId}`;
+    const widgetsKey = `${type}VisibleWidgets_${tenantId}`;
 
     const updateData: Record<string, any> = { ...currentMetadata };
     if (layout !== undefined) updateData[layoutKey] = layout;
     if (typeof isLocked === 'boolean') updateData[lockKey] = isLocked;
+    if (Array.isArray(visibleWidgets)) updateData[widgetsKey] = visibleWidgets;
     
     await prisma.user.update({
       where: { id: userId },
@@ -73,10 +75,12 @@ export const GET = withTenantAuth(async (request, auth) => {
     const metadata = (user?.metadata as Record<string, any>) || {};
     const layoutKey = `${type}Layout_${tenantId}`;
     const lockKey = `${type}LayoutLocked_${tenantId}`;
+    const widgetsKey = `${type}VisibleWidgets_${tenantId}`;
 
     return NextResponse.json({ 
       layout: metadata[layoutKey] || null,
       isLocked: typeof metadata[lockKey] === 'boolean' ? metadata[lockKey] : null,
+      visibleWidgets: Array.isArray(metadata[widgetsKey]) ? metadata[widgetsKey] : null,
       type,
       tenantId 
     });
