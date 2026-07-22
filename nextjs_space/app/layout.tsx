@@ -7,6 +7,7 @@ import { Toaster } from '@/components/ui/sonner';
 import { SessionProvider } from '@/components/session-provider';
 import { ThemeProvider } from '@/components/theme-provider';
 import { PushNotificationInit } from '@/components/providers/PushNotificationInit';
+import { PWAInstallPrompt } from '@/components/providers/PWAInstallPrompt';
 import { CookieConsentBanner } from '@/components/public/CookieConsentBanner';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -25,8 +26,14 @@ export const metadata = {
 export const viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 5,
+  maximumScale: 1,
+  userScalable: false,
   themeColor: '#0f1d46',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'Volkern',
+  },
 };
 
 export default function RootLayout({
@@ -36,10 +43,20 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es" suppressHydrationWarning>
+      <head>
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="Volkern" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="application-name" content="Volkern" />
+        <meta name="format-detection" content="telephone=no" />
+      </head>
       <body className={`${inter.className} selection:bg-blue-500/30`}>
         <SessionProvider>
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem={true}>
             <PushNotificationInit />
+            <PWAInstallPrompt />
             {children}
             <CookieConsentBanner />
             <Toaster position="top-center" />

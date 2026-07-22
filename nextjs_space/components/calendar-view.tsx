@@ -125,6 +125,8 @@ const estadoOptions = [
 export default function CalendarView({ citas, leads, contacts = [], onRefresh, googleEvents = [], onDateRangeChange }: CalendarViewProps) {
   const [view, setView] = useState<View>('month')
   const [date, setDate] = useState(new Date())
+  const [isMobile, setIsMobile] = useState(false)
+  const [showExtraFields, setShowExtraFields] = useState(false)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [showEditDialog, setShowEditDialog] = useState(false)
   const [showDetailDialog, setShowDetailDialog] = useState(false)
@@ -143,6 +145,14 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh, g
       })
       .catch(() => {})
   }, [])
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
+
   const [selectedCita, setSelectedCita] = useState<Cita | null>(null)
   const [creating, setCreating] = useState(false)
   const [updating, setUpdating] = useState(false)
@@ -165,6 +175,9 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh, g
     connectedCalendarId: '',
   })
   const [selectedCatalogoItem, setSelectedCatalogoItem] = useState<CatalogoItem | null>(null)
+  const [showNewLeadForm, setShowNewLeadForm] = useState(false)
+  const [creatingLead, setCreatingLead] = useState(false)
+  const [newLeadData, setNewLeadData] = useState({ nombre: '', email: '', telefono: '', empresa: '' })
 
   // Convertir citas a eventos de calendario + añadir eventos de Google Calendar
   const events: (CalendarEvent | GoogleEvent)[] = useMemo(
@@ -532,7 +545,7 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh, g
 
   return (
     <>
-      <div className="h-[700px] bg-white rounded-lg p-4">
+      <div className="h-[500px] md:h-[700px] bg-white rounded-lg p-2 md:p-4">
         <CalendarComponent
           localizer={localizer}
           events={events}
@@ -557,243 +570,279 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh, g
       </div>
 
       {/* Dialog para crear cita */}
-      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+      <Dialog open={showCreateDialog} onOpenChange={(open) => {
+        setShowCreateDialog(open)
+        if (!open) {
+          setShowNewLeadForm(false)
+          setShowExtraFields(false)
+          setNewLeadData({ nombre: '', email: '', telefono: '', empresa: '' })
+        }
+      }}>
+        <DialogContent className={isMobile ? "max-w-full h-full max-h-full rounded-none p-4" : "max-w-2xl max-h-[90vh] overflow-y-auto"}>
+          <DialogHeader className={isMobile ? "pb-2" : ""}>
             <DialogTitle>Nueva Cita</DialogTitle>
-            <DialogDescription>
-              Completa los detalles de la cita
-            </DialogDescription>
+            {!isMobile && (
+              <DialogDescription>Completa los detalles de la cita</DialogDescription>
+            )}
           </DialogHeader>
 
-          <div className="space-y-4 py-4">
-            {/* Selector de Catálogo */}
-            <div className="space-y-2">
-              <Label>Servicio del Catálogo (Opcional)</Label>
-              <div className="flex items-center gap-2">
-                <CatalogoSelector
-                  onSelect={handleCatalogoSelect}
-                  buttonLabel="Seleccionar del Catálogo"
-                  buttonVariant="outline"
-                />
-                {selectedCatalogoItem && (
-                  <div className="flex-1 flex items-center gap-2 p-2 bg-muted rounded-md">
-                    <Tag className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm font-medium">{selectedCatalogoItem.nombre}</span>
-                    <Badge variant="secondary" className="ml-auto">
-                      {selectedCatalogoItem.precioBase.toLocaleString('es-ES')} {selectedCatalogoItem.moneda}
-                    </Badge>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
+          <div className={isMobile ? "space-y-3 py-2 overflow-y-auto flex-1" : "space-y-4 py-4"}>
+            {!isMobile && (
+              <div className="space-y-2">
+                <Label>Servicio del Catálogo (Opcional)</Label>
+                <div className="flex items-center gap-2">
+                  <CatalogoSelector
+                    onSelect={handleCatalogoSelect}
+                    buttonLabel="Seleccionar del Catálogo"
+                    buttonVariant="outline"
+                  />
+                  {selectedCatalogoItem && (
+                    <div className="flex-1 flex items-center gap-2 p-2 bg-muted rounded-md">
+                      <Tag className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium">{selectedCatalogoItem.nombre}</span>
+                      <Badge variant="secondary" className="ml-auto">
+                        {selectedCatalogoItem.precioBase.toLocaleString('es-ES')} {selectedCatalogoItem.moneda}
+                      </Badge>
+                      <Button variant="ghost" size="sm" onClick={() => {
                         setSelectedCatalogoItem(null)
                         setFormData(prev => ({ ...prev, catalogoItemId: '' }))
-                      }}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                )}
+                      }}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Selecciona un servicio para autocompletar título, duración y descripción
+                </p>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Selecciona un servicio para autocompletar título, duración y descripción
-              </p>
-            </div>
+            )}
 
             <div className="space-y-2">
-              <Label htmlFor="leadId">Lead / Contacto *</Label>
-              <Select value={formData.leadId} onValueChange={(value) => setFormData({ ...formData, leadId: value })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona un lead o contacto" />
-                </SelectTrigger>
-                <SelectContent>
-                  {leads.length > 0 && (
-                    <SelectGroup>
-                      <SelectLabel>📋 Leads</SelectLabel>
-                      {leads.map((lead) => (
-                        <SelectItem key={`lead-${lead.id}`} value={lead.id}>
-                          {lead.nombre}
-                          {lead.empresa && ` - ${lead.empresa}`}
+              <Label htmlFor="leadId" className={isMobile ? "text-xs" : ""}>Lead / Contacto *</Label>
+              {!showNewLeadForm ? (
+                <>
+                  <Select value={formData.leadId} onValueChange={(value) => setFormData({ ...formData, leadId: value })}>
+                    <SelectTrigger className={isMobile ? "h-9 text-sm" : ""}>
+                      <SelectValue placeholder="Selecciona lead o contacto" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {leads.length > 0 && (
+                        <SelectGroup>
+                          <SelectLabel>Leads</SelectLabel>
+                          {leads.map((lead) => (
+                            <SelectItem key={`lead-${lead.id}`} value={lead.id}>
+                              {lead.nombre}
+                              {lead.empresa && ` - ${lead.empresa}`}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      )}
+                      {contacts.length > 0 && (
+                        <SelectGroup>
+                          <SelectLabel>Contactos</SelectLabel>
+                          {contacts.filter(c => c.tipo === 'person').map((contact) => (
+                            <SelectItem key={`contact-${contact.id}`} value={`contact:${contact.id}`}>
+                              {contact.nombre}
+                              {contact.company?.nombre && ` - ${contact.company.nombre}`}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      )}
+                      {leads.length === 0 && contacts.length === 0 && (
+                        <SelectItem value="no-options" disabled>
+                          No hay leads ni contactos disponibles
                         </SelectItem>
-                      ))}
-                    </SelectGroup>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  {!isMobile && (
+                    <Button type="button" variant="link" size="sm" className="px-0 h-auto text-xs" onClick={() => setShowNewLeadForm(true)}>
+                      + Crear nuevo lead
+                    </Button>
                   )}
-                  {contacts.length > 0 && (
-                    <SelectGroup>
-                      <SelectLabel>👤 Contactos</SelectLabel>
-                      {contacts.filter(c => c.tipo === 'person').map((contact) => (
-                        <SelectItem key={`contact-${contact.id}`} value={`contact:${contact.id}`}>
-                          {contact.nombre}
-                          {contact.company?.nombre && ` - ${contact.company.nombre}`}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  )}
-                  {leads.length === 0 && contacts.length === 0 && (
-                    <SelectItem value="no-options" disabled>
-                      No hay leads ni contactos disponibles
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
+                </>
+              ) : (
+                <div className="space-y-3 p-3 border rounded-md bg-muted/30">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Nombre *</Label>
+                      <Input value={newLeadData.nombre} onChange={(e) => setNewLeadData({ ...newLeadData, nombre: e.target.value })} placeholder="Nombre" className="h-8 text-sm" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Email</Label>
+                      <Input type="email" value={newLeadData.email} onChange={(e) => setNewLeadData({ ...newLeadData, email: e.target.value })} placeholder="email@ejemplo.com" className="h-8 text-sm" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Teléfono</Label>
+                      <Input value={newLeadData.telefono} onChange={(e) => setNewLeadData({ ...newLeadData, telefono: e.target.value })} placeholder="+52 555 123 4567" className="h-8 text-sm" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Empresa</Label>
+                      <Input value={newLeadData.empresa} onChange={(e) => setNewLeadData({ ...newLeadData, empresa: e.target.value })} placeholder="Nombre de empresa" className="h-8 text-sm" />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 pt-1">
+                    <Button type="button" size="sm" disabled={creatingLead || !newLeadData.nombre.trim()} onClick={async () => {
+                      if (!newLeadData.nombre.trim()) return
+                      setCreatingLead(true)
+                      try {
+                        const res = await fetch('/api/leads', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            nombre: newLeadData.nombre.trim(),
+                            email: newLeadData.email.trim() || undefined,
+                            telefono: newLeadData.telefono.trim() || undefined,
+                            empresa: newLeadData.empresa.trim() || undefined,
+                            fuente: 'creacion_rapida_calendario',
+                          }),
+                        })
+                        const data = await res.json()
+                        if (!res.ok) throw new Error(data.error || 'Error al crear lead')
+                        const leadId = data.lead?.id || data.id
+                        setFormData(prev => ({ ...prev, leadId }))
+                        setShowNewLeadForm(false)
+                        setNewLeadData({ nombre: '', email: '', telefono: '', empresa: '' })
+                        toast.success('Lead creado exitosamente')
+                        onRefresh()
+                      } catch (error: any) {
+                        toast.error(error.message || 'Error al crear lead')
+                      } finally {
+                        setCreatingLead(false)
+                      }
+                    }}>
+                      {creatingLead ? 'Creando...' : 'Guardar lead'}
+                    </Button>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => {
+                      setShowNewLeadForm(false)
+                      setNewLeadData({ nombre: '', email: '', telefono: '', empresa: '' })
+                    }}>
+                      Cancelar
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="fecha">Fecha *</Label>
-                <Input
-                  id="fecha"
-                  type="date"
-                  value={formData.fecha}
-                  onChange={(e) => setFormData({ ...formData, fecha: e.target.value })}
-                />
+            <div className="grid grid-cols-2 gap-2 md:gap-4">
+              <div className="space-y-1 md:space-y-2">
+                <Label className={isMobile ? "text-xs" : ""}>Fecha *</Label>
+                <Input type="date" value={formData.fecha} onChange={(e) => setFormData({ ...formData, fecha: e.target.value })} className={isMobile ? "h-9 text-sm" : ""} />
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="hora">Hora *</Label>
-                <Input
-                  id="hora"
-                  type="time"
-                  value={formData.hora}
-                  onChange={(e) => setFormData({ ...formData, hora: e.target.value })}
-                />
+              <div className="space-y-1 md:space-y-2">
+                <Label className={isMobile ? "text-xs" : ""}>Hora *</Label>
+                <Input type="time" value={formData.hora} onChange={(e) => setFormData({ ...formData, hora: e.target.value })} className={isMobile ? "h-9 text-sm" : ""} />
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="tipo">Tipo de Cita *</Label>
+            <div className="grid grid-cols-2 gap-2 md:gap-4">
+              <div className="space-y-1 md:space-y-2">
+                <Label className={isMobile ? "text-xs" : ""}>Tipo</Label>
                 <Select value={formData.tipo} onValueChange={(value) => setFormData({ ...formData, tipo: value })}>
-                  <SelectTrigger>
+                  <SelectTrigger className={isMobile ? "h-9 text-sm" : ""}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {tipoOptions.map((option) => (
                       <SelectItem key={option.value} value={option.value}>
-                        {option.label}
+                        {isMobile ? option.label.replace(/[^\w\s]/g, '') : option.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="duracion">Duración (minutos) *</Label>
-                <Input
-                  id="duracion"
-                  type="number"
-                  min="15"
-                  step="15"
-                  value={formData.duracion}
-                  onChange={(e) => setFormData({ ...formData, duracion: parseInt(e.target.value) })}
-                />
+              <div className="space-y-1 md:space-y-2">
+                <Label className={isMobile ? "text-xs" : ""}>Duración *</Label>
+                <Input type="number" min="15" step="15" value={formData.duracion} onChange={(e) => setFormData({ ...formData, duracion: parseInt(e.target.value) })} className={isMobile ? "h-9 text-sm" : ""} />
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="titulo">Título</Label>
-              <Input
-                id="titulo"
-                value={formData.titulo}
-                onChange={(e) => setFormData({ ...formData, titulo: e.target.value })}
-                placeholder="Ej: Reunión de seguimiento"
-              />
+            <div className="space-y-1 md:space-y-2">
+              <Label className={isMobile ? "text-xs" : ""}>Título</Label>
+              <Input value={formData.titulo} onChange={(e) => setFormData({ ...formData, titulo: e.target.value })} placeholder="Ej: Reunión de seguimiento" className={isMobile ? "h-9 text-sm" : ""} />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="descripcion">Descripción</Label>
-              <Textarea
-                id="descripcion"
-                value={formData.descripcion}
-                onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
-                placeholder="Notas sobre la reunión..."
-                rows={3}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="ubicacion">Ubicación (Opcional)</Label>
-              <Input
-                id="ubicacion"
-                value={formData.ubicacion}
-                onChange={(e) => setFormData({ ...formData, ubicacion: e.target.value })}
-                placeholder="Ej: Oficina principal, Sala de juntas"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="linkReunion">Link de Reunión Virtual</Label>
-              <Select 
-                value={formData.tipoLinkReunion} 
-                onValueChange={(value) => setFormData({ ...formData, tipoLinkReunion: value, linkReunion: '', linkReunionPegado: '' })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona una opción" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ninguno">No incluir link</SelectItem>
-                  <SelectItem value="generar">Generar Google Meet automáticamente</SelectItem>
-                  <SelectItem value="pegar">Pegar link de reunión</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {formData.tipoLinkReunion === 'pegar' && (
-              <div className="space-y-2">
-                <Label htmlFor="linkReunionPegado">URL de la Reunión</Label>
-                <Input
-                  id="linkReunionPegado"
-                  value={formData.linkReunionPegado}
-                  onChange={(e) => setFormData({ ...formData, linkReunionPegado: e.target.value })}
-                  placeholder="https://zoom.us/j/... o https://meet.google.com/..."
-                />
-              </div>
+            {isMobile && (
+              <Button type="button" variant="ghost" size="sm" className="w-full text-xs text-muted-foreground" onClick={() => setShowExtraFields(!showExtraFields)}>
+                {showExtraFields ? 'Ocultar campos adicionales' : 'Más opciones (ubicación, descripción, enlace)'}
+              </Button>
             )}
 
-            {formData.tipoLinkReunion === 'generar' && (
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
-                <p className="text-sm text-blue-700">
-                  <Video className="inline h-4 w-4 mr-1" />
-                  Se generará automáticamente un enlace de Google Meet al guardar la cita
-                </p>
-              </div>
-            )}
+            {(!isMobile || showExtraFields) && (
+              <>
+                <div className="space-y-1 md:space-y-2">
+                  <Label className={isMobile ? "text-xs" : ""}>Descripción</Label>
+                  <Textarea value={formData.descripcion} onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })} placeholder="Notas sobre la reunión..." rows={isMobile ? 2 : 3} className={isMobile ? "text-sm" : ""} />
+                </div>
 
-            {connectedCalendars.length > 0 && (
-              <div className="space-y-2">
-                <Label htmlFor="create-connectedCalendar">Sincronizar con Google Calendar</Label>
-                <Select
-                  value={formData.connectedCalendarId}
-                  onValueChange={(value) => setFormData({ ...formData, connectedCalendarId: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="No sincronizar" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="no-sync">No sincronizar</SelectItem>
-                    {connectedCalendars.map((cal) => (
-                      <SelectItem key={cal.id} value={cal.id}>
-                        <span className="flex items-center gap-2">
-                          <span className="inline-block w-3 h-3 rounded-full" style={{ backgroundColor: cal.color }} />
-                          {cal.nombre}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Elige el calendario de Google donde se creará este evento
-                </p>
-              </div>
+                <div className="space-y-1 md:space-y-2">
+                  <Label className={isMobile ? "text-xs" : ""}>Ubicación</Label>
+                  <Input value={formData.ubicacion} onChange={(e) => setFormData({ ...formData, ubicacion: e.target.value })} placeholder="Ej: Oficina principal" className={isMobile ? "h-9 text-sm" : ""} />
+                </div>
+
+                <div className="space-y-1 md:space-y-2">
+                  <Label className={isMobile ? "text-xs" : ""}>Link de Reunión Virtual</Label>
+                  <Select value={formData.tipoLinkReunion} onValueChange={(value) => setFormData({ ...formData, tipoLinkReunion: value, linkReunion: '', linkReunionPegado: '' })}>
+                    <SelectTrigger className={isMobile ? "h-9 text-sm" : ""}>
+                      <SelectValue placeholder="Selecciona una opción" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ninguno">No incluir link</SelectItem>
+                      <SelectItem value="generar">Generar Google Meet</SelectItem>
+                      <SelectItem value="pegar">Pegar link</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {formData.tipoLinkReunion === 'pegar' && (
+                  <div className="space-y-1 md:space-y-2">
+                    <Label className={isMobile ? "text-xs" : ""}>URL de la Reunión</Label>
+                    <Input value={formData.linkReunionPegado} onChange={(e) => setFormData({ ...formData, linkReunionPegado: e.target.value })} placeholder="https://meet.google.com/..." className={isMobile ? "h-9 text-sm" : ""} />
+                  </div>
+                )}
+
+                {formData.tipoLinkReunion === 'generar' && (
+                  <div className="p-2 md:p-3 bg-blue-50 border border-blue-200 rounded-md">
+                    <p className="text-xs md:text-sm text-blue-700">
+                      <Video className="inline h-3 w-3 md:h-4 md:w-4 mr-1" />
+                      Se generará un enlace de Google Meet al guardar
+                    </p>
+                  </div>
+                )}
+
+                {connectedCalendars.length > 0 && (
+                  <div className="space-y-1 md:space-y-2">
+                    <Label className={isMobile ? "text-xs" : ""}>Sincronizar con Google Calendar</Label>
+                    <Select value={formData.connectedCalendarId} onValueChange={(value) => setFormData({ ...formData, connectedCalendarId: value })}>
+                      <SelectTrigger className={isMobile ? "h-9 text-sm" : ""}>
+                        <SelectValue placeholder="No sincronizar" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="no-sync">No sincronizar</SelectItem>
+                        {connectedCalendars.map((cal) => (
+                          <SelectItem key={cal.id} value={cal.id}>
+                            <span className="flex items-center gap-2">
+                              <span className="inline-block w-3 h-3 rounded-full" style={{ backgroundColor: cal.color }} />
+                              {cal.nombre}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </>
             )}
           </div>
 
-          <div className="flex justify-end space-x-2">
-            <Button variant="outline" onClick={() => setShowCreateDialog(false)} disabled={creating}>
+          <div className={`${isMobile ? "sticky bottom-0 bg-background pt-2 border-t mt-2" : ""} flex justify-end space-x-2`}>
+            <Button variant="outline" size={isMobile ? "sm" : "default"} onClick={() => setShowCreateDialog(false)} disabled={creating}>
               Cancelar
             </Button>
-            <Button onClick={handleCreateCita} disabled={creating}>
+            <Button size={isMobile ? "sm" : "default"} onClick={handleCreateCita} disabled={creating}>
               {creating ? 'Creando...' : 'Crear Cita'}
             </Button>
           </div>
@@ -801,105 +850,164 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh, g
       </Dialog>
 
       {/* Dialog para editar cita */}
-      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+      <Dialog open={showEditDialog} onOpenChange={(open) => {
+        setShowEditDialog(open)
+        if (!open) {
+          setShowNewLeadForm(false)
+          setShowExtraFields(false)
+          setNewLeadData({ nombre: '', email: '', telefono: '', empresa: '' })
+        }
+      }}>
+        <DialogContent className={isMobile ? "max-w-full h-full max-h-full rounded-none p-4" : "max-w-2xl max-h-[90vh] overflow-y-auto"}>
+          <DialogHeader className={isMobile ? "pb-2" : ""}>
             <DialogTitle>Editar Cita</DialogTitle>
-            <DialogDescription>
-              Modifica los detalles de la cita
-            </DialogDescription>
+            {!isMobile && (
+              <DialogDescription>Modifica los detalles de la cita</DialogDescription>
+            )}
           </DialogHeader>
 
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="edit-leadId">Lead / Contacto *</Label>
-              <Select value={formData.leadId} onValueChange={(value) => setFormData({ ...formData, leadId: value })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona un lead o contacto" />
-                </SelectTrigger>
-                <SelectContent>
-                  {leads.length > 0 && (
-                    <SelectGroup>
-                      <SelectLabel>📋 Leads</SelectLabel>
-                      {leads.map((lead) => (
-                        <SelectItem key={`edit-lead-${lead.id}`} value={lead.id}>
-                          {lead.nombre}
-                          {lead.empresa && ` - ${lead.empresa}`}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
+          <div className={isMobile ? "space-y-3 py-2 overflow-y-auto flex-1" : "space-y-4 py-4"}>
+            <div className="space-y-1 md:space-y-2">
+              <Label className={isMobile ? "text-xs" : ""}>Lead / Contacto *</Label>
+              {!showNewLeadForm ? (
+                <>
+                  <Select value={formData.leadId} onValueChange={(value) => setFormData({ ...formData, leadId: value })}>
+                    <SelectTrigger className={isMobile ? "h-9 text-sm" : ""}>
+                      <SelectValue placeholder="Selecciona lead o contacto" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {leads.length > 0 && (
+                        <SelectGroup>
+                          <SelectLabel>Leads</SelectLabel>
+                          {leads.map((lead) => (
+                            <SelectItem key={`edit-lead-${lead.id}`} value={lead.id}>
+                              {lead.nombre}
+                              {lead.empresa && ` - ${lead.empresa}`}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      )}
+                      {contacts.length > 0 && (
+                        <SelectGroup>
+                          <SelectLabel>Contactos</SelectLabel>
+                          {contacts.filter(c => c.tipo === 'person').map((contact) => (
+                            <SelectItem key={`edit-contact-${contact.id}`} value={`contact:${contact.id}`}>
+                              {contact.nombre}
+                              {contact.company?.nombre && ` - ${contact.company.nombre}`}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  {!isMobile && (
+                    <Button type="button" variant="link" size="sm" className="px-0 h-auto text-xs" onClick={() => setShowNewLeadForm(true)}>
+                      + Crear nuevo lead
+                    </Button>
                   )}
-                  {contacts.length > 0 && (
-                    <SelectGroup>
-                      <SelectLabel>👤 Contactos</SelectLabel>
-                      {contacts.filter(c => c.tipo === 'person').map((contact) => (
-                        <SelectItem key={`edit-contact-${contact.id}`} value={`contact:${contact.id}`}>
-                          {contact.nombre}
-                          {contact.company?.nombre && ` - ${contact.company.nombre}`}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  )}
-                </SelectContent>
-              </Select>
+                </>
+              ) : (
+                <div className="space-y-3 p-3 border rounded-md bg-muted/30">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Nombre *</Label>
+                      <Input value={newLeadData.nombre} onChange={(e) => setNewLeadData({ ...newLeadData, nombre: e.target.value })} placeholder="Nombre" className="h-8 text-sm" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Email</Label>
+                      <Input type="email" value={newLeadData.email} onChange={(e) => setNewLeadData({ ...newLeadData, email: e.target.value })} placeholder="email@ejemplo.com" className="h-8 text-sm" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Teléfono</Label>
+                      <Input value={newLeadData.telefono} onChange={(e) => setNewLeadData({ ...newLeadData, telefono: e.target.value })} placeholder="+52 555 123 4567" className="h-8 text-sm" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Empresa</Label>
+                      <Input value={newLeadData.empresa} onChange={(e) => setNewLeadData({ ...newLeadData, empresa: e.target.value })} placeholder="Nombre de empresa" className="h-8 text-sm" />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 pt-1">
+                    <Button type="button" size="sm" disabled={creatingLead || !newLeadData.nombre.trim()} onClick={async () => {
+                      if (!newLeadData.nombre.trim()) return
+                      setCreatingLead(true)
+                      try {
+                        const res = await fetch('/api/leads', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            nombre: newLeadData.nombre.trim(),
+                            email: newLeadData.email.trim() || undefined,
+                            telefono: newLeadData.telefono.trim() || undefined,
+                            empresa: newLeadData.empresa.trim() || undefined,
+                            fuente: 'creacion_rapida_calendario',
+                          }),
+                        })
+                        const data = await res.json()
+                        if (!res.ok) throw new Error(data.error || 'Error al crear lead')
+                        const leadId = data.lead?.id || data.id
+                        setFormData(prev => ({ ...prev, leadId }))
+                        setShowNewLeadForm(false)
+                        setNewLeadData({ nombre: '', email: '', telefono: '', empresa: '' })
+                        toast.success('Lead creado exitosamente')
+                        onRefresh()
+                      } catch (error: any) {
+                        toast.error(error.message || 'Error al crear lead')
+                      } finally {
+                        setCreatingLead(false)
+                      }
+                    }}>
+                      {creatingLead ? 'Creando...' : 'Guardar lead'}
+                    </Button>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => {
+                      setShowNewLeadForm(false)
+                      setNewLeadData({ nombre: '', email: '', telefono: '', empresa: '' })
+                    }}>
+                      Cancelar
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="edit-fecha">Fecha *</Label>
-                <Input
-                  id="edit-fecha"
-                  type="date"
-                  value={formData.fecha}
-                  onChange={(e) => setFormData({ ...formData, fecha: e.target.value })}
-                />
+            <div className="grid grid-cols-2 gap-2 md:gap-4">
+              <div className="space-y-1 md:space-y-2">
+                <Label className={isMobile ? "text-xs" : ""}>Fecha *</Label>
+                <Input type="date" value={formData.fecha} onChange={(e) => setFormData({ ...formData, fecha: e.target.value })} className={isMobile ? "h-9 text-sm" : ""} />
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="edit-hora">Hora *</Label>
-                <Input
-                  id="edit-hora"
-                  type="time"
-                  value={formData.hora}
-                  onChange={(e) => setFormData({ ...formData, hora: e.target.value })}
-                />
+              <div className="space-y-1 md:space-y-2">
+                <Label className={isMobile ? "text-xs" : ""}>Hora *</Label>
+                <Input type="time" value={formData.hora} onChange={(e) => setFormData({ ...formData, hora: e.target.value })} className={isMobile ? "h-9 text-sm" : ""} />
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="edit-tipo">Tipo de Cita *</Label>
+            <div className="grid grid-cols-2 gap-2 md:gap-4">
+              <div className="space-y-1 md:space-y-2">
+                <Label className={isMobile ? "text-xs" : ""}>Tipo</Label>
                 <Select value={formData.tipo} onValueChange={(value) => setFormData({ ...formData, tipo: value })}>
-                  <SelectTrigger>
+                  <SelectTrigger className={isMobile ? "h-9 text-sm" : ""}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {tipoOptions.map((option) => (
                       <SelectItem key={option.value} value={option.value}>
-                        {option.label}
+                        {isMobile ? option.label.replace(/[^\w\s]/g, '') : option.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="edit-duracion">Duración (minutos) *</Label>
-                <Input
-                  id="edit-duracion"
-                  type="number"
-                  min="15"
-                  step="15"
-                  value={formData.duracion}
-                  onChange={(e) => setFormData({ ...formData, duracion: parseInt(e.target.value) })}
-                />
+              <div className="space-y-1 md:space-y-2">
+                <Label className={isMobile ? "text-xs" : ""}>Duración *</Label>
+                <Input type="number" min="15" step="15" value={formData.duracion} onChange={(e) => setFormData({ ...formData, duracion: parseInt(e.target.value) })} className={isMobile ? "h-9 text-sm" : ""} />
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="edit-estado">Estado *</Label>
+            <div className="space-y-1 md:space-y-2">
+              <Label className={isMobile ? "text-xs" : ""}>Estado *</Label>
               <Select value={formData.estado} onValueChange={(value) => setFormData({ ...formData, estado: value })}>
-                <SelectTrigger>
+                <SelectTrigger className={isMobile ? "h-9 text-sm" : ""}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -912,109 +1020,84 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh, g
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="edit-titulo">Título</Label>
-              <Input
-                id="edit-titulo"
-                value={formData.titulo}
-                onChange={(e) => setFormData({ ...formData, titulo: e.target.value })}
-                placeholder="Ej: Reunión de seguimiento"
-              />
+            <div className="space-y-1 md:space-y-2">
+              <Label className={isMobile ? "text-xs" : ""}>Título</Label>
+              <Input value={formData.titulo} onChange={(e) => setFormData({ ...formData, titulo: e.target.value })} placeholder="Ej: Reunión de seguimiento" className={isMobile ? "h-9 text-sm" : ""} />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="edit-descripcion">Descripción</Label>
-              <Textarea
-                id="edit-descripcion"
-                value={formData.descripcion}
-                onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
-                placeholder="Notas sobre la reunión..."
-                rows={3}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="edit-ubicacion">Ubicación (Opcional)</Label>
-              <Input
-                id="edit-ubicacion"
-                value={formData.ubicacion}
-                onChange={(e) => setFormData({ ...formData, ubicacion: e.target.value })}
-                placeholder="Ej: Oficina principal, Sala de juntas"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="edit-linkReunion">Link de Reunión Virtual</Label>
-              <Select 
-                value={formData.tipoLinkReunion} 
-                onValueChange={(value) => setFormData({ ...formData, tipoLinkReunion: value, linkReunion: '', linkReunionPegado: '' })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona una opción" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ninguno">No incluir link</SelectItem>
-                  <SelectItem value="generar">Generar Google Meet automáticamente</SelectItem>
-                  <SelectItem value="pegar">Pegar link de reunión</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {formData.tipoLinkReunion === 'pegar' && (
-              <div className="space-y-2">
-                <Label htmlFor="edit-linkReunionPegado">URL de la Reunión</Label>
-                <Input
-                  id="edit-linkReunionPegado"
-                  value={formData.linkReunionPegado}
-                  onChange={(e) => setFormData({ ...formData, linkReunionPegado: e.target.value })}
-                  placeholder="https://zoom.us/j/... o https://meet.google.com/..."
-                />
-              </div>
+            {isMobile && (
+              <Button type="button" variant="ghost" size="sm" className="w-full text-xs text-muted-foreground" onClick={() => setShowExtraFields(!showExtraFields)}>
+                {showExtraFields ? 'Ocultar campos adicionales' : 'Más opciones (ubicación, descripción, enlace)'}
+              </Button>
             )}
 
-            {formData.tipoLinkReunion === 'generar' && (
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
-                <p className="text-sm text-blue-700">
-                  <Video className="inline h-4 w-4 mr-1" />
-                  Se generará automáticamente un enlace de Google Meet al guardar la cita
-                </p>
-              </div>
-            )}
-
-            {connectedCalendars.length > 0 && (
-              <div className="space-y-2">
-                <Label htmlFor="edit-connectedCalendar">Sincronizar con Google Calendar</Label>
-                <Select
-                  value={formData.connectedCalendarId}
-                  onValueChange={(value) => setFormData({ ...formData, connectedCalendarId: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="No sincronizar" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="no-sync">No sincronizar</SelectItem>
-                    {connectedCalendars.map((cal) => (
-                      <SelectItem key={cal.id} value={cal.id}>
-                        <span className="flex items-center gap-2">
-                          <span className="inline-block w-3 h-3 rounded-full" style={{ backgroundColor: cal.color }} />
-                          {cal.nombre}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Elige el calendario de Google donde se sincronizará esta cita
-                </p>
-              </div>
+            {(!isMobile || showExtraFields) && (
+              <>
+                <div className="space-y-1 md:space-y-2">
+                  <Label className={isMobile ? "text-xs" : ""}>Descripción</Label>
+                  <Textarea value={formData.descripcion} onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })} placeholder="Notas sobre la reunión..." rows={isMobile ? 2 : 3} className={isMobile ? "text-sm" : ""} />
+                </div>
+                <div className="space-y-1 md:space-y-2">
+                  <Label className={isMobile ? "text-xs" : ""}>Ubicación</Label>
+                  <Input value={formData.ubicacion} onChange={(e) => setFormData({ ...formData, ubicacion: e.target.value })} placeholder="Ej: Oficina principal" className={isMobile ? "h-9 text-sm" : ""} />
+                </div>
+                <div className="space-y-1 md:space-y-2">
+                  <Label className={isMobile ? "text-xs" : ""}>Link de Reunión Virtual</Label>
+                  <Select value={formData.tipoLinkReunion} onValueChange={(value) => setFormData({ ...formData, tipoLinkReunion: value, linkReunion: '', linkReunionPegado: '' })}>
+                    <SelectTrigger className={isMobile ? "h-9 text-sm" : ""}>
+                      <SelectValue placeholder="Selecciona una opción" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ninguno">No incluir link</SelectItem>
+                      <SelectItem value="generar">Generar Google Meet</SelectItem>
+                      <SelectItem value="pegar">Pegar link</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {formData.tipoLinkReunion === 'pegar' && (
+                  <div className="space-y-1 md:space-y-2">
+                    <Label className={isMobile ? "text-xs" : ""}>URL de la Reunión</Label>
+                    <Input value={formData.linkReunionPegado} onChange={(e) => setFormData({ ...formData, linkReunionPegado: e.target.value })} placeholder="https://meet.google.com/..." className={isMobile ? "h-9 text-sm" : ""} />
+                  </div>
+                )}
+                {formData.tipoLinkReunion === 'generar' && (
+                  <div className="p-2 md:p-3 bg-blue-50 border border-blue-200 rounded-md">
+                    <p className="text-xs md:text-sm text-blue-700">
+                      <Video className="inline h-3 w-3 md:h-4 md:w-4 mr-1" />
+                      Se generará un enlace de Google Meet al guardar
+                    </p>
+                  </div>
+                )}
+                {connectedCalendars.length > 0 && (
+                  <div className="space-y-1 md:space-y-2">
+                    <Label className={isMobile ? "text-xs" : ""}>Sincronizar con Google Calendar</Label>
+                    <Select value={formData.connectedCalendarId} onValueChange={(value) => setFormData({ ...formData, connectedCalendarId: value })}>
+                      <SelectTrigger className={isMobile ? "h-9 text-sm" : ""}>
+                        <SelectValue placeholder="No sincronizar" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="no-sync">No sincronizar</SelectItem>
+                        {connectedCalendars.map((cal) => (
+                          <SelectItem key={cal.id} value={cal.id}>
+                            <span className="flex items-center gap-2">
+                              <span className="inline-block w-3 h-3 rounded-full" style={{ backgroundColor: cal.color }} />
+                              {cal.nombre}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </>
             )}
           </div>
 
-          <div className="flex justify-end space-x-2">
-            <Button variant="outline" onClick={() => setShowEditDialog(false)} disabled={updating}>
+          <div className={`${isMobile ? "sticky bottom-0 bg-background pt-2 border-t mt-2" : ""} flex justify-end space-x-2`}>
+            <Button variant="outline" size={isMobile ? "sm" : "default"} onClick={() => setShowEditDialog(false)} disabled={updating}>
               Cancelar
             </Button>
-            <Button onClick={handleUpdateCita} disabled={updating}>
+            <Button size={isMobile ? "sm" : "default"} onClick={handleUpdateCita} disabled={updating}>
               {updating ? 'Guardando...' : 'Guardar Cambios'}
             </Button>
           </div>
@@ -1023,122 +1106,98 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh, g
 
       {/* Dialog para ver detalles de cita */}
       <Dialog open={showDetailDialog} onOpenChange={setShowDetailDialog}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className={isMobile ? "max-w-full h-full max-h-full rounded-none p-4" : "max-w-2xl"}>
           {selectedCita && (
             <>
-              <DialogHeader>
+              <DialogHeader className={isMobile ? "pb-2" : ""}>
                 <div className="flex items-start justify-between">
-                  <div className="space-y-1 flex-1">
-                    <DialogTitle className="text-xl">{selectedCita.titulo || 'Cita sin título'}</DialogTitle>
-                    <div className="flex items-center space-x-2">
+                  <div className="space-y-1 flex-1 min-w-0">
+                    <DialogTitle className={isMobile ? "text-base" : "text-xl"}>{selectedCita.titulo || 'Cita sin título'}</DialogTitle>
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       {tipoOptions.find((t) => t.value === selectedCita.tipo) && (
-                        <Badge variant="secondary">
+                        <Badge variant="secondary" className={isMobile ? "text-[10px] h-5" : ""}>
                           {tipoOptions.find((t) => t.value === selectedCita.tipo)?.label}
                         </Badge>
                       )}
                       {estadoOptions.find((e) => e.value === selectedCita.estado) && (
-                        <Badge
-                          className={`${
-                            estadoOptions.find((e) => e.value === selectedCita.estado)?.color
-                          } text-white`}
-                        >
+                        <Badge className={`${estadoOptions.find((e) => e.value === selectedCita.estado)?.color} text-white ${isMobile ? "text-[10px] h-5" : ""}`}>
                           {estadoOptions.find((e) => e.value === selectedCita.estado)?.label}
                         </Badge>
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Button variant="outline" size="icon" onClick={handleEditClick}>
-                      <Edit className="h-4 w-4" />
+                  <div className="flex items-center space-x-1 shrink-0">
+                    <Button variant="outline" size="icon" className={isMobile ? "h-8 w-8" : ""} onClick={handleEditClick}>
+                      <Edit className="h-3.5 w-3.5 md:h-4 md:w-4" />
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => {
-                        setShowDetailDialog(false)
-                        setShowDeleteDialog(true)
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4 text-red-500" />
+                    <Button variant="outline" size="icon" className={isMobile ? "h-8 w-8" : ""} onClick={() => {
+                      setShowDetailDialog(false)
+                      setShowDeleteDialog(true)
+                    }}>
+                      <Trash2 className="h-3.5 w-3.5 md:h-4 md:w-4 text-red-500" />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => setShowDetailDialog(false)}>
-                      <X className="h-4 w-4" />
+                    <Button variant="ghost" size="icon" className={isMobile ? "h-8 w-8" : ""} onClick={() => setShowDetailDialog(false)}>
+                      <X className="h-3.5 w-3.5 md:h-4 md:w-4" />
                     </Button>
                   </div>
                 </div>
               </DialogHeader>
 
-              <div className="space-y-4 py-4">
-                <Card className="p-4 space-y-3">
-                  <div className="flex items-center space-x-3 text-sm">
-                    <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+              <div className={isMobile ? "space-y-3 overflow-y-auto flex-1" : "space-y-4 py-4"}>
+                <Card className={`${isMobile ? "p-3 space-y-2" : "p-4 space-y-3"}`}>
+                  <div className="flex items-center gap-2 md:gap-3 text-xs md:text-sm">
+                    <CalendarIcon className="h-3.5 w-3.5 md:h-4 md:w-4 text-muted-foreground shrink-0" />
                     <span className="font-medium">
-                      {format(new Date(selectedCita.fechaHora), "EEEE d 'de' MMMM 'de' yyyy", { locale: es })}
+                      {format(new Date(selectedCita.fechaHora), isMobile ? "d MMM yyyy" : "EEEE d 'de' MMMM 'de' yyyy", { locale: es })}
                     </span>
                   </div>
-
-                  <div className="flex items-center space-x-3 text-sm">
-                    <Clock className="h-4 w-4 text-muted-foreground" />
-                    <span>
-                      {format(new Date(selectedCita.fechaHora), 'HH:mm', { locale: es })} ({selectedCita.duracion} min)
-                    </span>
+                  <div className="flex items-center gap-2 md:gap-3 text-xs md:text-sm">
+                    <Clock className="h-3.5 w-3.5 md:h-4 md:w-4 text-muted-foreground shrink-0" />
+                    <span>{format(new Date(selectedCita.fechaHora), 'HH:mm', { locale: es })} ({selectedCita.duracion} min)</span>
                   </div>
-
                   {selectedCita.lead && (
-                    <div className="flex items-center space-x-3 text-sm">
-                      <User className="h-4 w-4 text-muted-foreground" />
+                    <div className="flex items-center gap-2 md:gap-3 text-xs md:text-sm">
+                      <User className="h-3.5 w-3.5 md:h-4 md:w-4 text-muted-foreground shrink-0" />
                       <div>
                         <p className="font-medium">{selectedCita.lead.nombre}</p>
-                        <p className="text-muted-foreground text-xs">{selectedCita.lead.email}</p>
+                        <p className="text-muted-foreground text-[10px] md:text-xs">{selectedCita.lead.email}</p>
                       </div>
                     </div>
                   )}
-
                   {selectedCita.lead?.empresa && (
-                    <div className="flex items-center space-x-3 text-sm">
-                      <Building2 className="h-4 w-4 text-muted-foreground" />
+                    <div className="flex items-center gap-2 md:gap-3 text-xs md:text-sm">
+                      <Building2 className="h-3.5 w-3.5 md:h-4 md:w-4 text-muted-foreground shrink-0" />
                       <span>{selectedCita.lead.empresa}</span>
                     </div>
                   )}
-
                   {selectedCita.ubicacion && (
-                    <div className="flex items-center space-x-3 text-sm">
-                      <MapPin className="h-4 w-4 text-muted-foreground" />
+                    <div className="flex items-center gap-2 md:gap-3 text-xs md:text-sm">
+                      <MapPin className="h-3.5 w-3.5 md:h-4 md:w-4 text-muted-foreground shrink-0" />
                       <span>{selectedCita.ubicacion}</span>
                     </div>
                   )}
-
                   {selectedCita.linkReunion && (
-                    <div className="flex items-center space-x-3 text-sm">
-                      <Video className="h-4 w-4 text-muted-foreground" />
-                      <a
-                        href={selectedCita.linkReunion}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:underline"
-                      >
+                    <div className="flex items-center gap-2 md:gap-3 text-xs md:text-sm">
+                      <Video className="h-3.5 w-3.5 md:h-4 md:w-4 text-muted-foreground shrink-0" />
+                      <a href={selectedCita.linkReunion} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
                         Unirse a la reunión
                       </a>
                     </div>
                   )}
                 </Card>
-
                 {selectedCita.descripcion && (
-                  <div className="space-y-2">
-                    <Label>Descripción</Label>
-                    <p className="text-sm text-muted-foreground bg-muted p-3 rounded-md">
-                      {selectedCita.descripcion}
-                    </p>
+                  <div className="space-y-1 md:space-y-2">
+                    <Label className={isMobile ? "text-xs" : ""}>Descripción</Label>
+                    <p className="text-xs md:text-sm text-muted-foreground bg-muted p-2 md:p-3 rounded-md">{selectedCita.descripcion}</p>
                   </div>
                 )}
-
                 {selectedCita.servicio && (
-                  <div className="space-y-2">
-                    <Label>Servicio</Label>
-                    <Card className="p-3">
-                      <p className="font-medium text-sm">{selectedCita.servicio.nombre}</p>
+                  <div className="space-y-1 md:space-y-2">
+                    <Label className={isMobile ? "text-xs" : ""}>Servicio</Label>
+                    <Card className={`${isMobile ? "p-2" : "p-3"}`}>
+                      <p className="font-medium text-xs md:text-sm">{selectedCita.servicio.nombre}</p>
                       {selectedCita.servicio.descripcion && (
-                        <p className="text-xs text-muted-foreground mt-1">{selectedCita.servicio.descripcion}</p>
+                        <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5 md:mt-1">{selectedCita.servicio.descripcion}</p>
                       )}
                     </Card>
                   </div>
