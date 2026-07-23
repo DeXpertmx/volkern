@@ -186,9 +186,26 @@ export async function calculate_property_quality_score(input: {
   }
 
   // Bonus: certificación energética
-  if ((property.customFieldValues as any)?.certificacion_energetica) {
+  const cf = (property.customFieldValues as any) || {};
+  if (cf.certificacion_energetica) {
     score += 5;
-    details["Certificación energética"] = 5;
+    details["Certificación energética (letra)"] = 5;
+  }
+  if (cf.consumo_energetico) {
+    score += 3;
+    details["Consumo energético"] = 3;
+  }
+  if (cf.emisiones_co2) {
+    score += 2;
+    details["Emisiones CO₂"] = 2;
+  }
+  if (cf.organismo_certificador) {
+    score += 2;
+    details["Organismo certificador"] = 2;
+  }
+  if (cf.fecha_certificado && cf.caducidad_certificado) {
+    score += 3;
+    details["Certificado vigente"] = 3;
   }
 
   const cappedScore = Math.min(score, 100);

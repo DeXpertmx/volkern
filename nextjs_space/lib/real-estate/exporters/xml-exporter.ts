@@ -95,6 +95,12 @@ export function generateIdealistaFeed(
       ${p.bathrooms ? tag('bathrooms', p.bathrooms) : ''}
       ${tag('condition', 'good')}
       ${p.energyCert ? tag('energyCertification', p.energyCert) : ''}
+      ${p.energyCertConsumption ? tag('energyConsumption', `${p.energyCertConsumption} kWh/m²/year`) : ''}
+      ${p.energyCertEmission ? tag('energyEmission', `${p.energyCertEmission} kg CO₂/m²/year`) : ''}
+      ${p.energyCertBody ? tag('energyCertBody', p.energyCertBody) : ''}
+      ${p.energyCertDate ? tag('energyCertDate', p.energyCertDate) : ''}
+      ${p.energyCertExpiry ? tag('energyCertExpiry', p.energyCertExpiry) : ''}
+      ${p.energyCertUrl ? tag('energyCertUrl', p.energyCertUrl) : ''}
       ${p.yearBuilt ? tag('yearBuilt', p.yearBuilt) : ''}
       <location>
         ${p.address ? tag('address', p.address) : ''}

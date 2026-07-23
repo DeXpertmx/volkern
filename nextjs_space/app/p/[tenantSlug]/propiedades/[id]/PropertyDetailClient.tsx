@@ -227,6 +227,12 @@ export default function PropertyDetailClient({
                 {property.energyCert && (
                   <FeatureCard icon="⚡" label="Cert. Energética" value={property.energyCert} />
                 )}
+                {property.energyCertConsumption && (
+                  <FeatureCard icon="⚡" label="Consumo" value={`${property.energyCertConsumption} kWh/m²/año`} />
+                )}
+                {property.energyCertEmission && (
+                  <FeatureCard icon="⚡" label="Emisiones CO₂" value={`${property.energyCertEmission} kg/m²/año`} />
+                )}
               </div>
             </div>
 

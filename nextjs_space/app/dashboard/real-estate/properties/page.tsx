@@ -96,6 +96,13 @@ const initialForm = {
   bedrooms: '',
   bathrooms: '',
   status: 'disponible',
+  energyCert: '',
+  energyCertConsumption: '',
+  energyCertEmission: '',
+  energyCertBody: '',
+  energyCertDate: '',
+  energyCertExpiry: '',
+  energyCertUrl: '',
 };
 
 type FormData = typeof initialForm;
@@ -328,6 +335,13 @@ export default function RealEstatePropertiesPage() {
         bedrooms: form.bedrooms ? parseInt(form.bedrooms) : undefined,
         bathrooms: form.bathrooms ? parseInt(form.bathrooms) : undefined,
         status: form.status,
+        energyCert: form.energyCert || undefined,
+        energyCertConsumption: form.energyCertConsumption ? parseFloat(form.energyCertConsumption) : undefined,
+        energyCertEmission: form.energyCertEmission ? parseFloat(form.energyCertEmission) : undefined,
+        energyCertBody: form.energyCertBody || undefined,
+        energyCertDate: form.energyCertDate || undefined,
+        energyCertExpiry: form.energyCertExpiry || undefined,
+        energyCertUrl: form.energyCertUrl || undefined,
       };
 
       const res = await apiFetch('/api/real-estate/properties', {
@@ -1036,6 +1050,83 @@ export default function RealEstatePropertiesPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            {/* Certificación Energética */}
+            <div className="border-t pt-4">
+              <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                ⚡ Certificación Energética
+              </h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Clasificación</Label>
+                  <Select
+                    value={form.energyCert}
+                    onValueChange={(v) => setForm((prev) => ({ ...prev, energyCert: v }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {['A', 'B', 'C', 'D', 'E', 'F', 'G', 'En trámite'].map((c) => (
+                        <SelectItem key={c} value={c}>{c}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Consumo Energético</Label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    value={form.energyCertConsumption}
+                    onChange={(e) => setForm((prev) => ({ ...prev, energyCertConsumption: e.target.value }))}
+                    placeholder="kWh/m²/año"
+                  />
+                </div>
+                <div>
+                  <Label>Emisiones CO₂</Label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    value={form.energyCertEmission}
+                    onChange={(e) => setForm((prev) => ({ ...prev, energyCertEmission: e.target.value }))}
+                    placeholder="kg CO₂/m²/año"
+                  />
+                </div>
+                <div>
+                  <Label>Organismo Certificador</Label>
+                  <Input
+                    value={form.energyCertBody}
+                    onChange={(e) => setForm((prev) => ({ ...prev, energyCertBody: e.target.value }))}
+                    placeholder="Ej: IDAE, ICAEN..."
+                  />
+                </div>
+                <div>
+                  <Label>Fecha del Certificado</Label>
+                  <Input
+                    type="date"
+                    value={form.energyCertDate}
+                    onChange={(e) => setForm((prev) => ({ ...prev, energyCertDate: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label>Caducidad</Label>
+                  <Input
+                    type="date"
+                    value={form.energyCertExpiry}
+                    onChange={(e) => setForm((prev) => ({ ...prev, energyCertExpiry: e.target.value }))}
+                  />
+                </div>
+                <div className="col-span-2">
+                  <Label>Documento (URL)</Label>
+                  <Input
+                    value={form.energyCertUrl}
+                    onChange={(e) => setForm((prev) => ({ ...prev, energyCertUrl: e.target.value }))}
+                    placeholder="https://..."
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
