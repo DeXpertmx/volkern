@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -50,6 +50,29 @@ export default function EscanearGastoPage() {
   const [scanResult, setScanResult] = useState<ScanResult | null>(null)
   const [saving, setSaving] = useState(false)
 
+  useEffect(() => {
+    if (step !== 'camera') return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        })
+        if (cancelled) { stream.getTracks().forEach(t => t.stop()); return }
+        streamRef.current = stream
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream
+        }
+      } catch {
+        if (!cancelled) {
+          toast.error('No se pudo acceder a la cámara. Usa la subida de imagen en su lugar.')
+          setStep('select')
+        }
+      }
+    })()
+    return () => { cancelled = true }
+  }, [step])
+
   const [form, setForm] = useState({
     description: '',
     amount: '',
@@ -59,22 +82,10 @@ export default function EscanearGastoPage() {
     receiptUrl: '',
   })
 
-  const startCamera = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
-      })
-      streamRef.current = stream
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        videoRef.current.play()
-      }
-      setStep('camera')
-      setCapturedImage(null)
-      setScanResult(null)
-    } catch {
-      toast.error('No se pudo acceder a la cámara. Usa la subida de imagen en su lugar.')
-    }
+  const startCamera = useCallback(() => {
+    setStep('camera')
+    setCapturedImage(null)
+    setScanResult(null)
   }, [])
 
   const capturePhoto = useCallback(() => {
@@ -333,7 +344,7 @@ export default function EscanearGastoPage() {
         <Card>
           <CardContent className="p-4">
             <div className="relative rounded-xl overflow-hidden bg-black">
-              <video ref={videoRef} autoPlay playsInline className="w-full max-h-[60vh] object-contain" />
+              <video ref={videoRef} autoPlay playsInline muted className="w-full max-h-[60vh] object-cover" />
             </div>
             <div className="flex gap-3 mt-4 justify-center">
               <Button variant="outline" onClick={discardAndBack}>Cancelar</Button>
