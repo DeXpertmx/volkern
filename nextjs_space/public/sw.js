@@ -9,6 +9,7 @@ const STATIC_ASSETS = [
   '/volkern-logo.png',
   '/manifest.json',
   '/favicon.ico',
+  '/dashboard/finanzas/gastos/escanear',
 ]
 
 const API_CACHE_PATTERNS = [

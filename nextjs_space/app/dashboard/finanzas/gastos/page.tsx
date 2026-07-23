@@ -1,10 +1,11 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Search, Receipt, Filter, Eye, ShieldCheck, AlertTriangle } from "lucide-react"
+import { Plus, Search, Receipt, Filter, Eye, ShieldCheck, AlertTriangle, Scan } from "lucide-react"
 import { 
   Sheet, 
   SheetContent, 
@@ -31,9 +32,16 @@ export default function GastosPage() {
           <h1 className="text-3xl font-black tracking-tight uppercase">Listado de Gastos</h1>
           <p className="text-muted-foreground">Control detallado de cada egreso operativo.</p>
         </div>
-        <Button className="rounded-xl font-bold uppercase text-xs tracking-wider">
-          <Plus className="w-4 h-4 mr-2" /> Registrar Gasto
-        </Button>
+        <div className="flex gap-2">
+          <Link href="/dashboard/finanzas/gastos/escanear">
+            <Button variant="outline" className="rounded-xl font-bold uppercase text-xs tracking-wider">
+              <Scan className="w-4 h-4 mr-2" /> Escanear
+            </Button>
+          </Link>
+          <Button className="rounded-xl font-bold uppercase text-xs tracking-wider">
+            <Plus className="w-4 h-4 mr-2" /> Registrar Gasto
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">

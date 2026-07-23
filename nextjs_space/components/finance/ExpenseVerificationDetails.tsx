@@ -12,7 +12,9 @@ import {
   AlertTriangle,
   FileDigit,
   Fingerprint,
-  Navigation
+  Navigation,
+  ExternalLink,
+  Image as ImageIcon
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -37,6 +39,7 @@ interface ExpenseVerificationDetailsProps {
     exifLat?: number
     exifLng?: number
     isAnomaly: boolean
+    receiptUrl?: string | null
   }
   tenantConfig: {
     baseLatitude: number
@@ -58,7 +61,41 @@ export default function ExpenseVerificationDetails({ expense, tenantConfig }: Ex
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-      {/* Left Column: Integrity & Chain of Trust */}
+      {/* Full Width: Receipt Image */}
+      {expense.receiptUrl && (
+        <div className="lg:col-span-12">
+          <Card className="border-none shadow-premium overflow-hidden">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-xs font-black uppercase tracking-widest flex items-center gap-2">
+                <ImageIcon className="w-4 h-4 text-indigo-500" />
+                Comprobante Original
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="relative rounded-xl overflow-hidden bg-slate-100 max-h-[400px] flex items-center justify-center">
+                <img
+                  src={`/api/erp/expenses/${expense.id}/receipt`}
+                  alt="Comprobante del gasto"
+                  className="max-w-full max-h-[400px] object-contain"
+                />
+              </div>
+              <div className="mt-3">
+                <a
+                  href={`/api/erp/expenses/${expense.id}/receipt`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  Abrir comprobante en nueva pestaña
+                </a>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Header: Verification */}
       <div className="lg:col-span-12">
          <div className="flex items-center gap-3 mb-4">
              <div className="p-2 bg-indigo-600 rounded-xl">

@@ -8,11 +8,20 @@ import { withTenantAuth } from '@/lib/api-key-auth';
  */
 export const GET = withTenantAuth(async (request, auth) => {
   try {
+    const { searchParams } = new URL(request.url);
+    const search = searchParams.get('search');
+
+    const where: any = {
+      tenantId: auth.tenant!.id,
+      active: true
+    };
+
+    if (search) {
+      where.name = { contains: search, mode: 'insensitive' };
+    }
+
     const suppliers = await prisma.supplier.findMany({
-      where: {
-        tenantId: auth.tenant!.id,
-        active: true
-      },
+      where,
       orderBy: { name: 'asc' }
     });
 
