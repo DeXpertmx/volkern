@@ -44,6 +44,12 @@ const PRESETS: Record<string, Array<{
     { fieldKey: 'trastero', label: 'Trastero', type: 'boolean' },
     { fieldKey: 'orientacion', label: 'Orientación', type: 'select', options: ['Norte', 'Sur', 'Este', 'Oeste', 'Noreste', 'Noroeste', 'Sureste', 'Suroeste'] },
     { fieldKey: 'certificacion_energetica', label: 'Certificación Energética', type: 'select', options: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'En trámite'] },
+    { fieldKey: 'consumo_energetico', label: 'Consumo Energético', type: 'number', unidad: 'kWh/m²/año', placeholder: '120.5' },
+    { fieldKey: 'emisiones_co2', label: 'Emisiones CO₂', type: 'number', unidad: 'kg CO₂/m²/año', placeholder: '25.3' },
+    { fieldKey: 'organismo_certificador', label: 'Organismo Certificador', type: 'text', placeholder: 'Nombre del organismo emisor' },
+    { fieldKey: 'fecha_certificado', label: 'Fecha del Certificado', type: 'date' },
+    { fieldKey: 'caducidad_certificado', label: 'Caducidad del Certificado', type: 'date' },
+    { fieldKey: 'documento_certificado', label: 'Documento del Certificado', type: 'text', placeholder: 'URL del PDF del certificado' },
 
     // === Visibilidad y SEO ===
     { fieldKey: 'destacada', label: 'Propiedad Destacada', type: 'boolean' },

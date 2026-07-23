@@ -48,7 +48,13 @@ export interface InmuebleParsed {
   hasHeating: boolean;                // calefaccion
   furnished: boolean;                 // amueblado
   orientation: string | null;         // orientacion
-  energyCert: string | null;          // certificacion_energetica
+  energyCert: string | null;          // certificacion_energetica (letra A-G)
+  energyCertConsumption: number | null;  // consumo_energetico (kWh/m²/año)
+  energyCertEmission: number | null;     // emisiones_co2 (kg CO₂/m²/año)
+  energyCertBody: string | null;         // organismo_certificador
+  energyCertDate: string | null;         // fecha_certificado
+  energyCertExpiry: string | null;       // caducidad_certificado
+  energyCertUrl: string | null;          // documento_certificado (URL PDF)
   status: string;                     // estado: 'disponible' | 'reservada' | 'vendida' | 'alquilada'
   featured: boolean;                  // destacada
   longDescription: string | null;     // descripcion_larga
@@ -143,6 +149,12 @@ export function parseInmueble(item: CatalogoItem): InmuebleParsed {
     furnished: Boolean(f.amueblado),
     orientation: f.orientacion || null,
     energyCert: f.certificacion_energetica || null,
+    energyCertConsumption: f.consumo_energetico ? Number(f.consumo_energetico) : null,
+    energyCertEmission: f.emisiones_co2 ? Number(f.emisiones_co2) : null,
+    energyCertBody: f.organismo_certificador || null,
+    energyCertDate: f.fecha_certificado || null,
+    energyCertExpiry: f.caducidad_certificado || null,
+    energyCertUrl: f.documento_certificado || null,
     status: f.estado || 'disponible',
     featured: Boolean(f.destacada),
     longDescription: f.descripcion_larga || null,
@@ -388,6 +400,12 @@ export function buildCustomFieldValues(
   if (data.furnished) result.amueblado = true;
   if (data.orientation) result.orientacion = data.orientation;
   if (data.energyCert) result.certificacion_energetica = data.energyCert;
+  if (data.energyCertConsumption) result.consumo_energetico = data.energyCertConsumption;
+  if (data.energyCertEmission) result.emisiones_co2 = data.energyCertEmission;
+  if (data.energyCertBody) result.organismo_certificador = data.energyCertBody;
+  if (data.energyCertDate) result.fecha_certificado = data.energyCertDate;
+  if (data.energyCertExpiry) result.caducidad_certificado = data.energyCertExpiry;
+  if (data.energyCertUrl) result.documento_certificado = data.energyCertUrl;
   if (data.status) result.estado = data.status;
   if (data.featured) result.destacada = true;
   if (data.longDescription) result.descripcion_larga = data.longDescription;

@@ -91,6 +91,12 @@ export const PATCH = withTenantAuth(async (req, auth, { params }: { params: { id
       { key: 'status', field: 'estado', type: 'string' },
       { key: 'orientation', field: 'orientacion', type: 'string' },
       { key: 'energyCert', field: 'certificacion_energetica', type: 'string' },
+      { key: 'energyCertConsumption', field: 'consumo_energetico', type: 'number' },
+      { key: 'energyCertEmission', field: 'emisiones_co2', type: 'number' },
+      { key: 'energyCertBody', field: 'organismo_certificador', type: 'string' },
+      { key: 'energyCertDate', field: 'fecha_certificado', type: 'string' },
+      { key: 'energyCertExpiry', field: 'caducidad_certificado', type: 'string' },
+      { key: 'energyCertUrl', field: 'documento_certificado', type: 'string' },
       { key: 'longDescription', field: 'descripcion_larga', type: 'string' },
       { key: 'seoTags', field: 'tags_seo', type: 'string' },
       { key: 'amenities', field: 'amenidades', type: 'string' },
@@ -108,6 +114,10 @@ export const PATCH = withTenantAuth(async (req, auth, { params }: { params: { id
       { key: 'hasGarden', field: 'jardin' },
       { key: 'hasStorageRoom', field: 'trastero' },
       { key: 'furnished', field: 'amueblado' },
+      { key: 'hasTerrace', field: 'terraza' },
+      { key: 'hasBalcony', field: 'balcon' },
+      { key: 'hasAirConditioning', field: 'aire_acondicionado' },
+      { key: 'hasHeating', field: 'calefaccion' },
       { key: 'featured', field: 'destacada' },
     ];
 

@@ -345,6 +345,8 @@ export function propertyToMLS(
 
     // Eficiencia energética
     ...(property.energyCert ? { energyCert: mapEnergyCert(property.energyCert) } : {}),
+    ...(property.energyCertConsumption ? { energyCertConsumption: `${property.energyCertConsumption} kWh/m²/year` } : {}),
+    ...(property.energyCertEmission ? { energyCertEmission: `${property.energyCertEmission} kg CO₂/m²/year` } : {}),
 
     // Antigüedad
     ...(property.yearBuilt ? { yearBuilt: property.yearBuilt } : {}),
