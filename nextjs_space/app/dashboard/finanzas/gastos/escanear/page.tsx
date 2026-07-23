@@ -92,20 +92,48 @@ export default function EscanearGastoPage() {
     }
   }, [])
 
-  const capturePhoto = useCallback(() => {
+  const capturePhoto = useCallback(async () => {
     const video = videoRef.current
     if (!video) return
-    if (video.videoWidth === 0 || video.videoHeight === 0) {
-      toast.error('La cámara no está lista. Intenta de nuevo.')
-      return
+    let dataUrl: string | null = null
+    const track = streamRef.current?.getVideoTracks()?.[0]
+    if (track && 'takePhoto' in (window as any).ImageCapture?.prototype) {
+      try {
+        const capture = new (window as any).ImageCapture(track)
+        const blob = await capture.takePhoto()
+        dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(reader.result as string)
+          reader.onerror = reject
+          reader.readAsDataURL(blob)
+        })
+      } catch {}
     }
-    const c = document.createElement('canvas')
-    c.width = video.videoWidth
-    c.height = video.videoHeight
-    const ctx = c.getContext('2d')
-    if (!ctx) return
-    ctx.drawImage(video, 0, 0)
-    const dataUrl = c.toDataURL('image/jpeg', 0.92)
+    if (!dataUrl && typeof createImageBitmap !== 'undefined') {
+      try {
+        const bitmap = await createImageBitmap(video)
+        const c = document.createElement('canvas')
+        c.width = bitmap.width
+        c.height = bitmap.height
+        const ctx = c.getContext('2d')
+        if (ctx) {
+          ctx.drawImage(bitmap, 0, 0)
+          dataUrl = c.toDataURL('image/jpeg', 0.92)
+        }
+        bitmap.close()
+      } catch {}
+    }
+    if (!dataUrl) {
+      if (video.videoWidth === 0 || video.videoHeight === 0) return
+      const c = document.createElement('canvas')
+      c.width = video.videoWidth
+      c.height = video.videoHeight
+      const ctx = c.getContext('2d')
+      if (!ctx) return
+      ctx.drawImage(video, 0, 0)
+      dataUrl = c.toDataURL('image/jpeg', 0.92)
+    }
+    if (!dataUrl) return
     setCapturedImage(dataUrl)
     setStep('preview')
     stopStream()
@@ -454,8 +482,8 @@ export default function EscanearGastoPage() {
             autoPlay
             playsInline
             muted
-            className="flex-1 w-full object-cover"
-            style={{ WebkitTransform: 'translateZ(0)', transform: 'translateZ(0)' }}
+            className="flex-1 w-full"
+            style={{ objectFit: 'cover' }}
           />
           <div className="absolute top-4 left-4">
             <Button variant="ghost" size="icon" className="rounded-full bg-black/40 text-white hover:bg-black/60" onClick={backToSelect}>
