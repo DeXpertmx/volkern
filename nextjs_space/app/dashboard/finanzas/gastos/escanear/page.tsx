@@ -93,16 +93,40 @@ export default function EscanearGastoPage() {
     }
   }, [])
 
-  const capturePhoto = useCallback(() => {
+  const capturePhoto = useCallback(async () => {
     const video = videoRef.current
     const canvas = canvasRef.current
     if (!video || !canvas) return
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    ctx.drawImage(video, 0, 0)
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.9)
+
+    let dataUrl: string | null = null
+
+    const track = streamRef.current?.getVideoTracks()?.[0]
+    if (track && 'ImageCapture' in window) {
+      try {
+        const capture = new (window as any).ImageCapture(track)
+        const blob = await capture.takePhoto({ imageWidth: 1920, imageHeight: 1080 })
+        dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(reader.result as string)
+          reader.onerror = reject
+          reader.readAsDataURL(blob)
+        })
+      } catch {}
+    }
+
+    if (!dataUrl) {
+      if (video.videoWidth === 0 || video.videoHeight === 0) {
+        toast.error('La cámara no está lista. Intenta de nuevo.')
+        return
+      }
+      canvas.width = video.videoWidth
+      canvas.height = video.videoHeight
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
+      ctx.drawImage(video, 0, 0)
+      dataUrl = canvas.toDataURL('image/jpeg', 0.92)
+    }
+
     setCapturedImage(dataUrl)
     setStep('preview')
     stopStream()
@@ -471,7 +495,7 @@ export default function EscanearGastoPage() {
         </div>
       )}
 
-      <canvas ref={canvasRef} className="hidden" />
+      <canvas ref={canvasRef} style={{ position: 'fixed', left: '-9999px', top: 0, width: 1, height: 1 }} />
     </>
   )
 }
