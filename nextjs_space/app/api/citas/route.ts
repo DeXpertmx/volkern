@@ -23,34 +23,24 @@ export const GET = withTenantAuth(async (request, auth) => {
     const sort = searchParams.get('sort')
 
     const whereClause: any = {
-      tenantId: auth.tenant!.id  // Filtrar por tenant
+      tenantId: auth.tenant!.id
     }
 
-    if (estado && estado !== 'all') {
-      if (estado.includes(',')) {
-        whereClause.estado = { in: estado.split(',') }
-      } else {
-        whereClause.estado = estado
-      }
-    }
+    const estadosValidos = estado && estado !== 'all'
+      ? estado.split(',').map((e: string) => e.toLowerCase().trim())
+      : null
 
     if (tipo && tipo !== 'all') {
       whereClause.tipo = tipo
     }
 
-    // Filtro por un día específico
     if (fecha) {
       const fechaInicioDay = new Date(fecha)
       const fechaFinDay = new Date(fecha)
       fechaFinDay.setDate(fechaFinDay.getDate() + 1)
-
-      whereClause.fechaHora = {
-        gte: fechaInicioDay,
-        lt: fechaFinDay
-      }
+      whereClause.fechaHora = { gte: fechaInicioDay, lt: fechaFinDay }
     }
 
-    // Filtro por rango de fechas (para calendario)
     if (fechaInicio && fechaFin) {
       whereClause.fechaHora = {
         gte: new Date(fechaInicio),
@@ -58,19 +48,17 @@ export const GET = withTenantAuth(async (request, auth) => {
       }
     }
 
-    // El proxy de prisma redirige a la DB física del tenant
     const citas = await prisma.cita.findMany({
       where: whereClause,
-      include: {
-        lead: true,
-        servicio: true
-      },
-      orderBy: {
-        fechaHora: sort === 'asc' ? 'asc' : 'desc'
-      }
+      include: { lead: true, servicio: true },
+      orderBy: { fechaHora: sort === 'asc' ? 'asc' : 'desc' }
     })
 
-    return NextResponse.json(citas)
+    const result = estadosValidos
+      ? citas.filter(c => estadosValidos.includes(c.estado.toLowerCase()))
+      : citas
+
+    return NextResponse.json(result)
   } catch (error: any) {
     console.error('CRITICAL ERROR fetching citas:', error?.message || error)
     return NextResponse.json(
