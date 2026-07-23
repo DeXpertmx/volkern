@@ -39,7 +39,6 @@ const CATEGORIES = [
 export default function EscanearGastoPage() {
   const router = useRouter()
   const videoRef = useRef<HTMLVideoElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
 
@@ -93,40 +92,20 @@ export default function EscanearGastoPage() {
     }
   }, [])
 
-  const capturePhoto = useCallback(async () => {
+  const capturePhoto = useCallback(() => {
     const video = videoRef.current
-    const canvas = canvasRef.current
-    if (!video || !canvas) return
-
-    let dataUrl: string | null = null
-
-    const track = streamRef.current?.getVideoTracks()?.[0]
-    if (track && 'ImageCapture' in window) {
-      try {
-        const capture = new (window as any).ImageCapture(track)
-        const blob = await capture.takePhoto({ imageWidth: 1920, imageHeight: 1080 })
-        dataUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader()
-          reader.onload = () => resolve(reader.result as string)
-          reader.onerror = reject
-          reader.readAsDataURL(blob)
-        })
-      } catch {}
+    if (!video) return
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
+      toast.error('La cámara no está lista. Intenta de nuevo.')
+      return
     }
-
-    if (!dataUrl) {
-      if (video.videoWidth === 0 || video.videoHeight === 0) {
-        toast.error('La cámara no está lista. Intenta de nuevo.')
-        return
-      }
-      canvas.width = video.videoWidth
-      canvas.height = video.videoHeight
-      const ctx = canvas.getContext('2d')
-      if (!ctx) return
-      ctx.drawImage(video, 0, 0)
-      dataUrl = canvas.toDataURL('image/jpeg', 0.92)
-    }
-
+    const c = document.createElement('canvas')
+    c.width = video.videoWidth
+    c.height = video.videoHeight
+    const ctx = c.getContext('2d')
+    if (!ctx) return
+    ctx.drawImage(video, 0, 0)
+    const dataUrl = c.toDataURL('image/jpeg', 0.92)
     setCapturedImage(dataUrl)
     setStep('preview')
     stopStream()
@@ -495,7 +474,6 @@ export default function EscanearGastoPage() {
         </div>
       )}
 
-      <canvas ref={canvasRef} style={{ position: 'fixed', left: '-9999px', top: 0, width: 1, height: 1 }} />
     </>
   )
 }
