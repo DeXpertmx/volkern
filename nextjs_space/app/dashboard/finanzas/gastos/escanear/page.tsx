@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
-import { Camera, Receipt, Scan, Loader2, ArrowLeft, CheckCircle2, Image as ImageIcon } from 'lucide-react'
+import { Camera, Receipt, Scan, Loader2, ArrowLeft, CheckCircle2, Image as ImageIcon, X } from 'lucide-react'
 
 type PageStep = 'select' | 'camera' | 'preview' | 'form'
 
@@ -57,11 +57,6 @@ export default function EscanearGastoPage() {
     const stream = streamRef.current
     if (!stream) return
     video.srcObject = stream
-    const onError = () => {
-      if (video.error) console.error('[Video]', video.error)
-    }
-    video.addEventListener('error', onError)
-    return () => video.removeEventListener('error', onError)
   }, [step])
 
   const [form, setForm] = useState({
@@ -73,19 +68,28 @@ export default function EscanearGastoPage() {
     receiptUrl: '',
   })
 
+  const stopStream = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop())
+      streamRef.current = null
+    }
+  }
+
   const startCamera = useCallback(async () => {
     setCapturedImage(null)
     setScanResult(null)
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+        video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
         audio: false,
       })
       streamRef.current = stream
       setStep('camera')
     } catch (err: any) {
       console.error('[Camera]', err)
-      toast.error(err?.name === 'NotAllowedError' ? 'Permiso de cámara denegado. Ajústalo en los ajustes del navegador.' : 'No se pudo acceder a la cámara. Usa la subida de imagen en su lugar.')
+      toast.error(err?.name === 'NotAllowedError'
+        ? 'Permiso de cámara denegado. Ajústalo en los ajustes del navegador.'
+        : 'No se pudo acceder a la cámara.')
     }
   }, [])
 
@@ -93,7 +97,6 @@ export default function EscanearGastoPage() {
     const video = videoRef.current
     const canvas = canvasRef.current
     if (!video || !canvas) return
-
     canvas.width = video.videoWidth
     canvas.height = video.videoHeight
     const ctx = canvas.getContext('2d')
@@ -102,11 +105,7 @@ export default function EscanearGastoPage() {
     const dataUrl = canvas.toDataURL('image/jpeg', 0.9)
     setCapturedImage(dataUrl)
     setStep('preview')
-
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(t => t.stop())
-      streamRef.current = null
-    }
+    stopStream()
   }, [])
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -121,7 +120,7 @@ export default function EscanearGastoPage() {
     reader.readAsDataURL(file)
   }, [])
 
-  const compressImage = async (dataUrl: string, maxDim = 1920, quality = 0.7): Promise<Blob> => {
+  const compressImage = async (dataUrl: string, maxDim = 1200, quality = 0.6): Promise<Blob> => {
     return new Promise((resolve, reject) => {
       const img = new Image()
       img.onload = () => {
@@ -149,11 +148,20 @@ export default function EscanearGastoPage() {
 
     try {
       const blob = await compressImage(capturedImage)
-      setScanMessage('Ejecutando OCR...')
+      setScanMessage('Enviando a OCR...')
       const formData = new FormData()
       formData.append('file', blob, 'receipt.jpg')
 
-      const res = await fetch('/api/erp/expenses/scan', { method: 'POST', body: formData })
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 25000)
+
+      const res = await fetch('/api/erp/expenses/scan', {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal,
+      })
+      clearTimeout(timeout)
+
       const data = await res.json()
 
       if (!res.ok) {
@@ -162,7 +170,7 @@ export default function EscanearGastoPage() {
         return
       }
 
-      setScanMessage('Analizando datos extraídos...')
+      setScanMessage('Analizando datos...')
       setScanResult(data)
       const ext = data.extracted
       setForm(prev => ({
@@ -175,8 +183,12 @@ export default function EscanearGastoPage() {
         receiptUrl: data.receiptUrl,
       }))
       setStep('form')
-    } catch {
-      toast.error('Error de conexión al escanear')
+    } catch (err: any) {
+      if (err?.name === 'AbortError') {
+        toast.error('El OCR está tardando demasiado. Intenta con una imagen más pequeña o usa "Sin OCR".')
+      } else {
+        toast.error('Error de conexión al escanear')
+      }
     } finally {
       setScanning(false)
       setScanMessage('')
@@ -184,10 +196,7 @@ export default function EscanearGastoPage() {
   }, [capturedImage])
 
   const goToForm = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(t => t.stop())
-      streamRef.current = null
-    }
+    stopStream()
     setStep('form')
   }
 
@@ -278,185 +287,191 @@ export default function EscanearGastoPage() {
   }
 
   const discardAndBack = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(t => t.stop())
-      streamRef.current = null
-    }
+    stopStream()
     router.push('/dashboard/finanzas/gastos')
   }
 
+  const backToSelect = () => {
+    stopStream()
+    setStep('select')
+  }
+
   return (
-    <div className="space-y-6 pb-12">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={discardAndBack}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <h1 className="text-2xl font-black tracking-tight">Escanear Gasto</h1>
-            <p className="text-sm text-muted-foreground">Toma una foto del ticket o sube una imagen</p>
+    <>
+      {step !== 'camera' && (
+        <div className="space-y-6 pb-12">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Button variant="ghost" size="icon" onClick={discardAndBack}>
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+              <div>
+                <h1 className="text-2xl font-black tracking-tight">Escanear Gasto</h1>
+                <p className="text-sm text-muted-foreground">Toma una foto del ticket o sube una imagen</p>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
 
-      {step === 'select' && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card className="cursor-pointer hover:border-primary/50 transition-all hover:shadow-lg" onClick={startCamera}>
-            <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
-              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-                <Camera className="h-8 w-8 text-primary" />
-              </div>
-              <div className="text-center">
-                <p className="font-bold text-lg">Cámara</p>
-                <p className="text-sm text-muted-foreground">Toma una foto del ticket</p>
-              </div>
-            </CardContent>
-          </Card>
+          {step === 'select' && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card className="cursor-pointer hover:border-primary/50 transition-all hover:shadow-lg" onClick={startCamera}>
+                <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
+                  <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Camera className="h-8 w-8 text-primary" />
+                  </div>
+                  <div className="text-center">
+                    <p className="font-bold text-lg">Cámara</p>
+                    <p className="text-sm text-muted-foreground">Toma una foto del ticket</p>
+                  </div>
+                </CardContent>
+              </Card>
 
-          <Card className="cursor-pointer hover:border-primary/50 transition-all hover:shadow-lg" onClick={() => fileInputRef.current?.click()}>
-            <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
-              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-                <ImageIcon className="h-8 w-8 text-primary" />
-              </div>
-              <div className="text-center">
-                <p className="font-bold text-lg">Subir Imagen</p>
-                <p className="text-sm text-muted-foreground">Selecciona una foto del ticket</p>
-              </div>
-            </CardContent>
-          </Card>
+              <Card className="cursor-pointer hover:border-primary/50 transition-all hover:shadow-lg" onClick={() => fileInputRef.current?.click()}>
+                <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
+                  <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                    <ImageIcon className="h-8 w-8 text-primary" />
+                  </div>
+                  <div className="text-center">
+                    <p className="font-bold text-lg">Subir Imagen</p>
+                    <p className="text-sm text-muted-foreground">Selecciona una foto del ticket</p>
+                  </div>
+                </CardContent>
+              </Card>
 
-          <Card className="cursor-pointer hover:border-primary/50 transition-all hover:shadow-lg" onClick={goToForm}>
-            <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
-              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-                <Receipt className="h-8 w-8 text-primary" />
-              </div>
-              <div className="text-center">
-                <p className="font-bold text-lg">Manual</p>
-                <p className="text-sm text-muted-foreground">Rellena los datos del gasto</p>
-              </div>
-            </CardContent>
-          </Card>
+              <Card className="cursor-pointer hover:border-primary/50 transition-all hover:shadow-lg" onClick={goToForm}>
+                <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
+                  <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Receipt className="h-8 w-8 text-primary" />
+                  </div>
+                  <div className="text-center">
+                    <p className="font-bold text-lg">Manual</p>
+                    <p className="text-sm text-muted-foreground">Rellena los datos del gasto</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
+
+          {step === 'preview' && capturedImage && (
+            <Card>
+              <CardContent className="p-4">
+                <div className="relative rounded-xl overflow-hidden bg-slate-100">
+                  <img src={capturedImage} alt="Captura" className="w-full max-h-[50vh] object-contain" />
+                </div>
+                <div className="flex gap-3 mt-4 justify-center flex-wrap">
+                  <Button variant="outline" onClick={goToForm}>
+                    <Receipt className="h-4 w-4 mr-2" /> Sin OCR
+                  </Button>
+                  <Button variant="outline" onClick={retake}>
+                    <Camera className="h-4 w-4 mr-2" /> Repetir
+                  </Button>
+                  <Button onClick={runScan} disabled={scanning} className="min-w-[180px]">
+                    {scanning ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Scan className="h-4 w-4 mr-2" />}
+                    {scanning ? (scanMessage || 'Escaneando...') : 'Escanear Ticket'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {scanning && scanMessage && (
+            <Card className="border-primary/20 bg-primary/5">
+              <CardContent className="flex items-center justify-center gap-3 py-6">
+                <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                <span className="text-sm font-bold text-primary">{scanMessage}</span>
+              </CardContent>
+            </Card>
+          )}
+
+          {(step === 'form') && (
+            <div className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    {scanResult ? <CheckCircle2 className="h-5 w-5 text-emerald-500" /> : <Receipt className="h-5 w-5" />}
+                    {scanResult ? 'Datos Extraídos' : 'Datos del Gasto'}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {form.receiptUrl && (
+                    <div className="rounded-xl overflow-hidden bg-slate-100 border max-h-[200px] flex items-center justify-center">
+                      <img src={capturedImage || ''} alt="Comprobante" className="max-w-full max-h-[200px] object-contain" />
+                    </div>
+                  )}
+                  <div>
+                    <Label>Descripción <span className="text-destructive">*</span></Label>
+                    <Input value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} placeholder="Ej: Compra en supermercado" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Importe <span className="text-destructive">*</span></Label>
+                      <Input type="number" step="0.01" value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} placeholder="0.00" />
+                    </div>
+                    <div>
+                      <Label>Fecha</Label>
+                      <Input type="date" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Proveedor</Label>
+                      <Input value={form.supplier} onChange={e => setForm(p => ({ ...p, supplier: e.target.value }))} placeholder="Nombre del proveedor" />
+                    </div>
+                    <div>
+                      <Label>Categoría</Label>
+                      <Select value={form.category} onValueChange={v => setForm(p => ({ ...p, category: v }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 pt-4">
+                    <Button variant="outline" className="flex-1" onClick={discardAndBack}>Descartar</Button>
+                    <Button className="flex-1" onClick={saveExpense} disabled={saving}>
+                      {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
+                      {saving ? 'Guardando...' : 'Guardar Gasto'}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </div>
       )}
-
-      <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
 
       {step === 'camera' && (
-        <Card>
-          <CardContent className="p-4">
-            <div className="relative rounded-xl overflow-hidden bg-black" style={{ minHeight: '300px' }}>
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className="absolute inset-0 w-full h-full object-contain"
-                style={{ WebkitTransform: 'translateZ(0)', transform: 'translateZ(0)' }}
-              />
-            </div>
-            <div className="flex gap-3 mt-4 justify-center">
-              <Button variant="outline" onClick={discardAndBack}>Cancelar</Button>
-              <Button onClick={capturePhoto}>
-                <Camera className="h-4 w-4 mr-2" /> Capturar
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {step === 'preview' && capturedImage && (
-        <Card>
-          <CardContent className="p-4">
-            <div className="relative rounded-xl overflow-hidden bg-slate-100">
-              <img src={capturedImage} alt="Captura" className="w-full max-h-[50vh] object-contain" />
-            </div>
-            <div className="flex gap-3 mt-4 justify-center">
-              <Button variant="outline" onClick={goToForm}>
-                <Receipt className="h-4 w-4 mr-2" /> Sin OCR
-              </Button>
-              <Button variant="outline" onClick={retake}>
-                <Camera className="h-4 w-4 mr-2" /> Repetir
-              </Button>
-              <Button onClick={runScan} disabled={scanning} className="min-w-[180px]">
-                {scanning ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Scan className="h-4 w-4 mr-2" />}
-                {scanning ? (scanMessage || 'Escaneando...') : 'Escanear Ticket'}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {scanning && scanMessage && (
-        <Card className="border-primary/20 bg-primary/5">
-          <CardContent className="flex items-center justify-center gap-3 py-6">
-            <Loader2 className="h-5 w-5 animate-spin text-primary" />
-            <span className="text-sm font-bold text-primary">{scanMessage}</span>
-          </CardContent>
-        </Card>
-      )}
-
-      {(step === 'form' || scanResult) && (
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                {scanResult ? <CheckCircle2 className="h-5 w-5 text-emerald-500" /> : <Receipt className="h-5 w-5" />}
-                {scanResult ? 'Datos Extraídos' : 'Datos del Gasto'}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {form.receiptUrl && (
-                <div className="rounded-xl overflow-hidden bg-slate-100 border max-h-[200px] flex items-center justify-center">
-                  <img
-                    src={capturedImage || ''}
-                    alt="Comprobante"
-                    className="max-w-full max-h-[200px] object-contain"
-                  />
-                </div>
-              )}
-              <div>
-                <Label>Descripción <span className="text-destructive">*</span></Label>
-                <Input value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} placeholder="Ej: Compra en supermercado" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label>Importe <span className="text-destructive">*</span></Label>
-                  <Input type="number" step="0.01" value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} placeholder="0.00" />
-                </div>
-                <div>
-                  <Label>Fecha</Label>
-                  <Input type="date" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label>Proveedor</Label>
-                  <Input value={form.supplier} onChange={e => setForm(p => ({ ...p, supplier: e.target.value }))} placeholder="Nombre del proveedor" />
-                </div>
-                <div>
-                  <Label>Categoría</Label>
-                  <Select value={form.category} onValueChange={v => setForm(p => ({ ...p, category: v }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <Button variant="outline" className="flex-1" onClick={discardAndBack}>Descartar</Button>
-                <Button className="flex-1" onClick={saveExpense} disabled={saving}>
-                  {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
-                  {saving ? 'Guardando...' : 'Guardar Gasto'}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="fixed inset-0 z-50 bg-black flex flex-col">
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className="flex-1 w-full object-cover"
+            style={{ WebkitTransform: 'translateZ(0)', transform: 'translateZ(0)' }}
+          />
+          <div className="absolute top-4 left-4">
+            <Button variant="ghost" size="icon" className="rounded-full bg-black/40 text-white hover:bg-black/60" onClick={backToSelect}>
+              <X className="h-6 w-6" />
+            </Button>
+          </div>
+          <div className="absolute bottom-8 left-0 right-0 flex items-center justify-center gap-6">
+            <Button
+              size="lg"
+              className="rounded-full h-16 w-16 bg-white hover:bg-slate-100 text-black shadow-xl"
+              onClick={capturePhoto}
+            >
+              <Camera className="h-8 w-8" />
+            </Button>
+          </div>
         </div>
       )}
 
       <canvas ref={canvasRef} className="hidden" />
-    </div>
+    </>
   )
 }
