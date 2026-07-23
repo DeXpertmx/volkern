@@ -1,4 +1,5 @@
 export const dynamic = 'force-dynamic';
+export const maxDuration = 30;
 
 import { NextResponse } from 'next/server'
 import { withTenantAuth } from '@/lib/api-key-auth'
@@ -52,6 +53,25 @@ function extractExpenseData(text: string) {
   }
 }
 
+function ocrWithTimeout(buffer: Buffer, timeoutMs = 20000): Promise<string> {
+  return new Promise(async (resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error('OCR_TIMEOUT'))
+    }, timeoutMs)
+
+    try {
+      const worker = await createWorker('spa')
+      const { data: { text } } = await worker.recognize(buffer)
+      await worker.terminate()
+      clearTimeout(timer)
+      resolve(text)
+    } catch (err) {
+      clearTimeout(timer)
+      reject(err)
+    }
+  })
+}
+
 export const POST = withTenantAuth(async (req, auth) => {
   try {
     const formData = await req.formData()
@@ -61,19 +81,37 @@ export const POST = withTenantAuth(async (req, auth) => {
       return NextResponse.json({ error: 'No se proporcionó imagen' }, { status: 400 })
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer())
+    const bytes = await file.arrayBuffer()
+    const buffer = Buffer.from(bytes)
 
     const receiptUrl = await uploadFile(buffer, `receipts/${auth.tenant!.id}/${Date.now()}-${file.name}`, file.type || 'image/jpeg')
 
-    const worker = await createWorker('spa')
-    const { data: { text } } = await worker.recognize(buffer)
-    await worker.terminate()
+    let text = ''
+    let ocrOk = false
+    try {
+      text = await ocrWithTimeout(buffer)
+      ocrOk = true
+    } catch (err: any) {
+      if (err?.message === 'OCR_TIMEOUT') {
+        console.warn('[ExpenseScan] OCR timed out')
+      } else {
+        console.error('[ExpenseScan] OCR error:', err)
+      }
+    }
 
-    const extracted = extractExpenseData(text)
+    const extracted = ocrOk ? extractExpenseData(text) : {
+      supplier: null,
+      total: null,
+      nif: null,
+      date: null,
+      category: 'otros',
+      rawText: '',
+    }
 
     return NextResponse.json({
-      success: true,
+      success: ocrOk,
       receiptUrl,
+      ocrTimedOut: !ocrOk,
       extracted,
     })
   } catch (error: any) {
