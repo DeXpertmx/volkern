@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Users, Calendar, TrendingUp, Send, Lock, Unlock, GripVertical, Rocket, ShieldCheck, X, Plus } from 'lucide-react'
@@ -11,7 +11,6 @@ const ResponsiveGridLayout = RGL as any;
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 
-import debounce from 'lodash.debounce'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { DashboardStats } from '@/components/dashboard-stats'
 import { DayNavigationAppointments } from '@/components/day-navigation-appointments'
@@ -22,6 +21,15 @@ import { OperationalMap } from '@/components/operations/operational-map'
 import { TrustProtocolLogs } from '@/components/sovereignty/trust-protocol-logs'
 import { QuickActions } from '@/components/dashboard/quick-actions'
 import { DashboardSkeleton } from '@/components/dashboard-skeleton'
+
+const LS_KEY = 'volkern_dashboard_data'
+
+function lsSave(data: object) {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(data)) } catch {}
+}
+function lsLoad(): Record<string, any> | null {
+  try { return JSON.parse(localStorage.getItem(LS_KEY) || 'null') } catch { return null }
+}
 
 interface DashboardStatsData {
   totalLeads: number
@@ -55,7 +63,6 @@ const WIDGET_LABELS: Record<string, string> = {
   audit: 'Logs de Protocolo',
 }
 
-// Layout eXpert Universal (12 columnas)
 const defaultLayouts: ResponsiveLayouts = {
   lg: [
     { i: 'actions', x: 0, y: 0, w: 12, h: 2, static: false },
@@ -82,11 +89,21 @@ export function DashboardContent() {
     ingresosDiarios: [],
     proximasCitas: []
   })
-  const [isLoading, setIsLoading] = useState(true)
-  const [isLocked, setIsLocked] = useState(true)
-  const [layouts, setLayouts] = useState<ResponsiveLayouts>(defaultLayouts)
-  const [visibleWidgets, setVisibleWidgets] = useState<string[]>(ALL_WIDGET_IDS)
+  const [isLocked, setIsLocked] = useState(() => {
+    const saved = lsLoad()
+    return typeof saved?.isLocked === 'boolean' ? saved.isLocked : true
+  })
+  const [layouts, setLayouts] = useState<ResponsiveLayouts>(() => {
+    const saved = lsLoad()
+    return saved?.layout || defaultLayouts
+  })
+  const [visibleWidgets, setVisibleWidgets] = useState<string[]>(() => {
+    const saved = lsLoad()
+    if (Array.isArray(saved?.visibleWidgets) && saved.visibleWidgets.length > 0) return saved.visibleWidgets
+    return ALL_WIDGET_IDS
+  })
   const [mounted, setMounted] = useState(false)
+  const [statsLoaded, setStatsLoaded] = useState(false)
 
   const layoutsRef = useRef(layouts)
   useEffect(() => { layoutsRef.current = layouts }, [layouts])
@@ -94,93 +111,72 @@ export function DashboardContent() {
   const visibleRef = useRef(visibleWidgets)
   useEffect(() => { visibleRef.current = visibleWidgets }, [visibleWidgets])
 
+  const isLockedRef = useRef(isLocked)
+  useEffect(() => { isLockedRef.current = isLocked }, [isLocked])
+
+  const skipNextLayoutSave = useRef(true)
+
   const { width, containerRef } = useContainerWidth() as { width: number | undefined; containerRef: React.RefObject<HTMLDivElement | null> };
 
   useEffect(() => {
+    Promise.all([
+      fetch('/api/dashboard'),
+      fetch('/api/v1/user/layout')
+    ]).then(async ([statsRes, layoutRes]) => {
+      if (statsRes.ok) {
+        const data = await statsRes.json();
+        setStats(data);
+      }
+      if (layoutRes.ok) {
+        const { layout, isLocked: savedLocked, visibleWidgets: savedVisible } = await layoutRes.json();
+        if (layout) { setLayouts(layout); lsSave({ layout, isLocked: savedLocked, visibleWidgets: savedVisible }) }
+        if (typeof savedLocked === 'boolean') { setIsLocked(savedLocked); isLockedRef.current = savedLocked }
+        if (Array.isArray(savedVisible) && savedVisible.length > 0) setVisibleWidgets(savedVisible);
+      }
+    }).catch(error => {
+      console.error('Error fetching dashboard data:', error);
+    }).finally(() => {
+      setStatsLoaded(true)
+      skipNextLayoutSave.current = false
+    })
+
     setMounted(true)
   }, [])
 
-  // Fetch Stats & Layout
-  useEffect(() => {
-    if (!mounted) return;
-    
-    const fetchData = async () => {
-      try {
-        const [statsRes, layoutRes] = await Promise.all([
-          fetch('/api/dashboard'),
-          fetch('/api/v1/user/layout')
-        ]);
-
-        if (statsRes.ok) {
-          const data = await statsRes.json();
-          setStats(data);
-        }
-
-        if (layoutRes.ok) {
-          const { layout, isLocked: savedLocked, visibleWidgets: savedVisible } = await layoutRes.json();
-          if (layout) setLayouts(layout);
-          if (typeof savedLocked === 'boolean') setIsLocked(savedLocked);
-          if (Array.isArray(savedVisible) && savedVisible.length > 0) setVisibleWidgets(savedVisible);
-        }
-      } catch (error) {
-        console.error('Error fetching dashboard data:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [mounted]);
-
-  const saveToApi = useCallback(async (data: { layout?: any; isLocked?: boolean; visibleWidgets?: string[] }) => {
-    try {
-      await fetch('/api/v1/user/layout', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-    } catch (e) {
-      console.error('Error al persistir layout:', e);
-    }
+  const persist = useCallback((data: { layout?: any; isLocked?: boolean; visibleWidgets?: string[] }) => {
+    lsSave(data)
+    fetch('/api/v1/user/layout', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    }).catch(e => console.error('Error al persistir layout:', e))
   }, [])
 
-  const persistLayout = useMemo(
-    () => debounce(async (newLayouts: any, locked: boolean, widgets: string[]) => {
-      await saveToApi({ layout: newLayouts, isLocked: locked, visibleWidgets: widgets });
-      console.log('💾 Layout guardado automáticamente.');
-    }, 2000),
-    [saveToApi]
-  );
-
-  const onLayoutChange = (_currentLayout: any, allLayouts: ResponsiveLayouts) => {
-    if (!isLocked) {
+  const onLayoutChange = useCallback((_currentLayout: any, allLayouts: ResponsiveLayouts) => {
+    if (skipNextLayoutSave.current) return
+    if (!isLockedRef.current) {
       setLayouts(allLayouts);
-      persistLayout(allLayouts, isLocked, visibleRef.current);
+      persist({ layout: allLayouts, isLocked: isLockedRef.current, visibleWidgets: visibleRef.current });
     }
-  };
+  }, [persist]);
 
-  const toggleLock = () => {
-    const next = !isLocked;
+  const toggleLock = useCallback(() => {
+    const next = !isLockedRef.current;
     setIsLocked(next);
-    commitLayout(layoutsRef.current, next, visibleRef.current);
-  }
+    persist({ layout: layoutsRef.current, isLocked: next, visibleWidgets: visibleRef.current });
+  }, [persist])
 
-  const commitLayout = (layout: any, locked: boolean, widgets: string[]) => {
-    persistLayout.cancel?.();
-    saveToApi({ layout, isLocked: locked, visibleWidgets: widgets });
-  }
-
-  const hideWidget = (id: string) => {
+  const hideWidget = useCallback((id: string) => {
     const next = visibleRef.current.filter(w => w !== id);
     setVisibleWidgets(next);
-    commitLayout(layoutsRef.current, isLocked, next);
-  }
+    persist({ layout: layoutsRef.current, isLocked: isLockedRef.current, visibleWidgets: next });
+  }, [persist])
 
-  const showWidget = (id: string) => {
+  const showWidget = useCallback((id: string) => {
     const next = [...visibleRef.current, id];
     setVisibleWidgets(next);
-    commitLayout(layoutsRef.current, isLocked, next);
-  }
+    persist({ layout: layoutsRef.current, isLocked: isLockedRef.current, visibleWidgets: next });
+  }, [persist])
 
   const WidgetWrapper = ({ id, children, noPadding = false }: { id: string, children: React.ReactNode, noPadding?: boolean }) => (
     <div key={id} className={`group relative h-full w-full ${noPadding ? '' : 'overflow-hidden'}`}>
@@ -211,15 +207,18 @@ export function DashboardContent() {
         </div>
       </CardHeader>
       <CardContent>
-        <div className="text-3xl font-black">{isLoading ? '...' : value}</div>
+        <div className="text-3xl font-black">{statsLoaded ? value : '...'}</div>
         <p className="text-[10px] text-muted-foreground font-medium mt-1">{description}</p>
       </CardContent>
     </Card>
   );
 
-  if (!mounted || isLoading) return <DashboardSkeleton />;
+  const hiddenWidgets = useMemo(
+    () => ALL_WIDGET_IDS.filter(id => !visibleWidgets.includes(id)),
+    [visibleWidgets]
+  );
 
-  const hiddenWidgets = ALL_WIDGET_IDS.filter(id => !visibleRef.current.includes(id));
+  if (!mounted) return <DashboardSkeleton />;
 
   return (
     <div className="space-y-6" ref={containerRef as React.Ref<HTMLDivElement>}>
@@ -266,8 +265,8 @@ export function DashboardContent() {
             onClick={toggleLock}
             className="gap-2 shadow-xl hover:scale-105 transition-transform"
           >
-            {isLocked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
-            {isLocked ? "Bloquear Layout" : "Ajustar Bento Box"}
+            {isLocked ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+            {isLocked ? "Ajustar Bento Box" : "Bloquear Layout"}
           </Button>
         </div>
       </div>
