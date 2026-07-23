@@ -52,25 +52,16 @@ export default function EscanearGastoPage() {
 
   useEffect(() => {
     if (step !== 'camera') return
-    let cancelled = false
-    ;(async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
-        })
-        if (cancelled) { stream.getTracks().forEach(t => t.stop()); return }
-        streamRef.current = stream
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream
-        }
-      } catch {
-        if (!cancelled) {
-          toast.error('No se pudo acceder a la cámara. Usa la subida de imagen en su lugar.')
-          setStep('select')
-        }
-      }
-    })()
-    return () => { cancelled = true }
+    const video = videoRef.current
+    if (!video) return
+    const stream = streamRef.current
+    if (!stream) return
+    video.srcObject = stream
+    const onError = () => {
+      if (video.error) console.error('[Video]', video.error)
+    }
+    video.addEventListener('error', onError)
+    return () => video.removeEventListener('error', onError)
   }, [step])
 
   const [form, setForm] = useState({
@@ -82,10 +73,20 @@ export default function EscanearGastoPage() {
     receiptUrl: '',
   })
 
-  const startCamera = useCallback(() => {
-    setStep('camera')
+  const startCamera = useCallback(async () => {
     setCapturedImage(null)
     setScanResult(null)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      })
+      streamRef.current = stream
+      setStep('camera')
+    } catch (err: any) {
+      console.error('[Camera]', err)
+      toast.error(err?.name === 'NotAllowedError' ? 'Permiso de cámara denegado. Ajústalo en los ajustes del navegador.' : 'No se pudo acceder a la cámara. Usa la subida de imagen en su lugar.')
+    }
   }, [])
 
   const capturePhoto = useCallback(() => {
@@ -343,8 +344,15 @@ export default function EscanearGastoPage() {
       {step === 'camera' && (
         <Card>
           <CardContent className="p-4">
-            <div className="relative rounded-xl overflow-hidden bg-black">
-              <video ref={videoRef} autoPlay playsInline muted className="w-full max-h-[60vh] object-cover" />
+            <div className="relative rounded-xl overflow-hidden bg-black" style={{ minHeight: '300px' }}>
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="absolute inset-0 w-full h-full object-contain"
+                style={{ WebkitTransform: 'translateZ(0)', transform: 'translateZ(0)' }}
+              />
             </div>
             <div className="flex gap-3 mt-4 justify-center">
               <Button variant="outline" onClick={discardAndBack}>Cancelar</Button>
