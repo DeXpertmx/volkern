@@ -27,75 +27,114 @@ const FALLBACK: VisionResult = {
   operationDate: null, issuerName: null, issuerAddress: null, issuerTaxId: null,
 }
 
-async function visionExtract(buffer: Buffer, mimeType: string): Promise<VisionResult | null> {
-  const GOOGLE_AI_KEY = process.env.GOOGLE_AI_KEY
-  if (!GOOGLE_AI_KEY) return null
+async function callVision(buffer: Buffer, mimeType: string): Promise<VisionResult | null> {
+  const base64 = buffer.toString('base64')
+  const dataUrl = `data:${mimeType};base64,${base64}`
 
-  const MODEL = process.env.GEMMA_MODEL || 'gemini-1.5-flash-latest'
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GOOGLE_AI_KEY}`
+  const prompt = `Eres un extractor de datos de facturas españolas. Analiza la imagen y devuelve SOLO un JSON válido sin markdown ni explicaciones. Usa punto para decimales (ej: 121.00).
 
-  const prompt = `Extrae los datos de esta factura o ticket y devuelve SOLO un JSON sin texto adicional (ni markdown, ni code blocks, ni explicaciones). Usa este esquema exacto:
-{
-  "supplier": "nombre del proveedor o null",
-  "total": 123.45 o null,
-  "nif": "NIF del emisor o null",
-  "date": "DD/MM/AAAA o null",
-  "category": "alimentacion|transporte|suministros|oficina|tecnologia|marketing|profesional|otros",
-  "invoiceNumber": "número de factura o null",
-  "taxableBase": 123.45 o null,
-  "vatRate": 21 o null (solo número, sin %),
-  "vatAmount": 12.34 o null,
-  "operationDate": "DD/MM/AAAA solo si distinta a la fecha de emisión o null",
-  "issuerName": "razón social del emisor o null",
-  "issuerAddress": "domicilio fiscal completo o null",
-  "issuerTaxId": "NIF del emisor o null"
+Campos:
+- "supplier": nombre del proveedor
+- "total": importe total numérico
+- "nif": NIF del emisor
+- "date": fecha emisión DD/MM/AAAA
+- "category": alimentacion|transporte|suministros|oficina|tecnologia|marketing|profesional|otros
+- "invoiceNumber": número de factura
+- "taxableBase": base imponible numérica
+- "vatRate": tipo IVA numérico (sin %)
+- "vatAmount": cuota IVA numérica
+- "operationDate": fecha operación DD/MM/AAAA solo si distinta a emisión
+- "issuerName": razón social del emisor
+- "issuerAddress": domicilio fiscal del emisor
+- "issuerTaxId": NIF del emisor
+
+Si un campo no está disponible pon null.`
+
+  // ── Try OpenRouter (DeepSeek V4 Flash, soporta imágenes) ──
+  const openrouterKey = process.env.OPENROUTER_API_KEY
+  if (openrouterKey) {
+    try {
+      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${openrouterKey}`,
+        },
+        body: JSON.stringify({
+          model: 'deepseek/deepseek-chat:free',
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'text', text: prompt },
+              { type: 'image_url', image_url: { url: dataUrl } },
+            ],
+          }],
+          temperature: 0.1,
+          max_tokens: 1024,
+        }),
+        signal: AbortSignal.timeout(45000),
+      })
+
+      if (res.ok) {
+        const json = await res.json()
+        const raw = json.choices?.[0]?.message?.content || ''
+        return parseJsonResult(raw)
+      } else {
+        const errText = await res.text()
+        console.error('[Vision] OpenRouter error:', res.status, errText)
+      }
+    } catch (err: any) {
+      console.error('[Vision] OpenRouter fetch error:', err?.message)
+    }
+  }
+
+  // ── Fallback: Google Gemini ──
+  const googleKey = process.env.GOOGLE_AI_KEY
+  if (googleKey) {
+    try {
+      const model = process.env.GEMMA_MODEL || 'gemini-1.5-flash'
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${googleKey}`
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            role: 'user',
+            parts: [
+              { text: prompt },
+              { inline_data: { mime_type: mimeType, data: base64 } },
+            ],
+          }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 1024 },
+        }),
+        signal: AbortSignal.timeout(45000),
+      })
+
+      if (res.ok) {
+        const json = await res.json()
+        const raw = json.candidates?.[0]?.content?.parts?.[0]?.text || ''
+        return parseJsonResult(raw)
+      } else {
+        const errText = await res.text()
+        console.error('[Vision] Google error:', res.status, errText)
+      }
+    } catch (err: any) {
+      console.error('[Vision] Google fetch error:', err?.message)
+    }
+  }
+
+  return null
 }
 
-Los números decimales usa punto como separador (ej: 123.45). No incluyas nada más que el JSON.`
-
+function parseJsonResult(raw: string): VisionResult | null {
+  raw = raw.replace(/```(?:json)?\n?/gi, '').replace(/```\n?$/g, '').trim()
+  const start = raw.indexOf('{')
+  const end = raw.lastIndexOf('}')
+  if (start === -1 || end === -1) return null
   try {
-    const base64 = buffer.toString('base64')
-
-    const body = {
-      contents: [{
-        role: 'user',
-        parts: [
-          { text: prompt },
-          { inline_data: { mime_type: mimeType, data: base64 } }
-        ]
-      }],
-      generationConfig: {
-        temperature: 0.1,
-        maxOutputTokens: 1024,
-        response_mime_type: 'application/json',
-      }
-    }
-
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 45000)
-
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    })
-    clearTimeout(timeout)
-
-    if (!res.ok) {
-      const err = await res.text()
-      console.error('[VisionExtract] API error:', res.status, err)
-      return null
-    }
-
-    const data = await res.json()
-    let raw = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
-    raw = raw.replace(/```json\n?/gi, '').replace(/```\n?$/g, '').trim()
-
-    const parsed: VisionResult = JSON.parse(raw)
-    return parsed
-  } catch (err: any) {
-    console.error('[VisionExtract] Error:', err?.message)
+    return JSON.parse(raw.substring(start, end + 1))
+  } catch {
     return null
   }
 }
@@ -116,9 +155,9 @@ export const POST = withTenantAuth(async (req, auth) => {
 
     let visionResult: VisionResult | null = null
     try {
-      visionResult = await visionExtract(buffer, file.type || 'image/jpeg')
-    } catch (err) {
-      console.error('[ExpenseScan] Vision error:', err)
+      visionResult = await callVision(buffer, file.type || 'image/jpeg')
+    } catch (err: any) {
+      console.error('[ExpenseScan] Vision error:', err?.message)
     }
 
     const extracted: VisionResult = visionResult || FALLBACK
