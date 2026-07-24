@@ -483,7 +483,7 @@ export default function EscanearGastoPage() {
             playsInline
             muted
             className="flex-1 w-full"
-            style={{ objectFit: 'cover' }}
+            style={{ objectFit: 'cover', WebkitTransform: 'translateZ(0)', transform: 'translateZ(0)' }}
           />
           <div className="absolute top-4 left-4">
             <Button variant="ghost" size="icon" className="rounded-full bg-black/40 text-white hover:bg-black/60" onClick={backToSelect}>
