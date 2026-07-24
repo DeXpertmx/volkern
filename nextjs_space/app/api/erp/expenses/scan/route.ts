@@ -50,16 +50,48 @@ Campos:
 
 Si un campo no está disponible pon null.`
 
-  // ── Try OpenRouter (DeepSeek V4 Flash, soporta imágenes) ──
+  // ── 1. DeepSeek native API (deepseek-chat con imagen) ──
+  const deepseekKey = process.env.DEEPSEEK_API_KEY
+  if (deepseekKey) {
+    try {
+      const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${deepseekKey}` },
+        body: JSON.stringify({
+          model: 'deepseek-chat',
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'text', text: prompt },
+              { type: 'image_url', image_url: { url: dataUrl } },
+            ],
+          }],
+          temperature: 0.1,
+          max_tokens: 1024,
+        }),
+        signal: AbortSignal.timeout(45000),
+      })
+      if (res.ok) {
+        const json = await res.json()
+        const raw = json.choices?.[0]?.message?.content || ''
+        const parsed = parseJsonResult(raw)
+        if (parsed) return parsed
+      } else {
+        const errText = await res.text()
+        console.error('[Vision] DeepSeek error:', res.status, errText.substring(0, 300))
+      }
+    } catch (err: any) {
+      console.error('[Vision] DeepSeek fetch error:', err?.message)
+    }
+  }
+
+  // ── 2. OpenRouter ──
   const openrouterKey = process.env.OPENROUTER_API_KEY
   if (openrouterKey) {
     try {
       const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${openrouterKey}`,
-        },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${openrouterKey}` },
         body: JSON.stringify({
           model: 'deepseek/deepseek-chat:free',
           messages: [{
@@ -74,50 +106,41 @@ Si un campo no está disponible pon null.`
         }),
         signal: AbortSignal.timeout(45000),
       })
-
       if (res.ok) {
         const json = await res.json()
         const raw = json.choices?.[0]?.message?.content || ''
-        return parseJsonResult(raw)
+        const parsed = parseJsonResult(raw)
+        if (parsed) return parsed
       } else {
         const errText = await res.text()
-        console.error('[Vision] OpenRouter error:', res.status, errText)
+        console.error('[Vision] OpenRouter error:', res.status, errText.substring(0, 300))
       }
     } catch (err: any) {
       console.error('[Vision] OpenRouter fetch error:', err?.message)
     }
   }
 
-  // ── Fallback: Google Gemini ──
+  // ── 3. Google Gemini ──
   const googleKey = process.env.GOOGLE_AI_KEY
   if (googleKey) {
     try {
-      const model = process.env.GEMMA_MODEL || 'gemini-1.5-flash'
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${googleKey}`
-
-      const res = await fetch(url, {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${googleKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{
-            role: 'user',
-            parts: [
-              { text: prompt },
-              { inline_data: { mime_type: mimeType, data: base64 } },
-            ],
-          }],
+          contents: [{ role: 'user', parts: [{ text: prompt }, { inline_data: { mime_type: mimeType, data: base64 } }] }],
           generationConfig: { temperature: 0.1, maxOutputTokens: 1024 },
         }),
         signal: AbortSignal.timeout(45000),
       })
-
       if (res.ok) {
         const json = await res.json()
         const raw = json.candidates?.[0]?.content?.parts?.[0]?.text || ''
-        return parseJsonResult(raw)
+        const parsed = parseJsonResult(raw)
+        if (parsed) return parsed
       } else {
         const errText = await res.text()
-        console.error('[Vision] Google error:', res.status, errText)
+        console.error('[Vision] Google error:', res.status, errText.substring(0, 300))
       }
     } catch (err: any) {
       console.error('[Vision] Google fetch error:', err?.message)
