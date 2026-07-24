@@ -328,9 +328,36 @@ export default function EscanearGastoPage() {
   }
 
   return (
-    <>
+    <div className="space-y-6 pb-12">
+      {step === 'camera' && (
+        <div className="relative bg-black rounded-2xl overflow-hidden" style={{ minHeight: '70vh' }}>
+          <div className="absolute top-3 left-3 z-10">
+            <Button variant="ghost" size="icon" className="rounded-full bg-black/50 text-white hover:bg-black/70 h-9 w-9" onClick={backToSelect}>
+              <X className="h-5 w-5" />
+            </Button>
+          </div>
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className="absolute inset-0 w-full h-full"
+            style={{ objectFit: 'cover', WebkitTransform: 'translateZ(0)', transform: 'translateZ(0)' }}
+          />
+          <div className="absolute bottom-6 left-0 right-0 flex justify-center">
+            <button
+              type="button"
+              className="h-16 w-16 rounded-full bg-white shadow-xl flex items-center justify-center active:scale-95 transition-transform"
+              onClick={capturePhoto}
+            >
+              <Camera className="h-8 w-8 text-black" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {step !== 'camera' && (
-        <div className="space-y-6 pb-12">
+        <>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Button variant="ghost" size="icon" onClick={discardAndBack}>
@@ -472,36 +499,8 @@ export default function EscanearGastoPage() {
               </Card>
             </div>
           )}
-        </div>
+        </>
       )}
-
-      {step === 'camera' && (
-        <div className="fixed inset-0 z-50 bg-black flex flex-col">
-          <video
-            ref={videoRef}
-            autoPlay
-            playsInline
-            muted
-            className="flex-1 w-full"
-            style={{ objectFit: 'cover', WebkitTransform: 'translateZ(0)', transform: 'translateZ(0)' }}
-          />
-          <div className="absolute top-4 left-4">
-            <Button variant="ghost" size="icon" className="rounded-full bg-black/40 text-white hover:bg-black/60" onClick={backToSelect}>
-              <X className="h-6 w-6" />
-            </Button>
-          </div>
-          <div className="absolute bottom-8 left-0 right-0 flex items-center justify-center gap-6">
-            <Button
-              size="lg"
-              className="rounded-full h-16 w-16 bg-white hover:bg-slate-100 text-black shadow-xl"
-              onClick={capturePhoto}
-            >
-              <Camera className="h-8 w-8" />
-            </Button>
-          </div>
-        </div>
-      )}
-
-    </>
+    </div>
   )
 }
