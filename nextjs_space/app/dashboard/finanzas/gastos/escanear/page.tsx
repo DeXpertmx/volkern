@@ -48,6 +48,7 @@ export default function EscanearGastoPage() {
   const [scanning, setScanning] = useState(false)
   const [scanMessage, setScanMessage] = useState('')
   const [scanResult, setScanResult] = useState<any>(null)
+  const [rawOcrText, setRawOcrText] = useState('')
   const [saving, setSaving] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [showSelect, setShowSelect] = useState(true)
@@ -105,7 +106,7 @@ export default function EscanearGastoPage() {
       formData.append('file', blob, 'receipt.jpg')
 
       const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), 25000)
+      const timeout = setTimeout(() => controller.abort(), 40000)
 
       const res = await fetch('/api/erp/expenses/scan', {
         method: 'POST',
@@ -124,6 +125,7 @@ export default function EscanearGastoPage() {
 
       setScanMessage('Analizando datos...')
       setScanResult(data)
+      setRawOcrText(data.rawText || '')
       const ext: ExtractedData = data.extracted
       setForm(prev => ({
         ...prev,
@@ -252,6 +254,7 @@ export default function EscanearGastoPage() {
     setCapturedImage(null)
     setCapturedFile(null)
     setScanResult(null)
+    setRawOcrText('')
     setShowForm(false)
     setShowSelect(true)
     setForm({
@@ -365,8 +368,7 @@ export default function EscanearGastoPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
-                {scanResult ? <CheckCircle2 className="h-5 w-5 text-emerald-500" /> : <Receipt className="h-5 w-5" />}
-                {scanResult ? 'Datos Extraídos' : 'Datos del Gasto'}
+                {scanResult?.ocrTimedOut ? <><span className="text-amber-500">⚠</span> OCR no disponible</> : scanResult ? <><CheckCircle2 className="h-5 w-5 text-emerald-500" /> Datos Extraídos</> : <><Receipt className="h-5 w-5" /> Datos del Gasto</>}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -405,6 +407,12 @@ export default function EscanearGastoPage() {
                 </div>
               </div>
 
+              {rawOcrText && (
+                <details className="border rounded-lg p-3 bg-muted/30">
+                  <summary className="font-semibold text-sm cursor-pointer select-none">Texto OCR crudo</summary>
+                  <pre className="mt-3 text-xs text-muted-foreground whitespace-pre-wrap font-mono max-h-40 overflow-y-auto">{rawOcrText}</pre>
+                </details>
+              )}
               <details className="border rounded-lg p-3 bg-muted/30">
                 <summary className="font-semibold text-sm cursor-pointer select-none">Datos Verifactu (opcional)</summary>
                 <div className="space-y-3 mt-3">
