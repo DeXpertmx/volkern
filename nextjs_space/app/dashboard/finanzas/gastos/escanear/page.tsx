@@ -16,6 +16,14 @@ interface ExtractedData {
   date: string | null
   category: string
   nif: string | null
+  invoiceNumber: string | null
+  taxableBase: number | null
+  vatRate: number | null
+  vatAmount: number | null
+  operationDate: string | null
+  issuerName: string | null
+  issuerAddress: string | null
+  issuerTaxId: string | null
   rawText: string
 }
 
@@ -51,6 +59,14 @@ export default function EscanearGastoPage() {
     category: 'otros',
     date: new Date().toISOString().split('T')[0],
     receiptUrl: '',
+    invoiceNumber: '',
+    taxableBase: '',
+    vatRate: '',
+    vatAmount: '',
+    operationDate: '',
+    issuerName: '',
+    issuerAddress: '',
+    issuerTaxId: '',
   })
 
   const handleImageCapture = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -117,6 +133,14 @@ export default function EscanearGastoPage() {
         category: ext.category || 'otros',
         date: ext.date ? formatDetectedDate(ext.date) : prev.date,
         receiptUrl: data.receiptUrl,
+        invoiceNumber: ext.invoiceNumber || '',
+        taxableBase: ext.taxableBase ? ext.taxableBase.toString() : '',
+        vatRate: ext.vatRate ? ext.vatRate.toString() : '',
+        vatAmount: ext.vatAmount ? ext.vatAmount.toString() : '',
+        operationDate: ext.operationDate ? formatDetectedDate(ext.operationDate) : '',
+        issuerName: ext.issuerName || '',
+        issuerAddress: ext.issuerAddress || '',
+        issuerTaxId: ext.issuerTaxId || '',
       }))
       setShowForm(true)
     } catch (err: any) {
@@ -188,6 +212,14 @@ export default function EscanearGastoPage() {
         category: form.category,
         supplierId,
         status: 'PAID',
+        invoiceNumber: form.invoiceNumber || undefined,
+        taxableBase: form.taxableBase || undefined,
+        vatRate: form.vatRate || undefined,
+        vatAmount: form.vatAmount || undefined,
+        operationDate: form.operationDate || undefined,
+        issuerName: form.issuerName || undefined,
+        issuerAddress: form.issuerAddress || undefined,
+        issuerTaxId: form.issuerTaxId || undefined,
       }
       if (form.receiptUrl) body.receiptUrl = form.receiptUrl
 
@@ -229,6 +261,14 @@ export default function EscanearGastoPage() {
       category: 'otros',
       date: new Date().toISOString().split('T')[0],
       receiptUrl: '',
+      invoiceNumber: '',
+      taxableBase: '',
+      vatRate: '',
+      vatAmount: '',
+      operationDate: '',
+      issuerName: '',
+      issuerAddress: '',
+      issuerTaxId: '',
     })
   }
 
@@ -364,6 +404,48 @@ export default function EscanearGastoPage() {
                   </Select>
                 </div>
               </div>
+
+              <details className="border rounded-lg p-3 bg-muted/30">
+                <summary className="font-semibold text-sm cursor-pointer select-none">Datos Verifactu (opcional)</summary>
+                <div className="space-y-3 mt-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Nº Factura</Label>
+                      <Input value={form.invoiceNumber} onChange={e => setForm(p => ({ ...p, invoiceNumber: e.target.value }))} placeholder="2024-001" />
+                    </div>
+                    <div>
+                      <Label>Fecha Operación</Label>
+                      <Input type="date" value={form.operationDate} onChange={e => setForm(p => ({ ...p, operationDate: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <Label>Base Imponible</Label>
+                      <Input type="number" step="0.01" value={form.taxableBase} onChange={e => setForm(p => ({ ...p, taxableBase: e.target.value }))} placeholder="0.00" />
+                    </div>
+                    <div>
+                      <Label>IVA %</Label>
+                      <Input type="number" step="0.01" value={form.vatRate} onChange={e => setForm(p => ({ ...p, vatRate: e.target.value }))} placeholder="21" />
+                    </div>
+                    <div>
+                      <Label>Cuota IVA</Label>
+                      <Input type="number" step="0.01" value={form.vatAmount} onChange={e => setForm(p => ({ ...p, vatAmount: e.target.value }))} placeholder="0.00" />
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Razón Social (Emisor)</Label>
+                    <Input value={form.issuerName} onChange={e => setForm(p => ({ ...p, issuerName: e.target.value }))} placeholder="Nombre o razón social" />
+                  </div>
+                  <div>
+                    <Label>NIF Emisor</Label>
+                    <Input value={form.issuerTaxId} onChange={e => setForm(p => ({ ...p, issuerTaxId: e.target.value }))} placeholder="B12345678" />
+                  </div>
+                  <div>
+                    <Label>Domicilio Fiscal (Emisor)</Label>
+                    <Input value={form.issuerAddress} onChange={e => setForm(p => ({ ...p, issuerAddress: e.target.value }))} placeholder="C/ Ejemplo 123, 28001 Madrid" />
+                  </div>
+                </div>
+              </details>
 
               <div className="flex gap-3 pt-4">
                 <Button variant="outline" className="flex-1" onClick={discardAndBack}>Descartar</Button>

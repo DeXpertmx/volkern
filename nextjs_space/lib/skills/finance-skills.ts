@@ -40,6 +40,16 @@ export interface CreateExpenseInput {
   status?: 'PENDING' | 'PAID' | 'VOID';
   exifLat?: number;
   exifLng?: number;
+
+  // ── Verifactu ─────────────────────────────────────────────
+  invoiceNumber?: string;
+  taxableBase?: number;
+  vatRate?: number;
+  vatAmount?: number;
+  operationDate?: Date;
+  issuerName?: string;
+  issuerAddress?: string;
+  issuerTaxId?: string;
 }
 
 /**
