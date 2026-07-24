@@ -36,6 +36,7 @@ export default function EscanearGastoPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [capturedImage, setCapturedImage] = useState<string | null>(null)
+  const [capturedFile, setCapturedFile] = useState<File | null>(null)
   const [scanning, setScanning] = useState(false)
   const [scanMessage, setScanMessage] = useState('')
   const [scanResult, setScanResult] = useState<any>(null)
@@ -55,44 +56,34 @@ export default function EscanearGastoPage() {
   const handleImageCapture = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      setCapturedImage(ev.target?.result as string)
-      setShowSelect(false)
-      setShowForm(false)
-      setScanResult(null)
-    }
-    reader.readAsDataURL(file)
+    setCapturedFile(file)
+    setCapturedImage(URL.createObjectURL(file))
+    setShowSelect(false)
+    setShowForm(false)
+    setScanResult(null)
   }, [])
 
-  const compressImage = async (dataUrl: string, maxDim = 1200, quality = 0.6): Promise<Blob> => {
+  const compressImage = async (file: File, maxDim = 1200, quality = 0.6): Promise<Blob> => {
+    const img = await createImageBitmap(file, { resizeWidth: maxDim, resizeHeight: maxDim, resizeQuality: 'medium' })
+    const c = document.createElement('canvas')
+    c.width = Math.min(img.width, maxDim)
+    c.height = Math.min(img.height, maxDim)
+    const ctx = c.getContext('2d')
+    if (!ctx) throw new Error('No canvas context')
+    ctx.drawImage(img, 0, 0)
+    img.close()
     return new Promise((resolve, reject) => {
-      const img = new Image()
-      img.onload = () => {
-        let { width, height } = img
-        if (width > maxDim || height > maxDim) {
-          if (width > height) { height = Math.round(height * maxDim / width); width = maxDim }
-          else { width = Math.round(width * maxDim / height); height = maxDim }
-        }
-        const c = document.createElement('canvas')
-        c.width = width; c.height = height
-        const ctx = c.getContext('2d')
-        if (!ctx) { reject(new Error('No canvas context')); return }
-        ctx.drawImage(img, 0, 0, width, height)
-        c.toBlob(b => b ? resolve(b) : reject(new Error('No blob')), 'image/jpeg', quality)
-      }
-      img.onerror = reject
-      img.src = dataUrl
+      c.toBlob(b => b ? resolve(b) : reject(new Error('No blob')), 'image/jpeg', quality)
     })
   }
 
   const runScan = useCallback(async () => {
-    if (!capturedImage) return
+    if (!capturedFile) return
     setScanning(true)
     setScanMessage('Preparando imagen...')
 
     try {
-      const blob = await compressImage(capturedImage)
+      const blob = await compressImage(capturedFile)
       setScanMessage('Enviando a OCR...')
       const formData = new FormData()
       formData.append('file', blob, 'receipt.jpg')
@@ -225,7 +216,9 @@ export default function EscanearGastoPage() {
   }
 
   const resetAll = () => {
+    if (capturedImage?.startsWith('blob:')) URL.revokeObjectURL(capturedImage)
     setCapturedImage(null)
+    setCapturedFile(null)
     setScanResult(null)
     setShowForm(false)
     setShowSelect(true)
