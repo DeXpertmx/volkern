@@ -4138,6 +4138,17 @@ model Expense {
   isAnomaly          Boolean  @default(false)
   parentFingerprint  String?
   verificationStatus String   @default("PENDING")
+
+  // ── Verifactu ─────────────────────────────────────────────
+  invoiceNumber      String?  // Número y serie de la factura
+  taxableBase        Float?   // Base imponible
+  vatRate            Float?   // Tipo de IVA aplicado (%)
+  vatAmount          Float?   // Cuota total de IVA
+  operationDate      DateTime? // Fecha de la operación (si distinta a emisión)
+  issuerName         String?  // Razón social del emisor
+  issuerAddress      String?  // Domicilio fiscal del emisor
+  issuerTaxId        String?  // NIF del emisor
+
   createdBy          User     @relation("ExpenseCreator", fields: [createdById], references: [id])
   lead               Lead?    @relation(fields: [leadId], references: [id])
   project            Project? @relation(fields: [projectId], references: [id])

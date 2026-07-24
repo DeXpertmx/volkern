@@ -76,7 +76,15 @@ export const POST = withTenantAuth(async (request, auth) => {
       amount: parseFloat(body.amount),
       category: body.category || 'General',
       receiptUrl: body.receiptUrl,
-      status: body.status || 'PAID'
+      status: body.status || 'PAID',
+      invoiceNumber: body.invoiceNumber,
+      taxableBase: body.taxableBase ? parseFloat(body.taxableBase) : undefined,
+      vatRate: body.vatRate ? parseFloat(body.vatRate) : undefined,
+      vatAmount: body.vatAmount ? parseFloat(body.vatAmount) : undefined,
+      operationDate: body.operationDate ? new Date(body.operationDate) : undefined,
+      issuerName: body.issuerName,
+      issuerAddress: body.issuerAddress,
+      issuerTaxId: body.issuerTaxId,
     });
 
     return NextResponse.json(expense);
