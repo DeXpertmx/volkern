@@ -1,5 +1,5 @@
 export const dynamic = 'force-dynamic';
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 import { NextResponse } from 'next/server'
 import { withTenantAuth } from '@/lib/api-key-auth'
@@ -148,7 +148,7 @@ function extractExpenseData(text: string) {
   }
 }
 
-function ocrWithTimeout(buffer: Buffer, timeoutMs = 20000): Promise<string> {
+function ocrWithTimeout(buffer: Buffer, timeoutMs = 30000): Promise<string> {
   return new Promise(async (resolve, reject) => {
     const timer = setTimeout(() => {
       reject(new Error('OCR_TIMEOUT'))
@@ -216,6 +216,7 @@ export const POST = withTenantAuth(async (req, auth) => {
       receiptUrl,
       ocrTimedOut: !ocrOk,
       extracted,
+      rawText: text.substring(0, 2000),
     })
   } catch (error: any) {
     console.error('[ExpenseScan] Error:', error)
