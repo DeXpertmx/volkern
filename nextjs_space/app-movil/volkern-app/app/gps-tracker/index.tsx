@@ -495,7 +495,7 @@ export default function GpsTrackerScreen() {
             {/* Permission denied */}
             {permissionDenied && (
               <View style={styles.warningCard}>
-                <Ionicons name="location-off" size={20} color={colors.warning} />
+                <Ionicons name="location" size={20} color={colors.warning} />
                 <Text style={styles.warningText}>
                   Permiso de ubicación denegado. Ve a Ajustes &gt; Volkern &gt; Localización y permite el acceso.
                 </Text>
