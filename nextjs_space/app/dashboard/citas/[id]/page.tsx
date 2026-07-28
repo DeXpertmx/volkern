@@ -77,7 +77,7 @@ export default function CitaDetalleePage() {
       const res = await fetch(`/api/citas/${params.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ estado: nuevoEstado }),
+        body: JSON.stringify({ estado: nuevoEstado.toLowerCase() }),
       });
 
       if (!res.ok) throw new Error('Error al actualizar estado');

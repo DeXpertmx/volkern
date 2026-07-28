@@ -82,7 +82,8 @@ export async function PUT(
     const tenantId = auth.tenant.id
 
     const body = await request.json()
-    const { estado, fechaHora, montoPagado, stripePaymentId, titulo, descripcion, duracion, tipo, catalogoItemId, connectedCalendarId } = body
+    let { estado, fechaHora, montoPagado, stripePaymentId, titulo, descripcion, duracion, tipo, catalogoItemId, connectedCalendarId } = body
+    if (estado) estado = (estado as string).toLowerCase()
 
     // Obtener la cita antes de actualizar para comparar cambios
     const citaAnterior = await prisma.cita.findUnique({
@@ -226,7 +227,8 @@ export async function PATCH(
     const tenantId = auth.tenant.id
 
     const body = await request.json()
-    const { estado, fechaHora, montoPagado, stripePaymentId, titulo, descripcion, duracion, tipo, catalogoItemId, connectedCalendarId } = body
+    let { estado, fechaHora, montoPagado, stripePaymentId, titulo, descripcion, duracion, tipo, catalogoItemId, connectedCalendarId } = body
+    if (estado) estado = (estado as string).toLowerCase()
 
     const cita = await prisma.cita.update({
       where: { id: params.id },
