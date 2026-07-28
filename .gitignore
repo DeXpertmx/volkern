@@ -11,3 +11,8 @@ build/
 fluy_crm.zip
 .vercel
 .env*
+
+# Freebuff desktop sessions
+.freebuff/
+# Backup files
+*.bak
