@@ -13,6 +13,7 @@ import { favoritesService, type FavoriteItem } from '../../src/services/favorite
 import { goalsService } from '../../src/services/goals';
 import { contactsService, type Contact } from '../../src/services/contacts';
 import { hubsService } from '../../src/services/hubs';
+import { useVertical } from '../../src/contexts/vertical';
 import { getIonicon } from '../../src/utils/icons';
 
 // ─── Trend Indicator ───────────────────────────────────────────────────────────
@@ -187,6 +188,7 @@ export default function DashboardScreen() {
   const [favorites, setFavorites] = useState<FavoriteItem[]>([]);
   const [goalStats, setGoalStats] = useState({ active: 0, completed: 0, total: 0, overallProgress: 0 });
   const [recentContacts, setRecentContacts] = useState<Contact[]>([]);
+  const { setActiveVertical } = useVertical();
 
   useEffect(() => {
     loadDashboard();
@@ -338,6 +340,44 @@ export default function DashboardScreen() {
             </View>
           ))}
         </View>
+
+        {/* Vertical Quick-Access */}
+        <Text style={styles.sectionTitle}>Tus Verticales</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ marginBottom: spacing.xxl }}
+          contentContainerStyle={{ gap: spacing.md }}
+        >
+          {hubsService.getCategories().slice(0, 8).map((cat) => (
+            <TouchableOpacity
+              key={cat.id}
+              style={[
+                styles.vertCard,
+                { borderLeftColor: cat.color },
+              ]}
+              onPress={() => {
+                setActiveVertical(cat)
+                router.push('/(tabs)/vertical')
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.vertIcon, { backgroundColor: cat.color + '15' }]}>
+                <Ionicons name={getIonicon(cat.icon) as any} size={22} color={cat.color} />
+              </View>
+              <Text style={styles.vertName} numberOfLines={2}>{cat.name}</Text>
+              <Text style={styles.vertCount}>{cat.moduleCount} módulos</Text>
+            </TouchableOpacity>
+          ))}
+          <TouchableOpacity
+            style={styles.vertAllCard}
+            onPress={() => router.push('/(tabs)/vertical')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="apps" size={24} color={colors.primary} />
+            <Text style={[styles.vertName, { color: colors.primary }]}>Ver todas</Text>
+          </TouchableOpacity>
+        </ScrollView>
 
         {/* Favorites Section */}
         {favorites.length > 0 && (
@@ -942,6 +982,47 @@ const makeStyles = (colors: ReturnType<typeof useThemeColors>, screenWidth: numb
     color: colors.textPrimary,
     textAlign: 'center',
     fontSize: 10,
+  },
+  vertCard: {
+    width: 120,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    alignItems: 'center',
+    gap: spacing.xs,
+    borderLeftWidth: 3,
+    ...shadows.sm,
+  },
+  vertIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  vertName: {
+    ...typography.caption,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    textAlign: 'center',
+    fontSize: 12,
+  },
+  vertCount: {
+    ...typography.caption,
+    color: colors.textTertiary,
+    fontSize: 10,
+  },
+  vertAllCard: {
+    width: 100,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderStyle: 'dashed',
   },
 });
 

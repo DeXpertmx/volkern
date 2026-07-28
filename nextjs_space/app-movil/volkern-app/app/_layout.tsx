@@ -5,6 +5,8 @@ import { AuthProvider } from '../src/contexts/auth';
 import { NotificationsProvider } from '../src/contexts/notifications';
 import { NetworkProvider } from '../src/contexts/network';
 import { I18nProvider } from '../src/contexts/i18n';
+import { VerticalProvider } from '../src/contexts/vertical';
+import { hubsService } from '../src/services/hubs';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useAuth } from '../src/contexts/auth';
 import { useThemeColors, useTheme, ThemeProvider } from '../src/theme';
@@ -459,7 +461,12 @@ export default function RootLayout() {
           <I18nProvider>
             <NetworkProvider>
               <NotificationsProvider>
-              <RootLayoutNav />
+                <VerticalProvider
+                  categories={hubsService.getCategories()}
+                  getModules={(categoryId: string) => hubsService.getModulesByCategory(categoryId)}
+                >
+                  <RootLayoutNav />
+                </VerticalProvider>
               </NotificationsProvider>
             </NetworkProvider>
           </I18nProvider>

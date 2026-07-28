@@ -1,4 +1,3 @@
-// ─── Navegación ───────────────────────────────────────────────────────────────
 export type RootStackParamList = {
   '(tabs)': undefined;
   'auth/login': undefined;
@@ -6,13 +5,11 @@ export type RootStackParamList = {
 
 export type TabParamList = {
   index: undefined;
-  gemma: undefined;
-  notifications: undefined;
-  hubs: undefined;
+  vertical: undefined;
+  calendar: undefined;
   profile: undefined;
 };
 
-// ─── Módulos / Hubs ──────────────────────────────────────────────────────────
 export interface HubCategory {
   id: string;
   name: string;
@@ -33,7 +30,6 @@ export interface HubModule {
   description: string;
 }
 
-// ─── Notificaciones ───────────────────────────────────────────────────────────
 export interface AppNotification {
   id: string;
   type: 'lead' | 'cita' | 'message' | 'system' | 'task' | 'alert';
@@ -44,7 +40,6 @@ export interface AppNotification {
   data?: Record<string, unknown>;
 }
 
-// ─── Leads ────────────────────────────────────────────────────────────────────
 export interface Lead {
   id: string;
   name: string;
@@ -58,7 +53,6 @@ export interface Lead {
   notes?: string;
 }
 
-// ─── Citas ────────────────────────────────────────────────────────────────────
 export interface Cita {
   id: string;
   title: string;

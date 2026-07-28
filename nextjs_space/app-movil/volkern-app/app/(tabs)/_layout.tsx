@@ -5,8 +5,8 @@ import { Platform, View, Text, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNotificationsCount } from '../../src/contexts/notifications';
 import { useNetwork } from '../../src/contexts/network';
+import { useVertical } from '../../src/contexts/vertical';
 
-// ─── Tab Icon Helper ──────────────────────────────────────────────────────────
 function TabIcon({ name, color, size }: { name: keyof typeof Ionicons.glyphMap; color: any; size: number }) {
   return <Ionicons name={name} size={size} color={color} />;
 }
@@ -16,13 +16,14 @@ export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const { unreadCount } = useNotificationsCount();
   const { pendingCount } = useNetwork();
+  const { activeVertical } = useVertical();
   const s = makeStyles(colors);
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.primary as string,
+        tabBarActiveTintColor: activeVertical?.color || (colors.primary as string),
         tabBarInactiveTintColor: colors.textTertiary as string,
         tabBarStyle: {
           height: Platform.OS === 'android'
@@ -62,37 +63,15 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="gemma"
+        name="vertical"
         options={{
-          title: 'Gemma',
-          tabBarIcon: ({ color, size }) => (
-            <TabIcon name="chatbubble-ellipses" color={color} size={size} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="notifications"
-        options={{
-          title: 'Notificaciones',
-          tabBarIcon: ({ color, size }) => (
-            <View>
-              <TabIcon name="notifications" color={color} size={size} />
-              {unreadCount > 0 && (
-                <View style={s.badge}>
-                  <Text style={s.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
-                </View>
-              )}
-            </View>
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="hubs"
-        options={{
-          title: 'Módulos',
-          tabBarIcon: ({ color, size }) => (
-            <TabIcon name="grid" color={color} size={size} />
-          ),
+          title: activeVertical ? activeVertical.name : 'Verticales',
+          tabBarIcon: ({ color, size }) => {
+            const iconName = activeVertical
+              ? (activeVertical.icon in Ionicons.glyphMap ? activeVertical.icon : 'apps')
+              : 'apps';
+            return <Ionicons name={(iconName as any) || 'apps'} size={size} color={activeVertical ? activeVertical.color : color} />;
+          },
         }}
       />
       <Tabs.Screen
@@ -101,24 +80,6 @@ export default function TabLayout() {
           title: 'Calendario',
           tabBarIcon: ({ color, size }) => (
             <TabIcon name="calendar" color={color} size={size} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="tasks"
-        options={{
-          title: 'Tareas',
-          tabBarIcon: ({ color, size }) => (
-            <TabIcon name="checkbox" color={color} size={size} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="reports"
-        options={{
-          title: 'Reportes',
-          tabBarIcon: ({ color, size }) => (
-            <TabIcon name="bar-chart" color={color} size={size} />
           ),
         }}
       />
