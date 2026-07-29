@@ -24,6 +24,7 @@ import { prisma } from '../lib/db';
 import { MetaAdsConnector } from '../lib/ads/connectors/meta-ads';
 import { GoogleAdsConnector } from '../lib/ads/connectors/google-ads';
 import { VaultService } from '../lib/security/vault';
+import { assertNoPrismaTypos } from '../lib/dev/prisma-model-guard';
 import fs from 'fs';
 import path from 'path';
 
@@ -195,131 +196,7 @@ async function runConnectorExpectingError(
   return errorMsg ?? 'no error captured';
 }
 
-// ─── PRISMA MODEL GUARD ────────────────────────────────────────────────────────
-/**
- * Reads this script's own source, extracts every `prisma.<name>` reference
- * (filtering $-prefixed methods like $queryRaw / $disconnect / $transaction),
- * and verifies each is a live, object-shaped model on the running PrismaClient.
- *
- * If a referenced name is missing, computes the closest schema-derived
- * camelCase model via Levenshtein distance and prints:
- *   `Model X no existe; probablemente quisiste decir Y`
- *
- * Catches the kind of single-character typo that bit us with
- * adCampaignPublication → adsCampaignPublication.
- */
-async function validatePrismaModelReferences(): Promise<void> {
-  step('0. PRISMA MODEL GUARD: verify every prisma.<model> referenced exists on the live client');
-
-  const scriptPath = process.argv[1] ?? path.join(process.cwd(), 'scripts', 'smoke-ads-publicaciones.ts');
-  const schemaPath = path.join(process.cwd(), 'prisma', 'schema.prisma');
-
-  if (!fs.existsSync(scriptPath)) {
-    console.warn(`  (skip) script source not resolved at ${scriptPath}`);
-    return;
-  }
-  if (!fs.existsSync(schemaPath)) {
-    console.warn(`  (skip) schema not resolved at ${schemaPath}`);
-    return;
-  }
-
-  const scriptSrc = fs.readFileSync(scriptPath, 'utf-8');
-  const schemaSrc = fs.readFileSync(schemaPath, 'utf-8');
-
-  // 1) First-level identifiers used as `prisma.<name>` in the script source.
-  //    Skip $-prefixed methods (Prisma reserved prefixes for $queryRaw, etc.).
-  const usedIds = new Set<string>();
-  const refRe = /prisma\.([A-Za-z_$][A-Za-z0-9_$]*)/g;
-  let mm: RegExpExecArray | null;
-  while ((mm = refRe.exec(scriptSrc))) {
-    if (!mm[1].startsWith('$')) usedIds.add(mm[1]);
-  }
-
-  // 2) Schema model declarations: `model FooBar {` → PascalCase → camelCase.
-  //    camelCase is what Prisma's client exposes (PascalCase ↔ camelCase).
-  const pascalToCamel = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
-  const schemaModels = [...schemaSrc.matchAll(/^\s*model\s+([A-Z][A-Za-z0-9_]*)/gm)].map((m) => m[1]);
-  const knownModelNames = new Set(schemaModels.map(pascalToCamel));
-
-  // 3) Diagnose top-level keys Prisma exposes (informational only — Prisma
-  //    uses a Proxy whose own keys are non-enumerable in some versions).
-  //    Schema-derived set is the source of truth for "did you mean".
-  const exposed = Object.keys(prisma as any).sort();
-  console.log(
-    `  Object.keys(prisma) → ${exposed.length} top-level keys` +
-      (exposed.length ? ': ' + exposed.slice(0, 12).join(', ') + (exposed.length > 12 ? '…' : '') : ' (proxy hides own keys — using schema-derived validation instead)')
-  );
-  console.log(`  Schema-derived model names (camelCase): ${knownModelNames.size} models`);
-  console.log(`  Script references ${usedIds.size} prisma.<model> names: ${[...usedIds].sort().join(', ')}`);
-
-  // 4) Levenshtein distance for "did you mean" suggestions.
-  const levenshtein = (a: string, b: string): number => {
-    if (a === b) return 0;
-    const m = a.length;
-    const n = b.length;
-    if (m === 0) return n;
-    if (n === 0) return m;
-    const prev = new Array<number>(n + 1);
-    const cur = new Array<number>(n + 1);
-    for (let j = 0; j <= n; j++) prev[j] = j;
-    for (let i = 1; i <= m; i++) {
-      cur[0] = i;
-      for (let j = 1; j <= n; j++) {
-        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-        cur[j] = Math.min(cur[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost);
-      }
-      for (let j = 0; j <= n; j++) prev[j] = cur[j];
-    }
-    return prev[n];
-  };
-
-  // 5) Cross-check each referenced identifier against the live client.
-  //    `typeof prisma.<name> === 'object'` is the runtime signal we confirmed
-  //    during diagnostics; Prisma returns `undefined` (typeof 'undefined') for
-  //    names it doesn't expose.
-  const missing: Array<{ ref: string; suggestion: string | null }> = [];
-  for (const ref of usedIds) {
-    const live = (prisma as any)[ref];
-    if (typeof live === 'object' && live !== null) continue;
-
-    // Closest schema-derived camelCase match within distance 2 (covers one
-    // insertion / deletion / substitution / swap).
-    let best: { name: string; dist: number } | null = null;
-    for (const cand of knownModelNames) {
-      const d = levenshtein(ref, cand);
-      if (d <= 2 && (!best || d < best.dist)) best = { name: cand, dist: d };
-    }
-    // Fallback: also check live getOwnPropertyNames (in case schema lags client).
-    if (!best) {
-      for (const cand of Object.getOwnPropertyNames(prisma as any)) {
-        const d = levenshtein(ref, cand);
-        if (d <= 2 && (!best || d < best.dist)) best = { name: cand, dist: d };
-      }
-    }
-    missing.push({ ref, suggestion: best?.name ?? null });
-  }
-
-  if (missing.length) {
-    const lines = missing.map(({ ref, suggestion }) =>
-      suggestion
-        ? `  - Model ${ref} no existe; probablemente quisiste decir ${suggestion}`
-        : `  - Model ${ref} no existe en el cliente Prisma (verify prisma/schema.prisma)`
-    );
-    throw new Error(
-      `PRISMA MODEL GUARD FAILED:\n` +
-        `${missing.length} referenced model(s) do not exist on the live Prisma client:\n` +
-        lines.join('\n') +
-        `\n\n  Schema models (camelCase, ${knownModelNames.size} total): ` +
-        [...knownModelNames].sort().slice(0, 80).join(', ') +
-        (knownModelNames.size > 80 ? '…' : '')
-    );
-  }
-
-  console.log(`  OK — all ${usedIds.size} referenced prisma.<model> names exist on the live client`);
-}
-
-async function main() {
-  await validatePrismaModelReferences();
+  await assertNoPrismaTypos(prisma);
   step('1. Verify 3 new tables exist in DB');
   const tables = await prisma.$queryRaw<Array<{ table_name: string }>>`
     SELECT table_name FROM information_schema.tables

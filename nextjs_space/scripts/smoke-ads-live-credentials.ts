@@ -80,6 +80,7 @@ import { prisma } from '../lib/db';
 import { MetaAdsConnector } from '../lib/ads/connectors/meta-ads';
 import { GoogleAdsConnector } from '../lib/ads/connectors/google-ads';
 import { VaultService } from '../lib/security/vault';
+import { assertNoPrismaTypos } from '../lib/dev/prisma-model-guard';
 
 function step(label: string) {
   console.log(`\n=== ${label} ===`);
@@ -109,100 +110,6 @@ function missingEnv(platform: 'META' | 'GOOGLE'): string[] {
 }
 
 // ─── 2. PRISMA MODEL GUARD (re-used from offline smoke) ───────────────
-async function validatePrismaModelReferences(): Promise<void> {
-  step('0. PRISMA MODEL GUARD: verify every prisma.<model> referenced exists');
-  const scriptPath =
-    process.argv[1] ??
-    path.join(process.cwd(), 'scripts', 'smoke-ads-live-credentials.ts');
-  const schemaPath = path.join(process.cwd(), 'prisma', 'schema.prisma');
-
-  if (!fs.existsSync(scriptPath) || !fs.existsSync(schemaPath)) {
-    console.warn('  (skip) script or schema source not resolved');
-    return;
-  }
-  const scriptSrc = fs.readFileSync(scriptPath, 'utf-8');
-  const schemaSrc = fs.readFileSync(schemaPath, 'utf-8');
-
-  const usedIds = new Set<string>();
-  const refRe = /prisma\.([A-Za-z_$][A-Za-z0-9_$]*)/g;
-  let mm: RegExpExecArray | null;
-  while ((mm = refRe.exec(scriptSrc))) {
-    if (!mm[1].startsWith('$')) usedIds.add(mm[1]);
-  }
-
-  const pascalToCamel = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
-  const schemaModels = [...schemaSrc.matchAll(/^\s*model\s+([A-Z][A-Za-z0-9_]*)/gm)].map((m) =>
-    m[1],
-  );
-  const knownModelNames = new Set(schemaModels.map(pascalToCamel));
-
-  const exposed = Object.keys(prisma as any).sort();
-  console.log(
-    `  Object.keys(prisma) → ${exposed.length} top-level keys` +
-      (exposed.length
-        ? ': ' + exposed.slice(0, 12).join(', ') + (exposed.length > 12 ? '…' : '')
-        : ' (proxy hides own keys — using schema-derived validation instead)'),
-  );
-  console.log(`  Schema-derived model names (camelCase): ${knownModelNames.size} models`);
-  console.log(`  Script references ${usedIds.size} prisma.<model> names: ${[...usedIds].sort().join(', ')}`);
-
-  const levenshtein = (a: string, b: string): number => {
-    if (a === b) return 0;
-    const m = a.length;
-    const n = b.length;
-    if (m === 0) return n;
-    if (n === 0) return m;
-    const prev = new Array<number>(n + 1);
-    const cur = new Array<number>(n + 1);
-    for (let j = 0; j <= n; j++) prev[j] = j;
-    for (let i = 1; i <= m; i++) {
-      cur[0] = i;
-      for (let j = 1; j <= n; j++) {
-        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-        cur[j] = Math.min(cur[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost);
-      }
-      for (let j = 0; j <= n; j++) prev[j] = cur[j];
-    }
-    return prev[n];
-  };
-
-  const missing: Array<{ ref: string; suggestion: string | null }> = [];
-  for (const ref of usedIds) {
-    const live = (prisma as any)[ref];
-    if (typeof live === 'object' && live !== null) continue;
-
-    let best: { name: string; dist: number } | null = null;
-    for (const cand of knownModelNames) {
-      const d = levenshtein(ref, cand);
-      if (d <= 2 && (!best || d < best.dist)) best = { name: cand, dist: d };
-    }
-    if (!best) {
-      for (const cand of Object.getOwnPropertyNames(prisma as any)) {
-        const d = levenshtein(ref, cand);
-        if (d <= 2 && (!best || d < best.dist)) best = { name: cand, dist: d };
-      }
-    }
-    missing.push({ ref, suggestion: best?.name ?? null });
-  }
-
-  if (missing.length) {
-    const lines = missing.map(({ ref, suggestion }) =>
-      suggestion
-        ? `  - Model ${ref} no existe; probablemente quisiste decir ${suggestion}`
-        : `  - Model ${ref} no existe en el cliente Prisma (verify prisma/schema.prisma)`,
-    );
-    throw new Error(
-      `PRISMA MODEL GUARD FAILED:\n` +
-        `${missing.length} referenced model(s) do not exist on the live Prisma client:\n` +
-        lines.join('\n') +
-        `\n\n  Schema models (camelCase, ${knownModelNames.size} total): ` +
-        [...knownModelNames].sort().slice(0, 80).join(', ') +
-        (knownModelNames.size > 80 ? '…' : ''),
-    );
-  }
-
-  console.log(`  OK — all ${usedIds.size} referenced prisma.<model> names exist on the live client`);
-}
 
 // ─── 3. Status mapper (matches /api/.../publish/route.ts) ──────────────
 function mapPublicacionEstado(connectorStatus: string): 'PUBLICADA' | 'PROGRAMADA' | 'ERROR' {
@@ -536,7 +443,7 @@ async function pruneSandboxRecords(
 
 // ─── 6. main ──────────────────────────────────────────────────────────
 async function main() {
-  await validatePrismaModelReferences();
+  await assertNoPrismaTypos(prisma);
 
   step('1. Load .env.sandbox');
   const sandbox = loadSandboxEnv();
