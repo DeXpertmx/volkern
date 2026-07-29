@@ -11,6 +11,8 @@ import {
   Facebook, 
   Instagram, 
   Linkedin, 
+  Youtube,
+  Music,
   LayoutGrid,
   Clock,
   Send,
@@ -124,11 +126,13 @@ export default function SocialDashboardPage() {
                 </Link>
               </CardHeader>
               <CardContent className="p-6">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
                   {[
                     { name: 'Facebook', id: 'facebook', icon: Facebook, color: 'text-blue-600', bg: 'bg-blue-50' },
                     { name: 'Instagram', id: 'instagram', icon: Instagram, color: 'text-pink-600', bg: 'bg-pink-50' },
                     { name: 'LinkedIn', id: 'linkedin', icon: Linkedin, color: 'text-sky-700', bg: 'bg-sky-50' },
+                    { name: 'YouTube', id: 'youtube', icon: Youtube, color: 'text-red-600', bg: 'bg-red-50' },
+                    { name: 'TikTok', id: 'tiktok', icon: Music, color: 'text-slate-900', bg: 'bg-slate-50' },
                   ].map((plat) => {
                     const config = configs[plat.id]
                     const connected = !!(config?.isActive && config?.profileId)
