@@ -58,10 +58,29 @@ import { motion } from 'framer-motion'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+type CommissionType = 'porcentaje_venta' | 'porcentaje_comision' | 'monto_fijo' | 'suscripcion_mensual'
+
+const COMMISSION_TYPE_LABELS: Record<CommissionType, string> = {
+  porcentaje_venta: 'Porcentaje sobre Venta',
+  porcentaje_comision: 'Porcentaje sobre Comisión',
+  monto_fijo: 'Monto Fijo',
+  suscripcion_mensual: 'Suscripción Mensual',
+}
+
+const COMMISSION_TYPE_DESCRIPTIONS: Record<CommissionType, string> = {
+  porcentaje_venta: '% del precio de venta total',
+  porcentaje_comision: '% del valor de la operación',
+  monto_fijo: 'Cantidad fija por operación',
+  suscripcion_mensual: 'Cuota periódica mensual (ej. franquicias)',
+}
+
 interface RealEstateConfig {
   enabled: boolean
   defaultCurrency: string
+  commissionType: CommissionType
   defaultCommissionPct: number
+  defaultMonthlyFee: number
+  defaultFixedFee: number
   defaultSplitAgent: number
   defaultSplitAgency: number
   portalSlug: string
@@ -113,7 +132,10 @@ export default function RealEstateConfigDashboard() {
   const [config, setConfig] = useState<RealEstateConfig>({
     enabled: false,
     defaultCurrency: 'EUR',
+    commissionType: 'porcentaje_venta',
     defaultCommissionPct: 3,
+    defaultMonthlyFee: 0,
+    defaultFixedFee: 0,
     defaultSplitAgent: 50,
     defaultSplitAgency: 50,
     portalSlug: 'propiedades',
@@ -209,7 +231,10 @@ export default function RealEstateConfigDashboard() {
           section: 'real_estate',
           data: {
             defaultCurrency: config.defaultCurrency,
+            commissionType: config.commissionType,
             defaultCommissionPct: config.defaultCommissionPct,
+            defaultMonthlyFee: config.defaultMonthlyFee,
+            defaultFixedFee: config.defaultFixedFee,
             defaultSplitAgent: config.defaultSplitAgent,
             defaultSplitAgency: config.defaultSplitAgency,
             portalSlug: config.portalSlug,
@@ -392,10 +417,29 @@ export default function RealEstateConfigDashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{config.defaultCommissionPct}%</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Split: {config.defaultSplitAgent}% agente / {config.defaultSplitAgency}% agencia
-            </p>
+            {config.commissionType === 'suscripcion_mensual' ? (
+              <>
+                <div className="text-2xl font-bold">{config.defaultMonthlyFee.toLocaleString()} {config.defaultCurrency}/mes</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Suscripción mensual — sin split
+                </p>
+              </>
+            ) : config.commissionType === 'monto_fijo' ? (
+              <>
+                <div className="text-2xl font-bold">{config.defaultFixedFee.toLocaleString()} {config.defaultCurrency}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Monto Fijo · Split: {config.defaultSplitAgent}% agente / {config.defaultSplitAgency}% agencia
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="text-2xl font-bold">{config.defaultCommissionPct}%</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {COMMISSION_TYPE_LABELS[config.commissionType]}
+                  {' · Split: '}{config.defaultSplitAgent}% agente / {config.defaultSplitAgency}% agencia
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -682,102 +726,164 @@ export default function RealEstateConfigDashboard() {
                 Configuración de Comisiones
               </CardTitle>
               <CardDescription>
-                Define los porcentajes de comisión por defecto para nuevas operaciones.
+                Define el tipo y los valores de comisión por defecto para nuevas operaciones.
                 Se pueden ajustar por transacción individual.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Tipo de Comisión */}
+              <div className="space-y-2">
+                <Label htmlFor="commission-type">Tipo de Comisión Default</Label>
+                <Select
+                  value={config.commissionType}
+                  onValueChange={(v) => setConfig(prev => ({ ...prev, commissionType: v as CommissionType }))}
+                >
+                  <SelectTrigger id="commission-type" className="max-w-xs">
+                    <SelectValue placeholder="Seleccionar tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="porcentaje_venta">Porcentaje sobre Venta</SelectItem>
+                    <SelectItem value="porcentaje_comision">Porcentaje sobre Comisión</SelectItem>
+                    <SelectItem value="monto_fijo">Monto Fijo</SelectItem>
+                    <SelectItem value="suscripcion_mensual">Suscripción Mensual</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {COMMISSION_TYPE_DESCRIPTIONS[config.commissionType]}
+                </p>
+              </div>
+
+              {/* Campos según tipo */}
+              {config.commissionType === 'suscripcion_mensual' ? (
                 <div className="space-y-2">
-                  <Label htmlFor="commission-pct">
-                    Comisión Default (%)
+                  <Label htmlFor="monthly-fee">
+                    Cuota Mensual ({config.defaultCurrency})
                   </Label>
                   <div className="flex items-center gap-2">
                     <Input
-                      id="commission-pct"
+                      id="monthly-fee"
                       type="number"
                       min={0}
-                      max={100}
-                      step={0.5}
-                      value={config.defaultCommissionPct}
+                      step={10}
+                      value={config.defaultMonthlyFee}
                       onChange={(e) => setConfig(prev => ({
                         ...prev,
-                        defaultCommissionPct: parseFloat(e.target.value) || 0,
+                        defaultMonthlyFee: parseFloat(e.target.value) || 0,
                       }))}
-                      className="max-w-[120px]"
+                      className="max-w-[160px]"
                     />
-                    <Percent className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">/mes</span>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Porcentaje sobre el valor de venta/alquiler
+                    Ideal para franquicias que cobran una suscripción periódica en lugar de comisión por venta
                   </p>
                 </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="commission-pct">
+                      {config.commissionType === 'monto_fijo' ? 'Monto Fijo' : 'Porcentaje'}
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="commission-pct"
+                        type="number"
+                        min={0}
+                        max={config.commissionType === 'monto_fijo' ? 999999999 : 100}
+                        step={config.commissionType === 'monto_fijo' ? 50 : 0.5}
+                        value={config.commissionType === 'monto_fijo' ? config.defaultFixedFee : config.defaultCommissionPct}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value) || 0
+                          if (config.commissionType === 'monto_fijo') {
+                            setConfig(prev => ({ ...prev, defaultFixedFee: val }))
+                          } else {
+                            setConfig(prev => ({ ...prev, defaultCommissionPct: val }))
+                          }
+                        }}
+                        className="max-w-[160px]"
+                      />
+                      {config.commissionType !== 'monto_fijo' && (
+                        <Percent className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {config.commissionType === 'monto_fijo'
+                        ? 'Cantidad fija por operación cerrada'
+                        : `Valor basado en el ${COMMISSION_TYPE_LABELS[config.commissionType].toLowerCase()}`
+                      }
+                    </p>
+                  </div>
 
-                <div className="space-y-2">
-                  <Label>Split Agente / Agencia</Label>
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-medium">Agente:</span>
-                      <Input
-                        type="number"
-                        min={0}
-                        max={100}
-                        value={config.defaultSplitAgent}
-                        onChange={(e) => {
-                          const agentVal = parseInt(e.target.value) || 0
-                          setConfig(prev => ({
-                            ...prev,
-                            defaultSplitAgent: agentVal,
-                            defaultSplitAgency: 100 - agentVal,
-                          }))
-                        }}
-                        className="max-w-[80px]"
-                      />
-                      <span className="text-xs text-muted-foreground">%</span>
+                  <div className="space-y-2">
+                    <Label>Split Agente / Agencia</Label>
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-medium">Agente:</span>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={config.defaultSplitAgent}
+                          onChange={(e) => {
+                            const agentVal = parseInt(e.target.value) || 0
+                            setConfig(prev => ({
+                              ...prev,
+                              defaultSplitAgent: agentVal,
+                              defaultSplitAgency: 100 - agentVal,
+                            }))
+                          }}
+                          className="max-w-[80px]"
+                        />
+                        <span className="text-xs text-muted-foreground">%</span>
+                      </div>
+                      <span className="text-muted-foreground">/</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-medium">Agencia:</span>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={config.defaultSplitAgency}
+                          onChange={(e) => {
+                            const agencyVal = parseInt(e.target.value) || 0
+                            setConfig(prev => ({
+                              ...prev,
+                              defaultSplitAgency: agencyVal,
+                              defaultSplitAgent: 100 - agencyVal,
+                            }))
+                          }}
+                          className="max-w-[80px]"
+                        />
+                        <span className="text-xs text-muted-foreground">%</span>
+                      </div>
                     </div>
-                    <span className="text-muted-foreground">/</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-medium">Agencia:</span>
-                      <Input
-                        type="number"
-                        min={0}
-                        max={100}
-                        value={config.defaultSplitAgency}
-                        onChange={(e) => {
-                          const agencyVal = parseInt(e.target.value) || 0
-                          setConfig(prev => ({
-                            ...prev,
-                            defaultSplitAgency: agencyVal,
-                            defaultSplitAgent: 100 - agencyVal,
-                          }))
-                        }}
-                        className="max-w-[80px]"
-                      />
-                      <span className="text-xs text-muted-foreground">%</span>
-                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Cómo se distribuye la comisión entre agente y agencia
+                    </p>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    El split determina cómo se distribuye la comisión entre agente y agencia
-                  </p>
                 </div>
-              </div>
+              )}
 
               <Separator />
 
               <div className="space-y-2">
                 <h4 className="font-semibold text-sm">Tipos de Comisión Soportados</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <div className="p-3 rounded-xl bg-muted/50">
                     <p className="font-medium text-sm">Porcentaje sobre Venta</p>
                     <p className="text-xs text-muted-foreground mt-1">% del precio de venta total</p>
                   </div>
                   <div className="p-3 rounded-xl bg-muted/50">
                     <p className="font-medium text-sm">Porcentaje sobre Comisión</p>
-                    <p className="text-xs text-muted-foreground mt-1">% del total de comisión generada</p>
+                    <p className="text-xs text-muted-foreground mt-1">% del valor de la operación</p>
                   </div>
                   <div className="p-3 rounded-xl bg-muted/50">
                     <p className="font-medium text-sm">Monto Fijo</p>
                     <p className="text-xs text-muted-foreground mt-1">Cantidad fija por operación</p>
+                  </div>
+                  <div className="p-3 rounded-xl bg-gradient-to-br from-indigo-500/10 to-transparent border-indigo-500/20">
+                    <p className="font-medium text-sm text-indigo-600 dark:text-indigo-400">Suscripción Mensual</p>
+                    <p className="text-xs text-muted-foreground mt-1">Cuota periódica mensual — para franquicias</p>
                   </div>
                 </div>
               </div>

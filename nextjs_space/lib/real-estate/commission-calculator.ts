@@ -12,9 +12,10 @@ import type { Comision, Deal, User } from '@prisma/client';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface CommissionRule {
-  tipo: 'porcentaje_venta' | 'porcentaje_comision' | 'monto_fijo' | 'escalonada';
+  tipo: 'porcentaje_venta' | 'porcentaje_comision' | 'monto_fijo' | 'escalonada' | 'suscripcion_mensual';
   porcentaje?: number;
   montoFijo?: number;
+  cuotaMensual?: number;   // Para tipo suscripcion_mensual
   escalones?: CommissionTier[];
   splitAgente?: number;   // % que va al agente
   splitAgencia?: number;  // % que va a la agencia/franquicia
@@ -123,6 +124,18 @@ export function calculateCommission(input: CommissionInput): CommissionResult {
         }
       }
       break;
+    }
+
+    case 'suscripcion_mensual': {
+      montoComision = rule.cuotaMensual || 0;
+      desglose.push(`Suscripción mensual: ${montoComision.toLocaleString()}/mes`);
+      // La suscripción no tiene split — el monto completo va a la franquicia
+      return {
+        montoCalculado: montoComision,
+        splitAgente: 0,
+        splitAgencia: montoComision,
+        desglose,
+      };
     }
   }
 
