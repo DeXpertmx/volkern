@@ -1204,21 +1204,275 @@ export class GoogleAdsConnector implements AdPlatformConnector {
   //  3. Manejar policy reviews (Google pone los ads en 'UNDER_REVIEW' inicialmente)
 
   async publishPublication(input: PublishPublicationInput): Promise<PublishPublicationResult> {
-    throw new Error(
-      '[GoogleAds] publishPublication no implementado en v1. Use plataforma=META o implemente AdGroupAd:mutate.',
+    const { publicationId, socialPostId } = input;
+    let { creative } = input;
+    const { accessToken, accountId } = await getDecryptedToken(input.platformId);
+    const developerToken = process.env.ADS_GOOGLE_DEVELOPER_TOKEN || '';
+    const customerId = accountId;
+
+    // 1. Local publication lookup (for campaign + adGroup target)
+    const publication = await prisma.adsCampaignPublication.findUnique({
+      where: { id: publicationId },
+      include: {
+        campaign: { include: { adSets: { take: 1, orderBy: { createdAt: 'asc' } } } },
+        creative: true,
+      },
+    });
+    if (!publication) throw new Error(`Publicación no encontrada: ${publicationId}`);
+    if (!publication.campaign) throw new Error(`Publicación ${publicationId} sin campaign asociada`);
+
+    // 1b. Boost fallback: si no hay creative o no trae mediaUrl pero sí socialPostId,
+    //     cargar el SocialPost para usar su contenido como creative.
+    if ((!creative || !creative.mediaUrl) && socialPostId) {
+      const sp = await prisma.socialPost.findUnique({
+        where: { id: socialPostId },
+        select: { content: true, mediaUrls: true },
+      });
+      if (sp) {
+        const socialPostMedia = sp.mediaUrls?.[0];
+        const looksLikeVideo =
+          !!socialPostMedia &&
+          (socialPostMedia.includes('youtube.com') ||
+            socialPostMedia.includes('youtu.be') ||
+            /\.(mp4|mov|webm)$/i.test(socialPostMedia));
+        const boostHeadline =
+          sp.content && sp.content.length > 0
+            ? sp.content.split('\n')[0].slice(0, 30)
+            : undefined;
+        const boostBody =
+          sp.content && sp.content.length > 0 ? sp.content.slice(0, 90) : undefined;
+        creative = {
+          mediaUrl: socialPostMedia,
+          mediaType: socialPostMedia ? (looksLikeVideo ? 'VIDEO' : 'IMAGE') : 'IMAGE',
+          bodyText: boostBody,
+          headline: boostHeadline,
+          landingUrl: creative?.landingUrl,
+        };
+        logger.info(
+          { publicationId, socialPostId, hasMedia: !!socialPostMedia },
+          'Google Ads: boost desde SocialPost',
+        );
+      } else {
+        logger.warn(
+          { publicationId, socialPostId },
+          'Google Ads: socialPostId no encontrado, continuando sin creative media',
+        );
+      }
+    }
+
+    // 2. Subir asset si hay creative con mediaUrl
+    let assetResourceName: string | undefined;
+    if (creative?.mediaUrl && (creative.mediaType === 'IMAGE' || creative.mediaType === 'VIDEO')) {
+      const buffer = await fetch(creative.mediaUrl).then((r) => {
+        if (!r.ok) throw new Error(`No se pudo descargar mediaUrl (${r.status})`);
+        return r.arrayBuffer();
+      });
+      const base64Data = Buffer.from(buffer).toString('base64');
+      const assetType = creative.mediaType === 'VIDEO' ? 'YOUTUBE_VIDEO' : 'IMAGE';
+      const imageAsset =
+        creative.mediaType === 'IMAGE' ? { data: base64Data } : undefined;
+      const youtubeVideoAsset =
+        creative.mediaType === 'VIDEO' ? { youtubeVideoId: creative.mediaUrl.split('v=').pop()?.split('&')[0] || '' } : undefined;
+
+      const assetResult = await mutateGoogleAds<{
+        results?: Array<{ resourceName: string }>;
+      }>(customerId, accessToken, developerToken, 'assets', [
+        {
+          create: {
+            name: `Volkern_${publicationId}_${Date.now()}`,
+            type: assetType,
+            ...(imageAsset && { imageAsset }),
+            ...(youtubeVideoAsset && { youtubeVideoAsset }),
+          },
+        },
+      ]);
+      assetResourceName = assetResult.results?.[0]?.resourceName;
+      logger.info({ publicationId, assetResourceName }, 'Google Ads: asset uploaded');
+    }
+
+    // 3. Construir payload del AdGroupAd
+    const adSetExternalId = publication.campaign.adSets[0]?.externalId;
+    if (!adSetExternalId) {
+      throw new Error(
+        `Campaign ${publication.campaign.name} no tiene AdSets en Google Ads. Ejecuta syncCampaigns primero.`,
+      );
+    }
+    const adGroupResourceName = `customers/${customerId}/adGroups/${adSetExternalId}`;
+    const finalUrls = (creative?.landingUrl ? [creative.landingUrl] : []) as string[];
+
+    // RSA requiere ≥3 headlines y ≥2 descriptions
+    const safe = (s: string | undefined, max: number, fallback: string): string =>
+      (s && s.trim().length > 0 ? s : fallback).slice(0, max);
+    const headlines = [
+      safe(creative?.headline, 30, 'Volkern — descubre tu próxima propiedad'),
+      safe(creative?.bodyText, 30, 'Asesoría inmobiliaria profesional'),
+      'Visítanos hoy mismo',
+    ];
+    const descriptions = [
+      safe(creative?.bodyText, 90, 'Encuentra propiedades exclusivas con el equipo de Volkern.'),
+      'Más de 15 años ayudando a tu familia a invertir bien.',
+    ];
+
+    const adPayload: Record<string, unknown> = creative?.mediaType === 'VIDEO'
+      ? {
+          finalUrls,
+          videoAd: {
+            name: `VolkernPub_${publicationId}`,
+            video: assetResourceName,
+          },
+        }
+      : creative?.mediaType === 'IMAGE' && assetResourceName
+      ? {
+          finalUrls,
+          imageAd: {
+            name: `VolkernPub_${publicationId}`,
+            imageAsset: assetResourceName,
+          },
+        }
+      : {
+          finalUrls,
+          responsiveSearchAd: {
+            headlines: headlines.map((text) => ({ text })),
+            descriptions: descriptions.map((text) => ({ text })),
+            path1: 'volkern',
+          },
+        };
+
+    // 4. Crear AdGroupAd (siempre arranca PAUSED — se activa según policySummary)
+    const opCreate = adGroupResourceName
+      ? {
+          create: {
+            adGroup: adGroupResourceName,
+            status: 'PAUSED',
+            ad: {
+              name: `VolkernPub_${publicationId}`,
+              ...adPayload,
+            },
+          },
+        }
+      : null;
+    if (!opCreate) {
+      throw new Error('Internal: create operation no construido');
+    }
+
+    const adGroupAdResult = await mutateGoogleAds<{
+      results?: Array<{ resourceName: string }>;
+    }>(customerId, accessToken, developerToken, 'adGroupAds', [opCreate]);
+
+    const adGroupAdResourceName = adGroupAdResult.results?.[0]?.resourceName;
+    if (!adGroupAdResourceName) {
+      throw new Error('Google Ads: respuesta mutate sin resourceName');
+    }
+
+    // 5. Consultar policySummary.approvalStatus del AdGroupAd recién creado
+    const policyQuery = `
+      SELECT ad_group_ad.status, ad_group_ad.policy_summary.approval_status
+      FROM ad_group_ad
+      WHERE ad_group_ad.resource_name = '${adGroupAdResourceName}'
+    `;
+    const policyRows = await searchGoogleAds(customerId, accessToken, developerToken, policyQuery);
+    const rawStatus = policyRows[0]?.adGroupAd?.status ?? 'PAUSED';
+    const rawApproval = policyRows[0]?.adGroupAd?.policySummary?.approvalStatus ?? null;
+
+    // 6. Activar AdGroupAd si Google lo aprobó inicialmente
+    const mapper = (s: string | null): 'ACTIVE' | 'IN_REVIEW' | 'REJECTED' => {
+      switch (s) {
+        case 'APPROVED':
+        case 'APPROVED_LIMITED':
+          return 'ACTIVE';
+        case 'UNDER_REVIEW':
+        case 'PENDING_REVIEW':
+        case 'AREA_OF_INTEREST_ONLY':
+          return 'IN_REVIEW';
+        case 'DISAPPROVED':
+        case 'APPROVED_WITH_REVIEW':
+        case 'PENDING_RICH_MEDIA_REVIEW':
+        case 'PENDING_VIDEO_REVIEW':
+          return 'IN_REVIEW';
+        default:
+          return 'IN_REVIEW';
+      }
+    };
+    const volkernStatus = mapper(rawApproval);
+
+    if (volkernStatus === 'ACTIVE' && rawStatus !== 'ENABLED') {
+      await mutateGoogleAds<{ results?: Array<Record<string, unknown>> }>(
+        customerId,
+        accessToken,
+        developerToken,
+        'adGroupAds',
+        [
+          {
+            updateMask: 'status',
+            update: { resourceName: adGroupAdResourceName, status: 'ENABLED' },
+          },
+        ],
+      );
+      logger.info({ publicationId, resourceName: adGroupAdResourceName }, 'Google Ads: activado tras aprobación');
+    }
+
+    logger.info(
+      { publicationId, externalAdId: adGroupAdResourceName, estado: volkernStatus, rawApproval },
+      'Google Ads publicación creada',
+    );
+
+    return {
+      externalAdId: adGroupAdResourceName,
+      status: volkernStatus,
+      externalStatusRaw: rawApproval ?? rawStatus,
+      ...(volkernStatus === 'REJECTED' && { errorMessage: `Política Google: ${rawApproval}` }),
+    };
+  }
+
+  async pausePublication(input: { externalAdId: string; platformId: string }): Promise<void> {
+    const { accessToken, accountId } = await getDecryptedToken(input.platformId);
+    const developerToken = process.env.ADS_GOOGLE_DEVELOPER_TOKEN || '';
+    await mutateGoogleAds<{ results?: Array<Record<string, unknown>> }>(
+      accountId,
+      accessToken,
+      developerToken,
+      'adGroupAds',
+      [
+        {
+          updateMask: 'status',
+          update: { resourceName: input.externalAdId, status: 'PAUSED' },
+        },
+      ],
     );
   }
 
-  async pausePublication(_input: { externalAdId: string; platformId: string }): Promise<void> {
-    throw new Error('[GoogleAds] pausePublication no implementado en v1.');
+  async resumePublication(input: { externalAdId: string; platformId: string }): Promise<void> {
+    const { accessToken, accountId } = await getDecryptedToken(input.platformId);
+    const developerToken = process.env.ADS_GOOGLE_DEVELOPER_TOKEN || '';
+    await mutateGoogleAds<{ results?: Array<Record<string, unknown>> }>(
+      accountId,
+      accessToken,
+      developerToken,
+      'adGroupAds',
+      [
+        {
+          updateMask: 'status',
+          update: { resourceName: input.externalAdId, status: 'ENABLED' },
+        },
+      ],
+    );
   }
 
-  async resumePublication(_input: { externalAdId: string; platformId: string }): Promise<void> {
-    throw new Error('[GoogleAds] resumePublication no implementado en v1.');
-  }
-
-  async deletePublication(_input: { externalAdId: string; platformId: string }): Promise<void> {
-    throw new Error('[GoogleAds] deletePublication no implementado en v1.');
+  async deletePublication(input: { externalAdId: string; platformId: string }): Promise<void> {
+    const { accessToken, accountId } = await getDecryptedToken(input.platformId);
+    const developerToken = process.env.ADS_GOOGLE_DEVELOPER_TOKEN || '';
+    await mutateGoogleAds<{ results?: Array<Record<string, unknown>> }>(
+      accountId,
+      accessToken,
+      developerToken,
+      'adGroupAds',
+      [
+        {
+          updateMask: 'status',
+          update: { resourceName: input.externalAdId, status: 'REMOVED' },
+        },
+      ],
+    );
   }
 }
 

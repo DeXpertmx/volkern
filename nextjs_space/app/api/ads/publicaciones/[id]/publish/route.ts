@@ -80,15 +80,26 @@ export const POST = withTenantAuth(async (_req, auth, { params }: any) => {
     const updated = await prisma.adsCampaignPublication.update({
       where: { id: pub.id },
       data: {
-        estado: 'PUBLICADA',
+        estado: result.status === 'REJECTED'
+          ? 'ERROR'
+          : result.status === 'IN_REVIEW'
+          ? 'PROGRAMADA'
+          : 'PUBLICADA',
         externalAdId: result.externalAdId,
         externalStatus: result.status,
         publishedAt: new Date(),
-        errorMessage: null,
+        errorMessage:
+          result.status === 'REJECTED' && result.errorMessage
+            ? result.errorMessage
+            : null,
       },
     });
 
-    return NextResponse.json({ data: updated, externalAdId: result.externalAdId });
+    return NextResponse.json({
+      data: updated,
+      externalAdId: result.externalAdId,
+      externalStatusRaw: result.externalStatusRaw ?? null,
+    });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

@@ -272,4 +272,6 @@ export interface PublishPublicationResult {
   externalAdId: string;
   status: 'ACTIVE' | 'IN_REVIEW' | 'PAUSED' | 'REJECTED';
   externalStatusRaw?: string;
+  /** Mensaje legible cuando el conector rechaza el publish (ej. políticas de plataforma). */
+  errorMessage?: string;
 }
