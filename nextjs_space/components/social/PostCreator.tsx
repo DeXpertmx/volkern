@@ -9,6 +9,8 @@ import {
   Facebook, 
   Instagram, 
   Linkedin,
+  Youtube,
+  Music,
   Monitor,
   Smartphone,
   Info
@@ -96,6 +98,8 @@ export function PostCreator({ onClose, onPostCreated }: PostCreatorProps) {
                 { id: 'facebook', icon: Facebook, color: 'text-blue-600', bg: 'bg-blue-50' },
                 { id: 'instagram', icon: Instagram, color: 'text-pink-600', bg: 'bg-pink-50' },
                 { id: 'linkedin', icon: Linkedin, color: 'text-sky-700', bg: 'bg-sky-50' },
+                { id: 'youtube', icon: Youtube, color: 'text-red-600', bg: 'bg-red-50' },
+                { id: 'tiktok', icon: Music, color: 'text-slate-900', bg: 'bg-slate-50' },
               ].map((plat) => (
                 <button
                   key={plat.id}
