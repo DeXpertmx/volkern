@@ -150,8 +150,6 @@ export const HUBS: HubConfig[] = [
     ],
     items: [
       { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3, planModule: 'analytics', description: 'Métricas y KPIs de ventas' },
-      { name: 'Discover', href: '/dashboard/discover', icon: Radio, planModule: 'scoring', description: 'Inteligencia CRM y señales de compra' },
-      { name: 'Importar Datos', href: '/dashboard/importar', icon: FileWarning, description: 'Importación masiva de leads y contactos' },
       { name: 'Tareas', href: '/dashboard/tareas', icon: ListTodo, planModule: 'tareas', description: 'Gestión de pendientes y seguimientos' },
       { name: 'Leads', href: '/dashboard/leads', icon: Users, planModule: 'leads', description: 'Gestión de prospectos' },
       { name: 'Contactos', href: '/dashboard/contactos', icon: UserCheck, planModule: 'contactos', description: 'Base de datos de contactos' },
@@ -204,6 +202,7 @@ export const HUBS: HubConfig[] = [
       '/dashboard/social'
     ],
     items: [
+      { name: 'Discover', href: '/dashboard/discover', icon: Radar, planModule: 'ads', description: 'Inteligencia de mercado y señales de compra con AI Score' },
       { name: 'Campañas', href: '/dashboard/campanas', icon: Send, planModule: 'campanas', description: 'Email marketing y campañas' },
       { name: 'ADS Intelligence', href: '/dashboard/ads', icon: TrendingUp, planModule: 'ads', description: 'Campañas de anuncios pagados con IA' },
       { name: 'Constructor Web', href: '/dashboard/webcreator', icon: Sparkles, planModule: 'cms', description: 'Diseño de landing pages' },
