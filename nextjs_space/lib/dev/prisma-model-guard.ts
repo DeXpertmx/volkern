@@ -111,8 +111,6 @@ export interface AssertOptions {
   silent?: boolean;
 }
 
-const TOP_SCHEMA_NAMES_TO_PRELOAD = 0; // pure function — uses regex
-
 /**
  * Runtime guard for smoke pre-scripts. Wrap in `step('0. PRISMA MODEL GUARD')`
  * at the start of `main()`. On success: logs `OK` and returns. On real typo:
@@ -148,12 +146,11 @@ export async function assertNoPrismaTypos(
   // Cross-validate against live client — schema.prisma may not list ad-hoc
   // models exposed via client extensions / DMMF transformations. A ref the
   // schema doesn't know about but the live client exposes is NOT a typo.
+  // NOTE: PrismaClient is a Proxy; Object.getOwnPropertyNames on it returns
+  // an empty array in modern Node, so liveKeys may stay empty. We still
+  // keep this check for non-proxied clients (e.g. test stubs).
   const liveKeys = new Set<string>();
-  try {
-    for (const k of Object.getOwnPropertyNames(prisma ?? {})) liveKeys.add(k);
-  } catch {
-    /* proxy may throw — skip */
-  }
+  for (const k of Object.getOwnPropertyNames(prisma ?? {})) liveKeys.add(k);
   const filteredTypos = staticTypos.filter((t) => !liveKeys.has(t.ref));
 
   if (!opts.silent) {
