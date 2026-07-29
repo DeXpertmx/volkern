@@ -10,7 +10,7 @@ import { PushNotificationInit } from '@/components/providers/PushNotificationIni
 import { PWAInstallPrompt } from '@/components/providers/PWAInstallPrompt';
 import { CookieConsentBanner } from '@/components/public/CookieConsentBanner';
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({ subsets: ['latin'], adjustFontFallback: false });
 
 
 export const metadata = {

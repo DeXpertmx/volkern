@@ -91,7 +91,8 @@ export function DashboardContent() {
   })
   const [isLocked, setIsLocked] = useState(() => {
     const saved = lsLoad()
-    return typeof saved?.isLocked === 'boolean' ? saved.isLocked : true
+    const savedIsLocked = saved?.isLocked
+    return typeof savedIsLocked === 'boolean' ? savedIsLocked : true
   })
   const [layouts, setLayouts] = useState<ResponsiveLayouts>(() => {
     const saved = lsLoad()
@@ -99,7 +100,8 @@ export function DashboardContent() {
   })
   const [visibleWidgets, setVisibleWidgets] = useState<string[]>(() => {
     const saved = lsLoad()
-    if (Array.isArray(saved?.visibleWidgets) && saved.visibleWidgets.length > 0) return saved.visibleWidgets
+    const savedVisible = saved?.visibleWidgets
+    if (Array.isArray(savedVisible) && savedVisible.length > 0) return savedVisible
     return ALL_WIDGET_IDS
   })
   const [mounted, setMounted] = useState(false)

@@ -129,7 +129,7 @@ export async function GET(req: NextRequest) {
         ownerContactId: null,
         tasaImpuesto: null,
         ownerContact: null,
-      })
+      } as any)
     }
 
     // Incluir siempre Servicio legacy independientemente del filtro tipo

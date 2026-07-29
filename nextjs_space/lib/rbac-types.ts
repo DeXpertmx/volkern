@@ -266,6 +266,7 @@ export const ALL_MODULES: RBACModule[] = [
   'whitelabel',
   'telefonia',
   'pages',
+  'ads',
 ];
 
 /**
@@ -323,6 +324,7 @@ export const MODULE_LABELS: Record<RBACModule, string> = {
   whitelabel: 'White Label',
   telefonia: 'Telefonía',
   pages: 'Páginas',
+  ads: 'Anuncios',
 };
 
 /**

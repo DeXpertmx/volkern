@@ -13,7 +13,7 @@ export async function resolveTenantBySlug(slug: string) {
     select: { tenantId: true },
   });
 
-  if (!config) return null;
+  if (!config?.tenantId) return null;
 
   return globalPrisma.tenant.findUnique({
     where: { id: config.tenantId },
@@ -26,7 +26,7 @@ export async function resolveTenantByCustomDomain(domain: string) {
     select: { tenantId: true },
   });
 
-  if (!config) return null;
+  if (!config?.tenantId) return null;
 
   return globalPrisma.tenant.findUnique({
     where: { id: config.tenantId },

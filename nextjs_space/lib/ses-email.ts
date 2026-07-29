@@ -148,6 +148,10 @@ export async function sendBulkEmail(emails: SendEmailParams[]) {
   }
 }
 
+function getFromAddress(subdomain?: string): string {
+  return FROM_ADDRESSES[subdomain || 'default'] || 'Volkern <noreply@volkern.app>';
+}
+
 export function replaceTemplateVariables(
   template: string,
   variables: Record<string, string>
