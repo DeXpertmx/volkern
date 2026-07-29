@@ -37,7 +37,7 @@ async function testDigitalSignature() {
         });
       }
 
-      const vacation = await prisma.vacationRequest.create({
+      const vacation = await prisma.erp_vacation_requests.create({
         data: {
           tenantId: tenant.id,
           employeeId: employee.id,

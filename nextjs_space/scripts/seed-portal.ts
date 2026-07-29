@@ -8,7 +8,7 @@ async function main() {
   const contact = await prisma.contact.findFirst({ where: { tenantId: tenant.id } });
   if (!contact) return console.log('No contact found');
 
-  const order = await prisma.salesOrder.create({
+  const order = await prisma.erp_sales_orders.create({
     data: {
       tenantId: tenant.id,
       contactId: contact.id,

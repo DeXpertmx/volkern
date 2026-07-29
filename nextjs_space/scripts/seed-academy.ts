@@ -9,7 +9,7 @@ async function main() {
   const password = 'password123';
 
   // Check if user exists
-  let user = await prisma.academyUser.findUnique({ 
+  let user = await prisma.erp_academy_users.findUnique({
     where: { email },
     include: { estudiante: true }
   });

@@ -26,7 +26,7 @@ async function main() {
   }
 
   // 3. Limpiar previos
-  await prisma.digitalAccess.deleteMany({ where: { tenantId } });
+  await prisma.erp_digital_access.deleteMany({ where: { tenantId } });
 
   // 4. Crear accesos digitales
   const assets = [
@@ -63,7 +63,7 @@ async function main() {
   ];
 
   for (const asset of assets) {
-    await prisma.digitalAccess.create({ data: asset });
+    await prisma.erp_digital_access.create({ data: asset });
   }
 
   console.log('🚀 Digital Access Assets cargados con éxito.');

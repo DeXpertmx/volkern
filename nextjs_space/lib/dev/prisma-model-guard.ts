@@ -79,10 +79,22 @@ export function detectPrismaTypos(
     if (!mm[1].startsWith('$')) usedIds.add(mm[1]);
   }
 
-  const pascalModels = [
-    ...schemaCode.matchAll(/^\s*model\s+([A-Z][A-Za-z0-9_]*)/gm),
+  // Capture both PascalCase-starting models (e.g. `model User`) AND
+  // snake_case schema names that start with lowercase (e.g.
+  // `model erp_customer_users`, `model agent_skill_logs`). The codebase
+  // mixes conventions: PascalCase models are accessed in code as their
+  // camelCase equivalent (`prisma.user`), while snake_case models are
+  // accessed verbatim (`prisma.erp_customer_users`). Both forms are
+  // accepted on the client, so the audit must accept both.
+  const schemaModels = [
+    ...schemaCode.matchAll(/^\s*model\s+([A-Za-z_][A-Za-z0-9_]*)/gm),
   ].map((m) => m[1]);
-  const validNames = new Set(pascalModels.map(pascalToCamel));
+  const validNames = new Set<string>([
+    // PascalCase sources → camelCase for client access.
+    ...schemaModels.filter((n) => /^[A-Z]/.test(n)).map(pascalToCamel),
+    // snake_case sources kept verbatim (pascalToCamel is identity for them).
+    ...schemaModels,
+  ]);
 
   const missing: PrismaTypo[] = [];
   for (const ref of usedIds) {

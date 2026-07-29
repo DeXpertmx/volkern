@@ -65,7 +65,7 @@ async function main() {
   // 3. Asignar Activos a Empleados
   // Ana tiene el Kit de Sensores y la Licencia
   if (sensorItem && softwareItem) {
-    await prisma.employeeAsset.create({
+    await prisma.erp_employee_assets.create({
       data: {
         tenantId,
         employeeId: anaId,
@@ -76,7 +76,7 @@ async function main() {
       } as any
     });
 
-    await prisma.employeeAsset.create({
+    await prisma.erp_employee_assets.create({
       data: {
         tenantId,
         employeeId: anaId,
@@ -90,7 +90,7 @@ async function main() {
 
   // Carlos tiene la Estación de Soldadura
   if (weldingItem) {
-    await prisma.employeeAsset.create({
+    await prisma.erp_employee_assets.create({
       data: {
         tenantId,
         employeeId: carlosId,
