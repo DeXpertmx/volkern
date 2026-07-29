@@ -840,7 +840,7 @@ export class MetaAdsConnector implements AdPlatformConnector {
     if (!publication || !publication.tenant.vaultSeed) {
       throw new Error('Publicación no encontrada o sin vaultSeed');
     }
-    const platformId = (publication as any).platformId || input.publicationId;
+    const platformId = input.platformId;
     const { accessToken, accountId } = await getDecryptedToken(platformId);
     const adAccountId = `act_${accountId}`;
     const pageId = input.metaPageId || process.env.ADS_META_DEFAULT_PAGE_ID;
@@ -898,45 +898,24 @@ export class MetaAdsConnector implements AdPlatformConnector {
     return { externalAdId: adResp.id, status: 'IN_REVIEW', externalStatusRaw: 'PENDING_REVIEW' };
   }
 
-  async pausePublication(externalAdId: string): Promise<void> {
-    // Necesitamos resolver platformId desde el AdCampaignPublication asociado.
-    // En la práctica el caller resolverá y pasará también platformId; para simplicidad
-    // buscamos el externalAdId en la tabla:
-    const publication = await prisma.adsCampaignPublication.findFirst({
-      where: { externalAdId },
-      include: { tenant: { select: { vaultSeed: true } } },
-    });
-    if (!publication || !publication.tenant.vaultSeed) throw new Error('Publicación no encontrada');
-    const platformId = (publication as any).platformId;
-    const { accessToken } = await getDecryptedToken(platformId);
-    await metaFetch(`${BASE_URL}/${externalAdId}?access_token=${accessToken}`, {
+  async pausePublication(input: { externalAdId: string; platformId: string }): Promise<void> {
+    const { accessToken } = await getDecryptedToken(input.platformId);
+    await metaFetch(`${BASE_URL}/${input.externalAdId}?access_token=${accessToken}`, {
       method: 'POST',
       body: JSON.stringify({ status: 'PAUSED' }),
     });
   }
 
-  async resumePublication(externalAdId: string): Promise<void> {
-    const publication = await prisma.adsCampaignPublication.findFirst({
-      where: { externalAdId },
-      include: { tenant: { select: { vaultSeed: true } } },
-    });
-    if (!publication || !publication.tenant.vaultSeed) throw new Error('Publicación no encontrada');
-    const platformId = (publication as any).platformId;
-    const { accessToken } = await getDecryptedToken(platformId);
-    await metaFetch(`${BASE_URL}/${externalAdId}?access_token=${accessToken}`, {
+  async resumePublication(input: { externalAdId: string; platformId: string }): Promise<void> {
+    const { accessToken } = await getDecryptedToken(input.platformId);
+    await metaFetch(`${BASE_URL}/${input.externalAdId}?access_token=${accessToken}`, {
       method: 'POST',
       body: JSON.stringify({ status: 'ACTIVE' }),
     });
   }
 
-  async deletePublication(externalAdId: string): Promise<void> {
-    const publication = await prisma.adsCampaignPublication.findFirst({
-      where: { externalAdId },
-      include: { tenant: { select: { vaultSeed: true } } },
-    });
-    if (!publication || !publication.tenant.vaultSeed) throw new Error('Publicación no encontrada');
-    const platformId = (publication as any).platformId;
-    const { accessToken } = await getDecryptedToken(platformId);
-    await metaFetch(`${BASE_URL}/${externalAdId}?access_token=${accessToken}`, { method: 'DELETE' });
+  async deletePublication(input: { externalAdId: string; platformId: string }): Promise<void> {
+    const { accessToken } = await getDecryptedToken(input.platformId);
+    await metaFetch(`${BASE_URL}/${input.externalAdId}?access_token=${accessToken}`, { method: 'DELETE' });
   }
 }

@@ -79,6 +79,7 @@ export const POST = withTenantAuth(async (req, auth) => {
       const connector = getConnectorForPlatform(adPlatform);
       const result = await connector.publishPublication({
         publicationId: publication.id,
+        platformId: platform.id,
         socialPostId: post.id,
         ...(body.metaPageId && { metaPageId: body.metaPageId }),
         ...(body.adSetId && { adSetId: body.adSetId }),

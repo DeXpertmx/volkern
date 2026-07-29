@@ -225,14 +225,14 @@ export interface AdPlatformConnector {
   /** Publica una unidad creativa como ad (o boostea un SocialPost) */
   publishPublication(input: PublishPublicationInput): Promise<PublishPublicationResult>;
 
-  /** Pausa una publicación ya creada en la plataforma */
-  pausePublication(externalAdId: string): Promise<void>;
+  /** Pausa una publicación ya creada en la plataforma. Resuelve la conexión del tenant por platformId. */
+  pausePublication(input: { externalAdId: string; platformId: string }): Promise<void>;
 
-  /** Reactiva una publicación pausada */
-  resumePublication(externalAdId: string): Promise<void>;
+  /** Reactiva una publicación pausada. */
+  resumePublication(input: { externalAdId: string; platformId: string }): Promise<void>;
 
-  /** Archiva/elimina una publicación según lo permita la plataforma */
-  deletePublication(externalAdId: string): Promise<void>;
+  /** Archiva/elimina una publicación según lo permita la plataforma. */
+  deletePublication(input: { externalAdId: string; platformId: string }): Promise<void>;
 }
 
 // ─── Tipos para el registro de conectores ─────────────────────────────
@@ -245,6 +245,8 @@ export interface ConnectorConstructor {
 
 export interface PublishPublicationInput {
   publicationId: string;
+  /** id de AdPlatformConnection del tenant (resuelto por el caller). */
+  platformId: string;
   // Solo cuando NO es boost y la creatividad viene del AdsCreative propio
   creative?: {
     mediaUrl: string;

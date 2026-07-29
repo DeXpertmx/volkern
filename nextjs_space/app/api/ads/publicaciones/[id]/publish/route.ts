@@ -49,6 +49,7 @@ export const POST = withTenantAuth(async (_req, auth, { params }: any) => {
     try {
       result = await connector.publishPublication({
         publicationId: pub.id,
+        platformId: platform.id,
         ...(pub.creative && {
           creative: {
             mediaUrl: pub.creative.mediaUrl,

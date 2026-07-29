@@ -1198,15 +1198,15 @@ export class LinkedInAdsConnector implements AdPlatformConnector {
     );
   }
 
-  async pausePublication(_externalAdId: string): Promise<void> {
+  async pausePublication(_input: { externalAdId: string; platformId: string }): Promise<void> {
     throw new Error('[LinkedInAds] pausePublication no implementado en v1.');
   }
 
-  async resumePublication(_externalAdId: string): Promise<void> {
+  async resumePublication(_input: { externalAdId: string; platformId: string }): Promise<void> {
     throw new Error('[LinkedInAds] resumePublication no implementado en v1.');
   }
 
-  async deletePublication(_externalAdId: string): Promise<void> {
+  async deletePublication(_input: { externalAdId: string; platformId: string }): Promise<void> {
     throw new Error('[LinkedInAds] deletePublication no implementado en v1.');
   }
 }

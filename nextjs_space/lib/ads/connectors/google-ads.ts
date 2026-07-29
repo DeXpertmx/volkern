@@ -1209,15 +1209,15 @@ export class GoogleAdsConnector implements AdPlatformConnector {
     );
   }
 
-  async pausePublication(_externalAdId: string): Promise<void> {
+  async pausePublication(_input: { externalAdId: string; platformId: string }): Promise<void> {
     throw new Error('[GoogleAds] pausePublication no implementado en v1.');
   }
 
-  async resumePublication(_externalAdId: string): Promise<void> {
+  async resumePublication(_input: { externalAdId: string; platformId: string }): Promise<void> {
     throw new Error('[GoogleAds] resumePublication no implementado en v1.');
   }
 
-  async deletePublication(_externalAdId: string): Promise<void> {
+  async deletePublication(_input: { externalAdId: string; platformId: string }): Promise<void> {
     throw new Error('[GoogleAds] deletePublication no implementado en v1.');
   }
 }
