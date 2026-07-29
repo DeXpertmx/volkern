@@ -72,7 +72,7 @@ export const ALL_MODULES: ModuleDefinition[] = [
   { id: 'builder_premium', label: 'Constructor Premium', description: 'WebCreator avanzado con componentes pro', icon: '🏗️', group: 'Marketing' },
   { id: 'social_manager', label: 'Hub Social', description: 'Gestión y programación de redes sociales', icon: '📱', group: 'Marketing' },
   { id: 'formularios', label: 'Formularios', description: 'Creador de formularios inteligentes', icon: '📝', group: 'Marketing' },
-  { id: 'ads', label: 'ADS Intelligence', description: 'Campañas de anuncios pagados con IA (Meta, Google, LinkedIn, TikTok)', icon: '📊', group: 'Marketing' },
+  { id: 'ads', label: 'ADS Intelligence', description: 'Campañas de anuncios pagados con IA (Meta, Google, LinkedIn, TikTok)', icon: '📈', group: 'Marketing' },
   { id: 'cursos', label: 'Cursos', description: 'Gestión de cursos y contenido', icon: '📚', group: 'Academia' },
   { id: 'estudiantes', label: 'Estudiantes', description: 'Portal de estudiantes y certificados', icon: '🎓', group: 'Academia' },
   { id: 'automatizaciones', label: 'Automatizaciones', description: 'Motor de automatización visual', icon: '⚙️', group: 'Automatización' },
