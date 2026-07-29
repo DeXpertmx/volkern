@@ -59,7 +59,7 @@ async function runMetaFlow(
       landingUrl: 'https://example.com',
     },
   });
-  const pub = await prisma.adCampaignPublication.create({
+  const pub = await prisma.adsCampaignPublication.create({
     data: {
       tenantId: tenant.id,
       nombre: 'Smoke Meta Pub',
