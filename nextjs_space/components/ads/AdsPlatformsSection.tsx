@@ -64,7 +64,10 @@ export function AdsPlatformsSection() {
       const res = await fetch('/api/ads/connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ platform }),
+        body: JSON.stringify({
+          platform: platform.toUpperCase(),
+          redirectUri: window.location.origin + '/api/ads/connect/callback?platform=' + platform.toUpperCase(),
+        }),
       })
       if (!res.ok) {
         const error = await res.json()
