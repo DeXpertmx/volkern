@@ -57,6 +57,9 @@ export interface MCPCallToolResponse {
  * Definiciones de herramientas MCP basadas en Skills
  * Cada tool mapea directamente a un skill
  */
+
+
+
 export const MCP_TOOLS: MCPTool[] = [
   // ========== CONTACTOS ==========
   {
@@ -990,6 +993,20 @@ export const MCP_TOOLS: MCPTool[] = [
       required: ['tituloPagina', 'tenantId'],
     },
   },
+  // ─── ENERGÍA / OPTIMIZACIÓN ───────────────────────────────────────────────────
+  {
+    name: 'optimize_energy_consumption',
+    description: 'Analiza el plan de energía del tenant (erp_capacity_snapshots) y devuelve alertas / recomendación si hay picos que exceden la capacidad contratada. Espera que un script o el propio host haya inyectado lecturas vía lib/mcp/optimize-energy/analytics-service.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tenantId: { type: 'string', description: 'ID del tenant' },
+        thresholdRatio: { type: 'number', description: 'Ratio peak/capacity sobre el que se considera oversized (default 0.85)' },
+      },
+      required: ['tenantId'],
+    },
+  },
+
 ];
 
 // ============== HANDLERS MCP ==============

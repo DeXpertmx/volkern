@@ -667,6 +667,8 @@ const cancelBookingWrapper = async (input: {
 }
 
 
+import * as optimizeEnergySkills from '@/lib/mcp/skills/optimizeEnergySkill';
+
 export const skills = {
   // Contactos
   create_contact: contactSkills.createContact,
@@ -829,6 +831,8 @@ export const skills = {
   start_ab_test: adSkills.start_ab_test,
   calculate_ab_test_significance: adSkills.calculate_ab_test_significance,
   declare_ab_test_winner: adSkills.declare_ab_test_winner,
+  optimize_energy_consumption: optimizeEnergySkills.optimizeEnergyConsumption,
+
 } as const;
 
 export type SkillName = keyof typeof skills;
