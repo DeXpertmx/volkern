@@ -64,6 +64,7 @@ import {
   MapPin,
   Ship,
   Radio,
+  Radar,
   Scale,
   Mail
 } from 'lucide-react'
