@@ -65,6 +65,7 @@ export function AdsPlatformsSection() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          // Backend espera MAYÚSCULAS (META, GOOGLE, LINKEDIN, TIKTOK) + redirectUri obligatorio
           platform: platform.toUpperCase(),
           redirectUri: window.location.origin + '/api/ads/connect/callback?platform=' + platform.toUpperCase(),
         }),
