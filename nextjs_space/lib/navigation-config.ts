@@ -63,9 +63,11 @@ import {
   Truck,
   MapPin,
   Ship,
+  Radar,
   Radio,
   Scale,
-  Mail
+  Mail,
+  Megaphone
 } from 'lucide-react'
 import type { PermissionModule } from '@/lib/permissions'
 
@@ -150,8 +152,6 @@ export const HUBS: HubConfig[] = [
     ],
     items: [
       { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3, planModule: 'analytics', description: 'Métricas y KPIs de ventas' },
-      { name: 'Discover', href: '/dashboard/discover', icon: Radio, planModule: 'scoring', description: 'Inteligencia CRM y señales de compra' },
-      { name: 'Importar Datos', href: '/dashboard/importar', icon: FileWarning, description: 'Importación masiva de leads y contactos' },
       { name: 'Tareas', href: '/dashboard/tareas', icon: ListTodo, planModule: 'tareas', description: 'Gestión de pendientes y seguimientos' },
       { name: 'Leads', href: '/dashboard/leads', icon: Users, planModule: 'leads', description: 'Gestión de prospectos' },
       { name: 'Contactos', href: '/dashboard/contactos', icon: UserCheck, planModule: 'contactos', description: 'Base de datos de contactos' },
@@ -200,12 +200,16 @@ export const HUBS: HubConfig[] = [
     basePaths: [
       '/dashboard/campanas',
       '/dashboard/ads',
+      '/dashboard/ads/publicaciones',
+      '/dashboard/discover',
       '/dashboard/webcreator',
       '/dashboard/social'
     ],
     items: [
+      { name: 'Discover', href: '/dashboard/discover', icon: Radar, planModule: 'discover', description: 'Inteligencia de mercado y señales de compra con AI Score' },
       { name: 'Campañas', href: '/dashboard/campanas', icon: Send, planModule: 'campanas', description: 'Email marketing y campañas' },
       { name: 'ADS Intelligence', href: '/dashboard/ads', icon: TrendingUp, planModule: 'ads', description: 'Campañas de anuncios pagados con IA' },
+      { name: 'Publicaciones ADS', href: '/dashboard/ads/publicaciones', icon: Megaphone, planModule: 'ads', description: 'Crea, programa y publica anuncios en Meta y Google' },
       { name: 'Constructor Web', href: '/dashboard/webcreator', icon: Sparkles, planModule: 'cms', description: 'Diseño de landing pages' },
       { name: 'Hub Social', href: '/dashboard/social', icon: Share2, planModule: 'social_manager', description: 'Gestión de redes sociales' },
       { name: 'Configuración', href: '/dashboard/social/settings', icon: Settings2, description: 'Conectar redes sociales y APIs' },
@@ -496,7 +500,8 @@ export const HUBS: HubConfig[] = [
     description: 'Ajustes del sistema, marca blanca e integraciones.',
     basePaths: [
       '/dashboard/equipo',
-      '/dashboard/integraciones'
+      '/dashboard/integraciones',
+      '/dashboard/importar'
     ],
     items: [
       { name: 'Empresa', href: '/dashboard/configuracion?section=empresa', icon: Building, description: 'Datos empresariales' },
@@ -515,6 +520,7 @@ export const HUBS: HubConfig[] = [
       { name: 'Inmobiliaria', href: '/dashboard/configuracion/real-estate', icon: Home, description: 'Configuración del portal de propiedades y comisiones' },
       { name: 'Equipo', href: '/dashboard/equipo', icon: UserCog, planModule: 'equipo', description: 'Gestión de usuarios' },
       { name: 'Integraciones', href: '/dashboard/integraciones', icon: Plug, planModule: 'integraciones', description: 'Conexión con apps externas' },
+      { name: 'Importar Datos', href: '/dashboard/importar', icon: FileWarning, planModule: 'integraciones', description: 'Importa leads, contactos, catálogo y contabilidad desde Sage, Microdata o CSV' },
       { name: 'Módulos', href: '/dashboard/configuracion?section=modulos', icon: LayoutGrid, description: 'Activar/desactivar funciones' },
       { name: 'Auditoría', href: '/dashboard/auditoria', icon: Activity, description: 'Historial completo de acciones en el sistema' },
       { name: 'Compliance ⚡', href: '/dashboard/configuracion?section=compliance', icon: ShieldCheck, description: 'Control de compliance y procesos obligatorios' },
