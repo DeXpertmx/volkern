@@ -123,6 +123,11 @@ export default function EscanearGastoPage() {
         return
       }
 
+      // Mostrar diagnóstico si OCR falló (sin API keys o error de extracción)
+      if (!data.success && data.diagnostic) {
+        toast.warning(data.diagnostic)
+      }
+
       setScanMessage('Analizando datos...')
       setScanResult(data)
       setRawOcrText(data.rawText || '')
@@ -155,7 +160,7 @@ export default function EscanearGastoPage() {
       setScanning(false)
       setScanMessage('')
     }
-  }, [capturedImage])
+  }, [capturedFile])
 
   const goToForm = () => {
     setShowForm(true)
