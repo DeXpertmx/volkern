@@ -26,8 +26,10 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
+import { Eye, Users, Heart, ArrowRight } from 'lucide-react'
 import { PostCreator } from '@/components/social/PostCreator'
 import { PostQueue } from '@/components/social/PostQueue'
+import { SocialAnalyticsWidget } from '@/components/social/SocialAnalyticsWidget'
 import { toast } from 'sonner'
 
 export default function SocialDashboardPage() {
@@ -182,24 +184,45 @@ export default function SocialDashboardPage() {
               </CardContent>
             </Card>
 
-            {/* Quick Stats */}
-            <Card className="rounded-3xl border-slate-200/60 shadow-sm border-l-4 border-l-indigo-600">
-              <CardHeader>
-                <CardTitle className="text-sm font-bold uppercase tracking-widest text-slate-500">Alcance Total</CardTitle>
-                <div className="flex items-end gap-2 mt-2">
-                  <span className="text-4xl font-black text-slate-900 tracking-tighter">12.4k</span>
-                  <Badge className="bg-green-100 text-green-700 hover:bg-green-100 mb-1 border-none font-bold text-[10px]">+14%</Badge>
-                </div>
+            {/* Quick Stats - Compact Summary */}
+            <Card className="rounded-3xl border-slate-200/60 shadow-sm overflow-hidden md:col-span-1">
+              <CardHeader className="border-b border-slate-100 bg-slate-50/50 pb-3">
+                <CardTitle className="text-xs font-black uppercase tracking-tighter flex items-center gap-2">
+                  <BarChart3 className="h-3.5 w-3.5 text-indigo-500" />
+                  Resumen Rápido
+                </CardTitle>
+                <CardDescription className="text-[9px]">Métricas en vivo de tus canales</CardDescription>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-slate-400 uppercase">Interacciones</span>
-                        <span className="text-xs font-black">2,450</span>
-                    </div>
-                    <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-indigo-600 w-3/4" />
-                    </div>
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Eye className="h-3.5 w-3.5 text-indigo-400" />
+                    <span className="text-[10px] font-bold text-slate-500 uppercase">Alcance</span>
+                  </div>
+                  <span className="text-sm font-black text-slate-800">—</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Users className="h-3.5 w-3.5 text-emerald-400" />
+                    <span className="text-[10px] font-bold text-slate-500 uppercase">Seguidores</span>
+                  </div>
+                  <span className="text-sm font-black text-slate-800">—</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Heart className="h-3.5 w-3.5 text-rose-400" />
+                    <span className="text-[10px] font-bold text-slate-500 uppercase">Engagement</span>
+                  </div>
+                  <span className="text-sm font-black text-slate-800">—</span>
+                </div>
+                <div className="pt-2 border-t border-slate-100">
+                  <button
+                    onClick={() => setActiveTab('analytics')}
+                    className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors text-[10px] font-black uppercase tracking-widest"
+                  >
+                    Ver Estadísticas Completas
+                    <ArrowRight className="h-3 w-3" />
+                  </button>
                 </div>
               </CardContent>
             </Card>
@@ -267,6 +290,10 @@ export default function SocialDashboardPage() {
 
         <TabsContent value="queue">
           <PostQueue posts={posts.filter(p => p.status === 'scheduled')} full />
+        </TabsContent>
+
+        <TabsContent value="analytics" className="outline-none">
+          <SocialAnalyticsWidget />
         </TabsContent>
       </Tabs>
 
