@@ -30,11 +30,13 @@ import { Eye, Users, Heart, ArrowRight } from 'lucide-react'
 import { PostCreator } from '@/components/social/PostCreator'
 import { PostQueue } from '@/components/social/PostQueue'
 import { SocialAnalyticsWidget } from '@/components/social/SocialAnalyticsWidget'
+import { SocialEditorialCalendar } from '@/components/social/SocialEditorialCalendar'
 import { toast } from 'sonner'
 
 export default function SocialDashboardPage() {
   const [activeTab, setActiveTab] = useState('overview')
   const [isCreatorOpen, setIsCreatorOpen] = useState(false)
+  const [creatorPreselectedDate, setCreatorPreselectedDate] = useState<Date | undefined>(undefined)
   const [posts, setPosts] = useState<any[]>([])
   const [configs, setConfigs] = useState<Record<string, any>>({})
   const [loading, setLoading] = useState(true)
@@ -105,6 +107,10 @@ export default function SocialDashboardPage() {
           <TabsTrigger value="queue" className="rounded-xl font-bold uppercase text-[10px] tracking-widest px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">
             <Clock className="h-3.5 w-3.5 mr-2" />
             Programados ({posts.filter(p => p.status === 'scheduled').length})
+          </TabsTrigger>
+          <TabsTrigger value="calendar" className="rounded-xl font-bold uppercase text-[10px] tracking-widest px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+            <Calendar className="h-3.5 w-3.5 mr-2" />
+            Calendario
           </TabsTrigger>
           <TabsTrigger value="analytics" className="rounded-xl font-bold uppercase text-[10px] tracking-widest px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">
             <BarChart3 className="h-3.5 w-3.5 mr-2" />
@@ -292,6 +298,21 @@ export default function SocialDashboardPage() {
           <PostQueue posts={posts.filter(p => p.status === 'scheduled')} full />
         </TabsContent>
 
+        <TabsContent value="calendar" className="outline-none">
+          <SocialEditorialCalendar
+            posts={posts}
+            onRefresh={fetchPosts}
+            onCreatePost={(date) => {
+              setCreatorPreselectedDate(date)
+              setIsCreatorOpen(true)
+            }}
+            onEditPost={(post) => {
+              // Future: open post editor for editing
+              console.log('Edit post:', post.id)
+            }}
+          />
+        </TabsContent>
+
         <TabsContent value="analytics" className="outline-none">
           <SocialAnalyticsWidget />
         </TabsContent>
@@ -300,10 +321,15 @@ export default function SocialDashboardPage() {
       {/* Modales */}
       {isCreatorOpen && (
         <PostCreator 
-          onClose={() => setIsCreatorOpen(false)} 
+          preselectedDate={creatorPreselectedDate}
+          onClose={() => {
+            setIsCreatorOpen(false)
+            setCreatorPreselectedDate(undefined)
+          }}
           onPostCreated={() => {
             fetchPosts()
             setIsCreatorOpen(false)
+            setCreatorPreselectedDate(undefined)
           }}
         />
       )}
