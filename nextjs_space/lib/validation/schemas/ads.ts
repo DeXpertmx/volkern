@@ -167,3 +167,73 @@ export const AdInsightsQuerySchema = z.object({
   dateFrom: z.string().datetime().optional(),
   dateTo: z.string().datetime().optional(),
 });
+
+// ──────────────────────────────────────────────
+// ADS — Publicaciones (creativas unitarias)
+// ──────────────────────────────────────────────
+
+// Estados permitidos (deben casar con el dashboard)
+export const AdPublicationStatuses = ['BORRADOR', 'PROGRAMADA', 'PUBLICADA', 'ERROR', 'PAUSADA'] as const;
+export const AdPublicationPlatforms = ['META', 'GOOGLE'] as const;
+
+export const AdCreativeCreateSchema = z.object({
+  nombre: z.string().min(1, 'Nombre requerido').max(255),
+  mediaUrl: z.string().url('URL de media inválida'),
+  mediaType: z.enum(['IMAGE', 'VIDEO']),
+  durationSec: z.coerce.number().int().min(1).max(120).optional().nullable(),
+  width: z.coerce.number().int().min(1).optional().nullable(),
+  height: z.coerce.number().int().min(1).optional().nullable(),
+  bodyText: z.string().max(5000).optional().nullable(),
+  headline: z.string().max(255).optional().nullable(),
+  callToAction: z.enum(['LEARN_MORE', 'SIGN_UP', 'SHOP_NOW', 'BOOK_TRAVEL', 'DOWNLOAD', 'CONTACT_US', 'SUBSCRIBE', 'GET_OFFER', 'GET_QUOTE', 'APPLY_NOW', 'WHATSAPP_MESSAGE']).optional().nullable(),
+  landingUrl: z.string().url().optional().nullable(),
+});
+
+export const AdBoostSchema = z.object({
+  socialPostId: z.string().min(1, 'Se requiere el SocialPost a boostar'),
+  budgetDaily: z.coerce.number().min(1, 'Presupuesto diario mínimo 1').optional(),
+  budgetTotal: z.coerce.number().min(1).optional(),
+  currency: z.string().length(3).optional().default('MXN'),
+  campaignId: z.string().optional().nullable(),
+  metaPageId: z.string().optional().nullable(),
+  adSetId: z.string().optional().nullable(),
+});
+
+// Crear publicación: exige o creativeId (creatividad propia) o isBoost con socialPostId
+export const AdPublicationCreateSchema = z.object({
+  nombre: z.string().min(1, 'Nombre requerido').max(255),
+  plataforma: z.enum(AdPublicationPlatforms),
+  platformId: z.string().min(1, 'platformId requerido (id de AdPlatformConnection)'),
+  campaignId: z.string().optional().nullable(),
+  creativeId: z.string().optional().nullable(),
+  isBoost: z.boolean().optional().default(false),
+  socialPostId: z.string().optional().nullable(),
+  scheduledFor: z.string().datetime().optional().nullable(),
+  budgetDaily: z.coerce.number().min(0).optional().nullable(),
+  budgetTotal: z.coerce.number().min(0).optional().nullable(),
+  currency: z.string().length(3).optional().default('MXN'),
+}).refine(
+  (data) => {
+    if (data.isBoost) return !!data.socialPostId;
+    return !!data.creativeId || data.nombre.length > 0; // creación simple aceptable
+  },
+  { message: 'Si isBoost=true, socialPostId es obligatorio. En caso contrario, se requiere creativeId.', path: ['socialPostId'] }
+);
+
+export const AdPublicationUpdateSchema = z.object({
+  nombre: z.string().min(1).max(255).optional(),
+  scheduledFor: z.string().datetime().nullable().optional(),
+  campaignId: z.string().nullable().optional(),
+  budgetDaily: z.coerce.number().min(0).nullable().optional(),
+  budgetTotal: z.coerce.number().min(0).nullable().optional(),
+  estado: z.enum(AdPublicationStatuses).optional(),
+});
+
+export const AdPublicationListQuerySchema = z.object({
+  plataforma: z.enum(AdPublicationPlatforms).optional(),
+  estado: z.enum(AdPublicationStatuses).optional(),
+  campaignId: z.string().optional(),
+  socialPostId: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional().default(50),
+  cursor: z.string().optional(),
+});

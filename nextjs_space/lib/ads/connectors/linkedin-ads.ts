@@ -36,6 +36,8 @@ import type {
   InsightSyncResult,
   AdCampaignInput,
   AdCampaignOutput,
+  PublishPublicationInput,
+  PublishPublicationResult,
 } from '../types';
 
 const API_VERSION = 'v2';
@@ -1181,5 +1183,30 @@ export class LinkedInAdsConnector implements AdPlatformConnector {
       ...(data.objective && { objective: data.objective }),
       ...(data.dailyBudget !== undefined && { dailyBudget: data.dailyBudget }),
     };
+  }
+
+  // ─── Publicaciones ADS ─────────────────────────────────────────
+  // v1: stubs. LinkedIn Ads no tiene un endpoint directo equivalente a Meta Boost
+  // ni a AdCreative copy-based. La implementación real requiere:
+  //   1. POST /adCreativesV2 con variables.data (image+text+landing)
+  //   2. POST /adGroupsV2 con creative associations
+  //   3. Manejar LinkedIn review (los ads pasan por "PENDING_REVIEW" inicialmente)
+
+  async publishPublication(_input: PublishPublicationInput): Promise<PublishPublicationResult> {
+    throw new Error(
+      '[LinkedInAds] publishPublication no implementado en v1. Use plataforma=META o implemente adCreativesV2.',
+    );
+  }
+
+  async pausePublication(_externalAdId: string): Promise<void> {
+    throw new Error('[LinkedInAds] pausePublication no implementado en v1.');
+  }
+
+  async resumePublication(_externalAdId: string): Promise<void> {
+    throw new Error('[LinkedInAds] resumePublication no implementado en v1.');
+  }
+
+  async deletePublication(_externalAdId: string): Promise<void> {
+    throw new Error('[LinkedInAds] deletePublication no implementado en v1.');
   }
 }

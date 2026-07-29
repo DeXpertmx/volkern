@@ -219,10 +219,55 @@ export interface AdPlatformConnector {
 
   /** Crea una campaña en la plataforma */
   createCampaign(tenantId: string, platformId: string, data: AdCampaignInput): Promise<AdCampaignOutput>;
+
+  // ─── Publicaciones ADS ────────────────────────────────────────────
+
+  /** Publica una unidad creativa como ad (o boostea un SocialPost) */
+  publishPublication(input: PublishPublicationInput): Promise<PublishPublicationResult>;
+
+  /** Pausa una publicación ya creada en la plataforma */
+  pausePublication(externalAdId: string): Promise<void>;
+
+  /** Reactiva una publicación pausada */
+  resumePublication(externalAdId: string): Promise<void>;
+
+  /** Archiva/elimina una publicación según lo permita la plataforma */
+  deletePublication(externalAdId: string): Promise<void>;
 }
 
 // ─── Tipos para el registro de conectores ─────────────────────────────
 
 export interface ConnectorConstructor {
   new (): AdPlatformConnector;
+}
+
+// ─── Tipos para Publicaciones ADS ───────────────────────────────────
+
+export interface PublishPublicationInput {
+  publicationId: string;
+  // Solo cuando NO es boost y la creatividad viene del AdsCreative propio
+  creative?: {
+    mediaUrl: string;
+    mediaType: 'IMAGE' | 'VIDEO';
+    bodyText?: string;
+    headline?: string;
+    callToAction?: string;
+    landingUrl?: string;
+  };
+  // Solo para boost: id de la publicación SocialPost que se está boosteando
+  socialPostId?: string;
+  // Página de Facebook (Meta requiere para publicar)
+  metaPageId?: string;
+  // AdSetId existente en el que colgar el creativo (Meta → adcreative + ad)
+  adSetId?: string;
+  // Presupuesto diario (en moneda del tenant)
+  budgetDaily?: number;
+  budgetTotal?: number;
+  currency?: string;
+}
+
+export interface PublishPublicationResult {
+  externalAdId: string;
+  status: 'ACTIVE' | 'IN_REVIEW' | 'PAUSED' | 'REJECTED';
+  externalStatusRaw?: string;
 }

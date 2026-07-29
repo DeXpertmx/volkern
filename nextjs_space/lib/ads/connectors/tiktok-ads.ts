@@ -41,6 +41,8 @@ import type {
   InsightSyncResult,
   AdCampaignInput,
   AdCampaignOutput,
+  PublishPublicationInput,
+  PublishPublicationResult,
 } from '../types';
 
 const BASE_URL = 'https://ads.tiktok.com/open_api/v1.3';
@@ -1140,5 +1142,29 @@ export class TiktokAdsConnector implements AdPlatformConnector {
       ...(data.objective && { objective: data.objective }),
       ...(data.dailyBudget !== undefined && { dailyBudget: data.dailyBudget }),
     };
+  }
+
+  // ─── Publicaciones ADS ─────────────────────────────────────────────
+  // v1: stubs. TikTok Ads requiere:
+  //   1. POST /file/video/upload/  para subir el medio
+  //   2. POST /ad/create/          para crear el anuncio
+  //   3. Manejar status PENDING_REVIEW/REVIEWING (TikTok revisa antes de aprobar)
+
+  async publishPublication(_input: PublishPublicationInput): Promise<PublishPublicationResult> {
+    throw new Error(
+      '[TikTokAds] publishPublication no implementado en v1. Use plataforma=META o implemente /file/video/upload + /ad/create.',
+    );
+  }
+
+  async pausePublication(_externalAdId: string): Promise<void> {
+    throw new Error('[TikTokAds] pausePublication no implementado en v1.');
+  }
+
+  async resumePublication(_externalAdId: string): Promise<void> {
+    throw new Error('[TikTokAds] resumePublication no implementado en v1.');
+  }
+
+  async deletePublication(_externalAdId: string): Promise<void> {
+    throw new Error('[TikTokAds] deletePublication no implementado en v1.');
   }
 }

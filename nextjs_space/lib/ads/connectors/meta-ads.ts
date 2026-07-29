@@ -31,6 +31,8 @@ import type {
   InsightSyncResult,
   AdCampaignInput,
   AdCampaignOutput,
+  PublishPublicationInput,
+  PublishPublicationResult,
 } from '../types';
 
 const API_VERSION = 'v22.0';
@@ -821,5 +823,120 @@ export class MetaAdsConnector implements AdPlatformConnector {
       ...(data.objective && { objective: data.objective }),
       ...(data.dailyBudget !== undefined && { dailyBudget: data.dailyBudget }),
     };
+  }
+
+  // ─── Publicaciones ADS ─────────────────────────────────────────────
+
+  /**
+   * Publica una publicación ADS en Meta.
+   * Si la publicación viene de un SocialPost (boost), se usa `object_story_spec` para rezar
+   * sobre el post orgánico en lugar de subir creativos nuevos.
+   */
+  async publishPublication(input: PublishPublicationInput): Promise<PublishPublicationResult> {
+    const publication = await prisma.adsCampaignPublication.findUnique({
+      where: { id: input.publicationId },
+      include: { creative: true, socialPost: true, tenant: { select: { vaultSeed: true } } },
+    });
+    if (!publication || !publication.tenant.vaultSeed) {
+      throw new Error('Publicación no encontrada o sin vaultSeed');
+    }
+    const platformId = (publication as any).platformId || input.publicationId;
+    const { accessToken, accountId } = await getDecryptedToken(platformId);
+    const adAccountId = `act_${accountId}`;
+    const pageId = input.metaPageId || process.env.ADS_META_DEFAULT_PAGE_ID;
+    if (!pageId) {
+      throw new Error('metaPageId requerido para publicar en Meta (establece ADS_META_DEFAULT_PAGE_ID como fallback)');
+    }
+    const adSetId = input.adSetId || process.env.ADS_META_DEFAULT_ADSET_ID;
+    if (!adSetId) {
+      throw new Error('adSetId requerido para publicar en Meta (establece ADS_META_DEFAULT_ADSET_ID como fallback)');
+    }
+
+    // Construir link_spec / object_story_spec
+    let linkData: Record<string, unknown>;
+    if (input.socialPostId && publication.socialPost) {
+      // Modo boost: rezar sobre el post orgánico
+      linkData = {
+        object_story_id: `${pageId}_${publication.socialPost.id}`,
+      };
+    } else if (publication.creative || input.creative) {
+      const c = publication.creative || (input.creative as any);
+      linkData = {
+        message: c.bodyText || '',
+        link: c.landingUrl || 'https://example.com',
+        name: c.headline || '',
+        ...(c.callToAction && { call_to_action: { type: c.callToAction } }),
+        ...(c.mediaType === 'IMAGE' && c.mediaUrl && { picture: c.mediaUrl }),
+      };
+    } else {
+      throw new Error('Sin creatividad ni SocialPost asociado para publicar');
+    }
+
+    // 1. Crear adcreative
+    const creativeResp = await metaFetch<{ id: string }>(
+      `${BASE_URL}/${adAccountId}/adcreatives?access_token=${accessToken}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ name: `VC-${publication.id}`, object_story_spec: { page_id: pageId, link_data: linkData } }),
+      },
+    );
+
+    // 2. Crear ad dentro del adset
+    const adResp = await metaFetch<{ id: string }>(
+      `${BASE_URL}/${adAccountId}/ads?access_token=${accessToken}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          name: `VC-Ad-${publication.id}`,
+          adset_id: adSetId,
+          creative: { creative_id: creativeResp.id },
+          status: 'ACTIVE',
+        }),
+      },
+    );
+
+    return { externalAdId: adResp.id, status: 'IN_REVIEW', externalStatusRaw: 'PENDING_REVIEW' };
+  }
+
+  async pausePublication(externalAdId: string): Promise<void> {
+    // Necesitamos resolver platformId desde el AdCampaignPublication asociado.
+    // En la práctica el caller resolverá y pasará también platformId; para simplicidad
+    // buscamos el externalAdId en la tabla:
+    const publication = await prisma.adsCampaignPublication.findFirst({
+      where: { externalAdId },
+      include: { tenant: { select: { vaultSeed: true } } },
+    });
+    if (!publication || !publication.tenant.vaultSeed) throw new Error('Publicación no encontrada');
+    const platformId = (publication as any).platformId;
+    const { accessToken } = await getDecryptedToken(platformId);
+    await metaFetch(`${BASE_URL}/${externalAdId}?access_token=${accessToken}`, {
+      method: 'POST',
+      body: JSON.stringify({ status: 'PAUSED' }),
+    });
+  }
+
+  async resumePublication(externalAdId: string): Promise<void> {
+    const publication = await prisma.adsCampaignPublication.findFirst({
+      where: { externalAdId },
+      include: { tenant: { select: { vaultSeed: true } } },
+    });
+    if (!publication || !publication.tenant.vaultSeed) throw new Error('Publicación no encontrada');
+    const platformId = (publication as any).platformId;
+    const { accessToken } = await getDecryptedToken(platformId);
+    await metaFetch(`${BASE_URL}/${externalAdId}?access_token=${accessToken}`, {
+      method: 'POST',
+      body: JSON.stringify({ status: 'ACTIVE' }),
+    });
+  }
+
+  async deletePublication(externalAdId: string): Promise<void> {
+    const publication = await prisma.adsCampaignPublication.findFirst({
+      where: { externalAdId },
+      include: { tenant: { select: { vaultSeed: true } } },
+    });
+    if (!publication || !publication.tenant.vaultSeed) throw new Error('Publicación no encontrada');
+    const platformId = (publication as any).platformId;
+    const { accessToken } = await getDecryptedToken(platformId);
+    await metaFetch(`${BASE_URL}/${externalAdId}?access_token=${accessToken}`, { method: 'DELETE' });
   }
 }

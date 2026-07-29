@@ -400,6 +400,8 @@ model Tenant {
   adRecommendations              AdRecommendation[]
   adSchedules                    AdSchedule[]
   adABTests                      AdABTest[]
+  adsCreatives                   AdsCreative[]
+  adsPublications                AdsCampaignPublication[]
 }
 
 model AttendanceRules {
@@ -3926,8 +3928,9 @@ model SocialPost {
   metadata     Json?            @default("{}")
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
-  tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  analytics    SocialAnalytics?
+  tenant           Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  analytics        SocialAnalytics?
+  adsPublications  AdsCampaignPublication[]
 
   @@index([tenantId])
   @@index([status])
@@ -7022,6 +7025,7 @@ model AdCampaign {
   budgetAlerts      AdBudgetExecution[]
   schedules         AdSchedule[]
   abTests           AdABTest[]
+  adsPublications   AdsCampaignPublication[]
 
   @@index([tenantId])
   @@index([platformId])
@@ -7283,4 +7287,96 @@ model AdABTestVariant {
 
   @@index([abTestId])
   @@map("ad_ab_test_variants")
+}
+
+// ─── Publicaciones ADS ─────────────────────────────────────────────
+// Sub-módulo de ADS Intelligence: cada publicación es una unidad autónoma
+// de creatividad+copy+schedule que se publica (o boostea desde un SocialPost)
+// en Meta o Google Ads. Vive al lado de AdCampaign pero es independiente:
+// una publicación puede o no vivir dentro de una campaña.
+
+// Activo creativo reutilizable por tenant (imagen/video + copy)
+model AdsCreative {
+  id           String   @id @default(cuid())
+  tenantId     String
+  nombre       String
+  mediaUrl     String   // URL pública (S3 / Cloudinary / similaire)
+  mediaType    String   // 'IMAGE' | 'VIDEO'
+  durationSec  Int?     // Solo VIDEO
+  width        Int?
+  height       Int?
+  bodyText     String?  // Copy principal
+  headline     String?  // Titular para Meta (title) o Google (headline)
+  callToAction String?  // LEARN_MORE | SIGN_UP | SHOP_NOW | etc.
+  landingUrl   String?  // URL destino (link de Meta/Google)
+  metadata     Json?    @default("{}")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant       Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  publications AdsCampaignPublication[]
+
+  @@index([tenantId])
+  @@index([tenantId, createdAt])
+  @@map("ads_creatives")
+}
+
+// Unidad visible en el dashboard de Publicaciones ADS.
+// estados: BORRADOR | PROGRAMADA | PUBLICADA | ERROR | PAUSADA
+model AdsCampaignPublication {
+  id             String    @id @default(cuid())
+  tenantId       String
+  campaignId     String?   // Opcional: una publicación puede vivir fuera de una campaña
+  creativeId     String?   // Null cuando isBoost=true (la creatividad viene del SocialPost)
+  socialPostId   String?   // Origen del boost (solo si isBoost=true)
+  isBoost        Boolean   @default(false)
+  nombre         String
+  plataforma     String    // 'META' | 'GOOGLE'
+  estado         String    @default("BORRADOR")
+  externalAdId   String?   // ID en Meta Ads / Google Ads
+  externalStatus String?   // ACTIVE | IN_REVIEW | PAUSED | REJECTED
+  scheduledFor   DateTime?
+  publishedAt    DateTime?
+  budgetDaily    Float?    // Presupuesto diario
+  budgetTotal    Float?    // Presupuesto total (lifetime)
+  currency       String    @default("MXN")
+  metrics        Json?     @default("{\"impressions\":0,\"clicks\":0,\"spend\":0}")
+  errorMessage   String?   // Última causa de error (si estado=ERROR)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  tenant         Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campaign       AdCampaign?              @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  creative       AdsCreative?             @relation(fields: [creativeId], references: [id], onDelete: SetNull)
+  socialPost     SocialPost?              @relation(fields: [socialPostId], references: [id], onDelete: SetNull)
+  schedules      AdsPublicationSchedule[]
+
+  @@index([tenantId, plataforma])
+  @@index([tenantId, estado])
+  @@index([campaignId])
+  @@index([socialPostId])
+  @@index([scheduledFor])
+  @@map("ads_publications")
+}
+
+// Registro de ejecuciones programadas (una fila por fecha). Permite auditar
+// el reintento y el estado de cada intento de publicación automática.
+model AdsPublicationSchedule {
+  id             String    @id @default(cuid())
+  tenantId       String
+  publicationId  String
+  scheduledFor   DateTime
+  executedAt     DateTime?
+  status         String    @default("PENDING") // PENDING | SUCCESS | FAILED | SKIPPED
+  errorMessage   String?
+  attempts       Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  publication    AdsCampaignPublication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+
+  @@index([publicationId])
+  @@index([status, scheduledFor])
+  @@index([tenantId])
+  @@map("ads_publication_schedules")
 }

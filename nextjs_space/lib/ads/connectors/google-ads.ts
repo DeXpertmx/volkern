@@ -31,6 +31,8 @@ import type {
   InsightSyncResult,
   AdCampaignInput,
   AdCampaignOutput,
+  PublishPublicationInput,
+  PublishPublicationResult,
 } from '../types';
 
 const API_VERSION = 'v16';
@@ -1193,6 +1195,30 @@ export class GoogleAdsConnector implements AdPlatformConnector {
       ...(data.objective && { objective: data.objective }),
       ...(data.dailyBudget !== undefined && { dailyBudget: data.dailyBudget }),
     };
+  }
+
+  // ─── Publicaciones ADS ─────────────────────────────────────────────
+  // v1: stub. La implementación completa de Google Ads requiere:
+  //  1. Subir el asset (imagen/video) a AssetService
+  //  2. Crear un AdGroupAd que referencie el asset + textos (responsiveSearchAd)
+  //  3. Manejar policy reviews (Google pone los ads en 'UNDER_REVIEW' inicialmente)
+
+  async publishPublication(input: PublishPublicationInput): Promise<PublishPublicationResult> {
+    throw new Error(
+      '[GoogleAds] publishPublication no implementado en v1. Use plataforma=META o implemente AdGroupAd:mutate.',
+    );
+  }
+
+  async pausePublication(_externalAdId: string): Promise<void> {
+    throw new Error('[GoogleAds] pausePublication no implementado en v1.');
+  }
+
+  async resumePublication(_externalAdId: string): Promise<void> {
+    throw new Error('[GoogleAds] resumePublication no implementado en v1.');
+  }
+
+  async deletePublication(_externalAdId: string): Promise<void> {
+    throw new Error('[GoogleAds] deletePublication no implementado en v1.');
   }
 }
 
