@@ -24,13 +24,20 @@ import { toast } from 'sonner'
 interface PostCreatorProps {
   onClose: () => void
   onPostCreated: () => void
+  preselectedDate?: Date
 }
 
-export function PostCreator({ onClose, onPostCreated }: PostCreatorProps) {
+export function PostCreator({ onClose, onPostCreated, preselectedDate }: PostCreatorProps) {
   const [content, setContent] = useState('')
   const [platforms, setPlatforms] = useState<string[]>(['facebook'])
   const [mediaUrl, setMediaUrl] = useState('')
-  const [scheduledFor, setScheduledFor] = useState('')
+  const [scheduledFor, setScheduledFor] = useState(
+    preselectedDate
+      ? new Date(preselectedDate.getTime() - preselectedDate.getTimezoneOffset() * 60000)
+          .toISOString()
+          .slice(0, 16)
+      : '',
+  )
   const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile'>('desktop')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
