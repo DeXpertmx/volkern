@@ -1458,6 +1458,82 @@ export class GoogleAdsConnector implements AdPlatformConnector {
     );
   }
 
+  /**
+   * Re-queries Google Ads policy approval status for an existing ad.
+   * Used by `lib/cron/ads-publication-repoll` to flip PROGRAMADA →
+   * PUBLICADA when Google's policy review returns APPROVED, or
+   * PROGRAMADA → ERROR if DISAPPROVED.
+   *
+   * Read-only: does not mutate the ad. The flip is performed by
+   * subsequent `resumePublication` + `AdsCampaignPublication.update`.
+   *
+   * Aware of token-expiry path: if `GoogleAuthError` is thrown,
+   * refreshes the token and retries once. Critical for unattended
+   * cron runs — otherwise a tenant whose token expired mid-batch
+   * would silently fail forever.
+   *
+   * Expects `externalAdId` to be the `ad_group_ad` resource name
+   * (e.g. `customers/{cid}/adGroupAds/{agid}~{adid}`), as returned by
+   * `publishPublication`. Falls back to UNKNOWN if the format is missing.
+   */
+  async recheckGooglePolicy(input: {
+    externalAdId: string;
+    platformId: string;
+  }): Promise<{
+    approvalStatus: string;
+    adGroupAdStatus: string | null;
+  }> {
+    const developerToken = process.env.ADS_GOOGLE_DEVELOPER_TOKEN || '';
+
+    const execute = async (): Promise<GoogleAdsRow[]> => {
+      const { accessToken, accountId } = await getDecryptedToken(input.platformId);
+      const customerId = accountId;
+
+      if (!input.externalAdId?.includes('~')) {
+        logger.warn(
+          { externalAdId: input.externalAdId },
+          'GoogleAds: recheckGooglePolicy needs an ad_group_ad resource name (with tilde)',
+        );
+        return [];
+      }
+
+      const query = `
+        SELECT
+          ad_group_ad.resource_name,
+          ad_group_ad.status,
+          ad_group_ad.policy_summary.approval_status
+        FROM ad_group_ad
+        WHERE ad_group_ad.resource_name = '${input.externalAdId}'
+        LIMIT 1
+      `;
+      return await searchGoogleAds(customerId, accessToken, developerToken, query);
+    };
+
+    let rows: GoogleAdsRow[];
+    try {
+      rows = await execute();
+    } catch (err: any) {
+      if (err instanceof GoogleAuthError || err?.name === 'GoogleAuthError') {
+        logger.warn(
+          { platformId: input.platformId },
+          'GoogleAds: token expired during recheck, refreshing + retrying once',
+        );
+        await refreshTokenIfNeeded(input.platformId);
+        rows = await execute();
+      } else {
+        throw err;
+      }
+    }
+
+    if (rows.length === 0 || !rows[0].adGroupAd) {
+      return { approvalStatus: 'UNKNOWN', adGroupAdStatus: null };
+    }
+    return {
+      approvalStatus: rows[0].adGroupAd.policySummary?.approvalStatus || 'UNKNOWN',
+      adGroupAdStatus: rows[0].adGroupAd.status,
+    };
+  }
+
   async deletePublication(input: { externalAdId: string; platformId: string }): Promise<void> {
     const { accessToken, accountId } = await getDecryptedToken(input.platformId);
     const developerToken = process.env.ADS_GOOGLE_DEVELOPER_TOKEN || '';

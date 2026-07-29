@@ -216,6 +216,22 @@ export function initCronJobs() {
   });
 
   console.log('✅ [Scheduler] ADS Full Sync programado (cada 6 horas)');
+
+  // 16. ADS Publication Re-Poll (Google) — cada 30 min
+  cron.schedule('*/30 * * * *', async () => {
+    console.log('[Cron] 🔄 Re-poleando publicaciones PROGRAMADA de Google Ads...');
+    try {
+      const { runAdsPublicationRepoll } = await import('./ads-publication-repoll');
+      const stats = await runAdsPublicationRepoll();
+      console.log(
+        `[Cron] ✅ ADS repoll: totalChecked=${stats.totalChecked}, +PUBLICADA=${stats.flippedToPublicada}, +ERROR=${stats.flippedToError}, raced=${stats.racedOrSkipped}, pending=${stats.stillPending}, errors=${stats.errors}, ${stats.durationMs}ms`,
+      );
+    } catch (error: any) {
+      console.error('[Cron] ❌ Error en ADS repoll:', error.message);
+    }
+  });
+
+  console.log('✅ [Scheduler] ADS Publication Re-Poll programado (cada 30 min)');
 }
 
 /**
