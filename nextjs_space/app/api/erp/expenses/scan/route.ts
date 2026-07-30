@@ -75,78 +75,10 @@ Si un campo no está disponible pon null.`
 
   console.log(`[Vision] Procesando ${isPdf ? 'PDF' : 'imagen'} (${(buffer.length / 1024).toFixed(1)} KB, ${mimeType})`)
 
-  // ── 1. Google Gemini (más fiable para visión) ──
-  const googleKey = process.env.GOOGLE_AI_KEY
-  if (googleKey) {
-    try {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${googleKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ text: prompt }, { inline_data: { mime_type: mimeType, data: base64 } }] }],
-          generationConfig: { temperature: 0.1, maxOutputTokens: maxTokens },
-        }),
-        signal: AbortSignal.timeout(timeoutMs),
-      })
-      if (res.ok) {
-        const json = await res.json()
-        const raw = json.candidates?.[0]?.content?.parts?.[0]?.text || ''
-        const parsed = parseJsonResult(raw)
-        if (parsed) {
-          console.log('[Vision] ✅ Gemini extrajo datos correctamente')
-          return parsed
-        }
-      } else {
-        const errText = await res.text()
-        console.error('[Vision] Google Gemini error:', res.status, errText.substring(0, 300))
-      }
-    } catch (err: any) {
-      console.error('[Vision] Google Gemini fetch error:', err?.message)
-    }
-  } else {
-    console.warn('[Vision] ⚠️ GOOGLE_AI_KEY no configurada — Gemini no disponible')
-  }
-
-  // ── 2. DeepSeek (saltar para PDFs — modelo text-only no soporta documentos) ──
-  const deepseekKey = process.env.DEEPSEEK_API_KEY
-  if (deepseekKey && !isPdf) {
-    try {
-      const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${deepseekKey}` },
-        body: JSON.stringify({
-          model: 'deepseek-chat',
-          messages: [{
-            role: 'user',
-            content: [
-              { type: 'text', text: prompt },
-              { type: 'image_url', image_url: { url: dataUrl } },
-            ],
-          }],
-          temperature: 0.1,
-          max_tokens: maxTokens,
-        }),
-        signal: AbortSignal.timeout(10000),
-      })
-      if (res.ok) {
-        const json = await res.json()
-        const raw = json.choices?.[0]?.message?.content || ''
-        const parsed = parseJsonResult(raw)
-        if (parsed) {
-          console.log('[Vision] ✅ DeepSeek extrajo datos')
-          return parsed
-        }
-      }
-    } catch {
-      // Ignorar — DeepSeek text-only no es crítico
-    }
-  }
-
-  // ── 3. OpenRouter con modelo vision (fallback) ──
+  // ── 1. OpenRouter con GPT-4o-mini (proveedor principal — rápido, soporta imágenes y PDFs) ──
   const openrouterKey = process.env.OPENROUTER_API_KEY
   if (openrouterKey) {
     try {
-      // Usamos openai/gpt-4o-mini que soporta imágenes, es rápido y económico
       const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${openrouterKey}` },
@@ -181,12 +113,77 @@ Si un campo no está disponible pon null.`
     }
   }
 
+  // ── 2. Google Gemini (fallback — cuota gratuita limitada) ──
+  const googleKey = process.env.GOOGLE_AI_KEY
+  if (googleKey) {
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${googleKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts: [{ text: prompt }, { inline_data: { mime_type: mimeType, data: base64 } }] }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: maxTokens },
+        }),
+        signal: AbortSignal.timeout(15000), // timeout corto — cuota se agota rápido
+      })
+      if (res.ok) {
+        const json = await res.json()
+        const raw = json.candidates?.[0]?.content?.parts?.[0]?.text || ''
+        const parsed = parseJsonResult(raw)
+        if (parsed) {
+          console.log('[Vision] ✅ Gemini extrajo datos correctamente')
+          return parsed
+        }
+      } else {
+        const errText = await res.text()
+        console.error('[Vision] Google Gemini error:', res.status, errText.substring(0, 300))
+      }
+    } catch (err: any) {
+      console.error('[Vision] Google Gemini fetch error:', err?.message)
+    }
+  }
+
+  // ── 3. DeepSeek (solo imágenes, texto plano — no soporta documentos) ──
+  const deepseekKey = process.env.DEEPSEEK_API_KEY
+  if (deepseekKey && !isPdf) {
+    try {
+      const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${deepseekKey}` },
+        body: JSON.stringify({
+          model: 'deepseek-chat',
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'text', text: prompt },
+              { type: 'image_url', image_url: { url: dataUrl } },
+            ],
+          }],
+          temperature: 0.1,
+          max_tokens: maxTokens,
+        }),
+        signal: AbortSignal.timeout(10000),
+      })
+      if (res.ok) {
+        const json = await res.json()
+        const raw = json.choices?.[0]?.message?.content || ''
+        const parsed = parseJsonResult(raw)
+        if (parsed) {
+          console.log('[Vision] ✅ DeepSeek extrajo datos')
+          return parsed
+        }
+      }
+    } catch {
+      // Ignorar — DeepSeek text-only no es crítico
+    }
+  }
+
   const missingKeys: string[] = []
+  if (!openrouterKey) missingKeys.push('OPENROUTER_API_KEY')
   if (!googleKey) missingKeys.push('GOOGLE_AI_KEY')
   if (!deepseekKey) missingKeys.push('DEEPSEEK_API_KEY')
-  if (!openrouterKey) missingKeys.push('OPENROUTER_API_KEY')
   const diagnostic = missingKeys.length === 3
-    ? 'Ninguna API de visión configurada. Se requieren GOOGLE_AI_KEY, DEEPSEEK_API_KEY u OPENROUTER_API_KEY en las variables de entorno.'
+    ? 'Ninguna API de visión configurada. Se requieren OPENROUTER_API_KEY, GOOGLE_AI_KEY o DEEPSEEK_API_KEY en las variables de entorno.'
     : (missingKeys.length > 0
       ? `Faltan: ${missingKeys.join(', ')}. Las APIs configuradas no devolvieron datos válidos.`
       : 'Las APIs de visión configuradas no pudieron extraer datos de la imagen.')
