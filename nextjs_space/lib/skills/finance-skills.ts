@@ -43,13 +43,23 @@ export interface CreateExpenseInput {
 
   // ── Verifactu ─────────────────────────────────────────────
   invoiceNumber?: string;
+  serie?: string;
   taxableBase?: number;
   vatRate?: number;
   vatAmount?: number;
+  irpfRate?: number;
+  irpfAmount?: number;
+  totalFactura?: number;
   operationDate?: Date;
   issuerName?: string;
   issuerAddress?: string;
   issuerTaxId?: string;
+  // Receptor
+  receptorNombre?: string;
+  receptorNif?: string;
+  receptorDireccion?: string;
+  // Pago
+  iban?: string;
 }
 
 /**
@@ -96,13 +106,26 @@ export async function createExpense(input: CreateExpenseInput) {
       tenant?.baseLongitude || null
     );
 
+    // Extraer campos nuevos (no existen en Prisma) para guardarlos en metadata
+    const { serie, irpfRate, irpfAmount, totalFactura, receptorNombre, receptorNif, receptorDireccion, iban, ...prismaInput } = input
+    
     const expense = await prisma.expense.create({
       data: {
-        ...input,
+        ...prismaInput,
         date: input.date || new Date(),
         status: input.status || 'PAID',
         parentFingerprint: lastExpense?.fingerprint || null,
-        isAnomaly
+        isAnomaly,
+        metadata: {
+          serie: serie || null,
+          irpfRate: irpfRate || null,
+          irpfAmount: irpfAmount || null,
+          totalFactura: totalFactura || null,
+          receptorNombre: receptorNombre || null,
+          receptorNif: receptorNif || null,
+          receptorDireccion: receptorDireccion || null,
+          iban: iban || null,
+        },
       },
       include: {
         supplier: true
