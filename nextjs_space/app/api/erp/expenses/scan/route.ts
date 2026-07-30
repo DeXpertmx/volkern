@@ -27,6 +27,124 @@ const FALLBACK: VisionResult = {
   operationDate: null, issuerName: null, issuerAddress: null, issuerTaxId: null,
 }
 
+// ─── OCR.space RAW TEXT PARSER ──────────────────────────────────────────────
+// Extrae campos de factura española desde texto plano (OCR.space output)
+function parseInvoiceText(text: string): VisionResult | null {
+  if (!text || text.trim().length < 10) return null
+
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+  const full = text.replace(/\s+/g, ' ').trim()
+
+  // ── Proveedor: primera línea no vacía que no sea número/fecha ──
+  let supplier: string | null = null
+  for (const line of lines.slice(0, 5)) {
+    if (/^[\d\s\-\/.,:;()]+$/.test(line)) continue
+    if (/(?:factura|nº|n[ií]|fecha|total|importe|iva|base|direcci[oó]n|cif|nif|dni)/i.test(line)) continue
+    if (line.length > 2 && line.length < 100) {
+      supplier = line.replace(/^[\s*•\-]+/, '').trim()
+      break
+    }
+  }
+
+  // ── Total ──
+  let total: number | null = null
+  const totalMatch = full.match(/(?:total|importe\s+total|neto\s+a\s+pagar|suma)\s*[:.]?\s*€?\s*([\d]{1,10}(?:[.,][\d]{1,2})?)/i)
+  if (totalMatch) {
+    total = parseFloat(totalMatch[1].replace(',', '.'))
+  } else {
+    // Fallback: último número con decimales que parezca un total
+    const allNums = [...full.matchAll(/([\d]{1,10}(?:[.,][\d]{1,2}))\s*€?/g)]
+    if (allNums.length > 0) {
+      total = parseFloat(allNums[allNums.length - 1][1].replace(',', '.'))
+    }
+  }
+
+  // ── NIF ──
+  let nif: string | null = null
+  const nifMatch = full.match(/\b([A-Za-z]\d{8})\b/)
+  if (nifMatch) nif = nifMatch[1].toUpperCase()
+  // También buscar después de NIF/CIF/DNI:
+  const nifLabelMatch = full.match(/(?:nif|cif|dni)\s*[:.]?\s*([A-Za-z0-9]{9,10})/i)
+  if (nifLabelMatch) nif = nifLabelMatch[1].toUpperCase()
+
+  // ── Fecha ──
+  let date: string | null = null
+  const dateMatch = full.match(/\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\b/)
+  if (dateMatch) {
+    const [_, d, m, y] = dateMatch
+    const yy = y.length === 2 ? '20' + y : y
+    date = `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${yy}`
+  }
+
+  // ── Número de factura ──
+  let invoiceNumber: string | null = null
+  const invMatch = full.match(/(?:factura|nº|numero|n[o°])\s*[:.]?\s*([A-Za-z0-9][A-Za-z0-9\-\/]{1,20})/i)
+  if (invMatch) invoiceNumber = invMatch[1].trim()
+
+  // ── Base imponible ──
+  let taxableBase: number | null = null
+  const baseMatch = full.match(/(?:base\s+imponible|base|subtotal|bruto)\s*[:.]?\s*€?\s*([\d]{1,10}(?:[.,][\d]{1,2})?)/i)
+  if (baseMatch) taxableBase = parseFloat(baseMatch[1].replace(',', '.'))
+
+  // ── IVA ──
+  let vatRate: number | null = null
+  let vatAmount: number | null = null
+  const ivaRateMatch = full.match(/(?:iva|i\.v\.a\.)\s*[:.]?\s*(\d{1,2})(?:\s*%|\s*por\s*ciento)?/i)
+  if (ivaRateMatch) vatRate = parseFloat(ivaRateMatch[1])
+  const ivaAmountMatch = full.match(/(?:iva|cuota\s+iva|i\.v\.a\.)\s*[:.]?\s*€?\s*([\d]{1,10}(?:[.,][\d]{1,2})?)/i)
+  if (ivaAmountMatch) vatAmount = parseFloat(ivaAmountMatch[1].replace(',', '.'))
+
+  // ── Emisor (razón social / dirección) ──
+  let issuerName: string | null = supplier // Por defecto = supplier
+  let issuerAddress: string | null = null
+  let issuerTaxId: string | null = nif
+
+  // Buscar dirección
+  for (const line of lines) {
+    if (/(?:calle|c\/|c\.|avda|avenida|plaza|paseo|carretera|ctra|pol[ií]gono|camino|bulevar|urbanizaci[oó]n)/i.test(line)) {
+      issuerAddress = line
+      break
+    }
+  }
+
+  // ── Categoría (heurística) ──
+  let category = 'otros'
+  const catMap: Record<string, string[]> = {
+    alimentacion: ['supermercado', 'restaurante', 'comida', 'alimentaci', 'cafeter', 'bar ', 'panader', 'carnicer'],
+    transporte: ['gasolinera', 'combustible', 'carburante', 'peaje', 'aparcamiento', 'parking', 'uber', 'taxi', 'renfe', 'vueling', 'iberia', 'transporte'],
+    suministros: ['luz', 'electricidad', 'agua', 'gas', 'telefónica', 'movistar', 'vodafone', 'orange', 'suministro'],
+    oficina: ['papelería', 'librería', 'material oficina', 'fichero', 'impresora', 'tóner', 'cartucho'],
+    tecnologia: ['apple', 'amazon', 'software', 'hosting', 'dominio', 'aws', 'google cloud', 'azure', 'microsoft', 'adobe', 'tecnolog'],
+    marketing: ['google ads', 'facebook ads', 'meta ads', 'publicidad', 'marketing', 'seo', 'sem', 'redes sociales'],
+    profesional: ['asesor', 'abogado', 'notario', 'gestor', 'consultor', 'auditor', 'arquitecto', 'ingeniero'],
+  }
+  for (const [cat, keywords] of Object.entries(catMap)) {
+    if (keywords.some(k => full.toLowerCase().includes(k))) {
+      category = cat
+      break
+    }
+  }
+
+  // Devolver solo si al menos encontramos algo útil
+  if (!supplier && !total && !date) return null
+
+  return {
+    supplier,
+    total: total && isFinite(total) ? Math.round(total * 100) / 100 : null,
+    nif,
+    date,
+    category,
+    invoiceNumber,
+    taxableBase: taxableBase && isFinite(taxableBase) ? Math.round(taxableBase * 100) / 100 : null,
+    vatRate: vatRate && isFinite(vatRate) ? vatRate : null,
+    vatAmount: vatAmount && isFinite(vatAmount) ? Math.round(vatAmount * 100) / 100 : null,
+    operationDate: null,
+    issuerName,
+    issuerAddress,
+    issuerTaxId,
+  }
+}
+
 async function callVision(buffer: Buffer, mimeType: string): Promise<VisionResult | null> {
   const base64 = buffer.toString('base64')
   const dataUrl = `data:${mimeType};base64,${base64}`
@@ -75,7 +193,51 @@ Si un campo no está disponible pon null.`
 
   console.log(`[Vision] Procesando ${isPdf ? 'PDF' : 'imagen'} (${(buffer.length / 1024).toFixed(1)} KB, ${mimeType})`)
 
-  // ── 1. OpenRouter con GPT-4o-mini (proveedor principal — rápido, soporta imágenes y PDFs) ──
+  // ── 1. OCR.space (proveedor gratuito — 25K requests/mes, soporta PDFs e imágenes) ──
+  const ocrSpaceKey = process.env.OCR_SPACE_API_KEY
+  if (ocrSpaceKey) {
+    try {
+      const res = await fetch('https://api.ocr.space/parse/image', {
+        method: 'POST',
+        headers: {
+          'apikey': ocrSpaceKey,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          base64Image: base64,
+          language: 'spa',
+          isTable: 'true',
+          OCREngine: '2',
+          filetype: isPdf ? 'PDF' : 'JPG',
+        }),
+        signal: AbortSignal.timeout(timeoutMs),
+      })
+      if (res.ok) {
+        const json = await res.json()
+        if (!json.IsErroredOnProcessing && json.OCRExitCode === 1) {
+          const rawText = (json.ParsedResults?.[0]?.ParsedText || '').trim()
+          if (rawText) {
+            console.log(`[Vision] OCR.space extrajo ${rawText.length} caracteres de texto`)
+            const parsed = parseInvoiceText(rawText)
+            if (parsed) {
+              console.log('[Vision] ✅ OCR.space + parseInvoiceText extrajeron datos')
+              return parsed
+            }
+            console.warn('[Vision] OCR.space extrajo texto pero parseInvoiceText no encontró campos estructurados')
+          }
+        } else {
+          console.error('[Vision] OCR.space processing error:', json.ErrorMessage || 'Unknown')
+        }
+      } else {
+        const errText = await res.text()
+        console.error('[Vision] OCR.space HTTP error:', res.status, errText.substring(0, 200))
+      }
+    } catch (err: any) {
+      console.error('[Vision] OCR.space fetch error:', err?.message)
+    }
+  }
+
+  // ── 2. OpenRouter con GPT-4o-mini (fallback IA) ──
   const openrouterKey = process.env.OPENROUTER_API_KEY
   if (openrouterKey) {
     try {
@@ -113,7 +275,7 @@ Si un campo no está disponible pon null.`
     }
   }
 
-  // ── 2. Google Gemini (fallback — cuota gratuita limitada) ──
+  // ── 3. Google Gemini (fallback — cuota gratuita limitada) ──
   const googleKey = process.env.GOOGLE_AI_KEY
   if (googleKey) {
     try {
@@ -143,7 +305,7 @@ Si un campo no está disponible pon null.`
     }
   }
 
-  // ── 3. DeepSeek (solo imágenes, texto plano — no soporta documentos) ──
+  // ── 4. DeepSeek (solo imágenes, texto plano — no soporta documentos) ──
   const deepseekKey = process.env.DEEPSEEK_API_KEY
   if (deepseekKey && !isPdf) {
     try {
@@ -179,14 +341,15 @@ Si un campo no está disponible pon null.`
   }
 
   const missingKeys: string[] = []
+  if (!ocrSpaceKey) missingKeys.push('OCR_SPACE_API_KEY')
   if (!openrouterKey) missingKeys.push('OPENROUTER_API_KEY')
   if (!googleKey) missingKeys.push('GOOGLE_AI_KEY')
   if (!deepseekKey) missingKeys.push('DEEPSEEK_API_KEY')
-  const diagnostic = missingKeys.length === 3
-    ? 'Ninguna API de visión configurada. Se requieren OPENROUTER_API_KEY, GOOGLE_AI_KEY o DEEPSEEK_API_KEY en las variables de entorno.'
+  const diagnostic = missingKeys.length === 4
+    ? 'Ninguna API de visión configurada. Se requieren OCR_SPACE_API_KEY, OPENROUTER_API_KEY, GOOGLE_AI_KEY o DEEPSEEK_API_KEY en las variables de entorno.'
     : (missingKeys.length > 0
       ? `Faltan: ${missingKeys.join(', ')}. Las APIs configuradas no devolvieron datos válidos.`
-      : 'Las APIs de visión configuradas no pudieron extraer datos de la imagen.')
+      : 'Las APIs de visión configuradas (4 proveedores) no pudieron extraer datos de la imagen. Prueba con mejor iluminación o usa "Sin OCR".')
   console.warn(`[Vision] ❌ ${diagnostic}`)
   return null
 }
@@ -229,14 +392,15 @@ export const POST = withTenantAuth(async (req, auth) => {
     // Construir mensaje diagnóstico si falló
     let diagnostic: string | null = null
     if (!visionResult) {
+      const ocrSpaceKey = !!process.env.OCR_SPACE_API_KEY
+      const openrouterKey = !!process.env.OPENROUTER_API_KEY
       const googleKey = !!process.env.GOOGLE_AI_KEY
       const deepseekKey = !!process.env.DEEPSEEK_API_KEY
-      const openrouterKey = !!process.env.OPENROUTER_API_KEY
-      const configured = [googleKey, deepseekKey, openrouterKey]
+      const configured = [ocrSpaceKey, openrouterKey, googleKey, deepseekKey]
       const configuredCount = configured.filter(Boolean).length
 
       if (configuredCount === 0) {
-        diagnostic = 'Ninguna API de visión configurada. Contacta al administrador para configurar GOOGLE_AI_KEY, DEEPSEEK_API_KEY u OPENROUTER_API_KEY.'
+        diagnostic = 'Ninguna API de visión configurada. Contacta al administrador para configurar OCR_SPACE_API_KEY, GOOGLE_AI_KEY, OPENROUTER_API_KEY o DEEPSEEK_API_KEY.'
       } else {
         diagnostic = `Las APIs de visión configuradas (${configuredCount} proveedor${configuredCount !== 1 ? 'es' : ''}) no pudieron extraer datos de la imagen. Prueba con mejor iluminación o usa "Sin OCR" para rellenar manualmente.`
       }
