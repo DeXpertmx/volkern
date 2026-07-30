@@ -94,6 +94,7 @@ export const POST = withTenantAuth(async (request, auth) => {
       receptorNif: body.receptorNif,
       receptorDireccion: body.receptorDireccion,
       iban: body.iban,
+      lineas: body.lineas,
     });
 
     return NextResponse.json(expense);

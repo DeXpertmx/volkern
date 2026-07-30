@@ -60,6 +60,8 @@ export interface CreateExpenseInput {
   receptorDireccion?: string;
   // Pago
   iban?: string;
+  // Líneas de detalle
+  lineas?: { descripcion: string | null; cantidad: number | null; precio_unitario: number | null; importe: number | null }[];
 }
 
 /**
@@ -125,6 +127,7 @@ export async function createExpense(input: CreateExpenseInput) {
           receptorNif: receptorNif || null,
           receptorDireccion: receptorDireccion || null,
           iban: iban || null,
+          lineas: input.lineas || null,
         },
       },
       include: {
