@@ -56,7 +56,10 @@ export interface VisionResult {
   // Categoría inferida
   category: string
 
-  // ── Campos planos legacy (backward compat con frontend actual) ──
+  // ── Verifactu / AEAT verificación ──
+  verifactu: boolean
+
+  // Campos planos legacy (backward compat con frontend actual) ──
   supplier: string | null
   total: number | null
   nif: string | null
@@ -114,8 +117,9 @@ function looksLikeNif(s: string): boolean {
 
 // Extrae NIF/CIF de una línea, admitiendo guiones y etiquetas previas.
 function extractNif(line: string): string | null {
-  // Etiqueta + valor: relajamos para aguantar OCR defectuoso (ej: "B-87654321" o "123430/82")
-  const labelMatch = line.match(/(?:nif|cif|dni)[\s\/\-]*(?:dni|nif|cif)?\s*[:.]?\s*([A-Za-z0-9\-\/]{6,16})/i)
+  // Etiqueta + valor: relajamos para aguantar OCR defectuoso (ej: "B-87654321" o "123430/82").
+  // Soporta "NIF: B-123", "NIF Cliente: B-123", "NIF/DNI 12345678Z".
+  const labelMatch = line.match(/(?:nif|cif|dni)(?:[\s\/\-]*(?:dni|nif|cif|cliente|de|del|emisor|receptor))?\s*[:.]\s*([A-Za-z0-9\-\/]{6,16})/i)
   if (labelMatch) {
     const candidate = labelMatch[1].trim()
     // Si el candidato tiene formato decente lo normalizamos; si no, devolvemos null
@@ -123,6 +127,9 @@ function extractNif(line: string): string | null {
     if (looksLikeNif(candidate)) return normalizeNif(candidate)
     return null
   }
+  // Variante sin dos puntos, p. ej. "NIF B-12345678" o "DNI 12345678Z"
+  const bareLabelMatch = line.match(/(?:nif|cif|dni)\s+([A-Za-z0-9\-\/]{6,16})/i)
+  if (bareLabelMatch && looksLikeNif(bareLabelMatch[1])) return normalizeNif(bareLabelMatch[1])
   // Sin etiqueta
   const bareMatch = line.match(/\b([A-Za-z]?[-]?\d{7,8}[A-Za-z0-9]?|\d{8}[-]?[A-Za-z])\b/)
   if (bareMatch && looksLikeNif(bareMatch[1])) return normalizeNif(bareMatch[1])
@@ -131,7 +138,10 @@ function extractNif(line: string): string | null {
 
 // Determina si una línea parece una dirección postal.
 function looksLikeAddress(line: string): boolean {
-  return /(?:calle|c\/|c\.|avda|avenida|plaza|paseo|carretera|ctra|pol[ií]gono|camino|bulevar|urb\.|^\d{5}\b|madrid|barcelona|españa|sevilla|valencia)/i.test(line)
+  // Requiere un indicador de vía (calle, avda, plaza, etc.) o un CP al inicio.
+  // No basta con el nombre de una ciudad para evitar que "SUMINISTROS INDUSTRIALES VALENCIA C.B."
+  // se confunda con una dirección.
+  return /\b(?:calle|c\/|av(?:da)?\.|avenida|plaza|paseo|carretera|ctra|pol[ií]gono|camino|bulevar|urb\.|^\d{5}\b)/i.test(line)
 }
 
 // Extrae la parte izquierda y derecha de un bloque de dos columnas.
@@ -157,21 +167,27 @@ function extractParty(lines: string[], _isReceptor = false): { nombre: string | 
   let nif: string | null = null
   let direccion: string | null = null
 
-  const stopWords = /registro mercantil|actividad|contacto|email|tel[eé]fono|fax|web|datos de pago|forma de pago|informaci[oó]n legal|total a pagar/i
+  const stopWords = /registro mercantil|actividad|contacto|email|tel[eé]fono|\btel[:\s]|telf[:\s]|tpv|fax|web|datos de pago|forma de pago|informaci[oó]n legal|total a pagar|hora:|atendido por|vendedor|factura simplificada|n°?\s*factura|n[úu]mero\s+de\s+factura|datos de emisi[oó]n|detalles del pedido|concepto|horas|ref\.?\s*contrato|forma de pago|attn:|attention:/i
   const titleWords = /emisor|receptor|cliente|datos fiscales/i
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim()
-    if (!line) continue
-    if (titleWords.test(line)) continue
-    if (stopWords.test(line)) continue
+    const rawLine = lines[i].trim()
+    if (!rawLine) continue
+    if (stopWords.test(rawLine)) continue
 
     // NIF
-    const lineNif = extractNif(line)
+    const lineNif = extractNif(rawLine)
     if (lineNif && !nif) {
       nif = lineNif
       continue
     }
+
+    // Para líneas tipo "Cliente Identificado: TALLERES...", quitar el prefijo
+    let line = rawLine.replace(/^(?:cliente(?:\s+identificado)?|receptor|destinatario|emisor)\s*[:.-]?\s*/i, '')
+
+    // Si después de quitar el prefijo no queda nada o es solo "Datos fiscales" etc.
+    if (!line) continue
+    if (titleWords.test(line)) continue
 
     // Dirección (puede extenderse varias líneas)
     if (looksLikeAddress(line)) {
@@ -179,7 +195,7 @@ function extractParty(lines: string[], _isReceptor = false): { nombre: string | 
       // Consumir líneas posteriores mientras parezcan dirección o contengan CP/país
       let j = i + 1
       while (j < lines.length && !stopWords.test(lines[j]) && !extractNif(lines[j])) {
-        const next = lines[j].trim()
+        const next = lines[j].trim().replace(/^(?:cliente(?:\s+identificado)?|receptor|destinatario|emisor)\s*[:.-]?\s*/i, '')
         if (!next) break
         if (looksLikeAddress(next) || /^\d{5}\b/.test(next) || /españa|spain/i.test(next)) {
           parts.push(next)
@@ -194,7 +210,8 @@ function extractParty(lines: string[], _isReceptor = false): { nombre: string | 
     }
 
     // Nombre: línea con texto razonable, acumulable para razones sociales multilínea
-    if (line.length > 2 && !/^[\d\s\-\/.,:;()]+$/.test(line) && !/iva|irpf|total|base|importe/i.test(line)) {
+    const isNameCandidate = line.length > 2 && !/^[\d\s\-\/.,:;()]+$/.test(line) && !/\b(iva|irpf|total|base|importe)\b/i.test(line)
+    if (isNameCandidate) {
       if (!nombre) {
         nombre = line
       } else {
@@ -241,10 +258,10 @@ export function parseInvoiceText(text: string): VisionResult | null {
   let invoiceNumber: string | null = null
   let serie: string | null = null
   const invPatterns = [
-    /n[úu]mero\s+de\s+factura\s*[:.]?\s*([A-Za-z0-9][A-Za-z0-9\-\/]{2,25})/i,
-    /factura\s*n[ºo°]?\s*[:.]?\s*([A-Za-z0-9][A-Za-z0-9\-\/]{2,25})/i,
-    /(?:factura|n[ºo°])\s*[:.]?\s*([A-Za-z0-9][A-Za-z0-9\-\/]{2,25})/i,
-    /\bfactura\b[^\d]{0,20}([A-Za-z0-9][A-Za-z0-9\-\/]{2,25})/i,
+    /n[úu]mero\s+de\s+factura\s*[:.]?\s*([A-Za-z0-9][A-Za-z0-9\-\/]*\d[A-Za-z0-9\-\/]*)/i,
+    /factura\s*n[ºo°]?\s*[:.]?\s*([A-Za-z0-9][A-Za-z0-9\-\/]*\d[A-Za-z0-9\-\/]*)/i,
+    /(?:factura|n[ºo°])\s*[:.]?\s*([A-Za-z0-9][A-Za-z0-9\-\/]*\d[A-Za-z0-9\-\/]*)/i,
+    /\bfactura\b[^\d]{0,20}([A-Za-z0-9][A-Za-z0-9\-\/]*\d[A-Za-z0-9\-\/]*)/i,
   ]
   for (const pattern of invPatterns) {
     const m = full.match(pattern)
@@ -256,14 +273,16 @@ export function parseInvoiceText(text: string): VisionResult | null {
   }
 
   // ── Fechas ──
+  // Normalizamos importes tipo "14, 20" a "14,20" para no romper detección de fechas cercanas
   const allDates = [...full.matchAll(/\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\b/g)]
   const fmtDate = (d: string, m: string, y: string): string => {
     const yy = y.length === 2 ? '20' + y : y
     return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${yy}`
   }
-  // Etiquetas específicas para distinguir emisión/operación
+  // Etiquetas específicas para distinguir emisión/operación/vencimiento
   const fechaExpMatch = full.match(/(?:fecha\s+de\s+expedici[oó]n|fecha\s+de\s+emisi[oó]n)\s*[:.]?\s*(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/i)
   const fechaOpMatch = full.match(/(?:fecha\s+de\s+operaci[oó]n|fecha\s+operaci[oó]n)\s*[:.]?\s*(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/i)
+  const fechaVencMatch = full.match(/(?:fecha\s+de\s+vencimiento|vencimiento)\s*[:.]?\s*(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/i)
   let fecha_emision: string | null = fechaExpMatch ? fmtDate(fechaExpMatch[1], fechaExpMatch[2], fechaExpMatch[3]) : null
   let fecha_operacion: string | null = fechaOpMatch ? fmtDate(fechaOpMatch[1], fechaOpMatch[2], fechaOpMatch[3]) : null
   if (!fecha_emision && allDates.length > 0) {
@@ -272,7 +291,11 @@ export function parseInvoiceText(text: string): VisionResult | null {
   }
   if (!fecha_operacion && allDates.length > 1) {
     const [__, d2, m2, y2] = allDates[1]
-    fecha_operacion = fmtDate(d2, m2, y2)
+    const cand = fmtDate(d2, m2, y2)
+    const isVencimiento = fechaVencMatch && fmtDate(fechaVencMatch[1], fechaVencMatch[2], fechaVencMatch[3]) === cand
+    if (!isVencimiento) {
+      fecha_operacion = cand
+    }
   }
 
   // ── Emisor / Receptor (layout de dos columnas) ──
@@ -291,7 +314,12 @@ export function parseInvoiceText(text: string): VisionResult | null {
 
   if (emisorHeaderIdx >= 0 && (receptorHeaderIdx > emisorHeaderIdx || isSameLineHeader)) {
     const maxIdx = Math.max(emisorHeaderIdx, receptorHeaderIdx)
-    const endParty = detalleStartIdx > maxIdx ? detalleStartIdx : Math.min(lines.length, maxIdx + 12)
+    // Cortar el bloque de partes al primer encabezado de sección posterior (datos de emisión, detalles, concepto, tabla...)
+    const sectionEndIdx = lines.findIndex((l, idx) =>
+      idx > maxIdx &&
+      /^(?:datos\s+de\s+emisi[oó]n|detalles\s+del\s+pedido|concepto|descripci[oó]n\s+del\s+producto|c[oó]digo|cant\.|cantidad|precio|horas|ref\.?\s*contrato)/i.test(l)
+    )
+    const endParty = sectionEndIdx >= 0 ? sectionEndIdx : (detalleStartIdx > maxIdx ? detalleStartIdx : Math.min(lines.length, maxIdx + 12))
     // Si el header está en la misma línea, empezamos después para no tomar los títulos como datos
     const startIdx = isSameLineHeader ? emisorHeaderIdx + 1 : emisorHeaderIdx
     const { leftLines, rightLines } = splitTwoColumnBlock(lines, startIdx, endParty)
@@ -316,12 +344,19 @@ export function parseInvoiceText(text: string): VisionResult | null {
 
     const receptorStart = lines.findIndex(l => /(?:cliente|receptor|destinatario)/i.test(l))
     if (receptorStart >= 0) {
+      // El bloque del receptor incluye la línea que contiene el label (p. ej. "Cliente Identificado: ...")
+      // porque ahí suele ir el nombre.
+      const startIncludesLabel = /cliente\s+(?:identificado|raz[oó]n|nombre)|receptor|destinatario/i.test(lines[receptorStart])
+      const receptorLines = startIncludesLabel
+        ? [lines[receptorStart], ...lines.slice(receptorStart + 1)]
+        : lines.slice(receptorStart)
       // El bloque del receptor termina cuando empieza la tabla de líneas o un total/resumen
       const receptorEnd = lines.findIndex((l, idx) =>
         idx > receptorStart &&
-        /^(?:total|c[oó]digo|descripci[oó]n|cant\.|cantidad|base|subtotal|importe\s+total|suma\s+importes|desglose)/i.test(l)
+        /^(?:total|c[oó]digo|descripci[oó]n|cant\.|cantidad|base|subtotal|importe\s+total|suma\s+importes|desglose|datos\s+de|detalles\s+del|concepto)/i.test(l)
       )
-      const receptorRawLines = lines.slice(receptorStart + 1, receptorEnd >= 0 ? receptorEnd : receptorStart + 10)
+      const effectiveEnd = receptorEnd >= 0 ? receptorEnd - receptorStart : receptorStart + 10
+      const receptorRawLines = receptorLines.slice(0, effectiveEnd)
       // El receptor también puede venir en dos columnas (datos a la izq, dirección de envío a la der)
       const { leftLines: receptorLeft } = splitTwoColumnBlock(receptorRawLines, 0, receptorRawLines.length)
       const receptorParty = extractParty(receptorLeft, true)
@@ -348,22 +383,32 @@ export function parseInvoiceText(text: string): VisionResult | null {
     let trailingDescription: string[] = []
     let lastItem: LineaFactura | null = null
     let lastAmountLineHadCode = false
-    const moneyRegex = /\d{1,3}(?:[.,]\d{3})*[.,]\d{2}/g
+    // Normalizamos importes con espaciados raros del OCR ("14, 20", "48, 00")
+    const moneyRegex = /\d{1,3}(?:[.,]\d{3})*[.,]\s*\d{2}/g
     for (let i = lineasStart + 1; i < lineasEnd; i++) {
       // Quitar símbolo de euro y porcentajes (IVA/descuento) antes de buscar importes
       const line = lines[i].replace(/€/g, '').replace(/\d{1,2}\s*%/g, '').trim()
       const amounts = [...line.matchAll(moneyRegex)].map(m => m[0])
       if (amounts.length >= 2) {
-        // Antes de procesar el nuevo item, adjuntar descripciones trailing al anterior
-        // solo si la línea de importes anterior comenzaba con un código de producto.
-        if (lastItem && lastAmountLineHadCode && trailingDescription.length > 0) {
+        // Antes de procesar el nuevo item, adjuntar descripciones trailing al anterior.
+        if (lastItem && trailingDescription.length > 0) {
           const extra = trailingDescription.join(' ').replace(/\s+/g, ' ').trim()
           if (extra) lastItem.descripcion = ((lastItem.descripcion || '') + ' ' + extra).trim()
         }
 
-        // Último importe = importe línea, penúltimo = precio unitario
-        const importe = amounts[amounts.length - 1]
-        const precio = amounts[amounts.length - 2]
+        // Último importe = importe línea, penúltimo = precio unitario.
+        // Si hay 3 importes y el primero × el segundo ≈ el tercero, el primero es la cantidad.
+        let importe = amounts[amounts.length - 1]
+        let precio = amounts[amounts.length - 2]
+        let inferredQty: number | null = null
+        if (amounts.length >= 3) {
+          const a = toNum(amounts[0]) || 0
+          const b = toNum(amounts[1]) || 0
+          const c = toNum(amounts[2]) || 0
+          if (a > 0 && b > 0 && c > 0 && Math.abs(a * b - c) < 0.01) {
+            inferredQty = a
+          }
+        }
         // Descripción: líneas previas + texto antes del primer importe
         const firstAmountIdx = line.search(moneyRegex)
         let inlineDesc = firstAmountIdx > 0 ? line.slice(0, firstAmountIdx).trim() : ''
@@ -376,14 +421,18 @@ export function parseInvoiceText(text: string): VisionResult | null {
           inlineDesc = inlineDesc.slice(code.length).trim()
         }
 
-        // Cantidad: número entero justo antes del primer importe (opcional); por defecto 1
+        // Cantidad: preferir heurística de 3 importes; si no, el número entero justo antes del primer importe.
         let cantidad = 1
-        const qtyMatch = inlineDesc.match(/(\d+)\s*$/)
-        if (qtyMatch) {
-          const q = parseInt(qtyMatch[1], 10)
-          if (q < 1000) {
-            cantidad = q
-            inlineDesc = inlineDesc.replace(/\s*\d+\s*$/, '').trim()
+        if (inferredQty !== null) {
+          cantidad = inferredQty
+        } else {
+          const qtyMatch = inlineDesc.match(/(\d+)\s*$/)
+          if (qtyMatch) {
+            const q = parseInt(qtyMatch[1], 10)
+            if (q < 1000) {
+              cantidad = q
+              inlineDesc = inlineDesc.replace(/\s*\d+\s*$/, '').trim()
+            }
           }
         }
 
@@ -409,13 +458,14 @@ export function parseInvoiceText(text: string): VisionResult | null {
         pendingDescription = []
       } else if (!/^(?:base|subtotal|total|importe|iva|imp|página|\d+%)/i.test(line)) {
         // Acumular como descripción.
-        // Si la línea de importes anterior llevaba código de producto, solo la PRIMERA
-        // línea descriptiva posterior se considera trailing del item anterior; el resto
-        // son descripciones principales del siguiente item.
-        if (lastItem && lastAmountLineHadCode && trailingDescription.length === 0) {
-          trailingDescription.push(line.replace(/\t/g, ' ').trim())
+        // Línea trailing si: comienza con minúscula, es parentética, o el item anterior tenía código de producto.
+        const cleanLine = line.replace(/\t/g, ' ').trim()
+        const isLowerOrParen = /^[a-záéíóúüñ(]/.test(cleanLine) || /^\([^)]*\)$/.test(cleanLine)
+        const isTrailing = isLowerOrParen || (lastAmountLineHadCode && trailingDescription.length === 0)
+        if (lastItem && isTrailing && trailingDescription.length === 0) {
+          trailingDescription.push(cleanLine)
         } else {
-          pendingDescription.push(line.replace(/\t/g, ' ').trim())
+          pendingDescription.push(cleanLine)
         }
       }
     }
@@ -428,7 +478,7 @@ export function parseInvoiceText(text: string): VisionResult | null {
 
   // ── Base Imponible ──
   let baseImponible: number | null = null
-  const baseMatch = full.match(/(?:base\s+imponible\s+total|base\s+imponible|base|subtotal|bruto|importe\s+neto)\s*[:.]?\s*€?\s*([\d]{1,3}(?:[.,][\d]{3})*(?:[.,]\d{1,2})?)/i)
+  const baseMatch = full.match(/(?:base\s+imponible|subtotal|importe\s+neto)[^:]{0,25}[:.]?\s*€?\s*([\d]{1,3}(?:[.,][\d]{3})*(?:[.,]\s*\d{1,2})?)/i)
   if (baseMatch) baseImponible = toNum(baseMatch[1])
 
   // ── IVA ──
@@ -437,7 +487,7 @@ export function parseInvoiceText(text: string): VisionResult | null {
   const desgloseIva: DesgloseIva[] = []
 
   // Desglose por tipo de IVA: buscar líneas tipo "21,00 %  600,10 €  126,02 €"
-  const ivaRowRegex = /^(\d{1,2}(?:[.,]\d+)?)\s*%\s*([\d]{1,3}(?:[.,][\d]{3})*(?:[.,]\d{1,2})?)\s*€?\s*([\d]{1,3}(?:[.,][\d]{3})*(?:[.,]\d{1,2})?)\s*€?/i
+  const ivaRowRegex = /^(\d{1,2}(?:[.,]\d+)?)\s*%\s*([\d]{1,3}(?:[.,][\d]{3})*(?:[.,]\s*\d{1,2})?)\s*€?\s*([\d]{1,3}(?:[.,][\d]{3})*(?:[.,]\s*\d{1,2})?)\s*€?/i
   for (const line of lines) {
     const m = line.match(ivaRowRegex)
     if (m) {
@@ -458,34 +508,37 @@ export function parseInvoiceText(text: string): VisionResult | null {
     // Fallback para facturas con un solo tipo de IVA
     const ivaRateMatch = full.match(/(?:iva|i\.v\.a\.)[^0-9]*(\d{1,2}(?:[.,]\d+)?)\s*%/i)
     if (ivaRateMatch) tipoIva = toNum(ivaRateMatch[1])
-    const ivaAmtMatch = full.match(/(?:iva|cuota\s+iva)[^:]*:\s*€?\s*[-–]?\s*([\d]{1,3}(?:[.,][\d]{3})*(?:[.,]\d{1,2})?)/i)
+    const ivaAmtMatch = full.match(/(?:iva|cuota\s+iva)[^:]*:\s*€?\s*[-–]?\s*([\d]{1,3}(?:[.,][\d]{3})*(?:[.,]\s*\d{1,2})?)/i)
     if (ivaAmtMatch) cuotaIva = toNum(ivaAmtMatch[1])
   }
 
   // Priorizar etiquetas explícitas de totalidad de IVA
-  const totalIvaMatch = full.match(/total\s+(?:impuestos|iva)[^:]*:\s*€?\s*([\d]{1,3}(?:[.,][\d]{3})*(?:[.,]\d{1,2})?)/i)
+  const totalIvaMatch = full.match(/total\s+(?:impuestos|iva)[^:]*:\s*€?\s*([\d]{1,3}(?:[.,][\d]{3})*(?:[.,]\s*\d{1,2})?)/i)
   if (totalIvaMatch) cuotaIva = toNum(totalIvaMatch[1])
 
   // ── IRPF ──
   let tipoIrpf: number | null = null
   let cuotaIrpf: number | null = null
-  // Tolerar "Retención IRPF (-15%)*:" o "IRPF 15%"
-  const irpfRateMatch = full.match(/(?:irpf|retenci[oó]n)[^0-9]*(\d{1,2}(?:[.,]\d+)?)\s*%/i)
+  // Tolerar "Retención IRPF (-15%)*:", "IRPF 15%" o "Retención IRPF (%):"
+  const irpfRateMatch = full.match(/(?:irpf|retenci[oó]n)[^0-9]*(-?\d{1,2}(?:[.,]\d+)?)\s*%/i)
   if (irpfRateMatch) tipoIrpf = toNum(irpfRateMatch[1])
-  const irpfAmtMatch = full.match(/(?:irpf|retenci[oó]n)[^:]*:\s*€?\s*[-–]?\s*([\d]{1,3}(?:[.,][\d]{3})*(?:[.,]\d{1,2})?)/i)
+  // Si aparece la etiqueta de retención pero sin tasa, asumir 0%
+  const hasIrpfLabel = /retenci[oó]n\s+(?:irpf|sobre\s+el\s+trabajo)|\bIRPF\b/i.test(full)
+  if (hasIrpfLabel && tipoIrpf === null) tipoIrpf = 0
+  const irpfAmtMatch = full.match(/(?:irpf|retenci[oó]n)[^:]*:\s*€?\s*[-–]?\s*([\d]{1,3}(?:[.,][\d]{3})*(?:[.,]\s*\d{1,2})?)/i)
   if (irpfAmtMatch) cuotaIrpf = -Math.abs(toNum(irpfAmtMatch[1]) || 0)
 
   // ── Total Factura ──
   let totalFactura: number | null = null
-  const totalMatch = full.match(/(?:total\s+a\s+pagar|total\s+factura|importe\s+total|neto\s+a\s+pagar)\s*[:.]?\s*€?\s*([\d]{1,3}(?:[.,][\d]{3})*(?:[.,]\d{1,2})?)/i)
+  const totalMatch = full.match(/(?:total\s+a\s+pagar|total\s+factura|importe\s+total|neto\s+a\s+pagar)\s*[:.]?\s*€?\s*([\d]{1,3}(?:[.,][\d]{3})*(?:[.,]\s*\d{1,2})?)/i)
   if (totalMatch) totalFactura = toNum(totalMatch[1])
   // Fallback: "TOTAL A PAGAR: 1.696,00 €"
   if (!totalFactura) {
-    const totalMatch2 = full.match(/total\s*[:.]?\s*€?\s*([\d]{1,3}(?:[.,][\d]{3})*(?:[.,]\d{1,2})?)\s*€?/i)
+    const totalMatch2 = full.match(/total\s*[:.]?\s*€?\s*([\d]{1,3}(?:[.,][\d]{3})*(?:[.,]\s*\d{1,2})?)\s*€?/i)
     if (totalMatch2) totalFactura = toNum(totalMatch2[1])
   }
   if (!totalFactura) {
-    const allNums = [...full.matchAll(/([\d]{1,3}(?:[.,][\d]{3})*(?:[.,]\d{1,2}))\s*€/g)]
+    const allNums = [...full.matchAll(/([\d]{1,3}(?:[.,][\d]{3})*(?:[.,]\s*\d{1,2}))\s*€/g)]
     if (allNums.length > 0) {
       totalFactura = toNum(allNums[allNums.length - 1][1])
     }
@@ -506,6 +559,9 @@ export function parseInvoiceText(text: string): VisionResult | null {
       if (/^ES\d{2}\d{18,24}$/.test(candidate)) iban = candidate
     }
   }
+
+  // ── Verifactu ──
+  const verifactu = /VERI[\s\*]?FACTU|QR\s*AEAT|factura\s*verificable\s*en\s*la\s*sede/i.test(full)
 
   // ── Categoría (heurística) ──
   let category = 'otros'
@@ -556,6 +612,7 @@ export function parseInvoiceText(text: string): VisionResult | null {
     },
     iban,
     category,
+    verifactu,
 
     // Campos planos legacy
     supplier: emisorNombre,
@@ -593,6 +650,7 @@ export const FALLBACK: VisionResult = {
   },
   iban: null,
   category: 'otros',
+  verifactu: false,
   supplier: null,
   total: null,
   nif: null,
