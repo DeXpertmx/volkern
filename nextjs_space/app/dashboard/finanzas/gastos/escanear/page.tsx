@@ -322,6 +322,13 @@ export default function EscanearGastoPage() {
         receptorNif: form.receptorNif || undefined,
         receptorDireccion: form.receptorDireccion || undefined,
         iban: form.iban || undefined,
+        // Líneas de detalle (serializadas para metadata)
+        lineas: form.lineas.length > 0 ? form.lineas.map(l => ({
+          descripcion: l.descripcion || null,
+          cantidad: l.cantidad ? parseFloat(l.cantidad) : null,
+          precio_unitario: l.precio ? parseFloat(l.precio) : null,
+          importe: l.importe ? parseFloat(l.importe) : null,
+        })) : undefined,
       }
       if (form.receiptUrl) body.receiptUrl = form.receiptUrl
 
