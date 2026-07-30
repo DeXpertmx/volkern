@@ -17,6 +17,12 @@ export interface LineaFactura {
   importe: number | null
 }
 
+export interface DesgloseIva {
+  tipo: number
+  base: number
+  cuota: number
+}
+
 export interface TotalesFactura {
   base_imponible: number | null
   tipo_iva: number | null
@@ -24,6 +30,7 @@ export interface TotalesFactura {
   tipo_irpf: number | null
   cuota_irpf: number | null
   total_factura: number | null
+  desglose_iva?: DesgloseIva[]
 }
 
 export interface VisionResult {
@@ -191,11 +198,13 @@ function extractParty(lines: string[], _isReceptor = false): { nombre: string | 
       if (!nombre) {
         nombre = line
       } else {
-        // Fusionar solo si la siguiente línea parece seguir la razón social y no es ruido administrativo
+        // Fusionar si la siguiente línea continúa la razón social o aporta el sufijo societario
         const last = nombre.split(' ').pop()?.toUpperCase()
+        const hasCompanySuffix = /\b(S\.?L\.?U\.?|S\.?L\.?|S\.?A\.?U\.?|S\.?A\.?|S\.?C\.?|S\.?C\.?P\.?|C\.?B\.?|S\.?A\.?P\.?|S\.?A\.?T|LLC|INC|GMBH|BV|LTD)\b/i.test(line)
         const isCompanySuffix = /^(S\.?L\.?|S\.?A\.?|S\.?L\.?U\.?|S\.?A\.?U\.?|S\.?C\.?|S\.?C\.?P\.?|C\.?B\.?|S\.?A\.?P\.?|S\.?A\.?T|LLC|INC|GMBH|BV|LTD)$/i.test(last || '')
         const isAdministrativeNoise = /hoja|registro|folio|tomo|nº\s*\d|m-\d|inscripci[oó]n|contacto|nif|cif|dni/i.test(line)
-        if (isCompanySuffix && !isAdministrativeNoise) {
+        const looksLikeContinuation = /^DEL?\s|^DE\s|^[A-Z]/i.test(line) && !isAdministrativeNoise
+        if ((isCompanySuffix || hasCompanySuffix || looksLikeContinuation) && !isAdministrativeNoise) {
           nombre += ' ' + line
         }
       }
@@ -295,17 +304,27 @@ export function parseInvoiceText(text: string): VisionResult | null {
     receptorNif = receptorParty.nif
     receptorDireccion = receptorParty.direccion
   } else {
-    // Fallback: emisor en primeras líneas, receptor tras "Cliente"
-    const emisorEndIdx = lines.findIndex(l => /^(?:cliente|receptor|destinatario)/i.test(l))
-    const emisorLines = emisorEndIdx > 0 ? lines.slice(0, emisorEndIdx) : lines.slice(0, Math.min(8, lines.length))
-    const emisorParty = extractParty(emisorLines)
+    // Fallback: emisor en primeras líneas, receptor tras "Cliente" / "Receptor"
+    const emisorEndIdx = lines.findIndex(l => /(?:cliente|receptor|destinatario)/i.test(l))
+    const emisorRawLines = emisorEndIdx > 0 ? lines.slice(0, emisorEndIdx) : lines.slice(0, Math.min(10, lines.length))
+    // El emisor puede venir en dos columnas (nombre a la izquierda, datos de factura a la derecha)
+    const { leftLines: emisorLeft } = splitTwoColumnBlock(emisorRawLines, 0, emisorRawLines.length)
+    const emisorParty = extractParty(emisorLeft)
     emisorNombre = emisorParty.nombre
     emisorNif = emisorParty.nif
     emisorDireccion = emisorParty.direccion
 
-    const receptorStart = lines.findIndex(l => /^(?:cliente|receptor|destinatario)/i.test(l))
+    const receptorStart = lines.findIndex(l => /(?:cliente|receptor|destinatario)/i.test(l))
     if (receptorStart >= 0) {
-      const receptorParty = extractParty(lines.slice(receptorStart + 1, receptorStart + 8), true)
+      // El bloque del receptor termina cuando empieza la tabla de líneas o un total/resumen
+      const receptorEnd = lines.findIndex((l, idx) =>
+        idx > receptorStart &&
+        /^(?:total|c[oó]digo|descripci[oó]n|cant\.|cantidad|base|subtotal|importe\s+total|suma\s+importes|desglose)/i.test(l)
+      )
+      const receptorRawLines = lines.slice(receptorStart + 1, receptorEnd >= 0 ? receptorEnd : receptorStart + 10)
+      // El receptor también puede venir en dos columnas (datos a la izq, dirección de envío a la der)
+      const { leftLines: receptorLeft } = splitTwoColumnBlock(receptorRawLines, 0, receptorRawLines.length)
+      const receptorParty = extractParty(receptorLeft, true)
       receptorNombre = receptorParty.nombre
       receptorNif = receptorParty.nif
       receptorDireccion = receptorParty.direccion
@@ -322,23 +341,41 @@ export function parseInvoiceText(text: string): VisionResult | null {
 
   // ── Líneas de detalle ──
   const lineas: LineaFactura[] = []
-  const lineasStart = lines.findIndex(l => /^(?:cant|cantidad|descripci[oó]n|concepto|art[ií]culo|producto|ref\s*[:.])/i.test(l))
-  const lineasEnd = lines.findIndex(l => /(?:base\s+imponible|subtotal|total|importe\s+total|suma|iva\s*\d)/i.test(l))
+  const lineasStart = lines.findIndex(l => /^(?:c[oó]digo|cant|cantidad|descripci[oó]n|concepto|art[ií]culo|producto|ref\s*[:.])/i.test(l))
+  const lineasEnd = lines.findIndex(l => /(?:base\s+imponible|subtotal|total\s+factura|importe\s+total|suma\s+importes|desglose\s+impositivo)/i.test(l))
   if (lineasStart >= 0 && lineasEnd > lineasStart) {
-    const pendingDescription: string[] = []
+    let pendingDescription: string[] = []
+    let trailingDescription: string[] = []
+    let lastItem: LineaFactura | null = null
+    let lastAmountLineHadCode = false
     const moneyRegex = /\d{1,3}(?:[.,]\d{3})*[.,]\d{2}/g
     for (let i = lineasStart + 1; i < lineasEnd; i++) {
-      // Quitar símbolo de euro y porcentajes (IVA) antes de buscar importes
+      // Quitar símbolo de euro y porcentajes (IVA/descuento) antes de buscar importes
       const line = lines[i].replace(/€/g, '').replace(/\d{1,2}\s*%/g, '').trim()
       const amounts = [...line.matchAll(moneyRegex)].map(m => m[0])
       if (amounts.length >= 2) {
+        // Antes de procesar el nuevo item, adjuntar descripciones trailing al anterior
+        // solo si la línea de importes anterior comenzaba con un código de producto.
+        if (lastItem && lastAmountLineHadCode && trailingDescription.length > 0) {
+          const extra = trailingDescription.join(' ').replace(/\s+/g, ' ').trim()
+          if (extra) lastItem.descripcion = ((lastItem.descripcion || '') + ' ' + extra).trim()
+        }
+
         // Último importe = importe línea, penúltimo = precio unitario
         const importe = amounts[amounts.length - 1]
         const precio = amounts[amounts.length - 2]
         // Descripción: líneas previas + texto antes del primer importe
-        // Con regex global match() no devuelve index; usamos search() que sí lo devuelve sin tocar lastIndex.
         const firstAmountIdx = line.search(moneyRegex)
         let inlineDesc = firstAmountIdx > 0 ? line.slice(0, firstAmountIdx).trim() : ''
+
+        // Separar código de producto si aparece al inicio (ej: ENV-0912, PAL-EU01, ALM-FNB)
+        const codeMatch = inlineDesc.match(/^[A-Z]{2,4}(?:[-.][A-Z0-9]{1,6})?\d{0,6}\b/)
+        let code = ''
+        if (codeMatch) {
+          code = codeMatch[0]
+          inlineDesc = inlineDesc.slice(code.length).trim()
+        }
+
         // Cantidad: número entero justo antes del primer importe (opcional); por defecto 1
         let cantidad = 1
         const qtyMatch = inlineDesc.match(/(\d+)\s*$/)
@@ -349,25 +386,43 @@ export function parseInvoiceText(text: string): VisionResult | null {
             inlineDesc = inlineDesc.replace(/\s*\d+\s*$/, '').trim()
           }
         }
+
         const descParts = [...pendingDescription]
         if (inlineDesc) descParts.push(inlineDesc)
+        if (code) descParts.unshift(code)
         let descripcion = descParts.join(' ').replace(/\s+/g, ' ').trim() || null
         // Fallback: si tras quitar cantidad/importes la descripción quedó vacía,
         // reutilizar la línea ya limpia de importes y porcentajes como descripción.
         if (!descripcion) {
           descripcion = line.replace(/\s+/g, ' ').trim() || null
         }
-        lineas.push({
+        const newItem: LineaFactura = {
           descripcion,
           cantidad,
           precio_unitario: toNum(precio),
           importe: toNum(importe),
-        })
-        pendingDescription.length = 0
+        }
+        lineas.push(newItem)
+        lastItem = newItem
+        lastAmountLineHadCode = !!codeMatch
+        trailingDescription = []
+        pendingDescription = []
       } else if (!/^(?:base|subtotal|total|importe|iva|imp|página|\d+%)/i.test(line)) {
-        // Acumular como descripción
-        pendingDescription.push(line.replace(/\t/g, ' ').trim())
+        // Acumular como descripción.
+        // Si la línea de importes anterior llevaba código de producto, solo la PRIMERA
+        // línea descriptiva posterior se considera trailing del item anterior; el resto
+        // son descripciones principales del siguiente item.
+        if (lastItem && lastAmountLineHadCode && trailingDescription.length === 0) {
+          trailingDescription.push(line.replace(/\t/g, ' ').trim())
+        } else {
+          pendingDescription.push(line.replace(/\t/g, ' ').trim())
+        }
       }
+    }
+    // Aplicar trailing descriptions pendientes al último item
+    if (lastItem && trailingDescription.length > 0) {
+      const extra = trailingDescription.join(' ').replace(/\s+/g, ' ').trim()
+      if (extra) lastItem.descripcion = ((lastItem.descripcion || '') + ' ' + extra).trim()
     }
   }
 
@@ -379,12 +434,37 @@ export function parseInvoiceText(text: string): VisionResult | null {
   // ── IVA ──
   let tipoIva: number | null = null
   let cuotaIva: number | null = null
-  // Tolerar "IVA (21% sobre 1.600,00 €):" o "IVA 21%"
-  const ivaRateMatch = full.match(/(?:iva|i\.v\.a\.)[^0-9]*(\d{1,2}(?:[.,]\d+)?)\s*%/i)
-  if (ivaRateMatch) tipoIva = toNum(ivaRateMatch[1])
-  // Cuota IVA: buscar "IVA (21% sobre X): 336,00" o "IVA: 336,00"
-  const ivaAmtMatch = full.match(/(?:iva|cuota\s+iva)[^:]*:\s*€?\s*[-–]?\s*([\d]{1,3}(?:[.,][\d]{3})*(?:[.,]\d{1,2})?)/i)
-  if (ivaAmtMatch) cuotaIva = toNum(ivaAmtMatch[1])
+  const desgloseIva: DesgloseIva[] = []
+
+  // Desglose por tipo de IVA: buscar líneas tipo "21,00 %  600,10 €  126,02 €"
+  const ivaRowRegex = /^(\d{1,2}(?:[.,]\d+)?)\s*%\s*([\d]{1,3}(?:[.,][\d]{3})*(?:[.,]\d{1,2})?)\s*€?\s*([\d]{1,3}(?:[.,][\d]{3})*(?:[.,]\d{1,2})?)\s*€?/i
+  for (const line of lines) {
+    const m = line.match(ivaRowRegex)
+    if (m) {
+      desgloseIva.push({
+        tipo: toNum(m[1]) || 0,
+        base: toNum(m[2]) || 0,
+        cuota: toNum(m[3]) || 0,
+      })
+    }
+  }
+
+  if (desgloseIva.length > 0) {
+    // El tipo de IVA principal es el de mayor base imponible
+    const mainIva = desgloseIva.reduce((prev, curr) => (curr.base > prev.base ? curr : prev))
+    tipoIva = mainIva.tipo
+    cuotaIva = desgloseIva.reduce((sum, item) => sum + item.cuota, 0)
+  } else {
+    // Fallback para facturas con un solo tipo de IVA
+    const ivaRateMatch = full.match(/(?:iva|i\.v\.a\.)[^0-9]*(\d{1,2}(?:[.,]\d+)?)\s*%/i)
+    if (ivaRateMatch) tipoIva = toNum(ivaRateMatch[1])
+    const ivaAmtMatch = full.match(/(?:iva|cuota\s+iva)[^:]*:\s*€?\s*[-–]?\s*([\d]{1,3}(?:[.,][\d]{3})*(?:[.,]\d{1,2})?)/i)
+    if (ivaAmtMatch) cuotaIva = toNum(ivaAmtMatch[1])
+  }
+
+  // Priorizar etiquetas explícitas de totalidad de IVA
+  const totalIvaMatch = full.match(/total\s+(?:impuestos|iva)[^:]*:\s*€?\s*([\d]{1,3}(?:[.,][\d]{3})*(?:[.,]\d{1,2})?)/i)
+  if (totalIvaMatch) cuotaIva = toNum(totalIvaMatch[1])
 
   // ── IRPF ──
   let tipoIrpf: number | null = null
@@ -472,6 +552,7 @@ export function parseInvoiceText(text: string): VisionResult | null {
       tipo_irpf: tipoIrpf,
       cuota_irpf: cuotaIrpf,
       total_factura: totalFactura,
+      desglose_iva: desgloseIva.length > 0 ? desgloseIva : undefined,
     },
     iban,
     category,
@@ -508,6 +589,7 @@ export const FALLBACK: VisionResult = {
     tipo_irpf: null,
     cuota_irpf: null,
     total_factura: null,
+    desglose_iva: undefined,
   },
   iban: null,
   category: 'otros',
