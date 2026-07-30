@@ -1,11 +1,9 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { updateCalendarEvent, deleteCalendarEvent } from '@/lib/google-calendar'
-import { sendAppointmentConfirmation, sendAppointmentStatusNotification, generateCitaEmailHash } from '@/lib/email'
+import { sendAppointmentConfirmation, generateCitaEmailHash } from '@/lib/email'
 import { authenticateRequest } from '@/lib/api-key-auth'
 
 export async function GET(
@@ -115,16 +113,26 @@ export async function PUT(
       }
     })
 
+    // Determinar qué tipo de cambio se realizó para decidir si toca Google Calendar o enviar correo
+    const estadoAnteriorLower = citaAnterior.estado?.toLowerCase() || ''
+    const estadoNuevoLower = cita.estado?.toLowerCase() || ''
+    const huboCancelacion = estadoNuevoLower === 'cancelada' && estadoAnteriorLower !== 'cancelada'
+    const huboCambiosDeCalendario = (
+      (fechaHora && new Date(fechaHora).getTime() !== citaAnterior.fechaHora.getTime()) ||
+      (duracion && duracion !== citaAnterior.duracion) ||
+      (titulo && titulo !== citaAnterior.titulo) ||
+      (descripcion !== undefined && descripcion !== citaAnterior.descripcion)
+    )
+
     // 📅 SINCRONIZACIÓN AUTOMÁTICA CON GOOGLE CALENDAR (en tiempo real)
+    // Solo tocamos GCal si: se canceló la cita (eliminar evento) o cambió algo del calendario.
+    // Un simple cambio de estado (confirmar/pagar) NO debe disparar updateCalendarEvent.
     try {
-      // Sincronizar con el calendario del usuario asignado
       const googleIntegration = await prisma.googleCalendarIntegration.findFirst({
         where: { userId: cita.usuarioAsignadoId || auth.user?.id },
       })
 
       if (googleIntegration && googleIntegration.activo) {
-        console.log('📅 Actualizando cita en Google Calendar...')
-
         // Obtener el Google Calendar ID específico si la cita tiene connectedCalendarId
         let targetCalendarId: string | undefined;
         if (cita.connectedCalendarId) {
@@ -136,20 +144,45 @@ export async function PUT(
           }
         }
 
-        await updateCalendarEvent(googleIntegration.userId, params.id, {
-          titulo: cita.titulo || 'Cita',
-          descripcion: cita.descripcion || undefined,
-          fechaHora: cita.fechaHora,
-          duracion: cita.duracion,
-          leadEmail: cita.lead?.email || undefined,
-          googleCalendarEventId: cita.googleCalendarEventId,
-          targetCalendarId,
-        })
-
-        console.log('✅ Cita actualizada en Google Calendar')
+        if (huboCancelacion && cita.googleCalendarEventId) {
+          console.log('📅 Eliminando cita cancelada de Google Calendar...')
+          await deleteCalendarEvent(googleIntegration.userId, params.id, cita.googleCalendarEventId, targetCalendarId)
+          console.log('✅ Cita eliminada de Google Calendar')
+        } else if (huboCambiosDeCalendario) {
+          console.log('📅 Actualizando cita en Google Calendar...')
+          await updateCalendarEvent(googleIntegration.userId, params.id, {
+            titulo: cita.titulo || 'Cita',
+            descripcion: cita.descripcion || undefined,
+            fechaHora: cita.fechaHora,
+            duracion: cita.duracion,
+            googleCalendarEventId: cita.googleCalendarEventId,
+            targetCalendarId,
+          })
+          console.log('✅ Cita actualizada en Google Calendar')
+        }
       }
     } catch (gcalError: any) {
-      console.error('⚠️ Error al actualizar en Google Calendar (no crítico):', gcalError.message)
+      console.error('️ Error al actualizar en Google Calendar (no crítico):', gcalError.message)
+    }
+
+    // 📧 Enviar correo de confirmación al lead cuando el admin confirma la cita
+    if (estadoNuevoLower === 'confirmada' && estadoAnteriorLower !== 'confirmada' && cita.lead?.email && cita.servicio) {
+      console.log(`📧 Enviando correo de confirmación al lead: ${cita.lead.email}`)
+      await sendAppointmentConfirmation({
+        id: cita.id,
+        lead: { nombre: cita.lead.nombre, email: cita.lead.email },
+        servicio: {
+          nombre: cita.servicio.nombre,
+          descripcion: cita.servicio.descripcion,
+          precio: cita.servicio.precio,
+          moneda: cita.servicio.moneda,
+        },
+        fechaHora: cita.fechaHora,
+        duracion: cita.duracion,
+        tenantNombre: auth.tenant?.nombre,
+        linkReunion: cita.linkReunion,
+        tenantId: tenantId,
+      }).catch(err => console.error('Error enviando correo de confirmación al lead:', err))
     }
 
     // 📧 CONTROL DE REENVÍO DE CORREO AL LEAD
@@ -230,6 +263,15 @@ export async function PATCH(
     let { estado, fechaHora, montoPagado, stripePaymentId, titulo, descripcion, duracion, tipo, catalogoItemId, connectedCalendarId } = body
     if (estado) estado = (estado as string).toLowerCase()
 
+    const citaAnterior = await prisma.cita.findUnique({
+      where: { id: params.id },
+      include: { lead: true, servicio: true }
+    })
+
+    if (!citaAnterior) {
+      return NextResponse.json({ error: 'Cita no encontrada' }, { status: 404 })
+    }
+
     const cita = await prisma.cita.update({
       where: { id: params.id },
       data: {
@@ -250,6 +292,17 @@ export async function PATCH(
       }
     })
 
+    // Determinar qué tipo de cambio se realizó
+    const estadoAnteriorLower = citaAnterior.estado?.toLowerCase() || ''
+    const estadoNuevoLower = cita.estado?.toLowerCase() || ''
+    const huboCancelacion = estadoNuevoLower === 'cancelada' && estadoAnteriorLower !== 'cancelada'
+    const huboCambiosDeCalendario = (
+      (fechaHora && new Date(fechaHora).getTime() !== citaAnterior.fechaHora.getTime()) ||
+      (duracion && duracion !== citaAnterior.duracion) ||
+      (titulo && titulo !== citaAnterior.titulo) ||
+      (descripcion !== undefined && descripcion !== citaAnterior.descripcion)
+    )
+
     // 📅 SINCRONIZACIÓN AUTOMÁTICA CON GOOGLE CALENDAR (en tiempo real)
     try {
       const googleIntegration = await prisma.googleCalendarIntegration.findFirst({
@@ -257,8 +310,6 @@ export async function PATCH(
       })
 
       if (googleIntegration && googleIntegration.activo) {
-        console.log('📅 Actualizando cita en Google Calendar...')
-
         // Obtener el Google Calendar ID específico si la cita tiene connectedCalendarId
         let targetCalendarId: string | undefined;
         if (cita.connectedCalendarId) {
@@ -270,20 +321,45 @@ export async function PATCH(
           }
         }
 
-        await updateCalendarEvent(googleIntegration.userId, params.id, {
-          titulo: cita.titulo || 'Cita',
-          descripcion: cita.descripcion || undefined,
-          fechaHora: cita.fechaHora,
-          duracion: cita.duracion,
-          leadEmail: cita.lead?.email || undefined,
-          googleCalendarEventId: cita.googleCalendarEventId,
-          targetCalendarId,
-        })
-
-        console.log('✅ Cita actualizada en Google Calendar')
+        if (huboCancelacion && cita.googleCalendarEventId) {
+          console.log('📅 Eliminando cita cancelada de Google Calendar...')
+          await deleteCalendarEvent(googleIntegration.userId, params.id, cita.googleCalendarEventId, targetCalendarId)
+          console.log('✅ Cita eliminada de Google Calendar')
+        } else if (huboCambiosDeCalendario) {
+          console.log('📅 Actualizando cita en Google Calendar...')
+          await updateCalendarEvent(googleIntegration.userId, params.id, {
+            titulo: cita.titulo || 'Cita',
+            descripcion: cita.descripcion || undefined,
+            fechaHora: cita.fechaHora,
+            duracion: cita.duracion,
+            googleCalendarEventId: cita.googleCalendarEventId,
+            targetCalendarId,
+          })
+          console.log('✅ Cita actualizada en Google Calendar')
+        }
       }
     } catch (gcalError: any) {
       console.error('⚠️ Error al actualizar en Google Calendar (no crítico):', gcalError.message)
+    }
+
+    // 📧 Enviar correo de confirmación al lead cuando el admin confirma la cita
+    if (estadoNuevoLower === 'confirmada' && estadoAnteriorLower !== 'confirmada' && cita.lead?.email && cita.servicio) {
+      console.log(`📧 Enviando correo de confirmación al lead: ${cita.lead.email}`)
+      await sendAppointmentConfirmation({
+        id: cita.id,
+        lead: { nombre: cita.lead.nombre, email: cita.lead.email },
+        servicio: {
+          nombre: cita.servicio.nombre,
+          descripcion: cita.servicio.descripcion,
+          precio: cita.servicio.precio,
+          moneda: cita.servicio.moneda,
+        },
+        fechaHora: cita.fechaHora,
+        duracion: cita.duracion,
+        tenantNombre: auth.tenant?.nombre,
+        linkReunion: cita.linkReunion,
+        tenantId: tenantId,
+      }).catch(err => console.error('Error enviando correo de confirmación al lead:', err))
     }
 
     return NextResponse.json({

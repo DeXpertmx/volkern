@@ -287,12 +287,15 @@ export async function updateCalendarEvent(
         dateTime: endTime.toISOString(),
         timeZone: timezone,
       },
-      attendees: citaData.leadEmail ? [{ email: citaData.leadEmail }] : [],
+      // ❗ No tocamos `attendees` para no resetear los RSVPs ni perder asistentes existentes.
+      // Si hace falta cambiar el email del lead, eso se hace al crear el evento.
     };
 
     const targetCalId = citaData.targetCalendarId || integration.calendarId;
 
-    const response = await calendar.events.update({
+    // Usamos `.patch` en lugar de `.update` para no sobrescribir todo el recurso del evento.
+    // `.update` elimina campos no proporcionados (conferenceData, extendedProperties, attendee RSVPs).
+    const response = await calendar.events.patch({
       calendarId: targetCalId,
       eventId: eventId!,
       requestBody: updatedEvent,

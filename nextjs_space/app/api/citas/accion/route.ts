@@ -134,8 +134,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Actualizar el estado de la cita (usando mayúscula inicial para consistencia)
-    const nuevoEstado = action === 'confirmar' ? 'Confirmada' : 'Cancelada';
+    // Actualizar el estado de la cita (normalizado a minúsculas para consistencia con el resto de la app)
+    const nuevoEstado = action === 'confirmar' ? 'confirmada' : 'cancelada';
     
     // Registrar en descripción de la cita
     const notaAccion = action === 'confirmar' 
@@ -186,7 +186,7 @@ export async function POST(request: NextRequest) {
           servicio: cita.servicio?.nombre || null,
           fechaHora: cita.fechaHora,
         },
-        accion: nuevoEstado === 'Confirmada' ? 'confirmada' : (nuevoEstado === 'Cancelada' ? 'cancelada' : 'modificada'),
+        accion: nuevoEstado === 'confirmada' ? 'confirmada' : (nuevoEstado === 'cancelada' ? 'cancelada' : 'modificada'),
         tenantNombre: cita.tenant?.nombre,
         tenantId: cita.tenantId || '',
       });
@@ -224,6 +224,7 @@ export async function POST(request: NextRequest) {
     const mensaje = action === 'confirmar'
       ? '¡Gracias! Tu cita ha sido confirmada exitosamente.'
       : 'Tu cita ha sido cancelada. Esperamos verte pronto.';
+    console.log(`[citas/accion] Cita ${citaId} ${action === 'confirmar' ? 'confirmada' : 'cancelada'}. Estado guardado: ${nuevoEstado}`);
 
     return NextResponse.json({
       success: true,
