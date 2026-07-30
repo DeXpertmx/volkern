@@ -7,6 +7,7 @@ import { sendAppointmentStatusNotification } from '@/lib/email';
 import { deleteCalendarEvent } from '@/lib/google-calendar';
 import { createSystemContext } from '@/lib/skills/context';
 
+
 interface CitaActionPayload {
   citaId: string;
   action: 'confirmar' | 'cancelar' | 'reagendar';
@@ -174,7 +175,7 @@ export async function POST(request: NextRequest) {
     if (owner && owner.email && cita.lead) {
       console.log(`📧 Enviando notificación de cita ${nuevoEstado} al propietario: ${owner.email}`);
       
-      await sendAppointmentStatusNotification({
+      const statusResult = await sendAppointmentStatusNotification({
         ownerEmail: owner.email,
         ownerName: owner.name || undefined,
         lead: {
@@ -190,6 +191,25 @@ export async function POST(request: NextRequest) {
         tenantNombre: cita.tenant?.nombre,
         tenantId: cita.tenantId || '',
       });
+
+      if (!statusResult.success) {
+        console.error('❌ Error enviando notificación de cita al propietario:', statusResult.error);
+      }
+    }
+
+    // 🔔 Notificación in-app para el propietario
+    if (owner?.id && cita.tenantId) {
+      const accionInApp = action === 'confirmar' ? 'confirmada' : 'cancelada';
+      await prisma.inAppNotification.create({
+        data: {
+          tenantId: cita.tenantId,
+          userId: owner.id,
+          title: `Cita ${accionInApp} por el cliente`,
+          body: `El cliente ${cita.lead?.nombre || 'N/A'} ha ${accionInApp} la cita de ${cita.servicio?.nombre || cita.titulo}.`,
+          type: 'info',
+          read: false,
+        }
+      }).catch(err => console.error('Error creando notificación in-app:', err));
     }
 
     // Notificación por Telegram al admin

@@ -261,22 +261,47 @@ export class NotificationService {
       if (!recipient.email) {
         throw new Error('Email address required');
       }
-      
-      const { sendEmail } = await import('@/lib/ses-email');
-      
-      const result = await sendEmail({
+
+      // Resolve tenant subdomain/name for correct FROM address
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: _context.tenantId },
+        select: { subdomain: true, nombre: true },
+      });
+
+      const tenantSubdomain = tenant?.subdomain ?? undefined;
+      const tenantName = tenant?.nombre ?? undefined;
+      const subject = content.subject || 'Notificación';
+      const html = content.html || content.body;
+
+      // 1. Try AWS SES / tenant SMTP first
+      const { sendEmail: sendSesEmail } = await import('@/lib/ses-email');
+      let result = await sendSesEmail({
         to: recipient.email,
-        subject: content.subject || 'Notificación',
-        html: content.html || content.body,
+        subject,
+        html,
         text: content.body,
-        tenantSubdomain: _context.tenantId,
+        tenantSubdomain,
         tenantId: _context.tenantId,
       });
-      
+
+      // 2. Fallback to Resend if SES failed and Resend is configured
+      if (!result.success && process.env.RESEND_API_KEY) {
+        console.warn('[NotificationLayer] SES email failed, trying Resend fallback:', result.error);
+        const { sendEmail: sendResendEmail } = await import('@/lib/resend-email');
+        result = await sendResendEmail({
+          to: recipient.email,
+          subject,
+          html,
+          text: content.body,
+          tenantSubdomain,
+          tenantName,
+        });
+      }
+
       if (!result.success) {
         throw new Error(result.error);
       }
-      
+
       return {
         success: true,
         channel: 'email',
