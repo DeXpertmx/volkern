@@ -10,11 +10,51 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner'
 import { Camera, Receipt, Scan, Loader2, ArrowLeft, CheckCircle2, Image as ImageIcon, FileText } from 'lucide-react'
 
+interface EmisorInfo {
+  nombre: string | null
+  nif: string | null
+  direccion: string | null
+}
+
+interface ReceptorInfo {
+  nombre: string | null
+  nif: string | null
+  direccion: string | null
+}
+
+interface LineaFactura {
+  descripcion: string | null
+  cantidad: number | null
+  precio_unitario: number | null
+  importe: number | null
+}
+
+interface TotalesFactura {
+  base_imponible: number | null
+  tipo_iva: number | null
+  cuota_iva: number | null
+  tipo_irpf: number | null
+  cuota_irpf: number | null
+  total_factura: number | null
+}
+
 interface ExtractedData {
+  // Nuevos campos estructurados
+  numero_factura: string | null
+  serie: string | null
+  fecha_emision: string | null
+  fecha_operacion: string | null
+  emisor: EmisorInfo
+  receptor: ReceptorInfo
+  lineas: LineaFactura[]
+  totales: TotalesFactura
+  iban: string | null
+  category: string
+
+  // Campos legacy
   supplier: string | null
   total: number | null
   date: string | null
-  category: string
   nif: string | null
   invoiceNumber: string | null
   taxableBase: number | null
@@ -63,14 +103,28 @@ export default function EscanearGastoPage() {
     category: 'otros',
     date: new Date().toISOString().split('T')[0],
     receiptUrl: '',
+    // Identificación factura
     invoiceNumber: '',
+    serie: '',
+    // Emisor
+    issuerName: '',
+    issuerTaxId: '',
+    issuerAddress: '',
+    // Receptor
+    receptorNombre: '',
+    receptorNif: '',
+    receptorDireccion: '',
+    // Líneas de detalle
+    lineas: [] as { descripcion: string; cantidad: string; precio: string; importe: string }[],
+    // Totales
     taxableBase: '',
     vatRate: '',
     vatAmount: '',
+    irpfRate: '',
+    irpfAmount: '',
+    totalFactura: '',
     operationDate: '',
-    issuerName: '',
-    issuerAddress: '',
-    issuerTaxId: '',
+    iban: '',
   })
 
   const handleFileCapture = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -154,14 +208,33 @@ export default function EscanearGastoPage() {
         category: ext.category || 'otros',
         date: ext.date ? formatDetectedDate(ext.date) : prev.date,
         receiptUrl: data.receiptUrl,
-        invoiceNumber: ext.invoiceNumber || '',
-        taxableBase: ext.taxableBase ? ext.taxableBase.toString() : '',
-        vatRate: ext.vatRate ? ext.vatRate.toString() : '',
-        vatAmount: ext.vatAmount ? ext.vatAmount.toString() : '',
-        operationDate: ext.operationDate ? formatDetectedDate(ext.operationDate) : '',
-        issuerName: ext.issuerName || '',
-        issuerAddress: ext.issuerAddress || '',
-        issuerTaxId: ext.issuerTaxId || '',
+        // Identificación factura
+        invoiceNumber: ext.numero_factura || ext.invoiceNumber || '',
+        serie: ext.serie || '',
+        // Emisor
+        issuerName: ext.emisor?.nombre || ext.issuerName || '',
+        issuerTaxId: ext.emisor?.nif || ext.issuerTaxId || '',
+        issuerAddress: ext.emisor?.direccion || ext.issuerAddress || '',
+        // Receptor
+        receptorNombre: ext.receptor?.nombre || '',
+        receptorNif: ext.receptor?.nif || '',
+        receptorDireccion: ext.receptor?.direccion || '',
+        // Totales
+        taxableBase: ext.totales?.base_imponible?.toString() || ext.taxableBase?.toString() || '',
+        vatRate: ext.totales?.tipo_iva?.toString() || ext.vatRate?.toString() || '',
+        vatAmount: ext.totales?.cuota_iva?.toString() || ext.vatAmount?.toString() || '',
+        irpfRate: ext.totales?.tipo_irpf?.toString() || '',
+        irpfAmount: ext.totales?.cuota_irpf?.toString() || '',
+        totalFactura: ext.totales?.total_factura?.toString() || ext.total?.toString() || '',
+        operationDate: ext.fecha_operacion ? formatDetectedDate(ext.fecha_operacion) : (ext.operationDate ? formatDetectedDate(ext.operationDate) : ''),
+        iban: ext.iban || '',
+        // Líneas de detalle
+        lineas: (ext.lineas || []).map((l: LineaFactura) => ({
+          descripcion: l.descripcion || '',
+          cantidad: l.cantidad?.toString() || '',
+          precio: l.precio_unitario?.toString() || '',
+          importe: l.importe?.toString() || '',
+        })),
       }))
       setShowForm(true)
     } catch (err: any) {
@@ -234,13 +307,21 @@ export default function EscanearGastoPage() {
         supplierId,
         status: 'PAID',
         invoiceNumber: form.invoiceNumber || undefined,
+        serie: form.serie || undefined,
         taxableBase: form.taxableBase || undefined,
         vatRate: form.vatRate || undefined,
         vatAmount: form.vatAmount || undefined,
+        irpfRate: form.irpfRate || undefined,
+        irpfAmount: form.irpfAmount || undefined,
+        totalFactura: form.totalFactura || undefined,
         operationDate: form.operationDate || undefined,
         issuerName: form.issuerName || undefined,
         issuerAddress: form.issuerAddress || undefined,
         issuerTaxId: form.issuerTaxId || undefined,
+        receptorNombre: form.receptorNombre || undefined,
+        receptorNif: form.receptorNif || undefined,
+        receptorDireccion: form.receptorDireccion || undefined,
+        iban: form.iban || undefined,
       }
       if (form.receiptUrl) body.receiptUrl = form.receiptUrl
 
@@ -286,13 +367,22 @@ export default function EscanearGastoPage() {
       date: new Date().toISOString().split('T')[0],
       receiptUrl: '',
       invoiceNumber: '',
+      serie: '',
+      issuerName: '',
+      issuerTaxId: '',
+      issuerAddress: '',
+      receptorNombre: '',
+      receptorNif: '',
+      receptorDireccion: '',
+      lineas: [],
       taxableBase: '',
       vatRate: '',
       vatAmount: '',
+      irpfRate: '',
+      irpfAmount: '',
+      totalFactura: '',
       operationDate: '',
-      issuerName: '',
-      issuerAddress: '',
-      issuerTaxId: '',
+      iban: '',
     })
   }
 
@@ -467,18 +557,103 @@ export default function EscanearGastoPage() {
                   <pre className="mt-3 text-xs text-muted-foreground whitespace-pre-wrap font-mono max-h-40 overflow-y-auto">{rawOcrText}</pre>
                 </details>
               )}
+              {/* Líneas de detalle extraídas */}
+              {form.lineas.length > 0 && (
+                <div className="border rounded-lg p-3 bg-muted/30">
+                  <h4 className="font-semibold text-sm mb-2">Líneas de detalle</h4>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="text-muted-foreground border-b">
+                          <th className="text-left py-1 pr-2">Descripción</th>
+                          <th className="text-right px-2">Cant.</th>
+                          <th className="text-right px-2">Precio Ud.</th>
+                          <th className="text-right pl-2">Importe</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {form.lineas.map((l, i) => (
+                          <tr key={i} className="border-b border-muted-foreground/20">
+                            <td className="py-1 pr-2">{l.descripcion}</td>
+                            <td className="text-right px-2">{l.cantidad}</td>
+                            <td className="text-right px-2">{l.precio ? `${l.precio} €` : '-'}</td>
+                            <td className="text-right pl-2">{l.importe ? `${l.importe} €` : '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
               <details className="border rounded-lg p-3 bg-muted/30">
-                <summary className="font-semibold text-sm cursor-pointer select-none">Datos Verifactu (opcional)</summary>
+                <summary className="font-semibold text-sm cursor-pointer select-none">Datos Fiscales (Verifactu)</summary>
                 <div className="space-y-3 mt-3">
+                  {/* Nº Factura + Serie */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label>Nº Factura</Label>
-                      <Input value={form.invoiceNumber} onChange={e => setForm(p => ({ ...p, invoiceNumber: e.target.value }))} placeholder="2024-001" />
+                      <Input value={form.invoiceNumber} onChange={e => setForm(p => ({ ...p, invoiceNumber: e.target.value }))} placeholder="F2026-00142" />
                     </div>
+                    <div>
+                      <Label>Serie</Label>
+                      <Input value={form.serie} onChange={e => setForm(p => ({ ...p, serie: e.target.value }))} placeholder="F2026" />
+                    </div>
+                  </div>
+
+                  {/* Fechas */}
+                  <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label>Fecha Operación</Label>
                       <Input type="date" value={form.operationDate} onChange={e => setForm(p => ({ ...p, operationDate: e.target.value }))} />
                     </div>
+                    <div>
+                      <Label>Total Factura</Label>
+                      <Input type="number" step="0.01" value={form.totalFactura} onChange={e => setForm(p => ({ ...p, totalFactura: e.target.value }))} placeholder="0.00" />
+                    </div>
+                  </div>
+
+                  {/* Emisor */}
+                  <div className="border-b pb-2 mb-2">
+                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Emisor (Quien vende)</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Razón Social</Label>
+                      <Input value={form.issuerName} onChange={e => setForm(p => ({ ...p, issuerName: e.target.value }))} placeholder="Nombre o razón social" />
+                    </div>
+                    <div>
+                      <Label>NIF / CIF</Label>
+                      <Input value={form.issuerTaxId} onChange={e => setForm(p => ({ ...p, issuerTaxId: e.target.value }))} placeholder="B12345678" />
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Domicilio Fiscal</Label>
+                    <Input value={form.issuerAddress} onChange={e => setForm(p => ({ ...p, issuerAddress: e.target.value }))} placeholder="C/ Ejemplo 123, 28001 Madrid" />
+                  </div>
+
+                  {/* Receptor */}
+                  <div className="border-b pb-2 mb-2 mt-4">
+                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Receptor (Cliente)</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Nombre / Razón Social</Label>
+                      <Input value={form.receptorNombre} onChange={e => setForm(p => ({ ...p, receptorNombre: e.target.value }))} placeholder="Nombre del cliente" />
+                    </div>
+                    <div>
+                      <Label>NIF / CIF</Label>
+                      <Input value={form.receptorNif} onChange={e => setForm(p => ({ ...p, receptorNif: e.target.value }))} placeholder="12345678Z" />
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Domicilio</Label>
+                    <Input value={form.receptorDireccion} onChange={e => setForm(p => ({ ...p, receptorDireccion: e.target.value }))} placeholder="Avda. Constitución 12, Sevilla" />
+                  </div>
+
+                  {/* Totales e Impuestos */}
+                  <div className="border-b pb-2 mb-2 mt-4">
+                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Desglose de Impuestos</span>
                   </div>
                   <div className="grid grid-cols-3 gap-3">
                     <div>
@@ -494,17 +669,24 @@ export default function EscanearGastoPage() {
                       <Input type="number" step="0.01" value={form.vatAmount} onChange={e => setForm(p => ({ ...p, vatAmount: e.target.value }))} placeholder="0.00" />
                     </div>
                   </div>
-                  <div>
-                    <Label>Razón Social (Emisor)</Label>
-                    <Input value={form.issuerName} onChange={e => setForm(p => ({ ...p, issuerName: e.target.value }))} placeholder="Nombre o razón social" />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>IRPF % (Retención)</Label>
+                      <Input type="number" step="0.01" value={form.irpfRate} onChange={e => setForm(p => ({ ...p, irpfRate: e.target.value }))} placeholder="15" />
+                    </div>
+                    <div>
+                      <Label>Cuota IRPF</Label>
+                      <Input type="number" step="0.01" value={form.irpfAmount} onChange={e => setForm(p => ({ ...p, irpfAmount: e.target.value }))} placeholder="-240.00" />
+                    </div>
+                  </div>
+
+                  {/* IBAN */}
+                  <div className="border-b pb-2 mb-2 mt-4">
+                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Pago</span>
                   </div>
                   <div>
-                    <Label>NIF Emisor</Label>
-                    <Input value={form.issuerTaxId} onChange={e => setForm(p => ({ ...p, issuerTaxId: e.target.value }))} placeholder="B12345678" />
-                  </div>
-                  <div>
-                    <Label>Domicilio Fiscal (Emisor)</Label>
-                    <Input value={form.issuerAddress} onChange={e => setForm(p => ({ ...p, issuerAddress: e.target.value }))} placeholder="C/ Ejemplo 123, 28001 Madrid" />
+                    <Label>IBAN</Label>
+                    <Input value={form.iban} onChange={e => setForm(p => ({ ...p, iban: e.target.value }))} placeholder="ES9100491234561234567890" />
                   </div>
                 </div>
               </details>

@@ -77,14 +77,23 @@ export const POST = withTenantAuth(async (request, auth) => {
       category: body.category || 'General',
       receiptUrl: body.receiptUrl,
       status: body.status || 'PAID',
+      // Verifactu fields
       invoiceNumber: body.invoiceNumber,
+      serie: body.serie,
       taxableBase: body.taxableBase ? parseFloat(body.taxableBase) : undefined,
       vatRate: body.vatRate ? parseFloat(body.vatRate) : undefined,
       vatAmount: body.vatAmount ? parseFloat(body.vatAmount) : undefined,
+      irpfRate: body.irpfRate ? parseFloat(body.irpfRate) : undefined,
+      irpfAmount: body.irpfAmount ? parseFloat(body.irpfAmount) : undefined,
+      totalFactura: body.totalFactura ? parseFloat(body.totalFactura) : undefined,
       operationDate: body.operationDate ? new Date(body.operationDate) : undefined,
       issuerName: body.issuerName,
       issuerAddress: body.issuerAddress,
       issuerTaxId: body.issuerTaxId,
+      receptorNombre: body.receptorNombre,
+      receptorNif: body.receptorNif,
+      receptorDireccion: body.receptorDireccion,
+      iban: body.iban,
     });
 
     return NextResponse.json(expense);

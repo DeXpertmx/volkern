@@ -5,12 +5,62 @@ import { NextResponse } from 'next/server'
 import { withTenantAuth } from '@/lib/api-key-auth'
 import { uploadFile } from '@/lib/s3'
 
+interface EmisorInfo {
+  nombre: string | null
+  nif: string | null
+  direccion: string | null
+}
+
+interface ReceptorInfo {
+  nombre: string | null
+  nif: string | null
+  direccion: string | null
+}
+
+interface LineaFactura {
+  descripcion: string | null
+  cantidad: number | null
+  precio_unitario: number | null
+  importe: number | null
+}
+
+interface TotalesFactura {
+  base_imponible: number | null
+  tipo_iva: number | null
+  cuota_iva: number | null
+  tipo_irpf: number | null
+  cuota_irpf: number | null
+  total_factura: number | null
+}
+
 interface VisionResult {
+  // Identificación
+  numero_factura: string | null
+  serie: string | null
+  fecha_emision: string | null   // DD/MM/AAAA
+  fecha_operacion: string | null  // DD/MM/AAAA (solo si distinta)
+
+  // Partes
+  emisor: EmisorInfo
+  receptor: ReceptorInfo
+
+  // Líneas de detalle
+  lineas: LineaFactura[]
+
+  // Totales e impuestos
+  totales: TotalesFactura
+
+  // IBAN
+  iban: string | null
+
+  // Categoría inferida
+  category: string
+
+  // ── Campos planos legacy (backward compat con frontend actual) ──
   supplier: string | null
   total: number | null
   nif: string | null
   date: string | null
-  category: string
   invoiceNumber: string | null
   taxableBase: number | null
   vatRate: number | null
@@ -21,127 +71,276 @@ interface VisionResult {
   issuerTaxId: string | null
 }
 
+function emptyEmisor(): EmisorInfo {
+  return { nombre: null, nif: null, direccion: null }
+}
+
+function emptyReceptor(): ReceptorInfo {
+  return { nombre: null, nif: null, direccion: null }
+}
+
+function emptyTotales(): TotalesFactura {
+  return { base_imponible: null, tipo_iva: null, cuota_iva: null, tipo_irpf: null, cuota_irpf: null, total_factura: null }
+}
+
 const FALLBACK: VisionResult = {
-  supplier: null, total: null, nif: null, date: null, category: 'otros',
+  numero_factura: null, serie: null, fecha_emision: null, fecha_operacion: null,
+  emisor: emptyEmisor(), receptor: emptyReceptor(),
+  lineas: [], totales: emptyTotales(), iban: null, category: 'otros',
+  supplier: null, total: null, nif: null, date: null,
   invoiceNumber: null, taxableBase: null, vatRate: null, vatAmount: null,
   operationDate: null, issuerName: null, issuerAddress: null, issuerTaxId: null,
 }
 
-// ─── OCR.space RAW TEXT PARSER ──────────────────────────────────────────────
-// Extrae campos de factura española desde texto plano (OCR.space output)
+// ─── Spanish Invoice Regex Parser ───────────────────────────────────────────
+// Extrae TODOS los campos de una factura española desde texto plano (OCR.space)
 function parseInvoiceText(text: string): VisionResult | null {
   if (!text || text.trim().length < 10) return null
 
   const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
   const full = text.replace(/\s+/g, ' ').trim()
+  const lowerFull = full.toLowerCase()
 
-  // ── Proveedor: primera línea no vacía que no sea número/fecha ──
-  let supplier: string | null = null
-  for (const line of lines.slice(0, 5)) {
-    if (/^[\d\s\-\/.,:;()]+$/.test(line)) continue
-    if (/(?:factura|nº|n[ií]|fecha|total|importe|iva|base|direcci[oó]n|cif|nif|dni)/i.test(line)) continue
-    if (line.length > 2 && line.length < 100) {
-      supplier = line.replace(/^[\s*•\-]+/, '').trim()
-      break
-    }
+  // ── parseFloat helper europea ──
+  const toNum = (s: string): number | null => {
+    const n = parseFloat(s.replace(',', '.'))
+    return isFinite(n) ? Math.round(n * 100) / 100 : null
   }
 
-  // ── Total ──
-  let total: number | null = null
-  const totalMatch = full.match(/(?:total|importe\s+total|neto\s+a\s+pagar|suma)\s*[:.]?\s*€?\s*([\d]{1,10}(?:[.,][\d]{1,2})?)/i)
-  if (totalMatch) {
-    total = parseFloat(totalMatch[1].replace(',', '.'))
-  } else {
-    // Fallback: último número con decimales que parezca un total
-    const allNums = [...full.matchAll(/([\d]{1,10}(?:[.,][\d]{1,2}))\s*€?/g)]
-    if (allNums.length > 0) {
-      total = parseFloat(allNums[allNums.length - 1][1].replace(',', '.'))
-    }
-  }
-
-  // ── NIF ──
-  let nif: string | null = null
-  const nifMatch = full.match(/\b([A-Za-z]\d{8})\b/)
-  if (nifMatch) nif = nifMatch[1].toUpperCase()
-  // También buscar después de NIF/CIF/DNI:
-  const nifLabelMatch = full.match(/(?:nif|cif|dni)\s*[:.]?\s*([A-Za-z0-9]{9,10})/i)
-  if (nifLabelMatch) nif = nifLabelMatch[1].toUpperCase()
-
-  // ── Fecha ──
-  let date: string | null = null
-  const dateMatch = full.match(/\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\b/)
-  if (dateMatch) {
-    const [_, d, m, y] = dateMatch
-    const yy = y.length === 2 ? '20' + y : y
-    date = `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${yy}`
-  }
-
-  // ── Número de factura ──
+  // ── Número de factura + Serie ──
   let invoiceNumber: string | null = null
-  const invMatch = full.match(/(?:factura|nº|numero|n[o°])\s*[:.]?\s*([A-Za-z0-9][A-Za-z0-9\-\/]{1,20})/i)
-  if (invMatch) invoiceNumber = invMatch[1].trim()
+  let serie: string | null = null
+  const invMatch = full.match(/(?:factura|nº|numero|n[o°]|fact\s*n[o°]?)\s*[:.]?\s*([A-Za-z0-9][A-Za-z0-9\-\/]{1,20})/i)
+  if (invMatch) {
+    invoiceNumber = invMatch[1].trim()
+    // Extraer serie: la parte alfabética inicial (ej: F2026-001 → F2026)
+    const serieMatch = invoiceNumber.match(/^([A-Za-z]+\d*)/)
+    if (serieMatch) serie = serieMatch[1]
+  }
 
-  // ── Base imponible ──
-  let taxableBase: number | null = null
-  const baseMatch = full.match(/(?:base\s+imponible|base|subtotal|bruto)\s*[:.]?\s*€?\s*([\d]{1,10}(?:[.,][\d]{1,2})?)/i)
-  if (baseMatch) taxableBase = parseFloat(baseMatch[1].replace(',', '.'))
+  // ── Fechas ──
+  const allDates = [...full.matchAll(/\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\b/g)]
+  const fmtDate = (d: string, m: string, y: string): string => {
+    const yy = y.length === 2 ? '20' + y : y
+    return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${yy}`
+  }
+  let fecha_emision: string | null = null
+  let fecha_operacion: string | null = null
+  if (allDates.length > 0) {
+    const [_, d1, m1, y1] = allDates[0]
+    fecha_emision = fmtDate(d1, m1, y1)
+    if (allDates.length > 1) {
+      const [__, d2, m2, y2] = allDates[1]
+      fecha_operacion = fmtDate(d2, m2, y2)
+    }
+  }
+
+  // ── Emisor (quien vende) ──
+  let emisorNombre: string | null = null
+  let emisorNif: string | null = null
+  let emisorDireccion: string | null = null
+
+  // Buscar bloque del emisor (primeras líneas hasta "Cliente" o "Receptor")
+  const emisorEndIdx = lines.findIndex(l => /^(?:cliente|receptor|facturar\s*a|datos\s+del\s+cliente|sr\s+\/|destinatario)/i.test(l))
+  const emisorLines = emisorEndIdx > 0 ? lines.slice(0, emisorEndIdx) : lines.slice(0, Math.min(8, lines.length))
+
+  for (const line of emisorLines) {
+    // NIF/CIF del emisor
+    const nifMatch = line.match(/(?:nif|cif|dni)\s*[:.]?\s*([A-Za-z0-9]{9,10})/i)
+    if (nifMatch) { emisorNif = nifMatch[1].toUpperCase(); continue }
+    // Dirección
+    if (/(?:calle|c\/|c\.|avda|avenida|plaza|paseo|carretera|ctra|pol[ií]gono|camino|bulevar|urb\.)/i.test(line)) {
+      emisorDireccion = line; continue
+    }
+    // Nombre: primera línea con más de 3 caracteres que no sea encabezado
+    if (!emisorNombre && line.length > 3 && !/^[\d\s\-\/.,:;()]+$/.test(line) &&
+        !/(?:factura|nº|fecha|total|importe|iva|base|direcci[oó]n|proforma)/i.test(line)) {
+      emisorNombre = line.replace(/^[\s*•\-]+/, '').trim()
+    }
+  }
+
+  // Si no encontramos nombre, usar primera línea con contenido
+  if (!emisorNombre) {
+    for (const line of lines.slice(0, 3)) {
+      if (line.length > 3 && !/^[\d\s\-\/.,:;()]+$/.test(line) &&
+          !/(?:factura|nº|fecha|total)/i.test(line)) {
+        emisorNombre = line.replace(/^[\s*•\-]+/, '').trim()
+        break
+      }
+    }
+  }
+
+  // ── Receptor (cliente) ──
+  let receptorNombre: string | null = null
+  let receptorNif: string | null = null
+  let receptorDireccion: string | null = null
+
+  const receptorStart = lines.findIndex(l => /^(?:cliente|receptor|facturar\s*a|datos\s+del\s+cliente|sr\s+\/|destinatario)/i.test(l))
+  if (receptorStart >= 0) {
+    const receptorLines = lines.slice(receptorStart + 1, Math.min(receptorStart + 6, lines.length))
+    for (const line of receptorLines) {
+      const nifMatch = line.match(/(?:nif|cif|dni)\s*[:.]?\s*([A-Za-z0-9]{9,10})/i)
+      if (nifMatch) { receptorNif = nifMatch[1].toUpperCase(); continue }
+      if (/(?:calle|c\/|c\.|avda|avenida|plaza|paseo|carretera)/i.test(line)) {
+        receptorDireccion = line; continue
+      }
+      if (!receptorNombre && line.length > 3 && !/^[\d\s\-\/.,:;()]+$/.test(line)) {
+        receptorNombre = line.replace(/^[\s*•\-]+/, '').trim()
+      }
+    }
+  }
+  // Si no hay bloque explícito, el receptor podría estar después del emisor
+  if (!receptorNombre && emisorEndIdx > 0) {
+    const afterLines = lines.slice(emisorEndIdx, emisorEndIdx + 6)
+    for (const line of afterLines.slice(1)) { // saltar la línea "Cliente:"
+      if (line.length > 3 && !/^[\d\s\-\/.,:;()]+$/.test(line)) {
+        if (!receptorNombre) { receptorNombre = line.replace(/^[\s*•\-]+/, '').trim(); continue }
+        if (!receptorDireccion && /(?:calle|c\/|c\.|avda|avenida|plaza|paseo|carretera)/i.test(line)) {
+          receptorDireccion = line; continue
+        }
+        const nifMatch = line.match(/(?:nif|cif|dni)\s*[:.]?\s*([A-Za-z0-9]{9,10})/i)
+        if (nifMatch) receptorNif = nifMatch[1].toUpperCase()
+      }
+    }
+  }
+
+  // ── Líneas de detalle ──
+  const lineas: LineaFactura[] = []
+  const lineasStart = lines.findIndex(l => /^(?:cant|cantidad|descripci[oó]n|concepto|art[ií]culo|producto|ref\s*[:.])/i.test(l))
+  const lineasEnd = lines.findIndex(l => /^(?:base\s+imponible|subtotal|total|importe\s+total|suma|iva\s*\d)/i.test(l))
+  if (lineasStart >= 0 && lineasEnd > lineasStart) {
+    for (let i = lineasStart + 1; i < lineasEnd; i++) {
+      const line = lines[i]
+      // Patrón: cantidad + descripción + precio_unitario + importe
+      const liMatch = line.match(/^(\d+[.,]?\d*)\s+(.+?)\s+(\d+[.,]\d{2})\s+(\d+[.,]\d{2})$/)
+      if (liMatch) {
+        lineas.push({
+          descripcion: liMatch[2].trim(),
+          cantidad: toNum(liMatch[1]),
+          precio_unitario: toNum(liMatch[3]),
+          importe: toNum(liMatch[4]),
+        })
+      } else {
+        // Intentar sin cantidad
+        const liMatch2 = line.match(/^(.+?)\s+(\d+[.,]\d{2})\s+(\d+[.,]\d{2})$/)
+        if (liMatch2 && !/(?:base|total|iva|subtotal)/i.test(line)) {
+          lineas.push({
+            descripcion: liMatch2[1].trim(),
+            cantidad: null,
+            precio_unitario: toNum(liMatch2[2]),
+            importe: toNum(liMatch2[3]),
+          })
+        }
+      }
+    }
+  }
+
+  // ── Base Imponible ──
+  let baseImponible: number | null = null
+  const baseMatch = full.match(/(?:base\s+imponible|base|subtotal|bruto|importe\s+neto)\s*[:.]?\s*€?\s*([\d]{1,10}(?:[.,][\d]{1,2})?)/i)
+  if (baseMatch) baseImponible = toNum(baseMatch[1])
 
   // ── IVA ──
-  let vatRate: number | null = null
-  let vatAmount: number | null = null
-  const ivaRateMatch = full.match(/(?:iva|i\.v\.a\.)\s*[:.]?\s*(\d{1,2})(?:\s*%|\s*por\s*ciento)?/i)
-  if (ivaRateMatch) vatRate = parseFloat(ivaRateMatch[1])
-  const ivaAmountMatch = full.match(/(?:iva|cuota\s+iva|i\.v\.a\.)\s*[:.]?\s*€?\s*([\d]{1,10}(?:[.,][\d]{1,2})?)/i)
-  if (ivaAmountMatch) vatAmount = parseFloat(ivaAmountMatch[1].replace(',', '.'))
+  let tipoIva: number | null = null
+  let cuotaIva: number | null = null
+  const ivaRateMatch = full.match(/(?:iva|i\.v\.a\.)\s*[:.]?\s*(\d{1,2}(?:[.,]\d+)?)(?:\s*%|\s*por\s*ciento)?/i)
+  if (ivaRateMatch) tipoIva = toNum(ivaRateMatch[1])
+  const ivaAmtMatch = full.match(/(?:iva|cuota\s+iva|i\.v\.a\.|iva\s+\d+%)\s*[:.]?\s*€?\s*([\d]{1,10}(?:[.,][\d]{1,2})?)/i)
+  if (ivaAmtMatch) cuotaIva = toNum(ivaAmtMatch[1])
 
-  // ── Emisor (razón social / dirección) ──
-  let issuerName: string | null = supplier // Por defecto = supplier
-  let issuerAddress: string | null = null
-  let issuerTaxId: string | null = nif
+  // ── IRPF ──
+  let tipoIrpf: number | null = null
+  let cuotaIrpf: number | null = null
+  const irpfRateMatch = full.match(/(?:irpf|retenci[oó]n|i\.r\.p\.f\.)\s*[:.]?\s*(\d{1,2}(?:[.,]\d+)?)(?:\s*%|\s*por\s*ciento)?/i)
+  if (irpfRateMatch) tipoIrpf = toNum(irpfRateMatch[1])
+  const irpfAmtMatch = full.match(/(?:irpf|retenci[oó]n|i\.r\.p\.f\.|irpf\s+\d+%)\s*[:.]?\s*[-–]?\s*€?\s*([\d]{1,10}(?:[.,][\d]{1,2})?)/i)
+  if (irpfAmtMatch) cuotaIrpf = toNum(irpfAmtMatch[1])
 
-  // Buscar dirección
-  for (const line of lines) {
-    if (/(?:calle|c\/|c\.|avda|avenida|plaza|paseo|carretera|ctra|pol[ií]gono|camino|bulevar|urbanizaci[oó]n)/i.test(line)) {
-      issuerAddress = line
-      break
+  // ── Total Factura ──
+  let totalFactura: number | null = null
+  const totalMatch = full.match(/(?:total\s+factura|total|importe\s+total|neto\s+a\s+pagar|total\s+a\s+pagar|importe)\s*[:.]?\s*€?\s*([\d]{1,10}(?:[.,][\d]{1,2})?)/i)
+  if (totalMatch) totalFactura = toNum(totalMatch[1])
+  // Fallback: último número con decimales
+  if (!totalFactura) {
+    const allNums = [...full.matchAll(/([\d]{1,10}(?:[.,][\d]{1,2}))\s*€?/g)]
+    if (allNums.length > 0) {
+      totalFactura = toNum(allNums[allNums.length - 1][1])
     }
+  }
+
+  // ── IBAN ──
+  let iban: string | null = null
+  const ibanMatch = full.match(/\b(ES\d{2}\s*(?:\d{4}\s*){2,}\d{1,4})\b/)
+  if (ibanMatch) iban = ibanMatch[1].replace(/\s+/g, '')
+  // Fallback: cualquier secuencia que parezca IBAN
+  if (!iban) {
+    const ibanMatch2 = full.match(/\b[A-Z]{2}\d{2}\s*(?:\d{4}\s*){4,}\d{1,4}\b/)
+    if (ibanMatch2) iban = ibanMatch2[0].replace(/\s+/g, '')
   }
 
   // ── Categoría (heurística) ──
   let category = 'otros'
   const catMap: Record<string, string[]> = {
-    alimentacion: ['supermercado', 'restaurante', 'comida', 'alimentaci', 'cafeter', 'bar ', 'panader', 'carnicer'],
-    transporte: ['gasolinera', 'combustible', 'carburante', 'peaje', 'aparcamiento', 'parking', 'uber', 'taxi', 'renfe', 'vueling', 'iberia', 'transporte'],
-    suministros: ['luz', 'electricidad', 'agua', 'gas', 'telefónica', 'movistar', 'vodafone', 'orange', 'suministro'],
-    oficina: ['papelería', 'librería', 'material oficina', 'fichero', 'impresora', 'tóner', 'cartucho'],
-    tecnologia: ['apple', 'amazon', 'software', 'hosting', 'dominio', 'aws', 'google cloud', 'azure', 'microsoft', 'adobe', 'tecnolog'],
+    alimentacion: ['supermercado', 'restaurante', 'comida', 'alimentaci', 'cafeter', 'bar ', 'panader', 'carnicer', 'fruter'],
+    transporte: ['gasolinera', 'combustible', 'carburante', 'peaje', 'aparcamiento', 'parking', 'uber', 'taxi', 'renfe', 'vueling', 'iberia', 'transporte', 'gasolina'],
+    suministros: ['luz', 'electricidad', 'agua', 'gas', 'telefónica', 'movistar', 'vodafone', 'orange', 'suministro', 'endesa', 'iberdrola', 'naturgy'],
+    oficina: ['papelería', 'librería', 'material oficina', 'fichero', 'impresora', 'tóner', 'cartucho', 'oficina'],
+    tecnologia: ['apple', 'amazon', 'software', 'hosting', 'dominio', 'aws', 'google cloud', 'azure', 'microsoft', 'adobe', 'tecnolog', 'informática'],
     marketing: ['google ads', 'facebook ads', 'meta ads', 'publicidad', 'marketing', 'seo', 'sem', 'redes sociales'],
-    profesional: ['asesor', 'abogado', 'notario', 'gestor', 'consultor', 'auditor', 'arquitecto', 'ingeniero'],
+    profesional: ['asesor', 'abogado', 'notario', 'gestor', 'consultor', 'auditor', 'arquitecto', 'ingeniero', 'procurador', 'registrador'],
   }
   for (const [cat, keywords] of Object.entries(catMap)) {
-    if (keywords.some(k => full.toLowerCase().includes(k))) {
+    if (keywords.some(k => lowerFull.includes(k))) {
       category = cat
       break
     }
   }
 
-  // Devolver solo si al menos encontramos algo útil
-  if (!supplier && !total && !date) return null
+  // ── Sincronizar campos legacy ──
+  const hasData = !!(emisorNombre || totalFactura || fecha_emision)
+  if (!hasData) return null
 
   return {
-    supplier,
-    total: total && isFinite(total) ? Math.round(total * 100) / 100 : null,
-    nif,
-    date,
+    // Nuevos campos estructurados
+    numero_factura: invoiceNumber,
+    serie,
+    fecha_emision,
+    fecha_operacion,
+    emisor: {
+      nombre: emisorNombre,
+      nif: emisorNif,
+      direccion: emisorDireccion,
+    },
+    receptor: {
+      nombre: receptorNombre,
+      nif: receptorNif,
+      direccion: receptorDireccion,
+    },
+    lineas,
+    totales: {
+      base_imponible: baseImponible,
+      tipo_iva: tipoIva,
+      cuota_iva: cuotaIva,
+      tipo_irpf: tipoIrpf,
+      cuota_irpf: cuotaIrpf,
+      total_factura: totalFactura,
+    },
+    iban,
     category,
+
+    // Campos planos legacy
+    supplier: emisorNombre,
+    total: totalFactura,
+    nif: emisorNif,
+    date: fecha_emision,
     invoiceNumber,
-    taxableBase: taxableBase && isFinite(taxableBase) ? Math.round(taxableBase * 100) / 100 : null,
-    vatRate: vatRate && isFinite(vatRate) ? vatRate : null,
-    vatAmount: vatAmount && isFinite(vatAmount) ? Math.round(vatAmount * 100) / 100 : null,
-    operationDate: null,
-    issuerName,
-    issuerAddress,
-    issuerTaxId,
+    taxableBase: baseImponible,
+    vatRate: tipoIva,
+    vatAmount: cuotaIva,
+    operationDate: fecha_operacion,
+    issuerName: emisorNombre,
+    issuerAddress: emisorDireccion,
+    issuerTaxId: emisorNif,
   }
 }
 
@@ -150,43 +349,50 @@ async function callVision(buffer: Buffer, mimeType: string): Promise<VisionResul
   const dataUrl = `data:${mimeType};base64,${base64}`
   const isPdf = mimeType === 'application/pdf'
 
-  const prompt = isPdf
-    ? `Eres un extractor de datos de facturas españolas. Analiza el documento PDF y devuelve SOLO un JSON válido sin markdown ni explicaciones. Usa punto para decimales (ej: 121.00).
+  const prompt = `Eres un extractor de datos de facturas españolas. Analiza el ${isPdf ? 'documento PDF' : 'documento/imagen'} y devuelve SOLO un JSON válido sin markdown ni explicaciones. Usa punto para decimales (ej: 121.00). Fechas en formato DD/MM/AAAA.
 
-Campos:
-- "supplier": nombre del proveedor
-- "total": importe total numérico
-- "nif": NIF del emisor
-- "date": fecha emisión DD/MM/AAAA
-- "category": alimentacion|transporte|suministros|oficina|tecnologia|marketing|profesional|otros
-- "invoiceNumber": número de factura
-- "taxableBase": base imponible numérica
-- "vatRate": tipo IVA numérico (sin %)
-- "vatAmount": cuota IVA numérica
-- "operationDate": fecha operación DD/MM/AAAA solo si distinta a emisión
-- "issuerName": razón social del emisor
-- "issuerAddress": domicilio fiscal del emisor
-- "issuerTaxId": NIF del emisor
+Estructura exacta del JSON:
+{
+  "numero_factura": "F2026-00142",  // null si no se encuentra
+  "serie": "F2026",                   // parte alfabética+numérica inicial del nº factura, null si no
+  "fecha_emision": "24/07/2026",
+  "fecha_operacion": "20/07/2026",   // null si igual a fecha_emision
 
-Si un campo no está disponible pon null.`
-    : `Eres un extractor de datos de facturas españolas. Analiza la imagen y devuelve SOLO un JSON válido sin markdown ni explicaciones. Usa punto para decimales (ej: 121.00).
+  "emisor": {
+    "nombre": "INNOVATECH SOLUCIONES S.L.",
+    "nif": "B-87654321",
+    "direccion": "Calle Gran Via, 45, Planta 3ª, 28013 Madrid, España"
+  },
 
-Campos:
-- "supplier": nombre del proveedor
-- "total": importe total numérico
-- "nif": NIF del emisor
-- "date": fecha emisión DD/MM/AAAA
-- "category": alimentacion|transporte|suministros|oficina|tecnologia|marketing|profesional|otros
-- "invoiceNumber": número de factura
-- "taxableBase": base imponible numérica
-- "vatRate": tipo IVA numérico (sin %)
-- "vatAmount": cuota IVA numérica
-- "operationDate": fecha operación DD/MM/AAAA solo si distinta a emisión
-- "issuerName": razón social del emisor
-- "issuerAddress": domicilio fiscal del emisor
-- "issuerTaxId": NIF del emisor
+  "receptor": {
+    "nombre": "Carlos Mendoza Gutiérrez",
+    "nif": "12345678Z",
+    "direccion": "Avenida de la Constitución, 12, 2ºB, 41001 Sevilla, España"
+  },
 
-Si un campo no está disponible pon null.`
+  "lineas": [
+    {
+      "descripcion": "Servicio de consultoría",
+      "cantidad": 1,
+      "precio_unitario": 500.00,
+      "importe": 500.00
+    }
+  ],
+
+  "totales": {
+    "base_imponible": 1600.00,
+    "tipo_iva": 21.0,
+    "cuota_iva": 336.00,
+    "tipo_irpf": 15.0,
+    "cuota_irpf": -240.00,  // negativo si descuenta
+    "total_factura": 1696.00
+  },
+
+  "iban": "ES9100491234561234567890",
+  "category": "profesional"  // alimentacion|transporte|suministros|oficina|tecnologia|marketing|profesional|otros
+}
+
+Si un campo no está disponible pon null. Si no hay líneas de detalle, pon array vacío [].`
 
   const timeoutMs = isPdf ? 45000 : 30000; // PDFs necesitan más tiempo
   const maxTokens = isPdf ? 4096 : 1024
