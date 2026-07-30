@@ -4,6 +4,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { updateCalendarEvent, deleteCalendarEvent } from '@/lib/google-calendar'
 import { sendAppointmentConfirmation, generateCitaEmailHash } from '@/lib/email'
+import { notifyUser } from '@/lib/skills/notification-layer'
+import { createSystemContext } from '@/lib/skills/context'
 import { authenticateRequest } from '@/lib/api-key-auth'
 
 export async function GET(
@@ -165,10 +167,23 @@ export async function PUT(
       console.error('️ Error al actualizar en Google Calendar (no crítico):', gcalError.message)
     }
 
+    // 🔔 Notificación in-app cuando la cita se cancela
+    if (huboCancelacion) {
+      const targetUserId = cita.usuarioAsignadoId || auth.user?.id
+      if (targetUserId) {
+        notifyUser(
+          targetUserId,
+          'Cita cancelada',
+          `La cita con ${cita.lead?.nombre || 'cliente'} para ${cita.servicio?.nombre || cita.titulo} ha sido cancelada.`,
+          createSystemContext(tenantId)
+        ).catch(err => console.error('Error creando notificación in-app de cancelación:', err))
+      }
+    }
+
     // 📧 Enviar correo de confirmación al lead cuando el admin confirma la cita
     if (estadoNuevoLower === 'confirmada' && estadoAnteriorLower !== 'confirmada' && cita.lead?.email && cita.servicio) {
       console.log(`📧 Enviando correo de confirmación al lead: ${cita.lead.email}`)
-      await sendAppointmentConfirmation({
+      const emailResult = await sendAppointmentConfirmation({
         id: cita.id,
         lead: { nombre: cita.lead.nombre, email: cita.lead.email },
         servicio: {
@@ -182,7 +197,28 @@ export async function PUT(
         tenantNombre: auth.tenant?.nombre,
         linkReunion: cita.linkReunion,
         tenantId: tenantId,
-      }).catch(err => console.error('Error enviando correo de confirmación al lead:', err))
+      }).catch(err => ({ success: false, error: String(err) })) as { success: boolean; error?: string }
+
+      if (!emailResult.success) {
+        console.error('❌ Error enviando correo de confirmación al lead:', emailResult.error)
+      }
+
+      // 🔔 Notificación in-app para el usuario asignado/admin
+      const targetUserId = cita.usuarioAsignadoId || auth.user?.id
+      if (targetUserId) {
+        const fechaFormateada = new Intl.DateTimeFormat('es-MX', {
+          dateStyle: 'short',
+          timeStyle: 'short',
+          timeZone: 'America/Mexico_City'
+        }).format(cita.fechaHora)
+
+        notifyUser(
+          targetUserId,
+          'Cita confirmada',
+          `La cita con ${cita.lead?.nombre || 'cliente'} para ${cita.servicio?.nombre || cita.titulo} el ${fechaFormateada} ha sido confirmada.`,
+          createSystemContext(tenantId)
+        ).catch(err => console.error('Error creando notificación in-app:', err))
+      }
     }
 
     // 📧 CONTROL DE REENVÍO DE CORREO AL LEAD
@@ -214,7 +250,7 @@ export async function PUT(
           },
           fechaHora: cita.fechaHora,
           duracion: cita.duracion,
-          tenantNombre: undefined, // Se obtiene del tenant
+          tenantNombre: auth.tenant?.nombre,
           linkReunion: cita.linkReunion,
           tenantId: tenantId
         })
@@ -345,7 +381,7 @@ export async function PATCH(
     // 📧 Enviar correo de confirmación al lead cuando el admin confirma la cita
     if (estadoNuevoLower === 'confirmada' && estadoAnteriorLower !== 'confirmada' && cita.lead?.email && cita.servicio) {
       console.log(`📧 Enviando correo de confirmación al lead: ${cita.lead.email}`)
-      await sendAppointmentConfirmation({
+      const emailResult = await sendAppointmentConfirmation({
         id: cita.id,
         lead: { nombre: cita.lead.nombre, email: cita.lead.email },
         servicio: {
@@ -359,7 +395,28 @@ export async function PATCH(
         tenantNombre: auth.tenant?.nombre,
         linkReunion: cita.linkReunion,
         tenantId: tenantId,
-      }).catch(err => console.error('Error enviando correo de confirmación al lead:', err))
+      }).catch(err => ({ success: false, error: String(err) })) as { success: boolean; error?: string }
+
+      if (!emailResult.success) {
+        console.error('❌ Error enviando correo de confirmación al lead:', emailResult.error)
+      }
+
+      // 🔔 Notificación in-app para el usuario asignado/admin
+      const targetUserId = cita.usuarioAsignadoId || auth.user?.id
+      if (targetUserId) {
+        const fechaFormateada = new Intl.DateTimeFormat('es-MX', {
+          dateStyle: 'short',
+          timeStyle: 'short',
+          timeZone: 'America/Mexico_City'
+        }).format(cita.fechaHora)
+
+        notifyUser(
+          targetUserId,
+          'Cita confirmada',
+          `La cita con ${cita.lead?.nombre || 'cliente'} para ${cita.servicio?.nombre || cita.titulo} el ${fechaFormateada} ha sido confirmada.`,
+          createSystemContext(tenantId)
+        ).catch(err => console.error('Error creando notificación in-app:', err))
+      }
     }
 
     return NextResponse.json({

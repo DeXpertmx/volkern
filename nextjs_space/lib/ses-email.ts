@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import { prisma } from '@/lib/db';
+import { getFromAddress } from './resend-email';
 
 const FROM_ADDRESSES: Record<string, string> = {
   admin: 'Volkern <noreply@volkern.app>',
