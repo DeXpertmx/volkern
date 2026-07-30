@@ -204,7 +204,7 @@ Si un campo no está disponible pon null.`
           'Content-Type': 'application/x-www-form-urlencoded',
         },
         body: new URLSearchParams({
-          base64Image: base64,
+          base64Image: dataUrl, // Data URI completo (data:mime;base64,...)
           language: 'spa',
           isTable: 'true',
           OCREngine: '2',
