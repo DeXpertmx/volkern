@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
-import { Camera, Receipt, Scan, Loader2, ArrowLeft, CheckCircle2, Image as ImageIcon } from 'lucide-react'
+import { Camera, Receipt, Scan, Loader2, ArrowLeft, CheckCircle2, Image as ImageIcon, FileText } from 'lucide-react'
 
 interface ExtractedData {
   supplier: string | null
@@ -42,9 +42,12 @@ export default function EscanearGastoPage() {
   const router = useRouter()
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const pdfInputRef = useRef<HTMLInputElement>(null)
 
   const [capturedImage, setCapturedImage] = useState<string | null>(null)
   const [capturedFile, setCapturedFile] = useState<File | null>(null)
+  const [isPdf, setIsPdf] = useState(false)
+  const [capturedFileName, setCapturedFileName] = useState<string>('')
   const [scanning, setScanning] = useState(false)
   const [scanMessage, setScanMessage] = useState('')
   const [scanResult, setScanResult] = useState<any>(null)
@@ -70,17 +73,26 @@ export default function EscanearGastoPage() {
     issuerTaxId: '',
   })
 
-  const handleImageCapture = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileCapture = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    const pdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
     setCapturedFile(file)
-    setCapturedImage(URL.createObjectURL(file))
+    setCapturedFileName(file.name)
+    setIsPdf(pdf)
+    setCapturedImage(pdf ? null : URL.createObjectURL(file))
     setShowSelect(false)
     setShowForm(false)
     setScanResult(null)
   }, [])
 
-  const compressImage = async (file: File, maxDim = 1200, quality = 0.6): Promise<Blob> => {
+  const prepareFile = async (file: File, maxDim = 1200, quality = 0.6): Promise<{ blob: Blob; mimeType: string; fileName: string }> => {
+    const isPdfFile = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+    if (isPdfFile) {
+      // PDF: no comprimir, enviar raw
+      return { blob: file, mimeType: 'application/pdf', fileName: file.name }
+    }
+    // Imagen: comprimir como antes
     const img = await createImageBitmap(file, { resizeWidth: maxDim, resizeHeight: maxDim, resizeQuality: 'medium' })
     const c = document.createElement('canvas')
     c.width = Math.min(img.width, maxDim)
@@ -89,21 +101,23 @@ export default function EscanearGastoPage() {
     if (!ctx) throw new Error('No canvas context')
     ctx.drawImage(img, 0, 0)
     img.close()
-    return new Promise((resolve, reject) => {
+    const blob = await new Promise<Blob>((resolve, reject) => {
       c.toBlob(b => b ? resolve(b) : reject(new Error('No blob')), 'image/jpeg', quality)
     })
+    return { blob, mimeType: 'image/jpeg', fileName: 'receipt.jpg' }
   }
 
   const runScan = useCallback(async () => {
     if (!capturedFile) return
     setScanning(true)
-    setScanMessage('Preparando imagen...')
+    const pdf = capturedFile.type === 'application/pdf' || capturedFile.name.toLowerCase().endsWith('.pdf')
+    setScanMessage(pdf ? 'Leyendo factura PDF...' : 'Preparando imagen...')
 
     try {
-      const blob = await compressImage(capturedFile)
-      setScanMessage('Enviando a OCR...')
+      const { blob, mimeType, fileName } = await prepareFile(capturedFile)
+      setScanMessage(pdf ? 'Extrayendo datos del PDF...' : 'Enviando a OCR...')
       const formData = new FormData()
-      formData.append('file', blob, 'receipt.jpg')
+      formData.append('file', blob, fileName)
 
       const controller = new AbortController()
       const timeout = setTimeout(() => controller.abort(), 40000)
@@ -258,6 +272,8 @@ export default function EscanearGastoPage() {
     if (capturedImage?.startsWith('blob:')) URL.revokeObjectURL(capturedImage)
     setCapturedImage(null)
     setCapturedFile(null)
+    setIsPdf(false)
+    setCapturedFileName('')
     setScanResult(null)
     setRawOcrText('')
     setShowForm(false)
@@ -289,13 +305,14 @@ export default function EscanearGastoPage() {
           </Button>
           <div>
             <h1 className="text-2xl font-black tracking-tight">Escanear Gasto</h1>
-            <p className="text-sm text-muted-foreground">Toma una foto del ticket o sube una imagen</p>
+            <p className="text-sm text-muted-foreground">Toma una foto, sube una imagen o una factura PDF</p>
           </div>
         </div>
       </div>
 
-      <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleImageCapture} />
-      <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageCapture} />
+      <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileCapture} />
+      <input ref={fileInputRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={handleFileCapture} />
+      <input ref={pdfInputRef} type="file" accept="application/pdf" className="hidden" onChange={handleFileCapture} />
 
       {showSelect && !capturedImage && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -323,6 +340,18 @@ export default function EscanearGastoPage() {
             </CardContent>
           </Card>
 
+          <Card className="cursor-pointer hover:border-primary/50 transition-all hover:shadow-lg" onClick={() => pdfInputRef.current?.click()}>
+            <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
+              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                <FileText className="h-8 w-8 text-primary" />
+              </div>
+              <div className="text-center">
+                <p className="font-bold text-lg">Subir Factura PDF</p>
+                <p className="text-sm text-muted-foreground">Selecciona un archivo PDF</p>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card className="cursor-pointer hover:border-primary/50 transition-all hover:shadow-lg" onClick={goToForm}>
             <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
               <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
@@ -337,22 +366,32 @@ export default function EscanearGastoPage() {
         </div>
       )}
 
-      {capturedImage && !showForm && (
+      {(capturedImage || isPdf) && !showForm && (
         <Card>
           <CardContent className="p-4">
             <div className="relative rounded-xl overflow-hidden bg-slate-100">
-              <img src={capturedImage} alt="Captura" className="w-full max-h-[50vh] object-contain" />
+              {isPdf ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-4">
+                  <FileText className="h-24 w-24 text-primary/40" />
+                  <p className="text-lg font-semibold text-muted-foreground">{capturedFileName || 'Factura PDF'}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {(capturedFile ? (capturedFile.size / 1024).toFixed(0) : '?')} KB
+                  </p>
+                </div>
+              ) : (
+                <img src={capturedImage!} alt="Captura" className="w-full max-h-[50vh] object-contain" />
+              )}
             </div>
             <div className="flex gap-3 mt-4 justify-center flex-wrap">
               <Button variant="outline" onClick={resetAll}>
-                <Camera className="h-4 w-4 mr-2" /> Nueva Foto
+                {isPdf ? <FileText className="h-4 w-4 mr-2" /> : <Camera className="h-4 w-4 mr-2" />} {isPdf ? 'Nuevo PDF' : 'Nueva Foto'}
               </Button>
               <Button variant="outline" onClick={goToForm}>
                 <Receipt className="h-4 w-4 mr-2" /> Sin OCR
               </Button>
               <Button onClick={runScan} disabled={scanning} className="min-w-[180px]">
                 {scanning ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Scan className="h-4 w-4 mr-2" />}
-                {scanning ? (scanMessage || 'Escaneando...') : 'Escanear Ticket'}
+                {scanning ? (scanMessage || 'Escaneando...') : isPdf ? 'Extraer Datos del PDF' : 'Escanear Ticket'}
               </Button>
             </div>
           </CardContent>
@@ -377,9 +416,19 @@ export default function EscanearGastoPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {form.receiptUrl && capturedImage && (
+              {(form.receiptUrl && (capturedImage || isPdf)) && (
                 <div className="rounded-xl overflow-hidden bg-slate-100 border max-h-[200px] flex items-center justify-center">
-                  <img src={capturedImage} alt="Comprobante" className="max-w-full max-h-[200px] object-contain" />
+                  {isPdf ? (
+                    <div className="flex items-center gap-3 px-6 py-8">
+                      <FileText className="h-10 w-10 text-primary/40" />
+                      <div>
+                        <p className="font-medium text-sm">{capturedFileName || 'Factura PDF'}</p>
+                        <p className="text-xs text-muted-foreground">Subido como comprobante</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <img src={capturedImage} alt="Comprobante" className="max-w-full max-h-[200px] object-contain" />
+                  )}
                 </div>
               )}
               <div>

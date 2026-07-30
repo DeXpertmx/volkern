@@ -30,8 +30,28 @@ const FALLBACK: VisionResult = {
 async function callVision(buffer: Buffer, mimeType: string): Promise<VisionResult | null> {
   const base64 = buffer.toString('base64')
   const dataUrl = `data:${mimeType};base64,${base64}`
+  const isPdf = mimeType === 'application/pdf'
 
-  const prompt = `Eres un extractor de datos de facturas españolas. Analiza la imagen y devuelve SOLO un JSON válido sin markdown ni explicaciones. Usa punto para decimales (ej: 121.00).
+  const prompt = isPdf
+    ? `Eres un extractor de datos de facturas españolas. Analiza el documento PDF y devuelve SOLO un JSON válido sin markdown ni explicaciones. Usa punto para decimales (ej: 121.00).
+
+Campos:
+- "supplier": nombre del proveedor
+- "total": importe total numérico
+- "nif": NIF del emisor
+- "date": fecha emisión DD/MM/AAAA
+- "category": alimentacion|transporte|suministros|oficina|tecnologia|marketing|profesional|otros
+- "invoiceNumber": número de factura
+- "taxableBase": base imponible numérica
+- "vatRate": tipo IVA numérico (sin %)
+- "vatAmount": cuota IVA numérica
+- "operationDate": fecha operación DD/MM/AAAA solo si distinta a emisión
+- "issuerName": razón social del emisor
+- "issuerAddress": domicilio fiscal del emisor
+- "issuerTaxId": NIF del emisor
+
+Si un campo no está disponible pon null.`
+    : `Eres un extractor de datos de facturas españolas. Analiza la imagen y devuelve SOLO un JSON válido sin markdown ni explicaciones. Usa punto para decimales (ej: 121.00).
 
 Campos:
 - "supplier": nombre del proveedor
@@ -50,7 +70,10 @@ Campos:
 
 Si un campo no está disponible pon null.`
 
-  const timeoutMs = 30000; // 30s por proveedor
+  const timeoutMs = isPdf ? 45000 : 30000; // PDFs necesitan más tiempo
+  const maxTokens = isPdf ? 4096 : 1024
+
+  console.log(`[Vision] Procesando ${isPdf ? 'PDF' : 'imagen'} (${(buffer.length / 1024).toFixed(1)} KB, ${mimeType})`)
 
   // ── 1. Google Gemini (más fiable para visión) ──
   const googleKey = process.env.GOOGLE_AI_KEY
@@ -61,7 +84,7 @@ Si un campo no está disponible pon null.`
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ role: 'user', parts: [{ text: prompt }, { inline_data: { mime_type: mimeType, data: base64 } }] }],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 1024 },
+          generationConfig: { temperature: 0.1, maxOutputTokens: maxTokens },
         }),
         signal: AbortSignal.timeout(timeoutMs),
       })
@@ -84,16 +107,10 @@ Si un campo no está disponible pon null.`
     console.warn('[Vision] ⚠️ GOOGLE_AI_KEY no configurada — Gemini no disponible')
   }
 
-  // ── 2. DeepSeek — Nota: el endpoint /v1/chat/completions NO soporta imágenes.
-  //     DeepSeek tiene un modelo VL separado (deepseek-vl2) pero requiere
-  //     el endpoint específico de DeepSeek VL, no el chat estándar.
-  //     Mientras no tengamos acceso a ese endpoint, DeepSeek salta.
+  // ── 2. DeepSeek (saltar para PDFs — modelo text-only no soporta documentos) ──
   const deepseekKey = process.env.DEEPSEEK_API_KEY
-  if (deepseekKey) {
+  if (deepseekKey && !isPdf) {
     try {
-      // Intentamos con el modelo deepseek-chat (texto únicamente).
-      // No esperamos que funcione con imágenes — es un intento por si
-      // el API Key tiene acceso a un modelo VL en el futuro.
       const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${deepseekKey}` },
@@ -107,20 +124,19 @@ Si un campo no está disponible pon null.`
             ],
           }],
           temperature: 0.1,
-          max_tokens: 1024,
+          max_tokens: maxTokens,
         }),
-        signal: AbortSignal.timeout(10000), // timeout corto: casi seguro falla
+        signal: AbortSignal.timeout(10000),
       })
       if (res.ok) {
         const json = await res.json()
         const raw = json.choices?.[0]?.message?.content || ''
         const parsed = parseJsonResult(raw)
         if (parsed) {
-          console.log('[Vision] ✅ DeepSeek extrajo datos (solo texto en prompt)')
+          console.log('[Vision] ✅ DeepSeek extrajo datos')
           return parsed
         }
       }
-      // Ignoramos error: DeepSeek chat no soporta imágenes, es esperado
     } catch {
       // Ignorar — DeepSeek text-only no es crítico
     }
@@ -144,7 +160,7 @@ Si un campo no está disponible pon null.`
             ],
           }],
           temperature: 0.1,
-          max_tokens: 1024,
+          max_tokens: maxTokens,
         }),
         signal: AbortSignal.timeout(timeoutMs),
       })
