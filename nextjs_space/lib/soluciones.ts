@@ -83,7 +83,7 @@ export const SOLUTION_MODULES: SolutionModule[] = [
     name: 'Insurance',
     description:
       'Cartera inteligente, renovaciones automáticas e IA que detecta oportunidades de venta cruzada.',
-    href: '/soluciones/seguros',
+    href: '/soluciones/insurance',
   },
 ];
 
