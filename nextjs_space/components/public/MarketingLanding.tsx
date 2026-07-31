@@ -134,7 +134,7 @@ export default function MarketingLanding() {
               Desde <span className="text-white font-bold">€49/mes</span>. 14 días gratis. Sin tarjeta.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/auth/signup?vertical=agencia_marketing">
+              <Link href="/signup?vertical=agencia_marketing">
                 <Button size="lg" className="bg-purple-600 hover:bg-purple-500 text-white px-10 py-7 text-lg rounded-xl font-bold shadow-xl shadow-purple-600/30 group">
                   Probar 14 días gratis
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -451,7 +451,7 @@ export default function MarketingLanding() {
                 <span className="text-white font-bold">14 días gratis</span>. Sin tarjeta. Sin compromiso.
               </p>
               <p className="text-slate-500 text-sm mb-10">Luego €49/mes. Incluye CRM, email, automatización, chat y más.</p>
-              <Link href="/auth/signup?vertical=agencia_marketing">
+              <Link href="/signup?vertical=agencia_marketing">
                 <Button size="lg" className="bg-purple-600 hover:bg-purple-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-purple-600/30 group">
                   Probar 14 días gratis
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -470,7 +470,7 @@ export default function MarketingLanding() {
             <p className="text-2xl text-slate-300 font-medium leading-relaxed mb-2">Más conversión.</p>
             <p className="text-2xl text-slate-300 font-medium leading-relaxed mb-8">Menos herramientas.</p>
             <p className="text-lg text-purple-400 font-medium mb-8">Volkern es tu sistema de marketing completo.</p>
-            <Link href="/auth/signup?vertical=agencia_marketing">
+            <Link href="/signup?vertical=agencia_marketing">
               <Button size="lg" className="bg-purple-600 hover:bg-purple-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-purple-600/30 group">
                 Probar 14 días gratis
                 <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />

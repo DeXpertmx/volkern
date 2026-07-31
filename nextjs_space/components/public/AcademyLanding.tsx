@@ -135,7 +135,7 @@ export default function AcademyLanding() {
               Desde <span className="text-white font-bold">€49/mes</span>. 14 días gratis. Sin tarjeta.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/auth/signup?vertical=academia">
+              <Link href="/signup?vertical=academia">
                 <Button size="lg" className="bg-amber-600 hover:bg-amber-500 text-white px-10 py-7 text-lg rounded-xl font-bold shadow-xl shadow-amber-600/30 group">
                   Probar 14 días gratis
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -453,7 +453,7 @@ export default function AcademyLanding() {
                 <span className="text-white font-bold">14 días gratis</span>. Sin tarjeta. Sin compromiso.
               </p>
               <p className="text-slate-500 text-sm mb-10">Luego €49/mes. Incluye LMS, CRM, pagos y automatización.</p>
-              <Link href="/auth/signup?vertical=academia">
+              <Link href="/signup?vertical=academia">
                 <Button size="lg" className="bg-amber-600 hover:bg-amber-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-amber-600/30 group">
                   Probar 14 días gratis
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -471,7 +471,7 @@ export default function AcademyLanding() {
             <p className="text-2xl text-slate-300 font-medium leading-relaxed mb-2">Tu conocimiento tiene valor.</p>
             <p className="text-2xl text-amber-400 font-semibold leading-relaxed mb-8">Ahora necesitas un sistema.</p>
             <p className="text-lg text-slate-400 font-medium mb-8">Volkern convierte contenido en ingresos.</p>
-            <Link href="/auth/signup?vertical=academia">
+            <Link href="/signup?vertical=academia">
               <Button size="lg" className="bg-amber-600 hover:bg-amber-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-amber-600/30 group">
                 Probar 14 días gratis
                 <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />

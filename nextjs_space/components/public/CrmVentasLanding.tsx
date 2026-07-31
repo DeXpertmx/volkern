@@ -136,7 +136,7 @@ export default function CrmVentasLanding() {
               Desde <span className="text-white font-bold">€49/mes</span>. 14 días gratis. Sin tarjeta.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/auth/signup?vertical=crm_ventas">
+              <Link href="/signup?vertical=crm_ventas">
                 <Button size="lg" className="bg-cyan-600 hover:bg-cyan-500 text-white px-10 py-7 text-lg rounded-xl font-bold shadow-xl shadow-cyan-600/30 group">
                   Probar 14 días gratis
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -453,7 +453,7 @@ export default function CrmVentasLanding() {
                 <span className="text-white font-bold">14 días gratis</span>. Sin tarjeta. Sin compromiso.
               </p>
               <p className="text-slate-500 text-sm mb-10">Luego €49/mes. Incluye CRM, pipeline, email, telefonía y más.</p>
-              <Link href="/auth/signup?vertical=crm_ventas">
+              <Link href="/signup?vertical=crm_ventas">
                 <Button size="lg" className="bg-cyan-600 hover:bg-cyan-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-cyan-600/30 group">
                   Probar 14 días gratis
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -472,7 +472,7 @@ export default function CrmVentasLanding() {
             <p className="text-2xl text-slate-300 font-medium leading-relaxed mb-2">Más seguimiento.</p>
             <p className="text-2xl text-slate-300 font-medium leading-relaxed mb-8">Más cierres.</p>
             <p className="text-lg text-cyan-400 font-medium mb-8">Volkern convierte tu proceso comercial en un sistema.</p>
-            <Link href="/auth/signup?vertical=crm_ventas">
+            <Link href="/signup?vertical=crm_ventas">
               <Button size="lg" className="bg-cyan-600 hover:bg-cyan-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-cyan-600/30 group">
                 Probar 14 días gratis
                 <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />

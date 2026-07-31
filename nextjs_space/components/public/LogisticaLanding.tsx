@@ -117,7 +117,7 @@ export default function LogisticaLanding() {
               Reduce errores y mejora la eficiencia de tu operación.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/auth/signup">
+              <Link href="/signup">
                 <Button size="lg" className="bg-yellow-600 hover:bg-yellow-500 text-white px-10 py-7 text-lg rounded-xl font-bold shadow-xl shadow-yellow-600/30 group">
                   Activar mi sistema logístico
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -367,7 +367,7 @@ export default function LogisticaLanding() {
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-amber-400">logística</span>
               </h2>
               <p className="text-lg text-slate-400 mb-10 max-w-xl mx-auto">Centraliza rutas, equipos y entregas en un solo sistema.</p>
-              <Link href="/auth/signup">
+              <Link href="/signup">
                 <Button size="lg" className="bg-yellow-600 hover:bg-yellow-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-yellow-600/30 group">
                   Activar Volkern Logística
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -386,7 +386,7 @@ export default function LogisticaLanding() {
             <p className="text-2xl text-slate-300 font-medium leading-relaxed mb-2">Menos errores.</p>
             <p className="text-2xl text-slate-300 font-medium leading-relaxed mb-8">Operaciones eficientes.</p>
             <p className="text-lg text-yellow-400 font-medium mb-8">Volkern conecta tu logística en un solo sistema.</p>
-            <Link href="/auth/signup">
+            <Link href="/signup">
               <Button size="lg" className="bg-yellow-600 hover:bg-yellow-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-yellow-600/30 group">
                 Activar mi sistema logístico
                 <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />

@@ -135,7 +135,7 @@ export default function RealEstateLanding() {
               Desde <span className="text-white font-bold">€59/mes</span>. 14 días gratis. Sin tarjeta.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/auth/signup?vertical=inmobiliaria">
+              <Link href="/signup?vertical=inmobiliaria">
                 <Button size="lg" className="bg-emerald-600 hover:bg-emerald-500 text-white px-10 py-7 text-lg rounded-xl font-bold shadow-xl shadow-emerald-600/30 group">
                   Probar 14 días gratis
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -410,7 +410,7 @@ export default function RealEstateLanding() {
                 <span className="text-white font-bold">14 días gratis</span>. Sin tarjeta. Sin compromiso.
               </p>
               <p className="text-slate-500 text-sm mb-10">Luego €59/mes. Incluye CRM, propiedades, firma digital y más.</p>
-              <Link href="/auth/signup?vertical=inmobiliaria">
+              <Link href="/signup?vertical=inmobiliaria">
                 <Button size="lg" className="bg-emerald-600 hover:bg-emerald-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-emerald-600/30 group">
                   Probar 14 días gratis
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -428,7 +428,7 @@ export default function RealEstateLanding() {
             <p className="text-2xl text-slate-300 font-medium leading-relaxed mb-2">Deja de perder oportunidades por falta de seguimiento.</p>
             <p className="text-xl text-emerald-400 font-semibold">Empieza a operar con control, velocidad y claridad.</p>
             <div className="mt-8">
-              <Link href="/auth/signup?vertical=inmobiliaria">
+              <Link href="/signup?vertical=inmobiliaria">
                 <Button size="lg" className="bg-emerald-600 hover:bg-emerald-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-emerald-600/30 group">
                   Probar 14 días gratis
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
