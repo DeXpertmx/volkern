@@ -110,6 +110,10 @@ model User {
   equalityComplaints      EqualityComplaint[]
   disponibilidad          Disponibilidad[]
   ausencias               Ausencia[]
+  polizasCreadas          Poliza[]                          @relation("PolizaCreator")
+  renovacionesAsignadas   Renovacion[]                      @relation("RenovacionAgente")
+  oportunidadesAsignadas  OportunidadComercial[]            @relation("OportunidadAgente")
+  importLogsInsurance     InsuranceImportLog[]              @relation("ImportLogCreator")
 
   @@index([tenantId])
   @@index([roleId])
@@ -400,6 +404,13 @@ model Tenant {
   adRecommendations              AdRecommendation[]
   adSchedules                    AdSchedule[]
   adABTests                      AdABTest[]
+  // ─── Insurance Vertical ────────────────────────────────
+  aseguradoras                   Aseguradora[]
+  productosSeguro                ProductoSeguro[]
+  polizasSeguro                  Poliza[]
+  renovacionesSeguro             Renovacion[]
+  oportunidadesComerciales       OportunidadComercial[]
+  insuranceImportLogs            InsuranceImportLog[]
 }
 
 model AttendanceRules {
@@ -711,6 +722,8 @@ model Contact {
   ownerProperties                CatalogoItem[]                   @relation("OwnerProperties")
   captaciones                    Captacion[]                      @relation("CaptacionPropietario")
   perfilFiscal                   PerfilFiscalCliente?             @relation("ContactPerfilFiscal")
+  polizasSeguro                  Poliza[]                          @relation("PolizaCliente")
+  oportunidadesSeguro            OportunidadComercial[]            @relation("OportunidadCliente")
 
   @@index([tenantId])
   @@index([email])
@@ -7283,4 +7296,277 @@ model AdABTestVariant {
 
   @@index([abTestId])
   @@map("ad_ab_test_variants")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// VOLKERN INSURANCE VERTICAL
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum Ramo {
+  AUTO
+  HOGAR
+  VIDA
+  SALUD
+  GASTOS_MEDICOS
+  EMPRESARIAL
+  RESPONSABILIDAD_CIVIL
+  INCENDIO
+  TRANSPORTE
+  AHORRO
+  JUBILACION
+  OTROS
+}
+
+enum EstadoPoliza {
+  ACTIVA
+  PROXIMA_A_VENCER
+  VENCIDA
+  CANCELADA
+  EN_TRAMITE
+}
+
+enum FormaPago {
+  ANUAL
+  SEMESTRAL
+  TRIMESTRAL
+  MENSUAL
+}
+
+enum EstadoRenovacion {
+  PENDIENTE
+  CONTACTO_INICIAL
+  REVISION
+  OFERTA_ENVIADA
+  RENOVADA
+  NO_RENOVADA
+  PERDIDA
+}
+
+enum OrigenOportunidad {
+  IA
+  MANUAL
+  RENOVACION
+  REFERIDO
+}
+
+enum EstadoOportunidad {
+  NUEVA
+  EN_ANALISIS
+  COTIZADA
+  EN_NEGOCIACION
+  GANADA
+  PERDIDA
+}
+
+// ─── Aseguradora ──────────────────────────────────────────────────────────────
+
+model Aseguradora {
+  id              String            @id @default(cuid())
+  tenantId        String
+  tenant          Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  nombre          String
+  nif             String?
+  direccion       String?
+  telefono        String?
+  email           String?
+  web             String?
+
+  codigoExterno   String?
+  activa          Boolean           @default(true)
+
+  productos       ProductoSeguro[]
+  polizas         Poliza[]
+
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@unique([tenantId, nombre])
+  @@index([tenantId])
+  @@map("insurance_aseguradoras")
+}
+
+// ─── ProductoSeguro ───────────────────────────────────────────────────────────
+
+model ProductoSeguro {
+  id              String                  @id @default(cuid())
+  tenantId        String
+  tenant          Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  aseguradoraId   String
+  aseguradora     Aseguradora             @relation(fields: [aseguradoraId], references: [id], onDelete: Cascade)
+
+  nombre          String
+  ramo            Ramo
+  subramo         String?
+  descripcion     String?
+  primaReferencia Decimal?
+  comisionPct     Decimal?
+  activo          Boolean                 @default(true)
+
+  polizas         Poliza[]
+  oportunidades   OportunidadComercial[]
+
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  @@unique([tenantId, aseguradoraId, nombre])
+  @@index([tenantId, ramo])
+  @@index([aseguradoraId])
+  @@map("insurance_productos_seguro")
+}
+
+// ─── Poliza ───────────────────────────────────────────────────────────────────
+
+model Poliza {
+  id                  String              @id @default(cuid())
+  tenantId            String
+  tenant              Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Relaciones
+  clienteId           String
+  cliente             Contact             @relation("PolizaCliente", fields: [clienteId], references: [id], onDelete: Cascade)
+  aseguradoraId       String
+  aseguradora         Aseguradora         @relation(fields: [aseguradoraId], references: [id], onDelete: Cascade)
+  productoSeguroId    String
+  productoSeguro      ProductoSeguro      @relation(fields: [productoSeguroId], references: [id], onDelete: Cascade)
+
+  // Datos de la póliza
+  numeroPoliza        String
+  descripcion         String?
+  sumaAsegurada       Decimal?
+  primaAnual          Decimal?
+  formaPago           FormaPago?
+  moneda              String              @default("EUR")
+
+  // Fechas clave
+  fechaInicio         DateTime
+  fechaVencimiento    DateTime
+  fechaEmision        DateTime            @default(now())
+
+  // Estado
+  estado              EstadoPoliza        @default(ACTIVA)
+
+  // Metadata
+  comisionPct         Decimal?
+  notas               String?
+
+  // Tracking
+  renovaciones        Renovacion[]
+  oportunidades       OportunidadComercial[]  @relation("OportunidadPolizaOrigen")
+
+  // Auditoría
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  createdById         String
+  createdBy           User                @relation("PolizaCreator", fields: [createdById], references: [id])
+
+  @@unique([tenantId, numeroPoliza])
+  @@index([tenantId, estado])
+  @@index([tenantId, fechaVencimiento])
+  @@index([tenantId, productoSeguroId])
+  @@index([tenantId, aseguradoraId])
+  @@index([clienteId])
+  @@map("insurance_polizas")
+}
+
+// ─── Renovacion ───────────────────────────────────────────────────────────────
+
+model Renovacion {
+  id                String            @id @default(cuid())
+  tenantId          String
+  tenant            Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  polizaId          String
+  poliza            Poliza            @relation(fields: [polizaId], references: [id], onDelete: Cascade)
+
+  periodoInicio     DateTime
+  periodoFin        DateTime
+  estado            EstadoRenovacion  @default(PENDIENTE)
+
+  nuevaPrima        Decimal?
+  nuevaSumaAsegurada Decimal?
+  condicionesDiferentes String?
+
+  fechaContactoInicial DateTime?
+  fechaCierre         DateTime?
+  resultado           String?
+  riesgoPerdida       Boolean           @default(false)
+  motivoRiesgo        String?
+
+  agenteAsignadoId    String?
+  agenteAsignado      User?             @relation("RenovacionAgente", fields: [agenteAsignadoId], references: [id])
+
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@index([tenantId, estado])
+  @@index([tenantId, periodoInicio])
+  @@index([polizaId])
+  @@map("insurance_renovaciones")
+}
+
+// ─── OportunidadComercial ─────────────────────────────────────────────────────
+
+model OportunidadComercial {
+  id                String                @id @default(cuid())
+  tenantId          String
+  tenant            Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Relaciones
+  clienteId         String
+  cliente           Contact               @relation("OportunidadCliente", fields: [clienteId], references: [id], onDelete: Cascade)
+  polizaOrigenId    String?
+  polizaOrigen      Poliza?               @relation("OportunidadPolizaOrigen", fields: [polizaOrigenId], references: [id], onDelete: SetNull)
+  productoSugeridoId String
+  productoSugerido  ProductoSeguro        @relation(fields: [productoSugeridoId], references: [id], onDelete: Cascade)
+
+  // Datos de la oportunidad
+  titulo            String
+  origen            OrigenOportunidad     @default(IA)
+  probabilidad      Int
+  primaEstimada     Decimal?
+  estado            EstadoOportunidad     @default(NUEVA)
+
+  // Seguimiento
+  agenteAsignadoId  String?
+  agenteAsignado    User?                 @relation("OportunidadAgente", fields: [agenteAsignadoId], references: [id])
+  fechaCierre       DateTime?
+  notas             String?
+
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  @@index([tenantId, estado])
+  @@index([tenantId, clienteId])
+  @@index([tenantId, origen])
+  @@index([polizaOrigenId])
+  @@map("insurance_oportunidades")
+}
+
+// ─── InsuranceImportLog (para auditoría del importador) ───────────────────────
+
+model InsuranceImportLog {
+  id              String    @id @default(cuid())
+  tenantId        String
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  fileName        String
+  fileType        String    // xlsx, csv
+  totalRows       Int
+  rowsImported    Int
+  rowsFailed      Int
+  errors          Json?     // Array de errores por fila
+  summary         Json?     // Resumen: polizas creadas, aseguradoras nuevas, etc.
+
+  createdById     String
+  createdBy       User      @relation("ImportLogCreator", fields: [createdById], references: [id])
+
+  createdAt       DateTime  @default(now())
+
+  @@index([tenantId])
+  @@index([createdAt])
+  @@map("insurance_import_logs")
 }

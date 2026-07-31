@@ -23,6 +23,8 @@ import {
   Zap,
   Sparkles,
   Layers,
+  Shield,
+  Receipt,
   ArrowUpRight,
 } from 'lucide-react';
 import { SOLUTION_MODULES, COLOR_MAP } from '@/lib/soluciones';
@@ -42,6 +44,8 @@ const ICON_MAP: Record<string, React.ComponentType<any>> = {
   UserCheck,
   Factory,
   GraduationCap,
+  Shield,
+  Receipt,
 };
 
 const BENEFITS = [
