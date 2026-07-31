@@ -5,7 +5,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/db';
 import { chatwootApi } from '@/lib/nexus/chatwoot-api';
-import { encrypt } from '@/lib/core/crypto';
+import { encrypt, decrypt } from '@/lib/core/crypto';
 import crypto from 'crypto';
 
 /**
@@ -87,16 +87,56 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Username del bot: soporta botUsername (nuevo) y botName (provisioner/legacy)
+    // Username del bot: resolver el handle REAL vía getMe usando el token.
+    // El botName guardado en el provisioner es el nombre de exhibición
+    // (p.ej. "Mi Empresa Bot"), NO el @usuario de Telegram — un enlace
+    // t.me/<nombre-inexistente> redirige a telegram.org y rompe el QR.
     const channelConfig = (channel?.config as any) || {};
     const legacyCreds = (legacyIntegration?.credenciales as any) || {};
-    const botUsername =
-      channelConfig?.botUsername ||
-      channelConfig?.botName ||
-      legacyCreds?.bot_username ||
-      legacyCreds?.botName ||
-      legacyCreds?.bot_name ||
-      (legacyIntegration?.nombre ? legacyIntegration.nombre.replace(/^Telegram[ -]+@?/i, '') : undefined);
+
+    // 1. Obtener el token del bot (Channel cifrado o Integration legacy plano)
+    let botToken: string | null = null;
+    if (channelConfig?.botToken) {
+      botToken = decrypt(channelConfig.botToken);
+    } else if (legacyCreds?.bot_token) {
+      botToken = legacyCreds.bot_token;
+    }
+
+    // 2. Autoritativo: consultar getMe de Telegram para el handle real
+    let realBotUsername: string | null = null;
+    if (botToken) {
+      try {
+        const meRes = await fetch(`https://api.telegram.org/bot${botToken}/getMe`, {
+          signal: AbortSignal.timeout(6000),
+        });
+        const meData = await meRes.json();
+        if (meData?.ok && meData?.result?.username) {
+          realBotUsername = String(meData.result.username).replace(/^@/, '').trim();
+        }
+      } catch (meErr) {
+        console.warn('[Telegram GET] getMe falló, usando username almacenado:', meErr);
+      }
+    }
+
+    // 3. Fallback sanitizado y VALIDADO a los valores guardados.
+    // Formato real de username de Telegram: 5-32 chars, [a-z0-9_], sin '_' final.
+    // Si el valor almacenado es un nombre de exhibición (p.ej. "Mi Empresa Bot")
+    // o un handle inválido, devolvemos null para que la UI no genere un QR roto.
+    const sanitize = (v?: string) => (v ? String(v).replace(/^@/, '').trim() : undefined);
+    const isValidUsername = (v?: string): v is string =>
+      !!v && /^[a-zA-Z][a-zA-Z0-9_]{3,30}[a-zA-Z0-9]$/.test(v);
+    const rawFallback =
+      sanitize(channelConfig?.botUsername) ||
+      sanitize(channelConfig?.botName) ||
+      sanitize(legacyCreds?.bot_username) ||
+      sanitize(legacyCreds?.botName) ||
+      sanitize(legacyCreds?.bot_name) ||
+      (legacyIntegration?.nombre
+        ? legacyIntegration.nombre.replace(/^Telegram[ -]+@?/i, '').trim()
+        : undefined);
+    const fallbackUsername = isValidUsername(rawFallback) ? rawFallback : null;
+
+    const botUsername = realBotUsername || fallbackUsername || null;
 
     return NextResponse.json({
       configured: true,
@@ -104,7 +144,8 @@ export async function GET(req: NextRequest) {
         id: channel?.id || legacyIntegration?.id,
         name: channel?.name || legacyIntegration?.nombre,
         isActive: channel ? channel.isActive : true,
-        botUsername: botUsername ?? null,
+        botUsername,
+        botResolvedVia: realBotUsername ? 'getMe' : 'stored',
         chatwootInboxId: channel?.chatwootInboxId ?? null,
         createdAt: channel?.createdAt ?? null,
         updatedAt: channel?.updatedAt ?? null,
