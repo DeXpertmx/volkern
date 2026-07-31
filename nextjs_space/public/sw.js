@@ -77,7 +77,9 @@ async function cacheFirstWithNetwork(request, cacheName) {
   if (cached) return cached
 
   try {
-    const response = await fetch(request)
+    // Forzar redirect:'follow' — el request de navegación viene con redirect:'manual'
+    // y la redirección del middleware (ej. / → /auth/login) rompe si no se sigue.
+    const response = await fetch(request, { redirect: 'follow' })
     if (response.ok) {
       const cache = await caches.open(cacheName)
       cache.put(request, response.clone())
@@ -90,7 +92,9 @@ async function cacheFirstWithNetwork(request, cacheName) {
 
 async function networkFirstWithCache(request, cacheName) {
   try {
-    const response = await fetch(request)
+    // Forzar redirect:'follow' — el request de navegación viene con redirect:'manual'
+    // y la redirección del middleware (ej. /dashboard/ → /auth/login) rompe si no se sigue.
+    const response = await fetch(request, { redirect: 'follow' })
     if (response.ok) {
       const cache = await caches.open(cacheName)
       cache.put(request, response.clone())
