@@ -114,6 +114,31 @@ async function findTelegramContext(chatId: string): Promise<TelegramContext | nu
 
 
 /**
+ * Busca el bot_token de Telegram de un tenant, soportando ambos modelos:
+ * 1) Integration legacy (credenciales.bot_token en texto plano)
+ * 2) Channel moderno (config.botToken cifrado con AES)
+ */
+async function findTenantBotToken(tenantId: string): Promise<string | null> {
+  const integration = await prisma.integration.findFirst({
+    where: { tenantId, tipo: 'telegram', activo: true },
+    select: { credenciales: true },
+  })
+  const creds = integration?.credenciales as any
+  if (creds?.bot_token) return creds.bot_token
+
+  const channel = await prisma.channel.findFirst({
+    where: { tenantId, type: 'telegram' },
+    select: { config: true },
+  })
+  const config = channel?.config as any
+  if (config?.botToken) {
+    const { decrypt } = await import('@/lib/core/crypto')
+    return decrypt(config.botToken)
+  }
+  return process.env.TELEGRAM_BOT_TOKEN || null
+}
+
+/**
  * Procesa un mensaje (texto del usuario o callback_data de quick reply)
  * a través del pipeline unificado y envía la respuesta al chat.
  * Envuelto en timeout para no superar los 30s que Telegram permite.
@@ -316,6 +341,69 @@ export async function POST(request: NextRequest) {
       if (messageText.startsWith('/start')) {
         const parts = messageText.split(' ')
         const tenantIdParam = parts.length > 1 ? parts[1] : null
+
+        // Rate-limit por chat (mismo criterio que el flujo de mensajes)
+        if (isRateLimited(chatId)) {
+          return NextResponse.json({ ok: true })
+        }
+
+        // ═══ VINCULACIÓN POR USUARIO (QR del perfil) ═══════════════════
+        // Payload: u_<userId>_<token> → valida el token one-time y guarda
+        // telegram_chat_id en el metadata del usuario para que reciba sus
+        // notificaciones personales.
+        if (tenantIdParam && tenantIdParam.startsWith('u_')) {
+          const [prefix, userId, linkToken] = tenantIdParam.split('_')
+          if (prefix !== 'u') {
+            return NextResponse.json({ ok: true })
+          }
+          const user = await prisma.user.findUnique({
+            where: { id: userId || '' },
+            select: { id: true, name: true, metadata: true, tenantId: true },
+          })
+
+          const currentMeta = (user?.metadata as any) || {}
+
+          // Seguridad: exigir token one-time. Evita que un tercero vincule
+          // su propio chat al ID de otro usuario (secuestro de notificaciones).
+          if (!user?.tenantId || !linkToken || currentMeta.telegram_link_token !== linkToken) {
+            console.warn(`[Telegram] /start u_ inválido (usuario o token no válido): ${userId}`)
+            return NextResponse.json({ ok: true })
+          }
+
+          // Guardar chat_id en metadata (plano + anidado) y consumir el token
+          const botToken = await findTenantBotToken(user.tenantId)
+          await prisma.user.update({
+            where: { id: user.id },
+            data: {
+              metadata: {
+                ...currentMeta,
+                telegram_chat_id: chatId,
+                telegram_link_token: null,
+                telegram: {
+                  ...(currentMeta.telegram || {}),
+                  chat_id: chatId,
+                  linkedAt: new Date().toISOString(),
+                },
+              },
+            },
+          })
+
+          console.log(`[Telegram] Chat ID ${chatId} vinculado al usuario ${user.id}`)
+
+          if (botToken) {
+            try {
+              await sendBotMessage(
+                chatId,
+                `✅ *¡Telegram vinculado correctamente!*\n\nAhora recibirás las notificaciones de Volkern en este chat.\n\n📱 *Tu Chat ID:* \`${chatId}\``,
+                botToken
+              )
+            } catch (sendErr) {
+              console.error('[TelegramWebhook] Error enviando confirmación /start usuario:', sendErr)
+            }
+          }
+
+          return NextResponse.json({ ok: true })
+        }
 
         let integration = null
 

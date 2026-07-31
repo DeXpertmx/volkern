@@ -33,8 +33,10 @@ import {
   Share2,
   ChevronRight,
   FileWarning,
-  X
+  X,
+  RefreshCw
 } from "lucide-react";
+import { QRCodeSVG } from 'qrcode.react';
 import { ComplaintForm } from "@/components/equality/ComplaintForm";
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "framer-motion";
@@ -124,7 +126,19 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
   const [cardUrl, setCardUrl] = useState("");
 
   const [telegramChatId, setTelegramChatId] = useState("");
+  const [telegramBotUsername, setTelegramBotUsername] = useState("");
+  const [telegramLinkToken, setTelegramLinkToken] = useState("");
+  const [checkingTelegram, setCheckingTelegram] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  const generateTelegramLinkToken = () => {
+    try {
+      if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+        return crypto.randomUUID().replace(/-/g, '');
+      }
+    } catch (e) { /* fallback */ }
+    return Math.random().toString(36).slice(2) + Date.now().toString(36) + Math.random().toString(36).slice(2);
+  };
   
   // Agent Skills State
   const [skillKey, setSkillKey] = useState<any>(null);
@@ -167,6 +181,45 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
           setNotifications(data.metadata.notifications);
         }
         setTimezone(data.timezone || 'America/Mexico_City');
+        
+        // 1. Obtener username del bot de Telegram para el QR de vinculación
+        try {
+          const tgRes = await fetch("/api/integraciones/telegram");
+          if (tgRes.ok) {
+            const tgData = await tgRes.json();
+            if (tgData.configured && tgData.integration?.botUsername) {
+              setTelegramBotUsername(String(tgData.integration.botUsername).replace('@', ''));
+            }
+          }
+        } catch (e) {
+          console.warn("Error fetching telegram bot status:", e);
+        }
+        
+        // 1b. Asegurar token one-time para la vinculación por QR
+        if (data.metadata?.telegram_chat_id) {
+          setTelegramLinkToken("");
+        } else {
+          const storedToken = data.metadata?.telegram_link_token;
+          if (storedToken) {
+            setTelegramLinkToken(storedToken);
+          } else {
+            const newToken = generateTelegramLinkToken();
+            try {
+              const tokenRes = await fetch("/api/users/me", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ metadata: { ...(data.metadata || {}), telegram_link_token: newToken } })
+              });
+              if (tokenRes.ok) {
+                setTelegramLinkToken(newToken);
+              } else {
+                console.warn("No se pudo persistir el token de Telegram");
+              }
+            } catch (err) {
+              console.warn("Error al persistir el token de Telegram:", err);
+            }
+          }
+        }
         
         // 2. Configurar link de tarjeta digital
         try {
@@ -214,6 +267,8 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
         } catch (e) {
           console.warn("Error fetching ausencias:", e);
         }
+        
+        return data;
       }
     } catch (error) {
       console.error("Error fetching user:", error);
@@ -284,7 +339,9 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
     try {
       const metadata = {
         ...userData?.metadata,
-        telegram_chat_id: telegramChatId
+        telegram_chat_id: telegramChatId,
+        // Vincular manualmente consume el token one-time de la vinculación por QR
+        telegram_link_token: telegramChatId ? null : userData?.metadata?.telegram_link_token
       };
 
       const res = await fetch("/api/users/me", {
@@ -310,6 +367,45 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
       toast.error("Error de conexión");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleVerifyTelegram = async () => {
+    setCheckingTelegram(true);
+    try {
+      const data = await fetchUser();
+      if (data?.metadata?.telegram_chat_id) {
+        toast.success("¡Telegram vinculado correctamente!");
+      } else {
+        toast.info("Aún no detectamos la vinculación. Escanea el QR y pulsa INICIAR en el bot.");
+      }
+    } catch (error) {
+      toast.error("Error al verificar la conexión");
+    } finally {
+      setCheckingTelegram(false);
+    }
+  };
+
+  const handleUnlinkTelegram = async () => {
+    try {
+      const metadata = { ...userData?.metadata };
+      delete metadata.telegram_chat_id;
+      delete metadata.telegram;
+      delete metadata.telegram_link_token;
+      const res = await fetch("/api/users/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ metadata })
+      });
+      if (res.ok) {
+        setTelegramChatId("");
+        toast.success("Telegram desvinculado");
+        fetchUser();
+      } else {
+        toast.error("Error al desvincular");
+      }
+    } catch (error) {
+      toast.error("Error de conexión");
     }
   };
 
@@ -891,26 +987,90 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
                     <Switch checked={notifications.leads} onCheckedChange={(val) => updateNotificationSetting('leads', val)} />
                  </div>
                   <div className="pt-4 space-y-4">
-                     <div className="flex flex-col gap-2">
-                        <Label className="text-[11px] font-black uppercase text-slate-400 tracking-wider">Telegram Chat ID (Personal)</Label>
-                        <div className="flex gap-2">
-                           <Input 
-                              value={telegramChatId} 
-                              onChange={e => setTelegramChatId(e.target.value)} 
-                              placeholder="Ej. 123456789"
-                              className="h-12 rounded-xl border-slate-200" 
-                           />
-                           <Button 
-                             onClick={handleUpdateProfile}
-                             disabled={saving}
-                             className="h-12 premium-gradient-primary rounded-xl px-6"
-                           >
-                             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Vincular"}
-                           </Button>
-                        </div>
-                        <p className="text-[10px] text-slate-500 font-medium">
-                          Obtén tu ID hablando con nuestro bot de Volkern. Tus récords y alertas se enviarán aquí.
-                        </p>
+                     <div className="flex flex-col gap-3">
+                        <Label className="text-[11px] font-black uppercase text-slate-400 tracking-wider">Telegram para Notificaciones</Label>
+                        
+                        {telegramChatId ? (
+                          <div className="p-4 bg-green-50 border border-green-200 rounded-2xl flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                              <div className="h-10 w-10 bg-green-100 text-green-600 rounded-xl flex items-center justify-center shrink-0">
+                                <Check className="h-5 w-5" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-bold text-green-700 text-sm">Telegram vinculado</p>
+                                <p className="text-[10px] text-green-600 font-mono truncate">Chat ID: {telegramChatId}</p>
+                              </div>
+                            </div>
+                            <Button variant="ghost" size="sm" className="text-red-500 h-8 hover:bg-red-50 hover:text-red-600" onClick={handleUnlinkTelegram}>
+                              Quitar
+                            </Button>
+                          </div>
+                        ) : telegramBotUsername && telegramLinkToken ? (
+                          <div className="p-5 bg-slate-50 border border-slate-100 rounded-2xl flex flex-col sm:flex-row items-center gap-6">
+                            <a 
+                              href={`tg://resolve?domain=${telegramBotUsername}&start=u_${userData?.id || ''}_${telegramLinkToken}`}
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group shrink-0"
+                            >
+                              <QRCodeSVG 
+                                value={`https://t.me/${telegramBotUsername}?start=u_${userData?.id || ''}_${telegramLinkToken}`}
+                                size={132}
+                                level="H"
+                                className="transition-transform group-hover:scale-105 duration-300"
+                              />
+                            </a>
+                            <div className="flex-1 space-y-3 text-center sm:text-left">
+                              <div>
+                                <p className="font-bold text-slate-900">Vincula tu Telegram por QR</p>
+                                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                                  1. Escanea el QR con tu teléfono (o tócalo para abrir Telegram).<br/>
+                                  2. Pulsa <strong>"INICIAR"</strong> en el bot <span className="font-mono">@{telegramBotUsername}</span>.<br/>
+                                  3. Tu Chat ID quedará vinculado automáticamente. 🎉
+                                </p>
+                              </div>
+                              <Button 
+                                variant="outline"
+                                className="rounded-full h-10 px-6 text-xs font-bold border-slate-200"
+                                onClick={handleVerifyTelegram}
+                                disabled={checkingTelegram}
+                              >
+                                {checkingTelegram ? <Loader2 className="h-3 w-3 animate-spin mr-2" /> : <RefreshCw className="h-3 w-3 mr-2" />}
+                                Ya escaneé — Verificar conexión
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl space-y-2">
+                            <p className="text-xs font-bold text-amber-800">Sin bot de Telegram configurado</p>
+                            <p className="text-[10px] text-amber-700 font-medium">
+                              Para vincular por QR necesitas un bot de Telegram de tu empresa. Configúralo primero en{' '}
+                              <a href="/dashboard/configuracion" className="underline font-bold hover:text-amber-900 transition-colors">
+                                Configuración → Integraciones
+                              </a>
+                              , o usa el campo manual de abajo.
+                            </p>
+                          </div>
+                        )}
+                        
+                        <details className="text-[10px] text-slate-400">
+                          <summary className="cursor-pointer font-semibold hover:text-slate-600 transition-colors">¿Prefieres escribir el Chat ID manualmente?</summary>
+                          <div className="flex gap-2 mt-2">
+                             <Input 
+                                value={telegramChatId} 
+                                onChange={e => setTelegramChatId(e.target.value)} 
+                                placeholder="Ej. 123456789"
+                                className="h-12 rounded-xl border-slate-200" 
+                             />
+                             <Button 
+                               onClick={handleUpdateProfile}
+                               disabled={saving}
+                               className="h-12 premium-gradient-primary rounded-xl px-6"
+                             >
+                               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Vincular"}
+                             </Button>
+                          </div>
+                        </details>
                      </div>
                   </div>
               </div>
