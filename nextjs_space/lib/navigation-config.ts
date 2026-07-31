@@ -279,7 +279,7 @@ export const HUBS: HubConfig[] = [
       { name: 'Global Cockpit', href: '/dashboard/finanzas/global', icon: LineChart, planModule: 'finanzas_consolidado', description: 'Consolidación financiera y cash flow' },
       { name: 'Financial Cockpit', href: '/dashboard/finanzas', icon: BarChart3, planModule: 'finanzas', description: 'Vista general de salud financiera' },
       { name: 'Mesa de Facturación', href: '/dashboard/finanzas/facturacion', icon: Receipt, planModule: 'finanzas', requiredRegion: 'ES', description: 'Revisión y emisión legal Veri*factu' },
-      { name: 'Facturación Directa (MX)', href: '/dashboard/sales/billing', icon: Zap, requiredRegion: 'MX', description: 'Emisión rápida Zero-Stripe' },
+      { name: 'Facturación Directa (MX)', href: '/dashboard/sales/billing', icon: Zap, requiredRegion: 'MX', description: 'Emisión Zero-Stripe de CFDI 4.0' },
       { name: 'Hub Contable', href: '/dashboard/finanzas/contabilidad', icon: BookOpen, planModule: 'finanzas', description: 'Libro diario inmutable y sellado' },
       { name: 'Conciliación Bancaria', href: '/dashboard/finanzas/contabilidad/reconciliacion', icon: Calculator, planModule: 'finanzas', description: 'Sincronización con bancos e IA' },
       { name: 'Impuestos (Modelo 303)', href: '/dashboard/finanzas/contabilidad/impuestos', icon: FileText, planModule: 'finanzas', requiredRegion: 'ES', description: 'Automatización de IVA trimestral' },
