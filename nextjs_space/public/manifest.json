@@ -13,19 +13,13 @@
   "icons": [
     {
       "src": "/volkern-icon.png",
-      "sizes": "192x192",
+      "sizes": "100x100",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
       "src": "/volkern-icon.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/volkern-icon.png",
-      "sizes": "512x512",
+      "sizes": "100x100",
       "type": "image/png",
       "purpose": "maskable"
     }
@@ -36,14 +30,14 @@
       "short_name": "Agendar",
       "description": "Crear una nueva cita en el calendario",
       "url": "/dashboard/citas",
-      "icons": [{ "src": "/volkern-icon.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/volkern-icon.png", "sizes": "100x100" }]
     },
     {
       "name": "Mis Leads",
       "short_name": "Leads",
       "description": "Gestionar mis leads",
       "url": "/dashboard/leads",
-      "icons": [{ "src": "/volkern-icon.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/volkern-icon.png", "sizes": "100x100" }]
     }
   ],
   "screenshots": [],
