@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 });
     }
 
-    // Buscar canal de Telegram
+    // Buscar canal de Telegram (modelo moderno)
     const channel = await prisma.channel.findFirst({
       where: {
         tenantId: user.tenantId,
@@ -71,24 +71,44 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    if (!channel) {
+    // Fallback: integración legacy (modelo Integration con credenciales.bot_token)
+    const legacyIntegration = await prisma.integration.findFirst({
+      where: {
+        tenantId: user.tenantId,
+        tipo: 'telegram',
+        activo: true,
+      },
+      select: { id: true, nombre: true, credenciales: true },
+    });
+
+    if (!channel && !legacyIntegration) {
       return NextResponse.json({
         configured: false,
       });
     }
 
-    const config = channel.config as any;
+    // Username del bot: soporta botUsername (nuevo) y botName (provisioner/legacy)
+    const channelConfig = (channel?.config as any) || {};
+    const legacyCreds = (legacyIntegration?.credenciales as any) || {};
+    const botUsername =
+      channelConfig?.botUsername ||
+      channelConfig?.botName ||
+      legacyCreds?.bot_username ||
+      legacyCreds?.botName ||
+      legacyCreds?.bot_name ||
+      (legacyIntegration?.nombre ? legacyIntegration.nombre.replace(/^Telegram[ -]+@?/i, '') : undefined);
 
     return NextResponse.json({
       configured: true,
       integration: {
-        id: channel.id,
-        name: channel.name,
-        isActive: channel.isActive,
-        botUsername: config?.botUsername,
-        chatwootInboxId: channel.chatwootInboxId,
-        createdAt: channel.createdAt,
-        updatedAt: channel.updatedAt,
+        id: channel?.id || legacyIntegration?.id,
+        name: channel?.name || legacyIntegration?.nombre,
+        isActive: channel ? channel.isActive : true,
+        botUsername: botUsername ?? null,
+        chatwootInboxId: channel?.chatwootInboxId ?? null,
+        createdAt: channel?.createdAt ?? null,
+        updatedAt: channel?.updatedAt ?? null,
+        source: channel ? 'channel' : 'integration',
       },
     });
   } catch (error: any) {
