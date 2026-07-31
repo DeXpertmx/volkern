@@ -77,6 +77,14 @@ export const SOLUTION_MODULES: SolutionModule[] = [
       'Facturación, cobros y catálogo para autónomos y pymes. Sin complicaciones.',
     href: '/soluciones/facturacion',
   },
+  {
+    iconKey: 'Shield',
+    color: 'sky',
+    name: 'Insurance',
+    description:
+      'Cartera inteligente, renovaciones automáticas e IA que detecta oportunidades de venta cruzada.',
+    href: '/soluciones/seguros',
+  },
 ];
 
 export const COLOR_MAP: Record<
@@ -138,6 +146,13 @@ export const COLOR_MAP: Record<
     icon: 'text-green-400',
     glow: 'bg-green-500/5',
     badge: 'bg-green-500/10 text-green-400 border-green-500/20',
+  },
+  sky: {
+    bg: 'bg-sky-500/10',
+    border: 'border-sky-500/20 hover:border-sky-500/40',
+    icon: 'text-sky-400',
+    glow: 'bg-sky-500/5',
+    badge: 'bg-sky-500/10 text-sky-400 border-sky-500/20',
   },
 };
 
