@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Card,
   CardContent,
@@ -116,6 +116,11 @@ export function ConfiguracionDashboard({ activeSection }: ConfiguracionDashboard
   const [tenantModules, setTenantModules] = useState<string[]>([]);
   const [modulesLoading, setModulesLoading] = useState(false);
   const [togglingModule, setTogglingModule] = useState<string | null>(null);
+  // Horarios: auto-guardado debounced + estado visual
+  const [horariosDirty, setHorariosDirty] = useState(false);
+  const [savingHorarios, setSavingHorarios] = useState(false);
+  const [horariosSaveState, setHorariosSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const horariosIdleTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const CORE_MODULES = ['leads', 'contactos', 'empresas', 'pipeline', 'tareas', 'analytics', 'equipo', 'configuracion', 'conocimiento'];
 
@@ -195,6 +200,8 @@ export function ConfiguracionDashboard({ activeSection }: ConfiguracionDashboard
       });
       if (res.ok) {
         toast.success("Configuración guardada");
+        // El POST de configuración completa ya incluye horariosAtencion
+        setHorariosDirty(false);
       } else {
         toast.error("Error al guardar");
       }
@@ -204,6 +211,47 @@ export function ConfiguracionDashboard({ activeSection }: ConfiguracionDashboard
       setSaving(false);
     }
   };
+
+  const saveHorarios = async () => {
+    // Limpiar el reset visual pendiente para evitar carreras del indicador
+    if (horariosIdleTimeout.current) {
+      clearTimeout(horariosIdleTimeout.current);
+      horariosIdleTimeout.current = null;
+    }
+    setSavingHorarios(true);
+    setHorariosSaveState('saving');
+    try {
+      const res = await fetch("/api/configuracion", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ horariosAtencion: config.horariosAtencion }),
+      });
+      if (res.ok) {
+        setHorariosSaveState('saved');
+        setHorariosDirty(false);
+        toast.success("Horarios guardados");
+        horariosIdleTimeout.current = setTimeout(() => setHorariosSaveState('idle'), 2500);
+      } else {
+        setHorariosSaveState('error');
+        toast.error("Error al guardar horarios");
+      }
+    } catch (error) {
+      setHorariosSaveState('error');
+      toast.error("Error de conexión");
+    } finally {
+      setSavingHorarios(false);
+    }
+  };
+
+  // ─── Auto-guardado de horarios (debounced, solo tras edición del usuario) ───
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!horariosDirty || !config.horariosAtencion) return;
+    const timer = setTimeout(() => {
+      saveHorarios();
+    }, 900);
+    return () => clearTimeout(timer);
+  }, [config.horariosAtencion, horariosDirty]);
 
   if (loading) return <div className="p-12 text-center animate-pulse">Cargando configuración...</div>;
 
@@ -369,10 +417,46 @@ export function ConfiguracionDashboard({ activeSection }: ConfiguracionDashboard
           )}
 
           {activeSection === "horarios" && (
-            <HorariosMultiplesEditor 
-              value={config.horariosAtencion} 
-              onChange={(h) => setConfig({ ...config, horariosAtencion: h })} 
-            />
+            <div className="space-y-6">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                  <h2 className="text-2xl font-bold tracking-tight">Horarios de Atención</h2>
+                  <p className="text-sm text-muted-foreground">Define tu horario semanal. Los cambios se guardan automáticamente.</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  {horariosSaveState === 'saving' && (
+                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Loader2 className="h-3 w-3 animate-spin" /> Guardando...
+                    </span>
+                  )}
+                  {horariosSaveState === 'saved' && (
+                    <span className="text-xs text-green-600 font-medium">Guardado ✓</span>
+                  )}
+                  {horariosSaveState === 'error' && (
+                    <span className="text-xs text-red-500 font-medium">Error al guardar — reintenta</span>
+                  )}
+                  <Button
+                    onClick={saveHorarios}
+                    disabled={savingHorarios}
+                    className="premium-gradient-primary rounded-full px-6"
+                  >
+                    {savingHorarios && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                    Guardar Horarios
+                  </Button>
+                </div>
+              </div>
+              <Card className="shadow-sm">
+                <CardContent className="pt-6">
+                  <HorariosMultiplesEditor
+                    value={config.horariosAtencion}
+                    onChange={(h) => {
+                      setConfig({ ...config, horariosAtencion: h });
+                      setHorariosDirty(true);
+                    }}
+                  />
+                </CardContent>
+              </Card>
+            </div>
           )}
           {activeSection === "fiscal" && <FiscalConfigSection />}
           {activeSection === "telefonia" && <TelephonyConfigSection tenantId={config._tenantId || ""} />}
