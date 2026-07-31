@@ -46,13 +46,18 @@ self.addEventListener('fetch', (event) => {
   const { request } = event
   const url = new URL(request.url)
 
+  // No interceptar peticiones a otros orígenes
   if (url.origin !== self.location.origin) return
+
+  // ⛔ NO interceptar peticiones POST/PUT/DELETE/PATCH — la Cache API
+  //     no soporta métodos distintos de GET y rompe con TypeError.
+  //     Dejamos que pasen directo al network sin interceptar.
+  if (request.method !== 'GET' && request.mode !== 'navigate') return
 
   const isStaticAsset = STATIC_ASSETS.includes(url.pathname) ||
     /\.(png|jpg|jpeg|gif|svg|ico|woff2?|css|js)$/.test(url.pathname)
 
-  const isApiRequest = API_CACHE_PATTERNS.some((pattern) => pattern.test(url.pathname)) &&
-    request.method === 'GET'
+  const isApiRequest = API_CACHE_PATTERNS.some((pattern) => pattern.test(url.pathname))
 
   if (isApiRequest) {
     event.respondWith(networkFirstWithCache(request, API_CACHE))
@@ -69,6 +74,7 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
+  // Solo GET requests llegan aquí (POST/PUT/DELETE fueron filtrados arriba)
   event.respondWith(networkFirstWithCache(request, DYNAMIC_CACHE))
 })
 
@@ -92,10 +98,14 @@ async function cacheFirstWithNetwork(request, cacheName) {
 
 async function networkFirstWithCache(request, cacheName) {
   try {
-    // Forzar redirect:'follow' — el request de navegación viene con redirect:'manual'
-    // y la redirección del middleware (ej. /dashboard/ → /auth/login) rompe si no se sigue.
-    const response = await fetch(request, { redirect: 'follow' })
-    if (response.ok) {
+    // Forzar redirect:'follow' solo en navegaciones (vienen con redirect:'manual')
+    // En GET normales, usar el redirect mode que traiga el request original.
+    const fetchOpts: RequestInit = request.mode === 'navigate'
+      ? { redirect: 'follow' }
+      : {}
+    const response = await fetch(request, fetchOpts)
+    // Solo cachear respuestas GET exitosas
+    if (response.ok && response.status === 200 && request.method === 'GET') {
       const cache = await caches.open(cacheName)
       cache.put(request, response.clone())
     }
