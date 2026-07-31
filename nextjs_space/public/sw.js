@@ -1,7 +1,6 @@
-const CACHE_VERSION = 'v1'
+const CACHE_VERSION = 'v2'
 const STATIC_CACHE = `volkern-static-${CACHE_VERSION}`
 const DYNAMIC_CACHE = `volkern-dynamic-${CACHE_VERSION}`
-const API_CACHE = `volkern-api-${CACHE_VERSION}`
 
 const STATIC_ASSETS = [
   '/',
@@ -10,14 +9,6 @@ const STATIC_ASSETS = [
   '/manifest.json',
   '/favicon.ico',
   '/dashboard/finanzas/gastos/escanear',
-]
-
-const API_CACHE_PATTERNS = [
-  /\/api\/citas/,
-  /\/api\/disponibilidad/,
-  /\/api\/calendars/,
-  /\/api\/leads/,
-  /\/api\/contacts/,
 ]
 
 self.addEventListener('install', (event) => {
@@ -34,7 +25,7 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames
-          .filter((name) => name !== STATIC_CACHE && name !== DYNAMIC_CACHE && name !== API_CACHE)
+          .filter((name) => name !== STATIC_CACHE && name !== DYNAMIC_CACHE)
           .map((name) => caches.delete(name))
       )
     })
@@ -54,15 +45,13 @@ self.addEventListener('fetch', (event) => {
   //     Dejamos que pasen directo al network sin interceptar.
   if (request.method !== 'GET' && request.mode !== 'navigate') return
 
+  // ⛔ NO cachear endpoints de API: sus respuestas son por-tenant, volátiles
+  //     y sensibles (horarios, leads, citas...). Cachearlas provoca datos
+  //     obsoletos tras guardar. Pasan directo al network.
+  if (url.pathname.startsWith('/api/')) return
+
   const isStaticAsset = STATIC_ASSETS.includes(url.pathname) ||
     /\.(png|jpg|jpeg|gif|svg|ico|woff2?|css|js)$/.test(url.pathname)
-
-  const isApiRequest = API_CACHE_PATTERNS.some((pattern) => pattern.test(url.pathname))
-
-  if (isApiRequest) {
-    event.respondWith(networkFirstWithCache(request, API_CACHE))
-    return
-  }
 
   if (isStaticAsset) {
     event.respondWith(cacheFirstWithNetwork(request, STATIC_CACHE))
