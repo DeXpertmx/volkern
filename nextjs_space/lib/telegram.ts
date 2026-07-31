@@ -66,7 +66,53 @@ export async function sendTelegramMessage(
   return TelegramService.sendMessage(botToken, chatId, message);
 }
 
-export async function loadTelegramCredentials() {
+/**
+ * Carga las credenciales de Telegram para un tenant.
+ *
+ * Resolución en cascada:
+ * 1) Integration legacy (credenciales.bot_token en texto plano)
+ * 2) Channel moderno (config.botToken cifrado con AES)
+ * 3) Variables de entorno como último recurso
+ *
+ * Si no se pasa tenantId, se devuelven solo las variables de entorno
+ * (compatibilidad con llamadores históricos).
+ */
+export async function loadTelegramCredentials(tenantId?: string | null) {
+  if (tenantId) {
+    try {
+      const { default: prisma } = await import('@/lib/db');
+
+      // 1) Integration legacy (texto plano)
+      const integration = await prisma.integration.findFirst({
+        where: { tenantId, tipo: 'telegram', activo: true },
+        select: { credenciales: true },
+      });
+      const creds = integration?.credenciales as any;
+      if (creds?.bot_token) {
+        return {
+          bot_token: creds.bot_token,
+          admin_chat_id: creds.admin_chat_id || null,
+        };
+      }
+
+      // 2) Channel moderno (botToken cifrado)
+      const channel = await prisma.channel.findFirst({
+        where: { tenantId, type: 'telegram' },
+        select: { config: true },
+      });
+      const config = channel?.config as any;
+      if (config?.botToken) {
+        const { decrypt } = await import('@/lib/core/crypto');
+        return {
+          bot_token: decrypt(config.botToken),
+          admin_chat_id: config.adminChatId || config.admin_chat_id || null,
+        };
+      }
+    } catch (e) {
+      console.error('[telegram] Error resolviendo credenciales del tenant:', e);
+    }
+  }
+
   return {
     bot_token: process.env.TELEGRAM_BOT_TOKEN,
     admin_chat_id: process.env.TELEGRAM_ADMIN_CHAT_ID,

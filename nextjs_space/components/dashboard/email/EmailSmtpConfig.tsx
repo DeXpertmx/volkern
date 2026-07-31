@@ -93,6 +93,7 @@ export function EmailSmtpConfig() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          section: 'email',
           data: {
             smtp_host: config.smtp_host,
             smtp_port: config.smtp_port,

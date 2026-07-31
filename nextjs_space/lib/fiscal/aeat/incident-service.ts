@@ -69,7 +69,7 @@ export class AEATIncidentService {
   }
 
   private static async notifyIncident(incident: any) {
-    const creds = await loadTelegramCredentials();
+    const creds = await loadTelegramCredentials(incident.tenantId);
     if (creds.admin_chat_id) {
       const msg = `🚨 <b>NUEVO INCIDENTE FISCAL</b>\n\n` +
                   `🆔 ID: ${incident.id}\n` +
@@ -82,7 +82,7 @@ export class AEATIncidentService {
   }
 
   private static async notifyResolution(incident: any) {
-    const creds = await loadTelegramCredentials();
+    const creds = await loadTelegramCredentials(incident.tenantId);
     if (creds.admin_chat_id) {
       const msg = `✅ <b>INCIDENTE RESUELTO</b>\n\n` +
                   `🆔 ID: ${incident.id}\n` +

@@ -54,8 +54,9 @@ export const POST = withTenantAuth(async (request, auth) => {
     const tenantId = auth.tenant!.id;
     let body = await request.json();
 
-    // Si el body viene envuelto en { section, data }, extraer solo data
-    if (body.section && body.data && typeof body.data === 'object') {
+    // Si el body viene envuelto en { section, data } (o solo { data }), extraer solo data
+    const wrapped = body.data && typeof body.data === 'object' && !Array.isArray(body.data);
+    if (wrapped && (body.section || Object.keys(body).length === 1)) {
       body = body.data;
     }
 
