@@ -160,7 +160,6 @@ export const HUBS: HubConfig[] = [
       { name: 'Cotizaciones', href: '/dashboard/cotizaciones', icon: FileText, planModule: 'cotizaciones', description: 'Propuestas comerciales' },
       { name: 'Contratos', href: '/dashboard/contratos', icon: ScrollText, planModule: 'contratos', description: 'Gestión documental' },
       { name: 'Órdenes de Venta', href: '/dashboard/ventas/ordenes', icon: ShoppingCart, planModule: 'ordenes_venta', description: 'Pedidos y ventas' },
-      { name: 'Facturación Directa (MX)', href: '/dashboard/sales/billing', icon: Zap, requiredRegion: 'MX', description: 'Emisión Zero-Stripe de CFDI 4.0' },
       { name: 'Citas', href: '/dashboard/citas', icon: Calendar, planModule: 'citas', description: 'Agenda y reuniones' },
       { name: 'Pronósticos', href: '/dashboard/ventas/pronosticos', icon: BarChart3, planModule: 'pronosticos', description: 'Predicción de ventas' },
       { name: 'Scoring', href: '/dashboard/scoring', icon: Award, planModule: 'scoring', description: 'Calificación de leads' },
