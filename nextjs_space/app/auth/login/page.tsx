@@ -38,16 +38,24 @@ export default function LoginPage() {
         if (host === 'localhost' || host === 'volkern.app') return;
 
         const subdomain = host.split('.')[0];
-        if (['www', 'app', 'auth', 'login'].includes(subdomain)) return;
+
+        // ⚠️ FIX: Lista ampliada de subdominios reservados. NO hacer fetch
+        // para ninguno — son portales multi-tenant y deben mostrar branding
+        // por defecto de Volkern. Antes solo excluía ['www','app','auth','login']
+        // y dejaba pasar 'admin','api','register','webcreator','dashboard' que
+        // provocaban un 404 → redirect a volkern.app.
+        const RESERVED = ['www', 'app', 'api', 'auth', 'login', 'register', 'dashboard', 'webcreator', 'admin'];
+        if (RESERVED.includes(subdomain)) return;
 
         const res = await fetch(`/api/public/branding?subdomain=${subdomain}`);
         if (res.ok) {
           const data = await res.json();
           setBranding(data);
-        } else if (res.status === 404) {
-          // Si el subdominio no existe, redirigir a la landing principal
-          window.location.href = process.env.NEXT_PUBLIC_APP_URL || 'https://volkern.app';
         }
+        // ⚠️ FIX: Nunca redirigir a la landing principal desde el login. Si el
+        // tenant no existe o el API falla, simplemente mostramos el branding
+        // por defecto. Antes hacía `window.location.href = 'https://volkern.app'`
+        // que sacaba al usuario del flujo de autenticación.
       } catch (err) {
         console.error('Error al cargar branding:', err);
       }
