@@ -246,7 +246,7 @@ export default function ProductosLanding() {
 
                     {/* CTAs */}
                     <div className="space-y-2">
-                      <Link href={`/auth/signup?vertical=${v.id}`}>
+                      <Link href={`/signup?vertical=${v.id}`}>
                         <Button
                           size="sm"
                           className={`w-full ${v.buttonBg} text-white py-5 text-sm rounded-xl font-bold ${v.buttonShadow} group/btn`}
@@ -310,7 +310,7 @@ export default function ProductosLanding() {
               <p className="text-lg text-slate-400 mb-10 max-w-xl mx-auto">
                 Prueba el que más se acerque a tu negocio. Todos incluyen 14 días gratis. Sin tarjeta. Sin compromiso.
               </p>
-              <Link href="/auth/signup">
+              <Link href="/signup">
                 <Button size="lg" className="bg-blue-600 hover:bg-blue-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-blue-600/30 group">
                   Empezar con Volkern
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />

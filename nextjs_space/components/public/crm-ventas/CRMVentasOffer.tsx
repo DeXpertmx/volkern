@@ -20,7 +20,7 @@ export const CRMVentasOffer = () => {
             <span className="flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-cyan-400" /> Booking de citas</span>
             <span className="flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-cyan-400" /> Tarjeta digital</span>
           </div>
-          <a href="/auth/signup"><Button size="lg" className="bg-cyan-600 hover:bg-cyan-500 text-white px-10 py-7 text-lg rounded-xl group shadow-xl shadow-cyan-600/30">Empieza gratis<ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" /></Button></a>
+          <a href="/signup"><Button size="lg" className="bg-cyan-600 hover:bg-cyan-500 text-white px-10 py-7 text-lg rounded-xl group shadow-xl shadow-cyan-600/30">Empieza gratis<ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" /></Button></a>
           <p className="mt-6 text-sm text-slate-600">Sin tarjeta de crédito. Todo incluido desde el primer día.</p>
         </motion.div>
       </div>

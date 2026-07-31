@@ -213,7 +213,7 @@ export default function PricingPage() {
                       </div>
 
                       {/* CTA */}
-                      <Link href={`/auth/signup?vertical=${v.id}`}>
+                      <Link href={`/signup?vertical=${v.id}`}>
                         <Button
                           size="sm"
                           className={`w-full ${c.btn} text-white py-5 text-sm rounded-xl font-bold ${c.btnShadow} group/btn`}
@@ -324,7 +324,7 @@ export default function PricingPage() {
               <p className="text-lg text-slate-400 mb-10 max-w-md mx-auto leading-relaxed">
                 Todos incluyen 14 días gratis. Sin tarjeta. Sin compromiso. Prueba el que más se acerque a tu negocio.
               </p>
-              <Link href="/auth/signup">
+              <Link href="/signup">
                 <Button size="lg" className="bg-blue-600 hover:bg-blue-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-blue-600/30 group">
                   Empezar ahora
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />

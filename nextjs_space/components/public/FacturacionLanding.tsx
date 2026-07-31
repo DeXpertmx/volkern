@@ -123,7 +123,7 @@ export default function FacturacionLanding() {
               Desde <span className="text-white font-bold">€19/mes</span>. Sin complicaciones. Sin Excels. Sin perder horas.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/auth/signup?vertical=facturacion">
+              <Link href="/signup?vertical=facturacion">
                 <Button size="lg" className="bg-green-600 hover:bg-green-500 text-white px-10 py-7 text-lg rounded-xl font-bold shadow-xl shadow-green-600/30 group">
                   Probar 14 días gratis
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -410,7 +410,7 @@ export default function FacturacionLanding() {
                 Empieza hoy con <span className="text-white font-bold">14 días gratis</span>. Sin tarjeta. Sin compromiso.
               </p>
               <p className="text-slate-500 text-sm mb-10">Luego €19/mes. Cancela cuando quieras.</p>
-              <Link href="/auth/signup?vertical=facturacion">
+              <Link href="/signup?vertical=facturacion">
                 <Button size="lg" className="bg-green-600 hover:bg-green-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-green-600/30 group">
                   Probar 14 días gratis
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -428,7 +428,7 @@ export default function FacturacionLanding() {
             <p className="text-2xl text-slate-300 font-medium leading-relaxed mb-2">Menos horas facturando.</p>
             <p className="text-2xl text-slate-300 font-medium leading-relaxed mb-2">Más tiempo para tu negocio.</p>
             <p className="text-lg text-green-400 font-medium mb-8">Volkern Factura. Simple. Rápido. Sin errores.</p>
-            <Link href="/auth/signup?vertical=facturacion">
+            <Link href="/signup?vertical=facturacion">
               <Button size="lg" className="bg-green-600 hover:bg-green-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-green-600/30 group">
                 Probar 14 días gratis
                 <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />

@@ -118,7 +118,7 @@ export const Pricing = ({ plans }: PricingProps) => {
                 className={`w-full py-6 rounded-xl font-bold ${
                   plan.slug === 'profesional' || plan.slug === 'infinity' ? 'bg-blue-600 hover:bg-blue-500' : 'border-slate-800 text-slate-300'
                 }`}
-                onClick={() => window.location.href = `/auth/signup?plan=${plan.slug}`}
+                onClick={() => window.location.href = `/signup?plan=${plan.slug}`}
               >
                 Comenzar ahora
               </Button>

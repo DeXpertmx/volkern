@@ -131,7 +131,7 @@ export default function RRHHLanding() {
               Desde <span className="text-white font-bold">€39/mes</span>. 14 días gratis. Sin tarjeta.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/auth/signup?vertical=rrhh">
+              <Link href="/signup?vertical=rrhh">
                 <Button size="lg" className="bg-rose-600 hover:bg-rose-500 text-white px-10 py-7 text-lg rounded-xl font-bold shadow-xl shadow-rose-600/30 group">
                   Probar 14 días gratis
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -449,7 +449,7 @@ export default function RRHHLanding() {
                 <span className="text-white font-bold">14 días gratis</span>. Sin tarjeta. Sin compromiso.
               </p>
               <p className="text-slate-500 text-sm mb-10">Luego €39/mes. Incluye gestión de empleados, documentos y más.</p>
-              <Link href="/auth/signup?vertical=rrhh">
+              <Link href="/signup?vertical=rrhh">
                 <Button size="lg" className="bg-rose-600 hover:bg-rose-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-rose-600/30 group">
                   Probar 14 días gratis
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -468,7 +468,7 @@ export default function RRHHLanding() {
             <p className="text-2xl text-slate-300 font-medium leading-relaxed mb-2">Más control.</p>
             <p className="text-2xl text-slate-300 font-medium leading-relaxed mb-8">Mejores equipos.</p>
             <p className="text-lg text-rose-400 font-medium mb-8">Volkern es la base de una operación interna eficiente.</p>
-            <Link href="/auth/signup?vertical=rrhh">
+            <Link href="/signup?vertical=rrhh">
               <Button size="lg" className="bg-rose-600 hover:bg-rose-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-rose-600/30 group">
                 Probar 14 días gratis
                 <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />

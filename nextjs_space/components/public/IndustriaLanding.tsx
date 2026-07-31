@@ -131,7 +131,7 @@ export default function IndustriaLanding() {
               Desde <span className="text-white font-bold">€59/mes</span>. 14 días gratis. Sin tarjeta.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/auth/signup?vertical=industria">
+              <Link href="/signup?vertical=industria">
                 <Button size="lg" className="bg-orange-600 hover:bg-orange-500 text-white px-10 py-7 text-lg rounded-xl font-bold shadow-xl shadow-orange-600/30 group">
                   Probar 14 días gratis
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -448,7 +448,7 @@ export default function IndustriaLanding() {
                 <span className="text-white font-bold">14 días gratis</span>. Sin tarjeta. Sin compromiso.
               </p>
               <p className="text-slate-500 text-sm mb-10">Luego €59/mes. Incluye procesos, tareas, documentación y más.</p>
-              <Link href="/auth/signup?vertical=industria">
+              <Link href="/signup?vertical=industria">
                 <Button size="lg" className="bg-orange-600 hover:bg-orange-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-orange-600/30 group">
                   Probar 14 días gratis
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -467,7 +467,7 @@ export default function IndustriaLanding() {
             <p className="text-2xl text-slate-300 font-medium leading-relaxed mb-2">Más control.</p>
             <p className="text-2xl text-slate-300 font-medium leading-relaxed mb-8">Mejor operación.</p>
             <p className="text-lg text-orange-400 font-medium mb-8">Volkern convierte tu operación en un sistema eficiente.</p>
-            <Link href="/auth/signup?vertical=industria">
+            <Link href="/signup?vertical=industria">
               <Button size="lg" className="bg-orange-600 hover:bg-orange-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-orange-600/30 group">
                 Probar 14 días gratis
                 <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
