@@ -42,6 +42,68 @@ import { Switch } from "@/components/ui/switch";
 import { ALL_MODULES } from "@/lib/plans";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
+// ─── Timezone options (IANA, curated for ES + LatAm + NA + UTC) ───────────────
+const TIMEZONES: { group: string; options: { value: string; label: string }[] }[] = [
+  {
+    group: 'España y Europa',
+    options: [
+      { value: 'Europe/Madrid', label: 'Madrid (CET / CEST)' },
+      { value: 'Europe/Barcelona', label: 'Barcelona' },
+      { value: 'Europe/London', label: 'Londres (GMT / BST)' },
+      { value: 'Europe/Paris', label: 'París (CET / CEST)' },
+      { value: 'Europe/Berlin', label: 'Berlín (CET / CEST)' },
+      { value: 'Europe/Lisbon', label: 'Lisboa (WET / WEST)' },
+    ],
+  },
+  {
+    group: 'América Latina',
+    options: [
+      { value: 'America/Mexico_City', label: 'Ciudad de México (CT)' },
+      { value: 'America/Monterrey', label: 'Monterrey (CT)' },
+      { value: 'America/Cancun', label: 'Cancún (EST)' },
+      { value: 'America/Bogota', label: 'Bogotá (COT)' },
+      { value: 'America/Lima', label: 'Lima (PET)' },
+      { value: 'America/Santiago', label: 'Santiago (CLT)' },
+      { value: 'America/Argentina/Buenos_Aires', label: 'Buenos Aires (ART)' },
+      { value: 'America/Sao_Paulo', label: 'São Paulo (BRT)' },
+      { value: 'America/Caracas', label: 'Caracas (VET)' },
+      { value: 'America/La_Paz', label: 'La Paz (BOT)' },
+      { value: 'America/Montevideo', label: 'Montevideo (UYT)' },
+      { value: 'America/Guayaquil', label: 'Guayaquil (ECT)' },
+      { value: 'America/Panama', label: 'Panamá (EST)' },
+      { value: 'America/Costa_Rica', label: 'Costa Rica (CST)' },
+      { value: 'America/Guatemala', label: 'Guatemala (CST)' },
+    ],
+  },
+  {
+    group: 'América del Norte',
+    options: [
+      { value: 'America/New_York', label: 'Nueva York (ET)' },
+      { value: 'America/Chicago', label: 'Chicago (CT)' },
+      { value: 'America/Denver', label: 'Denver (MT)' },
+      { value: 'America/Los_Angeles', label: 'Los Ángeles (PT)' },
+      { value: 'America/Toronto', label: 'Toronto (ET)' },
+      { value: 'America/Phoenix', label: 'Phoenix (MST, sin DST)' },
+    ],
+  },
+  {
+    group: 'Otros',
+    options: [
+      { value: 'UTC', label: 'UTC' },
+      { value: 'Atlantic/Canary', label: 'Canarias (WET / WEST)' },
+    ],
+  },
+]
+
+// ─── Detect the browser's IANA timezone (e.g. "Europe/Madrid") ────────────────
+function detectBrowserTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Madrid'
+  } catch {
+    return 'Europe/Madrid'
+  }
+}
+
 interface ConfiguracionDashboardProps {
   activeSection: string;
 }
@@ -70,6 +132,10 @@ export function ConfiguracionDashboard({ activeSection }: ConfiguracionDashboard
       const res = await fetch("/api/configuracion");
       if (res.ok) {
         const data = await res.json();
+        // Si el tenant nunca tuvo timezone guardada, autoset del navegador (no pisa elección del usuario si ya tenía una).
+        if (!data.timezone) {
+          data.timezone = detectBrowserTimezone()
+        }
         setConfig(data);
       }
     } catch (error) {
@@ -252,11 +318,26 @@ export function ConfiguracionDashboard({ activeSection }: ConfiguracionDashboard
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="timezone">Zona Horaria</Label>
-                      <Input
+                      <select
                         id="timezone"
-                        value={config.timezone || ""} 
-                        onChange={e => setConfig({...config, timezone: e.target.value})} 
-                      />
+                        value={config.timezone || 'Europe/Madrid'}
+                        onChange={e => setConfig({ ...config, timezone: e.target.value })}
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {TIMEZONES.map(group => (
+                          <optgroup key={group.group} label={group.group}>
+                            {group.options.map(opt => (
+                              <option key={opt.value} value={opt.value}>{opt.label}</option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                      <p className="text-[10px] text-muted-foreground italic">
+                        Detectado del navegador: {detectBrowserTimezone()}
+                        {config.timezone !== detectBrowserTimezone() && (
+                          <span className="ml-1 text-amber-600">· distinto de la selección</span>
+                        )}
+                      </p>
                     </div>
                   </div>
                   <Button onClick={handleSaveConfig} className="premium-gradient-primary rounded-full px-8">
