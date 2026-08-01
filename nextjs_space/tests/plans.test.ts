@@ -117,6 +117,69 @@ describe('PLAN_MODULES', () => {
       expect(new Set(modules).size).toBe(modules.length);
     }
   });
+
+  it('todos los planes deben incluir el módulo insurance (incluida la vertical contable)', () => {
+    for (const [plan, modules] of Object.entries(PLAN_MODULES)) {
+      expect(modules, `plan ${plan} debe incluir insurance`).toContain('insurance');
+    }
+  });
+
+  it('todos los planes deben incluir los módulos core (CRM, comunicación, administración)', () => {
+    // La omisión de insurance en la vertical contable ocurrió porque nada fijaba
+    // los módulos que TODO plan debe tener. Este set core aplica a todos los planes.
+    const CORE_MODULES = [
+      'leads', 'contactos', 'empresas', 'pipeline', 'tareas',
+      'mensajes', 'citas', 'catalogo',
+      'equipo', 'configuracion',
+    ];
+    for (const [plan, modules] of Object.entries(PLAN_MODULES)) {
+      for (const core of CORE_MODULES) {
+        expect(modules, `plan ${plan} debe incluir módulo core ${core}`).toContain(core);
+      }
+    }
+  });
+
+  it('los planes de cada vertical deben incluir los módulos clave de esa vertical', () => {
+    // Mapa vertical → módulos que la identifican y planes que deben cubrirla.
+    // Si un plan de una vertical omite un módulo clave (como pasó con insurance
+    // en la vertical contable), este test lo detecta con el nombre del plan y módulo.
+    const VERTICAL_KEY_MODULES: Record<string, { modules: string[]; plans: string[] }> = {
+      contable: {
+        modules: ['finanzas', 'conciliacion', 'cotizaciones', 'contratos', 'ordenes_venta'],
+        plans: [PLANS.ACCOUNTING_SLOT, PLANS.PRO_ACCOUNTING],
+      },
+      agencia: {
+        modules: ['agency', 'white_label', 'custom_domain'],
+        plans: [PLANS.PRO_AGENCY, PLANS.PRO_ACCOUNTING],
+      },
+      academia: {
+        modules: ['cursos', 'estudiantes'],
+        plans: [PLANS.TRIAL, PLANS.ESENCIAL, PLANS.PROFESIONAL, PLANS.INFINITY, PLANS.SCALE, PLANS.COMPLIANCE, PLANS.PRO_AGENCY],
+      },
+      marketing: {
+        modules: ['campanas', 'email_marketing', 'cms', 'ads'],
+        plans: [PLANS.TRIAL, PLANS.ESENCIAL, PLANS.PROFESIONAL, PLANS.INFINITY, PLANS.SCALE, PLANS.COMPLIANCE, PLANS.PRO_AGENCY, PLANS.AGENCY_SLOT],
+      },
+      erp: {
+        modules: ['rrhh', 'finanzas', 'inventario', 'produccion', 'proyectos'],
+        plans: [PLANS.TRIAL, PLANS.ESENCIAL, PLANS.PROFESIONAL, PLANS.INFINITY, PLANS.SCALE, PLANS.COMPLIANCE, PLANS.PRO_AGENCY],
+      },
+      seguros: {
+        modules: ['insurance'],
+        plans: Object.values(PLANS), // todos los planes incluyen seguros
+      },
+    };
+
+    for (const [vertical, { modules, plans }] of Object.entries(VERTICAL_KEY_MODULES)) {
+      for (const plan of plans) {
+        const planModules = PLAN_MODULES[plan];
+        expect(planModules, `vertical ${vertical}: plan ${plan} debe existir en PLAN_MODULES`).toBeDefined();
+        for (const mod of modules) {
+          expect(planModules, `vertical ${vertical}: plan ${plan} debe incluir módulo clave ${mod}`).toContain(mod);
+        }
+      }
+    }
+  });
 });
 
 describe('PLAN_LIMITS', () => {

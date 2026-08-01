@@ -93,3 +93,49 @@ describe('PLAN_LIMITS consistency with plans', () => {
     }
   });
 });
+
+describe('Coherencia de superset entre planes (slot ⊆ pro)', () => {
+  // Guard de regresión: si un módulo se añade al slot de cliente pero se olvida
+  // en el plan padre (o viceversa), la vertical se desincroniza en silencio.
+  it('PRO_ACCOUNTING debe ser superset de ACCOUNTING_SLOT (módulos)', () => {
+    const slot = new Set(PLAN_MODULES[PLANS.ACCOUNTING_SLOT]);
+    const pro = new Set(PLAN_MODULES[PLANS.PRO_ACCOUNTING]);
+    for (const mod of PLAN_MODULES[PLANS.ACCOUNTING_SLOT]) {
+      expect(pro.has(mod), `módulo ${mod} del slot contable debe existir en pro-accounting`).toBe(true);
+    }
+    // El plan padre debe aportar módulos propios de la firma (no solo replicar el slot)
+    expect(slot.size).toBeLessThan(pro.size);
+  });
+
+  it('PRO_AGENCY debe ser superset de AGENCY_SLOT (módulos)', () => {
+    const pro = new Set(PLAN_MODULES[PLANS.PRO_AGENCY]);
+    for (const mod of PLAN_MODULES[PLANS.AGENCY_SLOT]) {
+      expect(pro.has(mod), `módulo ${mod} del slot de agencia debe existir en pro-agency`).toBe(true);
+    }
+  });
+
+  it('PRO_ACCOUNTING debe aportar módulos de firma contable (white_label, agency, rrhh, finanzas_consolidado)', () => {
+    const pro = PLAN_MODULES[PLANS.PRO_ACCOUNTING];
+    expect(pro).toContain('white_label');
+    expect(pro).toContain('custom_domain');
+    expect(pro).toContain('agency');
+    expect(pro).toContain('rrhh');
+    expect(pro).toContain('finanzas_consolidado');
+  });
+
+  it('ambos planes contables deben incluir insurance (vertical contable cubierta)', () => {
+    expect(PLAN_MODULES[PLANS.ACCOUNTING_SLOT]).toContain('insurance');
+    expect(PLAN_MODULES[PLANS.PRO_ACCOUNTING]).toContain('insurance');
+  });
+
+  it('PRO_ACCOUNTING debe tener límites >= ACCOUNTING_SLOT o ilimitados (-1)', () => {
+    const slot = PLAN_LIMITS[PLANS.ACCOUNTING_SLOT] as Record<string, number>;
+    const pro = PLAN_LIMITS[PLANS.PRO_ACCOUNTING] as Record<string, number>;
+    for (const key of Object.keys(slot)) {
+      const s = slot[key];
+      const p = pro[key];
+      // -1 en pro = ilimitado → siempre supera al slot; sino debe ser >= slot
+      expect(p === -1 || p >= s, `límite ${key}: pro-accounting (${p}) debe ser ilimitado o >= slot (${s})`).toBe(true);
+    }
+  });
+});

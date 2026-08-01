@@ -160,6 +160,13 @@ const INTENT_TO_SKILL: Record<string, string> = {
   'recomendar_inmuebles': 'recommend_properties',
   'calcular_comision_franquicia': 'calculate_property_quality_score',
 
+  // ─── Insurance / Seguros ───
+  'crear_poliza': 'create_poliza',
+  'mis_polizas': 'list_polizas',
+  'polizas_por_vencer': 'polizas_por_vencer',
+  'renovaciones_pendientes': 'renovaciones_pendientes',
+  'clientes_sin_contacto': 'clientes_sin_contacto',
+
   // ─── Operaciones ───
   'auditar_integridad': 'audit_finance_integrity',
   'actividad_campo': 'get_field_activity',
@@ -590,6 +597,18 @@ export const SkillOrchestratorAgent = {
       tituloPagina: '📄 ¿Cuál es el título de la página?',
       palabrasClave: '🔑 ¿Alguna palabra clave específica?',
 
+      // Seguros / Insurance (solo claves no existentes; fechaVencimiento y producto ya están arriba)
+      numeroPoliza: '🧾 ¿Cuál es el número de la póliza?',
+      fechaInicio: '📅 ¿Cuál es la fecha de inicio de la póliza? (ej: 2026-08-01)',
+      aseguradora: '🏢 ¿Con qué aseguradora es la póliza? (ej: AXA, MAPFRE, Qualitas)',
+      ramo: '📋 ¿Cuál es el ramo del seguro? (ej: AUTO, HOGAR, VIDA)',
+      primaAnual: '💰 ¿Cuál es la prima anual?',
+      sumaAsegurada: '🛡️ ¿Cuál es la suma asegurada?',
+      formaPago: '💳 ¿Cuál es la forma de pago? (anual, semestral, trimestral, mensual)',
+      cliente: '👤 ¿Quién es el cliente asegurado? (nombre o email)',
+      dias: '📆 ¿En cuántos días? (ej: 30, 60, 90)',
+      riesgo: '⚠️ ¿Quieres ver solo las de riesgo? (sí/no)',
+
       // Real Estate
       propiedadId: '🏠 ¿Cuál es el ID de la propiedad?',
       tipo_operacion: '💰 ¿Venta o alquiler?',
@@ -749,15 +768,20 @@ export const SkillOrchestratorAgent = {
         'sugerir_campania': 'campanas',
         'generar_web_block': 'cms',
         'generar_seo': 'cms',
-        'sugerir_automatizacion': 'automatizaciones',
+        'sugerir_automatizacion': 'automatizaciones',      // Real Estate (usa el catálogo de inmuebles)
+      'generar_descripcion_inmueble': 'catalogo',
+      'sugerir_precio_inmueble': 'catalogo',
+      'calificar_inmueble': 'catalogo',
+      'buscar_inmuebles': 'catalogo',
+      'recomendar_inmuebles': 'catalogo',
+      'calcular_comision_franquicia': 'catalogo',
 
-        // Real Estate (usa el catálogo de inmuebles)
-        'generar_descripcion_inmueble': 'catalogo',
-        'sugerir_precio_inmueble': 'catalogo',
-        'calificar_inmueble': 'catalogo',
-        'buscar_inmuebles': 'catalogo',
-        'recomendar_inmuebles': 'catalogo',
-        'calcular_comision_franquicia': 'catalogo',
+      // Insurance / Seguros
+      'crear_poliza': 'insurance',
+      'mis_polizas': 'insurance',
+      'polizas_por_vencer': 'insurance',
+      'renovaciones_pendientes': 'insurance',
+      'clientes_sin_contacto': 'insurance',
       };
 
       const module = intentModules[intent];
@@ -839,6 +863,11 @@ export const SkillOrchestratorAgent = {
       'buscar_inmuebles': '🏠 No tienes acceso al módulo de *Real Estate*. Contacta al administrador.',
       'recomendar_inmuebles': '🏠 No tienes acceso al módulo de *Real Estate*. Contacta al administrador.',
       'calcular_comision_franquicia': '🏠 No tienes acceso al módulo de *Real Estate*. Contacta al administrador.',
+      'crear_poliza': '🛡️ No tienes acceso al módulo de *Seguros*. Contacta al administrador para activarlo.',
+      'mis_polizas': '🛡️ No tienes acceso al módulo de *Seguros*. Contacta al administrador para activarlo.',
+      'polizas_por_vencer': '🛡️ No tienes acceso al módulo de *Seguros*. Contacta al administrador para activarlo.',
+      'renovaciones_pendientes': '🛡️ No tienes acceso al módulo de *Seguros*. Contacta al administrador para activarlo.',
+      'clientes_sin_contacto': '🛡️ No tienes acceso al módulo de *Seguros*. Contacta al administrador para activarlo.',
     };
     return messages[intent] || '❌ No tienes acceso a esta función. Contacta al administrador.';
   },
@@ -871,6 +900,7 @@ Puedo ayudarte con:
 🚚 *Logística*: Envíos, flota, rutas y almacén
 📣 *Marketing*: Copy, sentimiento, SEO y automatización
 🏠 *Real Estate*: Descripciones, precios, calidad y búsqueda
+🛡️ *Seguros*: Pólizas, renovaciones, aseguradoras y cartera IA
 
 ¿En qué puedo ayudarte?`;
   },
@@ -989,6 +1019,13 @@ Puedo ayudarte con:
       'calculate_property_quality_score': 'Calificar inmueble',
       'search_properties_by_filters': 'Buscar inmuebles',
       'recommend_properties': 'Recomendar inmuebles',
+
+      // Insurance / Seguros
+      'create_poliza': 'Registrar una póliza de seguro',
+      'list_polizas': 'Listar pólizas del tenant',
+      'polizas_por_vencer': 'Consultar pólizas próximas a vencer',
+      'renovaciones_pendientes': 'Consultar renovaciones pendientes',
+      'clientes_sin_contacto': 'Detectar clientes asegurados sin contacto reciente',
 
       // Operaciones
       'audit_finance_integrity': 'Auditar integridad financiera',

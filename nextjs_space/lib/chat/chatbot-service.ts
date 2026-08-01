@@ -64,6 +64,20 @@ const MISSING_ENTITY_PROMPTS: Record<string, string> = {
   contenido: '📝 ¿Cuál es el contenido?',
   tipo: '📋 ¿De qué tipo es?',
   motivo: '📋 ¿Cuál es el motivo?',
+
+  // Insurance
+  numeroPoliza: '🔖 ¿Cuál es el número de póliza?',
+  fechaVencimiento: '📅 ¿Cuándo vence la póliza? (ej: 2026-12-31)',
+  fechaInicio: '📅 ¿Cuándo inicia la cobertura? (si no lo indicas, se usa hoy)',
+  aseguradora: '🏢 ¿Con qué aseguradora? (ej: AXA, MAPFRE, Qualitas)',
+  ramo: '📋 ¿Qué ramo de seguro? (auto, vida, hogar, salud…)',
+  primaAnual: '💰 ¿Cuál es la prima anual?',
+  sumaAsegurada: '🛡️ ¿Cuál es la suma asegurada?',
+  formaPago: '💳 ¿Cuál es la forma de pago? (ANUAL, SEMESTRAL, TRIMESTRAL, MENSUAL)',
+  cliente: '👤 ¿Cuál es el nombre o email del cliente asegurado?',
+  dias: '📅 ¿En cuántos días? (ej: 30, 60, 90)',
+  riesgo: '⚠️ ¿Incluir solo renovaciones en riesgo? (true/false)',
+  estado: '📋 ¿Qué estado? (ACTIVA, PROXIMA_A_VENCER, PENDIENTE…)',
 }
 
 export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput> {
