@@ -12,6 +12,7 @@
  */
 
 import { prisma } from '@/lib/db';
+import { isModuleActive, type CrmModule } from '@/lib/plans';
 
 export interface ExecutionPlan {
   steps: ExecutionStep[];
@@ -44,6 +45,8 @@ export interface OrchestratorInput {
 const INTENT_TO_SKILL: Record<string, string> = {
   // ─── CRM: Contactos & Leads ───
   'crear_lead': 'create_lead',
+  'crear_contacto': 'create_contact',
+  'crear_empresa': 'create_company',
   'buscar_lead': 'find_lead_by_email',
   'listar_contactos': 'list_contacts',
   'listar_leads': 'list_leads',
@@ -525,6 +528,10 @@ export const SkillOrchestratorAgent = {
       telefono: '📱 ¿Cuál es el número de teléfono?',
       empresa: '🏢 ¿Cuál es su empresa?',
       contexto: '💬 ¿Qué contexto o notas tiene este contacto?',
+      cargo: '💼 ¿Cuál es su cargo o puesto?',
+      linkedin: '🔗 ¿Cuál es su perfil de LinkedIn?',
+      ubicacion: '📍 ¿Cuál es su ubicación?',
+      tags: '🏷️ ¿Algunas etiquetas para este registro? (separadas por coma)',
 
       // Productos / Servicios
       servicio: '📋 ¿Qué servicio o producto necesitas?',
@@ -613,7 +620,13 @@ export const SkillOrchestratorAgent = {
   // ==================== VERIFICACIÓN DE ACCESO ====================
 
   /**
-   * Verificar acceso al skill por tenant
+   * Verificar acceso al skill por tenant.
+   *
+   * Usa el sistema real de módulos del plan (isModuleActive), igual que el resto
+   * de la plataforma: los módulos incluidos en el plan están activos por defecto
+   * y los TenantFeature solo los sobrescriben (habilitar/deshabilitar explícito).
+   * Esto reemplaza el antiguo mapeo a features inventados ('crm', 'booking',
+   * 'deals', ...) que nunca existían en tenantFeatures y bloqueaba todo.
    */
   async checkSkillAccess(tenantId: string, intent: string): Promise<boolean> {
     try {
@@ -624,135 +637,136 @@ export const SkillOrchestratorAgent = {
 
       if (!tenant) return false;
 
-      // Mapping de intents a features
-      const intentFeatures: Record<string, string> = {
-        // CRM - Contactos & Leads
-        'crear_lead': 'crm',
-        'buscar_lead': 'crm',
-        'listar_contactos': 'crm',
-        'listar_leads': 'crm',
-        'actualizar_lead': 'crm',
-        'convertir_lead': 'crm',
-        'obtener_telefono': 'crm',
+      // Mapping de intents a módulos reales del plan (CrmModule)
+      const intentModules: Record<string, CrmModule> = {
+        // CRM - Leads
+        'crear_lead': 'leads',
+        'buscar_lead': 'leads',
+        'listar_leads': 'leads',
+        'actualizar_lead': 'leads',
+        'convertir_lead': 'leads',
+        'detectar_ghosting': 'leads',
+        'generar_ruta_exito': 'leads',
+        'diagnosticos_lead': 'leads',
+        'registrar_interaccion': 'leads',
+
+        // CRM - Contactos
+        'crear_contacto': 'contactos',
+        'listar_contactos': 'contactos',
+        'obtener_telefono': 'contactos',
+
+        // CRM - Empresas
+        'crear_empresa': 'empresas',
 
         // CRM - Citas
-        'agendar_cita': 'booking',
-        'mis_citas': 'booking',
-        'cancelar_cita': 'booking',
-        'reagendar_cita': 'booking',
-        'confirmar_cita': 'booking',
-        'auto_agendar': 'booking',
+        'agendar_cita': 'citas',
+        'mis_citas': 'citas',
+        'cancelar_cita': 'citas',
+        'reagendar_cita': 'citas',
+        'confirmar_cita': 'citas',
+        'auto_agendar': 'citas',
 
         // CRM - Conversaciones
-        'enviar_mensaje': 'messaging',
-        'enviar_mensaje_interno': 'messaging',
-        'crear_conversacion': 'messaging',
-        'cerrar_conversacion': 'messaging',
+        'enviar_mensaje': 'mensajes',
+        'enviar_mensaje_interno': 'mensajes',
+        'crear_conversacion': 'mensajes',
+        'cerrar_conversacion': 'mensajes',
+        'contactar_humano': 'mensajes',
 
         // CRM - Tareas
-        'crear_tarea': 'crm',
-        'completar_tarea': 'crm',
-        'mis_tareas': 'crm',
+        'crear_tarea': 'tareas',
+        'completar_tarea': 'tareas',
+        'mis_tareas': 'tareas',
 
         // CRM - Notas
-        'crear_nota': 'crm',
-        'ver_notas': 'crm',
+        'crear_nota': 'tareas',
+        'ver_notas': 'tareas',
 
         // CRM - Pipeline
-        'crear_negocio': 'deals',
-        'actualizar_negocio': 'deals',
-        'mis_negocios': 'deals',
-        'calificar_lead': 'deals',
+        'crear_negocio': 'pipeline',
+        'actualizar_negocio': 'pipeline',
+        'mis_negocios': 'pipeline',
+        'calificar_lead': 'pipeline',
+        'consultar_estado_pedido': 'pipeline',
 
-        // CRM - Proactividad
-        'detectar_ghosting': 'crm',
-        'generar_ruta_exito': 'crm',
+        // Catálogo
+        'consultar_servicios': 'catalogo',
+        'consultar_precio': 'catalogo',
+        'buscar_producto': 'catalogo',
+        'buscar_catalogo': 'catalogo',
+        'gestionar_catalogo': 'catalogo',
 
-        // CRM - General
-        'registrar_interaccion': 'crm',
-        'diagnosticos_lead': 'crm',
-        'consultar_servicios': 'catalog',
-        'consultar_precio': 'catalog',
-        'buscar_producto': 'catalog',
-        'buscar_catalogo': 'catalog',
-        'consultar_estado_pedido': 'deals',
-        'contactar_humano': 'crm',
-
-        // Finanzas - Facturación
-        'crear_factura': 'billing',
-        'cancelar_factura': 'billing',
-        'estado_fiscal': 'billing',
-        'rectificar_factura': 'billing',
-
-        // Finanzas - Gastos
-        'registrar_gasto': 'finance',
-        'registrar_gasto_vision': 'finance',
-        'crear_proveedor': 'finance',
-        'analizar_gastos': 'finance',
-        'proyeccion_financiera': 'finance',
-        'proyeccion_impuestos': 'finance',
-        'analizar_rentabilidad_global': 'finance',
-        'auditar_integridad_gastos': 'finance',
+        // Finanzas - Facturación & Gastos
+        'crear_factura': 'finanzas',
+        'cancelar_factura': 'finanzas',
+        'estado_fiscal': 'finanzas',
+        'rectificar_factura': 'finanzas',
+        'registrar_gasto': 'finanzas',
+        'registrar_gasto_vision': 'finanzas',
+        'crear_proveedor': 'finanzas',
+        'analizar_gastos': 'finanzas',
+        'proyeccion_financiera': 'finanzas',
+        'proyeccion_impuestos': 'finanzas',
+        'analizar_rentabilidad_global': 'finanzas',
+        'auditar_integridad_gastos': 'finanzas',
+        'auditar_integridad': 'finanzas',
 
         // ERP - Inventario
-        'salud_inventario': 'inventory',
-        'ajustar_stock': 'inventory',
-        'consumir_inventario': 'inventory',
-        'watchdog_inventario': 'inventory',
-        'gestionar_catalogo': 'catalog',
+        'salud_inventario': 'inventario',
+        'ajustar_stock': 'inventario',
+        'consumir_inventario': 'inventario',
+        'watchdog_inventario': 'inventario',
+        'auditar_fugas_materiales': 'inventario',
 
         // ERP - Producción & Calidad
-        'calcular_costo_produccion': 'production',
-        'detectar_anomalias_calidad': 'quality',
-        'verificar_mermas': 'production',
-        'registrar_inspeccion_calidad': 'quality',
+        'calcular_costo_produccion': 'produccion',
+        'verificar_mermas': 'produccion',
+        'detectar_anomalias_calidad': 'calidad',
+        'registrar_inspeccion_calidad': 'calidad',
 
         // ERP - Proyectos
-        'rentabilidad_proyecto': 'projects',
-        'desviaciones_proyecto': 'projects',
+        'rentabilidad_proyecto': 'proyectos',
+        'desviaciones_proyecto': 'proyectos',
 
         // RRHH
-        'resumen_rrhh': 'hr',
-        'aprobar_vacaciones': 'hr',
-        'riesgo_rotacion': 'hr',
+        'resumen_rrhh': 'rrhh',
+        'aprobar_vacaciones': 'rrhh',
+        'riesgo_rotacion': 'rrhh',
 
         // Logística
-        'estado_envio': 'logistics',
-        'rastrear_pedido': 'logistics',
-        'tracking_envio': 'logistics',
-        'salud_flota': 'logistics',
-        'estado_flota': 'logistics',
-        'optimizar_ruta': 'logistics',
-        'reorganizar_almacen': 'logistics',
+        'estado_envio': 'logistica',
+        'rastrear_pedido': 'logistica',
+        'tracking_envio': 'logistica',
+        'salud_flota': 'logistica',
+        'estado_flota': 'logistica',
+        'optimizar_ruta': 'logistica',
+        'reorganizar_almacen': 'logistica',
+        'actividad_campo': 'logistica',
 
         // Marketing
-        'generar_copy': 'marketing',
-        'analizar_sentimiento': 'marketing',
-        'sugerir_campania': 'marketing',
-        'generar_web_block': 'marketing',
-        'generar_seo': 'marketing',
-        'sugerir_automatizacion': 'marketing',
+        'generar_copy': 'campanas',
+        'analizar_sentimiento': 'campanas',
+        'sugerir_campania': 'campanas',
+        'generar_web_block': 'cms',
+        'generar_seo': 'cms',
+        'sugerir_automatizacion': 'automatizaciones',
 
-        // Real Estate
-        'generar_descripcion_inmueble': 'real_estate',
-        'sugerir_precio_inmueble': 'real_estate',
-        'calificar_inmueble': 'real_estate',
-        'buscar_inmuebles': 'real_estate',
-        'recomendar_inmuebles': 'real_estate',
-        'calcular_comision_franquicia': 'real_estate',
-
-        // Operaciones
-        'auditar_integridad': 'advanced',
-        'actividad_campo': 'advanced',
-        'auditar_fugas_materiales': 'advanced',
+        // Real Estate (usa el catálogo de inmuebles)
+        'generar_descripcion_inmueble': 'catalogo',
+        'sugerir_precio_inmueble': 'catalogo',
+        'calificar_inmueble': 'catalogo',
+        'buscar_inmuebles': 'catalogo',
+        'recomendar_inmuebles': 'catalogo',
+        'calcular_comision_franquicia': 'catalogo',
       };
 
-      const feature = intentFeatures[intent];
-      if (!feature) return true; // Si no hay mapping, permitir
+      const module = intentModules[intent];
+      if (!module) return true; // Si no hay mapping, permitir
 
-      const featureRecord = tenant.tenantFeatures.find(f => f.feature === feature);
-      return featureRecord?.habilitado ?? false;
-    } catch {
+      return isModuleActive(module, tenant.plan, tenant.tenantFeatures);
+    } catch (error) {
+      // Log imprescindible: un fallo aquí bloquearía todos los intents en silencio
+      console.error('[SkillOrchestrator] checkSkillAccess error:', error);
       return false;
     }
   },
@@ -764,6 +778,14 @@ export const SkillOrchestratorAgent = {
    */
   getNoAccessMessage(intent: string): string {
     const messages: Record<string, string> = {
+      'crear_lead': '👥 No tienes acceso al módulo de *Leads*. Contacta al administrador para activarlo.',
+      'buscar_lead': '👥 No tienes acceso al módulo de *Leads*. Contacta al administrador para activarlo.',
+      'listar_leads': '👥 No tienes acceso al módulo de *Leads*. Contacta al administrador para activarlo.',
+      'actualizar_lead': '👥 No tienes acceso al módulo de *Leads*. Contacta al administrador para activarlo.',
+      'convertir_lead': '👥 No tienes acceso al módulo de *Leads*. Contacta al administrador para activarlo.',
+      'crear_contacto': '✅ No tienes acceso al módulo de *Contactos*. Contacta al administrador para activarlo.',
+      'listar_contactos': '✅ No tienes acceso al módulo de *Contactos*. Contacta al administrador para activarlo.',
+      'crear_empresa': '🏢 No tienes acceso al módulo de *Empresas*. Contacta al administrador para activarlo.',
       'agendar_cita': '📅 No tienes acceso al módulo de *Citas*. Contacta al administrador para activarlo.',
       'cancelar_cita': '📅 No tienes acceso al módulo de *Citas*. Contacta al administrador.',
       'mis_citas': '📅 No tienes acceso al módulo de *Citas*. Contacta al administrador.',
@@ -860,6 +882,8 @@ Puedo ayudarte con:
     const descriptions: Record<string, string> = {
       // Contactos & Leads
       'create_lead': 'Crear un nuevo lead',
+      'create_contact': 'Crear un nuevo contacto',
+      'create_company': 'Crear una nueva empresa',
       'find_lead_by_email': 'Buscar lead por email',
       'list_contacts': 'Listar contactos',
       'list_leads': 'Listar leads',
