@@ -41,6 +41,7 @@ import * as operationalSkills from './operational-skills';
 import * as marketingSkills from './marketing-skills';
 import * as adSkills from './ads-skills';
 import * as realEstateSkills from './real-estate-skills';
+import * as insuranceSkills from './insurance-skills';
 import * as logisticsSkills from './logistics-skills';
 import * as interactionSkills from './interaction-skills';
 import * as billingSkills from './billing-skills';
@@ -909,6 +910,13 @@ export const skills = {
   calculate_property_quality_score: realEstateSkills.calculate_property_quality_score,
   search_properties_by_filters: realEstateSkills.search_properties_by_filters,
   recommend_properties: realEstateSkills.recommend_properties,
+
+  // Insurance / Seguros
+  create_poliza: insuranceSkills.create_poliza,
+  list_polizas: insuranceSkills.list_polizas,
+  polizas_por_vencer: insuranceSkills.polizas_por_vencer,
+  renovaciones_pendientes: insuranceSkills.renovaciones_pendientes,
+  clientes_sin_contacto: insuranceSkills.clientes_sin_contacto,
 
   // ERP Logística
   get_shipment_status: logisticsSkills.getShipmentStatus,

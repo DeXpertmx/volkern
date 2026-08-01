@@ -11,30 +11,21 @@
  * Uso: npx tsx scripts/seed-subscription-plans.ts
  * Seguro de ejecutar múltiples veces (upsert por slug).
  *
- * Mantener en sync con ALL_MODULES, PLAN_LIMITS, PLAN_PRICES en lib/plans.ts
+ * Los módulos de cada plan se derivan de ALL_MODULES en lib/plans.ts, por lo
+ * que no hay que mantener esta lista a mano (incluye insurance automáticamente).
+ * PLAN_LIMITS/PLAN_PRICES se mantienen en lib/plans.ts como única fuente de verdad.
  */
 
 import { PrismaClient } from '@prisma/client'
+import { ALL_MODULES } from '../lib/plans'
 
 const prisma = new PrismaClient()
 
-// Los módulos completos (ALL_FEATURES_SET) de lib/plans.ts
-// Si agregas módulos nuevos en lib/plans.ts, actualiza también esta lista.
-const ALL_FEATURES_SET = [
-  'leads', 'contactos', 'empresas', 'pipeline', 'tareas', 'analytics',
-  'cotizaciones', 'contratos', 'ordenes_venta', 'pronosticos', 'scoring',
-  'mensajes', 'citas', 'catalogo', 'chatbot_whatsapp', 'telefonia',
-  'campanas', 'email_marketing', 'cms', 'builder_premium', 'social_manager', 'formularios',
-  'cursos', 'estudiantes',
-  'automatizaciones',
-  'mi_tarjeta',
-  'integraciones', 'equipo', 'configuracion', 'white_label', 'custom_domain', 'conocimiento', 'agency',
-  'compliance_pro',
-  'whatsapp', 'meta_integration', 'telegram', 'sms', 'google_calendar', 'api_access',
-  'rrhh', 'finanzas', 'finanzas_consolidado',
-  'calidad', 'produccion', 'inventario', 'proyectos', 'taskforce', 'activos', 'conciliacion', 'logistica',
-  'estrategia',
-]
+// Los módulos completos (ALL_FEATURES_SET) de lib/plans.ts.
+// Derivado en runtime desde ALL_MODULES para evitar desincronización: si se
+// agrega un módulo nuevo en lib/plans.ts (p. ej. insurance), el seed lo
+// incluye automáticamente en todos los planes.
+const ALL_FEATURES_SET: string[] = ALL_MODULES.map(m => m.id)
 
 interface PlanSeed {
   slug: string
@@ -445,10 +436,11 @@ async function main() {
   })
   for (const p of verifyPlans) {
     const feat = p.features as any
-    const modules = Array.isArray(feat?.modules) ? feat.modules.length : 0
+    const modules = Array.isArray(feat?.modules) ? feat.modules : []
+    const hasInsurance = modules.includes('insurance')
     const rawLimits = feat?.raw_limits || {}
     const hasComplianceMode = rawLimits.compliance_mode !== undefined
-    console.log(`  ${p.slug.padEnd(14)} | ${p.nombre.padEnd(16)} | users=${String(p.limiteUsuarios).padEnd(4)} | leads=${String(p.limiteLeads).padEnd(5)} | storage=${String(p.limiteStorage).padEnd(4)}GB | modules=${modules} | compliance=${rawLimits.compliance_mode} | precio=${p.precio}€ | public=${p.esPublico}`)
+    console.log(`  ${p.slug.padEnd(14)} | ${p.nombre.padEnd(16)} | users=${String(p.limiteUsuarios).padEnd(4)} | leads=${String(p.limiteLeads).padEnd(5)} | storage=${String(p.limiteStorage).padEnd(4)}GB | modules=${modules.length} | insurance=${hasInsurance ? '✅' : '❌'} | compliance=${rawLimits.compliance_mode} | precio=${p.precio}€ | public=${p.esPublico}`)
   }
 
   // Verificar que getPlanConfig funciona con DB para todos los planes

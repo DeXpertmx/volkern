@@ -140,18 +140,27 @@ export const ExecutionEngine = {
           errorMessage: error.message
         });
 
-        // Mostrar el mensaje real del error cuando sea informativo
+        // Mostrar el mensaje real del error cuando sea informativo.
+        // Comparación case-insensitive + patrones amplios para cubrir los
+        // mensajes en español de todos los skills (incl. insurance: "No encontré
+        // el cliente...", "...es requerida", "No se pudo identificar...").
         const rawMessage = error.message || '';
+        const raw = rawMessage.toLowerCase();
         const meaningfulError =
-          rawMessage.includes('no encontrado') ||
-          rawMessage.includes('requerido') ||
-          rawMessage.includes('Ya existe') ||
-          rawMessage.includes('No se encontró') ||
-          rawMessage.includes('no es válido') ||
-          rawMessage.includes('no parece');
+          raw.includes('no encontr') ||
+          raw.includes('no se encontr') ||
+          raw.includes('requerid') ||
+          raw.includes('ya existe') ||
+          raw.includes('no se pudo') ||
+          raw.includes('no fue posible') ||
+          raw.includes('no es válido') ||
+          raw.includes('no parece');
 
+        // Solo el error de skill inexistente ("Skill no encontrado: X") muestra
+        // "Acción no disponible". El resto de mensajes "no encontré..."
+        // (ej. cliente/aseguradora de insurance) deben mostrar el texto real.
         return {
-          message: rawMessage.includes('no encontrado')
+          message: raw.includes('skill no encontr')
             ? `❌ Acción no disponible: ${step.action}`
             : meaningfulError
               ? `❌ ${rawMessage}`
@@ -255,6 +264,65 @@ export const ExecutionEngine = {
         return '🔄 *Lead convertido a contacto* correctamente.';
       case 'create_task':
         return `📝 *Tarea creada:* ${nombre}`;
+      case 'create_poliza':
+        return data?.message ? `📋 ${this.escapeMarkdown(String(data.message))}` : '';
+
+      // ─── Insurance: skills de lectura (muestran resultados al usuario) ───
+      case 'list_polizas': {
+        const polizas = data?.polizas || [];
+        if (!Array.isArray(polizas) || polizas.length === 0) return '📋 No hay pólizas registradas.';
+        const lines = polizas.slice(0, 5).map((p: any) => {
+          const numero = this.escapeMarkdown(String(p?.numeroPoliza || ''));
+          const cliente = this.escapeMarkdown(String(p?.cliente?.nombre || ''));
+          const ase = this.escapeMarkdown(String(p?.aseguradora?.nombre || ''));
+          const vence = p?.fechaVencimiento ? new Date(p.fechaVencimiento).toISOString().slice(0, 10) : '—';
+          return `• ${numero} — ${cliente} (${ase}) vence ${vence}`;
+        });
+        const total = Number(data?.total ?? polizas.length);
+        const suffix = total > 5 ? `\n… y ${total - 5} más` : '';
+        return `📋 *Pólizas (${total}):*\n${lines.join('\n')}${suffix}`;
+      }
+      case 'polizas_por_vencer': {
+        const polizas = data?.polizas || [];
+        const dias = Number(data?.dias ?? 30);
+        if (!Array.isArray(polizas) || polizas.length === 0) return `⏰ No hay pólizas por vencer en los próximos ${dias} días.`;
+        const lines = polizas.slice(0, 5).map((p: any) => {
+          const numero = this.escapeMarkdown(String(p?.numeroPoliza || ''));
+          const cliente = this.escapeMarkdown(String(p?.cliente?.nombre || ''));
+          const vence = p?.fechaVencimiento ? new Date(p.fechaVencimiento).toISOString().slice(0, 10) : '—';
+          return `• ${numero} — ${cliente} vence ${vence}`;
+        });
+        const total = Number(data?.total ?? polizas.length);
+        const suffix = total > 5 ? `\n… y ${total - 5} más` : '';
+        return `⏰ *Pólizas por vencer (${dias}d):*\n${lines.join('\n')}${suffix}`;
+      }
+      case 'renovaciones_pendientes': {
+        const renovaciones = data?.renovaciones || [];
+        if (!Array.isArray(renovaciones) || renovaciones.length === 0) return '🔄 No hay renovaciones pendientes.';
+        const lines = renovaciones.slice(0, 5).map((r: any) => {
+          const numero = this.escapeMarkdown(String(r?.poliza?.numeroPoliza || ''));
+          const cliente = this.escapeMarkdown(String(r?.poliza?.cliente?.nombre || ''));
+          const estado = this.escapeMarkdown(String(r?.estado || ''));
+          return `• ${numero} — ${cliente} (${estado})`;
+        });
+        const total = Number(data?.total ?? renovaciones.length);
+        const suffix = total > 5 ? `\n… y ${total - 5} más` : '';
+        return `🔄 *Renovaciones pendientes (${total}):*\n${lines.join('\n')}${suffix}`;
+      }
+      case 'clientes_sin_contacto': {
+        const clientes = data?.clientes || [];
+        const dias = Number(data?.dias ?? 180);
+        if (!Array.isArray(clientes) || clientes.length === 0) return `👥 No hay clientes sin contacto en los últimos ${dias} días.`;
+        const lines = clientes.slice(0, 5).map((c: any) => {
+          const nombre = this.escapeMarkdown(String(c?.nombre || ''));
+          const polizasCount = Array.isArray(c?.polizasSeguro) ? c.polizasSeguro.length : 0;
+          const extra = polizasCount > 0 ? ` (${polizasCount} póliza(s))` : '';
+          return `• ${nombre}${extra}`;
+        });
+        const total = Number(data?.total ?? clientes.length);
+        const suffix = total > 5 ? `\n… y ${total - 5} más` : '';
+        return `👥 *Clientes sin contacto (${dias}d):*\n${lines.join('\n')}${suffix}`;
+      }
       default:
         return '';
     }

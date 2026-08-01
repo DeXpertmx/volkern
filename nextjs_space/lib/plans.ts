@@ -33,6 +33,7 @@ export type CrmModule =
   | 'telefonia'
   | 'social_manager'
   | 'rrhh' | 'finanzas' | 'finanzas_consolidado'
+  | 'insurance'
   | 'calidad' | 'produccion' | 'inventario' | 'proyectos'
   | 'taskforce' | 'activos' | 'conocimiento' | 'estrategia'
   | 'conciliacion' | 'logistica'
@@ -92,6 +93,7 @@ export const ALL_MODULES: ModuleDefinition[] = [
   { id: 'google_calendar', label: 'Google Calendar', description: 'Sincronización de citas y eventos', icon: '📅', group: 'Integraciones' },
   { id: 'api_access', label: 'Acceso a la API', description: 'Tokens de API para desarrolladores', icon: '🔑', group: 'Integraciones' },
   { id: 'rrhh', label: 'RRHH', description: 'Gestión de talento y nóminas', icon: '👥', group: 'ERP' },
+  { id: 'insurance', label: 'Seguros', description: 'Cartera de pólizas, renovaciones y aseguradoras', icon: '🛡️', group: 'ERP' },
   { id: 'finanzas', label: 'Finanzas', description: 'Contabilidad, IVA, balances', icon: '💰', group: 'ERP' },
   { id: 'finanzas_consolidado', label: 'Consolidado Financiero', description: 'Vista multi-tenant financiera', icon: '📊', group: 'ERP' },
   { id: 'calidad', label: 'Calidad', description: 'Control de calidad industrial', icon: '✅', group: 'ERP' },
@@ -122,6 +124,7 @@ export const PLAN_MODULES: Record<string, CrmModule[]> = {
     'mensajes', 'citas', 'catalogo',
     'ads',
     'mi_tarjeta',
+    'insurance',
     'equipo', 'configuracion',
   ],
   [PLANS.AGENCY_SLOT]: [
@@ -130,6 +133,7 @@ export const PLAN_MODULES: Record<string, CrmModule[]> = {
     'campanas', 'email_marketing', 'cms', 'builder_premium',
     'ads',
     'mi_tarjeta',
+    'insurance',
     'equipo', 'configuracion',
   ],
   [PLANS.PRO_AGENCY]: ALL_FEATURES_SET,
@@ -138,6 +142,7 @@ export const PLAN_MODULES: Record<string, CrmModule[]> = {
     'mensajes', 'citas', 'catalogo',
     'cotizaciones', 'contratos', 'ordenes_venta',
     'finanzas', 'conciliacion',
+    'insurance',
     'automatizaciones',
     'ads',
     'mi_tarjeta',
@@ -150,6 +155,7 @@ export const PLAN_MODULES: Record<string, CrmModule[]> = {
     'mensajes', 'citas', 'catalogo',
     'cotizaciones', 'contratos', 'ordenes_venta', 'pronosticos', 'scoring',
     'finanzas', 'conciliacion',
+    'insurance',
     'automatizaciones',
     'ads',
     'mi_tarjeta',

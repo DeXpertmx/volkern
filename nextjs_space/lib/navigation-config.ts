@@ -231,6 +231,28 @@ export const HUBS: HubConfig[] = [
     ]
   },
   {
+    id: 'seguros',
+    name: 'Seguros',
+    icon: ShieldCheck,
+    href: '/dashboard/seguros',
+    description: 'Cartera de pólizas, renovaciones y aseguradoras con IA.',
+    requiredAccountType: 'BUSINESS',
+    requiredModule: 'insurance',
+    basePaths: [
+      '/dashboard/seguros/polizas',
+      '/dashboard/seguros/renovaciones',
+      '/dashboard/seguros/cartera',
+      '/dashboard/seguros/aseguradoras'
+    ],
+    items: [
+      { name: 'Dashboard Seguros', href: '/dashboard/seguros', icon: LayoutDashboard, planModule: 'insurance', description: 'KPIs de cartera y renovaciones' },
+      { name: 'Pólizas', href: '/dashboard/seguros/polizas', icon: FileText, planModule: 'insurance', description: 'Gestión de pólizas y clientes asegurados' },
+      { name: 'Renovaciones', href: '/dashboard/seguros/renovaciones', icon: RotateCw, planModule: 'insurance', description: 'Motor de renovaciones y alertas' },
+      { name: 'Cartera IA', href: '/dashboard/seguros/cartera', icon: BarChart3, planModule: 'insurance', description: 'Mapa de cartera y oportunidades IA' },
+      { name: 'Aseguradoras', href: '/dashboard/seguros/aseguradoras', icon: Building2, planModule: 'insurance', description: 'Directorio de aseguradoras y productos' },
+    ]
+  },
+  {
     id: 'rrhh',
     name: 'RRHH',
     icon: Users,

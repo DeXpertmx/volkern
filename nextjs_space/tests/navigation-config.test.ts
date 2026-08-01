@@ -124,6 +124,16 @@ describe('HUBS', () => {
     expect(hub.requiredModule).toBe('produccion');
   });
 
+  it('debe incluir el hub de Seguros con requiredModule insurance (ERP genérico, no vertical-específico)', () => {
+    const hub = HUBS.find(h => h.id === 'seguros')!;
+    expect(hub.requiredAccountType).toBe('BUSINESS');
+    expect(hub.requiredModule).toBe('insurance');
+    // El hub es module-driven: visible para cualquier tenant (BUSINESS o AGENCY)
+    // cuyo plan incluya insurance, incluida la vertical contable
+    expect(hub.items.some(i => i.name === 'Pólizas')).toBe(true);
+    expect(hub.items.some(i => i.name === 'Aseguradoras')).toBe(true);
+  });
+
   it('debe incluir el hub de Configuración', () => {
     const hub = HUBS.find(h => h.id === 'configuracion')!;
     expect(hub.items.length).toBeGreaterThanOrEqual(10);

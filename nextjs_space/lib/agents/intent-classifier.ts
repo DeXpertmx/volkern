@@ -101,9 +101,23 @@ export class IntentClassifierAgent {
         rawResponse
       };
       
-    } catch (error) {
-      console.error('Error en IntentClassifierAgent:', error);
-      
+    } catch (error: any) {
+      // Log imprescindible: un fallo aquí degrada a consulta_general y el usuario
+      // ve una respuesta LLM genérica. Sin este log (ej. rate limit 429 de Gemini
+      // free tier) el fallo quedaba invisible en el audit log.
+      console.error('[IntentClassifier] Error en clasificación:', error?.message || error);
+      try {
+        await this.logClassification({
+          ...params,
+          intent: 'ERROR_CLASIFICACION',
+          confidence: 0,
+          duration: Date.now() - startTime,
+          rawResponse: `Error en clasificación: ${error?.message || error}`.substring(0, 1000)
+        });
+      } catch (logError) {
+        console.warn('[IntentClassifier] Error logueando fallo de clasificación:', logError);
+      }
+
       return {
         intent: 'consulta_general',
         confidence: 0.1,

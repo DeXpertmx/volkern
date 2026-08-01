@@ -509,4 +509,37 @@ describe('getPlanConfig("scale") — DB vs hardcoded fallback', () => {
       }
     }
   })
+
+  // ── 6. Planes contables: fallback hardcodeado (no tienen registro en BD) ──
+  it('accounting-slot: el fallback debe devolver PLAN_MODULES[ACCOUNTING_SLOT] (con insurance)', async () => {
+    // Sin registro en BD → cae al hardcoded fallback
+    vi.mocked(globalPrisma.subscriptionPlan.findUnique).mockResolvedValue(null)
+
+    const config = await getPlanConfig('accounting-slot')
+
+    expect(config.slug).toBe('accounting-slot')
+    expect(new Set(config.modules)).toEqual(new Set(PLAN_MODULES[PLANS.ACCOUNTING_SLOT]))
+    // Guard de regresión: la vertical contable debe incluir insurance
+    expect(config.modules).toContain('insurance')
+    expect(config.modules).toContain('finanzas')
+    expect(config.modules).toContain('conciliacion')
+  })
+
+  it('pro-accounting: el fallback debe devolver PLAN_MODULES[PRO_ACCOUNTING] (superset del slot)', async () => {
+    vi.mocked(globalPrisma.subscriptionPlan.findUnique).mockResolvedValue(null)
+
+    const config = await getPlanConfig('pro-accounting')
+
+    expect(config.slug).toBe('pro-accounting')
+    expect(new Set(config.modules)).toEqual(new Set(PLAN_MODULES[PLANS.PRO_ACCOUNTING]))
+    expect(config.modules).toContain('insurance')
+    // El plan padre debe incluir módulos de la firma que el slot no tiene
+    expect(config.modules).toContain('agency')
+    expect(config.modules).toContain('white_label')
+
+    // Superset: todo lo del slot contable debe estar en pro-accounting
+    for (const mod of PLAN_MODULES[PLANS.ACCOUNTING_SLOT]) {
+      expect(config.modules).toContain(mod)
+    }
+  })
 })
