@@ -6,7 +6,7 @@ import { withTenantAuth } from '@/lib/api-key-auth'
 import { sendWhatsAppMessage, sendWhatsAppMessageWithMedia } from '@/lib/whatsapp'
 import { sendEmail, replaceTemplateVariables } from '@/lib/ses-email'
 import { sendSMS } from '@/lib/sms'
-import { sendTelegramMessage } from '@/lib/telegram'
+import { sendTelegramMessage, loadTelegramCredentials } from '@/lib/telegram'
 import { sendFacebookMessage, sendInstagramMessage } from '@/lib/meta-messenger'
 import { getDownloadUrl } from '@/lib/s3'
 import { checkFeatureLimit, incrementUsage } from '@/lib/subscription'
@@ -153,11 +153,33 @@ export const POST = withTenantAuth(async (request, auth) => {
     } else if (['sms', 'telegram', 'facebook', 'instagram'].includes(canal)) {
         // Implementación simplificada para otros canales (Siguen usando librerías existentes)
         try {
-            if (canal === 'sms') await sendSMS(conversacion.contactoTelefono!, contenidoFinal);
-            else if (canal === 'telegram') await sendTelegramMessage(conversacion.contactoTelefono!, contenidoFinal);
-            else if (canal === 'facebook') await sendFacebookMessage(conversacion.contactoTelefono!, contenidoFinal);
-            else if (canal === 'instagram') await sendInstagramMessage(conversacion.contactoTelefono!, contenidoFinal);
-            resultado = { success: true, messageId: `${canal}-${Date.now()}` }
+            if (canal === 'sms') {
+                await sendSMS(conversacion.contactoTelefono!, contenidoFinal);
+            } else if (canal === 'telegram') {
+                // FIX sincronización hub→Telegram: resolver el bot_token del tenant
+                // (Integration legacy → Channel moderno → env). Antes se enviaba con el
+                // bot global de process.env, por lo que el mensaje no llegaba al cliente
+                // cuando el tenant usa su propio bot de Telegram.
+                const creds = await loadTelegramCredentials(tenantId);
+                const tgResult = await sendTelegramMessage(
+                    conversacion.contactoTelefono!,
+                    contenidoFinal,
+                    creds.bot_token || undefined,
+                );
+                if (!tgResult.success) {
+                    estado = 'error';
+                    errorMensaje = tgResult.error || 'Error enviando por Telegram';
+                    resultado = { success: false, error: errorMensaje };
+                }
+            } else if (canal === 'facebook') {
+                await sendFacebookMessage(conversacion.contactoTelefono!, contenidoFinal);
+            } else if (canal === 'instagram') {
+                await sendInstagramMessage(conversacion.contactoTelefono!, contenidoFinal);
+            }
+            // Solo marcar éxito si el canal no declaró error
+            if (!resultado) {
+                resultado = { success: true, messageId: `${canal}-${Date.now()}` }
+            }
         } catch (e: any) {
             estado = 'error';
             errorMensaje = e.message;
