@@ -83,7 +83,7 @@ export const SkillRegistry = {
               };
             } catch (error: any) {
               return {
-                message: `Error executing ${action}`,
+                message: error.message || `Error executing ${action}`,
                 error: error.message
               };
             }

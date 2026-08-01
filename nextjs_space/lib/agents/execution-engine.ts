@@ -86,7 +86,8 @@ export const ExecutionEngine = {
                   const result = await volkernSkill(params);
                   return { message: 'OK', data: result };
                 } catch (error: any) {
-                  return { message: 'Error', error: error.message };
+                  // Propagar el mensaje real del skill (ej. "Ya existe un contacto con el email X")
+                  return { message: error.message || 'Error', error: error.message };
                 }
               }
             };
@@ -139,10 +140,22 @@ export const ExecutionEngine = {
           errorMessage: error.message
         });
 
+        // Mostrar el mensaje real del error cuando sea informativo
+        const rawMessage = error.message || '';
+        const meaningfulError =
+          rawMessage.includes('no encontrado') ||
+          rawMessage.includes('requerido') ||
+          rawMessage.includes('Ya existe') ||
+          rawMessage.includes('No se encontró') ||
+          rawMessage.includes('no es válido') ||
+          rawMessage.includes('no parece');
+
         return {
-          message: error.message.includes('no encontrado')
+          message: rawMessage.includes('no encontrado')
             ? `❌ Acción no disponible: ${step.action}`
-            : '⚠️ Error ejecutando la operación.',
+            : meaningfulError
+              ? `❌ ${rawMessage}`
+              : '⚠️ Error ejecutando la operación.',
           skill: step.action,
           error: true,
           executionTimeMs: Date.now() - startTime
@@ -211,6 +224,43 @@ export const ExecutionEngine = {
   },
 
   /**
+   * Escapa caracteres especiales de Markdown de Telegram en valores interpolados
+   * (evita que un nombre con * _ [ ] rompa el parseo del mensaje).
+   */
+  escapeMarkdown(value: string): string {
+    return value.replace(/([_*[\]()~`>#+\-=|{}.!])/g, '\\$1');
+  },
+
+  /**
+   * Formatea un mensaje amigable para skills de creación/actualización de CRM.
+   * Retorna '' si el skill no tiene formateador (se usa la respuesta del skill).
+   */
+  formatSkillResult(skillName: string, data: any): string {
+    if (!data) return '';
+    const nombre = this.escapeMarkdown(String(data.nombre || data.name || data.titulo || ''));
+    const email = data.email ? ` (${this.escapeMarkdown(String(data.email))})` : '';
+
+    switch (skillName) {
+      case 'create_lead':
+        return `✅ *Lead creado:* ${nombre}${email}`;
+      case 'create_contact':
+        return `✅ *Contacto creado:* ${nombre}${email}`;
+      case 'create_company':
+        return `🏢 *Empresa creada:* ${nombre}${email}`;
+      case 'update_lead':
+        return `✏️ *Lead actualizado:* ${nombre}${email}`;
+      case 'update_contact':
+        return `✏️ *Contacto actualizado:* ${nombre}${email}`;
+      case 'convert_lead':
+        return '🔄 *Lead convertido a contacto* correctamente.';
+      case 'create_task':
+        return `📝 *Tarea creada:* ${nombre}`;
+      default:
+        return '';
+    }
+  },
+
+  /**
    * Construye la respuesta final desde los resultados
    */
   buildResponse(results: Array<{ action: string; output: SkillOutput }>): ExecutionOutput {
@@ -223,8 +273,19 @@ export const ExecutionEngine = {
 
     const last = results[results.length - 1];
 
-    // Respuesta del skill tiene priority
-    if (last.output?.message) {
+    // Prioridad 1: mensaje formateado amigable para skills de CRM
+    const formatted = this.formatSkillResult(last.action, last.output?.data);
+    if (formatted) {
+      return {
+        message: formatted,
+        skill: last.action,
+        data: last.output?.data || undefined,
+        error: !!last.output?.error || false
+      };
+    }
+
+    // Prioridad 2: respuesta del skill (si no es el placeholder genérico "OK")
+    if (last.output?.message && last.output.message !== 'OK') {
       return {
         message: last.output.message,
         skill: last.action,
@@ -236,7 +297,7 @@ export const ExecutionEngine = {
     return {
       message: '✅ Operación completada',
       skill: last.action,
-      data: last.output
+      data: last.output?.data || last.output
     };
   }
 };

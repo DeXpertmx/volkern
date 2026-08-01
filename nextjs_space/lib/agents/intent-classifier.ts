@@ -23,10 +23,18 @@ export class IntentClassifierAgent {
     context?: string;
     userId: string;
     tenantId: string;
+    pendingIntent?: string;
+    collectedEntities?: Record<string, any>;
+    missingEntities?: string[];
   }): Promise<IntentClassification> {
      const startTime = Date.now();
     
-    const systemPrompt = this.buildSystemPrompt(params.context);
+    const systemPrompt = this.buildSystemPrompt(
+      params.context,
+      params.pendingIntent,
+      params.collectedEntities,
+      params.missingEntities
+    );
     const userPrompt = this.buildUserPrompt(params.message);
     console.log(`[IntentClassifier] Using classification-only prompt for: "${params.message}"`);
     
@@ -35,7 +43,7 @@ export class IntentClassifierAgent {
       const response = await callAssistantWithFallback([
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
-      ]);
+      ], 10000);
       
       const content = response.choices[0].message.content;
       console.log(`[IntentClassifier] AI Response: "${content}"`);
@@ -49,8 +57,24 @@ export class IntentClassifierAgent {
         parsed.confidence = Math.min(parsed.confidence, 0.3);
       }
 
+      // Continuar el intent pendiente (multi-turno): si el clasificador devolvió
+      // algo ambiguo pero hay una acción pendiente, mantenerla.
+      if (params.pendingIntent && (parsed.intent === 'unknown' || parsed.intent === 'consulta_general')) {
+        parsed.intent = params.pendingIntent;
+      }
+
       if (Object.keys(parsed.extractedParams || {}).length === 0 && parsed.intent !== 'consulta_general') {
         parsed.extractedParams = this.fallbackExtract(params.message, parsed.intent);
+      }
+
+      // Fusionar entidades ya capturadas en turnos previos (nunca perderlas).
+      // Solo cuando hay un intent pendiente activo: las entidades recolectadas
+      // pertenecen a ese flujo y no deben inyectarse en intents nuevos.
+      if (params.pendingIntent && params.collectedEntities && Object.keys(params.collectedEntities).length > 0) {
+        parsed.extractedParams = {
+          ...params.collectedEntities,
+          ...(parsed.extractedParams || {}),
+        };
       }
 
       await this.logClassification({
@@ -98,39 +122,30 @@ export class IntentClassifierAgent {
     return schema.requiredParams.filter((param: string) => !extractedParams[param]);
   }
 
-  private buildSystemPrompt(context?: string): string {
+  private buildSystemPrompt(
+    context?: string,
+    pendingIntent?: string,
+    collectedEntities?: Record<string, any>,
+    missingEntities?: string[]
+  ): string {
     const intentsList = this.intentsSchema.map(i => 
       `- ${i.name}: ${i.description}. Parámetros requeridos: ${i.requiredParams.join(', ') || 'ninguno'}`
     ).join('\n');
+
+    // Contexto multi-turno: el usuario está completando una acción pendiente
+    let turnContext = '';
+    if (pendingIntent) {
+      const collected = collectedEntities && Object.keys(collectedEntities).length > 0
+        ? JSON.stringify(collectedEntities)
+        : 'ninguno';
+      const missing = missingEntities?.length ? missingEntities.join(', ') : 'ninguno';
+      turnContext = `\n\nCONTEXTO MULTI-TURNO (OBLIGATORIO):\nEl usuario está completando la intención "${pendingIntent}".\nParámetros ya capturados: ${collected}.\nFaltan por capturar: ${missing}.\nDebes mantener la intención "${pendingIntent}" y extraer SOLO los parámetros que falten del mensaje actual.`;
+    }
     
     return `Eres un clasificador de intenciones para Volkern CRM.
 
-INTENCIONES DISPONIBLES:
-${intentsList}
-
-REGLAS ESTRICTAS:
-1. Devuelve SOLO JSON, nada más.
-2. confidence debe ser un número entre 0 y 1.
-3. Si faltan parámetros requeridos, needsMoreInfo = true y lista missingParams.
-4. Si todos los parámetros requeridos están presentes, needsMoreInfo = false.
-5. Para mensajes ambiguos, confidence < 0.7 y usa consulta_general.
-6. Extrae los parámetros del mensaje en extractedParams.
-7. Para fechas relativas ("mañana", "viernes"), conviértelas a YYYY-MM-DD.
-
-FORMATO DE RESPUESTA:
-{
-  "intent": "nombre_intent",
-  "confidence": 0.95,
-  "needsMoreInfo": false,
-  "missingParams": [],
-  "extractedParams": {
-    "nombre": "Juan Pérez",
-    "email": "juan@email.com"
-  }
-}
-
-${context ? `CONTEXTO DE CONVERSACIÓN PREVIA:\n${context}\n` : ''}
-`;
+INTENCIONES DISPONIBLES:\n${intentsList}\n
+REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un número entre 0 y 1.\n3. Si faltan parámetros requeridos, needsMoreInfo = true y lista missingParams.\n4. Si todos los parámetros requeridos están presentes, needsMoreInfo = false.\n5. Para mensajes ambiguos, confidence < 0.7 y usa consulta_general.\n6. Extrae los parámetros del mensaje en extractedParams.\n7. Para fechas relativas ("mañana", "viernes"), conviértelas a YYYY-MM-DD.\n\nFORMATO DE RESPUESTA:\n{\n  "intent": "nombre_intent",\n  "confidence": 0.95,\n  "needsMoreInfo": false,\n  "missingParams": [],\n  "extractedParams": {\n    "nombre": "Juan Pérez",\n    "email": "juan@email.com"\n  }\n}\n\n${context ? `CONTEXTO DE CONVERSACIÓN PREVIA:\n${context}\n` : ''}${turnContext}\n`;
   }
 
   private buildUserPrompt(message: string): string {

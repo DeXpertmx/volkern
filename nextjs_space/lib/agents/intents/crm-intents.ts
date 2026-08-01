@@ -8,13 +8,40 @@ export const crmIntents: IntentSchema[] = [
   // ========== CONTACTOS & LEADS ==========
   {
     name: 'crear_lead',
-    description: 'Crear un nuevo lead o contacto en el sistema',
-    requiredParams: ['nombre', 'email', 'contexto'],
-    optionalParams: ['telefono', 'empresa'],
+    description: 'Crear un nuevo lead (prospecto sin formalizar) en el sistema',
+    requiredParams: ['nombre', 'email'],
+    optionalParams: ['telefono', 'empresa', 'contexto', 'cargo', 'fuente'],
     examples: [
       'agrega a Juan Pérez con email juan@email.com por tema de ventas',
       'nuevo lead: María García, maria@empresa.com, tel 123456789, contexto: interesado en software',
-      'crea un contacto llamado Carlos Ruiz con email carlos@test.com para seguimiento'
+      'registra el lead Carlos Ruiz, carlos@test.com, de la empresa Acme',
+      'agrega un lead: Ana Torres, ana@torres.com, tel 5551234'
+    ],
+    destructive: false
+  },
+  {
+    name: 'crear_contacto',
+    description: 'Crear un nuevo contacto (persona ya formalizada) en el sistema',
+    requiredParams: ['nombre', 'email'],
+    optionalParams: ['telefono', 'empresa', 'contexto', 'cargo', 'linkedin', 'ubicacion'],
+    examples: [
+      'agrega el contacto Laura Gómez con email laura@empresa.com',
+      'crea un contacto llamado Pedro Sánchez, pedro@test.com, tel 987654321',
+      'nuevo contacto: Sofía Ruiz, sofia@ruiz.com, de la empresa Ruiz y Asociados',
+      'registra el contacto Carlos Díaz, carlos@diaz.com'
+    ],
+    destructive: false
+  },
+  {
+    name: 'crear_empresa',
+    description: 'Crear una nueva empresa o compañía en el sistema',
+    requiredParams: ['nombre'],
+    optionalParams: ['email', 'telefono', 'contexto', 'ubicacion', 'linkedin', 'tags'],
+    examples: [
+      'crea la empresa Acme Corporation',
+      'agrega una empresa nueva: Tecnologías del Norte, contacto@tnorte.com',
+      'registra la empresa Ruiz y Asociados con teléfono 555-0101',
+      'nueva empresa: Global Soft, gsoft@corp.com, ubicada en Ciudad de México'
     ],
     destructive: false
   },

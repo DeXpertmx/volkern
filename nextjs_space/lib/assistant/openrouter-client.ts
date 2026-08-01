@@ -48,59 +48,73 @@ export interface OpenRouterResponse {
   };
 }
 
-export async function callOpenRouter(model: string, messages: OpenRouterMessage[], temperature = 0.3, maxTokens = 8192): Promise<OpenRouterResponse> {
+export async function callOpenRouter(model: string, messages: OpenRouterMessage[], temperature = 0.3, maxTokens = 8192, timeoutMs = 20000): Promise<OpenRouterResponse> {
   if (!OPENROUTER_API_KEY) {
     throw new Error('OPENROUTER_API_KEY no configurada');
   }
 
-  const response = await fetch(OPENROUTER_BASE_URL, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://volkern.app',
-      'X-Title': 'Volkern CRM Assistant',
-      'X-No-Logging': 'true'
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature,
-      max_tokens: maxTokens,
-      top_p: 0.9
-    })
-  });
+  // Timeout acotado: si el proveedor no responde, el pipeline cae al siguiente
+  // fallback en vez de colgar el webhook de Telegram (límite ~25-30s).
+  // El llamador puede pasar un timeout menor en caminos con presupuesto de
+  // tiempo estricto (chatbot) o mayor en generaciones largas (Web Creator).
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`OpenRouter error (${model}): ${response.status} - ${error}`);
+  try {
+    const response = await fetch(OPENROUTER_BASE_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://volkern.app',
+        'X-Title': 'Volkern CRM Assistant',
+        'X-No-Logging': 'true'
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature,
+        max_tokens: maxTokens,
+        top_p: 0.9
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`OpenRouter error (${model}): ${response.status} - ${error}`);
+    }
+
+    const data = await response.json();
+
+    if (!data?.choices?.[0]?.message?.content) {
+      throw new Error(`${model} retornó respuesta vacía o nula`);
+    }
+
+    return data;
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  const data = await response.json();
-
-  if (!data?.choices?.[0]?.message?.content) {
-    throw new Error(`${model} retornó respuesta vacía o nula`);
-  }
-
-  return data;
 }
 
 /**
  * Llama a google/gemma-4-31b-it:free via OpenRouter.
  */
 async function callGemma4(
-  messages: OpenRouterMessage[]
+  messages: OpenRouterMessage[],
+  timeoutMs = 20000
 ): Promise<OpenRouterResponse> {
-  return callOpenRouter('google/gemma-4-31b-it:free', messages, 0.3);
+  return callOpenRouter('google/gemma-4-31b-it:free', messages, 0.3, 8192, timeoutMs);
 }
 
 /**
  * Llama a nvidia/nemotron-3-ultra-550b-a55b:free via OpenRouter.
  */
 async function callNemotron(
-  messages: OpenRouterMessage[]
+  messages: OpenRouterMessage[],
+  timeoutMs = 20000
 ): Promise<OpenRouterResponse> {
-  return callOpenRouter('nvidia/nemotron-3-ultra-550b-a55b:free', messages, 0.3);
+  return callOpenRouter('nvidia/nemotron-3-ultra-550b-a55b:free', messages, 0.3, 8192, timeoutMs);
 }
 
 /**
@@ -109,7 +123,8 @@ async function callNemotron(
  */
 async function callDeepSeekV4FlashDirect(
   messages: OpenRouterMessage[],
-  tools?: OpenRouterTool[]
+  tools?: OpenRouterTool[],
+  timeoutMs = 20000
 ): Promise<OpenRouterResponse> {
   if (!DEEPSEEK_API_KEY) {
     throw new Error('DEEPSEEK_API_KEY no configurada');
@@ -128,36 +143,49 @@ async function callDeepSeekV4FlashDirect(
     body.tool_choice = 'auto';
   }
 
-  const response = await fetch(`${DEEPSEEK_BASE_URL}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body)
-  });
+  // Timeout acotado: DeepSeek directo debe responder rápido; si se cuelga,
+  // el fallback (OpenRouter/Gemma) toma el relevo sin colgar el webhook.
+  // En el camino caliente del chatbot se pasa 10s para entrar al fallback
+  // antes del límite de 25s del webhook de Telegram.
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`DeepSeek V4 Flash error: ${response.status} - ${error}`);
+  try {
+    const response = await fetch(`${DEEPSEEK_BASE_URL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`DeepSeek V4 Flash error: ${response.status} - ${error}`);
+    }
+
+    const data = await response.json();
+
+    if (!data?.choices?.[0]?.message?.content) {
+      throw new Error('DeepSeek V4 Flash retornó respuesta vacía o nula');
+    }
+
+    return data;
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  const data = await response.json();
-
-  if (!data?.choices?.[0]?.message?.content) {
-    throw new Error('DeepSeek V4 Flash retornó respuesta vacía o nula');
-  }
-
-  return data;
 }
 
 /**
  * Llama a deepseek/deepseek-chat:free via OpenRouter (fallback si la API directa falla).
  */
 async function callDeepSeekChat(
-  messages: OpenRouterMessage[]
+  messages: OpenRouterMessage[],
+  timeoutMs = 20000
 ): Promise<OpenRouterResponse> {
-  return callOpenRouter('deepseek/deepseek-chat:free', messages, 0.4, 8192);
+  return callOpenRouter('deepseek/deepseek-chat:free', messages, 0.4, 8192, timeoutMs);
 }
 
 /**
@@ -174,7 +202,9 @@ export async function callWebCreatorWithFallback(
   // 1. DeepSeek V4 Flash directo
   try {
     console.log('[AI WebCreator] Intentando DeepSeek V4 Flash (API directa)...');
-    const response = await callDeepSeekV4FlashDirect(messages);
+    // Generaciones largas (hasta 8K tokens): timeout amplio para no caer en
+    // fallbacks espurios por latencia legítima.
+    const response = await callDeepSeekV4FlashDirect(messages, undefined, 45000);
     console.log('[AI WebCreator] ✅ DeepSeek V4 Flash respondió correctamente');
     return response;
   } catch (error) {
@@ -184,7 +214,7 @@ export async function callWebCreatorWithFallback(
   // 2. DeepSeek Chat via OpenRouter
   try {
     console.log('[AI WebCreator] Fallback a deepseek/deepseek-chat:free...');
-    const response = await callDeepSeekChat(messages);
+    const response = await callDeepSeekChat(messages, 45000);
     console.log('[AI WebCreator] ✅ DeepSeek Chat respondió correctamente');
     return response;
   } catch (error) {
@@ -194,7 +224,7 @@ export async function callWebCreatorWithFallback(
   // 3. Gemma 4 via OpenRouter
   try {
     console.log('[AI WebCreator] Fallback a google/gemma-4-31b-it:free...');
-    const response = await callGemma4(messages);
+    const response = await callGemma4(messages, 45000);
     console.log('[AI WebCreator] ✅ Gemma 4 respondió correctamente');
     return response;
   } catch (error) {
@@ -204,7 +234,7 @@ export async function callWebCreatorWithFallback(
   // 4. Nemotron
   try {
     console.log('[AI WebCreator] Fallback a nvidia/nemotron-3-ultra-550b-a55b:free...');
-    const response = await callNemotron(messages);
+    const response = await callNemotron(messages, 45000);
     console.log('[AI WebCreator] ✅ Nemotron respondió correctamente');
     return response;
   } catch (error) {
@@ -227,7 +257,8 @@ export async function callWebCreatorWithFallback(
  * Llama a Google Gemini 2.5 Flash directamente (fallback cuando OpenRouter falla o como último recurso).
  */
 async function callGemini25Flash(
-  messages: OpenRouterMessage[]
+  messages: OpenRouterMessage[],
+  timeoutMs = 90000
 ): Promise<OpenRouterResponse> {
   const GOOGLE_AI_KEY = process.env.GOOGLE_AI_KEY;
   const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GOOGLE_AI_KEY}`;
@@ -249,7 +280,7 @@ async function callGemini25Flash(
   }
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 90000);
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   const response = await fetch(API_URL, {
     method: 'POST',
@@ -297,13 +328,21 @@ async function callGemini25Flash(
  * 5. Google Gemini 2.5 Flash directo (respaldo final)
  */
 export async function callAssistantWithFallback(
-  messages: OpenRouterMessage[]
+  messages: OpenRouterMessage[],
+  timeoutMs?: number
 ): Promise<OpenRouterResponse> {
+  // Timeout por hop de la cadena de fallback.
+  // - Default 20s: preserve el comportamiento para jobs en background
+  //   (summarizer, analyzer, etc.) que generan texto largo y antes no tenían timeout.
+  // - Camino caliente del chatbot (intent-classifier / fact-extractor) pasa 10s
+  //   para que TODA la cadena entre en el presupuesto de 25s del webhook.
+  const hopTimeout = timeoutMs ?? 20000
+
   // 1. DeepSeek V4 Flash directo
   if (DEEPSEEK_API_KEY) {
     try {
       console.log('[AI] Intentando DeepSeek V4 Flash (API directa)...');
-      const response = await callDeepSeekV4FlashDirect(messages);
+      const response = await callDeepSeekV4FlashDirect(messages, undefined, hopTimeout);
       console.log('[AI] ✅ DeepSeek V4 Flash respondió correctamente');
       return response;
     } catch (deepseekError) {
@@ -314,7 +353,7 @@ export async function callAssistantWithFallback(
   // 2. DeepSeek Chat via OpenRouter
   try {
     console.log('[AI] Fallback a deepseek/deepseek-chat:free...');
-    const response = await callDeepSeekChat(messages);
+    const response = await callDeepSeekChat(messages, hopTimeout);
     console.log('[AI] ✅ DeepSeek Chat respondió correctamente');
     return response;
   } catch (deepseekChatError) {
@@ -324,7 +363,7 @@ export async function callAssistantWithFallback(
   // 3. Gemma 4 via OpenRouter
   try {
     console.log('[AI] Fallback a google/gemma-4-31b-it:free...');
-    const response = await callGemma4(messages);
+    const response = await callGemma4(messages, hopTimeout);
     console.log('[AI] ✅ Gemma 4 respondió correctamente');
     return response;
   } catch (gemmaError) {
@@ -334,7 +373,7 @@ export async function callAssistantWithFallback(
   // 4. Nemotron via OpenRouter
   try {
     console.log('[AI] Fallback a nvidia/nemotron-3-ultra-550b-a55b:free...');
-    const response = await callNemotron(messages);
+    const response = await callNemotron(messages, hopTimeout);
     console.log('[AI] ✅ Nemotron respondió correctamente');
     return response;
   } catch (nemotronError) {
@@ -344,7 +383,9 @@ export async function callAssistantWithFallback(
   // 5. Fallback final: Google Gemini 2.5 Flash directo
   try {
     console.log('[AI] Fallback final a Google Gemini 2.5 Flash...');
-    const response = await callGemini25Flash(messages);
+    // En el camino caliente el último recurso también debe caber en el
+    // presupuesto del webhook: mínimo 30s (no 90s fijos).
+    const response = await callGemini25Flash(messages, Math.max(hopTimeout, 30000));
     console.log('[AI] ✅ Gemini respondió correctamente');
     return response;
   } catch (geminiError) {
@@ -480,7 +521,7 @@ export async function callOpenRouterWithFallback(
   // 1. Modelo configurado via OpenRouter
   try {
     console.log(`[AI] Intentando ${model} via OpenRouter...`);
-    const response = await callOpenRouter(model, messages, temperature, maxTokens);
+    const response = await callOpenRouter(model, messages, temperature, maxTokens, 45000);
     console.log(`[AI] ✅ ${model} respondió correctamente`);
     return response;
   } catch (openRouterError) {

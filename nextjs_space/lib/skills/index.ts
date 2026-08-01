@@ -142,12 +142,114 @@ const updateLeadWrapper = async (input: { tenantId: string; email?: string; nomb
   throw new Error(`No se encontró ningún contacto ni lead para actualizar.`);
 };
 
-const createLeadWrapper = async (input: { tenantId: string; nombre: string; email: string; telefono?: string; notas?: string; contexto?: string; empresa?: string; origen?: string; fuente?: string }) => {
-  const { contexto, notas, origen, ...rest } = input;
+const createLeadWrapper = async (input: { tenantId: string; nombre: string; email: string; telefono?: string; notas?: string; contexto?: string; empresa?: string; origen?: string; fuente?: string; cargo?: string }) => {
+  const { contexto, notas, origen, cargo, ...rest } = input;
   return contactSkills.createLead({
     ...rest,
     fuente: origen || rest.fuente,
+    cargo: cargo,
     notas: contexto || notas
+  });
+};
+
+/**
+ * Wrapper create_contact: mapea params español del chatbot y, si se indica
+ * una empresa, la busca o crea (contacto tipo company) para vincularla.
+ */
+const createContactWrapper = async (input: {
+  tenantId: string;
+  nombre: string;
+  email: string;
+  telefono?: string;
+  cargo?: string;
+  empresa?: string;
+  contexto?: string;
+  notas?: string;
+  linkedin?: string;
+  ubicacion?: string;
+  tags?: string;
+  userId?: string;
+}) => {
+  const { tenantId, nombre, email, telefono, cargo, empresa, contexto, notas, linkedin, ubicacion, tags, userId } = input;
+
+  let companyId: string | undefined;
+  if (empresa && empresa.trim()) {
+    const { prisma } = await import('@/lib/db');
+    let company = await prisma.contact.findFirst({
+      where: { tenantId, tipo: 'company', nombre: { equals: empresa.trim(), mode: 'insensitive' } },
+    });
+    if (!company) {
+      company = await prisma.contact.create({
+        data: {
+          tenantId,
+          nombre: empresa.trim(),
+          email: `empresa-${empresa.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()}-${Date.now()}@volkern.app`,
+          tipo: 'company',
+          notas: 'Empresa creada automáticamente desde el chatbot',
+        },
+      });
+    }
+    companyId = company.id;
+  }
+
+  return contactSkills.createContact({
+    tenantId,
+    nombre,
+    email,
+    telefono,
+    cargo,
+    linkedin,
+    ubicacion,
+    tags,
+    notas: contexto || notas,
+    companyId,
+    userId,
+    source: 'webhook',
+  });
+};
+
+/**
+ * Wrapper create_company: crea una empresa (contacto tipo company).
+ * Si no llega email, genera uno corporativo de respaldo (mismo patrón que la
+ * conversión de leads en app/api/leads/[id]/convert/route.ts).
+ */
+const createCompanyWrapper = async (input: {
+  tenantId: string;
+  nombre: string;
+  email?: string;
+  telefono?: string;
+  contexto?: string;
+  notas?: string;
+  ubicacion?: string;
+  linkedin?: string;
+  tags?: string;
+  userId?: string;
+}) => {
+  const { tenantId, nombre, email, telefono, contexto, notas, ubicacion, linkedin, tags, userId } = input;
+
+  // Idempotencia por nombre: si ya existe una empresa con ese nombre, no duplicar
+  const { prisma } = await import('@/lib/db');
+  const existing = await prisma.contact.findFirst({
+    where: { tenantId, tipo: 'company', nombre: { equals: nombre.trim(), mode: 'insensitive' } },
+  });
+  if (existing) {
+    return existing;
+  }
+
+  const finalEmail = email?.trim() || `empresa-${nombre.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()}-${Date.now()}@volkern.app`;
+
+  return contactSkills.createContact({
+    tenantId,
+    nombre,
+    email: finalEmail,
+    telefono,
+    tipo: 'company',
+    ubicacion,
+    linkedin,
+    tags,
+    notas: contexto || notas,
+    userId,
+    source: 'webhook',
   });
 };
 
@@ -669,11 +771,14 @@ const cancelBookingWrapper = async (input: {
 
 export const skills = {
   // Contactos
-  create_contact: contactSkills.createContact,
+  create_contact: createContactWrapper,
   update_contact: contactSkills.updateContact,
   get_contact: contactSkills.getContact,
   find_contact_by_email: findContactByEmailWrapper,
   list_contacts: contactSkills.listContacts,
+
+  // Empresas (contactos tipo company)
+  create_company: createCompanyWrapper,
   
   // Leads
   create_lead: createLeadWrapper,
@@ -859,6 +964,8 @@ export function listSkills(): Array<{ name: SkillName; description: string; cate
     { name: 'get_contact', description: 'Obtener contacto por ID', category: 'contacts' },
     { name: 'find_contact_by_email', description: 'Buscar contacto por email', category: 'contacts' },
     { name: 'list_contacts', description: 'Listar todos los contactos del tenant, con paginación', category: 'contacts' },
+    // Empresas
+    { name: 'create_company', description: 'Crear una nueva empresa (contacto tipo company)', category: 'companies' },
     // Leads
     { name: 'create_lead', description: 'Crear un nuevo lead', category: 'leads' },
     { name: 'get_lead', description: 'Obtener lead por ID', category: 'leads' },

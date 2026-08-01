@@ -3,6 +3,7 @@ import { KnowledgeService } from '@/lib/knowledge/knowledge-service'
 import { callAssistantWithFallback, callAssistantWithToolLoop, OpenRouterMessage, OpenRouterTool } from '@/lib/assistant/openrouter-client'
 import { ChatMemoryService, filterClickedQuickReplies, isQuickReplyMatch } from '@/lib/chat/chat-memory'
 import { extractFacts, formatFacts } from '@/lib/agents/fact-extractor'
+import type { ExtractedFact } from '@/lib/agents/fact-extractor'
 import { rerankResults, buildKbBlock } from '@/lib/knowledge/reranker'
 import { needsSummarization, generateSummary, buildSummaryBlock } from '@/lib/chat/conversation-summarizer'
 import { analyzeConversation } from '@/lib/chat/conversation-analyzer'
@@ -47,6 +48,11 @@ const MISSING_ENTITY_PROMPTS: Record<string, string> = {
   email: '📧 ¿Cuál es el correo electrónico?',
   phone: '📱 ¿Cuál es el número de teléfono?',
   telefono: '📱 ¿Cuál es el número de teléfono?',
+  empresa: '🏢 ¿Cuál es su empresa?',
+  cargo: '💼 ¿Cuál es su cargo o puesto?',
+  linkedin: '🔗 ¿Cuál es su perfil de LinkedIn?',
+  ubicacion: '📍 ¿Cuál es su ubicación?',
+  tags: '🏷️ ¿Algunas etiquetas? (separadas por coma)',
   monto: '💰 ¿Cuál es el monto?',
   concepto: '📝 ¿Cuál es el concepto?',
   titulo: '📝 ¿Cuál es el título?',
@@ -151,75 +157,105 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
       context: context.facts?.length > 0
         ? 'Hechos conocidos: ' + context.facts.join(', ')
         : undefined,
+      // Contexto multi-turno: el clasificador continúa la acción pendiente
+      pendingIntent: context.pendingIntent,
+      collectedEntities: context.collectedEntities,
+      missingEntities: context.missingEntities,
     })
 
-    // ═══ FASE 2: EXTRAER FACTS DEL CLIENTE (en paralelo) ═══
-    const newFacts = await extractFacts(message, context.facts, {
-      intent: classification.intent,
-      tenantName: tenant?.nombre,
-    })
+    // ═══ 1b. ¿ES ACCIÓN EJECUTABLE? ═══
+    // Se calcula ANTES del RAG: para acciones (crear contacto, agendar, etc.)
+    // no se necesitan embeddings ni reranker (solo sirven a consultas generales),
+    // y omitirlos evita que el pipeline exceda el timeout de 25s de Telegram.
+    const isActionable = classification.intent !== 'consulta_general'
+      && classification.intent !== 'unknown'
+      && classification.confidence >= 0.5
 
-    if (newFacts.length > 0) {
-      const factStrings = formatFacts(newFacts)
-      for (const fact of factStrings) {
-        await memory.addFact(conv.id, fact)
-      }
-      // Recargar contexto con los nuevos facts
-      context.facts = [...context.facts, ...factStrings]
-    }
-
-    // ═══ FASE 2: RAG CON RE-RANKING (en paralelo) ═══
-    // Solo buscar en KB si el RAG está activo en la configuración
-    const kbArticles = config.ragActivo !== false
-      ? await KnowledgeService.searchSemantic(tenantId, message).catch(err => {
-          console.warn('[ChatbotService] Error en búsqueda semántica de KB:', err)
-          return []
-        })
-      : []
-
-    // ═══ FASE 2b: CATÁLOGO VISIBLE PARA CHATBOT ═══
-    const catalogItems = config.ragActivo !== false
-      ? await KnowledgeService.searchCatalogItems(tenantId, message).catch(err => {
-          console.warn('[ChatbotService] Error en búsqueda de catálogo:', err)
-          return []
-        })
-      : []
-
-    let kbSection = ''
-    if (kbArticles.length > 0) {
-      // Pasar por el reranker para mejorar relevancia
-      const conversationContext = context.facts.length > 0
-        ? context.facts.slice(-5).join('. ')
-        : undefined
-
-      const rankedResults = await rerankResults(
-        message,
-        kbArticles.map(a => ({
-          ...a,
-          similarity: (a as any).similarity,
-        })),
-        conversationContext
-      ).catch(err => {
-        console.warn('[ChatbotService] Error en reranker, usando resultados originales:', err)
-        return null
+    // ═══ FASE 2: EXTRAER FACTS DEL CLIENTE ═══
+    // Para acciones: fire-and-forget (los facts se persisten para turnos futuros
+    // sin bloquear la ejecución del skill — una llamada LLM menos en el camino crítico).
+    // Para consultas: se espera porque los facts nuevos enriquecen la respuesta del LLM.
+    let newFacts: ExtractedFact[] = []
+    if (isActionable) {
+      extractFacts(message, context.facts, {
+        intent: classification.intent,
+        tenantName: tenant?.nombre,
+      }).then(facts => {
+        if (facts.length > 0) {
+          const factStrings = formatFacts(facts)
+          return Promise.all(factStrings.map(f => memory.addFact(conv.id, f)))
+        }
+      }).catch(err => console.warn('[ChatbotService] Error extrayendo facts (fire-and-forget):', err))
+    } else {
+      newFacts = await extractFacts(message, context.facts, {
+        intent: classification.intent,
+        tenantName: tenant?.nombre,
       })
 
-      if (rankedResults && rankedResults.length > 0) {
-        kbSection = buildKbBlock(rankedResults)
-      } else {
-        // Fallback: estructura original
-        kbSection = '\n\nINFORMACIÓN DE REFERENCIA:\n' + kbArticles.slice(0, 3).map(a =>
-          `[${a.category}] ${a.title}: ${a.content.substring(0, 400)}`
-        ).join('\n')
+      if (newFacts.length > 0) {
+        const factStrings = formatFacts(newFacts)
+        for (const fact of factStrings) {
+          await memory.addFact(conv.id, fact)
+        }
+        // Recargar contexto con los nuevos facts
+        context.facts = [...context.facts, ...factStrings]
       }
     }
 
-    // ═══ Inyectar resultados del catálogo ═══
+    // ═══ FASE 2: RAG CON RE-RANKING (solo para consultas, no para acciones) ═══
+    let kbSection = ''
     let catalogSection = ''
-    if (catalogItems.length > 0) {
-      catalogSection = '\n\nCATÁLOGO DE PRODUCTOS/SERVICIOS DISPONIBLES:\n' + catalogItems.map(item =>
-        `[${item.category}] ${item.title}: ${(item.content || '').substring(0, 400)}`
-      ).join('\n')
+    if (!isActionable) {
+      // Solo buscar en KB si el RAG está activo en la configuración
+      const kbArticles = config.ragActivo !== false
+        ? await KnowledgeService.searchSemantic(tenantId, message).catch(err => {
+            console.warn('[ChatbotService] Error en búsqueda semántica de KB:', err)
+            return []
+          })
+        : []
+
+      // ═══ FASE 2b: CATÁLOGO VISIBLE PARA CHATBOT ═══
+      const catalogItems = config.ragActivo !== false
+        ? await KnowledgeService.searchCatalogItems(tenantId, message).catch(err => {
+            console.warn('[ChatbotService] Error en búsqueda de catálogo:', err)
+            return []
+          })
+        : []
+
+      if (kbArticles.length > 0) {
+        // Pasar por el reranker para mejorar relevancia
+        const conversationContext = context.facts.length > 0
+          ? context.facts.slice(-5).join('. ')
+          : undefined
+
+        const rankedResults = await rerankResults(
+          message,
+          kbArticles.map(a => ({
+            ...a,
+            similarity: (a as any).similarity,
+          })),
+          conversationContext
+        ).catch(err => {
+          console.warn('[ChatbotService] Error en reranker, usando resultados originales:', err)
+          return null
+        })
+
+        if (rankedResults && rankedResults.length > 0) {
+          kbSection = buildKbBlock(rankedResults)
+        } else {
+          // Fallback: estructura original
+          kbSection = '\n\nINFORMACIÓN DE REFERENCIA:\n' + kbArticles.slice(0, 3).map(a =>
+            `[${a.category}] ${a.title}: ${a.content.substring(0, 400)}`
+          ).join('\n')
+        }
+      }
+
+      // ═══ Inyectar resultados del catálogo ═══
+      if (catalogItems.length > 0) {
+        catalogSection = '\n\nCATÁLOGO DE PRODUCTOS/SERVICIOS DISPONIBLES:\n' + catalogItems.map(item =>
+          `[${item.category}] ${item.title}: ${(item.content || '').substring(0, 400)}`
+        ).join('\n')
+      }
     }
 
     // ═══ FASE 2: RESUMEN AUTOMÁTICO ═══
@@ -233,10 +269,6 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
       recentMessages.length,
       (context.summary as any)?.version
     )
-
-    const isActionable = classification.intent !== 'consulta_general'
-      && classification.intent !== 'unknown'
-      && classification.confidence >= 0.5
 
     // ═══ HELPER: Generar resumen si es necesario (fire-and-forget) ═══
     const triggerSummary = () => {
@@ -334,6 +366,13 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
             : JSON.stringify(executionResult.data)
         }
 
+        // Limpiar estado multi-turno tras la ejecución (evita duplicados)
+        await memory.updateContext(conv.id, {
+          pendingIntent: undefined,
+          missingEntities: [],
+          collectedEntities: {},
+        })
+
         const action: ChatbotOutput['action'] =
           classification.intent === 'agendar_cita' ? 'agendar' :
           classification.intent === 'contactar_humano' ? 'transferir' :
@@ -380,6 +419,13 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
       // Caso 2b: El orquestador devolvió una respuesta directa (falta de acceso, etc.)
       if (planResult.success && planResult.response) {
         const finalMessage = planResult.response
+
+        // Limpiar estado multi-turno (respuesta sin ejecución)
+        await memory.updateContext(conv.id, {
+          pendingIntent: undefined,
+          missingEntities: [],
+          collectedEntities: {},
+        })
 
         await memory.addMessage({
           conversationId: conv.id,
