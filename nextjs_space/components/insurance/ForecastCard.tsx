@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   FlaskConical,
   Activity,
+  MessageSquare,
 } from 'lucide-react';
 import { formatCurrency } from '@/components/insurance/portfolio-format';
 
@@ -40,6 +41,17 @@ export interface ForecastAccuracy {
   bandaMultiplicador: number;
 }
 
+export interface ForecastAlert {
+  /** True cuando la alerta proactiva se disparó en esta llamada. */
+  enviado: boolean;
+  /** ID de la conversación creada/reusada por el chatbot. */
+  conversationId?: string;
+  /** Razón cuando NO se disparó (cooldown, slope positivo, etc.). */
+  reason?: string;
+  /** Texto humano interpretativo. */
+  detail?: string;
+}
+
 export interface ForecastData {
   generado: string;
   ventana: ForecastPoint[];
@@ -52,6 +64,8 @@ export interface ForecastData {
   r2: number;
   mensaje: string;
   accuracy?: ForecastAccuracy;
+  /** Proactividad forecast → chatbot: si slope<0 y R²>0.4, abre conversación. */
+  alert?: ForecastAlert | null;
 }
 
 interface ForecastCardProps {
@@ -90,6 +104,7 @@ export function ForecastCard({ data, loading }: ForecastCardProps) {
     slope = 0,
     mensaje = '',
     accuracy = EMPTY_ACCURACY,
+    alert = null,
   } = data ?? ({} as Partial<ForecastData>);
 
   // ─── Geometría SVG ────────────────────────────────────────────────
@@ -331,6 +346,30 @@ export function ForecastCard({ data, loading }: ForecastCardProps) {
           Próx.
         </div>
       </div>
+
+      {/* Chip CTA: alerta proactiva forecast → chatbot */}
+      {alert?.enviado && (
+        <div
+          className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-md bg-indigo-50 ring-1 ring-indigo-200 hover:bg-indigo-100 transition-colors"
+          data-testid="forecast-alert-chip"
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <MessageSquare className="w-4 h-4 text-indigo-700 flex-shrink-0" />
+            <p className="text-sm text-indigo-900 truncate">
+              El chatbot acaba de abrir una conversación proponiéndote revisar
+              las pólizas sin renovación próxima.
+            </p>
+          </div>
+          <a
+            href={alert.conversationId ? `/comunicaciones?conversationId=${alert.conversationId}` : '/comunicaciones'}
+            className="flex-shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors"
+            aria-label="Abrir la conversación propuesta por el chatbot"
+          >
+            <MessageSquare className="w-3 h-3" />
+            Abrir conversación
+          </a>
+        </div>
+      )}
 
       {/* Mensaje interpretativo */}
       <div className={`text-xs px-3 py-2 rounded-md ${

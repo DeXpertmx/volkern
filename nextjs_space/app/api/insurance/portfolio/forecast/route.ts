@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
+import { triggerPortfolioRenewalsAlert } from '@/lib/insurance/forecast-alert';
 
 /**
  * GET /api/insurance/portfolio/forecast
@@ -272,6 +273,7 @@ export async function GET(request: NextRequest) {
             ? 'Sin actividad en los últimos 6 meses'
             : `Pocos meses con actividad (${mesesConActividad}/6) — se necesita más historial`,
         accuracy,
+        alert: null, // sin slope real, no hay alerta que evaluar
       });
     }
 
@@ -292,6 +294,7 @@ export async function GET(request: NextRequest) {
         r2: 0,
         mensaje: 'No se pudo estimar la pendiente con los datos disponibles',
         accuracy,
+        alert: null, // pendiente indefinida, no hay alerta
       });
     }
 
@@ -335,8 +338,9 @@ export async function GET(request: NextRequest) {
     // se hace el 15 de febrero, el log dice "mesProyectado=2026-03-01".
     const mesProyectado = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
+    let currentForecastLogId: string | null = null;
     try {
-      await prisma.portfolioForecastLog.upsert({
+      const persisted = await prisma.portfolioForecastLog.upsert({
         where: {
           tenantId_mesProyectado_sourceVersion: {
             tenantId: auth.tenant!.id,
@@ -365,10 +369,22 @@ export async function GET(request: NextRequest) {
           ventanaMeses: WINDOW,
         },
       });
+      currentForecastLogId = persisted.id;
     } catch (logError) {
       // El log es audit, no debe romper la respuesta al cliente.
       console.error('[forecast] No se pudo persistir el log:', logError);
     }
+
+    // ─── Proactividad forecast → chatbot ─────────────────────────
+    // Si la pendiente es negativa con buen ajuste, abre una conversación
+    // proactiva con el chatbot proponiendo revisar las pólizas sin renovación
+    // próxima. Idempotente: cooldown interno de 7d vía portfolioForecastLog.
+    const alert = await triggerPortfolioRenewalsAlert(
+      auth.tenant!.id,
+      reg.slope,
+      r2,
+      currentForecastLogId,
+    );
 
     // ─── Backfill de logs cuyo mes apuntado ya cerró ────────────────
     // Para cada log con `mesProyectado < ahora` y `real IS NULL`, intenta
@@ -431,6 +447,7 @@ export async function GET(request: NextRequest) {
         r2,
         mensaje: `Modelo experimental (MAPE ${(accuracyFinal.mape * 100).toFixed(0)}% últimos ${accuracyFinal.dias}d) — usa la banda amplia como referencia`,
         accuracy: accuracyFinal,
+        alert, // ya calculado antes del backfill
       });
     }
 
@@ -446,6 +463,7 @@ export async function GET(request: NextRequest) {
       r2,
       mensaje,
       accuracy: accuracyFinal,
+      alert,
     });
   } catch (error) {
     console.error('Error al obtener forecast del portfolio:', error);

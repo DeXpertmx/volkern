@@ -7640,9 +7640,18 @@ model PortfolioForecastLog {
   generadoEn        DateTime  @default(now())
   backfilledEn      DateTime?
 
+  // ─── Proactive alert side-effects (forecast → chatbot) ───
+  // Cuando el forecast detecta slope<0 y R²>0.4, abre una conversación
+  // proactiva con el chatbot. Estos campos guardan el "ya lo hicimos"
+  // para idempotencia: si la alerta ya se disparó en los últimos 7 días,
+  // no repetimos.
+  alertaEnviadaAt        DateTime?
+  alertaConversacionId   String?
+
   @@unique([tenantId, mesProyectado, sourceVersion])
   @@index([tenantId])
   @@index([generadoEn])
   @@index([real])
+  @@index([alertaEnviadaAt])
   @@map("portfolio_forecast_log")
 }
