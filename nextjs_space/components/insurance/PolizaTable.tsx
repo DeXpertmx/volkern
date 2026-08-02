@@ -13,6 +13,7 @@ import {
   ChevronRight,
   FileDown,
   Upload,
+  LayoutGrid,
 } from 'lucide-react';
 
 interface PolizaTableProps {
@@ -26,6 +27,8 @@ interface PolizaTableProps {
   onNewPoliza: () => void;
   onImport: () => void;
   onRowClick: (id: string) => void;
+  /** Callback para volver a vista cards. Sin él, el toggle table⇄cards no se muestra. */
+  onSwitchToCards?: () => void;
 }
 
 const RAMOS = [
@@ -55,6 +58,7 @@ export function PolizaTable({
   onNewPoliza,
   onImport,
   onRowClick,
+  onSwitchToCards,
 }: PolizaTableProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [estadoFilter, setEstadoFilter] = useState('');
@@ -100,6 +104,16 @@ export function PolizaTable({
           </Button>
         </div>
         <div className="flex gap-2">
+          {onSwitchToCards && (
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={onSwitchToCards}
+              title="Cambiar a vista de tarjetas"
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </Button>
+          )}
           <Button variant="outline" onClick={onImport}>
             <Upload className="w-4 h-4 mr-2" />
             Importar
