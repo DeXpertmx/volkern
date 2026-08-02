@@ -134,7 +134,8 @@ export default function NuevaOrdenVentaPage() {
 
         if (leadsRes.ok) {
           const data = await leadsRes.json();
-          setLeads(data.leads || []);
+          // /api/leads devuelve un array pelado (no { leads }): soportar ambos
+          setLeads(Array.isArray(data) ? data : data.leads || []);
         }
         if (contactsRes.ok) {
           const data = await contactsRes.json();

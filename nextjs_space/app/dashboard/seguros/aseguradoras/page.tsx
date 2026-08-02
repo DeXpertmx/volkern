@@ -75,7 +75,8 @@ export default function AseguradorasPage() {
       const res = await apiFetch(`/api/insurance/aseguradoras?${params.toString()}`);
       const data = await res.json();
       if (res.ok) {
-        setAseguradoras(data.aseguradoras || []);
+        // La API devuelve { aseguradoras: [...] } (y antes un array plano): soportar ambos
+        setAseguradoras(Array.isArray(data) ? data : data.aseguradoras || []);
       } else {
         toast.error(data.error || 'Error al cargar aseguradoras');
       }

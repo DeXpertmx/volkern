@@ -157,7 +157,8 @@ export default function NuevaCotizacionPage() {
       const leadsData = await leadsRes.json()
       const dealsData = await dealsRes.json()
 
-      if (leadsData.leads) setLeads(leadsData.leads)
+      // /api/leads devuelve un array pelado (no { leads }): soportar ambos
+      setLeads(Array.isArray(leadsData) ? leadsData : (leadsData.leads || []))
       if (dealsData.deals) setDeals(dealsData.deals)
     } catch (error) {
       console.error('Error loading data:', error)

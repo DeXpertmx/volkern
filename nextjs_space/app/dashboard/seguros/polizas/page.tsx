@@ -170,7 +170,8 @@ export default function PolizasPage() {
       }
       if (prodRes.ok) {
         const data = await prodRes.json();
-        const list = data.productos || [];
+        // La API devuelve { productos: [...] } (y antes un array plano): soportar ambos
+        const list = Array.isArray(data) ? data : data.productos || [];
         setProductos(list);
         setProductosFiltrados(list);
       }

@@ -909,7 +909,8 @@ export const BookingCalendarComponent: React.FC<{
     fetch("/api/servicios")
       .then(r => r.ok ? r.json() : { servicios: [] })
       .then(data => {
-        const list = data.servicios || data.items || [];
+        // La API devuelve un array plano; soportar también el objeto envuelto
+        const list = Array.isArray(data) ? data : (data.servicios || data.items || []);
         setServices(list);
         if (servicioNombre && !selectedService) {
           const match = list.find((s: any) => s.nombre === servicioNombre);
@@ -1029,7 +1030,8 @@ export const ServiceCatalogComponent: React.FC<{
     fetch("/api/servicios")
       .then(r => r.ok ? r.json() : { servicios: [] })
       .then(data => {
-        const list = data.servicios || data.items || [];
+        // La API devuelve un array plano; soportar también el objeto envuelto
+        const list = Array.isArray(data) ? data : (data.servicios || data.items || []);
         setItems(list);
       })
       .catch(() => {});
