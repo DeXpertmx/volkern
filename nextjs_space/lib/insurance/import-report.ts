@@ -54,6 +54,8 @@ export interface CrearProducto {
   nombre: string;
   ramo: string;
   aseguradora: string;
+  /** Nombre de la aseguradora asociada al producto (cuando se reporta desde import). */
+  aseguradoraNombre?: string;
   fueCreado: boolean;
 }
 
