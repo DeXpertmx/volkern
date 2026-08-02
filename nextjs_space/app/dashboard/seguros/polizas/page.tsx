@@ -31,6 +31,11 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { PolizaTable } from '@/components/insurance/PolizaTable';
+import {
+  buildTemplatePolizas,
+  descargarCsv,
+  TEMPLATE_POLIZAS_FILENAME,
+} from '@/lib/insurance/csv-template';
 import { PolizaCard } from '@/components/insurance/PolizaCard';
 import { PolizaForm } from '@/components/insurance/PolizaForm';
 
@@ -291,84 +296,14 @@ export default function PolizasPage() {
   };
 
   /**
-   * Descarga un CSV de plantilla con las columnas que espera el importador.
-   * El usuario puede usarlo como base para preparar su archivo sin tener
-   * que adivinar nombres ni formatos de columna.
+   * Descarga la plantilla CSV de Pólizas usando el helper compartido
+   * `lib/insurance/csv-template.ts`. Mantener sincronizado el listado de
+   * columnas con la ruta /api/insurance/importar.
    */
   const descargarTemplate = () => {
-    const columnas = [
-      'numeroPoliza',
-      'clienteEmail',
-      'aseguradoraNombre',
-      'ramo',
-      'producto',
-      'primaAnual',
-      'sumaAsegurada',
-      'moneda',
-      'formaPago',
-      'fechaInicio',
-      'fechaVencimiento',
-      'comisionPct',
-      'descripcion',
-      'notas',
-    ];
-    const filasEjemplo = [
-      [
-        'P-2026-00001',
-        'juan.perez@example.com',
-        'AXA Seguros',
-        'AUTO',
-        'Auto Premium',
-        '450.00',
-        '20000',
-        'EUR',
-        'ANUAL',
-        '2026-01-15',
-        '2027-01-15',
-        '15',
-        'Póliza de auto particular',
-        'Renovación automática',
-      ],
-      [
-        'P-2026-00002',
-        'maria.garcia@example.com',
-        'MAPFRE',
-        'HOGAR',
-        'Hogar Esencial',
-        '320.50',
-        '150000',
-        'EUR',
-        'ANUAL',
-        '2026-02-01',
-        '2027-02-01',
-        '12',
-        'Vivienda habitual en Madrid',
-        'Cliente premium',
-      ],
-    ];
-
-    // BOM UTF-8 para que Excel respete tildes y CRLF (RFC 4180) para máxima
-    // compatibilidad con Excel en Windows.
-    const BOM = '\uFEFF';
-    const escapeCsv = (v: string) => {
-      const safe = String(v).replace(/"/g, '""');
-      return /["\r\n,]/.test(safe) ? `"${safe}"` : safe;
-    };
-    const csv = BOM + [
-      columnas.map(escapeCsv).join(','),
-      ...filasEjemplo.map(row => row.map(escapeCsv).join(',')),
-    ].join('\r\n');
-
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'template-importacion-polizas.csv';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    toast.success('Template descargado');
+    if (descargarCsv(TEMPLATE_POLIZAS_FILENAME, buildTemplatePolizas())) {
+      toast.success('Template descargado');
+    }
   };
 
   if (loading && polizas.length === 0) {
