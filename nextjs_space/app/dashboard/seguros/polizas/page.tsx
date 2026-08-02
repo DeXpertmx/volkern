@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { apiFetch } from '@/lib/api-client';
 import {
@@ -315,6 +315,8 @@ export default function PolizasPage() {
   const [wizardAnalysis, setWizardAnalysis] = useState<WizardAnalysis | null>(null);
   // Mapeo editable: cada canónico -> header seleccionado por el usuario ('' = sin mapear).
   const [wizardMapping, setWizardMapping] = useState<Record<string, string>>({});
+  // AbortController para cancelar una importación en curso durante el paso 4.
+  const importAbortRef = useRef<AbortController | null>(null);
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -344,6 +346,8 @@ export default function PolizasPage() {
   /**
    * Dispara el import con el mapping confirmado por el usuario en el wizard.
    * Si requiere columnas sin mapear, muestra un toast y bloquea la acción.
+   * Crea un AbortController para que el usuario pueda cancelar la importación
+   * durante el paso 'importing' (ver `cancelarImport`).
    */
   const confirmarImportWizard = async () => {
     if (!wizardAnalysis) return;
@@ -355,12 +359,11 @@ export default function PolizasPage() {
       return;
     }
     setWizardStep('importing');
+    importAbortRef.current = new AbortController();
     try {
-      const file = await fetch(wizardAnalysis.fileName).catch(() => null); // placeholder
-      // Re-leemos el archivo desde input original: lo más simple es volver a
-      // pedirlo al usuario. Para no romper el flujo si el usuario ya descartó
-      // el file, guardamos el File en un ref aparte durante analyzing.
-      // Aquí optamos por re-subir el último file leyendo del input.
+      // Re-leemos el archivo desde el input (es donde vive el File que el
+      // usuario acaba de seleccionar). Si el input se vació (caso raro),
+      // abortamos de forma controlada.
       const inputEl = document.getElementById('wizard-file-input') as HTMLInputElement | null;
       const file2 = inputEl?.files?.[0];
       if (!file2) {
@@ -377,7 +380,10 @@ export default function PolizasPage() {
       }
       fd.append('mapping', JSON.stringify(mappingLimpio));
 
-      const res = await apiFetch('/api/insurance/importar', { method: 'POST', body: fd });
+      const res = await apiFetch(
+        '/api/insurance/importar',
+        { method: 'POST', body: fd, signal: importAbortRef.current.signal },
+      );
       const data = await res.json();
       if (res.ok) {
         const report: ImportReport | undefined = data.report;
@@ -390,13 +396,42 @@ export default function PolizasPage() {
         setWizardStep('mapping');
       }
     } catch (error) {
-      console.error('Error importando:', error);
-      toast.error('Error al importar');
-      setWizardStep('mapping');
+      if ((error as Error)?.name === 'AbortError') {
+        // El usuario canceló. Algunas filas pueden haberse insertado en BD
+        // antes de que llegara la señal de abort al servidor, por eso avisamos.
+        toast.warning('Importación cancelada. Las pólizas que ya se habían guardado permanecen en tu cartera.', {
+          duration: 8000,
+          description: 'Puedes revisar la lista o reimportar el archivo corregido.',
+        });
+        setWizardStep('mapping');
+      } else {
+        console.error('Error importando:', error);
+        toast.error('Error al importar');
+        setWizardStep('mapping');
+      }
+    } finally {
+      importAbortRef.current = null;
+    }
+  };
+
+  /**
+   * Aborta la importación en curso. Disparado por el botón 'Cancelar' del
+   * paso 'importing'. Si no hay nada en vuelo, no-op.
+   * @param parcialMsg - texto a mostrar si llegan filas parcialmente guardadas;
+   *   requerido por si más adelante tenemos señales del servidor sobre el avance.
+   */
+  const cancelarImport = () => {
+    if (importAbortRef.current) {
+      importAbortRef.current.abort();
     }
   };
 
   const cerrarWizard = () => {
+    // Si hay un import en curso, abortarlo antes de cerrar el modal.
+    if (importAbortRef.current) {
+      importAbortRef.current.abort();
+      importAbortRef.current = null;
+    }
     setIsImportOpen(false);
     setWizardStep('select');
     setWizardAnalysis(null);
@@ -1044,6 +1079,14 @@ export default function PolizasPage() {
                   Procesando {wizardAnalysis?.totalRows ?? 0} filas. Esto puede tardar unos segundos.
                 </DialogDescription>
               </DialogHeader>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={cancelarImport}
+                className="mt-6"
+              >
+                Cancelar import
+              </Button>
             </div>
           )}
         </DialogContent>
