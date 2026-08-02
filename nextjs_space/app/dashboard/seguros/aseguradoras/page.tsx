@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/api-client';
 import {
   Building2,
@@ -58,6 +59,7 @@ interface Aseguradora {
 }
 
 export default function AseguradorasPage() {
+  const router = useRouter();
   const [aseguradoras, setAseguradoras] = useState<Aseguradora[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -335,6 +337,16 @@ export default function AseguradorasPage() {
                       )}
                     </div>
                     <div className="flex justify-end gap-1 mt-3 pt-3 border-t">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => router.push(`/dashboard/seguros/aseguradoras/${a.id}`)}
+                        title="Ver ficha completa"
+                        className="text-xs mr-auto"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5 mr-1" />
+                        Ver ficha
+                      </Button>
                       <Button variant="ghost" size="icon" onClick={() => handleEdit(a)} title="Editar">
                         <Edit className="w-4 h-4" />
                       </Button>
