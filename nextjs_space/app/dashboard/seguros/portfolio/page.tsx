@@ -14,12 +14,15 @@ import {
   CalendarClock,
   Clock,
   Sparkles,
+  Calendar,
 } from 'lucide-react';
 import { apiFetch } from '@/lib/api-client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import { TimelineMensual, type TimelineData } from '@/components/insurance/TimelineMensual';
+import { formatCurrency, formatDate, formatRelative } from '@/components/insurance/portfolio-format';
 
 interface PortfolioSnapshot {
   generado: string;
@@ -100,42 +103,6 @@ const RAMO_COLORS: Record<string, string> = {
   OTROS: 'bg-slate-400',
 };
 
-function formatCurrency(value: number, currency = 'USD'): string {
-  if (!Number.isFinite(value)) return '$0';
-  try {
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency,
-      maximumFractionDigits: 0,
-    }).format(value);
-  } catch {
-    return `$${value.toLocaleString('es-MX')}`;
-  }
-}
-
-function formatDate(iso: string): string {
-  try {
-    return new Intl.DateTimeFormat('es-MX', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    }).format(new Date(iso));
-  } catch {
-    return iso.slice(0, 10);
-  }
-}
-
-function formatRelative(iso: string): string {
-  const target = new Date(iso).getTime();
-  const diffMs = target - Date.now();
-  const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
-  if (diffDays < 0) return `Hace ${Math.abs(diffDays)}d`;
-  if (diffDays === 0) return 'Hoy';
-  if (diffDays < 7) return `En ${diffDays}d`;
-  if (diffDays < 30) return `En ${Math.round(diffDays / 7)}sem`;
-  return `En ${Math.round(diffDays / 30)}mes`;
-}
-
 function exportToCSV(data: PortfolioSnapshot): void {
   const rows: string[] = ['Sección,Métrica,Valor'];
   rows.push(`KPIs,Aseguradoras activas,${data.kpis.aseguradoras}`);
@@ -168,6 +135,8 @@ function exportToCSV(data: PortfolioSnapshot): void {
 
 export default function PortfolioPage() {
   const [snapshot, setSnapshot] = useState<PortfolioSnapshot | null>(null);
+  const [timeline, setTimeline] = useState<TimelineData | null>(null);
+  const [timelineLoading, setTimelineLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
@@ -179,6 +148,8 @@ export default function PortfolioPage() {
       if (!res.ok) throw new Error(data?.error ?? 'No pude obtener el snapshot');
       setSnapshot(data);
       setLastRefresh(new Date());
+      // Refresca el timeline en paralelo — es independiente del snapshot.
+      loadTimeline();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error al cargar el portfolio');
     } finally {
@@ -186,8 +157,23 @@ export default function PortfolioPage() {
     }
   }
 
+  async function loadTimeline() {
+    try {
+      setTimelineLoading(true);
+      const res = await apiFetch('/api/insurance/portfolio/timeline?months=12');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? 'No pude obtener el timeline');
+      setTimeline(data);
+    } catch (err) {
+      console.error('Error al cargar el timeline:', err);
+    } finally {
+      setTimelineLoading(false);
+    }
+  }
+
   useEffect(() => {
     loadSnapshot();
+    loadTimeline();
   }, []);
 
   const maxRamoPrima = useMemo(() => {
@@ -307,6 +293,28 @@ export default function PortfolioPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Timeline de prima mensual: visualiza el último YYYY-MM de los últimos 12 meses */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Calendar className="w-5 h-5 text-emerald-600" />
+            Timeline de prima emitida
+          </CardTitle>
+          <CardDescription>
+            Evolución mensual para entender tendencia, mejor mes y volumen del libro
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {timeline ? (
+            <TimelineMensual data={timeline} loading={timelineLoading} />
+          ) : (
+            <div className="text-sm text-muted-foreground text-center py-8">
+              Aún no hay datos de timeline.
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Alertas (si las hay) */}
       {(alertas.polizasPorVencer30d > 0 ||
