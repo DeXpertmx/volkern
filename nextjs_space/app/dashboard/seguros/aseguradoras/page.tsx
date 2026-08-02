@@ -30,6 +30,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 
 interface Aseguradora {
@@ -364,7 +365,7 @@ export default function AseguradorasPage() {
 
       {/* Create/Edit Dialog */}
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-3xl w-[95vw] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingAseg ? 'Editar Aseguradora' : 'Nueva Aseguradora'}</DialogTitle>
             <DialogDescription>
@@ -384,9 +385,9 @@ export default function AseguradorasPage() {
             </div>
 
             {/* ── Identificación Legal y Fiscal (Bloque 1) ── */}
-            <div className="rounded-lg border p-3 space-y-3">
+            <div className="rounded-lg border p-4 space-y-4">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Identificación Legal y Fiscal</p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="razonSocial">Razón Social</Label>
                   <Input
@@ -405,8 +406,6 @@ export default function AseguradorasPage() {
                     placeholder="AXA Seguros"
                   />
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <Label htmlFor="nif">Identificación Fiscal (NIF/CIF/RFC)</Label>
                   <Input
@@ -426,16 +425,16 @@ export default function AseguradorasPage() {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-3">
-                <div className="space-y-2 col-span-3 sm:col-span-1">
-                  <Label htmlFor="direccion">Domicilio Fiscal</Label>
-                  <Input
-                    id="direccion"
-                    value={formData.direccion}
-                    onChange={e => setFormData(prev => ({ ...prev, direccion: e.target.value }))}
-                    placeholder="Calle, número, colonia..."
-                  />
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="direccion">Domicilio Fiscal</Label>
+                <Input
+                  id="direccion"
+                  value={formData.direccion}
+                  onChange={e => setFormData(prev => ({ ...prev, direccion: e.target.value }))}
+                  placeholder="Calle, número, colonia..."
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="codigoPostal">C.P.</Label>
                   <Input
@@ -467,7 +466,7 @@ export default function AseguradorasPage() {
             </div>
 
             {/* ── Regulación y Licencias (Bloque 2) ── */}
-            <div className="rounded-lg border p-3 space-y-3">
+            <div className="rounded-lg border p-4 space-y-4">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Regulación y Licencias</p>
               <div className="space-y-2">
                 <Label htmlFor="numeroRegistro">Nº Registro / Licencia Reguladora</Label>
@@ -487,7 +486,7 @@ export default function AseguradorasPage() {
                   placeholder="Vida, Salud, Autos, Caución... (separados por coma)"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="fechaVigenciaLicenciaInicio">Vigencia Licencia — Inicio</Label>
                   <Input
@@ -510,46 +509,58 @@ export default function AseguradorasPage() {
             </div>
 
             {/* ── Contacto ── */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="rounded-lg border p-4 space-y-4">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Contacto</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="telefono">Teléfono</Label>
+                  <Input
+                    id="telefono"
+                    value={formData.telefono}
+                    onChange={e => setFormData(prev => ({ ...prev, telefono: e.target.value }))}
+                    placeholder="+34 91..."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={formData.email}
+                    onChange={e => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                    placeholder="info@aseguradora.com"
+                  />
+                </div>
+              </div>
               <div className="space-y-2">
-                <Label htmlFor="telefono">Teléfono</Label>
+                <Label htmlFor="web">Web</Label>
                 <Input
-                  id="telefono"
-                  value={formData.telefono}
-                  onChange={e => setFormData(prev => ({ ...prev, telefono: e.target.value }))}
-                  placeholder="+34 91..."
+                  id="web"
+                  value={formData.web}
+                  onChange={e => setFormData(prev => ({ ...prev, web: e.target.value }))}
+                  placeholder="https://..."
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={e => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                  placeholder="info@aseguradora.com"
+                <Label htmlFor="notas">Notas</Label>
+                <Textarea
+                  id="notas"
+                  value={formData.notas}
+                  onChange={e => setFormData(prev => ({ ...prev, notas: e.target.value }))}
+                  placeholder="Notas internas..."
+                  rows={3}
                 />
               </div>
+              <div className="flex items-center gap-2 pt-1">
+                <Checkbox
+                  id="activa"
+                  checked={formData.activa}
+                  onCheckedChange={v => setFormData(prev => ({ ...prev, activa: !!v }))}
+                />
+                <Label htmlFor="activa" className="cursor-pointer">Aseguradora activa</Label>
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="web">Web</Label>
-              <Input
-                id="web"
-                value={formData.web}
-                onChange={e => setFormData(prev => ({ ...prev, web: e.target.value }))}
-                placeholder="https://..."
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="notas">Notas</Label>
-              <Textarea
-                id="notas"
-                value={formData.notas}
-                onChange={e => setFormData(prev => ({ ...prev, notas: e.target.value }))}
-                placeholder="Notas internas..."
-                rows={2}
-              />
-            </div>
+
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsFormOpen(false)} disabled={saving}>
                 Cancelar
