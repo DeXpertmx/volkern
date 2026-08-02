@@ -208,7 +208,65 @@ export const TEMPLATE_ASEGURADORAS_COLUMNS: readonly string[] = [
   'notas',
 ] as const;
 
+/**
+ * Filas de ejemplo reales (AXA, MAPFRE) que el importador de aseguradoras
+ * verá al abrir el wizard. Mapean 1:1 con TEMPLATE_ASEGURADORAS_COLUMNS.
+ */
+export const TEMPLATE_ASEGURADORAS_EJEMPLOS: readonly (readonly string[])[] = [
+  [
+    'AXA Seguros',
+    'AXA Seguros Generales, S.A. de C.V.',
+    'AXA',
+    'ASE9311165Q8',
+    'General',
+    'Av. Insurgentes Sur 1234, Col. Del Valle',
+    '03100',
+    'Ciudad de México',
+    'México',
+    '+52 55 1234 5678',
+    'contacto@axa.com.mx',
+    'https://www.axa.mx',
+    'CNSF-2018-A001',
+    'AUTO;HOGAR;VIDA;SALUD;EMPRESARIAL',
+    '2018-01-15',
+    '2027-01-15',
+    'Aseguradora con cobertura nacional y atención al cliente 24/7.',
+  ],
+  [
+    'MAPFRE',
+    'MAPFRE México, S.A.',
+    'MAPFRE',
+    'MME970524K7A',
+    'General',
+    'Av. Javier Barros Sierra 555, Col. Santa Fe',
+    '01210',
+    'Ciudad de México',
+    'México',
+    '+52 55 5230 7000',
+    'atencion@mapfre.com.mx',
+    'https://www.mapfre.com.mx',
+    'CNSF-2017-M045',
+    'AUTO;HOGAR;VIDA;GASTOS_MEDICOS;INCENDIO',
+    '2017-03-01',
+    '2026-12-31',
+    'Aseguradora internacional con operaciones en más de 100 países.',
+  ],
+] as const;
+
 export const TEMPLATE_ASEGURADORAS_FILENAME = 'template-importacion-aseguradoras.csv';
+
+/**
+ * Genera el CSV completo de la plantilla de Aseguradoras. Usa las
+ * columnas y ejemplos AXA/MAPFRE de arriba. Devuelve string puro
+ * (sin BOM por default — Excel-friendly al activar bom:true).
+ */
+export function buildTemplateAseguradoras(options?: BuildCsvOptions): string {
+  return buildCsv(
+    [...TEMPLATE_ASEGURADORAS_COLUMNS],
+    TEMPLATE_ASEGURADORAS_EJEMPLOS.map(row => [...row]),
+    options,
+  );
+}
 
 /**
  * Columnas esperadas por el importador de Productos de seguros.
@@ -228,4 +286,49 @@ export const TEMPLATE_PRODUCTOS_COLUMNS: readonly string[] = [
   'activo',
 ] as const;
 
+/**
+ * Filas de ejemplo (Auto y Hogar de AXA) que el importador de productos
+ * verá al abrir el wizard. Cada producto pertenece a una aseguradora
+ * existente; si la aseguradora no existe todavía en BD, se crea al importar.
+ */
+export const TEMPLATE_PRODUCTOS_EJEMPLOS: readonly (readonly string[])[] = [
+  [
+    'AXA Seguros',
+    'Auto Plus Premium',
+    'AUTO',
+    'Cobertura amplia',
+    'Cobertura completa con grúa, abogado y auto sustituto.',
+    '8500',
+    '45000',
+    '500000',
+    '15',
+    'MXN',
+    'true',
+  ],
+  [
+    'AXA Seguros',
+    'Hogar Flexible',
+    'HOGAR',
+    'Estándar',
+    'Cobertura de hogar con servicios adicionales.',
+    '3500',
+    '18000',
+    '2000000',
+    '18',
+    'MXN',
+    'true',
+  ],
+] as const;
+
 export const TEMPLATE_PRODUCTOS_FILENAME = 'template-importacion-productos.csv';
+
+/**
+ * Genera el CSV completo de la plantilla de Productos.
+ */
+export function buildTemplateProductos(options?: BuildCsvOptions): string {
+  return buildCsv(
+    [...TEMPLATE_PRODUCTOS_COLUMNS],
+    TEMPLATE_PRODUCTOS_EJEMPLOS.map(row => [...row]),
+    options,
+  );
+}
