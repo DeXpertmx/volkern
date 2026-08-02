@@ -36,6 +36,11 @@ import {
   descargarCsv,
   TEMPLATE_POLIZAS_FILENAME,
 } from '@/lib/insurance/csv-template';
+import {
+  renderReportAsCsv,
+  buildReportFilename,
+  type ImportReport,
+} from '@/lib/insurance/import-report';
 import { PolizaCard } from '@/components/insurance/PolizaCard';
 import { PolizaForm } from '@/components/insurance/PolizaForm';
 
@@ -280,7 +285,12 @@ export default function PolizasPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        toast.success(`Importación completada: ${data.importadas || 0} pólizas importadas`);
+        const report: ImportReport | undefined = data.report;
+        if (report) {
+          mostrarResumenImportacion(report);
+        } else {
+          toast.success(`Importación completada: ${data.importadas || 0} pólizas importadas`);
+        }
         setIsImportOpen(false);
         loadPolizas();
       } else {
@@ -293,6 +303,60 @@ export default function PolizasPage() {
       setImporting(false);
       if (e.target) e.target.value = '';
     }
+  };
+
+  /**
+   * Muestra el resultado estructurado de la importación en un toast:
+   *   - Total / importadas / fallidas en una sola línea.
+   *   - Si hubo errores, ofrece descargar el reporte completo (CSV multi-sección
+   *     con errores por fila + entidades creadas) para que el broker pueda
+   *     corregir su archivo y volver a importar.
+   *   - Si se crearon nuevas aseguradoras, lo avisa (porque el broker suele
+   *     querer revisarlas antes de la próxima importación).
+   */
+  const mostrarResumenImportacion = (report: ImportReport) => {
+    const totalesPartes = [
+      `${report.totalRows} procesadas`,
+      `✅ ${report.importadas} importadas`,
+    ];
+    if (report.fallidas > 0) {
+      totalesPartes.push(`⚠️ ${report.fallidas} con error`);
+    }
+    const detalle = totalesPartes.join(' · ');
+
+    const subdetalle: string[] = [];
+    if (report.creadas.clientes.length > 0) {
+      const nuevos = report.creadas.clientes.filter(c => c.fueCreado).length;
+      subdetalle.push(`${nuevos} cliente(s) creado(s)`);
+    }
+    if (report.creadas.aseguradoras.length > 0) {
+      const nuevas = report.creadas.aseguradoras.filter(a => a.fueCreada).length;
+      subdetalle.push(`${nuevas} aseguradora(s) creada(s)`);
+    }
+    if (report.creadas.productos.length > 0) {
+      const nuevos = report.creadas.productos.filter(p => p.fueCreado).length;
+      subdetalle.push(`${nuevos} producto(s) creado(s)`);
+    }
+
+    const opciones: Parameters<typeof toast.success>[1] = {
+      duration: report.fallidas > 0 || report.creadas.clientes.length > 0 ? 10000 : 5000,
+      description: subdetalle.length > 0 ? subdetalle.join(' · ') : undefined,
+    };
+
+    if (report.fallidas > 0) {
+      opciones.action = {
+        label: 'Descargar reporte',
+        onClick: () => {
+          descargarCsv(
+            buildReportFilename(report.fileName),
+            renderReportAsCsv(report),
+          );
+          toast.success('Reporte descargado');
+        },
+      };
+    }
+
+    toast.success(`Importación: ${detalle}`, opciones);
   };
 
   /**
