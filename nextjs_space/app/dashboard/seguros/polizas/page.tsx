@@ -9,14 +9,10 @@ import {
   Search,
   Filter,
   Upload,
-  LayoutGrid,
   List,
-  Download,
+  FileDown,
   Loader2,
   X,
-  Trash2,
-  ChevronLeft,
-  ChevronRight,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -294,6 +290,87 @@ export default function PolizasPage() {
     }
   };
 
+  /**
+   * Descarga un CSV de plantilla con las columnas que espera el importador.
+   * El usuario puede usarlo como base para preparar su archivo sin tener
+   * que adivinar nombres ni formatos de columna.
+   */
+  const descargarTemplate = () => {
+    const columnas = [
+      'numeroPoliza',
+      'clienteEmail',
+      'aseguradoraNombre',
+      'ramo',
+      'producto',
+      'primaAnual',
+      'sumaAsegurada',
+      'moneda',
+      'formaPago',
+      'fechaInicio',
+      'fechaVencimiento',
+      'comisionPct',
+      'descripcion',
+      'notas',
+    ];
+    const filasEjemplo = [
+      [
+        'P-2026-00001',
+        'juan.perez@example.com',
+        'AXA Seguros',
+        'AUTO',
+        'Auto Premium',
+        '450.00',
+        '20000',
+        'EUR',
+        'ANUAL',
+        '2026-01-15',
+        '2027-01-15',
+        '15',
+        'Póliza de auto particular',
+        'Renovación automática',
+      ],
+      [
+        'P-2026-00002',
+        'maria.garcia@example.com',
+        'MAPFRE',
+        'HOGAR',
+        'Hogar Esencial',
+        '320.50',
+        '150000',
+        'EUR',
+        'ANUAL',
+        '2026-02-01',
+        '2027-02-01',
+        '12',
+        'Vivienda habitual en Madrid',
+        'Cliente premium',
+      ],
+    ];
+
+    // BOM UTF-8 para que Excel respete tildes y CRLF (RFC 4180) para máxima
+    // compatibilidad con Excel en Windows.
+    const BOM = '\uFEFF';
+    const escapeCsv = (v: string) => {
+      const safe = String(v).replace(/"/g, '""');
+      return /["\r\n,]/.test(safe) ? `"${safe}"` : safe;
+    };
+    const csv = BOM + [
+      columnas.map(escapeCsv).join(','),
+      ...filasEjemplo.map(row => row.map(escapeCsv).join(',')),
+    ].join('\r\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'template-importacion-polizas.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success('Template descargado');
+  };
+
   if (loading && polizas.length === 0) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -309,95 +386,90 @@ export default function PolizasPage() {
     <div className="space-y-4">
       {/* Toolbar */}
       <Card>
-        <CardHeader className="pb-3">
-          <div className="flex flex-col sm:flex-row gap-3 justify-between">
-            <div className="flex items-center gap-2 flex-1">
-              <div className="relative flex-1 max-w-sm">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar por nº póliza, cliente, aseguradora..."
-                  value={search}
-                  onChange={e => { setSearch(e.target.value); setPage(1); }}
-                  className="pl-9"
-                />
-              </div>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => setShowFilters(!showFilters)}
-                className={showFilters ? 'bg-muted' : ''}
-              >
-                <Filter className="w-4 h-4" />
-              </Button>
-              <div className="flex border rounded-md">
+        {/* Solo se muestra en vista cards: la vista table ya trae su propia
+            toolbar dentro de PolizaTable (buscar + filtro + Importar + Nueva),
+            así evitamos la doble fila que aparecía duplicada. */}
+        {viewMode === 'cards' && (
+          <CardHeader className="pb-3">
+            <div className="flex flex-col sm:flex-row gap-3 justify-between">
+              <div className="flex items-center gap-2 flex-1">
+                <div className="relative flex-1 max-w-sm">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar por nº póliza, cliente, aseguradora..."
+                    value={search}
+                    onChange={e => { setSearch(e.target.value); setPage(1); }}
+                    className="pl-9"
+                  />
+                </div>
                 <Button
-                  variant={viewMode === 'table' ? 'default' : 'ghost'}
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setShowFilters(!showFilters)}
+                  className={showFilters ? 'bg-muted' : ''}
+                >
+                  <Filter className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="outline"
                   size="icon"
                   onClick={() => setViewMode('table')}
-                  className="rounded-r-none"
+                  title="Cambiar a vista de tabla"
                 >
                   <List className="w-4 h-4" />
                 </Button>
-                <Button
-                  variant={viewMode === 'cards' ? 'default' : 'ghost'}
-                  size="icon"
-                  onClick={() => setViewMode('cards')}
-                  className="rounded-l-none"
-                >
-                  <LayoutGrid className="w-4 h-4" />
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setIsImportOpen(true)}>
+                  <Upload className="w-4 h-4 mr-2" />
+                  Importar
+                </Button>
+                <Button onClick={handleNewPoliza}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Nueva Póliza
                 </Button>
               </div>
             </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setIsImportOpen(true)}>
-                <Upload className="w-4 h-4 mr-2" />
-                Importar
-              </Button>
-              <Button onClick={handleNewPoliza}>
-                <Plus className="w-4 h-4 mr-2" />
-                Nueva Póliza
-              </Button>
-            </div>
-          </div>
 
-          {/* Filters */}
-          {showFilters && (
-            <div className="flex gap-3 mt-3 p-3 bg-muted/50 rounded-lg">
-              <Select value={estadoFilter || 'TODOS'} onValueChange={v => { setEstadoFilter(v === 'TODOS' ? '' : v); setPage(1); }}>
-                <SelectTrigger className="w-44">
-                  <SelectValue placeholder="Estado" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="TODOS">Todos los estados</SelectItem>
-                  {ESTADOS.map(e => (
-                    <SelectItem key={e} value={e}>{e.replace(/_/g, ' ')}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={ramoFilter || 'TODOS'} onValueChange={v => { setRamoFilter(v === 'TODOS' ? '' : v); setPage(1); }}>
-                <SelectTrigger className="w-44">
-                  <SelectValue placeholder="Ramo" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="TODOS">Todos los ramos</SelectItem>
-                  {RAMOS.map(r => (
-                    <SelectItem key={r} value={r}>{r.replace(/_/g, ' ')}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {(search || estadoFilter || ramoFilter) && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => { setSearch(''); setEstadoFilter(''); setRamoFilter(''); setPage(1); }}
-                >
-                  <X className="w-3.5 h-3.5 mr-1" />
-                  Limpiar
-                </Button>
-              )}
-            </div>
-          )}
-        </CardHeader>
+            {/* Filters */}
+            {showFilters && (
+              <div className="flex gap-3 mt-3 p-3 bg-muted/50 rounded-lg flex-wrap">
+                <Select value={estadoFilter || 'TODOS'} onValueChange={v => { setEstadoFilter(v === 'TODOS' ? '' : v); setPage(1); }}>
+                  <SelectTrigger className="w-44">
+                    <SelectValue placeholder="Estado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="TODOS">Todos los estados</SelectItem>
+                    {ESTADOS.map(e => (
+                      <SelectItem key={e} value={e}>{e.replace(/_/g, ' ')}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={ramoFilter || 'TODOS'} onValueChange={v => { setRamoFilter(v === 'TODOS' ? '' : v); setPage(1); }}>
+                  <SelectTrigger className="w-44">
+                    <SelectValue placeholder="Ramo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="TODOS">Todos los ramos</SelectItem>
+                    {RAMOS.map(r => (
+                      <SelectItem key={r} value={r}>{r.replace(/_/g, ' ')}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {(search || estadoFilter || ramoFilter) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => { setSearch(''); setEstadoFilter(''); setRamoFilter(''); setPage(1); }}
+                  >
+                    <X className="w-3.5 h-3.5 mr-1" />
+                    Limpiar
+                  </Button>
+                )}
+              </div>
+            )}
+          </CardHeader>
+        )}
 
         <CardContent>
           {polizas.length === 0 ? (
@@ -447,6 +519,7 @@ export default function PolizasPage() {
               }}
               onNewPoliza={handleNewPoliza}
               onImport={() => setIsImportOpen(true)}
+              onSwitchToCards={() => setViewMode('cards')}
               onRowClick={id => {
                 const p = polizas.find(px => px.id === id);
                 if (p) handleEditPoliza(p);
@@ -694,9 +767,23 @@ export default function PolizasPage() {
                 />
               </label>
             </div>
-            <div className="text-xs text-muted-foreground space-y-1">
-              <p><strong>Columnas esperadas:</strong> cliente, aseguradora, producto, numeroPoliza, ramo, primaAnual, fechaVencimiento</p>
-              <p>Formatos soportados: CSV (coma o punto y coma), Excel (.xlsx, .xls)</p>
+            <div className="rounded-lg bg-muted/50 p-3 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium">¿Cómo preparar el archivo?</p>
+                <Button variant="outline" size="sm" onClick={descargarTemplate}>
+                  <FileDown className="h-3.5 w-3.5 mr-1.5" />
+                  Descargar template
+                </Button>
+              </div>
+              <div className="text-xs text-muted-foreground space-y-1">
+                <p><strong>Columnas:</strong> numeroPoliza, clienteEmail, aseguradoraNombre, ramo, producto, primaAnual, sumaAsegurada, moneda, formaPago, fechaInicio, fechaVencimiento, comisionPct, descripcion, notas</p>
+                <p>• <strong>Obligatorias:</strong> numeroPoliza, clienteEmail, aseguradoraNombre, ramo, fechaInicio, fechaVencimiento. Filas sin estos campos serán rechazadas.</p>
+                <p>• El <strong>cliente</strong> se busca/crea por <strong>email</strong>. Si no existe, se crea automáticamente.</p>
+                <p>• La <strong>aseguradora</strong> se busca/crea por <strong>nombre</strong>. Si no existe, se crea.</p>
+                <p>• El <strong>producto</strong> se busca por nombre dentro de la aseguradora. Si no existe, se crea con el ramo indicado.</p>
+                <p>• <strong>Fechas</strong> en formato <code className="bg-background px-1 rounded">YYYY-MM-DD</code>.</p>
+                <p>• Formatos soportados: CSV (coma o punto y coma), Excel (.xlsx, .xls)</p>
+              </div>
             </div>
           </div>
         </DialogContent>
