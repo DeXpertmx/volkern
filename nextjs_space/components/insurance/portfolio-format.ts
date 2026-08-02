@@ -5,10 +5,12 @@
  */
 
 /**
- * Formatea un número como moneda. Usa `Intl.NumberFormat('es-MX', currency)`
- * y cae a `$N.toLocaleString('es-MX')` si el entorno no soporta Intl.
+ * Formatea un número como moneda. Default = 'MXN' (alineado con CURRENCY_CONSTANTS
+ * de lib/insurance/currency). La página portfolio debe pasar la moneda del
+ * tenant leyendo `tenantMoneda` de la respuesta del endpoint. Cae a `$N.toLocaleString`
+ * si el entorno no soporta Intl.
  */
-export function formatCurrency(value: number, currency: string = 'USD'): string {
+export function formatCurrency(value: number, currency: string = 'MXN'): string {
   if (!Number.isFinite(value)) return '$0';
   try {
     return new Intl.NumberFormat('es-MX', {
@@ -18,6 +20,24 @@ export function formatCurrency(value: number, currency: string = 'USD'): string 
     }).format(value);
   } catch {
     return `$${value.toLocaleString('es-MX')}`;
+  }
+}
+
+/**
+ * Variante con decimales: para pólizas individuales donde el centavos importan.
+ * Default 'MXN'. Usar como `formatCurrencyExact(p.primaAnual, p.moneda)`.
+ */
+export function formatCurrencyExact(value: number, currency: string = 'MXN'): string {
+  if (!Number.isFinite(value)) return '$0';
+  try {
+    return new Intl.NumberFormat('es-MX', {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+  } catch {
+    return `$${value.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
 }
 

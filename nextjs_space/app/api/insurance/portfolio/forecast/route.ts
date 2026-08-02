@@ -4,6 +4,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
 import { triggerPortfolioRenewalsAlert } from '@/lib/insurance/forecast-alert';
+import {
+  fxConvert,
+  resumenMoneda,
+  CURRENCY_CONSTANTS,
+  type Currency,
+} from '@/lib/insurance/currency';
 
 /**
  * GET /api/insurance/portfolio/forecast
@@ -133,18 +139,21 @@ function rSquared(points: Array<{ x: number; y: number; yHat: number }>): number
 /**
  * Acumula la prima real emitida en un mes (YYYY-MM-01) sumando las polizas
  * emitidas entre el primer y el último instante de ese mes. Helper perezoso
- * para no escribir dos veces el mismo bloque de códec.
+ * que convierte cada póliza a `targetCurrency` antes de sumar (FIX bug monedas).
  */
-async function sumaRealDelMes(tenantId: string, mes: Date): Promise<number> {
+async function sumaRealDelMes(tenantId: string, mes: Date, targetCurrency: Currency): Promise<number> {
   const fin = new Date(mes.getFullYear(), mes.getMonth() + 1, 1);
-  const agg = await prisma.poliza.aggregate({
+  const rows = await prisma.poliza.findMany({
     where: {
       tenantId,
       fechaEmision: { gte: mes, lt: fin },
     },
-    _sum: { primaAnual: true },
+    select: { primaAnual: true, moneda: true },
   });
-  return Number(agg._sum.primaAnual ?? 0);
+  return rows.reduce(
+    (acc, r) => acc + fxConvert(Number(r.primaAnual ?? 0), (r.moneda as string) ?? 'USD', targetCurrency),
+    0
+  );
 }
 
 /**
@@ -235,18 +244,32 @@ export async function GET(request: NextRequest) {
     const now = new Date();
     const startDate = new Date(now.getFullYear(), now.getMonth() - (WINDOW - 1), 1);
 
+    // Cargar moneda del tenant una sola vez; todas las sumas se convierten a ella.
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: auth.tenant!.id },
+      select: { moneda: true },
+    });
+    const tenantMoneda: Currency = (tenant?.moneda as Currency | undefined) ??
+      (CURRENCY_CONSTANTS.DEFAULT_TENANT_CURRENCY as Currency);
+
     const polizas = await prisma.poliza.findMany({
       where: { tenantId: auth.tenant!.id, fechaEmision: { gte: startDate } },
-      select: { fechaEmision: true, primaAnual: true },
+      select: { fechaEmision: true, primaAnual: true, moneda: true },
     });
 
     // Serie completa para evitar que el modelo lea meses como ausentes.
+    // Sumamos convirtiendo de cada póliza a tenantMoneda (FIX bug monedas).
     const skeleton = buildEmptySeries(now, WINDOW);
     const accumulator = new Map<string, number>();
     for (const p of polizas) {
       const d = new Date(p.fechaEmision);
       const key = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
-      accumulator.set(key, (accumulator.get(key) ?? 0) + Number(p.primaAnual ?? 0));
+      const montoEnTarget = fxConvert(
+        Number(p.primaAnual ?? 0),
+        (p.moneda as string) ?? 'USD',
+        tenantMoneda
+      );
+      accumulator.set(key, (accumulator.get(key) ?? 0) + montoEnTarget);
     }
     const ventana: TimelinePoint[] = skeleton.map(s => {
       const prima = accumulator.get(s.mes) ?? 0;
@@ -257,21 +280,21 @@ export async function GET(request: NextRequest) {
     // Caso borde: 0 pólizas emitidos en toda la ventana.
     const mesesConActividad = ys.filter(v => v > 0).length;
     if (mesesConActividad < 3) {
-      const accuracy = await computeAccuracy(auth.tenant!.id, 30);
-      return NextResponse.json({
-        generado: new Date().toISOString(),
-        ventana,
-        proyeccion: ys[ys.length - 1] ?? 0,
-        confianza: 0,
-        rangoMin: 0,
-        rangoMax: 0,
-        slope: 0,
-        intercept: 0,
-        r2: 0,
-        mensaje:
-          mesesConActividad === 0
-            ? 'Sin actividad en los últimos 6 meses'
-            : `Pocos meses con actividad (${mesesConActividad}/6) — se necesita más historial`,
+      const accuracy = await computeAccuracy(auth.tenant!.id, 30);    return NextResponse.json({
+      generado: new Date().toISOString(),
+      tenantMoneda,
+      ventana,
+      proyeccion: ys[ys.length - 1] ?? 0,
+      confianza: 0,
+      rangoMin: 0,
+      rangoMax: 0,
+      slope: 0,
+      intercept: 0,
+      r2: 0,
+      mensaje:
+        mesesConActividad === 0
+          ? 'Sin actividad en los últimos 6 meses'
+          : `Pocos meses con actividad (${mesesConActividad}/6) — se necesita más historial`,
         accuracy,
         alert: null, // sin slope real, no hay alerta que evaluar
       });
@@ -284,6 +307,7 @@ export async function GET(request: NextRequest) {
       const accuracy = await computeAccuracy(auth.tenant!.id, 30);
       return NextResponse.json({
         generado: new Date().toISOString(),
+        tenantMoneda,
         ventana,
         proyeccion: ys[ys.length - 1] ?? 0,
         confianza: 0,
@@ -401,7 +425,7 @@ export async function GET(request: NextRequest) {
       });
 
       for (const p of pendientes) {
-        const real = await sumaRealDelMes(auth.tenant!.id, p.mesProyectado);
+        const real = await sumaRealDelMes(auth.tenant!.id, p.mesProyectado, tenantMoneda);
         const proyectadoNum = 0; // placeholder, sobreescribimos abajo con el valor correcto
         // No tenemos el `proyectado` original en el `select` — leemos con una
         // segunda query mínima o lo hacemos en bloque. Para optimizar:
@@ -453,6 +477,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       generado: new Date().toISOString(),
+      tenantMoneda,
       ventana,
       proyeccion,
       confianza,
