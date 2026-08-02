@@ -15,6 +15,7 @@ import {
   Clock,
   Sparkles,
   Calendar,
+  Target,
 } from 'lucide-react';
 import { apiFetch } from '@/lib/api-client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -22,6 +23,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { TimelineMensual, type TimelineData } from '@/components/insurance/TimelineMensual';
+import { ForecastCard, type ForecastData } from '@/components/insurance/ForecastCard';
 import { formatCurrency, formatDate, formatRelative } from '@/components/insurance/portfolio-format';
 
 interface PortfolioSnapshot {
@@ -137,6 +139,8 @@ export default function PortfolioPage() {
   const [snapshot, setSnapshot] = useState<PortfolioSnapshot | null>(null);
   const [timeline, setTimeline] = useState<TimelineData | null>(null);
   const [timelineLoading, setTimelineLoading] = useState(true);
+  const [forecast, setForecast] = useState<ForecastData | null>(null);
+  const [forecastLoading, setForecastLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
@@ -148,8 +152,9 @@ export default function PortfolioPage() {
       if (!res.ok) throw new Error(data?.error ?? 'No pude obtener el snapshot');
       setSnapshot(data);
       setLastRefresh(new Date());
-      // Refresca el timeline en paralelo — es independiente del snapshot.
+      // Refresca el timeline + forecast en paralelo — son independientes del snapshot.
       loadTimeline();
+      loadForecast();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error al cargar el portfolio');
     } finally {
@@ -171,9 +176,24 @@ export default function PortfolioPage() {
     }
   }
 
+  async function loadForecast() {
+    try {
+      setForecastLoading(true);
+      const res = await apiFetch('/api/insurance/portfolio/forecast');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? 'No pude obtener el forecast');
+      setForecast(data);
+    } catch (err) {
+      console.error('Error al cargar el forecast:', err);
+    } finally {
+      setForecastLoading(false);
+    }
+  }
+
   useEffect(() => {
     loadSnapshot();
     loadTimeline();
+    loadForecast();
   }, []);
 
   const maxRamoPrima = useMemo(() => {
@@ -311,6 +331,28 @@ export default function PortfolioPage() {
           ) : (
             <div className="text-sm text-muted-foreground text-center py-8">
               Aún no hay datos de timeline.
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Forecast: proyección lineal del próximo mes basada en los últimos 6 meses */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Target className="w-5 h-5 text-indigo-600" />
+            ¿Cuánto emitiré el próximo mes?
+          </CardTitle>
+          <CardDescription>
+            Regresión lineal sobre los últimos 6 meses con intervalo de confianza
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {forecast || forecastLoading ? (
+            <ForecastCard data={forecast} loading={forecastLoading && !forecast} />
+          ) : (
+            <div className="text-sm text-muted-foreground text-center py-8">
+              Aún no hay suficientes datos para proyectar.
             </div>
           )}
         </CardContent>
