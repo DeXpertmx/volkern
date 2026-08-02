@@ -34,14 +34,27 @@ import { toast } from 'sonner';
 interface Aseguradora {
   id: string;
   nombre: string;
+  nif: string | null;
   telefono: string | null;
   email: string | null;
   web: string | null;
   direccion: string | null;
+  // Bloque 1: Identificación Legal y Fiscal
+  razonSocial: string | null;
+  nombreComercial: string | null;
+  codigoPostal: string | null;
+  provincia: string | null;
+  pais: string | null;
+  regimenFiscal: string | null;
+  // Bloque 2: Regulación y Licencias
+  numeroRegistro: string | null;
+  ramosAutorizados: string[] | null;
+  fechaVigenciaLicenciaInicio: string | null;
+  fechaVigenciaLicenciaFin: string | null;
   notas: string | null;
   activa: boolean;
   _count: { polizas: number; productos: number };
-  fechaCreacion: string;
+  createdAt: string;
 }
 
 export default function AseguradorasPage() {
@@ -54,10 +67,21 @@ export default function AseguradorasPage() {
 
   const [formData, setFormData] = useState({
     nombre: '',
+    nif: '',
     telefono: '',
     email: '',
     web: '',
     direccion: '',
+    razonSocial: '',
+    nombreComercial: '',
+    codigoPostal: '',
+    provincia: '',
+    pais: '',
+    regimenFiscal: '',
+    numeroRegistro: '',
+    ramosAutorizados: '',
+    fechaVigenciaLicenciaInicio: '',
+    fechaVigenciaLicenciaFin: '',
     notas: '',
     activa: true,
   });
@@ -95,7 +119,12 @@ export default function AseguradorasPage() {
 
   const handleNew = () => {
     setEditingAseg(null);
-    setFormData({ nombre: '', telefono: '', email: '', web: '', direccion: '', notas: '', activa: true });
+    setFormData({
+      nombre: '', nif: '', telefono: '', email: '', web: '', direccion: '',
+      razonSocial: '', nombreComercial: '', codigoPostal: '', provincia: '', pais: '', regimenFiscal: '',
+      numeroRegistro: '', ramosAutorizados: '', fechaVigenciaLicenciaInicio: '', fechaVigenciaLicenciaFin: '',
+      notas: '', activa: true,
+    });
     setIsFormOpen(true);
   };
 
@@ -103,10 +132,21 @@ export default function AseguradorasPage() {
     setEditingAseg(a);
     setFormData({
       nombre: a.nombre,
+      nif: a.nif || '',
       telefono: a.telefono || '',
       email: a.email || '',
       web: a.web || '',
       direccion: a.direccion || '',
+      razonSocial: a.razonSocial || '',
+      nombreComercial: a.nombreComercial || '',
+      codigoPostal: a.codigoPostal || '',
+      provincia: a.provincia || '',
+      pais: a.pais || '',
+      regimenFiscal: a.regimenFiscal || '',
+      numeroRegistro: a.numeroRegistro || '',
+      ramosAutorizados: Array.isArray(a.ramosAutorizados) ? a.ramosAutorizados.join(', ') : '',
+      fechaVigenciaLicenciaInicio: a.fechaVigenciaLicenciaInicio ? a.fechaVigenciaLicenciaInicio.slice(0, 10) : '',
+      fechaVigenciaLicenciaFin: a.fechaVigenciaLicenciaFin ? a.fechaVigenciaLicenciaFin.slice(0, 10) : '',
       notas: a.notas || '',
       activa: a.activa,
     });
@@ -127,10 +167,18 @@ export default function AseguradorasPage() {
         ? `/api/insurance/aseguradoras/${editingAseg.id}`
         : '/api/insurance/aseguradoras';
 
+      // Convertir ramosAutorizados (string separado por comas) en array para la API
+      const payload = {
+        ...formData,
+        ramosAutorizados: formData.ramosAutorizados
+          ? formData.ramosAutorizados.split(',').map(r => r.trim()).filter(Boolean)
+          : [],
+      };
+
       const res = await apiFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
@@ -239,21 +287,49 @@ export default function AseguradorasPage() {
                       </Badge>
                     </div>
                     <div className="space-y-1 text-sm text-muted-foreground">
+                      {a.razonSocial && a.razonSocial !== a.nombre && (
+                        <div className="flex items-center gap-2">
+                          <Building2 className="w-3.5 h-3.5 shrink-0" />
+                          <span className="truncate">{a.razonSocial}</span>
+                        </div>
+                      )}
+                      {a.nif && (
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs">{a.nif}</span>
+                        </div>
+                      )}
+                      {a.numeroRegistro && (
+                        <div className="flex items-center gap-2">
+                          <span className="truncate text-xs">Reg. {a.numeroRegistro}</span>
+                        </div>
+                      )}
+                      {Array.isArray(a.ramosAutorizados) && a.ramosAutorizados.length > 0 && (
+                        <div className="flex flex-wrap gap-1 pt-0.5">
+                          {a.ramosAutorizados.slice(0, 4).map((r) => (
+                            <Badge key={r} variant="outline" className="text-[10px] font-normal px-1.5 py-0">
+                              {r}
+                            </Badge>
+                          ))}
+                          {a.ramosAutorizados.length > 4 && (
+                            <span className="text-[10px] text-muted-foreground">+{a.ramosAutorizados.length - 4}</span>
+                          )}
+                        </div>
+                      )}
                       {a.email && (
                         <div className="flex items-center gap-2">
-                          <Mail className="w-3.5 h-3.5" />
+                          <Mail className="w-3.5 h-3.5 shrink-0" />
                           <span className="truncate">{a.email}</span>
                         </div>
                       )}
                       {a.telefono && (
                         <div className="flex items-center gap-2">
-                          <Phone className="w-3.5 h-3.5" />
+                          <Phone className="w-3.5 h-3.5 shrink-0" />
                           <span>{a.telefono}</span>
                         </div>
                       )}
                       {a.web && (
                         <div className="flex items-center gap-2">
-                          <Globe className="w-3.5 h-3.5" />
+                          <Globe className="w-3.5 h-3.5 shrink-0" />
                           <span className="truncate">{a.web}</span>
                         </div>
                       )}
@@ -294,6 +370,134 @@ export default function AseguradorasPage() {
                 required
               />
             </div>
+
+            {/* ── Identificación Legal y Fiscal (Bloque 1) ── */}
+            <div className="rounded-lg border p-3 space-y-3">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Identificación Legal y Fiscal</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="razonSocial">Razón Social</Label>
+                  <Input
+                    id="razonSocial"
+                    value={formData.razonSocial}
+                    onChange={e => setFormData(prev => ({ ...prev, razonSocial: e.target.value }))}
+                    placeholder="Grupo Asegurador, S.A."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="nombreComercial">Nombre Comercial</Label>
+                  <Input
+                    id="nombreComercial"
+                    value={formData.nombreComercial}
+                    onChange={e => setFormData(prev => ({ ...prev, nombreComercial: e.target.value }))}
+                    placeholder="AXA Seguros"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="nif">Identificación Fiscal (NIF/CIF/RFC)</Label>
+                  <Input
+                    id="nif"
+                    value={formData.nif}
+                    onChange={e => setFormData(prev => ({ ...prev, nif: e.target.value }))}
+                    placeholder="A12345678"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="regimenFiscal">Régimen Fiscal</Label>
+                  <Input
+                    id="regimenFiscal"
+                    value={formData.regimenFiscal}
+                    onChange={e => setFormData(prev => ({ ...prev, regimenFiscal: e.target.value }))}
+                    placeholder="Gran Contribuyente, Agente de Retención..."
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-2 col-span-3 sm:col-span-1">
+                  <Label htmlFor="direccion">Domicilio Fiscal</Label>
+                  <Input
+                    id="direccion"
+                    value={formData.direccion}
+                    onChange={e => setFormData(prev => ({ ...prev, direccion: e.target.value }))}
+                    placeholder="Calle, número, colonia..."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="codigoPostal">C.P.</Label>
+                  <Input
+                    id="codigoPostal"
+                    value={formData.codigoPostal}
+                    onChange={e => setFormData(prev => ({ ...prev, codigoPostal: e.target.value }))}
+                    placeholder="28001"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="provincia">Provincia/Estado</Label>
+                  <Input
+                    id="provincia"
+                    value={formData.provincia}
+                    onChange={e => setFormData(prev => ({ ...prev, provincia: e.target.value }))}
+                    placeholder="Madrid"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="pais">País</Label>
+                  <Input
+                    id="pais"
+                    value={formData.pais}
+                    onChange={e => setFormData(prev => ({ ...prev, pais: e.target.value }))}
+                    placeholder="España"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* ── Regulación y Licencias (Bloque 2) ── */}
+            <div className="rounded-lg border p-3 space-y-3">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Regulación y Licencias</p>
+              <div className="space-y-2">
+                <Label htmlFor="numeroRegistro">Nº Registro / Licencia Reguladora</Label>
+                <Input
+                  id="numeroRegistro"
+                  value={formData.numeroRegistro}
+                  onChange={e => setFormData(prev => ({ ...prev, numeroRegistro: e.target.value }))}
+                  placeholder="CNSF/DGSFP/Superintendencia..."
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ramosAutorizados">Ramos Autorizados</Label>
+                <Input
+                  id="ramosAutorizados"
+                  value={formData.ramosAutorizados}
+                  onChange={e => setFormData(prev => ({ ...prev, ramosAutorizados: e.target.value }))}
+                  placeholder="Vida, Salud, Autos, Caución... (separados por coma)"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="fechaVigenciaLicenciaInicio">Vigencia Licencia — Inicio</Label>
+                  <Input
+                    id="fechaVigenciaLicenciaInicio"
+                    type="date"
+                    value={formData.fechaVigenciaLicenciaInicio}
+                    onChange={e => setFormData(prev => ({ ...prev, fechaVigenciaLicenciaInicio: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="fechaVigenciaLicenciaFin">Vigencia Licencia — Fin</Label>
+                  <Input
+                    id="fechaVigenciaLicenciaFin"
+                    type="date"
+                    value={formData.fechaVigenciaLicenciaFin}
+                    onChange={e => setFormData(prev => ({ ...prev, fechaVigenciaLicenciaFin: e.target.value }))}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* ── Contacto ── */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="telefono">Teléfono</Label>
@@ -322,15 +526,6 @@ export default function AseguradorasPage() {
                 value={formData.web}
                 onChange={e => setFormData(prev => ({ ...prev, web: e.target.value }))}
                 placeholder="https://..."
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="direccion">Dirección</Label>
-              <Input
-                id="direccion"
-                value={formData.direccion}
-                onChange={e => setFormData(prev => ({ ...prev, direccion: e.target.value }))}
-                placeholder="Calle, ciudad..."
               />
             </div>
             <div className="space-y-2">
