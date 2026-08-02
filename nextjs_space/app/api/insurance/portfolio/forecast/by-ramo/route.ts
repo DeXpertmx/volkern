@@ -10,6 +10,11 @@ import {
   buildEmptySeries,
   computeRegressionForecast,
 } from '@/lib/insurance/forecast-engine';
+import {
+  fxConvert,
+  CURRENCY_CONSTANTS,
+  type Currency,
+} from '@/lib/insurance/currency';
 
 /**
  * GET /api/insurance/portfolio/forecast/by-ramo
@@ -47,6 +52,7 @@ const MAX_DIAS_PROXIMA = 60; // ventana estándar de "próximas a vencer" para e
 
 interface ByRamoPayload {
   generado: string;
+  tenantMoneda: string;
   windowSize: number;
   windowDiasProxima: number;
   ramos: Array<{
@@ -86,6 +92,14 @@ export async function GET(request: NextRequest) {
     const startDate = new Date(now.getFullYear(), now.getMonth() - (WINDOW - 1), 1);
     const skeleton = buildEmptySeries(now, WINDOW);
 
+    // Cargar moneda del tenant una sola vez para convertir todas las sumas.
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: auth.tenant!.id },
+      select: { moneda: true },
+    });
+    const tenantMoneda: Currency = (tenant?.moneda as Currency | undefined) ??
+      (CURRENCY_CONSTANTS.DEFAULT_TENANT_CURRENCY as Currency);
+
     // Ventana para PROXIMA_A_VENCER: hoy + MAX_DIAS_PROXIMA
     const upcomingLimit = new Date(now.getTime() + MAX_DIAS_PROXIMA * 24 * 60 * 60 * 1000);
 
@@ -99,13 +113,15 @@ export async function GET(request: NextRequest) {
             fechaEmision: { gte: startDate },
             productoSeguro: { ramo: ramo as any },
           },
-          select: { fechaEmision: true, primaAnual: true },
+          select: { fechaEmision: true, primaAnual: true, moneda: true },
         });
-        // Mapear Decimal → number para que `accumulateByMonth` acepte el shape.
+        // Mapear Decimal → number + convertir a tenantMoneda (FIX bug monedas).
         const ventana = accumulateByMonth(
           polizasEmitidas.map(p => ({
             fechaEmision: p.fechaEmision,
-            primaAnual: p.primaAnual ? Number(p.primaAnual) : null,
+            primaAnual: p.primaAnual
+              ? fxConvert(Number(p.primaAnual), (p.moneda as string) ?? 'USD', tenantMoneda)
+              : null,
           })),
           JSON.parse(JSON.stringify(skeleton))
         );
@@ -176,6 +192,7 @@ export async function GET(request: NextRequest) {
 
     const payload: ByRamoPayload = {
       generado: new Date().toISOString(),
+      tenantMoneda,
       windowSize: WINDOW,
       windowDiasProxima: MAX_DIAS_PROXIMA,
       ramos: ramoJobs,

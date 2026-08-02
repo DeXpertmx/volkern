@@ -26,10 +26,27 @@ import { TimelineMensual, type TimelineData } from '@/components/insurance/Timel
 import { ForecastCard, type ForecastData } from '@/components/insurance/ForecastCard';
 import { SmartForecastCard, type SmartForecastFE } from '@/components/insurance/SmartForecastCard';
 import { MultiRamoForecastGrid, type ByRamoData } from '@/components/insurance/MultiRamoForecastGrid';
-import { formatCurrency, formatDate, formatRelative } from '@/components/insurance/portfolio-format';
+import {
+  formatCurrency,
+  formatCurrencyExact,
+  formatDate,
+  formatRelative,
+} from '@/components/insurance/portfolio-format';
+import { fxConvert as fxPolizaToTarget } from '@/lib/insurance/currency';
 
 interface PortfolioSnapshot {
   generado: string;
+  tenantMoneda: string;
+  mezclaMonedas: {
+    mezcla: boolean;
+    porMoneda: Array<{
+      moneda: string;
+      count: number;
+      totalOriginal: number;
+      totalEnTarget: number;
+    }>;
+    totalEnTarget: number;
+  };
   kpis: {
     aseguradoras: number;
     productos: number;
@@ -64,6 +81,7 @@ interface PortfolioSnapshot {
     ramo: string | null;
     estado: string;
     primaAnual: number;
+    moneda: string;        // ← moneda nativa de la póliza (antes no se incluía)
     fechaVencimiento: string;
     createdAt: string;
   }>;
@@ -73,6 +91,7 @@ interface PortfolioSnapshot {
     aseguradora: string | null;
     producto: string | null;
     primaAnual: number;
+    moneda: string;        // ← moneda nativa
   }>;
 }
 
@@ -109,20 +128,21 @@ const RAMO_COLORS: Record<string, string> = {
 
 function exportToCSV(data: PortfolioSnapshot): void {
   const rows: string[] = ['Sección,Métrica,Valor'];
+  rows.push(`KPIs,Moneda tenant,${data.tenantMoneda}`);
   rows.push(`KPIs,Aseguradoras activas,${data.kpis.aseguradoras}`);
   rows.push(`KPIs,Productos publicados,${data.kpis.productos}`);
   rows.push(`KPIs,Pólizas activas,${data.kpis.polizasActivas}`);
   rows.push(`KPIs,Pólizas vencidas,${data.kpis.polizasVencidas}`);
-  rows.push(`KPIs,Prima anual total,${data.kpis.primaTotal}`);
-  rows.push(`KPIs,Prima promedio,${data.kpis.primaPromedio}`);
+  rows.push(`KPIs,Prima anual total (${data.tenantMoneda}),${data.kpis.primaTotal}`);
+  rows.push(`KPIs,Prima promedio (${data.tenantMoneda}),${data.kpis.primaPromedio}`);
   rows.push(`Alertas,Pólizas por vencer 30d,${data.alertas.polizasPorVencer30d}`);
   rows.push(`Alertas,Pólizas por vencer 60d,${data.alertas.polizasPorVencer60d}`);
   rows.push(`Alertas,Pólizas sin comisión,${data.alertas.polizasSinComisionCount}`);
   for (const r of data.mixPorRamo) {
-    rows.push(`Mix por ramo,${r.ramoLabel},${r.polizasCount} pólizas / ${formatCurrency(r.primaTotal)}`);
+    rows.push(`Mix por ramo,${r.ramoLabel},${r.polizasCount} pólizas / ${formatCurrency(r.primaTotal, data.tenantMoneda)}`);
   }
   for (const t of data.topAseguradoras) {
-    rows.push(`Top aseguradora,${t.nombre},${t.polizasCount} pólizas / ${formatCurrency(t.primaTotal)}`);
+    rows.push(`Top aseguradora,${t.nombre},${t.polizasCount} pólizas / ${formatCurrency(t.primaTotal, data.tenantMoneda)}`);
   }
 
   const csv = '\uFEFF' + rows.join('\r\n');
@@ -279,6 +299,9 @@ export default function PortfolioPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Badge variant="outline" className="text-xs font-mono">
+            {snapshot.tenantMoneda}
+          </Badge>
           <Button variant="outline" size="sm" onClick={() => loadSnapshot()} disabled={loading}>
             <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Refrescar
@@ -289,6 +312,46 @@ export default function PortfolioPage() {
           </Button>
         </div>
       </div>
+
+      {/* Banner de mezcla de monedas — sólo aparece cuando el portfolio combina
+          monedas. Indica cuántas pólizas hay en cada una y el equivalente
+          convertido a la moneda del tenant. Crucial para que el broker no
+          vea cifras infladas (suma de EUR+USD sin convertir). */}
+      {snapshot.mezclaMonedas.mezcla && (
+        <div
+          className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 flex items-start gap-3"
+          role="status"
+        >
+          <AlertTriangle className="w-5 h-5 text-amber-700 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-amber-900">
+              Portfolio multi-divisa · Convertido a {snapshot.tenantMoneda}
+            </p>
+            <p className="text-xs text-amber-800 mt-0.5">
+              Los totales del portfolio están expresados en{' '}
+              <strong className="font-mono">{snapshot.tenantMoneda}</strong>{' '}
+              (FX estático). Las pólizas mantienen su moneda nativa individual
+              que puedes ver en la tabla "Últimas pólizas".
+            </p>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {snapshot.mezclaMonedas.porMoneda.map(m => (
+                <span
+                  key={m.moneda}
+                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-white ring-1 ring-amber-200 text-xs font-mono"
+                  title={`≈ ${formatCurrency(m.totalEnTarget, snapshot.tenantMoneda)} en ${snapshot.tenantMoneda}`}
+                >
+                  <strong className="text-amber-900">{m.moneda}</strong>
+                  <span className="text-amber-700">{m.count} pólizas</span>
+                  <span className="text-amber-600">·</span>
+                  <span className="text-amber-800 tabular-nums">
+                    {m.totalOriginal.toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+                  </span>
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 4 KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -344,9 +407,9 @@ export default function PortfolioPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-emerald-700">{formatCurrency(kpis.primaTotal)}</div>
+            <div className="text-3xl font-bold text-emerald-700">{formatCurrency(kpis.primaTotal, snapshot?.tenantMoneda ?? 'MXN')}</div>
             <p className="text-xs text-emerald-700/70 mt-1">
-              promedio: {formatCurrency(kpis.primaPromedio)} / póliza
+              promedio: {formatCurrency(kpis.primaPromedio, snapshot?.tenantMoneda ?? 'MXN')} / póliza
             </p>
           </CardContent>
         </Card>
@@ -534,7 +597,7 @@ export default function PortfolioPage() {
                           </Badge>
                         </div>
                         <span className="text-sm text-muted-foreground tabular-nums">
-                          {formatCurrency(r.primaTotal)}
+                          {formatCurrency(r.primaTotal, snapshot?.tenantMoneda ?? 'MXN')}
                         </span>
                       </div>
                       <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
@@ -580,7 +643,7 @@ export default function PortfolioPage() {
                         <div className="flex items-center justify-between mb-1">
                           <span className="font-medium truncate">{a.nombre}</span>
                           <span className="text-sm text-muted-foreground tabular-nums ml-2">
-                            {formatCurrency(a.primaTotal)}
+                            {formatCurrency(a.primaTotal, snapshot?.tenantMoneda ?? 'MXN')}
                           </span>
                         </div>
                         <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
@@ -647,7 +710,23 @@ export default function PortfolioPage() {
                       <td className="py-2 px-2 truncate max-w-[180px]">{p.cliente ?? '—'}</td>
                       <td className="py-2 px-2 truncate max-w-[160px] hidden md:table-cell">{p.aseguradora ?? '—'}</td>
                       <td className="py-2 px-2 truncate max-w-[180px] hidden lg:table-cell">{p.producto ?? '—'}</td>
-                      <td className="py-2 px-2 text-right tabular-nums">{formatCurrency(p.primaAnual)}</td>
+                      <td className="py-2 px-2 text-right tabular-nums">
+                        <span className="font-semibold">{formatCurrencyExact(p.primaAnual, p.moneda)}</span>
+                        {p.moneda !== snapshot?.tenantMoneda && (
+                          <span
+                            className="ml-1 text-[10px] text-muted-foreground tabular-nums"
+                            title={`≈ ${formatCurrencyExact(
+                              fxPolizaToTarget(p.primaAnual, p.moneda, snapshot?.tenantMoneda ?? 'MXN'),
+                              snapshot?.tenantMoneda ?? 'MXN'
+                            )} (convertido a ${snapshot?.tenantMoneda ?? 'MXN'})`}
+                          >
+                            ≈ {formatCurrency(
+                              fxPolizaToTarget(p.primaAnual, p.moneda, snapshot?.tenantMoneda ?? 'MXN'),
+                              snapshot?.tenantMoneda ?? 'MXN'
+                            )}
+                          </span>
+                        )}
+                      </td>
                       <td className="py-2 px-2 text-center">
                         <Badge variant="outline" className={ESTADO_POLIZA_COLORS[p.estado] ?? ''}>
                           {ESTADO_POLIZA_LABELS[p.estado] ?? p.estado}
@@ -691,7 +770,17 @@ export default function PortfolioPage() {
                     </p>
                   </div>
                   <span className="text-sm font-semibold tabular-nums text-purple-700">
-                    {formatCurrency(p.primaAnual)}
+                    <span className="text-sm font-semibold tabular-nums">
+                      {formatCurrencyExact(p.primaAnual, p.moneda)}
+                    </span>
+                    {p.moneda !== snapshot?.tenantMoneda && (
+                      <span className="text-[10px] text-purple-600 ml-1 tabular-nums">
+                        ≈ {formatCurrency(
+                          fxPolizaToTarget(p.primaAnual, p.moneda, snapshot?.tenantMoneda ?? 'MXN'),
+                          snapshot?.tenantMoneda ?? 'MXN'
+                        )}
+                      </span>
+                    )}
                   </span>
                 </li>
               ))}
