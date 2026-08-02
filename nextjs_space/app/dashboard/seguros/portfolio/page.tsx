@@ -25,6 +25,7 @@ import { toast } from 'sonner';
 import { TimelineMensual, type TimelineData } from '@/components/insurance/TimelineMensual';
 import { ForecastCard, type ForecastData } from '@/components/insurance/ForecastCard';
 import { SmartForecastCard, type SmartForecastFE } from '@/components/insurance/SmartForecastCard';
+import { MultiRamoForecastGrid, type ByRamoData } from '@/components/insurance/MultiRamoForecastGrid';
 import { formatCurrency, formatDate, formatRelative } from '@/components/insurance/portfolio-format';
 
 interface PortfolioSnapshot {
@@ -144,6 +145,8 @@ export default function PortfolioPage() {
   const [forecastLoading, setForecastLoading] = useState(true);
   const [smartForecast, setSmartForecast] = useState<SmartForecastFE | null>(null);
   const [smartLoading, setSmartLoading] = useState(true);
+  const [byRamo, setByRamo] = useState<ByRamoData[] | null>(null);
+  const [byRamoLoading, setByRamoLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
@@ -159,6 +162,7 @@ export default function PortfolioPage() {
       loadTimeline();
       loadForecast();
       loadSmartForecast();
+      loadByRamo();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error al cargar el portfolio');
     } finally {
@@ -208,11 +212,26 @@ export default function PortfolioPage() {
     }
   }
 
+  async function loadByRamo() {
+    try {
+      setByRamoLoading(true);
+      const res = await apiFetch('/api/insurance/portfolio/forecast/by-ramo');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? 'No pude obtener el forecast por ramo');
+      setByRamo(data.ramos ?? []);
+    } catch (err) {
+      console.error('Error al cargar el forecast por ramo:', err);
+    } finally {
+      setByRamoLoading(false);
+    }
+  }
+
   useEffect(() => {
     loadSnapshot();
     loadTimeline();
     loadForecast();
     loadSmartForecast();
+    loadByRamo();
   }, []);
 
   const maxRamoPrima = useMemo(() => {
@@ -391,6 +410,24 @@ export default function PortfolioPage() {
         </CardHeader>
         <CardContent>
           <SmartForecastCard data={smartForecast} loading={smartLoading && !smartForecast} />
+        </CardContent>
+      </Card>
+
+      {/* Forecast multi-ramo: 12 mini sparklines + CTA Recuperar ramo */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Shield className="w-5 h-5 text-violet-600" />
+            Forecast por ramo
+          </CardTitle>
+          <CardDescription>
+            Regresión lineal individual para cada uno de los 12 ramos · ordenados
+            por caída absoluta · click en 'Recuperar ramo X' para ver las
+            pólizas próximas a vencer
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <MultiRamoForecastGrid data={byRamo} loading={byRamoLoading && !byRamo} />
         </CardContent>
       </Card>
 
