@@ -1,4 +1,6 @@
 export const dynamic = 'force-dynamic';
+// Cache de import por usuario: cada POST procesa un archivo distinto y
+// nunca debe servirse desde cache (forzamos siempre SSR fresco).
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
@@ -12,6 +14,10 @@ import {
   type ImportRowError,
   type ImportCreatedSummary,
 } from '@/lib/insurance/import-report';
+import {
+  parseCSVSmart,
+  suggestPolizasMapping,
+} from '@/lib/insurance/csv-wizard';
 
 // Required fields by key (the importer prefixes these with the mapped header name).
 const REQUIRED_FIELDS = ['numeroPoliza', 'clienteNombre', 'aseguradoraNombre', 'fechaInicio', 'fechaVencimiento'] as const;
@@ -48,33 +54,61 @@ export async function POST(req: NextRequest) {
     if (!file) {
       return NextResponse.json({ error: 'Archivo requerido' }, { status: 400 });
     }
-    if (!mappingStr) {
-      return NextResponse.json({ error: 'Mapeo de columnas requerido' }, { status: 400 });
+    // ── Límite de tamaño: 20MB para CSV. Evita OOM en archivos grandes.
+    const MAX_BYTES = 20 * 1024 * 1024;
+    if (file.size > MAX_BYTES) {
+      return NextResponse.json(
+        { error: `Archivo demasiado grande (${(file.size / 1024 / 1024).toFixed(1)} MB > 20 MB). Divide tu cartera.` },
+        { status: 413 }
+      );
     }
-
-    const mapping: Record<string, string> = JSON.parse(mappingStr);
+    // ── Auto-mapping si el cliente no envía mapping (compatibilidad +0 friccion)
     const fileType = file.name.endsWith('.csv') ? 'csv' : 'xlsx';
 
-    // ── Parsear el archivo ────────────────────────────────────────────────
+    // ── Parsear el archivo (siempre, para obtener headers incluso si vamos
+    //    a auto-mapear) ───────────────────────────────────────────────────
     let rows: Record<string, string>[];
+    let userHeaders: string[];
+    let detectedDelimiter: string;
     try {
       const buffer = Buffer.from(await file.arrayBuffer());
       const text = buffer.toString('utf-8');
 
-      if (fileType === 'csv') {
-        rows = parseCSV(text);
-      } else {
+      if (fileType !== 'csv') {
         return NextResponse.json(
           { error: 'Formato XLSX requiere librería xlsx. Por ahora solo se soporta CSV. Convierte tu Excel a CSV.' },
           { status: 400 }
         );
       }
+      const parsed = parseCSVSmart(text);
+      rows = parsed.rows;
+      userHeaders = parsed.headers;
+      detectedDelimiter = parsed.delimiter;
     } catch (parseErr) {
       return NextResponse.json({ error: 'Error al parsear el archivo: ' + (parseErr as Error).message }, { status: 400 });
     }
 
-    if (!rows || rows.length === 0) {
-      return NextResponse.json({ error: 'El archivo no contiene datos' }, { status: 400 });
+    // ── Resolver mapping: explícito > sugerido ────────────────────────────
+    let mapping: Record<string, string> = {};
+    let autoMapped = false;
+    if (mappingStr && mappingStr !== 'null' && mappingStr !== '{}') {
+      try {
+        const parsed = JSON.parse(mappingStr);
+        // Defensive: rechazar arrays y quedarse solo con strings en los values
+        // (un cliente malicioso podría mandar objects → bugs silenciosos).
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          mapping = Object.fromEntries(
+            Object.entries(parsed).filter(([, v]) => typeof v === 'string' && v.length > 0)
+          ) as Record<string, string>;
+        }
+      } catch {
+        mapping = {};
+      }
+    }
+    if (Object.keys(mapping).length === 0) {
+      const sugerido = suggestPolizasMapping(userHeaders);
+      mapping = sugerido.mapping;
+      autoMapped = true;
     }
 
     // ── Validar columnas requeridas ──────────────────────────────────────
@@ -84,6 +118,10 @@ export async function POST(req: NextRequest) {
         { error: `Faltan columnas requeridas en el mapeo: ${missingFields.join(', ')}` },
         { status: 400 }
       );
+    }
+
+    if (!rows || rows.length === 0) {
+      return NextResponse.json({ error: 'El archivo no contiene datos' }, { status: 400 });
     }
 
     const tenantId = auth.tenant!.id;
@@ -300,7 +338,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      report: { ...report, logId: log.id },
+      report: { ...report, logId: log.id, autoMapped },
     });
   } catch (error) {
     console.error('Error al importar pólizas:', error);
@@ -308,8 +346,15 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// ─── PUT - Previsualizar archivo (sin guardar) ────────────────────────────────
-
+// ─── PUT - Analizar archivo (sin guardar) ─────────────────────────────────
+//
+// Devuelve todo lo necesario para que la UI arme el paso 2 del wizard:
+//   - delimiter: ',' | ';' | '\t' detectado y su label legible
+//   - columns: lista cruda de headers del CSV
+//   - mapeoSugerido: best-effort canónico -> header (sólo confianza >= 0.6)
+//   - matches: detalle por canónico (incluso los NO matcheados, confidence 0)
+//   - preview: 10 primeras filas para mostrar al usuario
+//
 export async function PUT(req: NextRequest) {
   try {
     const auth = await authenticateRequest(req, ['insurance:read', 'catalogo:read']);
@@ -319,78 +364,39 @@ export async function PUT(req: NextRequest) {
 
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
-
     if (!file) {
       return NextResponse.json({ error: 'Archivo requerido' }, { status: 400 });
+    }
+    if (!file.name.endsWith('.csv')) {
+      return NextResponse.json(
+        { error: 'Por ahora solo CSV. Convierte tu Excel a CSV.' },
+        { status: 400 }
+      );
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
     const text = buffer.toString('utf-8');
-    const rows = parseCSV(text);
-
-    if (!rows || rows.length === 0) {
+    const parsed = parseCSVSmart(text);
+    if (!parsed.headers.length || parsed.rows.length === 0) {
       return NextResponse.json({ error: 'El archivo no contiene datos' }, { status: 400 });
     }
 
+    const sugerencia = suggestPolizasMapping(parsed.headers);
+    const REQUERIDOS = ['numeroPoliza', 'clienteNombre', 'aseguradoraNombre', 'fechaInicio', 'fechaVencimiento'];
+
     return NextResponse.json({
       fileName: file.name,
-      totalRows: rows.length,
-      columns: Object.keys(rows[0]),
-      preview: rows.slice(0, 10),
+      delimiter: parsed.delimiter,
+      delimiterLabel: parsed.delimiter === ',' ? 'coma' : parsed.delimiter === ';' ? 'punto y coma' : 'tabulador',
+      totalRows: parsed.rows.length,
+      columns: parsed.headers,
+      preview: parsed.rows.slice(0, 10),
+      mapeoSugerido: sugerencia.mapping,
+      matches: sugerencia.matches,
+      autoMapAvailable: REQUERIDOS.every(c => sugerencia.mapping[c]),
     });
   } catch (error) {
-    console.error('Error al previsualizar archivo:', error);
-    return NextResponse.json({ error: 'Error al previsualizar archivo' }, { status: 500 });
+    console.error('Error al analizar el archivo:', error);
+    return NextResponse.json({ error: 'Error al analizar el archivo: ' + (error as Error).message }, { status: 500 });
   }
-}
-
-// ─── CSV parser  ─────────────────────────────────────────────────────────────────
-function parseCSV(text: string): Record<string, string>[] {
-  const lines = text.split('\n').filter(line => line.trim());
-  if (lines.length < 2) return [];
-
-  const headers = parseCSVLine(lines[0]);
-  const rows: Record<string, string>[] = [];
-
-  for (let i = 1; i < lines.length; i++) {
-    const values = parseCSVLine(lines[i]);
-    // Mantener el matching por posición para que un CSV con líneas más cortas
-    // siga parseándose (los huecos quedan como '').
-    const row: Record<string, string> = {};
-    for (let j = 0; j < headers.length; j++) {
-      row[headers[j]] = (values[j] ?? '').trim();
-    }
-    rows.push(row);
-  }
-
-  return rows;
-}
-
-function parseCSVLine(line: string): string[] {
-  const result: string[] = [];
-  let current = '';
-  let inQuotes = false;
-
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-    if (char === '"') {
-      if (inQuotes && line[i + 1] === '"') {
-        current += '"';
-        i++;
-      } else {
-        inQuotes = !inQuotes;
-      }
-    } else if (char === ',' && !inQuotes) {
-      result.push(current);
-      current = '';
-    } else if (char === ';' && !inQuotes) {
-      result.push(current);
-      current = '';
-    } else {
-      current += char;
-    }
-  }
-  result.push(current);
-
-  return result;
 }
