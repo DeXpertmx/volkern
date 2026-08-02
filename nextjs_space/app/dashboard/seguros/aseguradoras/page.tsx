@@ -15,7 +15,13 @@ import {
   Globe,
   Loader2,
   X,
+  Upload,
 } from 'lucide-react';
+import { ImportEntityWizard } from '@/components/insurance/ImportEntityWizard';
+import {
+  buildTemplateAseguradoras,
+  TEMPLATE_ASEGURADORAS_FILENAME,
+} from '@/lib/insurance/csv-template';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -59,6 +65,32 @@ interface Aseguradora {
   createdAt: string;
 }
 
+/**
+ * Columnas canónicas que el wizard muestra en el paso 2 (mapeo).
+ * Mantienen el mismo orden que el reporte descargable y los headers
+ * del template bajado — así el corredor reconoce qué columna es cuál.
+ */
+const ASEGURADORAS_CANONICOS_UI: Array<{ key: string; label: string; required: boolean }> = [
+  { key: 'nombre',                label: 'Nombre comercial',     required: true  },
+  { key: 'razonSocial',           label: 'Razón social',         required: false },
+  { key: 'nombreComercial',       label: 'Marca',                required: false },
+  { key: 'identificacionFiscal',  label: 'RFC / NIT / RUC',      required: false },
+  { key: 'domicilioFiscal',       label: 'Domicilio fiscal',     required: false },
+  { key: 'codigoPostal',          label: 'Código postal',        required: false },
+  { key: 'provincia',             label: 'Estado / Provincia',   required: false },
+  { key: 'pais',                  label: 'País',                 required: false },
+  { key: 'regimenFiscal',         label: 'Régimen fiscal',       required: false },
+  { key: 'numeroRegistro',        label: 'Nº registro regulador', required: false },
+  { key: 'ramosAutorizados',      label: 'Ramos autorizados',   required: false },
+  { key: 'licenciaInicio',        label: 'Inicio licencia',      required: false },
+  { key: 'licenciaVencimiento',   label: 'Vencimiento licencia', required: false },
+  { key: 'representanteLegal',    label: 'Representante legal',  required: false },
+  { key: 'telefono',              label: 'Teléfono',             required: false },
+  { key: 'email',                 label: 'Email',                required: false },
+  { key: 'sitioWeb',              label: 'Sitio web',            required: false },
+  { key: 'notas',                 label: 'Notas',                required: false },
+];
+
 export default function AseguradorasPage() {
   const router = useRouter();
   const [aseguradoras, setAseguradoras] = useState<Aseguradora[]>([]);
@@ -67,6 +99,7 @@ export default function AseguradorasPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingAseg, setEditingAseg] = useState<Aseguradora | null>(null);
   const [saving, setSaving] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
 
   const [formData, setFormData] = useState({
     nombre: '',
@@ -243,6 +276,10 @@ export default function AseguradorasPage() {
                 className="pl-9"
               />
             </div>
+            <Button variant="outline" onClick={() => setIsImportOpen(true)}>
+              <Upload className="w-4 h-4 mr-2" />
+              Importar
+            </Button>
             <Button onClick={handleNew}>
               <Plus className="w-4 h-4 mr-2" />
               Nueva Aseguradora
@@ -572,6 +609,20 @@ export default function AseguradorasPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <ImportEntityWizard
+        open={isImportOpen}
+        onOpenChange={setIsImportOpen}
+        endpoint="/api/insurance/aseguradoras/importar"
+        canonicalColumns={ASEGURADORAS_CANONICOS_UI}
+        templateBuilder={buildTemplateAseguradoras}
+        templateFilename={TEMPLATE_ASEGURADORAS_FILENAME}
+        entityLabel="Aseguradoras"
+        fileInputId="aseguradoras-wizard-file-input"
+        requiredFieldsHint="Al menos el nombre comercial es obligatorio; el resto se infiere del CSV."
+        extraTips={["Si tu archivo viene de Excel con acentos o celdas combinadas, el paso 'Análisis' detecta el delimitador y propone el mapeo automáticamente."]}
+        onCompleted={() => loadAseguradoras()}
+      />
     </div>
   );
 }
