@@ -192,6 +192,120 @@ export const POLIZAS_COLUMN_SYNONYMS: Record<string, readonly string[]> = {
   notas: ['notas', 'notes', 'comments', 'comentarios', 'observaciones', 'remarks'],
 };
 
+// ─── Sinónimos (aseguradoras) — Bloques 1-2 del plan 6-bloques ───────────────
+
+/**
+ * Sinónimos ES/EN para los campos canónicos de Aseguradoras. Cubre los
+ * Bloques 1 (Identificación Legal/Fiscal) y 2 (Regulación/Licencias) del
+ * plan de los 6 bloques. Los Bloques 3-6 se cubrirán cuando el schema
+ * crezca y agreguemos más canónicos.
+ */
+export const ASEGURADORAS_COLUMN_SYNONYMS: Record<string, readonly string[]> = {
+  nombre: [
+    'aseguradora', 'compania', 'cia', 'nombre', 'name', 'insurance company',
+    'razon social', 'insurer', 'carrier', 'asegurador', 'company',
+  ],
+  razonSocial: [
+    'razon social', 'razonsocial', 'legal name', 'registered name',
+    'nombre legal', 'social denomination', 'business name',
+  ],
+  nombreComercial: [
+    'nombre comercial', 'nombrecomercial', 'trade name', 'brand', 'marca',
+    'commercial name', 'doing business as', 'dba',
+  ],
+  identificacionFiscal: [
+    'ruc', 'nit', 'rfc', 'cif', 'nif', 'ein', 'tax id', 'taxid',
+    'identificacion fiscal', 'identificacionfiscal', 'tax identification',
+  ],
+  domicilioFiscal: [
+    'domicilio', 'domicilio fiscal', 'direccion fiscal', 'address',
+    'fiscal address', 'tax address', 'registered address',
+  ],
+  codigoPostal: [
+    'cp', 'zip', 'zipcode', 'zip code', 'postal code', 'postalcode',
+    'codigo postal', 'codigopostal', 'postcode',
+  ],
+  provincia: [
+    'provincia', 'state', 'region', 'estado', 'municipio',
+  ],
+  pais: [
+    'pais', 'country', 'nacion', 'nation',
+  ],
+  regimenFiscal: [
+    'regimen', 'regimen fiscal', 'tax regime', 'tax regime type',
+    'tax status', 'fiscal status', 'tax classification',
+  ],
+  numeroRegistro: [
+    'registro', 'numero registro', 'licencia', 'numero licencia',
+    'registration', 'registration number', 'license number',
+    'license', 'regulatory license', 'regulatory number',
+  ],
+  licenciaInicio: [
+    'fecha inicio licencia', 'licencia inicio', 'vigencia licencia inicio',
+    'license start', 'license startdate', 'licensefrom',
+  ],
+  licenciaVencimiento: [
+    'fecha vencimiento licencia', 'licencia vencimiento',
+    'vigencia licencia fin', 'license expiry', 'license enddate',
+    'licenseto', 'licencia vence',
+  ],
+  ramosAutorizados: [
+    'ramos', 'ramos autorizados', 'authorized lines', 'business lines',
+    'productos autorizados', 'authorized products', 'authorized ramos',
+    'lines of business', 'lob',
+  ],
+  telefono: [
+    'telefono', 'tel', 'phone', 'telefono contacto', 'contact phone',
+    'contactphone', 'phonenumber', 'oficina',
+  ],
+  email: [
+    'email', 'mail', 'correo', 'correo electronico', 'contactemail',
+    'contact email', 'corporate email',
+  ],
+  sitioWeb: [
+    'sitio web', 'website', 'web', 'url', 'pagina', 'homepage',
+  ],
+  representanteLegal: [
+    'representante legal', 'representantelegal', 'legal representative',
+    'rep legal', 'signatory', 'authorized representative',
+  ],
+  notas: ['notas', 'notes', 'comments', 'comentarios', 'observaciones', 'remarks'],
+};
+
+// ─── Sinónimos (productos) ─────────────────────────────────────────────────
+
+/**
+ * Sinónimos ES/EN para los campos canónicos de Productos de seguros. Cada
+ * producto pertenece a una aseguradora (referenciada por nombre en el CSV).
+ */
+export const PRODUCTOS_COLUMN_SYNONYMS: Record<string, readonly string[]> = {
+  nombre: [
+    'producto', 'producto seguro', 'plan', 'cobertura', 'coverage',
+    'product', 'product name', 'nombre producto', 'nombre',
+  ],
+  aseguradoraNombre: [
+    'aseguradora', 'compania', 'cia', 'aseguradora nombre',
+    'insurance', 'insurance company', 'insurer', 'carrier',
+    'asegurador', 'company',
+  ],
+  ramo: [
+    'ramo', 'line', 'type', 'modality', 'ramo de seguro', 'business line',
+    'ramodelseguro', 'tiporamo', 'insurance line', 'categoria',
+  ],
+  primaReferencia: [
+    'prima', 'prima referencia', 'referencia', 'premium', 'reference premium',
+    'premiumreference', 'starting premium', 'base premium',
+  ],
+  comisionPorDefecto: [
+    'comision', 'comision defecto', 'comision por defecto', 'commission',
+    'default commission', 'commissiondefault', 'commission pct',
+  ],
+  moneda: ['moneda', 'currency', 'curr', 'divisa'],
+  descripcion: ['descripcion', 'description', 'desc', 'detalle', 'detail'],
+  activo: ['activo', 'active', 'habilitado', 'enabled', 'disponible'],
+  notas: ['notas', 'notes', 'comments', 'comentarios', 'observaciones', 'remarks'],
+};
+
 // ─── Matching fuzzy con confianza ───────────────────────────────────────────
 
 /**
@@ -249,8 +363,9 @@ function longestCommonPrefix(a: string, b: string): string {
 }
 
 /**
- * Mapea los headers del usuario contra todas las columnas canónicas de
- * Pólizas usando una asignación GREEDY por header único:
+ * Mapea los headers del usuario contra un diccionario de sinónimos (cualquier
+ * entidad: pólizas, aseguradoras, productos…) usando una asignación GREEDY por
+ * header único:
  *
  *   1. Calcula todas las parejas (header, canonical, confianza).
  *   2. Ordena por confianza descendente.
@@ -259,15 +374,16 @@ function longestCommonPrefix(a: string, b: string): string {
  * Así un mismo header no se asigna a dos canonicales distintos (evita la
  * ambigüedad de `nombre` -> `clienteNombre` AND `numeroPolizaNombre`).
  */
-export function suggestPolizasMapping(
+export function suggestEntityMapping(
   userHeaders: string[],
+  synonyms: Record<string, readonly string[]>,
   threshold = 0.6
 ): SuggestionResult {
-  const canonicos = Object.keys(POLIZAS_COLUMN_SYNONYMS);
+  const canonicos = Object.keys(synonyms);
   const candidatas: Array<{ header: string; canonical: string; confidence: number; reason: string }> = [];
 
   for (const canon of canonicos) {
-    const syns = POLIZAS_COLUMN_SYNONYMS[canon];
+    const syns = synonyms[canon];
     for (const h of userHeaders) {
       const { confidence, reason } = detectColumn(h, canon, syns);
       if (confidence >= threshold) {
@@ -296,7 +412,7 @@ export function suggestPolizasMapping(
   }
 
   const matches: ColumnMatch[] = [];
-  for (const canon of Object.keys(POLIZAS_COLUMN_SYNONYMS).sort()) {
+  for (const canon of canonicos.sort()) {
     matches.push(
       matchesByCanonical.get(canon) ?? {
         canonical: canon,
@@ -308,6 +424,34 @@ export function suggestPolizasMapping(
   }
 
   return { mapping, matches };
+}
+
+/**
+ * Wrapper específico para Pólizas. Mantenido por compatibilidad con código
+ * existente que ya lo consumía — toda la lógica real vive en
+ * `suggestEntityMapping`.
+ */
+export function suggestPolizasMapping(
+  userHeaders: string[],
+  threshold = 0.6
+): SuggestionResult {
+  return suggestEntityMapping(userHeaders, POLIZAS_COLUMN_SYNONYMS, threshold);
+}
+
+/** Wrapper específico para Aseguradoras (Bloques 1-2 del plan). */
+export function suggestAseguradorasMapping(
+  userHeaders: string[],
+  threshold = 0.6
+): SuggestionResult {
+  return suggestEntityMapping(userHeaders, ASEGURADORAS_COLUMN_SYNONYMS, threshold);
+}
+
+/** Wrapper específico para Productos. */
+export function suggestProductosMapping(
+  userHeaders: string[],
+  threshold = 0.6
+): SuggestionResult {
+  return suggestEntityMapping(userHeaders, PRODUCTOS_COLUMN_SYNONYMS, threshold);
 }
 
 // ─── Parser que respeta BOM + delimitador detectado ──────────────────────────
