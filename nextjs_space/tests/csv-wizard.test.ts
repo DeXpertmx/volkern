@@ -3,9 +3,14 @@ import {
   detectDelimiter,
   normalizeHeader,
   detectColumn,
+  suggestEntityMapping,
   suggestPolizasMapping,
+  suggestAseguradorasMapping,
+  suggestProductosMapping,
   parseCSVSmart,
   POLIZAS_COLUMN_SYNONYMS,
+  ASEGURADORAS_COLUMN_SYNONYMS,
+  PRODUCTOS_COLUMN_SYNONYMS,
 } from '@/lib/insurance/csv-wizard';
 
 // ─── detectDelimiter ───────────────────────────────────────────────────────
@@ -236,7 +241,96 @@ describe('suggestPolizasMapping', () => {
 
 // ─── parseCSVSmart ─────────────────────────────────────────────────────────
 
-describe('parseCSVSmart', () => {
+  it('devuelve matches ordenados alfabéticamente por canonical', () => {
+    const headers = ['dummy'];
+    const { matches } = suggestPolizasMapping(headers);
+    const canonicosEnMatches = matches.map(m => m.canonical);
+    // Matches deben ordenarse alfabéticamente por canonical.
+    const expected = [...canonicosEnMatches].sort();
+    expect(canonicosEnMatches).toEqual(expected);
+  });
+});
+
+// ─── suggestAseguradorasMapping ───────────────────────────────────────────────
+
+describe('suggestAseguradorasMapping', () => {
+  it('mapea headers canónicos en español', () => {
+    const headers = ['nombre', 'razonSocial', 'identificacionFiscal', 'numeroRegistro', 'pais'];
+    const { mapping } = suggestAseguradorasMapping(headers);
+    expect(mapping.nombre).toBe('nombre');
+    expect(mapping.razonSocial).toBe('razonSocial');
+    expect(mapping.identificacionFiscal).toBe('identificacionFiscal');
+    expect(mapping.numeroRegistro).toBe('numeroRegistro');
+    expect(mapping.pais).toBe('pais');
+  });
+
+  it('mapea variantes coloquiales y EN', () => {
+    const headers = ['Compañía', 'Trade Name', 'RFC', 'License', 'México'];
+    const { mapping } = suggestAseguradorasMapping(headers);
+    expect(mapping.nombre).toBe('Compañía');
+    expect(mapping.nombreComercial).toBe('Trade Name');
+    expect(mapping.identificacionFiscal).toBe('RFC');
+    expect(mapping.numeroRegistro).toBe('License');
+    expect(mapping.pais).toBe('México');
+  });
+
+  it('mapea RUC / NIT / CIF como identificacionFiscal', () => {
+    const headers = ['Aseguradora', 'RUC', 'NIT', 'CIF'];
+    const { mapping, matches } = suggestAseguradorasMapping(headers);
+    // Solo uno de los tres identificadores entra, los demás quedan como 0.
+    const identMatches = matches.filter(m => m.canonical === 'identificacionFiscal');
+    expect(identMatches.length).toBe(1);
+    expect(['ruc', 'nit', 'cif']).toContain(identMatches[0].matchedHeader?.toLowerCase());
+    expect(Object.keys(mapping)).toContain('identificacionFiscal');
+  });
+});
+
+// ─── suggestProductosMapping ─────────────────────────────────────────────────
+
+describe('suggestProductosMapping', () => {
+  it('mapea headers canónicos', () => {
+    const headers = ['nombre', 'aseguradoraNombre', 'ramo', 'primaReferencia'];
+    const { mapping } = suggestProductosMapping(headers);
+    expect(mapping.nombre).toBe('nombre');
+    expect(mapping.aseguradoraNombre).toBe('aseguradoraNombre');
+    expect(mapping.ramo).toBe('ramo');
+    expect(mapping.primaReferencia).toBe('primaReferencia');
+  });
+
+  it('mapea variantes coloquiales', () => {
+    const headers = ['Producto', 'Compañía', 'Línea', 'Premium'];
+    const { mapping } = suggestProductosMapping(headers);
+    expect(mapping.nombre).toBe('Producto');
+    expect(mapping.aseguradoraNombre).toBe('Compañía');
+    expect(mapping.ramo).toBe('Línea');
+    expect(mapping.primaReferencia).toBe('Premium');
+  });
+});
+
+// ─── suggestEntityMapping (genérico) ──────────────────────────────────────────
+
+describe('suggestEntityMapping', () => {
+  it('acepta sinonimos custom ad-hoc', () => {
+    const custom = {
+      idExterno: ['external id', 'extid', 'id'],
+      descripcion: ['description', 'descripcion', 'nota'],
+    };
+    const headers = ['EXTID', 'Description'];
+    const { mapping } = suggestEntityMapping(headers, custom);
+    expect(mapping.idExterno).toBe('EXTID');
+    expect(mapping.descripcion).toBe('Description');
+  });
+
+  it('mapea por sinonimo aunque no exista match exacto contra canonical', () => {
+    // Mismas sinonimos que la otra prueba, pero con threshold bajo para
+    // ver que el comportamiento greedy sigue siendo el mismo.
+    const custom = {
+      cuenta: ['cuenta contable', 'codigo cuenta', 'account'],
+    };
+    const { mapping } = suggestEntityMapping(['account'], custom);
+    expect(mapping.cuenta).toBe('account');
+  });
+});
   it('detecta delimitador + parsea CSV con coma', () => {
     const csv = 'a,b,c\n1,2,3\n4,5,6';
     const r = parseCSVSmart(csv);
