@@ -411,6 +411,7 @@ model Tenant {
   renovacionesSeguro             Renovacion[]
   oportunidadesComerciales       OportunidadComercial[]
   insuranceImportLogs            InsuranceImportLog[]
+  portfolioForecastLogs          PortfolioForecastLog[]            @relation("TenantForecastLogs")
 }
 
 model AttendanceRules {
@@ -7603,4 +7604,45 @@ model InsuranceImportLog {
   @@index([tenantId])
   @@index([createdAt])
   @@map("insurance_import_logs")
+}
+
+// ─── PortfolioForecastLog (auditoría de predicciones del forecast ejecutivo) ──
+// Cada GET a /api/insurance/portfolio/forecast persiste una fila. Cuando el mes
+// proyectado ya pasó, permite backfillear el valor real y calcular MAPE.
+// Constraint única (tenantId, mesProyectado, sourceVersion) garantiza idempotencia:
+//   - el mismo (tenant, mes) genera siempre la misma fila aunque se llame N veces
+//   - distintas versiones del modelo conviven en la misma tabla para comparar
+model PortfolioForecastLog {
+  id                String    @id @default(cuid())
+  tenantId          String
+  tenant            Tenant    @relation("TenantForecastLogs", fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Bucket (YYYY-MM-01 UTC) al que apunta la proyección ("el próximo mes").
+  mesProyectado     DateTime
+  // Valor numérico proyectado por el modelo en el instante de generación.
+  proyectado        Decimal   @db.Decimal(18, 2)
+  // Valor real backfilleado cuando el mes proyectado ya terminó. NULL hasta entonces.
+  real              Decimal?  @db.Decimal(18, 2)
+  // |proyectado - real| / max(real, 1) * 100 — error porcentual absoluto.
+  // Se computa al backfillear `real` para no tener que hacerlo en cada lectura.
+  errorPct          Decimal?  @db.Decimal(7, 2)
+
+  // Metadatos del modelo: pendiente, intercepto, R² y ventana en meses.
+  slope             Decimal?  @db.Decimal(18, 4)
+  intercepto        Decimal?  @db.Decimal(18, 4)
+  r2                Decimal?  @db.Decimal(7, 4)
+  ventanaMeses      Int       @default(6)
+
+  // Versión del modelo: si cambian los hiperparámetros del forecast, permite
+  // mantener separadas las filas antiguas para auditoría/A/B.
+  sourceVersion     String    @default("v1-linear-6m")
+
+  generadoEn        DateTime  @default(now())
+  backfilledEn      DateTime?
+
+  @@unique([tenantId, mesProyectado, sourceVersion])
+  @@index([tenantId])
+  @@index([generadoEn])
+  @@index([real])
+  @@map("portfolio_forecast_log")
 }

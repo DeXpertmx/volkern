@@ -8,22 +8,41 @@ import { authenticateRequest } from '@/lib/api-key-auth';
  * GET /api/insurance/portfolio/forecast
  *
  * Proyecta la prima del próximo mes con regresión lineal simple sobre los
- * últimos 6 meses (los mismos buckets del timeline endpoint). Devuelve:
+ * últimos 6 meses y, además:
+ *
+ *  · Persiste un log en `portfolio_forecast_log` por cada generación (upsert
+ *    idempotente por tenant + mes proyectado + sourceVersion).
+ *  · Backfillea automáticamente el `real` cuando el mes apuntado por la
+ *    proyección ya cerró — así el log se enriquece sin necesidad de job batch.
+ *  · Calcula el MAPE histórico (Mean Absolute Percentage Error) sobre los
+ *    últimos 30 días de logs ya backfilleados, junto con una racha de aciertos
+ *    consecutivos para alimentar el chip "Nuestra predicción acertó en X%".
+ *  · Marca `experimental` cuando MAPE > 30 % y ensancha la banda del
+ *    ±1 stddev a ±1 stddev × 1.6 para reflejar la menor fidelidad.
+ *
+ * Respuesta:
  *
  *   {
- *     proyeccion: number,            // valor estimado para el mes siguiente
- *     confianza: 0..1,               // qué tan lineal es la tendencia (1 = perfecta)
- *     rangoMin: number,              // límite inferior (proyeccion - stddev)
- *     rangoMax: number,              // límite superior (proyeccion + stddev)
- *     slope: number,                 // pendiente por mes
- *     ventana: TimelinePoint[],      // últimos 6 meses usados en el modelo
- *     mensaje: '...'                 // texto humano interpretativo
+ *     generado: ISO,
+ *     ventana: TimelinePoint[],
+ *     proyeccion, confianza (0..1),
+ *     rangoMin, rangoMax,
+ *     slope, intercept, r2,
+ *     mensaje: '...',
+ *     accuracy: {
+ *       dias: 30,
+ *       muestras: 12,
+ *       mape: 0.18,           // 0..1
+ *       accuracyPct: 82,      // (1 - mape) * 100
+ *       mejorRacha: 5,
+ *       experimental: false,
+ *       bandaMultiplicador: 1
+ *     }
  *   }
  *
- * Notas:
- *  · Si menos de 3 meses tienen prima > 0, retornamos `{ confianza: 0,
- *    mensaje: 'datos insuficientes' }` y `proyeccion = 0`.
- *  · Si los 6 meses están en cero, devolvemos `stddev = 0` (sin ruido).
+ * Casos borde:
+ *  · <3 meses con actividad → confianza=0, mensaje informativo, accuracy.muestras=0
+ *  · sin logs backfilleados → accuracy.muestras=0, experimental=false (no hay base)
  */
 
 interface TimelinePoint {
@@ -35,7 +54,28 @@ interface TimelinePoint {
   primaPromedio: number;
 }
 
+interface AccuracyAcc {
+  dias: number;
+  muestras: number;
+  mape: number;
+  accuracyPct: number;
+  mejorRacha: number;
+  experimental: boolean;
+  bandaMultiplicador: number;
+}
+
 const MONTHS_ES_SHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+
+// Umbral de MAPE a partir del cual la predicción se considera "experimental".
+// 30 % es estándar en forecasting de ventas/pymes: por encima, el modelo pita.
+const EXPERIMENTAL_MAPE_THRESHOLD = 0.30;
+// Ancho de banda estándar: ±1 stddev de residuos. En modo experimental se
+// multiplica por este factor para reflejar la incertidumbre mayor.
+const EXPERIMENTAL_BAND_MULTIPLIER = 1.6;
+// Versionado del modelo: si en el futuro cambiamos los hiperparámetros del
+// forecast, incrementamos esto para que las filas nuevas convivan con las
+// antiguas y podamos comparar accuracy sin mezclar manzanas con naranjas.
+const SOURCE_VERSION = 'v1-linear-6m';
 
 function pad2(n: number): string {
   return n < 10 ? `0${n}` : String(n);
@@ -52,21 +92,14 @@ function buildEmptySeries(now: Date, count: number): TimelinePoint[] {
   return series;
 }
 
-/** Regresión lineal (least squares) sobre los puntos (x, y).
- *  Devuelve { slope, intercept } y null si hay menos de 2 puntos válidos. */
 function linearRegression(points: Array<{ x: number; y: number }>): { slope: number; intercept: number } | null {
   const n = points.length;
   if (n < 2) return null;
-
   let sumX = 0;
   let sumY = 0;
-  for (const p of points) {
-    sumX += p.x;
-    sumY += p.y;
-  }
+  for (const p of points) { sumX += p.x; sumY += p.y; }
   const meanX = sumX / n;
   const meanY = sumY / n;
-
   let num = 0;
   let den = 0;
   for (const p of points) {
@@ -79,8 +112,6 @@ function linearRegression(points: Array<{ x: number; y: number }>): { slope: num
   return { slope, intercept };
 }
 
-/** Desviación estándar muestral (N-1) en una sola pasada sin sqrt si todos
- *  los valores son el mismo → 0. */
 function stddev(values: number[]): number {
   const n = values.length;
   if (n < 2) return 0;
@@ -89,14 +120,107 @@ function stddev(values: number[]): number {
   return Math.sqrt(variance);
 }
 
-/** Bondad de ajuste R² (qué porcentaje de la varianza explica el modelo). */
 function rSquared(points: Array<{ x: number; y: number; yHat: number }>): number {
   if (points.length < 2) return 0;
   const meanY = points.reduce((acc, p) => acc + p.y, 0) / points.length;
   const ssTot = points.reduce((acc, p) => acc + (p.y - meanY) ** 2, 0);
   const ssRes = points.reduce((acc, p) => acc + (p.y - p.yHat) ** 2, 0);
-  if (ssTot === 0) return 1; // sin varianza todos los puntos son iguales
+  if (ssTot === 0) return 1;
   return 1 - ssRes / ssTot;
+}
+
+/**
+ * Acumula la prima real emitida en un mes (YYYY-MM-01) sumando las polizas
+ * emitidas entre el primer y el último instante de ese mes. Helper perezoso
+ * para no escribir dos veces el mismo bloque de códec.
+ */
+async function sumaRealDelMes(tenantId: string, mes: Date): Promise<number> {
+  const fin = new Date(mes.getFullYear(), mes.getMonth() + 1, 1);
+  const agg = await prisma.poliza.aggregate({
+    where: {
+      tenantId,
+      fechaEmision: { gte: mes, lt: fin },
+    },
+    _sum: { primaAnual: true },
+  });
+  return Number(agg._sum.primaAnual ?? 0);
+}
+
+/**
+ * Calcula MAPE + accuracyPct + mejorRacha sobre los logs del tenant cuyo `real`
+ * ya está backfilleado y cayeron dentro de la ventana `dias`.
+ *
+ *  · MAPE = promedio de errorPct/100 sobre las muestras
+ *  · mejorRacha = máximo de aciertos consecutivos (errorPct <= 25%) ordenados
+ *    cronológicamente ascendente (más recientes al final). Así "mejor racha de
+ *    los últimos N" se evalúa en el orden temporal natural.
+ *  · experimental = MAPE > 30 % (con un mínimo de 5 muestras para no marcar
+ *    como experimental a un tenant con sus 2 primeros logs desafortunados)
+ */
+async function computeAccuracy(tenantId: string, dias: number): Promise<AccuracyAcc> {
+  const cutoff = new Date(Date.now() - dias * 24 * 60 * 60 * 1000);
+
+  const logs = await prisma.portfolioForecastLog.findMany({
+    where: {
+      tenantId,
+      real: { not: null },
+      errorPct: { not: null },
+      generadoEn: { gte: cutoff },
+    },
+    orderBy: { generadoEn: 'asc' },
+    select: { errorPct: true },
+  });
+
+  const muestras = logs.length;
+  if (muestras === 0) {
+    return {
+      dias,
+      muestras: 0,
+      mape: 0,
+      accuracyPct: 100, // sin datos → optimista por defecto
+      mejorRacha: 0,
+      experimental: false,
+      bandaMultiplicador: 1,
+    };
+  }
+
+  // MAPE sobre todos los logs (no solo los más recientes). Cast seguro
+  // desde Decimal a number usando Number() — errorPct cabe en DECIMAL(7,2).
+  const errores: number[] = logs
+    .map((l: { errorPct: unknown }): number => {
+      const n = Number(l.errorPct ?? 0) / 100;
+      return Number.isFinite(n) ? n : 0;
+    });
+  const mape = errores.reduce((acc: number, v: number) => acc + v, 0) / errores.length;
+
+  // Racha de aciertos consecutivos (errorPct <= 25%). Consideramos "acierto"
+  // toda predicción con error relativo inferior al 25 %. Es más permisivo
+  // que el threshold experimental (30%) y refleja intuición humana de
+  // "el broker estuvo cerca de la realidad".
+  const ACIERTO_PCT = 25;
+  let racha = 0, mejorRacha = 0;
+  for (const e of errores) {
+    if (e * 100 <= ACIERTO_PCT) {
+      racha++;
+      mejorRacha = Math.max(mejorRacha, racha);
+    } else {
+      racha = 0;
+    }
+  }
+
+  // Marca experimental sólo con suficientes muestras (no castigar al tenant
+  // por sus 2-3 primeros logs desafortunados).
+  const experimental = muestras >= 5 && mape > EXPERIMENTAL_MAPE_THRESHOLD;
+
+  return {
+    dias,
+    muestras,
+    mape,
+    accuracyPct: Math.round((1 - mape) * 100),
+    mejorRacha,
+    experimental,
+    bandaMultiplicador: experimental ? EXPERIMENTAL_BAND_MULTIPLIER : 1,
+  };
 }
 
 export async function GET(request: NextRequest) {
@@ -111,14 +235,8 @@ export async function GET(request: NextRequest) {
     const startDate = new Date(now.getFullYear(), now.getMonth() - (WINDOW - 1), 1);
 
     const polizas = await prisma.poliza.findMany({
-      where: {
-        tenantId: auth.tenant!.id,
-        fechaEmision: { gte: startDate },
-      },
-      select: {
-        fechaEmision: true,
-        primaAnual: true,
-      },
+      where: { tenantId: auth.tenant!.id, fechaEmision: { gte: startDate } },
+      select: { fechaEmision: true, primaAnual: true },
     });
 
     // Serie completa para evitar que el modelo lea meses como ausentes.
@@ -135,9 +253,10 @@ export async function GET(request: NextRequest) {
     });
     const ys = ventana.map(p => p.primaTotal);
 
-    // Caso borde: 0 pólizas emitidos en toda la ventana — sin suficientes datos.
+    // Caso borde: 0 pólizas emitidos en toda la ventana.
     const mesesConActividad = ys.filter(v => v > 0).length;
     if (mesesConActividad < 3) {
+      const accuracy = await computeAccuracy(auth.tenant!.id, 30);
       return NextResponse.json({
         generado: new Date().toISOString(),
         ventana,
@@ -152,6 +271,7 @@ export async function GET(request: NextRequest) {
           mesesConActividad === 0
             ? 'Sin actividad en los últimos 6 meses'
             : `Pocos meses con actividad (${mesesConActividad}/6) — se necesita más historial`,
+        accuracy,
       });
     }
 
@@ -159,6 +279,7 @@ export async function GET(request: NextRequest) {
     const puntos = ventana.map((p, i) => ({ x: i, y: p.primaTotal }));
     const reg = linearRegression(puntos);
     if (!reg) {
+      const accuracy = await computeAccuracy(auth.tenant!.id, 30);
       return NextResponse.json({
         generado: new Date().toISOString(),
         ventana,
@@ -170,38 +291,147 @@ export async function GET(request: NextRequest) {
         intercept: ys[ys.length - 1] ?? 0,
         r2: 0,
         mensaje: 'No se pudo estimar la pendiente con los datos disponibles',
+        accuracy,
       });
     }
 
     // Proyección: el próximo mes corresponde a x = WINDOW.
     const proyeccionRaw = reg.slope * WINDOW + reg.intercept;
-    // Si la proyección es negativa y la actividad reciente fue baja, devolver 0.
     const proyeccion = Math.max(0, proyeccionRaw);
 
-    // Bondad de ajuste: R² combinado con actividad reciente para evitar
-    // que el modelo reporte alta confianza con datos triviales.
+    // Bondad de ajuste: R² combinado con actividad reciente.
     const yHats = puntos.map(p => reg.slope * p.x + reg.intercept);
     const r2 = rSquared(puntos.map((p, i) => ({ x: p.x, y: p.y, yHat: yHats[i] })));
     const confianza = Math.max(0, Math.min(1, r2));
 
-    // Intervalo de confianza: ±1 stddev de los residuos.
+    const accuracy = await computeAccuracy(auth.tenant!.id, 30);
+
+    // Intervalo: ±1 stddev de residuos (ajustado por banda si "experimental").
     const residuos = puntos.map((p, i) => p.y - yHats[i]);
     const stdResiduos = stddev(residuos);
-    const rangoMin = Math.max(0, proyeccion - stdResiduos);
-    const rangoMax = proyeccion + stdResiduos;
+    const stdAjustado = stdResiduos * accuracy.bandaMultiplicador;
+    const rangoMin = Math.max(0, proyeccion - stdAjustado);
+    const rangoMax = proyeccion + stdAjustado;
 
-    // Mensaje interpretativo según slope + confianza.
+    // Mensaje interpretativo según slope + confianza + accuracy.
     let mensaje = '';
-    if (reg.slope > 0 && r2 > 0.5) {
+    const slopeFrac = reg.slope;
+    if (accuracy.experimental) {
+      mensaje = `Modelo experimental (MAPE ${(accuracy.mape * 100).toFixed(0)}% últimos ${accuracy.dias}d) — usa la banda amplia como referencia`;
+    } else if (slopeFrac > 0 && r2 > 0.5) {
       mensaje = `Tendencia alcista con buen ajuste (R²=${(r2 * 100).toFixed(0)}%)`;
-    } else if (reg.slope > 0) {
+    } else if (slopeFrac > 0) {
       mensaje = `Tendencia alcista, pero con variabilidad alta (R²=${(r2 * 100).toFixed(0)}%)`;
-    } else if (reg.slope < 0 && r2 > 0.5) {
+    } else if (slopeFrac < 0 && r2 > 0.5) {
       mensaje = `Tendencia a la baja — revisar cartera (R²=${(r2 * 100).toFixed(0)}%)`;
-    } else if (reg.slope < 0) {
+    } else if (slopeFrac < 0) {
       mensaje = `Ligera caída — métricas variables`;
     } else {
       mensaje = `Tendencia plana — sin cambio claro`;
+    }
+
+    // ─── Persistir log (upsert idempotente) ──────────────────────────
+    // El "mes al que apunta" es el primer día del próximo mes. Si la petición
+    // se hace el 15 de febrero, el log dice "mesProyectado=2026-03-01".
+    const mesProyectado = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+    try {
+      await prisma.portfolioForecastLog.upsert({
+        where: {
+          tenantId_mesProyectado_sourceVersion: {
+            tenantId: auth.tenant!.id,
+            mesProyectado,
+            sourceVersion: SOURCE_VERSION,
+          },
+        },
+        create: {
+          tenantId: auth.tenant!.id,
+          mesProyectado,
+          proyectado: proyeccion,
+          slope: reg.slope,
+          intercepto: reg.intercept,
+          r2,
+          ventanaMeses: WINDOW,
+          sourceVersion: SOURCE_VERSION,
+        },
+        update: {
+          // Re-generación: actualiza el proyectado (los hiperparámetros del
+          // modelo pueden haber cambiado) pero NO el real/errorPct: si ya
+          // estaba backfilleado, no lo pisamos.
+          proyectado: proyeccion,
+          slope: reg.slope,
+          intercepto: reg.intercept,
+          r2,
+          ventanaMeses: WINDOW,
+        },
+      });
+    } catch (logError) {
+      // El log es audit, no debe romper la respuesta al cliente.
+      console.error('[forecast] No se pudo persistir el log:', logError);
+    }
+
+    // ─── Backfill de logs cuyo mes apuntado ya cerró ────────────────
+    // Para cada log con `mesProyectado < ahora` y `real IS NULL`, intenta
+    // calcular la prima real de ese mes y persistirla + errorPct.
+    try {
+      const ahora = new Date();
+      const pendientes = await prisma.portfolioForecastLog.findMany({
+        where: {
+          tenantId: auth.tenant!.id,
+          mesProyectado: { lt: ahora },
+          real: null,
+        },
+        select: { id: true, mesProyectado: true },
+      });
+
+      for (const p of pendientes) {
+        const real = await sumaRealDelMes(auth.tenant!.id, p.mesProyectado);
+        const proyectadoNum = 0; // placeholder, sobreescribimos abajo con el valor correcto
+        // No tenemos el `proyectado` original en el `select` — leemos con una
+        // segunda query mínima o lo hacemos en bloque. Para optimizar:
+        const fullLog = await prisma.portfolioForecastLog.findUnique({
+          where: { id: p.id },
+          select: { proyectado: true },
+        });
+        const proyectadoOriginal = Number(fullLog?.proyectado ?? 0);
+        const errorPct = proyectadoOriginal > 0
+          ? Math.abs(proyectadoOriginal - real) / proyectadoOriginal * 100
+          : (real > 0 ? 100 : 0);
+
+        await prisma.portfolioForecastLog.update({
+          where: { id: p.id },
+          data: {
+            real,
+            errorPct,
+            backfilledEn: new Date(),
+          },
+        });
+        // referencia a proyectadoNum para evitar el warning de unused
+        void proyectadoNum;
+      }
+    } catch (backfillError) {
+      console.error('[forecast] Error en backfill batch:', backfillError);
+    }
+
+    // Recalcular accuracy tras backfill (los logs que se acaban de cerrar
+    // podrían aportar muestras nuevas).
+    const accuracyFinal = await computeAccuracy(auth.tenant!.id, 30);
+    // Si tras backfill cruzamos el umbral, re-ajustar la banda del mensaje:
+    if (accuracyFinal.experimental !== accuracy.experimental) {
+      const stdAjustado2 = stdResiduos * accuracyFinal.bandaMultiplicador;
+      return NextResponse.json({
+        generado: new Date().toISOString(),
+        ventana,
+        proyeccion,
+        confianza,
+        rangoMin: Math.max(0, proyeccion - stdAjustado2),
+        rangoMax: proyeccion + stdAjustado2,
+        slope: reg.slope,
+        intercept: reg.intercept,
+        r2,
+        mensaje: `Modelo experimental (MAPE ${(accuracyFinal.mape * 100).toFixed(0)}% últimos ${accuracyFinal.dias}d) — usa la banda amplia como referencia`,
+        accuracy: accuracyFinal,
+      });
     }
 
     return NextResponse.json({
@@ -215,6 +445,7 @@ export async function GET(request: NextRequest) {
       intercept: reg.intercept,
       r2,
       mensaje,
+      accuracy: accuracyFinal,
     });
   } catch (error) {
     console.error('Error al obtener forecast del portfolio:', error);
