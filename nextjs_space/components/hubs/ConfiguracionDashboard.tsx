@@ -41,6 +41,8 @@ import Link from "next/link";
 import { Switch } from "@/components/ui/switch";
 import { ALL_MODULES } from "@/lib/plans";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { SUPPORTED_CURRENCIES, type Currency } from "@/lib/insurance/currency";
+import { Banknote, AlertTriangle, Euro } from "lucide-react";
 
 // ─── Timezone options (IANA, curated for ES + LatAm + NA + UTC) ───────────────
 const TIMEZONES: { group: string; options: { value: string; label: string }[] }[] = [
@@ -102,6 +104,213 @@ function detectBrowserTimezone(): string {
   } catch {
     return 'Europe/Madrid'
   }
+}
+
+// ─── Sub-componente: Moneda de Reporte ────────────────────────────────────────
+//
+// Permite al propio tenant (no requiere admin) cambiar la moneda de reporte
+// usada por /dashboard/seguros/portfolio (KPIs, mix por ramo, top aseguradoras,
+// forecast). Cooldown de 24h aplicado server-side para evitar sabotaje por
+// crashloop de UI.
+//
+// Por qué existe: `Tenant.moneda` defaults a 'MXN' en el schema. Si el tenant
+// nunca lo cambió y luego importa pólizas en otra moneda (EUR, USD…), el
+// portfolio ejecutivo muestra el KPI global convertido a la moneda del tenant,
+// confundiendo al broker ("yo manejo Euros pero veo MXN").
+function MonedaReporteCard({ onChanged }: { onChanged?: () => void }) {
+  const [monedaActual, setMonedaActual] = useState<string>('MXN');
+  const [monedaNueva, setMonedaNueva] = useState<string>('MXN');
+  const [loadingMoneda, setLoadingMoneda] = useState(true);
+  const [savingMoneda, setSavingMoneda] = useState(false);
+  const [errorMoneda, setErrorMoneda] = useState<string | null>(null);
+  const [cooldownMinutos, setCooldownMinutos] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/tenant/moneda');
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled) {
+            setMonedaActual(data.moneda || 'MXN');
+            setMonedaNueva(data.moneda || 'MXN');
+          }
+        }
+      } catch (e) {
+        // Silencioso: el usuario puede intentar igualmente.
+      } finally {
+        if (!cancelled) setLoadingMoneda(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleGuardarMoneda = async () => {
+    setErrorMoneda(null);
+    setCooldownMinutos(null);
+    if (monedaNueva === monedaActual) {
+      toast.info('La moneda no ha cambiado');
+      return;
+    }
+    setSavingMoneda(true);
+    try {
+      const res = await fetch('/api/tenant/moneda', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ moneda: monedaNueva }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        toast.success(data.mensaje || `Moneda actualizada a ${monedaNueva}`);
+        setMonedaActual(data.moneda);
+        if (onChanged) onChanged();
+      } else {
+        const data = await res.json();
+        setErrorMoneda(data.error || 'Error al guardar');
+        if (res.status === 429 && typeof data.error === 'string') {
+          const match = data.error.match(/(\d+)\s*minutos/i);
+          if (match) setCooldownMinutos(Number(match[1]));
+        }
+      }
+    } catch (e: any) {
+      setErrorMoneda('Error de conexión');
+    } finally {
+      setSavingMoneda(false);
+    }
+  };
+
+  const currencyLabels: Record<string, string> = {
+    EUR: 'Euro (€)',
+    USD: 'Dólar estadounidense ($)',
+    MXN: 'Peso mexicano ($)',
+    GBP: 'Libra esterlina (£)',
+    JPY: 'Yen japonés (¥)',
+    CNY: 'Yuan renminbi (¥)',
+    CAD: 'Dólar canadiense ($)',
+    BRL: 'Real brasileño (R$)',
+    CLP: 'Peso chileno ($)',
+    ARS: 'Peso argentino ($)',
+    COP: 'Peso colombiano ($)',
+    PEN: 'Sol peruano (S/)',
+  };
+
+  const symbolOf = (code: string) => {
+    if (['EUR'].includes(code)) return '€';
+    if (['GBP'].includes(code)) return '£';
+    if (['JPY', 'CNY'].includes(code)) return '¥';
+    if (['PEN'].includes(code)) return 'S/';
+    if (['BRL'].includes(code)) return 'R$';
+    return '$';
+  };
+
+  return (
+    <Card className="shadow-xl">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Banknote className="h-5 w-5 text-emerald-600" />
+          Moneda de Reporte
+        </CardTitle>
+        <CardDescription>
+          Moneda en la que se muestran los agregados financieros del portfolio ejecutivo de Seguros
+          (KPIs, mix por ramo, top aseguradoras, forecast). Cada póliza conserva su moneda nativa
+          individual — esta moneda solo define el “target” al que se convierten los importes para los
+          totales.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {loadingMoneda ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Cargando moneda actual…
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200">
+                <span className="text-xs text-emerald-700 font-semibold uppercase tracking-wider">
+                  Moneda actual
+                </span>
+                <span className="text-xl font-bold text-emerald-800">{monedaActual}</span>
+                <span className="text-2xl font-bold text-emerald-700">{symbolOf(monedaActual)}</span>
+              </div>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs">
+                    <p className="text-xs">
+                      Esta moneda aparece en el chip junto al botón «Refrescar» del portfolio ejecutivo.
+                      Si aquí ves MXN pero el broker maneja Euros, es porque este campo nunca fue
+                      actualizado desde el alta del tenant (defaults a MXN).
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="moneda-reporte">Cambiar moneda de reporte</Label>
+                <select
+                  id="moneda-reporte"
+                  value={monedaNueva}
+                  onChange={e => {
+                    setMonedaNueva(e.target.value);
+                    setErrorMoneda(null);
+                    setCooldownMinutos(null);
+                  }}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {SUPPORTED_CURRENCIES.map(c => (
+                    <option key={c} value={c}>
+                      {c} — {currencyLabels[c] || c}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-muted-foreground italic">
+                  12 monedas soportadas. Tasas FX estáticas en lib/insurance/currency.ts.
+                </p>
+              </div>
+            </div>
+
+            {errorMoneda && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200">
+                <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                <div className="text-xs text-amber-900">
+                  <p className="font-semibold">{errorMoneda}</p>
+                  {cooldownMinutos !== null && (
+                    <p className="mt-1">
+                      Si necesitas un cambio urgente y no puedes esperar, contacta al superadmin
+                      desde el panel /admin/tenants/{'{tenant}'}/modules.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={handleGuardarMoneda}
+                disabled={savingMoneda || monedaNueva === monedaActual}
+                className="premium-gradient-primary rounded-full px-8"
+              >
+                {savingMoneda && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                Guardar Moneda
+              </Button>
+              {monedaNueva !== monedaActual && (
+                <span className="text-xs text-amber-700 font-medium">
+                  ⚠️ Cambiará los totales en /dashboard/seguros/portfolio (cooldown 24h entre cambios)
+                </span>
+              )}
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 interface ConfiguracionDashboardProps {
@@ -393,6 +602,8 @@ export function ConfiguracionDashboard({ activeSection }: ConfiguracionDashboard
                   </Button>
                 </CardContent>
               </Card>
+
+              <MonedaReporteCard onChanged={() => fetchConfig()} />
 
               <Card className="shadow-xl">
                 <CardHeader>
