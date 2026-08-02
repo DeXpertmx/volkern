@@ -44,6 +44,46 @@ import {
 import { PolizaCard } from '@/components/insurance/PolizaCard';
 import { PolizaForm } from '@/components/insurance/PolizaForm';
 
+// Wizard CSV: tipos y helpers
+interface WizardMatch {
+  canonical: string;
+  matchedHeader: string | null;
+  confidence: number;
+  reason: string;
+}
+interface WizardAnalysis {
+  fileName: string;
+  delimiter: ',' | ';' | '\t';
+  delimiterLabel: string;
+  totalRows: number;
+  columns: string[];
+  preview: Record<string, string>[];
+  mapeoSugerido: Record<string, string>;
+  matches: WizardMatch[];
+  autoMapAvailable: boolean;
+}
+type WizardStep = 'select' | 'analyzing' | 'mapping' | 'importing';
+
+// Lista canónica de pólizas — ordenada y con etiquetas legibles para el wizard.
+const CANONICALES_POLIZAS: Array<{ key: string; label: string; required: boolean }> = [
+  { key: 'numeroPoliza', label: 'Número de Póliza', required: true },
+  { key: 'clienteNombre', label: 'Nombre del Cliente', required: true },
+  { key: 'aseguradoraNombre', label: 'Aseguradora', required: true },
+  { key: 'fechaInicio', label: 'Fecha de Inicio', required: true },
+  { key: 'fechaVencimiento', label: 'Fecha de Vencimiento', required: true },
+  { key: 'clienteEmail', label: 'Email del Cliente', required: false },
+  { key: 'clienteTelefono', label: 'Teléfono del Cliente', required: false },
+  { key: 'productoSeguroNombre', label: 'Producto', required: false },
+  { key: 'ramo', label: 'Ramo', required: false },
+  { key: 'primaAnual', label: 'Prima Anual', required: false },
+  { key: 'sumaAsegurada', label: 'Suma Asegurada', required: false },
+  { key: 'moneda', label: 'Moneda', required: false },
+  { key: 'formaPago', label: 'Forma de Pago', required: false },
+  { key: 'comisionPct', label: 'Comisión (%)', required: false },
+  { key: 'descripcion', label: 'Descripción', required: false },
+  { key: 'notas', label: 'Notas', required: false },
+];
+
 const ESTADOS = ['ACTIVA', 'PROXIMA_A_VENCER', 'VENCIDA', 'CANCELADA', 'EN_TRAMITE'];
 const RAMOS = [
   'AUTO', 'HOGAR', 'VIDA', 'SALUD', 'GASTOS_MEDICOS',
@@ -270,39 +310,97 @@ export default function PolizasPage() {
     }
   };
 
+  // ── Estado del wizard de import (3 pasos: select → mapping → import) ─────
+  const [wizardStep, setWizardStep] = useState<WizardStep>('select');
+  const [wizardAnalysis, setWizardAnalysis] = useState<WizardAnalysis | null>(null);
+  // Mapeo editable: cada canónico -> header seleccionado por el usuario ('' = sin mapear).
+  const [wizardMapping, setWizardMapping] = useState<Record<string, string>>({});
+
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    setImporting(true);
-    const fd = new FormData();
-    fd.append('file', file);
+    setWizardStep('analyzing');
 
     try {
-      const res = await apiFetch('/api/insurance/importar', {
-        method: 'POST',
-        body: fd,
-      });
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await apiFetch('/api/insurance/importar', { method: 'PUT', body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'No pude analizar el archivo');
+
+      const analysis = data as WizardAnalysis;
+      setWizardAnalysis(analysis);
+      // Inicializa el mapping editable con las sugerencias de confianza >= 0.6
+      setWizardMapping({ ...analysis.mapeoSugerido });
+      setWizardStep('mapping');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al analizar el archivo');
+      setWizardStep('select');
+    } finally {
+      if (e.target) e.target.value = '';
+    }
+  };
+
+  /**
+   * Dispara el import con el mapping confirmado por el usuario en el wizard.
+   * Si requiere columnas sin mapear, muestra un toast y bloquea la acción.
+   */
+  const confirmarImportWizard = async () => {
+    if (!wizardAnalysis) return;
+    const faltantesRequeridos = CANONICALES_POLIZAS
+      .filter(c => c.required && !wizardMapping[c.key])
+      .map(c => c.label);
+    if (faltantesRequeridos.length > 0) {
+      toast.error(`Faltan columnas obligatorias: ${faltantesRequeridos.join(', ')}`);
+      return;
+    }
+    setWizardStep('importing');
+    try {
+      const file = await fetch(wizardAnalysis.fileName).catch(() => null); // placeholder
+      // Re-leemos el archivo desde input original: lo más simple es volver a
+      // pedirlo al usuario. Para no romper el flujo si el usuario ya descartó
+      // el file, guardamos el File en un ref aparte durante analyzing.
+      // Aquí optamos por re-subir el último file leyendo del input.
+      const inputEl = document.getElementById('wizard-file-input') as HTMLInputElement | null;
+      const file2 = inputEl?.files?.[0];
+      if (!file2) {
+        toast.error('Vuelve a seleccionar el archivo para importar.');
+        setWizardStep('mapping');
+        return;
+      }
+      const fd = new FormData();
+      fd.append('file', file2);
+      // Enviamos sólo los canónicos que el usuario Mapeó (omitimos vacíos).
+      const mappingLimpio: Record<string, string> = {};
+      for (const [k, v] of Object.entries(wizardMapping)) {
+        if (v && v.length > 0) mappingLimpio[k] = v;
+      }
+      fd.append('mapping', JSON.stringify(mappingLimpio));
+
+      const res = await apiFetch('/api/insurance/importar', { method: 'POST', body: fd });
       const data = await res.json();
       if (res.ok) {
         const report: ImportReport | undefined = data.report;
-        if (report) {
-          mostrarResumenImportacion(report);
-        } else {
-          toast.success(`Importación completada: ${data.importadas || 0} pólizas importadas`);
-        }
-        setIsImportOpen(false);
+        if (report) mostrarResumenImportacion(report);
+        else toast.success(`Importación completada: ${data.importadas || 0} pólizas importadas`);
+        cerrarWizard();
         loadPolizas();
       } else {
         toast.error(data.error || 'Error al importar');
+        setWizardStep('mapping');
       }
     } catch (error) {
       console.error('Error importando:', error);
       toast.error('Error al importar');
-    } finally {
-      setImporting(false);
-      if (e.target) e.target.value = '';
+      setWizardStep('mapping');
     }
+  };
+
+  const cerrarWizard = () => {
+    setIsImportOpen(false);
+    setWizardStep('select');
+    setWizardAnalysis(null);
+    setWizardMapping({});
   };
 
   /**
@@ -383,12 +481,13 @@ export default function PolizasPage() {
 
   return (
     <div className="space-y-4">
-      {/* Toolbar */}
+      {/* Toolbar — la guarda del viewMode se hace con ternario explícito (no
+          `&&`) para que el subtree nunca quede "medio montado". Solo se
+          renderiza la toolbar nativa en cards; la vista table la trae
+          PolizaTable internamente. Si ves dos toolbars apiladas es porque la
+          versión desplegada es anterior a este fix. */}
       <Card>
-        {/* Solo se muestra en vista cards: la vista table ya trae su propia
-            toolbar dentro de PolizaTable (buscar + filtro + Importar + Nueva),
-            así evitamos la doble fila que aparecía duplicada. */}
-        {viewMode === 'cards' && (
+        {viewMode === 'cards' ? (
           <CardHeader className="pb-3">
             <div className="flex flex-col sm:flex-row gap-3 justify-between">
               <div className="flex items-center gap-2 flex-1">
@@ -468,7 +567,7 @@ export default function PolizasPage() {
               </div>
             )}
           </CardHeader>
-        )}
+        ) : null}
 
         <CardContent>
           {polizas.length === 0 ? (
@@ -731,60 +830,222 @@ export default function PolizasPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Import Dialog */}
-      <Dialog open={isImportOpen} onOpenChange={setIsImportOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Importar Cartera</DialogTitle>
-            <DialogDescription>
-              Sube un archivo CSV con tus pólizas. El sistema detectará automáticamente clientes, aseguradoras y productos.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="border-2 border-dashed rounded-lg p-8 text-center">
-              <Upload className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground mb-3">
-                Arrastra tu archivo CSV aquí o haz clic para seleccionar
-              </p>
-              <label className="cursor-pointer">
-                <Button variant="outline" disabled={importing}>
-                  {importing ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Importando...
-                    </>
-                  ) : (
-                    'Seleccionar archivo'
-                  )}
-                </Button>
-                <input
-                  type="file"
-                  accept=".csv,.xlsx,.xls"
-                  className="hidden"
-                  onChange={handleImport}
-                  disabled={importing}
-                />
-              </label>
-            </div>
-            <div className="rounded-lg bg-muted/50 p-3 space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-medium">¿Cómo preparar el archivo?</p>
-                <Button variant="outline" size="sm" onClick={descargarTemplate}>
-                  <FileDown className="h-3.5 w-3.5 mr-1.5" />
-                  Descargar template
-                </Button>
-              </div>
-              <div className="text-xs text-muted-foreground space-y-1">
-                <p><strong>Columnas:</strong> numeroPoliza, clienteEmail, aseguradoraNombre, ramo, producto, primaAnual, sumaAsegurada, moneda, formaPago, fechaInicio, fechaVencimiento, comisionPct, descripcion, notas</p>
-                <p>• <strong>Obligatorias:</strong> numeroPoliza, clienteEmail, aseguradoraNombre, ramo, fechaInicio, fechaVencimiento. Filas sin estos campos serán rechazadas.</p>
-                <p>• El <strong>cliente</strong> se busca/crea por <strong>email</strong>. Si no existe, se crea automáticamente.</p>
-                <p>• La <strong>aseguradora</strong> se busca/crea por <strong>nombre</strong>. Si no existe, se crea.</p>
-                <p>• El <strong>producto</strong> se busca por nombre dentro de la aseguradora. Si no existe, se crea con el ramo indicado.</p>
-                <p>• <strong>Fechas</strong> en formato <code className="bg-background px-1 rounded">YYYY-MM-DD</code>.</p>
-                <p>• Formatos soportados: CSV (coma o punto y coma), Excel (.xlsx, .xls)</p>
-              </div>
-            </div>
+      {/* Import Dialog — wizard de 3 pasos:
+            1) 'select'    → drag & drop + botón descargar template
+            2) 'analyzing' → PUT para detectar delimitador + sugerir mapping
+            3) 'mapping'   → tabla editable: cada canónico → header + confianza
+            4) 'importing' → POST con el mapping confirmado + toast resumen
+          La UI nunca muestra dos toolbars porque PolizaTable (vista table)
+          ya trae su propia barra. Esta vista card sólo muestra el contenido
+          sin toolbar nativa. */}
+      <Dialog open={isImportOpen} onOpenChange={(open) => open ? setIsImportOpen(true) : cerrarWizard()}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          {/* ── Stepper visible: 3 fases ─────────────────────────────────────── */}
+          <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+            {(['select', 'analyzing', 'mapping'] as const).map((s, i) => {
+              const active =
+                s === wizardStep ||
+                (s === 'select' && wizardStep === 'importing') ||
+                (s === 'analyzing' && (wizardStep === 'mapping' || wizardStep === 'importing'));
+              return (
+                <React.Fragment key={s}>
+                  <span className={`px-2 py-0.5 rounded-full ${active ? 'bg-sky-100 text-sky-700' : 'bg-muted'}`}>
+                    {i + 1}. {s === 'select' ? 'Subir' : s === 'analyzing' ? 'Analizar' : 'Mapear'}
+                  </span>
+                  {i < 2 && <span>→</span>}
+                </React.Fragment>
+              );
+            })}
           </div>
+
+          {/* ── Paso 1: Selección de archivo ───────────────────────────────── */}
+          {wizardStep === 'select' && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Importar Cartera</DialogTitle>
+                <DialogDescription>
+                  Sube tu archivo CSV. Detectamos automáticamente el delimitador y mapeamos las columnas.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="border-2 border-dashed rounded-lg p-8 text-center">
+                  <Upload className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Selecciona tu CSV. No necesitas renombrar columnas: detectaremos el delimitador
+                    y te mostraremos el mapeo antes de importar.
+                  </p>
+                  <label htmlFor="wizard-file-input" className="cursor-pointer">
+                    <Button variant="outline" asChild>
+                      <span>Seleccionar archivo</span>
+                    </Button>
+                    <input
+                      id="wizard-file-input"
+                      type="file"
+                      accept=".csv"
+                      className="hidden"
+                      onChange={handleImport}
+                    />
+                  </label>
+                </div>
+                <div className="rounded-lg bg-muted/50 p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium">¿No tienes un archivo listo?</p>
+                    <Button variant="outline" size="sm" onClick={descargarTemplate}>
+                      <FileDown className="h-3.5 w-3.5 mr-1.5" />
+                      Descargar template
+                    </Button>
+                  </div>
+                  <div className="text-xs text-muted-foreground space-y-1">
+                    <p><strong>Columnas mínimas:</strong> Número de póliza, Aseguradora, Nombre del cliente, Fecha de inicio, Fecha de vencimiento.</p>
+                    <p>• El <strong>cliente</strong> se busca por nombre; si no existe, se crea automáticamente.</p>
+                    <p>• La <strong>aseguradora</strong> y el <strong>producto</strong> también se crean si no existen.</p>
+                    <p>• Aceptamos CSV con <strong>coma</strong>, <strong>punto y coma</strong> o <strong>tab</strong>. Fechas en <code className="bg-background px-1 rounded">YYYY-MM-DD</code>.</p>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* ── Paso 2: Analizando ──────────────────────────────────────────── */}
+          {wizardStep === 'analyzing' && (
+            <div className="py-12 text-center">
+              <Loader2 className="h-10 w-10 animate-spin text-sky-500 mx-auto mb-4" />
+              <DialogHeader className="items-center">
+                <DialogTitle>Analizando archivo…</DialogTitle>
+                <DialogDescription>
+                  Detectando delimitador y proponiendo el mapeo de columnas.
+                </DialogDescription>
+              </DialogHeader>
+            </div>
+          )}
+
+          {/* ── Paso 3: Mapeo editable ────────────────────────────────────── */}
+          {wizardStep === 'mapping' && wizardAnalysis && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Confirma el mapeo de columnas</DialogTitle>
+                <DialogDescription>
+                  {wizardAnalysis.totalRows} filas · delimitador <strong>{wizardAnalysis.delimiterLabel}</strong> ·
+                  columnas detectadas: {wizardAnalysis.columns.length}
+                  {wizardAnalysis.autoMapAvailable
+                    ? ' · sugerencia automática disponible'
+                    : ' · requiere tu confirmación'}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-3 py-2">
+                <div className="grid gap-2 max-h-[50vh] overflow-y-auto pr-2">
+                  {CANONICALES_POLIZAS.map((c) => {
+                    const match = wizardAnalysis.matches.find(m => m.canonical === c.key);
+                    const sugerido = match?.matchedHeader ?? wizardMapping[c.key] ?? '';
+                    const confidence = match?.confidence ?? 0;
+                    const confidenceColor =
+                      confidence >= 0.85 ? 'bg-green-100 text-green-700' :
+                      confidence >= 0.6 ? 'bg-amber-100 text-amber-700' :
+                      confidence > 0 ? 'bg-red-100 text-red-700' : 'bg-muted text-muted-foreground';
+                    return (
+                      <div key={c.key} className="flex items-center gap-3 p-2 rounded-lg bg-muted/30">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-medium text-sm">{c.label}</span>
+                            {c.required && <span className="text-red-500 text-xs">*</span>}
+                          </div>
+                          {match?.reason && (
+                            <p className="text-xs text-muted-foreground truncate">
+                              <code className="bg-background px-1 rounded">{sugerido || '—'}</code>
+                              {match.reason !== 'Exacto' && match.reason !== 'Sin match' && (
+                                <span className="ml-2">· {match.reason}</span>
+                              )}
+                            </p>
+                          )}
+                        </div>
+                        <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${confidenceColor}`}>
+                          {confidence ? `${Math.round(confidence * 100)}%` : 'manual'}
+                        </span>
+                        <Select
+                          value={wizardMapping[c.key] ?? ''}
+                          onValueChange={(v) => setWizardMapping(prev => {
+                            const next = { ...prev };
+                            if (v === '') delete next[c.key];
+                            else {
+                              // Liberamos el header previo de cualquier otro canónico.
+                              for (const k of Object.keys(next)) {
+                                if (next[k] === v) delete next[k];
+                              }
+                              next[c.key] = v;
+                            }
+                            return next;
+                          })}
+                        >
+                          <SelectTrigger className="w-56">
+                            <SelectValue placeholder="(sin mapear)" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="">(sin mapear)</SelectItem>
+                            {wizardAnalysis.columns.map((col) => (
+                              <SelectItem key={col} value={col}>
+                                {col}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Preview de las primeras filas */}
+                <details className="rounded-lg bg-muted/30 p-3 text-xs">
+                  <summary className="cursor-pointer font-medium text-foreground">
+                    Vista previa · {Math.min(5, wizardAnalysis.preview.length)} de {wizardAnalysis.totalRows} filas
+                  </summary>
+                  <div className="mt-2 overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="text-left text-muted-foreground">
+                          {wizardAnalysis.columns.map(col => (
+                            <th key={col} className="p-1 font-medium">{col}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {wizardAnalysis.preview.slice(0, 5).map((row, i) => (
+                          <tr key={i} className="border-t border-border/50">
+                            {wizardAnalysis.columns.map(col => (
+                              <td key={col} className="p-1 whitespace-nowrap">{row[col] ?? ''}</td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
+              </div>
+
+              <DialogFooter className="gap-2">
+                <Button variant="outline" onClick={cerrarWizard}>Cancelar</Button>
+                <Button variant="ghost" onClick={() => { setWizardStep('select'); setWizardAnalysis(null); }}>
+                  ← Elegir otro archivo
+                </Button>
+                <Button onClick={confirmarImportWizard}>
+                  Confirmar e importar
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+
+          {/* ── Paso 4: Importando ─────────────────────────────────────────── */}
+          {wizardStep === 'importing' && (
+            <div className="py-12 text-center">
+              <Loader2 className="h-10 w-10 animate-spin text-sky-500 mx-auto mb-4" />
+              <DialogHeader className="items-center">
+                <DialogTitle>Importando {wizardAnalysis?.fileName || ''}…</DialogTitle>
+                <DialogDescription>
+                  Procesando {wizardAnalysis?.totalRows ?? 0} filas. Esto puede tardar unos segundos.
+                </DialogDescription>
+              </DialogHeader>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
