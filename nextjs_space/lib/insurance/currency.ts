@@ -139,6 +139,8 @@ export function resumenMoneda(
   return { totalEnTarget, porMoneda: buckets, mezcla };
 }
 
+export const SUPPORTED_CURRENCIES = ['USD', 'EUR', 'MXN', 'GBP', 'JPY', 'CNY', 'CAD', 'BRL', 'CLP', 'ARS', 'COP', 'PEN'] as const;
+
 export const CURRENCY_CONSTANTS = {
   DEFAULT_TENANT_CURRENCY: 'MXN',
   FX_TO_USD,
