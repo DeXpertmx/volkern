@@ -242,11 +242,15 @@ export const HUBS: HubConfig[] = [
       '/dashboard/seguros/polizas',
       '/dashboard/seguros/renovaciones',
       '/dashboard/seguros/cartera',
-      '/dashboard/seguros/aseguradoras'
+      '/dashboard/seguros/aseguradoras',
+      '/dashboard/seguros/portfolio',
+      '/dashboard/seguros/productos'
     ],
     items: [
       { name: 'Dashboard Seguros', href: '/dashboard/seguros', icon: LayoutDashboard, planModule: 'insurance', description: 'KPIs de cartera y renovaciones' },
+      { name: 'Portfolio Ejecutivo', href: '/dashboard/seguros/portfolio', icon: Sparkles, planModule: 'insurance', description: 'Vista 360° con KPIs, mix por ramo y top aseguradoras' },
       { name: 'Pólizas', href: '/dashboard/seguros/polizas', icon: FileText, planModule: 'insurance', description: 'Gestión de pólizas y clientes asegurados' },
+      { name: 'Productos', href: '/dashboard/seguros/productos', icon: Package, planModule: 'insurance', description: 'Catálogo de productos de las aseguradoras' },
       { name: 'Renovaciones', href: '/dashboard/seguros/renovaciones', icon: RotateCw, planModule: 'insurance', description: 'Motor de renovaciones y alertas' },
       { name: 'Cartera IA', href: '/dashboard/seguros/cartera', icon: BarChart3, planModule: 'insurance', description: 'Mapa de cartera y oportunidades IA' },
       { name: 'Aseguradoras', href: '/dashboard/seguros/aseguradoras', icon: Building2, planModule: 'insurance', description: 'Directorio de aseguradoras y productos' },
