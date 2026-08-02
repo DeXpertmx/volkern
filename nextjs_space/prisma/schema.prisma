@@ -7374,6 +7374,40 @@ model Aseguradora {
   email           String?
   web             String?
 
+  // ─── Identificación Legal y Fiscal (Bloque 1) ─────────────
+  razonSocial     String?
+  nombreComercial String?
+  codigoPostal    String?
+  provincia       String?
+  pais            String?
+  regimenFiscal   String?
+
+  // ─── Regulación y Licencias (Bloque 2) ────────────────────
+  numeroRegistro              String?
+  ramosAutorizados           Json?   // string[] — ramos de negocio autorizados (Vida, Salud, Autos...)
+  fechaVigenciaLicenciaInicio DateTime?
+  fechaVigenciaLicenciaFin    DateTime?
+
+  // ─── Contacto y Representación Legal (Bloque 3) ───────────
+  representanteLegal   Json?   // { nombre, documento, cargo }
+  mesaEntradas         String? // email institucional para notificaciones/regulatorio
+  contactosOperativos  Json?   // [{ cargo, nombre, email, telefono }]
+
+  // ─── Parámetros Operativos y Comerciales (Bloque 4) ────────
+  modelosComision      Json?   // [{ nombre, tipo, pct, aplicaA }]
+  condicionesPago      Json?   // { diasGracia, politicaCancelacion, requiereAnticipo }
+  limitesSuscripcion   Json?   // { montoMaximoAutomatico, moneda, requiereAprobacionManual }
+  gestionSiniestros    Json?   // { slaRespuestaHoras, limiteIndemnizacion, tipoLimite, deducible }
+
+  // ─── Configuración Financiera y Bancaria (Bloque 5) ────────
+  cuentasBancarias     Json?   // [{ banco, tipoCuenta, numeroCuenta, clabe, iban, swift, moneda }]
+  monedaBase           String?
+  monedaLiquidacion    String?
+
+  // ─── Integración Técnica y Seguridad (Bloque 6) ────────────
+  integracionApi       Json?   // { apiKey, oauth, endpoints, formatos, certificados }
+
+  notas           String?
   codigoExterno   String?
   activa          Boolean           @default(true)
 
