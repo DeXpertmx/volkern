@@ -24,6 +24,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { TimelineMensual, type TimelineData } from '@/components/insurance/TimelineMensual';
 import { ForecastCard, type ForecastData } from '@/components/insurance/ForecastCard';
+import { SmartForecastCard, type SmartForecastFE } from '@/components/insurance/SmartForecastCard';
 import { formatCurrency, formatDate, formatRelative } from '@/components/insurance/portfolio-format';
 
 interface PortfolioSnapshot {
@@ -141,6 +142,8 @@ export default function PortfolioPage() {
   const [timelineLoading, setTimelineLoading] = useState(true);
   const [forecast, setForecast] = useState<ForecastData | null>(null);
   const [forecastLoading, setForecastLoading] = useState(true);
+  const [smartForecast, setSmartForecast] = useState<SmartForecastFE | null>(null);
+  const [smartLoading, setSmartLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
@@ -155,6 +158,7 @@ export default function PortfolioPage() {
       // Refresca el timeline + forecast en paralelo — son independientes del snapshot.
       loadTimeline();
       loadForecast();
+      loadSmartForecast();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error al cargar el portfolio');
     } finally {
@@ -190,10 +194,25 @@ export default function PortfolioPage() {
     }
   }
 
+  async function loadSmartForecast() {
+    try {
+      setSmartLoading(true);
+      const res = await apiFetch('/api/insurance/portfolio/forecast/smart');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? 'No pude obtener el forecast smart');
+      setSmartForecast(data);
+    } catch (err) {
+      console.error('Error al cargar el forecast smart:', err);
+    } finally {
+      setSmartLoading(false);
+    }
+  }
+
   useEffect(() => {
     loadSnapshot();
     loadTimeline();
     loadForecast();
+    loadSmartForecast();
   }, []);
 
   const maxRamoPrima = useMemo(() => {
@@ -355,6 +374,23 @@ export default function PortfolioPage() {
               Aún no hay suficientes datos para proyectar.
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Forecast smart: base + multipliers estacionales aprendidos */}
+      <Card className="border-indigo-200">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-indigo-600" />
+            Forecast inteligente con eventos estacionales
+          </CardTitle>
+          <CardDescription>
+            Combina el forecast base con multipliers aprendidos por Semana Santa,
+            Vuelta al Cole, Fin de Año y campañas de Google Calendar
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <SmartForecastCard data={smartForecast} loading={smartLoading && !smartForecast} />
         </CardContent>
       </Card>
 

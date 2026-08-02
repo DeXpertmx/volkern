@@ -412,6 +412,7 @@ model Tenant {
   oportunidadesComerciales       OportunidadComercial[]
   insuranceImportLogs            InsuranceImportLog[]
   portfolioForecastLogs          PortfolioForecastLog[]            @relation("TenantForecastLogs")
+  portfolioSeasonalMultipliers   PortfolioSeasonalMultiplier[]     @relation("TenantSeasonalMultipliers")
 }
 
 model AttendanceRules {
@@ -7654,4 +7655,44 @@ model PortfolioForecastLog {
   @@index([real])
   @@index([alertaEnviadaAt])
   @@map("portfolio_forecast_log")
+}
+
+// ─── PortfolioSeasonalMultiplier (aprendido del histórico) ────────────────
+// Multiplier estacional aprendido por tenant × evento × ramo. Computado al
+// vuelo cuando el endpoint /forecast/smart lo necesita, persistido para no
+// recalcular cada vez que alguien refresca el dashboard. Constraint única
+// (tenantId, eventoKey, ramo) garantiza idempotencia del upsert.
+model PortfolioSeasonalMultiplier {
+  id                String   @id @default(cuid())
+  tenantId          String
+  tenant            Tenant   @relation("TenantSeasonalMultipliers", fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Identificador semántico del evento. Catálogo cerrado (seasonal-calendar.ts):
+  //   SEMANA_SANTA, VUELTA_COLE, FIN_ANO, BUEN_FIN, VERANO, RAMO_RENOVACION
+  eventoKey         String
+  // Multiplier específico por ramo; NULL = global del tenant.
+  ramo              String?
+
+  // Ventana del evento en MMDD (mes*100+día) para emparejar el bucket
+  // del forecast contra el rango histórico (rango recurrente, ejemplo: 1201..1231).
+  ventanaMdInicio   Int
+  ventanaMdFin      Int
+
+  // Multiplier aprendido (1.30 = +30% sobre el baseline). DECIMAL(4,2) admite
+  // desde 0.01 (estacionalidad muy deпреsiva) hasta 9.99 (pico extremo).
+  multiplier        Decimal  @db.Decimal(4, 2)
+  // Baseline promedio del mes base usado para normalizar (para debugging).
+  baselinePrima     Decimal? @db.Decimal(18, 2)
+  // Años donde se observó el evento (mínimo 2 para ser válido).
+  muestras          Int
+  // Confianza 0..1: nº de años ÷ cobertura esperada ×(1 - varianza relativa).
+  confianza         Decimal? @db.Decimal(4, 2)
+
+  fuente            String   @default("learned") // "learned" | "static" | "google_calendar"
+  computedAt        DateTime @default(now())
+
+  @@unique([tenantId, eventoKey, ramo])
+  @@index([tenantId])
+  @@index([eventoKey])
+  @@map("portfolio_seasonal_multipliers")
 }
