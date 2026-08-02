@@ -35,7 +35,9 @@ export async function GET(req: NextRequest) {
       orderBy: { nombre: 'asc' },
     });
 
-    return NextResponse.json(aseguradoras);
+    // Envolver en objeto { aseguradoras } para que la UI lea data.aseguradoras
+    // (también aceptamos el formato legacy de array plano por compatibilidad).
+    return NextResponse.json({ aseguradoras });
   } catch (error) {
     console.error('Error al obtener aseguradoras:', error);
     return NextResponse.json({ error: 'Error al obtener aseguradoras' }, { status: 500 });

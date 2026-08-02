@@ -38,7 +38,9 @@ export async function GET(req: NextRequest) {
       orderBy: { nombre: 'asc' },
     });
 
-    return NextResponse.json(productos);
+    // Envolver en { productos } para que los consumidores (polizas/page.tsx lee data.productos)
+    // funcionen de forma consistente con el resto del módulo (aseguradoras, polizas).
+    return NextResponse.json({ productos });
   } catch (error) {
     console.error('Error al obtener productos:', error);
     return NextResponse.json({ error: 'Error al obtener productos' }, { status: 500 });
