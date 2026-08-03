@@ -7,11 +7,11 @@ import { Metadata } from 'next';
 export const metadata: Metadata = {
   title: 'Volkern Soluciones | CRM, Marketing, Inmobiliario, RRHH y más',
   description:
-    'Explora todas las soluciones verticales de Volkern: CRM & Ventas, Marketing, Inmobiliario, Contabilidad, RRHH, Industria, Academy, Logística y Facturación. Un sistema para todo tu negocio.',
+    'Explora todas las soluciones verticales de Volkern: CRM & Ventas, Marketing, Inmobiliario, Contabilidad, RRHH, Industria, Academy, Logística, Facturación y Seguros. Un sistema para todo tu negocio.',
   openGraph: {
     title: 'Volkern Soluciones — CRM, Marketing, Inmobiliario, RRHH y más',
     description:
-      'Explora todas las soluciones verticales de Volkern: CRM, Marketing, Inmobiliario, Contabilidad, RRHH, Industria, Academy, Logística y Facturación.',
+      'Explora todas las soluciones verticales de Volkern: CRM, Marketing, Inmobiliario, Contabilidad, RRHH, Industria, Academy, Logística, Facturación y Seguros.',
     images: ['/og-soluciones.png'],
   },
 };
