@@ -112,6 +112,102 @@ const ALL_FEATURES_SET: CrmModule[] = ALL_MODULES
   .map(m => m.id)
   .filter(id => id !== 'compliance_pro')
 
+// ═══════════════════════════════════════════════════════════════════════════
+// VERTICALES — listas curadas de módulos que el operator puede elegir en el
+// step opcional "Vertical" del wizard de partner-onboarding. Cada vertical
+// pre-define el "starter pack" de módulos habilitados para que el broker
+// recién creado tenga exactamente lo que necesita para empezar a importar
+// datos de su vertical sin entrar a /admin/saas/tenants/{id}/modulos.
+//
+// Si un plan (e.g. INFINITY, ESSENCIAL) ya da TODOS los módulos, estos
+// verticales siguen funcionando: el provisioner hace upsert de tenantFeature
+// enabled=true para los módulos de la vertical como override explícito, de
+// modo que el operador (superadmin) ve en el auditLog cuáles se sembraron.
+//
+// Si un plan (e.g. BASICO) tiene módulos limitados, los verticales pueden
+// AÑADIR módulos que falten en el plan como overrides (siempre que el plan
+// tenga el slot para habilitarlos — el caller puede revisar isModuleActive
+// después para confirmar).
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const VERTICALS = ['insurance', 'real_estate', 'accounting', 'general'] as const;
+export type Vertical = typeof VERTICALS[number];
+
+export interface VerticalDefinition {
+  id: Vertical;
+  name: string;
+  description: string;
+  icon: string;
+  /** Lista curada de módulos que el tenant de esta vertical debe tener activados. */
+  modules: CrmModule[];
+}
+
+export const VERTICAL_DEFINITIONS: Record<Vertical, VerticalDefinition> = {
+  insurance: {
+    id: 'insurance',
+    name: 'Seguros (Brokers)',
+    description: 'Cartera de pólizas, aseguradoras, renovaciones y forecast. '
+               + 'Pensado para brokers / agentes de seguros.',
+    icon: '🛡️',
+    modules: [
+      'leads', 'contactos', 'empresas', 'pipeline', 'tareas', 'analytics',
+      'mensajes', 'citas', 'catalogo',
+      'cotizaciones', 'contratos',
+      'insurance', 'automatizaciones',
+      'mi_tarjeta',
+      'equipo', 'configuracion',
+    ],
+  },
+  real_estate: {
+    id: 'real_estate',
+    name: 'Inmobiliaria (Real Estate)',
+    description: 'Gestión de inmuebles, corredores, cotizaciones de alquiler '
+               + 'y comisión de franquicia.',
+    icon: '🏠',
+    modules: [
+      'leads', 'contactos', 'empresas', 'pipeline', 'tareas', 'analytics',
+      'mensajes', 'citas', 'catalogo',
+      'cotizaciones', 'contratos', 'ordenes_venta',
+      'campanas', 'cms', 'builder_premium',
+      'mi_tarjeta',
+      'integraciones',
+      'equipo', 'configuracion',
+    ],
+  },
+  accounting: {
+    id: 'accounting',
+    name: 'Contable (Accounting)',
+    description: 'Contabilidad, IVA, conciliación bancaria y '
+               + 'gestión documental fiscal.',
+    icon: '📊',
+    modules: [
+      'leads', 'contactos', 'empresas', 'pipeline', 'tareas', 'analytics',
+      'mensajes', 'citas', 'catalogo',
+      'cotizaciones', 'contratos', 'ordenes_venta',
+      'finanzas', 'conciliacion',
+      'automatizaciones',
+      'chatbot_whatsapp',
+      'mi_tarjeta',
+      'equipo', 'configuracion',
+      'conocimiento',
+    ],
+  },
+  general: {
+    id: 'general',
+    name: 'General (Multi-vertical)',
+    description: 'Broker sin vertical definida. Se siembran los módulos '
+               + 'CRM centrales (leads, contactos, tareas, pipeline) sin '
+               + 'sesgar hacia ningún vertical específico.',
+    icon: '💼',
+    modules: [
+      'leads', 'contactos', 'empresas', 'pipeline', 'tareas', 'analytics',
+      'mensajes', 'citas', 'catalogo',
+      'mi_tarjeta',
+      'equipo', 'configuracion',
+    ],
+  },
+};
+
 export const PLAN_MODULES: Record<string, CrmModule[]> = {
   [PLANS.TRIAL]: [...ALL_FEATURES_SET, 'compliance_pro'],
   [PLANS.ESENCIAL]: ALL_FEATURES_SET,
