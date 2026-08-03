@@ -17,7 +17,23 @@ export interface TenantProvisioningInput {
     subdomain: string;
     email: string;
     password: string;
-    telegram: {
+    /**
+     * Credenciales del bot de Telegram (opcional desde 2026-08-09).
+     *
+     * ANTES: era obligatorio. El flujo `/api/tenants/create` rechazaba
+     * cualquier creación sin `telegram`. Eso bloqueó a brokers que querían
+     * usar Volkern sin Telegram (e.g. sólo email corporativo + webchat).
+     *
+     * AHORA: opcional. Si se omite, el provisioner salta los pasos 3-7
+     * (creación de inbox + canal + webhook en Chatwoot) y sólo crea el
+     * tenant + usuario + dominio. El broker puede conectar Telegram
+     * después vía `/admin/partner-onboarding` o `addWhatsAppChannel` análogo.
+     *
+     * IMPORTANTE: para preservar compat con integraciones existentes que
+     * sí mandan Telegram, los pasos condicionales no son opcionales si
+     * la propiedad viene — sólo si NO viene.
+     */
+    telegram?: {
         botName: string;  // @mi_empresa_bot
         botToken: string; // 123456:ABCdef...
     };
@@ -42,6 +58,25 @@ export interface TenantProvisioningResult {
         step?: string;
     };
 }
+
+/**
+ * Variantes de respuesta cuando el input NO incluye Telegram.
+ *
+ * Antes: Telegram era obligatorio y el provisioner fallaba con
+ *   INVALID_TELEGRAM_TOKEN. Ahora puede proceder sin Telegram y devolver
+ *   `telegramSkipped: true` para que el caller sepa que el broker necesita
+ *   configurar el bot después.
+ */
+export interface TenantProvisioningSuccess {
+    success: true;
+    tenantId: string;
+    chatwootAccountId?: number;
+    telegramInboxId?: number;
+    /** true cuando se omitó Telegram en el input. */
+    telegramSkipped: boolean;
+}
+
+export type ProvisioningResult = TenantProvisioningSuccess | TenantProvisioningResult;
 
 /**
  * Validar token de bot de Telegram
@@ -123,17 +158,30 @@ export async function provisionTenant(input: TenantProvisioningInput): Promise<T
             };
         }
 
-        // Validar token de Telegram
-        const telegramValidation = await validateTelegramBot(telegram.botToken);
-        if (!telegramValidation.valid) {
-            return {
-                success: false,
-                error: {
-                    code: 'INVALID_TELEGRAM_TOKEN',
-                    message: telegramValidation.error || 'Token de Telegram inválido',
-                    step: 'telegram_validation',
-                },
-            };
+        // Validar token de Telegram (sólo si se proporcionó). Si falta, ok — el
+        // broker puede configurarlo después via /admin/partner-onboarding.
+        if (telegram && (telegram.botName || telegram.botToken)) {
+            if (!telegram.botName || !telegram.botToken) {
+                return {
+                    success: false,
+                    error: {
+                        code: 'TELEGRAM_INCOMPLETE',
+                        message: 'Si proporcionas Telegram, debes incluir botName Y botToken.',
+                        step: 'telegram_validation',
+                    },
+                };
+            }
+            const telegramValidation = await validateTelegramBot(telegram.botToken);
+            if (!telegramValidation.valid) {
+                return {
+                    success: false,
+                    error: {
+                        code: 'INVALID_TELEGRAM_TOKEN',
+                        message: telegramValidation.error || 'Token de Telegram inválido',
+                        step: 'telegram_validation',
+                    },
+                };
+            }
         }
     } catch (error: any) {
         console.error('[Provisioner] Validation error:', error);
@@ -146,6 +194,9 @@ export async function provisionTenant(input: TenantProvisioningInput): Promise<T
             },
         };
     }
+
+    // Indica si el flujo de Telegram se saltó (broker admin sin bot).
+    const telegramProvided = !!(telegram && telegram.botName && telegram.botToken);
 
     // PASO 2: Crear tenant en Volkern
     let tenantId: string;
@@ -236,91 +287,98 @@ export async function provisionTenant(input: TenantProvisioningInput): Promise<T
         };
     }
 
-    // PASO 4: Crear inbox de Telegram en Chatwoot
-    let telegramInboxId: number;
-    
-    try {
-        const inbox = await chatwootApi.createTelegramInbox(
-            chatwootAccountId,
-            telegram.botToken,
-            telegram.botName,
-            chatwootApiToken
-        );
-        telegramInboxId = inbox.id;
-        
-        console.log('[Provisioner] Telegram inbox created:', telegramInboxId);
-    } catch (error: any) {
-        console.error('[Provisioner] Telegram inbox error:', error);
-        // Rollback
-        await prisma.tenant.delete({ where: { id: tenantId } });
-        
-        return {
-            success: false,
-            error: {
-                code: 'TELEGRAM_INBOX_ERROR',
-                message: error.message,
-                step: 'create_telegram_inbox',
-            },
-        };
+    // PASO 4: Crear inbox de Telegram en Chatwoot (sólo si se proporcionó).
+    let telegramInboxId: number | undefined;
+    if (telegramProvided) {
+        try {
+            const inbox = await chatwootApi.createTelegramInbox(
+                chatwootAccountId,
+                telegram!.botToken,
+                telegram!.botName,
+                chatwootApiToken
+            );
+            telegramInboxId = inbox.id;
+            console.log('[Provisioner] Telegram inbox created:', telegramInboxId);
+        } catch (error: any) {
+            console.error('[Provisioner] Telegram inbox error:', error);
+            await prisma.tenant.delete({ where: { id: tenantId } });
+            return {
+                success: false,
+                error: {
+                    code: 'TELEGRAM_INBOX_ERROR',
+                    message: error.message,
+                    step: 'create_telegram_inbox',
+                },
+            };
+        }
+    } else {
+        // Sin Telegram: saltamos este paso. El hermano `addTelegramChannel`
+        // (no implementado aún, ver follow-ups) puede crearlo después.
+        console.log('[Provisioner] Telegram skipped (no bot en input). Broker puede configurar después.');
+        telegramInboxId = undefined;
     }
 
-    // PASO 5: Guardar configuración de Nexus
+    // PASO 5: Guardar configuración de Nexus (sólo si se creó Chatwoot).
     const webhookSecret = crypto.randomBytes(32).toString('hex');
     const webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://volkern.app'}/api/webhooks/nexus-sync`;
-    
-    try {
-        await prisma.messagingHubConfig.create({
-            data: {
-                tenantId,
-                isActive: true,
-                hubBaseUrl: process.env.CHATWOOT_BASE_URL || 'https://volkern.dimension.expert',
-                hubApiToken: encrypt(chatwootApiToken),
-                hubAccountId: String(chatwootAccountId),
-                chatwootAccountId,
-                telegramInboxId,
-                autoProvisioned: true,
-                provisionedAt: new Date(),
-                webhookSecret,
-                webhookUrl,
-            }
-        });
-        
-        console.log('[Provisioner] MessagingHubConfig created');
-    } catch (error: any) {
-        console.error('[Provisioner] MessagingHubConfig error:', error);
-        // Continuar aunque falle, no es crítico
+    if (telegramProvided) {
+        try {
+            await prisma.messagingHubConfig.create({
+                data: {
+                    tenantId,
+                    isActive: true,
+                    hubBaseUrl: process.env.CHATWOOT_BASE_URL || 'https://volkern.dimension.expert',
+                    hubApiToken: encrypt(chatwootApiToken),
+                    hubAccountId: String(chatwootAccountId),
+                    chatwootAccountId,
+                    telegramInboxId,
+                    autoProvisioned: true,
+                    provisionedAt: new Date(),
+                    webhookSecret,
+                    webhookUrl,
+                }
+            });
+            console.log('[Provisioner] MessagingHubConfig created');
+        } catch (error: any) {
+            console.error('[Provisioner] MessagingHubConfig error:', error);
+        }
+    } else {
+        console.log('[Provisioner] MessagingHubConfig skipped (no Telegram en input).');
     }
 
-    // PASO 6: Guardar canal de Telegram
-    try {
-        await prisma.channel.create({
-            data: {
-                tenantId,
-                type: 'telegram',
-                name: `Telegram - ${telegram.botName}`,
-                config: {
-                    botToken: encrypt(telegram.botToken),
-                    botName: telegram.botName,
-                },
-                chatwootInboxId: telegramInboxId,
-                isActive: true,
-                isDefault: true,
-            }
-        });
-        
-        console.log('[Provisioner] Channel created');
-    } catch (error: any) {
-        console.error('[Provisioner] Channel creation error:', error);
-        // Continuar aunque falle
+    // PASO 6: Guardar canal de Telegram (sólo si se proporcionó).
+    if (telegramProvided) {
+        try {
+            await prisma.channel.create({
+                data: {
+                    tenantId,
+                    type: 'telegram',
+                    name: `Telegram - ${telegram!.botName}`,
+                    config: {
+                        botToken: encrypt(telegram!.botToken),
+                        botName: telegram!.botName,
+                    },
+                    chatwootInboxId: telegramInboxId!,
+                    isActive: true,
+                    isDefault: true,
+                }
+            });
+            console.log('[Provisioner] Channel created');
+        } catch (error: any) {
+            console.error('[Provisioner] Channel creation error:', error);
+        }
+    } else {
+        console.log('[Provisioner] Channel skipped (no Telegram en input).');
     }
 
-    // PASO 7: Configurar webhook en Chatwoot
-    try {
-        await chatwootApi.configureWebhook(chatwootAccountId, webhookUrl, chatwootApiToken);
-        console.log('[Provisioner] Webhook configured');
-    } catch (error: any) {
-        console.error('[Provisioner] Webhook configuration error:', error);
-        // No es crítico, continuar
+    // PASO 7: Configurar webhook en Chatwoot (sólo si se creó la config de Nexus).
+    if (telegramProvided) {
+        try {
+            await chatwootApi.configureWebhook(chatwootAccountId, webhookUrl, chatwootApiToken);
+            console.log('[Provisioner] Webhook configured');
+        } catch (error: any) {
+            console.error('[Provisioner] Webhook configuration error:', error);
+        }
     }
 
     // PASO 8: Provisionar dominio de email (Resend + Cloudflare)
@@ -385,13 +443,18 @@ export async function provisionTenant(input: TenantProvisioningInput): Promise<T
     }
 
     console.log('[Provisioner] Provisioning completed successfully');
-    
+
     return {
         success: true,
         tenantId,
         chatwootAccountId,
         telegramInboxId,
-    };
+        telegramSkipped: !telegramProvided,
+        // Discriminación TypeScript-narrow-friendly: si telegramInboxId está
+        // definido el broker lo configuró, si no, fue skipped. Lo dejamos
+        // como opcional aunque TS no narrowe desde el union — los callers
+        // usan `telegramSkipped` para ramificar.
+    } as TenantProvisioningSuccess;
 }
 
 /**
