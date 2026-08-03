@@ -111,6 +111,7 @@ model User {
   disponibilidad          Disponibilidad[]
   ausencias               Ausencia[]
   polizasCreadas          Poliza[]                          @relation("PolizaCreator")
+  siniestrosReportados    Siniestro[]                       @relation("SiniestroReporter")
   renovacionesAsignadas   Renovacion[]                      @relation("RenovacionAgente")
   oportunidadesAsignadas  OportunidadComercial[]            @relation("OportunidadAgente")
   importLogsInsurance     InsuranceImportLog[]              @relation("ImportLogCreator")
@@ -415,7 +416,8 @@ model Tenant {
   polizasSeguro                  Poliza[]
   renovacionesSeguro             Renovacion[]
   oportunidadesComerciales       OportunidadComercial[]
-  insuranceImportLogs            InsuranceImportLog[]
+  siniestrosSeguro               Siniestro[]
+  insuranceImportLogs            InsuranceImportLog[]  
   portfolioForecastLogs          PortfolioForecastLog[]            @relation("TenantForecastLogs")
   portfolioSeasonalMultipliers   PortfolioSeasonalMultiplier[]     @relation("TenantSeasonalMultipliers")
 }
@@ -731,6 +733,7 @@ model Contact {
   perfilFiscal                   PerfilFiscalCliente?             @relation("ContactPerfilFiscal")
   polizasSeguro                  Poliza[]                          @relation("PolizaCliente")
   oportunidadesSeguro            OportunidadComercial[]            @relation("OportunidadCliente")
+  siniestrosCliente              Siniestro[]                       @relation("SiniestroCliente")
 
   @@index([tenantId])
   @@index([email])
@@ -7438,6 +7441,7 @@ model Aseguradora {
 
   productos       ProductoSeguro[]
   polizas         Poliza[]
+  siniestros      Siniestro[]
 
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
@@ -7515,6 +7519,7 @@ model Poliza {
   // Tracking
   renovaciones        Renovacion[]
   oportunidades       OportunidadComercial[]  @relation("OportunidadPolizaOrigen")
+  siniestros          Siniestro[]
 
   // Auditoría
   createdAt           DateTime            @default(now())
@@ -7718,4 +7723,66 @@ model PortfolioSeasonalMultiplier {
   @@index([tenantId])
   @@index([eventoKey])
   @@map("portfolio_seasonal_multipliers")
+}
+
+// ─── Siniestro (Fase 5.1) ─────────────────────────────────────────────────────
+// Ciclo de vida de un siniestro de seguros. Relación 1:N desde Poliza.
+// Por qué está separado de Poliza: el mismo Poliza puede tener varios siniestros
+// a lo largo del tiempo (auto con 2 choques, hogar con 2 inundaciones, etc.) y
+// cada uno tiene su propio estado, monto reclamado y resolución.
+
+enum EstadoSiniestro {
+  REPORTADO        // Cliente acaba de avisar; todavía sin abrir officially
+  EN_TRAMITE       // Documentación entregada, esperando respuesta aseguradora
+  ABIERTO          // Aseguradora aceptó y está procesando
+  PAGADO           // Aseguradora pagó la indemnización
+  RECHAZADO        // Aseguradora rechazó el siniestro
+  CERRADO          // Ciclo completo cerrado sin pago
+}
+
+model Siniestro {
+  id                  String              @id @default(cuid())
+  tenantId            String
+  tenant              Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Relaciones
+  polizaId            String
+  poliza              Poliza              @relation(fields: [polizaId], references: [id], onDelete: Cascade)
+  clienteId           String
+  cliente             Contact             @relation("SiniestroCliente", fields: [clienteId], references: [id], onDelete: Cascade)
+  aseguradoraId       String
+  aseguradora         Aseguradora         @relation(fields: [aseguradoraId], references: [id], onDelete: Cascade)
+
+  // Datos del siniestro
+  numeroSiniestro     String?             // Número que devuelve la aseguradora (si aplica)
+  descripcion         String
+  fechaSuceso         DateTime            // Cuándo ocurrió el evento
+  fechaReporte        DateTime            // Cuándo el cliente avisó (default: ahora)
+  fechaCierre         DateTime?
+
+  // Económico
+  montoReclamado      Decimal?
+  montoIndemnizado    Decimal?
+  deducible           Decimal?
+  moneda              String              @default("EUR")
+
+  // Estado y trazabilidad
+  estado              EstadoSiniestro     @default(REPORTADO)
+  motivoRechazo       String?
+  notas               String?
+  documentos          Json?               // Array de URLs a PDFs/fotos del siniestro
+
+  // Auditoría
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  createdById         String
+  createdBy           User                @relation("SiniestroReporter", fields: [createdById], references: [id])
+
+  @@unique([tenantId, numeroSiniestro])
+  @@index([tenantId, estado])
+  @@index([tenantId, fechaSuceso])
+  @@index([polizaId])
+  @@index([clienteId])
+  @@index([aseguradoraId])
+  @@map("insurance_siniestros")
 }
