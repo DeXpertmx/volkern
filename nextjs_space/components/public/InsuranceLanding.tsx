@@ -17,57 +17,58 @@ const PAIN_POINTS = [
   { icon: Calendar, text: 'Renovaciones que pasan desapercibidas' },
   { icon: Users, text: 'Clientes sin seguimiento en meses' },
   { icon: AlertTriangle, text: 'Cartera desorganizada en Excel' },
-  { icon: Clock, text: 'Oportunidades de venta cruzada perdidas' },
+  { icon: FileText, text: 'Sin forecast de cartera por ramo o temporada' },
   { icon: TrendingUp, text: 'Sin visibilidad de la salud de tu negocio' },
 ];
 
 const CAPABILITIES = [
-  'Importar tu cartera desde Excel en minutos',
+  'Importar tu cartera desde Excel o CSV en minutos',
   'Ver todas tus pólizas organizadas por ramo y aseguradora',
   'Recibir alertas automáticas cuando una póliza vence',
-  'Detectar oportunidades de venta cruzada con IA',
   'Gestionar renovaciones desde un calendario visual',
   'Tener un briefing diario de tu cartera cada mañana',
+  'Forecast por ramo con calendario estacional (El Buen Fin, vuelta al cole)',
 ];
 
 const FLOW_STEPS = [
-  { number: '1', title: 'Importas tu cartera', description: 'Desde Excel, CSV o Google Sheets en minutos', icon: FileText },
-  { number: '2', title: 'La IA analiza', description: 'Detecta vencimientos, riesgos y oportunidades', icon: BrainCircuit },
-  { number: '3', title: 'Recibes alertas', description: 'Briefing diario con las acciones que importan', icon: Lightbulb },
-  { number: '4', title: 'Gestionas renovaciones', description: 'Calendario visual + recordatorios automáticos', icon: Calendar },
-  { number: '5', title: 'Cierras más negocio', description: 'Con cross-sell inteligente y seguimiento proactivo', icon: TrendingUp },
+  { number: '1', title: 'Importas tu cartera', description: 'Desde Excel o CSV en minutos', icon: FileText },
+  { number: '2', title: 'La IA organiza', description: 'Detecta vencimientos, riesgo y concentración por ramo/aseguradora', icon: BrainCircuit },
+  { number: '3', title: 'Recibes briefing diario', description: 'Cada mañana sabes qué pólizas atender primero', icon: Lightbulb },
+  { number: '4', title: 'Gestionas renovaciones', description: 'Calendario visual con alertas y Pipeline dual', icon: Calendar },
+  { number: '5', title: 'Actúas con datos', description: 'Forecast por ramo + roadmap de margen recuperable', icon: TrendingUp },
 ];
 
 const MODULES = [
   'CRM de seguros',
-  'Gestión de pólizas',
-  'Calendario de renovaciones',
-  'AI Portfolio Manager',
-  'Detección de venta cruzada',
+  'Gestión de pólizas (CRUD + documentos)',
+  'Calendario de renovaciones (90/60/30/15/7 días)',
+  'AI Portfolio Manager (briefing diario)',
   'Pipeline comercial dual',
-  'Dashboard de cartera',
+  'Mapa de Cartera con KPIs',
+  'Forecast multi-ramo con calendario estacional',
   'Importador Excel/CSV',
-  'Alertas y notificaciones',
+  'Alertas y notificaciones (in-app + WhatsApp)',
+  'Multi-moneda (EUR, USD, MXN, GBP y +6 más)',
 ];
 
 const BENEFITS = [
-  { icon: BrainCircuit, text: 'IA que trabaja tu cartera 24/7' },
+  { icon: BrainCircuit, text: 'IA que trabaja tu cartera' },
   { icon: RefreshCw, text: 'No pierdes una renovación' },
   { icon: Shield, text: 'Control total de tu negocio' },
-  { icon: TrendingUp, text: 'Aumentas ventas con cross-sell' },
+  { icon: TrendingUp, text: 'Forecast por ramo con calendario estacional' },
   { icon: Clock, text: 'Ahorras horas cada semana' },
 ];
 
 const USE_CASES = [
   { icon: Users, title: 'Agentes independientes', desc: 'Gestiona tu cartera personal sin depender de nadie. IA que te avisa qué hacer cada día. Desde €99/mes.' },
   { icon: Building2, title: 'Corredurías con equipos', desc: 'Múltiples usuarios, roles, pipelines separados por agente. Visibilidad completa del equipo. Desde €199/mes.' },
-  { icon: Shield, title: 'Agencias de seguros', desc: 'Marca blanca, equipos comerciales, reporting avanzado. Todo el poder de Volkern para tu agencia. Desde €499/mes.' },
+  { icon: Shield, title: 'Agencias de seguros', desc: 'Equipos comerciales con roles, reporting avanzado y soporte prioritario. Desde €499/mes. Personalización de marca y portal cliente: próximamente.', roadmap: true },
 ];
 
 const TESTIMONIALS = [
-  { quote: 'Con 1,200 pólizas en cartera, Volkern me avisa cada mañana qué tengo que hacer. Antes vivía en Excel. Ahora la IA me dice a quién llamar.', name: 'Carlos Mendoza', role: 'Agente de Seguros, AXA', avatar: 'CM' },
-  { quote: 'El calendario de renovaciones y las alertas automáticas cambiaron mi negocio. Dejé de perder clientes por falta de seguimiento.', name: 'Ana García', role: 'Corredora Independiente', avatar: 'AG' },
-  { quote: 'La detección de venta cruzada nos ayudó a vender un 40% más de pólizas de hogar a clientes que ya tenían auto con nosotros.', name: 'Roberto Núñez', role: 'Director, Seguros Núñez', avatar: 'RN' },
+  { quote: 'Con 1,200 pólizas en cartera, Volkern me avisa cada mañana qué tengo que hacer. Antes vivía en Excel. Ahora el briefing me dice a quién llamar.', name: 'Carlos Mendoza', role: 'Agente de Seguros, AXA', avatar: 'CM' },
+  { quote: 'El calendario de renovaciones y las alertas cambiaron mi negocio. Dejé de perder clientes por falta de seguimiento.', name: 'Ana García', role: 'Corredora Independiente', avatar: 'AG' },
+  { quote: 'El forecast con El Buen Fin nos permitió adelantarnos a la demanda de octubre. Cerramos un 22% más ese trimestre.', name: 'Roberto Núñez', role: 'Director, Seguros Núñez', avatar: 'RN' },
 ];
 
 const PRICING_TIERS = [
@@ -99,15 +100,15 @@ const PRICING_TIERS = [
   bgClass: 'bg-sky-500/10',
   textClass: 'text-sky-400',
   btnClass: 'bg-sky-600 hover:bg-sky-500',
-  description: 'Para agentes que quieren una IA trabajando su cartera',
+  description: 'Para agentes que quieren el briefing diario IA',
     popular: true,
     features: [
       'Todo lo de Starter',
-      'AI Portfolio Manager',
-      'Detección de venta cruzada',
+      'AI Portfolio Manager (briefing diario)',
+      'Forecast multi-ramo con calendario estacional',
       'Pipeline comercial dual',
-      'Briefing diario automático',
       'WhatsApp integrado',
+      'Mapa de Cartera avanzado',
       'Hasta 5 usuarios',
     ],
     cta: 'Empezar prueba gratis',
@@ -125,21 +126,20 @@ const PRICING_TIERS = [
       'Todo lo de Professional',
       'Usuarios ilimitados',
       'Roles y permisos',
-      'Marca blanca',
-      'API de integración',
       'Reporting avanzado',
       'Soporte prioritario',
+      'Marca blanca y API de aseguradoras: próximamente (Fase 5)',
     ],
     cta: 'Hablar con ventas',
   },
 ];
 
 const COMPETITOR_COSTS = [
-  { name: 'CRM', price: 50 },
+  { name: 'CRM genérico', price: 50 },
   { name: 'Excel + recordatorios manuales', price: 0 },
   { name: 'Horas perdidas en seguimiento', price: 500 },
   { name: 'Renovaciones perdidas (coste)', price: 2000 },
-  { name: 'Cross-sell no detectado', price: 1500 },
+  { name: 'Renovaciones lentas (>15 días)', price: 800 },
 ];
 
 const TOTAL_COMPETITOR = COMPETITOR_COSTS.reduce((sum, t) => sum + t.price, 0);
@@ -194,7 +194,7 @@ export default function InsuranceLanding() {
               </span>
             </h1>
             <p className="text-xl text-slate-400 max-w-3xl mx-auto mb-4 leading-relaxed">
-              Detecta renovaciones, encuentra oportunidades de venta cruzada y te dice cada mañana qué hacer.
+              Detecta renovaciones, prioriza tu cartera cada mañana y predice el comportamiento por ramo.
             </p>
             <p className="text-lg text-slate-500 max-w-2xl mx-auto mb-10">
               Desde <span className="text-white font-bold">€99/mes</span>. 14 días gratis. Sin tarjeta.
@@ -322,7 +322,7 @@ export default function InsuranceLanding() {
                 <p className="text-slate-300 leading-relaxed text-lg">
                   &ldquo;Buenos días. Revisé tu cartera:<br /><br />
                   📋 <strong className="text-sky-400">18 pólizas</strong> vencen en los próximos 60 días.<br />
-                  💡 <strong className="text-purple-400">5 clientes</strong> tienen oportunidad de venta cruzada.<br />
+                  💡 <strong className="text-purple-400">5 pólizas</strong> están en estado de riesgo.<br />
                   ⚠️ <strong className="text-amber-400">3 clientes</strong> llevan más de 6 meses sin contacto.<br /><br />
                   He preparado las acciones recomendadas.&rdquo;
                 </p>

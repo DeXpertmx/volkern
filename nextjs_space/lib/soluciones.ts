@@ -82,7 +82,7 @@ export const SOLUTION_MODULES: SolutionModule[] = [
     color: 'sky',
     name: 'Insurance',
     description:
-      'Cartera inteligente, renovaciones automáticas e IA que detecta oportunidades de venta cruzada.',
+      'CRM de seguros con briefing diario IA, forecast por ramo y Mapa de Cartera. Para agentes, corredores y agencias.',
     href: '/soluciones/insurance',
   },
 ];
