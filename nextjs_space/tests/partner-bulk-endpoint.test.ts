@@ -5,6 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mocks = vi.hoisted(() => ({
   getServerSession: vi.fn(),
   userFindUnique: vi.fn(),
+  tenantFindMany: vi.fn(),
   runBulkOnboarding: vi.fn(),
   generateBulkPassword: vi.fn(),
 }));
@@ -16,7 +17,10 @@ vi.mock('next-auth', () => ({
 vi.mock('@/lib/auth', () => ({ authOptions: {} }));
 
 vi.mock('@/lib/db', () => ({
-  prisma: { user: { findUnique: mocks.userFindUnique } },
+  prisma: {
+    user: { findUnique: mocks.userFindUnique },
+    tenant: { findMany: mocks.tenantFindMany },
+  },
 }));
 
 vi.mock('@/lib/provisioning/partner-bulk-runner', () => ({
@@ -61,9 +65,12 @@ const VALID_CSV = 'empresa,subdomain,email\nA,a,a@a.com\n';
 beforeEach(() => {
   mocks.getServerSession.mockReset();
   mocks.userFindUnique.mockReset();
+  mocks.tenantFindMany.mockReset();
   mocks.runBulkOnboarding.mockReset();
   mocks.generateBulkPassword.mockReset();
   mocks.generateBulkPassword.mockReturnValue('AutoPwd1234');
+  // Default tenant.findMany: vacío (no hay subdominios ocupados).
+  mocks.tenantFindMany.mockResolvedValue([]);
   // Default runner response (no tests rely on what's returned; only on call counts).
   mocks.runBulkOnboarding.mockResolvedValue({
     ok: true, dryRun: false, total: 1, created: 1, simulated: 0, failed: 0,
@@ -257,3 +264,131 @@ describe('POST /api/admin/partner-bulk — csv edges: rechazos', () => {
 // Aquí cubrimos sólo el HTTP-layer: rechazo rápido de auth y body parsing.
 // Una integración end-to-end real se valida manualmente con curl contra
 // el dev server (ver docs/MONEDA_TENANT_Y_PORTFOLIO.md, sección "📡").
+
+// ═════════════════════════════════════════════════════════════════════════════
+// DRY-RUN THOROUGHNESS — pre-query de subdominios ya ocupados en BD
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('POST /api/admin/partner-bulk — dry-run thoroughness', () => {
+  beforeEach(() => {
+    process.env.CRON_SECRET = 'vault-secret-123';
+  });
+  afterEach(() => {
+    delete process.env.CRON_SECRET;
+  });
+
+  it('12) dryRun=true (header X-Dry-Run) → tenant.findMany con slug IN (excluyendo archivados)', async () => {
+    // Devolvemos un subdominio ocupado para que existingSubdomains lo incluya.
+    mocks.tenantFindMany.mockResolvedValue([{ slug: 'taken-sa' }]);
+
+    const csv =
+`empresa,subdomain,email
+BrokerA,taken-sa,a@a.com
+`;
+    const req = makeRequest({
+      headers: {
+        authorization: 'Bearer vault-secret-123',
+        'x-dry-run': 'true',
+      },
+      contentType: 'text/csv',
+      body: csv,
+    });
+    const res = await callRoute(req);
+
+    // El endpoint aceptó el request (200) y consultó Tenant.findMany.
+    expect(res.status).toBe(200);
+    expect(mocks.tenantFindMany).toHaveBeenCalledTimes(1);
+    expect(mocks.tenantFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          slug: { in: ['taken-sa'] },
+          estado: { not: 'archived' },
+        }),
+        select: { slug: true },
+      }),
+    );
+    // Y el response declara dryRun=true en el header.
+    expect(res.headers.get('x-bulk-dry-run')).toBe('true');
+  });
+
+  it('13) dryRun=true (body dryRun=true) → mismo comportamiento, NO dispara tenant.findMany si header ausente', async () => {
+    // Si header ausente y body.dryRun=true, sigue siendo dry-run → findMany SÍ se llama.
+    const csv =
+`empresa,subdomain,email
+BrokerA,sub-a,a@a.com
+`;
+    const req = makeRequest({
+      headers: { authorization: 'Bearer vault-secret-123' },
+      contentType: 'application/json',
+      body: JSON.stringify({ csv, dryRun: true, concurrency: 3 }),
+    });
+    const res = await callRoute(req);
+
+    expect(res.status).toBe(200);
+    expect(mocks.tenantFindMany).toHaveBeenCalledTimes(1);
+    expect(res.headers.get('x-bulk-dry-run')).toBe('true');
+  });
+
+  it('14) dryRun=false → tenant.findMany NO se llama (no queremos I/O extra)', async () => {
+    const csv =
+`empresa,subdomain,email
+BrokerA,sub-a,a@a.com
+`;
+    const req = makeRequest({
+      headers: { authorization: 'Bearer vault-secret-123' },
+      contentType: 'text/csv',
+      body: csv,
+    });
+    const res = await callRoute(req);
+
+    expect(res.status).toBe(200);
+    expect(mocks.tenantFindMany).not.toHaveBeenCalled();
+    expect(res.headers.get('x-bulk-dry-run')).toBe('false');
+  });
+
+  it('15) X-Dry-Run header tiene prioridad sobre body.dryRun (true gana false)', async () => {
+    const csv =
+`empresa,subdomain,email
+BrokerA,sub-a,a@a.com
+`;
+    const req = makeRequest({
+      headers: {
+        authorization: 'Bearer vault-secret-123',
+        'x-dry-run': '1', // header dice dry-run
+      },
+      contentType: 'application/json',
+      body: JSON.stringify({ csv, dryRun: false }), // body dice lo contrario
+    });
+    const res = await callRoute(req);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('x-bulk-dry-run')).toBe('true');
+    expect(mocks.tenantFindMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('16) dry-run con 2 subdominios: tenant.findMany recibe AMBOS en el filtro slug IN', async () => {
+    const csv =
+`empresa,subdomain,email
+BrokerA,sub-a,a@a.com
+BrokerB,sub-b,b@b.com
+`;
+    const req = makeRequest({
+      headers: {
+        authorization: 'Bearer vault-secret-123',
+        'x-dry-run': 'true',
+      },
+      contentType: 'text/csv',
+      body: csv,
+    });
+    const res = await callRoute(req);
+
+    expect(res.status).toBe(200);
+    expect(mocks.tenantFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          slug: { in: ['sub-a', 'sub-b'] },
+        }),
+      }),
+    );
+  });
+});

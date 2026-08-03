@@ -1250,3 +1250,65 @@ Esta lógica es 100% pura (sin React, sin I/O) para ser estable en
   lowercasear todos los emails (`lower-trim`), upper-trimear la
   columna moneda (`upper-trim`) y luego re-validar — todo en menos
   de 5 clicks sin recargar la página ni volver a parsear el CSV.
+
+## 🧪 Modo Dry-Run Thoroughness — wizard bulk + endpoint server-side
+
+Cuando el operator sube un CSV con N tenants (típicamente 50+), un copy-paste
+error en una hoja Excel podría duplicar el subdominio N veces o pisar uno ya
+existente. Para defenderse de estos desastres ANTES de mutar nada, el wizard
+bulk `/admin/partner-onboarding/bulk` y el endpoint server-side
+`/api/admin/partner-bulk` ofrecen un modo `dryRun` con **3 checks en cascada**:
+
+### Order de checks en `processOneRow` (cuando `dryRun=true`)
+
+1. **In-batch subdomain duplicate** → status=`error`, code=`DUPLICATE_SUBDOMAIN_IN_BATCH`. La fila posterior a la primera con el mismo subdominio (case-insensitive) se marca con `errorMessage` apuntando a la fila original.
+2. **Existing subdomain en BD** → status=`error`, code=`SUBDOMAIN_TAKEN`. Una sola query batch `Tenant.findMany({ slug: { in: rows.map(r => r.subdomain.toLowerCase()) }, estado: { not: 'archived' } })` se ejecuta al inicio del dry-run, y el resultado en `Set<string>` se pasa al runner como `existingSubdomains`.
+3. **Missing password** → status=`error`, code=`MISSING_PASSWORD`. Fail-fast: no espera al provisioner para detectar la falta. La falla del caller al inyectar password se reporta directamente.
+
+Sólo las filas que pasan los 3 checks se marcan como `status='simulated'`.
+
+### Wizard `/admin/partner-onboarding/bulk` — flujo con dry-run
+
+```
+1. Upload              ──► parseBulkCsv (cliente)
+2. Preview             ──┬─► edición inline + bulk find/replace
+                         └─► CTA "Simular sin mutar BD" (botón amber) + "Crear directo" (botón rose)
+3. Simulated (NUEVO)   ──► POST /api/admin/partner-bulk con X-Dry-Run: true
+                            • tabla de reporte (simuladas + conflictos)
+                            • chips de totales (simulated / failed / hadUnexpected)
+                            • "Volver a Preview y corregir"
+                            • "Re-simular"
+                            • "Confirmar y crear N tenants" (bloqueado si failed > 0)
+4. Create              ──► pool Create per-row (existente, sin cambios)
+5. Done                ──► bulk vertical seed CTA (existente, sin cambios)
+```
+
+### Endpoint `/api/admin/partner-bulk` — flags de dry-run
+
+**Header**: `X-Dry-Run: true|1` (prioridad sobre body)
+**Body JSON**: `{ "csv": "...", "dryRun": true }`
+
+Cuando `dryRun=true`:
+- Tenant.findMany se ejecuta con un `slug IN (rows.map(...))` y `estado NOT 'archived'`
+- El Set `existingSubdomains` se pasa al runner
+- Response `X-Bulk-Dry-Run: true` (header), `dryRun: true` (body)
+
+### Tests nuevos (40 vitest cubriendo dry-run)
+
+| Test | Cubre |
+|---|---|
+| `partner-bulk-runner > 1)` | dryRun=true no llama a provisionTenant, simula todas |
+| `partner-bulk-runner > 2)` | moneda EXPLICIT en dryRun |
+| `partner-bulk-runner > 3)` | telegramStatus='simulated' en dryRun |
+| `partner-bulk-runner > 3a)` | DUPLICATE_SUBDOMAIN_IN_BATCH (case-insensitive) |
+| `partner-bulk-runner > 3b)` | SUBDOMAIN_TAKEN cuando subdomain existe en BD |
+| `partner-bulk-runner > 3c)` | in-batch dup check tiene prioridad sobre SUBDOMAIN_TAKEN |
+| `partner-bulk-runner > 3d)` | existingSubdomains Set vacío no produce falsos positivos |
+| `partner-bulk-runner > 3e)` | existingSubdomains undefined no hace check contra BD |
+| `partner-bulk-runner > 3f)` | MISSING_PASSWORD gana sobre los demás en fail-fast |
+| `partner-bulk-endpoint > 12)` | header X-Dry-Run dispara tenant.findMany con slug IN |
+| `partner-bulk-endpoint > 13)` | body.dryRun=true dispara tenant.findMany |
+| `partner-bulk-endpoint > 14)` | dryRun=false NO llama a tenant.findMany |
+| `partner-bulk-endpoint > 15)` | X-Dry-Run header gana sobre body.dryRun=false |
+| `partner-bulk-endpoint > 16)` | 2 subdominios → findMany recibe ambos en `slug IN [a, b]` |
+
