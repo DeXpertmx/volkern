@@ -117,6 +117,175 @@ function generateSlug(empresa: string): string {
         .replace(/^-+|-+$/g, '');        // Quitar guiones al inicio/final
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// Telegram channel helper (reusable desde provisioner + endpoint admin).
+//
+// Extraído del bloque condicional `if (telegramProvided)` del provisioner
+// para que el endpoint POST /api/admin/tenants/{id}/telegram pueda crearlo
+// cuando el operator decide conectar el bot DESPUÉS del onboarding.
+//
+// Devuelve una discriminated union: ok=true con inboxId+channelId+hubId,
+// o ok=false con code reproduciendo los códigos del provisioner original
+// para mantener un único vocabulario de errores entre los dos paths.
+// ════════════════════════════════════════════════════════════════════════════
+
+export type TelegramActor =
+  | { kind: 'system'; source: string } // provisioner inicial o auto-boot
+  | { kind: 'user'; id: string; email: string | null }; // operator vía admin/o UI
+
+export interface AddTelegramChannelInput {
+    tenantId: string;
+    tenantName: string;
+    chatwootAccountId: number;
+    chatwootApiToken: string;
+    botName: string;
+    botToken: string;
+    webhookUrl: string;
+    webhookSecret: string;
+    actor: TelegramActor;
+    /** Si true, valida todo y devuelve un resolved plan sin tocar BD/Chatwoot. */
+    dryRun?: boolean;
+}
+
+export type AddTelegramChannelResult =
+  | {
+      ok: true;
+      telegramInboxId: number;
+      telegramChannelId: string;
+      hubConfigId: string;
+      /** 'created' si fue la primera vez, 'already-exists' si era idempotente. */
+      state: 'created' | 'already-exists';
+    }
+  | { ok: false; code: string; message: string };
+
+/**
+ * Helper reusable. Crea inbox en Chatwoot, upsert en messagingHubConfig y
+ * crea el canal en BD local + configura el webhook. Cuando un canal de
+ * Telegram ya existe para el tenant, devuelve `already-exists` (idempotente).
+ */
+export async function addTelegramChannelToTenant(
+    input: AddTelegramChannelInput
+): Promise<AddTelegramChannelResult> {
+    const {
+        tenantId, tenantName, chatwootAccountId, chatwootApiToken,
+        botName, botToken, webhookUrl, webhookSecret, dryRun,
+    } = input;
+
+    if (!botName || !botName.startsWith('@')) {
+        return { ok: false, code: 'TELEGRAM_BOTNAME_INVALID',
+            message: 'El botName debe empezar con @ (e.g. @mi_empresa_bot).' };
+    }
+    if (!botToken || botToken.length < 20) {
+        return { ok: false, code: 'TELEGRAM_BOTTOKEN_INVALID',
+            message: 'El botToken parece incompleto (longitud mínima 20).' };
+    }
+
+    // Idempotencia: si el tenant ya tiene canal+inbox de Telegram, no recreamos.
+    const existingChannel = await prisma.channel.findFirst({
+        where: { tenantId, type: 'telegram', isActive: true },
+    });
+    if (existingChannel) {
+        return { ok: true, state: 'already-exists',
+            telegramInboxId: Number(existingChannel.chatwootInboxId) || 0,
+            telegramChannelId: existingChannel.id,
+            hubConfigId: '' };
+    }
+
+    if (dryRun) {
+        // Plan validado: reportaríamos los IDs sin hacer I/O real.
+        return { ok: true, state: 'created',
+            telegramInboxId: 0, telegramChannelId: 'dry-run', hubConfigId: 'dry-run' };
+    }
+
+    // 1. Inbox en Chatwoot
+    let telegramInboxId: number;
+    try {
+        const inbox = await chatwootApi.createTelegramInbox(
+            chatwootAccountId, botToken, botName, chatwootApiToken,
+        );
+        telegramInboxId = inbox.id;
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Error creando inbox de Telegram';
+        return { ok: false, code: 'TELEGRAM_INBOX_ERROR', message };
+    }
+
+    // 2. Upsert messagingHubConfig con el telegramInboxId (no rompe si ya existe)
+    const hubConfig = await prisma.messagingHubConfig.upsert({
+        where: { tenantId },
+        update: {
+            telegramInboxId,
+            isActive: true,
+            webhookSecret,
+            webhookUrl,
+        },
+        create: {
+            tenantId,
+            isActive: true,
+            hubBaseUrl: process.env.CHATWOOT_BASE_URL || 'https://volkern.dimension.expert',
+            hubApiToken: encrypt(chatwootApiToken),
+            hubAccountId: String(chatwootAccountId),
+            chatwootAccountId,
+            telegramInboxId,
+            autoProvisioned: false,
+            provisionedAt: new Date(),
+            webhookSecret,
+            webhookUrl,
+        },
+    });
+
+    // 3. Canal (Channel row): botToken encryptado dentro del JSON config
+    const telegramChannel = await prisma.channel.create({
+        data: {
+            tenantId,
+            type: 'telegram',
+            name: `Telegram - ${botName}`,
+            config: {
+                botToken: encrypt(botToken),
+                botName,
+            },
+            chatwootInboxId: telegramInboxId,
+            isActive: true,
+            isDefault: true,
+        },
+    });
+
+    // 4. Webhook (best-effort: si falla, el handshake se hace manual)
+    try {
+        await chatwootApi.configureWebhook(chatwootAccountId, webhookUrl, chatwootApiToken);
+    } catch (err: unknown) {
+        console.warn('[addTelegramChannelToTenant] webhook configure failed (non-fatal):',
+            err instanceof Error ? err.message : err);
+    }
+
+    // 5. Audit log (best-effort)
+    try {
+        await prisma.auditLog.create({
+            data: {
+                accion: 'crear',
+                entidad: 'tenant-telegram',
+                entidadId: tenantId,
+                descripcion: `Canal de Telegram añadido a tenant "${tenantName}" (bot=${botName}, inbox=${telegramInboxId})`,
+                cambiosAntes: undefined as any,
+                cambiosDespues: {
+                    botName, telegramInboxId, telegramChannelId: telegramChannel.id,
+                    hubConfigId: hubConfig.id, actor: input.actor,
+                } as any,
+            },
+        });
+    } catch (err: unknown) {
+        console.warn('[addTelegramChannelToTenant] audit log failed (non-fatal):',
+            err instanceof Error ? err.message : err);
+    }
+
+    return {
+        ok: true,
+        state: 'created',
+        telegramInboxId,
+        telegramChannelId: telegramChannel.id,
+        hubConfigId: hubConfig.id,
+    };
+}
+
 /**
  * Provisionar un nuevo tenant con Nexus (Chatwoot) y Telegram
  */
@@ -287,98 +456,41 @@ export async function provisionTenant(input: TenantProvisioningInput): Promise<T
         };
     }
 
-    // PASO 4: Crear inbox de Telegram en Chatwoot (sólo si se proporcionó).
+    // PASOS 4-7: opcionalmente añadir canal de Telegram completo (inbox + hub
+    // config + channel row + webhook). Delegamos al helper `addTelegramChannelToTenant`
+    // para que el endpoint POST /api/admin/tenants/{id}/telegram pueda reusarlo
+    // cuando el operator decide conectar el bot después del onboarding.
+    const webhookSecret = crypto.randomBytes(32).toString('hex');
+    const webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://volkern.app'}/api/webhooks/nexus-sync`;
     let telegramInboxId: number | undefined;
     if (telegramProvided) {
-        try {
-            const inbox = await chatwootApi.createTelegramInbox(
-                chatwootAccountId,
-                telegram!.botToken,
-                telegram!.botName,
-                chatwootApiToken
-            );
-            telegramInboxId = inbox.id;
-            console.log('[Provisioner] Telegram inbox created:', telegramInboxId);
-        } catch (error: any) {
-            console.error('[Provisioner] Telegram inbox error:', error);
+        const tg = await addTelegramChannelToTenant({
+            tenantId,
+            tenantName: empresa,
+            chatwootAccountId: chatwootAccountId!,
+            chatwootApiToken,
+            botName: telegram!.botName,
+            botToken: telegram!.botToken,
+            webhookUrl,
+            webhookSecret,
+            actor: { kind: 'system', source: 'provisioner' },
+        }).catch((err: Error) => ({ ok: false as const, error: err }));
+        if ('ok' in tg && tg.ok) {
+            telegramInboxId = tg.telegramInboxId;
+        } else {
             await prisma.tenant.delete({ where: { id: tenantId } });
             return {
                 success: false,
                 error: {
                     code: 'TELEGRAM_INBOX_ERROR',
-                    message: error.message,
+                    message: ('error' in tg ? tg.error.message : '') || 'Error creando el canal de Telegram',
                     step: 'create_telegram_inbox',
                 },
             };
         }
     } else {
-        // Sin Telegram: saltamos este paso. El hermano `addTelegramChannel`
-        // (no implementado aún, ver follow-ups) puede crearlo después.
-        console.log('[Provisioner] Telegram skipped (no bot en input). Broker puede configurar después.');
+        console.log('[Provisioner] Telegram skipped (no bot en input). El broker puede conectarlo después vía POST /api/admin/tenants/{id}/telegram.');
         telegramInboxId = undefined;
-    }
-
-    // PASO 5: Guardar configuración de Nexus (sólo si se creó Chatwoot).
-    const webhookSecret = crypto.randomBytes(32).toString('hex');
-    const webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://volkern.app'}/api/webhooks/nexus-sync`;
-    if (telegramProvided) {
-        try {
-            await prisma.messagingHubConfig.create({
-                data: {
-                    tenantId,
-                    isActive: true,
-                    hubBaseUrl: process.env.CHATWOOT_BASE_URL || 'https://volkern.dimension.expert',
-                    hubApiToken: encrypt(chatwootApiToken),
-                    hubAccountId: String(chatwootAccountId),
-                    chatwootAccountId,
-                    telegramInboxId,
-                    autoProvisioned: true,
-                    provisionedAt: new Date(),
-                    webhookSecret,
-                    webhookUrl,
-                }
-            });
-            console.log('[Provisioner] MessagingHubConfig created');
-        } catch (error: any) {
-            console.error('[Provisioner] MessagingHubConfig error:', error);
-        }
-    } else {
-        console.log('[Provisioner] MessagingHubConfig skipped (no Telegram en input).');
-    }
-
-    // PASO 6: Guardar canal de Telegram (sólo si se proporcionó).
-    if (telegramProvided) {
-        try {
-            await prisma.channel.create({
-                data: {
-                    tenantId,
-                    type: 'telegram',
-                    name: `Telegram - ${telegram!.botName}`,
-                    config: {
-                        botToken: encrypt(telegram!.botToken),
-                        botName: telegram!.botName,
-                    },
-                    chatwootInboxId: telegramInboxId!,
-                    isActive: true,
-                    isDefault: true,
-                }
-            });
-            console.log('[Provisioner] Channel created');
-        } catch (error: any) {
-            console.error('[Provisioner] Channel creation error:', error);
-        }
-    } else {
-        console.log('[Provisioner] Channel skipped (no Telegram en input).');
-    }
-
-    // PASO 7: Configurar webhook en Chatwoot (sólo si se creó la config de Nexus).
-    if (telegramProvided) {
-        try {
-            await chatwootApi.configureWebhook(chatwootAccountId, webhookUrl, chatwootApiToken);
-            console.log('[Provisioner] Webhook configured');
-        } catch (error: any) {
-            console.error('[Provisioner] Webhook configuration error:', error);
-        }
     }
 
     // PASO 8: Provisionar dominio de email (Resend + Cloudflare)

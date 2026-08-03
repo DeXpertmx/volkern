@@ -423,3 +423,68 @@ npx eslint --no-eslintrc --resolve-plugins-relative-to . \
 - `eslint-rules/__tests__/no-hardcoded-currency-fallback.test.js` — 24 tests.
 - `tests/post-import-moneda-resolver.test.ts` (en el lib) — 22 tests del resolver.
 - `tests/post-import-moneda-autofix.test.ts` — 17 tests del helper I/O + trazabilidad.
+
+---
+
+## 🛰️ Conectar Telegram a un tenant creado sin bot
+
+Cuando un broker se onboarzó con `telegram` omitido (toggle OFF en `/admin/partner-onboarding`),
+el partner tenant nace con `messagingHubConfig.chatwootAccountId` ya creado pero sin `telegramInboxId`,
+sin canal `Channel` de Telegram y sin webhook configurado. Antes había que pedirle al
+broker que llamara al CLI o esperar a un fix manual; ahora el superadmin puede
+conectar el bot en 1 click desde el DoneCard del wizard.
+
+### Endpoint
+
+```
+POST /api/admin/tenants/{id}/telegram
+Headers: Cookies de sesión + CSRF de next-auth (mismo patrón que /api/admin/*)
+Body: { botName: string, botToken: string }
+Auth: Superadmin (rol.nombre === 'Superadmin')
+```
+
+Respuestas:
+
+| Status | Cuerpo                                                                                |
+|--------|---------------------------------------------------------------------------------------|
+| 200    | `{ success: true, state: 'created' \| 'already-exists', telegramInboxId, telegramChannelId, hubConfigId }` |
+| 400    | `{ error: 'botName y botToken son requeridos' }`                                       |
+| 401    | `{ error: 'No autorizado' }`                                                          |
+| 403    | `{ error: 'Acceso denegado' }`                                                        |
+| 404    | `{ error: 'Tenant no encontrado' }`                                                   |
+| 409    | `{ error: 'TENANT_LACKS_CHATWOOT — el tenant no tiene hub de Nexus configurado' }`   |
+| 422    | `{ code: 'TELEGRAM_BAD_TOKEN' \| 'TELEGRAM_BOTNAME_INVALID' \| 'TELEGRAM_BOTTOKEN_INVALID', error }` |
+| 500    | `{ code: 'TELEGRAM_INBOX_ERROR' \| 'UNEXPECTED', error }`                              |
+
+### Implementación
+
+- `lib/provisioning/tenant-provisioner.ts:171` ahora exporta `addTelegramChannelToTenant(input)` —
+  helper extraído del bloque `if (telegramProvided)` del provisioner original
+  (pasos 4-7: createTelegramInbox + upsert messagingHubConfig + create Channel + configureWebhook + auditLog).
+  Idempotente: si ya existe `Channel.type='telegram'` activo, devuelve
+  `state='already-exists'` sin tocar nada. El provisioner llama al helper
+  cuando telegram fue provisto; el endpoint admin lo llama cuando se conecta después.
+- `app/api/admin/tenants/[id]/telegram/route.ts` (POST): valida token con
+  `https://api.telegram.org/bot{token}/getMe`, lee el `hubApiToken` encriptado
+  del `messagingHubConfig`, llama al helper con `actor={ kind:'user', id, email }`.
+- `app/admin/partner-onboarding/page.tsx`: cuando el `CreateResponse.telegramSkipped === true`
+  y la respuesta trae `tenantId`, el DoneCard ahora muestra una tarjeta ámbar
+  inline-expandible con `@mi_empresa_bot` + `botToken` que llama al endpoint.
+  El éxito actualiza el `SummaryRow` ("✅ Inbox #N") en vivo.
+
+### Tests
+
+- `tests/add-telegram-channel.test.ts` — 11 tests cubriendo: éxito, idempotencia,
+  validación temprana (botName sin @ / botToken corto), dryRun, manejo de
+  error de Chatwoot, defensivo contra webhook/auditLog fallando, actor
+  system vs user se propaga al auditLog.
+
+### Auditoría
+
+Cada conexión del bot deja un `auditLog` con `entidad='tenant-telegram'` y
+`cambiosDespues.actor` propagado. Para listar todas las conexiones:
+```sql
+SELECT * FROM "auditLog"
+WHERE entidad = 'tenant-telegram' AND accion = 'crear'
+ORDER BY "fechaCreacion" DESC;
+```
