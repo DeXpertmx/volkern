@@ -603,3 +603,66 @@ defensivo contra errores parciales · actor=user y actor=system propagan
 - Operator (superadmin) puede distinguir el flow por icono en el DoneCard.
 - Helper `seedTenantModulesFromVertical` es reusable desde CLI scripts
   (`scripts/seed-partner-tenants.ts`) o cron (`/api/cron/seed-verticals`).
+
+---
+
+## 📦 Wizard de bulk onboarding (crear N tenants a la vez)
+
+Para cargar N partners de un golpe, sin pasar por el wizard unitario N veces.
+El operator sube un CSV con `empresa,subdomain,email,password,moneda,vertical`,
+el sistema parsea (detección auto de `,` o `;`, BOM UTF-8, RFC-4180), valida
+campo por campo, y crea N tenants con concurrencia=3 reusando
+`/api/tenants/create` uno a uno (más resiliente que un endpoint bulk).
+
+### Wizard UI (`/admin/partner-onboarding/bulk`)
+
+4 pasos:
+1. **Upload**  — input file o textarea.
+2. **Preview** — tabla con filas parseadas, badge por delimiter,
+   lista de errores de validación por fila (subdominio inválido, email
+   mal formado, etc), lista de filas vacías ignoradas.
+3. **Create**  — pool de 3 workers consumen el array de BulkRowState.
+   Por cada fila: `POST /api/tenants/create` con `empresa,subdomain,email,
+   password,moneda,vertical`. Estado `pending|running|created|error` visible
+   por fila en una tabla con CSS color (azul running, verde created, rosa
+   error). Botón "Cancelar" aborta los in-flight con AbortController.
+4. **Done**    — `{created, failed, pending}` con SummaryRows + botón
+   "Descargar CSV reporte". El reporte usa `buildBulkResultCsv` (RFC-4180
+   con BOM UTF-8 para Excel).
+
+### Librería compartida (`lib/insurance/csv-bulk.ts`)
+
+- `detectDelimiter(text)` — auto-detecta `,` o `;` mirando las primeras
+  5 filas CON CONTENIDO (ignora filas vacías `,,,` que mezcladas con
+  filas válidas rompen la heurística).
+- `parseCsvLine(line, delim)` — RFC-4180 simplificado con quote escaping.
+- `parseBulkCsv(text)` — entry point. Devuelve `{ delimiter, headers,
+  rows, errors, emptyRows }`.
+- `buildBulkResultCsv(results)` — serializa el reporte con 13 columnas
+  (row, empresa, subdominio, email, status, tenantId, chatwootAccountId,
+  telegramStatus, telegramInboxId, moneda, monedaInferenciaSource,
+  errorCode, errorMessage). Usa el mismo `escapeCsv` que
+  `lib/insurance/csv-template.ts`.
+- Headers reconocidos (case-insensitive, tolerant whitespace,
+  con aliases ES/EN): `empresa`/`company`/`nombre`,
+  `subdomain`/`subdominio`/`slug`, `email`/`correo`,
+  `password`/`contrasena`/`contraseña`, `moneda`/`currency`,
+  `vertical`, `telegramBotName`/`botName`, `telegramBotToken`/`botToken`.
+
+### Tests (tests/csv-bulk.test.ts — 23 tests)
+
+`detectDelimiter` con `,` y `;` + BOM + empate + filas vacías;
+`parseBulkCsv` con CRLF, BOM, comillas RFC-4180, campos faltantes,
+email inválido, subdominio inválido, filas vacías, etc; `buildBulkResultCsv`
+con BOM + CRLF + escape de comas y comillas dobles.
+
+### Implicaciones prácticas
+
+- Operator que tiene una lista de 50 brokers en una spreadsheet puede
+  copiar-pegar y crear 50 tenants en ~2 minutos (3 workers en paralelo,
+  cada uno tarda ~3-5s con provisioning completo de Nexus + Email).
+- El reporte CSV permite al equipo de onboarding triar lo que falló
+  (subdominio inválido, email duplicado, etc) sin re-correr el wizard.
+- Idempotencia: si un broker ya existía, recibirá `DUPLICATE_TENANT` y
+  la fila se marca como error — el operator puede filtrar el reporte y
+  reintentar sólo las válidas.
