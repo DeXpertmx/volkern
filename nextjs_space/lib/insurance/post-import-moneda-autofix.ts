@@ -203,7 +203,14 @@ export async function maybeAutoFixTenantCurrencyAfterImport(
   const now = new Date();
   await globalPrisma.tenant.update({
     where: { id: tenantId },
-    data: { moneda: resolution.moneda },
+    data: {
+      moneda: resolution.moneda,
+      // Trazabilidad: cambios automáticos por import = IMPORT_AUTO.
+      // Distinguible del cambio manual (EXPLICIT) o fallback heredado (FALLBACK).
+      // Permite queries tipo "tenants auto-corregidos esta semana".
+      monedaInferida: resolution.moneda,
+      monedaInferenciaSource: 'IMPORT_AUTO',
+    },
   });
 
   try {
@@ -214,7 +221,7 @@ export async function maybeAutoFixTenantCurrencyAfterImport(
         entidadId: tenantId,
         descripcion:
           `Auto-set desde primer import: ${previousMoneda} → ${resolution.moneda} ` +
-          `(${distribution[resolution.moneda]} pólizas importadas, source=${source}). ` +
+          `(fuente=IMPORT_AUTO, ${distribution[resolution.moneda]} pólizas importadas, source=${source}). ` +
           `Cooldown de 24h saltado (es auto-fix, no cambio manual).`,
         cambiosAntes: { moneda: previousMoneda } as any,
         cambiosDespues: { moneda: resolution.moneda } as any,

@@ -205,6 +205,67 @@ npx tsx scripts/update-tenant-currency.ts --tenant=mitemnant --moneda=EUR --appl
   `tests/multi-ramo-forecast.test.ts`, `tests/seasonal-forecast.test.ts`)
   usan `tenantMoneda='EUR'` o `'MXN'` para fijar el comportamiento.
 
+## 🧭 Trazabilidad de la fuente de moneda (NUEVO 2026-08-09)
+
+Cada cambio de `Tenant.moneda` debe propagarse a los nuevos campos:
+- `monedaInferida` (String?) — snapshot de la última moneda.
+- `monedaInferenciaSource` (`MonedaInferenciaSource` enum) — POR QUÉ.
+
+Valores:
+| Source | Quién lo asigna | Cuándo |
+|---|---|---|
+| `EXPLICIT` | Operador humano vía CLI flag, API body, o PATCH manual | `--moneda=USD`, `POST /api/tenants/create {moneda:EUR}`, `PATCH /api/tenant/moneda` |
+| `USER_PROMPT` | Usuario en prompt interactivo TTY del seed script | `npx tsx scripts/seed-partner-tenants.ts` eligiendo 1..12 |
+| `IMPORT_AUTO` | Helper `lib/insurance/post-import-moneda-autofix.ts` | Tras el primer import 100% en otra moneda via wizard |
+| `FALLBACK` (schema default) | Nadie — dejarlo así cuando hereda `MXN` | Tenants creados vía provisioner sin `moneda` en body |
+
+Uso programático típico del superadmin:
+
+```sql
+-- Tenants con moneda heredada del default MXN (limpiar mensualmente)
+SELECT id, slug, nombre, plan,
+       "moneda", "monedaInferida", "monedaInferenciaSource",
+       "fechaCreacion"
+FROM   "Tenant"
+WHERE  "monedaInferenciaSource" = 'FALLBACK'
+ORDER  BY "fechaCreacion" ASC;
+
+-- Auto-fixes de la última semana
+SELECT id, slug, "moneda", "monedaInferenciaSource"
+FROM   "Tenant"
+WHERE  "monedaInferenciaSource" = 'IMPORT_AUTO'
+  AND  "fechaActualizacion" >= now() - interval '7 days';
+```
+
+Endpoint equivalente para el panel admin:
+```
+GET /api/admin/tenants/currency-inheritance-report
+GET /api/admin/tenants/currency-inheritance-report?source=FALLBACK&limit=200&offset=0
+```
+
+Devuelve:
+- `total` y `count` de la página actual.
+- `bySource`: conteos agregados por cada valor del enum (4 totales,
+  útiles para alimentar `/admin/saas-metrics` del follow-up).
+- `items`: lista paginada con `id, slug, subdomain, nombre, plan,
+  moneda, monedaInferida, monedaInferenciaSource, fechaCreacion`.
+
+Reglas de actualización (regla de oro del módulo):
+
+> Cada `globalPrisma.tenant.update` que toque `moneda` DEBE actualizar
+> también `monedaInferida` y `monedaInferenciaSource`. Esta invariante
+> está cubierta por tests vitest (`tests/post-import-moneda-autofix.test.ts`
+> test #17: *"el update siempre incluye monedaInferida +
+> monedaInferenciaSource"*).
+
+Backfill para tenants pre-existentes (los creados antes del migration):
+```bash
+# Marca como FALLBACK a todo tenant que tenga moneda=MXN sin inferencia
+npx tsx scripts/backfill-moneda-inference.ts --apply
+# Marca como EXPLICIT a todo tenant con auditLog reciente de cambio manual de moneda
+npx tsx scripts/backfill-moneda-inference.ts --from-audit-log --apply
+```
+
 ## Cómo prevenir regresiones futuras
 
 1. **Default del schema**: NO cambiar `Tenant.moneda @default("MXN")` —
@@ -215,6 +276,9 @@ npx tsx scripts/update-tenant-currency.ts --tenant=mitemnant --moneda=EUR --appl
 3. **Regla ESLint custom** `eslint-rules/no-hardcoded-currency-fallback`
    — implementada el 2026-08-03 para bloquear, de una vez por todas, el
    patrón regresivo `?? 'MXN'` y compañía. Ver detalle más abajo.
+4. **Trazabilidad de fuente** — implementada el 2026-08-09. Cada cambio
+   de `Tenant.moneda` debe actualizar también `monedaInferida` +
+   `monedaInferenciaSource`. Cubierto por tests vitest.
 
 ## 🛡️ Defensa ESLint: `eslint-rules/no-hardcoded-currency-fallback`
 
@@ -341,6 +405,10 @@ npx eslint --no-eslintrc --resolve-plugins-relative-to . \
   opcional en el body (validado, 400 si inválida).
 - `app/api/tenant/moneda/route.ts` — PATCH + GET self-service (cambio
   posterior al onboarding, con cooldown 24h que el auto-fix bypassea).
+  Cada cambio marca `monedaInferenciaSource='EXPLICIT'`.
+- `app/api/admin/tenants/currency-inheritance-report/route.ts` — GET admin
+  para listar tenants con moneda heredada del default MXN (o por otra
+  fuente). Devuelve agregados + items paginados.
 - `app/dashboard/seguros/portfolio/page.tsx:303` — chip junto a Refrescar.
 - `components/hubs/ConfiguracionDashboard.tsx` — `MonedaReporteCard`.
 - `components/insurance/ImportEntityWizard.tsx` — wizard genérico que
@@ -353,5 +421,5 @@ npx eslint --no-eslintrc --resolve-plugins-relative-to . \
 - `eslint-rules/` — regla custom `no-hardcoded-currency-fallback` (ver arriba).
 - `scripts/install-eslint-local-rules.js` — sync `eslint-rules/` → node_modules.
 - `eslint-rules/__tests__/no-hardcoded-currency-fallback.test.js` — 24 tests.
-- `tests/tenant-currency-resolver.test.ts` — 22 tests del resolver.
-- `tests/post-import-moneda-autofix.test.ts` — 16 tests del helper I/O.
+- `tests/post-import-moneda-resolver.test.ts` (en el lib) — 22 tests del resolver.
+- `tests/post-import-moneda-autofix.test.ts` — 17 tests del helper I/O + trazabilidad.

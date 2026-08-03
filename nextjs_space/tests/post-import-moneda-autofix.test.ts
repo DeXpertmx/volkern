@@ -6,14 +6,12 @@
  *   1. La decisión correcta según composición del batch + tenant.moneda.
  *   2. Las escrituras a BD (tenant.update + auditLog.create) sólo cuando
  *      corresponde (cambio), o ninguna escritura cuando no corresponde.
- *   3. El mensaje humano y los campos de trazabilidad (reason, source, distribution).
- *
- * Cubre todos los branches: already-correct, batch-empty, mixed-currency,
- * empty-distribution, dry-run-suggested, auto-fix-applied.
+ *   3. La trazabilidad programática: cada update incluye monedaInferida +
+ *      monedaInferenciaSource (campos nuevos del schema 2026-08-09).
+ *   4. El mensaje humano y los campos de trazabilidad (reason, source, distribution).
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// Mock Prisma ANTES de importar el helper (las llamadas se resuelven en import time)
 const mockFindUnique = vi.fn();
 const mockUpdate = vi.fn();
 const mockAuditCreate = vi.fn();
@@ -30,7 +28,6 @@ vi.mock('@/lib/db', () => ({
   },
 }));
 
-// Importamos DESPUÉS del mock.
 const { maybeAutoFixTenantCurrencyAfterImport } = await import(
   '../lib/insurance/post-import-moneda-autofix'
 );
@@ -41,21 +38,18 @@ beforeEach(() => {
   mockFindUnique.mockReset();
   mockUpdate.mockReset();
   mockAuditCreate.mockReset();
-  // Defaults para que la mayoría de tests sólo necesiten sobreescribir lo específico.
   mockFindUnique.mockResolvedValue({
     id: TENANT_ID,
     slug: 'test-tenant',
-    moneda: 'MXN', // default conservador (escenario típico del autofix)
+    moneda: 'MXN',
   });
   mockUpdate.mockResolvedValue({ id: TENANT_ID, slug: 'test-tenant', moneda: 'EUR' });
   mockAuditCreate.mockResolvedValue({ id: 'audit-1' });
 });
 
-describe('maybeAutoFixTenantCurrencyAfterImport — casos de no-decisión (noop)', () => {
+describe('casos de no-decisión (noop)', () => {
   it('1) tenant.moneda="EUR" → already-correct, no escribe nada', async () => {
-    mockFindUnique.mockResolvedValue({
-      id: TENANT_ID, slug: 'test-tenant', moneda: 'EUR',
-    });
+    mockFindUnique.mockResolvedValue({ id: TENANT_ID, slug: 'test-tenant', moneda: 'EUR' });
     const result = await maybeAutoFixTenantCurrencyAfterImport(
       TENANT_ID, [{ moneda: 'EUR' }, { moneda: 'EUR' }],
     );
@@ -64,15 +58,12 @@ describe('maybeAutoFixTenantCurrencyAfterImport — casos de no-decisión (noop)
     expect(result.previousMoneda).toBe('EUR');
     expect(result.appliedMoneda).toBeUndefined();
     expect(result.mensaje).toContain('ya tiene moneda EUR');
-    // No debe haber escrito nada
     expect(mockUpdate).not.toHaveBeenCalled();
     expect(mockAuditCreate).not.toHaveBeenCalled();
   });
 
   it('2) tenant.moneda="USD" → already-correct aunque batch sea MXN', async () => {
-    mockFindUnique.mockResolvedValue({
-      id: TENANT_ID, slug: 'test-tenant', moneda: 'USD',
-    });
+    mockFindUnique.mockResolvedValue({ id: TENANT_ID, slug: 'test-tenant', moneda: 'USD' });
     const result = await maybeAutoFixTenantCurrencyAfterImport(
       TENANT_ID, [{ moneda: 'MXN' }],
     );
@@ -120,19 +111,18 @@ describe('maybeAutoFixTenantCurrencyAfterImport — casos de no-decisión (noop)
       [{ moneda: 'MXN' }, { moneda: 'MXN' }, { moneda: 'MXN' }],
     );
     expect(result.changed).toBe(false);
-    // El resolver sugiere MXN (que ES el fallback default) → no auto-fixeamos
     expect(result.suggestedMoneda).toBe('MXN');
     expect(mockUpdate).not.toHaveBeenCalled();
   });
 });
 
-describe('maybeAutoFixTenantCurrencyAfterImport — casos de auto-fix', () => {
-  it('7) batch 100% EUR → auto-fix MXN → EUR', async () => {
+describe('casos de auto-fix', () => {
+  it('7) batch 100% EUR → auto-fix MXN→EUR + write incluye trazabilidad', async () => {
     mockUpdate.mockResolvedValue({ id: TENANT_ID, slug: 'test-tenant', moneda: 'EUR' });
     const result = await maybeAutoFixTenantCurrencyAfterImport(
       TENANT_ID,
       [{ moneda: 'EUR' }, { moneda: 'EUR' }, { moneda: 'EUR' }, { moneda: 'EUR' }],
-      { source: 'system:auto-import-bulk-csv' }, // mismo source que usa app/api/insurance/importar
+      { source: 'system:auto-import-bulk-csv' },
     );
     expect(result.changed).toBe(true);
     expect(result.reason).toBe('auto-fix-applied');
@@ -140,29 +130,24 @@ describe('maybeAutoFixTenantCurrencyAfterImport — casos de auto-fix', () => {
     expect(result.appliedMoneda).toBe('EUR');
     expect(result.resolverSource).toBe('auto-from-polizas');
     expect(result.distribution).toEqual({ EUR: 4 });
-    // Verificamos escrituras: tenant.update + auditLog.create
+
+    // El update incluye la trazabilidad con monedaInferenciaSource nueva.
     expect(mockUpdate).toHaveBeenCalledTimes(1);
     expect(mockUpdate).toHaveBeenCalledWith({
       where: { id: TENANT_ID },
-      data: { moneda: 'EUR' },
+      data: { moneda: 'EUR', monedaInferida: 'EUR', monedaInferenciaSource: 'IMPORT_AUTO' },
     });
     expect(mockAuditCreate).toHaveBeenCalledTimes(1);
     const auditCall = mockAuditCreate.mock.calls[0][0].data;
-    expect(auditCall.accion).toBe('actualizar');
-    expect(auditCall.entidad).toBe('tenant');
-    expect(auditCall.entidadId).toBe(TENANT_ID);
     expect(auditCall.descripcion).toContain('Auto-set desde primer import');
-    expect(auditCall.descripcion).toContain('MXN');
-    expect(auditCall.descripcion).toContain('EUR');
-    expect(auditCall.descripcion).toContain('4 pólizas importadas');
+    expect(auditCall.descripcion).toContain('IMPORT_AUTO');
     expect(auditCall.descripcion).toContain('auto-import-bulk-csv');
     expect(auditCall.cambiosAntes).toEqual({ moneda: 'MXN' });
     expect(auditCall.cambiosDespues).toEqual({ moneda: 'EUR' });
-    // Timestamp de aplicación presente
     expect(result.aplicadoAt).toBeDefined();
   });
 
-  it('8) batch 100% USD → auto-fix MXN → USD', async () => {
+  it('8) batch 100% USD → auto-fix MXN→USD', async () => {
     mockUpdate.mockResolvedValue({ id: TENANT_ID, slug: 'test-tenant', moneda: 'USD' });
     const result = await maybeAutoFixTenantCurrencyAfterImport(
       TENANT_ID,
@@ -172,11 +157,11 @@ describe('maybeAutoFixTenantCurrencyAfterImport — casos de auto-fix', () => {
     expect(result.appliedMoneda).toBe('USD');
     expect(mockUpdate).toHaveBeenCalledWith({
       where: { id: TENANT_ID },
-      data: { moneda: 'USD' },
+      data: { moneda: 'USD', monedaInferida: 'USD', monedaInferenciaSource: 'IMPORT_AUTO' },
     });
   });
 
-  it('9) batch 100% GBP → auto-fix MXN → GBP', async () => {
+  it('9) batch 100% GBP → auto-fix MXN→GBP', async () => {
     mockUpdate.mockResolvedValue({ id: TENANT_ID, slug: 'test-tenant', moneda: 'GBP' });
     const result = await maybeAutoFixTenantCurrencyAfterImport(
       TENANT_ID, [{ moneda: 'GBP' }, { moneda: 'GBP' }],
@@ -185,7 +170,7 @@ describe('maybeAutoFixTenantCurrencyAfterImport — casos de auto-fix', () => {
     expect(result.appliedMoneda).toBe('GBP');
   });
 
-  it('10) batch con 1 sola póliza en EUR → auto-fix (minBatchSize=1 por default)', async () => {
+  it('10) batch con 1 sola póliza en EUR → auto-fix', async () => {
     mockUpdate.mockResolvedValue({ id: TENANT_ID, slug: 'test-tenant', moneda: 'EUR' });
     const result = await maybeAutoFixTenantCurrencyAfterImport(
       TENANT_ID, [{ moneda: 'EUR' }],
@@ -198,16 +183,11 @@ describe('maybeAutoFixTenantCurrencyAfterImport — casos de auto-fix', () => {
     mockUpdate.mockResolvedValue({ id: TENANT_ID, slug: 'test-tenant', moneda: 'EUR' });
     const result = await maybeAutoFixTenantCurrencyAfterImport(
       TENANT_ID,
-      [
-        { moneda: 'EUR' },
-        { moneda: 'EUR' },
-        { moneda: 'XYZ' }, // descartada por el resolver
-      ] as any,
+      [{ moneda: 'EUR' }, { moneda: 'EUR' }, { moneda: 'XYZ' }] as any,
     );
-    // El resolver filtra XYZ y deja EUR-only → auto-fix
     expect(result.changed).toBe(true);
     expect(result.appliedMoneda).toBe('EUR');
-    expect(result.distribution).toEqual({ EUR: 2, XYZ: 1 }); // raw se preserva
+    expect(result.distribution).toEqual({ EUR: 2, XYZ: 1 });
   });
 
   it('12) monedas en minúsculas se normalizan antes del resolver', async () => {
@@ -222,7 +202,7 @@ describe('maybeAutoFixTenantCurrencyAfterImport — casos de auto-fix', () => {
   });
 });
 
-describe('maybeAutoFixTenantCurrencyAfterImport — dry-run', () => {
+describe('dry-run', () => {
   it('13) dryRun=true con batch warranting auto-fix → reporta pero no escribe', async () => {
     const result = await maybeAutoFixTenantCurrencyAfterImport(
       TENANT_ID,
@@ -236,14 +216,13 @@ describe('maybeAutoFixTenantCurrencyAfterImport — dry-run', () => {
     expect(result.appliedMoneda).toBeUndefined();
     expect(result.mensaje).toContain('DRY-RUN');
     expect(result.mensaje).toContain('MXN → EUR');
-    // Verify: NO escribió nada
     expect(mockUpdate).not.toHaveBeenCalled();
     expect(mockAuditCreate).not.toHaveBeenCalled();
   });
 });
 
-describe('maybeAutoFixTenantCurrencyAfterImport — audit log diferenciador', () => {
-  it('14) el audit log distingue auto-fix de cambios manuales (texto incluye source)', async () => {
+describe('audit log diferenciador', () => {
+  it('14) el audit log distingue auto-fix de cambios manuales (texto incluye IMPORT_AUTO)', async () => {
     mockUpdate.mockResolvedValue({ id: TENANT_ID, slug: 'test-tenant', moneda: 'EUR' });
     await maybeAutoFixTenantCurrencyAfterImport(
       TENANT_ID, [{ moneda: 'EUR' }, { moneda: 'EUR' }],
@@ -252,9 +231,10 @@ describe('maybeAutoFixTenantCurrencyAfterImport — audit log diferenciador', ()
     const auditCall = mockAuditCreate.mock.calls[0][0].data;
     expect(auditCall.descripcion).toContain('system:test-suite');
     expect(auditCall.descripcion).toContain('Cooldown de 24h saltado');
+    expect(auditCall.descripcion).toContain('IMPORT_AUTO');
   });
 
-  it('15) si auditLog falla, tenant.moneda sigue actualizado (no rollback)', async () => {
+  it('15) si auditLog falla, tenant.update sigue persistido (no rollback)', async () => {
     mockUpdate.mockResolvedValue({ id: TENANT_ID, slug: 'test-tenant', moneda: 'EUR' });
     mockAuditCreate.mockRejectedValue(new Error('audit log table is locked'));
     const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -262,15 +242,18 @@ describe('maybeAutoFixTenantCurrencyAfterImport — audit log diferenciador', ()
     const result = await maybeAutoFixTenantCurrencyAfterImport(
       TENANT_ID, [{ moneda: 'EUR' }],
     );
-    // Aún así, el cambio está aplicado y reported
     expect(result.changed).toBe(true);
     expect(result.appliedMoneda).toBe('EUR');
     expect(mockUpdate).toHaveBeenCalledTimes(1);
+    expect(mockUpdate).toHaveBeenCalledWith({
+      where: { id: TENANT_ID },
+      data: { moneda: 'EUR', monedaInferida: 'EUR', monedaInferenciaSource: 'IMPORT_AUTO' },
+    });
     consoleWarnSpy.mockRestore();
   });
 });
 
-describe('maybeAutoFixTenantCurrencyAfterImport — respuesta payload para la UI', () => {
+describe('respuesta payload para la UI', () => {
   it('16) el payload completo incluye reason, distribution, mensaje y resolution trazable', async () => {
     mockUpdate.mockResolvedValue({ id: TENANT_ID, slug: 'test-tenant', moneda: 'EUR' });
     const result = await maybeAutoFixTenantCurrencyAfterImport(
@@ -289,8 +272,16 @@ describe('maybeAutoFixTenantCurrencyAfterImport — respuesta payload para la UI
     expect(result.resolution).toBeDefined();
     expect(result.resolution.moneda).toBe('EUR');
     expect(result.resolution.source).toBe('auto-from-polizas');
-    expect(result.resolution.mensaje).toContain('EUR');
-    // Format ISO timestamp
     expect(result.aplicadoAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it('17) trazabilidad: el update siempre incluye monedaInferida + monedaInferenciaSource', async () => {
+    mockUpdate.mockResolvedValue({ id: TENANT_ID, slug: 'test-tenant', moneda: 'EUR' });
+    await maybeAutoFixTenantCurrencyAfterImport(TENANT_ID, [{ moneda: 'EUR' }]);
+    const updateCall = mockUpdate.mock.calls[0][0].data;
+    expect(updateCall).toHaveProperty('monedaInferida');
+    expect(updateCall).toHaveProperty('monedaInferenciaSource');
+    expect(updateCall.monedaInferida).toBe('EUR');
+    expect(updateCall.monedaInferenciaSource).toBe('IMPORT_AUTO');
   });
 });

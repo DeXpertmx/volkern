@@ -167,6 +167,13 @@ export async function provisionTenant(input: TenantProvisioningInput): Promise<T
                 fechaTrialInicio: new Date(),
                 fechaTrialFin: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 días
                 moneda: monedaFinal,
+                // Trazabilidad de la fuente: si vino moneda explícita en el body
+                // del endpoint, marcamos EXPLICIT; si cayó al default MXN porque
+                // no se envió, marcamos FALLBACK. Esto da al superadmin una
+                // queries programática para distinguir tenants bien configurados
+                // de los que heredaron el default sin pasar por el onboarding.
+                monedaInferida: monedaFinal,
+                monedaInferenciaSource: moneda ? 'EXPLICIT' : 'FALLBACK',
             },
         });
 

@@ -89,7 +89,13 @@ async function main() {
   // Aplicar el cambio
   const updated = await globalPrisma.tenant.update({
     where: { id: t.id },
-    data: { moneda: args.moneda },
+    data: {
+      moneda: args.moneda,
+      // Trazabilidad: cambios manuales vía script = EXPLICIT.
+      // El auto-fix del primer import usa IMPORT_AUTO en su helper.
+      monedaInferida: args.moneda,
+      monedaInferenciaSource: 'EXPLICIT',
+    },
     select: { id: true, slug: true, moneda: true },
   });
 
@@ -103,7 +109,7 @@ async function main() {
         accion: 'actualizar',
         entidad: 'tenant',
         entidadId: t.id,
-        descripcion: `Moneda del tenant cambiada: ${t.moneda ?? '(null)'} → ${args.moneda}`,
+        descripcion: `Moneda del tenant cambiada: ${t.moneda ?? '(null)'} → ${args.moneda} (fuente=EXPLICIT, via scripts/update-tenant-currency.ts)`,
         cambiosAntes: { moneda: t.moneda } as any,
         cambiosDespues: { moneda: args.moneda } as any,
       },
