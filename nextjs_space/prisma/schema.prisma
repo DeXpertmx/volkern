@@ -171,6 +171,11 @@ model Tenant {
   fechaTrialFin      DateTime?
   fechaTrialInicio   DateTime?
   moneda             String      @default("MXN")
+  // Trazabilidad de cómo se eligió la moneda actual (o si es el default heredado).
+  // Para distingir programáticamente tenants bien configurados de los que nunca
+  // pasaron por el onboarding prompt. Véase `scripts/backfill-moneda-inference.ts`.
+  monedaInferida             String?
+  monedaInferenciaSource     MonedaInferenciaSource? @default(FALLBACK)
   mrr                Float       @default(0)
   stripeCustomerId   String?
   nexusEnabled       Boolean     @default(true)
@@ -7360,6 +7365,24 @@ enum EstadoOportunidad {
   EN_NEGOCIACION
   GANADA
   PERDIDA
+}
+
+// ─── Inferencia de moneda del tenant ───────────────────────────────
+// Trazabilidad programática de POR QUÉ cada tenant tiene su moneda
+// actual. Permite al superadmin listar tenants con moneda heredada
+// del default MXN para revisar manualmente.
+//
+// Valores:
+//   EXPLICIT     — el operador eligió moneda vía CLI flag / API body / PATCH manual.
+//   USER_PROMPT  — seleccionado por el usuario en el prompt interactivo (TTY).
+//   IMPORT_AUTO  — auto-set por el helper post-import tras el primer batch.
+//   FALLBACK     — default del schema (MXN), nunca establecido explícitamente.
+//
+enum MonedaInferenciaSource {
+  EXPLICIT
+  USER_PROMPT
+  IMPORT_AUTO
+  FALLBACK
 }
 
 // ─── Aseguradora ──────────────────────────────────────────────────────────────

@@ -94,7 +94,14 @@ export const PATCH = withTenantAuth(async (request, auth) => {
     const anteriores = tenant.moneda;
     const updated = await globalPrisma.tenant.update({
       where: { id: tenantId },
-      data: { moneda },
+      data: {
+        moneda,
+        // Trazabilidad: cambios manuales via UI/curl/PATCH = EXPLICIT.
+        // El bypass de cooldown (auto-fix del primer import) está en
+        // lib/insurance/post-import-moneda-autofix.ts y usa IMPORT_AUTO.
+        monedaInferida: moneda,
+        monedaInferenciaSource: 'EXPLICIT',
+      },
       select: { id: true, slug: true, moneda: true },
     });
 
@@ -103,7 +110,7 @@ export const PATCH = withTenantAuth(async (request, auth) => {
         accion: 'actualizar',
         entidad: 'tenant',
         entidadId: tenantId,
-        descripcion: `Moneda del tenant cambiada: ${anteriores ?? '(null)'} → ${moneda} (desde ${request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'UI'})`,
+        descripcion: `Moneda del tenant cambiada: ${anteriores ?? '(null)'} → ${moneda} (fuente=EXPLICIT, desde ${request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'UI'})`,
         cambiosAntes: { moneda: anteriores } as any,
         cambiosDespues: { moneda } as any,
       },

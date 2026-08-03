@@ -162,6 +162,18 @@ async function main() {
   let monedaElegida: Currency = args.moneda ?? FALLBACK_DEFAULT_MONEDA;
   let fuenteMoneda: 'flag' | 'prompt' | 'allow-auto-default' = args.moneda ? 'flag' : 'allow-auto-default';
 
+  // Campo `monedaInferenciaSource` del Tenant: trazabilidad programática de
+  // POR QUÉ cada tenant tiene su moneda actual. Esta pieza es lo que permite
+  // al superadmin listar "tenants con moneda heredada del default MXN".
+  type FuenteInferencia = 'EXPLICIT' | 'USER_PROMPT' | 'IMPORT_AUTO' | 'FALLBACK';
+  const fuenteInferencia: FuenteInferencia = args.moneda
+    ? 'EXPLICIT' // --moneda=USD es elección explícita vía flag CLI
+    : args.allowAuto
+      ? 'FALLBACK' // --allow-auto deja el heredado MXN sin pasar por prompt
+      : fuenteMoneda === 'prompt'
+        ? 'USER_PROMPT'
+        : 'FALLBACK';
+
   if (!args.moneda && !args.allowAuto) {
     // Intentar prompt interactivo
     const interactive = await promptMoneda();
@@ -179,7 +191,7 @@ async function main() {
     }
   }
   console.error('');
-  console.error(`💱 Moneda aplicada: ${monedaElegida} (fuente: ${fuenteMoneda})`);
+  console.error(`💱 Moneda aplicada: ${monedaElegida} (fuente: ${fuenteMoneda}, inferencia: ${fuenteInferencia})`);
   console.error('');
 
   // ── 2) Cleanup (opcional) ──────────────────────────────────────────────
@@ -220,7 +232,10 @@ async function main() {
     const email = `demo-partner-${idx}@volkern-test.dev`;
 
     try {
-      // 1. Crear tenant con moneda (NUEVO: forzado desde el prompt).
+      // 1. Crear tenant con moneda (NUEVO: forzado desde el prompt) +
+      //    trazabilidad de inferencia (campo monedaInferenciaSource) para que
+      //    el superadmin pueda distinguir programáticamente los tenants que
+      //    eligieron moneda explícita de los que heredaron el default MXN.
       const tenant = await prisma.tenant.create({
         data: {
           nombre: name,
@@ -229,6 +244,8 @@ async function main() {
           estado: 'activo',
           accountType: 'BUSINESS',
           moneda: monedaElegida,
+          monedaInferida: monedaElegida,
+          monedaInferenciaSource: fuenteInferencia,
         },
       });
 
@@ -252,7 +269,7 @@ async function main() {
 
       apiKeys.push(key);
       succeeded++;
-      console.error(`[${i + 1}/${args.count}] ✅ ${name} (${monedaElegida})`);
+      console.error(`[${i + 1}/${args.count}] ✅ ${name} (${monedaElegida}, ${fuenteInferencia})`);
     } catch (err) {
       console.error(`[${i + 1}/${args.count}] ❌ ${name}: ${(err as Error).message}`);
       failed++;
@@ -266,7 +283,7 @@ async function main() {
 
   console.error('');
   console.error('📊 Resumen:');
-  console.error(`   • Moneda aplicada: ${monedaElegida} (${fuenteMoneda})`);
+  console.error(`   • Moneda aplicada: ${monedaElegida} (${fuenteMoneda}, ${fuenteInferencia})`);
   console.error(`   • Tenants creados: ${succeeded} / ${args.count}`);
   console.error(`   • Tenants fallidos: ${failed}`);
   console.error(`   • Keys guardadas en: ${outPath}`);
