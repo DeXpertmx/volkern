@@ -6,22 +6,28 @@ import { SUPPORTED_CURRENCIES } from '@/lib/insurance/currency';
 
 /**
  * POST /api/tenants/create
- * Crear un nuevo tenant con provisionamiento automático de Nexus
- * 
+ * Crear un nuevo tenant con provisionamiento automático de Nexus.
+ *
+ * Telegram pasó de OBLIGATORIO a OPCIONAL el 2026-08-09. Brokers que no
+ * necesiten el bot pueden crear el tenant sin él y configurarlo después
+ * vía `/admin/partner-onboarding` o llamando de nuevo al endpoint con
+ * `telegram` poblado.
+ *
  * Body:
  * {
  *   empresa: string;
  *   subdomain: string;
  *   email: string;
  *   password: string;
- *   telegram: {
+ *   telegram?: {                        // OPCIONAL desde 2026-08-09.
  *     botName: string;      // @mi_empresa_bot
  *     botToken: string;     // 123456:ABCdef...
  *   };
- *   moneda?: string;        // 'USD' | 'EUR' | 'MXN' | ... OPCIONAL. Si se omite,
- *                          // el provisioner defaultea a 'MXN' (la moneda del
- *                          // portfolio ejecutivo se puede cambiar después vía
- *                          // /api/tenant/moneda o scripts/update-tenant-currency.ts).
+ *   moneda?: string;                    // 'USD' | 'EUR' | 'MXN' | ... OPCIONAL.
+ *                                       // Si se omite, defaultea a 'MXN' (la
+ *                                       // moneda del portfolio ejecutivo se
+ *                                       // puede cambiar después vía
+ *                                       // /api/tenant/moneda o scripts/update-tenant-currency.ts).
  * }
  */
 export async function POST(request: NextRequest) {
@@ -63,13 +69,15 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        if (!telegram || !telegram.botName || !telegram.botToken) {
+        // Telegram OPCIONAL desde 2026-08-09. Si el broker lo quiere ahora,
+        // debe venir completo; si no, lo puede configurar después.
+        if (telegram && (!telegram.botName || !telegram.botToken)) {
             return NextResponse.json(
-                { 
-                    success: false, 
+                {
+                    success: false,
                     error: {
-                        code: 'TELEGRAM_REQUIRED',
-                        message: 'Telegram es obligatorio. Proporciona botName y botToken'
+                        code: 'TELEGRAM_INCOMPLETE',
+                        message: 'Si proporcionas Telegram, debes incluir botName Y botToken. Si quieres crear el tenant sin Telegram, omite el campo entero.',
                     }
                 },
                 { status: 400 }
@@ -125,10 +133,12 @@ export async function POST(request: NextRequest) {
             subdomain: subdomain.toLowerCase(),
             email: email.toLowerCase(),
             password,
-            telegram: {
-                botName: telegram.botName,
-                botToken: telegram.botToken,
-            },
+            // El spread `...(telegram ? { telegram: {...} } : {})` es necesario
+            // porque TypeScript no narrowea `telegram` opcional en presencia
+            // de la comprobación previa de parcialidad.
+            ...(telegram?.botName && telegram?.botToken
+                ? { telegram: { botName: telegram.botName, botToken: telegram.botToken } }
+                : {}),
             ...(monedaNormalizada ? { moneda: monedaNormalizada as any } : {}),
         };
 
@@ -146,13 +156,18 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        const successResult = result as any; // narrow from union; both branches include tenantId
         return NextResponse.json({
             success: true,
-            tenantId: result.tenantId,
-            chatwootAccountId: result.chatwootAccountId,
-            telegramInboxId: result.telegramInboxId,
+            tenantId: successResult.tenantId,
+            chatwootAccountId: successResult.chatwootAccountId,
+            telegramInboxId: successResult.telegramInboxId,
+            telegramSkipped: successResult.telegramSkipped ?? false,
             moneda: monedaNormalizada ?? 'MXN',
-            message: 'Tenant creado exitosamente con Telegram configurado',
+            monedaInferenciaSource: monedaNormalizada ? 'EXPLICIT' : 'FALLBACK',
+            message: successResult.telegramSkipped
+                ? 'Tenant creado. Telegram quedó pendiente de configuración — puedes añadirlo desde /admin/partner-onboarding.'
+                : 'Tenant creado exitosamente con Telegram configurado',
         });
 
     } catch (error: any) {

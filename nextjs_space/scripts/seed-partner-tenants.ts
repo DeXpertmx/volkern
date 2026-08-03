@@ -49,7 +49,13 @@
 
 import { PrismaClient } from '@prisma/client';
 import { generateApiKey } from '../lib/api-keys';
-import { SUPPORTED_CURRENCIES, type Currency } from '../lib/insurance/currency';
+import {
+  SUPPORTED_CURRENCIES,
+  getCurrencyMenuOptions,
+  parseCurrencyAnswer,
+  printCurrencyMenuToConsole,
+  type Currency,
+} from '../lib/insurance/currency';
 import * as fs from 'fs';
 import * as readline from 'readline';
 
@@ -104,13 +110,15 @@ function parseArgs(): CliArgs {
 /**
  * Prompt interactivo para pedir la moneda preferida cuando STDIN es TTY.
  * Devuelve la Currency elegida o null si el usuario aborta.
+ * Usa el helper compartido de lib/insurance/currency-prompt para mantener
+ * la lista en sync con la UI del wizard /admin/partner-onboarding.
  */
 async function promptMoneda(): Promise<Currency | null> {
   if (!process.stdin.isTTY) {
     return null; // No se puede pedir interactivamente
   }
   return new Promise(resolve => {
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    const rl = readline.createInterface({ input: process.stdin, output: process.stderr });
     console.error('');
     console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.error('  🌐 MONEDA PREFERIDA DEL TENANT');
@@ -119,37 +127,18 @@ async function promptMoneda(): Promise<Currency | null> {
     console.error('  Si dejas el default (MXN) y luego importas pólizas en EUR/USD,');
     console.error('  el dashboard mostrará el KPI global convertido a MXN.');
     console.error('  Recomendación: elige la moneda en la que operas.');
-    console.error('');
-    console.error('  Opciones:');
-    SUPPORTED_CURRENCIES.forEach((m, i) => {
-      const nota =
-        m === 'MXN'
-          ? '(default conservador — solo si operas principalmente en México)'
-          : m === 'EUR'
-            ? '(recomendado para brokers europeos)'
-            : m === 'USD'
-              ? '(recomendado para brokers estadounidenses)'
-              : '';
-      console.error(`    ${i + 1}. ${m.padEnd(4)} ${nota}`);
-    });
+    const printLine = (line: string) => console.error(line);
+    printCurrencyMenuToConsole(printLine);
     console.error('');
     rl.question('  Elige moneda [1..12] o escribe el código (default: MXN): ', answer => {
       rl.close();
-      const raw = answer.trim().toUpperCase();
-      if (!raw) {
-        console.error('  → Default elegido: MXN');
+      const { code, source } = parseCurrencyAnswer(answer);
+      if (source === 'invalid') {
+        console.error(`  ⚠️  Entrada inválida: ${answer}. Default MXN.`);
         return resolve('MXN');
       }
-      // Acepta número (1..12) o código (USD/EUR/...).
-      const asNumber = Number(raw);
-      if (Number.isInteger(asNumber) && asNumber >= 1 && asNumber <= SUPPORTED_CURRENCIES.length) {
-        return resolve(SUPPORTED_CURRENCIES[asNumber - 1]);
-      }
-      if (SUPPORTED_CURRENCIES.includes(raw as Currency)) {
-        return resolve(raw as Currency);
-      }
-      console.error(`  ⚠️  Entrada inválida: ${answer}. Default MXN.`);
-      resolve('MXN');
+      if (source === 'default') console.error('  → Default elegido: MXN');
+      resolve(code);
     });
   });
 }
