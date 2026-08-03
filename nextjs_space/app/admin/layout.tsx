@@ -2,10 +2,9 @@
 'use client';
 
 import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
   Users,
@@ -14,6 +13,7 @@ import {
   Settings,
   Building2,
   UserPlus,
+  Archive,
   ShieldAlert,
   ShieldCheck,
   LogOut,
@@ -70,6 +70,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { name: 'SaaS Metrics', href: '/admin/saas', icon: TrendingUp },
     { name: 'Tenants', href: '/admin/saas/tenants', icon: Building2 },
     { name: 'Onboarding', href: '/admin/partner-onboarding', icon: UserPlus },
+    { name: 'Offboarding', href: '/admin/partner-offboarding', icon: Archive },
     { name: 'Churn', href: '/admin/saas/churn', icon: Users },
     { name: 'Revenue', href: '/admin/saas/revenue', icon: DollarSign },
     { name: 'Marketing', href: '/admin/marketing', icon: Sparkles },
