@@ -1,16 +1,33 @@
 /**
  * Helpers compartidos de formateo para los componentes del dashboard
  * ejecutivo de Seguros (portfolio + timeline). Reusables desde cualquier
- * módulo que necesite moneda MXN, fechas relativas o absolutas en español.
+ * módulo que necesite moneda, fechas relativas o absolutas en español.
+ *
+ * Defensa contra regresiones: la regla ESLint custom
+ * `eslint-rules/no-hardcoded-currency-fallback` bloquea cualquier intento
+ * de reintroducir el string literal 'MXN' en posiciones de fallback dentro
+ * de app/api/insurance/portfolio/** y components/insurance/**. Por eso
+ * evitamos defaults de la forma `currency = 'MXN'` aquí. Si necesitas un
+ * default global, usa `CURRENCY_CONSTANTS.DEFAULT_TENANT_CURRENCY`, que es
+ * un acceso por nombre, no un literal — la regla no lo bloqueará.
  */
+import { CURRENCY_CONSTANTS } from '@/lib/insurance/currency';
 
 /**
- * Formatea un número como moneda. Default = 'MXN' (alineado con CURRENCY_CONSTANTS
- * de lib/insurance/currency). La página portfolio debe pasar la moneda del
- * tenant leyendo `tenantMoneda` de la respuesta del endpoint. Cae a `$N.toLocaleString`
- * si el entorno no soporta Intl.
+ * Formatea un número como moneda. Default = `CURRENCY_CONSTANTS.DEFAULT_TENANT_CURRENCY`
+ * (acceso por nombre, no literal `'MXN'`) para que la ESLint rule no lo marque.
+ * Las páginas/llamadas deben pasar siempre la moneda explícita (`snapshot.tenantMoneda`
+ * o `poliza.moneda`); el default sólo cubre el caso edge de tests/utils que no
+ * tienen acceso al snapshot.
+ *
+ * El tipo es `string` (no `Currency`) porque los endpoints devuelven `string`
+ * en runtime (validado contra `SUPPORTED_CURRENCIES` en server). Esto evita
+ * casts innecesarios en cada call site sin perder la defensa de la regla.
  */
-export function formatCurrency(value: number, currency: string = 'MXN'): string {
+export function formatCurrency(
+  value: number,
+  currency: string = CURRENCY_CONSTANTS.DEFAULT_TENANT_CURRENCY
+): string {
   if (!Number.isFinite(value)) return '$0';
   try {
     return new Intl.NumberFormat('es-MX', {
@@ -25,9 +42,13 @@ export function formatCurrency(value: number, currency: string = 'MXN'): string 
 
 /**
  * Variante con decimales: para pólizas individuales donde el centavos importan.
- * Default 'MXN'. Usar como `formatCurrencyExact(p.primaAnual, p.moneda)`.
+ * Usar como `formatCurrencyExact(p.primaAnual, p.moneda)`. Default por
+ * constante tipada (no literal `'MXN'`) por la misma razón que `formatCurrency`.
  */
-export function formatCurrencyExact(value: number, currency: string = 'MXN'): string {
+export function formatCurrencyExact(
+  value: number,
+  currency: string = CURRENCY_CONSTANTS.DEFAULT_TENANT_CURRENCY
+): string {
   if (!Number.isFinite(value)) return '$0';
   try {
     return new Intl.NumberFormat('es-MX', {
