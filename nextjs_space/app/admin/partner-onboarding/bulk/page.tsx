@@ -49,8 +49,12 @@ import {
   FileUp,
   Loader2,
   Pause,
+  Pencil,
   RefreshCw,
+  RotateCcw,
   Sparkles,
+  Wand2,
+  XCircle,
 } from 'lucide-react';
 import {
   WizardShell,
@@ -64,6 +68,17 @@ import {
   type BulkParsedRow,
   type BulkResultRow,
 } from '@/lib/insurance/csv-bulk';
+import {
+  applyCellReplacement,
+  applyCellTransform,
+  allRowsValid,
+  editCell,
+  resetRow,
+  rowsValidationSummary,
+  validateRow,
+  type EditableColumn,
+  EDITABLE_COLUMNS,
+} from '@/lib/insurance/csv-bulk-editor';
 import { VERTICAL_DEFINITIONS, VERTICALS, type Vertical } from '@/lib/plans';
 
 type BulkStep = 'upload' | 'preview' | 'create' | 'done';
@@ -212,7 +227,6 @@ export default function PartnerOnboardingBulkPage() {
   const [csvText, setCsvText] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [parsedRows, setParsedRows] = useState<BulkParsedRow[]>([]);
   const [parseErrors, setParseErrors] = useState<{ rowNum: number | null; message: string }[]>([]);
   const [emptyRows, setEmptyRows] = useState<number[]>([]);
   const [delimiter, setDelimiter] = useState<',' | ';' | null>(null);
@@ -224,6 +238,18 @@ export default function PartnerOnboardingBulkPage() {
 
   // ─── Bulk vertical seed CTA (Done step) ──────────────────────────────────
   const [seedCards, setSeedCards] = useState<Record<string, SeedCardState>>({});
+
+  // ─── Inline editor (Preview step) ─────────────────────────────────────────
+  // `originalRows` es el snapshot inmutable de los BulkParsedRow del CSV
+  // (para Reset). `editedRows` es la versión mutable que el operator
+  // edita en el grid antes de avanzar a Create.
+  const [originalRows, setOriginalRows] = useState<BulkParsedRow[]>([]);
+  const [editedRows, setEditedRows] = useState<BulkParsedRow[]>([]);
+
+  // Estado del toolbar de bulk find/replace y bulk transform.
+  const [bulkColumn, setBulkColumn] = useState<EditableColumn>('email');
+  const [bulkFind, setBulkFind] = useState<string>('');
+  const [bulkReplace, setBulkReplace] = useState<string>('');
 
   function downloadReportCsv() {
     const report: BulkResultRow[] = rows.map(r => ({
@@ -261,19 +287,47 @@ export default function PartnerOnboardingBulkPage() {
     const reader = new FileReader();
     reader.onload = () => setCsvText(String(reader.result ?? ''));
     reader.readAsText(file, 'utf-8');
-  }
-
-  function parseAndGo() {
+  }  function parseAndGo() {
     const result = parseBulkCsv(csvText);
     setDelimiter(result.delimiter);
-    setParsedRows(result.rows);
+    setOriginalRows(result.rows);
+    setEditedRows(result.rows.map(r => ({ ...r })));
     setParseErrors(result.errors);
     setEmptyRows(result.emptyRows);
     setStep('preview');
   }
 
+  // ─── Editor handlers ─────────────────────────────────────────────────────
+
+  function updateCell(rowNum: number, column: EditableColumn, value: string) {
+    setEditedRows(prev => prev.map(r => r.rowNum === rowNum ? editCell(r, column, value) : r));
+  }
+
+  function resetRowToOriginal(rowNum: number) {
+    setEditedRows(prev => prev.map(r => {
+      const o = originalRows.find(or => or.rowNum === rowNum);
+      return o ? resetRow(o, r) : r;
+    }));
+  }
+
+  function resetAllRows() {
+    setEditedRows(originalRows.map(r => ({ ...r })));
+  }
+
+  function applyBulkReplace() {
+    if (!bulkFind) return; // noOp defensivo.
+    setEditedRows(prev => applyCellReplacement(prev, bulkColumn, bulkFind, bulkReplace));
+  }
+
+  function applyBulkTransform(transform: (v: string) => string) {
+    setEditedRows(prev => applyCellTransform(prev, bulkColumn, transform));
+    // Limpiamos los inputs find/replace para no confundir al operator tras el transform.
+    setBulkFind('');
+    setBulkReplace('');
+  }
+
   function startCreate() {
-    const states: BulkRowState[] = parsedRows.map(p => ({
+    const states: BulkRowState[] = editedRows.map(p => ({
       parsed: p,
       password: p.password?.trim() || generatePassword(),
       status: 'pending' as RowStatus,
@@ -370,11 +424,16 @@ export default function PartnerOnboardingBulkPage() {
   const valid = useMemo(() => {
     switch (step) {
       case 'upload':   return csvText.trim().length > 0;
-      case 'preview':  return parsedRows.length > 0;
+      case 'preview':  return editedRows.length > 0 && allRowsValid(editedRows);
       case 'create':   return !running;
       default:         return true;
     }
-  }, [step, csvText, parsedRows, running]);
+  }, [step, csvText, editedRows, running]);
+
+  const previewSummary = useMemo(
+    () => rowsValidationSummary(editedRows),
+    [editedRows],
+  );
 
   const stats = useMemo(() => {
     const created = rows.filter(r => r.status === 'created').length;
@@ -427,13 +486,22 @@ export default function PartnerOnboardingBulkPage() {
         )}
 
         {step === 'preview' && (
-          <div className="space-y-3">
+          <div className="space-y-4">
+            {/* ── Cabecera con chips de estado ────────────────────────────── */}
             <div className="flex flex-wrap items-center gap-3 text-xs">
               <span className="px-2 py-1 bg-slate-100 rounded font-mono">
                 Delimitador: {delimiter === ',' ? 'coma' : delimiter === ';' ? 'punto y coma' : 'no detectado'}
               </span>
-              <span className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded font-bold">
-                {parsedRows.length} filas listas
+              <span className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded font-bold inline-flex items-center gap-1">
+                <Check size={10} /> {previewSummary.valid}/{previewSummary.total} válidas
+              </span>
+              {previewSummary.invalid > 0 && (
+                <span className="px-2 py-1 bg-rose-50 text-rose-700 rounded font-bold inline-flex items-center gap-1">
+                  <XCircle size={10} /> {previewSummary.invalid} inválidas
+                </span>
+              )}
+              <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded font-bold inline-flex items-center gap-1">
+                <Pencil size={10} /> Edición inline
               </span>
               {emptyRows.length > 0 && (
                 <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded font-bold">
@@ -458,6 +526,24 @@ export default function PartnerOnboardingBulkPage() {
               </div>
             )}
 
+            {/* ── Toolbar de bulk find/replace + atajos ──────────────────── */}
+            <BulkFixToolbar
+              column={bulkColumn}
+              onColumnChange={setBulkColumn}
+              find={bulkFind}
+              onFindChange={setBulkFind}
+              replace={bulkReplace}
+              onReplaceChange={setBulkReplace}
+              onApply={applyBulkReplace}
+              onLowercase={() => applyBulkTransform(v => v.toLowerCase().trim())}
+              onUppercase={() => applyBulkTransform(v => v.toUpperCase().trim())}
+              onTrim={() => applyBulkTransform(v => v.trim())}
+              onResetAll={resetAllRows}
+              total={previewSummary.total}
+              invalid={previewSummary.invalid}
+            />
+
+            {/* ── Grid inline-editable con validación por celda ──────────── */}
             <div className="overflow-x-auto border border-slate-200 rounded-lg">
               <table className="w-full text-xs">
                 <thead className="bg-slate-50 text-slate-700">
@@ -469,32 +555,28 @@ export default function PartnerOnboardingBulkPage() {
                     <th className="px-2 py-1.5 text-left font-black uppercase tracking-widest">Moneda</th>
                     <th className="px-2 py-1.5 text-left font-black uppercase tracking-widest">Vertical</th>
                     <th className="px-2 py-1.5 text-left font-black uppercase tracking-widest">Password</th>
+                    <th className="px-2 py-1.5 text-left font-black uppercase tracking-widest"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {parsedRows.slice(0, 50).map(r => (
-                    <tr key={r.rowNum} className="border-t border-slate-100 hover:bg-slate-50">
-                      <td className="px-2 py-1.5 font-mono text-slate-500">{r.rowNum}</td>
-                      <td className="px-2 py-1.5 text-slate-800">{r.empresa}</td>
-                      <td className="px-2 py-1.5 font-mono text-slate-800">{r.subdomain}</td>
-                      <td className="px-2 py-1.5 text-slate-800">{r.email}</td>
-                      <td className="px-2 py-1.5 font-mono text-slate-500">{r.moneda || '(auto)'}</td>
-                      <td className="px-2 py-1.5 text-slate-500">{r.vertical || '(none)'}</td>
-                      <td className="px-2 py-1.5 font-mono text-slate-500">
-                        {r.password ? '*** del CSV' : '(autogen)'}
-                      </td>
-                    </tr>
+                  {editedRows.slice(0, 50).map(r => (
+                    <EditableRow
+                      key={r.rowNum}
+                      row={r}
+                      onChange={(col, v) => updateCell(r.rowNum, col, v)}
+                      onReset={() => resetRowToOriginal(r.rowNum)}
+                    />
                   ))}
                 </tbody>
               </table>
-              {parsedRows.length > 50 && (
+              {editedRows.length > 50 && (
                 <p className="text-xs text-slate-500 p-2 border-t border-slate-200 bg-slate-50">
-                  + {parsedRows.length - 50} filas más (sólo se muestran las primeras 50).
+                  + {editedRows.length - 50} filas más (sólo se muestran las primeras 50).
                 </p>
               )}
             </div>
 
-            {parsedRows.length === 0 && (
+            {editedRows.length === 0 && (
               <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-sm text-rose-900">
                 <p className="font-bold">No hay filas válidas para procesar.</p>
                 <p className="text-xs mt-1">Vuelve al paso 1 y corrige el CSV. Las filas con errores se listan arriba.</p>
@@ -655,7 +737,296 @@ function RowStatusChip({ status }: { status: RowStatus }) {
   return <span className="px-2 py-0.5 bg-rose-100 text-rose-700 rounded text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1"><AlertCircle size={10} /> Error</span>;
 }
 
-// ─── Bulk Vertical Seed CTA (Done step) ─────────────────────────────────────
+// ─── Inline Editor — Toolbar + Editable Row (Preview step) ──────────────────
+
+/**
+ * Toolbar que aparece sobre el grid del paso Preview. Permite aplicar
+ * una regla find/replace a una columna en TODAS las filas (e.g. caso
+ * típico: operador detecta que la columna email tiene `;` en lugar de
+ * `@` y arregla N filas con 1 acción).
+ *
+ * Atajos one-click:
+ *   • Lowercase + trim  — ideal para emails y subdominios.
+ *   • Uppercase + trim  — ideal para columna moneda.
+ *   • Trim              — quitar espacios al inicio/fin en cualquier columna.
+ *
+ * NO muta el array `originalRows` (preserva el snapshot para Reset).
+ */
+function BulkFixToolbar({
+  column,
+  onColumnChange,
+  find,
+  onFindChange,
+  replace,
+  onReplaceChange,
+  onApply,
+  onLowercase,
+  onUppercase,
+  onTrim,
+  onResetAll,
+  total,
+  invalid,
+}: {
+  column: EditableColumn;
+  onColumnChange: (c: EditableColumn) => void;
+  find: string;
+  onFindChange: (v: string) => void;
+  replace: string;
+  onReplaceChange: (v: string) => void;
+  onApply: () => void;
+  onLowercase: () => void;
+  onUppercase: () => void;
+  onTrim: () => void;
+  onResetAll: () => void;
+  total: number;
+  invalid: number;
+}) {
+  return (
+    <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <Wand2 size={14} className="text-[#1A365D]" />
+        <span className="text-[10px] font-black uppercase tracking-widest text-[#1A365D]">
+          Bulk fix
+        </span>
+        <span className="text-[10px] text-slate-500">
+          aplica find/replace a la columna de las {total} filas (no muta el CSV original)
+        </span>
+      </div>
+
+      <div className="flex flex-wrap gap-2 items-center">
+        <select
+          value={column}
+          onChange={e => onColumnChange(e.target.value as EditableColumn)}
+          className="px-2 py-1.5 text-xs border border-slate-300 rounded-lg bg-white font-medium"
+        >
+          {EDITABLE_COLUMNS.map(c => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
+        <input
+          value={find}
+          onChange={e => onFindChange(e.target.value)}
+          placeholder="buscar..."
+          className="px-2 py-1.5 text-xs border border-slate-300 rounded-lg bg-white font-mono flex-1 min-w-[8rem]"
+        />
+        <span className="text-[10px] text-slate-400">→</span>
+        <input
+          value={replace}
+          onChange={e => onReplaceChange(e.target.value)}
+          placeholder="reemplazar con..."
+          className="px-2 py-1.5 text-xs border border-slate-300 rounded-lg bg-white font-mono flex-1 min-w-[8rem]"
+        />
+        <button
+          type="button"
+          onClick={onApply}
+          disabled={!find}
+          className="px-3 py-1.5 bg-[#1A365D] text-white rounded-lg text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1 hover:scale-[1.02] transition-transform disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          Aplicar a todas
+        </button>
+      </div>
+
+      <div className="flex flex-wrap gap-2 items-center pt-1 border-t border-slate-200">
+        <span className="text-[10px] text-slate-500 font-medium">Atajos:</span>
+        <button type="button" onClick={onLowercase}
+          className="px-2 py-1 bg-white border border-slate-300 text-slate-700 rounded text-[10px] font-bold hover:bg-slate-100">
+          lower-trim
+        </button>
+        <button type="button" onClick={onUppercase}
+          className="px-2 py-1 bg-white border border-slate-300 text-slate-700 rounded text-[10px] font-bold hover:bg-slate-100">
+          upper-trim
+        </button>
+        <button type="button" onClick={onTrim}
+          className="px-2 py-1 bg-white border border-slate-300 text-slate-700 rounded text-[10px] font-bold hover:bg-slate-100">
+          sólo trim
+        </button>
+        <span className="flex-1" />
+        <button
+          type="button"
+          onClick={onResetAll}
+          disabled={invalid === 0}
+          className="px-2 py-1 bg-white border border-slate-300 text-slate-700 rounded text-[10px] font-bold inline-flex items-center gap-1 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
+          title="Revierte todas las filas al CSV original"
+        >
+          <RotateCcw size={10} /> Reset todas
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Fila del grid con inputs editables y chips de validación por celda.
+ * Cada celda valida en vivo usando `validateRow()` (que invoca
+ * `validateCell()` para cada columna). Las celdas inválidas se pintan
+ * con borde rose + chip de error debajo.
+ *
+ * La columna Password es opcional (vacío = auto-generado). Moneda y
+ * Vertical son opcionales (vacío = default).
+ */
+function EditableRow({
+  row,
+  onChange,
+  onReset,
+}: {
+  row: BulkParsedRow;
+  onChange: (col: EditableColumn, value: string) => void;
+  onReset: () => void;
+}) {
+  const rowValidation = useMemo(() => validateRow(row), [row]);
+  const isRowValid = rowValidation.ok;
+
+  // Helper para pintar una celda con validación inline.
+  const cellClass = (col: EditableColumn): string => {
+    const err = rowValidation.errors.find(e => e.column === col)?.message;
+    return err
+      ? 'border-rose-400 bg-rose-50 focus:ring-rose-300'
+      : 'border-slate-300 bg-white focus:ring-emerald-300';
+  };
+
+  return (
+    <tr className={`border-t border-slate-100 ${isRowValid ? 'hover:bg-slate-50' : 'bg-rose-50/40'}`}>
+      <td className="px-2 py-1.5 font-mono text-slate-500 align-top pt-2">{row.rowNum}</td>
+
+      {/* Empresa */}
+      <td className="px-2 py-1.5 align-top">
+        <CellInput
+          value={row.empresa ?? ''}
+          onChange={v => onChange('empresa', v)}
+          className={cellClass('empresa')}
+          col="empresa"
+        />
+        <CellError errors={rowValidation.errors} col="empresa" />
+      </td>
+
+      {/* Subdominio */}
+      <td className="px-2 py-1.5 align-top">
+        <CellInput
+          value={row.subdomain ?? ''}
+          onChange={v => onChange('subdomain', v)}
+          className={`${cellClass('subdomain')} font-mono`}
+          col="subdomain"
+          monospace
+        />
+        <CellError errors={rowValidation.errors} col="subdomain" />
+      </td>
+
+      {/* Email */}
+      <td className="px-2 py-1.5 align-top">
+        <CellInput
+          value={row.email ?? ''}
+          onChange={v => onChange('email', v)}
+          className={cellClass('email')}
+          col="email"
+        />
+        <CellError errors={rowValidation.errors} col="email" />
+      </td>
+
+      {/* Moneda */}
+      <td className="px-2 py-1.5 align-top">
+        <CellInput
+          value={row.moneda ?? ''}
+          onChange={v => onChange('moneda', v.toUpperCase())}
+          className={`${cellClass('moneda')} font-mono uppercase`}
+          col="moneda"
+          monospace
+          placeholder="(auto)"
+        />
+        <CellError errors={rowValidation.errors} col="moneda" />
+      </td>
+
+      {/* Vertical */}
+      <td className="px-2 py-1.5 align-top">
+        <select
+          value={(row.vertical ?? '').toLowerCase()}
+          onChange={e => onChange('vertical', e.target.value)}
+          className={`w-full px-1 py-1 text-xs border rounded font-medium ${cellClass('vertical')}`}
+        >
+          <option value="">(none)</option>
+          {(VERTICALS as readonly Vertical[]).map(v => (
+            <option key={v} value={v}>
+              {VERTICAL_DEFINITIONS[v].icon} {VERTICAL_DEFINITIONS[v].name}
+            </option>
+          ))}
+        </select>
+        <CellError errors={rowValidation.errors} col="vertical" />
+      </td>
+
+      {/* Password */}
+      <td className="px-2 py-1.5 align-top">
+        <CellInput
+          value={row.password ?? ''}
+          onChange={v => onChange('password', v)}
+          className={`${cellClass('password')} font-mono`}
+          col="password"
+          monospace
+          placeholder="(autogen)"
+        />
+        <CellError errors={rowValidation.errors} col="password" />
+      </td>
+
+      {/* Reset fila */}
+      <td className="px-2 py-1.5 align-top">
+        <button
+          type="button"
+          onClick={onReset}
+          disabled={isRowValid}
+          className="p-1 text-slate-400 hover:text-rose-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          title="Resetear esta fila al valor original del CSV"
+        >
+          <RotateCcw size={12} />
+        </button>
+      </td>
+    </tr>
+  );
+}
+
+function CellInput({
+  value,
+  onChange,
+  className,
+  col,
+  monospace,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  className: string;
+  col: string;
+  monospace?: boolean;
+  placeholder?: string;
+}) {
+  return (
+    <input
+      type="text"
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      placeholder={placeholder ?? ''}
+      data-col={col}
+      className={`w-full px-2 py-1 text-xs border rounded focus:outline-none focus:ring-2 transition-shadow ${
+        monospace ? 'font-mono' : ''
+      } ${className}`}
+    />
+  );
+}
+
+function CellError({
+  errors,
+  col,
+}: {
+  errors: { column: EditableColumn; message: string }[];
+  col: EditableColumn;
+}) {
+  const msg = errors.find(e => e.column === col)?.message;
+  if (!msg) return null;
+  return (
+    <p className="mt-0.5 text-[10px] text-rose-700 leading-tight font-bold">
+      {msg}
+    </p>
+  );
+}
+
+// ─── Bulk Vertical Seed CTA (Done step) ──────────────────────────────────────
 
 /**
  * CTA inline en el paso Done: 4 cards (insurance / real_estate /
