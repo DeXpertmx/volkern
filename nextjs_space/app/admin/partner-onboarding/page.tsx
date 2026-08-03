@@ -21,13 +21,16 @@
 
 import { useMemo, useState } from 'react';
 import {
+  AlertCircle,
   ArrowLeft,
   ArrowRight,
   Check,
   CheckCircle2,
   ChevronRight,
+  Forward,
   Loader2,
   Mail,
+  Send,
   Sparkles,
   User,
 } from 'lucide-react';
@@ -64,6 +67,16 @@ interface CreateResponse {
   message?: string;
 }
 
+interface TelegramConnectResponse {
+  success: boolean;
+  state?: 'created' | 'already-exists';
+  telegramInboxId?: number;
+  telegramChannelId?: string;
+  hubConfigId?: string;
+  code?: string;
+  error?: string;
+}
+
 const INITIAL: WizardForm = {
   empresa: '',
   subdomain: '',
@@ -92,6 +105,16 @@ export default function PartnerOnboardingPage() {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<CreateResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // CTA 'Conectar Telegram después' — sólo relevante cuando result.telegramSkipped = true.
+  const [telegramDeferredOpen, setTelegramDeferredOpen] = useState(false);
+  const [telegramDeferred, setTelegramDeferred] = useState({ botName: '', botToken: '' });
+  const [telegramDeferredStatus, setTelegramDeferredStatus] = useState<
+    | { kind: 'idle' }
+    | { kind: 'submitting' }
+    | { kind: 'success'; telegramInboxId: number }
+    | { kind: 'error'; code: string; message: string }
+  >({ kind: 'idle' });
 
   // Lista canónica del menú (misma que el script CLI)
   const menuOptions: CurrencyMenuOption[] = useMemo(() => getCurrencyMenuOptions(), []);
@@ -154,6 +177,42 @@ export default function PartnerOnboardingPage() {
       setStep('resumen');
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function submitTelegramDeferred() {
+    if (!result?.tenantId) return;
+    setTelegramDeferredStatus({ kind: 'submitting' });
+    try {
+      const res = await fetch(`/api/admin/tenants/${result.tenantId}/telegram`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(telegramDeferred),
+      });
+      const data: TelegramConnectResponse = await res.json().catch((): TelegramConnectResponse => ({
+        success: false, code: 'PARSE_ERROR', error: `HTTP ${res.status}`,
+      }));
+      if (!res.ok || !data.success) {
+        setTelegramDeferredStatus({
+          kind: 'error',
+          code: data?.code ?? `HTTP_${res.status}`,
+          message: data?.error ?? `Error HTTP ${res.status}`,
+        });
+        return;
+      }
+      setTelegramDeferredStatus({
+        kind: 'success',
+        telegramInboxId: data.telegramInboxId ?? 0,
+      });
+      // Reflejar en el resultado global para que el DoneCard muestre el éxito.
+      setResult(prev => prev ? {
+        ...prev,
+        telegramSkipped: false,
+        telegramInboxId: data.telegramInboxId,
+      } : prev);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Error desconocido al conectar Telegram';
+      setTelegramDeferredStatus({ kind: 'error', code: 'UNEXPECTED', message });
     }
   }
 
@@ -349,7 +408,16 @@ export default function PartnerOnboardingPage() {
         )}
 
         {step === 'done' && result && (
-          <DoneCard result={result} form={form} />
+          <DoneCard
+            result={result}
+            form={form}
+            opened={telegramDeferredOpen}
+            onToggleOpen={() => setTelegramDeferredOpen(o => !o)}
+            deferredForm={telegramDeferred}
+            onDeferredChange={(k, v) => setTelegramDeferred(prev => ({ ...prev, [k]: v }))}
+            deferredStatus={telegramDeferredStatus}
+            onSubmitDeferred={submitTelegramDeferred}
+          />
         )}
 
         <div className="flex items-center justify-between pt-3 border-t border-slate-100">
@@ -510,7 +578,26 @@ function CurrencyStep({
   );
 }
 
-function DoneCard({ result, form }: { result: CreateResponse; form: WizardForm }) {
+function DoneCard({
+  result, form,
+  opened, onToggleOpen,
+  deferredForm, onDeferredChange,
+  deferredStatus, onSubmitDeferred,
+}: {
+  result: CreateResponse;
+  form: WizardForm;
+  opened: boolean;
+  onToggleOpen: () => void;
+  deferredForm: { botName: string; botToken: string };
+  onDeferredChange: (k: 'botName' | 'botToken', v: string) => void;
+  deferredStatus:
+    | { kind: 'idle' }
+    | { kind: 'submitting' }
+    | { kind: 'success'; telegramInboxId: number }
+    | { kind: 'error'; code: string; message: string };
+  onSubmitDeferred: () => void;
+}) {
+  const telegramSkipped = result.telegramSkipped && !result.telegramInboxId;
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3 p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
@@ -527,8 +614,8 @@ function DoneCard({ result, form }: { result: CreateResponse; form: WizardForm }
         <SummaryRow
           icon={<Sparkles size={14} />}
           label="Telegram"
-          value={result.telegramSkipped
-            ? '⏭️  Pendiente — añade el bot desde /admin/partner-onboarding cuando esté listo'
+          value={telegramSkipped
+            ? '⏭️  Pendiente'
             : `✅ Inbox #${result.telegramInboxId}`}
         />
         <SummaryRow
@@ -538,6 +625,99 @@ function DoneCard({ result, form }: { result: CreateResponse; form: WizardForm }
           highlighted
         />
       </div>
+
+      {telegramSkipped && result.tenantId && (
+        <div className="border border-amber-200 bg-amber-50 rounded-xl overflow-hidden">
+          <button
+            type="button"
+            onClick={onToggleOpen}
+            className="w-full flex items-center justify-between gap-2 px-4 py-3 text-left"
+          >
+            <div className="flex items-center gap-2.5">
+              <Send size={16} className="text-amber-700" />
+              <div>
+                <p className="text-sm font-black text-amber-900 tracking-tight">
+                  {opened ? 'Ocultar formulario de Telegram' : 'Conectar Telegram ahora'}
+                </p>
+                <p className="text-[11px] text-amber-700 mt-0.5">
+                  El broker aún no tiene bot configurado. Si ya habló con @BotFather, lo conectas aquí en 1 paso.
+                </p>
+              </div>
+            </div>
+            <ChevronRight
+              size={14}
+              className={`text-amber-700 transition-transform ${opened ? 'rotate-90' : ''}`}
+            />
+          </button>
+
+          {opened && (
+            <div className="px-4 pb-4 space-y-3 border-t border-amber-200 pt-3">
+              {deferredStatus.kind === 'success' ? (
+                <div className="flex items-start gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
+                  <CheckCircle2 size={16} className="text-emerald-600 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-bold text-emerald-900">Telegram conectado</p>
+                    <p className="text-xs text-emerald-700 mt-0.5">
+                      Inbox #{deferredStatus.telegramInboxId} listo. El broker ya puede
+                      escribirle al bot.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <Field label="Bot username">
+                    <input
+                      type="text"
+                      autoFocus
+                      value={deferredForm.botName}
+                      onChange={e => onDeferredChange('botName', e.target.value)}
+                      placeholder="@mi_empresa_bot"
+                      disabled={deferredStatus.kind === 'submitting'}
+                      className="w-full px-3 py-2 border border-amber-200 bg-white rounded-lg focus:ring-2 focus:ring-amber-400/40 text-sm font-mono disabled:opacity-50"
+                    />
+                  </Field>
+                  <Field label="Bot token" hint="Lo obtienes de @BotFather en Telegram.">
+                    <input
+                      type="password"
+                      value={deferredForm.botToken}
+                      onChange={e => onDeferredChange('botToken', e.target.value)}
+                      placeholder="123456789:ABCdefGHI..."
+                      disabled={deferredStatus.kind === 'submitting'}
+                      className="w-full px-3 py-2 border border-amber-200 bg-white rounded-lg focus:ring-2 focus:ring-amber-400/40 text-sm font-mono disabled:opacity-50"
+                    />
+                  </Field>
+                  {deferredStatus.kind === 'error' && (
+                    <div className="flex items-start gap-2 p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-900">
+                      <AlertCircle size={14} className="mt-0.5 flex-shrink-0 text-rose-600" />
+                      <div>
+                        <p className="font-bold">{deferredStatus.code}</p>
+                        <p className="mt-0.5">{deferredStatus.message}</p>
+                      </div>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    disabled={
+                      !deferredForm.botName.startsWith('@') ||
+                      deferredForm.botToken.length < 20 ||
+                      deferredStatus.kind === 'submitting'
+                    }
+                    onClick={onSubmitDeferred}
+                    className="w-full px-4 py-2 bg-amber-600 text-white rounded-xl font-black uppercase tracking-widest text-[10px] shadow-lg shadow-amber-900/10 hover:scale-[1.01] transition-transform disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100 inline-flex items-center justify-center gap-1.5"
+                  >
+                    {deferredStatus.kind === 'submitting' ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <><Forward size={14} /> Conectar bot</>
+                    )}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       <p className="text-xs text-slate-500 pt-2 border-t border-slate-100">
         El broker ya puede iniciar sesión en{' '}
         <a href={`https://${form.subdomain}.volkern.app/auth/login`}
