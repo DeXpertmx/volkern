@@ -18,6 +18,14 @@
  *   4. Done      →  resumen { created, failed, pending } + botón de descarga
  *                   CSV con todos los IDs y estados (lib/insurance/csv-bulk
  *                   genera el reporte RFC-4180 con BOM para Excel).
+ *                   ── NUEVO 2026-08-10 ──
+ *                   Si hay tenants creados, muestra CTA "Seedear
+ *                   verticales en bulk" con 4 cards (insurance /
+ *                   real_estate / accounting / general) que llaman a
+ *                   `POST /api/admin/partner-bulk/seed-vertical` para
+ *                   activar el starter pack de módulos en todos los
+ *                   recién creados de un click, sin entrar a
+ *                   /admin/saas/tenants/{id}/modulos uno a uno.
  *
  * Reutiliza:
  *   • components/admin/onboarding-ui.tsx → Stepper, Field, SummaryRow,
@@ -26,6 +34,9 @@
  *   • app/api/tenants/create/route.ts → endpoint unario por fila (no
  *     creamos endpoint bulk separado: el modelo POST uno-a-uno es más
  *     resiliente y reusa toda la lógica del provisioner).
+ *   • app/api/admin/partner-bulk/seed-vertical/route.ts → endpoint que
+ *     reusa seedTenantModulesFromVertical del provisioner y aplica el
+ *     starter pack de la vertical elegida a los tenantIds dados.
  */
 
 import { useMemo, useRef, useState } from 'react';
@@ -39,6 +50,7 @@ import {
   Loader2,
   Pause,
   RefreshCw,
+  Sparkles,
 } from 'lucide-react';
 import {
   WizardShell,
@@ -52,6 +64,7 @@ import {
   type BulkParsedRow,
   type BulkResultRow,
 } from '@/lib/insurance/csv-bulk';
+import { VERTICAL_DEFINITIONS, VERTICALS, type Vertical } from '@/lib/plans';
 
 type BulkStep = 'upload' | 'preview' | 'create' | 'done';
 
@@ -165,6 +178,33 @@ async function createRow(row: BulkRowState, signal: AbortSignal): Promise<BulkRo
   }
 }
 
+interface SeedApiResponse {
+  ok: boolean;
+  dryRun: boolean;
+  vertical: Vertical;
+  total: number;
+  succeeded: number;
+  partial: number;
+  failed: number;
+  totalSeeded: number;
+  totalSkipped: number;
+  tenants: Array<{
+    tenantId: string;
+    seeded: string[];
+    skipped: string[];
+    errors: Array<{ module: string; error: string }>;
+    ok: boolean;
+    fatalError?: string;
+  }>;
+  error?: { code: string; message: string };
+}
+
+interface SeedCardState {
+  status: 'idle' | 'running' | 'done';
+  response?: SeedApiResponse;
+  error?: string;
+}
+
 // ─── Página ─────────────────────────────────────────────────────────────────
 
 export default function PartnerOnboardingBulkPage() {
@@ -181,6 +221,9 @@ export default function PartnerOnboardingBulkPage() {
   const [running, setRunning] = useState(false);
   const [aborted, setAborted] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+
+  // ─── Bulk vertical seed CTA (Done step) ──────────────────────────────────
+  const [seedCards, setSeedCards] = useState<Record<string, SeedCardState>>({});
 
   function downloadReportCsv() {
     const report: BulkResultRow[] = rows.map(r => ({
@@ -271,6 +314,55 @@ export default function PartnerOnboardingBulkPage() {
     setRows(prev => prev.map(r => r.status === 'running'
       ? { ...r, status: 'pending', errorCode: 'CANCELLED', errorMessage: 'Cancelado por el operador' }
       : r));
+  }
+
+  // ─── Bulk vertical seed action ──────────────────────────────────────────
+  const createdTenantIds = useMemo(
+    () => rows.filter(r => r.status === 'created' && r.tenantId).map(r => r.tenantId!) ?? [],
+    [rows],
+  );
+
+  async function runSeedVertical(vertical: Vertical, dryRun: boolean) {
+    if (createdTenantIds.length === 0) return;
+    setSeedCards(prev => ({ ...prev, [vertical]: { status: 'running' } }));
+    try {
+      const res = await fetch('/api/admin/partner-bulk/seed-vertical', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          tenantIds: createdTenantIds,
+          vertical,
+          dryRun,
+        }),
+      });
+      const data: SeedApiResponse = await res.json().catch(() => ({
+        ok: false,
+        dryRun,
+        vertical,
+        total: 0, succeeded: 0, partial: 0, failed: 0,
+        totalSeeded: 0, totalSkipped: 0, tenants: [],
+        error: { code: 'PARSE_ERROR', message: `HTTP ${res.status}` },
+      }));
+      if (!res.ok || data.error) {
+        setSeedCards(prev => ({
+          ...prev,
+          [vertical]: {
+            status: 'done',
+            error: data.error?.message ?? `Error HTTP ${res.status}`,
+          },
+        }));
+        return;
+      }
+      setSeedCards(prev => ({ ...prev, [vertical]: { status: 'done', response: data } }));
+    } catch (err: unknown) {
+      setSeedCards(prev => ({
+        ...prev,
+        [vertical]: {
+          status: 'done',
+          error: err instanceof Error ? err.message : 'Error desconocido',
+        },
+      }));
+    }
   }
 
   // ─── Validación por paso ────────────────────────────────────────────────
@@ -506,6 +598,15 @@ export default function PartnerOnboardingBulkPage() {
               Compatible con Excel y parsers RFC-4180.
             </p>
 
+            {/* ─── NUEVO: Bulk Vertical Seed CTA ──────────────────────────── */}
+            {createdTenantIds.length > 0 && (
+              <BulkVerticalSeedCTA
+                tenantIds={createdTenantIds}
+                cards={seedCards}
+                onSeed={(v, dry) => void runSeedVertical(v, dry)}
+              />
+            )}
+
             <div className="flex gap-2 pt-2">
               <a
                 href="/admin/saas/tenants"
@@ -552,4 +653,147 @@ function RowStatusChip({ status }: { status: RowStatus }) {
   if (status === 'running') return <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1"><Loader2 size={10} className="animate-spin" /> Creando</span>;
   if (status === 'created') return <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1"><Check size={10} /> Creado</span>;
   return <span className="px-2 py-0.5 bg-rose-100 text-rose-700 rounded text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1"><AlertCircle size={10} /> Error</span>;
+}
+
+// ─── Bulk Vertical Seed CTA (Done step) ─────────────────────────────────────
+
+/**
+ * CTA inline en el paso Done: 4 cards (insurance / real_estate /
+ * accounting / general) que llaman a /api/admin/partner-bulk/seed-vertical
+ * con los tenantIds de los recién creados. Reusa el helper SeedCardState
+ * para que cada card muestre progreso + resultado por separado.
+ */
+function BulkVerticalSeedCTA({
+  tenantIds,
+  cards,
+  onSeed,
+}: {
+  tenantIds: string[];
+  cards: Record<string, SeedCardState>;
+  onSeed: (v: Vertical, dry: boolean) => void;
+}) {
+  return (
+    <section className="space-y-3 pt-3 border-t border-slate-100">
+      <header className="space-y-1">
+        <h4 className="text-sm font-black uppercase tracking-widest text-[#1A365D] inline-flex items-center gap-2">
+          <Sparkles size={14} className="text-[#1A365D]" />
+          Seedear verticales en bulk
+        </h4>
+        <p className="text-xs text-slate-500">
+          Activa el starter pack de módulos de una vertical para los{' '}
+          <span className="font-mono font-bold">{tenantIds.length}</span> tenants recién creados,
+          en lugar de entrar a <code className="font-mono">/admin/saas/tenants/&#123;id&#125;/modulos</code>{' '}
+          uno a uno. Reusa <code className="font-mono">seedTenantModulesFromVertical</code> del provisioner.
+        </p>
+      </header>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {(VERTICALS as readonly Vertical[]).map(vertical => (
+          <VerticalCard
+            key={vertical}
+            vertical={vertical}
+            tenantCount={tenantIds.length}
+            state={cards[vertical]}
+            onSeed={(dryRun) => onSeed(vertical, dryRun)}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function VerticalCard({
+  vertical,
+  tenantCount,
+  state,
+  onSeed,
+}: {
+  vertical: Vertical;
+  tenantCount: number;
+  state: SeedCardState | undefined;
+  onSeed: (dryRun: boolean) => void;
+}) {
+  const def = VERTICAL_DEFINITIONS[vertical];
+  const isRunning = state?.status === 'running';
+  const isDone = state?.status === 'done';
+  const response = state?.response;
+  const errorMsg = state?.error;
+
+  const toneById: Record<Vertical, { bg: string; border: string; text: string; ring: string }> = {
+    insurance:   { bg: 'bg-amber-50',  border: 'border-amber-200',  text: 'text-amber-900',  ring: 'ring-amber-300' },
+    real_estate: { bg: 'bg-blue-50',   border: 'border-blue-200',   text: 'text-blue-900',   ring: 'ring-blue-300' },
+    accounting:  { bg: 'bg-emerald-50',border: 'border-emerald-200',text: 'text-emerald-900',ring: 'ring-emerald-300' },
+    general:     { bg: 'bg-slate-50',  border: 'border-slate-200',  text: 'text-slate-900',  ring: 'ring-slate-300' },
+  };
+  const tone = toneById[vertical];
+
+  return (
+    <div className={`p-4 border ${tone.border} ${tone.bg} rounded-2xl space-y-2 transition-shadow ${isRunning ? `ring-2 ${tone.ring}` : ''}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h5 className={`text-sm font-black ${tone.text} flex items-center gap-1.5`}>
+            <span className="text-base">{def.icon}</span>
+            {def.name}
+          </h5>
+          <p className="text-xs text-slate-600 mt-0.5 line-clamp-2">{def.description}</p>
+          <p className="text-[10px] font-mono text-slate-500 mt-1">
+            {def.modules.length} módulos · {tenantCount} tenants
+          </p>
+        </div>
+        <span className={`shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-lg text-base font-black ${tone.text} bg-white border ${tone.border}`}>
+          {def.modules.length}
+        </span>
+      </div>
+
+      {isDone && response && !errorMsg && (
+        <div className="text-xs space-y-1.5 pt-2 border-t border-slate-200">
+          <div className="flex items-center gap-1.5 text-emerald-700 font-bold">
+            <CheckCircle2 size={12} />
+            <span>
+              {response.succeeded}/{response.total} ok · {response.totalSeeded} sembrados · {response.totalSkipped} ya activos
+            </span>
+          </div>
+          {response.failed > 0 && (
+            <div className="text-rose-700">
+              {response.failed} tenant(s) con error fatal — ver reporte.
+            </div>
+          )}
+          {response.partial > 0 && (
+            <div className="text-amber-700">
+              {response.partial} tenant(s) con errores parciales (siguen ok=true pero con detalle).
+            </div>
+          )}
+        </div>
+      )}
+
+      {isDone && errorMsg && (
+        <div className="text-xs text-rose-700 pt-2 border-t border-slate-200">
+          <div className="flex items-center gap-1.5 font-bold">
+            <AlertCircle size={12} /> {errorMsg}
+          </div>
+        </div>
+      )}
+
+      <div className="flex gap-2 pt-1">
+        <button
+          type="button"
+          onClick={() => onSeed(false)}
+          disabled={isRunning || (isDone && response?.ok)}
+          className="flex-1 px-3 py-2 bg-[#1A365D] text-white rounded-xl text-[10px] font-black uppercase tracking-widest inline-flex items-center justify-center gap-1.5 hover:scale-[1.02] transition-transform disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {isRunning ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+          {isRunning ? 'Sembrando…' : isDone && response?.ok ? 'Aplicado' : 'Sembrar'}
+        </button>
+        <button
+          type="button"
+          onClick={() => onSeed(true)}
+          disabled={isRunning || isDone}
+          className="px-3 py-2 bg-white border border-slate-300 text-slate-700 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+          title="Simula el upsert sin tocar la BD"
+        >
+          {isRunning ? <Loader2 size={12} className="animate-spin" /> : 'Dry-run'}
+        </button>
+      </div>
+    </div>
+  );
 }

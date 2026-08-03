@@ -907,3 +907,233 @@ ORDER  BY t."fechaCreacion" DESC;
   los creados previamente, sólo los pendientes.
 - **Dry-run opcional**: herramientas de staging pueden previsualizar
   el resultado con `X-Dry-Run: true` antes de pedir mutable.
+
+---
+
+## 🌱 Bulk vertical seed en el paso Done del wizard (`/api/admin/partner-bulk/seed-vertical`)
+
+Después de crear N tenants en `/admin/partner-onboarding/bulk`, el operator
+antes tenía que entrar tenant por tenant a
+`/admin/saas/tenants/{id}/modulos` para activar el starter pack de
+módulos verticales (insurance / real_estate / accounting / general). Con
+esta feature, el paso Done del wizard muestra un panel inline con 4
+cards (uno por vertical) que llaman al endpoint server-side
+
+```
+POST /api/admin/partner-bulk/seed-vertical
+```
+
+para activar el starter pack en TODOS los tenants recién creados con un
+solo click. Reusa `seedTenantModulesFromVertical()` del provisioner — sin
+duplicar lógica de upsert de `tenantFeature`.
+
+### Flujo UI (paso Done del wizard)
+
+```
+┌─ Done ──────────────────────────────────────────────────┐
+│ ✅ {N} creados · {M} fallos · {k} pendientes           │
+│   [Descargar CSV reporte]                              │
+│ ────────────────────────────────────────────────────── │
+│ 🌱 Seedear verticales en bulk                          │
+│   activar starter pack de módulos para N tenants       │
+│                                                       │
+│   ┌──────────────┐  ┌──────────────┐                    │
+│   │ 🛡️ Seguros   │  │ 🏠 Inmob...  │  ... × 2          │
+│   │ Brokers      │  │ Real Estate  │                   │
+│   │ 16 módulos   │  │ 19 módulos   │                   │
+│   │ [Sembrar]    │  │ [Sembrar]    │                   │
+│   │ [Dry-run]    │  │ [Dry-run]    │                   │
+│   └──────────────┘  └──────────────┘                    │
+│                                                       │
+│   Acepta tenantIds de los rows status='created'.       │
+└───────────────────────────────────────────────────────┘
+```
+
+Cada card muestra:
+- Estado inicial (botón "Sembrar" / "Dry-run" enabled).
+- Mientras corre: spinner + ring colored por vertical + "Sembrando…".
+- Al terminar: `3/3 ok · 48 sembrados · 0 ya activos` (verde) o
+  `3 ok · 1 tenant con error fatal` (mixto).
+- Si el sembrado fue ok: el botón "Sembrar" se deshabilita y muestra
+  "Aplicado" — previene double-seeding por error del operator.
+- El botón "Dry-run" siempre está disponible antes del primer intento.
+
+### Endpoint
+
+```
+POST /api/admin/partner-bulk/seed-vertical
+```
+
+### Auth dual (misma que `/api/admin/partner-bulk`)
+
+| Mech                    | Quién                                |
+| ----------------------- | ------------------------------------ |
+| `Bearer ${CRON_SECRET}` | Scripts CLI, n8n, GitHub Actions     |
+| Session superadmin      | Operator humano vía curl --cookie     |
+
+### Body
+
+```jsonc
+{
+  "tenantIds": ["t1", "t2", "t3"],            // requerido, max 200
+  "vertical": "insurance",                     // requerido (insurance | real_estate | accounting | general)
+  "modules": ["leads", "contactos"],          // opcional: override de VERTICAL_DEFINITIONS[vertical].modules
+  "dryRun": false,                            // opcional, default false
+  "concurrency": 3                            // opcional, default 3, cap 1..10
+}
+```
+
+### Headers opcionales
+
+| Header       | Valores                            | Default | Comportamiento                                        |
+| ------------ | ---------------------------------- | ------- | ----------------------------------------------------- |
+| `X-Dry-Run`  | `true` \| `1` \| `false` \| `0`    | body    | **Override explícito** — gana sobre body.dryRun.      |
+
+> Cualquier valor truthy (`true`/`1`) o falsy (`false`/`0`) en el header
+> gana sobre `body.dryRun`. Útil cuando un script mal-configurado trae
+> `body.dryRun=true` y el operator lo cancela con `X-Dry-Run: false`.
+
+### Respuesta (200)
+
+```jsonc
+{
+  "ok": true,                                  // false si failed > 0 ó partial > 0
+  "dryRun": false,
+  "vertical": "insurance",
+  "modulesPlanned": ["leads", "contactos", ..., "configuracion"],   // 16 ítems
+  "total": 3,
+  "succeeded": 3,                              // tenants sin errores fatales y sin errors partials
+  "partial": 0,                                // tenants con errores partials (algunos módulos fallaron pero la mayoría se sembraron)
+  "failed": 0,                                 // tenants con error fatal (excepción no controlada)
+  "totalSeeded": 48,                           // suma de módulos nuevos activados
+  "totalSkipped": 0,                           // suma de módulos que ya estaban activos (idempotencia)
+  "tenants": [                                 // detalle por tenant
+    {
+      "tenantId": "t1",
+      "seeded": ["leads", "contactos", "insurance"],
+      "skipped": ["tareas"],
+      "errors": [],
+      "ok": true
+    }
+  ]
+}
+```
+
+Headers informativos:
+
+| Header                       | Valor                          |
+| ---------------------------- | ------------------------------ |
+| `X-Seed-Vertical`            | nombre de la vertical          |
+| `X-Seed-Total`               | total                          |
+| `X-Seed-Succeeded`           | succeeded                      |
+| `X-Seed-Partial`             | partial                        |
+| `X-Seed-Failed`              | failed                         |
+| `X-Seed-Total-Seeded`        | totalSeeded                    |
+| `X-Seed-Total-Skipped`       | totalSkipped                   |
+| `X-Seed-Dry-Run`             | `"true"` \| `"false"`          |
+
+### Códigos de error
+
+| HTTP | Cuándo                                                                  |
+| ---- | ----------------------------------------------------------------------- |
+| 400  | `INVALID_VERTICAL` (vertical no está en VERTICALS)                       |
+| 400  | `INVALID_TENANT_IDS` (array vacío o no-array ni strings)                |
+| 400  | `TOO_MANY_TENANT_IDS` (> 200)                                           |
+| 401  | Sin auth (ni session ni Bearer) o Bearer inválido                        |
+| 403  | Session pero rol ≠ `Superadmin`                                          |
+| 500  | `UNEXPECTED` — algo explotó fuera del try/catch                          |
+
+### Implementación
+
+- **`lib/provisioning/seed-vertical-bulk.ts`** — orquestador reusable
+  que reusa `seedTenantModulesFromVertical()` del provisioner para crear
+  `TenantFeature(habilitado=true, habilitadoPor, razon='Vertical seed: ${vertical}')`
+  por cada módulo. Pool de N workers (default 3, cap 1..10)consume la
+  cola de tenantIds. Defensivo contra errores fatales y parciales; las
+  excepciones se reportan como `fatalError` por tenant sin abortar el
+  batch.
+
+- **`app/api/admin/partner-bulk/seed-vertical/route.ts`** (POST) — auth
+  dual (mismo patrón que el endpoint partner-bulk), contenido JSON
+  requerido, validación de vertical contra `VERTICALS`, cap de 200
+  tenantIds por request, header `X-Dry-Run` con override explícito.
+  Llama al runner y propaga el resultado + headers informativos.
+
+- **`app/admin/partner-onboarding/bulk/page.tsx`** — paso Done extendido
+  con panel `BulkVerticalSeedCTA` que muestra 4 cards por vertical. Cada
+  card llama al endpoint con `tenantIds = rows.status=='created'`. UI
+  muestra progreso por card (azul running → verde done / rose error).
+
+### Tests (38 tests)
+
+- **`tests/seed-vertical-bulk.test.ts`** — 20 tests del runner:
+  dryRun no llama helper · happy path N tenants · módulos curados ·
+  override custom · propagar actor user/system · tenant sin errores vs
+  parcial vs fatal · suma de `totalSeeded` + `totalSkipped` · pool con
+  concurrencia=3 medida con `inFlight` counter · cap 1..10 · tenantIds
+  vacío · todas las 4 verticales curadas.
+
+- **`tests/seed-vertical-endpoint.test.ts`** — 18 tests del endpoint:
+  401 / 401 Bearer inválido / 403 no-Superadmin / 401 sin user ·
+  400 vertical inválido (INVALID_VERTICAL) · 400 tenantIds array vacío
+  / no-array (INVALID_TENANT_IDS) · 400 > 200 (TOO_MANY) · 400 no-JSON ·
+  Bearer auth delegation · runner llamado con campos correctos ·
+  `body.dryRun`/`X-Dry-Run`/priority · `modules` override · actor
+  system · response shape 200 + headers `X-Seed-*` · NO llama al
+  runner cuando hay errores tempranos.
+
+### Ejemplo curl
+
+```bash
+# Dry-run primero para validar qué se va a activar
+curl -fsS -X POST \
+  -H "Authorization: Bearer $CRON_SECRET" \
+  -H "Content-Type: application/json" \
+  -H "X-Dry-Run: true" \
+  -d '{"tenantIds":["t1","t2","t3"], "vertical":"insurance"}' \
+  "https://admin.volkern.app/api/admin/partner-bulk/seed-vertical" \
+  | jq '. | {vertical, total, succeeded, totalSeeded, dryRun, tenants_count: (.tenants|length)}'
+
+# Si dryRun output luce bien, aplicar
+curl -fsS -X POST \
+  -H "Authorization: Bearer $CRON_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"tenantIds":["t1","t2","t3"], "vertical":"insurance"}' \
+  "https://admin.volkern.app/api/admin/partner-bulk/seed-vertical"
+```
+
+### Auditoría
+
+Cada `tenantFeature` sembrado lleva `razon='Vertical seed: ${vertical}'` y
+`habilitadoPor = actor.email || actor.id` (para user) o
+`system:${actor.source}` (para system). El superadmin puede listar todos
+los seedings automáticos con:
+
+```sql
+SELECT tf."tenantId", tf.feature, tf.habilitadoPor, tf.razon, tf."fechaCreacion"
+FROM   "tenant_features" tf
+WHERE  tf.razon LIKE 'Vertical seed:%'
+ORDER  BY tf."fechaCreacion" DESC
+LIMIT  100;
+```
+
+### Implicaciones prácticas
+
+- **Operator onboarding masivo**: tras correr el partner-bulk con N
+  brokers de un CRM externo, el operator hace 1 click por vertical y
+  los N brokers arrancan con sus módulos correspondientes. Antes eran N
+  clicks × 4 dimensiones de filtro × 1 aprobación = 4N pasos manuales.
+- **Idempotente**: re-correr con el mismo `tenantIds` + vertical no
+  duplica audit entries; los módulos ya activos van a `skipped`, los
+  nuevos a `seeded`. Útil para reintentar tras un error de red sin
+  miedo.
+- **Defensivo**: un módulo que falla individualmente NO aborta el
+  batch. El provider persiste el error en `tenantResult.errors[]` y
+  sigue con el resto. Esto permite distinguir en el UI "1 módulo falló
+  en 1 tenant" vs "1 tenant entero falló" — métricas diferentes.
+- **El módulo 'insurance' del vertical insurance queda sembrado**: si
+  el broker importó pólizas antes de seedear el vertical, las páginas
+  `/dashboard/seguros` ya están habilitadas por el plan pero las cards
+  así quedan marcadas con `habilitadoPor='admin@volkern.app'` y
+  `razon='Vertical seed: insurance'` — el auditLog tiene trazabilidad
+  total.
