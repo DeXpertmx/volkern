@@ -116,15 +116,125 @@ npx tsx scripts/update-tenant-currency.ts --tenant=mitemnant --moneda=EUR --appl
    debe llamar al endpoint PATCH para cada nuevo tenant.
 2. **Onboarding**: al crear un nuevo tenant, pedir moneda preferida y
    setearla (work-in-progress; ver follow-ups).
-3. **Linter**: añadir regla ESLint que bloquee el hardcode de `?? 'MXN'` en
-   la lógica de portfolio (debe usar siempre `tenant.moneda` o `snapshot.tenantMoneda`).
+3. **Regla ESLint custom** `eslint-rules/no-hardcoded-currency-fallback`
+   — implementada el 2026-08-03 para bloquear, de una vez por todas, el
+   patrón regresivo `?? 'MXN'` y compañía. Ver detalle más abajo.
+
+## 🛡️ Defensa ESLint: `eslint-rules/no-hardcoded-currency-fallback`
+
+### Por qué existe
+
+El bug del chip MXN del portfolio ejecutivo fue un caso de regresión de un
+patrón perfectamente evitable: `snapshot?.tenantMoneda ?? 'MXN'`. Para que
+ningún feature futuro de forecast / cartera / cobranza lo reintroduzca,
+añadimos una regla ESLint custom que falla el build automáticamente cuando
+aparece el literal `'MXN'` en posiciones de fallback.
+
+### Qué detecta
+
+Bloquea el string literal `'MXN'` en tres posiciones de **fallback** dentro
+de los paths del vertical Seguros:
+
+| Posición AST                              | Ejemplo bloqueado                                    |
+| ----------------------------------------- | ---------------------------------------------------- |
+| `AssignmentPattern.right` (default param) | `function f(x = 'MXN') {}`                          |
+| `LogicalExpression.right` con `??` / `||` | `tenant?.moneda ?? 'MXN'`, `poliza.moneda \|\| 'MXN'` |
+| `ConditionalExpression` (ternario)        | `cond ? 'MXN' : other`, `cond ? other : 'MXN'`       |
+
+### Qué NO detecta (casos legítimos)
+
+- `<SelectItem value="MXN">` del formulario de pólizas: el usuario elige su
+  moneda, no es un fallback.
+- `const cfg = { currency: 'MXN' }`: configuración inmutable.
+- Template literals donde `'MXN'` aparece interpolado: la regla sólo mira
+  el nodo `Literal` puro.
+
+### Alcance (scoping)
+
+Solo activa en los archivos del vertical Seguros:
+
+```json
+// .eslintrc.json
+"overrides": [{
+  "files": [
+    "app/api/insurance/portfolio/**/*.ts",
+    "components/insurance/**/*.tsx",
+    "components/insurance/**/*.ts"
+  ],
+  "plugins": ["eslint-rules"],
+  "rules": { "eslint-rules/no-hardcoded-currency-fallback": "error" }
+}]
+```
+
+Otros verticales (real-estate, financiera) no se ven afectados: pueden seguir
+usando MXN como default legítimo para clientes mexicanos sin campo
+`tenant.moneda` equivalente.
+
+### Mensaje de error (orienta al fix correcto)
+
+> No hardcodear el fallback de moneda a "MXN". Usa `tenant.moneda`
+> (en routes) o `snapshot.tenantMoneda`/prop explícita (en componentes).
+> Para un default global legítimo, importa
+> `CURRENCY_CONSTANTS.DEFAULT_TENANT_CURRENCY` desde
+> "@/lib/insurance/currency".
+
+### Cómo se carga en Vercel (sin symlinks ni hacks)
+
+`eslint-rules/` es código del repo (committed). El `postinstall` script
+`scripts/install-eslint-local-rules.js` copia los 3 archivos del plugin
+a `node_modules/eslint-plugin-eslint-rules/` tras cualquier install
+(local o Vercel). El `.eslintrc.json` lo referencia por nombre corto
+(`"eslint-rules"`), que ESLint resuelve desde `node_modules` estándar.
+
+```
+eslint-rules/
+├── package.json                        # name: eslint-plugin-eslint-rules
+├── index.js                            # manifest + config.recommended
+├── no-hardcoded-currency-fallback.js   # la regla
+└── __tests__/
+    └── no-hardcoded-currency-fallback.test.js  # 24 tests RuleTester
+```
+
+### Cómo agregar otra regla custom en el futuro
+
+1. Crear `eslint-rules/<nombre-regla>.js` siguiendo el contrato de un rule
+   ESLint v8 (`{ meta, create(context) }`).
+2. Exportarla en `eslint-rules/index.js` bajo `rules['nombre-regla']`.
+3. Registrar el nombre corto en el `overrides.plugins` de `.eslintrc.json`.
+4. Escribir tests en `eslint-rules/__tests__/<nombre-regla>.test.js` con
+   `RuleTester` de `eslint`.
+5. (Opcional) Aplicar el override a otros paths.
+
+### Cómo verificar manualmente
+
+```bash
+# 1. Validar la regla con tests:
+cd nextjs_space && ./node_modules/.bin/vitest run \
+  eslint-rules/__tests__/no-hardcoded-currency-fallback.test.js
+# → 24/24 esperado
+
+# 2. Lint scoped (debe estar limpio):
+cd nextjs_space && npx eslint components/insurance/ \
+  app/api/insurance/portfolio/
+# → 0 errores de no-hardcoded-currency-fallback esperados
+
+# 3. Probar la regla con un caso malo:
+echo 'const x = tenant?.moneda ?? "MXN";' > /tmp/probe.ts
+npx eslint --no-eslintrc --resolve-plugins-relative-to . \
+  --config /tmp/cfg.json /tmp/probe.ts
+# → 1 error esperado: la regla dispara
+```
 
 ## Archivos relevantes
 
 - `prisma/schema.prisma:173` — campo `Tenant.moneda`.
-- `lib/insurance/currency.ts` — tabla FX, helpers, `SUPPORTED_CURRENCIES`.
+- `lib/insurance/currency.ts` — tabla FX, helpers, `SUPPORTED_CURRENCIES`,
+  `CURRENCY_CONSTANTS.DEFAULT_TENANT_CURRENCY`.
 - `app/api/insurance/portfolio/route.ts` — usa `tenant.moneda` para agregados.
 - `app/api/tenant/moneda/route.ts` — PATCH + GET self-service.
 - `app/dashboard/seguros/portfolio/page.tsx:303` — chip junto a Refrescar.
 - `components/hubs/ConfiguracionDashboard.tsx` — `MonedaReporteCard`.
 - `scripts/diagnose-tenant-currency.ts`, `scripts/update-tenant-currency.ts` — admin tools.
+- `eslint-rules/` — regla custom `no-hardcoded-currency-fallback` (ver arriba).
+- `scripts/install-eslint-local-rules.js` — sync `eslint-rules/` → node_modules.
+- `eslint-rules/__tests__/no-hardcoded-currency-fallback.test.js` — 24 tests.

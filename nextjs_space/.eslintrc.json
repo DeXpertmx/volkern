@@ -11,5 +11,18 @@
     "no-duplicate-imports": "error",
     "@typescript-eslint/no-non-null-assertion": "off",
     "@typescript-eslint/consistent-type-imports": "off"
-  }
+  },
+  "overrides": [
+    {
+      "files": [
+        "app/api/insurance/portfolio/**/*.ts",
+        "components/insurance/**/*.tsx",
+        "components/insurance/**/*.ts"
+      ],
+      "plugins": ["eslint-rules"],
+      "rules": {
+        "eslint-rules/no-hardcoded-currency-fallback": "error"
+      }
+    }
+  ]
 }
