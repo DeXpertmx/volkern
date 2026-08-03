@@ -8,6 +8,7 @@ import { chatwootApi } from '@/lib/nexus/chatwoot-api';
 import { encrypt } from '@/lib/core/crypto';
 import { registerDomain, verifyDomain, buildTenantEmailDomain } from '@/lib/resend-domains';
 import { getRootZoneId, configureEmailDnsRecords } from '@/lib/cloudflare-dns';
+import { SUPPORTED_CURRENCIES, type Currency } from '@/lib/insurance/currency';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 
@@ -20,6 +21,14 @@ export interface TenantProvisioningInput {
         botName: string;  // @mi_empresa_bot
         botToken: string; // 123456:ABCdef...
     };
+    /**
+     * Moneda preferida del tenant (la `Tenant.moneda` que usa el portfolio ejecutivo).
+     * Si se omite, defaultea a 'MXN' (la regla ESLint
+     * `eslint-rules/no-hardcoded-currency-fallback` se asegura de que ningún
+     * literal `'MXN'` quede en posiciones de fallback dentro de los archivos
+     * del vertical; aquí el default se aplica sólo al crear el tenant vía API).
+     */
+    moneda?: Currency;
 }
 
 export interface TenantProvisioningResult {
@@ -77,9 +86,19 @@ function generateSlug(empresa: string): string {
  * Provisionar un nuevo tenant con Nexus (Chatwoot) y Telegram
  */
 export async function provisionTenant(input: TenantProvisioningInput): Promise<TenantProvisioningResult> {
-    const { empresa, subdomain, email, password, telegram } = input;
+    const { empresa, subdomain, email, password, telegram, moneda } = input;
     
     console.log('[Provisioner] Starting provisioning for:', empresa);
+
+    // ── Validar moneda (si vino en el payload) ───────────────────────────
+    // El default 'MXN' es el del schema y NO es un literal en una posición de
+    // fallback dentro de un componente/route insurance, así que la regla
+    // `eslint-rules/no-hardcoded-currency-fallback` no lo bloquea. Se aplica
+    // aquí como default del provisioner, no como decision de UI.
+    const monedaFinal: Currency =
+      (moneda && SUPPORTED_CURRENCIES.includes(moneda as Currency)
+        ? (moneda as Currency)
+        : 'MXN');
 
     // PASO 1: Validar datos
     try {
@@ -147,6 +166,7 @@ export async function provisionTenant(input: TenantProvisioningInput): Promise<T
                 vaultSeed: crypto.randomBytes(32).toString('hex'),
                 fechaTrialInicio: new Date(),
                 fechaTrialFin: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 días
+                moneda: monedaFinal,
             },
         });
 

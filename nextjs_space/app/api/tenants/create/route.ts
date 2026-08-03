@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { provisionTenant, TenantProvisioningInput } from '@/lib/provisioning/tenant-provisioner';
+import { SUPPORTED_CURRENCIES } from '@/lib/insurance/currency';
 
 /**
  * POST /api/tenants/create
@@ -17,6 +18,10 @@ import { provisionTenant, TenantProvisioningInput } from '@/lib/provisioning/ten
  *     botName: string;      // @mi_empresa_bot
  *     botToken: string;     // 123456:ABCdef...
  *   };
+ *   moneda?: string;        // 'USD' | 'EUR' | 'MXN' | ... OPCIONAL. Si se omite,
+ *                          // el provisioner defaultea a 'MXN' (la moneda del
+ *                          // portfolio ejecutivo se puede cambiar después vía
+ *                          // /api/tenant/moneda o scripts/update-tenant-currency.ts).
  * }
  */
 export async function POST(request: NextRequest) {
@@ -24,7 +29,26 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
         
         // Validación básica
-        const { empresa, subdomain, email, password, telegram } = body;
+        const { empresa, subdomain, email, password, telegram, moneda } = body;
+
+        // Validar moneda (si viene en el body)
+        let monedaNormalizada: string | undefined;
+        if (moneda !== undefined && moneda !== null) {
+            const m = String(moneda).toUpperCase();
+            if (!SUPPORTED_CURRENCIES.includes(m as any)) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        error: {
+                            code: 'INVALID_MONEDA',
+                            message: `Moneda no soportada: ${moneda}. Soportadas: ${SUPPORTED_CURRENCIES.join(', ')}`,
+                        },
+                    },
+                    { status: 400 }
+                );
+            }
+            monedaNormalizada = m;
+        }
         
         if (!empresa || !subdomain || !email || !password) {
             return NextResponse.json(
@@ -105,6 +129,7 @@ export async function POST(request: NextRequest) {
                 botName: telegram.botName,
                 botToken: telegram.botToken,
             },
+            ...(monedaNormalizada ? { moneda: monedaNormalizada as any } : {}),
         };
 
         console.log('[API] Creating tenant:', { empresa, subdomain, email });
@@ -126,6 +151,7 @@ export async function POST(request: NextRequest) {
             tenantId: result.tenantId,
             chatwootAccountId: result.chatwootAccountId,
             telegramInboxId: result.telegramInboxId,
+            moneda: monedaNormalizada ?? 'MXN',
             message: 'Tenant creado exitosamente con Telegram configurado',
         });
 
