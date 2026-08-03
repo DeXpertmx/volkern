@@ -11,6 +11,23 @@
  *
  * Concurrencia default 3 (mismo número que el wizard y que el límite
  * seguro de Nexus para provisioning en paralelo).
+ *
+ * ─── Dry-run thoroughness ─────────────────────────────────────────────
+ * Cuando `dryRun=true` el runner hace TRES checks antes de marcar la
+ * fila como `simulated`:
+ *   1. **In-batch subdomain duplicate**: detecta si dos filas del mismo
+ *      batch tienen el mismo subdominio (case-insensitive). Las filas
+ *      posteriores a la primera se marcan como error con código
+ *      `DUPLICATE_SUBDOMAIN_IN_BATCH` y `errorMessage` indicando la fila
+ *      original. Crítico para batches de 50+ donde un copy-paste error
+ *      en una hoja Excel podría duplicar el subdominio N veces.
+ *   2. **Existing subdomain en BD**: si el caller pasa `existingSubdomains`
+ *      (Set<string>), el runner verifica que el subdominio no esté ya
+ *      tomado en la tabla Tenant (excluyendo tenants archivados). Las
+ *      filas con conflicto se marcan con `SUBDOMAIN_TAKEN`.
+ *   3. **Validación de input**: password faltante, email inválido, etc.
+ *      sigue siendo fail-fast como en el path no-dry-run.
+ * Nada de esto llama a provisionTenant ni a Chatwoot: 100% read-only.
  */
 
 import { provisionTenant, type TenantProvisioningInput, type ProvisioningResult } from '@/lib/provisioning/tenant-provisioner';
@@ -36,6 +53,16 @@ export interface BulkRunnerInput {
   concurrency?: number;
   /** Para audit log + trazabilidad. */
   actor: BulkActor;
+  /**
+   * Set de subdominios YA ocupados en la tabla Tenant (case-insensitive,
+   * ya normalizados a lowercase). El caller (route /api/admin/partner-bulk
+   * o un script CLI) lo construye con `prisma.tenant.findMany` ANTES de
+   * invocar el runner — una sola query batch, modo read-only.
+   *
+   * Si se omite o está vacío, sólo se aplica el check in-batch. Una
+   * práctica recomendada es siempre leerlo para batches grandes.
+   */
+  existingSubdomains?: Set<string>;
 }
 
 export interface BulkRunnerOutput {
@@ -95,6 +122,40 @@ function secureRandom(maxExclusive: number): number {
   }
 }
 
+// ─── Pre-pass: detección de duplicados in-batch ────────────────────────────────
+
+interface DuplicateMap {
+  /** rowNum de la fila → rowNum de la PRIMERA fila del batch con ese subdominio. */
+  rowToFirstRow: Map<number, number>;
+  /** subdominio lowercase → rowNum de la primera fila del batch con ese subdominio. */
+  subdomainToFirstRow: Map<string, number>;
+}
+
+/**
+ * Recorre las filas una sola vez (O(N)) y construye el mapa de duplicados.
+ * Las filas que no están duplicadas NO aparecen en `rowToFirstRow`. Una
+ * misma fila puede estar apuntada varias veces (si tres filas tienen el
+ * mismo subdominio, todas las posteriores a la primera apuntan a la 1ª).
+ *
+ * Compara subdominios en lowercase porque el modelo Tenant.slug guarda
+ * lowercase (ver generateSlug en tenant-provisioner.ts).
+ */
+function buildInBatchDuplicateMap(rows: BulkParsedRow[]): DuplicateMap {
+  const subdomainToFirstRow = new Map<string, number>();
+  const rowToFirstRow = new Map<number, number>();
+  for (const row of rows) {
+    const lower = row.subdomain.toLowerCase();
+    const first = subdomainToFirstRow.get(lower);
+    if (first === undefined) {
+      subdomainToFirstRow.set(lower, row.rowNum);
+    } else if (first !== row.rowNum) {
+      // Duplicado: apunta a la primera fila con este subdominio.
+      rowToFirstRow.set(row.rowNum, first);
+    }
+  }
+  return { rowToFirstRow, subdomainToFirstRow };
+}
+
 // ─── Orquestador ───────────────────────────────────────────────────────────────
 
 /**
@@ -105,6 +166,8 @@ async function processOneRow(
   row: BulkParsedRow,
   autoPasswords: Record<number, string>,
   dryRun: boolean,
+  duplicateMap: DuplicateMap,
+  existingSubdomains: Set<string> | undefined,
 ): Promise<BulkResultRow> {
   const base: BulkResultRow = {
     rowNum: row.rowNum,
@@ -115,11 +178,46 @@ async function processOneRow(
     status: 'pending',
   };
 
+  // ─── Dry-run thoroughness ────────────────────────────────────────────
   if (dryRun) {
+    // Check 1: in-batch subdomain duplicate.
+    const dupOf = duplicateMap.rowToFirstRow.get(row.rowNum);
+    if (dupOf !== undefined) {
+      return {
+        ...base,
+        status: 'error',
+        errorCode: 'DUPLICATE_SUBDOMAIN_IN_BATCH',
+        errorMessage: `Subdominio "${row.subdomain}" duplicado en el batch — la fila #${dupOf} ya lo usa. Corrige el CSV o elimina las filas duplicadas antes del create.`,
+      };
+    }
+
+    // Check 2: existing subdomain en BD.
+    if (existingSubdomains?.has(row.subdomain.toLowerCase())) {
+      return {
+        ...base,
+        status: 'error',
+        errorCode: 'SUBDOMAIN_TAKEN',
+        errorMessage: `El subdominio "${row.subdomain}" ya está ocupado por otro tenant. El wizard no lo puede crear — cambia el subdominio en la edición inline antes de confirmar.`,
+      };
+    }
+
+    // Check 3: missing password (fail-fast sin tocar la BD).
+    const hasPassword = (autoPasswords[row.rowNum] ?? row.password ?? '').trim().length > 0;
+    if (!hasPassword) {
+      return {
+        ...base,
+        status: 'error',
+        errorCode: 'MISSING_PASSWORD',
+        errorMessage: 'El caller no inyectó password y la fila no trae uno en el CSV.',
+      };
+    }
+
+    // Si pasa los tres checks → simulada.
+    const hasTelegram = !!(row.telegramBotName && row.telegramBotToken);
     return {
       ...base,
       status: 'simulated',
-      telegramStatus: row.telegramBotName ? 'simulated' : 'n/a',
+      telegramStatus: hasTelegram ? 'simulated' : 'n/a',
       monedaInferenciaSource: row.moneda ? 'EXPLICIT' : 'FALLBACK',
     };
   }
@@ -202,6 +300,8 @@ async function processOneRow(
  */
 export async function runBulkOnboarding(input: BulkRunnerInput): Promise<BulkRunnerOutput> {
   const concurrency = Math.max(1, Math.min(input.concurrency ?? 3, 10));
+  // Pre-pass O(N): detecta duplicados in-batch una sola vez.
+  const duplicateMap = buildInBatchDuplicateMap(input.rows);
   const queue: BulkParsedRow[] = [...input.rows];
   const report: BulkResultRow[] = [];
   let created = 0;
@@ -213,7 +313,13 @@ export async function runBulkOnboarding(input: BulkRunnerInput): Promise<BulkRun
     while (queue.length > 0) {
       const row = queue.shift();
       if (!row) break;
-      const r = await processOneRow(row, input.autoGeneratedPasswords, input.dryRun);
+      const r = await processOneRow(
+        row,
+        input.autoGeneratedPasswords,
+        input.dryRun,
+        duplicateMap,
+        input.existingSubdomains,
+      );
       if (r.status === 'created') created++;
       else if (r.status === 'simulated') simulated++;
       else {

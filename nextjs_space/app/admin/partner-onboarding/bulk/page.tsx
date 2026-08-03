@@ -47,6 +47,7 @@ import {
   CheckCircle2,
   Download,
   FileUp,
+  FlaskConical,
   Loader2,
   Pause,
   Pencil,
@@ -81,15 +82,16 @@ import {
 } from '@/lib/insurance/csv-bulk-editor';
 import { VERTICAL_DEFINITIONS, VERTICALS, type Vertical } from '@/lib/plans';
 
-type BulkStep = 'upload' | 'preview' | 'create' | 'done';
+type BulkStep = 'upload' | 'preview' | 'simulated' | 'create' | 'done';
 
-const ORDER: readonly BulkStep[] = ['upload', 'preview', 'create', 'done'];
+const ORDER: readonly BulkStep[] = ['upload', 'preview', 'simulated', 'create', 'done'];
 const STEP_INDEX = (s: BulkStep): number => ORDER.indexOf(s);
 const LABELS: Record<BulkStep, string> = {
   upload: '1. CSV',
   preview: '2. Vista previa',
-  create: '3. Crear',
-  done: '4. Listo',
+  simulated: '3. Simular',
+  create: '4. Crear',
+  done: '5. Listo',
 };
 
 // ─── Estados por fila ────────────────────────────────────────────────────────
@@ -220,6 +222,53 @@ interface SeedCardState {
   error?: string;
 }
 
+// ─── Dry-run (simulated) ────────────────────────────────
+/**
+ * Serializa los editedRows del Preview a CSV para re-enviarlos al
+ * endpoint /api/admin/partner-bulk con X-Dry-Run. El server re-parsea,
+ * re-valida y corre el runner con dryRun=true (read-only). Las
+ * ediciones inline del operator se respetan: si arregló el subdominio
+ * de la fila 3 con la toolbar bulk-fix, esa corrección viaja al server.
+ *
+ * Columnas en el orden fijado por `lib/insurance/csv-bulk.ts`. El delimitador
+ * usado es `,` (coma) por consistencia y compatibilidad con Excel.
+ */
+function serializeEditedRows(rows: BulkParsedRow[]): string {
+  const header = 'empresa,subdomain,email,password,moneda,vertical,telegramBotName,telegramBotToken';
+  const escape = (v: string | undefined): string => {
+    if (v === undefined || v === null) return '';
+    const s = String(v);
+    // RFC-4180 escape: quote si contiene coma, comilla doble, CR o LF.
+    if (/[,"\r\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+    return s;
+  };
+  const dataLines = rows.map(r => [
+    r.empresa ?? '',
+    r.subdomain ?? '',
+    r.email ?? '',
+    r.password ?? '',
+    r.moneda ?? '',
+    r.vertical ?? '',
+    r.telegramBotName ?? '',
+    r.telegramBotToken ?? '',
+  ].map(escape).join(','));
+  return [header, ...dataLines].join('\r\n') + '\r\n';
+}
+
+/** Subset del response del endpoint /api/admin/partner-bulk con X-Dry-Run. */
+interface BulkSimulateResponse {
+  ok: boolean;
+  dryRun: boolean;
+  total: number;
+  simulated: number;
+  failed: number;
+  hadUnexpectedErrors: boolean;
+  report: BulkResultRow[];
+  parseErrors?: { rowNum: number | null; message: string }[];
+  emptyRows?: number[];
+  error?: { code: string; message: string };
+}
+
 // ─── Página ─────────────────────────────────────────────────────────────────
 
 export default function PartnerOnboardingBulkPage() {
@@ -250,6 +299,16 @@ export default function PartnerOnboardingBulkPage() {
   const [bulkColumn, setBulkColumn] = useState<EditableColumn>('email');
   const [bulkFind, setBulkFind] = useState<string>('');
   const [bulkReplace, setBulkReplace] = useState<string>('');
+
+  // ── Dry-run thoroughness (paso Simulated) ───────────────────────
+  const [simulating, setSimulating] = useState(false);
+  const [simulatedReport, setSimulatedReport] = useState<BulkResultRow[]>([]);
+  const [simulatedTotals, setSimulatedTotals] = useState<{
+    total: number; simulated: number; failed: number; hadUnexpected: boolean;
+  }>({ total: 0, simulated: 0, failed: 0, hadUnexpected: false });
+  const [simulatedParseErrors, setSimulatedParseErrors] = useState<{ rowNum: number | null; message: string }[]>([]);
+  const [simulatedEmptyRows, setSimulatedEmptyRows] = useState<number[]>([]);
+  const [simulateError, setSimulateError] = useState<string | null>(null);
 
   function downloadReportCsv() {
     const report: BulkResultRow[] = rows.map(r => ({
@@ -324,6 +383,63 @@ export default function PartnerOnboardingBulkPage() {
     // Limpiamos los inputs find/replace para no confundir al operator tras el transform.
     setBulkFind('');
     setBulkReplace('');
+  }
+
+  // ── Simulate (dry-run thoroughness) ─────────────────────────────────
+  /**
+   * Envía el CSV de las editedRows al endpoint server-side
+   * /api/admin/partner-bulk con X-Dry-Run: true. El server:
+   *   • Re-parsea con el mismo parser.
+   *   • Query batch read-only a Tenant.findMany por los subdominios del
+   *     CSV (excluyendo archivados) → pasa Set como `existingSubdomains`.
+   *   • Corre el runner con dryRun=true. Filas que pasan los 3 checks (no
+   *     duplicadas in-batch, no tomadas en BD, con password) → status=
+   *     'simulated'. Filas con cualquier problema → status='error' con
+   *     código accionable (DUPLICATE_SUBDOMAIN_IN_BATCH | SUBDOMAIN_TAKEN |
+   *     MISSING_PASSWORD).
+   * El state wizard mantiene el report y los totales para el paso Simulated.
+   */
+  async function runSimulate() {
+    if (editedRows.length === 0) return;
+    setSimulating(true);
+    setSimulateError(null);
+    try {
+      const csv = serializeEditedRows(editedRows);
+      const res = await fetch('/api/admin/partner-bulk', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-dry-run': 'true',
+        },
+        body: JSON.stringify({ csv, concurrency: 3 }),
+      });
+      const data: BulkSimulateResponse = await res.json().catch(() => ({
+        ok: false, dryRun: true, total: 0, simulated: 0, failed: 0, hadUnexpectedErrors: false, report: [],
+        error: { code: 'PARSE_ERROR', message: `HTTP ${res.status}` },
+      }));
+      if (!res.ok || data.error) {
+        setSimulatedReport([]);
+        setSimulatedTotals({ total: 0, simulated: 0, failed: 0, hadUnexpected: false });
+        setSimulatedParseErrors([]);
+        setSimulatedEmptyRows([]);
+        setSimulateError(data.error?.message ?? `Error HTTP ${res.status}`);
+        setStep('simulated');
+        return;
+      }
+      setSimulatedReport(data.report ?? []);
+      setSimulatedTotals({
+        total: data.total, simulated: data.simulated, failed: data.failed,
+        hadUnexpected: !!data.hadUnexpectedErrors,
+      });
+      setSimulatedParseErrors(data.parseErrors ?? []);
+      setSimulatedEmptyRows(data.emptyRows ?? []);
+      setStep('simulated');
+    } catch (err: unknown) {
+      setSimulateError(err instanceof Error ? err.message : 'Error desconocido');
+      setStep('simulated');
+    } finally {
+      setSimulating(false);
+    }
   }
 
   function startCreate() {
@@ -423,12 +539,13 @@ export default function PartnerOnboardingBulkPage() {
 
   const valid = useMemo(() => {
     switch (step) {
-      case 'upload':   return csvText.trim().length > 0;
-      case 'preview':  return editedRows.length > 0 && allRowsValid(editedRows);
-      case 'create':   return !running;
-      default:         return true;
+      case 'upload':     return csvText.trim().length > 0;
+      case 'preview':    return editedRows.length > 0 && allRowsValid(editedRows);
+      case 'simulated':  return simulatedTotals.failed === 0 && simulatedTotals.simulated > 0 && !simulating && !simulateError;
+      case 'create':     return !running;
+      default:           return true;
     }
-  }, [step, csvText, editedRows, running]);
+  }, [step, csvText, editedRows, running, simulatedTotals, simulating, simulateError]);
 
   const previewSummary = useMemo(
     () => rowsValidationSummary(editedRows),
@@ -582,6 +699,194 @@ export default function PartnerOnboardingBulkPage() {
                 <p className="text-xs mt-1">Vuelve al paso 1 y corrige el CSV. Las filas con errores se listan arriba.</p>
               </div>
             )}
+
+            {/* ── CTAs de acción: Simular (recomendado para 50+ tenants) + Crear directo ─── */}
+            {editedRows.length > 0 && (
+              <div className="flex flex-wrap gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => void runSimulate()}
+                  disabled={simulating || !allRowsValid(editedRows)}
+                  className="flex-1 px-4 py-2.5 bg-amber-500 text-white rounded-xl text-xs font-black uppercase tracking-widest shadow inline-flex items-center justify-center gap-2 hover:scale-[1.01] transition-transform disabled:opacity-30 disabled:cursor-not-allowed"
+                  title="Ejecuta la simulación sin tocar la BD: detecta subdominios duplicados, ocupados en BD y passwords faltantes antes de crear nada."
+                >
+                  <FlaskConical size={14} />
+                  {simulating ? 'Simulando…' : 'Simular sin mutar BD'}
+                </button>
+                <button
+                  type="button"
+                  onClick={startCreate}
+                  disabled={!allRowsValid(editedRows)}
+                  className="px-4 py-2.5 bg-white border border-rose-300 text-rose-700 rounded-xl text-xs font-black uppercase tracking-widest inline-flex items-center justify-center gap-2 hover:bg-rose-50 disabled:opacity-30 disabled:cursor-not-allowed"
+                  title="Salta la simulación y crea N tenants directamente. Riesgo: no detecta subdominios duplicados antes de empezar."
+                >
+                  Crear directo →
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {step === 'simulated' && (
+          <div className="space-y-4">
+            {/* Cabecera: badge dry-run + totales + retorno a Preview */}
+            <div className="flex flex-wrap items-center gap-3 text-xs">
+              <span className="px-2 py-1 bg-amber-100 text-amber-900 rounded font-black uppercase tracking-widest inline-flex items-center gap-1">
+                <FlaskConical size={10} /> Simulado · BD no modificada
+              </span>
+              <span className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded font-bold inline-flex items-center gap-1">
+                <Check size={10} /> {simulatedTotals.simulated} simuladas OK
+              </span>
+              {simulatedTotals.failed > 0 && (
+                <span className="px-2 py-1 bg-rose-50 text-rose-700 rounded font-bold inline-flex items-center gap-1">
+                  <XCircle size={10} /> {simulatedTotals.failed} con conflicto
+                </span>
+              )}
+              <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded font-mono">
+                Total: {simulatedTotals.total} filas
+              </span>
+              {simulatedTotals.hadUnexpected && (
+                <span className="px-2 py-1 bg-rose-100 text-rose-900 rounded font-black uppercase tracking-widest">
+                  Errores no clasificados — revisar reporte
+                </span>
+              )}
+            </div>
+
+            {/* Error de red / endpoint */}
+            {simulateError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-sm text-rose-900">
+                <p className="font-bold">Error al simular</p>
+                <p className="text-xs mt-1 font-mono">{simulateError}</p>
+              </div>
+            )}
+
+            {/* Aviso: hay conflictos → volver a editar antes de crear */}
+            {!simulateError && simulatedTotals.failed > 0 && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-900 space-y-1">
+                <p className="font-bold inline-flex items-center gap-1.5">
+                  <AlertCircle size={14} /> {simulatedTotals.failed} fila(s) requieren atención antes de crear
+                </p>
+                <p className="text-xs">
+                  Corrige los subdominios duplicados o ya ocupados usando la edición inline del paso
+                  Preview. No crees hasta que <span className="font-mono">failed = 0</span>.
+                </p>
+              </div>
+            )}
+            {!simulateError && simulatedTotals.failed === 0 && simulatedTotals.simulated > 0 && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-900">
+                <p className="font-bold inline-flex items-center gap-1.5">
+                  <CheckCircle2 size={14} /> {simulatedTotals.simulated} filas listas para crear
+                </p>
+                <p className="text-xs mt-1">
+                  Ningún conflicto detectado. Click en “Confirmar y crear” para iniciar el provisioning real.
+                </p>
+              </div>
+            )}
+
+            {/* Tabla del reporte simulado */}
+            <div className="overflow-x-auto border border-slate-200 rounded-lg max-h-[28rem] overflow-y-auto">
+              <table className="w-full text-xs">
+                <thead className="bg-slate-50 text-slate-700 sticky top-0">
+                  <tr>
+                    <th className="px-2 py-1.5 text-left font-black uppercase tracking-widest">#</th>
+                    <th className="px-2 py-1.5 text-left font-black uppercase tracking-widest">Empresa</th>
+                    <th className="px-2 py-1.5 text-left font-black uppercase tracking-widest">Subdominio</th>
+                    <th className="px-2 py-1.5 text-left font-black uppercase tracking-widest">Resultado</th>
+                    <th className="px-2 py-1.5 text-left font-black uppercase tracking-widest">Detalle</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {simulatedReport.map(r => (
+                    <tr key={r.rowNum} className={`border-t border-slate-100 ${
+                      r.status === 'simulated' ? 'bg-emerald-50/60' : 'bg-rose-50'
+                    }`}>
+                      <td className="px-2 py-1.5 font-mono text-slate-500">{r.rowNum}</td>
+                      <td className="px-2 py-1.5 text-slate-800">{r.empresa}</td>
+                      <td className="px-2 py-1.5 font-mono text-slate-800">{r.subdomain}</td>
+                      <td className="px-2 py-1.5">
+                        <SimulatedRowChip status={r.status} />
+                      </td>
+                      <td className="px-2 py-1.5 font-mono text-slate-600">
+                        {r.status === 'simulated' && (
+                          <span className="text-emerald-700">
+                            tenant + chatwoot se crearán
+                            {r.telegramStatus === 'simulated' && ' · telegram se vinculará'}
+                          </span>
+                        )}
+                        {r.status === 'error' && (
+                          <span className="text-rose-700">
+                            <span className="font-black uppercase tracking-widest">{r.errorCode}</span>
+                            {r.errorMessage && <span className="block text-[10px] mt-0.5">{r.errorMessage}</span>}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {simulatedReport.length === 0 && !simulateError && (
+                    <tr>
+                      <td colSpan={5} className="px-2 py-4 text-center text-slate-500 italic">
+                        Sin filas que simular.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Parse errors + empty rows del CSV (server) */}
+            {(simulatedParseErrors.length > 0 || simulatedEmptyRows.length > 0) && (
+              <details className="text-xs">
+                <summary className="cursor-pointer font-bold text-slate-600">
+                  Detalles de parsing ({simulatedParseErrors.length} errores, {simulatedEmptyRows.length} filas vacías)
+                </summary>
+                <div className="mt-2 space-y-1 font-mono text-slate-600 max-h-32 overflow-y-auto">
+                  {simulatedParseErrors.map((e, i) => (
+                    <div key={i}>
+                      {e.rowNum ? `Fila #${e.rowNum}: ` : 'Header: '}{e.message}
+                    </div>
+                  ))}
+                  {simulatedEmptyRows.length > 0 && (
+                    <div className="text-slate-500 italic">
+                      Filas vacías ignoradas: #{simulatedEmptyRows.join(', #')}
+                    </div>
+                  )}
+                </div>
+              </details>
+            )}
+
+            {/* CTAs: Confirmar y crear (sólo si 0 failed), Volver a Preview */}
+            <div className="flex flex-wrap gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setStep('preview')}
+                className="px-4 py-2.5 bg-white border border-slate-300 text-slate-700 rounded-xl text-xs font-black uppercase tracking-widest inline-flex items-center gap-1.5 hover:bg-slate-50"
+              >
+                ← Volver a Preview y corregir
+              </button>
+              <button
+                type="button"
+                onClick={() => void runSimulate()}
+                disabled={simulating}
+                className="px-4 py-2.5 bg-white border border-amber-300 text-amber-800 rounded-xl text-xs font-black uppercase tracking-widest inline-flex items-center gap-1.5 hover:bg-amber-50 disabled:opacity-30"
+              >
+                <FlaskConical size={14} />
+                {simulating ? 'Re-simulando…' : 'Re-simular'}
+              </button>
+              <button
+                type="button"
+                onClick={startCreate}
+                disabled={
+                  simulating ||
+                  !!simulateError ||
+                  simulatedTotals.failed > 0 ||
+                  simulatedTotals.simulated === 0
+                }
+                className="flex-1 px-4 py-2.5 bg-[#1A365D] text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-indigo-900/10 inline-flex items-center justify-center gap-2 hover:scale-[1.01] transition-transform disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <CheckCircle2 size={14} />
+                Confirmar y crear {simulatedTotals.simulated} tenants →
+              </button>
+            </div>
           </div>
         )}
 
@@ -711,19 +1016,24 @@ export default function PartnerOnboardingBulkPage() {
           order={ORDER}
           step={step}
           resolveIndex={STEP_INDEX}
-          submitting={running || aborted}
+          submitting={running || aborted || simulating}
           onNext={() => {
             if (step === 'upload')  { parseAndGo(); return; }
-            if (step === 'preview') { startCreate();  return; }
+            if (step === 'preview') { void runSimulate(); return; }
+            if (step === 'simulated') {
+              if (simulatedTotals.failed === 0 && simulatedTotals.simulated > 0 && !simulateError) startCreate();
+              return;
+            }
           }}
           onPrev={() => {
-            if (step === 'preview') setStep('upload');
+            if (step === 'preview')    setStep('upload');
+            else if (step === 'simulated') setStep('preview');
             else if (step === 'create') cancelCreate();
-            else if (step === 'done') setStep('preview');
+            else if (step === 'done')  setStep('preview');
           }}
           valid={valid}
-          finalCtaLabel={step === 'preview' ? 'Crear N tenants' : undefined}
-          nextCtaLabel={step === 'upload' ? 'Parsear' : step === 'preview' ? 'Crear N tenants' : step === 'create' ? 'Esperando...' : step === 'done' ? 'Listo' : 'Siguiente'}
+          finalCtaLabel={step === 'preview' ? 'Simular' : step === 'simulated' ? 'Confirmar y crear N' : undefined}
+          nextCtaLabel={step === 'upload' ? 'Parsear' : step === 'preview' ? 'Simular' : step === 'simulated' ? 'Confirmar y crear' : step === 'create' ? 'Esperando...' : step === 'done' ? 'Listo' : 'Siguiente'}
         />
       </div>
     </div>
@@ -735,6 +1045,15 @@ function RowStatusChip({ status }: { status: RowStatus }) {
   if (status === 'running') return <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1"><Loader2 size={10} className="animate-spin" /> Creando</span>;
   if (status === 'created') return <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1"><Check size={10} /> Creado</span>;
   return <span className="px-2 py-0.5 bg-rose-100 text-rose-700 rounded text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1"><AlertCircle size={10} /> Error</span>;
+}
+
+/**
+ * Chip del paso Simulated. Diferencia entre `simulated` (que sí se creará)
+ * y `error` (con código de conflicto — la fila debe corregirse antes).
+ */
+function SimulatedRowChip({ status }: { status: string }) {
+  if (status === 'simulated') return <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1"><Check size={10} /> Simulado</span>;
+  return <span className="px-2 py-0.5 bg-rose-100 text-rose-700 rounded text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1"><AlertCircle size={10} /> Conflicto</span>;
 }
 
 // ─── Inline Editor — Toolbar + Editable Row (Preview step) ──────────────────
