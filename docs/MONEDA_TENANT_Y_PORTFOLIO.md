@@ -1137,3 +1137,116 @@ LIMIT  100;
   así quedan marcadas con `habilitadoPor='admin@volkern.app'` y
   `razon='Vertical seed: insurance'` — el auditLog tiene trazabilidad
   total.
+
+---
+
+## ✏️ Inline editor del paso Preview (`lib/insurance/csv-bulk-editor.ts`)
+
+El grid del paso `Preview` del wizard bulk ahora es **inline-editable**.
+El operator puede corregir emails/subdominios/moneda/vertical **fila
+por fila** antes de avanzar a `Create`, sin tener que volver a editar
+el CSV en Excel y re-subir.
+
+Caso típico: el operator detecta durante el preview que la columna
+`email` tiene `;` en lugar de `@` en N filas (typo sistemático). Antes
+de esta feature: cerrar el wizard, abrir Excel, hacer find-replace,
+re-guardar el CSV, re-subir. Ahora: 1 acción en el toolbar bulk-fix
+arregla las N filas simultáneamente.
+
+### Toolbar de bulk-fix
+
+Sobre el grid del preview, aparece un panel con:
+
+- **Selector de columna** (empresa / subdomain / email / password /
+  moneda / vertical / telegramBotName / telegramBotToken).
+- **`Buscar`** (regex-friendly): string a buscar en los valores.
+- **`Reemplazar con`**: string de reemplazo (puede ser vacío para
+  eliminar ocurrencias).
+- **Botón "Aplicar a todas"**: aplica el find/replace a esa columna
+  en todas las N filas en una sola operación atómica.
+- **Atajos one-click**:
+  - `lower-trim` → lowercase + trim (ideal para emails y subdominios).
+  - `upper-trim` → uppercase + trim (ideal para columna moneda).
+  - `sólo trim` → trim de espacios al inicio/fin.
+- **"Reset todas"**: revierte todas las filas al snapshot original
+  del CSV.
+
+### Inline editing por celda
+
+Cada celda de cada fila del grid es un `<input>` (o `<select>` para
+`vertical`) con validación LIVE por columna. Las celdas inválidas
+pintan borde rose + error chip debajo con un mensaje accionable:
+- `Empresa vacía` / `demasiado larga (max 200)`
+- `Subdominio inválido (lowercase + alfanumérico, sin dashes al inicio/fin ni consecutivos)`
+- `Email inválido (esperado: user@dominio.ext)`
+- `Password mínimo 6 chars (o dejar vacío para auto)`
+- `Moneda inválida. Esperada una de: USD, EUR, MXN, GBP, JPY, CNY, CAD, BRL, CLP, ARS, COP, PEN`
+- `Vertical inválida. Esperada una de: insurance, real_estate, accounting, general`
+
+Por fila hay un botón `RotateCcw` que revierte SOLO esa fila al valor
+original del CSV (snapshot inmutable `originalRows`).
+
+### Estado de validación sticky
+
+| Header chip                    | Significado                                              |
+| ------------------------------ | -------------------------------------------------------- |
+| `5/10 válidas` (verde + ✓)     | Filas que pasan `validateRow()`                           |
+| `5 inválidas` (rose + ✗)       | Filas con al menos una celda inválida                    |
+| `Edición inline` (slate + ✎)   | Indicador de que el operator está editando              |
+
+El botón **"Crear N tenants"** se deshabilita automáticamente si CUALQUIER
+fila tiene errores (`allRowsValid(editedRows) === false`).
+
+### Helpers puros (`lib/insurance/csv-bulk-editor.ts`)
+
+Esta lógica es 100% pura (sin React, sin I/O) para ser estable en
+`useMemo` + testable aislada vía vitest:
+
+| Helper                                  | Para qué                                          |
+| --------------------------------------- | ------------------------------------------------- |
+| `validateCell(column, value)`           | Valida una celda individual, devuelve ok+error.   |
+| `validateRow(row)`                      | Valida fila entera, devuelve errores por columna. |
+| `allRowsValid(rows)`                    | True si todas las filas son válidas.              |
+| `rowsValidationSummary(rows)`           | `{ total, valid, invalid }` para el header.      |
+| `editCell(row, column, value)`          | Devuelve nueva fila con la celda editada.         |
+| `resetRow(original, current)`           | Revierte a valores del snapshot.                   |
+| `applyCellReplacement(rows, col, find, replace)` | Bulk find/replace atómico a N filas.     |
+| `applyCellTransform(rows, col, fn)`     | Bulk transform puro (lower/upper/trim).           |
+
+### Tests (42 tests, 100% passing)
+
+- 18 tests de `validateCell` cubriendo todos los campos requeridos y
+  opcionales con casos edge (uppercase, leading-dash, longitudes
+  fuera de rango).
+- 3 tests de `validateRow` (fila válida, fila con 1 error, fila con
+  múltiples errores reportados en bloque).
+- 4 tests de `allRowsValid` + `rowsValidationSummary`.
+- 3 tests de `editCell` (inmutabilidad, todas las columnas, error en
+  columna inválida).
+- 1 test de `resetRow`.
+- 7 tests de `applyCellReplacement`:
+  caso de typo sistemático `;` → `@`, noOp con find vacío, no muta el
+  original, replace vacío elimina el find, trim al inicio/fin, aplicado
+  a moneda, inmutabilidad.
+- 6 tests de `applyCellTransform`:
+  lowercase, uppercase, ignora celdas vacías, trim+lowercase para
+  arreglar validación, identity (no cambia), inmutabilidad.
+
+### Implicaciones prácticas
+
+- **Reduce ida-y-vuelta a Excel**: el operator ya no tiene que cerrar
+  el wizard, abrir Excel, hacer find/replace, re-guardar CSV, re-subir,
+  re-parsear. Todo se hace inline en 1 paso.
+- **Mismas propiedades que el `.csv` original**: el snapshot
+  `originalRows` se preserva intacto mientras el operator edita
+  `editedRows`. El reset por fila o por todo el batch siempre vuelve
+  al estado pre-edit.
+- **Reutilizable para futuras features**: `applyCellReplacement` y
+  `applyCellTransform` son helpers puros que pueden usarse desde
+  futuros wizards 1-a-1 (e.g. corregir el email del partner antes de
+  archivar, normalizar subdominios en bulk migration scripts). No
+  están acoplados a la UI del wizard bulk.
+- **Caso de uso atípico**: el operator puede usar el toolbar para
+  lowercasear todos los emails (`lower-trim`), upper-trimear la
+  columna moneda (`upper-trim`) y luego re-validar — todo en menos
+  de 5 clicks sin recargar la página ni volver a parsear el CSV.
