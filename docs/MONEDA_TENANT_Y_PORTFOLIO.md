@@ -488,3 +488,68 @@ SELECT * FROM "auditLog"
 WHERE entidad = 'tenant-telegram' AND accion = 'crear'
 ORDER BY "fechaCreacion" DESC;
 ```
+
+---
+
+## 🗃️ Wizard de partner-offboarding (archivar tenant)
+
+Complementario al wizard de `partner-onboarding` (`/admin/partner-onboarding`).
+El operator (superadmin) ahora puede archivar un partner tenant existente
+desde la UI con el mismo aesthetic y stepper (`/admin/partner-offboarding`).
+
+### Endpoint detrás del wizard
+
+```
+POST /api/admin/tenants/{id}/archive
+Auth: Superadmin
+Body: { reason: string, sendGoodbyeEmail?: boolean = true, dryRun?: boolean = false }
+```
+
+Códigos:
+
+| Status | Cuerpo                                                                  |
+|--------|-------------------------------------------------------------------------|
+| 200    | `{ ok: true, tenantId, archivedAt, reason, steps:[{step,ok,detail}], goodbyeEmail }` |
+| 200    | `{ ok: false, ... }` cuando algún step secundario falló pero `tenant.estado` ya quedó `archived`. |
+| 400    | `{ error: 'reason es requerido (mínimo 3 caracteres)' }`              |
+| 401/403/404/409 | mismo patrón que todos los endpoints `/api/admin/tenants/*`     |
+| 500    | `{ code: 'UNEXPECTED' \| 'TENANT_UPDATE_FAILED', error }`              |
+
+### Implementación (6 pasos atómicos, todos best-effort desde el 2º en adelante)
+
+1. `prisma.tenant.update` — `estado='archived'`, `fechaVencimiento=now`, `mrr=0`.
+2. `prisma.messagingHubConfig.updateMany` — `isActive=false`, `hubApiToken=""`.
+3. `prisma.channel.updateMany` — `isActive=false`, `config={revoked:true,revokedAt,reason}`.
+4. `deleteDomain(resendDomainId)` en Resend + `emailDomainStatus='archived'`.
+5. `sendEmail({ to: tier.billingEmail || firstAdmin.email, subject, html })`
+   con plantilla que muestra razón y TTL de 90 días para exportar datos.
+6. `prisma.auditLog.create` con `accion='archivar'`, snapshot antes/después,
+   `cambiosDespues.actor` propagado.
+
+Cada paso reporta `ok:boolean + detail` al resultado. Si el paso 1 falla, `ok:false` global.
+Si los pasos 2-6 fallan individualmente, el caller ve `allOk vs partial` en la UI
+y decide si rollback manual.
+
+### Tests (tests/tenant-archiver.test.ts — 13 tests)
+
+Éxito end-to-end · tenant no existe · ya archivado · dryRun · sendGoodbyeEmail=false
+· deleteDomain falla · goodbye email falla · recipient fallback (admin user) · sin
+recipient · sin resendDomainId · audit snapshot · actor=system · smoke.
+
+### Shared UI
+
+Sub-componentes (`Stepper`, `Field`, `SummaryRow`, `WizardShell`) extraídos a
+`components/admin/onboarding-ui.tsx` para que ambos wizards compartan exactamente
+la misma estética (paleta, tipografía, transiciones, hover). Cambios futuros
+de aesthetic van en 1 lugar.
+
+### TODO conocidos (follow-ups)
+
+- `stripeCustomerId` existe pero la cancelación real del subscription no se hace
+  aquí (requeriría integración con Stripe API; por ahora sólo queda registrado
+  en `cambiosAntes` del audit log para que el superadmin lo cancele manualmente).
+- `fechaArchivado DateTime?` es un campo nuevo que NO se añade en este commit
+  (la migración aditiva se programa en un follow-up dedicado).
+- El wizard actual envía las 4 acciones como toggle ON/OFF granular, pero el
+  endpoint `/archive` las trata de forma atómica. Para granularidad fina
+  usar un endpoint `/archive/{action}` por recurso (futuro).
