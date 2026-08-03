@@ -9,6 +9,7 @@ import { encrypt } from '@/lib/core/crypto';
 import { registerDomain, verifyDomain, buildTenantEmailDomain } from '@/lib/resend-domains';
 import { getRootZoneId, configureEmailDnsRecords } from '@/lib/cloudflare-dns';
 import { SUPPORTED_CURRENCIES, type Currency } from '@/lib/insurance/currency';
+import { VERTICALS, type Vertical } from '@/lib/plans';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 
@@ -45,6 +46,18 @@ export interface TenantProvisioningInput {
      * del vertical; aquí el default se aplica sólo al crear el tenant vía API).
      */
     moneda?: Currency;
+    /**
+     * Vertical preferida del broker (opcional). Permite al wizard de
+     * partner-onboarding sembrar el "starter pack" de módulos vía tenantFeature
+     * overrides para que el tenant se quede listo para importar datos
+     * específicos sin tener que entrar a /admin/saas/tenants/{id}/modulos
+     * después.
+     *
+     * Valores válidos: 'insurance' | 'real_estate' | 'accounting' | 'general'.
+     * Si se omite, no se siembran overrides — el tenant arranca con los
+     * módulos default del plan (ver PLAN_MODULES en lib/plans.ts).
+     */
+    vertical?: Vertical;
 }
 
 export interface TenantProvisioningResult {
@@ -290,7 +303,15 @@ export async function addTelegramChannelToTenant(
  * Provisionar un nuevo tenant con Nexus (Chatwoot) y Telegram
  */
 export async function provisionTenant(input: TenantProvisioningInput): Promise<TenantProvisioningResult> {
-    const { empresa, subdomain, email, password, telegram, moneda } = input;
+    const { empresa, subdomain, email, password, telegram, moneda, vertical } = input;
+
+    // ── Validar vertical (si vino en el payload) ───────────────────────────
+    // El vertical NO defaultea; si el caller lo omite, no se siembran overrides
+    // y el tenant arranca con los módulos default del plan (PLAN_MODULES).
+    const verticalFinal: Vertical | undefined =
+      vertical && (VERTICALS as readonly string[]).includes(vertical)
+        ? vertical
+        : undefined;
     
     console.log('[Provisioner] Starting provisioning for:', empresa);
 
@@ -410,7 +431,7 @@ export async function provisionTenant(input: TenantProvisioningInput): Promise<T
         });
 
         userId = user.id;
-        
+
         console.log('[Provisioner] Tenant created:', tenantId);
     } catch (error: any) {
         console.error('[Provisioner] Tenant creation error:', error);
@@ -422,6 +443,37 @@ export async function provisionTenant(input: TenantProvisioningInput): Promise<T
                 step: 'create_tenant',
             },
         };
+    }
+
+    // ── (Opcional) Seed del "starter pack" de módulos según vertical ───────
+    // Sólo se ejecuta si el caller pasó `vertical`. Para cada módulo en
+    // VERTICAL_DEFINITIONS[vertical].modules, hacemos upsert de tenantFeature
+    // con habilitado=true + habilitadoPor='partner-onboarding' + razon explicativa.
+    //
+    // Esto NO quita los módulos que estén en PLAN_MODULES del plan: el override
+    // sólo "asegura" que los de la vertical estén explícitamente habilitados,
+    // para que el broker (que viene del wizard) los vea directamente. Si el
+    // plan ya cubre esos módulos, el upsert es idempotente.
+    if (verticalFinal) {
+        try {
+            const { VERTICAL_DEFINITIONS } = await import('@/lib/plans');
+            const modules = VERTICAL_DEFINITIONS[verticalFinal].modules;
+            const seedResults = await seedTenantModulesFromVertical({
+                tenantId,
+                vertical: verticalFinal,
+                modules,
+                actor: { kind: 'system', source: 'partner-onboarding' },
+            });
+            console.log('[Provisioner] Vertical seed:', {
+                vertical: verticalFinal,
+                seeded: seedResults.seeded,
+                skipped: seedResults.skipped,
+                errors: seedResults.errors,
+            });
+        } catch (err: any) {
+            console.error('[Provisioner] Vertical seed error (non-fatal):', err.message);
+            // No rompemos el provisioning — los módulos pueden habilitarse manualmente.
+        }
     }
 
     // PASO 3: Crear cuenta en Chatwoot
@@ -567,6 +619,90 @@ export async function provisionTenant(input: TenantProvisioningInput): Promise<T
         // como opcional aunque TS no narrowe desde el union — los callers
         // usan `telegramSkipped` para ramificar.
     } as TenantProvisioningSuccess;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// VERTICAL SEEDING — helper reusable para sembrar el "starter pack" de
+// módulos según la vertical elegida en el onboarding. Vive aquí (no en
+// el componente UI) para poder reusarse desde partners seeded por CLI o
+// desde el endpoint /api/admin/tenants/{id}/vertical.
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface SeedTenantModulesFromVerticalInput {
+    tenantId: string;
+    vertical: Vertical;
+    modules: readonly import('@/lib/plans').CrmModule[];
+    actor:
+      | { kind: 'system'; source: string }
+      | { kind: 'user'; id: string; email: string | null };
+}
+
+export interface SeedVerticalResult {
+    seeded: string[];    // módulos que se upsertearon con éxito
+    skipped: string[];   // módulos que ya existían con habilitado=true
+    errors: { module: string; error: string }[];
+}
+
+/**
+ * Upserta `tenantFeature` (habilitado=true) para cada módulo de la vertical.
+ * Si el módulo ya existe como override con habilitado=true, lo cuenta en
+ * `skipped` para no duplicar audit log. Si la upsert falla, lo reporta en
+ * `errors` pero continúa con el resto (defensivo: el caller decide rollback).
+ *
+ * Importante: el caller (provisionTenant o el endpoint admin que se cree
+ * después) ya debe haber decidido SIEMBRA o NO siembra. Esta función
+ * siempre trata el input como semánticamente válido — no valida pertenencia
+ * a VERTICAL_DEFINITIONS porque aceptamos listas custom (e.g. modulo picker
+ * del operator con subsets).
+ */
+export async function seedTenantModulesFromVertical(
+    input: SeedTenantModulesFromVerticalInput,
+): Promise<SeedVerticalResult> {
+    const { tenantId, vertical, modules, actor } = input;
+    const seeded: string[] = [];
+    const skipped: string[] = [];
+    const errors: { module: string; error: string }[] = [];
+
+    const habilitadoPor = actor.kind === 'user'
+        ? actor.email ?? actor.id
+        : `system:${actor.source}`;
+    const razon = `Vertical seed: ${vertical}`;
+
+    for (const mod of modules) {
+        try {
+            const existing = await prisma.tenantFeature.findUnique({
+                where: { tenantId_feature: { tenantId, feature: mod } },
+                select: { habilitado: true },
+            });
+            if (existing?.habilitado === true) {
+                skipped.push(mod);
+                continue;
+            }
+            await prisma.tenantFeature.upsert({
+                where: { tenantId_feature: { tenantId, feature: mod } },
+                update: {
+                    habilitado: true,
+                    habilitadoPor,
+                    razon,
+                },
+                create: {
+                    tenantId,
+                    feature: mod,
+                    habilitado: true,
+                    habilitadoPor,
+                    razon,
+                },
+            });
+            seeded.push(mod);
+        } catch (err: unknown) {
+            errors.push({
+                module: mod,
+                error: err instanceof Error ? err.message : String(err),
+            });
+        }
+    }
+
+    return { seeded, skipped, errors };
 }
 
 /**

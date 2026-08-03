@@ -553,3 +553,53 @@ de aesthetic van en 1 lugar.
 - El wizard actual envía las 4 acciones como toggle ON/OFF granular, pero el
   endpoint `/archive` las trata de forma atómica. Para granularidad fina
   usar un endpoint `/archive/{action}` por recurso (futuro).
+
+---
+
+## 🎯 Step "Vertical" en partner-onboarding
+
+Complemento directo del wizard de onboarding. El operator ahora puede elegir, en un step opcional después de "Empresa", la vertical del broker. Esto siembra el "starter pack" de módulos vía tenantFeature overrides para que el tenant arranque con los módulos relevantes ya habilitados y el broker pueda empezar a importar datos específicos del vertical (pólizas para insurance, inmuebles para real_estate, etc) sin entrar a `/admin/saas/tenants/{id}/modulos`.
+
+### Definición de verticales (lib/plans.ts)
+
+```
+VERTICALS = ['insurance', 'real_estate', 'accounting', 'general']
+VERTICAL_DEFINITIONS = {
+  insurance:   { name:'Seguros (Brokers)', icon:'🛡️', modules:[leads,contactos,empresas,pipeline,tareas,mensajes,citas,catalogo,cotizaciones,contratos,insurance,automatizaciones,mi_tarjeta,equipo,configuracion] },
+  real_estate: { name:'Inmobiliaria',      icon:'🏠', modules:[leads,contactos,empresas,pipeline,ordenes_venta,campanas,cms,builder_premium,integraciones,...] },
+  accounting:  { name:'Contable',          icon:'📊', modules:[leads,cotizaciones,contratos,ordenes_venta,finanzas,conciliacion,conocimiento,chatbot_whatsapp,...] },
+  general:     { name:'General Multi',     icon:'💼', modules:[core CRM: leads,contactos,empresas,pipeline,tareas,mensajes,citas,catalogo,mi_tarjeta,equipo,configuracion] },
+}
+```
+
+### Implementación
+
+1. `lib/plans.ts` — `VERTICALS`, `Vertical`, `VERTICAL_DEFINITIONS` (4 verticales con nombre+icon+description+modules).
+2. `lib/provisioning/tenant-provisioner.ts` — `seedTenantModulesFromVertical({tenantId,vertical,modules,actor})`:
+   helper que upserta tenantFeature(habilitado=true, habilitadoPor, razon='Vertical seed: ...')
+   para cada módulo. Idempotente (skipped si ya estaba habilitado=true).
+   Defensivo: si un upsert falla reporta `errors[]` pero continúa con el resto.
+3. `provisionTenant` — bloque condicional tras crear tenant+user: si `vertical` vino
+   en el input, llama al helper. Si no, no hace nada (broker arranca con módulos del plan).
+4. `app/api/tenants/create/route.ts` — body acepta `vertical?: string`; 400 INVALID_VERTICAL
+   si no está en VERTICALS; response incluye `vertical: Vertical | null`.
+5. `app/admin/partner-onboarding/page.tsx` — nuevo step `'vertical'` entre `'empresa'` y `'subdominio'`.
+   `<VerticalStep>` muestra 4 cards (icon + name + description + module count preview)
+   + opción "Sin vertical" (null = no siembra, broker arranca con módulos default del plan).
+   El DoneCard muestra "🛡️ Seguros (Brokers) — N módulos activados" o "🔹 Sin vertical".
+
+### Tests (tests/vertical-seed.test.ts — 10 tests)
+
+VERTICAL_DEFINITIONS exhaustividad (4 verticales con módulos) · signature ·
+módulos únicos por vertical · signature del helper · idempotencia ·
+defensivo contra errores parciales · actor=user y actor=system propagan
+`habilitadoPor` y `razon` · todas las verticales incluyen el core CRM
+(leads, contactos, tareas).
+
+### Implicaciones prácticas
+
+- Broker europeo (insurance) ya no necesita entrar a `/admin/saas/tenants/{id}/modulos`
+  post-onboarding para activar el módulo insurance.
+- Operator (superadmin) puede distinguir el flow por icono en el DoneCard.
+- Helper `seedTenantModulesFromVertical` es reusable desde CLI scripts
+  (`scripts/seed-partner-tenants.ts`) o cron (`/api/cron/seed-verticals`).

@@ -24,6 +24,7 @@ import {
   AlertCircle,
   ArrowLeft,
   ArrowRight,
+  Building,
   Check,
   CheckCircle2,
   ChevronRight,
@@ -31,6 +32,7 @@ import {
   Loader2,
   Mail,
   Send,
+  Shield,
   Sparkles,
   User,
 } from 'lucide-react';
@@ -40,11 +42,17 @@ import {
   currencyChip,
   type CurrencyMenuOption,
 } from '@/lib/insurance/currency-prompt';
+import {
+  VERTICAL_DEFINITIONS,
+  type Vertical,
+} from '@/lib/plans';
 
-type WizardStep = 'empresa' | 'subdominio' | 'email' | 'telegram' | 'moneda' | 'resumen' | 'done';
+type WizardStep = 'empresa' | 'vertical' | 'subdominio' | 'email' | 'telegram' | 'moneda' | 'resumen' | 'done';
 
 interface WizardForm {
   empresa: string;
+  /** null = aún sin decidir. El operador puede saltarlo para arrancar sin overrides. */
+  vertical: Vertical | null;
   subdomain: string;
   email: string;
   password: string;
@@ -63,6 +71,7 @@ interface CreateResponse {
   telegramSkipped?: boolean;
   moneda: string;
   monedaInferenciaSource?: string;
+  vertical?: Vertical | null;
   error?: { code: string; message: string };
   message?: string;
 }
@@ -79,6 +88,7 @@ interface TelegramConnectResponse {
 
 const INITIAL: WizardForm = {
   empresa: '',
+  vertical: null,
   subdomain: '',
   email: '',
   password: '',
@@ -89,13 +99,20 @@ const INITIAL: WizardForm = {
   fuenteInferencia: 'EXPLICIT',
 };
 
+const VERTICAL_ICONS: Record<Vertical, React.ReactNode> = {
+  insurance: <Shield size={20} className="text-rose-600" />,
+  real_estate: <Building size={20} className="text-blue-600" />,
+  accounting: <Sparkles size={20} className="text-emerald-600" />,
+  general: <User size={20} className="text-slate-600" />,
+};
+
 const ADMIN_HUBS = [
   { name: 'SaaS Metrics', href: '/admin/saas' },
   { name: 'Tenants', href: '/admin/saas/tenants' },
 ];
 
 function stepIndex(s: WizardStep): number {
-  const order: WizardStep[] = ['empresa', 'subdominio', 'email', 'telegram', 'moneda', 'resumen', 'done'];
+  const order: WizardStep[] = ['empresa', 'vertical', 'subdominio', 'email', 'telegram', 'moneda', 'resumen', 'done'];
   return order.indexOf(s);
 }
 
@@ -119,10 +136,13 @@ export default function PartnerOnboardingPage() {
   // Lista canónica del menú (misma que el script CLI)
   const menuOptions: CurrencyMenuOption[] = useMemo(() => getCurrencyMenuOptions(), []);
 
-  // Validación reactiva por paso
+  // Validación reactiva por paso. La vertical es OPCIONAL — el operador puede
+  // decidir saltarla usando el botón "Sin vertical" (vertical queda null) y
+  // aún así avanzar al siguiente step.
   const valid = useMemo(() => {
     switch (step) {
       case 'empresa':  return form.empresa.trim().length >= 2;
+      case 'vertical': return true; // opcional
       case 'subdominio': return /^[a-z0-9-]{3,40}$/.test(form.subdomain.toLowerCase());
       case 'email':   return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email) && form.password.length >= 8;
       case 'telegram': return !form.useTelegram || (form.telegramBotName.startsWith('@') && form.telegramBotToken.length > 20);
@@ -151,6 +171,9 @@ export default function PartnerOnboardingPage() {
         password: form.password,
         moneda: form.monedaCode,
       };
+      // vertical es opcional: si el operador la eligió, la enviamos para que
+      // el provisioner siembre los módulos de la vertical.
+      if (form.vertical) body.vertical = form.vertical;
       if (form.useTelegram && form.telegramBotName && form.telegramBotToken) {
         body.telegram = {
           botName: form.telegramBotName,
@@ -231,7 +254,7 @@ export default function PartnerOnboardingPage() {
       return;
     }
     const i = stepIndex(step);
-    const order: WizardStep[] = ['empresa', 'subdominio', 'email', 'telegram', 'moneda', 'resumen', 'done'];
+    const order: WizardStep[] = ['empresa', 'vertical', 'subdominio', 'email', 'telegram', 'moneda', 'resumen', 'done'];
     setStep(order[Math.min(i + 1, order.length - 1)]);
   }
 
@@ -240,7 +263,7 @@ export default function PartnerOnboardingPage() {
     else if (step === 'done') setStep('resumen');
     else if (step === 'resumen') setStep('moneda');
     else {
-      const order: WizardStep[] = ['empresa', 'subdominio', 'email', 'telegram', 'moneda', 'resumen', 'done'];
+      const order: WizardStep[] = ['empresa', 'vertical', 'subdominio', 'email', 'telegram', 'moneda', 'resumen', 'done'];
       const i = stepIndex(step);
       setStep(order[Math.max(i - 1, 0)]);
     }
@@ -273,6 +296,13 @@ export default function PartnerOnboardingPage() {
               Mínimo 2 caracteres. Lo verá el broker al iniciar sesión.
             </p>
           </Field>
+        )}
+
+        {step === 'vertical' && (
+          <VerticalStep
+            selected={form.vertical}
+            onSelect={(v) => field('vertical', v)}
+          />
         )}
 
         {step === 'subdominio' && (
@@ -383,6 +413,14 @@ export default function PartnerOnboardingPage() {
               Resumen antes de crear
             </h3>
             <SummaryRow icon={<User size={14} />}      label="Empresa"        value={form.empresa} />
+            <SummaryRow
+              icon={form.vertical ? VERTICAL_ICONS[form.vertical] : <Sparkles size={14} />}
+              label="Vertical"
+              value={form.vertical
+                ? `${VERTICAL_DEFINITIONS[form.vertical].icon} ${VERTICAL_DEFINITIONS[form.vertical].name} (${VERTICAL_DEFINITIONS[form.vertical].modules.length} módulos)`
+                : '🔹 Sin vertical específica (plan default)'}
+              highlighted
+            />
             <SummaryRow icon={<Sparkles size={14} />}  label="Subdominio"     value={`${form.subdomain}.volkern.app`} mono />
             <SummaryRow icon={<Mail size={14} />}      label="Admin email"    value={form.email} />
             <SummaryRow
@@ -466,16 +504,17 @@ export default function PartnerOnboardingPage() {
 // ──────────────────────────────────────────────────────────────────────────────
 
 function Stepper({ step }: { step: WizardStep }) {
-  const order: WizardStep[] = ['empresa', 'subdominio', 'email', 'telegram', 'moneda', 'resumen', 'done'];
+  const order: WizardStep[] = ['empresa', 'vertical', 'subdominio', 'email', 'telegram', 'moneda', 'resumen', 'done'];
   const i = stepIndex(step);
   const labels: Record<WizardStep, string> = {
     empresa: '1. Empresa',
-    subdominio: '2. Subdominio',
-    email: '3. Admin',
-    telegram: '4. Telegram',
-    moneda: '5. Moneda',
-    resumen: '6. Confirmar',
-    done: '7. Listo',
+    vertical: '2. Vertical',
+    subdominio: '3. Subdominio',
+    email: '4. Admin',
+    telegram: '5. Telegram',
+    moneda: '6. Moneda',
+    resumen: '7. Confirmar',
+    done: '8. Listo',
   };
   return (
     <ol className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">
@@ -578,6 +617,72 @@ function CurrencyStep({
   );
 }
 
+function VerticalStep({
+  selected, onSelect,
+}: {
+  selected: Vertical | null;
+  onSelect: (v: Vertical | null) => void;
+}) {
+  const verticals: Vertical[] = ['insurance', 'real_estate', 'accounting', 'general'];
+  return (
+    <div className="space-y-3">
+      <Field
+        label="Vertical del broker"
+        hint="Opcional. Si eliges una, el provisioner siembra el 'starter pack' de módulos (insurance, real_estate, accounting o general) para que el broker arranque con los módulos clave ya habilitados. Si eliges 'Sin vertical', el tenant arranca con los módulos default del plan."
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+          {verticals.map(v => {
+            const def = VERTICAL_DEFINITIONS[v];
+            const isSelected = selected === v;
+            return (
+              <button
+                key={v}
+                type="button"
+                onClick={() => onSelect(v)}
+                className={`text-left p-3 rounded-lg border transition-colors ${
+                  isSelected
+                    ? 'bg-[#1A365D]/5 border-[#1A365D]/40 ring-2 ring-[#1A365D]/30'
+                    : 'bg-white border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl" aria-hidden>{def.icon}</span>
+                    <span className="font-bold text-sm text-slate-900">{def.name}</span>
+                  </div>
+                  {isSelected && <CheckCircle2 size={16} className="text-[#1A365D]" />}
+                </div>
+                <p className="text-xs text-slate-500 mt-1 leading-tight">{def.description}</p>
+                <p className="text-[10px] font-mono text-slate-400 mt-1.5">
+                  {def.modules.length} módulos: {def.modules.slice(0, 4).join(', ')}{def.modules.length > 4 ? `, +${def.modules.length - 4}` : ''}
+                </p>
+              </button>
+            );
+          })}
+        </div>
+      </Field>
+      <button
+        type="button"
+        onClick={() => onSelect(null)}
+        className={`w-full text-left p-3 rounded-lg border transition-colors ${
+          selected === null
+            ? 'bg-slate-50 border-slate-300 ring-2 ring-slate-300/30'
+            : 'bg-white border-slate-200 hover:bg-slate-50'
+        }`}
+      >
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-bold text-slate-700">🔹 Sin vertical (dejar que el plan decida)</span>
+          {selected === null && <CheckCircle2 size={16} className="text-slate-500" />}
+        </div>
+        <p className="text-xs text-slate-500 mt-1">
+          El tenant arranca con los módulos default del plan (ver PLAN_MODULES en lib/plans.ts).
+          No se siembran overrides. El broker puede cambiar módulos después en /admin/saas/tenants/{'{id}'}/modulos.
+        </p>
+      </button>
+    </div>
+  );
+}
+
 function DoneCard({
   result, form,
   opened, onToggleOpen,
@@ -617,6 +722,14 @@ function DoneCard({
           value={telegramSkipped
             ? '⏭️  Pendiente'
             : `✅ Inbox #${result.telegramInboxId}`}
+        />
+        <SummaryRow
+          icon={form.vertical ? VERTICAL_ICONS[form.vertical] : <Sparkles size={14} />}
+          label="Vertical"
+          value={form.vertical
+            ? `${VERTICAL_DEFINITIONS[form.vertical].icon} ${VERTICAL_DEFINITIONS[form.vertical].name} (${VERTICAL_DEFINITIONS[form.vertical].modules.length} módulos activados)`
+            : '🔹 Sin vertical (default del plan)'}
+          highlighted
         />
         <SummaryRow
           icon={<Sparkles size={14} />}

@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { provisionTenant, TenantProvisioningInput } from '@/lib/provisioning/tenant-provisioner';
 import { SUPPORTED_CURRENCIES } from '@/lib/insurance/currency';
+import { VERTICALS, type Vertical } from '@/lib/plans';
 
 /**
  * POST /api/tenants/create
@@ -28,6 +29,10 @@ import { SUPPORTED_CURRENCIES } from '@/lib/insurance/currency';
  *                                       // moneda del portfolio ejecutivo se
  *                                       // puede cambiar después vía
  *                                       // /api/tenant/moneda o scripts/update-tenant-currency.ts).
+ *   vertical?: 'insurance' | 'real_estate' | 'accounting' | 'general'; // OPCIONAL.
+ *                                       Si viene, el provisioner siembra el "starter
+ *                                       pack" de módulos vía tenantFeatures para que
+ *                                       el broker arranque con la vertical preconfigurada.
  * }
  */
 export async function POST(request: NextRequest) {
@@ -35,7 +40,26 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
         
         // Validación básica
-        const { empresa, subdomain, email, password, telegram, moneda } = body;
+        const { empresa, subdomain, email, password, telegram, moneda, vertical } = body;
+
+        // Validar vertical (si viene en el body) — debe ser uno de VERTICALS.
+        let verticalNormalizado: Vertical | undefined;
+        if (vertical !== undefined && vertical !== null) {
+            const v = String(vertical).toLowerCase();
+            if (!(VERTICALS as readonly string[]).includes(v)) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        error: {
+                            code: 'INVALID_VERTICAL',
+                            message: `Vertical no soportada: ${vertical}. Soportadas: ${VERTICALS.join(', ')}`,
+                        },
+                    },
+                    { status: 400 }
+                );
+            }
+            verticalNormalizado = v as Vertical;
+        }
 
         // Validar moneda (si viene en el body)
         let monedaNormalizada: string | undefined;
@@ -140,6 +164,7 @@ export async function POST(request: NextRequest) {
                 ? { telegram: { botName: telegram.botName, botToken: telegram.botToken } }
                 : {}),
             ...(monedaNormalizada ? { moneda: monedaNormalizada as any } : {}),
+            ...(verticalNormalizado ? { vertical: verticalNormalizado } : {}),
         };
 
         console.log('[API] Creating tenant:', { empresa, subdomain, email });
@@ -165,6 +190,7 @@ export async function POST(request: NextRequest) {
             telegramSkipped: successResult.telegramSkipped ?? false,
             moneda: monedaNormalizada ?? 'MXN',
             monedaInferenciaSource: monedaNormalizada ? 'EXPLICIT' : 'FALLBACK',
+            vertical: verticalNormalizado ?? null,
             message: successResult.telegramSkipped
                 ? 'Tenant creado. Telegram quedó pendiente de configuración — puedes añadirlo desde /admin/partner-onboarding.'
                 : 'Tenant creado exitosamente con Telegram configurado',
