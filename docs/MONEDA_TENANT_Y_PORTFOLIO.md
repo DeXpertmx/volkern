@@ -1312,3 +1312,92 @@ Cuando `dryRun=true`:
 | `partner-bulk-endpoint > 15)` | X-Dry-Run header gana sobre body.dryRun=false |
 | `partner-bulk-endpoint > 16)` | 2 subdominios → findMany recibe ambos en `slug IN [a, b]` |
 
+
+---
+
+## 🛡️ Checkpoint + Smoke E2E del flujo bulk
+
+Esta sección documenta el protocolo de seguridad ANTES de cualquier
+cambio que toque el flujo bulk de provisioning (nuevas columnas en
+Tenant, nuevos pasos en provisionTenant, nuevos mocks, etc.).
+
+### Snapshot READ-ONLY con `scripts/checkpoint.sh`
+
+Genera un snapshot puro-SQL vía `psql + COPY TO CSV` (sin `pg_dump`,
+porque el server Neón corre PG 17 mientras el cliente local suele
+ser PG 16 → mismatch de versión abortaría el dump).
+
+```bash
+# Antes de cualquier cambio riesgoso:
+cd nextjs_space && bash scripts/checkpoint.sh "baseline antes de fix X"
+# Genera: nextjs_space/.checkpoints/<timestamp>/
+#   ├── schema.json     estructura de todas las tablas
+#   ├── data/<table>.csv dumps por tabla
+#   ├── state.json       conteos de tablas críticas
+#   └── README.md        cómo restaurar
+```
+
+Garantías del script:
+- **NUNCA escribe en la BD**: sólo `SELECT`, `COPY TO`, lecturas de `pg_catalog`.
+- Sin `--accept-data-loss` / `--force` / `--reset`.
+- Las copias CSV pueden restaurarse con `COPY ... FROM`, pero **sólo**
+  si la tabla está vacía (o si el operador decide explícitamente).
+
+### Smoke E2E con `tests/bulk-smoke-e2e.test.ts`
+
+Ejecuta el flujo bulk **contra la BD real** pero con datos 100%
+sintéticos prefijo `smoke-${RUN_ID}-` y cleanup estricto + self-leak
+detection.
+
+```bash
+# Por defecto: 7 tests SKIP-eados (sin env var).
+RUN_SMOKE_TESTS=1 ./node_modules/.bin/vitest run tests/bulk-smoke-e2e.test.ts
+```
+
+Capas de seguridad del smoke:
+1. **Opt-in**: `RUN_SMOKE_TESTS=1` requerido. Sin esa env, todos los
+   tests se skip-ean con mensaje claro.
+2. **Aislamiento por RUN_ID**: `crypto.randomUUID()` corta a 8 chars;
+   slugs = `smoke-${RUN_ID}-${slug}`. Imposible colisionar con datos
+   reales.
+3. **Cleanup obligatorio**: `afterAll` borra TODAS las filas con
+   prefijo `smoke-${RUN_ID}-` en transacción, en orden de FK
+   (User → MessagingHubConfig → TenantFeature → AuditLog → Tenant).
+4. **Self-leak detection**: aserción `expect(leftovers.length).toBe(0)`
+   después del cleanup. Si falla, reporta los IDs huérfanos para
+   borrarlos manualmente.
+5. **Mock servicios externos**: Chatwoot, Resend (dominios), Cloudflare
+   DNS, Telegram bot. Sólo la BD es real; el resto del mundo no.
+6. **Audit trail**: el smoke usa `actor.system='cron-secret'` para que
+   el operador pueda distinguir "creado por integración" vs "humano"
+   en un SQL simple.
+
+### Procedimiento recomendado antes de tocar el provisioning
+
+```bash
+# 1. Snapshot
+bash scripts/checkpoint.sh "antes de X"
+
+# 2. Smoke primer test de regresión (BD staging)
+RUN_SMOKE_TESTS=1 npx vitest run tests/bulk-smoke-e2e.test.ts
+
+# 3. Hacer el cambio
+
+# 4. Re-correr smoke — debe pasar con 0 leaks
+RUN_SMOKE_TESTS=1 npx vitest run tests/bulk-smoke-e2e.test.ts
+
+# 5. Si falla: revisar el snapshot para entender qué se rompió
+ls .checkpoints/
+```
+
+### Tests cubiertos (7 en el smoke)
+
+| # | Test | Cubre |
+|---|---|---|
+| 1 | `parseBulkCsv → 5 filas sintéticas` | sanity del parser |
+| 2 | `dry-run con 5 filas: todas simulated` | 0 mutaciones reales |
+| 3 | `provisionTenant happy path` | Tenant + User creados con moneda correcta |
+| 4 | `runBulkOnboarding crea 5 tenants reales e2e` | pool concurrencia=3, auditado como cron-secret |
+| 5 | `seedTenantModulesFromVertical siembra insurance` | módulos activados vía tenantFeature override |
+| 6 | `buildBulkResultCsv serializa Excel-friendly` | BOM + CRLF |
+| 7 | `self-leak: 0 tenants después del cleanup` | garantía final |
