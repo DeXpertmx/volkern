@@ -45,6 +45,54 @@ El síntoma típico:
 
 ## Cómo arreglarlo (3 caminos)
 
+### Camino 0 — Prevenirlo en el onboarding (NUEVO 2026-08-03)
+
+El origen del problema es que `Tenant.moneda` defaultea a `'MXN'` y muchos
+brokers ni siquiera saben que ese campo existe hasta que ven el chip del
+portfolio. Por eso, en el flujo de onboarding de partner tenants
+(`scripts/seed-partner-tenants.ts`) y en el endpoint de provisionamiento
+(`POST /api/tenants/create`), **se fuerza a pedir la moneda preferida antes
+de crear el primer tenant**.
+
+Para 50 tenants demo de staging, ahora:
+
+```bash
+# Antes (defaults silenciosos a MXN — pésimo para brokers EUR)
+DATABASE_URL=… npx tsx scripts/seed-partner-tenants.ts
+
+# Después — prompt interactivo en TTY
+DATABASE_URL=… npx tsx scripts/seed-partner-tenants.ts
+#   → aparece menú 1..12 con USD, EUR, MXN, GBP, …
+#   → broker elige EUR → los 50 tenants nacen con moneda='EUR'
+
+# CI/CD sin prompt: flag explícito o auto
+DATABASE_URL=… npx tsx scripts/seed-partner-tenants.ts --moneda=EUR
+DATABASE_URL=… npx tsx scripts/seed-partner-tenants.ts --allow-auto  # default MXN
+```
+
+Y el endpoint provisioner (`POST /api/tenants/create`) acepta el campo
+opcional `moneda` en el body, validado contra `SUPPORTED_CURRENCIES`.
+Si el partner llena el campo en el wizard del admin, el broker nace con
+la moneda correcta sin necesidad de revisar el dashboard.
+
+#### Auto-detección cuando el broker no elige (futuro)
+
+Cuando llegue el momento de auto-importar pólizas de un CSV/Excel durante
+el onboarding (sin intervención humana), se reusa
+`lib/insurance/tenant-currency-resolver.ts` con esta lógica:
+
+| Composición de pólizas importadas | Moneda seteada | Fuente |
+|-----------------------------------|----------------|--------|
+| El usuario pasó moneda explícita | Esa moneda | `explicit` |
+| Una sola moneda (e.g. 100% EUR) | Esa moneda | `auto-from-polizas` |
+| 0 pólizas (aún no importó) | Default conservador (MXN) | `fallback-default` |
+| Múltiples monedas | Default conservador (MXN) | `fallback-default` |
+
+Por qué "conservador = MXN" en los casos ambiguos: es la moneda histórica
+del schema, no rompe nada y el broker puede cambiarla cuando termine de
+importar vía `/dashboard/configuracion?section=empresa` (cooldown 24h) o
+a través del superadmin (sin cooldown).
+
 ### Camino 1 — El propio broker lo arregla desde la UI
 
 1. Ir a `/dashboard/configuracion?section=empresa`.
@@ -105,6 +153,9 @@ npx tsx scripts/update-tenant-currency.ts --tenant=mitemnant --moneda=EUR --appl
 
 - `tests/currency.test.ts` — `fxConvert`, `resumenMoneda`, monedas desconocidas,
   combination totals.
+- `tests/tenant-currency-resolver.test.ts` — 18 tests cubriendo todas las
+  ramas del auto-detector (explícito, auto-from-polizas, fallback-default ×
+  mixto/vacío/una moneda).
 - Todos los tests del vertical Seguros (`tests/forecast-*.test.ts`,
   `tests/multi-ramo-forecast.test.ts`, `tests/seasonal-forecast.test.ts`)
   usan `tenantMoneda='EUR'` o `'MXN'` para fijar el comportamiento.
@@ -230,11 +281,23 @@ npx eslint --no-eslintrc --resolve-plugins-relative-to . \
 - `prisma/schema.prisma:173` — campo `Tenant.moneda`.
 - `lib/insurance/currency.ts` — tabla FX, helpers, `SUPPORTED_CURRENCIES`,
   `CURRENCY_CONSTANTS.DEFAULT_TENANT_CURRENCY`.
+- `lib/insurance/tenant-currency-resolver.ts` — lógica pura de auto-detección
+  (reusable desde CLI/API/UI). Exporta `resolveTenantCurrency`,
+  `groupByMoneda`, `CurrencyResolution`.
+- `lib/provisioning/tenant-provisioner.ts` — provisioner acepta campo
+  `moneda` opcional (validado contra `SUPPORTED_CURRENCIES`).
 - `app/api/insurance/portfolio/route.ts` — usa `tenant.moneda` para agregados.
-- `app/api/tenant/moneda/route.ts` — PATCH + GET self-service.
+- `app/api/tenants/create/route.ts` — endpoint de creación con `moneda`
+  opcional en el body (validado, 400 si inválida).
+- `app/api/tenant/moneda/route.ts` — PATCH + GET self-service (cambio
+  posterior al onboarding).
 - `app/dashboard/seguros/portfolio/page.tsx:303` — chip junto a Refrescar.
 - `components/hubs/ConfiguracionDashboard.tsx` — `MonedaReporteCard`.
-- `scripts/diagnose-tenant-currency.ts`, `scripts/update-tenant-currency.ts` — admin tools.
+- `scripts/seed-partner-tenants.ts` — fuerza prompt de moneda al crear
+  tenants demo (`--moneda=`, prompt interactivo, o `--allow-auto`).
+- `scripts/diagnose-tenant-currency.ts`, `scripts/update-tenant-currency.ts` —
+  admin tools para diagnosticar/cambiar moneda tras importación.
 - `eslint-rules/` — regla custom `no-hardcoded-currency-fallback` (ver arriba).
 - `scripts/install-eslint-local-rules.js` — sync `eslint-rules/` → node_modules.
 - `eslint-rules/__tests__/no-hardcoded-currency-fallback.test.js` — 24 tests.
+- `tests/tenant-currency-resolver.test.ts` — 18 tests del resolver.
