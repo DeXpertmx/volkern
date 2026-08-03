@@ -666,3 +666,244 @@ con BOM + CRLF + escape de comas y comillas dobles.
 - Idempotencia: si un broker ya existía, recibirá `DUPLICATE_TENANT` y
   la fila se marca como error — el operator puede filtrar el reporte y
   reintentar sólo las válidas.
+
+---
+
+## 📡 Server-side bulk onboarding (`/api/admin/partner-bulk`)
+
+Complemento server-side del wizard web (`/admin/partner-onboarding/bulk`).
+Pensado para integraciones que no tienen browser: scripts CLI, cron jobs,
+pipelines de sales-ops (HubSpot → Volkern), herramientas internas tipo
+n8n, GitHub Actions. El endpoint reusa la misma lógica de provisioner +
+parser CSV que el wizard, así que ambas vías producen resultados idénticos
+y pueden mezclarse (un batch por web y otro por CLI en la misma sesión
+operativa).
+
+### Endpoint
+
+```
+POST /api/admin/partner-bulk
+```
+
+### Auth dual (cualquiera de las dos)
+
+| Mech                          | Quién                                          | Notas                                                |
+| ----------------------------- | ---------------------------------------------- | ---------------------------------------------------- |
+| **Bearer CRON_SECRET**        | Scripts CLI, cron, GitHub Actions, n8n, HubSpot| Header `Authorization: Bearer ${CRON_SECRET}`.       |
+| **Session superadmin**        | Operator humano con `curl --cookie`            | Mismo patrón que `/api/admin/tenants/[id]/modules`.  |
+
+El path Bearer es independiente de `NODE_ENV` (a diferencia de `/api/cron/*`,
+que sólo activa CRON_SECRET en producción). Aquí queremos que los scripts
+de staging/dev también funcionen.
+
+### Content-Type sniffing
+
+Acepta cualquiera de los tres siguientes:
+
+| Content-Type        | Body esperado                                                  |
+| ------------------- | -------------------------------------------------------------- |
+| `text/csv`          | CSV crudo (línea 1 = header, resto = filas)                     |
+| `text/plain`        | Idéntico al de arriba (path útil para `curl --data-binary @x`)  |
+| `application/json`  | `{ csv: "...", dryRun?: bool, concurrency?: number }`          |
+
+Cualquier otro → **415** `Content-Type ... no soportado`. Body > 5 MB →
+**415** con cap `Content-Length`.
+
+### Headers opcionales
+
+| Header                    | Valores aceptados                                  | Default |
+| ------------------------- | -------------------------------------------------- | ------- |
+| `X-Dry-Run`               | `true` \| `1` (cualquier otro se ignora)            | `false` |
+
+> El header tiene **prioridad** sobre `body.dryRun`. Si vienen ambos y
+> se contradicen, el header gana.
+
+### Respuesta (200 OK)
+
+```jsonc
+{
+  "ok": true,                         // false si failed > 0
+  "dryRun": false,
+  "total": 12,
+  "created": 11,
+  "simulated": 0,                     // N (sólo si dryRun=true)
+  "failed": 1,
+  "hadUnexpectedErrors": false,       // true si algún error es 'UNEXPECTED'
+  "report": [                         // mismo shape que el wizard web
+    {
+      "rowNum": 1,
+      "empresa": "Brokers SL",
+      "subdomain": "brokers",
+      "email": "admin@brokers.com",
+      "moneda": "EUR",
+      "status": "created",            // 'created' | 'simulated' | 'error'
+      "tenantId": "tenant_abc...",
+      "chatwootAccountId": 142,
+      "telegramInboxId": null,
+      "telegramStatus": "n/a",        // 'connected' | 'skipped' | 'n/a' | 'simulated'
+      "monedaInferenciaSource": "EXPLICIT"
+    },
+    // ...
+  ],
+  "reportCsv": "\uFEFFrow,empresa,...\r\n1,Brokers SL,...",   // RFC-4180 + BOM
+  "parseErrors": [{ "rowNum": 5, "message": "Email inválido: ..." }],
+  "emptyRows": [7, 8],
+  "generatedPasswords": { "1": "MyCsvPwd12", "2": "AutoPwd1234Xyz", ... }
+}
+```
+
+Headers informativos para que scripts lean totales sin parsear el body:
+
+| Header                                  | Valor                  |
+| --------------------------------------- | ---------------------- |
+| `X-Bulk-Total`                          | `String(total)`        |
+| `X-Bulk-Created`                        | `String(created)`      |
+| `X-Bulk-Simulated`                      | `String(simulated)`    |
+| `X-Bulk-Failed`                         | `String(failed)`       |
+| `X-Bulk-Dry-Run`                        | `"true"` \| `"false"`  |
+| `X-Bulk-Contains-Generated-Passwords`   | `"true"` si hay auto-pwd |
+
+### Códigos de error
+
+| HTTP | Cuándo                                                                 |
+| ---- | ---------------------------------------------------------------------- |
+| 401  | Sin auth (ni session ni Bearer) o Bearer inválido                       |
+| 403  | Session pero rol ≠ `Superadmin`                                         |
+| 415  | Content-Type inválido o Body > 5 MB                                     |
+| 422  | `CSV_NO_VALID_ROWS` — el parser descartó TODAS las filas                |
+| 500  | `UNEXPECTED` — algo explotó fuera del try/catch                         |
+
+`ok=false` en el body NO significa 500: significa "creé N, fallaron M"
+(partial success). El HTTP status sigue siendo 200 con el desglose.
+
+### Implementación
+
+- **`lib/provisioning/partner-bulk-runner.ts`** — orquestador reusable que
+  recibe `{ rows, autoGeneratedPasswords, dryRun, concurrency, actor }`
+  y devuelve `{ ok, total, created, simulated, failed, report, hadUnexpectedErrors }`.
+  Pool de `concurrency` workers (default 3, cap 1..10) consume la cola y
+  llama a `provisionTenant` directo (sin HTTP) por cada fila.
+  Defensivo: mapea códigos de negocio del provisioner (SUBDOMAIN_TAKEN,
+  INVALID_EMAIL, etc.) a `errorCode` por fila; cualquier excepción no
+  esperada se etiqueta como `errorCode='UNEXPECTED'` y marca
+  `hadUnexpectedErrors=true`.
+
+- **`app/api/admin/partner-bulk/route.ts`** — endpoint POST con:
+  1. Auth dual (Bearer CRON_SECRET o session superadmin).
+  2. Body parsing con content-type sniffing (text/csv | text/plain | json).
+  3. Cap de 5 MB por Content-Length para impedir DoS.
+  4. Parse del CSV via `parseBulkCsv` (mismo que el wizard).
+  5. Auto-generación de passwords via `generateBulkPassword` para filas
+     sin password (CSPRNG via `crypto.getRandomValues` con fallback a
+     `Math.random`).
+  6. Llamada a `runBulkOnboarding` con concurrencia default 3.
+  7. Response con `report` JSON + `reportCsv` RFC-4180 con BOM.
+
+### Tests (29 tests)
+
+- **`tests/partner-bulk-runner.test.ts`** — 18 tests del runner (lógica):
+  dry-run no llama a provisionTenant · happy path N filas · pool con
+  concurrencia=3 · cap concurrencia 1..10 · success=false del provisioner →
+  errorCode específico · reject de red → UNEXPECTED + hadUnexpectedErrors
+  · MISSING_PASSWORD fail-fast · idempotencia de errores de negocio ·
+  bulkPassword cumple el criterio (mayúscula + minúscula + dígito, sin
+  símbolos ambiguos) · 1000 passwords todas distintas.
+
+- **`tests/partner-bulk-endpoint.test.ts`** — 11 tests del endpoint
+  (HTTP-layer): 401 sin auth · 401 Bearer inválido · 401 Bearer sin
+  CRON_SECRET · 403 session sin Superadmin · 415 sin content-type ·
+  415 application/xml · 415 Body grande · 422 CSV 0 filas válidas ·
+  422 CSV vacío · 422 CSV sin header reconocible · NO llama al runner
+  cuando hay errores tempranos.
+
+### Ejemplos de uso
+
+#### 1. Cron job de sales-ops (HubSpot → Volkern)
+
+```bash
+#!/usr/bin/env bash
+# /etc/cron.daily/sync-brokers-to-volkern
+set -euo pipefail
+
+SECRET=$(cat /run/secrets/volkern-cron-secret)
+TODAY=$(date -u +%Y-%m-%d)
+DRY_RUN="${DRY_RUN:-false}"
+
+# Pull brokers nuevos de HubSpot, transforma a CSV...
+curl -fsS -H "Authorization: Bearer $HUBSPOT_TOKEN" \
+  "https://api.hubapi.com/.../brokers?createdate_gte=$TODAY" \
+  | jq -r '.results[] | [.company, .slug, .email] | @csv' \
+  > /tmp/new-brokers.csv
+
+# Header + filas
+{ echo "empresa,subdomain,email"; cat /tmp/new-brokers.csv; } > /tmp/payload.csv
+
+# Llamar a la API con dry-run primero (no mutar nada)
+curl -fsS -X POST \
+  -H "Authorization: Bearer $SECRET" \
+  -H "X-Dry-Run: $DRY_RUN" \
+  -H "Content-Type: text/csv" \
+  --data-binary @/tmp/payload.csv \
+  "https://admin.volkern.app/api/admin/partner-bulk" \
+  | tee "/var/log/volkern/bulk-${TODAY}.json"
+```
+
+#### 2. Onboarding masivo desde spreadsheet (operator)
+
+```bash
+# El operator tiene un .csv exportado de una spreadsheet.
+# Lo sube con curl + sesión guardada en cookies.txt.
+curl -fsS -X POST \
+  -b /tmp/volkern-cookies.txt \
+  -H "Content-Type: text/csv" \
+  --data-binary @./brokers-batch-1.csv \
+  "https://admin.volkern.app/api/admin/partner-bulk" \
+  | jq -r '.report[] | "\(.rowNum) \(.subdomain) \(.status) \(.tenantId // .errorCode)"'
+```
+
+#### 3. Workflow n8n / Make / Zapier
+
+La mayoría de estas plataformas tienen un módulo "HTTP Request" que
+acepta:
+
+1. **Method**: POST
+2. **URL**: `https://admin.volkern.app/api/admin/partner-bulk`
+3. **Auth**: Bearer Token → `{{ $env.CRON_SECRET }}`
+4. **Headers**: `Content-Type: text/csv`
+5. **Body**: Select "Send raw body" + pegar el CSV (bind a una variable
+   que viene del paso anterior del workflow).
+
+Salida del workflow: leer `body.report[*].tenantId` y disparar emails
+de bienvenida via otro paso.
+
+### Auditoría
+
+Cada tenant creado via bulk queda auditado vía el `auditLog` que ya
+crea `provisionTenant` (con `actor.system: 'cron-secret'` o
+`actor.user.email`). Query SQL típica:
+
+```sql
+-- Tenants creados por bulk en las últimas 24h
+SELECT t.id, t.slug, t.nombre, t."fechaCreacion",
+       al.actor, al."fechaCreacion" AS audit_at
+FROM   "Tenant" t
+LEFT   JOIN "auditLog" al
+       ON al."entidadId" = t.id AND al.accion = 'crear' AND al.entidad = 'tenant'
+WHERE  t."fechaCreacion" >= now() - interval '24 hours'
+ORDER  BY t."fechaCreacion" DESC;
+```
+
+### Implicaciones prácticas
+
+- **CLI scripts** pueden llamar al endpoint sin browser, sin curl
+  complicado: `fetch('/api/admin/partner-bulk', { method: 'POST',
+  headers: { Authorization: 'Bearer ...' }, body: csv })`.
+- **Cron jobs** que sincronizan brokers desde CRM externos se ejecutan
+  sin intervención humana: la respuesta JSON incluye el `report[]` para
+  notificar al team por email o Slack.
+- **Idempotencia cliente**: si un subdominio ya existe, la fila se
+  marca como `errorCode='SUBDOMAIN_TAKEN'` y el caller puede filtrar
+  easy. El endpoint NO es bulk-create atómico: reintentarlo no duplica
+  los creados previamente, sólo los pendientes.
+- **Dry-run opcional**: herramientas de staging pueden previsualizar
+  el resultado con `X-Dry-Run: true` antes de pedir mutable.
