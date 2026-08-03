@@ -292,7 +292,9 @@ export async function getInsurerConnector(slug: string): Promise<InsurerConnecto
   switch (slug as InsurerSlug) {
     case 'qualitas':
       return (await import('./qualitas')).default;
-    // Próximos commits: gnp, axa-mx, tirea, etc.
+    case 'gnp':
+      return (await import('./gnp')).default;
+    // Próximos commits: axa-mx, seguros-monterrey, tirea, fiva, eiac
     default:
       throw new ConnectorError(
         'INTERNAL' as ConnectorErrorCode,
