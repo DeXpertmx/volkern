@@ -75,18 +75,57 @@ opcional `moneda` en el body, validado contra `SUPPORTED_CURRENCIES`.
 Si el partner llena el campo en el wizard del admin, el broker nace con
 la moneda correcta sin necesidad de revisar el dashboard.
 
-#### Auto-detección cuando el broker no elige (futuro)
+#### Auto-detección al cerrar el loop del `--allow-auto` (NUEVO 2026-08-03)
 
-Cuando llegue el momento de auto-importar pólizas de un CSV/Excel durante
-el onboarding (sin intervención humana), se reusa
-`lib/insurance/tenant-currency-resolver.ts` con esta lógica:
+Si el broker **saltó el prompt** (`--allow-auto` o admin rápido) y aceptó
+el default MXN, el auto-fix se dispara **automáticamente al subir el primer
+batch de pólizas via wizard**:
 
-| Composición de pólizas importadas | Moneda seteada | Fuente |
-|-----------------------------------|----------------|--------|
-| El usuario pasó moneda explícita | Esa moneda | `explicit` |
+1. El broker va a `/dashboard/seguros/polizas` → abre el `ImportEntityWizard`
+   → sube su primer CSV con todas las pólizas en EUR.
+2. El CSV wizard llama a `POST /api/insurance/importar`. El endpoint:
+   - Persiste las pólizas (`insuranceImportLog`).
+   - Captura `batchStartTime = new Date()` y, tras el loop exitoso,
+     consulta `prisma.poliza.findMany({ where: { tenantId, createdAt >= batchStartTime } })`.
+   - Llama a `maybeAutoFixTenantCurrencyAfterImport(tenantId, polizasRecienImportadas)`.
+3. El helper decide:
+   - Lee `globalPrisma.tenant.findUnique({ where: { id: tenantId } })`.
+   - Si `tenant.moneda !== 'MXN'` (ya elegido por el broker) → noop.
+   - Si batch vacío → noop.
+   - Resuelve via `resolveTenantCurrency` + `groupByMoneda`:
+     - Una sola moneda no-MXN → auto-fix.
+     - Múltiples monedas → noop (conservador: no asume cuál priorizar).
+   - Si auto-fix warranted → actualiza `globalPrisma.tenant.update` +
+     escribe `auditLog` con descripcion `"Auto-set desde primer import:
+     MXN → EUR (N pólizas importadas, source=system:auto-import-bulk-csv).
+     Cooldown de 24h saltado (es auto-fix, no cambio manual)."`
+4. La respuesta del endpoint incluye `{ autoFixMoneda: { changed, previousMoneda, appliedMoneda, ... } }`
+   para que la UI muestre un toast: *"Tu moneda de reporte se actualizó
+   automáticamente a EUR tras el primer import."*
+
+#### Propiedades clave del auto-fix
+
+- **Idempotente**: si el broker sube un segundo batch (mismo tenant), el
+  helper detecta `previousMoneda='EUR'` y entra en el branch
+  `already-correct` → no hace nada.
+- **No rompe el cooldown manual**: el `PATCH /api/tenant/moneda` sigue
+  con su cooldown de 24h; el bypass es exclusivo del helper interno.
+- **Trazable**: cada auto-fix deja un `auditLog` con `descripcion` que
+  permite grep rápido ("¿qué tenants cambiaron moneda por auto-fix?")
+  y distinguirlo de cambios manuales del superadmin / broker.
+- **Defensivo**: si `auditLog.create` falla, el cambio del tenant NO se
+  rollbacka (un fail de auditoría no debe impedir el fix funcional).
+- **Pure decision**: la lógica pura vive en `lib/insurance/tenant-currency-resolver.ts`
+  y se testea aislada; el helper sólo añade la capa de I/O y bypass.
+
+#### Reglas de auto-detección (referencia rápida)
+
+| Composición de pólizas importadas | Moneda seteada | `source` |
+|-----------------------------------|----------------|-----------|
+| El usuario pasó moneda explícita (script flag o API body) | Esa moneda | `explicit` |
 | Una sola moneda (e.g. 100% EUR) | Esa moneda | `auto-from-polizas` |
 | 0 pólizas (aún no importó) | Default conservador (MXN) | `fallback-default` |
-| Múltiples monedas | Default conservador (MXN) | `fallback-default` |
+| Múltiples monedas (mixto) | Default conservador (MXN) | `fallback-default` |
 
 Por qué "conservador = MXN" en los casos ambiguos: es la moneda histórica
 del schema, no rompe nada y el broker puede cambiarla cuando termine de
@@ -153,9 +192,15 @@ npx tsx scripts/update-tenant-currency.ts --tenant=mitemnant --moneda=EUR --appl
 
 - `tests/currency.test.ts` — `fxConvert`, `resumenMoneda`, monedas desconocidas,
   combination totals.
-- `tests/tenant-currency-resolver.test.ts` — 18 tests cubriendo todas las
+- `tests/tenant-currency-resolver.test.ts` — 22 tests cubriendo todas las
   ramas del auto-detector (explícito, auto-from-polizas, fallback-default ×
   mixto/vacío/una moneda).
+- `tests/post-import-moneda-autofix.test.ts` — 16 tests cubriendo el helper
+  de auto-fix I/O (mockeando globalPrisma). Cubre: already-correct × 2
+  monedas, batch-empty, minBatchSize, mixed-currency, all-MXN (no-op),
+  auto-fix-applied × EUR/USD/GBP/minúsculas/moneda-no-soportada,
+  dry-run-suggested, audit-source differentiation, audit-failure
+  no-rollback, payload completo con trazabilidad.
 - Todos los tests del vertical Seguros (`tests/forecast-*.test.ts`,
   `tests/multi-ramo-forecast.test.ts`, `tests/seasonal-forecast.test.ts`)
   usan `tenantMoneda='EUR'` o `'MXN'` para fijar el comportamiento.
@@ -284,15 +329,23 @@ npx eslint --no-eslintrc --resolve-plugins-relative-to . \
 - `lib/insurance/tenant-currency-resolver.ts` — lógica pura de auto-detección
   (reusable desde CLI/API/UI). Exporta `resolveTenantCurrency`,
   `groupByMoneda`, `CurrencyResolution`.
+- `lib/insurance/post-import-moneda-autofix.ts` — helper I/O que decide +
+  aplica el auto-fix tras un import. Bypasses cooldown de 24h y deja
+  auditLog con `source='system:auto-import-bulk-csv'`.
 - `lib/provisioning/tenant-provisioner.ts` — provisioner acepta campo
   `moneda` opcional (validado contra `SUPPORTED_CURRENCIES`).
+- `app/api/insurance/importar/route.ts` — endpoint bulk-import de pólizas
+  con `batchStartTime` capturado + llamada post-loop al helper de auto-fix.
 - `app/api/insurance/portfolio/route.ts` — usa `tenant.moneda` para agregados.
 - `app/api/tenants/create/route.ts` — endpoint de creación con `moneda`
   opcional en el body (validado, 400 si inválida).
 - `app/api/tenant/moneda/route.ts` — PATCH + GET self-service (cambio
-  posterior al onboarding).
+  posterior al onboarding, con cooldown 24h que el auto-fix bypassea).
 - `app/dashboard/seguros/portfolio/page.tsx:303` — chip junto a Refrescar.
 - `components/hubs/ConfiguracionDashboard.tsx` — `MonedaReporteCard`.
+- `components/insurance/ImportEntityWizard.tsx` — wizard genérico que
+  muestra el toast de auto-fix cuando la respuesta incluye
+  `autoFixMoneda.changed`.
 - `scripts/seed-partner-tenants.ts` — fuerza prompt de moneda al crear
   tenants demo (`--moneda=`, prompt interactivo, o `--allow-auto`).
 - `scripts/diagnose-tenant-currency.ts`, `scripts/update-tenant-currency.ts` —
@@ -300,4 +353,5 @@ npx eslint --no-eslintrc --resolve-plugins-relative-to . \
 - `eslint-rules/` — regla custom `no-hardcoded-currency-fallback` (ver arriba).
 - `scripts/install-eslint-local-rules.js` — sync `eslint-rules/` → node_modules.
 - `eslint-rules/__tests__/no-hardcoded-currency-fallback.test.js` — 24 tests.
-- `tests/tenant-currency-resolver.test.ts` — 18 tests del resolver.
+- `tests/tenant-currency-resolver.test.ts` — 22 tests del resolver.
+- `tests/post-import-moneda-autofix.test.ts` — 16 tests del helper I/O.

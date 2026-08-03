@@ -18,6 +18,7 @@ import {
   parseCSVSmart,
   suggestPolizasMapping,
 } from '@/lib/insurance/csv-wizard';
+import { maybeAutoFixTenantCurrencyAfterImport } from '@/lib/insurance/post-import-moneda-autofix';
 
 // Required fields by key (the importer prefixes these with the mapped header name).
 const REQUIRED_FIELDS = ['numeroPoliza', 'clienteNombre', 'aseguradoraNombre', 'fechaInicio', 'fechaVencimiento'] as const;
@@ -125,6 +126,10 @@ export async function POST(req: NextRequest) {
     }
 
     const tenantId = auth.tenant!.id;
+
+    // Capturamos timestamp antes del loop para, al final, identificar las
+    // pólizas recién insertadas (se las pasamos al auto-fix de tenant.moneda).
+    const batchStartTime = new Date();
 
     // ── Estado del proceso de import ─────────────────────────────────────
     const errores: ImportRowError[] = [];
@@ -336,9 +341,49 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    // ── AUTO-FIX tenant.moneda tras el import (NUEVO 2026-08-03) ──────
+    // Cierra el loop del path `--allow-auto` del seed script: si el broker
+    // aceptó el default MXN y este es su primer batch import 100% en otra
+    // moneda, ajustamos tenant.moneda automáticamente (saltando el cooldown
+    // de 24h del endpoint /api/tenant/moneda normal). Audit log con source
+    // 'auto-import' que distingue del cambio manual.
+    let autoFixMoneda: Awaited<ReturnType<typeof maybeAutoFixTenantCurrencyAfterImport>> | null = null;
+    if (importadas > 0) {
+      try {
+        // Recolectamos las monedas reales de las pólizas recién insertadas
+        // (no de las filas crudas: el CSV no tiene columna moneda hoy, así
+        // que las polizas heredan el default del schema, 'EUR').
+        const polizasRecienImportadas = await prisma.poliza.findMany({
+          where: { tenantId, createdAt: { gte: batchStartTime } },
+          select: { moneda: true },
+        });
+        autoFixMoneda = await maybeAutoFixTenantCurrencyAfterImport(
+          tenantId,
+          polizasRecienImportadas.map(p => ({ moneda: p.moneda })),
+          {
+            dryRun: false,
+            minBatchSize: 1,
+            source: 'system:auto-import-bulk-csv',
+          },
+        );
+        if (autoFixMoneda.changed) {
+          console.warn(
+            `[importar] Auto-fix aplicado: ${autoFixMoneda.previousMoneda} → ${autoFixMoneda.appliedMoneda} ` +
+              `(${autoFixMoneda.distribution[autoFixMoneda.appliedMoneda!]} pólizas importadas).`,
+          );
+        }
+      } catch (autoFixErr: any) {
+        // El auto-fix es defensivo: nunca rompe la import si falla.
+        console.error('[importar] Auto-fix de moneda falló (no es fatal):', autoFixErr?.message);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       report: { ...report, logId: log.id, autoMapped },
+      // Devolvemos también el resultado del auto-fix para que la UI pueda
+      // mostrar un toast tipo "Tu moneda de reporte se actualizó a EUR".
+      autoFixMoneda: autoFixMoneda ?? undefined,
     });
   } catch (error) {
     console.error('Error al importar pólizas:', error);
