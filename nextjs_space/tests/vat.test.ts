@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeVatAmount } from '@/lib/finance/vat';
+import { computeVatAmount, computePercentageAmount } from '@/lib/finance/vat';
 
 describe('computeVatAmount', () => {
   it('calcula la cuota: base × tipo / 100', () => {
@@ -25,5 +25,22 @@ describe('computeVatAmount', () => {
     expect(computeVatAmount('100', '0')).toBe('');
     expect(computeVatAmount('abc', '21')).toBe('');
     expect(computeVatAmount('100', 'xyz')).toBe('');
+  });
+});
+
+describe('computePercentageAmount (IRPF / retenciones)', () => {
+  it('calcula la retención: base × tipo / 100', () => {
+    expect(computePercentageAmount('1600', '15')).toBe('240.00');
+    expect(computePercentageAmount('1000', '7')).toBe('70.00');
+    expect(computePercentageAmount('121', '15')).toBe('18.15');
+  });
+
+  it('es idéntico a computeVatAmount', () => {
+    expect(computePercentageAmount('1600', '21')).toBe(computeVatAmount('1600', '21'));
+  });
+
+  it('devuelve "" si falta base o tipo', () => {
+    expect(computePercentageAmount('', '15')).toBe('');
+    expect(computePercentageAmount('1600', '')).toBe('');
   });
 });

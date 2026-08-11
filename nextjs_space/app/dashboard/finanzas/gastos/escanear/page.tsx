@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner'
 import { Camera, Receipt, Scan, Loader2, ArrowLeft, CheckCircle2, Image as ImageIcon, FileText } from 'lucide-react'
 import IvaRatesEditor from '@/components/finance/IvaRatesEditor'
-import { computeVatAmount } from '@/lib/finance/vat'
+import { computeVatAmount, computePercentageAmount } from '@/lib/finance/vat'
 
 interface EmisorInfo {
   nombre: string | null
@@ -129,11 +129,25 @@ export default function EscanearGastoPage() {
     })
   }
 
-  // Aplica la base imponible y recalcula la cuota si hay tipo de IVA
+  // Aplica el tipo de retención de IRPF y recalcula la cuota si hay base
+  const applyIrpfRate = (rate: string) => {
+    setForm(p => {
+      const irpfAmount = computePercentageAmount(p.taxableBase, rate)
+      return { ...p, irpfRate: rate, irpfAmount: irpfAmount || p.irpfAmount }
+    })
+  }
+
+  // Aplica la base imponible y recalcula cuota de IVA y retención de IRPF
   const applyTaxableBase = (base: string) => {
     setForm(p => {
       const vatAmount = computeVatAmount(base, p.vatRate)
-      return { ...p, taxableBase: base, vatAmount: vatAmount || p.vatAmount }
+      const irpfAmount = computePercentageAmount(base, p.irpfRate)
+      return {
+        ...p,
+        taxableBase: base,
+        vatAmount: vatAmount || p.vatAmount,
+        irpfAmount: irpfAmount || p.irpfAmount,
+      }
     })
   }
 
@@ -778,7 +792,7 @@ export default function EscanearGastoPage() {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label>IRPF % (Retención)</Label>
-                      <Input type="number" step="0.01" value={form.irpfRate} onChange={e => setForm(p => ({ ...p, irpfRate: e.target.value }))} placeholder="15" />
+                      <Input type="number" step="0.01" value={form.irpfRate} onChange={e => applyIrpfRate(e.target.value)} placeholder="15" />
                     </div>
                     <div>
                       <Label>Cuota IRPF</Label>
