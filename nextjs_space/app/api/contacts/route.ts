@@ -45,7 +45,17 @@ export const GET = withTenantAuth(async (request, auth) => {
           }
         },
         perfilFiscal: {
-          select: { id: true, idFiscalValidado: true }
+          // Incluir los datos fiscales que el flujo de facturación muestra al
+          // seleccionar el contacto (sin nif decía "Sin datos fiscales").
+          select: {
+            id: true,
+            idFiscalValidado: true,
+            nif: true,
+            razonSocial: true,
+            address: true,
+            city: true,
+            country: true,
+          }
         },
         _count: {
           select: {

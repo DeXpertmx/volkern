@@ -3,18 +3,19 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { withTenantAuth } from '@/lib/api-key-auth'
-import { validateFiscalId, aplicaInversionSujetoPasivo, PAISES_UE } from '@/lib/fiscal-validation'
+import { validateFiscalId, aplicaInversionSujetoPasivo, PAISES_UE, normalizarPais } from '@/lib/fiscal-validation'
 
 // La tabla real (y el schema.prisma) usan nif/country/address/city/province/
 // zipCode; la API y el componente trabajan con idFiscal/pais/direccionFiscal/
 // ciudadFiscal/estadoFiscal/codigoPostalFiscal. Mapeamos en ambas direcciones
 // para que el frontend funcione sin tocar la BD (las migraciones nuevas nunca
-// se aplicaron a Neon; la columna real es la vieja).
+// se aplicaron a Neon; la columna real es la vieja). Además normalizamos el
+// país a su código (la BD guardó nombres como 'España' en perfiles viejos).
 function mapearPerfil(p: any) {
   return {
     ...p,
     idFiscal: p.nif ?? null,
-    pais: p.country ?? null,
+    pais: normalizarPais(p.country),
     direccionFiscal: p.address ?? null,
     ciudadFiscal: p.city ?? null,
     estadoFiscal: p.province ?? null,
@@ -112,6 +113,9 @@ export const POST = withTenantAuth(async (req, auth) => {
       return NextResponse.json({ error: 'País, tipo de ID fiscal y número de ID fiscal son requeridos' }, { status: 400 })
     }
 
+    // Normalizar nombre de país -> código (p. ej. 'España' -> 'ES')
+    const paisNormalizado = normalizarPais(pais) || pais;
+
     // Validar que el lead/contact exista y pertenezca al tenant (Base de Datos aislada)
     if (leadId) {
       const lead = await prisma.lead.findFirst({
@@ -152,7 +156,7 @@ export const POST = withTenantAuth(async (req, auth) => {
     }
 
     // Validar ID fiscal (Lógica de negocio independiente de la DB)
-    const validacion = validateFiscalId(pais, tipoIdFiscal, idFiscal)
+    const validacion = validateFiscalId(paisNormalizado, tipoIdFiscal, idFiscal)
     if (!validacion.valid) {
       return NextResponse.json({ error: `ID Fiscal inválido: ${validacion.error}` }, { status: 400 })
     }
@@ -165,7 +169,7 @@ export const POST = withTenantAuth(async (req, auth) => {
         contactId: contactId || null,
         razonSocial,
         nif: validacion.formatted || idFiscal,
-        country: pais,
+        country: paisNormalizado,
         tipoIdFiscal,
         regimenFiscal,
         idIntracomunitario: idIntracomunitario?.toUpperCase() || null,

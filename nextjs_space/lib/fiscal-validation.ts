@@ -417,6 +417,32 @@ export function validateFiscalId(pais: string, tipoId: string, valor: string): {
   };
 }
 
+// La BD guardó nombres de país ('España') en lugar de códigos ('ES') en
+// perfiles viejos (default del schema). La API/UI trabajan con códigos, así
+// que normalizamos nombre -> código. Si no es un nombre conocido, devuelve
+// el valor tal cual (ya es un código o es un país nuevo).
+const PAIS_NOMBRE_A_CODIGO: Record<string, string> = {
+  'España': 'ES', 'Espana': 'ES',
+  'México': 'MX', 'Mexico': 'MX',
+  'Estados Unidos': 'US',
+  'Chile': 'CL',
+  'Argentina': 'AR',
+  'Colombia': 'CO',
+  'Perú': 'PE', 'Peru': 'PE',
+  'Brasil': 'BR',
+  'Reino Unido': 'GB',
+  'Alemania': 'DE',
+  'Francia': 'FR',
+  'Italia': 'IT',
+  'Portugal': 'PT',
+};
+
+export function normalizarPais(pais: string | null | undefined): string | null {
+  if (!pais) return null;
+  const trimmed = pais.trim();
+  return PAIS_NOMBRE_A_CODIGO[trimmed] || trimmed;
+}
+
 // Obtener lista de países soportados
 export function getSupportedCountries(): { codigo: string; nombre: string }[] {
   const paises = new Map<string, string>();
