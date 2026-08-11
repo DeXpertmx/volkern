@@ -101,8 +101,8 @@ export const insuranceIntents: IntentSchema[] = [
   {
     name: 'actualizar_siniestro',
     description: 'Avanzar el estado de un siniestro (REPORTADO → EN_TRAMITE → ABIERTO → PAGADO/RECHAZADO → CERRADO). PAGADO requiere monto indemnizado; RECHAZADO requiere motivo',
-    requiredParams: ['siniestro'],
-    optionalParams: ['estado', 'montoIndemnizado', 'motivoRechazo', 'notas', 'fechaCierre'],
+    requiredParams: ['siniestro', 'estado'],
+    optionalParams: ['montoIndemnizado', 'motivoRechazo', 'notas', 'fechaCierre'],
     examples: [
       'pasa el siniestro SIN-001 a en trámite',
       'marca como pagado el siniestro de la póliza AXA-1234 con indemnización 1200',

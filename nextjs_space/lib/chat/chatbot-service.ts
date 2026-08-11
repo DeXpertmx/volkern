@@ -77,7 +77,16 @@ const MISSING_ENTITY_PROMPTS: Record<string, string> = {
   cliente: '👤 ¿Cuál es el nombre o email del cliente asegurado?',
   dias: '📅 ¿En cuántos días? (ej: 30, 60, 90)',
   riesgo: '⚠️ ¿Incluir solo renovaciones en riesgo? (true/false)',
-  estado: '📋 ¿Qué estado? (ACTIVA, PROXIMA_A_VENCER, PENDIENTE…)',
+  estado: '📋 ¿A qué estado? (en trámite, abierto, pagado, rechazado, cerrado…)',
+
+  // Siniestros
+  siniestro: '🔖 ¿A qué siniestro te refieres? (ej: SIN-001)',
+  numeroSiniestro: '🔖 ¿Quieres asignar un número al siniestro? (ej: SIN-101)',
+  poliza: '🔖 ¿Contra qué póliza es? Dame el número de póliza.',
+  descripcion: '📝 ¿Qué pasó? Describe brevemente el siniestro.',
+  montoReclamado: '💰 ¿Cuál es el monto reclamado?',
+  montoIndemnizado: '💰 ¿Cuánto se va a indemnizar?',
+  motivoRechazo: '📋 ¿Cuál es el motivo del rechazo?',
 }
 
 export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput> {
