@@ -1672,7 +1672,8 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
       julio: 6, agosto: 7, septiembre: 8, setiembre: 8, octubre: 9, noviembre: 10, diciembre: 11,
     }
     const days: Record<string, number> = {
-      domingo: 0, lunes: 1, martes: 2, miercoles: 3, jueves: 4, viernes: 5, sabado: 6,
+      domingo: 0, lunes: 1, martes: 2, miercoles: 3, miércoles: 3,
+      jueves: 4, viernes: 5, sabado: 6, sábado: 6,
     }
     const today = new Date()
     const isoDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`

@@ -22,6 +22,57 @@ export function computePercentageAmount(base: string, rate: string): string {
 export const computeVatAmount = computePercentageAmount;
 
 /**
+ * Tramo de IVA del desglose (base imponible y tipo como strings de input).
+ */
+export interface VatTranche {
+  base: string
+  rate: string
+}
+
+/**
+ * Rellena automáticamente los tramos vacíos para que la suma de bases
+ * cuadre con `target` (la base imponible total a repartir). Los tramos ya
+ * rellenos no se tocan; los vacíos se reparten a partes iguales y el último
+ * absorbe el redondeo, de forma que sum(base) === target.
+ *
+ * `fillableIndices` permite excluir tramos (p. ej. los que el usuario acaba
+ * de vaciar a propósito para teclear otro valor). Devuelve null si no hay
+ * nada que repartir (objetivo inválido, sin tramos rellenables o resto <= 0).
+ */
+export function fillEmptyTranches(
+  rows: VatTranche[],
+  target: string | number,
+  fillableIndices?: number[]
+): string[] | null {
+  const t = typeof target === 'number' ? target : parseFloat(target)
+  if (!Number.isFinite(t) || t <= 0) return null
+
+  const isFilled = (r: VatTranche) => {
+    const b = parseFloat(r.base)
+    return Number.isFinite(b) && b > 0
+  }
+  const fillable =
+    fillableIndices ?? rows.map((_, i) => i).filter(i => !isFilled(rows[i]))
+  if (fillable.length === 0) return null
+
+  const sumFilled = rows.reduce(
+    (acc, r) => acc + (isFilled(r) ? parseFloat(r.base) : 0),
+    0
+  )
+  const remaining = t - sumFilled
+  if (remaining <= 0.005) return null
+
+  const share = Math.round((remaining / fillable.length) * 100) / 100
+  const result = rows.map(r => r.base)
+  fillable.forEach((idx, k) => {
+    const isLast = k === fillable.length - 1
+    const val = isLast ? remaining - share * (fillable.length - 1) : share
+    result[idx] = val.toFixed(2)
+  })
+  return result
+}
+
+/**
  * Conciliación del total de factura: base + IVA − IRPF debe cuadrar con el
  * total detectado. Devuelve null si faltan datos o la diferencia está dentro
  * de la tolerancia (por defecto ±0.02 por redondeos); si no, el desajuste.

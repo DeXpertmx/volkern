@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner'
 import { Camera, Receipt, Scan, Loader2, ArrowLeft, CheckCircle2, Image as ImageIcon, FileText, AlertTriangle } from 'lucide-react'
 import IvaRatesEditor from '@/components/finance/IvaRatesEditor'
-import { computeVatAmount, computePercentageAmount, computeInvoiceTotalMismatch } from '@/lib/finance/vat'
+import { computeVatAmount, computePercentageAmount, computeInvoiceTotalMismatch, fillEmptyTranches } from '@/lib/finance/vat'
 
 interface EmisorInfo {
   nombre: string | null
@@ -105,6 +105,10 @@ export default function EscanearGastoPage() {
   // Tramos de IVA (varias bases con distintos tipos) para facturas mixtas
   const [ivaRows, setIvaRows] = useState<{ id: number; base: string; rate: string }[]>([])
   const nextIvaRowId = useRef(0)
+  // Total base a repartir entre los tramos (los vacíos se autocompletan)
+  const [trancheTarget, setTrancheTarget] = useState('')
+  // Tramos que el usuario vació a propósito: no se autocompletan
+  const [lockedEmptyRows, setLockedEmptyRows] = useState<Set<number>>(new Set())
 
   const lookupSupplierVatRates = async (name: string) => {
     if (ratesTouched) return
@@ -127,6 +131,9 @@ export default function EscanearGastoPage() {
   // Aplica un tipo de IVA y recalcula la cuota si hay base imponible
   const applyVatRate = (rate: string) => {
     setForm(p => {
+      // Con tramos activos el IVA % del desglose es solo informativo (los
+      // tramos mandan); la cuota se recalcula desde las filas al sincronizar.
+      if (ivaRows.length > 0) return { ...p, vatRate: rate }
       const vatAmount = computeVatAmount(p.taxableBase, rate)
       return { ...p, vatRate: rate, vatAmount: vatAmount || p.vatAmount }
     })
@@ -142,6 +149,15 @@ export default function EscanearGastoPage() {
 
   // Aplica la base imponible y recalcula cuota de IVA y retención de IRPF
   const applyTaxableBase = (base: string) => {
+    // Con tramos activos, la base imponible es el total a repartir: los
+    // tramos vacíos se rellenan para cuadrarla y el desglose se recalcula.
+    if (ivaRows.length > 0) {
+      setTrancheTarget(base)
+      const rows = applyDistribution(ivaRows, base)
+      setIvaRows(rows)
+      syncTotalsFromRows(rows)
+      return
+    }
     setForm(p => {
       const vatAmount = computeVatAmount(base, p.vatRate)
       const irpfAmount = computePercentageAmount(base, p.irpfRate)
@@ -203,25 +219,61 @@ export default function EscanearGastoPage() {
     }))
   }
 
+  // ─── Tramos de IVA: reparto automático del total ─────────────────────
+  // Rellena los tramos vacíos (no bloqueados) para que la suma de bases
+  // cuadre con el total a repartir. Devuelve las filas resultantes.
+  const applyDistribution = (rows: typeof ivaRows, target?: string) => {
+    const t = target ?? trancheTarget
+    const parsed = parseFloat(t)
+    if (!Number.isFinite(parsed) || parsed <= 0) return rows
+    const fillable = rows
+      .map((r, i) => ({ r, i }))
+      .filter(({ r }) => !(parseFloat(r.base) > 0) && !lockedEmptyRows.has(r.id))
+      .map(({ i }) => i)
+    const distributed = fillEmptyTranches(rows, parsed, fillable)
+    return distributed ? rows.map((r, i) => ({ ...r, base: distributed[i] })) : rows
+  }
+
   const addIvaRow = () => {
     // El primer tramo arranca con los valores actuales del desglose único
     const rows = ivaRows.length === 0 && (form.taxableBase || form.vatRate)
       ? [{ id: nextIvaRowId.current++, base: form.taxableBase, rate: form.vatRate }]
       : [...ivaRows, { id: nextIvaRowId.current++, base: '', rate: '' }]
-    setIvaRows(rows)
-    syncTotalsFromRows(rows)
+    // El total a repartir arranca con la base imponible o el total del OCR
+    const target = trancheTarget || form.taxableBase || form.totalFactura
+    if (target) setTrancheTarget(target)
+    const withDist = applyDistribution(rows, target)
+    setIvaRows(withDist)
+    syncTotalsFromRows(withDist)
   }
 
   const updateIvaRow = (id: number, field: 'base' | 'rate', value: string) => {
-    const rows = ivaRows.map(r => (r.id === id ? { ...r, [field]: value } : r))
+    let rows = ivaRows.map(r => (r.id === id ? { ...r, [field]: value } : r))
+    if (field === 'base') {
+      // Si el usuario vacía un tramo a propósito, no lo autocompletamos
+      const isEmpty = !(parseFloat(value) > 0)
+      setLockedEmptyRows(prev => {
+        const next = new Set(prev)
+        if (isEmpty) next.add(id)
+        else next.delete(id)
+        return next
+      })
+      rows = applyDistribution(rows)
+    }
     setIvaRows(rows)
     syncTotalsFromRows(rows)
   }
 
   const removeIvaRow = (id: number) => {
     const rows = ivaRows.filter(r => r.id !== id)
-    setIvaRows(rows)
-    if (rows.length > 0) syncTotalsFromRows(rows)
+    setLockedEmptyRows(prev => {
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
+    const withDist = applyDistribution(rows)
+    setIvaRows(withDist)
+    if (withDist.length > 0) syncTotalsFromRows(withDist)
   }
 
   const ivaTotals = ivaRows.reduce(
@@ -889,6 +941,23 @@ export default function EscanearGastoPage() {
                       </p>
                     ) : (
                       <div className="space-y-2">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Label className="text-xs text-muted-foreground">Total base a repartir</Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={trancheTarget}
+                            onChange={e => {
+                              const target = e.target.value
+                              setTrancheTarget(target)
+                              const rows = applyDistribution(ivaRows, target)
+                              setIvaRows(rows)
+                              syncTotalsFromRows(rows)
+                            }}
+                            placeholder="0.00"
+                            className="w-28 h-8 rounded-lg"
+                          />
+                        </div>
                         {ivaRows.map(row => (
                           <div key={row.id} className="grid grid-cols-[1fr_90px_110px_auto] gap-2 items-center">
                             <Input type="number" step="0.01" placeholder="Base imponible" value={row.base} onChange={e => updateIvaRow(row.id, 'base', e.target.value)} className="h-9 rounded-lg" />
@@ -901,7 +970,7 @@ export default function EscanearGastoPage() {
                           <span>Base total: <span className="text-foreground">€{ivaTotals.base.toFixed(2)}</span></span>
                           <span>IVA total: <span className="text-foreground">€{ivaTotals.vat.toFixed(2)}</span></span>
                         </div>
-                        <p className="text-[10px] text-muted-foreground">Los totales se sincronizan con el desglose superior (Base Imponible / Cuota IVA).</p>
+                        <p className="text-[10px] text-muted-foreground">Los tramos vacíos se reparten automáticamente para cuadrar el total (el último absorbe el redondeo). Los totales se sincronizan con el desglose superior (Base Imponible / Cuota IVA).</p>
                       </div>
                     )}
                   </div>
