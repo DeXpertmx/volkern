@@ -27,7 +27,7 @@ export const GET = withTenantAuth(async (request, auth) => {
       where,
       include: {
         supplier: {
-          select: { id: true, name: true }
+          select: { id: true, name: true, taxId: true }
         },
         lead: {
           select: { id: true, nombre: true }
