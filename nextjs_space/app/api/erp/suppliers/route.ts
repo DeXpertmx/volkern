@@ -43,11 +43,19 @@ export const POST = withTenantAuth(async (request, auth) => {
       return NextResponse.json({ error: 'El nombre es obligatorio' }, { status: 400 });
     }
 
+    // vatRates: tipos de IVA que aplica el proveedor (p. ej. [21, 10, 4])
+    const vatRates = Array.isArray(body.vatRates)
+      ? body.vatRates
+          .map((v: unknown) => Number(v))
+          .filter((v: number) => Number.isFinite(v) && v >= 0)
+      : [];
+
     const supplier = await prisma.supplier.create({
       data: {
         tenantId: auth.tenant!.id,
         name: body.name,
         taxId: body.taxId,
+        vatRates,
         email: body.email,
         phone: body.phone,
         streetType: body.streetType,

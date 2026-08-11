@@ -95,6 +95,25 @@ export default function EscanearGastoPage() {
   const [saving, setSaving] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [showSelect, setShowSelect] = useState(true)
+  // Tipos de IVA del proveedor detectado: se ofrecen como opciones para el IVA %
+  const [supplierVatRates, setSupplierVatRates] = useState<number[]>([])
+
+  const lookupSupplierVatRates = async (name: string) => {
+    if (!name.trim()) { setSupplierVatRates([]); return }
+    try {
+      const res = await fetch(`/api/erp/suppliers?search=${encodeURIComponent(name)}`)
+      const list = await res.json()
+      if (Array.isArray(list) && list.length > 0) {
+        const exact = list.find((s: any) => (s.name || '').toLowerCase() === name.trim().toLowerCase())
+        const s = exact || list[0]
+        setSupplierVatRates(Array.isArray(s?.vatRates) ? s.vatRates : [])
+      } else {
+        setSupplierVatRates([])
+      }
+    } catch {
+      setSupplierVatRates([])
+    }
+  }
 
   const [form, setForm] = useState({
     description: '',
@@ -545,7 +564,12 @@ export default function EscanearGastoPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label>Proveedor</Label>
-                  <Input value={form.supplier} onChange={e => setForm(p => ({ ...p, supplier: e.target.value }))} placeholder="Nombre del proveedor" />
+                  <Input
+                    value={form.supplier}
+                    onChange={e => setForm(p => ({ ...p, supplier: e.target.value }))}
+                    onBlur={() => lookupSupplierVatRates(form.supplier)}
+                    placeholder="Nombre del proveedor"
+                  />
                 </div>
                 <div>
                   <Label>Categoría</Label>
@@ -669,7 +693,27 @@ export default function EscanearGastoPage() {
                     </div>
                     <div>
                       <Label>IVA %</Label>
-                      <Input type="number" step="0.01" value={form.vatRate} onChange={e => setForm(p => ({ ...p, vatRate: e.target.value }))} placeholder="21" />
+                      {supplierVatRates.length > 0 ? (
+                        <div className="flex gap-2">
+                          <Select
+                            value={form.vatRate && supplierVatRates.map(String).includes(form.vatRate) ? form.vatRate : 'custom'}
+                            onValueChange={v => setForm(p => ({ ...p, vatRate: v === 'custom' ? p.vatRate : v }))}
+                          >
+                            <SelectTrigger className="w-full"><SelectValue placeholder="Seleccionar tipo" /></SelectTrigger>
+                            <SelectContent>
+                              {supplierVatRates.map(r => (
+                                <SelectItem key={r} value={String(r)}>{r}%</SelectItem>
+                              ))}
+                              <SelectItem value="custom">Otro (manual)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          {(!form.vatRate || !supplierVatRates.map(String).includes(form.vatRate)) && (
+                            <Input type="number" step="0.01" value={form.vatRate} onChange={e => setForm(p => ({ ...p, vatRate: e.target.value }))} placeholder="21" className="w-20" />
+                          )}
+                        </div>
+                      ) : (
+                        <Input type="number" step="0.01" value={form.vatRate} onChange={e => setForm(p => ({ ...p, vatRate: e.target.value }))} placeholder="21" />
+                      )}
                     </div>
                     <div>
                       <Label>Cuota IVA</Label>

@@ -44,14 +44,84 @@ function formatAddress(s: any): string {
   return parts.length ? parts.join(', ') : 'No especificada'
 }
 
-const emptyForm = { name: '', taxId: '', email: '', phone: '', streetType: '', streetName: '', streetNumber: '', staircase: '', floor: '', door: '', postalCode: '', city: '', province: '', country: 'España', category: 'Varios' }
+const emptyForm = { name: '', taxId: '', email: '', phone: '', streetType: '', streetName: '', streetNumber: '', staircase: '', floor: '', door: '', postalCode: '', city: '', province: '', country: 'España', category: 'Varios', vatRates: [] as number[] }
+
+// Editor de tipos de IVA del proveedor: chips con añadir/eliminar.
+// Un proveedor puede facturar a varios tipos (p. ej. 21%, 10%, 4%); esos
+// tipos se ofrecen al registrar un gasto.
+function IvaRatesEditor({ value, onChange }: { value: number[]; onChange: (v: number[]) => void }) {
+  const [input, setInput] = useState('')
+
+  const addRate = () => {
+    const n = parseFloat(input.replace(',', '.'))
+    if (Number.isFinite(n) && n >= 0 && !value.includes(n)) {
+      onChange([...value, n].sort((a, b) => a - b))
+    }
+    setInput('')
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-1.5 min-h-[28px]">
+        {value.length === 0 ? (
+          <span className="text-xs text-muted-foreground">Sin tipos configurados (se usará el que indiques en el gasto)</span>
+        ) : (
+          value.map(v => (
+            <span key={v} className="inline-flex items-center gap-1 rounded-lg bg-primary/10 text-primary text-xs font-bold px-2 py-1">
+              {v}%
+              <button
+                type="button"
+                onClick={() => onChange(value.filter(x => x !== v))}
+                className="hover:text-rose-500 leading-none"
+                aria-label={`Quitar ${v}%`}
+              >×</button>
+            </span>
+          ))
+        )}
+      </div>
+      <div className="flex gap-2">
+        <Input
+          type="number"
+          step="0.01"
+          min="0"
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addRate() } }}
+          placeholder="21"
+          className="rounded-xl h-9 w-24"
+        />
+        <Button type="button" variant="outline" size="sm" onClick={addRate} className="rounded-xl h-9">Añadir tipo</Button>
+      </div>
+    </div>
+  )
+}
 
 export default function ProveedoresPage() {
   const { data: suppliers, isLoading, mutate } = useSWR('/api/erp/suppliers', fetcher)
   const [createOpen, setCreateOpen] = useState(false)
   const [detailSupplier, setDetailSupplier] = useState<any>(null)
+  const [detailSaving, setDetailSaving] = useState(false)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState(emptyForm)
+
+  async function saveDetailRates() {
+    if (!detailSupplier) return
+    setDetailSaving(true)
+    try {
+      const res = await fetch(`/api/erp/suppliers/${detailSupplier.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vatRates: detailSupplier.vatRates || [] })
+      })
+      if (!res.ok) throw new Error()
+      toast.success('Tipos de IVA actualizados')
+      mutate()
+    } catch {
+      toast.error('Error al guardar los tipos de IVA')
+    } finally {
+      setDetailSaving(false)
+    }
+  }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
@@ -166,6 +236,9 @@ export default function ProveedoresPage() {
                 <Label className="text-[11px] font-bold uppercase tracking-widest">Teléfono</Label>
                 <Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="+34 600 000 000" className="rounded-xl" />
               </div>
+            </div>              <div className="space-y-1.5">
+              <Label className="text-[11px] font-bold uppercase tracking-widest">Tipos de IVA aplicables</Label>
+              <IvaRatesEditor value={form.vatRates} onChange={vatRates => setForm({ ...form, vatRates })} />
             </div>
             <div className="space-y-1.5">
               <Label className="text-[11px] font-bold uppercase tracking-widest">Categoría</Label>
@@ -254,7 +327,16 @@ export default function ProveedoresPage() {
                       <Phone className="w-3 h-3" /> {supplier.phone || 'No especificado'}
                     </div>
                  </div>
-                 
+
+                 <div className="flex flex-wrap gap-1.5">
+                    {(supplier.vatRates?.length
+                      ? supplier.vatRates.map((v: number) => `${v}%`)
+                      : ['IVA según gasto']
+                    ).map((label: string) => (
+                      <span key={label} className="rounded-lg bg-slate-100 dark:bg-slate-800 text-[10px] font-bold px-2 py-0.5">{label}</span>
+                    ))}
+                 </div>
+
                  <div className="pt-4 border-t flex items-center justify-between">
                     <div>
                        <p className="text-[10px] font-bold text-muted-foreground uppercase">Balance Pendiente</p>
@@ -316,6 +398,19 @@ export default function ProveedoresPage() {
             <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900 space-y-1">
               <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5"><Calendar className="w-3 h-3" /> Registrado</p>
               <p className="text-sm font-medium">{new Date(detailSupplier?.createdAt).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+            </div>
+            <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Tipos de IVA aplicables</p>
+                <Button variant="ghost" size="sm" disabled={detailSaving} onClick={saveDetailRates} className="rounded-lg text-primary font-bold h-7">
+                  {detailSaving ? 'Guardando...' : 'Guardar'}
+                </Button>
+              </div>
+              <IvaRatesEditor
+                value={detailSupplier?.vatRates || []}
+                onChange={vatRates => setDetailSupplier({ ...detailSupplier, vatRates })}
+              />
+              <p className="text-[10px] text-muted-foreground">Estos tipos se ofrecen al registrar un gasto de este proveedor.</p>
             </div>
           </div>
         </DialogContent>

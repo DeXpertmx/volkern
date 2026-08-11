@@ -23,6 +23,7 @@ Anotado el 2026-08-11. Estado real de cada tema para retomar donde se quedó.
 7. ~~**Campo "Motivo de exención" en el modal**~~ — resuelto `748a8bd`: el modal tiene el input obligatorio y el flujo exento ya no da 400.
 8. **Unificar `ConfiguracionFiscalEmisor` vs `PerfilFiscalCliente`** — dos modelos paralelos de datos fiscales (emisor propio vs clientes) con campos distintos; verificar que la facturación los usa coherentemente.
 9. ~~**403 por wildcard `{ all: true }` en permisos**~~ — resuelto en código (pendiente de deploy): `hasPermission`/`getVisibleModules` ahora entienden `permisos.all === true` y `permisos[module] === true` (shape de `bootstrap-admin.ts`). Afectaba a tenants nuevos (dexpert incluido): `GET /api/deals` daba 403.
+10. ~~**Múltiples tipos de IVA por proveedor**~~ — implementado (pendiente de deploy): `Supplier.vatRates` (Float[], columna aplicada en Neon), editor en la página de proveedores (crear + detalle), y el formulario de gasto ofrece un select con los tipos del proveedor (pre-rellenado por OCR, con opción manual). Tests `erp-suppliers.test.ts`.
 
 ## Notas operativas
 
