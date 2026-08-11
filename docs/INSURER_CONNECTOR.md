@@ -1,7 +1,7 @@
 # 🔌 InsurerConnector — Arquitectura para integración con aseguradoras
 
-**Versión:** 1.2 (Fase 5.2 API + UI, 2026-08-11)
-**Estado actual:** 2 implementaciones (Quálitas MOCK, GNP MOCK), 5 pendientes.
+**Versión:** 1.3 (Conector TIREA MOCK, 2026-08-11)
+**Estado actual:** 3 implementaciones (Quálitas MOCK, GNP MOCK, TIREA MOCK), 4 pendientes.
 
 ---
 
@@ -29,7 +29,7 @@ lib/insurance/connectors/
 ├── gnp/                         # 🔜 pendiente
 ├── axa-mx/                      # 🔜 pendiente
 ├── seguros-monterrey/           # 🔜 pendiente
-├── tirea/                       # 🔜 pendiente — estándar ficheros (no REST)
+├── tirea/                       # ✅ MOCK — estándar ficheros (no REST)
 ├── fiva/                        # 🔜 pendiente — solo normativo (consulta ramos autorizados)
 └── eiac/                        # 🔜 pendiente — solo mediadores (consulta red)
 ```
@@ -46,8 +46,15 @@ lib/insurance/connectors/
 |---|---|---|---|---|
 | `qualitas` | MX | AUTO | AUTH_API_KEY, POLICIES_LIST, POLICIES_ISSUE, CLAIMS_SUBMIT, CLAIMS_STATUS | **MOCK** |
 | `gnp` | MX | AUTO, HOGAR, VIDA, SALUD, GASTOS_MEDICOS, EMPRESARIAL | AUTH_API_KEY, POLICIES_LIST, POLICIES_ISSUE, CLAIMS_SUBMIT, CLAIMS_STATUS | **MOCK** |
+| `tirea` | ES | AUTO, HOGAR, VIDA, SALUD, RESPONSABILIDAD_CIVIL, TRANSPORTE | AUTH_API_KEY, POLICIES_LIST, POLICIES_ISSUE, CLAIMS_SUBMIT, CLAIMS_STATUS | **MOCK** |
 
-Los 5 conectores restantes lanzarán con `isMock: true` hasta que llegue
+TIREA es el primer conector de España: moneda EUR, valida NIF/CIF/NIE vía
+`validarTaxId('ES', …)` y — a diferencia de GNP — TODOS sus ramos exigen
+capital asegurado numérico (`sumaAsegurada > 0`). En la integración real el
+canal será SFTP + ficheros (no REST); el mock lo abstrae detrás de la misma
+interfaz.
+
+Los 4 conectores restantes lanzarán con `isMock: true` hasta que llegue
 Partner Engineering con cada uno. La firma de la interfaz es estable,
 así que el caller no ramifica.
 
@@ -254,7 +261,7 @@ Total: ~855 líneas, 1 commit atómico.
 | 2 | API REST `/api/insurance/connectors/[slug]/sync` + `[slug]/emitir` + listado + tests | ~4h | ✅ |
 | 3 | UI `/dashboard/seguros/aseguradoras/conectores` — listado + sync + emitir | ~6h | ✅ |
 | 4 | Conector GNP mock (segundo conector México) | ~3h | ✅ `e0455f0` |
-| 5 | Conector TIREA mock (España — primero del mercado español) | ~6h | 🟡 |
+| 5 | Conector TIREA mock (España — primero del mercado español) | ~6h | ✅ |
 | 6 | Conector FIVA mock (solo consulta normativa) | ~2h | 🟡 |
 | 7 | Conector EIAC mock (solo red de mediadores) | ~2h | 🟡 |
 | 8 | Webhook genérico `app/api/insurance/webhooks/[aseguradora]/route.ts` | ~4h | 🟡 |
