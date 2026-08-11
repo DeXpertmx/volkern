@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Plus, Search, Building2, Phone, Mail, MapPin, Calendar, CreditCard, Tag } from "lucide-react"
 import useSWR from "swr"
 import { toast } from "sonner"
+import IvaRatesEditor from "@/components/finance/IvaRatesEditor"
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
@@ -45,56 +46,6 @@ function formatAddress(s: any): string {
 }
 
 const emptyForm = { name: '', taxId: '', email: '', phone: '', streetType: '', streetName: '', streetNumber: '', staircase: '', floor: '', door: '', postalCode: '', city: '', province: '', country: 'España', category: 'Varios', vatRates: [] as number[] }
-
-// Editor de tipos de IVA del proveedor: chips con añadir/eliminar.
-// Un proveedor puede facturar a varios tipos (p. ej. 21%, 10%, 4%); esos
-// tipos se ofrecen al registrar un gasto.
-function IvaRatesEditor({ value, onChange }: { value: number[]; onChange: (v: number[]) => void }) {
-  const [input, setInput] = useState('')
-
-  const addRate = () => {
-    const n = parseFloat(input.replace(',', '.'))
-    if (Number.isFinite(n) && n >= 0 && !value.includes(n)) {
-      onChange([...value, n].sort((a, b) => a - b))
-    }
-    setInput('')
-  }
-
-  return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap gap-1.5 min-h-[28px]">
-        {value.length === 0 ? (
-          <span className="text-xs text-muted-foreground">Sin tipos configurados (se usará el que indiques en el gasto)</span>
-        ) : (
-          value.map(v => (
-            <span key={v} className="inline-flex items-center gap-1 rounded-lg bg-primary/10 text-primary text-xs font-bold px-2 py-1">
-              {v}%
-              <button
-                type="button"
-                onClick={() => onChange(value.filter(x => x !== v))}
-                className="hover:text-rose-500 leading-none"
-                aria-label={`Quitar ${v}%`}
-              >×</button>
-            </span>
-          ))
-        )}
-      </div>
-      <div className="flex gap-2">
-        <Input
-          type="number"
-          step="0.01"
-          min="0"
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addRate() } }}
-          placeholder="21"
-          className="rounded-xl h-9 w-24"
-        />
-        <Button type="button" variant="outline" size="sm" onClick={addRate} className="rounded-xl h-9">Añadir tipo</Button>
-      </div>
-    </div>
-  )
-}
 
 export default function ProveedoresPage() {
   const { data: suppliers, isLoading, mutate } = useSWR('/api/erp/suppliers', fetcher)
