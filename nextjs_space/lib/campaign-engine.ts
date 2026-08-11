@@ -81,7 +81,7 @@ async function getTargetAudience(
               email: true,
               telefono: true,
               empresa: true,
-              perfilFiscal: { select: { idFiscal: true } as any }
+              perfilFiscal: { select: { nif: true } }
             }
           })
           const estudiantes = await tenantClient.estudiante.findMany({
@@ -96,7 +96,7 @@ async function getTargetAudience(
               email: l.email,
               telefono: l.telefono || undefined,
               empresa: l.empresa || undefined,
-              idFiscal: l.perfilFiscal?.idFiscal || undefined
+              idFiscal: l.perfilFiscal?.nif || undefined
             })),
             ...estudiantes.map((e: any) => ({ tipo: 'estudiante', id: e.id, nombre: e.nombre, email: e.email, telefono: e.telefono || undefined }))
           )
@@ -119,7 +119,7 @@ async function getTargetAudience(
               email: true,
               telefono: true,
               empresa: true,
-              perfilFiscal: { select: { idFiscal: true } as any }
+              perfilFiscal: { select: { nif: true } }
             }
           })
           destinatarios.push(...leadsWithScore.map((l: any) => ({
@@ -129,7 +129,7 @@ async function getTargetAudience(
             email: l.email,
             telefono: l.telefono || undefined,
             empresa: l.empresa || undefined,
-            idFiscal: l.perfilFiscal?.idFiscal || undefined
+            idFiscal: l.perfilFiscal?.nif || undefined
           })))
           break
 
@@ -143,7 +143,7 @@ async function getTargetAudience(
               email: true,
               telefono: true,
               empresa: true,
-              perfilFiscal: { select: { idFiscal: true } as any }
+              perfilFiscal: { select: { nif: true } }
             }
           })
           destinatarios.push(...leadsByEstado.map((l: any) => ({
@@ -153,7 +153,7 @@ async function getTargetAudience(
             email: l.email,
             telefono: l.telefono || undefined,
             empresa: l.empresa || undefined,
-            idFiscal: l.perfilFiscal?.idFiscal || undefined
+            idFiscal: l.perfilFiscal?.nif || undefined
           })))
           break
 
@@ -185,7 +185,7 @@ async function getTargetAudience(
                 email: true,
                 telefono: true,
                 empresa: true,
-                perfilFiscal: { select: { idFiscal: true } as any }
+                perfilFiscal: { select: { nif: true } }
               }
             })
             destinatarios.push(...customLeads.map((l: any) => ({
@@ -195,7 +195,7 @@ async function getTargetAudience(
               email: l.email,
               telefono: l.telefono || undefined,
               empresa: l.empresa || undefined,
-              idFiscal: l.perfilFiscal?.idFiscal || undefined
+              idFiscal: l.perfilFiscal?.nif || undefined
             })))
           }
 

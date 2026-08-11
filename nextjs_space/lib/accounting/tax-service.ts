@@ -408,7 +408,7 @@ export class TaxService {
         const perfil = inv.contact.perfilFiscal;
         clientMap.set(contactId, {
           nombre: inv.contact.nombre,
-          nif: (perfil as any)?.idFiscal || (perfil as any)?.idIntracomunitario || '',
+          nif: perfil?.nif || perfil?.idIntracomunitario || '',
           country: perfil?.country || 'ES',
           count: 1,
           total: Number(inv.monto),
@@ -529,7 +529,7 @@ export class TaxService {
         country: { not: 'ES' },
         idIntracomunitario: { not: null },
       },
-      select: { contactId: true, country: true, idIntracomunitario: true, idFiscal: true } as any
+      select: { contactId: true, country: true, idIntracomunitario: true, nif: true }
     });
 
     const contactIds = euProfiles
@@ -557,7 +557,7 @@ export class TaxService {
       const profile = profileMap.get(inv.contactId!) as any;
       return {
         clientName: inv.contact?.nombre || 'Sin nombre',
-        clientNif: profile?.idFiscal || '',
+        clientNif: profile?.nif || '',
         clientCountry: profile?.country || '',
         clientVatId: profile?.idIntracomunitario || '',
         invoiceNumber: inv.numero,

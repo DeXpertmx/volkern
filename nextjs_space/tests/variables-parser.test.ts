@@ -56,8 +56,8 @@ describe('replaceVariables', () => {
     expect(replaceVariables('Empresa: {empresa}', ctx)).toBe('Empresa: ACME Corp');
   });
 
-  it('debe reemplazar {id_fiscal} con lead.perfilFiscal.idFiscal', () => {
-    const ctx = makeContext({ lead: { perfilFiscal: { idFiscal: 'B12345678' } } });
+  it('debe reemplazar {id_fiscal} con lead.perfilFiscal.nif (columna real de la BD)', () => {
+    const ctx = makeContext({ lead: { perfilFiscal: { nif: 'B12345678' } } });
     expect(replaceVariables('ID Fiscal: {id_fiscal}', ctx)).toBe('ID Fiscal: B12345678');
   });
 
