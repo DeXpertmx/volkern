@@ -638,6 +638,51 @@ export const ExecutionEngine = {
         const monto = data?.monto !== undefined && data?.monto !== null ? ` por ${this.escapeMarkdown(String(data.monto))} ${this.escapeMarkdown(String(data?.moneda || 'EUR'))}` : '';
         return `🔄 *Factura rectificada:* ${numero}${monto}. La factura anterior queda anulada.`;
       }
+
+      // ─── Logística (Undécimo entrenamiento) ───
+      case 'get_shipment_status': {
+        if (!data?.found) return `🚚 ${this.escapeMarkdown(String(data?.message || 'No se encontró el envío.'))}`;
+        const s = data?.shipment || {};
+        const tracking = this.escapeMarkdown(String(s?.trackingNumber || ''));
+        const status = this.escapeMarkdown(String(s?.status || '').replace(/_/g, ' '));
+        const carrier = s?.carrier ? ` · ${this.escapeMarkdown(String(s.carrier))}` : '';
+        const cliente = s?.customerName ? `\n👤 ${this.escapeMarkdown(String(s.customerName))}` : '';
+        const entrega = s?.estimatedDelivery
+          ? `\n📅 Entrega estimada: ${this.escapeMarkdown(String(s.estimatedDelivery).slice(0, 10))}`
+          : '';
+        return `🚚 *Envío ${tracking}:* ${status}${carrier}${cliente}${entrega}`;
+      }
+      case 'track_order': {
+        if (!data?.found) return `📦 ${this.escapeMarkdown(String(data?.message || 'No se encontró el pedido.'))}`;
+        const estado = this.escapeMarkdown(String(data?.status || '').replace(/_/g, ' '));
+        const carrier = data?.carrier ? ` · ${this.escapeMarkdown(String(data.carrier))}` : '';
+        const receiver = data?.receiver ? ` · 👤 ${this.escapeMarkdown(String(data.receiver))}` : '';
+        const events = (data?.timeline || []).map((t: any) => {
+          const icon = t?.done ? '✅' : '⏳';
+          const fecha = t?.date ? ` (${this.escapeMarkdown(String(t.date).slice(0, 10))})` : '';
+          return `${icon} ${this.escapeMarkdown(String(t?.event || ''))}${fecha}`;
+        }).join('\n');
+        return `📦 *Pedido:* ${estado}${carrier}${receiver}\n${events}`;
+      }
+      case 'check_fleet_health': {
+        if (data?.message) return `🚛 ${this.escapeMarkdown(String(data.message))}`;
+        const kpis = data?.kpis || {};
+        const activos = kpis?.active !== undefined ? this.escapeMarkdown(String(kpis.active)) : '';
+        const total = kpis?.total !== undefined ? this.escapeMarkdown(String(kpis.total)) : '';
+        const mant = (data?.maintenanceDue || []).map((v: any) => `• ${this.escapeMarkdown(String(v?.plate || ''))} ${this.escapeMarkdown(String(v?.brand || ''))} ${this.escapeMarkdown(String(v?.model || ''))}`).join('\n');
+        const itv = (data?.expiringItv || []).map((v: any) => `• ${this.escapeMarkdown(String(v?.plate || ''))} — ${this.escapeMarkdown(String(v?.daysLeft ?? ''))}d`).join('\n');
+        let out = `🚛 *Flota:* ${activos} de ${total} vehículos activos.`;
+        if (mant) out += `\n\n🛠️ *En mantenimiento:*\n${mant}`;
+        if (itv) out += `\n\n📋 *ITV próximas a vencer:*\n${itv}`;
+        if (!mant && !itv) out += '\n✅ Sin mantenimientos pendientes ni ITV próxima.';
+        return out;
+      }
+      case 'optimize_route': {
+        return `🗺️ ${this.escapeMarkdown(String(data?.suggestion || 'Sin sugerencia de ruta.'))}`;
+      }
+      case 'suggest_warehouse_reorg': {
+        return `🏭 ${this.escapeMarkdown(String(data?.suggestion || 'Sin sugerencia de reorganización.'))}`;
+      }
       default:
         return '';
     }
