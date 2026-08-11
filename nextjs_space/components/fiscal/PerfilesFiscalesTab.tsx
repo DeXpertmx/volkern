@@ -35,6 +35,7 @@ interface PerfilFiscal {
   estadoFiscal?: string | null;
   esExentoImpuestos?: boolean;
   exentoImpuestos?: boolean;
+  motivoExencion?: string | null;
   idIntracomunitario: string | null;
   lead?: { nombre: string; email: string };
   contact?: { nombre: string; email: string };
@@ -96,6 +97,7 @@ export default function PerfilesFiscalesTab({ onUpdate }: Props) {
     ciudad: '',
     estadoProvincia: '',
     esExentoImpuestos: false,
+    motivoExencion: '',
     idIntracomunitario: ''
   });
 
@@ -179,6 +181,10 @@ export default function PerfilesFiscalesTab({ onUpdate }: Props) {
       toast.error('Selecciona un contacto');
       return;
     }
+    if (formData.esExentoImpuestos && !formData.motivoExencion?.trim()) {
+      toast.error('Indica el motivo de la exención de impuestos');
+      return;
+    }
 
     try {
       const url = editingPerfil
@@ -200,6 +206,7 @@ export default function PerfilesFiscalesTab({ onUpdate }: Props) {
         ciudadFiscal: formData.ciudad || null,
         estadoFiscal: formData.estadoProvincia || null,
         exentoImpuestos: formData.esExentoImpuestos,
+        motivoExencion: formData.esExentoImpuestos ? (formData.motivoExencion?.trim() || null) : null,
         idIntracomunitario: formData.idIntracomunitario || null
       };
 
@@ -262,6 +269,7 @@ export default function PerfilesFiscalesTab({ onUpdate }: Props) {
       ciudad: perfil.ciudadFiscal || perfil.ciudad || '',
       estadoProvincia: perfil.estadoFiscal || perfil.estadoProvincia || '',
       esExentoImpuestos: perfil.exentoImpuestos || perfil.esExentoImpuestos || false,
+      motivoExencion: perfil.motivoExencion || '',
       idIntracomunitario: perfil.idIntracomunitario || ''
     });
     setDialogOpen(true);
@@ -285,6 +293,7 @@ export default function PerfilesFiscalesTab({ onUpdate }: Props) {
       ciudad: '',
       estadoProvincia: '',
       esExentoImpuestos: false,
+      motivoExencion: '',
       idIntracomunitario: ''
     });
   };
@@ -512,6 +521,20 @@ export default function PerfilesFiscalesTab({ onUpdate }: Props) {
                   />
                   <Label>Exento de Impuestos</Label>
                 </div>
+
+                {formData.esExentoImpuestos && (
+                  <div className="col-span-2 space-y-2">
+                    <Label>Motivo de Exención *</Label>
+                    <Input
+                      value={formData.motivoExencion}
+                      onChange={(e) => setFormData({ ...formData, motivoExencion: e.target.value })}
+                      placeholder="Ej: Art. 20 Ley 37/1992, sujeto pasivo en otro Estado miembro, entidad exenta..."
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Obligatorio cuando el perfil está exento de impuestos (el API lo exige para Veri*factu).
+                    </p>
+                  </div>
+                )}
               </div>
               </div>
 

@@ -146,6 +146,20 @@ describe('PATCH /api/configuracion/fiscal/perfiles/:id', () => {
     expect(res.status).toBe(400);
     expect(prisma.perfilFiscalCliente.update).not.toHaveBeenCalled();
   });
+
+  it('acepta exento con motivoExencion y lo guarda', async () => {
+    (prisma.perfilFiscalCliente.findFirst as any).mockResolvedValue(perfilExistente);
+    (prisma.perfilFiscalCliente.update as any).mockResolvedValue({ ...perfilExistente, exentoImpuestos: true, motivoExencion: 'Art. 20 Ley 37/1992' });
+
+    const res = await PATCH(
+      makeReq({ ...payloadFrontend, exentoImpuestos: true, motivoExencion: 'Art. 20 Ley 37/1992' }),
+      { params: { id: 'perfil-1' } }
+    );
+    expect(res.status).toBe(200);
+    const data = (prisma.perfilFiscalCliente.update as any).mock.calls[0][0].data;
+    expect(data.exentoImpuestos).toBe(true);
+    expect(data.motivoExencion).toBe('Art. 20 Ley 37/1992');
+  });
 });
 
 describe('POST /api/configuracion/fiscal/perfiles', () => {
