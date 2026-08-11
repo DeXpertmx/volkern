@@ -18,9 +18,9 @@ export const hrIntents: IntentSchema[] = [
   },
   {
     name: 'aprobar_vacaciones',
-    description: 'Aprobar solicitud de vacaciones con nota personalizada',
+    description: 'Aprobar solicitud de vacaciones con nota personalizada. El bot localiza la solicitud por número (#123) o por el nombre del empleado; si solo se da el nombre, usa la solicitud pendiente del empleado',
     requiredParams: ['solicitudId'],
-    optionalParams: ['nota'],
+    optionalParams: ['nombre', 'nota'],
     examples: [
       'aprueba la solicitud de vacaciones #123',
       'autoriza vacaciones de María con nota: "Disfruta tus días"',

@@ -159,6 +159,19 @@ export class IntentClassifierAgent {
       if (!missing.includes('nombre')) missing.push('nombre');
     }
 
+    // aprobar_vacaciones: la solicitud puede localizarse por número (solicitudId)
+    // o por el nombre del empleado (su solicitud pendiente). Si el usuario dio el
+    // nombre, el parámetro está satisfecho y NO se pide la solicitud. Si falta
+    // por completo, se pide la solicitud.
+    if (intent === 'aprobar_vacaciones') {
+      if (extractedParams.nombre) {
+        return missing.filter((p: string) => p !== 'solicitudId');
+      }
+      if (!extractedParams.solicitudId && !missing.includes('solicitudId')) {
+        missing.push('solicitudId');
+      }
+    }
+
     return missing;
   }
 
@@ -375,7 +388,10 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     // Entidades de logística sin verbo: "estado del envío TRK-123", "cómo está
     // la flota", "qué pedidos en tránsito", "ITV próxima a vencer" (undécimo)
     const LOGISTICA_TRIGGER = /\b(?:env[ií]os?|tracking|pedidos?|flota|veh[ií]culos?|cami[oó]nes?|rutas?|reparto|entregas?|paquetes?|itv|almac[eé]n(?:es)?)\b/i
-    if (!ACTION_VERB.test(message) && !ENTITY_TRIGGER.test(message) && !FILTER_ONLY.test(message) && !CITA_TRIGGER.test(message) && !FINANZA_TRIGGER.test(message) && !TAREA_TRIGGER.test(message) && !PROVEEDOR_TRIGGER.test(message) && !CATALOGO_TRIGGER.test(message) && !INVENTARIO_TRIGGER.test(message) && !INSURANCE_TRIGGER.test(message) && !FACTURA_TRIGGER.test(message) && !LOGISTICA_TRIGGER.test(message)) return null
+    // Entidades de RRHH sin verbo: "resumen diario de RH", "briefing del equipo",
+    // "quién tiene riesgo de irse", "solicitudes de vacaciones" (duodécimo)
+    const RRHH_TRIGGER = /\b(?:rrhh|recursos\s+humanos|vacaciones|rotaci[oó]n|retenci[oó]n|irse|briefing|resumen\s+diario|estado\s+de\s+fuerza|equipo\s+hoy|talento)\b/i
+    if (!ACTION_VERB.test(message) && !ENTITY_TRIGGER.test(message) && !FILTER_ONLY.test(message) && !CITA_TRIGGER.test(message) && !FINANZA_TRIGGER.test(message) && !TAREA_TRIGGER.test(message) && !PROVEEDOR_TRIGGER.test(message) && !CATALOGO_TRIGGER.test(message) && !INVENTARIO_TRIGGER.test(message) && !INSURANCE_TRIGGER.test(message) && !FACTURA_TRIGGER.test(message) && !LOGISTICA_TRIGGER.test(message) && !RRHH_TRIGGER.test(message)) return null
 
     const extracted: Record<string, any> = {}
     const email = message.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,})/)
@@ -675,6 +691,48 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
       const almacenId = this.extractAlmacenRefDe(message)
       if (almacenId) extracted.almacenId = almacenId
       return { intent: 'reorganizar_almacen', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 0g. RESUMEN RRHH ("dame el resumen diario de RH", "briefing de
+    // recursos humanos", "cómo está el equipo hoy") ═══
+    const RH_ENTITY = /\b(?:rrhh|recursos\s+humanos|rh)\b/i
+    const BRIEFING_VERB = /\b(?:resumen|briefing|dame\s+el\s+resumen|dame\s+el\s+briefing|estado\s+del\s+equipo|estado\s+de\s+fuerza|c[oó]mo\s+est[aá]\s+(?:el|mi)\s+equipo|c[oó]mo\s+va\s+el\s+equipo)\b/i
+    const EQUIPO_SOLO = /\b(?:equipo|colaboradores|plantilla|estado\s+de\s+fuerza)\b/i
+    if ((RH_ENTITY.test(message) && BRIEFING_VERB.test(message)) ||
+        (BRIEFING_VERB.test(message) && EQUIPO_SOLO.test(message) && /\bhoy|ahora|actual|diario|d[ií]a/i.test(message))) {
+      return { intent: 'resumen_rrhh', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 0h. APROBAR VACACIONES ("aprueba la solicitud de vacaciones #123",
+    // "autoriza vacaciones de María con nota: Disfruta tus días",
+    // "confirma la solicitud de vacaciones de Juan Pérez") ═══
+    const VACACIONES_ENTITY = /\b(?:vacaciones|asuntos\s+propios|d[ií]as\s+libres|permisos?)\b/i
+    const APROBAR_VERB = /\b(?:aprueba|aprobar|aprobaci[oó]n|autoriza|autorizar|confirma|confirmar|acepta|aceptar|valida|validar|da\s+el\s+ok|dale\s+ok)\b/i
+    if (VACACIONES_ENTITY.test(message) && APROBAR_VERB.test(message)) {
+      const solicitudId = this.extractSolicitudIdDe(message)
+      if (solicitudId) extracted.solicitudId = solicitudId
+      const msgNombre = this.stripFechaPhrases(message)
+      const nombre = this.extractNombreAfter(msgNombre, /\b(?:vacaciones|d[ií]as\s+libres|permisos?)\s+(?:de|del|del empleado)\s+/i)
+      if (nombre) extracted.nombre = nombre
+      const nota = this.extractNotaDe(message)
+      if (nota) extracted.nota = nota
+      return { intent: 'aprobar_vacaciones', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 0i. RIESGO ROTACIÓN ("analiza el riesgo de rotación del equipo",
+    // "quién tiene riesgo de irse", "análisis de retención de talento") ═══
+    const ROTACION_ENTITY = /\b(?:rotaci[oó]n|retenci[oó]n|irse|renunciar|abandonar)\b/i
+    const RIESGO_SIGNAL = /\b(?:riesgo|an[aá]lisis|analiza|analizar|qu[ié]n\s+tiene|dame\s+el\s+an[aá]lisis|qui[eé]nes\s+est[aá]n)\b/i
+    if (ROTACION_ENTITY.test(message) && RIESGO_SIGNAL.test(message)) {
+      const msgEmpleado = this.stripFechaPhrases(message)
+      // "de María" / "del equipo": el lookahead exige mayúscula inicial para no
+      // capturar "riesgo de rotación" como nombre.
+      const nombre = this.extractNombreAfter(msgEmpleado, /\b(?:de|del|empleado|colaborador)\s+(?=[A-ZÁÉÍÓÚÑÜ])/)
+      // Evitar capturar "el equipo", "el personal" como nombre
+      if (nombre && !/\b(?:equipo|personal|talento|la\s+empresa|todos?)\b/i.test(nombre)) {
+        extracted.nombre = nombre
+      }
+      return { intent: 'riesgo_rotacion', confidence: 0.85, extractedParams: extracted }
     }
 
     // ═══ 0. CONVERTIR LEAD (antes que crear: "convierte… en contacto" también
@@ -1649,6 +1707,40 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
   }
 
   /**
+   * Extrae el identificador de una solicitud de vacaciones: "#123",
+   * "solicitud 123", "solicitud #123", "VAC-123". Normaliza a "123" o "VAC-123".
+   */
+  private extractSolicitudIdDe(message: string): string | null {
+    const hash = message.match(/#\s?(\d{1,8})/)
+    if (hash) return hash[1]
+    const kw = message.match(/\b(?:solicitud|solicitud\s+de\s+vacaciones)\s+(?:n[úu]mero\s+|#\s*)?(\d{1,8})/i)
+    if (kw) return kw[1]
+    const prefijo = message.match(/\b(VAC-\d{1,8})/i)
+    if (prefijo) return prefijo[1]
+    return null
+  }
+
+  /**
+   * Extrae la nota personalizada: tras "con nota: X", "nota: X", "con el
+   * mensaje: X". Corta en comillas de cierre o fin de mensaje.
+   */
+  private extractNotaDe(message: string): string | null {
+    const m = message.match(/\b(?:con\s+)?nota\s*:\s*["“']?([^"”']+)/i)
+    if (m) {
+      let nota = m[1].trim()
+      nota = nota.replace(/["'”]+\s*$/, '').trim()
+      if (nota.length >= 2) return nota
+    }
+    const m2 = message.match(/\bcon\s+el\s+mensaje\s*:\s*["“']?([^"”']+)/i)
+    if (m2) {
+      let nota = m2[1].trim()
+      nota = nota.replace(/["'”]+\s*$/, '').trim()
+      if (nota.length >= 2) return nota
+    }
+    return null
+  }
+
+  /**
    * Extrae la hora de "a las 10am", "a las 15:30", "las 2pm", "10:00 AM",
    * "2:30 PM". Normaliza a HH:MM (24h).
    */
@@ -2011,7 +2103,7 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
 
     // Paso 1: delimitadores fuertes (coma, punto y coma, "con email/correo/
     // teléfono", "para", "de la empresa").
-    const parts = rest.split(/\s*(?:,|;|para\s+|con\s+(?:email|correo|tel[eé]fono)|de\s+la\s+empresa|de\s+empresa)/i)
+    const parts = rest.split(/\s*(?:,|;|para\s+|con\s+(?:email|correo|tel[eé]fono|nota)|de\s+la\s+empresa|de\s+empresa)/i)
     let name = parts[0].trim()
 
     // Paso 2: el punto solo separa cuando cierra una oración nueva (seguido de
@@ -2359,6 +2451,20 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     }
     if (param === 'almacenId' || param === 'warehouseId') {
       return this.extractAlmacenRefDe(message)
+    }
+    // ─── Módulo RRHH (Duodécimo entrenamiento) ───
+    if (param === 'solicitudId' || param === 'vacationRequestId') {
+      const ref = this.extractSolicitudIdDe(message)
+      if (ref) return ref
+      // Si responde con el nombre del empleado ("la de María") en vez del nº,
+      // el wrapper lo resuelve a su solicitud pendiente.
+      return this.extractNombreAfter(message, /\b(?:de|del|empleado|colaborador)\s+/i)
+    }
+    if (param === 'nota' || param === 'note') {
+      return this.extractNotaDe(message)
+    }
+    if (param === 'empleadoId' || param === 'employeeId') {
+      return this.extractNombreAfter(message, /\b(?:empleado|colaborador|de|del)\s+/i)
     }
     return null
   }

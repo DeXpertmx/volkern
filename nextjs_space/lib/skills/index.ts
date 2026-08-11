@@ -1692,6 +1692,164 @@ const suggestWarehouseReorgWrapper = async (input: {
   });
 };
 
+// ─── Wrappers de RRHH (Duodécimo entrenamiento): el core exige
+// vacationRequestId / employeeId, pero el chatbot localiza la solicitud por
+// número (#123) o por el nombre del empleado, y el riesgo de rotación puede
+// pedirse para todo el equipo ────────────────────────────────────────────────
+
+/**
+ * Resuelve la solicitud de vacaciones pendiente: por id cuid (API), por número
+ * de solicitud (#123 → match por sufijo del id, best-effort) o por el nombre
+ * del empleado (usa su solicitud pendiente más reciente).
+ */
+async function resolveVacationRequestId(
+  tenantId: string,
+  ref?: string,
+  employeeNombre?: string,
+): Promise<{ id: string; empleadoNombre: string; empleadoId: string }> {
+  const { prisma } = await import('@/lib/db')
+  const refClean = ref ? String(ref).trim().replace(/^#/, '') : ''
+
+  // 1. Id cuid directo
+  if (refClean && /^c[a-z0-9]{20,}$/i.test(refClean)) {
+    const direct = await (prisma as any).erp_vacation_requests.findUnique({
+      where: { id: refClean, tenantId },
+      select: { id: true, employeeId: true, erp_employees: { select: { fullName: true } } },
+    })
+    if (direct) {
+      return {
+        id: direct.id,
+        empleadoId: direct.employeeId,
+        empleadoNombre: direct.erp_employees?.fullName || '',
+      }
+    }
+    throw new Error(`No encontré ninguna solicitud de vacaciones con ese id.`)
+  }
+
+  // 2. Número de solicitud: los ids son cuids; se permite match por sufijo
+  if (refClean && /^\d{1,8}$/.test(refClean)) {
+    const all = await (prisma as any).erp_vacation_requests.findMany({
+      where: { tenantId, status: 'PENDING' },
+      select: { id: true, employeeId: true, erp_employees: { select: { fullName: true } } },
+      orderBy: { createdAt: 'desc' },
+    })
+    const byRef = all.find((v: any) => v.id.endsWith(refClean) || String(v.id).includes(refClean))
+    if (byRef) {
+      return {
+        id: byRef.id,
+        empleadoId: byRef.employeeId,
+        empleadoNombre: byRef.erp_employees?.fullName || '',
+      }
+    }
+    throw new Error(`No encontré ninguna solicitud de vacaciones "${refClean}" pendiente de aprobar.`)
+  }
+
+  // 3. Por nombre del empleado
+  const nombre = String(employeeNombre || refClean || '').trim()
+  if (!nombre) {
+    throw new Error('Necesito saber qué solicitud aprobar: su número (#123) o el nombre del empleado.')
+  }
+  const employee = await (prisma as any).employee.findFirst({
+    where: { tenantId, fullName: { contains: nombre, mode: 'insensitive' as const }, isActive: true },
+    select: { id: true, fullName: true },
+  })
+  if (!employee) throw new Error(`No encontré ningún empleado llamado "${nombre}".`)
+  const pending = await (prisma as any).erp_vacation_requests.findFirst({
+    where: { tenantId, employeeId: employee.id, status: 'PENDING' },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, employeeId: true },
+  })
+  if (!pending) {
+    throw new Error(`${employee.fullName} no tiene solicitudes de vacaciones pendientes de aprobar.`)
+  }
+  return { id: pending.id, empleadoId: pending.employeeId, empleadoNombre: employee.fullName }
+}
+
+const approveVacationWrapper = async (input: {
+  tenantId: string;
+  solicitudId?: string;
+  vacationRequestId?: string;
+  nombre?: string;
+  empleado?: string;
+  nota?: string;
+  note?: string;
+  userId?: string;
+}) => {
+  const resolved = await resolveVacationRequestId(
+    input.tenantId,
+    input.vacationRequestId || input.solicitudId,
+    input.nombre || input.empleado,
+  )
+  const result = await hrSkills.approve_vacation_voice({
+    tenantId: input.tenantId,
+    vacationRequestId: resolved.id,
+    note: String(input.nota || input.note || ''),
+    userId: input.userId || 'SYSTEM',
+  })
+  return { ...result, empleadoNombre: resolved.empleadoNombre }
+}
+
+const talentRetentionRiskWrapper = async (input: {
+  tenantId: string;
+  empleadoId?: string;
+  employeeId?: string;
+  nombre?: string;
+  empleado?: string;
+}) => {
+  const { prisma } = await import('@/lib/db')
+  const { tenantId } = input
+  const ref = input.employeeId || input.empleadoId
+  const nombre = String(input.nombre || input.empleado || '').trim()
+
+  // 1. Empleado concreto (id cuid o nombre; un ref no-cuid se trata como nombre)
+  let targetId: string | undefined
+  const refEsCuid = ref ? /^c[a-z0-9]{20,}$/i.test(ref) : false
+  if (refEsCuid) targetId = ref
+  const nombreBusqueda = String(nombre || (ref && !refEsCuid ? ref : '') || '').trim()
+  if (!targetId && nombreBusqueda) {
+    const emp = await (prisma as any).employee.findFirst({
+      where: { tenantId, fullName: { contains: nombreBusqueda, mode: 'insensitive' as const }, isActive: true },
+      select: { id: true, fullName: true },
+    })
+    if (!emp) throw new Error(`No encontré ningún empleado llamado "${nombreBusqueda}".`)
+    targetId = emp.id
+  }
+  if (targetId) {
+    return hrSkills.talent_retention_risk({ tenantId: input.tenantId, employeeId: targetId })
+  }
+
+  // 2. Todo el equipo: analizar cada empleado activo y agregar por riesgo
+  const employees = await (prisma as any).employee.findMany({
+    where: { tenantId, isActive: true },
+    select: { id: true, fullName: true },
+  })
+  if (employees.length === 0) throw new Error('No hay empleados activos en el equipo para analizar.')
+  const results: any[] = []
+  for (const emp of employees) {
+    try {
+      results.push(await hrSkills.talent_retention_risk({ tenantId: input.tenantId, employeeId: emp.id }))
+    } catch {
+      // Empleado sin datos suficientes: se omite del agregado
+    }
+  }
+  if (results.length === 0) throw new Error('No pude completar el análisis de rotación del equipo.')
+  const rank: Record<string, number> = { HIGH: 3, MEDIUM: 2, LOW: 1 }
+  results.sort((a, b) => (rank[b.riskLevel] || 0) - (rank[a.riskLevel] || 0))
+  const summary = results
+    .map(
+      (r) => `• ${r.employeeName}: ${r.riskLevel} (${r.factors?.workload || ''}; ${r.factors?.trainingMaturity || ''})`,
+    )
+    .join('\n')
+  return {
+    teamAnalysis: true,
+    analyzed: results.length,
+    highRisk: results.filter((r) => r.riskLevel === 'HIGH').length,
+    mediumRisk: results.filter((r) => r.riskLevel === 'MEDIUM').length,
+    summary,
+    mostAtRisk: results[0] || null,
+  }
+}
+
 export const skills = {
   // Contactos
   create_contact: createContactWrapper,
@@ -1811,11 +1969,11 @@ export const skills = {
   register_qc_inspection: qualitySkills.register_qc_inspection,
 
   // ERP RRHH (HRM)
-  talent_retention_risk: hrSkills.talent_retention_risk,
+  talent_retention_risk: talentRetentionRiskWrapper,
   get_employee_confidential_data: hrSkills.get_employee_confidential_data,
   get_hr_daily_brief: hrSkills.get_hr_daily_brief,
   authorize_bulk_expenses: hrSkills.authorize_bulk_expenses,
-  approve_vacation_voice: hrSkills.approve_vacation_voice,
+  approve_vacation_voice: approveVacationWrapper,
   orchestrate_asset_transfer: hrSkills.orchestrate_asset_transfer,
   mcp_access_watchdog: hrSkills.mcp_access_watchdog,
   generate_offboarding_security_kit: hrSkills.generate_offboarding_security_kit,

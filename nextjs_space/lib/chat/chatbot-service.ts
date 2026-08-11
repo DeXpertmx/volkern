@@ -98,6 +98,11 @@ const MISSING_ENTITY_PROMPTS: Record<string, string> = {
   pedidoId: '🧾 ¿Cuál es el número o referencia del pedido? (ej: #ORD-456)',
   vehiculoId: '🚛 ¿De qué vehículo? (ej: VEH-001 o la matrícula)',
   almacenId: '🏭 ¿De qué almacén? (ej: principal, central)',
+
+  // RRHH
+  solicitudId: '🔖 ¿Qué solicitud de vacaciones? (ej: #123 o el nombre del empleado)',
+  nota: '📝 ¿Quieres agregar una nota? (ej: nota: "Disfruta tus días")',
+  empleadoId: '👤 ¿De qué empleado? (ej: nombre del colaborador)',
 }
 
 export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput> {
