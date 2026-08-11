@@ -2080,6 +2080,207 @@ describe('IntentClassifier — ruta determinista (sin LLM)', () => {
     expect(result.intent).toBe('convertir_lead');
     expect(result.intent).not.toBe('actualizar_siniestro');
   });
+
+  // ═══ DÉCIMO ENTRENAMIENTO (módulo Facturación): crear, cancelar, estado
+  // fiscal y rectificar facturas Veri*factu ═══
+
+  // ── crear_factura ──
+  it('genera una factura para el lead juan@email.com → crear_factura con cliente email', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'genera una factura para el lead juan@email.com',
+    });
+    expect(result.intent).toBe('crear_factura');
+    expect(result.extractedParams.cliente).toBe('juan@email.com');
+    // Falta el monto → pide el dato (multi-turno)
+    expect(result.needsMoreInfo).toBe(true);
+    expect(result.missingParams).toContain('monto');
+  });
+
+  it('crea factura para María García por 5000€ → crear_factura completo', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'crea factura para María García por 5000€',
+    });
+    expect(result.intent).toBe('crear_factura');
+    expect(result.extractedParams.cliente).toBe('María García');
+    expect(result.extractedParams.monto).toBe(5000);
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('factura para Carlos Ruiz por consultoría → crear_factura con concepto', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'factura para Carlos Ruiz por consultoría',
+    });
+    expect(result.intent).toBe('crear_factura');
+    expect(result.extractedParams.cliente).toBe('Carlos Ruiz');
+    expect(result.extractedParams.concepto).toBe('consultoría');
+    expect(result.needsMoreInfo).toBe(true);
+  });
+
+  it('multi-turno: completa el monto faltante de crear_factura', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'por 750 euros',
+      pendingIntent: 'crear_factura',
+      collectedEntities: { cliente: 'juan@email.com' },
+      missingEntities: ['monto'],
+    });
+    expect(result.intent).toBe('crear_factura');
+    // extractParamDeterministically normaliza a string; el wrapper lo convierte a number
+    expect(result.extractedParams.monto).toBe('750');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('multi-turno: completa el cliente faltante de crear_factura con email', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'el cliente es maria@empresa.com',
+      pendingIntent: 'crear_factura',
+      collectedEntities: { monto: 5000 },
+      missingEntities: ['cliente'],
+    });
+    expect(result.intent).toBe('crear_factura');
+    expect(result.extractedParams.cliente).toBe('maria@empresa.com');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  // ── cancelar_factura ──
+  it('cancela la factura FAC-001 → cancelar_factura', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cancela la factura FAC-001',
+    });
+    expect(result.intent).toBe('cancelar_factura');
+    expect(result.extractedParams.factura).toBe('FAC-001');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('anula la factura #123 → cancelar_factura con factura 123', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'anula la factura #123',
+    });
+    expect(result.intent).toBe('cancelar_factura');
+    expect(result.extractedParams.factura).toBe('123');
+  });
+
+  it('cancelar factura de Juan Pérez, motivo: error en datos → pide el número', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cancelar factura de Juan Pérez, motivo: error en datos',
+    });
+    expect(result.intent).toBe('cancelar_factura');
+    expect(result.extractedParams.motivo).toBe('error en datos');
+    expect(result.needsMoreInfo).toBe(true);
+    expect(result.missingParams).toContain('factura');
+  });
+
+  // ── estado_fiscal ──
+  it('dime el estado fiscal de la factura FAC-001 → estado_fiscal', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'dime el estado fiscal de la factura FAC-001',
+    });
+    expect(result.intent).toBe('estado_fiscal');
+    expect(result.extractedParams.factura).toBe('FAC-001');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('verifica la integridad de la factura #123 → estado_fiscal', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'verifica la integridad de la factura #123',
+    });
+    expect(result.intent).toBe('estado_fiscal');
+    expect(result.extractedParams.factura).toBe('123');
+  });
+
+  it('estado de la factura de juan@email.com → estado_fiscal sin número (pide)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'estado de la factura de juan@email.com',
+    });
+    expect(result.intent).toBe('estado_fiscal');
+    expect(result.needsMoreInfo).toBe(true);
+    expect(result.missingParams).toContain('factura');
+  });
+
+  // ── rectificar_factura ──
+  it('rectifica la factura FAC-001, el monto correcto es 4500€ → rectificar_factura', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'rectifica la factura FAC-001, el monto correcto es 4500€',
+    });
+    expect(result.intent).toBe('rectificar_factura');
+    expect(result.extractedParams.factura).toBe('FAC-001');
+    expect(result.extractedParams.monto).toBe(4500);
+    // Falta el motivo de la rectificación
+    expect(result.needsMoreInfo).toBe(true);
+    expect(result.missingParams).toContain('razon');
+  });
+
+  it('corrige la factura #123 por error en el concepto → rectificar_factura completo', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'corrige la factura #123 por error en el concepto',
+    });
+    expect(result.intent).toBe('rectificar_factura');
+    expect(result.extractedParams.factura).toBe('123');
+    expect(result.extractedParams.razon).toBe('error en el concepto');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('multi-turno: completa el motivo de rectificar_factura', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'por un error en el cálculo del IVA',
+      pendingIntent: 'rectificar_factura',
+      collectedEntities: { factura: 'FAC-001', monto: 4500 },
+      missingEntities: ['razon'],
+    });
+    expect(result.intent).toBe('rectificar_factura');
+    expect(result.extractedParams.razon).toBe('un error en el cálculo del IVA');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  // ── negativos de facturación ──
+
+  it('"pago la factura de juan@volkern.test" NO es crear_factura', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'pago la factura de juan@volkern.test',
+    });
+    expect(result.intent).not.toBe('crear_factura');
+    expect(result.intent).not.toBe('cancelar_factura');
+  });
+
+  it('"registra un gasto de 50€: comida" sigue siendo gasto (no facturación)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'registra un gasto de 50€: comida',
+    });
+    expect(result.intent).toBe('registrar_gasto');
+    expect(result.intent).not.toBe('crear_factura');
+  });
+
+  it('"verifica la integridad de los gastos" NO es estado_fiscal', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'verifica la integridad de los gastos',
+    });
+    expect(result.intent).not.toBe('estado_fiscal');
+  });
+
+  it('"crea un lead de la empresa facturación SA" sigue siendo crear_lead', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'crea un lead de la empresa Facturación SA, pedro@facturacion.test',
+    });
+    expect(result.intent).toBe('crear_lead');
+    expect(result.intent).not.toBe('crear_factura');
+  });
 });
 
 describe('IntentClassifier — getRequiredParams', () => {

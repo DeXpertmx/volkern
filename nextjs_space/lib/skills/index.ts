@@ -1431,6 +1431,137 @@ const updateSiniestroWrapper = async (input: {
   });
 };
 
+// ─── Wrappers de Facturación (Décimo entrenamiento): el core exige ids y
+// amount, pero el chatbot pasa cliente (email/nombre), monto y número de
+// factura ───────────────────────────────────────────────────────────────────
+
+/**
+ * Resuelve el cliente fiscal por email o nombre → leadId/contactId. Si el ref
+ * parece un email busca por email; si no, por nombre (contains, insensitive).
+ */
+async function resolveClienteFiscal(tenantId: string, ref?: string): Promise<{ leadId?: string; contactId?: string }> {
+  if (!ref || !String(ref).trim()) {
+    throw new Error('Necesito saber a quién facturar: el nombre o email del cliente (requerido).')
+  }
+  const { prisma } = await import('@/lib/db')
+  const refClean = String(ref).trim()
+  const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(refClean)
+  const where = isEmail
+    ? { tenantId, email: { equals: refClean, mode: 'insensitive' as const } }
+    : { tenantId, nombre: { contains: refClean, mode: 'insensitive' as const } }
+  const lead = await prisma.lead.findFirst({ where: where as any, select: { id: true } })
+  if (lead) return { leadId: lead.id }
+  const contact = await prisma.contact.findFirst({ where: where as any, select: { id: true } })
+  if (contact) return { contactId: contact.id }
+  throw new Error(`No encontré ningún cliente "${refClean}". ¿Tienes otro dato (email o nombre)?`)
+}
+
+/**
+ * Resuelve la factura por id cuid (API) o por número (chatbot): "FAC-001",
+ * "#123", "MOCK-1754…".
+ */
+async function resolveInvoiceId(tenantId: string, ref?: string): Promise<string> {
+  if (!ref) throw new Error('Necesito saber de qué factura se trata (su número).')
+  const refClean = String(ref).trim().replace(/^#/, '')
+  if (/^c[a-z0-9]{20,}$/i.test(refClean)) return refClean
+  const { prisma } = await import('@/lib/db')
+  const invoice = await prisma.invoice.findFirst({
+    where: { tenantId, numero: { contains: refClean, mode: 'insensitive' as const } },
+    orderBy: { fechaEmision: 'desc' },
+    select: { id: true, numero: true },
+  })
+  if (!invoice) throw new Error(`No encontré ninguna factura "${refClean}" en tu historial.`)
+  return invoice.id
+}
+
+const createInvoiceWrapper = async (input: {
+  tenantId: string;
+  email?: string;
+  nombre?: string;
+  cliente?: string;
+  leadId?: string;
+  contactId?: string;
+  monto?: number | string;
+  amount?: number | string;
+  concepto?: string;
+  description?: string;
+  moneda?: string;
+  userId?: string;
+}) => {
+  // Monto obligatorio (el clasificador lo exige; aquí se valida por si llega vacío)
+  const amountRaw = input.amount !== undefined && input.amount !== '' ? input.amount : input.monto
+  const amount = amountRaw !== undefined && amountRaw !== '' ? Number(amountRaw) : NaN
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error('Indica el monto de la factura para poder generarla (requerido).')
+  }
+  // Cliente: prioridad al id explícito; si no, resolver por email/nombre
+  const clienteRef = input.cliente || input.email || input.nombre
+  let leadId = input.leadId
+  let contactId = input.contactId
+  if (!leadId && !contactId) {
+    const resolved = await resolveClienteFiscal(input.tenantId, clienteRef)
+    leadId = resolved.leadId
+    contactId = resolved.contactId
+  }
+  if (!leadId && !contactId) {
+    throw new Error('Necesito saber a quién facturar: el nombre o email del cliente (requerido).')
+  }
+  return billingSkills.create_invoice({
+    tenantId: input.tenantId,
+    leadId,
+    contactId,
+    amount,
+    currency: input.moneda || 'EUR',
+    description: input.concepto || input.description,
+    items: [],
+  } as any);
+};
+
+const cancelInvoiceWrapper = async (input: {
+  tenantId: string;
+  factura?: string;
+  invoiceId?: string;
+  motivo?: string;
+}) => {
+  const invoiceId = input.invoiceId || (input.factura ? await resolveInvoiceId(input.tenantId, input.factura) : undefined)
+  if (!invoiceId) throw new Error('Necesito saber qué factura quieres cancelar (su número).')
+  return billingSkills.cancel_invoice({ tenantId: input.tenantId, invoiceId });
+};
+
+const getInvoiceFiscalStatusWrapper = async (input: {
+  tenantId: string;
+  factura?: string;
+  invoiceId?: string;
+}) => {
+  const invoiceId = input.invoiceId || (input.factura ? await resolveInvoiceId(input.tenantId, input.factura) : undefined)
+  if (!invoiceId) throw new Error('Necesito saber de qué factura quieres el estado fiscal (su número).')
+  return billingSkills.get_invoice_fiscal_status({ tenantId: input.tenantId, invoiceId });
+};
+
+const rectifyInvoiceWrapper = async (input: {
+  tenantId: string;
+  factura?: string;
+  invoiceId?: string;
+  razon?: string;
+  motivo?: string;
+  monto?: number | string;
+  amount?: number | string;
+}) => {
+  if (!input.razon && !input.motivo) {
+    throw new Error('Indica el motivo de la rectificación para poder corregir la factura (requerido).')
+  }
+  const invoiceId = input.invoiceId || (input.factura ? await resolveInvoiceId(input.tenantId, input.factura) : undefined)
+  if (!invoiceId) throw new Error('Necesito saber qué factura quieres rectificar (su número).')
+  const amountRaw = input.monto !== undefined && input.monto !== '' ? input.monto : input.amount
+  const amount = amountRaw !== undefined && amountRaw !== '' ? Number(amountRaw) : undefined
+  return billingSkills.rectify_invoice({
+    tenantId: input.tenantId,
+    invoiceId,
+    reason: String(input.razon || input.motivo),
+    amount: amount !== undefined && Number.isFinite(amount) ? amount : undefined,
+  });
+};
+
 export const skills = {
   // Contactos
   create_contact: createContactWrapper,
@@ -1452,11 +1583,12 @@ export const skills = {
   obtener_telefono: getPhoneByNameWrapper,
   registrar_interaccion: registerInteractionWrapper,
   
-  // Facturación & Veri*factu
-  create_invoice: billingSkills.create_invoice,
-  rectify_invoice: billingSkills.rectify_invoice,
-  cancel_invoice: billingSkills.cancel_invoice,
-  get_invoice_fiscal_status: billingSkills.get_invoice_fiscal_status,
+  // Facturación & Veri*factu (wrappers: resuelven cliente por email/nombre y
+  // factura por número para el chatbot — el core exige ids y amount)
+  create_invoice: createInvoiceWrapper,
+  rectify_invoice: rectifyInvoiceWrapper,
+  cancel_invoice: cancelInvoiceWrapper,
+  get_invoice_fiscal_status: getInvoiceFiscalStatusWrapper,
   
   // Conversaciones
   create_conversation: conversationSkills.createConversation,

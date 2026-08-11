@@ -8,20 +8,21 @@ export const financeIntents: IntentSchema[] = [
   // ========== FACTURACIÓN & VERI*FACTU ==========
   {
     name: 'crear_factura',
-    description: 'Generar una factura legal con sello Veri*factu',
-    requiredParams: ['leadId'],
-    optionalParams: ['monto', 'concepto'],
+    description: 'Generar una factura legal con sello Veri*factu (requiere cliente —nombre o email— y monto; el wrapper resuelve el lead/contacto y sella la factura)',
+    requiredParams: ['cliente', 'monto'],
+    optionalParams: ['email', 'nombre', 'concepto', 'descripcion', 'moneda'],
     examples: [
       'genera una factura para el lead juan@email.com',
       'crea factura para María García por 5000€',
-      'factura para Carlos Ruiz por consultoría'
+      'factura para Carlos Ruiz por consultoría',
+      'emite una factura a juan@email.com por 750€ de consultoría'
     ],
     destructive: false
   },
   {
     name: 'cancelar_factura',
     description: 'Anular o cancelar una factura existente (Veri*factu)',
-    requiredParams: ['invoiceId'],
+    requiredParams: ['factura'],
     optionalParams: ['motivo'],
     examples: [
       'cancela la factura FAC-001',
@@ -33,8 +34,8 @@ export const financeIntents: IntentSchema[] = [
   {
     name: 'estado_fiscal',
     description: 'Consultar el estado fiscal e integridad de una factura',
-    requiredParams: ['invoiceId'],
-    optionalParams: [],
+    requiredParams: ['factura'],
+    optionalParams: ['email'],
     examples: [
       'dime el estado fiscal de la factura FAC-001',
       'verifica la integridad de la factura #123',
@@ -45,8 +46,8 @@ export const financeIntents: IntentSchema[] = [
   {
     name: 'rectificar_factura',
     description: 'Rectificar o corregir una factura existente (Veri*factu no permite cancelación, solo rectificación)',
-    requiredParams: ['invoiceId', 'razon'],
-    optionalParams: ['monto'],
+    requiredParams: ['factura', 'razon'],
+    optionalParams: ['monto', 'motivo'],
     examples: [
       'rectifica la factura FAC-001, el monto correcto es 4500€',
       'corrige la factura #123 por error en el concepto',

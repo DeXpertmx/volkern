@@ -360,7 +360,10 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     // Entidades de seguros sin verbo: "qué pólizas vencen", "siniestros abiertos",
     // "renovaciones pendientes", "clientes sin contacto", "pólizas por vencer"
     const INSURANCE_TRIGGER = /\b(?:p[oó]lizas?|siniestros?|renovaciones?|aseguradoras?|vence|vencen|indemnizaci[oó]n|sin\s+contacto|no\s+tienen\s+contacto|no\s+han\s+tenido\s+contacto|cartera\s+de\s+seguros?)\b/i
-    if (!ACTION_VERB.test(message) && !ENTITY_TRIGGER.test(message) && !FILTER_ONLY.test(message) && !CITA_TRIGGER.test(message) && !FINANZA_TRIGGER.test(message) && !TAREA_TRIGGER.test(message) && !PROVEEDOR_TRIGGER.test(message) && !CATALOGO_TRIGGER.test(message) && !INVENTARIO_TRIGGER.test(message) && !INSURANCE_TRIGGER.test(message)) return null
+    // Entidades de facturación sin verbo: "factura para X", "estado fiscal de
+    // FAC-001", "verifica la integridad de la factura" (décimo entrenamiento)
+    const FACTURA_TRIGGER = /\b(?:facturas?|factur[aá]ci[oó]n|facturar|estado\s+fiscal|integridad\s+fiscal)\b/i
+    if (!ACTION_VERB.test(message) && !ENTITY_TRIGGER.test(message) && !FILTER_ONLY.test(message) && !CITA_TRIGGER.test(message) && !FINANZA_TRIGGER.test(message) && !TAREA_TRIGGER.test(message) && !PROVEEDOR_TRIGGER.test(message) && !CATALOGO_TRIGGER.test(message) && !INVENTARIO_TRIGGER.test(message) && !INSURANCE_TRIGGER.test(message) && !FACTURA_TRIGGER.test(message)) return null
 
     const extracted: Record<string, any> = {}
     const email = message.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,})/)
@@ -529,6 +532,68 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
       const cliente = this.extractClienteSeguroDe(message)
       if (cliente) extracted.cliente = cliente
       return { intent: 'mis_polizas', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 0i. FACTURACIÓN (Décimo entrenamiento): crear, cancelar, estado fiscal
+    // y rectificar facturas Veri*factu. Se detectan ANTES que registrar_interaccion
+    // ("crea factura para María: consultoría por 500€" contiene ':' y caería en
+    // interacción) y antes que los gastos ("anula la factura #123" tiene verbo
+    // de gasto pero la entidad factura gana). Permite controlar el módulo de
+    // facturación desde Telegram sin depender del LLM ═══
+    const FACTURA_ENTITY = /\bfacturas?\b/i
+
+    // 0i-a. ESTADO FISCAL ("dime el estado fiscal de la factura FAC-001",
+    // "verifica la integridad de la factura #123", "estado de la factura de
+    // juan@email.com") — antes que crear/cancelar para que "verifica la
+    // factura…" no se lea como creación ═══
+    const ESTADO_FISCAL_SIGNAL = /\b(?:estado\s+fiscal|estado\s+de\s+(?:la\s+|mi\s+)?factura|integridad\s+fiscal|integridad\s+(?:de\s+la\s+)?factura|verifica|verificar|revisa|revisar)\b/i
+    if (FACTURA_ENTITY.test(message) && ESTADO_FISCAL_SIGNAL.test(message)) {
+      const factura = this.extractNumeroFacturaDe(message)
+      if (factura) extracted.factura = factura
+      return { intent: 'estado_fiscal', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // 0i-b. CANCELAR FACTURA ("cancela la factura FAC-001", "anula la factura
+    // #123", "cancelar factura de Juan Pérez, motivo: error en datos") ═══
+    const CANCEL_FACTURA_VERB = /\b(?:cancela|cancelar|anula|anular|elimina|eliminar)\b/i
+    if (FACTURA_ENTITY.test(message) && CANCEL_FACTURA_VERB.test(message)) {
+      const factura = this.extractNumeroFacturaDe(message)
+      if (factura) extracted.factura = factura
+      const motivo = this.extractMotivoFacturaDe(message)
+      if (motivo) extracted.motivo = motivo
+      return { intent: 'cancelar_factura', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // 0i-c. RECTIFICAR FACTURA ("rectifica la factura FAC-001, el monto
+    // correcto es 4500€", "corrige la factura #123 por error en el concepto") ═══
+    const RECTIFICAR_FACTURA_VERB = /\b(?:rectifica|rectificar|corrige|corregir)\b/i
+    if (FACTURA_ENTITY.test(message) && RECTIFICAR_FACTURA_VERB.test(message)) {
+      const factura = this.extractNumeroFacturaDe(message)
+      if (factura) extracted.factura = factura
+      const razon = this.extractMotivoFacturaDe(message)
+      if (razon) extracted.razon = razon
+      const monto = this.extractMontoFacturaDe(message)
+      if (monto !== null) extracted.monto = monto
+      return { intent: 'rectificar_factura', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // 0i-d. CREAR FACTURA ("genera una factura para el lead juan@email.com",
+    // "crea factura para María García por 5000€", "factura para Carlos Ruiz
+    // por consultoría") — el cliente se resuelve por email o nombre en el
+    // wrapper; aquí solo se captura. Sin verbo solo entra con "para/a" (no
+    // "de"): "pago la factura de juan@…" es un pago, no una creación ═══
+    const CREATE_FACTURA_VERB = /\b(?:crea|crear|genera|generar|emite|emitir|registra|registrar|nueva|nuevo|haz|hacer)\b/i
+    if (FACTURA_ENTITY.test(message) && (CREATE_FACTURA_VERB.test(message) || /\bfacturas?\s+(?:para|a)\b/i.test(message))) {
+      const cliente = this.extractClienteFacturaDe(message)
+      // Si viene un email ("factura para el lead juan@email.com") se usa como
+      // referencia de cliente; el wrapper distingue email vs nombre.
+      if (cliente) extracted.cliente = cliente
+      else if (email) extracted.cliente = email
+      const monto = this.extractMontoFacturaDe(message)
+      if (monto !== null) extracted.monto = monto
+      const concepto = this.extractConceptoFacturaDe(message)
+      if (concepto) extracted.concepto = concepto
+      return { intent: 'crear_factura', confidence: 0.85, extractedParams: extracted }
     }
 
     // ═══ 0. CONVERTIR LEAD (antes que crear: "convierte… en contacto" también
@@ -1357,6 +1422,87 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
   }
 
   /**
+   * Número de factura: "FAC-001" / "FAC_001" / "MOCK-1754…" / "#123" / el
+   * token tras "factura". Normaliza quitando el '#' inicial.
+   */
+  private extractNumeroFacturaDe(message: string): string | null {
+    const m = message.match(/\b(?:FAC[-_]\d+|[A-Z]{2,6}[-_]\d{2,}|MOCK[-_]\d+|#\d{2,})\b/i)
+    if (m) return m[0].replace(/^#/, '')
+    const kw = message.match(/\bfactura\s*(?:n[úu]mero\s*|nº\s*|#\s*)?([A-Za-z0-9][A-Za-z0-9-]{2,})/i)
+    if (kw) {
+      let n = kw[1].trim()
+      n = n.split(/\s+(?:de|del|por|con|para|,|;)/i)[0].trim()
+      if (n.length >= 3) return n
+    }
+    return null
+  }
+
+  /**
+   * Monto de factura: con divisa ("por 5000€", "el monto correcto es 4500 €")
+   * o tras la keyword "monto" ("monto 4500", "monto de 4500").
+   */
+  private extractMontoFacturaDe(message: string): number | null {
+    // (?!\w) en vez de \b: "€" es un carácter no-palabra, así que \b tras él
+    // nunca matchea al final de la cadena ("5000€" → null).
+    const withCur = message.match(/(\d+(?:[.,]\d{1,2})?)\s*(?:€|euros?|eur)(?!\w)/i)
+    if (withCur) {
+      const v = parseFloat(withCur[1].replace(',', '.'))
+      if (Number.isFinite(v)) return v
+    }
+    const kw = message.match(/\bmonto\s*(?::|de\s+|es\s+|de\s+la\s+factura\s+)?(\d+(?:[.,]\d{1,2})?)/i)
+    if (kw) {
+      const v = parseFloat(kw[1].replace(',', '.'))
+      if (Number.isFinite(v)) return v
+    }
+    return null
+  }
+
+  /**
+   * Cliente de la factura: tras "para/para el lead/a/de" ("crea factura para
+   * María García por 5000€" → "María García", "para el lead juan@email.com"
+   * → "juan@email.com"). Corta en el siguiente campo (por, con, motivo…).
+   */
+  private extractClienteFacturaDe(message: string): string | null {
+    const m = message.match(/\b(?:para|a|de)\s+(?:el\s+lead\s+|el\s+cliente\s+|la\s+cliente\s+|nuestr[oa]\s+cliente\s+)?([A-ZÁÉÍÓÚÑÜ0-9][A-Za-zÁÉÍÓÚÑÜ0-9@.\- ]{2,40})/i)
+    if (!m) return null
+    let c = m[1].trim()
+    c = c.split(/\s+(?:por|con|de|del|la|el|y|o|motivo|raz[oó]n|rectifica|corrige|,|;)/i)[0].trim()
+    if (c.length < 2 || /^(?:el|la|los|las|un|una|por|con|de|del)$/i.test(c)) return null
+    return c
+  }
+
+  /**
+   * Concepto de la factura: tras "por" que no sea un monto ("factura para
+   * Carlos Ruiz por consultoría" → "consultoría").
+   */
+  private extractConceptoFacturaDe(message: string): string | null {
+    const m = message.match(/\bpor\s+([A-Za-zÁÉÍÓÚÑÜáéíóúñü][A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9'\- ]{2,40})/i)
+    if (!m) return null
+    let c = m[1].trim()
+    if (/^\d/.test(c)) return null // es un monto ("por 5000€"), no un concepto
+    c = c.split(/\s*(?:,|;|con\s+|motivo|raz[oó]n|rectifica|corrige)/i)[0].trim()
+    return c.length >= 2 ? c : null
+  }
+
+  /**
+   * Motivo de cancelación/rectificación: tras "motivo:"/"razón:" o "por" al
+   * final ("…por error en el concepto" → "error en el concepto").
+   */
+  private extractMotivoFacturaDe(message: string): string | null {
+    const kw = message.match(/(?:motivo|raz[oó]n)\s*:\s*([\s\S]{2,80})/i)
+    if (kw) {
+      let r = kw[1].trim().replace(/["'”]+\s*$/, '').trim()
+      if (r.length >= 2) return r
+    }
+    const por = message.match(/\bpor\s+(.{2,60})$/i)
+    if (por) {
+      const r = por[1].trim().replace(/["'”]+\s*$/, '').trim()
+      return r.length >= 2 ? r : null
+    }
+    return null
+  }
+
+  /**
    * Extrae la hora de "a las 10am", "a las 15:30", "las 2pm", "10:00 AM",
    * "2:30 PM". Normaliza a HH:MM (24h).
    */
@@ -1940,11 +2086,17 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
       const gAmount = message.match(/(?:gasto|egreso|pago|compra|gast[éeoó])\s*(?::|de|por|en)?\s*(\d+(?:[.,]\d{1,2})?)/i)
       const withKeyword = gAmount ? parseFloat(gAmount[1].replace(',', '.')) : null
       if (withKeyword !== null && Number.isFinite(withKeyword)) return String(withKeyword)
+      // Facturación (décimo entrenamiento): "el monto es 4500", "por 5000€"
+      const facturaMonto = this.extractMontoFacturaDe(message)
+      if (facturaMonto !== null && facturaMonto !== withKeyword) return String(facturaMonto)
       // Respuesta desnuda del usuario: "45.90" / "300"
       const bare = message.match(/^(?:\s*)(\d+(?:[.,]\d{1,2})?)\s*(?:€|euros?)?\s*$/i)
       return bare ? String(parseFloat(bare[1].replace(',', '.'))) : null
     }
     if (param === 'concepto' || param === 'description') {
+      // Facturación (décimo entrenamiento): "por consultoría" tras la factura
+      const facturaConcepto = this.extractConceptoFacturaDe(message)
+      if (facturaConcepto) return facturaConcepto
       const withField = this.extractConceptoDe(message)
       if (withField) return withField
       const trimmed = message.trim()
@@ -2013,7 +2165,10 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
       return this.extractFechaDe(message) || this.extractFechaInicioDe(message)
     }
     if (param === 'cliente') {
-      return this.extractClienteSeguroDe(message)
+      // Email desnudo ("juan@email.com") o nombre ("María García") de facturación
+      const emailMatch = message.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,})/)
+      if (emailMatch) return emailMatch[1]
+      return this.extractClienteSeguroDe(message) || this.extractClienteFacturaDe(message)
     }
     if (param === 'dias') {
       const v = this.extractDiasDe(message)
@@ -2038,6 +2193,13 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     }
     if (param === 'motivoRechazo') {
       return this.extractMotivoRechazoDe(message)
+    }
+    // ─── Módulo Facturación (Décimo entrenamiento) ───
+    if (param === 'factura' || param === 'invoiceId' || param === 'numeroFactura') {
+      return this.extractNumeroFacturaDe(message)
+    }
+    if (param === 'razon' || param === 'motivo') {
+      return this.extractMotivoFacturaDe(message)
     }
     return null
   }
