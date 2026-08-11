@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Shield, FileText, Building2, LayoutDashboard, RefreshCw, BarChart3, ShieldAlert } from 'lucide-react';
+import { Shield, FileText, Building2, LayoutDashboard, RefreshCw, BarChart3, ShieldAlert, Plug } from 'lucide-react';
 
 const NAV_ITEMS = [
   {
@@ -36,6 +36,11 @@ const NAV_ITEMS = [
     href: '/dashboard/seguros/siniestros',
     label: 'Siniestros',
     icon: ShieldAlert,
+  },
+  {
+    href: '/dashboard/seguros/aseguradoras/conectores',
+    label: 'Conectores',
+    icon: Plug,
   },
 ];
 

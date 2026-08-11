@@ -247,7 +247,8 @@ export const HUBS: HubConfig[] = [
       '/dashboard/seguros/aseguradoras',
       '/dashboard/seguros/portfolio',
       '/dashboard/seguros/productos',
-      '/dashboard/seguros/siniestros'
+      '/dashboard/seguros/siniestros',
+      '/dashboard/seguros/aseguradoras/conectores'
     ],
     items: [
       { name: 'Dashboard Seguros', href: '/dashboard/seguros', icon: LayoutDashboard, planModule: 'insurance', description: 'KPIs de cartera y renovaciones' },
@@ -258,6 +259,7 @@ export const HUBS: HubConfig[] = [
       { name: 'Cartera IA', href: '/dashboard/seguros/cartera', icon: BarChart3, planModule: 'insurance', description: 'Mapa de cartera y oportunidades IA' },
       { name: 'Aseguradoras', href: '/dashboard/seguros/aseguradoras', icon: Building2, planModule: 'insurance', description: 'Directorio de aseguradoras y productos' },
       { name: 'Siniestros', href: '/dashboard/seguros/siniestros', icon: ShieldAlert, planModule: 'insurance', description: 'Gestión del ciclo de vida de los siniestros' },
+      { name: 'Conectores', href: '/dashboard/seguros/aseguradoras/conectores', icon: Plug, planModule: 'insurance', description: 'Marketplace de integraciones con aseguradoras (Fase 5)' },
     ]
   },
   {
