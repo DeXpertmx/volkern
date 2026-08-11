@@ -153,6 +153,15 @@ const INTENT_TO_SKILL: Record<string, string> = {
   'generar_seo': 'generate_seo_metadata',
   'sugerir_automatizacion': 'advise_on_automation_rules',
 
+  // ─── ADS (programación de campañas y tests A/B) ───
+  'programar_campania': 'create_ad_schedule',
+  'listar_horarios': 'list_ad_schedules',
+  'eliminar_horario': 'delete_ad_schedule',
+  'crear_test_ab': 'create_ab_test',
+  'iniciar_test_ab': 'start_ab_test',
+  'evaluar_test_ab': 'calculate_ab_test_significance',
+  'declarar_ganador': 'declare_ab_test_winner',
+
   // ─── Real Estate ───
   'generar_descripcion_inmueble': 'generate_property_description',
   'sugerir_precio_inmueble': 'suggest_price_based_on_market',
@@ -774,7 +783,15 @@ export const SkillOrchestratorAgent = {
         'sugerir_campania': 'campanas',
         'generar_web_block': 'cms',
         'generar_seo': 'cms',
-        'sugerir_automatizacion': 'automatizaciones',      // Real Estate (usa el catálogo de inmuebles)
+        'sugerir_automatizacion': 'automatizaciones',
+        // ADS
+        'programar_campania': 'ads',
+        'listar_horarios': 'ads',
+        'eliminar_horario': 'ads',
+        'crear_test_ab': 'ads',
+        'iniciar_test_ab': 'ads',
+        'evaluar_test_ab': 'ads',
+        'declarar_ganador': 'ads',      // Real Estate (usa el catálogo de inmuebles)
       'generar_descripcion_inmueble': 'catalogo',
       'sugerir_precio_inmueble': 'catalogo',
       'calificar_inmueble': 'catalogo',
@@ -868,6 +885,13 @@ export const SkillOrchestratorAgent = {
       'generar_web_block': '📣 No tienes acceso al módulo de *Marketing*. Contacta al administrador.',
       'generar_seo': '📣 No tienes acceso al módulo de *Marketing*. Contacta al administrador.',
       'sugerir_automatizacion': '📣 No tienes acceso al módulo de *Marketing*. Contacta al administrador.',
+      'programar_campania': '📣 No tienes acceso al módulo de *Ads*. Contacta al administrador para activarlo.',
+      'listar_horarios': '📣 No tienes acceso al módulo de *Ads*. Contacta al administrador para activarlo.',
+      'eliminar_horario': '📣 No tienes acceso al módulo de *Ads*. Contacta al administrador para activarlo.',
+      'crear_test_ab': '📣 No tienes acceso al módulo de *Ads*. Contacta al administrador para activarlo.',
+      'iniciar_test_ab': '📣 No tienes acceso al módulo de *Ads*. Contacta al administrador para activarlo.',
+      'evaluar_test_ab': '📣 No tienes acceso al módulo de *Ads*. Contacta al administrador para activarlo.',
+      'declarar_ganador': '📣 No tienes acceso al módulo de *Ads*. Contacta al administrador para activarlo.',
       'generar_descripcion_inmueble': '🏠 No tienes acceso al módulo de *Real Estate*. Contacta al administrador.',
       'sugerir_precio_inmueble': '🏠 No tienes acceso al módulo de *Real Estate*. Contacta al administrador.',
       'calificar_inmueble': '🏠 No tienes acceso al módulo de *Real Estate*. Contacta al administrador.',

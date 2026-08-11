@@ -172,6 +172,12 @@ export class IntentClassifierAgent {
       }
     }
 
+    // crear_test_ab: el nombre del test se sintetiza desde la campaña ("Test
+    // A/B — verano"), así que nunca se pide por separado.
+    if (intent === 'crear_test_ab') {
+      return missing.filter((p: string) => p !== 'nombre');
+    }
+
     return missing;
   }
 
@@ -391,7 +397,11 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     // Entidades de RRHH sin verbo: "resumen diario de RH", "briefing del equipo",
     // "quién tiene riesgo de irse", "solicitudes de vacaciones" (duodécimo)
     const RRHH_TRIGGER = /\b(?:rrhh|recursos\s+humanos|vacaciones|rotaci[oó]n|retenci[oó]n|irse|briefing|resumen\s+diario|estado\s+de\s+fuerza|equipo\s+hoy|talento)\b/i
-    if (!ACTION_VERB.test(message) && !ENTITY_TRIGGER.test(message) && !FILTER_ONLY.test(message) && !CITA_TRIGGER.test(message) && !FINANZA_TRIGGER.test(message) && !TAREA_TRIGGER.test(message) && !PROVEEDOR_TRIGGER.test(message) && !CATALOGO_TRIGGER.test(message) && !INVENTARIO_TRIGGER.test(message) && !INSURANCE_TRIGGER.test(message) && !FACTURA_TRIGGER.test(message) && !LOGISTICA_TRIGGER.test(message) && !RRHH_TRIGGER.test(message)) return null
+    // Entidades de marketing/ads sin verbo: "copy para…", "sentimiento del
+    // feedback", "sugerencias de campaña", "bloque hero para la landing",
+    // "SEO de la página", "test A/B", "programaciones activas" (decimotercero)
+    const MARKETING_TRIGGER = /\b(?:copy|post|publicaci[oó]n|texto\s+publicitario|sentimiento|opinan|opini[oó]n|feedback|comentarios?|rese[nñ]as?|campa[nñ]as?|marketing|bloque|secci[oó]n|landing|seo|metadatos|keywords?|palabras\s+clave|tests?|programaci[oó]n(?:es)?|horarios?\s+programados|automatizaci[oó]n|automatiza|automatizar|reglas\s+automa[á]?ticas?)\b/i
+    if (!ACTION_VERB.test(message) && !ENTITY_TRIGGER.test(message) && !FILTER_ONLY.test(message) && !CITA_TRIGGER.test(message) && !FINANZA_TRIGGER.test(message) && !TAREA_TRIGGER.test(message) && !PROVEEDOR_TRIGGER.test(message) && !CATALOGO_TRIGGER.test(message) && !INVENTARIO_TRIGGER.test(message) && !INSURANCE_TRIGGER.test(message) && !FACTURA_TRIGGER.test(message) && !LOGISTICA_TRIGGER.test(message) && !RRHH_TRIGGER.test(message) && !MARKETING_TRIGGER.test(message)) return null
 
     const extracted: Record<string, any> = {}
     const email = message.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,})/)
@@ -733,6 +743,133 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
         extracted.nombre = nombre
       }
       return { intent: 'riesgo_rotacion', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 0j. GENERAR COPY ("genera un copy para email sobre nuestro nuevo
+    // producto", "crea un post promocionando descuento", "escribe un texto
+    // publicitario para WhatsApp") ═══
+    const COPY_VERB = /\b(?:genera|generar|crea|crear|escribe|escribir|redacta|redactar|dame\s+un\s+copy|hazme\s+un\s+copy)\b/i
+    const COPY_ENTITY = /\b(?:copy|post|publicaci[oó]n|texto\s+publicitario|anuncio|eslogan|slogan|mensaje\s+de\s+marketing)\b/i
+    if (COPY_VERB.test(message) && COPY_ENTITY.test(message)) {
+      const tema = this.extractTemaDe(message)
+      if (tema) extracted.tema = tema
+      const formato = this.extractFormatoDe(message)
+      if (formato) extracted.formato = formato
+      const tono = this.extractTonoDe(message)
+      if (tono) extracted.tono = tono
+      return { intent: 'generar_copy', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 0k. ANALIZAR SENTIMIENTO ("analiza el sentimiento de este feedback:
+    // …", "qué opinan los clientes sobre nosotros") ═══
+    const SENTIMIENTO_ENTITY = /\b(?:sentimiento|opinan|opini[oó]n|feedback|comentarios?|rese[nñ]as?)\b/i
+    const ANALIZAR_VERB = /\b(?:analiza|analizar|qu[eé]\s+opinan|c[oó]mo\s+ven)\b/i
+    if (SENTIMIENTO_ENTITY.test(message) && ANALIZAR_VERB.test(message)) {
+      const texto = this.extractTextoDe(message)
+      if (texto) extracted.texto = texto
+      return { intent: 'analizar_sentimiento', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 0l. SUGERIR CAMPAÑA ("sugiere mejoras para mi campaña actual",
+    // "cómo puedo optimizar mis campañas de marketing") ═══
+    const CAMPANIA_ENTITY = /\bcampa[nñ]as?\b/i
+    const SUGGEST_VERB = /\b(?:sugiere|sugerir|sugerencias?|mejoras?|optimiza|optimizar|optimizaci[oó]n|recomienda|recomendar|recomendaciones?)\b/i
+    if (CAMPANIA_ENTITY.test(message) && SUGGEST_VERB.test(message) && !COPY_ENTITY.test(message)) {
+      return { intent: 'sugerir_campania', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 0m. GENERAR BLOQUE WEB ("genera un bloque hero para la landing de mi
+    // producto", "dame un bloque CTA para promocionar el servicio") ═══
+    const BLOQUE_ENTITY = /\b(?:bloque|secci[oó]n|landing)\b/i
+    const WEB_VERB = /\b(?:genera|generar|crea|crear|dame\s+un\s+bloque|dame\s+una\s+secci[oó]n)\b/i
+    if (BLOQUE_ENTITY.test(message) && WEB_VERB.test(message)) {
+      const tipoBloque = this.extractTipoBloqueDe(message)
+      if (tipoBloque) extracted.tipoBloque = tipoBloque
+      const producto = this.extractProductoWebDe(message)
+      if (producto) extracted.producto = producto
+      return { intent: 'generar_web_block', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 0n. GENERAR SEO ("genera el SEO para la página de servicios",
+    // "dame metadatos SEO para mi landing de ventas") ═══
+    const SEO_ENTITY = /\b(?:seo|metadatos|keywords?|palabras\s+clave|t[ií]tulo\s+y\s+descripci[oó]n|meta\s+(?:t[ií]tulo|descripci[oó]n))\b/i
+    const SEO_VERB = /\b(?:genera|generar|dame|optimiza|crea|crear)\b/i
+    if (SEO_ENTITY.test(message) && SEO_VERB.test(message)) {
+      const tituloPagina = this.extractTituloPaginaDe(message)
+      if (tituloPagina) extracted.tituloPagina = tituloPagina
+      return { intent: 'generar_seo', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 0o. SUGERIR AUTOMATIZACIÓN ("sugiere reglas de automatización para
+    // mi negocio", "cómo puedo automatizar mi marketing") ═══
+    const AUTO_ENTITY = /\b(?:automatiza|automatizar|automatizaci[oó]n|reglas?\s+automa[á]?ticas?)\b/i
+    if (AUTO_ENTITY.test(message) && /\b(?:sugiere|sugerir|ideas?|qu[eé]|c[oó]mo|dame)\b/i.test(message)) {
+      return { intent: 'sugerir_automatizacion', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 0p. PROGRAMAR CAMPAÑA ("programa mi campaña de Meta para horario
+    // laboral", "pausa mi campaña de Google Ads los fines de semana") ═══
+    const CAMPANIA_PROG_VERB = /\b(?:programa|programar|pausa|pausar|activa|activar|desactiva|desactivar)\b/i
+    if (CAMPANIA_PROG_VERB.test(message) && CAMPANIA_ENTITY.test(message)) {
+      const campania = this.extractCampaniaDe(message)
+      if (campania) extracted.campania = campania
+      extracted.accion = /\b(?:pausa|pausar|desactiva|desactivar)\b/i.test(message) ? 'PAUSE' : 'ACTIVATE'
+      const dias = this.extractDiasSemanaDe(message)
+      if (dias) extracted.dias = dias
+      const horario = this.extractHorarioDe(message)
+      if (horario) {
+        extracted.horaInicio = horario.inicio
+        extracted.horaFin = horario.fin
+      }
+      return { intent: 'programar_campania', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 0q. LISTAR HORARIOS ("muéstrame las programaciones activas",
+    // "lista las programaciones de mis campañas") ═══
+    const HORARIO_LIST_ENTITY = /\b(?:programaciones?|horarios?\s+(?:programados?|activos?))\b/i
+    const LISTAR_VERB = /\b(?:mu[eé]strame|lista|listar|qu[eé]\s+campa[nñ]as|ver|dame)\b/i
+    if (HORARIO_LIST_ENTITY.test(message) && LISTAR_VERB.test(message)) {
+      return { intent: 'listar_horarios', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 0r. ELIMINAR HORARIO ("elimina la programación de la campaña de
+    // verano", "borra el horario de la campaña de Meta") ═══
+    const ELIMINAR_PROG_VERB = /\b(?:elimina|eliminar|borra|borrar|cancela|cancelar)\b/i
+    if (ELIMINAR_PROG_VERB.test(message) && /\b(?:programaci[oó]n|horario)\b/i.test(message)) {
+      const programacion = this.extractProgramacionDe(message)
+      if (programacion) extracted.programacion = programacion
+      return { intent: 'eliminar_horario', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 0s. TESTS A/B (crear / iniciar / evaluar / declarar ganador) ═══
+    const TEST_AB_ENTITY = /\btest\s+(?:a\/?b|de\s+la\s+campa[nñ]a|de\s+mi\s+campa[nñ]a)\b/i
+    const CREATE_TEST_VERB = /\b(?:crea|crear|configura|configurar|haz|hacer|quiero)\b/i
+    if (TEST_AB_ENTITY.test(message) && CREATE_TEST_VERB.test(message)) {
+      const campania = this.extractCampaniaDe(message)
+      if (campania) {
+        extracted.campania = campania
+        extracted.nombre = `Test A/B — ${campania}`
+      }
+      return { intent: 'crear_test_ab', confidence: 0.85, extractedParams: extracted }
+    }
+    const START_TEST_VERB = /\b(?:inicia|iniciar|activa|activar|pon\s+en\s+marcha|empieza|empiezar)\b/i
+    if (TEST_AB_ENTITY.test(message) && START_TEST_VERB.test(message)) {
+      const test = this.extractTestAbDe(message)
+      if (test) extracted.test = test
+      return { intent: 'iniciar_test_ab', confidence: 0.85, extractedParams: extracted }
+    }
+    const EVAL_TEST_VERB = /\b(?:c[oó]mo\s+va|significancia|va\s+ganando|ganando|evalu[aá]|calcular|dame\s+la\s+significancia)\b/i
+    if (TEST_AB_ENTITY.test(message) && EVAL_TEST_VERB.test(message)) {
+      const test = this.extractTestAbDe(message)
+      if (test) extracted.test = test
+      return { intent: 'evaluar_test_ab', confidence: 0.85, extractedParams: extracted }
+    }
+    if (/\b(?:declara|declarar)\b/i.test(message) && /\bganador|ganadora\b/i.test(message)) {
+      const test = this.extractTestAbDe(message)
+      if (test) extracted.test = test
+      const variante = this.extractVarianteDe(message)
+      if (variante) extracted.variante = variante
+      return { intent: 'declarar_ganador', confidence: 0.85, extractedParams: extracted }
     }
 
     // ═══ 0. CONVERTIR LEAD (antes que crear: "convierte… en contacto" también
@@ -1741,6 +1878,250 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
   }
 
   /**
+   * Extrae el tema del copy: tras "sobre", "acerca de", "promocionando" o
+   * "para". Descarta si solo captura el formato ("para WhatsApp").
+   */
+  private extractTemaDe(message: string): string | null {
+    const FORMAT_ONLY = /^(?:email|correo|whatsapp|linkedin|instagram|facebook|tiktok|youtube|web|redes?\s+sociales?|sms|mi\s+producto|mi\s+servicio)$/i
+    const m = message.match(/(?:sobre|acerca\s+de|promocionando)\s+([^,.]+)/i)
+    if (m) {
+      let tema = m[1].trim()
+      tema = tema.split(/\s+(?:con\s+un\s+tono|en\s+formato)\b/i)[0].trim()
+      tema = tema.replace(/["'”]+\s*$/, '').trim()
+      if (tema.length >= 2 && !FORMAT_ONLY.test(tema)) return tema
+    }
+    const m2 = message.match(/\b(?:copy|post|publicaci[oó]n|anuncio|eslogan|slogan)\s+(?:de\s+|para\s+)?([^,.]+)/i)
+    if (m2) {
+      let tema = m2[1].trim()
+      tema = tema.split(/\s+(?:con\s+un\s+tono|en\s+formato|para\s+email|para\s+redes|para\s+whatsapp)\b/i)[0].trim()
+      tema = tema.replace(/["'”]+\s*$/, '').trim()
+      if (tema.length >= 2 && !FORMAT_ONLY.test(tema)) return tema
+    }
+    return null
+  }
+
+  /**
+   * Extrae el formato del copy: "para email" → EMAIL, "para LinkedIn" →
+   * LINKEDIN, "para YouTube" → YOUTUBE, "para TikTok" → TIKTOK.
+   */
+  private extractFormatoDe(message: string): string | null {
+    if (/\b(?:email|correo)\b/i.test(message)) return 'EMAIL'
+    if (/\blinkedin\b/i.test(message)) return 'LINKEDIN'
+    if (/\byoutube\b/i.test(message)) return 'YOUTUBE'
+    if (/\btiktok\b/i.test(message)) return 'TIKTOK'
+    if (/\b(?:redes\s+sociales|instagram|facebook|whatsapp|web)\b/i.test(message)) return 'EMAIL'
+    return null
+  }
+
+  /**
+   * Extrae el tono: profesional/formal → professional, agresivo → aggressive,
+   * amigable/casual/divertido → friendly, educativo → educational.
+   */
+  private extractTonoDe(message: string): string | null {
+    const m = message.match(/\b(?:con\s+un\s+tono\s+|tono\s+)([a-záéíóúñü]+)/i)
+    if (m) {
+      const t = m[1].toLowerCase()
+      if (/^profesional|formal$/.test(t)) return 'professional'
+      if (/^agresiv/.test(t)) return 'aggressive'
+      if (/^amigable|casual|divertid/.test(t)) return 'friendly'
+      if (/^educativ/.test(t)) return 'educational'
+    }
+    if (/\bprofesional\b|\bformal\b/i.test(message)) return 'professional'
+    if (/\bagresiv[oa]\b/i.test(message)) return 'aggressive'
+    if (/\bamigable\b|\bcasual\b|\bdivertid[oa]\b/i.test(message)) return 'friendly'
+    if (/\beducativ[oa]\b/i.test(message)) return 'educational'
+    return null
+  }
+
+  /**
+   * Extrae el texto a analizar: tras "feedback:", "comentarios:", "texto:".
+   */
+  private extractTextoDe(message: string): string | null {
+    const m = message.match(/(?:feedback|comentarios?|texto|rese[nñ]as?|mensaje)\s*[:]\s*["“']?([^"”']+)/i)
+    if (m) {
+      let t = m[1].trim()
+      t = t.replace(/["'”]+\s*$/, '').trim()
+      if (t.length >= 2) return t
+    }
+    return null
+  }
+
+  /**
+   * Extrae el tipo de bloque web: hero, features, testimonials, pricing, cta,
+   * team, contact, footer, stats, faq, gallery, blog.
+   */
+  private extractTipoBloqueDe(message: string): string | null {
+    const tipos = ['testimonials', 'features', 'pricing', 'footer', 'gallery', 'contact', 'blog', 'stats', 'faq', 'team', 'hero', 'cta']
+    const low = message.toLowerCase()
+    for (const t of tipos) {
+      if (new RegExp(`\\b${t}\\b`).test(low)) return t
+    }
+    // Sin anglicismo: "bloque de testimonios" → testimonials, "sección de características" → features
+    if (/\btestimonio/.test(low)) return 'testimonials'
+    if (/\bcaracter[ií]sticas?\b|\bfuncionalidades?\b/.test(low)) return 'features'
+    if (/\bprecios?\b/.test(low)) return 'pricing'
+    if (/\bllamada\s+a\s+la\s+acci[oó]n\b|\bcta\b/.test(low)) return 'cta'
+    return null
+  }
+
+  /**
+   * Extrae el producto/servicio de un bloque web: tras "para la landing de",
+   * "para la web", "para promocionar", "para el/la". (Nombre distinto de
+   * extractProductoDe del módulo de inventario.)
+   */
+  private extractProductoWebDe(message: string): string | null {
+    const m = message.match(/(?:para\s+la\s+landing\s+de|para\s+la\s+web\s+de|para\s+promocionar|para\s+mi\s+landing\s+de|para\s+el|para\s+la)\s+([^,.]+)/i)
+    if (m) {
+      let prod = m[1].trim()
+      prod = prod.replace(/["'”]+\s*$/, '').trim()
+      // Descarta si lo capturado es solo el tipo de bloque o "web"
+      if (this.extractTipoBloqueDe(prod)) return null
+      if (/^web$/i.test(prod)) return null
+      if (prod.length >= 2) return prod
+    }
+    return null
+  }
+
+  /**
+   * Extrae el título de página del SEO: tras "para la página de", "para mi
+   * landing de", "de la página de", "para la página".
+   */
+  private extractTituloPaginaDe(message: string): string | null {
+    const m = message.match(/(?:para\s+la\s+p[aá]gina\s+de|para\s+mi\s+landing\s+de|para\s+la\s+p[aá]gina|de\s+la\s+p[aá]gina\s+de|para\s+mi\s+p[aá]gina\s+de)\s+([^,.]+)/i)
+    if (m) {
+      let titulo = m[1].trim()
+      titulo = titulo.replace(/["'”]+\s*$/, '').trim()
+      if (titulo.length >= 2) return titulo
+    }
+    return null
+  }
+
+  /**
+   * Extrae el nombre de la campaña: tras "campaña de/para", o el adjetivo
+   * descriptor de la campaña ("campaña de verano" → verano, "campaña de
+   * Meta" → Meta).
+   */
+  private extractCampaniaDe(message: string): string | null {
+    const m = message.match(/\bcampa[nñ]a\s+(?:de|para|en|con|\b)?\s*([^,.]+)/i)
+    if (m) {
+      let camp = m[1].trim()
+      camp = camp.split(/\s+(?:para|con|en\s+horario|los\s+fines|solo|de\s+lunes)\b/i)[0].trim()
+      camp = camp.replace(/["'”]+\s*$/, '').trim()
+      // Evitar capturar palabras genéricas que siguen a "campaña"
+      if (/^(?:actual|nueva|existente|que|de|mi|la|el|publicitaria|de\s+marketing)$/i.test(camp)) return null
+      if (camp.length >= 2) return camp
+    }
+    return null
+  }
+
+  /**
+   * Extrae los días de la semana de una programación: "lunes a viernes" →
+   * [MON..FRI], "los fines de semana" → [SAT, SUN], "todos los días" → todos.
+   */
+  private extractDiasSemanaDe(message: string): string[] | null {
+    const dayMap: Record<string, string> = {
+      lunes: 'MON', martes: 'TUE', miercoles: 'WED', miércoles: 'WED', jueves: 'THU',
+      viernes: 'FRI', sabado: 'SAT', sábado: 'SAT', domingo: 'SUN',
+    }
+    const order = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
+    const found: string[] = []
+    const has = (re: RegExp) => re.test(message)
+    if (has(/\btodos\s+los\s+d[ií]as\b/i)) return [...order]
+    if (has(/\bfines?\s+de\s+semana\b/i)) found.push('SAT', 'SUN')
+    const range = message.match(/\bde\s+(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\s+a\s+(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\b/i)
+    if (range) {
+      const norm = (w: string) => dayMap[w.toLowerCase().replace(/é/g, 'e').replace(/á/g, 'a')]
+      const start = order.indexOf(norm(range[1]))
+      const end = order.indexOf(norm(range[2]))
+      for (let i = start; i <= end && i < order.length; i++) found.push(order[i])
+    }
+    for (const [es, code] of Object.entries(dayMap)) {
+      if (new RegExp(`\\b${es}\\b`, 'i').test(message) && !found.includes(code)) found.push(code)
+    }
+    return found.length ? [...new Set(found)] : null
+  }
+
+  /**
+   * Extrae el rango horario "de 9 a 18", "de 9am a 6pm", "de 09:00 a 18:00".
+   * Normaliza a HH:MM (24h). Atajos: "horario laboral" → 09:00-18:00,
+   * "por la noche" → 22:00-06:00.
+   */
+  private extractHorarioDe(message: string): { inicio: string; fin: string } | null {
+    const norm = (h: number, mRaw: string | undefined, pm: boolean): string => {
+      let hour = h
+      if (pm && hour < 12) hour += 12
+      if (!pm && hour === 12) hour = 0
+      return `${String(hour).padStart(2, '0')}:${String(mRaw ? Number(mRaw) : 0).padStart(2, '0')}`
+    }
+    if (/\bhorario\s+laboral\b/i.test(message)) return { inicio: '09:00', fin: '18:00' }
+    if (/\bpor\s+la\s+noche\b/i.test(message)) return { inicio: '22:00', fin: '06:00' }
+    const m = message.match(/\b(?:de|desde|entre)\s+(?:las\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:a|hasta|y)\s+(?:las\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/i)
+    if (m) {
+      return { inicio: norm(Number(m[1]), m[2], /pm/i.test(m[3] || '')), fin: norm(Number(m[4]), m[5], /pm/i.test(m[6] || '')) }
+    }
+    return null
+  }
+
+  /**
+   * Extrae la referencia de la programación a eliminar: tras "de la campaña
+   * de" o el descriptor ("programación de la campaña de verano" → verano).
+   */
+  private extractProgramacionDe(message: string): string | null {
+    const m = message.match(/(?:de\s+la\s+campa[nñ]a\s+de|de\s+la\s+campa[nñ]a|de\s+la\s+programaci[oó]n|de\s+mi\s+campa[nñ]a)\s+([^,.]+)/i)
+    if (m) {
+      let ref = m[1].trim()
+      ref = ref.replace(/["'”]+\s*$/, '').trim()
+      if (ref.length >= 2) return ref
+    }
+    const m2 = message.match(/\b(?:programaci[oó]n|horario)\s+(?:de\s+)?([^,.]+)/i)
+    if (m2) {
+      let ref = m2[1].trim()
+      ref = ref.split(/\s+(?:nocturn[oa]|laboral|activa)\b/i)[0].trim()
+      if (ref.length >= 2) return ref
+    }
+    return null
+  }
+
+  /**
+   * Extrae la referencia del test A/B: tras "test A/B de la campaña de" o
+   * "test A/B de". "el test A/B que creé" → null (pide más info).
+   */
+  private extractTestAbDe(message: string): string | null {
+    const m = message.match(/test\s+a\/?b\s+(?:de\s+la\s+campa[nñ]a\s+de|de\s+la\s+campa[nñ]a|de)\s+([^,.]+)/i)
+    if (m) {
+      let ref = m[1].trim()
+      ref = ref.replace(/["'”]+\s*$/, '').trim()
+      if (ref.length >= 2) return ref
+    }
+    const m2 = message.match(/\btest\s+a\/?b\s+(?:de\s+la\s+campa[nñ]a\s+de|de\s+la\s+campa[nñ]a|de\s+)?([^,.]+)/i)
+    if (m2) {
+      let ref = m2[1].trim()
+      ref = ref.split(/\s+(?:que|para)\b/i)[0].trim()
+      if (ref.length >= 2 && !/^(?:que|que\s+cre[eé]|borrador|activo|en\s+curso)$/i.test(ref)) return ref
+    }
+    // "test de Facebook" sin A/B explícito ("declara ganadora la variante B
+    // del test de Facebook")
+    const m3 = message.match(/\btest\s+(?:de\s+la\s+campa[nñ]a\s+de|de\s+)?([^,.]+)/i)
+    if (m3) {
+      let ref = m3[1].trim()
+      ref = ref.split(/\s+(?:que|para)\b/i)[0].trim()
+      if (ref.length >= 2 && !/^a\/?b$/i.test(ref) && !/^(?:que|que\s+cre[eé]|borrador|activo|en\s+curso)$/i.test(ref)) return ref
+    }
+    return null
+  }
+
+  /**
+   * Extrae la variante declarada: "variante B" → B, "la B" → B.
+   */
+  private extractVarianteDe(message: string): string | null {
+    const m = message.match(/\b(?:variante|variant)\s+([A-Za-z0-9]+)/i)
+    if (m) return m[1]
+    const m2 = message.match(/\bganador[ao]?\s+la\s+([A-Za-z0-9]+)\b/i)
+    if (m2) return m2[1]
+    return null
+  }
+
+  /**
    * Extrae la hora de "a las 10am", "a las 15:30", "las 2pm", "10:00 AM",
    * "2:30 PM". Normaliza a HH:MM (24h).
    */
@@ -2465,6 +2846,44 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     }
     if (param === 'empleadoId' || param === 'employeeId') {
       return this.extractNombreAfter(message, /\b(?:empleado|colaborador|de|del)\s+/i)
+    }
+    // ─── Módulo Marketing/Ads (Decimotercer entrenamiento) ───
+    if (param === 'tema' || param === 'topic') {
+      return this.extractTemaDe(message)
+    }
+    if (param === 'formato' || param === 'platform') {
+      return this.extractFormatoDe(message)
+    }
+    if (param === 'tono' || param === 'tone') {
+      return this.extractTonoDe(message)
+    }
+    if (param === 'texto' || param === 'text') {
+      return this.extractTextoDe(message)
+    }
+    if (param === 'tipoBloque' || param === 'category') {
+      return this.extractTipoBloqueDe(message)
+    }
+    if (param === 'tituloPagina' || param === 'pageTitle') {
+      return this.extractTituloPaginaDe(message)
+    }
+    if (param === 'producto' || param === 'description') {
+      return this.extractProductoWebDe(message)
+    }
+    if (param === 'campania' || param === 'campaignId' || param === 'campaign') {
+      return this.extractCampaniaDe(message)
+    }
+    if (param === 'test' || param === 'testId') {
+      return this.extractTestAbDe(message)
+    }
+    if (param === 'programacion' || param === 'scheduleId') {
+      return this.extractProgramacionDe(message)
+    }
+    if (param === 'variante' || param === 'variantId') {
+      return this.extractVarianteDe(message)
+    }
+    if (param === 'dias' || param === 'daysOfWeek') {
+      const dias = this.extractDiasSemanaDe(message)
+      return dias ? dias.join(',') : null
     }
     return null
   }
