@@ -255,7 +255,9 @@ export default function ContactoDetallePage() {
       })
 
       const data = await res.json()
-      if (data.success) {
+      // El PATCH devuelve el contacto crudo (no { success: true }); aceptamos
+      // ambas formas: éxito si la respuesta es ok y no trae success: false.
+      if (res.ok && data.success !== false) {
         toast.success('Perfil fiscal actualizado')
         setIsFiscalModalOpen(false)
         fetchContactData()

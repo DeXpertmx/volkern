@@ -9,7 +9,8 @@ Anotado el 2026-08-11. Estado real de cada tema para retomar donde se quedó.
 
 ## En curso
 
-- **Perfil fiscal: "Error al actualizar perfil fiscal" + scroll del modal** — la API (POST/PATCH) escribe `pais`/`idFiscal`/`direccionFiscal`/`ciudadFiscal`/`estadoFiscal`/`codigoPostalFiscal`, pero la BD real (Neon) y el schema.prisma tienen los nombres viejos: `nif`/`country`/`address`/`city`/`province`/`zipCode`. Prisma lanza "Unknown argument" → 500. Fix: mapear la API a las columnas reales y devolver en GET los nombres que espera el componente. Modal: mover el scroll a un contenedor interno (header+footer fijos).
+- **403 en `GET /api/deals` para tenants con rol creado por `scripts/bootstrap-admin.ts`** — resuelto en código (ver abajo): el rol queda con `permisos: { all: true }` (wildcard) y `hasPermission()` no lo interpretaba → 403 en rutas con gating por módulo. **Requiere deploy** para que afecte a producción.
+- **"Error al actualizar perfil fiscal" desde la página de contacto** — el PATCH `/api/contacts/[id]` devuelve el contacto crudo (no `{ success: true }`) y la página solo miraba `data.success` → mostraba el error aunque el guardado funcionara. Fix en las dos páginas (con y sin `[tenant]`) + normalización de `country` ("España" → "ES") en el PATCH. **Requiere deploy.**
 
 ## Pendientes (por orden de valor)
 
@@ -21,6 +22,7 @@ Anotado el 2026-08-11. Estado real de cada tema para retomar donde se quedó.
 6. **Integrar `scripts/e2e-provision-chatwoot.ts` como check de regresión** en deploy/CI.
 7. ~~**Campo "Motivo de exención" en el modal**~~ — resuelto `748a8bd`: el modal tiene el input obligatorio y el flujo exento ya no da 400.
 8. **Unificar `ConfiguracionFiscalEmisor` vs `PerfilFiscalCliente`** — dos modelos paralelos de datos fiscales (emisor propio vs clientes) con campos distintos; verificar que la facturación los usa coherentemente.
+9. ~~**403 por wildcard `{ all: true }` en permisos**~~ — resuelto en código (pendiente de deploy): `hasPermission`/`getVisibleModules` ahora entienden `permisos.all === true` y `permisos[module] === true` (shape de `bootstrap-admin.ts`). Afectaba a tenants nuevos (dexpert incluido): `GET /api/deals` daba 403.
 
 ## Notas operativas
 

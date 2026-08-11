@@ -90,6 +90,26 @@ describe('hasPermission', () => {
     const user = makeUser();
     expect(hasPermission(user, 'leads', 'exportar')).toBe(false);
   });
+
+  it('debe conceder todo con el wildcard { all: true } (shape de bootstrap-admin)', () => {
+    const user = makeUser({
+      role: { id: 'r-all', nombre: 'Admin', permisos: { all: true } },
+    });
+    expect(hasPermission(user, 'leads', 'ver')).toBe(true);
+    expect(hasPermission(user, 'leads', 'crear')).toBe(true);
+    expect(hasPermission(user, 'deals', 'ver')).toBe(true);
+    expect(hasPermission(user, 'configuracion', 'editar')).toBe(true);
+    expect(hasPermission(user, 'whitelabel', 'gestionar')).toBe(true);
+  });
+
+  it('debe conceder módulo completo si permisos[module] es true', () => {
+    const user = makeUser({
+      role: { id: 'r-mod', nombre: 'Admin', permisos: { leads: true } as any },
+    });
+    expect(hasPermission(user, 'leads', 'ver')).toBe(true);
+    expect(hasPermission(user, 'leads', 'eliminar')).toBe(true);
+    expect(hasPermission(user, 'citas', 'ver')).toBe(false);
+  });
 });
 
 // ─── canViewModule ─────────────────────────────────────────────────────
@@ -153,6 +173,17 @@ describe('getVisibleModules', () => {
   it('debe devolver [] si permisos es null', () => {
     const user = makeUser({ role: { id: 'r-1', nombre: 'X', permisos: null as any } });
     expect(getVisibleModules(user)).toEqual([]);
+  });
+
+  it('debe devolver todos los módulos con el wildcard { all: true }', () => {
+    const user = makeUser({
+      role: { id: 'r-all', nombre: 'Admin', permisos: { all: true } },
+    });
+    const modules = getVisibleModules(user);
+    expect(modules).toContain('leads');
+    expect(modules).toContain('cursos');
+    expect(modules).toContain('whitelabel');
+    expect(modules.length).toBeGreaterThan(5);
   });
 });
 
