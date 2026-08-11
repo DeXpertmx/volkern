@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Plus, Search, Building2, Phone, Mail, MapPin, Calendar, CreditCard, Tag } from "lucide-react"
+import { Plus, Search, Building2, Phone, Mail, MapPin, Calendar, CreditCard, Tag, Receipt } from "lucide-react"
+import Link from "next/link"
 import useSWR from "swr"
 import { toast } from "sonner"
 import IvaRatesEditor from "@/components/finance/IvaRatesEditor"
@@ -67,6 +68,30 @@ export default function ProveedoresPage() {
   const [detailSaving, setDetailSaving] = useState(false)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState(emptyForm)
+  // Gastos recientes del proveedor (se cargan al abrir la ficha)
+  const [supplierExpenses, setSupplierExpenses] = useState<any[]>([])
+  const [expensesLoading, setExpensesLoading] = useState(false)
+  const [expensesTotal, setExpensesTotal] = useState(0)
+
+  useEffect(() => {
+    if (!detailSupplier?.id) {
+      setSupplierExpenses([])
+      return
+    }
+    let cancelled = false
+    setExpensesLoading(true)
+    fetch(`/api/erp/expenses?supplierId=${detailSupplier.id}&limit=5`)
+      .then(r => r.json())
+      .then(data => {
+        if (cancelled) return
+        const list = Array.isArray(data?.expenses) ? data.expenses : []
+        setSupplierExpenses(list)
+        setExpensesTotal(list.reduce((a: number, e: any) => a + (Number(e.amount) || 0), 0))
+      })
+      .catch(() => { if (!cancelled) setSupplierExpenses([]) })
+      .finally(() => { if (!cancelled) setExpensesLoading(false) })
+    return () => { cancelled = true }
+  }, [detailSupplier?.id])
 
   async function saveDetailRates() {
     if (!detailSupplier) return
@@ -375,6 +400,37 @@ export default function ProveedoresPage() {
                 onChange={vatRates => setDetailSupplier({ ...detailSupplier, vatRates })}
               />
               <p className="text-[10px] text-muted-foreground">Estos tipos se ofrecen al registrar un gasto de este proveedor.</p>
+            </div>
+            <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5"><Receipt className="w-3 h-3" /> Gastos recientes</p>
+                {detailSupplier && (
+                  <Link href={`/dashboard/finanzas/gastos?proveedor=${detailSupplier.id}`} className="text-[10px] font-bold text-primary hover:underline">
+                    Ver todos →
+                  </Link>
+                )}
+              </div>
+              {expensesLoading ? (
+                <p className="text-sm text-muted-foreground">Cargando gastos…</p>
+              ) : supplierExpenses.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Sin gastos registrados todavía.</p>
+              ) : (
+                <div className="space-y-2">
+                  {supplierExpenses.map(e => (
+                    <div key={e.id} className="flex items-center justify-between gap-2 text-sm">
+                      <div className="min-w-0">
+                        <p className="font-medium truncate">{e.description}</p>
+                        <p className="text-[10px] text-muted-foreground">{new Date(e.date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                      </div>
+                      <span className="font-black tracking-tighter shrink-0">-€{Number(e.amount).toFixed(2)}</span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between border-t pt-2 text-[10px] font-bold uppercase text-muted-foreground">
+                    <span>Total (últimos {supplierExpenses.length})</span>
+                    <span className="text-foreground font-black">-€{expensesTotal.toFixed(2)}</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </DialogContent>

@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -29,6 +30,7 @@ function SortIcon({ active, dir }: { active: boolean; dir: 'asc' | 'desc' }) {
 }
 
 export default function GastosPage() {
+  const router = useRouter()
   const { data, isLoading } = useSWR('/api/erp/expenses', fetcher)
   const [selectedExpense, setSelectedExpense] = useState<any>(null)
 
@@ -38,6 +40,18 @@ export default function GastosPage() {
   const [ivaFilter, setIvaFilter] = useState<PresenceFilter>('all')
   const [sortKey, setSortKey] = useState<SortKey>('date')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+
+  // Filtro de proveedor desde la URL (?proveedor=ID), p. ej. desde su ficha
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const id = params.get('proveedor')
+    if (id) setSupplierFilter(id)
+  }, [])
+
+  const changeSupplierFilter = (id: string) => {
+    setSupplierFilter(id)
+    router.replace(id === 'all' ? '/dashboard/finanzas/gastos' : `/dashboard/finanzas/gastos?proveedor=${id}`, { scroll: false })
+  }
 
   const expenses = data?.expenses || []
   const tenantConfig = data?.tenantConfig || { baseLatitude: 40.416775, baseLongitude: -3.703790 }
@@ -107,7 +121,7 @@ export default function GastosPage() {
         </div>
         <select
           value={supplierFilter}
-          onChange={e => setSupplierFilter(e.target.value)}
+          onChange={e => changeSupplierFilter(e.target.value)}
           className="w-full bg-slate-100 dark:bg-slate-900 border-none rounded-xl px-4 py-3 text-sm font-bold appearance-none outline-none cursor-pointer"
         >
           <option value="all">Todos los proveedores</option>
