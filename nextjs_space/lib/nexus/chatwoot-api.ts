@@ -6,7 +6,11 @@
 
 import { encrypt } from '@/lib/core/crypto';
 
-const CHATWOOT_BASE_URL = process.env.CHATWOOT_BASE_URL || 'https://volkern.dimension.expert';
+// Sin CHATWOOT_BASE_URL el cliente está deshabilitado: el default anterior
+// ('https://volkern.dimension.expert') apuntaba al gateway de Volkern, no a
+// una instancia de Chatwoot, y cada llamada devolvía 404 de la app. Ahora una
+// URL ausente se trata como "Chatwoot no configurado" (ver request()).
+const CHATWOOT_BASE_URL = process.env.CHATWOOT_BASE_URL || '';
 const CHATWOOT_SUPER_ADMIN_TOKEN = process.env.CHATWOOT_SUPER_ADMIN_TOKEN;
 const CHATWOOT_BOT_USER_ID = 2; // ID del usuario bot admin-bot@volkern.app
 const CHATWOOT_BOT_EMAIL = 'admin-bot@volkern.app';
@@ -65,6 +69,9 @@ class ChatwootApiClient {
         options: RequestInit = {},
         useAccountToken?: string
     ): Promise<T> {
+        if (!this.baseUrl) {
+            throw new Error('Chatwoot no configurado: falta CHATWOOT_BASE_URL. Las integraciones de mensajería se omiten.');
+        }
         const token = useAccountToken || this.superAdminToken;
         
         const response = await fetch(`${this.baseUrl}${endpoint}`, {
