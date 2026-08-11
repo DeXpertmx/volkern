@@ -363,7 +363,10 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     // Entidades de facturación sin verbo: "factura para X", "estado fiscal de
     // FAC-001", "verifica la integridad de la factura" (décimo entrenamiento)
     const FACTURA_TRIGGER = /\b(?:facturas?|factur[aá]ci[oó]n|facturar|estado\s+fiscal|integridad\s+fiscal)\b/i
-    if (!ACTION_VERB.test(message) && !ENTITY_TRIGGER.test(message) && !FILTER_ONLY.test(message) && !CITA_TRIGGER.test(message) && !FINANZA_TRIGGER.test(message) && !TAREA_TRIGGER.test(message) && !PROVEEDOR_TRIGGER.test(message) && !CATALOGO_TRIGGER.test(message) && !INVENTARIO_TRIGGER.test(message) && !INSURANCE_TRIGGER.test(message) && !FACTURA_TRIGGER.test(message)) return null
+    // Entidades de logística sin verbo: "estado del envío TRK-123", "cómo está
+    // la flota", "qué pedidos en tránsito", "ITV próxima a vencer" (undécimo)
+    const LOGISTICA_TRIGGER = /\b(?:env[ií]os?|tracking|pedidos?|flota|veh[ií]culos?|cami[oó]nes?|rutas?|reparto|entregas?|paquetes?|itv|almac[eé]n(?:es)?)\b/i
+    if (!ACTION_VERB.test(message) && !ENTITY_TRIGGER.test(message) && !FILTER_ONLY.test(message) && !CITA_TRIGGER.test(message) && !FINANZA_TRIGGER.test(message) && !TAREA_TRIGGER.test(message) && !PROVEEDOR_TRIGGER.test(message) && !CATALOGO_TRIGGER.test(message) && !INVENTARIO_TRIGGER.test(message) && !INSURANCE_TRIGGER.test(message) && !FACTURA_TRIGGER.test(message) && !LOGISTICA_TRIGGER.test(message)) return null
 
     const extracted: Record<string, any> = {}
     const email = message.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,})/)
@@ -594,6 +597,75 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
       const concepto = this.extractConceptoFacturaDe(message)
       if (concepto) extracted.concepto = concepto
       return { intent: 'crear_factura', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 0j. LOGÍSTICA (Undécimo entrenamiento): envíos, pedidos, flota, rutas
+    // y almacén. Son consultas operativas (no crean nada) — el dueño las hace
+    // desde el móvil; no deben depender del LLM ═══
+    const PEDIDO_SIGNAL = /\b(?:pedidos?|#?ORD[-_][A-Z0-9]+|#?PED[-_][A-Z0-9]+)\b/i
+    const TRACKING_WORD = /\btracking\b/i
+    const TRACKING_REF = /\b(?:TRK|ABC|ENV|SHP)[-_]\d+\b/i
+    const ENVIO_SIGNAL = /\benv[ií]os?\b|\bpaquetes?\b/i
+    const QUERY_LOGISTICA = /\b(?:estado|d[oó]nde|cu[aá]ndo|llega|consulta|consultar|dame|mu[eé]strame|muestra|rastrea|rastrear|seguimiento|timeline|en\s+qu[eé]\s+estado|haz\s+seguimiento)\b/i
+
+    // 0j-a. RASTREAR PEDIDO ("rastrea el pedido #ORD-456", "en qué estado
+    // está mi pedido #PED-100", "seguimiento del pedido de María García") —
+    // antes que los envíos: "pedido" gana sobre "envío" cuando vienen juntos ═══
+    if (PEDIDO_SIGNAL.test(message) && QUERY_LOGISTICA.test(message)) {
+      const pedidoId = this.extractPedidoRefDe(message)
+      if (pedidoId) extracted.pedidoId = pedidoId
+      return { intent: 'rastrear_pedido', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // 0j-b. TRACKING ENVÍO ("consultar el tracking del paquete", "dónde está
+    // mi envío TRK-998") — la palabra "tracking" es la señal más fuerte ═══
+    if (TRACKING_WORD.test(message) && QUERY_LOGISTICA.test(message)) {
+      const tracking = this.extractTrackingDe(message)
+      if (tracking) extracted.tracking = tracking
+      return { intent: 'tracking_envio', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // 0j-c. ESTADO ENVÍO ("dónde está el envío ABC-987", "cuál es el estado
+    // del envío TRK-12345") — envío/paquete o código de tracking sin verbo ═══
+    if ((ENVIO_SIGNAL.test(message) || TRACKING_REF.test(message)) && QUERY_LOGISTICA.test(message)) {
+      const tracking = this.extractTrackingDe(message)
+      if (tracking) extracted.tracking = tracking
+      return { intent: 'estado_envio', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // 0j-d. FLOTA ("cómo está la flota", "dame la salud de la flota", "qué
+    // mantenimientos pendientes hay", "qué vehículos tienen ITV próxima") —
+    // "salud/mantenimiento/ITV" → salud_flota; el resto → estado_flota ═══
+    const FLOTA_SIGNAL = /\b(?:flota|veh[ií]culos?|cami[oó]nes?|itv|mantenimientos?\s+pendientes?|mantenimiento)\b/i
+    if (FLOTA_SIGNAL.test(message)) {
+      const vehiculoId = this.extractVehiculoRefDe(message)
+      if (vehiculoId) extracted.vehiculoId = vehiculoId
+      if (/\b(?:salud|mantenimientos?\s+pendientes?|itv)\b/i.test(message)) {
+        return { intent: 'salud_flota', confidence: 0.85, extractedParams: extracted }
+      }
+      return { intent: 'estado_flota', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // 0j-e. OPTIMIZAR RUTA ("optimiza la ruta de reparto para mañana",
+    // "sugiere la mejor ruta para los pedidos pendientes") ═══
+    const RUTA_SIGNAL = /\b(?:rutas?|reparto|entregas?)\b/i
+    const OPTIMIZAR_SIGNAL = /\b(?:optimiza|optimizar|organiza|organizar|sugiere|sugerir|planifica|planificar|mejor\s+ruta)\b/i
+    if (RUTA_SIGNAL.test(message) && OPTIMIZAR_SIGNAL.test(message)) {
+      const fecha = this.extractFechaDe(message)
+      if (fecha) extracted.fecha = fecha
+      const vehiculoId = this.extractVehiculoRefDe(message)
+      if (vehiculoId) extracted.vehiculoId = vehiculoId
+      return { intent: 'optimizar_ruta', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // 0j-f. REORGANIZAR ALMACÉN ("sugiere cómo reorganizar el almacén",
+    // "cómo puedo optimizar el espacio del almacén") ═══
+    const ALMACEN_SIGNAL = /\balmac[eé]n(?:es)?\b/i
+    const REORGANIZAR_SIGNAL = /\b(?:reorganiza|reorganizar|reorganizaci[oó]n|optimizar\s+el\s+espacio|mejorar\s+la\s+distribuci[oó]n)\b/i
+    if (ALMACEN_SIGNAL.test(message) && REORGANIZAR_SIGNAL.test(message)) {
+      const almacenId = this.extractAlmacenRefDe(message)
+      if (almacenId) extracted.almacenId = almacenId
+      return { intent: 'reorganizar_almacen', confidence: 0.85, extractedParams: extracted }
     }
 
     // ═══ 0. CONVERTIR LEAD (antes que crear: "convierte… en contacto" también
@@ -1503,6 +1575,69 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
   }
 
   /**
+   * Número de tracking: "TRK-12345" / "ABC-987" / "ENV-550" / el token tras
+   * "tracking"/"envío"/"paquete" ("el envío ABC-987" → "ABC-987").
+   */
+  private extractTrackingDe(message: string): string | null {
+    const ref = message.match(/\b(?:TRK|ABC|ENV|SHP|SHIP)[-_]?\d{2,}\b/i)
+    if (ref) return ref[0]
+    const kw = message.match(/\b(?:tracking|env[ií]o|paquete)\s*(?:n[úu]mero\s*|#\s*)?([A-Za-z0-9][A-Za-z0-9-]{2,})/i)
+    if (kw) {
+      let t = kw[1].trim()
+      t = t.split(/\s+(?:de|del|por|con|para|,|;)/i)[0].trim()
+      // Rechazar conectores que se cuelan tras la keyword ("tracking del
+      // paquete" → "del" no es un número de tracking)
+      if (t.length >= 3 && !/^(?:de|del|el|la|los|las|un|una|por|con|para|mi|tu|su)$/i.test(t)) return t
+    }
+    return null
+  }
+
+  /**
+   * Referencia de pedido: "#ORD-456" / "PED-100" / "ORD-456" / el número
+   * tras "pedido" ("el pedido 789" → "789").
+   */
+  private extractPedidoRefDe(message: string): string | null {
+    const ref = message.match(/\b#?(?:ORD|PED)[-_][A-Z0-9]+\b/i)
+    if (ref) return ref[0].replace(/^#/, '')
+    const kw = message.match(/\bpedido\s*(?:n[úu]mero\s*|#\s*)?([A-Za-z0-9][A-Za-z0-9-]{1,})/i)
+    if (kw) {
+      let p = kw[1].trim()
+      p = p.split(/\s+(?:de|del|por|con|para|,|;)/i)[0].trim()
+      // Rechazar conectores ("pedido de María" → "de" no es una referencia)
+      if (p.length >= 2 && !/^(?:de|del|el|la|los|las|un|una|por|con|para|mi|tu|su)$/i.test(p)) return p
+    }
+    return null
+  }
+
+  /**
+   * Referencia de vehículo: "VEH-001" / "#VEH-002" / matrícula corta tras
+   * "vehículo"/"camión"/"flota del".
+   */
+  private extractVehiculoRefDe(message: string): string | null {
+    const ref = message.match(/\b#?VEH[-_][A-Z0-9]+\b/i)
+    if (ref) return ref[0].replace(/^#/, '')
+    const kw = message.match(/\b(?:veh[ií]culo|cami[oó]n|veh[ií]culos)\s+(?:n[úu]mero\s*|#\s*)?([A-Za-z0-9][A-Za-z0-9-]{1,})/i)
+    if (kw) {
+      let v = kw[1].trim()
+      v = v.split(/\s+(?:de|del|por|con|para|,|;)/i)[0].trim()
+      if (v.length >= 2) return v
+    }
+    return null
+  }
+
+  /**
+   * Referencia de almacén: tras "almacén" ("reorganización del almacén
+   * principal" → "principal").
+   */
+  private extractAlmacenRefDe(message: string): string | null {
+    const kw = message.match(/\balmac[eé]n\s+(?:principal\s+|central\s+|secundario\s+|de\s+|del\s+)?([A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9][A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9'\- ]{1,30})/i)
+    if (!kw) return null
+    let a = kw[1].trim()
+    a = a.split(/\s*(?:,|;|para|con|y)/i)[0].trim()
+    return a.length >= 2 ? a : null
+  }
+
+  /**
    * Extrae la hora de "a las 10am", "a las 15:30", "las 2pm", "10:00 AM",
    * "2:30 PM". Normaliza a HH:MM (24h).
    */
@@ -2200,6 +2335,19 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     }
     if (param === 'razon' || param === 'motivo') {
       return this.extractMotivoFacturaDe(message)
+    }
+    // ─── Módulo Logística (Undécimo entrenamiento) ───
+    if (param === 'tracking' || param === 'trackingNumber') {
+      return this.extractTrackingDe(message)
+    }
+    if (param === 'pedidoId' || param === 'orderRef') {
+      return this.extractPedidoRefDe(message)
+    }
+    if (param === 'vehiculoId' || param === 'vehicleId') {
+      return this.extractVehiculoRefDe(message)
+    }
+    if (param === 'almacenId' || param === 'warehouseId') {
+      return this.extractAlmacenRefDe(message)
     }
     return null
   }

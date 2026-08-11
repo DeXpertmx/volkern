@@ -92,6 +92,12 @@ const MISSING_ENTITY_PROMPTS: Record<string, string> = {
   montoReclamado: '💰 ¿Cuál es el monto reclamado?',
   montoIndemnizado: '💰 ¿Cuánto se va a indemnizar?',
   motivoRechazo: '📋 ¿Cuál es el motivo del rechazo?',
+
+  // Logística
+  tracking: '🔢 ¿Cuál es el número de tracking? (ej: TRK-12345)',
+  pedidoId: '🧾 ¿Cuál es el número o referencia del pedido? (ej: #ORD-456)',
+  vehiculoId: '🚛 ¿De qué vehículo? (ej: VEH-001 o la matrícula)',
+  almacenId: '🏭 ¿De qué almacén? (ej: principal, central)',
 }
 
 export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput> {

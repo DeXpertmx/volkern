@@ -2281,6 +2281,214 @@ describe('IntentClassifier — ruta determinista (sin LLM)', () => {
     expect(result.intent).toBe('crear_lead');
     expect(result.intent).not.toBe('crear_factura');
   });
+
+  // ═══ UNDÉCIMO ENTRENAMIENTO (módulo Logística): envíos, pedidos, flota,
+  // rutas y almacén ═══
+
+  // ── rastrear_pedido ──
+  it('rastrea el pedido #ORD-456 → rastrear_pedido con pedidoId', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'rastrea el pedido #ORD-456',
+    });
+    expect(result.intent).toBe('rastrear_pedido');
+    expect(result.extractedParams.pedidoId).toBe('ORD-456');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('en qué estado está mi pedido #PED-100 → rastrear_pedido', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'en qué estado está mi pedido #PED-100',
+    });
+    expect(result.intent).toBe('rastrear_pedido');
+    expect(result.extractedParams.pedidoId).toBe('PED-100');
+  });
+
+  it('seguimiento del pedido de María García → rastrear_pedido sin ref (pide)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'seguimiento del pedido de María García',
+    });
+    expect(result.intent).toBe('rastrear_pedido');
+    expect(result.needsMoreInfo).toBe(true);
+    expect(result.missingParams).toContain('pedidoId');
+  });
+
+  // ── tracking_envio / estado_envio ──
+  it('cuál es el estado del envío con tracking TRK-12345 → tracking_envio', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cuál es el estado del envío con tracking TRK-12345',
+    });
+    expect(result.intent).toBe('tracking_envio');
+    expect(result.extractedParams.tracking).toBe('TRK-12345');
+  });
+
+  it('consultar el tracking del paquete → tracking_envio sin número (pide)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'consultar el tracking del paquete',
+    });
+    expect(result.intent).toBe('tracking_envio');
+    expect(result.needsMoreInfo).toBe(true);
+    expect(result.missingParams).toContain('tracking');
+  });
+
+  it('dónde está mi envío TRK-998 → estado_envio con tracking', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'dónde está mi envío TRK-998',
+    });
+    expect(result.intent).toBe('estado_envio');
+    expect(result.extractedParams.tracking).toBe('TRK-998');
+  });
+
+  it('dónde está el envío ABC-987 → estado_envio', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'dónde está el envío ABC-987',
+    });
+    expect(result.intent).toBe('estado_envio');
+    expect(result.extractedParams.tracking).toBe('ABC-987');
+  });
+
+  it('multi-turno: completa el tracking faltante de tracking_envio', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'el tracking es TRK-999',
+      pendingIntent: 'tracking_envio',
+      collectedEntities: {},
+      missingEntities: ['tracking'],
+    });
+    expect(result.intent).toBe('tracking_envio');
+    expect(result.extractedParams.tracking).toBe('TRK-999');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  // ── flota ──
+  it('cómo está la flota de vehículos → estado_flota', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cómo está la flota de vehículos',
+    });
+    expect(result.intent).toBe('estado_flota');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('dame la salud de la flota → salud_flota', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'dame la salud de la flota',
+    });
+    expect(result.intent).toBe('salud_flota');
+  });
+
+  it('qué mantenimientos pendientes hay → salud_flota', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'qué mantenimientos pendientes hay',
+    });
+    expect(result.intent).toBe('salud_flota');
+  });
+
+  it('qué vehículos tienen ITV próxima a vencer → salud_flota', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'qué vehículos tienen ITV próxima a vencer',
+    });
+    expect(result.intent).toBe('salud_flota');
+  });
+
+  it('estado del vehículo VEH-001 → estado_flota con vehiculoId', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'estado del vehículo VEH-001',
+    });
+    expect(result.intent).toBe('estado_flota');
+    expect(result.extractedParams.vehiculoId).toBe('VEH-001');
+  });
+
+  // ── optimizar_ruta / reorganizar_almacen ──
+  it('optimiza la ruta de reparto para mañana → optimizar_ruta con fecha', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'optimiza la ruta de reparto para mañana',
+    });
+    expect(result.intent).toBe('optimizar_ruta');
+    expect(result.extractedParams.fecha).toBeTruthy();
+  });
+
+  it('sugiere la mejor ruta para los pedidos pendientes → optimizar_ruta', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'sugiere la mejor ruta para los pedidos pendientes',
+    });
+    expect(result.intent).toBe('optimizar_ruta');
+    expect(result.intent).not.toBe('rastrear_pedido');
+  });
+
+  it('cómo puedo organizar las entregas de mañana → optimizar_ruta', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cómo puedo organizar las entregas de mañana',
+    });
+    expect(result.intent).toBe('optimizar_ruta');
+  });
+
+  it('sugiere cómo reorganizar el almacén → reorganizar_almacen', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'sugiere cómo reorganizar el almacén',
+    });
+    expect(result.intent).toBe('reorganizar_almacen');
+  });
+
+  it('cómo puedo optimizar el espacio del almacén → reorganizar_almacen', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cómo puedo optimizar el espacio del almacén',
+    });
+    expect(result.intent).toBe('reorganizar_almacen');
+  });
+
+  it('reorganización del almacén principal → reorganizar_almacen con almacenId', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'reorganización del almacén principal',
+    });
+    expect(result.intent).toBe('reorganizar_almacen');
+    expect(result.extractedParams.almacenId).toBe('principal');
+  });
+
+  // ── negativos de logística ──
+
+  it('"envía un mensaje a juan@volkern.test" NO es estado_envio', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'envía un mensaje a juan@volkern.test',
+    });
+    expect(result.intent).not.toBe('estado_envio');
+    expect(result.intent).not.toBe('tracking_envio');
+  });
+
+  it('"dame mi salud financiera" NO es salud_flota', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'dame mi salud financiera',
+    });
+    expect(result.intent).toBe('analizar_gastos');
+    expect(result.intent).not.toBe('salud_flota');
+  });
+
+  it('"cuánto stock hay de X" NO es reorganizar_almacen', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cuánto stock hay del producto X',
+    });
+    expect(result.intent).not.toBe('reorganizar_almacen');
+    expect(result.intent).not.toBe('optimizar_ruta');
+  });
 });
 
 describe('IntentClassifier — getRequiredParams', () => {

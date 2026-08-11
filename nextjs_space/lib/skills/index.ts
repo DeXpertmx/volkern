@@ -1562,6 +1562,90 @@ const rectifyInvoiceWrapper = async (input: {
   });
 };
 
+// ─── Wrappers de Logística (Undécimo entrenamiento): el chatbot habla de
+// "tracking", "pedido #ORD-456", "vehículo VEH-001" y "almacén principal";
+// el core espera trackingNumber / orderRef / warehouseId ─────────────────────
+
+const getShipmentStatusWrapper = async (input: {
+  tenantId: string;
+  tracking?: string;
+  trackingNumber?: string;
+  envio?: string;
+  shipmentId?: string;
+}) => {
+  return logisticsSkills.getShipmentStatus({
+    tenantId: input.tenantId,
+    trackingNumber: input.trackingNumber || input.tracking || input.envio,
+    shipmentId: input.shipmentId,
+  });
+};
+
+const trackOrderWrapper = async (input: {
+  tenantId: string;
+  pedidoId?: string;
+  orderRef?: string;
+  tracking?: string;
+  trackingNumber?: string;
+}) => {
+  return logisticsSkills.trackOrder({
+    tenantId: input.tenantId,
+    orderRef: input.orderRef || input.pedidoId,
+    trackingNumber: input.trackingNumber || input.tracking,
+  });
+};
+
+const checkFleetHealthWrapper = async (input: {
+  tenantId: string;
+  vehiculoId?: string;
+  vehiculo?: string;
+}) => {
+  const result = await logisticsSkills.checkFleetHealth({ tenantId: input.tenantId });
+  const ref = String(input.vehiculoId || input.vehiculo || '').trim();
+  if (!ref) return result;
+  const match = (v: any) =>
+    (v.plate && String(v.plate).toLowerCase().includes(ref.toLowerCase())) ||
+    (v.id && String(v.id).toLowerCase() === ref.toLowerCase()) ||
+    (v.vehicleId && String(v.vehicleId).toLowerCase() === ref.toLowerCase());
+  const maintenanceDue = (result.maintenanceDue || []).filter(match);
+  const expiringItv = (result.expiringItv || []).filter(match);
+  if (maintenanceDue.length === 0 && expiringItv.length === 0) {
+    return {
+      ...result,
+      maintenanceDue: [],
+      expiringItv: [],
+      message: `No encontré el vehículo "${ref}" con mantenimientos pendientes ni ITV próxima a vencer.`,
+    };
+  }
+  return { ...result, maintenanceDue, expiringItv };
+};
+
+const optimizeRouteWrapper = async (input: {
+  tenantId: string;
+  origin?: string;
+  destination?: string;
+  priority?: string;
+  fecha?: string;
+  vehiculoId?: string;
+}) => {
+  return logisticsSkills.optimizeRoute({
+    tenantId: input.tenantId,
+    origin: input.origin,
+    destination: input.destination,
+    priority: input.priority,
+  });
+};
+
+const suggestWarehouseReorgWrapper = async (input: {
+  tenantId: string;
+  almacenId?: string;
+  warehouseId?: string;
+}) => {
+  return logisticsSkills.suggestWarehouseReorganization({
+    tenantId: input.tenantId,
+    warehouseId: input.warehouseId || input.almacenId,
+  });
+};
+
 export const skills = {
   // Contactos
   create_contact: createContactWrapper,
@@ -1716,11 +1800,13 @@ export const skills = {
   update_siniestro: updateSiniestroWrapper,
 
   // ERP Logística
-  get_shipment_status: logisticsSkills.getShipmentStatus,
-  check_fleet_health: logisticsSkills.checkFleetHealth,
-  optimize_route: logisticsSkills.optimizeRoute,
-  suggest_warehouse_reorg: logisticsSkills.suggestWarehouseReorganization,
-  track_order: logisticsSkills.trackOrder,
+  // Logística (wrappers: mapean tracking/pedidoId/vehiculoId/almacenId del
+  // chatbot a trackingNumber/orderRef/warehouseId del core)
+  get_shipment_status: getShipmentStatusWrapper,
+  check_fleet_health: checkFleetHealthWrapper,
+  optimize_route: optimizeRouteWrapper,
+  suggest_warehouse_reorg: suggestWarehouseReorgWrapper,
+  track_order: trackOrderWrapper,
 
   // Marketing Hub
   generate_marketing_copy: marketingSkills.generate_marketing_copy,
