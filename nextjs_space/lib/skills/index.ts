@@ -779,9 +779,26 @@ const getPhoneByNameWrapper = async (input: { tenantId: string; nombre: string }
   throw new Error(`No se encontró teléfono para el nombre "${nombre}"`);
 };
 
+/**
+ * Email sintético determinista para leads sin email (cita desde Telegram):
+ * "Juan Pérez" → "juan.perez@auto.volkern.local". Marca @auto.volkern.local
+ * para que nadie envíe emails reales a una dirección que no existe.
+ */
+function emailSinteticoParaLead(nombre: string): string {
+  const slug = nombre
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // quitar acentos
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '.')
+    .replace(/^\.+|\.+$/g, '')
+    .slice(0, 40)
+  return `${slug || 'contacto'}@auto.volkern.local`
+}
+
 const createBookingWrapper = async (input: { 
   tenantId: string; 
   email?: string; 
+  telefono?: string;
   nombre?: string; 
   fecha?: string; 
   hora?: string; 
@@ -790,7 +807,7 @@ const createBookingWrapper = async (input: {
   ubicacion?: string;
   userId?: string;
 }) => {
-  const { tenantId, email, nombre, fecha, hora, titulo, tipo, ubicacion, userId } = input;
+  const { tenantId, email, telefono, nombre, fecha, hora, titulo, tipo, ubicacion, userId } = input;
   const { prisma } = await import('@/lib/db');
 
   // ── Limpiar nombre: extraer solo el nombre real ──
@@ -843,12 +860,40 @@ const createBookingWrapper = async (input: {
     }
   }
 
-  // ── Si no hay email, pedir al usuario ──
-  // (No generar emails placeholder. La IA preguntará en el siguiente turno)
-  if (!targetEmail) {
-    throw new Error(`EMAIL_REQUIRED: No tengo el email de ${targetNombre || 'este contacto'}. ¿Me lo puedes proporcionar?`)
+  // ── Si solo hay email, derivar el nombre de él (createBooking también lo
+  // hace: "maria@x.com" → "maria"). No aplica la validación de 2 palabras. ──
+  if (!targetNombre && targetEmail) {
+    targetNombre = targetEmail.split('@')[0].replace(/[._-]+/g, ' ').trim()
   }
-  if (!targetNombre) targetNombre = targetEmail.split('@')[0]
+
+  // ── Sin nombre NI email → pedir el contacto (el clasificador ya pide fecha
+  // y hora; aquí solo llega si el usuario no nombró a nadie) ──
+  if (!targetNombre && !targetEmail) {
+    throw new Error('Necesito saber con quién agendar la cita: dame el nombre o email del contacto (requerido).')
+  }
+
+  // ── Si no hay email: auto-registrar el lead ──
+  // (El modelo Lead exige email, pero desde Telegram el usuario suele dar solo
+  // el nombre. Se genera un email sintético determinista y se crea el lead con
+  // el teléfono si viene; createBooking lo reutiliza por email → la cita queda
+  // vinculada al lead recién registrado, sin duplicados.)
+  if (!targetEmail) {
+    // TS no infiere la correlación a través del throw previo: aquí targetNombre
+    // siempre es string (si ambos faltaran ya habríamos lanzado antes).
+    const nombreFinal = targetNombre as string
+    targetEmail = emailSinteticoParaLead(nombreFinal)
+    await prisma.lead.create({
+      data: {
+        tenantId,
+        nombre: nombreFinal,
+        email: targetEmail,
+        telefono: telefono || null,
+        fuente: 'booking',
+        notas: 'Lead registrado automáticamente desde el chat sin email para agendar la cita.',
+        metadataExterna: { sinEmail: true, origen: 'chat' },
+      },
+    })
+  }
 
   // 3. Procesar fecha y hora de forma robusta
   //    Soporta formatos: "10:00", "10:00am", "2pm", "10:00 AM", "2:30 PM"
@@ -928,7 +973,8 @@ const createBookingWrapper = async (input: {
   return bookingSkills.createBooking({
     tenantId,
     email: targetEmail,
-    nombre: targetNombre,
+    telefono,
+    nombre: targetNombre as string,
     titulo: titulo || 'Cita de Seguimiento',
     fechaHora: dt,
     descripcion: tipo ? `Tipo: ${tipo}` : undefined,

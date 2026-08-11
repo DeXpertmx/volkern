@@ -88,10 +88,17 @@ describe('crmIntents', () => {
   });
 
   // ── Citas / Bookings ──
-  it('debe incluir agendar_cita con fecha+hora', () => {
+  it('debe incluir agendar_cita con fecha+hora+nombre (email opcional: auto-registro)', () => {
     const i = crmIntents.find(x => x.name === 'agendar_cita')!;
     expect(i.requiredParams).toContain('fecha');
     expect(i.requiredParams).toContain('hora');
+    // El clasificador solo exige fecha+hora; el wrapper resuelve nombre|email
+    // y auto-registra el lead con email sintético si no está en el CRM.
+    expect(i.requiredParams).toEqual(['fecha', 'hora']);
+    expect(i.requiredParams).not.toContain('email');
+    expect(i.optionalParams).toContain('email');
+    expect(i.optionalParams).toContain('nombre');
+    expect(i.optionalParams).toContain('telefono');
   });
 
   it('debe incluir mis_citas', () => {
