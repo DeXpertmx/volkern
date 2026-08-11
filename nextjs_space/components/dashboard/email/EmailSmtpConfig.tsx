@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from '@/components/ui/card'
@@ -50,10 +50,18 @@ export function EmailSmtpConfig() {
   const [config, setConfig] = useState<EmailConfig>(defaults)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const saveResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [testing, setTesting] = useState<'smtp' | 'imap' | null>(null)
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null)
 
-  useEffect(() => { fetchConfig() }, [])
+  useEffect(() => {
+    fetchConfig()
+    // Limpiar el timer de reset visual al desmontar
+    return () => {
+      if (saveResetTimer.current) clearTimeout(saveResetTimer.current)
+    }
+  }, [])
 
   const fetchConfig = async () => {
     try {
@@ -87,7 +95,9 @@ export function EmailSmtpConfig() {
 
   const handleSave = async () => {
     setSaving(true)
+    setSaveState('saving')
     setTestResult(null)
+    if (saveResetTimer.current) clearTimeout(saveResetTimer.current)
     try {
       const res = await fetch('/api/configuracion', {
         method: 'POST',
@@ -113,13 +123,19 @@ export function EmailSmtpConfig() {
           },
         }),
       })
-      if (res.ok) toast.success('Configuración guardada')
+      if (res.ok) {
+        toast.success('Configuración guardada')
+        setSaveState('saved')
+        saveResetTimer.current = setTimeout(() => setSaveState('idle'), 2500)
+      }
       else {
         const err = await res.json()
         toast.error(err.error || 'Error al guardar')
+        setSaveState('error')
       }
     } catch {
       toast.error('Error de conexión')
+      setSaveState('error')
     } finally {
       setSaving(false)
     }
@@ -318,6 +334,16 @@ export function EmailSmtpConfig() {
           {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
           {saving ? 'Guardando...' : 'Guardar Configuración'}
         </Button>
+        {saveState === 'saved' && (
+          <span className="text-sm text-emerald-600 font-medium flex items-center gap-1">
+            <CheckCircle2 className="h-4 w-4" /> Guardado ✓
+          </span>
+        )}
+        {saveState === 'error' && (
+          <span className="text-sm text-red-600 font-medium flex items-center gap-1">
+            <AlertTriangle className="h-4 w-4" /> Error al guardar — reintenta
+          </span>
+        )}
         <Button variant="outline" onClick={() => handleTest('smtp')} disabled={testing !== null || !config.smtp_host || !config.smtp_user}>
           {testing === 'smtp' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
           {testing === 'smtp' ? 'Probando...' : 'Probar SMTP'}
