@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
     const aplicaReverseCharge = cotizacion.emisor && perfilFiscalCliente
       ? aplicaInversionSujetoPasivo(
           cotizacion.emisor.pais,
-          (perfilFiscalCliente as any).pais,
+          perfilFiscalCliente.country,
           !!perfilFiscalCliente.idIntracomunitario
         )
       : false

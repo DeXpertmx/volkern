@@ -36,8 +36,8 @@ export function replaceVariables(text: string, context: ExecutionContext): strin
       '{{lead.estado}}': lead.estado || '',
       '{empresa}': lead.empresa || '',
       '{{empresa}}': lead.empresa || '',
-      '{id_fiscal}': lead.perfilFiscal?.idFiscal || '',
-      '{{id_fiscal}}': lead.perfilFiscal?.idFiscal || '',
+      '{id_fiscal}': lead.perfilFiscal?.nif || '',
+      '{{id_fiscal}}': lead.perfilFiscal?.nif || '',
       '{fecha_hoy}': fechaHoy,
       '{{fecha_hoy}}': fechaHoy,
     }
