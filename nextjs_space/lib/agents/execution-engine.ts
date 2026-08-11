@@ -548,6 +548,64 @@ export const ExecutionEngine = {
         const suffix = projects.length > 6 ? `\n… y ${projects.length - 6} más` : '';
         return `📐 *Desviaciones en proyectos (${projects.length}):*\n${lines.join('\n')}${suffix}`;
       }
+      case 'detect_ghosting': {
+        const leads = Array.isArray(data) ? data : [];
+        if (leads.length === 0) return '👻 No hay leads fantasma: todos tus leads activos tienen actividad reciente.';
+        const lines = leads.slice(0, 8).map((l: any) => {
+          const nombre = this.escapeMarkdown(String(l?.nombre || ''));
+          const horas = Number(l?.horasInactivo ?? 0);
+          const dias = (horas / 24).toFixed(1).replace(/\.0$/, '');
+          const res = l?.draftRescate ? `\n   💬 ${this.escapeMarkdown(String(l.draftRescate))}` : '';
+          return `• ${nombre} — inactivo ${horas}h (~${dias} días)${res}`;
+        });
+        const suffix = leads.length > 8 ? `\n… y ${leads.length - 8} más` : '';
+        return `👻 *Leads fantasma (${leads.length}):*\n${lines.join('\n')}${suffix}`;
+      }
+      case 'generate_success_path': {
+        const steps = Array.isArray(data?.steps) ? data.steps : [];
+        const reasoning = data?.metadata?.reasoning ? `\n🧠 ${this.escapeMarkdown(String(data.metadata.reasoning))}` : '';
+        if (steps.length === 0) return '🗺 No pude generar la ruta de éxito.';
+        const lines = steps.map((s: any, i: number) => `\n${i + 1}. *${this.escapeMarkdown(String(s?.title || ''))}* — ${this.escapeMarkdown(String(s?.description || ''))}`);
+        return `🗺 *Ruta de éxito para cerrar el deal:*${lines.join('')}${reasoning}`;
+      }
+      case 'audit_expense_integrity': {
+        return String(data?.status === 'ALERT' ? '🚨 ' : '✅ ') + this.escapeMarkdown(String(data?.content || 'Auditoría completada.'));
+      }
+      case 'audit_finance_integrity': {
+        const status = String(data?.status || 'ÍNTEGRA');
+        const invoice = data?.invoiceAudit?.breaches?.length ?? 0;
+        const expense = Array.isArray(data?.expenseBreaches) ? data.expenseBreaches.length : 0;
+        const ledger = Array.isArray(data?.ledgerAudit?.breaches) ? data.ledgerAudit.breaches.length : 0;
+        const total = invoice + expense + ledger;
+        if (status === 'COMPROMETIDA') {
+          return `🚨 *PROTOCOLO DE DESCONFIANZA ACTIVADO*\n🔴 Integridad comprometida — ${total} infracción(es):\n🧾 Facturas: ${invoice}\n💸 Gastos: ${expense}\n📒 Libro diario: ${ledger}`;
+        }
+        return `🟢 *Integridad financiera íntegra.* Sin brechas en facturas, gastos ni libro diario.`;
+      }
+      case 'audit_material_leaks': {
+        const summary = data?.leakSummary || {};
+        const anomalies = Number(summary?.anomaliesCount ?? 0);
+        const consumption = Number(summary?.automaticConsumptionCount ?? 0);
+        const status = String(data?.status || 'STABLE');
+        const statusLabel: Record<string, string> = { CRITICAL: '🔴 CRÍTICO', STABLE: '🟢 ESTABLE' };
+        const rec = data?.recommendation ? `\n💡 ${this.escapeMarkdown(String(data.recommendation))}` : '';
+        return `🕳 *Auditoría de fugas de material:* ${statusLabel[status] || status}\n⚠️ Ajustes sospechosos: ${anomalies}\n🏭 Consumos automáticos (7 días): ${consumption}${rec}`;
+      }
+      case 'get_field_activity': {
+        const techs = Array.isArray(data?.activeTechs) ? data.activeTechs : [];
+        if (techs.length === 0) return '📍 No hay técnicos con check-in registrado hoy.';
+        const lines = techs.slice(0, 10).map((t: any) => {
+          const nombre = this.escapeMarkdown(String(t?.technician || ''));
+          const role = t?.role ? this.escapeMarkdown(String(t.role)) : '';
+          const state = String(t?.status || '');
+          const stateLabel: Record<string, string> = { CLOCK_IN: '🟢 activo', CLOCK_OUT: '⚪ fuera' };
+          const loc = t?.lat != null && t?.lng != null ? ` · ${this.escapeMarkdown(String(t.lat))},${this.escapeMarkdown(String(t.lng))}` : '';
+          const anomaly = t?.isAnomaly ? ' ⚠️' : '';
+          return `• ${nombre}${role ? ` (${role})` : ''} — ${stateLabel[state] || state}${loc}${anomaly}`;
+        });
+        const suffix = techs.length > 10 ? `\n… y ${techs.length - 10} más` : '';
+        return `📍 *Actividad de campo (${techs.length}):*\n${lines.join('\n')}${suffix}`;
+      }
       case 'analyze_burn_rate': {
         const months = Number(data?.periodMonths ?? 3);
         const periodo = months === 1 ? '1 mes' : `${months} meses`;

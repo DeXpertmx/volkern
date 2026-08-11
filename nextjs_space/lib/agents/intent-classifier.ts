@@ -195,6 +195,13 @@ export class IntentClassifierAgent {
       return missing.filter((p: string) => p !== 'proyectoId');
     }
 
+    // generar_ruta_exito: el usuario puede referirse al lead por nombre
+    // ("cómo puedo cerrar el deal con María") — el wrapper resuelve el nombre
+    // a su lead; el email solo se exige si no hay nombre.
+    if (intent === 'generar_ruta_exito' && extractedParams.nombre) {
+      return missing.filter((p: string) => p !== 'email');
+    }
+
     return missing;
   }
 
@@ -349,7 +356,17 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
 
     const extracted: Record<string, any> = {}
     for (const missing of params.missingEntities) {
-      const val = this.extractParamDeterministically(missing, params.message)
+      let val = this.extractParamDeterministically(missing, params.message)
+      // generar_ruta_exito: si piden el email y el usuario responde con el
+      // nombre del lead ("Ana Torres"), se captura como nombre (el wrapper
+      // resuelve el lead por nombre).
+      if (!val && missing === 'email' && params.pendingIntent === 'generar_ruta_exito') {
+        const name = this.extractParamDeterministically('nombre', params.message)
+        if (name) {
+          extracted.nombre = name
+          continue
+        }
+      }
       if (val) extracted[missing] = val
     }
 
@@ -412,6 +429,10 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     // Entidades de ERP industrial sin verbo: producción, calidad, mermas,
     // proyectos y watchdog (décimo sexto entrenamiento)
     const ERP_TRIGGER = /\b(?:producci[oó]n|manufactura|fabricar|fabricaci[oó]n|calidad|mermas?|desperdicios?|scrap|inspecci[oó]n|qc\b|proyectos?|watchdog|reorden|reponer|desviaci[oó]n|rentabilidad\s+del\s+proyecto)\b/i
+    // Entidades de proactividad, auditoría y campo sin verbo (décimo séptimo
+    // entrenamiento): "leads fantasmas", "ruta de éxito", "integridad",
+    // "fugas de materiales", "técnicos en campo"
+    const AUDIT_OPS_TRIGGER = /\b(?:fantasmas?|ghosting|inactivos?|sin\s+actividad|no\s+han\s+tenido\s+actividad|dejaron\s+de\s+responder|abandonados?|ruta\s+de\s+[ée]xito|success\s+path|siguiente\s+paso\s+para\s+el\s+lead|cerrar\s+(?:el\s+deal|la\s+venta)|integridad|discrepancias?|gastos\s+(?:duplicados?|sospechosos?)|fugas?\s+de\s+material(?:es)?|mermas?\s+sospechosas?|desviaciones?\s+de\s+stock|t[eé]cnicos?\s+(?:en\s+campo|en\s+terreno)|actividad\s+de\s+campo|activos?\s+desplegados?|qu[eé]\s+activos\s+est[aá]n\s+desplegados|brechas?\s+en\s+veri\s?\*?\s?factu|check-?ins?)\b/i
     // Entidades de logística sin verbo: "estado del envío TRK-123", "cómo está
     // la flota", "qué pedidos en tránsito", "ITV próxima a vencer" (undécimo)
     const LOGISTICA_TRIGGER = /\b(?:env[ií]os?|tracking|pedidos?|flota|veh[ií]culos?|cami[oó]nes?|rutas?|reparto|entregas?|paquetes?|itv|almac[eé]n(?:es)?)\b/i
@@ -426,7 +447,7 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     // en alquiler", "precio de la propiedad", "comisión de la venta"
     // (decimocuarto entrenamiento)
     const RE_TRIGGER = /\b(?:inmuebles?|propiedad(?:es)?|departamentos?|casas?|pisos?|oficinas?|locales?|terrenos?|solares?|chalets?|villas?|alquiler|en\s+venta|presupuesto\s+de|precio\s+(?:de|sugerido|de\s+venta)|comisi[oó]n(?:es)?\s+de|score\s+de\s+calidad|franquicia)\b/i
-    if (!ACTION_VERB.test(message) && !ENTITY_TRIGGER.test(message) && !FILTER_ONLY.test(message) && !CITA_TRIGGER.test(message) && !FINANZA_TRIGGER.test(message) && !TAREA_TRIGGER.test(message) && !PROVEEDOR_TRIGGER.test(message) && !CATALOGO_TRIGGER.test(message) && !INVENTARIO_TRIGGER.test(message) && !INSURANCE_TRIGGER.test(message) && !FACTURA_TRIGGER.test(message) && !LOGISTICA_TRIGGER.test(message) && !RRHH_TRIGGER.test(message) && !MARKETING_TRIGGER.test(message) && !RE_TRIGGER.test(message) && !ERP_TRIGGER.test(message)) return null
+    if (!ACTION_VERB.test(message) && !ENTITY_TRIGGER.test(message) && !FILTER_ONLY.test(message) && !CITA_TRIGGER.test(message) && !FINANZA_TRIGGER.test(message) && !TAREA_TRIGGER.test(message) && !PROVEEDOR_TRIGGER.test(message) && !CATALOGO_TRIGGER.test(message) && !INVENTARIO_TRIGGER.test(message) && !INSURANCE_TRIGGER.test(message) && !FACTURA_TRIGGER.test(message) && !LOGISTICA_TRIGGER.test(message) && !RRHH_TRIGGER.test(message) && !MARKETING_TRIGGER.test(message) && !RE_TRIGGER.test(message) && !ERP_TRIGGER.test(message) && !AUDIT_OPS_TRIGGER.test(message)) return null
 
     const extracted: Record<string, any> = {}
     const email = message.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,})/)
@@ -1037,8 +1058,11 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     // "busca/consulta contactos" (plural, sin nombre propio) también es un
     // listado — los casos individuales ya los capturó la rama 4.
     const listSignal = LIST_VERB.test(message) || FILTER_SIGNAL.test(message) || BUSCAR_VERB.test(message)
+    // "leads inactivos / fantasma / sin actividad" son ghosting (décimo séptimo
+    // entrenamiento), no un listado simple de leads.
+    const GHOSTING_EARLY = /\b(?:fantasmas?|ghosting|inactivos?|sin\s+actividad|no\s+han\s+tenido\s+actividad|dejaron\s+de\s+responder|abandonados?)\b/i
 
-    if (hasLeads && listSignal) {
+    if (hasLeads && listSignal && !GHOSTING_EARLY.test(message)) {
       const estado = this.extractEstadoDe(message)
       if (estado) extracted.estado = estado
       const search = this.extractSearchDe(message, /\bleads?\b/i)
@@ -1323,6 +1347,58 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
       const proyecto = this.extractProyectoDe(message)
       if (proyecto) extracted.proyecto = proyecto
       return { intent: 'desviaciones_proyecto', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 11h. DETECTAR GHOSTING ("detecta leads fantasmas", "qué leads están
+    // inactivos en etapa negociación", "encuentra leads sin actividad en 7
+    // días") ═══
+    const GHOSTING_SIGNAL = /\b(?:ghosting|fantasmas?|dejaron\s+de\s+responder|no\s+han\s+respondido|sin\s+actividad|no\s+han\s+tenido\s+actividad|inactivos?\s+en\s+etapa|abandonados?)\b/i
+    if (GHOSTING_SIGNAL.test(message) && /\b(?:leads?|contactos?|clientes?|prospectos?|deals?|negocios?)\b/i.test(message)) {
+      const dias = this.extractDiasDe(message)
+      if (dias !== null) extracted.dias_inactivo = dias
+      return { intent: 'detectar_ghosting', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 11i. GENERAR RUTA DE ÉXITO ("genera una ruta de éxito para
+    // juan@email.com", "cómo puedo cerrar el deal con María", "sugiere
+    // siguiente paso para el lead de Carlos") ═══
+    const RUTA_EXITO = /\b(?:ruta\s+de\s+[ée]xito|success\s+path|estrategia\s+para\s+convertir|c[oó]mo\s+(?:puedo\s+)?cerrar\s+(?:el\s+deal|la\s+venta|a\s+este\s+lead)|siguiente\s+paso\s+para\s+el\s+lead|estrategia\s+para\s+el\s+lead)\b/i
+    if (RUTA_EXITO.test(message)) {
+      // Sin "de" suelto: "ruta de éxito" no debe capturar "éxito" como lead.
+      const nombre = this.extractNombreAfter(message, /\b(?:con|para|el\s+lead|la\s+lead|del)\b/i)
+      if (nombre && !extracted.email) extracted.nombre = nombre
+      return { intent: 'generar_ruta_exito', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 11j. AUDITAR INTEGRIDAD DE GASTOS ("audita la integridad de los
+    // gastos", "hay discrepancias en los gastos", "revisa si hay gastos
+    // duplicados o sospechosos") ═══
+    const AUDIT_GASTOS = /\b(?:integridad\s+de\s+los\s+gastos|integridad\s+de\s+gastos|discrepancias?\s+en\s+(?:los\s+|mis\s+)?gastos|anomal[ií]as?\s+en\s+(?:los\s+|mis\s+)?gastos|gastos\s+duplicados?|gastos\s+sospechosos?)\b/i
+    if (AUDIT_GASTOS.test(message)) {
+      return { intent: 'auditar_integridad_gastos', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 11k. AUDITAR INTEGRIDAD FINANCIERA ("audita la integridad
+    // financiera", "verifica la integridad fiscal", "hay brechas en
+    // Veri*factu") ═══
+    const AUDIT_INTEGRIDAD = /\b(?:audita|auditar|verifica|verificar)\s+la\s+integridad|integridad\s+financiera|integridad\s+fiscal|brechas?\s+en\s+veri\s?\*?\s?factu|protocolo\s+de\s+desconfianza\b/i
+    if (AUDIT_INTEGRIDAD.test(message) && !AUDIT_GASTOS.test(message)) {
+      return { intent: 'auditar_integridad', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 11l. AUDITAR FUGAS DE MATERIALES ("audita las fugas de materiales",
+    // "hay mermas sospechosas en el inventario", "detecta desviaciones de
+    // stock contra producción") ═══
+    const FUGAS_MATERIAL = /\b(?:fugas?\s+de\s+material(?:es)?|mermas?\s+sospechosas?|desviaciones?\s+de\s+stock|robos?\s+o\s+fugas?|fugas?\s+de\s+materias?)\b/i
+    if (FUGAS_MATERIAL.test(message)) {
+      return { intent: 'auditar_fugas_materiales', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 11m. ACTIVIDAD DE CAMPO ("dónde están los técnicos en campo hoy",
+    // "muéstrame la actividad de campo", "qué activos están desplegados") ═══
+    const CAMPO_ACTIVIDAD = /\b(?:d[oó]nde\s+est[aá]n\s+(?:los\s+|mis\s+)?(?:t[eé]cnicos|trabajadores|equipos?)\s+en\s+campo|actividad\s+de\s+campo|t[eé]cnicos?\s+en\s+terreno|activos\s+desplegados|qu[eé]\s+activos\s+est[aá]n\s+desplegados|check-?ins?)\b/i
+    if (CAMPO_ACTIVIDAD.test(message)) {
+      return { intent: 'actividad_campo', confidence: 0.85, extractedParams: extracted }
     }
 
     // ═══ 12. REGISTRAR GASTO ("registra gasto de 45.90 en comida",
@@ -3239,6 +3315,11 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     if (param === 'lote') {
       const m = message.match(/\b#?L-?\d{1,6}\b/i)
       return m ? m[0].replace(/^#/, '') : null
+    }
+    // ─── Módulo Proactividad/Auditoría (Décimo séptimo entrenamiento) ───
+    if (param === 'dias_inactivo' || param === 'dias') {
+      const v = this.extractDiasDe(message)
+      return v !== null ? String(v) : null
     }
     // ─── Módulo Marketing/Ads (Decimotercer entrenamiento) ───
     if (param === 'tema' || param === 'topic') {
