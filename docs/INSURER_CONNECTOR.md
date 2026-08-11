@@ -1,7 +1,7 @@
 # 🔌 InsurerConnector — Arquitectura para integración con aseguradoras
 
-**Versión:** 1.0 (Fase 5.2 START, 2026-08-03)
-**Estado actual:** 1 implementación (Quálitas MOCK), 6 pendientes.
+**Versión:** 1.2 (Fase 5.2 API + UI, 2026-08-11)
+**Estado actual:** 2 implementaciones (Quálitas MOCK, GNP MOCK), 5 pendientes.
 
 ---
 
@@ -40,15 +40,27 @@ lib/insurance/connectors/
 
 ---
 
-## ✅ Estado actual (Fase 5.2 commit 1)
+## ✅ Estado actual (Fase 5.2)
 
 | Slug | País | Ramos | Capabilities | Tipo |
 |---|---|---|---|---|
 | `qualitas` | MX | AUTO | AUTH_API_KEY, POLICIES_LIST, POLICIES_ISSUE, CLAIMS_SUBMIT, CLAIMS_STATUS | **MOCK** |
+| `gnp` | MX | AUTO, HOGAR, VIDA, SALUD, GASTOS_MEDICOS, EMPRESARIAL | AUTH_API_KEY, POLICIES_LIST, POLICIES_ISSUE, CLAIMS_SUBMIT, CLAIMS_STATUS | **MOCK** |
 
-Los 6 conectores restantes lanzarán con `isMock: true` hasta que llegue
+Los 5 conectores restantes lanzarán con `isMock: true` hasta que llegue
 Partner Engineering con cada uno. La firma de la interfaz es estable,
 así que el caller no ramifica.
+
+### API REST (capa de red)
+
+| Ruta | Método | Propósito |
+|---|---|---|
+| `/api/insurance/connectors` | GET | Lista el marketplace con metadata (país, ramos, capabilities, mock/live) |
+| `/api/insurance/connectors/[slug]/sync` | POST | `sync_cartera_desde_aseguradora` (idempotente, dry-run y `actualizarExistentes`) |
+| `/api/insurance/connectors/[slug]/emitir` | POST | `emitir_poliza_en_aseguradora` (issuePolicy + doc URL en notas) |
+
+Auth dual (Bearer `CRON_SECRET` para server-to-server / session para UI) y
+mapeo tipado de `ConnectorError` → HTTP (401/400/404/422/429/501/502).
 
 ---
 
@@ -236,14 +248,14 @@ Total: ~855 líneas, 1 commit atómico.
 
 ## ⏭️ Próximos commits (orden propuesto)
 
-| # | Commit | Esfuerzo |
-|---|---|---|
-| 1 | Skill wrapper `lib/insurance/connectors-skills.ts` + tests | ~4h |
-| 2 | API REST `app/api/insurance/connectors/[slug]/sync/route.ts` + tests | ~4h |
-| 3 | UI `/dashboard/seguros/aseguradoras/conectores/page.tsx` — listado de conectores | ~6h |
-| 4 | Conector GNP mock (segundo conector México) | ~3h |
-| 5 | Conector TIREA mock (España — primero del mercado español) | ~6h |
-| 6 | Conector FIVA mock (solo consulta normativa) | ~2h |
-| 7 | Conector EIAC mock (solo red de mediadores) | ~2h |
-| 8 | Webhook genérico `app/api/insurance/webhooks/[aseguradora]/route.ts` | ~4h |
-| 9 | Swap Qualitas mock → real (cuando llegue Partner Engineering) | ~8h+ |
+| # | Commit | Esfuerzo | Estado |
+|---|---|---|---|
+| 1 | Skill wrapper `lib/insurance/connectors-skills.ts` + tests | ~4h | ✅ `f6ed5ec` |
+| 2 | API REST `/api/insurance/connectors/[slug]/sync` + `[slug]/emitir` + listado + tests | ~4h | ✅ |
+| 3 | UI `/dashboard/seguros/aseguradoras/conectores` — listado + sync + emitir | ~6h | ✅ |
+| 4 | Conector GNP mock (segundo conector México) | ~3h | ✅ `e0455f0` |
+| 5 | Conector TIREA mock (España — primero del mercado español) | ~6h | 🟡 |
+| 6 | Conector FIVA mock (solo consulta normativa) | ~2h | 🟡 |
+| 7 | Conector EIAC mock (solo red de mediadores) | ~2h | 🟡 |
+| 8 | Webhook genérico `app/api/insurance/webhooks/[aseguradora]/route.ts` | ~4h | 🟡 |
+| 9 | Swap Qualitas mock → real (cuando llegue Partner Engineering) | ~8h+ | 🟡 |
