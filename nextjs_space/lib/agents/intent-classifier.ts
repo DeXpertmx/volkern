@@ -28,7 +28,17 @@ export class IntentClassifierAgent {
     missingEntities?: string[];
   }): Promise<IntentClassification> {
      const startTime = Date.now();
-    
+
+    // ═══ RUTA RÁPIDA DETERMINISTA (sin LLM) ═══════════════════════════════
+    // Los intents de creación (crear_lead / crear_contacto / crear_empresa) se
+    // detectan con regex para que funcionen aunque la cadena de LLM esté caída
+    // o lenta — evitando el PIPELINE_TIMEOUT de 25s del webhook de Telegram
+    // (el último respaldo de la cadena, gemini-2.5-flash, ya no existe).
+    const deterministic = await this.classifyDeterministic(params)
+    if (deterministic) {
+      return deterministic
+    }
+
     const systemPrompt = this.buildSystemPrompt(
       params.context,
       params.pendingIntent,
@@ -118,6 +128,13 @@ export class IntentClassifierAgent {
         console.warn('[IntentClassifier] Error logueando fallo de clasificación:', logError);
       }
 
+      // Fallback determinista multi-turno: si la cadena LLM falló pero hay una
+      // acción pendiente y el mensaje contiene el dato faltante, completarla.
+      const multiTurn = this.tryMultiTurnDeterministic(params)
+      if (multiTurn) {
+        return multiTurn
+      }
+
       return {
         intent: 'consulta_general',
         confidence: 0.1,
@@ -204,6 +221,1368 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     }
     
     return extracted;
+  }
+
+  // ═══ CLASIFICACIÓN DETERMINISTA (sin LLM) ═══════════════════════════════
+  // Ruta rápida para los intents de creación del CRM. Al no depender del LLM,
+  // garantiza que crear leads/contactos/empresas funcione incluso cuando la
+  // cadena de modelos está caída o lenta (el webhook de Telegram solo permite
+  // ~25s y el último respaldo de la cadena, gemini-2.5-flash, ya no existe).
+
+  private async classifyDeterministic(params: {
+    message: string;
+    userId: string;
+    tenantId: string;
+    pendingIntent?: string;
+    collectedEntities?: Record<string, any>;
+    missingEntities?: string[];
+  }): Promise<IntentClassification | null> {
+    const startTime = Date.now()
+
+    // Caso multi-turno: completar la acción pendiente con el dato del mensaje.
+    // PERO si el mensaje coincide con una intención de creación nueva y clara
+    // (ej. el usuario cambió de idea y dice "crea la empresa X" mientras había
+    // un crear_lead pendiente), la nueva intención gana para no secuestrar el
+    // flujo con un pendingIntent colgado de un turno anterior.
+    if (params.pendingIntent) {
+      const freshDet = this.detectIntentDeterministically(params.message)
+      if (freshDet) {
+        return await this.completeDeterministic(params, freshDet.intent, freshDet.extractedParams)
+      }
+      const completed = this.tryMultiTurnDeterministic(params)
+      if (completed) return completed
+      return null
+    }
+
+    // Caso nuevo mensaje: detectar intent de creación
+    const det = this.detectIntentDeterministically(params.message)
+    if (!det) return null
+
+    return this.completeDeterministic(params, det.intent, det.extractedParams, startTime)
+  }
+
+  private async completeDeterministic(
+    params: { message: string; userId: string; tenantId: string },
+    intent: string,
+    extractedParams: Record<string, any>,
+    startTime = Date.now()
+  ): Promise<IntentClassification> {
+    const missingParams = this.getMissingParams(intent, extractedParams)
+    console.log(`[IntentClassifier] ✅ Ruta determinista: ${intent} (${Date.now() - startTime}ms)`)
+
+    await this.logClassification({
+      message: params.message,
+      userId: params.userId,
+      tenantId: params.tenantId,
+      intent,
+      confidence: 0.85,
+      duration: Date.now() - startTime,
+      rawResponse: '[determinista] ' + JSON.stringify(extractedParams),
+    })
+
+    return {
+      intent,
+      confidence: 0.85,
+      needsMoreInfo: missingParams.length > 0,
+      missingParams,
+      extractedParams,
+      rawResponse: '[determinista]',
+    }
+  }
+
+  /**
+   * Multi-turno sin LLM: si hay una acción pendiente y el mensaje contiene el
+   * dato que falta (email, nombre, teléfono…), lo captura y completa.
+   */
+  private tryMultiTurnDeterministic(params: {
+    message: string;
+    pendingIntent?: string;
+    collectedEntities?: Record<string, any>;
+    missingEntities?: string[];
+  }): IntentClassification | null {
+    if (!params.pendingIntent || !params.missingEntities?.length) return null
+
+    const extracted: Record<string, any> = {}
+    for (const missing of params.missingEntities) {
+      const val = this.extractParamDeterministically(missing, params.message)
+      if (val) extracted[missing] = val
+    }
+
+    if (Object.keys(extracted).length === 0) return null
+
+    const merged = { ...(params.collectedEntities || {}), ...extracted }
+    const missingParams = this.getMissingParams(params.pendingIntent, merged)
+    console.log(`[IntentClassifier] ✅ Multi-turno determinista: ${params.pendingIntent} → ${JSON.stringify(extracted)}`)
+
+    return {
+      intent: params.pendingIntent,
+      confidence: 0.85,
+      needsMoreInfo: missingParams.length > 0,
+      missingParams,
+      extractedParams: merged,
+      rawResponse: '[determinista-multiturno]',
+    }
+  }
+
+  /**
+   * Detecta por patrones de texto (sin LLM) los intents del módulo Ventas:
+   * - convertir_lead ("convierte a X en contacto")
+   * - crear_lead / crear_contacto / crear_empresa
+   * - buscar_lead ("busca el lead X", "encuentra a María", "dame los datos de X")
+   * - listar_leads / listar_contactos ("lista los leads", "contactos tipo empresa")
+   * y extrae sus parámetros con regex.
+   */
+  private detectIntentDeterministically(message: string): {
+    intent: string;
+    confidence: number;
+    extractedParams: Record<string, any>;
+  } | null {
+    // Guard amplio: cualquier verbo de acción del módulo Ventas. Sin esto, los
+    // mensajes de búsqueda/listado ("busca el lead…", "lista los contactos…")
+    // nunca entrarían en la ruta determinista. También acepta frases de filtro
+    // sin verbo: "leads en estado X", "contactos tipo empresa".
+    const ACTION_VERB = /\b(?:agrega|crea|registra|nuev[oa]|añade|alta|abre|busca|encuentra|consulta|localiza|lista|listame|mu[eé]strame|muestra|ver|ens[eé][ñn]ame|dame|convierte|convertir|pasa|transforma|mueve|actualiza|cambia|modifica|pon|ponle|anota|anotar|tuve|registro|agenda|agendar|programa|programar|reserva|reservar|aparta|apartar|cancela|cancelar|anula|anular|reagenda|reagendar|confirmar|analiza|analizar|revisa|revisar|completa|completar|termina|terminar|finaliza|finalizar|marca|marcar|cierra|cerrar)\b/i
+    const FILTER_ONLY = /\b(?:contactos?|leads?)\b.*\b(?:en\s+estado|por\s+estado|tipo|que\s+contengan|tags?)\b/i
+    // Entidades del pipeline sin verbo: "cómo va mi pipeline", "qué deals tengo"
+    const ENTITY_TRIGGER = /\b(?:pipeline|deals?|negocios?|oportunidad)\b/i
+    // Entidades de citas sin verbo: "qué citas tengo", "reunión con X"
+    const CITA_TRIGGER = /\b(?:citas?|reuni[oó]n|reuniones|videollamada)\b/i
+    // Entidades de finanzas sin verbo: "gasto de 300€", "cómo vamos de gastos"
+    const FINANZA_TRIGGER = /\b(?:gastos?|egresos?|gast[ée]|burn\s*rate|salud\s+financiera|flujo\s+de\s+caja)\b/i
+    // Entidades de tareas/notas sin verbo: "qué tareas tengo", "ver notas de X"
+    const TAREA_TRIGGER = /\b(?:tareas?|pendientes?|notas?|to[- ]?do)\b/i
+    // Entidades de proveedores sin verbo: "lista de proveedores", "qué proveedores tengo"
+    const PROVEEDOR_TRIGGER = /\bproveedor(?:es)?\b/i
+    // Entidades de catálogo sin verbo: "qué productos hay", "precio de X", "cuánto cuesta X"
+    const CATALOGO_TRIGGER = /\b(?:cat[aá]logo|productos?|servicios?|art[ií]culos?|inmuebles?|propiedades?|precios?|cu[aá]nto\s+cuesta|cu[aá]nto\s+vale|qu[eé]\s+precio|precio\s+de)\b/i
+    // Entidades de inventario sin verbo: "stock bajo", "existencias", "entrada/salida de X unidades"
+    const INVENTARIO_TRIGGER = /\b(?:inventario|stock|existencias|unidades|reorden|ruptura)\b/i
+    if (!ACTION_VERB.test(message) && !ENTITY_TRIGGER.test(message) && !FILTER_ONLY.test(message) && !CITA_TRIGGER.test(message) && !FINANZA_TRIGGER.test(message) && !TAREA_TRIGGER.test(message) && !PROVEEDOR_TRIGGER.test(message) && !CATALOGO_TRIGGER.test(message) && !INVENTARIO_TRIGGER.test(message)) return null
+
+    const extracted: Record<string, any> = {}
+    const email = message.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,})/)
+    if (email) extracted.email = email[1]
+
+    // Mensaje sin emails: los tests de entidad (tarea/nota/gasto/cita) no deben
+    // matchear palabras dentro de direcciones ("x@tareas.com" → no es una tarea).
+    const msgNoEmails = message.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,}/g, ' ')
+
+    // Campos opcionales del primer entrenamiento (Ventas): si el usuario los
+    // menciona (cargo, teléfono, LinkedIn, ubicación, tags, contexto) se capturan
+    // para que el skill los guarde en la BD — antes quedaban en null.
+    const cargo = this.extractCargoDe(message)
+    if (cargo) extracted.cargo = cargo
+    const telefono = this.extractTelefonoDe(message)
+    if (telefono) extracted.telefono = telefono
+    const linkedin = this.extractLinkedinDe(message)
+    if (linkedin) extracted.linkedin = linkedin
+    const ubicacion = this.extractUbicacionDe(message)
+    if (ubicacion) extracted.ubicacion = ubicacion
+    const tags = this.extractTagsDe(message)
+    if (tags) extracted.tags = tags
+    const contexto = this.extractContextoDe(message)
+    if (contexto) extracted.contexto = contexto
+
+    const CREATE_VERB = /\b(?:agrega|crea|registra|nuev[oa]|añade|alta)\b/i
+    const BUSCAR_VERB = /\b(?:busca|encuentra|consulta|localiza)\b/i
+
+    // ═══ 0. CONVERTIR LEAD (antes que crear: "convierte… en contacto" también
+    // contiene la palabra "contacto" y no debe clasificarse como creación) ═══
+    if (/\b(?:convierte|convertir|pasa|transforma)\b/i.test(message) && /\bcontacto\b/i.test(message)) {
+      let nombre = this.extractNombreAfter(message, /\blead\b|\bprospecto\b/i)
+      if (!nombre) {
+        nombre = this.extractNombreAfter(message, /(?:convierte|pasa|transforma)\s+(?:a\s+|al\s+|el\s+)?/i)
+      }
+      // Recortar el sufijo "a contacto" / "en contacto" ("convierte lead de
+      // María García a contacto" → "María García").
+      if (nombre) nombre = nombre.split(/\s+(?:a|en|al)\s+contacto\b/i)[0].trim() || null
+      if (nombre) extracted.nombre = nombre
+      return { intent: 'convertir_lead', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 1. CREAR LEAD / PROSPECTO ═══
+    if (CREATE_VERB.test(message) && /\blead\b|\bprospecto\b/i.test(message)) {
+      const nombre = this.extractNombreAfter(message, /\blead\b|\bprospecto\b/i)
+      if (nombre) extracted.nombre = nombre
+      const empresa = this.extractEmpresaDe(message)
+      if (empresa) extracted.empresa = empresa
+      return { intent: 'crear_lead', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 2. CREAR EMPRESA (antes que contacto: "crea la empresa X, contacto@…"
+    // trae "contacto" dentro del email y no debe clasificarse como contacto) ═══
+    if (/(?:crea|agrega|registra|nueva|nuevo|añade)\s+(?:una\s+|la\s+|nueva\s+)?empresa\b/i.test(message)) {
+      const nombre = this.extractNombreAfter(message, /\bempresa\b/i)
+      if (nombre) extracted.nombre = nombre
+      return { intent: 'crear_empresa', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 3. CREAR CONTACTO ═══
+    if (CREATE_VERB.test(message) && /\bcontacto\b/i.test(message)) {
+      const nombre = this.extractNombreAfter(message, /\bcontacto\b/i)
+      if (nombre) extracted.nombre = nombre
+      const empresa = this.extractEmpresaDe(message)
+      if (empresa) extracted.empresa = empresa
+      return { intent: 'crear_contacto', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 4. BUSCAR LEAD (individual, por email o nombre) ═══
+    const leadMention = /\blead\b|\bprospecto\b/i.test(message)
+    const nameTarget = /(?:busca|encuentra|consulta|localiza)\s+(?:a\s+|al\s+)?[A-ZÁÉÍÓÚÑÜ]/.test(message)
+    const dameDatos = /\bdame\s+los\s+datos\s+de\b/i.test(message)
+    // "busca Cafeteras Pro" / "busca Propiedades en Madrid" son búsquedas de
+    // catálogo, no de leads (una entidad de catálogo desactiva esta rama).
+    const CATALOGO_ENTITY_EARLY = /\b(?:productos?|servicios?|cat[aá]logo|art[ií]culos?|inmuebles?|propiedades?|precios?)\b/i
+    if (((BUSCAR_VERB.test(message) && (leadMention || nameTarget)) || dameDatos) && !CATALOGO_ENTITY_EARLY.test(message)) {
+      const nombre =
+        this.extractNombreAfter(message, /\blead\b|\bprospecto\b/i) ||
+        this.extractNombreAfter(message, /(?:busca|encuentra|consulta|localiza)\s+(?:a\s+|al\s+)?/i) ||
+        this.extractNombreAfter(message, /\bdame\s+los\s+datos\s+de\b/i)
+      if (nombre) extracted.nombre = nombre
+      return { intent: 'buscar_lead', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 5. LISTAR LEADS / CONTACTOS ═══
+    const hasContacts = /\bcontactos?\b/i.test(message)
+    const hasLeads = /\bleads?\b/i.test(message)
+    const LIST_VERB = /\b(?:lista|listame|mu[eé]strame|muestra|ver|ens[eé][ñn]ame|dame\s+(?:una|la)\s+lista)\b/i
+    const FILTER_SIGNAL = /\b(?:que\s+contengan?|en\s+estado|por\s+estado|en\s+etapa|por\s+etapa|tipo|con\s+tags?)\b/i
+    // "busca/consulta contactos" (plural, sin nombre propio) también es un
+    // listado — los casos individuales ya los capturó la rama 4.
+    const listSignal = LIST_VERB.test(message) || FILTER_SIGNAL.test(message) || BUSCAR_VERB.test(message)
+
+    if (hasLeads && listSignal) {
+      const estado = this.extractEstadoDe(message)
+      if (estado) extracted.estado = estado
+      const search = this.extractSearchDe(message, /\bleads?\b/i)
+      if (search) extracted.search = search
+      return { intent: 'listar_leads', confidence: 0.85, extractedParams: extracted }
+    }
+
+    if (hasContacts && listSignal) {
+      const tipo = this.extractTipoDe(message)
+      if (tipo) extracted.tipo = tipo
+      const search = this.extractSearchDe(message, /\bcontactos?\b/i)
+      if (search) extracted.search = search
+      // Los tags ya se capturaron globalmente (extractTagsDe) si venían como
+      // "con tags vip" — el skill list_contacts los usa como filtro.
+      return { intent: 'listar_contactos', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 6. DEALS / PIPELINE DE VENTAS ═══
+    const DEAL_ENTITY = /\b(?:deal|deals|negocio|negocios|oportunidad|pipeline)\b/i
+
+    // 6a. CREAR NEGOCIO ("crea un deal con juan@x.com por 5000€ por el paquete")
+    // NOTA: verbo propio sin "alta" — "pon prioridad alta al deal" no debe
+    // disparar creación ("alta" solo es crear en "dar de alta").
+    if (/\b(?:crea|agrega|registra|nueva|nuevo|abre|añade)\b/i.test(message) && DEAL_ENTITY.test(message)) {
+      let nombre = this.extractNombreAfter(message, /\b(?:con|para)\b/i)
+      // Recortar el monto: "María García a 3000€" → "María García"
+      if (nombre) nombre = nombre.split(/\s+(?:a|al|en)\s+(?:\d|€|etapa|prioridad|alta|media|baja)/i)[0].trim() || null
+      if (nombre) extracted.nombre = nombre
+      const monto = this.extractMontoDe(message)
+      if (monto) extracted.monto = monto
+      const titulo = this.extractTituloDe(message)
+      // Sintetizar título si no viene explícito ("Negocio - María García") para
+      // no bloquear el flujo preguntando un campo que el skill puede inferir.
+      extracted.titulo = titulo || `Negocio - ${nombre || extracted.email || 'sin nombre'}`
+      const etapa = this.extractEtapaDe(message)
+      if (etapa) extracted.etapa = etapa
+      const prioridad = this.extractPrioridadDe(message)
+      if (prioridad) extracted.prioridad = prioridad
+      return { intent: 'crear_negocio', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // 6b. ACTUALIZAR NEGOCIO ("mueve el deal de juan@x.com a etapa negociación")
+    if (/\b(?:mueve|actualiza|cambia|pon)\b/i.test(message) && DEAL_ENTITY.test(message)) {
+      // "con" primero: "actualiza el monto del negocio con María" → María
+      // (si usáramos "del" primero capturaría "negocio con María").
+      let nombre = this.extractNombreAfter(message, /\bcon\b/i) || this.extractNombreAfter(message, /\b(?:de|del)\b/i)
+      // Recortar el destino: "María a 7000€" → "María"
+      if (nombre) nombre = nombre.split(/\s+(?:a|al|en)\s+(?:\d|etapa|prioridad|€|alta|media|baja)/i)[0].trim() || null
+      if (nombre) extracted.nombre = nombre
+      const etapa = this.extractEtapaDe(message)
+      if (etapa) extracted.etapa = etapa
+      const monto = this.extractMontoDe(message)
+      if (monto) extracted.monto = monto
+      const prioridad = this.extractPrioridadDe(message)
+      if (prioridad) extracted.prioridad = prioridad
+      const titulo = this.extractTituloDe(message)
+      if (titulo) extracted.titulo = titulo
+      return { intent: 'actualizar_negocio', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // 6c. MIS NEGOCIOS (listar pipeline con filtro de etapa)
+    if (
+      DEAL_ENTITY.test(message) &&
+      (LIST_VERB.test(message) || FILTER_SIGNAL.test(message) || BUSCAR_VERB.test(message) ||
+        // "cómo va mi pipeline" / "deals activos" / "qué deals tengo/hay".
+        // "tengo/hay" SOLO en el patrón de consulta (no "tengo una oportunidad…")
+        /\bpipeline\b|\bactivos?\b|qu[eé]\s+(?:deals|negocios)\s+(?:tengo|hay)\b/i.test(message))
+    ) {
+      const etapa = this.extractEtapaDe(message)
+      if (etapa) extracted.etapa = etapa
+      return { intent: 'mis_negocios', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 7. ACTUALIZAR LEAD / CONTACTO ("actualiza el teléfono de X a 555-1234",
+    // "ponle contexto a X: …") — después de los deals para no chocar con
+    // "actualiza el monto del negocio…" ═══
+    const UPDATE_VERB = /\b(?:actualiza|cambia|modifica|ponle|pon|agrega\s+contexto|agregar\s+contexto|agrega\s+notas|ponle\s+notas|pon\s+contexto|pon\s+notas)\b/i
+    const UPDATE_TARGET = /\b(?:lead|contacto|contexto|notas?|tel[eé]fono|cargo|empresa|correo|nombre)\b/i
+    if (UPDATE_VERB.test(message) && !DEAL_ENTITY.test(message) && UPDATE_TARGET.test(message)) {
+      // Nombre: de la parte anterior a los dos puntos ("ponle contexto a
+      // Alejandra: …" → "Alejandra"), para no arrastrar el contenido.
+      // Primero el patrón "al contacto X" / "al lead X" (no tiene conector
+      // con/de/a suelto antes del nombre), luego el conector genérico.
+      const beforeColon = message.split(/\s*:\s*/)[0]
+      let nombre = this.extractNombreAfter(beforeColon, /\b(?:contacto|lead|cliente)\b/i) ||
+        this.extractNombreAfter(beforeColon, /\b(?:con|de|del|a)\b/i)
+      if (nombre) nombre = nombre.split(/\s+(?:a|al)\s+(?:\d|tel|€)/i)[0].trim() || null
+      if (nombre) extracted.nombre = nombre
+
+      // Teléfono: primero con keyword, luego "a 555-1234" ("actualiza el teléfono de X a 555")
+      const telefono = this.extractTelefonoDe(message) ||
+        (message.match(/(?:a|al)\s+(\+?[\d\s()\-.]{6,15})/) || [])[1]
+      if (telefono) extracted.telefono = telefono.trim()
+
+      // Contexto/notas: contenido tras los dos puntos ("ponle contexto a X: Interesada…")
+      const colonIdx = message.indexOf(':')
+      if (colonIdx >= 0 && /\b(?:contexto|notas?)\b/i.test(message)) {
+        const ctx = message.slice(colonIdx + 1).trim()
+        if (ctx.length >= 2) extracted.contexto = ctx.replace(/["'”]+\s*$/, '').trim()
+      }
+
+      return { intent: 'actualizar_lead', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 8. REGISTRAR INTERACCIÓN ("registra una llamada con Juan: …",
+    // "anota una reunión con Carlos: …") ═══
+    const INTERACTION_VERB = /\b(?:registra|registrar|registro|anota|anotar|tuve)\b|\binteracci[oó]n\b/i
+    const INTERACTION_TIPO = /\b(?:llamad[oa]|llam[aá]r|email|correo|whatsapp|reuni[oó]n|visita|mensaje|nota)\b/i
+    // "registra un gasto de 50€: ..." NO es una interacción (va a la rama de gastos), PERO
+    // "registra una llamada: hablamos de un gasto de 50€" SÍ lo es (tipo explícito).
+    const hasGastoWord = /\b(?:gastos?|egresos?|gast[ée])\b/i.test(message)
+    // "registra proveedor: X" / "crea proveedor Y" NO son interacciones (van a
+    // la rama de proveedores), pero "registra una llamada con el proveedor Juan"
+    // SÍ lo es (tipo explícito). Ojo: "email" es un CAMPO del proveedor
+    // ("proveedor: X, email y@z.com"), no un tipo de interacción → se excluye
+    // del guard para no bloquear la creación.
+    const hasProveedorCreate = /\b(?:registra|registrar|nuev[oa]|crea|crear|agrega|agregar|añade)\s+(?:un\s+|el\s+|este\s+|nuev[oa]\s+)?proveedor\b/i.test(message)
+    const INTERACTION_TIPO_NO_EMAIL = /\b(?:llamad[oa]|llam[aá]r|whatsapp|reuni[oó]n|visita|mensaje|nota)\b/i
+    // "anota en el perfil de X: …" / "anota una nota para X: …" NO son
+    // interacciones (van a crear_nota). "anota una reunión con…" sí lo es.
+    const notaLibre = /\b(?:en\s+el\s+perfil|una\s+nota|notas?\s+(?:para|a|de))\b/i.test(message)
+    if (INTERACTION_VERB.test(message) && (INTERACTION_TIPO.test(message) || message.includes(':')) && !(hasGastoWord && !INTERACTION_TIPO.test(message)) && !(hasProveedorCreate && !INTERACTION_TIPO_NO_EMAIL.test(message)) && !notaLibre) {
+      let nombre = this.extractNombreAfter(message, /\b(?:con|de|del|a)\b/i)
+      if (nombre) nombre = nombre.split(/\s*:/)[0].trim() || null
+      if (nombre) extracted.nombre = nombre
+      const tipo = this.extractTipoInteraccionDe(message)
+      if (tipo) extracted.tipo = tipo
+      const colonIdx = message.indexOf(':')
+      if (colonIdx >= 0) {
+        const contenido = message.slice(colonIdx + 1).trim()
+        if (contenido.length >= 2) extracted.contenido = contenido.replace(/["'”]+\s*$/, '').trim()
+      }
+      return { intent: 'registrar_interaccion', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 9. CANCELAR CITA ("cancela la cita de Alejandra", "cancela mi reunión
+    // de mañana con juan@x.com") — antes que agendar para no chocar con el
+    // sustantivo "cita" del guard de agendar ═══
+    if (/\b(?:cancela|cancelar|elimina|eliminar|anula|anular)\b/i.test(message) && /\b(?:cita|reuni[oó]n|reuniones|videollamada)\b/i.test(message)) {
+      // Quitar frases de fecha para que no se cuelen en el nombre
+      // ("reunión de mañana con Juan" → "reunión con Juan").
+      const msgForNombre = this.stripFechaPhrases(message)
+      const nombre =
+        this.extractNombreAfter(msgForNombre, /\bcon\b/i) ||
+        this.extractNombreAfter(msgForNombre, /(?:cita|reuni[oó]n)\s+(?:de|del)\s+/i)
+      if (nombre) extracted.nombre = nombre
+      const fecha = this.extractFechaDe(message)
+      if (fecha) extracted.fecha = fecha
+      const idx = message.indexOf(':')
+      if (idx >= 0) {
+        const motivo = message.slice(idx + 1).trim()
+        if (motivo.length >= 2) extracted.motivo = motivo.replace(/["'”]+\s*$/, '').trim()
+      }
+      return { intent: 'cancelar_cita', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 10. MIS CITAS ("qué citas tengo", "muéstrame mis citas",
+    // "citas de mañana/esta semana") ═══
+    const hasCitas = /\b(?:citas?|reuni[oó]n|reuniones)\b/i.test(message)
+    const QUERY_CITAS = /qu[eé]\s+(?:citas?|reuniones?)\s+(?:tengo|hay|tienes|tenemos|tiene)\b/i
+    const LIST_CITAS = /\b(?:lista|listame|mu[eé]strame|muestra|ver|ens[eé][ñn]ame|dame)\s+(?:mis\s+|las\s+|tus\s+)?(?:citas?|reuniones?)\b/i
+    // "tengo una cita para mañana" es una afirmación, no una consulta de listado
+    const DATE_CITAS = /^(?!.*\b(?:tengo|tienes|tenemos|tiene|hay|hago|haces|quedo|quedamos)\b).*\b(?:citas?|reuniones?)\s+(?:de|para|del)\s+(?:hoy|ma[nñ]ana|esta\s+semana|la\s+semana|el\s+(?:lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo))\b/i
+    if (hasCitas && (QUERY_CITAS.test(message) || LIST_CITAS.test(message) || DATE_CITAS.test(message))) {
+      // "qué citas tengo mañana" → filtrar por ese día. El wrapper de
+      // get_upcoming_bookings espera el parámetro `date` (no `fecha`).
+      const fecha = this.extractFechaDe(message)
+      if (fecha) extracted.date = fecha
+      return { intent: 'mis_citas', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 11. AGENDAR CITA ("agenda una cita con María para mañana a las 10am",
+    // "programa reunión con Juan el viernes a las 15:30 por 1 hora") ═══
+    // Nota: "cita con/para" sin verbo NO agenda ("tengo una cita para mañana"
+    // es una afirmación, no una petición) — se excluyen los verbos de estado.
+    // El negative lookahead va anclado a ^ para que barra TODO el mensaje
+    // (si no, se evalúa solo en la posición de inicio y "tengo una cita para…"
+    // seguía pasando desde la posición siguiente).
+    const NO_AGENDAR_STMT = /^(?!.*\b(?:tengo|tienes|tenemos|tiene|hay|hago|haces|quedo|quedamos|dej[oa])\b)/i
+    const AGENDAR_VERB = new RegExp(
+      NO_AGENDAR_STMT.source + '.*\\b(?:agenda|agendar|programa|programar|reserva|reservar|aparta|apartar)\\b' +
+      '|' + NO_AGENDAR_STMT.source + '.*\\b(?:haz|hacer|crea|crear|pon)\\s+(?:me\\s+|una\\s+|la\\s+)?cita\\b' +
+      '|' + NO_AGENDAR_STMT.source + '.*\\b(?:cita|reuni[oó]n)\\s+(?:con|para)\\b',
+      'i'
+    )
+    if (AGENDAR_VERB.test(message) && /\b(?:cita|reuni[oó]n|reuniones|videollamada)\b/i.test(message)) {
+      const msgForNombre = this.stripFechaPhrases(message)
+      // "con" primero ("cita con María"), luego "cita para X".
+      const nombre =
+        this.extractNombreAfter(msgForNombre, /\bcon\b/i) ||
+        this.extractNombreAfter(msgForNombre, /(?:cita|reuni[oó]n)\s+(?:para|de|del)\s+/i)
+      if (nombre) extracted.nombre = nombre
+      const fecha = this.extractFechaDe(message)
+      if (fecha) extracted.fecha = fecha
+      const hora = this.extractHoraDe(message)
+      if (hora) extracted.hora = hora
+      const tipo = this.extractTipoCitaDe(message)
+      if (tipo) extracted.tipo = tipo
+      const titulo = this.extractTituloDe(message)
+      if (titulo) extracted.servicio = titulo
+      return { intent: 'agendar_cita', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 12. REGISTRAR GASTO ("registra gasto de 45.90 en comida",
+    // "nuevo gasto: 120€ de electricidad, proveedor Iberdrola",
+    // "gasto de 300€ en software, categoría herramientas") ═══
+    const GASTO_ENTITY = /\b(?:gastos?|egresos?|gast[ée])\b/i
+    const REGISTRO_GASTO_VERB = /\b(?:registra|registrar|registro|nuev[oa]|crea|crear|anota|anotar|agrega|agregar)\b/i
+    const MONTO_SIGNAL = /\b(?:de|por|en)\s+\d+(?:[.,]\d{1,2})?\s*(?:€|euros?|eur|pesos|dolares|usd|mxn)?\b|\b\d+(?:[.,]\d{1,2})?\s*(?:€|euros?|eur)\b/i
+    if (GASTO_ENTITY.test(message) && (REGISTRO_GASTO_VERB.test(message) || MONTO_SIGNAL.test(message))) {
+      // Monto: el que sigue a la keyword de gasto ("gasto de 45.90"), o con divisa
+      const gAmount = message.match(/(?:gasto|egreso|pago|compra|gast[éeoó])\s*(?::|de|por|en)?\s*(\d+(?:[.,]\d{1,2})?)\s*(?:€|euros?|eur)?/i)
+      const monto = gAmount ? parseFloat(gAmount[1].replace(',', '.')) : this.extractMontoDe(message)
+      if (monto !== null && Number.isFinite(monto)) extracted.monto = monto
+      const concepto = this.extractConceptoDe(message)
+      if (concepto) extracted.concepto = concepto
+      const categoria = this.extractCategoriaDe(message)
+      if (categoria) extracted.categoria = categoria
+      const proveedor = this.extractProveedorDe(message)
+      if (proveedor) extracted.proveedor = proveedor
+      const fecha = this.extractFechaDe(message)
+      if (fecha) extracted.fecha = fecha
+      return { intent: 'registrar_gasto', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 13. ANALIZAR GASTOS / SALUD FINANCIERA ("cómo vamos de gastos este
+    // mes", "analiza mi burn rate", "dame mi salud financiera") ═══
+    const ANALIZAR_GASTOS = /\b(?:analiza|analizar|revisa|revisar|an[aá]lisis|c[oó]mo\s+vamos|c[oó]mo\s+van|c[oó]mo\s+est[aá]\s+(?:el\s+|la\s+|mi\s+)?(?:inventario\s+de\s+)?gastos|salud\s+financiera|burn\s*rate|qu[eé]\s+gastos\s+(?:hemos|hay|tengo|tenemos)|cu[aá]nto\s+hemos\s+gastado|gastos?\s+(?:del\s+)?mes|flujo\s+de\s+caja|rentabilidad)\b/i
+    if (ANALIZAR_GASTOS.test(message) && /\b(?:gastos?|financ|burn|salud\s+financiera|flujo\s+de\s+caja|ingresos?|egresos?)\b/i.test(message)) {
+      const months = this.extractMesesDe(message)
+      if (months) extracted.months = months
+      return { intent: 'analizar_gastos', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 14. CREAR PROVEEDOR ("registra proveedor: Suministros SA, email
+    // ventas@suministros.com", "nuevo proveedor: Papelería López", "crea
+    // proveedor Tecnología Plus SA de CV") ═══
+    const PROVEEDOR_ENTITY = /\bproveedor(?:es)?\b/i
+    const CREATE_PROVEEDOR_VERB = /\b(?:registra|registrar|nuev[oa]|crea|crear|agrega|agregar|añade|alta|anota|anotar)\b/i
+    if (PROVEEDOR_ENTITY.test(message) && CREATE_PROVEEDOR_VERB.test(message)) {
+      // Nombre: tras "proveedor" (extractNombreAfter ya corta en coma y en
+      // "con email/teléfono"). "registra proveedor: X" → tras quitar los dos
+      // puntos queda "X".
+      const nombre = this.extractNombreAfter(message, /\bproveedor\b/i)
+      if (nombre) extracted.nombre = nombre
+      const categoria = this.extractCategoriaDe(message)
+      if (categoria) extracted.categoria = categoria
+      const direccion = this.extractDireccionDe(message)
+      if (direccion) extracted.direccion = direccion
+      // email y telefono ya se capturaron globalmente (extractEmailDe en la
+      // entrada, extractTelefonoDe arriba).
+      return { intent: 'crear_proveedor', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 15. LISTAR PROVEEDORES ("lista los proveedores", "qué proveedores
+    // tengo", "muéstrame mis proveedores") ═══
+    const LISTAR_PROVEEDORES = /\b(?:lista|listame|mu[eé]strame|muestra|ver|ens[eé][ñn]ame|qu[eé])\s+(?:los\s+|mis\s+|tus\s+|todos\s+los\s+)?proveedor(?:es)?\b|qu[eé]\s+proveedores\s+(?:tengo|hay|tenemos|tienes)\b|proveedor(?:es)?\s+(?:de\s+)?categor[ií]a\b/i
+    if (PROVEEDOR_ENTITY.test(message) && LISTAR_PROVEEDORES.test(message)) {
+      const categoria = this.extractCategoriaDe(message)
+      if (categoria) extracted.categoria = categoria
+      return { intent: 'listar_proveedores', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 16. COMPLETAR TAREA ("marca como completada la tarea de llamar a
+    // Juan", "completa el pendiente de enviar documento") ═══
+    const TAREA_ENTITY = /\b(?:tareas?|pendientes?)\b/i
+    const COMPLETAR_TAREA = /\b(?:completa|completar|termina|terminar|finaliza|finalizar|cierra|cerrar|marca\s+como\s+completada|marcar\s+como\s+completada|d[ae]\s+por\s+completada)\b/i
+    // "la tarea ya está completa" es una afirmación, no una petición de completar
+    if (COMPLETAR_TAREA.test(message) && TAREA_ENTITY.test(msgNoEmails) && !/\b(?:est[aá]|ya|qued[oó])\s+(?:completa|completada|terminada)\b/i.test(message)) {
+      const titulo = this.extractTituloTareaDe(message) ||
+        this.extractNombreAfter(message, /(?:tarea|pendiente)\s+(?:de|del)\s+/i)
+      if (titulo) extracted.titulo = titulo
+      return { intent: 'completar_tarea', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 17. CREAR TAREA ("crea tarea: llamar a Juan Pérez", "nueva tarea
+    // para María: revisar cotización", "agrega pendiente: enviar documento,
+    // vence el viernes") ═══
+    const CREATE_TASK_VERB = /\b(?:crea|crear|agrega|agregar|registra|registrar|nuev[oa]|nueva|nuevo|añade|anota|anotar|pon|poner)\b/i
+    if (CREATE_TASK_VERB.test(message) && TAREA_ENTITY.test(msgNoEmails)) {
+      const titulo = this.extractTituloTareaDe(message)
+      if (titulo) extracted.titulo = titulo
+      // Nombre cortado en los dos puntos ("para María: revisar…" → "María")
+      let nombre = this.extractNombreAfter(message, /\b(?:con|para)\b/i)
+      if (nombre) nombre = nombre.split(':')[0].trim() || null
+      if (nombre) extracted.nombre = nombre
+      const fechaVencimiento = this.extractFechaDe(message)
+      if (fechaVencimiento) extracted.fechaVencimiento = fechaVencimiento
+      const prioridad = this.extractPrioridadDe(message)
+      if (prioridad) extracted.prioridad = prioridad
+      // "crea tarea para mañana: …" → "mañana" es fecha, no persona
+      if (nombre && /^(?:hoy|ma[nñ]ana|ayer|pasado\s+ma[nñ]ana|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo|esta\s+semana)$/i.test(nombre.trim())) nombre = null
+      // Título sintetizado si no vino ("tarea con Alejandra" → seguimiento)
+      if (!titulo) extracted.titulo = `Seguimiento ${nombre || extracted.email || 'sin nombre'}`
+      return { intent: 'crear_tarea', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 18. MIS TAREAS ("qué tareas tengo pendientes", "muéstrame mis
+    // tareas", "tareas pendientes de juan@email.com") ═══
+    const MIS_TAREAS = /\b(?:qu[eé]\s+(?:tareas|pendientes)\s+(?:tengo|hay|tienes|tenemos)|(?:mis|las|tus)\s+tareas|tareas\s+pendientes|lista\s+de\s+tareas)\b/i
+    if (TAREA_ENTITY.test(msgNoEmails) && MIS_TAREAS.test(message)) {
+      return { intent: 'mis_tareas', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 19. CREAR NOTA ("agrega nota a juan@x.com: Cliente interesado…",
+    // "nota para María García: Prefiere WhatsApp") — después de interacción
+    // ("anota en el perfil de X: …") y actualizar_lead ("ponle notas"). ═══
+    const CREATE_NOTA_VERB = /\b(?:agrega|agregar|crea|crear|registra|registrar|deja|dejar|anota|anotar|nueva|nuevo)\b|^\s*nota\b|\bnota\s+(?:para|de|a)\b/i
+    if (/\bnotas?\b|\bperfil\b/i.test(message) && CREATE_NOTA_VERB.test(message)) {
+      const idx = message.indexOf(':')
+      if (idx >= 0) {
+        const contenido = message.slice(idx + 1).trim()
+        if (contenido.length >= 2) extracted.contenido = contenido.replace(/["'”]+\s*$/, '').trim()
+      }
+      // "nota para María García: …" / "anota en el perfil de Carlos: …"
+      let nombre = this.extractNombreAfter(message, /\b(?:para|de|a|en\s+el\s+perfil\s+de)\b/i)
+      if (nombre) nombre = nombre.split(':')[0].trim() || null
+      if (nombre) extracted.nombre = nombre
+      return { intent: 'crear_nota', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 20. VER NOTAS ("muéstrame las notas de juan@x.com", "qué notas
+    // tiene María García") ═══
+    const VER_NOTAS = /\b(?:ver|mu[eé]strame|muestra|listame|lista|qu[eé])\s+(?:las\s+|sus\s+|tus\s+|mis\s+)?notas?\b|\bqu[eé]\s+notas\s+(?:tiene|tenga|tienen)\b/i
+    if (/\bnotas?\b/i.test(message) && VER_NOTAS.test(message)) {
+      const nombre = this.extractNombreAfter(message, /\bqu[eé]\s+notas\s+(?:tiene|tenga|tienen)\s+/i) ||
+        this.extractNombreAfter(message, /\b(?:de|del|de\s+la)\b/i)
+      if (nombre) extracted.nombre = nombre
+      return { intent: 'ver_notas', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 21. SALUD DE INVENTARIO / STOCK BAJO ("cómo está el inventario",
+    // "qué productos tienen stock bajo", "hay riesgo de ruptura",
+    // "productos por debajo del punto de reorden") ═══
+    // "inventario de gastos" / "inventario de egresos" son gastos, no stock
+    const INVENTARIO_ENTITY = /\b(?:inventario|stock|existencias|unidades)\b/i
+    const SALUD_INVENTARIO = /\b(?:c[oó]mo\s+est[aá]\s+(?:el\s+|mi\s+)?inventario|salud\s+del\s+inventario|stock\s+baj[oa]|baj[oa]\s+stock|riesgo\s+de\s+ruptura|ruptura\s+de\s+stock|punto\s+de\s+reorden|debajo\s+del\s+punto\s+de\s+reorden|necesito\s+reponer|qu[eé]\s+(?:productos|art[ií]culos)\s+tienen\s+stock\s+baj[oa]|qu[eé]\s+productos\s+(?:tengo|hay|tenemos)\s+con\s+stock|alertas?\s+de\s+inventario|revisa\s+las\s+alertas|qu[eé]\s+productos\s+necesito\s+reponer)\b/i
+    if (INVENTARIO_ENTITY.test(message) && (SALUD_INVENTARIO.test(message) || /\b(?:c[oó]mo\s+vamos?|c[oó]mo\s+est[aá]|salud|an[aá]lisis)\b/i.test(message)) && !/\b(?:gastos?|egresos?)\b/i.test(message)) {
+      const producto = this.extractProductoDe(message)
+      if (producto) extracted.producto = producto
+      return { intent: 'salud_inventario', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 22. AJUSTAR STOCK ("entrada de 50 unidades del producto X",
+    // "ajusta el stock del producto Y, salida de 10", "transfiere 20
+    // unidades del producto Z al almacén 2") ═══
+    const AJUSTAR_STOCK_VERB = /\b(?:ajusta|ajustar|entrada|ingreso|salida|egreso|transfiere|transferir|mueve|mover|agrega\s+stock|quita\s+stock|dar\s+de\s+alta|dar\s+de\s+baja)\b/i
+    const UNIDADES_SIGNAL = /\b(?:unidades?|uds?|piezas?|pzs?|kg|lt|litros?)\b/i
+    if (INVENTARIO_ENTITY.test(message) && AJUSTAR_STOCK_VERB.test(message) && (UNIDADES_SIGNAL.test(message) || /\b\d+\b/.test(message))) {
+      const producto = this.extractProductoDe(message)
+      if (producto) extracted.producto = producto
+      const cantidad = this.extractCantidadStockDe(message)
+      if (cantidad !== null) extracted.cantidad = cantidad
+      const tipo = this.extractTipoStockDe(message)
+      if (tipo) extracted.tipo = tipo
+      // Sin producto → pedirlo (el skill necesita saber a qué ítem ajustar)
+      return { intent: 'ajustar_stock', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 23. CONSUMIR INVENTARIO ("consume 5 unidades del producto X",
+    // "descarga 10 del material Z", "registra consumo de 3 unidades") ═══
+    const CONSUMIR_VERB = /\b(?:consum(?:e|o|ir)|descarga|descargar|descuenta|descontar|us[aeo]\s+\d+|registra\s+consumo|procesa\s+la\s+salida)\b/i
+    if ((INVENTARIO_ENTITY.test(message) || /\b(?:material|materia\s+prima)\b/i.test(message)) && CONSUMIR_VERB.test(message) && UNIDADES_SIGNAL.test(message)) {
+      const producto = this.extractProductoDe(message)
+      if (producto) extracted.producto = producto
+      const cantidad = this.extractCantidadStockDe(message)
+      if (cantidad !== null) extracted.cantidad = cantidad
+      return { intent: 'consumir_inventario', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 24. BUSCAR EN CATÁLOGO / CONSULTAR PRECIO ("busca cafeteras en el
+    // catálogo", "qué precio tiene X", "cuánto cuesta el paquete premium",
+    // "busca propiedades en Madrid por menos de 300000") ═══
+    const CATALOGO_ENTITY = /\b(?:cat[aá]logo|productos?|servicios?|art[ií]culos?|inmuebles?|propiedades?|apartamentos?|casas?|precios?)\b/i
+    const PRECIO_QUERY = /\b(?:qu[eé]\s+precio|cu[aá]nto\s+cuesta|cuestan|vale|valen|precio\s+de|precios\s+de)\b/i
+    const BUSCAR_CATALOGO_VERB = /\b(?:busca|buscar|encuentra|encontrar|consulta|consultar|qu[eé]\s+(?:productos|servicios|art[ií]culos)\b|qu[eé]\s+precio|cu[aá]nto\s+cuesta|cu[aá]nto\s+cuestan|cu[aá]nto\s+vale|cu[aá]nto\s+valen|precio\s+de|precios\s+de)\b/i
+    // "cuánto cuesta fabricar el producto Y" es producción (calcular_costo), no catálogo
+    const NO_PRODUCCION = /\b(?:fabricar|manufactura|producir|producci[oó]n|fabricaci[oó]n)\b/i
+    // "cuánto cuesta la cita de un abogado" no es catálogo (entidad de cita)
+    const NO_CITA = /\b(?:citas?|reuni[oó]n|videollamada)\b/i
+    // Patrón de listado ("qué productos hay", "lista el catálogo") — se
+    // declara aquí (rama 22) para poder excluirlo de la rama 21 de búsqueda.
+    const LISTAR_CATALOGO = /\b(?:lista|listame|mu[eé]strame|muestra|ver|ens[eé][ñn]ame)\s+(?:el\s+|los\s+|las\s+|todos\s+los\s+)?(?:cat[aá]logo|productos?|servicios?|art[ií]culos?|[íi]tems?)\b|qu[eé]\s+(?:productos|servicios|art[ií]culos)\s+(?:hay|tienes|tenemos|tiene|existen)\b/i
+    // "qué productos hay" / "lista el catálogo" son listados (rama 22), no
+    // búsquedas con query — aquí solo búsqueda/con precio explícito.
+    if ((CATALOGO_ENTITY.test(message) || PRECIO_QUERY.test(message)) && BUSCAR_CATALOGO_VERB.test(message) && !LISTAR_CATALOGO.test(message) && !NO_PRODUCCION.test(message) && !NO_CITA.test(message)) {
+      const query = this.extractCatalogoQueryDe(message)
+      if (query) extracted.query = query
+      const tipo = this.extractTipoCatalogoDe(message)
+      if (tipo) extracted.tipo = tipo
+      const categoria = this.extractCategoriaDe(message)
+      if (categoria) extracted.categoria = categoria
+      const rango = this.extractPrecioRangoDe(message)
+      if (rango.precioMin !== null) extracted.precioMin = rango.precioMin
+      if (rango.precioMax !== null) extracted.precioMax = rango.precioMax
+      return { intent: 'buscar_catalogo', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 25. LISTAR CATÁLOGO ("lista el catálogo", "qué productos hay",
+    // "muéstrame los servicios disponibles") → buscar_catalogo sin query (el
+    // skill lista el catálogo visible en el chatbot) ═══
+    if (CATALOGO_ENTITY.test(message) && LISTAR_CATALOGO.test(message)) {
+      const tipo = this.extractTipoCatalogoDe(message)
+      if (tipo) extracted.tipo = tipo
+      const categoria = this.extractCategoriaDe(message)
+      if (categoria) extracted.categoria = categoria
+      return { intent: 'buscar_catalogo', confidence: 0.85, extractedParams: extracted }
+    }
+
+    return null
+  }
+
+  /**
+   * Quita frases de fecha ("mañana", "el viernes", "15 de mayo", "15/05/2026")
+   * del mensaje para que no se cuelen en la extracción del nombre.
+   */
+  private stripFechaPhrases(message: string): string {
+    return message
+      .replace(/\bpasado\s+ma[nñ]ana\b/gi, ' ')
+      .replace(/\bma[nñ]ana\b|\bhoy\b/gi, ' ')
+      .replace(/\b(?:el|este)\s+(?:pr[oó]xim[oa]\s+)?(?:domingo|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado)\b/gi, ' ')
+      .replace(/\b\d{1,2}\s+de\s+[A-Za-zÁÉÍÓÚÑÜáéíóúñü]+\b/gi, ' ')
+      .replace(/\b\d{1,2}[\/-]\d{1,2}(?:[\/-]\d{2,4})?\b/gi, ' ')
+      .replace(/\b\d{4}[-/]\d{1,2}[-/]\d{1,2}\b/gi, ' ')
+      // Horas: "a las 10am", "a las 15:30", "las 2pm" (no se cuelan en el nombre)
+      .replace(/\b(?:a\s+las|a\s+la|las)\s+\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?)?\b/gi, ' ')
+      .replace(/\s{2,}/g, ' ')
+  }
+
+  /**
+   * Extrae la fecha de "mañana", "pasado mañana", "el viernes", "15/05/2026",
+   * "15 de mayo". Normaliza SIEMPRE a YYYY-MM-DD (createBookingWrapper solo
+   * entiende ese formato; DD/MM/YYYY caía al default de mañana 10am).
+   */
+  private extractFechaDe(message: string): string | null {
+    const months: Record<string, number> = {
+      enero: 0, febrero: 1, marzo: 2, abril: 3, mayo: 4, junio: 5,
+      julio: 6, agosto: 7, septiembre: 8, setiembre: 8, octubre: 9, noviembre: 10, diciembre: 11,
+    }
+    const days: Record<string, number> = {
+      domingo: 0, lunes: 1, martes: 2, miercoles: 3, jueves: 4, viernes: 5, sabado: 6,
+    }
+    const today = new Date()
+    const isoDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    const addDays = (d: Date, n: number) => { const t = new Date(d); t.setDate(t.getDate() + n); return t }
+
+    // 1. Fecha explícita YYYY-MM-DD / YYYY/MM/DD
+    const iso = message.match(/\b(\d{4})[-/](\d{1,2})[-/](\d{1,2})\b/)
+    if (iso) {
+      const [y, m, d] = [Number(iso[1]), Number(iso[2]), Number(iso[3])]
+      if (m >= 1 && m <= 12 && d >= 1 && d <= 31) return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    }
+
+    // 2. Fecha DD/MM/YYYY o DD/MM → normalizar a YYYY-MM-DD
+    const dmy = message.match(/\b(\d{1,2})[\/-](\d{1,2})(?:[\/-](\d{2,4}))?\b/)
+    if (dmy && Number(dmy[1]) <= 31 && Number(dmy[2]) >= 1 && Number(dmy[2]) <= 12) {
+      const d = Number(dmy[1]); const m = Number(dmy[2])
+      let y = dmy[3] ? Number(dmy[3]) : today.getFullYear()
+      if (dmy[3] && y < 100) y += 2000
+      return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    }
+
+    // 3. Relativos ("pasado mañana" antes que "mañana")
+    if (/\bpasado\s+ma[nñ]ana\b|\bma[nñ]ana\s+despu[eé]s\b/i.test(message)) return isoDate(addDays(today, 2))
+    if (/\bma[nñ]ana\b/i.test(message) && !/(?:por|en|de)\s+la\s+ma[nñ]ana\b/i.test(message)) return isoDate(addDays(today, 1))
+    if (/\bhoy\b/i.test(message)) return isoDate(today)
+    if (/\bayer\b/i.test(message)) return isoDate(addDays(today, -1))
+
+    // 4. Día de la semana: "el viernes", "el lunes que viene". Un día de la
+    // semana desnudo SIEMPRE es la próxima ocurrencia ("el viernes" dicho un
+    // viernes = el próximo viernes, semántica de agendamiento).
+    for (const [name, dow] of Object.entries(days)) {
+      const re = new RegExp(`\\b${name}\\b`, 'i')
+      if (re.test(message)) {
+        let daysAhead = (dow - today.getDay() + 7) % 7
+        if (daysAhead === 0) daysAhead = 7
+        return isoDate(addDays(today, daysAhead))
+      }
+    }
+
+    // 5. Textual: "15 de mayo", "15 de mayo de 2026"
+    const dmyTxt = message.match(/\b(\d{1,2})\s+de\s+([A-Za-zÁÉÍÓÚÑÜáéíóúñü]+)(?:\s+de\s+(\d{2,4}))?\b/i)
+    if (dmyTxt) {
+      const monthKey = dmyTxt[2].toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      const month = months[monthKey]
+      if (month !== undefined && Number(dmyTxt[1]) >= 1 && Number(dmyTxt[1]) <= 31) {
+        const d = Number(dmyTxt[1])
+        let y = dmyTxt[3] ? Number(dmyTxt[3]) : today.getFullYear()
+        if (dmyTxt[3] && y < 100) y += 2000
+        const candidate = new Date(y, month, d)
+        if (!dmyTxt[3] && candidate.getTime() < today.getTime()) candidate.setFullYear(y + 1)
+        return isoDate(candidate)
+      }
+    }
+
+    return null
+  }
+
+  /**
+   * Extrae la hora de "a las 10am", "a las 15:30", "las 2pm", "10:00 AM",
+   * "2:30 PM". Normaliza a HH:MM (24h).
+   */
+  private extractHoraDe(message: string): string | null {
+    const withPrefix = message.match(/\b(?:a\s+las|a\s+la|las)\s+(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)?(?!\s*(?:citas?|reuniones?))/i)
+    const ampm = message.match(/\b(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)\b/i)
+    const bare = message.match(/\b(\d{1,2}):(\d{2})\b/)
+    const m = withPrefix || ampm || bare
+    if (!m) return null
+    let h = Number(m[1])
+    const min = m[2] ? Number(m[2]) : 0
+    const meridian = (m[3] || '').toLowerCase().replace(/\./g, '')
+    if (meridian.startsWith('p') && h !== 12) h += 12
+    if (meridian.startsWith('a') && h === 12) h = 0
+    if (h > 23 || min > 59) return null
+    return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`
+  }
+
+  /**
+   * Extrae el título de una tarea: contenido tras los dos puntos ("crea tarea:
+   * llamar a Juan Pérez" → "llamar a Juan Pérez"), cortado en fecha/prioridad/
+   * descripción; o tras "tarea"/"pendiente" sin dos puntos.
+   */
+  private extractTituloTareaDe(message: string): string | null {
+    const idx = message.indexOf(':')
+    if (idx >= 0) {
+      let t = message.slice(idx + 1).trim()
+      t = t.split(/\s*(?:,|;|vence|vencimiento|prioridad|descripci[oó]n|con\s+prioridad|para\s+(?:el|la|hoy|ma[nñ]ana|viernes|lunes|martes|mi[eé]rcoles|jueves|s[aá]bado|domingo))/i)[0].trim()
+      t = t.replace(/["'”]+\s*$/, '').trim()
+      if (t.length >= 2) return t
+    }
+    // Sin dos puntos: lo que sigue a "tarea"/"pendiente" ("marca como completada
+    // la tarea de llamar a Juan" → "llamar a Juan"). Sin filtro de mayúscula
+    // porque los títulos suelen empezar en minúscula ("llamar a…").
+    const kw = message.match(/\btarea\b|\bpendiente\b/i)
+    if (kw && kw.index !== undefined) {
+      let t = message.slice(kw.index + kw[0].length).trim()
+      // NO se quita "con/para": "tarea con Alejandra" es una persona, no un título
+      // (se sintetiza "Seguimiento X"); "tarea de llamar a Juan" sí es título.
+      t = t.replace(/^(?:de|del|por|a)\s+/i, '')
+      t = t.split(/\s*(?:,|;|vence|vencimiento|prioridad|descripci[oó]n)/i)[0].trim()
+      t = t.replace(/["'”]+\s*$/, '').trim()
+      if (t.length >= 2 && !/^(?:con|para|de|del|el|la|un|una)\b/i.test(t)) return t
+    }
+    return null
+  }
+
+  /**
+   * Extrae el concepto de un gasto: el texto tras el monto y su conector
+   * ("gasto de 45.90 en comida" → "comida"), cortando en el siguiente campo
+   * (proveedor, categoría, coma…).
+   */
+  private extractConceptoDe(message: string): string | null {
+    // Texto posterior al monto de la frase de gasto. Primero con monto
+    // ("gasto de 45.90 en comida"), luego sin monto ("gasto en comida").
+    const gWith = message.match(/(?:gasto|egreso|pago|compra|gast[éeoó])\s*(?::|de|por|en)?\s*\d+(?:[.,]\d{1,2})?\s*(?:€|euros?|eur)?/i)
+    // "del" solo en gNoAmount: "gasto del 15/05…" → tras "del" viene un dígito
+    // (el (?!\s*\d) mira más allá de los espacios) → el match falla y no se
+    // captura la fecha como concepto.
+    // \b en "de"/"del" evita que "de" matchee dentro de "del" (si no,
+    // "gasto del 15/05…" consumiría solo "de" y capturaría la fecha).
+    const gNoAmount = message.match(/(?:gasto|egreso|pago|compra|gast[éeoó])\s*(?::|por|en|del\b|de\b)\s*(?!\s*\d)/i)
+    const gMatch = gWith || gNoAmount
+    if (!gMatch || gMatch.index === undefined) return null
+    let rest = message.slice(gMatch.index + gMatch[0].length).trim()
+    rest = rest.replace(/^(?:en|de|por|para|con|el|la|al|del|a|de\s+la)\s+/i, '').replace(/^:\s*/, '')
+    rest = rest.split(/\s*(?:,|;|proveedor|categor[ií]a|con\s+\S+@|\s+con\s+|email|el\s+d[ií]a|de\s+la\s+empresa|de\s+empresa)/i)[0].trim()
+    rest = rest.replace(/["'”]+\s*$/, '').trim()
+    return rest.length >= 2 ? rest : null
+  }
+
+  /**
+   * Extrae la categoría de "categoría herramientas" / "categoria: viajes".
+   */
+  private extractCategoriaDe(message: string): string | null {
+    const m = message.match(/\b(?:categor[ií]a|categoria)\s*(?::|de\s+)?\s*([A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9][A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9'\- ]{1,25})/i)
+    if (!m) return null
+    let c = m[1].trim()
+    c = c.split(/\s*(?:,|;|proveedor|con\s+)/i)[0].trim()
+    return c.length >= 2 ? c : null
+  }
+
+  /**
+   * Extrae la dirección de "dirección: Calle 5 #12" / "direccion Av. Reforma 123".
+   * El skill de proveedores guarda la dirección por partes (streetName,
+   * city…) pero para el chatbot basta con capturarla como texto libre y
+   * createSupplierWrapper la asigna a streetName.
+   */
+  private extractDireccionDe(message: string): string | null {
+    const m = message.match(/\b(?:direcci[oó]n|direccion|domicilio|calle)\s*(?::|de\s+)?\s*([A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9][A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9.,'#\- ]{2,60})/i)
+    if (!m) return null
+    let d = m[1].trim()
+    d = d.split(/\s*(?:,|;|con\s+(?:email|correo|tel[eé]fono)|categor[ií]a|provincia|ciudad)/i)[0].trim()
+    d = d.replace(/["'”]+\s*$/, '').trim()
+    return d.length >= 3 ? d : null
+  }
+
+  /**
+   * Extrae la query de búsqueda de catálogo: el texto tras el verbo y la
+   * entidad ("busca cafeteras en el catálogo" → "cafeteras", "qué precio
+   * tiene el paquete premium" → "el paquete premium"), cortando en filtros
+   * (categoría, tipo, rango de precio, ciudad…).
+   */
+  private extractCatalogoQueryDe(message: string): string | null {
+    let q = message
+      // Verbo + entidad opcional: "busca X", "busca en el catálogo X",
+      // "consulta el catálogo de X", "cuánto cuesta X", "precio de X"…
+      .replace(/\b(?:busca|buscar|encuentra|encontrar|consulta|consultar|dame|mu[eé]strame|muestra|ver|lista|listame)\s+(?:en\s+el\s+|el\s+|los\s+|las\s+)?(?:cat[aá]logo|productos?|servicios?|art[ií]culos?|precios?)?\s*/i, '')
+      .replace(/\b(?:en\s+el\s+cat[aá]logo)\b/i, ' ')
+      .replace(/\b(?:cu[aá]nto\s+cuesta|cuestan|vale|valen|qu[eé]\s+precio\s+tiene|qu[eé]\s+precio\s+tienen|precio\s+de|precios\s+de)\b/i, ' ')
+      .trim()
+    // Cortar en filtros estructurados
+    q = q.split(/\s*(?:por\s+(?:menos|m[aá]s)\s+de|categor[ií]a|tipo|de\s+tipo|con\s+\d+\s+habitaciones|en\s+\S+\s+con\s+\d+|en\s+la\s+categor[ií]a)\b/i)[0].trim()
+    q = q.replace(/["'”]+\s*$/, '').trim()
+    // Quitar artículo inicial sobrante ("cuánto cuesta la consultoría" →
+    // "consultoría") y descartar solo si queda vacío o es un artículo suelto.
+    q = q.replace(/^(?:el|la|los|las|un|una|al|del)\s+/i, '').trim()
+    if (!q || q.length < 2 || /^(?:el|la|los|las|un|una|al|del)$/i.test(q)) return null
+    // Palabras genéricas de entidad no son un término de búsqueda real
+    // ("busca productos por menos de 500" → query null, se usa el filtro tipo)
+    if (/^(?:productos?|servicios?|art[ií]culos?|cat[aá]logo|precios?|[íi]tems?|propiedades?|inmuebles?|casas?)$/i.test(q)) return null
+    return q
+  }
+
+  /**
+   * Extrae el tipo de ítem de catálogo: "propiedades/inmuebles/casas" →
+   * inmueble, "servicios" → servicio, "productos/artículos" → producto.
+   */
+  private extractTipoCatalogoDe(message: string): string | null {
+    const m = message.match(/\b(?:tipo|de\s+tipo|tipo\s+de)\s+(\w+)\b/i)
+    if (m) {
+      const t = m[1].toLowerCase()
+      if (t.includes('inmueble') || t.includes('propiedad') || t.includes('casa') || t.includes('departamento')) return 'inmueble'
+      if (t.includes('servicio')) return 'servicio'
+      if (t.includes('producto')) return 'producto'
+    }
+    if (/\b(?:propiedades?|inmuebles?|apartamentos?|casas?|departamentos?)\b/i.test(message)) return 'inmueble'
+    if (/\b(?:servicios?)\b/i.test(message) && !/\b(?:productos?|art[ií]culos?|cat[aá]logo)\b/i.test(message)) return 'servicio'
+    if (/\b(?:productos?|art[ií]culos?)\b/i.test(message) && !/\b(?:servicios?)\b/i.test(message)) return 'producto'
+    return null
+  }
+
+  /**
+   * Extrae rango de precio: "por menos de 300000" → precioMax,
+   * "más de 150000" → precioMin, "entre 100 y 200" → ambos.
+   */
+  private extractPrecioRangoDe(message: string): { precioMin: number | null; precioMax: number | null } {
+    let precioMin: number | null = null
+    let precioMax: number | null = null
+    const num = (s: string) => { const v = parseFloat(s.replace(',', '.')); return Number.isFinite(v) ? v : null }
+    const entre = message.match(/\bentre\s+(\d+(?:[.,]\d+)?)\s+y\s+(\d+(?:[.,]\d+)?)\b/i)
+    if (entre) {
+      return { precioMin: num(entre[1]), precioMax: num(entre[2]) }
+    }
+    const menos = message.match(/\b(?:menos\s+de|por\s+menos\s+de|hasta|m[aá]ximo)\s+(\d+(?:[.,]\d+)?)\b/i)
+    if (menos) precioMax = num(menos[1])
+    const mas = message.match(/\b(?:m[aá]s\s+de|por\s+m[aá]s\s+de|desde|m[ií]nimo)\s+(\d+(?:[.,]\d+)?)\b/i)
+    if (mas) precioMin = num(mas[1])
+    return { precioMin, precioMax }
+  }
+
+  /**
+   * Extrae el producto/materia de "del producto X", "producto Y", "del material
+   * Z", "de las 10 unidades del producto Z". Corta en unidades/cantidades.
+   */
+  private extractProductoDe(message: string): string | null {
+    const m = message.match(/(?:del\s+producto|del\s+material|producto|material|art[ií]culo|de\s+la\s+existencia|de\s+los\s+productos)\s+([A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9][A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9'\- ]{1,50})/i)
+    if (!m) return null
+    let p = m[1].trim()
+    p = p.split(/\s*(?:,|;|unidades?|uds?|piezas?|pzs?|kg|lt|litros?|al\s+almac[eé]n|a\s+otro|stock|hacia|al\s+)\b/i)[0].trim()
+    p = p.replace(/["'”]+\s*$/, '').trim()
+    return p.length >= 2 ? p : null
+  }
+
+  /**
+   * Extrae la cantidad de stock: "entrada de 50 unidades" → 50,
+   * "salida de 10" → 10, "consume 5 unidades" → 5.
+   */
+  private extractCantidadStockDe(message: string): number | null {
+    const m = message.match(/(?:de|por|en|a)\s+(\d+(?:[.,]\d{1,2})?)\s*(?:unidades?|uds?|piezas?|pzs?|kg|lt|litros?)?\b/i)
+    if (m) {
+      const v = parseFloat(m[1].replace(',', '.'))
+      if (Number.isFinite(v)) return v
+    }
+    const bare = message.match(/\b(\d+(?:[.,]\d{1,2})?)\s*(?:unidades?|uds?|piezas?|pzs?|kg|lt|litros?)\b/i)
+    if (bare) {
+      const v = parseFloat(bare[1].replace(',', '.'))
+      if (Number.isFinite(v)) return v
+    }
+    return null
+  }
+
+  /**
+   * Extrae el tipo de ajuste: "entrada/ingreso" → IN, "salida/egreso" → OUT,
+   * "transfiere/mueve" → TRANSFER.
+   */
+  private extractTipoStockDe(message: string): string | null {
+    if (/\b(?:transfiere|transferir|mueve|mover|transferencia)\b/i.test(message)) return 'TRANSFER'
+    if (/\b(?:salida|egreso|dar\s+de\s+baja|quita)\b/i.test(message)) return 'OUT'
+    if (/\b(?:entrada|ingreso|dar\s+de\s+alta|agrega\s+stock)\b/i.test(message)) return 'IN'
+    return null
+  }
+
+  /**
+   * Extrae el proveedor de "proveedor Iberdrola" / "proveedor: Acme".
+   */
+  private extractProveedorDe(message: string): string | null {
+    const m = message.match(/\b(?:proveedor(?:es)?|proveedora)\s*(?::|de\s+)?\s*([A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9][A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9'\- ]{1,40})/i)
+    if (!m) return null
+    let p = m[1].trim()
+    p = p.split(/\s*(?:,|;|categor[ií]a|con\s+)/i)[0].trim()
+    p = p.replace(/["'”]+\s*$/, '').trim()
+    return p.length >= 2 ? p : null
+  }
+
+  /**
+   * Extrae el periodo de análisis en meses: "este mes" → 1, "este trimestre"
+   * / "3 meses" → 3, "este año" → 12.
+   */
+  private extractMesesDe(message: string): number | null {
+    if (/\b(?:este|el)\s+a[nñ]o\b|\b12\s+meses\b/i.test(message)) return 12
+    if (/\b(?:este|el)\s+trimestre\b|\b3\s+meses\b/i.test(message)) return 3
+    if (/\b6\s+meses\b|\bsemestre\b/i.test(message)) return 6
+    if (/\b(?:este|el)\s+mes\b/i.test(message)) return 1
+    const m = message.match(/\b(\d{1,2})\s+meses?\b/i)
+    if (m) {
+      const v = Number(m[1])
+      if (v >= 1 && v <= 24) return v
+    }
+    return null
+  }
+
+  /**
+   * Extrae el tipo de cita: "videollamada/virtual/zoom" → videollamada,
+   * "presencial/oficina" → presencial.
+   */
+  private extractTipoCitaDe(message: string): string | null {
+    if (/\b(?:videollamada|video|virtual|online|zoom|meet|google\s+meet)\b/i.test(message)) return 'videollamada'
+    if (/\b(?:presencial|oficina|en\s+persona|domicilio)\b/i.test(message)) return 'presencial'
+    return null
+  }
+
+  /**
+   * Extrae el tipo de interacción (llamada/email/whatsapp/reunión/visita/mensaje/nota).
+   */
+  private extractTipoInteraccionDe(message: string): string | null {
+    if (/\bllamad[oa]\b|\bllam[aá]r\b/i.test(message)) return 'llamada'
+    if (/\bemail\b|\bcorreo\b/i.test(message)) return 'email'
+    if (/\bwhatsapp\b/i.test(message)) return 'whatsapp'
+    if (/\breuni[oó]n\b/i.test(message)) return 'reunión'
+    if (/\bvisita\b/i.test(message)) return 'visita'
+    if (/\bmensaje\b/i.test(message)) return 'mensaje'
+    if (/\bnota\b/i.test(message)) return 'nota'
+    return null
+  }
+
+  /**
+   * Extrae el monto monetario de "por 5000€" / "a 7000€" / "3000 euros".
+   */
+  private extractMontoDe(message: string): number | null {
+    const m = message.match(/(\d+(?:[.,]\d{1,2})?)\s*(?:€|euros?|eur|pesos|dolares|usd|mxn)/i)
+    if (!m) return null
+    const v = parseFloat(m[1].replace(',', '.'))
+    return Number.isFinite(v) ? v : null
+  }
+
+  /**
+   * Extrae el título/servicio de "por el paquete empresarial" / "para el servicio X".
+   */
+  private extractTituloDe(message: string): string | null {
+    const m = message.match(/(?:por|para|del?)\s+(?:el|la|un|una)\s+([A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9][A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9'\- ]{2,40})/i)
+    if (!m) return null
+    let t = m[1].trim()
+    t = t.split(/\s*(?:,|;|\s+y\s+)/i)[0].trim()
+    if (/^\d/.test(t)) return null // es un monto, no un título
+    return t.length >= 2 ? t : null
+  }
+
+  /**
+   * Extrae la etapa de "a etapa negociación" / "en etapa X" / "etapa propuesta".
+   */
+  private extractEtapaDe(message: string): string | null {
+    const m = message.match(/(?:a\s+etapa|en\s+etapa|por\s+etapa|etapa)\s+([A-Za-zÁÉÍÓÚÑÜáéíóúñü]{2,25})/i)
+    if (!m) return null
+    return m[1].toLowerCase()
+  }
+
+  /**
+   * Extrae la prioridad de "prioridad alta/media/baja".
+   */
+  private extractPrioridadDe(message: string): string | null {
+    const m = message.match(/\bprioridad\s+([a-zA-ZÁÉÍÓÚÑÜáéíóúñü]+)/i)
+    if (!m) return null
+    const p = m[1].toLowerCase()
+    return /^(alta|media|baja)$/.test(p) ? p : null
+  }
+
+  /**
+   * Extrae el estado de un lead de "leads en estado X" / "leads por estado X"
+   * o de palabras sueltas comunes ("nuevos", "convertidos").
+   */
+  private extractEstadoDe(message: string): string | null {
+    const m = message.match(/(?:en|por)\s+estado\s+([A-Za-zÁÉÍÓÚÑÜáéíóúñü]{2,20})/i)
+    if (m) return m[1].toLowerCase()
+    // "nuevos"/"convertidos" sueltos SOLO si no vienen como tag ("leads con tags
+    // nuevos" → "nuevos" es una etiqueta, no un estado).
+    if (/\bnuevos?\b/i.test(message) && !/tags?\s+nuevos?\b/i.test(message)) return 'nuevo'
+    if (/\bconvertidos?\b/i.test(message) && !/tags?\s+convertidos?\b/i.test(message)) return 'convertido'
+    return null
+  }
+
+  /**
+   * Extrae el tipo de contacto de "contactos tipo empresa/persona".
+   */
+  private extractTipoDe(message: string): string | null {
+    const m = message.match(/\btipo\s+([a-zA-ZÁÉÍÓÚÑÜáéíóúñü\-]{2,25})/i)
+    if (!m) return null
+    const t = m[1].toLowerCase()
+    if (/^(?:empresa|company|compañ[ií]a|empresas)$/.test(t)) return 'company'
+    if (/^(?:persona|person|personas)$/.test(t)) return 'person'
+    return null
+  }
+
+  /**
+   * Extrae el término de búsqueda de un listado:
+   * - "que contengan X" / "con la palabra X"
+   * - nombre propio justo después de la entidad ("busca el contacto Laura" → "Laura")
+   */
+  private extractSearchDe(message: string, entityKeyword: RegExp): string | null {
+    const m = message.match(/(?:que\s+contengan?\s+|con\s+la\s+palabra\s+)(?:["'“])?([A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9][A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9'.\- ]{0,40})/i)
+    if (m) {
+      let s = m[1].trim()
+      // Recortar en el siguiente conector ("que contengan García y de Acme" → "García")
+      s = s.split(/\s+(?:y|de|con|por)\b/i)[0].trim()
+      s = s.replace(/(?<=[a-záéíóúñü0-9])\.\s*$/, '').trim()
+      s = s.replace(/["'”]\s*$/, '').trim()
+      return s.length >= 2 ? s : null
+    }
+
+    // "busca el contacto Laura Gómez" → término tras la entidad. Se rechaza si
+    // empieza con palabras estructurales (todos/los/en/tipo…) para no capturar
+    // "tipo empresa" ni "en estado contactado" (esas van por sus helpers).
+    const afterEntity = this.extractNombreAfter(message, entityKeyword)
+    if (afterEntity && !/^(?:todos?|todas|los|las|en|por|con|que|tipo|de|una|un)\b/i.test(afterEntity.trim())) {
+      return afterEntity.trim()
+    }
+    return null
+  }
+
+  /**
+   * Extrae el nombre que sigue a una keyword (lead/contacto/empresa) hasta un
+   * delimitador natural (coma, punto, ";", "con email", "de la empresa", …).
+   */
+  private extractNombreAfter(message: string, keyword: RegExp): string | null {
+    const match = message.match(keyword)
+    if (!match || match.index === undefined) return null
+
+    let rest = message.slice(match.index + match[0].length).trim()
+    rest = rest.replace(/^[:\s]+/, '')
+
+    // Paso 1: delimitadores fuertes (coma, punto y coma, "con email/correo/
+    // teléfono", "para", "de la empresa").
+    const parts = rest.split(/\s*(?:,|;|para\s+|con\s+(?:email|correo|tel[eé]fono)|de\s+la\s+empresa|de\s+empresa)/i)
+    let name = parts[0].trim()
+
+    // Paso 2: el punto solo separa cuando cierra una oración nueva (seguido de
+    // mayúscula case-sensitive) — NUNCA dentro de razones sociales con
+    // abreviaturas ("S.A. de C.V.", "Inc.", "S.L.", "U.S."). El flag /i del
+    // paso 1 no aplica aquí porque este split se hace sin /i.
+    name = name.split(/\.\s+(?=[A-ZÁÉÍÓÚÑÜ])/)[0].trim()
+    // Quitar SOLO el punto final de oración (nombre de persona: "Juan Perez."),
+    // preservando el de abreviaturas/razones sociales ("S.A. de C.V.", "Inc.")
+    // cuyo carácter previo es mayúscula.
+    name = name.replace(/(?<=[a-záéíóúñü0-9])\.\s*$/, '').trim()
+
+    name = name.replace(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,})/g, '').trim()
+    name = name.replace(/^(?:llamad[oa]|a|nuev[oa])\s+/i, '').trim()
+
+    const words = name.split(/\s+/).filter(Boolean)
+    const keep: string[] = []
+    const CONNECTORS = /^(?:de|del|la|el|y|los|las|san|santa)$/i
+    for (const w of words) {
+      if (!/^[A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9]/.test(w)) continue
+      if (CONNECTORS.test(w)) {
+        if (keep.length > 0) keep.push(w)
+        continue
+      }
+      keep.push(w)
+      if (keep.length >= 5) break
+    }
+    while (keep.length > 0 && CONNECTORS.test(keep[keep.length - 1])) keep.pop()
+    if (keep.length === 0) return null
+
+    const finalName = keep.join(' ')
+    if (finalName.length < 2 || /^[a-z]/.test(finalName)) return null
+    return finalName
+  }
+
+  /**
+   * Extrae el nombre de empresa de "de la empresa X" / "empresa X"
+   * (usado en lead/contacto). Soporta razones sociales con "S.A.", "Inc.",
+   * "S.A. de C.V.", etc.
+   */
+  private extractEmpresaDe(message: string): string | null {
+    // 1. "de la empresa X" / "de empresa X" (más específico)
+    const m1 = message.match(/(?:de\s+la\s+empresa|de\s+empresa)\s+([A-ZÁÉÍÓÚÑÜ][a-zA-ZÁÉÍÓÚÑÜ0-9]+(?:[^,;]{0,50}))/i)
+    if (m1) {
+      let e = m1[1].trim()
+      e = e.replace(/\s*(?:con|y|tel[eé]fono|email|correo)\b.*$/i, '').trim()
+      e = e.replace(/[.\s]+$/, '').trim()
+      return e.length >= 2 ? e : null
+    }
+    // 2. "empresa X" suelto (ej: "empresa Volkern Test")
+    const m2 = message.match(/\bempresa\s+([A-ZÁÉÍÓÚÑÜ][a-zA-ZÁÉÍÓÚÑÜ0-9]+(?:[^,;]{0,50}))/i)
+    if (m2) {
+      let e = m2[1].trim()
+      e = e.replace(/\s*(?:con|y|tel[eé]fono|email|correo)\b.*$/i, '').trim()
+      e = e.replace(/[.\s]+$/, '').trim()
+      return e.length >= 2 ? e : null
+    }
+    return null
+  }
+
+  /**
+   * Extrae el cargo/puesto de "cargo Gerente", "puesto Director", etc.
+   */
+  private extractCargoDe(message: string): string | null {
+    const m = message.match(/(?:cargo|puesto|posici[oó]n)\s*(?::|de\s+)?\s*([A-Za-zÁÉÍÓÚÑÜáéíóúñü][A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9'\- ]{1,40})/i)
+    if (!m) return null
+    let c = m[1].trim()
+    // Recortar hasta un delimitador natural (coma, punto y coma, "con email",
+    // "de la empresa"). El punto suelto NO corta para no partir abreviaturas
+    // tipo "Director de S.A." (mismo criterio que extractNombreAfter).
+    c = c.split(/\s*(?:,|;|con\s+(?:email|correo|tel[eé]fono)|de\s+la\s+empresa|empresa\b)/i)[0].trim()
+    return c.length >= 2 ? c : null
+  }
+
+  /**
+   * Extrae teléfono de "teléfono +52..." / "tel 555-1234" / "celular ...".
+   */
+  private extractTelefonoDe(message: string): string | null {
+    const m = message.match(/(?:tel[eé]fono|tel|celular|cel|m[oó]vil|whatsapp)\s*(?::|de\s+)?\s*(\+?[\d\s()\-.]{6,18})/i)
+    if (!m) return null
+    let t = m[1].trim()
+    t = t.split(/\s*(?:,|;|\s+y\s+)/i)[0].trim()
+    t = t.replace(/[^+\d\-()\s]/g, '').trim()
+    t = t.replace(/\.\s*$/, '').trim() // punto final colgante ("555-1234.")
+    if (t.replace(/\D/g, '').length < 6) return null
+    return t
+  }
+
+  /**
+   * Extrae LinkedIn de "linkedin.com/in/usuario" / "linkedin: usuario" /
+   * "linkedin de usuario". NO acepta "linkedin" como sustantivo en frases tipo
+   * "el lead que llegó por linkedin" (capturaría "con" o "de").
+   */
+  private extractLinkedinDe(message: string): string | null {
+    // URL completa: linkedin.com/in/usuario
+    const url = message.match(/linkedin\.com\/in\/([A-Za-z0-9._\-]{2,60})/i)
+    if (url) return url[1].trim()
+
+    // Etiqueta de campo: "linkedin: usuario" / "linkedin de usuario" /
+    // "linkedin usuario" (un solo token, no un conector).
+    const m = message.match(/linkedin\s*(?::|de\s+)?\s*(?:in\/)?([A-Za-z0-9._\-]{2,60})/i)
+    if (!m) return null
+    let l = m[1].trim()
+    l = l.split(/\s*(?:,|;|\s+y\s+)/i)[0].trim()
+    const firstToken = l.split(/[.\/_-]/)[0].toLowerCase()
+    if (/^(?:con|de|el|la|los|las|por|que|del|para|en|y|al|un|una|tengo|soy|es|mi)$/.test(firstToken)) return null
+    return l.length >= 2 ? l : null
+  }
+
+  /**
+   * Extrae ubicación de "ubicación Ciudad de México" / "ubicado en ...".
+   * NOTA: NO se acepta el "en" desnudo como ancla (matcheaba el "en" dentro
+   * de palabras tipo "Elena" y capturaba "a Ruiz" en vez de la ciudad).
+   */
+  private extractUbicacionDe(message: string): string | null {
+    const m = message.match(/(?:ubicaci[oó]n|ubicad[oa]\s+en)\s*(?::|de\s+)?\s*([A-Za-zÁÉÍÓÚÑÜáéíóúñü][A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9'\- ]{1,40})/i)
+    if (!m) return null
+    let u = m[1].trim()
+    u = u.split(/\s*(?:,|;|\.|con\s+(?:email|correo|tel[eé]fono)|empresa\b)/i)[0].trim()
+    return u.length >= 2 ? u : null
+  }
+
+  /**
+   * Extrae tags de "tags vip,cliente" / "etiquetas a,b,c".
+   */
+  private extractTagsDe(message: string): string | null {
+    const m = message.match(/\b(?:tags?|etiquetas)\b\s*(?::|de\s+)?\s*([A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9_,\- ]{1,60})/i)
+    if (!m) return null
+    let t = m[1].trim()
+    // Cortar en el siguiente campo (evita capturar "de la empresa X", "con email"…)
+    t = t.split(/\b(?:de\s+la\s+empresa|de\s+empresa|con\s+(?:email|correo|tel[eé]fono)|cargo|tel[eé]fono|linkedin|ubicaci[oó]n)\b/i)[0].trim()
+    t = t.replace(/^[,\s]+|[,\s]+$/g, '')
+    return t.length >= 1 ? t : null
+  }
+
+  /**
+   * Extrae contexto/notas de "contexto: interesado en software" /
+   * "notas: llamar después". Requiere que la palabra funcione como campo
+   * (seguida de ":") para no confundirse con palabras sueltas tipo
+   * "Nota Azul" o "notas de prensa".
+   */
+  private extractContextoDe(message: string): string | null {
+    const m = message.match(/\b(?:contexto|notas?)\b\s*:\s*([A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9][A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9'\- ]{1,80})/i)
+    if (!m) return null
+    let c = m[1].trim()
+    c = c.split(/\s*(?:,|;|\s+y\s+(?:el|la|tel[eé]fono|email|correo))/i)[0].trim()
+    return c.length >= 2 ? c : null
+  }
+
+  /**
+   * Extrae un parámetro faltante concreto del mensaje (multi-turno sin LLM).
+   */
+  private extractParamDeterministically(param: string, message: string): string | null {
+    if (param === 'email') {
+      const m = message.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,})/)
+      return m ? m[1] : null
+    }
+    if (param === 'telefono' || param === 'phone') {
+      // Primero con keyword ("teléfono 555..."), luego acepta número desnudo:
+      // en multi-turno el usuario responde SOLO el número ("5551234567")
+      // cuando el bot pregunta "¿Cuál es el número de teléfono?".
+      const withKeyword = this.extractTelefonoDe(message)
+      if (withKeyword) return withKeyword
+      const bare = message.match(/(?:\+?\d[\d\s\-().]{6,}\d)/)
+      return bare ? bare[0].replace(/\s+/g, ' ').trim() : null
+    }
+    if (param === 'nombre') {
+      const trimmed = message.trim()
+      // Acepta nombres con mayúscula inicial ("Ana Torres") o en minúscula
+      // simple ("ana") para no estancar el multi-turno. También razones
+      // sociales / nombres con conectores en minúscula ("Suministros del
+      // Norte", "Tecnología Plus SA de CV"): cada token significativo debe
+      // empezar con mayúscula y solo se permiten conectores cortos
+      // (de/del/la/las/los/el/y/e/sa). Esto NO captura frases tipo "Fue en
+      // comida" o "Llámame mañana" como nombre.
+      // Token: palabra capitalizada ("Norte") o sigla/abreviatura en mayúscula
+      // ("SA", "CV", "S.A.", "Inc."). Tras un conector corto o un espacio.
+      const TOKEN = '(?:[A-ZÁÉÍÓÚÑÜ][a-záéíóúñü]+|[A-ZÁÉÍÓÚÑÜ]{1,5}(?:\.)?)'
+      const NAME_RE = new RegExp(
+        '^[A-ZÁÉÍÓÚÑÜ][a-záéíóúñü]+(?:\\s+(?:de|del|la|las|los|el|y|e|sa)\\s+' + TOKEN + '|\\s+' + TOKEN + '){0,5}$'
+      )
+      if (NAME_RE.test(trimmed) || /^[a-záéíóúñü]{2,20}$/.test(trimmed)) {
+        return trimmed
+      }
+      return null
+    }
+    if (param === 'empresa') {
+      return this.extractEmpresaDe(message)
+    }
+    if (param === 'categoria' || param === 'category') {
+      return this.extractCategoriaDe(message)
+    }
+    if (param === 'direccion' || param === 'address' || param === 'domicilio') {
+      return this.extractDireccionDe(message)
+    }
+    if (param === 'cargo' || param === 'puesto') {
+      return this.extractCargoDe(message)
+    }
+    if (param === 'linkedin') {
+      return this.extractLinkedinDe(message)
+    }
+    if (param === 'ubicacion') {
+      return this.extractUbicacionDe(message)
+    }
+    if (param === 'tags') {
+      return this.extractTagsDe(message)
+    }
+    if (param === 'contexto' || param === 'notas' || param === 'nota') {
+      return this.extractContextoDe(message)
+    }
+    if (param === 'tipo') {
+      return this.extractTipoInteraccionDe(message) || this.extractTipoCitaDe(message)
+    }
+    if (param === 'fecha' || param === 'date') {
+      return this.extractFechaDe(message)
+    }
+    if (param === 'monto' || param === 'amount') {
+      const gAmount = message.match(/(?:gasto|egreso|pago|compra|gast[éeoó])\s*(?::|de|por|en)?\s*(\d+(?:[.,]\d{1,2})?)/i)
+      const withKeyword = gAmount ? parseFloat(gAmount[1].replace(',', '.')) : null
+      if (withKeyword !== null && Number.isFinite(withKeyword)) return String(withKeyword)
+      // Respuesta desnuda del usuario: "45.90" / "300"
+      const bare = message.match(/^(?:\s*)(\d+(?:[.,]\d{1,2})?)\s*(?:€|euros?)?\s*$/i)
+      return bare ? String(parseFloat(bare[1].replace(',', '.'))) : null
+    }
+    if (param === 'concepto' || param === 'description') {
+      const withField = this.extractConceptoDe(message)
+      if (withField) return withField
+      const trimmed = message.trim()
+        .replace(/^(?:fue|es|era|son)\s+/i, '')
+        .replace(/^(?:en|por|de|un|una)\s+/i, '')
+        .replace(/^:\s*/, '')
+        .trim()
+      if (/^[A-Za-zÁÉÍÓÚÑÜáéíóúñü]/.test(trimmed) && trimmed.length >= 2 && trimmed.length <= 60) return trimmed
+      return null
+    }
+    if (param === 'proveedor') {
+      return this.extractProveedorDe(message)
+    }
+    if (param === 'categoria' || param === 'category') {
+      return this.extractCategoriaDe(message)
+    }
+    if (param === 'months' || param === 'periodo') {
+      return this.extractMesesDe(message) !== null ? String(this.extractMesesDe(message)) : null
+    }
+    if (param === 'titulo') {
+      const withField = this.extractTituloTareaDe(message)
+      if (withField) return withField
+      const trimmed = message.trim().replace(/^:\s*/, '').trim()
+      if (/^[A-Za-zÁÉÍÓÚÑÜáéíóúñü]/.test(trimmed) && trimmed.length >= 2 && trimmed.length <= 80) return trimmed
+      return null
+    }
+    if (param === 'fechaVencimiento' || param === 'dueDate') {
+      return this.extractFechaDe(message)
+    }
+    if (param === 'prioridad') {
+      return this.extractPrioridadDe(message)
+    }
+    if (param === 'hora' || param === 'time') {
+      return this.extractHoraDe(message)
+    }
+    if (param === 'servicio' || param === 'service') {
+      return this.extractTituloDe(message)
+    }
+    if (param === 'contenido') {
+      const idx = message.indexOf(':')
+      const content = (idx >= 0 ? message.slice(idx + 1) : message).trim()
+      return content.length >= 2 ? content.replace(/["'”]+\s*$/, '').trim() : null
+    }
+    return null
   }
 
   private async logClassification(data: {

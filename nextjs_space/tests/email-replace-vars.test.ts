@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { replaceTemplateVariables, getFromAddress } from '@/lib/ses-email';
+import { replaceTemplateVariables } from '@/lib/ses-email';
+import { getFromAddress } from '@/lib/resend-email';
 
 // ==================== replaceTemplateVariables ====================
 describe('replaceTemplateVariables', () => {
@@ -63,30 +64,37 @@ describe('replaceTemplateVariables', () => {
 });
 
 // ==================== getFromAddress ====================
+// El FROM es dinámico por tenant: `noreply@{subdomain}.volkern.app`.
 describe('getFromAddress', () => {
-  it('debe devolver dirección admin para subdomain "admin"', () => {
+  it('debe usar el subdominio del tenant en el FROM para "admin"', () => {
     const result = getFromAddress('admin');
-    expect(result).toContain('noreply@volkern.app');
+    expect(result).toContain('noreply@admin.volkern.app');
     expect(result).toContain('Volkern');
   });
 
-  it('debe devolver dirección demo para subdomain "demo"', () => {
+  it('debe usar el subdominio del tenant en el FROM para "demo"', () => {
     const result = getFromAddress('demo');
-    expect(result).toContain('noreply@volkern.app');
+    expect(result).toContain('noreply@demo.volkern.app');
   });
 
-  it('debe devolver dirección default para subdomain no definido', () => {
+  it('debe usar el subdominio para cualquier subdomain no definido', () => {
     const result = getFromAddress('unknown-subdomain');
-    expect(result).toContain('noreply@volkern.app');
+    expect(result).toContain('noreply@unknown-subdomain.volkern.app');
   });
 
-  it('debe devolver dirección default para undefined', () => {
+  it('debe devolver el dominio raíz para undefined', () => {
     const result = getFromAddress(undefined);
     expect(result).toContain('noreply@volkern.app');
     expect(typeof result).toBe('string');
   });
 
-  it('todas las direcciones deben incluir "Volkern"', () => {
+  it('debe incluir el nombre del tenant si se pasa', () => {
+    const result = getFromAddress('dexpert', 'Dimension eXpert');
+    expect(result).toContain('Dimension eXpert');
+    expect(result).toContain('noreply@dexpert.volkern.app');
+  });
+
+  it('todas las direcciones deben incluir "Volkern" o el nombre del tenant', () => {
     const addresses = [
       getFromAddress('admin'),
       getFromAddress('demo'),

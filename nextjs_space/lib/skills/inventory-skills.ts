@@ -41,6 +41,44 @@ async function getOrCreateDefaultWarehouse(tenantId: string) {
 }
 
 /**
+ * Upsert de StockLevel por ítem sin lotes (lotId null).
+ *
+ * ⚠️ Fix de runtime: Prisma NO acepta `lotId: null` dentro del where de la clave
+ * compuesta única `warehouseId_catalogoItemId_lotId` en un upsert ("lotId: String"
+ * inválido) — cualquier ajuste/consumo de stock reventaba en producción.
+ * Se resuelve con findFirst + update/create, que sí soporta lotId null.
+ */
+async function upsertStockLevelByItem(tx: any, input: {
+  tenantId: string;
+  warehouseId: string;
+  catalogoItemId: string;
+  quantityDelta: number; // +entrada, -salida/consumo
+}) {
+  const { tenantId, warehouseId, catalogoItemId, quantityDelta } = input;
+  const existing = await tx.stockLevel.findFirst({
+    where: { tenantId, warehouseId, catalogoItemId, lotId: null }
+  });
+
+  if (existing) {
+    return tx.stockLevel.update({
+      where: { id: existing.id },
+      data: { quantity: { increment: quantityDelta }, lastSync: new Date() }
+    });
+  }
+
+  return tx.stockLevel.create({
+    data: {
+      tenantId,
+      warehouseId,
+      catalogoItemId,
+      lotId: null,
+      quantity: quantityDelta,
+      lastSync: new Date()
+    }
+  });
+}
+
+/**
  * Ajustar Stock (Transaccional)
  */
 export async function adjustStock(input: AdjustStockInput) {
@@ -55,26 +93,13 @@ export async function adjustStock(input: AdjustStockInput) {
 
       if (!warehouse) throw new Error('Almacén no encontrado');
 
-      // 2. Actualizar o Crear StockLevel
-      const stockLevel = await tx.stockLevel.upsert({
-        where: {
-          warehouseId_catalogoItemId_lotId: {
-            warehouseId: warehouse.id,
-            catalogoItemId,
-            lotId: null as any
-          }
-        },
-        update: {
-          quantity: type === 'IN' ? { increment: quantity } : { decrement: quantity },
-          lastSync: new Date()
-        },
-        create: {
-          tenantId,
-          warehouseId: warehouse.id,
-          catalogoItemId,
-          lotId: null,
-          quantity: type === 'IN' ? quantity : -quantity
-        }
+      // 2. Actualizar o Crear StockLevel (fix runtime: upsert con lotId null no
+      // funciona en Prisma — ver upsertStockLevelByItem)
+      const stockLevel = await upsertStockLevelByItem(tx, {
+        tenantId,
+        warehouseId: warehouse.id,
+        catalogoItemId,
+        quantityDelta: type === 'IN' ? quantity : -quantity,
       });
 
       // 3. Registrar Movimiento
@@ -93,25 +118,11 @@ export async function adjustStock(input: AdjustStockInput) {
 
       // 4. Lógica de Transferencia (si aplica)
       if (type === 'TRANSFER' && input.targetWarehouseId) {
-         await tx.stockLevel.upsert({
-            where: {
-              warehouseId_catalogoItemId_lotId: {
-                warehouseId: input.targetWarehouseId,
-                catalogoItemId,
-                lotId: null as any
-              }
-            },
-            update: {
-              quantity: { increment: quantity },
-              lastSync: new Date()
-            },
-            create: {
-              tenantId,
-              warehouseId: input.targetWarehouseId,
-              catalogoItemId,
-              lotId: null,
-              quantity
-            }
+         await upsertStockLevelByItem(tx, {
+            tenantId,
+            warehouseId: input.targetWarehouseId,
+            catalogoItemId,
+            quantityDelta: quantity,
          });
 
          await tx.stockMovement.create({
@@ -180,25 +191,11 @@ export async function processInventoryConsumption(input: {
         for (const item of bom.components) {
           const quantityToReduce = item.quantityRequired * quantity;
           
-          const stock = await tx.stockLevel.upsert({
-            where: {
-              warehouseId_catalogoItemId_lotId: {
-                warehouseId: warehouse.id,
-                catalogoItemId: item.componentId,
-                lotId: null as any
-              }
-            },
-            update: {
-              quantity: { decrement: quantityToReduce },
-              lastSync: new Date()
-            },
-            create: {
-              tenantId,
-              warehouseId: warehouse.id,
-              catalogoItemId: item.componentId,
-              lotId: null,
-              quantity: -quantityToReduce
-            }
+          const stock = await upsertStockLevelByItem(tx, {
+            tenantId,
+            warehouseId: warehouse.id,
+            catalogoItemId: item.componentId,
+            quantityDelta: -quantityToReduce,
           });
 
           // 🛡️ LOG DE INTEGRIDAD: Registrar el consumo industrial
@@ -220,25 +217,11 @@ export async function processInventoryConsumption(input: {
         }
       } else {
         // --- ESCENARIO SIMPLE: CONSUMIR PRODUCTO DIRECTO ---
-        const stock = await tx.stockLevel.upsert({
-          where: {
-            warehouseId_catalogoItemId_lotId: {
-              warehouseId: warehouse.id,
-              catalogoItemId: productId,
-              lotId: null as any
-            }
-          },
-          update: {
-            quantity: { decrement: quantity },
-            lastSync: new Date()
-          },
-          create: {
-            tenantId,
-            warehouseId: warehouse.id,
-            catalogoItemId: productId,
-            lotId: null,
-            quantity: -quantity
-          }
+        const stock = await upsertStockLevelByItem(tx, {
+          tenantId,
+          warehouseId: warehouse.id,
+          catalogoItemId: productId,
+          quantityDelta: -quantity,
         });
 
         // Log simple

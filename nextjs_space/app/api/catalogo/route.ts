@@ -87,9 +87,12 @@ export async function GET(req: NextRequest) {
       }),
     ]);
 
-    // Mapear Servicio legacy a forma CatalogoItem, deduplicando
+    // Mapear Servicio legacy a forma CatalogoItem, deduplicando.
+    // El valor es un objeto de visualización: las relaciones del modelo
+    // (tenant, captaciones, deals, cursos...) no aplican a servicios legacy,
+    // por eso el tipo es `any` en lugar de typeof catalogoItems[0].
     const catalogoIds = new Set(catalogoItems.map(c => c.id))
-    const legacyMap = new Map<string, typeof catalogoItems[0]>()
+    const legacyMap = new Map<string, any>()
     for (const s of serviciosLegacy) {
       if (s.catalogoItemId && catalogoIds.has(s.catalogoItemId)) continue
       const key = s.catalogoItemId || s.id
@@ -127,6 +130,16 @@ export async function GET(req: NextRequest) {
         profundo: null,
         tasaImpuestoId: null,
         ownerContactId: null,
+        // Campos requeridos del modelo CatalogoItem (defaults del schema)
+        categoriaFiscal: 'general',
+        unidad: 'unidad',
+        visibleInChatbot: false,
+        costOfAcquisition: 0,
+        isManufactured: false,
+        isOperationalBlocker: false,
+        isStockable: false,
+        requiresQualityControl: false,
+        trackByLot: false,
         tasaImpuesto: null,
         ownerContact: null,
       })

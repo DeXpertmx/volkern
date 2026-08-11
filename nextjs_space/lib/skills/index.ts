@@ -59,8 +59,82 @@ import { fromZonedTime } from 'date-fns-tz';
 const findContactByEmailWrapper = (input: { email: string; tenantId: string }) => 
   contactSkills.findContactByEmail(input.email, input.tenantId);
 
-const findLeadByEmailWrapper = (input: { email: string; tenantId: string }) => 
-  contactSkills.findLeadByEmail(input.email, input.tenantId);
+const findLeadByEmailWrapper = async (input: { email?: string; nombre?: string; tenantId: string }) => {
+  const { email, nombre, tenantId } = input;
+  if (!email && !nombre) throw new Error('Se requiere un email o nombre para buscar el lead.');
+
+  // 1. Buscar por email exacto si viene
+  let lead = null;
+  if (email) {
+    lead = await contactSkills.findLeadByEmail(email, tenantId);
+  }
+
+  // 2. Fallback por nombre ("busca el lead Juan Pérez") — búsqueda insensible a
+  // mayúsculas para que funcione aunque el usuario escriba el nombre a medias.
+  if (!lead && nombre) {
+    const { prisma } = await import('@/lib/db');
+    lead = await prisma.lead.findFirst({
+      where: { tenantId, nombre: { contains: nombre, mode: 'insensitive' } },
+    });
+  }
+
+  if (!lead) {
+    throw new Error(
+      `No encontré ningún lead${email ? ` con el email ${email}` : ''}${nombre ? ` con el nombre "${nombre}"` : ''}.`
+    );
+  }
+
+  return lead;
+};
+
+/**
+ * Wrapper convert_lead: el skill core exige leadId, pero el orquestador solo
+ * pasa email/nombre desde el chatbot. Resuelve el lead (por email exacto o por
+ * nombre insensible a mayúsculas) y evita reconvertir leads ya convertidos.
+ */
+const convertLeadWrapper = async (input: { email?: string; nombre?: string; tenantId: string; userId?: string }) => {
+  const { email, nombre, tenantId, userId } = input;
+  if (!email && !nombre) throw new Error('Se requiere un email o nombre para identificar el lead a convertir.');
+
+  const { prisma } = await import('@/lib/db');
+  let lead = email ? await contactSkills.findLeadByEmail(email, tenantId) : null;
+  if (!lead && nombre) {
+    lead = await prisma.lead.findFirst({
+      where: { tenantId, nombre: { contains: nombre, mode: 'insensitive' }, estado: { not: 'convertido' } },
+    });
+  }
+
+  if (!lead) {
+    throw new Error(
+      `No encontré ningún lead${email ? ` con el email ${email}` : ''}${nombre ? ` con el nombre "${nombre}"` : ''} para convertir.`
+    );
+  }
+  if (lead.estado === 'convertido') {
+    throw new Error(`El lead ${lead.nombre} ya fue convertido a contacto.`);
+  }
+
+  return contactSkills.convertLead({ leadId: lead.id, tenantId, userId, source: 'webhook' });
+};
+
+const createNoteWrapper = async (input: { tenantId: string; leadId?: string; email?: string; nombre?: string; contenido: string; userId?: string }) => {
+  const { tenantId, leadId, email, nombre, contenido } = input;
+  if (!contenido) throw new Error('contenido es requerido');
+  const userId = await resolveRealUserId(tenantId, input.userId);
+
+  let resolvedLeadId = leadId;
+  if (!resolvedLeadId) {
+    const { prisma } = await import('@/lib/db');
+    const lead = email
+      ? await prisma.lead.findFirst({ where: { tenantId, email } })
+      : nombre
+        ? await prisma.lead.findFirst({ where: { tenantId, nombre: { contains: nombre, mode: 'insensitive' } } })
+        : null;
+    if (!lead) throw new Error(`No encontré ningún lead${email ? ` con el email ${email}` : nombre ? ` con el nombre "${nombre}"` : ''} para la nota.`);
+    resolvedLeadId = lead.id;
+  }
+
+  return taskSkills.createNote({ tenantId, leadId: resolvedLeadId, contenido, userId, source: 'webhook' });
+};
 
 const getConversationWrapper = (input: { conversationId: string; tenantId: string }) => 
   conversationSkills.getConversation(input.conversationId, input.tenantId);
@@ -68,11 +142,86 @@ const getConversationWrapper = (input: { conversationId: string; tenantId: strin
 const getTasksByLeadWrapper = (input: { leadId: string; tenantId: string }) => 
   taskSkills.getTasksByLead(input.leadId, input.tenantId);
 
-const getPendingTasksWrapper = (input: { userId: string; tenantId: string }) => 
-  taskSkills.getPendingTasksByUser(input.userId, input.tenantId);
+const getPendingTasksWrapper = async (input: { userId: string; tenantId: string; email?: string; nombre?: string }) => {
+  const { tenantId, userId, email, nombre } = input;
+  // "tareas pendientes de juan@x.com" → filtrar por ese lead/contacto
+  if (email || nombre) {
+    const { prisma } = await import('@/lib/db');
+    const lead = email
+      ? await prisma.lead.findFirst({ where: { tenantId, email } })
+      : await prisma.lead.findFirst({ where: { tenantId, nombre: { contains: nombre, mode: 'insensitive' } } });
+    if (lead) return taskSkills.getTasksByLead(lead.id, tenantId);
+    const contact = email
+      ? await prisma.contact.findFirst({ where: { tenantId, email } })
+      : await prisma.contact.findFirst({ where: { tenantId, nombre: { contains: nombre, mode: 'insensitive' } } });
+    if (contact) return taskSkills.getTasksByLead(contact.id, tenantId);
+    throw new Error(`No encontré ningún lead o contacto${email ? ` con el email ${email}` : ` con el nombre "${nombre}"`}.`);
+  }
+  return taskSkills.getPendingTasksByUser(userId, tenantId);
+};
 
-const getNotesByLeadWrapper = (input: { leadId: string }) => 
-  taskSkills.getNotesByLead(input.leadId);
+/**
+ * Wrapper complete_task: el skill core exige taskId, pero el orquestador pasa
+ * titulo/email desde el chatbot. Resuelve la tarea pendiente por título
+ * (insensible a mayúsculas, opcionalmente filtrada por lead/contacto).
+ */
+const completeTaskWrapper = async (input: {
+  tenantId: string;
+  titulo?: string;
+  email?: string;
+  nombre?: string;
+  taskId?: string;
+  userId?: string;
+}) => {
+  const { tenantId, titulo, email, nombre, taskId, userId } = input;
+  const { prisma } = await import('@/lib/db');
+
+  if (taskId) return taskSkills.completeTask({ taskId, tenantId, userId });
+  if (!titulo) throw new Error('Indica qué tarea quieres completar (su título).');
+
+  let leadId: string | undefined;
+  let contactId: string | undefined;
+  if (email) {
+    const lead = await prisma.lead.findFirst({ where: { tenantId, email } });
+    if (lead) leadId = lead.id;
+    else {
+      const contact = await prisma.contact.findFirst({ where: { tenantId, email } });
+      if (contact) contactId = contact.id;
+    }
+  } else if (nombre) {
+    const lead = await prisma.lead.findFirst({ where: { tenantId, nombre: { contains: nombre, mode: 'insensitive' } } });
+    if (lead) leadId = lead.id;
+    else {
+      const contact = await prisma.contact.findFirst({ where: { tenantId, nombre: { contains: nombre, mode: 'insensitive' } } });
+      if (contact) contactId = contact.id;
+    }
+  }
+
+  const where: any = { tenantId, completada: false, titulo: { contains: titulo, mode: 'insensitive' } };
+  if (leadId) where.leadId = leadId;
+  if (contactId) where.contactId = contactId;
+
+  const task = await prisma.task.findFirst({ where, orderBy: { fechaVencimiento: 'asc' } });
+  if (!task) {
+    throw new Error(`No encontré ninguna tarea pendiente con el título "${titulo}"${email ? ` de ${email}` : ''}.`);
+  }
+  return taskSkills.completeTask({ taskId: task.id, tenantId, userId });
+};
+
+const getNotesByLeadWrapper = async (input: { leadId?: string; email?: string; nombre?: string; tenantId: string }) => {
+  const { leadId, email, nombre, tenantId } = input;
+  let resolvedId = leadId;
+  if (!resolvedId && (email || nombre)) {
+    const { prisma } = await import('@/lib/db');
+    const lead = email
+      ? await prisma.lead.findFirst({ where: { tenantId, email } })
+      : await prisma.lead.findFirst({ where: { tenantId, nombre: { contains: nombre, mode: 'insensitive' } } });
+    if (!lead) throw new Error(`No encontré ningún lead${email ? ` con el email ${email}` : ` con el nombre "${nombre}"`}.`);
+    resolvedId = lead.id;
+  }
+  if (!resolvedId) throw new Error('Se requiere el email o nombre del lead para ver sus notas.');
+  return taskSkills.getNotesByLead(resolvedId);
+};
 
 const getDiagnosisByLeadWrapper = (input: { leadId: string; tenantId: string }) => 
   diagnosisSkills.getDiagnosisByLead(input.leadId, input.tenantId);
@@ -86,8 +235,173 @@ const getUpcomingBookingsWrapper = (input: { tenantId: string; limit?: number; u
 const getDealWrapper = (input: { dealId: string; tenantId: string }) =>
   dealSkills.getDeal(input.dealId, input.tenantId);
 
-const listDealsWrapper = (input: { tenantId: string; etapa?: string; prioridad?: string; leadId?: string; contactId?: string; search?: string; page?: number; limit?: number }) =>
-  dealSkills.listDeals(input.tenantId, input);
+const listDealsWrapper = async (input: {
+  tenantId: string;
+  etapa?: string;
+  prioridad?: string;
+  email?: string;
+  nombre?: string;
+  leadId?: string;
+  contactId?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}) => {
+  const { tenantId, email, nombre, ...filters } = input;
+  // "qué deals tengo con juan@x.com" → resolver el email/nombre a lead/contacto
+  // para filtrar el pipeline por esa persona (si no, listaría todos).
+  if ((email || nombre) && !filters.leadId && !filters.contactId) {
+    const { prisma } = await import('@/lib/db');
+    const lead = email
+      ? await prisma.lead.findFirst({ where: { tenantId, email } })
+      : await prisma.lead.findFirst({ where: { tenantId, nombre: { contains: nombre, mode: 'insensitive' } } });
+    if (lead) filters.leadId = lead.id;
+    else {
+      const contact = email
+        ? await prisma.contact.findFirst({ where: { tenantId, email } })
+        : await prisma.contact.findFirst({ where: { tenantId, nombre: { contains: nombre, mode: 'insensitive' } } });
+      if (contact) filters.contactId = contact.id;
+    }
+  }
+  return dealSkills.listDeals(tenantId, filters);
+};
+
+/**
+ * Wrapper create_deal: el skill core exige titulo+valor y leadId/contactId,
+ * pero el orquestador pasa email/nombre/monto desde el chatbot. Resuelve el
+ * lead o contacto, mapea monto→valor y sintetiza el título si no vino.
+ */
+const createDealWrapper = async (input: {
+  tenantId: string;
+  email?: string;
+  nombre?: string;
+  monto?: number | string;
+  titulo?: string;
+  etapa?: string;
+  prioridad?: string;
+}) => {
+  const { tenantId, email, nombre, monto, titulo, etapa, prioridad } = input;
+  if (!email && !nombre) throw new Error('Se requiere un email o nombre para crear el negocio.');
+
+  const { prisma } = await import('@/lib/db');
+  let leadId: string | undefined;
+  let contactId: string | undefined;
+
+  const findLead = async (e?: string, n?: string) => {
+    if (e) {
+      const lead = await prisma.lead.findFirst({ where: { tenantId, email: e } });
+      if (lead) return lead.id;
+      const contact = await prisma.contact.findFirst({ where: { tenantId, email: e } });
+      if (contact) return { contactId: contact.id };
+    }
+    if (n) {
+      const lead = await prisma.lead.findFirst({ where: { tenantId, nombre: { contains: n, mode: 'insensitive' } } });
+      if (lead) return lead.id;
+      const contact = await prisma.contact.findFirst({ where: { tenantId, nombre: { contains: n, mode: 'insensitive' } } });
+      if (contact) return { contactId: contact.id };
+    }
+    return null;
+  };
+
+  const resolved = await findLead(email, nombre);
+  if (typeof resolved === 'string') leadId = resolved;
+  else if (resolved) contactId = resolved.contactId;
+
+  const valor = monto !== undefined && monto !== null && monto !== '' ? Number(monto) : NaN;
+  if (!Number.isFinite(valor)) {
+    throw new Error('Se requiere un monto para crear el negocio (ej: por 5000€).');
+  }
+
+  return dealSkills.createDeal({
+    tenantId,
+    titulo: titulo || `Negocio - ${nombre || email}`,
+    valor,
+    leadId,
+    contactId,
+    etapa,
+    prioridad,
+    source: 'webhook',
+  });
+};
+
+/**
+ * Wrapper update_deal: resuelve el deal más reciente del lead/contacto
+ * (por email o nombre) y aplica los cambios de etapa/monto/prioridad/título.
+ */
+const updateDealWrapper = async (input: {
+  tenantId: string;
+  email?: string;
+  nombre?: string;
+  etapa?: string;
+  monto?: number | string;
+  prioridad?: string;
+  titulo?: string;
+}) => {
+  const { tenantId, email, nombre, ...updates } = input;
+  if (!email && !nombre) throw new Error('Se requiere un email o nombre para identificar el negocio.');
+
+  const { prisma } = await import('@/lib/db');
+  let leadId: string | undefined;
+  let contactId: string | undefined;
+
+  if (email) {
+    const lead = await prisma.lead.findFirst({ where: { tenantId, email } });
+    if (lead) leadId = lead.id;
+    else {
+      const contact = await prisma.contact.findFirst({ where: { tenantId, email } });
+      if (contact) contactId = contact.id;
+    }
+  }
+  if (!leadId && !contactId && nombre) {
+    const lead = await prisma.lead.findFirst({ where: { tenantId, nombre: { contains: nombre, mode: 'insensitive' } } });
+    if (lead) leadId = lead.id;
+    else {
+      const contact = await prisma.contact.findFirst({ where: { tenantId, nombre: { contains: nombre, mode: 'insensitive' } } });
+      if (contact) contactId = contact.id;
+    }
+  }
+  if (!leadId && !contactId) throw new Error(`No encontré ningún lead o contacto con ${email ? `el email ${email}` : `el nombre "${nombre}"`}.`);
+
+  const deal = await prisma.deal.findFirst({
+    where: leadId ? { tenantId, leadId } : { tenantId, contactId },
+    orderBy: { fechaCreacion: 'desc' },
+  });
+  if (!deal) throw new Error(`No encontré ningún negocio abierto para ${email || nombre}.`);
+
+  const data: any = {};
+  if (updates.etapa) data.etapa = updates.etapa;
+  if (updates.monto !== undefined && updates.monto !== '') {
+    const valor = Number(updates.monto);
+    if (!Number.isFinite(valor)) throw new Error('El monto no es un número válido.');
+    data.valor = valor;
+  }
+  if (updates.prioridad) data.prioridad = updates.prioridad;
+  if (updates.titulo) data.titulo = updates.titulo;
+  if (Object.keys(data).length === 0) {
+    throw new Error('Indica qué quieres actualizar del negocio (etapa, monto, prioridad o título).');
+  }
+
+  return dealSkills.updateDeal({ dealId: deal.id, tenantId, ...data, source: 'webhook' });
+};
+
+/**
+ * Wrapper prequalify_lead: resuelve leadId desde email/nombre antes de
+ * delegar al skill compuesto (Escucha Activa).
+ */
+const prequalifyLeadWrapper = async (input: { tenantId: string; email?: string; nombre?: string; nota?: string; userId?: string }) => {
+  const { tenantId, email, nombre, nota } = input;
+  const userId = await resolveRealUserId(tenantId, input.userId);
+  if (!email && !nombre) throw new Error('Se requiere un email o nombre para precalificar el lead.');
+  const { prisma } = await import('@/lib/db');
+  let lead = email ? await prisma.lead.findFirst({ where: { tenantId, email } }) : null;
+  if (!lead && nombre) {
+    lead = await prisma.lead.findFirst({ where: { tenantId, nombre: { contains: nombre, mode: 'insensitive' } } });
+  }
+  if (!lead) {
+    throw new Error(`No encontré ningún lead con ${email ? `el email ${email}` : `el nombre "${nombre}"`} para precalificar.`);
+  }
+  return dealSkills.prequalifyLead({ tenantId, leadId: lead.id, noteText: nota || '', userId, source: 'webhook' });
+};
 
 const updateLeadWrapper = async (input: { tenantId: string; email?: string; nombre?: string; telefono?: string; empresa?: string; contexto?: string; notas?: string }) => {
   const { tenantId, email, nombre, contexto, notas, ...dataToUpdate } = input;
@@ -259,6 +573,7 @@ const createTaskWrapper = async (input: {
   tenantId: string; 
   titulo: string; 
   email?: string; 
+  nombre?: string;
   leadId?: string;
   contactId?: string;
   descripcion?: string; 
@@ -269,7 +584,7 @@ const createTaskWrapper = async (input: {
   timezone?: string;
   tipo?: string;
 }) => {
-  const { tenantId, email, leadId, contactId, titulo, descripcion, fechaVencimiento, userId, asignadoAId, timezone, tipo } = input;
+  const { tenantId, email, nombre, leadId, contactId, titulo, descripcion, fechaVencimiento, userId, asignadoAId, timezone, tipo } = input;
   
   let lead = null;
   let contact = null;
@@ -284,6 +599,15 @@ const createTaskWrapper = async (input: {
     
     if (!lead && !contact) {
       throw new Error(`No se encontró ningún lead o contacto con el correo ${email}`);
+    }
+  } else if (nombre) {
+    // "crea una tarea con Alejandra" → resolver el lead/contacto por nombre
+    lead = await prisma.lead.findFirst({ where: { tenantId, nombre: { contains: nombre, mode: 'insensitive' } } });
+    if (!lead) {
+      contact = await prisma.contact.findFirst({ where: { tenantId, nombre: { contains: nombre, mode: 'insensitive' } } });
+    }
+    if (!lead && !contact) {
+      throw new Error(`No se encontró ningún lead o contacto con el nombre "${nombre}"`);
     }
   } else if (leadId) {
     lead = await prisma.lead.findFirst({ where: { id: leadId, tenantId } });
@@ -361,8 +685,33 @@ const createTaskWrapper = async (input: {
   return task;
 };
 
+/**
+ * Valida que un userId corresponda a un usuario REAL del tenant antes de usarlo
+ * en campos con FK (creadoPor → User). Los canales tipo WhatsApp pueden pasar
+ * leadId o ids ficticios como userId, lo que rompía la creación de interacciones
+ * y notas con error de foreign key. Devuelve undefined si no es un usuario real
+ * (el campo creadoPor es nullable, así que se guarda sin creador).
+ */
+async function resolveRealUserId(tenantId: string, userId?: string): Promise<string | undefined> {
+  if (!userId) return undefined;
+  const { prisma } = await import('@/lib/db');
+  // 1. Usuario del tenant (caso normal)
+  const user = await prisma.user.findFirst({
+    where: { id: userId, tenantId },
+    select: { id: true },
+  });
+  if (user) return user.id;
+  // 2. Fallback: usuarios de plataforma con tenantId null (el id es único global)
+  const platformUser = await prisma.user.findFirst({
+    where: { id: userId, tenantId: null },
+    select: { id: true },
+  });
+  return platformUser?.id;
+}
+
 const registerInteractionWrapper = async (input: { tenantId: string; email?: string; nombre?: string; tipo: any; contenido: string; resultado?: string; userId?: string }) => {
-  const { tenantId, email, nombre, tipo, contenido, resultado, userId } = input;
+  const { tenantId, email, nombre, tipo, contenido, resultado } = input;
+  const userId = await resolveRealUserId(tenantId, input.userId);
   
   const { prisma } = await import('@/lib/db');
   
@@ -669,6 +1018,152 @@ const createExpenseWrapper = async (input: {
   });
 };
 
+// ─── Wrappers de Proveedores: mapean params español → inglés y añaden
+// default de categoría (createSupplier core exige category). list_suppliers no
+// existía como skill → wrapper directo a la BD ──────────────────────────────
+
+const createSupplierWrapper = async (input: {
+  tenantId: string;
+  nombre?: string;
+  name?: string;
+  email?: string;
+  telefono?: string;
+  direccion?: string;
+  categoria?: string;
+  category?: string;
+}) => {
+  const name = (input.nombre || input.name || '').trim();
+  if (!name) throw new Error('El nombre del proveedor es requerido.');
+
+  return financeSkills.createSupplier({
+    tenantId: input.tenantId,
+    name,
+    email: input.email,
+    phone: input.telefono,
+    streetName: input.direccion,
+    category: input.categoria || input.category || 'General',
+  });
+};
+
+const listSuppliersWrapper = async (input: { tenantId: string; categoria?: string }) => {
+  const { tenantId, categoria } = input;
+  const { prisma } = await import('@/lib/db');
+  const suppliers = await prisma.supplier.findMany({
+    where: { tenantId, active: true, ...(categoria ? { category: { contains: categoria, mode: 'insensitive' } } : {}) },
+    orderBy: { name: 'asc' },
+    take: 50,
+  });
+  return { suppliers, total: suppliers.length };
+};
+
+// ─── Wrappers de Inventario: aceptan nombre de producto O id real ────────────
+
+/**
+ * Normaliza la referencia al ítem: si ya es un id cuid (viene de la API),
+ * se usa directo; si es un nombre (viene del chatbot), se resuelve contra el
+ * catálogo por búsqueda insensible a mayúsculas.
+ */
+const resolveCatalogoItemId = async (tenantId: string, ref?: string): Promise<string> => {
+  if (!ref) throw new Error('Necesito saber a qué producto se refiere.');
+  // Los cuid de Prisma son ~25 chars alfanuméricos empezando por 'c' — los ids
+  // reales (API, MCP) NO deben buscarse por nombre.
+  if (/^c[a-z0-9]{20,}$/i.test(ref)) return ref;
+  const { prisma } = await import('@/lib/db');
+  const item = await prisma.catalogoItem.findFirst({
+    where: {
+      tenantId,
+      OR: [
+        { nombre: { contains: ref, mode: 'insensitive' as const } },
+        { sku: { contains: ref, mode: 'insensitive' as const } },
+      ],
+    },
+    orderBy: { nombre: 'asc' },
+    select: { id: true, nombre: true },
+  });
+  if (!item) throw new Error(`No encontré ningún producto llamado "${ref}" en tu catálogo.`);
+  return item.id;
+};
+
+/**
+ * Ajustar stock: acepta el shape del chatbot (producto nombre + cantidad +
+ * tipo) y el de la API (catalogoItemId id + type + quantity + referenceId +
+ * targetWarehouseId). Pasa al skill core con catalogoItemId resuelto.
+ */
+const adjustStockWrapper = async (input: {
+  tenantId: string;
+  producto?: string;
+  productId?: string;
+  catalogoItemId?: string;
+  cantidad?: number | string;
+  quantity?: number;
+  tipo?: string;
+  type?: string;
+  almacenId?: string;
+  warehouseId?: string;
+  reason?: string;
+  userId?: string;
+  referenceId?: string;
+  targetWarehouseId?: string;
+}) => {
+  const { tenantId } = input;
+  const ref = input.producto || input.productId || input.catalogoItemId;
+  const id = await resolveCatalogoItemId(tenantId, ref);
+  const cantidad = Number(input.cantidad ?? input.quantity);
+  if (!Number.isFinite(cantidad) || cantidad <= 0) throw new Error('La cantidad debe ser un número mayor que 0.');
+  const tipo = (input.tipo || input.type || 'IN').toUpperCase() as 'IN' | 'OUT' | 'TRANSFER';
+  return inventorySkills.adjustStock({
+    tenantId,
+    catalogoItemId: id,
+    type: tipo,
+    quantity: cantidad,
+    reason: input.reason || `Ajuste vía chatbot (${tipo})`,
+    warehouseId: input.warehouseId || input.almacenId,
+    userId: input.userId,
+    referenceId: input.referenceId,
+    targetWarehouseId: input.targetWarehouseId,
+  });
+};
+
+/**
+ * Salud de inventario: producto opcional → catalogoItemId.
+ */
+const getInventoryHealthWrapper = async (input: {
+  tenantId: string;
+  producto?: string;
+  catalogoItemId?: string;
+}) => {
+  const id = input.catalogoItemId || (input.producto ? await resolveCatalogoItemId(input.tenantId, input.producto) : undefined);
+  return inventorySkills.getInventoryHealth({ tenantId: input.tenantId, catalogoItemId: id });
+};
+
+/**
+ * Consumo de inventario: acepta producto nombre (chatbot) o productId id
+ * (API). Pasa al skill core con productId resuelto.
+ */
+const processInventoryConsumptionWrapper = async (input: {
+  tenantId: string;
+  producto?: string;
+  productId?: string;
+  cantidad?: number | string;
+  quantity?: number;
+  almacenId?: string;
+  warehouseId?: string;
+  userId?: string;
+}) => {
+  const { tenantId } = input;
+  const ref = input.producto || input.productId;
+  const id = await resolveCatalogoItemId(tenantId, ref);
+  const cantidad = Number(input.cantidad ?? input.quantity);
+  if (!Number.isFinite(cantidad) || cantidad <= 0) throw new Error('La cantidad debe ser un número mayor que 0.');
+  return inventorySkills.processInventoryConsumption({
+    tenantId,
+    productId: id,
+    quantity: cantidad,
+    warehouseId: input.warehouseId || input.almacenId,
+    userId: input.userId,
+  });
+};
+
 // ─── Cancel Booking Wrapper: busca por nombre/email si no hay bookingId ──────
 
 const cancelBookingWrapper = async (input: {
@@ -952,7 +1447,7 @@ export const skills = {
   update_lead: updateLeadWrapper,
   get_lead: contactSkills.getLead,
   find_lead_by_email: findLeadByEmailWrapper,
-  convert_lead: contactSkills.convertLead,
+  convert_lead: convertLeadWrapper,
   list_leads: contactSkills.listLeads,
   obtener_telefono: getPhoneByNameWrapper,
   registrar_interaccion: registerInteractionWrapper,
@@ -972,12 +1467,12 @@ export const skills = {
   
   // Tareas
   create_task: createTaskWrapper,
-  complete_task: taskSkills.completeTask,
+  complete_task: completeTaskWrapper,
   get_tasks_by_lead: getTasksByLeadWrapper,
   get_pending_tasks: getPendingTasksWrapper,
   
   // Notas
-  create_note: taskSkills.createNote,
+  create_note: createNoteWrapper,
   get_notes_by_lead: getNotesByLeadWrapper,
   
   // Diagnósticos (skill compuesto)
@@ -993,11 +1488,11 @@ export const skills = {
   auto_schedule: bookingSkills.autoScheduleAppointment,
   
   // Deals / Pipeline
-  create_deal: dealSkills.createDeal,
-  update_deal: dealSkills.updateDeal,
+  create_deal: createDealWrapper,
+  update_deal: updateDealWrapper,
   get_deal: getDealWrapper,
   list_deals: listDealsWrapper,
-  prequalify_lead: dealSkills.prequalifyLead,
+  prequalify_lead: prequalifyLeadWrapper,
   
   // Catálogo
   export_catalog: catalogSkills.exportCatalog,
@@ -1023,15 +1518,16 @@ export const skills = {
   sync_chatwoot_outgoing: chatwootSyncSkills.syncOutgoingChatwootMessage,
   
   // ERP Finanzas
-  create_supplier: financeSkills.createSupplier,
+  create_supplier: createSupplierWrapper,
+  list_suppliers: listSuppliersWrapper,
   create_expense: createExpenseWrapper,
   register_expense_vision: financeSkills.registerExpenseVision,
   analyze_burn_rate: financeSkills.analyzeBurnRate,
   
   // ERP Inventario
-  adjust_stock: inventorySkills.adjustStock,
-  get_inventory_health: inventorySkills.getInventoryHealth,
-  process_inventory_consumption: inventorySkills.processInventoryConsumption,
+  adjust_stock: adjustStockWrapper,
+  get_inventory_health: getInventoryHealthWrapper,
+  process_inventory_consumption: processInventoryConsumptionWrapper,
   inventory_watchdog: inventoryWatchdogSkills.inventoryWatchdog,
   
   // ERP Proyectos
@@ -1201,6 +1697,7 @@ export function listSkills(): Array<{ name: SkillName; description: string; cate
     { name: 'get_invoice_fiscal_status', description: 'Consultar estado fiscal e integridad de una factura', category: 'billing' },
     // ERP Finanzas
     { name: 'create_supplier', description: 'Registrar un nuevo proveedor', category: 'finance' },
+    { name: 'list_suppliers', description: 'Listar proveedores registrados del tenant', category: 'finance' },
     { name: 'create_expense', description: 'Registrar un nuevo gasto u egreso', category: 'finance' },
     { name: 'register_expense_vision', description: 'Registrar gasto mediante procesamiento de visión', category: 'finance' },
     { name: 'analyze_burn_rate', description: 'Analizar relación ingresos vs gastos y salud financiera', category: 'finance' },

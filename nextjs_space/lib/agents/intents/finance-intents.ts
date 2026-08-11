@@ -85,11 +85,24 @@ export const financeIntents: IntentSchema[] = [
     name: 'crear_proveedor',
     description: 'Registrar un nuevo proveedor',
     requiredParams: ['nombre'],
-    optionalParams: ['email', 'telefono', 'direccion'],
+    optionalParams: ['email', 'telefono', 'direccion', 'categoria'],
     examples: [
       'registra proveedor: Suministros SA, email ventas@suministros.com',
       'nuevo proveedor: Papelería López',
       'crea proveedor Tecnología Plus SA de CV'
+    ],
+    destructive: false
+  },
+  {
+    name: 'listar_proveedores',
+    description: 'Listar los proveedores registrados',
+    requiredParams: [],
+    optionalParams: ['categoria'],
+    examples: [
+      'lista los proveedores',
+      'qué proveedores tengo',
+      'muéstrame mis proveedores',
+      'proveedores de categoría oficina'
     ],
     destructive: false
   },

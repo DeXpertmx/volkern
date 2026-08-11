@@ -508,8 +508,10 @@ describe('Zod — Citas', () => {
       fail(CitaCreateSchema, { ...baseCita, leadId: 'cuid12345678901234567890123', duracion: 481 }, 'duracion');
     });
 
-    it('debe aceptar los 4 tipos de cita', () => {
-      for (const t of ['reunion', 'llamada', 'presencial', 'otro']) {
+    it('debe aceptar todos los tipos de cita del schema', () => {
+      // Enum real de CitaCreateSchema (fuente: lib/validation/schemas/citas.ts).
+      // Los tipos virtuales/presenciales se mapean a llamada/reunion en booking.
+      for (const t of ['reunion', 'llamada', 'demo', 'servicio', 'otro']) {
         ok(CitaCreateSchema, { ...baseCita, leadId: 'cuid12345678901234567890123', tipo: t as 'reunion' });
       }
     });

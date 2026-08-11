@@ -161,15 +161,19 @@ describe('crmIntents', () => {
   });
 
   // ── Notas ──
-  it('debe incluir crear_nota con email+contenido', () => {
+  it('debe incluir crear_nota con contenido (email opcional: el wrapper resuelve por nombre)', () => {
     const i = crmIntents.find(x => x.name === 'crear_nota')!;
-    expect(i.requiredParams).toContain('email');
     expect(i.requiredParams).toContain('contenido');
+    expect(i.requiredParams).not.toContain('email');
+    expect(i.optionalParams).toContain('email');
+    expect(i.optionalParams).toContain('nombre');
   });
 
-  it('debe incluir ver_notas', () => {
+  it('debe incluir ver_notas (email opcional)', () => {
     const i = crmIntents.find(x => x.name === 'ver_notas')!;
-    expect(i.requiredParams).toContain('email');
+    expect(i.requiredParams).toEqual([]);
+    expect(i.optionalParams).toContain('email');
+    expect(i.optionalParams).toContain('nombre');
   });
 
   // ── Deals / Pipeline ──
@@ -208,8 +212,8 @@ describe('marketingIntents', () => {
     expect(Array.isArray(marketingIntents)).toBe(true);
   });
 
-  it('debe tener 6 intents', () => {
-    expect(marketingIntents.length).toBe(6);
+  it('debe tener 13 intents (3 base + web creator + SEO + automatización + ADS schedules + A/B tests)', () => {
+    expect(marketingIntents.length).toBe(13);
   });
 
   it('todos deben cumplir el schema', () => {
@@ -237,8 +241,9 @@ describe('marketingIntents', () => {
     expect(i.requiredParams).toEqual([]);
   });
 
-  it('ninguno debe ser destructive', () => {
-    marketingIntents.forEach(i => expect(i.destructive).toBe(false));
+  it('solo eliminar_horario y declarar_ganador deben ser destructive', () => {
+    const destructive = marketingIntents.filter(i => i.destructive).map(i => i.name);
+    expect(destructive).toEqual(['eliminar_horario', 'declarar_ganador']);
   });
 });
 

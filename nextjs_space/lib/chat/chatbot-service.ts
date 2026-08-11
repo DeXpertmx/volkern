@@ -327,7 +327,7 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
 
           // 2. Detectar patrones (cada ~10 conversaciones)
           const totalAnalyses = await prisma.chatbotAuditLog.count({
-            where: { tenantId, event: 'conversation_analysis', createdAt: { gte: new Date(Date.now() - 86400000) } } as any,
+            where: { tenantId, intent: 'conversation_analysis', createdAt: { gte: new Date(Date.now() - 86400000) } } as any,
           })
 
           if (totalAnalyses % 10 === 0 && totalAnalyses > 0) {

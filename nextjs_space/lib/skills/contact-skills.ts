@@ -436,6 +436,7 @@ export async function listContacts(input: {
       orderBy: { [orderByField]: sortOrder },
       include: {
         company: { select: { id: true, nombre: true } },
+        // Contact usa nombres PascalCase en sus relaciones (Task, Cita, …)
         _count: { select: { deals: true, Task: true } },
       },
     }),
@@ -511,7 +512,8 @@ export async function listLeads(input: {
       skip,
       orderBy: { [orderByField]: sortOrder },
       include: {
-        _count: { select: { deals: true, Task: true, citas: true } } as any,
+        // Campos reales del modelo (relaciones en minúscula): tareas, no "Task"
+        _count: { select: { deals: true, tareas: true, citas: true } } as any,
       },
     }),
     prisma.lead.count({ where }),

@@ -26,7 +26,7 @@ interface UserWithMeta {
   id: string;
   email?: string | null;
   telefono?: string | null;
-  tenantId: string;
+  tenantId: string | null;
   metadata: Record<string, any> | null;
 }
 

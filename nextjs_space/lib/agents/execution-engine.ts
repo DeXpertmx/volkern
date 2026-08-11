@@ -154,16 +154,25 @@ export const ExecutionEngine = {
           raw.includes('no se pudo') ||
           raw.includes('no fue posible') ||
           raw.includes('no es válido') ||
-          raw.includes('no parece');
+          raw.includes('no parece') ||
+          // Citas: pedir el email que falta (multi-turno) y desambiguar
+          // cuando hay varias citas del mismo contacto.
+          raw.includes('email_required') ||
+          raw.includes('no tengo el email') ||
+          raw.includes('varias citas') ||
+          raw.includes('no hay disponibilidad');
 
         // Solo el error de skill inexistente ("Skill no encontrado: X") muestra
         // "Acción no disponible". El resto de mensajes "no encontré..."
         // (ej. cliente/aseguradora de insurance) deben mostrar el texto real.
+        // El prefijo EMAIL_REQUIRED: lo consume la ruta /api/ai/chat (guarda
+        // contexto multi-turno); aquí solo se limpia para no filtrarse al usuario.
+        const cleanMessage = rawMessage.replace(/^EMAIL_REQUIRED:\s*/i, '');
         return {
           message: raw.includes('skill no encontr')
             ? `❌ Acción no disponible: ${step.action}`
             : meaningfulError
-              ? `❌ ${rawMessage}`
+              ? `❌ ${cleanMessage}`
               : '⚠️ Error ejecutando la operación.',
           skill: step.action,
           error: true,
@@ -262,10 +271,266 @@ export const ExecutionEngine = {
         return `✏️ *Contacto actualizado:* ${nombre}${email}`;
       case 'convert_lead':
         return '🔄 *Lead convertido a contacto* correctamente.';
-      case 'create_task':
-        return `📝 *Tarea creada:* ${nombre}`;
+
+      // ─── Ventas: búsqueda y listados (muestran los datos reales) ───
+      case 'find_lead_by_email': {
+        const nombre = this.escapeMarkdown(String(data?.nombre || ''));
+        const email = this.escapeMarkdown(String(data?.email || ''));
+        const tel = data?.telefono ? `\n📱 Teléfono: ${this.escapeMarkdown(String(data.telefono))}` : '';
+        const emp = data?.empresa ? `\n🏢 Empresa: ${this.escapeMarkdown(String(data.empresa))}` : '';
+        const cargo = data?.cargo ? `\n💼 Cargo: ${this.escapeMarkdown(String(data.cargo))}` : '';
+        const estado = data?.estado ? `\n📊 Estado: ${this.escapeMarkdown(String(data.estado))}` : '';
+        const notas = data?.notas ? `\n📝 Notas: ${this.escapeMarkdown(String(data.notas))}` : '';
+        return `🔍 *Lead encontrado:*\n👤 ${nombre} (${email})${tel}${emp}${cargo}${estado}${notas}`;
+      }
+      case 'list_leads': {
+        const items = data?.items || [];
+        const total = Number(data?.total ?? (Array.isArray(items) ? items.length : 0));
+        if (!Array.isArray(items) || items.length === 0) return '👥 No hay leads registrados.';
+        const lines = items.slice(0, 5).map((l: any) => {
+          const n = this.escapeMarkdown(String(l?.nombre || ''));
+          const e = l?.email ? ` (${this.escapeMarkdown(String(l.email))})` : '';
+          const st = l?.estado ? ` · ${this.escapeMarkdown(String(l.estado))}` : '';
+          return `• ${n}${e}${st}`;
+        });
+        const suffix = total > 5 ? `\n… y ${total - 5} más` : '';
+        return `👥 *Leads (${total}):*\n${lines.join('\n')}${suffix}`;
+      }
+      case 'list_contacts': {
+        const items = data?.items || [];
+        const total = Number(data?.total ?? (Array.isArray(items) ? items.length : 0));
+        if (!Array.isArray(items) || items.length === 0) return '📇 No hay contactos registrados.';
+        const lines = items.slice(0, 5).map((c: any) => {
+          const n = this.escapeMarkdown(String(c?.nombre || ''));
+          const e = c?.email ? ` (${this.escapeMarkdown(String(c.email))})` : '';
+          const t = c?.tipo === 'company' ? ' · 🏢 Empresa' : '';
+          return `• ${n}${e}${t}`;
+        });
+        const suffix = total > 5 ? `\n… y ${total - 5} más` : '';
+        return `📇 *Contactos (${total}):*\n${lines.join('\n')}${suffix}`;
+      }
+      // ─── Ventas: pipeline de deals ───
+      case 'create_deal': {
+        const t = this.escapeMarkdown(String(data?.titulo || ''));
+        const v = data?.valor ? ` por ${this.escapeMarkdown(String(data.valor))}${data?.moneda ? ` ${this.escapeMarkdown(String(data.moneda))}` : ''}` : '';
+        const e = data?.etapa ? ` · etapa ${this.escapeMarkdown(String(data.etapa))}` : '';
+        return `📊 *Negocio creado:* ${t}${v}${e}`;
+      }
+      case 'update_deal': {
+        const t = this.escapeMarkdown(String(data?.titulo || ''));
+        const e = data?.etapa ? `\n📍 Etapa: ${this.escapeMarkdown(String(data.etapa))}` : '';
+        const v = data?.valor ? `\n💰 Valor: ${this.escapeMarkdown(String(data.valor))}${data?.moneda ? ` ${this.escapeMarkdown(String(data.moneda))}` : ''}` : '';
+        const p = data?.prioridad ? `\n⚡ Prioridad: ${this.escapeMarkdown(String(data.prioridad))}` : '';
+        return `✏️ *Negocio actualizado:* ${t}${e}${v}${p}`;
+      }
+      case 'list_deals': {
+        const deals = data?.deals || [];
+        const total = Number(data?.total ?? (Array.isArray(deals) ? deals.length : 0));
+        if (!Array.isArray(deals) || deals.length === 0) return '📊 No hay negocios en el pipeline.';
+        const lines = deals.slice(0, 5).map((d: any) => {
+          const t = this.escapeMarkdown(String(d?.titulo || ''));
+          const l = d?.lead?.nombre ? ` — ${this.escapeMarkdown(String(d.lead.nombre))}` : '';
+          const v = d?.valor ? ` · ${this.escapeMarkdown(String(d.valor))}${d?.moneda ? ` ${this.escapeMarkdown(String(d.moneda))}` : ''}` : '';
+          const e = d?.etapa ? ` · ${this.escapeMarkdown(String(d.etapa))}` : '';
+          return `• ${t}${l}${v}${e}`;
+        });
+        const suffix = total > 5 ? `\n… y ${total - 5} más` : '';
+        return `📊 *Pipeline (${total}):*\n${lines.join('\n')}${suffix}`;
+      }
+      case 'prequalify_lead':
+        return data?.note?.contenido
+          ? `📝 *Lead precalificado.* Nota registrada: "${this.escapeMarkdown(String(data.note.contenido))}"`
+          : '📝 Lead precalificado y nota registrada.';
+      case 'registrar_interaccion': {
+        const tipo = data?.tipo ? ` (${this.escapeMarkdown(String(data.tipo))})` : '';
+        const contenido = data?.contenido ? `: "${this.escapeMarkdown(String(data.contenido))}"` : '';
+        return `📞 *Interacción registrada*${tipo}${contenido}`;
+      }
+      case 'create_task': {
+        const t = this.escapeMarkdown(String(data?.titulo || data?.name || ''));
+        const vence = data?.fechaVencimiento
+          ? ` · vence ${this.escapeMarkdown(new Date(data.fechaVencimiento).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }))}`
+          : '';
+        return `📝 *Tarea creada:* ${t}${vence}`;
+      }
+      case 'complete_task': {
+        const t = this.escapeMarkdown(String(data?.titulo || data?.name || 'la tarea'));
+        return `✅ *Tarea completada:* ${t}`;
+      }
+      case 'get_pending_tasks': {
+        const items = Array.isArray(data) ? data : data?.items || [];
+        const total = Array.isArray(items) ? items.length : 0;
+        if (total === 0) return '✅ No tienes tareas pendientes.';
+        const lines = items.slice(0, 6).map((t: any) => {
+          const titulo = this.escapeMarkdown(String(t?.titulo || ''));
+          const vence = t?.fechaVencimiento
+            ? ` · ${this.escapeMarkdown(new Date(t.fechaVencimiento).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }))}`
+            : '';
+          const lead = t?.lead?.nombre ? ` — ${this.escapeMarkdown(String(t.lead.nombre))}` : '';
+          return `• ${titulo}${vence}${lead}`;
+        });
+        const suffix = total > 6 ? `\n… y ${total - 6} más` : '';
+        return `📋 *Tareas pendientes (${total}):*\n${lines.join('\n')}${suffix}`;
+      }
+      case 'create_note': {
+        const contenido = data?.contenido ? `: "${this.escapeMarkdown(String(data.contenido))}"` : '';
+        return `📝 *Nota agregada*${contenido}`;
+      }
+      case 'get_notes_by_lead': {
+        const items = Array.isArray(data) ? data : data?.items || [];
+        const total = Array.isArray(items) ? items.length : 0;
+        if (total === 0) return '📓 No hay notas registradas para este contacto.';
+        const lines = items.slice(0, 5).map((n: any) => {
+          const contenido = this.escapeMarkdown(String(n?.contenido || ''));
+          const fecha = n?.fechaCreacion
+            ? ` (${this.escapeMarkdown(new Date(n.fechaCreacion).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }))})`
+            : '';
+          return `• ${contenido}${fecha}`;
+        });
+        const suffix = total > 5 ? `\n… y ${total - 5} más` : '';
+        return `📓 *Notas (${total}):*\n${lines.join('\n')}${suffix}`;
+      }
       case 'create_poliza':
         return data?.message ? `📋 ${this.escapeMarkdown(String(data.message))}` : '';
+
+      // ─── Catálogo: búsqueda y listado (el skill ya devuelve mensaje amigable) ───
+      case 'buscar_catalogo':
+        // buscarCatalogo retorna { message: '🔍 *Resultados…*', items, total }.
+        // El texto formateado del skill ya incluye el markdown de Telegram
+        // correcto (no se escapa para no romper los asteriscos).
+        return data?.message ? String(data.message) : '';
+      case 'export_catalog': {
+        const items = data?.items || [];
+        if (!Array.isArray(items) || items.length === 0) return '📋 El catálogo está vacío.';
+        const lines = items.slice(0, 8).map((i: any) => {
+          const n = this.escapeMarkdown(String(i?.nombre || ''));
+          const p = i?.precioBase !== undefined && i?.precioBase !== null ? `${this.escapeMarkdown(String(i.precioBase))} ${this.escapeMarkdown(String(i.moneda || 'EUR'))}` : '';
+          const t = i?.tipo ? ` · ${this.escapeMarkdown(String(i.tipo))}` : '';
+          return `• ${n}${p ? ` — ${p}` : ''}${t}`;
+        });
+        const total = Number(data?.totalItems ?? items.length);
+        const suffix = total > 8 ? `\n… y ${total - 8} más` : '';
+        return `📋 *Catálogo (${total}):*\n${lines.join('\n')}${suffix}`;
+      }
+      // ─── Finanzas: proveedores y gastos ───
+      case 'create_supplier': {
+        const n = this.escapeMarkdown(String(data?.name || data?.nombre || ''));
+        const cat = data?.category ? ` · ${this.escapeMarkdown(String(data.category))}` : '';
+        const em = data?.email ? ` (${this.escapeMarkdown(String(data.email))})` : '';
+        return `🏢 *Proveedor creado:* ${n}${em}${cat}.`;
+      }
+      case 'list_suppliers': {
+        const items = data?.suppliers || [];
+        const total = Number(data?.total ?? (Array.isArray(items) ? items.length : 0));
+        if (!Array.isArray(items) || items.length === 0) return '🏢 No hay proveedores registrados.';
+        const lines = items.slice(0, 8).map((s: any) => {
+          const n = this.escapeMarkdown(String(s?.name || s?.nombre || ''));
+          const cat = s?.category ? ` · ${this.escapeMarkdown(String(s.category))}` : '';
+          const em = s?.email ? ` (${this.escapeMarkdown(String(s.email))})` : '';
+          return `• ${n}${em}${cat}`;
+        });
+        const suffix = total > 8 ? `\n… y ${total - 8} más` : '';
+        return `🏢 *Proveedores (${total}):*\n${lines.join('\n')}${suffix}`;
+      }
+      case 'create_expense': {
+        const monto = data?.amount !== undefined && data?.amount !== null ? this.escapeMarkdown(String(data.amount)) : '';
+        const desc = data?.description ? this.escapeMarkdown(String(data.description)) : '';
+        const cat = data?.category ? ` · ${this.escapeMarkdown(String(data.category))}` : '';
+        return `💳 *Gasto registrado:* ${monto}€${desc ? ` — ${desc}` : ''}${cat}.`;
+      }
+
+      // ─── Inventario: stock, salud y consumo ───
+      case 'adjust_stock': {
+        const sl = data?.stockLevel;
+        const mv = data?.movement; // hermano de stockLevel en el retorno del skill
+        const item = sl?.catalogoItem;
+        const nombre = item?.nombre ? this.escapeMarkdown(String(item.nombre)) : (sl?.catalogoItemId ? this.escapeMarkdown(String(sl.catalogoItemId)) : '');
+        const tipo = String(mv?.type || sl?.movement?.type || '');
+        const tipoLabel: Record<string, string> = { IN: '📥 Entrada', OUT: '📤 Salida', TRANSFER: '🔁 Transferencia' };
+        const cant = mv?.quantity !== undefined ? this.escapeMarkdown(String(mv.quantity)) : '';
+        const qty = sl?.quantity !== undefined ? this.escapeMarkdown(String(sl.quantity)) : '';
+        return `📦 *${tipoLabel[tipo] || 'Ajuste'} de stock:* ${nombre}${cant ? ` — ${cant}u` : ''}.${qty ? `\n📊 Stock actual: ${qty}u` : ''}`;
+      }
+      case 'get_inventory_health': {
+        const status = String(data?.status || 'HEALTHY');
+        const items = Array.isArray(data?.items) ? data.items : [];
+        const statusLabel: Record<string, string> = {
+          HEALTHY: '🟢 Inventario sano',
+          WARNING: '🟡 Stock bajo detectado',
+          CRITICAL: '🔴 Riesgo de ruptura',
+        };
+        if (status === 'HEALTHY') return `📦 ${statusLabel[status]}.\n${data?.recommendation ? this.escapeMarkdown(String(data.recommendation)) : ''}`;
+        const lines = items.slice(0, 8).map((i: any) => {
+          const n = this.escapeMarkdown(String(i?.name || ''));
+          const cur = i?.current !== undefined ? this.escapeMarkdown(String(i.current)) : '';
+          const min = i?.min !== undefined ? this.escapeMarkdown(String(i.min)) : '';
+          return `• ${n} — ${cur}u (mín ${min}u)`;
+        });
+        const total = Number(data?.criticalItemsCount ?? items.length);
+        const suffix = total > 8 ? `\n… y ${total - 8} más` : '';
+        const rec = data?.recommendation ? `\n💡 ${this.escapeMarkdown(String(data.recommendation))}` : '';
+        return `📦 *${statusLabel[status]} (${total}):*\n${lines.join('\n')}${suffix}${rec}`;
+      }
+      case 'process_inventory_consumption': {
+        // El skill retorna { success, warehouse } (descontó producto o BoM).
+        const wh = data?.warehouse ? this.escapeMarkdown(String(data.warehouse)) : '';
+        return `📤 *Consumo registrado.*${wh ? ` Almacén: ${wh}.` : ''} Stock actualizado.`;
+      }
+      case 'analyze_burn_rate': {
+        const months = Number(data?.periodMonths ?? 3);
+        const periodo = months === 1 ? '1 mes' : `${months} meses`;
+        const income = data?.totalIncome !== undefined ? this.escapeMarkdown(String(data.totalIncome)) : '0';
+        const expense = data?.totalExpense !== undefined ? this.escapeMarkdown(String(data.totalExpense)) : '0';
+        const net = data?.netProfit !== undefined ? this.escapeMarkdown(String(data.netProfit)) : '0';
+        const status = String(data?.burnRateStatus || 'HEALTHY');
+        const statusLabel: Record<string, string> = {
+          HEALTHY: '🟢 Estable',
+          WARNING: '🟡 Alerta',
+          CRITICAL: '🔴 Crítico',
+        };
+        const rec = data?.recommendation ? `\n💡 ${this.escapeMarkdown(String(data.recommendation))}` : '';
+        return `📊 *Análisis financiero (${this.escapeMarkdown(periodo)}):*\n💰 Ingresos: ${income}€\n💸 Gastos: ${expense}€\n📈 Resultado: ${net}€\n🩺 Estado: ${statusLabel[status] || status}${rec}`;
+      }
+
+      // ─── Citas & Bookings ───
+      case 'create_booking': {
+        const cita = data?.cita || data;
+        const titulo = cita?.titulo ? this.escapeMarkdown(String(cita.titulo)) : 'Cita';
+        const nombre = data?.lead?.nombre ? this.escapeMarkdown(String(data.lead.nombre)) : (data?.nombre ? this.escapeMarkdown(String(data.nombre)) : '');
+        const fecha = cita?.fechaHora
+          ? new Date(cita.fechaHora).toLocaleString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
+          : 'la fecha indicada';
+        return `📅 *Cita agendada:* ${titulo}${nombre ? ` con ${nombre}` : ''}\n🗓 ${this.escapeMarkdown(fecha)}`;
+      }
+      case 'get_upcoming_bookings': {
+        const citas = data?.citas || [];
+        const total = Array.isArray(citas) ? citas.length : 0;
+        if (total === 0) return '📋 No tienes citas próximas.';
+        const lines = citas.slice(0, 6).map((c: any) => {
+          const raw = c?.fechaHoraLocal || c?.fechaHora;
+          let f = 'fecha sin definir';
+          if (raw) {
+            try {
+              f = new Date(raw).toLocaleString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+            } catch {
+              f = String(raw);
+            }
+          }
+          const t = c?.titulo ? this.escapeMarkdown(String(c.titulo)) : 'Cita';
+          const n = c?.lead?.nombre ? ` — ${this.escapeMarkdown(String(c.lead.nombre))}` : '';
+          const tipo = c?.fuente === 'google_calendar' ? ' 📌' : '';
+          return `• ${this.escapeMarkdown(f)} — ${t}${n}${tipo}`;
+        });
+        const suffix = total > 6 ? `\n… y ${total - 6} más` : '';
+        return `📋 *Tus próximas citas (${total}):*\n${lines.join('\n')}${suffix}`;
+      }
+      case 'cancel_booking': {
+        const titulo = data?.titulo ? this.escapeMarkdown(String(data.titulo)) : 'la cita';
+        const fecha = data?.fechaHora
+          ? new Date(data.fechaHora).toLocaleString('es-MX', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
+          : '';
+        return `❌ *Cita cancelada:* ${titulo}${fecha ? ` del ${this.escapeMarkdown(fecha)}` : ''}.`;
+      }
 
       // ─── Insurance: skills de lectura (muestran resultados al usuario) ───
       case 'list_polizas': {
