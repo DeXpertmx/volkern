@@ -117,6 +117,15 @@ const MISSING_ENTITY_PROMPTS: Record<string, string> = {
   test: '🧪 ¿De qué test A/B? (ej: el de la campaña de verano)',
   programacion: '⏰ ¿Qué programación quieres eliminar? (ej: la de la campaña de Meta)',
   variante: '🔀 ¿Qué variante declaras ganadora? (A, B, C…)',
+
+  // Real Estate
+  propiedad: '🏠 ¿De qué propiedad? (ej: #PROP-001, la casa del centro, el departamento en la playa)',
+  propiedadId: '🏠 ¿De qué propiedad? (ej: #PROP-001, la casa del centro)',
+  tipo_operacion: '🏷️ ¿En venta o en alquiler?',
+  tipo_inmueble: '🏗️ ¿Qué tipo? (casa, departamento, oficina, terreno)',
+  zona: '📍 ¿En qué zona o ciudad?',
+  habitaciones: '🔢 ¿Cuántas habitaciones mínimo?',
+  presupuesto: '💰 ¿Cuál es el presupuesto? (ej: 500k, 300 mil)',
 }
 
 export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput> {

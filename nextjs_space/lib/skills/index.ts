@@ -2138,6 +2138,152 @@ const declareAbTestWinnerWrapper = async (input: {
   return adSkills.declare_ab_test_winner({ tenantId: input.tenantId, testId, variantId });
 };
 
+// ─── Wrappers de Real Estate (Decimocuarto entrenamiento): el core exige
+// propertyId; el chatbot se refiere a la propiedad por id/sku (#PROP-001) o
+// por descripción ("la casa de la colonia Roma") ────────────────────────────
+
+async function resolvePropiedadId(tenantId: string, ref?: string): Promise<string> {
+  if (!ref || !String(ref).trim()) {
+    throw new Error('Necesito saber a qué propiedad te refieres (su id o nombre).')
+  }
+  const refClean = String(ref).trim().replace(/^#/, '')
+  if (/^c[a-z0-9]{20,}$/i.test(refClean)) return refClean
+  const { prisma } = await import('@/lib/db')
+  const byId = await prisma.catalogoItem.findFirst({
+    where: {
+      tenantId,
+      tipo: 'inmueble',
+      OR: [
+        { sku: { contains: refClean, mode: 'insensitive' as const } },
+        { nombre: { contains: refClean, mode: 'insensitive' as const } },
+      ],
+    },
+    orderBy: { fechaActualizacion: 'desc' },
+    select: { id: true },
+  })
+  if (byId) return byId.id
+  // Fallback: match por zona / tipo_inmueble en customFieldValues (JSONB)
+  const rows: any = await prisma.$queryRawUnsafe(
+    `SELECT id FROM "CatalogoItem" WHERE "tenantId" = $1 AND tipo = 'inmueble' AND (LOWER(COALESCE("customFieldValues"->>'zona','')) LIKE LOWER($2) OR LOWER(COALESCE("customFieldValues"->>'tipo_inmueble','')) LIKE LOWER($2) OR LOWER("nombre") LIKE LOWER($2)) ORDER BY "fechaActualizacion" DESC LIMIT 1`,
+    tenantId,
+    `%${refClean}%`,
+  )
+  const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : undefined
+  if (row?.id) return row.id
+  throw new Error(`No encontré ninguna propiedad "${refClean}" en tu cartera.`)
+}
+
+const generatePropertyDescriptionWrapper = async (input: {
+  tenantId: string;
+  propiedad?: string;
+  propiedadId?: string;
+  propertyId?: string;
+}) => {
+  const propertyId =
+    input.propertyId ||
+    input.propiedadId ||
+    (input.propiedad ? await resolvePropiedadId(input.tenantId, input.propiedad) : undefined)
+  if (!propertyId) throw new Error('Necesito saber a qué propiedad generar la descripción (su id o nombre).')
+  return realEstateSkills.generate_property_description({ tenantId: input.tenantId, propertyId });
+};
+
+const suggestPriceBasedOnMarketWrapper = async (input: {
+  tenantId: string;
+  propiedad?: string;
+  propiedadId?: string;
+  propertyId?: string;
+  tipo_operacion?: string;
+  operationType?: string;
+}) => {
+  const propertyId =
+    input.propertyId ||
+    input.propiedadId ||
+    (input.propiedad ? await resolvePropiedadId(input.tenantId, input.propiedad) : undefined)
+  if (!propertyId) throw new Error('Necesito saber a qué propiedad sugerir precio (su id o nombre).')
+  const result = await realEstateSkills.suggest_price_based_on_market({ tenantId: input.tenantId, propertyId });
+  const operacion = input.operationType || input.tipo_operacion
+  return operacion ? { ...result, operationType: operacion } : result;
+};
+
+const calculatePropertyQualityScoreWrapper = async (input: {
+  tenantId: string;
+  propiedad?: string;
+  propiedadId?: string;
+  propertyId?: string;
+}) => {
+  const propertyId =
+    input.propertyId ||
+    input.propiedadId ||
+    (input.propiedad ? await resolvePropiedadId(input.tenantId, input.propiedad) : undefined)
+  if (!propertyId) throw new Error('Necesito saber a qué propiedad calificar (su id o nombre).')
+  return realEstateSkills.calculate_property_quality_score({ tenantId: input.tenantId, propertyId });
+};
+
+const searchPropertiesByFiltersWrapper = async (input: {
+  tenantId: string;
+  tipo_operacion?: string;
+  tipo_inmueble?: string;
+  zona?: string;
+  habitaciones?: string | number;
+  query?: string;
+}) => {
+  if (input.query) {
+    return realEstateSkills.search_properties_by_filters({ tenantId: input.tenantId, query: String(input.query) });
+  }
+  const parts: string[] = []
+  if (input.tipo_operacion) parts.push(input.tipo_operacion === 'venta' ? 'en venta' : 'en alquiler')
+  if (input.tipo_inmueble) parts.push(String(input.tipo_inmueble).toLowerCase())
+  if (input.zona) parts.push(`en ${input.zona}`)
+  if (input.habitaciones) parts.push(`${input.habitaciones} habitaciones`)
+  const query = parts.join(' ') || 'inmuebles disponibles'
+  return realEstateSkills.search_properties_by_filters({ tenantId: input.tenantId, query });
+};
+
+const recommendPropertiesWrapper = async (input: {
+  tenantId: string;
+  tipo_operacion?: string;
+  zona?: string;
+  presupuesto?: string | number;
+}) => {
+  const precioMax = input.presupuesto !== undefined && input.presupuesto !== '' ? Number(input.presupuesto) : undefined
+  return realEstateSkills.recommend_properties({
+    tenantId: input.tenantId,
+    tipoOperacion:
+      input.tipo_operacion === 'alquiler' ? ('alquiler' as const) : input.tipo_operacion === 'venta' ? ('venta' as const) : undefined,
+    ciudad: input.zona,
+    precioMax,
+  });
+};
+
+const calculateFranchiseCommissionsWrapper = async (input: {
+  tenantId: string;
+  propiedad?: string;
+  propiedadId?: string;
+  propertyId?: string;
+  userId?: string;
+}) => {
+  const { tenantId } = input
+  const propertyId =
+    input.propertyId ||
+    input.propiedadId ||
+    (input.propiedad ? await resolvePropiedadId(input.tenantId, input.propiedad) : undefined)
+  if (!propertyId) throw new Error('Necesito saber de qué propiedad calcular la comisión (su id o nombre).')
+  const { prisma } = await import('@/lib/db')
+  const deal = await prisma.deal.findFirst({
+    where: { tenantId, catalogoItemId: propertyId },
+    orderBy: { fechaCreacion: 'desc' },
+    select: { id: true, valor: true, valorReal: true, moneda: true },
+  })
+  if (!deal) {
+    throw new Error('No encontré ninguna operación (deal) vinculada a esa propiedad para calcular la comisión.')
+  }
+  return realEstateSkills.calculate_franchise_commissions({
+    tenantId,
+    dealId: deal.id,
+    userId: input.userId || 'SYSTEM',
+  });
+};
+
 export const skills = {
   // Contactos
   create_contact: createContactWrapper,
@@ -2274,12 +2420,14 @@ export const skills = {
   get_field_activity: operationalSkills.get_field_activity,
   audit_material_leaks: operationalSkills.audit_material_leaks,
   
-  // Real Estate
-  generate_property_description: realEstateSkills.generate_property_description,
-  suggest_price_based_on_market: realEstateSkills.suggest_price_based_on_market,
-  calculate_property_quality_score: realEstateSkills.calculate_property_quality_score,
-  search_properties_by_filters: realEstateSkills.search_properties_by_filters,
-  recommend_properties: realEstateSkills.recommend_properties,
+  // Real Estate (wrappers: resuelven la propiedad por id/nombre/zona y
+  // construyen la búsqueda desde filtros en español)
+  generate_property_description: generatePropertyDescriptionWrapper,
+  suggest_price_based_on_market: suggestPriceBasedOnMarketWrapper,
+  calculate_property_quality_score: calculatePropertyQualityScoreWrapper,
+  search_properties_by_filters: searchPropertiesByFiltersWrapper,
+  recommend_properties: recommendPropertiesWrapper,
+  calculate_franchise_commissions: calculateFranchiseCommissionsWrapper,
 
   // Insurance / Seguros
   create_poliza: insuranceSkills.create_poliza,

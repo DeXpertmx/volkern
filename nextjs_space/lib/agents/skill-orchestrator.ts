@@ -168,7 +168,7 @@ const INTENT_TO_SKILL: Record<string, string> = {
   'calificar_inmueble': 'calculate_property_quality_score',
   'buscar_inmuebles': 'search_properties_by_filters',
   'recomendar_inmuebles': 'recommend_properties',
-  'calcular_comision_franquicia': 'calculate_property_quality_score',
+  'calcular_comision_franquicia': 'calculate_franchise_commissions',
 
   // ─── Insurance / Seguros ───
   'crear_poliza': 'create_poliza',

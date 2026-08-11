@@ -791,6 +791,66 @@ export const ExecutionEngine = {
       case 'declare_ab_test_winner': {
         return data?.message ? `🧪 ${this.escapeMarkdown(String(data.message))}` : '🧪 Operación A/B completada.';
       }
+
+      // ─── Real Estate (Decimocuarto entrenamiento) ───
+      case 'generate_property_description': {
+        const desc = data?.description
+          ? `\n${this.escapeMarkdown(String(data.description))}`
+          : '';
+        return `🏠 *Descripción generada:*${desc}`;
+      }
+      case 'suggest_price_based_on_market': {
+        if (data?.message && data.suggestedPrice == null) return `🏠 ${this.escapeMarkdown(String(data.message))}`;
+        const precio = data?.suggestedPrice != null ? this.escapeMarkdown(Number(data.suggestedPrice).toLocaleString('es-ES')) : '—';
+        const conf = String(data?.confidence || 'low');
+        const confLabel: Record<string, string> = { high: 'alta', medium: 'media', low: 'baja' };
+        const muestra = data?.sampleSize != null ? ` (basado en ${this.escapeMarkdown(String(data.sampleSize))} similares)` : '';
+        const op = data?.operationType ? ` · ${this.escapeMarkdown(String(data.operationType))}` : '';
+        return `🏠 *Precio sugerido:* ${precio}€${op}\n🎯 Confianza: ${confLabel[conf] || conf}${muestra}`;
+      }
+      case 'calculate_property_quality_score': {
+        const score = data?.score != null ? this.escapeMarkdown(String(data.score)) : '—';
+        const grade = data?.grade ? ` · Grado ${this.escapeMarkdown(String(data.grade))}` : '';
+        const detalles = data?.details && typeof data.details === 'object'
+          ? `\n${Object.entries(data.details).map(([k, v]) => `• ${this.escapeMarkdown(k)}: ${this.escapeMarkdown(String(v))}`).join('\n')}`
+          : '';
+        return `📊 *Score de calidad:* ${score}/100${grade}${detalles}`;
+      }
+      case 'search_properties_by_filters': {
+        const items = Array.isArray(data?.properties) ? data.properties : [];
+        const total = Number(data?.total ?? items.length);
+        if (items.length === 0) return '🏠 No encontré propiedades que coincidan con tu búsqueda.';
+        const lines = items.slice(0, 6).map((p: any) => {
+          const nombre = this.escapeMarkdown(String(p?.nombre || p?.propertyType || 'Inmueble'));
+          const op = p?.operationType ? ` · ${this.escapeMarkdown(String(p.operationType))}` : '';
+          const precio = p?.precioBase != null ? ` · ${this.escapeMarkdown(Number(p.precioBase).toLocaleString('es-ES'))}€` : '';
+          const zona = p?.city ? ` · ${this.escapeMarkdown(String(p.city))}` : '';
+          const habs = p?.bedrooms ? ` · ${this.escapeMarkdown(String(p.bedrooms))} habs` : '';
+          return `• ${nombre}${op}${precio}${zona}${habs}`;
+        });
+        const suffix = total > 6 ? `\n… y ${total - 6} más` : '';
+        return `🏠 *Propiedades (${total}):*\n${lines.join('\n')}${suffix}`;
+      }
+      case 'recommend_properties': {
+        const items = Array.isArray(data?.recommendations) ? data.recommendations : [];
+        if (items.length === 0) return `🏠 ${this.escapeMarkdown(String(data?.mensaje || 'No encontré propiedades recomendadas.'))}`;
+        const lines = items.slice(0, 5).map((r: any) => {
+          const titulo = this.escapeMarkdown(String(r?.titulo || 'Inmueble'));
+          const precio = r?.precioFormateado ? ` · ${this.escapeMarkdown(String(r.precioFormateado))}` : '';
+          const ubicacion = r?.ubicacion ? ` · ${this.escapeMarkdown(String(r.ubicacion))}` : '';
+          const razon = r?.razon ? `\n   💡 ${this.escapeMarkdown(String(r.razon))}` : '';
+          return `• ${titulo}${precio}${ubicacion}${razon}`;
+        });
+        return `🏠 *Recomendaciones:*\n${lines.join('\n')}`;
+      }
+      case 'calculate_franchise_commissions': {
+        if (data?.success === false) return `💼 ${this.escapeMarkdown(String(data?.error || 'No pude calcular la comisión.'))}`;
+        const monto = data?.montoCalculado != null ? this.escapeMarkdown(Number(data.montoCalculado).toLocaleString('es-ES')) : '—';
+        const desglose = Array.isArray(data?.desglose) && data.desglose.length > 0
+          ? `\n${data.desglose.map((d: any) => `• ${this.escapeMarkdown(String(d))}`).join('\n')}`
+          : '';
+        return `💼 *Comisión calculada:* ${monto}€${desglose}`;
+      }
       default:
         return '';
     }
