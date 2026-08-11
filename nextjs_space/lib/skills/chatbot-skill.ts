@@ -22,9 +22,17 @@ export async function executeChatbotResponse(payload: {
   try {
     console.log(`[🤖 ChatbotSkill] 1. Verificando suscripción para tenant: ${tenantId}`);
     // 1. Verificar si el servicio está contratado (Module Check)
+    // select explícito: evita que Prisma intente leer columnas del modelo
+    // Tenant que aún no existen en la BD de producción (ej. monedaInferida,
+    // migración 20260809 pendiente) — un findUnique sin select lanzaría
+    // PrismaClientKnownRequestError y bloquearía el servicio en silencio.
     const tenant = await prisma.tenant.findUnique({
       where: { id: tenantId },
-      include: { tenantFeatures: true }
+      select: {
+        id: true,
+        plan: true,
+        tenantFeatures: { select: { feature: true, habilitado: true } },
+      },
     });
 
     if (!tenant) return { success: false, error: 'Tenant no encontrado' };

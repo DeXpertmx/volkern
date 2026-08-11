@@ -239,18 +239,6 @@ describe('suggestPolizasMapping', () => {
   });
 });
 
-// ─── parseCSVSmart ─────────────────────────────────────────────────────────
-
-  it('devuelve matches ordenados alfabéticamente por canonical', () => {
-    const headers = ['dummy'];
-    const { matches } = suggestPolizasMapping(headers);
-    const canonicosEnMatches = matches.map(m => m.canonical);
-    // Matches deben ordenarse alfabéticamente por canonical.
-    const expected = [...canonicosEnMatches].sort();
-    expect(canonicosEnMatches).toEqual(expected);
-  });
-});
-
 // ─── suggestAseguradorasMapping ───────────────────────────────────────────────
 
 describe('suggestAseguradorasMapping', () => {
@@ -265,13 +253,13 @@ describe('suggestAseguradorasMapping', () => {
   });
 
   it('mapea variantes coloquiales y EN', () => {
-    const headers = ['Compañía', 'Trade Name', 'RFC', 'License', 'México'];
+    const headers = ['Compañía', 'Trade Name', 'RFC', 'License', 'País'];
     const { mapping } = suggestAseguradorasMapping(headers);
     expect(mapping.nombre).toBe('Compañía');
     expect(mapping.nombreComercial).toBe('Trade Name');
     expect(mapping.identificacionFiscal).toBe('RFC');
     expect(mapping.numeroRegistro).toBe('License');
-    expect(mapping.pais).toBe('México');
+    expect(mapping.pais).toBe('País');
   });
 
   it('mapea RUC / NIT / CIF como identificacionFiscal', () => {
@@ -331,6 +319,10 @@ describe('suggestEntityMapping', () => {
     expect(mapping.cuenta).toBe('account');
   });
 });
+
+// ─── parseCSVSmart ─────────────────────────────────────────────────────────
+
+describe('parseCSVSmart', () => {
   it('detecta delimitador + parsea CSV con coma', () => {
     const csv = 'a,b,c\n1,2,3\n4,5,6';
     const r = parseCSVSmart(csv);

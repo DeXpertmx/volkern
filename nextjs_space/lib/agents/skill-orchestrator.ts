@@ -105,6 +105,7 @@ const INTENT_TO_SKILL: Record<string, string> = {
   'registrar_gasto': 'create_expense',
   'registrar_gasto_vision': 'register_expense_vision',
   'crear_proveedor': 'create_supplier',
+  'listar_proveedores': 'list_suppliers',
   'analizar_gastos': 'analyze_burn_rate',
   'proyeccion_financiera': 'project_financial_forecast',
   'proyeccion_impuestos': 'tax_prospector',
@@ -296,7 +297,13 @@ export const SkillOrchestratorAgent = {
   // ==================== PLANES POR INTENT COMPLEJO ====================
 
   /**
-   * Plan: Agendar cita (3 pasos: validar disponibilidad → agendar → confirmar)
+   * Plan: Agendar cita (1 paso → create_booking)
+   * El antiguo plan de 3 pasos (validate_availability → auto_schedule →
+   * confirm_booking) estaba roto para el chatbot: validate_availability no
+   * existe como skill y auto_schedule exige leadId (el orquestador solo pasa
+   * nombre/email). create_booking (createBookingWrapper) resuelve el
+   * lead/contacto por nombre o email, valida fecha/hora y pide el email si
+   * falta — cubre el flujo completo.
    */
   planAgendarCita(entities: Record<string, string>, tenantId: string): ExecutionPlan {
     if (!entities.fecha && !entities.date) {
@@ -307,34 +314,20 @@ export const SkillOrchestratorAgent = {
       return this.createAskUserPlan('hora', 'agendar_cita');
     }
 
-    const fecha = entities.fecha || entities.date;
-    const hora = entities.hora || entities.time;
-    const servicio = entities.servicio || entities.service;
-
-    if (!servicio) {
-      return this.createAskUserPlan('servicio', 'agendar_cita');
-    }
-
     return {
       steps: [
         {
-          action: 'validate_availability',
-          params: { tenantId, fecha, hora }
-        },
-        {
-          action: 'auto_schedule',
+          action: 'create_booking',
           params: {
             tenantId,
-            fecha,
-            hora,
-            servicio,
-            customerName: entities.nombre || entities.customer_name,
-            email: entities.email
+            fecha: entities.fecha || entities.date,
+            hora: entities.hora || entities.time,
+            nombre: entities.nombre,
+            email: entities.email,
+            titulo: entities.servicio || entities.service || entities.titulo,
+            tipo: entities.tipo,
+            ubicacion: entities.ubicacion,
           }
-        },
-        {
-          action: 'confirm_booking',
-          params: { tenantId }
         }
       ]
     };
@@ -652,9 +645,17 @@ export const SkillOrchestratorAgent = {
    */
   async checkSkillAccess(tenantId: string, intent: string): Promise<boolean> {
     try {
+      // select explícito: evita que Prisma intente leer columnas del modelo
+      // Tenant que aún no existen en la BD de producción (ej. monedaInferida,
+      // agregada en una migración pendiente), lo que lanzaba una excepción que
+      // el catch convertía en un falso 'sin acceso' para TODOS los intents.
       const tenant = await prisma.tenant.findUnique({
         where: { id: tenantId },
-        include: { tenantFeatures: true }
+        select: {
+          id: true,
+          plan: true,
+          tenantFeatures: { select: { feature: true, habilitado: true } },
+        },
       });
 
       if (!tenant) return false;
@@ -726,6 +727,7 @@ export const SkillOrchestratorAgent = {
         'registrar_gasto': 'finanzas',
         'registrar_gasto_vision': 'finanzas',
         'crear_proveedor': 'finanzas',
+        'listar_proveedores': 'finanzas',
         'analizar_gastos': 'finanzas',
         'proyeccion_financiera': 'finanzas',
         'proyeccion_impuestos': 'finanzas',
@@ -836,6 +838,8 @@ export const SkillOrchestratorAgent = {
       'rectificar_factura': '🧾 No tienes acceso al módulo de *Facturación*. Contacta al administrador.',
       'registrar_gasto': '💳 No tienes acceso al módulo de *Gastos*. Contacta al administrador.',
       'registrar_gasto_vision': '💳 No tienes acceso al módulo de *Gastos*. Contacta al administrador.',
+      'crear_proveedor': '🏢 No tienes acceso al módulo de *Proveedores*. Contacta al administrador.',
+      'listar_proveedores': '🏢 No tienes acceso al módulo de *Proveedores*. Contacta al administrador.',
       'analizar_gastos': '💳 No tienes acceso al módulo de *Finanzas*. Contacta al administrador.',
       'salud_inventario': '📦 No tienes acceso al módulo de *Inventario*. Contacta al administrador.',
       'ajustar_stock': '📦 No tienes acceso al módulo de *Inventario*. Contacta al administrador.',
@@ -979,6 +983,7 @@ Puedo ayudarte con:
       // Finanzas
       'create_expense': 'Registrar gasto',
       'create_supplier': 'Crear proveedor',
+      'list_suppliers': 'Listar proveedores',
       'register_expense_vision': 'Registrar gasto por foto',
       'analyze_burn_rate': 'Analizar gastos',
       'project_financial_forecast': 'Proyección financiera',

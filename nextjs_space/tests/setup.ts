@@ -1,5 +1,13 @@
 import { vi } from 'vitest';
 import 'dotenv/config';
+import { webcrypto } from 'node:crypto';
+
+// Node 18 (entorno vitest 'node') NO expone `crypto` como global — pero
+// `hashApiKeyEdge` (Web Crypto) y el sliding-window limiter usan
+// `crypto.subtle` / `crypto.randomUUID()`. Polyfill single-point aquí.
+if (!globalThis.crypto) {
+  (globalThis as unknown as { crypto: unknown }).crypto = webcrypto;
+}
 
 
 // Mock Next.js headers/cookies

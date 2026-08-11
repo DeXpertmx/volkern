@@ -160,8 +160,10 @@ export const crmIntents: IntentSchema[] = [
   {
     name: 'agendar_cita',
     description: 'Agendar una cita o reunión con un lead',
-    requiredParams: ['fecha', 'hora'],
-    optionalParams: ['email', 'nombre', 'duracion', 'notas', 'tipo'],
+    // email es requerido porque create_booking lo exige (para buscar/crear el
+    // lead): si falta, el bot pregunta y completa el flujo en el siguiente turno.
+    requiredParams: ['fecha', 'hora', 'email'],
+    optionalParams: ['nombre', 'duracion', 'notas', 'tipo'],
     examples: [
       'agenda cita con juan@email.com para mañana a las 10am',
       'programa reunión con María el viernes a las 15:30 por 1 hora',
@@ -326,8 +328,11 @@ export const crmIntents: IntentSchema[] = [
   {
     name: 'crear_nota',
     description: 'Agregar una nota a un lead o contacto',
-    requiredParams: ['email', 'contenido'],
-    optionalParams: [],
+    // el wrapper resuelve el lead también por nombre; email se pide solo si no
+    // hay forma de identificar al lead (crear_nota sin email ni nombre falla
+    // con un mensaje informativo en el wrapper)
+    requiredParams: ['contenido'],
+    optionalParams: ['email', 'nombre'],
     examples: [
       'agrega nota a juan@email.com: "Cliente interesado en paquete premium"',
       'nota para María García: "Prefiere contacto por WhatsApp"',
@@ -338,8 +343,9 @@ export const crmIntents: IntentSchema[] = [
   {
     name: 'ver_notas',
     description: 'Ver notas de un lead o contacto',
-    requiredParams: ['email'],
-    optionalParams: [],
+    // email opcional: el wrapper resuelve el lead también por nombre
+    requiredParams: [],
+    optionalParams: ['email', 'nombre'],
     examples: [
       'muéstrame las notas de juan@email.com',
       'qué notas tiene María García',

@@ -184,6 +184,1498 @@ describe('IntentClassifier — isDestructive', () => {
   });
 });
 
+describe('IntentClassifier — ruta determinista (sin LLM)', () => {
+  const classifier = new IntentClassifierAgent();
+  const base = { userId: 'u1', tenantId: 't1' };
+
+  it('detecta crear_lead con nombre, email y empresa sin llamar al LLM', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'agrega el lead Prueba Local, pruebalocal@volkern.test, de la empresa Volkern Test',
+    });
+    expect(result.intent).toBe('crear_lead');
+    expect(result.extractedParams.nombre).toBe('Prueba Local');
+    expect(result.extractedParams.email).toBe('pruebalocal@volkern.test');
+    expect(result.extractedParams.empresa).toBe('Volkern Test');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('detecta crear_contacto con nombre y email', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'agrega el contacto Laura Gomez con email laura@volkern.test',
+    });
+    expect(result.intent).toBe('crear_contacto');
+    expect(result.extractedParams.nombre).toBe('Laura Gomez');
+    expect(result.extractedParams.email).toBe('laura@volkern.test');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('detecta crear_empresa sin confundir el email contacto@', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'crea la empresa Volkern Empresa Prueba, contacto@volkernempresa.test',
+    });
+    expect(result.intent).toBe('crear_empresa');
+    expect(result.extractedParams.nombre).toBe('Volkern Empresa Prueba');
+    expect(result.extractedParams.email).toBe('contacto@volkernempresa.test');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('crear_lead sin email → needsMoreInfo con missingParams', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'agrega el lead Ana Torres',
+    });
+    expect(result.intent).toBe('crear_lead');
+    expect(result.extractedParams.nombre).toBe('Ana Torres');
+    expect(result.needsMoreInfo).toBe(true);
+    expect(result.missingParams).toContain('email');
+  });
+
+  it('multi-turno: completa el dato faltante sin LLM', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'ana@test.com',
+      pendingIntent: 'crear_lead',
+      collectedEntities: { nombre: 'Ana Torres' },
+      missingEntities: ['email'],
+    });
+    expect(result.intent).toBe('crear_lead');
+    expect(result.extractedParams).toMatchObject({ nombre: 'Ana Torres', email: 'ana@test.com' });
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('mensajes sin verbo de creación NO caen en la ruta determinista', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: '¿qué módulos tienes?',
+    });
+    expect(result.intent).toBe('consulta_general'); // el mock del LLM devuelve {}
+  });
+
+  // ═══ PRIMER ENTRENAMIENTO (módulo Ventas): extracción de campos opcionales ═══
+
+  it('captura cargo, teléfono y empresa al crear contacto', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'agrega el contacto Laura Gomez con email laura@volkern.test, cargo Gerente, teléfono +525511223344, de la empresa Volkern Test',
+    });
+    expect(result.intent).toBe('crear_contacto');
+    expect(result.extractedParams.nombre).toBe('Laura Gomez');
+    expect(result.extractedParams.email).toBe('laura@volkern.test');
+    expect(result.extractedParams.cargo).toBe('Gerente');
+    expect(result.extractedParams.telefono).toContain('525511223344');
+    expect(result.extractedParams.empresa).toBe('Volkern Test');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('captura empresa suelta (sin "de la") al crear lead', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'agrega el lead Juan Perez con email juan@volkern.test, empresa Acme Corp',
+    });
+    expect(result.intent).toBe('crear_lead');
+    expect(result.extractedParams.nombre).toBe('Juan Perez');
+    expect(result.extractedParams.email).toBe('juan@volkern.test');
+    expect(result.extractedParams.empresa).toBe('Acme Corp');
+  });
+
+  it('captura linkedin, ubicacion y tags al crear lead', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'agrega el lead Carlos Diaz con email carlos@volkern.test, linkedin carlosdiaz, ubicación Ciudad de México, tags vip,caliente',
+    });
+    expect(result.intent).toBe('crear_lead');
+    expect(result.extractedParams.nombre).toBe('Carlos Diaz');
+    expect(result.extractedParams.email).toBe('carlos@volkern.test');
+    expect(result.extractedParams.linkedin).toContain('carlosdiaz');
+    expect(result.extractedParams.ubicacion).toContain('Ciudad de México');
+    expect(result.extractedParams.tags).toContain('vip');
+  });
+
+  it('NO confunde la ubicación con el "en" dentro de un nombre (Elena)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'agrega el contacto Elena Ruiz con email elena@volkern.test, ubicación Madrid, de la empresa Volkern Test',
+    });
+    expect(result.intent).toBe('crear_contacto');
+    expect(result.extractedParams.nombre).toBe('Elena Ruiz');
+    expect(result.extractedParams.ubicacion).toBe('Madrid');
+    expect(result.extractedParams.empresa).toBe('Volkern Test');
+  });
+
+  it('captura contexto al crear lead', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'agrega el lead Ana Torres con email ana@volkern.test, contexto: interesado en software de gestión',
+    });
+    expect(result.intent).toBe('crear_lead');
+    expect(result.extractedParams.contexto).toContain('interesado en software');
+  });
+
+  it('NO trata "linkedin" como campo cuando es fuente del lead (falso positivo)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'agrega el lead que llegó por linkedin con email juan@volkern.test',
+    });
+    expect(result.intent).toBe('crear_lead');
+    expect(result.extractedParams.linkedin).toBeUndefined();
+    expect(result.extractedParams.email).toBe('juan@volkern.test');
+  });
+
+  it('NO dispara contexto con la palabra suelta "nota" (empresa Nota Azul)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'crea la empresa Nota Azul con email notaazul@volkern.test',
+    });
+    expect(result.intent).toBe('crear_empresa');
+    expect(result.extractedParams.contexto).toBeUndefined();
+    expect(result.extractedParams.nombre).toBe('Nota Azul');
+  });
+
+  it('NO sobre-captura tags con el campo empresa siguiente', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'agrega el lead Roberto Lima con email roberto@volkern.test, tags vip,caliente, de la empresa Acme Corp',
+    });
+    expect(result.intent).toBe('crear_lead');
+    expect(result.extractedParams.tags).toBe('vip,caliente');
+    expect(result.extractedParams.empresa).toBe('Acme Corp');
+  });
+
+  it('NO trata "nota" de "notas de prensa" como contexto', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'agrega el lead Maria Diaz con email maria@volkern.test, notas: llamar mañana',
+    });
+    expect(result.intent).toBe('crear_lead');
+    expect(result.extractedParams.contexto).toContain('llamar mañana');
+  });
+
+  it('conserva razón social con S.A. al crear empresa', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'crea la empresa Volkern E2E S.A. de C.V. con email contacto@volkern.test',
+    });
+    expect(result.intent).toBe('crear_empresa');
+    expect(result.extractedParams.nombre).toBe('Volkern E2E S.A. de C.V.');
+    expect(result.extractedParams.email).toBe('contacto@volkern.test');
+  });
+
+  it('multi-turno: completa cargo cuando falta (crear_contacto)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cargo: Directora Comercial',
+      pendingIntent: 'crear_contacto',
+      collectedEntities: { nombre: 'Sofia Ruiz', email: 'sofia@volkern.test' },
+      missingEntities: ['cargo'],
+    });
+    expect(result.intent).toBe('crear_contacto');
+    expect(result.extractedParams).toMatchObject({
+      nombre: 'Sofia Ruiz',
+      email: 'sofia@volkern.test',
+      cargo: 'Directora Comercial',
+    });
+  });
+
+  it('multi-turno: completa tags cuando faltan (crear_empresa)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'tags: proveedor,clave',
+      pendingIntent: 'crear_empresa',
+      collectedEntities: { nombre: 'Acme Corp' },
+      missingEntities: ['tags'],
+    });
+    expect(result.intent).toBe('crear_empresa');
+    expect(result.extractedParams).toMatchObject({
+      nombre: 'Acme Corp',
+      tags: 'proveedor,clave',
+    });
+  });
+
+  it('multi-turno: completa teléfono con número desnudo (sin keyword)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: '5551234567',
+      pendingIntent: 'crear_contacto',
+      collectedEntities: { nombre: 'Pedro Rios', email: 'pedro@volkern.test' },
+      missingEntities: ['telefono'],
+    });
+    expect(result.intent).toBe('crear_contacto');
+    expect(result.extractedParams).toMatchObject({
+      nombre: 'Pedro Rios',
+      email: 'pedro@volkern.test',
+      telefono: '5551234567',
+    });
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('crear_lead con todos los campos → sin preguntas extra', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'agrega el lead Roberto Lima con email roberto@volkern.test, cargo Director, teléfono +34911223344',
+    });
+    expect(result.intent).toBe('crear_lead');
+    expect(result.needsMoreInfo).toBe(false);
+    expect(result.extractedParams.cargo).toBe('Director');
+    expect(result.extractedParams.telefono).toContain('34911223344');
+  });
+
+  // ═══ SEGUNDO ENTRENAMIENTO (módulo Ventas): buscar, listar y convertir ═══
+
+  it('busca lead por email: "busca el lead con email…"', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'busca el lead con email juan@volkern.test',
+    });
+    expect(result.intent).toBe('buscar_lead');
+    expect(result.extractedParams.email).toBe('juan@volkern.test');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('busca lead por nombre: "busca el lead Juan Perez" NO cae en crear_lead', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'busca el lead Juan Perez',
+    });
+    expect(result.intent).toBe('buscar_lead');
+    expect(result.extractedParams.nombre).toBe('Juan Perez');
+    expect(result.intent).not.toBe('crear_lead');
+  });
+
+  it('busca lead por nombre sin la palabra lead: "encuentra a María García"', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'encuentra a María García',
+    });
+    expect(result.intent).toBe('buscar_lead');
+    expect(result.extractedParams.nombre).toBe('María García');
+  });
+
+  it('busca lead con "dame los datos de…"', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'dame los datos de juan@volkern.test',
+    });
+    expect(result.intent).toBe('buscar_lead');
+    expect(result.extractedParams.email).toBe('juan@volkern.test');
+  });
+
+  it('lista los leads', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'lista los leads',
+    });
+    expect(result.intent).toBe('listar_leads');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('lista leads por estado (sin verbo): "leads en estado contactado"', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'leads en estado contactado',
+    });
+    expect(result.intent).toBe('listar_leads');
+    expect(result.extractedParams.estado).toBe('contactado');
+  });
+
+  it('lista leads nuevos: "ver leads nuevos" → estado nuevo', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'ver leads nuevos',
+    });
+    expect(result.intent).toBe('listar_leads');
+    expect(result.extractedParams.estado).toBe('nuevo');
+  });
+
+  it('"leads con tags nuevos" NO infiere estado (nuevos es una etiqueta)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'lista los leads con tags nuevos',
+    });
+    expect(result.intent).toBe('listar_leads');
+    expect(result.extractedParams.estado).toBeUndefined();
+    expect(result.extractedParams.tags).toBe('nuevos');
+  });
+
+  it('muéstrame todos los contactos', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'muéstrame todos los contactos',
+    });
+    expect(result.intent).toBe('listar_contactos');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('contactos tipo empresa → filtro tipo company', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'contactos tipo empresa',
+    });
+    expect(result.intent).toBe('listar_contactos');
+    expect(result.extractedParams.tipo).toBe('company');
+  });
+
+  it('busca contactos que contengan García → listar con search', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'busca contactos que contengan García',
+    });
+    expect(result.intent).toBe('listar_contactos');
+    expect(result.extractedParams.search).toBe('García');
+  });
+
+  it('busca un contacto concreto: "busca el contacto Laura Gómez" → search Laura', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'busca el contacto Laura Gómez',
+    });
+    expect(result.intent).toBe('listar_contactos');
+    expect(result.extractedParams.search).toContain('Laura');
+  });
+
+  it('contactos con tags vip → filtro tags', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'contactos con tags vip',
+    });
+    expect(result.intent).toBe('listar_contactos');
+    expect(result.extractedParams.tags).toBe('vip');
+  });
+
+  it('convierte lead por email: "convierte a juan@volkern.test en contacto"', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'convierte a juan@volkern.test en contacto',
+    });
+    expect(result.intent).toBe('convertir_lead');
+    expect(result.extractedParams.email).toBe('juan@volkern.test');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('convierte lead por nombre: "convierte lead de María García a contacto"', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'convierte lead de María García a contacto',
+    });
+    expect(result.intent).toBe('convertir_lead');
+    expect(result.extractedParams.nombre).toBe('María García');
+    // El skill necesita el email para convertir → pide más info
+    expect(result.needsMoreInfo).toBe(true);
+    expect(result.missingParams).toContain('email');
+  });
+
+  it('"convierte…" NO se confunde con crear_contacto (contiene la palabra contacto)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'pasa a contacto a carlos@volkern.test',
+    });
+    expect(result.intent).toBe('convertir_lead');
+    expect(result.extractedParams.email).toBe('carlos@volkern.test');
+  });
+
+  // ═══ TERCER ENTRENAMIENTO (módulo Ventas): pipeline / deals ═══
+
+  it('crea un deal con email, monto y título', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'crea un deal con juan@volkern.test por 5000€ por el paquete empresarial',
+    });
+    expect(result.intent).toBe('crear_negocio');
+    expect(result.extractedParams.email).toBe('juan@volkern.test');
+    expect(result.extractedParams.monto).toBe(5000);
+    expect(result.extractedParams.titulo).toContain('paquete empresarial');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('crea un negocio con nombre y sin título explícito → sintetiza título', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'abre negocio con María García a 3000€',
+    });
+    expect(result.intent).toBe('crear_negocio');
+    expect(result.extractedParams.nombre).toBe('María García');
+    expect(result.extractedParams.monto).toBe(3000);
+    expect(result.extractedParams.titulo).toContain('María García');
+  });
+
+  it('crear_negocio sin email → pide más info', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'crea un negocio con Laura por el servicio premium',
+    });
+    expect(result.intent).toBe('crear_negocio');
+    expect(result.extractedParams.titulo).toContain('servicio premium');
+    expect(result.needsMoreInfo).toBe(true);
+    expect(result.missingParams).toContain('email');
+  });
+
+  it('mueve un deal a otra etapa', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'mueve el deal de juan@volkern.test a etapa negociación',
+    });
+    expect(result.intent).toBe('actualizar_negocio');
+    expect(result.extractedParams.email).toBe('juan@volkern.test');
+    expect(result.extractedParams.etapa).toBe('negociación');
+  });
+
+  it('actualiza el monto de un negocio por nombre', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'actualiza el monto del negocio con María a 7000€',
+    });
+    expect(result.intent).toBe('actualizar_negocio');
+    expect(result.extractedParams.nombre).toBe('María');
+    expect(result.extractedParams.monto).toBe(7000);
+  });
+
+  it('pon prioridad alta al deal', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'pon prioridad alta al deal de Carlos Ruiz',
+    });
+    expect(result.intent).toBe('actualizar_negocio');
+    expect(result.extractedParams.nombre).toBe('Carlos Ruiz');
+    expect(result.extractedParams.prioridad).toBe('alta');
+  });
+
+  it('muéstrame los deals activos', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'muéstrame los deals activos',
+    });
+    expect(result.intent).toBe('mis_negocios');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('negocios en etapa propuesta → mis_negocios con filtro', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'negocios en etapa propuesta',
+    });
+    expect(result.intent).toBe('mis_negocios');
+    expect(result.extractedParams.etapa).toBe('propuesta');
+  });
+
+  it('cómo va mi pipeline de ventas → mis_negocios', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cómo va mi pipeline de ventas',
+    });
+    expect(result.intent).toBe('mis_negocios');
+  });
+
+  it('NO confunde "crea un deal" con crear_lead ni con mis_negocios', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'crea un deal con juan@volkern.test por 5000€',
+    });
+    expect(result.intent).toBe('crear_negocio');
+    expect(result.intent).not.toBe('crear_lead');
+    expect(result.intent).not.toBe('mis_negocios');
+  });
+
+  it('"tengo una oportunidad para ti" NO es mis_negocios (señal tengo acotada)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'tengo una oportunidad para ti',
+    });
+    expect(result.intent).not.toBe('mis_negocios');
+  });
+
+  it('"qué deals tengo con juan@volkern.test" → mis_negocios con email', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'qué deals tengo con juan@volkern.test',
+    });
+    expect(result.intent).toBe('mis_negocios');
+    expect(result.extractedParams.email).toBe('juan@volkern.test');
+  });
+
+  // ═══ CUARTO ENTRENAMIENTO (módulo Ventas): actualizar lead e interacciones ═══
+
+  it('actualiza el teléfono de un lead por email', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'actualiza el telefono de juan@volkern.test a 555-1234',
+    });
+    expect(result.intent).toBe('actualizar_lead');
+    expect(result.extractedParams.email).toBe('juan@volkern.test');
+    expect(result.extractedParams.telefono).toContain('555-1234');
+  });
+
+  it('ponle contexto a un contacto (contenido tras los dos puntos)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'ponle contexto a Alejandra Velázquez: Interesada en automatización',
+    });
+    expect(result.intent).toBe('actualizar_lead');
+    expect(result.extractedParams.nombre).toBe('Alejandra Velázquez');
+    expect(result.extractedParams.contexto).toContain('Interesada en automatización');
+  });
+
+  it('cambia el nombre de un lead por email', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cambia el nombre de maria@volkern.test a Maria Perez',
+    });
+    expect(result.intent).toBe('actualizar_lead');
+    expect(result.extractedParams.email).toBe('maria@volkern.test');
+  });
+
+  it('pon contexto al contacto X (sin conector suelto antes del nombre)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'pon contexto al contacto Alejandra Velázquez',
+    });
+    expect(result.intent).toBe('actualizar_lead');
+    expect(result.extractedParams.nombre).toBe('Alejandra Velázquez');
+  });
+
+  it('NO confunde actualizar lead con actualizar negocio', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'actualiza el telefono de juan@volkern.test a 555-1234',
+    });
+    expect(result.intent).not.toBe('actualizar_negocio');
+  });
+
+  it('registra una llamada con contenido tras los dos puntos', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'registra una llamada con Juan Pérez: Hablamos sobre el presupuesto',
+    });
+    expect(result.intent).toBe('registrar_interaccion');
+    expect(result.extractedParams.tipo).toBe('llamada');
+    expect(result.extractedParams.nombre).toBe('Juan Pérez');
+    expect(result.extractedParams.contenido).toContain('Hablamos sobre el presupuesto');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('anota una reunión con un contacto', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'anota una reunión con Carlos: Quedamos en firmar contrato mañana',
+    });
+    expect(result.intent).toBe('registrar_interaccion');
+    expect(result.extractedParams.tipo).toBe('reunión');
+    expect(result.extractedParams.nombre).toBe('Carlos');
+    expect(result.extractedParams.contenido).toContain('Quedamos en firmar');
+  });
+
+  it('nueva interacción tipo email con un lead', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'nueva interacción tipo email con maria@volkern.test: Enviado catálogo',
+    });
+    expect(result.intent).toBe('registrar_interaccion');
+    expect(result.extractedParams.tipo).toBe('email');
+    expect(result.extractedParams.email).toBe('maria@volkern.test');
+  });
+
+  it('multi-turno: completa el tipo de interacción faltante', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'fue una llamada',
+      pendingIntent: 'registrar_interaccion',
+      collectedEntities: { nombre: 'Juan', contenido: 'Hablamos' },
+      missingEntities: ['tipo'],
+    });
+    expect(result.intent).toBe('registrar_interaccion');
+    expect(result.extractedParams.tipo).toBe('llamada');
+  });
+
+  // ═══ QUINTO ENTRENAMIENTO (módulo Citas): agendar, consultar y cancelar ═══
+
+  const isoDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const tomorrow = () => { const d = new Date(); d.setDate(d.getDate() + 1); return isoDate(d) };
+  const nextWeekday = (dow: number) => {
+    const t = new Date();
+    let ahead = (dow - t.getDay() + 7) % 7;
+    if (ahead === 0) ahead = 7;
+    t.setDate(t.getDate() + ahead);
+    return isoDate(t);
+  };
+
+  it('agenda una cita con email para mañana a las 10am', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'agenda una cita con maria@volkern.test para mañana a las 10am',
+    });
+    expect(result.intent).toBe('agendar_cita');
+    expect(result.extractedParams.email).toBe('maria@volkern.test');
+    expect(result.extractedParams.fecha).toBe(tomorrow());
+    expect(result.extractedParams.hora).toBe('10:00');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('programa reunión con nombre el viernes a las 15:30 (pide email: el skill lo exige)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'programa reunión con Juan Pérez el viernes a las 15:30',
+    });
+    expect(result.intent).toBe('agendar_cita');
+    expect(result.extractedParams.nombre).toBe('Juan Pérez');
+    expect(result.extractedParams.fecha).toBe(nextWeekday(5));
+    expect(result.extractedParams.hora).toBe('15:30');
+    expect(result.needsMoreInfo).toBe(true);
+    expect(result.missingParams).toContain('email');
+  });
+
+  it('agenda videollamada con 2pm → tipo videollamada y hora 14:00', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'agenda videollamada con ana@volkern.test el lunes a las 2pm',
+    });
+    expect(result.intent).toBe('agendar_cita');
+    expect(result.extractedParams.tipo).toBe('videollamada');
+    expect(result.extractedParams.hora).toBe('14:00');
+    expect(result.extractedParams.fecha).toBe(nextWeekday(1));
+  });
+
+  it('agenda cita en fecha explícita 15/05/2026 → normaliza a YYYY-MM-DD', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'agenda cita con Luis Gómez el 15/05/2026 a las 11:30',
+    });
+    expect(result.intent).toBe('agendar_cita');
+    expect(result.extractedParams.nombre).toBe('Luis Gómez');
+    expect(result.extractedParams.fecha).toBe('2026-05-15');
+    expect(result.extractedParams.hora).toBe('11:30');
+  });
+
+  it('agendar sin fecha → needsMoreInfo pide fecha', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'agenda una cita con maria@volkern.test a las 10am',
+    });
+    expect(result.intent).toBe('agendar_cita');
+    expect(result.extractedParams.hora).toBe('10:00');
+    expect(result.needsMoreInfo).toBe(true);
+    expect(result.missingParams).toContain('fecha');
+  });
+
+  it('multi-turno: completa la fecha faltante de agendar_cita', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'mañana',
+      pendingIntent: 'agendar_cita',
+      collectedEntities: { email: 'maria@volkern.test', hora: '10:00' },
+      missingEntities: ['fecha'],
+    });
+    expect(result.intent).toBe('agendar_cita');
+    expect(result.extractedParams.fecha).toBe(tomorrow());
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('multi-turno: completa la hora faltante de agendar_cita', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'a las 10:30',
+      pendingIntent: 'agendar_cita',
+      collectedEntities: { email: 'maria@volkern.test', fecha: tomorrow() },
+      missingEntities: ['hora'],
+    });
+    expect(result.intent).toBe('agendar_cita');
+    expect(result.extractedParams.hora).toBe('10:30');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('qué citas tengo mañana → mis_citas con filtro de fecha', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'qué citas tengo mañana',
+    });
+    expect(result.intent).toBe('mis_citas');
+    expect(result.extractedParams.date).toBe(tomorrow());
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('muéstrame mis citas → mis_citas sin filtro', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'muéstrame mis citas',
+    });
+    expect(result.intent).toBe('mis_citas');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('cancela la cita de Alejandra Velázquez', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cancela la cita de Alejandra Velázquez',
+    });
+    expect(result.intent).toBe('cancelar_cita');
+    expect(result.extractedParams.nombre).toBe('Alejandra Velázquez');
+  });
+
+  it('cancela mi reunión de mañana con juan@volkern.test', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cancela mi reunión de mañana con juan@volkern.test',
+    });
+    expect(result.intent).toBe('cancelar_cita');
+    expect(result.extractedParams.email).toBe('juan@volkern.test');
+    expect(result.extractedParams.fecha).toBe(tomorrow());
+  });
+
+  it('"¿cuánto cuesta la cita de un abogado?" NO es agendar ni mis_citas', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: '¿cuánto cuesta la cita de un abogado?',
+    });
+    expect(result.intent).not.toBe('agendar_cita');
+    expect(result.intent).not.toBe('mis_citas');
+    expect(result.intent).not.toBe('cancelar_cita');
+  });
+
+  it('"cancela el deal de Carlos" NO es cancelar_cita (sin entidad cita)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cancela el deal de Carlos',
+    });
+    expect(result.intent).not.toBe('cancelar_cita');
+  });
+
+  it('"tengo una cita mañana" NO se fuerza a agendar_cita (sin verbo de agenda)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'tengo una cita mañana',
+    });
+    expect(result.intent).not.toBe('agendar_cita');
+  });
+
+  it('"tengo una cita para mañana" (afirmación con para) NO es agendar_cita', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'tengo una cita para mañana',
+    });
+    expect(result.intent).not.toBe('agendar_cita');
+    expect(result.intent).not.toBe('mis_citas');
+  });
+
+  it('multi-turno: completa el email faltante de agendar_cita (tras EMAIL_REQUIRED)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'maria@volkern.test',
+      pendingIntent: 'agendar_cita',
+      collectedEntities: { nombre: 'Juan Pérez', fecha: tomorrow(), hora: '10:00' },
+      missingEntities: ['email'],
+    });
+    expect(result.intent).toBe('agendar_cita');
+    expect(result.extractedParams.email).toBe('maria@volkern.test');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('el día de la semana coincide con hoy → usa la próxima semana (semántica de agenda)', async () => {
+    const today = new Date();
+    const dowToday = today.getDay();
+    const names = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+    const result = await classifier.classify({
+      ...base,
+      message: `agenda cita con test@volkern.test el ${names[dowToday]} a las 9am`,
+    });
+    expect(result.intent).toBe('agendar_cita');
+    const expected = new Date();
+    expected.setDate(expected.getDate() + 7);
+    const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    expect(result.extractedParams.fecha).toBe(iso(expected));
+  });
+
+  // ═══ SEXTO ENTRENAMIENTO (módulo Finanzas): gastos ═══
+
+  it('registra gasto de 45.90 en comida', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'registra gasto de 45.90 en comida',
+    });
+    expect(result.intent).toBe('registrar_gasto');
+    expect(result.extractedParams.monto).toBe(45.9);
+    expect(result.extractedParams.concepto).toBe('comida');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('nuevo gasto con monto, concepto y proveedor', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'nuevo gasto: 120€ de electricidad, proveedor Iberdrola',
+    });
+    expect(result.intent).toBe('registrar_gasto');
+    expect(result.extractedParams.monto).toBe(120);
+    expect(result.extractedParams.concepto).toBe('electricidad');
+    expect(result.extractedParams.proveedor).toBe('Iberdrola');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('gasto sin verbo con monto, concepto y categoría', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'gasto de 300€ en software, categoría herramientas',
+    });
+    expect(result.intent).toBe('registrar_gasto');
+    expect(result.extractedParams.monto).toBe(300);
+    expect(result.extractedParams.concepto).toBe('software');
+    expect(result.extractedParams.categoria).toBe('herramientas');
+  });
+
+  it('registrar_gasto sin monto → pide monto', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'registra un gasto en comida',
+    });
+    expect(result.intent).toBe('registrar_gasto');
+    expect(result.extractedParams.concepto).toBe('comida');
+    expect(result.needsMoreInfo).toBe(true);
+    expect(result.missingParams).toContain('monto');
+  });
+
+  it('multi-turno: completa el monto faltante de registrar_gasto', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: '45.90',
+      pendingIntent: 'registrar_gasto',
+      collectedEntities: { concepto: 'comida' },
+      missingEntities: ['monto'],
+    });
+    expect(result.intent).toBe('registrar_gasto');
+    expect(result.extractedParams).toMatchObject({ concepto: 'comida', monto: '45.9' });
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('multi-turno: completa el concepto faltante', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'fue en comida',
+      pendingIntent: 'registrar_gasto',
+      collectedEntities: { monto: '45.9' },
+      missingEntities: ['concepto'],
+    });
+    expect(result.intent).toBe('registrar_gasto');
+    expect(result.extractedParams.concepto).toBe('comida');
+  });
+
+  it('analiza mi burn rate → analizar_gastos', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'analiza mi burn rate',
+    });
+    expect(result.intent).toBe('analizar_gastos');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('cómo vamos de gastos este mes → analizar_gastos con months=1', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cómo vamos de gastos este mes',
+    });
+    expect(result.intent).toBe('analizar_gastos');
+    expect(result.extractedParams.months).toBe(1);
+  });
+
+  it('dame mi salud financiera → analizar_gastos', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'dame mi salud financiera',
+    });
+    expect(result.intent).toBe('analizar_gastos');
+  });
+
+  it('NO confunde gastos con interacciones (registra gasto de 50€: comida)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'registra un gasto de 50€: comida',
+    });
+    expect(result.intent).toBe('registrar_gasto');
+    expect(result.intent).not.toBe('registrar_interaccion');
+    expect(result.extractedParams.monto).toBe(50);
+  });
+
+  it('"pago la factura de X" NO es registrar_gasto', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'pago la factura de juan@volkern.test',
+    });
+    expect(result.intent).not.toBe('registrar_gasto');
+  });
+
+  it('"registra una llamada: hablamos de un gasto de 50€" SÍ es interacción (tipo explícito)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'registra una llamada con Juan: hablamos de un gasto de 50€',
+    });
+    expect(result.intent).toBe('registrar_interaccion');
+    expect(result.intent).not.toBe('registrar_gasto');
+    expect(result.extractedParams.tipo).toBe('llamada');
+  });
+
+  it('"gasto del 15/05/2026 de 300€" → monto 300 y SIN concepto basura', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'gasto del 15/05/2026 de 300€',
+    });
+    expect(result.intent).toBe('registrar_gasto');
+    expect(result.extractedParams.monto).toBe(300);
+    expect(result.extractedParams.concepto).toBeUndefined();
+  });
+
+  it('concepto con "con proveedor" sin coma → no arrastra el "con"', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'registra gasto de 45.90 en comida con proveedor Acme',
+    });
+    expect(result.intent).toBe('registrar_gasto');
+    expect(result.extractedParams.concepto).toBe('comida');
+    expect(result.extractedParams.proveedor).toBe('Acme');
+  });
+
+  // ═══ SÉPTIMO ENTRENAMIENTO (módulo Tareas/Notas) ═══
+
+  it('crea tarea: llamar a Juan Pérez (título tras los dos puntos)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'crea tarea: llamar a Juan Pérez',
+    });
+    expect(result.intent).toBe('crear_tarea');
+    expect(result.extractedParams.titulo).toBe('llamar a Juan Pérez');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('nueva tarea para María: revisar cotización → nombre + título', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'nueva tarea para María: revisar cotización',
+    });
+    expect(result.intent).toBe('crear_tarea');
+    expect(result.extractedParams.titulo).toBe('revisar cotización');
+    expect(result.extractedParams.nombre).toBe('María');
+  });
+
+  it('agrega pendiente con vencimiento el viernes', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'agrega pendiente: enviar documento a Carlos, vence el viernes',
+    });
+    expect(result.intent).toBe('crear_tarea');
+    expect(result.extractedParams.titulo).toBe('enviar documento a Carlos');
+    expect(result.extractedParams.fechaVencimiento).toBe(nextWeekday(5));
+  });
+
+  it('tarea sin título explícito → sintetiza "Seguimiento X"', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'crea una tarea con Alejandra Velázquez',
+    });
+    expect(result.intent).toBe('crear_tarea');
+    expect(result.extractedParams.nombre).toBe('Alejandra Velázquez');
+    expect(result.extractedParams.titulo).toContain('Seguimiento');
+  });
+
+  it('"crea tarea para mañana: …" → mañana es fecha, NO nombre', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'crea tarea para mañana: llamar a Juan',
+    });
+    expect(result.intent).toBe('crear_tarea');
+    expect(result.extractedParams.titulo).toBe('llamar a Juan');
+    expect(result.extractedParams.nombre).toBeUndefined();
+    expect(result.extractedParams.fechaVencimiento).toBe(tomorrow());
+  });
+
+  it('marca como completada la tarea de llamar a Juan', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'marca como completada la tarea de llamar a Juan',
+    });
+    expect(result.intent).toBe('completar_tarea');
+    expect(result.extractedParams.titulo).toBe('llamar a Juan');
+  });
+
+  it('"la tarea ya está completa" NO es completar_tarea (afirmación)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'la tarea ya está completa',
+    });
+    expect(result.intent).not.toBe('completar_tarea');
+  });
+
+  it('"completa el diagnóstico de X" NO es completar_tarea', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'completa el diagnóstico de juan@volkern.test',
+    });
+    expect(result.intent).not.toBe('completar_tarea');
+  });
+
+  it('qué tareas tengo pendientes → mis_tareas', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'qué tareas tengo pendientes',
+    });
+    expect(result.intent).toBe('mis_tareas');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('muéstrame mis tareas → mis_tareas', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'muéstrame mis tareas',
+    });
+    expect(result.intent).toBe('mis_tareas');
+  });
+
+  it('tareas pendientes de juan@volkern.test → mis_tareas con email', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'tareas pendientes de juan@volkern.test',
+    });
+    expect(result.intent).toBe('mis_tareas');
+    expect(result.extractedParams.email).toBe('juan@volkern.test');
+  });
+
+  it('agrega nota con email y contenido', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'agrega nota a juan@volkern.test: Cliente interesado en paquete premium',
+    });
+    expect(result.intent).toBe('crear_nota');
+    expect(result.extractedParams.email).toBe('juan@volkern.test');
+    expect(result.extractedParams.contenido).toContain('Cliente interesado');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('nota para María García: Prefiere contacto por WhatsApp', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'nota para María García: Prefiere contacto por WhatsApp',
+    });
+    expect(result.intent).toBe('crear_nota');
+    expect(result.extractedParams.nombre).toBe('María García');
+    expect(result.extractedParams.contenido).toContain('Prefiere contacto');
+  });
+
+  it('anota en el perfil de Carlos: … → crear_nota y NO registrar_interaccion', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'anota en el perfil de Carlos: Llamar después de las 5pm',
+    });
+    expect(result.intent).toBe('crear_nota');
+    expect(result.intent).not.toBe('registrar_interaccion');
+    expect(result.extractedParams.contenido).toContain('Llamar después');
+  });
+
+  it('"ponle notas a Juan: Cliente importante" sigue siendo actualizar_lead', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'ponle notas a Juan: Cliente importante',
+    });
+    expect(result.intent).toBe('actualizar_lead');
+    expect(result.extractedParams.contexto).toContain('Cliente importante');
+  });
+
+  it('muéstrame las notas de juan@volkern.test → ver_notas con email', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'muéstrame las notas de juan@volkern.test',
+    });
+    expect(result.intent).toBe('ver_notas');
+    expect(result.extractedParams.email).toBe('juan@volkern.test');
+  });
+
+  it('qué notas tiene María García → ver_notas con nombre', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'qué notas tiene María García',
+    });
+    expect(result.intent).toBe('ver_notas');
+    expect(result.extractedParams.nombre).toBe('María García');
+  });
+
+  // ═══ OCTAVO ENTRENAMIENTO (módulo Proveedores): crear y listar ═══
+
+  it('registra proveedor con email → crear_proveedor', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'registra proveedor: Suministros SA, email ventas@suministros.com',
+    });
+    expect(result.intent).toBe('crear_proveedor');
+    expect(result.extractedParams.nombre).toBe('Suministros SA');
+    expect(result.extractedParams.email).toBe('ventas@suministros.com');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('nuevo proveedor tras los dos puntos → crear_proveedor', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'nuevo proveedor: Papelería López',
+    });
+    expect(result.intent).toBe('crear_proveedor');
+    expect(result.extractedParams.nombre).toBe('Papelería López');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('crea proveedor con razón social larga (SA de CV)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'crea proveedor Tecnología Plus SA de CV',
+    });
+    expect(result.intent).toBe('crear_proveedor');
+    expect(result.extractedParams.nombre).toBe('Tecnología Plus SA de CV');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('crear_proveedor sin nombre → pide nombre', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'registra un proveedor',
+    });
+    expect(result.intent).toBe('crear_proveedor');
+    expect(result.needsMoreInfo).toBe(true);
+    expect(result.missingParams).toContain('nombre');
+  });
+
+  it('multi-turno: completa el nombre del proveedor faltante', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'Suministros del Norte',
+      pendingIntent: 'crear_proveedor',
+      collectedEntities: { email: 'ventas@suministros.com' },
+      missingEntities: ['nombre'],
+    });
+    expect(result.intent).toBe('crear_proveedor');
+    expect(result.extractedParams.nombre).toBe('Suministros del Norte');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('multi-turno: completa razón social con SA de CV', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'Tecnología Plus SA de CV',
+      pendingIntent: 'crear_proveedor',
+      collectedEntities: { email: 'ventas@tech.com' },
+      missingEntities: ['nombre'],
+    });
+    expect(result.intent).toBe('crear_proveedor');
+    expect(result.extractedParams.nombre).toBe('Tecnología Plus SA de CV');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('multi-turno: frase no-nombre NO se captura como nombre del proveedor', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'Fue en comida',
+      pendingIntent: 'crear_proveedor',
+      collectedEntities: { email: 'ventas@tech.com' },
+      missingEntities: ['nombre'],
+    });
+    // El multi-turno NO captura la frase como nombre (sigue pendiente la
+    // intención; el nombre queda undefined).
+    expect(result.extractedParams.nombre).toBeUndefined();
+    expect(result.intent).toBe('crear_proveedor');
+  });
+
+  it('captura categoría y dirección al crear proveedor', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'registra proveedor: Acme Corp, categoría oficina, dirección Av. Reforma 123',
+    });
+    expect(result.intent).toBe('crear_proveedor');
+    expect(result.extractedParams.nombre).toBe('Acme Corp');
+    expect(result.extractedParams.categoria).toBe('oficina');
+    expect(result.extractedParams.direccion).toBe('Av. Reforma 123');
+  });
+
+  it('lista los proveedores → listar_proveedores', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'lista los proveedores',
+    });
+    expect(result.intent).toBe('listar_proveedores');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('qué proveedores tengo → listar_proveedores', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'qué proveedores tengo',
+    });
+    expect(result.intent).toBe('listar_proveedores');
+  });
+
+  it('muéstrame mis proveedores → listar_proveedores', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'muéstrame mis proveedores',
+    });
+    expect(result.intent).toBe('listar_proveedores');
+  });
+
+  it('proveedores de categoría oficina → listar_proveedores con filtro', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'proveedores de categoría oficina',
+    });
+    expect(result.intent).toBe('listar_proveedores');
+    expect(result.extractedParams.categoria).toBe('oficina');
+  });
+
+  it('"registra una llamada con el proveedor Juan" SÍ es interacción (tipo explícito)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'registra una llamada con el proveedor Juan: tratamos el pedido',
+    });
+    expect(result.intent).toBe('registrar_interaccion');
+    expect(result.intent).not.toBe('crear_proveedor');
+  });
+
+  it('"gasto de 300€ en software, proveedor Iberdrola" sigue siendo gasto, no crear_proveedor', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'gasto de 300€ en software, proveedor Iberdrola',
+    });
+    expect(result.intent).toBe('registrar_gasto');
+    expect(result.intent).not.toBe('crear_proveedor');
+    expect(result.extractedParams.proveedor).toBe('Iberdrola');
+  });
+
+  it('"crea proveedor" NO se confunde con crear_lead ni crear_empresa', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'crea proveedor Tecnología Plus SA de CV',
+    });
+    expect(result.intent).toBe('crear_proveedor');
+    expect(result.intent).not.toBe('crear_lead');
+    expect(result.intent).not.toBe('crear_empresa');
+  });
+
+  // ═══ NOVENO ENTRENAMIENTO (módulo Catálogo): buscar, precio y listar ═══
+
+  it('busca cafeteras en el catálogo → buscar_catalogo con query', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'busca cafeteras en el catálogo',
+    });
+    expect(result.intent).toBe('buscar_catalogo');
+    expect(result.extractedParams.query).toContain('cafeteras');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('qué precio tiene el paquete premium → buscar_catalogo', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'qué precio tiene el paquete premium',
+    });
+    expect(result.intent).toBe('buscar_catalogo');
+    expect(result.extractedParams.query).toContain('paquete premium');
+  });
+
+  it('cuánto cuesta la consultoría → buscar_catalogo', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cuánto cuesta la consultoría',
+    });
+    expect(result.intent).toBe('buscar_catalogo');
+    expect(result.extractedParams.query).toContain('consultoría');
+  });
+
+  it('busca propiedades en Madrid por menos de 300000 → tipo inmueble + precioMax', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'busca propiedades en Madrid por menos de 300000',
+    });
+    expect(result.intent).toBe('buscar_catalogo');
+    expect(result.extractedParams.tipo).toBe('inmueble');
+    expect(result.extractedParams.precioMax).toBe(300000);
+  });
+
+  it('qué productos de tipo inmueble por más de 150000 → precioMin', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'qué productos de tipo inmueble por más de 150000',
+    });
+    expect(result.intent).toBe('buscar_catalogo');
+    expect(result.extractedParams.tipo).toBe('inmueble');
+    expect(result.extractedParams.precioMin).toBe(150000);
+  });
+
+  it('entre 100 y 200 → ambos extremos del rango', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'busca servicios entre 100 y 200',
+    });
+    expect(result.intent).toBe('buscar_catalogo');
+    expect(result.extractedParams.tipo).toBe('servicio');
+    expect(result.extractedParams.precioMin).toBe(100);
+    expect(result.extractedParams.precioMax).toBe(200);
+  });
+
+  it('qué productos hay → buscar_catalogo sin query (listar)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'qué productos hay',
+    });
+    expect(result.intent).toBe('buscar_catalogo');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('lista el catálogo → buscar_catalogo', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'lista el catálogo',
+    });
+    expect(result.intent).toBe('buscar_catalogo');
+  });
+
+  it('muéstrame los servicios disponibles → buscar_catalogo tipo servicio', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'muéstrame los servicios disponibles',
+    });
+    expect(result.intent).toBe('buscar_catalogo');
+    expect(result.extractedParams.tipo).toBe('servicio');
+  });
+
+  it('"busca el producto Cafeteras Pro" NO es buscar_lead', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'busca el producto Cafeteras Pro',
+    });
+    expect(result.intent).toBe('buscar_catalogo');
+    expect(result.intent).not.toBe('buscar_lead');
+  });
+
+  it('"cuánto cuesta fabricar el producto Y" NO es buscar_catalogo (producción)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cuánto cuesta fabricar el producto Y',
+    });
+    expect(result.intent).not.toBe('buscar_catalogo');
+  });
+
+  it('"¿cuánto cuesta la cita de un abogado?" sigue sin ser agendar ni catálogo', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: '¿cuánto cuesta la cita de un abogado?',
+    });
+    expect(result.intent).not.toBe('agendar_cita');
+    expect(result.intent).not.toBe('mis_citas');
+    expect(result.intent).not.toBe('buscar_catalogo');
+  });
+
+  // ═══ INVENTARIO / STOCK ═══
+
+  it('cómo está el inventario → salud_inventario', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cómo está el inventario',
+    });
+    expect(result.intent).toBe('salud_inventario');
+  });
+
+  it('qué productos tienen stock bajo → salud_inventario (y NO catálogo)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'qué productos tienen stock bajo',
+    });
+    expect(result.intent).toBe('salud_inventario');
+    expect(result.intent).not.toBe('buscar_catalogo');
+  });
+
+  it('hay riesgo de ruptura de stock → salud_inventario', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'hay riesgo de ruptura de stock',
+    });
+    expect(result.intent).toBe('salud_inventario');
+  });
+
+  it('salud del inventario del producto X → salud_inventario con producto', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'salud del inventario del producto Cafetera Pro',
+    });
+    expect(result.intent).toBe('salud_inventario');
+    expect(result.extractedParams.producto).toContain('Cafetera');
+  });
+
+  it('entrada de 50 unidades del producto X → ajustar_stock IN', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'entrada de 50 unidades del producto Cafetera Pro',
+    });
+    expect(result.intent).toBe('ajustar_stock');
+    expect(result.extractedParams.cantidad).toBe(50);
+    expect(result.extractedParams.tipo).toBe('IN');
+    expect(result.extractedParams.producto).toContain('Cafetera');
+  });
+
+  it('salida de 10 unidades del producto Y → ajustar_stock OUT', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'salida de 10 unidades del producto Cafetera Pro',
+    });
+    expect(result.intent).toBe('ajustar_stock');
+    expect(result.extractedParams.cantidad).toBe(10);
+    expect(result.extractedParams.tipo).toBe('OUT');
+  });
+
+  it('ajusta el stock del producto Z, entrada de 5 → ajustar_stock', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'ajusta el stock del producto Cafetera Pro, entrada de 5 unidades',
+    });
+    expect(result.intent).toBe('ajustar_stock');
+    expect(result.extractedParams.tipo).toBe('IN');
+    expect(result.extractedParams.cantidad).toBe(5);
+  });
+
+  it('ajustar_stock sin producto → pide producto', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'entrada de 50 unidades',
+    });
+    expect(result.intent).toBe('ajustar_stock');
+    expect(result.needsMoreInfo).toBe(true);
+    expect(result.missingParams).toContain('producto');
+  });
+
+  it('consume 5 unidades del producto X → consumir_inventario', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'consume 5 unidades del producto Cafetera Pro',
+    });
+    expect(result.intent).toBe('consumir_inventario');
+    expect(result.extractedParams.cantidad).toBe(5);
+    expect(result.extractedParams.producto).toContain('Cafetera');
+  });
+
+  it('descarga 10 del material Z → consumir_inventario', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'descarga 10 unidades del material Acero Inoxidable',
+    });
+    expect(result.intent).toBe('consumir_inventario');
+    expect(result.extractedParams.cantidad).toBe(10);
+  });
+
+  it('"cómo está el inventario de gastos" NO es salud_inventario (es gasto)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cómo está el inventario de gastos este mes',
+    });
+    expect(result.intent).toBe('analizar_gastos');
+  });
+
+  it('"entrada de datos de Juan" NO es ajustar_stock (sin unidades)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'entrada de datos de Juan Pérez',
+    });
+    expect(result.intent).not.toBe('ajustar_stock');
+  });
+});
+
 describe('IntentClassifier — getRequiredParams', () => {
   const classifier = new IntentClassifierAgent();
 

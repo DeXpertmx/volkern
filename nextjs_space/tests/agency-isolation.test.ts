@@ -20,10 +20,20 @@ describe('Volkern Agency Security & Isolation (Targeted Logic)', () => {
   let testUser: any;
 
   beforeAll(async () => {
-    // 1. Obtener un usuario base
-    testUser = await prisma.user.findFirst({
-      where: { email: { contains: 'volkern' } }
-    }) || await prisma.user.findFirst();
+    // 1. Crear un usuario dedicado SIN rol de Superadmin.
+    //    CRÍTICO: si la key de la Agencia B pertenece a un Superadmin, la
+    //    Regla de Oro permite legítimamente acceder a CUALQUIER tenant, y el
+    //    test de aislamiento (SECURITY) no podría distinguir al intruso.
+    //    Antes esto fallaba porque findFirst devolvía admin@volkern.app
+    //    (rol Superadmin) y el bypass enmascaraba la violación de jerarquía.
+    const stamp = Date.now() + Math.floor(Math.random() * 100000);
+    testUser = await prisma.user.create({
+      data: {
+        email: `agency-isolation-${stamp}@volkern.test`,
+        name: 'Usuario Aislamiento Agencias',
+        roleId: null, // Sin rol → nunca Superadmin
+      },
+    });
 
     // 2. Setup Agencia A
     agencyA = await prisma.tenant.create({
@@ -88,6 +98,9 @@ describe('Volkern Agency Security & Isolation (Targeted Logic)', () => {
     if (agencyA?.id) {
       await prisma.apiKey.deleteMany({ where: { tenantId: { in: [agencyA.id, agencyB?.id].filter(Boolean) } } });
       await prisma.tenant.deleteMany({ where: { id: { in: [slotA?.id, agencyA.id, agencyB?.id].filter(Boolean) } } });
+    }
+    if (testUser?.id) {
+      await prisma.user.deleteMany({ where: { id: testUser.id } }).catch(() => {});
     }
   });
 

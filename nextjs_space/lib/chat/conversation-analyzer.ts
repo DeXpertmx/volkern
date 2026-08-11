@@ -209,6 +209,9 @@ async function saveAnalysis(analysis: ConversationAnalysis): Promise<void> {
       data: {
         tenantId: analysis.tenantId,
         intent: 'conversation_analysis',
+        // `status` es obligatorio en el schema; sin él el create falla y el
+        // post-análisis muere silenciosamente en segundo plano.
+        status: 'SUCCESS',
         skillParams: {
           conversationId: analysis.conversationId,
           sentiment: analysis.sentiment,

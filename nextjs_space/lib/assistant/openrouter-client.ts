@@ -1,5 +1,3 @@
-import { callGemma, GemmaMessage } from '@/lib/ai/gemma-client';
-
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
@@ -53,48 +51,92 @@ export async function callOpenRouter(model: string, messages: OpenRouterMessage[
     throw new Error('OPENROUTER_API_KEY no configurada');
   }
 
-  // Timeout acotado: si el proveedor no responde, el pipeline cae al siguiente
-  // fallback en vez de colgar el webhook de Telegram (límite ~25-30s).
-  // El llamador puede pasar un timeout menor en caminos con presupuesto de
-  // tiempo estricto (chatbot) o mayor en generaciones largas (Web Creator).
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  // Los modelos free de OpenRouter (google/gemma-4-*) usan un pool compartido
+  // y devuelven 429 intermitente ("retry shortly"). Reintentamos con backoff
+  // corto para que un rate-limit transitorio NO haga saltar todo el fallback
+  // (antes TODOS los modelos daban 429 a la vez y la consulta agotaba el
+  // timeout de 25s del webhook).
+  const MAX_RETRIES = 2;
+  const started = Date.now();
+  let lastError: Error | null = null;
 
-  try {
-    const response = await fetch(OPENROUTER_BASE_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://volkern.app',
-        'X-Title': 'Volkern CRM Assistant',
-        'X-No-Logging': 'true'
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        temperature,
-        max_tokens: maxTokens,
-        top_p: 0.9
-      }),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`OpenRouter error (${model}): ${response.status} - ${error}`);
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    // Presupuesto TOTAL acotado a timeoutMs (deadline compartido entre intentos).
+    // Si un modelo se cuelga (no 429, sino abort por timeout), el catch reintentaría
+    // hasta 3×timeoutMs — eso reventaría el presupuesto del webhook de Telegram.
+    // Con este deadline, un modelo colgado consume a lo sumo timeoutMs y la cadena
+    // avanza al siguiente fallback.
+    const elapsed = Date.now() - started;
+    const remaining = timeoutMs - elapsed;
+    if (remaining <= 0) {
+      throw lastError ?? new Error(`OpenRouter error (${model}): timeout total agotado`);
     }
 
-    const data = await response.json();
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), remaining);
 
-    if (!data?.choices?.[0]?.message?.content) {
-      throw new Error(`${model} retornó respuesta vacía o nula`);
+    try {
+      const response = await fetch(OPENROUTER_BASE_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://volkern.app',
+          'X-Title': 'Volkern CRM Assistant',
+          'X-No-Logging': 'true'
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          temperature,
+          max_tokens: maxTokens,
+          top_p: 0.9
+        }),
+        signal: controller.signal,
+      });
+
+      if (response.status === 429) {
+        const errorBody = await response.text().catch(() => '');
+        // 429 del pool compartido (upstream_provider_shared_pool) dura 30-60s:
+        // reintentar en milisegundos es inútil → fallar rápido para que la
+        // cadena pase al siguiente proveedor (Ling) sin quemar presupuesto.
+        if (errorBody.includes('upstream_provider_shared_pool')) {
+          throw new Error(`OpenRouter error (${model}): ${response.status} - ${errorBody}`);
+        }
+        if (attempt < MAX_RETRIES) {
+          // Rate-limit individual/transitorio: esperar y reintentar
+          await new Promise(r => setTimeout(r, 700 * (attempt + 1)));
+          continue;
+        }
+        throw new Error(`OpenRouter error (${model}): ${response.status} - ${errorBody}`);
+      }
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`OpenRouter error (${model}): ${response.status} - ${error}`);
+      }
+
+      const data = await response.json();
+
+      if (!data?.choices?.[0]?.message?.content) {
+        throw new Error(`${model} retornó respuesta vacía o nula`);
+      }
+
+      return data;
+    } catch (e: any) {
+      lastError = e instanceof Error ? e : new Error(String(e));
+      // Un 429 del pool compartido de Google dura 30-60s: reintentarlo en ms es
+      // inútil. Falla rápido para que la cadena pase al siguiente proveedor
+      // (Ling) sin quemar el presupuesto del webhook de 25s.
+      if (attempt >= MAX_RETRIES || isGoogleSharedPool429(lastError)) throw lastError;
+      // Si no fue un 429 de pool (p. ej. timeout de red), reintentar con backoff
+      await new Promise(r => setTimeout(r, 400 * (attempt + 1)));
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    return data;
-  } finally {
-    clearTimeout(timeoutId);
   }
+
+  throw lastError || new Error(`OpenRouter error (${model})`);
 }
 
 /**
@@ -108,13 +150,71 @@ async function callGemma4(
 }
 
 /**
- * Llama a nvidia/nemotron-3-ultra-550b-a55b:free via OpenRouter.
+ * Llama a google/gemma-4-26b-a4b-it:free via OpenRouter.
+ * Respaldo adicional más ligero/rápido que la 31b; útil cuando la 31b está
+ * rate-limited upstream (429), que era un fallo común en producción.
  */
-async function callNemotron(
+async function callGemma426b(
   messages: OpenRouterMessage[],
   timeoutMs = 20000
 ): Promise<OpenRouterResponse> {
-  return callOpenRouter('nvidia/nemotron-3-ultra-550b-a55b:free', messages, 0.3, 8192, timeoutMs);
+  return callOpenRouter('google/gemma-4-26b-a4b-it:free', messages, 0.3, 8192, timeoutMs);
+}
+
+/**
+ * Llama a inclusionai/ling-3.0-flash:free via OpenRouter.
+ * Proveedor DISTINTO a Google (Inclusion AI): no comparte el pool rate-limit
+ * de Google AI Studio, así que sigue funcionando cuando gemma-4-31b/26b dan
+ * 429 a la vez. Verificado: responde en ~1s con contenido real en español.
+ */
+async function callLing30Flash(
+  messages: OpenRouterMessage[],
+  timeoutMs = 20000
+): Promise<OpenRouterResponse> {
+  return callOpenRouter('inclusionai/ling-3.0-flash:free', messages, 0.3, 8192, timeoutMs);
+}
+
+/**
+ * True si el error es un 429 del pool compartido de Google AI Studio
+ * (google/gemma-4-*). En ese caso gemma-4-26b dará el MISMO 429 — no vale la
+ * pena reintentarlo: saltar directo al respaldo de otro proveedor (Ling).
+ */
+function isGoogleSharedPool429(error: unknown): boolean {
+  const msg = String(error instanceof Error ? error.message : error);
+  return msg.includes('upstream_provider_shared_pool') || msg.includes('Google AI Studio');
+}
+
+/**
+ * Intenta la cadena Google (gemma-4-31b → gemma-4-26b) con un atajo:
+ * si la 31b da 429 del pool compartido de Google, la 26b dará el mismo error
+ * (comparten rate-limit), así que se salta directo y se ahorran ~2.4s de
+ * reintentos inútiles por consulta — crítico para el presupuesto del webhook
+ * de Telegram (25s), donde cada segundo cuenta.
+ */
+async function callGoogleGemmaChain(
+  messages: OpenRouterMessage[],
+  timeoutMs = 20000,
+  skipModel?: string
+): Promise<OpenRouterResponse | null> {
+  if (skipModel !== 'google/gemma-4-31b-it:free') {
+    try {
+      const response = await callGemma4(messages, timeoutMs);
+      return response;
+    } catch (error) {
+      console.warn('[AI] Gemma 4 falló:', error);
+      // Pool compartido de Google → la 26b dará lo mismo: saltarla.
+      if (isGoogleSharedPool429(error)) return null;
+    }
+  }
+  if (skipModel !== 'google/gemma-4-26b-a4b-it:free') {
+    try {
+      const response = await callGemma426b(messages, timeoutMs);
+      return response;
+    } catch (error) {
+      console.warn('[AI] Gemma 4 26b falló:', error);
+    }
+  }
+  return null;
 }
 
 /**
@@ -179,22 +279,11 @@ async function callDeepSeekV4FlashDirect(
 }
 
 /**
- * Llama a deepseek/deepseek-chat:free via OpenRouter (fallback si la API directa falla).
- */
-async function callDeepSeekChat(
-  messages: OpenRouterMessage[],
-  timeoutMs = 20000
-): Promise<OpenRouterResponse> {
-  return callOpenRouter('deepseek/deepseek-chat:free', messages, 0.4, 8192, timeoutMs);
-}
-
-/**
  * Pipeline de llamada para Web Creator (DeepSeek V4 Flash prioritario):
  * 1. DeepSeek V4 Flash directo (API nativa) — PRIMARIO
- * 2. deepseek/deepseek-chat:free via OpenRouter (respaldo 1)
- * 3. google/gemma-4-31b-it:free via OpenRouter (respaldo 2)
- * 4. nvidia/nemotron-3-ultra-550b-a55b:free via OpenRouter (respaldo 3)
- * 5. Google Gemini 2.5 Flash directo (respaldo final)
+ * 2. google/gemma-4-31b-it:free via OpenRouter (respaldo 1)
+ * 3. google/gemma-4-26b-a4b-it:free via OpenRouter (respaldo 2)
+ * 4. Google Gemini 2.5 Flash directo (respaldo final)
  */
 export async function callWebCreatorWithFallback(
   messages: OpenRouterMessage[]
@@ -211,40 +300,31 @@ export async function callWebCreatorWithFallback(
     console.warn('[AI WebCreator] DeepSeek V4 Flash falló:', error);
   }
 
-  // 2. DeepSeek Chat via OpenRouter
+  // 2. Ling 3.0 Flash via OpenRouter — proveedor distinto a Google, inmune al
+  //     pool rate-limit de Google AI Studio
   try {
-    console.log('[AI WebCreator] Fallback a deepseek/deepseek-chat:free...');
-    const response = await callDeepSeekChat(messages, 45000);
-    console.log('[AI WebCreator] ✅ DeepSeek Chat respondió correctamente');
+    console.log('[AI WebCreator] Fallback a inclusionai/ling-3.0-flash:free...');
+    const response = await callLing30Flash(messages, 45000);
+    console.log('[AI WebCreator] ✅ Ling 3.0 Flash respondió correctamente');
     return response;
   } catch (error) {
-    console.warn('[AI WebCreator] DeepSeek Chat falló:', error);
+    console.warn('[AI WebCreator] Ling 3.0 Flash falló:', error);
   }
 
-  // 3. Gemma 4 via OpenRouter
-  try {
-    console.log('[AI WebCreator] Fallback a google/gemma-4-31b-it:free...');
-    const response = await callGemma4(messages, 45000);
-    console.log('[AI WebCreator] ✅ Gemma 4 respondió correctamente');
-    return response;
-  } catch (error) {
-    console.warn('[AI WebCreator] Gemma 4 falló:', error);
-  }
-
-  // 4. Nemotron
-  try {
-    console.log('[AI WebCreator] Fallback a nvidia/nemotron-3-ultra-550b-a55b:free...');
-    const response = await callNemotron(messages, 45000);
-    console.log('[AI WebCreator] ✅ Nemotron respondió correctamente');
-    return response;
-  } catch (error) {
-    console.warn('[AI WebCreator] Nemotron falló:', error);
+  // 3+4. Gemma 4 (31b → 26b) via OpenRouter — con atajo ante 429 del pool
+  //       compartido de Google
+  {
+    const gemmaResponse = await callGoogleGemmaChain(messages, 45000);
+    if (gemmaResponse) {
+      console.log('[AI WebCreator] ✅ Gemma 4 respondió correctamente');
+      return gemmaResponse;
+    }
   }
 
   // 5. Fallback final: Google Gemini 2.5 Flash directo
   try {
     console.log('[AI WebCreator] Fallback final a Google Gemini 2.5 Flash...');
-    const response = await callGemini25Flash(messages);
+    const response = await callGemini25Flash(messages, 15000);
     console.log('[AI WebCreator] ✅ Gemini respondió correctamente');
     return response;
   } catch (error) {
@@ -322,10 +402,9 @@ async function callGemini25Flash(
 /**
  * Pipeline de llamada con fallback — DeepSeek V4 Flash prioritario:
  * 1. DeepSeek V4 Flash directo (API nativa) — PRIMARIO
- * 2. deepseek/deepseek-chat:free via OpenRouter (respaldo 1)
- * 3. google/gemma-4-31b-it:free via OpenRouter (respaldo 2)
- * 4. nvidia/nemotron-3-ultra-550b-a55b:free via OpenRouter (respaldo 3)
- * 5. Google Gemini 2.5 Flash directo (respaldo final)
+ * 2. google/gemma-4-31b-it:free via OpenRouter (respaldo 1)
+ * 3. google/gemma-4-26b-a4b-it:free via OpenRouter (respaldo 2)
+ * 4. Google Gemini 2.5 Flash directo (respaldo final)
  */
 export async function callAssistantWithFallback(
   messages: OpenRouterMessage[],
@@ -350,42 +429,37 @@ export async function callAssistantWithFallback(
     }
   }
 
-  // 2. DeepSeek Chat via OpenRouter
+  // 2. Ling 3.0 Flash via OpenRouter — proveedor DISTINTO a Google, inmune al
+  //     rate-limit compartido del pool de Google AI Studio. Va ANTES que Gemma
+  //     porque cuando el pool de Google está 429 (lo más común), los Gemma
+  //     desperdician segundos preciosos del presupuesto de 25s del webhook.
   try {
-    console.log('[AI] Fallback a deepseek/deepseek-chat:free...');
-    const response = await callDeepSeekChat(messages, hopTimeout);
-    console.log('[AI] ✅ DeepSeek Chat respondió correctamente');
+    console.log('[AI] Fallback a inclusionai/ling-3.0-flash:free...');
+    const response = await callLing30Flash(messages, hopTimeout);
+    console.log('[AI] ✅ Ling 3.0 Flash respondió correctamente');
     return response;
-  } catch (deepseekChatError) {
-    console.warn('[AI] DeepSeek Chat falló:', deepseekChatError);
+  } catch (lingError) {
+    console.warn('[AI] Ling 3.0 Flash falló:', lingError);
   }
 
-  // 3. Gemma 4 via OpenRouter
-  try {
-    console.log('[AI] Fallback a google/gemma-4-31b-it:free...');
-    const response = await callGemma4(messages, hopTimeout);
-    console.log('[AI] ✅ Gemma 4 respondió correctamente');
-    return response;
-  } catch (gemmaError) {
-    console.warn('[AI] Gemma 4 falló:', gemmaError);
-  }
-
-  // 4. Nemotron via OpenRouter
-  try {
-    console.log('[AI] Fallback a nvidia/nemotron-3-ultra-550b-a55b:free...');
-    const response = await callNemotron(messages, hopTimeout);
-    console.log('[AI] ✅ Nemotron respondió correctamente');
-    return response;
-  } catch (nemotronError) {
-    console.warn('[AI] Nemotron falló:', nemotronError);
+  // 3. Gemma 4 (31b → 26b) via OpenRouter — con atajo ante 429 del pool
+  //     compartido de Google (la 26b daría el mismo error y solo quemaría
+  //     el presupuesto del webhook con reintentos inútiles)
+  {
+    const gemmaResponse = await callGoogleGemmaChain(messages, hopTimeout);
+    if (gemmaResponse) {
+      console.log('[AI] ✅ Gemma 4 respondió correctamente');
+      return gemmaResponse;
+    }
   }
 
   // 5. Fallback final: Google Gemini 2.5 Flash directo
   try {
     console.log('[AI] Fallback final a Google Gemini 2.5 Flash...');
-    // En el camino caliente el último recurso también debe caber en el
-    // presupuesto del webhook: mínimo 30s (no 90s fijos).
-    const response = await callGemini25Flash(messages, Math.max(hopTimeout, 30000));
+    // El último recurso debe caber en el presupuesto del webhook de Telegram
+    // (25s): el clasificador pasa 10s por hop, así que Gemini no puede esperar
+    // 30s (reventaría el PIPELINE_TIMEOUT). Se acota a máx 15s.
+    const response = await callGemini25Flash(messages, Math.min(Math.max(hopTimeout, 10000), 15000));
     console.log('[AI] ✅ Gemini respondió correctamente');
     return response;
   } catch (geminiError) {
@@ -510,7 +584,7 @@ async function runToolLoop(
 }
 
 /**
- * Pipeline genérico con modelo configurable y fallback a DeepSeek Chat / Nemotron / Gemini.
+ * Pipeline genérico con modelo configurable y fallback a Gemma 4 (31b/26b) / Gemini.
  */
 export async function callOpenRouterWithFallback(
   model: string,
@@ -528,34 +602,32 @@ export async function callOpenRouterWithFallback(
     console.warn(`[AI] ${model} falló:`, openRouterError);
   }
 
-  // 2. DeepSeek Chat via OpenRouter
-  if (model !== 'deepseek/deepseek-chat:free') {
+  // 2. Ling 3.0 Flash via OpenRouter — proveedor distinto a Google
+  if (model !== 'inclusionai/ling-3.0-flash:free') {
     try {
-      console.log('[AI] Fallback a deepseek/deepseek-chat:free...');
-      const response = await callDeepSeekChat(messages);
-      console.log('[AI] ✅ DeepSeek Chat respondió correctamente');
+      console.log('[AI] Fallback a inclusionai/ling-3.0-flash:free...');
+      const response = await callLing30Flash(messages);
+      console.log('[AI] ✅ Ling 3.0 Flash respondió correctamente');
       return response;
-    } catch (dsChatError) {
-      console.warn('[AI] DeepSeek Chat falló:', dsChatError);
+    } catch (lingError) {
+      console.warn('[AI] Ling 3.0 Flash falló:', lingError);
     }
   }
 
-  // 3. Nemotron via OpenRouter
-  if (model !== 'nvidia/nemotron-3-ultra-550b-a55b:free') {
-    try {
-      console.log('[AI] Fallback a nvidia/nemotron-3-ultra-550b-a55b:free...');
-      const response = await callNemotron(messages);
-      console.log('[AI] ✅ Nemotron respondió correctamente');
-      return response;
-    } catch (nemotronError) {
-      console.warn('[AI] Nemotron falló:', nemotronError);
+  // 3+4. Gemma 4 (31b → 26b) via OpenRouter — con atajo ante 429 del pool
+  //       compartido de Google
+  {
+    const gemmaResponse = await callGoogleGemmaChain(messages, 20000, model);
+    if (gemmaResponse) {
+      console.log('[AI] ✅ Gemma 4 respondió correctamente');
+      return gemmaResponse;
     }
   }
 
   // 4. Fallback final: Google Gemini 2.5 Flash directo
   try {
     console.log('[AI] Fallback final a Google Gemini 2.5 Flash...');
-    const response = await callGemini25Flash(messages);
+    const response = await callGemini25Flash(messages, 15000);
     console.log('[AI] ✅ Gemini respondió correctamente');
     return response;
   } catch (geminiError) {
