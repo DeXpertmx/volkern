@@ -3316,6 +3316,203 @@ describe('IntentClassifier — ruta determinista (sin LLM)', () => {
     expect(result.intent).not.toBe('sugerir_precio_inmueble');
     expect(result.intent).toBe('buscar_catalogo');
   });
+
+  // ═══ DÉCIMO QUINTO ENTRENAMIENTO (módulo Proyecciones Financieras):
+  // proyección de flujo de caja, impuestos por país y rentabilidad global ═══
+
+  // ── proyeccion_financiera ──
+  it('cómo se ve el flujo de caja para el próximo mes → proyeccion_financiera', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cómo se ve el flujo de caja para el próximo mes',
+    });
+    expect(result.intent).toBe('proyeccion_financiera');
+    expect(result.extractedParams.months).toBe(1);
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('proyecta el EBITDA del trimestre → proyeccion_financiera con months=3', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'proyecta el EBITDA del trimestre',
+    });
+    expect(result.intent).toBe('proyeccion_financiera');
+    expect(result.extractedParams.months).toBe(3);
+  });
+
+  it('dame un pronóstico financiero → proyeccion_financiera', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'dame un pronóstico financiero',
+    });
+    expect(result.intent).toBe('proyeccion_financiera');
+  });
+
+  it('dame la proyección financiera del próximo año → months=12', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'dame la proyección financiera del próximo año',
+    });
+    expect(result.intent).toBe('proyeccion_financiera');
+    expect(result.extractedParams.months).toBe(12);
+  });
+
+  // ── proyeccion_impuestos ──
+  it('calcula la provisión de impuestos para España → proyeccion_impuestos (ES)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'calcula la provisión de impuestos para España',
+    });
+    expect(result.intent).toBe('proyeccion_impuestos');
+    expect(result.extractedParams.pais).toBe('ES');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('proyección fiscal de México este trimestre → MX con months=3', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'proyección fiscal de México este trimestre',
+    });
+    expect(result.intent).toBe('proyeccion_impuestos');
+    expect(result.extractedParams.pais).toBe('MX');
+    expect(result.extractedParams.months).toBe(3);
+  });
+
+  it('cuánto debo pagar de impuestos en USA → USA_LLC', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cuánto debo pagar de impuestos en USA',
+    });
+    expect(result.intent).toBe('proyeccion_impuestos');
+    expect(result.extractedParams.pais).toBe('USA_LLC');
+  });
+
+  it('dame la estimación de impuestos para mi LLC → USA_LLC', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'dame la estimación de impuestos para mi LLC',
+    });
+    expect(result.intent).toBe('proyeccion_impuestos');
+    expect(result.extractedParams.pais).toBe('USA_LLC');
+  });
+
+  it('proyección de impuestos sin país → pide el país', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'proyección de impuestos',
+    });
+    expect(result.intent).toBe('proyeccion_impuestos');
+    expect(result.needsMoreInfo).toBe(true);
+    expect(result.missingParams).toContain('pais');
+  });
+
+  it('multi-turno: completa el país de proyeccion_impuestos', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'España',
+      pendingIntent: 'proyeccion_impuestos',
+      collectedEntities: {},
+      missingEntities: ['pais'],
+    });
+    expect(result.intent).toBe('proyeccion_impuestos');
+    expect(result.extractedParams.pais).toBe('ES');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  // ── analizar_rentabilidad_global ──
+  it('dame la rentabilidad global del negocio → analizar_rentabilidad_global', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'dame la rentabilidad global del negocio',
+    });
+    expect(result.intent).toBe('analizar_rentabilidad_global');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('analiza el EBITDA del último trimestre → rentabilidad con months=3', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'analiza el EBITDA del último trimestre',
+    });
+    expect(result.intent).toBe('analizar_rentabilidad_global');
+    expect(result.extractedParams.months).toBe(3);
+  });
+
+  it('cómo vamos financieramente en general → analizar_rentabilidad_global', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cómo vamos financieramente en general',
+    });
+    expect(result.intent).toBe('analizar_rentabilidad_global');
+  });
+
+  it('cuál es el margen real del negocio → analizar_rentabilidad_global', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cuál es el margen real del negocio',
+    });
+    expect(result.intent).toBe('analizar_rentabilidad_global');
+  });
+
+  it('dame la rentabilidad del trimestre → rentabilidad con months=3', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'dame la rentabilidad del trimestre',
+    });
+    expect(result.intent).toBe('analizar_rentabilidad_global');
+    expect(result.extractedParams.months).toBe(3);
+  });
+
+  // ── negativos / regresiones de finanzas ──
+  it('cómo vamos de gastos este mes → analizar_gastos (sigue intacto)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cómo vamos de gastos este mes',
+    });
+    expect(result.intent).toBe('analizar_gastos');
+    expect(result.extractedParams.months).toBe(1);
+  });
+
+  it('analiza mi burn rate → analizar_gastos (sigue intacto)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'analiza mi burn rate',
+    });
+    expect(result.intent).toBe('analizar_gastos');
+  });
+
+  it('dame mi salud financiera → analizar_gastos (sigue intacto)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'dame mi salud financiera',
+    });
+    expect(result.intent).toBe('analizar_gastos');
+  });
+
+  it('"registra un gasto de 50 euros en transporte" NO es proyección', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'registra un gasto de 50 euros en transporte',
+    });
+    expect(result.intent).toBe('registrar_gasto');
+  });
+
+  it('"cuánto debo pagar de renta" NO es proyección de impuestos', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cuánto debo pagar de renta',
+    });
+    expect(result.intent).not.toBe('proyeccion_impuestos');
+    expect(result.intent).not.toBe('analizar_rentabilidad_global');
+  });
+
+  it('"analiza el sentimiento de este feedback" NO es proyección', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'analiza el sentimiento de este feedback',
+    });
+    expect(result.intent).toBe('analizar_sentimiento');
+  });
 });
 
 describe('IntentClassifier — getRequiredParams', () => {

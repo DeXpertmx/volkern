@@ -2284,6 +2284,42 @@ const calculateFranchiseCommissionsWrapper = async (input: {
   });
 };
 
+// ─── Proyecciones financieras (Décimo quinto entrenamiento) ───
+// Wrappers: traducen los parámetros del chatbot (país en español, meses) a lo
+// que exigen los skills core (region enum, period string).
+
+const taxProspectorWrapper = async (input: {
+  tenantId: string;
+  pais?: string;
+  region?: string;
+  months?: number | string;
+  periodo?: string;
+}) => {
+  const region =
+    (input.region as 'MX' | 'ES' | 'USA_LLC') ||
+    (input.pais as 'MX' | 'ES' | 'USA_LLC') ||
+    'MX';
+  return consolidationSkills.taxProspector({ tenantId: input.tenantId, region });
+};
+
+const analyzeGlobalProfitabilityWrapper = async (input: {
+  tenantId: string;
+  userId?: string;
+  months?: number | string;
+  periodo?: string;
+}) => {
+  const months = Number(input.months ?? input.periodo ?? 0) || 0;
+  const period =
+    months >= 12 ? 'year_to_date'
+    : months >= 3 ? 'last_quarter'
+    : 'current_month';
+  return consolidationSkills.analyzeGlobalProfitability({
+    tenantId: input.tenantId,
+    userId: input.userId || 'SYSTEM',
+    period,
+  });
+};
+
 export const skills = {
   // Contactos
   create_contact: createContactWrapper,
@@ -2389,10 +2425,10 @@ export const skills = {
   detect_project_drifting: projectSkills.detectProjectDrifting,
   
   // ERP Consolidación (The Financial Brain)
-  analyze_global_profitability: consolidationSkills.analyzeGlobalProfitability,
+  analyze_global_profitability: analyzeGlobalProfitabilityWrapper,
   audit_expense_integrity: consolidationSkills.auditExpenseIntegrity,
   project_financial_forecast: consolidationSkills.projectFinancialForecast,
-  tax_prospector: consolidationSkills.taxProspector,
+  tax_prospector: taxProspectorWrapper,
   
   // ERP Producción (MRP)
   calculate_production_cost: productionSkills.calculate_production_cost,
