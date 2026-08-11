@@ -118,6 +118,10 @@ const MISSING_ENTITY_PROMPTS: Record<string, string> = {
   programacion: '⏰ ¿Qué programación quieres eliminar? (ej: la de la campaña de Meta)',
   variante: '🔀 ¿Qué variante declaras ganadora? (A, B, C…)',
 
+  // Proyecciones financieras
+  pais: '🌎 ¿De qué país o jurisdicción? (ej: España, México, USA/LLC)',
+  region: '🌎 ¿De qué país o jurisdicción? (ej: España, México, USA/LLC)',
+
   // Real Estate
   propiedad: '🏠 ¿De qué propiedad? (ej: #PROP-001, la casa del centro, el departamento en la playa)',
   propiedadId: '🏠 ¿De qué propiedad? (ej: #PROP-001, la casa del centro)',

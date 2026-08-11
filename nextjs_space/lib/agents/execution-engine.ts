@@ -491,6 +491,36 @@ export const ExecutionEngine = {
         const rec = data?.recommendation ? `\n💡 ${this.escapeMarkdown(String(data.recommendation))}` : '';
         return `📊 *Análisis financiero (${this.escapeMarkdown(periodo)}):*\n💰 Ingresos: ${income}€\n💸 Gastos: ${expense}€\n📈 Resultado: ${net}€\n🩺 Estado: ${statusLabel[status] || status}${rec}`;
       }
+      case 'project_financial_forecast': {
+        const expectedIn = data?.expectedIn != null ? this.escapeMarkdown(Number(data.expectedIn).toLocaleString('es-ES')) : '—';
+        const committedOut = data?.committedOut != null ? this.escapeMarkdown(Number(data.committedOut).toLocaleString('es-ES')) : '—';
+        const runway = data?.runwayDays != null ? this.escapeMarkdown(Number(data.runwayDays).toFixed(0)) : '—';
+        return `🔮 *Proyección a 30 días:*\n📥 Ingreso esperado: ${expectedIn}€\n📤 Gasto comprometido: ${committedOut}€\n🛟 Runway: ${runway} días estimados.`;
+      }
+      case 'tax_prospector': {
+        const region = String(data?.region || 'MX');
+        const regionLabel: Record<string, string> = {
+          MX: 'México',
+          ES: 'España',
+          USA_LLC: 'USA (LLC)',
+        };
+        const liability = data?.estimatedLiability != null ? this.escapeMarkdown(Number(data.estimatedLiability).toLocaleString('es-ES')) : '—';
+        const advice = data?.advice ? `\n💡 ${this.escapeMarkdown(String(data.advice))}` : '';
+        return `🧾 *Provisión de impuestos (${regionLabel[region] || region}):*\n💰 Estimación: ${liability}€${advice}`;
+      }
+      case 'analyze_global_profitability': {
+        const income = data?.revenue != null ? this.escapeMarkdown(Number(data.revenue).toLocaleString('es-ES')) : '—';
+        const expenses = data?.expenses != null ? this.escapeMarkdown(Number(data.expenses).toLocaleString('es-ES')) : '—';
+        const margin = data?.margin != null ? this.escapeMarkdown(String(data.margin)) : '—';
+        const status = String(data?.status || '');
+        const statusLabel: Record<string, string> = {
+          SALUDABLE: '🟢 SALUDABLE',
+          CRÍTICO: '🔴 CRÍTICO',
+          CRITICO: '🔴 CRÍTICO',
+        };
+        const statusTxt = statusLabel[status] || (status ? this.escapeMarkdown(status) : '');
+        return `📊 *Rentabilidad global:*\n💰 Ingresos: ${income}€\n💸 Gastos: ${expenses}€\n📈 Margen: ${margin}%\n${statusTxt ? `🩺 Estado: ${statusTxt}` : ''}`;
+      }
 
       // ─── Citas & Bookings ───
       case 'create_booking': {

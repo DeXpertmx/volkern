@@ -383,8 +383,9 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     const ENTITY_TRIGGER = /\b(?:pipeline|deals?|negocios?|oportunidad)\b/i
     // Entidades de citas sin verbo: "qué citas tengo", "reunión con X"
     const CITA_TRIGGER = /\b(?:citas?|reuni[oó]n|reuniones|videollamada)\b/i
-    // Entidades de finanzas sin verbo: "gasto de 300€", "cómo vamos de gastos"
-    const FINANZA_TRIGGER = /\b(?:gastos?|egresos?|gast[ée]|burn\s*rate|salud\s+financiera|flujo\s+de\s+caja)\b/i
+    // Entidades de finanzas sin verbo: "gasto de 300€", "cómo vamos de gastos",
+    // "proyección financiera", "impuestos", "rentabilidad" (décimo quinto entrenamiento)
+    const FINANZA_TRIGGER = /\b(?:gastos?|egresos?|gast[ée]|burn\s*rate|salud\s+financiera|flujo\s+de\s+caja|proyecci[oó]n|pron[oó]stic(?:o|a|os)?|forecast|impuestos?|fiscal|provisi[oó]n|rentabilidad|ebitda|margen|financieramente)\b/i
     // Entidades de tareas/notas sin verbo: "qué tareas tengo", "ver notas de X"
     const TAREA_TRIGGER = /\b(?:tareas?|pendientes?|notas?|to[- ]?do)\b/i
     // Entidades de proveedores sin verbo: "lista de proveedores", "qué proveedores tengo"
@@ -1253,10 +1254,44 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
       return { intent: 'registrar_gasto', confidence: 0.85, extractedParams: extracted }
     }
 
+    // ═══ 12a. PROYECCIÓN DE IMPUESTOS ("calcula la provisión de impuestos
+    // para España", "proyección fiscal de México", "cuánto debo pagar de
+    // impuestos en USA") ═══
+    const PROYECCION_IMPUESTOS = /\b(?:impuestos?|fiscal|provisi[oó]n\s+(?:de\s+)?impuestos?)\b/i
+    if (PROYECCION_IMPUESTOS.test(message)) {
+      const pais = this.extractPaisDe(message)
+      if (pais) extracted.pais = pais
+      const months = this.extractMesesDe(message)
+      if (months) extracted.months = months
+      return { intent: 'proyeccion_impuestos', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 12b. PROYECCIÓN FINANCIERA ("cómo se ve el flujo de caja para el
+    // próximo mes", "proyecta el EBITDA del trimestre", "dame un pronóstico
+    // financiero") ═══
+    const PROYECCION_FIN = /\b(?:proyecci[oó]n|proyecta|proyectar|pron[oó]stic(?:o|a|os)?|forecast|flujo\s+de\s+caja)\b/i
+    if (PROYECCION_FIN.test(message)) {
+      const months = this.extractMesesDe(message)
+      if (months) extracted.months = months
+      return { intent: 'proyeccion_financiera', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 12c. RENTABILIDAD GLOBAL ("dame la rentabilidad global del negocio",
+    // "analiza el EBITDA del último trimestre", "cómo vamos financieramente en
+    // general") ═══
+    const RENTABILIDAD_GLOBAL = /\b(?:rentabilidad|ebitda|margen(?:\s+real|\s+bruto|\s+neto)?|c[oó]mo\s+vamos\s+financieramente|salud\s+financiera\s+integral)\b/i
+    if (RENTABILIDAD_GLOBAL.test(message)) {
+      const months = this.extractMesesDe(message)
+      if (months) extracted.months = months
+      return { intent: 'analizar_rentabilidad_global', confidence: 0.85, extractedParams: extracted }
+    }
+
     // ═══ 13. ANALIZAR GASTOS / SALUD FINANCIERA ("cómo vamos de gastos este
     // mes", "analiza mi burn rate", "dame mi salud financiera") ═══
-    const ANALIZAR_GASTOS = /\b(?:analiza|analizar|revisa|revisar|an[aá]lisis|c[oó]mo\s+vamos|c[oó]mo\s+van|c[oó]mo\s+est[aá]\s+(?:el\s+|la\s+|mi\s+)?(?:inventario\s+de\s+)?gastos|salud\s+financiera|burn\s*rate|qu[eé]\s+gastos\s+(?:hemos|hay|tengo|tenemos)|cu[aá]nto\s+hemos\s+gastado|gastos?\s+(?:del\s+)?mes|flujo\s+de\s+caja|rentabilidad)\b/i
-    if (ANALIZAR_GASTOS.test(message) && /\b(?:gastos?|financ|burn|salud\s+financiera|flujo\s+de\s+caja|ingresos?|egresos?)\b/i.test(message)) {
+    // Nota: "flujo de caja" y "rentabilidad" ya fueron reclamados por las
+    // ramas 12a/12c (proyecciones) — aquí solo quedan gastos/burn rate/salud.
+    const ANALIZAR_GASTOS = /\b(?:analiza|analizar|revisa|revisar|an[aá]lisis|c[oó]mo\s+vamos|c[oó]mo\s+van|c[oó]mo\s+est[aá]\s+(?:el\s+|la\s+|mi\s+)?(?:inventario\s+de\s+)?gastos|salud\s+financiera|burn\s*rate|qu[eé]\s+gastos\s+(?:hemos|hay|tengo|tenemos)|cu[aá]nto\s+hemos\s+gastado|gastos?\s+(?:del\s+)?mes)\b/i
+    if (ANALIZAR_GASTOS.test(message) && /\b(?:gastos?|financ|burn|salud\s+financiera|ingresos?|egresos?)\b/i.test(message)) {
       const months = this.extractMesesDe(message)
       if (months) extracted.months = months
       return { intent: 'analizar_gastos', confidence: 0.85, extractedParams: extracted }
@@ -2510,15 +2545,29 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
    * / "3 meses" → 3, "este año" → 12.
    */
   private extractMesesDe(message: string): number | null {
-    if (/\b(?:este|el)\s+a[nñ]o\b|\b12\s+meses\b/i.test(message)) return 12
-    if (/\b(?:este|el)\s+trimestre\b|\b3\s+meses\b/i.test(message)) return 3
+    // Nota: sin \b inicial porque JS no considera word-char a los acentos
+    // ("último" precedido de espacio no tendría boundary). "del trimestre"
+    // y "para el próximo año" también cubren el periodo.
+    if (/(?:este|el|del|para\s+el|pr[oó]ximo|pr[oó]ximos|último|ultimo)\s+a[nñ]o\b|\b12\s+meses\b/i.test(message)) return 12
+    if (/(?:este|el|del|para\s+el|pr[oó]ximo|último|ultimo)\s+trimestre\b|\b3\s+meses\b/i.test(message)) return 3
     if (/\b6\s+meses\b|\bsemestre\b/i.test(message)) return 6
-    if (/\b(?:este|el)\s+mes\b/i.test(message)) return 1
+    if (/(?:este|el|del|para\s+el|pr[oó]ximo|último|ultimo)\s+mes\b/i.test(message)) return 1
     const m = message.match(/\b(\d{1,2})\s+meses?\b/i)
     if (m) {
       const v = Number(m[1])
       if (v >= 1 && v <= 24) return v
     }
+    return null
+  }
+
+  /**
+   * Extrae el país/región fiscal de la proyección de impuestos:
+   * "España/ES" → ES, "México/MX" → MX, "USA/US/EE.UU/LLC" → USA_LLC.
+   */
+  private extractPaisDe(message: string): string | null {
+    if (/\b(?:espa[nñ]a|espa[nñ]ol)\b|\bES\b/i.test(message)) return 'ES'
+    if (/\b(?:m[eé]xico|mexicano)\b|\bMX\b/i.test(message)) return 'MX'
+    if (/\b(?:usa|estados\s+unidos|ee\.?\s?uu|am[eé]rica)\b|\bUS\b|\bLLC\b/i.test(message)) return 'USA_LLC'
     return null
   }
 
@@ -2902,6 +2951,9 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     }
     if (param === 'months' || param === 'periodo') {
       return this.extractMesesDe(message) !== null ? String(this.extractMesesDe(message)) : null
+    }
+    if (param === 'pais' || param === 'region') {
+      return this.extractPaisDe(message)
     }
     if (param === 'titulo') {
       const withField = this.extractTituloTareaDe(message)
