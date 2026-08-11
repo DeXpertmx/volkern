@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
 import { ComplianceGate } from '@/lib/compliance-gate';
+import { normalizarPais } from '@/lib/fiscal-validation';
 
 // GET /api/contacts/[id] - Obtener un contacto específico (Actualizado con historial unificado)
 export const GET = withTenantAuth(async (request, auth, { params }) => {
@@ -192,16 +193,24 @@ export const PATCH = withTenantAuth(async (request, auth, { params }) => {
 
     // Soporte para Perfil Fiscal
     if (perfilFiscal) {
+      // Normalizar país (nombre -> código, p. ej. 'España' -> 'ES') para que
+      // el guardado desde la página de contacto no rompa los chequeos de UE
+      // ni deje el Select de país sin valor.
+      const fiscalClean = { ...perfilFiscal };
+      if (fiscalClean.country) {
+        fiscalClean.country = normalizarPais(fiscalClean.country) || fiscalClean.country;
+      }
+
       updateData.perfilFiscal = {
         upsert: {
           create: {
-            ...perfilFiscal,
+            ...fiscalClean,
             tenantId,
             defaultIva: perfilFiscal.defaultIva ? parseFloat(perfilFiscal.defaultIva) : 21.0,
             defaultIrpf: perfilFiscal.defaultIrpf ? parseFloat(perfilFiscal.defaultIrpf) : 0.0
           },
           update: {
-            ...perfilFiscal,
+            ...fiscalClean,
             defaultIva: perfilFiscal.defaultIva ? parseFloat(perfilFiscal.defaultIva) : undefined,
             defaultIrpf: perfilFiscal.defaultIrpf ? parseFloat(perfilFiscal.defaultIrpf) : undefined
           }

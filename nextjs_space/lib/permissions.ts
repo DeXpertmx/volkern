@@ -44,6 +44,25 @@ export interface ModulePermissions {
   [action: string]: boolean;
 }
 
+// Todos los módulos conocidos por el sistema. Usado por getVisibleModules
+// cuando el rol usa el wildcard { all: true }.
+export const ALL_PERMISSION_MODULES: PermissionModule[] = [
+  'leads',
+  'citas',
+  'estudiantes',
+  'cursos',
+  'automatizaciones',
+  'campanas',
+  'ads',
+  'mensajes',
+  'analytics',
+  'configuracion',
+  'equipo',
+  'whitelabel',
+  'telefonia',
+  'pages',
+];
+
 export interface RolePermissions {
   [module: string]: ModulePermissions;
 }
@@ -76,13 +95,32 @@ export function hasPermission(
     return true;
   }
 
-  const permissions = user.role.permisos as RolePermissions;
+  // Permisos pueden venir como shape por módulo ({ leads: { ver: true } })
+  // o con wildcard ({ all: true }, usado por scripts/bootstrap-admin.ts).
+  const permissions = user.role.permisos as Record<string, unknown>;
   
-  if (!permissions || !permissions[module]) {
+  if (!permissions) {
     return false;
   }
 
-  return permissions[module][action] === true;
+  // Wildcard { all: true } = acceso total a todos los módulos. Sin esto, los
+  // admins creados con ese shape recibían 403 en rutas como GET /api/deals
+  // (hasPermission('leads','ver')).
+  if (permissions.all === true) {
+    return true;
+  }
+
+  const modulePerms = permissions[module];
+  if (modulePerms === undefined) {
+    return false;
+  }
+
+  // Módulo concedido entero (permisos[module] === true)
+  if (modulePerms === true) {
+    return true;
+  }
+
+  return (modulePerms as ModulePermissions)[action] === true;
 }
 
 /**
@@ -103,15 +141,21 @@ export function getVisibleModules(user: UserWithRole | null): PermissionModule[]
     return [];
   }
 
-  const permissions = user.role.permisos as RolePermissions;
+  const permissions = user.role.permisos as Record<string, unknown>;
   
   if (!permissions) {
     return [];
   }
 
-  return Object.keys(permissions).filter(module => 
-    permissions[module].ver === true
-  ) as PermissionModule[];
+  // Wildcard { all: true } = todos los módulos visibles
+  if (permissions.all === true) {
+    return ALL_PERMISSION_MODULES;
+  }
+
+  return Object.keys(permissions).filter(module => {
+    const perms = permissions[module];
+    return perms === true || (perms as ModulePermissions)?.ver === true;
+  }) as PermissionModule[];
 }
 
 /**
