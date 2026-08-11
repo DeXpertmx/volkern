@@ -71,4 +71,44 @@ export const insuranceIntents: IntentSchema[] = [
     ],
     destructive: false
   },
+  {
+    name: 'crear_siniestro',
+    description: 'Reportar un siniestro contra una póliza (requiere póliza y descripción; el cliente y la aseguradora se resuelven desde la póliza)',
+    requiredParams: ['poliza', 'descripcion'],
+    optionalParams: ['cliente', 'numeroSiniestro', 'fechaSuceso', 'fechaReporte', 'montoReclamado', 'deducible', 'moneda', 'estado', 'notas'],
+    examples: [
+      'reporta un siniestro para la póliza AXA-1234: colisión leve, monto reclamado 1500',
+      'crea un siniestro contra POL-001 de Juan Pérez con fecha suceso 2026-07-15',
+      'registra un siniestro de la póliza 8888: daño por agua en el local',
+      'nuevo siniestro de auto: choque en estacionamiento, reclamado 30000 MXN'
+    ],
+    destructive: false
+  },
+  {
+    name: 'listar_siniestros',
+    description: 'Listar siniestros del tenant con filtros opcionales (estado, cliente, aseguradora)',
+    requiredParams: [],
+    optionalParams: ['estado', 'cliente', 'aseguradora', 'page', 'limit'],
+    examples: [
+      'muéstrame los siniestros',
+      'qué siniestros están abiertos',
+      'lista los siniestros rechazados',
+      'siniestros de AXA',
+      'cuántos siniestros tiene Juan Pérez'
+    ],
+    destructive: false
+  },
+  {
+    name: 'actualizar_siniestro',
+    description: 'Avanzar el estado de un siniestro (REPORTADO → EN_TRAMITE → ABIERTO → PAGADO/RECHAZADO → CERRADO). PAGADO requiere monto indemnizado; RECHAZADO requiere motivo',
+    requiredParams: ['siniestro'],
+    optionalParams: ['estado', 'montoIndemnizado', 'motivoRechazo', 'notas', 'fechaCierre'],
+    examples: [
+      'pasa el siniestro SIN-001 a en trámite',
+      'marca como pagado el siniestro de la póliza AXA-1234 con indemnización 1200',
+      'rechaza el siniestro SIN-002 por no estar cubierto',
+      'cierra el siniestro SIN-003'
+    ],
+    destructive: false
+  },
 ];

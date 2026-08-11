@@ -166,6 +166,9 @@ const INTENT_TO_SKILL: Record<string, string> = {
   'polizas_por_vencer': 'polizas_por_vencer',
   'renovaciones_pendientes': 'renovaciones_pendientes',
   'clientes_sin_contacto': 'clientes_sin_contacto',
+  'crear_siniestro': 'create_siniestro',
+  'listar_siniestros': 'list_siniestros',
+  'actualizar_siniestro': 'update_siniestro',
 
   // ─── Operaciones ───
   'auditar_integridad': 'audit_finance_integrity',
@@ -782,6 +785,9 @@ export const SkillOrchestratorAgent = {
       'polizas_por_vencer': 'insurance',
       'renovaciones_pendientes': 'insurance',
       'clientes_sin_contacto': 'insurance',
+      'crear_siniestro': 'insurance',
+      'listar_siniestros': 'insurance',
+      'actualizar_siniestro': 'insurance',
       };
 
       const module = intentModules[intent];
@@ -868,6 +874,9 @@ export const SkillOrchestratorAgent = {
       'polizas_por_vencer': '🛡️ No tienes acceso al módulo de *Seguros*. Contacta al administrador para activarlo.',
       'renovaciones_pendientes': '🛡️ No tienes acceso al módulo de *Seguros*. Contacta al administrador para activarlo.',
       'clientes_sin_contacto': '🛡️ No tienes acceso al módulo de *Seguros*. Contacta al administrador para activarlo.',
+      'crear_siniestro': '🛡️ No tienes acceso al módulo de *Seguros*. Contacta al administrador para activarlo.',
+      'listar_siniestros': '🛡️ No tienes acceso al módulo de *Seguros*. Contacta al administrador para activarlo.',
+      'actualizar_siniestro': '🛡️ No tienes acceso al módulo de *Seguros*. Contacta al administrador para activarlo.',
     };
     return messages[intent] || '❌ No tienes acceso a esta función. Contacta al administrador.';
   },
@@ -1026,6 +1035,9 @@ Puedo ayudarte con:
       'polizas_por_vencer': 'Consultar pólizas próximas a vencer',
       'renovaciones_pendientes': 'Consultar renovaciones pendientes',
       'clientes_sin_contacto': 'Detectar clientes asegurados sin contacto reciente',
+      'create_siniestro': 'Reportar un siniestro contra una póliza',
+      'list_siniestros': 'Listar siniestros del tenant',
+      'update_siniestro': 'Avanzar el estado de un siniestro',
 
       // Operaciones
       'audit_finance_integrity': 'Auditar integridad financiera',
