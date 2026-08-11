@@ -1674,6 +1674,412 @@ describe('IntentClassifier — ruta determinista (sin LLM)', () => {
     });
     expect(result.intent).not.toBe('ajustar_stock');
   });
+
+  // ═══ NOVENO ENTRENAMIENTO (módulo Seguros): pólizas, renovaciones y siniestros ═══
+
+  // ── crear_poliza ──
+
+  it('crea póliza completa: número, aseguradora implícita y vencimiento', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'registra la póliza AXA-1234 para Juan Pérez con vencimiento el 2026-12-31',
+    });
+    expect(result.intent).toBe('crear_poliza');
+    expect(result.extractedParams.numeroPoliza).toBe('AXA-1234');
+    expect(result.extractedParams.fechaVencimiento).toBe('2026-12-31');
+    expect(result.extractedParams.aseguradora).toBe('AXA');
+    expect(result.extractedParams.cliente).toBe('Juan Pérez');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('crea póliza con ramo y prima (sin número → pide número y vencimiento)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'crea una póliza para maria@empresa.com: producto Vida, aseguradora AXA, prima 850',
+    });
+    expect(result.intent).toBe('crear_poliza');
+    expect(result.extractedParams.aseguradora).toBe('AXA');
+    expect(result.extractedParams.ramo).toBe('vida');
+    expect(result.extractedParams.primaAnual).toBe(850);
+    expect(result.needsMoreInfo).toBe(true);
+    expect(result.missingParams).toContain('numeroPoliza');
+    expect(result.missingParams).toContain('fechaVencimiento');
+  });
+
+  it('crea póliza sin vencimiento → pide la fecha', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'crea la póliza POL-001 para Carlos Ruiz con aseguradora MAPFRE',
+    });
+    expect(result.intent).toBe('crear_poliza');
+    expect(result.extractedParams.numeroPoliza).toBe('POL-001');
+    expect(result.extractedParams.aseguradora).toBe('MAPFRE');
+    expect(result.needsMoreInfo).toBe(true);
+    expect(result.missingParams).toContain('fechaVencimiento');
+  });
+
+  it('póliza con fecha de inicio explícita ("inicia hoy")', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'nueva póliza: número P-001, cliente Carlos Ruiz, hogar MAPFRE, inicia hoy, vence en 1 año',
+    });
+    expect(result.intent).toBe('crear_poliza');
+    expect(result.extractedParams.numeroPoliza).toBe('P-001');
+    expect(result.extractedParams.ramo).toBe('hogar');
+    expect(result.extractedParams.aseguradora).toBe('MAPFRE');
+    expect(result.extractedParams.cliente).toBe('Carlos Ruiz');
+    expect(result.extractedParams.fechaInicio).toBeTruthy();
+  });
+
+  it('multi-turno: completa el número de póliza faltante', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'la póliza es AXA-1234',
+      pendingIntent: 'crear_poliza',
+      collectedEntities: { aseguradora: 'AXA', fechaVencimiento: '2026-12-31' },
+      missingEntities: ['numeroPoliza'],
+    });
+    expect(result.intent).toBe('crear_poliza');
+    expect(result.extractedParams.numeroPoliza).toBe('AXA-1234');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('multi-turno: completa la aseguradora faltante', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'con Qualitas',
+      pendingIntent: 'crear_poliza',
+      collectedEntities: { numeroPoliza: 'Q-001', fechaVencimiento: '2026-12-31' },
+      missingEntities: ['aseguradora'],
+    });
+    expect(result.intent).toBe('crear_poliza');
+    expect(result.extractedParams.aseguradora).toBe('Qualitas');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  // ── mis_polizas ──
+
+  it('muéstrame las pólizas → mis_polizas', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'muéstrame las pólizas',
+    });
+    expect(result.intent).toBe('mis_polizas');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('lista las pólizas activas → mis_polizas con estado ACTIVA', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'lista las pólizas activas',
+    });
+    expect(result.intent).toBe('mis_polizas');
+    expect(result.extractedParams.estado).toBe('ACTIVA');
+  });
+
+  it('pólizas del ramo auto → mis_polizas con ramo', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'pólizas del ramo auto',
+    });
+    expect(result.intent).toBe('mis_polizas');
+    expect(result.extractedParams.ramo).toBe('auto');
+  });
+
+  it('ver pólizas de AXA → mis_polizas con aseguradora (y NO cliente)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'ver pólizas de AXA',
+    });
+    expect(result.intent).toBe('mis_polizas');
+    expect(result.extractedParams.aseguradora).toBe('AXA');
+    expect(result.extractedParams.cliente).toBeUndefined();
+  });
+
+  it('qué pólizas tiene Juan Pérez → mis_polizas con cliente', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'qué pólizas tiene Juan Pérez',
+    });
+    expect(result.intent).toBe('mis_polizas');
+    expect(result.extractedParams.cliente).toBe('Juan Pérez');
+  });
+
+  // ── polizas_por_vencer ──
+
+  it('qué pólizas vencen pronto → polizas_por_vencer', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'qué pólizas vencen pronto',
+    });
+    expect(result.intent).toBe('polizas_por_vencer');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('pólizas por vencer en 60 días → polizas_por_vencer con dias=60', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'pólizas por vencer en 60 días',
+    });
+    expect(result.intent).toBe('polizas_por_vencer');
+    expect(result.extractedParams.dias).toBe(60);
+  });
+
+  it('muéstrame las pólizas que vencen este mes → polizas_por_vencer (NO mis_polizas)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'muéstrame las pólizas que vencen este mes',
+    });
+    expect(result.intent).toBe('polizas_por_vencer');
+    expect(result.intent).not.toBe('mis_polizas');
+  });
+
+  it('renovaciones en los próximos 30 días → polizas_por_vencer con dias=30', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'renovaciones en los próximos 30 días',
+    });
+    expect(result.intent).toBe('polizas_por_vencer');
+    expect(result.extractedParams.dias).toBe(30);
+  });
+
+  // ── renovaciones_pendientes ──
+
+  it('qué renovaciones están pendientes → renovaciones_pendientes', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'qué renovaciones están pendientes',
+    });
+    expect(result.intent).toBe('renovaciones_pendientes');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('renovaciones en riesgo de perderse → renovaciones_pendientes con riesgo', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'renovaciones en riesgo de perderse',
+    });
+    expect(result.intent).toBe('renovaciones_pendientes');
+    expect(result.extractedParams.riesgo).toBe(true);
+  });
+
+  // ── clientes_sin_contacto ──
+
+  it('qué clientes no tienen contacto hace tiempo → clientes_sin_contacto', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'qué clientes no tienen contacto hace tiempo',
+    });
+    expect(result.intent).toBe('clientes_sin_contacto');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('clientes sin contacto en 90 días → clientes_sin_contacto con dias=90', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'clientes sin contacto en 90 días',
+    });
+    expect(result.intent).toBe('clientes_sin_contacto');
+    expect(result.extractedParams.dias).toBe(90);
+  });
+
+  // ── crear_siniestro ──
+
+  it('reporta siniestro con póliza, descripción y monto reclamado', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'reporta un siniestro para la póliza AXA-1234: colisión leve, monto reclamado 1500',
+    });
+    expect(result.intent).toBe('crear_siniestro');
+    expect(result.extractedParams.poliza).toBe('AXA-1234');
+    expect(result.extractedParams.descripcion).toBe('colisión leve');
+    expect(result.extractedParams.montoReclamado).toBe(1500);
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('crea siniestro contra póliza sin descripción → pide descripción', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'crea un siniestro contra POL-001 de Juan Pérez con fecha suceso 2026-07-15',
+    });
+    expect(result.intent).toBe('crear_siniestro');
+    expect(result.extractedParams.poliza).toBe('POL-001');
+    expect(result.extractedParams.fechaSuceso).toBe('2026-07-15');
+    expect(result.needsMoreInfo).toBe(true);
+    expect(result.missingParams).toContain('descripcion');
+  });
+
+  it('registra siniestro de la póliza 8888: daño por agua → crear_siniestro (NO interacción)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'registra un siniestro de la póliza 8888: daño por agua en el local',
+    });
+    expect(result.intent).toBe('crear_siniestro');
+    expect(result.intent).not.toBe('registrar_interaccion');
+    expect(result.extractedParams.poliza).toBe('8888');
+    expect(result.extractedParams.descripcion).toContain('daño por agua');
+  });
+
+  it('siniestro sin póliza → pide la póliza', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'registra un siniestro: daño por agua en el local',
+    });
+    expect(result.intent).toBe('crear_siniestro');
+    expect(result.extractedParams.descripcion).toContain('daño por agua');
+    expect(result.needsMoreInfo).toBe(true);
+    expect(result.missingParams).toContain('poliza');
+  });
+
+  it('multi-turno: completa la póliza faltante del siniestro', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'es la póliza POL-001',
+      pendingIntent: 'crear_siniestro',
+      collectedEntities: { descripcion: 'daño por agua' },
+      missingEntities: ['poliza'],
+    });
+    expect(result.intent).toBe('crear_siniestro');
+    expect(result.extractedParams.poliza).toBe('POL-001');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  // ── listar_siniestros ──
+
+  it('muéstrame los siniestros → listar_siniestros', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'muéstrame los siniestros',
+    });
+    expect(result.intent).toBe('listar_siniestros');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('qué siniestros están abiertos → listar_siniestros con estado ABIERTO', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'qué siniestros están abiertos',
+    });
+    expect(result.intent).toBe('listar_siniestros');
+    expect(result.extractedParams.estado).toBe('ABIERTO');
+  });
+
+  it('siniestros de AXA → listar_siniestros con aseguradora', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'siniestros de AXA',
+    });
+    expect(result.intent).toBe('listar_siniestros');
+    expect(result.extractedParams.aseguradora).toBe('AXA');
+  });
+
+  it('cuántos siniestros tiene Juan Pérez → listar_siniestros con cliente', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cuántos siniestros tiene Juan Pérez',
+    });
+    expect(result.intent).toBe('listar_siniestros');
+    expect(result.extractedParams.cliente).toBe('Juan Pérez');
+  });
+
+  // ── actualizar_siniestro ──
+
+  it('pasa el siniestro SIN-001 a en trámite → estado EN_TRAMITE', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'pasa el siniestro SIN-001 a en trámite',
+    });
+    expect(result.intent).toBe('actualizar_siniestro');
+    expect(result.extractedParams.siniestro).toBe('SIN-001');
+    expect(result.extractedParams.estado).toBe('EN_TRAMITE');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('marca como pagado el siniestro con indemnización → PAGADO + monto', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'marca como pagado el siniestro de la póliza AXA-1234 con indemnización 1200',
+    });
+    expect(result.intent).toBe('actualizar_siniestro');
+    expect(result.extractedParams.estado).toBe('PAGADO');
+    expect(result.extractedParams.montoIndemnizado).toBe(1200);
+    expect(result.extractedParams.siniestro).toBe('AXA-1234');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('rechaza el siniestro SIN-002 por no estar cubierto → RECHAZADO + motivo', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'rechaza el siniestro SIN-002 por no estar cubierto',
+    });
+    expect(result.intent).toBe('actualizar_siniestro');
+    expect(result.extractedParams.siniestro).toBe('SIN-002');
+    expect(result.extractedParams.estado).toBe('RECHAZADO');
+    expect(result.extractedParams.motivoRechazo).toContain('no estar cubierto');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('cierra el siniestro SIN-003 → CERRADO', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cierra el siniestro SIN-003',
+    });
+    expect(result.intent).toBe('actualizar_siniestro');
+    expect(result.extractedParams.siniestro).toBe('SIN-003');
+    expect(result.extractedParams.estado).toBe('CERRADO');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('multi-turno: completa el estado faltante del siniestro', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'a pagado',
+      pendingIntent: 'actualizar_siniestro',
+      collectedEntities: { siniestro: 'SIN-001' },
+      missingEntities: ['estado'],
+    });
+    expect(result.intent).toBe('actualizar_siniestro');
+    expect(result.extractedParams.estado).toBe('PAGADO');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  // ── negativos de seguros ──
+
+  it('"pago la factura de juan@volkern.test" NO es actualizar_siniestro', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'pago la factura de juan@volkern.test',
+    });
+    expect(result.intent).not.toBe('actualizar_siniestro');
+    expect(result.intent).not.toBe('crear_siniestro');
+  });
+
+  it('"registra un gasto de 50€: comida" sigue siendo gasto (no siniestro)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'registra un gasto de 50€: comida',
+    });
+    expect(result.intent).toBe('registrar_gasto');
+    expect(result.intent).not.toBe('crear_siniestro');
+  });
+
+  it('"agrega pendiente: enviar documento, vence el viernes" sigue siendo crear_tarea', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'agrega pendiente: enviar documento a Carlos, vence el viernes',
+    });
+    expect(result.intent).toBe('crear_tarea');
+    expect(result.intent).not.toBe('polizas_por_vencer');
+  });
+
+  it('"convierte a juan@volkern.test en contacto" sigue siendo convertir_lead', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'convierte a juan@volkern.test en contacto',
+    });
+    expect(result.intent).toBe('convertir_lead');
+    expect(result.intent).not.toBe('actualizar_siniestro');
+  });
 });
 
 describe('IntentClassifier — getRequiredParams', () => {

@@ -357,7 +357,10 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     const CATALOGO_TRIGGER = /\b(?:cat[aá]logo|productos?|servicios?|art[ií]culos?|inmuebles?|propiedades?|precios?|cu[aá]nto\s+cuesta|cu[aá]nto\s+vale|qu[eé]\s+precio|precio\s+de)\b/i
     // Entidades de inventario sin verbo: "stock bajo", "existencias", "entrada/salida de X unidades"
     const INVENTARIO_TRIGGER = /\b(?:inventario|stock|existencias|unidades|reorden|ruptura)\b/i
-    if (!ACTION_VERB.test(message) && !ENTITY_TRIGGER.test(message) && !FILTER_ONLY.test(message) && !CITA_TRIGGER.test(message) && !FINANZA_TRIGGER.test(message) && !TAREA_TRIGGER.test(message) && !PROVEEDOR_TRIGGER.test(message) && !CATALOGO_TRIGGER.test(message) && !INVENTARIO_TRIGGER.test(message)) return null
+    // Entidades de seguros sin verbo: "qué pólizas vencen", "siniestros abiertos",
+    // "renovaciones pendientes", "clientes sin contacto", "pólizas por vencer"
+    const INSURANCE_TRIGGER = /\b(?:p[oó]lizas?|siniestros?|renovaciones?|aseguradoras?|vence|vencen|indemnizaci[oó]n|sin\s+contacto|no\s+tienen\s+contacto|no\s+han\s+tenido\s+contacto|cartera\s+de\s+seguros?)\b/i
+    if (!ACTION_VERB.test(message) && !ENTITY_TRIGGER.test(message) && !FILTER_ONLY.test(message) && !CITA_TRIGGER.test(message) && !FINANZA_TRIGGER.test(message) && !TAREA_TRIGGER.test(message) && !PROVEEDOR_TRIGGER.test(message) && !CATALOGO_TRIGGER.test(message) && !INVENTARIO_TRIGGER.test(message) && !INSURANCE_TRIGGER.test(message)) return null
 
     const extracted: Record<string, any> = {}
     const email = message.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,})/)
@@ -385,6 +388,148 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
 
     const CREATE_VERB = /\b(?:agrega|crea|registra|nuev[oa]|añade|alta)\b/i
     const BUSCAR_VERB = /\b(?:busca|encuentra|consulta|localiza)\b/i
+
+    // ═══ 0. SEGUROS (Noveno entrenamiento): pólizas, renovaciones y siniestros ═══
+    // Se detectan ANTES que el resto del CRM: "registra un siniestro de la
+    // póliza 8888: …" contiene ':' y caería en registrar_interaccion; "pasa el
+    // siniestro SIN-001 a en trámite" no debe confundirse con convertir_lead.
+    // Los términos (póliza/siniestro/renovación) son distintivos y ganan sobre
+    // las ramas de Ventas/Finanzas. Permite controlar el módulo Seguros desde
+    // Telegram sin depender del LLM (misma garantía que crear_lead).
+    const POLIZA_ENTITY = /\b(?:p[oó]liza|p[oó]lizas)\b/i
+    const SINIESTRO_ENTITY = /\b(?:siniestro|siniestros)\b/i
+    const RENOVACION_ENTITY = /\brenovaciones?\b/i
+
+    // 0a. ACTUALIZAR SINIESTRO ("pasa el siniestro SIN-001 a en trámite",
+    // "marca como pagado el siniestro de la póliza AXA-1234 con indemnización
+    // 1200", "rechaza el siniestro SIN-002 por no estar cubierto") — antes que
+    // crear para que "marca como pagado…" no se lea como creación ═══
+    const UPDATE_SINIESTRO_VERB = /\b(?:pasa|pasar|avanza|avanzar|actualiza|actualizar|cambia|cambiar|marca\s+como|marcar\s+como|rechaza|rechazar|cierra|cerrar|paga|pagar|aprueba|aprobar)\b/i
+    const CREATE_SINIESTRO_VERB = /\b(?:reporta|reportar|crea|crear|registra|registrar|nuev[oa]|abre|abrir|añade|añadir)\b/i
+    if (SINIESTRO_ENTITY.test(message) && UPDATE_SINIESTRO_VERB.test(message) && !CREATE_SINIESTRO_VERB.test(message)) {
+      const siniestro = this.extractNumeroSiniestroDe(message) || this.extractPolizaRefDe(message)
+      if (siniestro) extracted.siniestro = siniestro
+      // Estado: texto explícito ("a en trámite", "abierto") o inferido del verbo
+      // ("rechaza" → RECHAZADO, "cierra" → CERRADO, "paga" → PAGADO).
+      const estado = this.extractEstadoSiniestroDe(message)
+      if (estado) extracted.estado = estado
+      else if (/\b(?:rechaza|rechazar)\b/i.test(message)) extracted.estado = 'RECHAZADO'
+      else if (/\b(?:cierra|cerrar)\b/i.test(message)) extracted.estado = 'CERRADO'
+      else if (/\b(?:paga|pagar|aprueba|aprobar)\b/i.test(message)) extracted.estado = 'PAGADO'
+      else if (/\b(?:pasa|pasar|avanza|avanzar|actualiza|actualizar|cambia|cambiar)\b/i.test(message)) extracted.estado = 'EN_TRAMITE'
+      const montoIndemnizado = this.extractIndemnizacionDe(message)
+      if (montoIndemnizado !== null) extracted.montoIndemnizado = montoIndemnizado
+      const motivo = this.extractMotivoRechazoDe(message)
+      if (motivo) extracted.motivoRechazo = motivo
+      return { intent: 'actualizar_siniestro', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // 0b. CREAR SINIESTRO ("reporta un siniestro para la póliza AXA-1234:
+    // colisión leve, monto reclamado 1500", "crea un siniestro contra POL-001…") ═══
+    if (SINIESTRO_ENTITY.test(message) && CREATE_SINIESTRO_VERB.test(message)) {
+      const poliza = this.extractPolizaRefDe(message)
+      if (poliza) extracted.poliza = poliza
+      const numeroSiniestro = this.extractNumeroSiniestroDe(message)
+      if (numeroSiniestro) extracted.numeroSiniestro = numeroSiniestro
+      const descripcion = this.extractDescripcionSiniestroDe(message)
+      if (descripcion) extracted.descripcion = descripcion
+      const monto = this.extractMontoReclamadoDe(message)
+      if (monto !== null) extracted.montoReclamado = monto
+      const fechaSuceso = this.extractFechaDe(message)
+      if (fechaSuceso) extracted.fechaSuceso = fechaSuceso
+      const estado = this.extractEstadoSiniestroDe(message)
+      if (estado) extracted.estado = estado
+      return { intent: 'crear_siniestro', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // 0c. LISTAR SINIESTROS ("muéstrame los siniestros", "qué siniestros
+    // están abiertos", "siniestros de AXA", "cuántos siniestros tiene Juan") ═══
+    const LISTAR_SINIESTROS = /\b(?:lista|listame|mu[eé]strame|muestra|ver|ens[eé][ñn]ame)\s+(?:los\s+|mis\s+|tus\s+|todos\s+los\s+)?siniestros?\b|(?:qu[eé]|cu[aá]ntos)\s+siniestros?\s+(?:tengo|hay|tienes|tenemos|est[aá]n|tiene|tienen)|siniestros?\s+(?:de|del|por|en|abiertos?|rechazados?|pagados?|cerrados?|en\s+tr[aá]mite|reportados?|pendientes?)\b/i
+    if (SINIESTRO_ENTITY.test(message) && LISTAR_SINIESTROS.test(message)) {
+      const estado = this.extractEstadoSiniestroDe(message)
+      if (estado) extracted.estado = estado
+      const aseguradora = this.extractAseguradoraDe(message)
+      if (aseguradora) extracted.aseguradora = aseguradora
+      const cliente = this.extractClienteSeguroDe(message)
+      if (cliente) extracted.cliente = cliente
+      return { intent: 'listar_siniestros', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // 0d. CREAR PÓLIZA ("registra la póliza AXA-1234 para Juan Pérez con
+    // vencimiento el 2026-12-31", "crea una póliza para maria@empresa.com:
+    // producto Vida, aseguradora AXA, prima 850") ═══
+    if (POLIZA_ENTITY.test(message) && CREATE_VERB.test(message)) {
+      const numeroPoliza = this.extractNumeroPolizaDe(message)
+      if (numeroPoliza) extracted.numeroPoliza = numeroPoliza
+      const aseguradora = this.extractAseguradoraDe(message)
+      if (aseguradora) extracted.aseguradora = aseguradora
+      // Vencimiento: la fecha que sigue a "vence/vencimiento" ("vence en 1 año"
+      // no se parsea → pide el dato en multi-turno). Si no hay keyword, la
+      // última fecha explícita del mensaje.
+      const venceIdx = message.search(/\b(?:vence|vencimiento|vence\s+el|vence\s+en)\b/i)
+      let fechaVencimiento: string | null = null
+      if (venceIdx >= 0) {
+        fechaVencimiento = this.extractFechaDe(message.slice(venceIdx))
+      } else {
+        const dates = [...message.matchAll(/\b(\d{4}[-/]\d{1,2}[-/]\d{1,2})\b/g)]
+        if (dates.length > 0) fechaVencimiento = dates[dates.length - 1][1]
+      }
+      if (fechaVencimiento) extracted.fechaVencimiento = fechaVencimiento
+      const fechaInicio = this.extractFechaInicioDe(message)
+      if (fechaInicio) extracted.fechaInicio = fechaInicio
+      const ramo = this.extractRamoSeguroDe(message)
+      if (ramo) extracted.ramo = ramo
+      const prima = this.extractPrimaDe(message)
+      if (prima !== null) extracted.primaAnual = prima
+      const suma = this.extractSumaAseguradaDe(message)
+      if (suma !== null) extracted.sumaAsegurada = suma
+      const cliente = this.extractClienteSeguroDe(message)
+      if (cliente) extracted.cliente = cliente
+      return { intent: 'crear_poliza', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // 0e. PÓLIZAS POR VENCER ("qué pólizas vencen pronto", "pólizas por
+    // vencer en 60 días", "renovaciones en los próximos 30 días") — antes que
+    // mis_polizas para que "muéstrame las pólizas que vencen este mes" no se
+    // lea como listado simple ═══
+    if ((POLIZA_ENTITY.test(message) || RENOVACION_ENTITY.test(message)) && /\b(?:vence|vencen|venc[eí]|por\s+vencer|a\s+vencer|pr[oó]ximas?\s+a\s+vencer|pr[oó]ximos?\s+\d+\s+d[ií]as)\b/i.test(message)) {
+      const dias = this.extractDiasDe(message)
+      if (dias !== null) extracted.dias = dias
+      return { intent: 'polizas_por_vencer', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // 0f. RENOVACIONES PENDIENTES ("qué renovaciones están pendientes",
+    // "renovaciones en riesgo de perderse") ═══
+    if (RENOVACION_ENTITY.test(message) && /\b(?:pendientes?|en\s+riesgo|riesgo\s+de\s+p[eé]rdida|estado\s+de\s+las|con\s+oferta|en\s+proceso)\b/i.test(message)) {
+      if (/\b(?:en\s+riesgo|riesgo\s+de\s+p[eé]rdida)\b/i.test(message)) extracted.riesgo = true
+      const estado = this.extractEstadoRenovacionDe(message)
+      if (estado) extracted.estado = estado
+      return { intent: 'renovaciones_pendientes', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // 0g. CLIENTES SIN CONTACTO ("qué clientes no tienen contacto hace tiempo",
+    // "clientes sin contacto en 90 días", "dame los clientes abandonados") ═══
+    if (/\b(?:clientes?|asegurados?)\b/i.test(message) && /\b(?:sin\s+contacto|no\s+tienen\s+contacto|no\s+han\s+tenido\s+contacto|abandonados?|sin\s+actividad)\b/i.test(message)) {
+      const dias = this.extractDiasDe(message)
+      if (dias !== null) extracted.dias = dias
+      return { intent: 'clientes_sin_contacto', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // 0h. MIS PÓLIZAS ("muéstrame las pólizas", "lista las pólizas activas",
+    // "qué pólizas tiene Juan Pérez", "pólizas del ramo auto", "ver pólizas de AXA") ═══
+    const LIST_VERB_POLIZAS = /\b(?:lista|listame|mu[eé]strame|muestra|ver|ens[eé][ñn]ame)\b/i
+    const FILTER_SIGNAL_POLIZAS = /\b(?:en\s+estado|por\s+estado|en\s+etapa|por\s+etapa|tipo|de\s+ramo|del\s+ramo|por\s+ramo)\b/i
+    if (POLIZA_ENTITY.test(message) && (LIST_VERB_POLIZAS.test(message) || FILTER_SIGNAL_POLIZAS.test(message) || BUSCAR_VERB.test(message) || /qu[eé]\s+p[oó]lizas?\s+(?:tiene|hay|tengo|tienes|tenemos)\b/i.test(message) || /\bp[oó]lizas?\s+(?:de|del|por|en)\b/i.test(message))) {
+      const estado = this.extractEstadoPolizaDe(message)
+      if (estado) extracted.estado = estado
+      const ramo = this.extractRamoSeguroDe(message)
+      if (ramo) extracted.ramo = ramo
+      const aseguradora = this.extractAseguradoraDe(message)
+      if (aseguradora) extracted.aseguradora = aseguradora
+      const cliente = this.extractClienteSeguroDe(message)
+      if (cliente) extracted.cliente = cliente
+      return { intent: 'mis_polizas', confidence: 0.85, extractedParams: extracted }
+    }
 
     // ═══ 0. CONVERTIR LEAD (antes que crear: "convierte… en contacto" también
     // contiene la palabra "contacto" y no debe clasificarse como creación) ═══
@@ -948,6 +1093,267 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     }
 
     return null
+  }
+
+  // ═══ Helpers del Noveno entrenamiento (módulo Seguros) ═══════════════════
+
+  /**
+   * Nombres de aseguradoras conocidas (para capturar "pólizas de AXA" sin
+   * keyword). Compartidos por aseguradora y cliente (un nombre de aseguradora
+   * nunca es un cliente).
+   */
+  private readonly ASEGURADORAS_CONOCIDAS = /\b(?:AXA|MAPFRE|Ma?pfre|Qu[aá]litas|GNP|Seguros\s+Monterrey|Monterrey|TIREA|FIVA|EIAC|Zurich|Allianz|HDI|Banorte|HSBC|BBVA|F[ée]nix|Atlas|Chubb|Generali|Inbursa|Hidalgo|San\s+Rafael|La\s+Latinoamericana)\b/i
+
+  /**
+   * Número de póliza: el token tras la keyword "póliza" ("póliza AXA-1234" →
+   * "AXA-1234", "póliza: número P-001" → "P-001", "la póliza 8888" → "8888").
+   */
+  private extractNumeroPolizaDe(message: string): string | null {
+    // "la póliza es AXA-1234" (multi-turno) y "la póliza AXA-1234" (1 turno)
+    const m = message.match(/(?:p[oó]liza)\s*:?\s*(?:n[úu]mero\s+|nº\s*|#\s*|es\s+(?:el\s+|la\s+|n[úu]mero\s+)?)?((?:[A-Za-z]{1,4}[-_][A-Za-z0-9]{2,}[A-Za-z0-9-]*|\d{3,}))/i)
+    if (!m) return null
+    let n = m[1].trim()
+    n = n.split(/\s+(?:vence|venc|para|con|de|del|el|la|por|inicia|,|;)/i)[0].trim()
+    return n.length >= 3 ? n : null
+  }
+
+  /**
+   * Referencia a póliza para siniestros: token tras "póliza", "contra",
+   * "de la póliza" ("siniestro contra POL-001" → "POL-001", "siniestro de la
+   * póliza 8888" → "8888").
+   */
+  private extractPolizaRefDe(message: string): string | null {
+    const m = message.match(/(?:p[oó]liza|contra|para\s+la\s+p[oó]liza|de\s+la\s+p[oó]liza)\s*(?::|n[úu]mero\s+|nº\s*|#\s*)?((?:[A-Za-z]{1,4}[-_][A-Za-z0-9]{2,}[A-Za-z0-9-]*|\d{3,}))/i)
+    if (!m) return null
+    let n = m[1].trim()
+    n = n.split(/\s+(?:vence|venc|para|con|de|del|el|la|por|,|;)/i)[0].trim()
+    return n.length >= 3 ? n : null
+  }
+
+  /**
+   * Aseguradora: tras la keyword "aseguradora" o por nombre conocido suelto
+   * ("pólizas de AXA", "hogar MAPFRE"). NO usa "con" como ancla ("con
+   * vencimiento el 2026-12-31" capturaría la fecha como aseguradora).
+   */
+  private extractAseguradoraDe(message: string): string | null {
+    const kw = message.match(/\baseguradora\s*(?::|de|con)?\s*([A-ZÁÉÍÓÚÑÜ][A-Za-zÁÉÍÓÚÑÜ0-9 .'\-]{1,30})/i)
+    let a: string | null = kw ? kw[1] : null
+    if (!a) {
+      const known = message.match(this.ASEGURADORAS_CONOCIDAS)
+      if (known) a = known[0]
+    }
+    if (!a) return null
+    let cleaned = a.trim()
+    cleaned = cleaned.split(/\s+(?:vence|venc|prima|inicia|con\s+venc|para|el|la|del|por|,|;)/i)[0].trim()
+    return cleaned.length >= 2 ? cleaned : null
+  }
+
+  /**
+   * Rama del seguro: tras "ramo", "del ramo", "de ramo" o "póliza de auto".
+   */
+  private extractRamoSeguroDe(message: string): string | null {
+    const RAMOS = '(?:auto|autos|vida|hogar|salud|gastos?\\s+m[eé]dicos?|m[eé]dicos?|empresarial|transporte|responsabilidad\\s+civil|rc|incendio|ahorro|jubilaci[oó]n)'
+    const kw = message.match(new RegExp(`\\b(?:ramo|de\\s+ramo)\\s*(?::|de)?\\s*(${RAMOS})\\b`, 'i'))
+    if (kw) return kw[1].toLowerCase()
+    const dePoliza = message.match(new RegExp(`\\b(?:p[oó]lizas?|seguros?)\\s+(?:de|del|de\\s+ramo)\\s+(${RAMOS})\\b`, 'i'))
+    if (dePoliza) return dePoliza[1].toLowerCase()
+    const suelto = message.match(new RegExp(`\\b(${RAMOS})\\b`, 'i'))
+    return suelto ? suelto[1].toLowerCase() : null
+  }
+
+  /**
+   * Estado de póliza: "activas" → ACTIVA, "próximas a vencer" →
+   * PROXIMA_A_VENCER, "vencidas" → VENCIDA, "canceladas" → CANCELADA.
+   */
+  private extractEstadoPolizaDe(message: string): string | null {
+    if (/\b(?:pr[oó]ximas?\s+a\s+vencer|por\s+vencer)\b/i.test(message)) return 'PROXIMA_A_VENCER'
+    if (/\bactivas?\b/i.test(message)) return 'ACTIVA'
+    if (/\bvencid[oa]s?\b/i.test(message)) return 'VENCIDA'
+    if (/\bcanceladas?\b/i.test(message)) return 'CANCELADA'
+    if (/\bpendientes?\b/i.test(message)) return 'PENDIENTE'
+    const m = message.match(/(?:en|por)\s+estado\s+([A-Za-zÁÉÍÓÚÑÜáéíóúñü]{2,20})/i)
+    if (m) {
+      const e = m[1].toLowerCase()
+      if (e.includes('vencer')) return 'PROXIMA_A_VENCER'
+      if (e.startsWith('activ')) return 'ACTIVA'
+      if (e.startsWith('vencid')) return 'VENCIDA'
+      if (e.startsWith('cancel')) return 'CANCELADA'
+      if (e.startsWith('pend')) return 'PENDIENTE'
+    }
+    return null
+  }
+
+  /**
+   * Estado de siniestro normalizado al enum (REPORTADO / EN_TRAMITE / ABIERTO /
+   * PAGADO / RECHAZADO / CERRADO): "a en trámite" → EN_TRAMITE, "abiertos" →
+   * ABIERTO, "pagado" → PAGADO, "rechazado" → RECHAZADO, "cerrado" → CERRADO.
+   */
+  private extractEstadoSiniestroDe(message: string): string | null {
+    const ALIASES: Record<string, string> = {
+      'reportado': 'REPORTADO', 'reportados': 'REPORTADO',
+      'en tramite': 'EN_TRAMITE', 'en trámite': 'EN_TRAMITE', 'tramite': 'EN_TRAMITE',
+      'trámite': 'EN_TRAMITE', 'en proceso': 'EN_TRAMITE', 'proceso': 'EN_TRAMITE',
+      'abierto': 'ABIERTO', 'abiertos': 'ABIERTO',
+      'pagado': 'PAGADO', 'pagados': 'PAGADO', 'aprobado': 'PAGADO',
+      'rechazado': 'RECHAZADO', 'rechazados': 'RECHAZADO',
+      'cerrado': 'CERRADO', 'cerrados': 'CERRADO',
+    }
+    // "a en trámite" / "a abierto" / "en estado pagado"
+    const m = message.match(/(?:a\s+en|a\s+|en\s+estado|a\s+estado|estado)\s+([A-Za-zÁÉÍÓÚÑÜáéíóúñü]{2,20})/i)
+    if (m) {
+      const key = m[1].trim().toLowerCase().replace(/\s+/g, ' ')
+      if (ALIASES[key]) return ALIASES[key]
+    }
+    // Palabra suelta: "siniestros abiertos", "los rechazados", "marca pagado"
+    for (const [phrase, val] of Object.entries(ALIASES)) {
+      if (new RegExp(`\\b${phrase.replace(/ /g, '\\s+')}\\b`, 'i').test(message)) return val
+    }
+    return null
+  }
+
+  /**
+   * Estado de renovación: "pendientes" → PENDIENTE, "contacto inicial" →
+   * CONTACTO_INICIAL, "revisión" → REVISION, "oferta enviada" → OFERTA_ENVIADA.
+   */
+  private extractEstadoRenovacionDe(message: string): string | null {
+    if (/\bpendientes?\b/i.test(message)) return 'PENDIENTE'
+    if (/\bcontacto\s+inicial\b/i.test(message)) return 'CONTACTO_INICIAL'
+    if (/\brevisi[oó]n\b/i.test(message)) return 'REVISION'
+    if (/\boferta\s+enviada\b/i.test(message)) return 'OFERTA_ENVIADA'
+    return null
+  }
+
+  /**
+   * Prima anual: número tras "prima"/"prima anual"/"primaAnual".
+   */
+  private extractPrimaDe(message: string): number | null {
+    const m = message.match(/(?:prima\s+anual|primaAnual|prima)\s*(?::|de|por)?\s*(\d+(?:[.,]\d{1,2})?)/i)
+    if (!m) return null
+    const v = parseFloat(m[1].replace(',', '.'))
+    return Number.isFinite(v) ? v : null
+  }
+
+  /**
+   * Suma asegurada: número tras "suma asegurada"/"sumaAsegurada"/"cobertura".
+   */
+  private extractSumaAseguradaDe(message: string): number | null {
+    const m = message.match(/(?:suma\s+asegurada|sumaAsegurada|cobertura)\s*(?::|de|por)?\s*(\d+(?:[.,]\d{1,2})?)/i)
+    if (!m) return null
+    const v = parseFloat(m[1].replace(',', '.'))
+    return Number.isFinite(v) ? v : null
+  }
+
+  /**
+   * Cliente asegurado: tras "cliente/asegurado/para/de/tiene/tienen". Rechaza
+   * nombres de aseguradoras conocidas ("pólizas de AXA" → cliente null, no
+   * "AXA") y palabras en minúscula ("de la", "de los"…).
+   */
+  private extractClienteSeguroDe(message: string): string | null {
+    const m = message.match(/\b(?:cliente|asegurado|para|de|tiene|tienen)\s+([A-ZÁÉÍÓÚÑÜ][A-Za-zÁÉÍÓÚÑÜ0-9 ]{2,30})/i)
+    if (!m) return null
+    let c = m[1].trim()
+    c = c.split(/\s+(?:con|de|del|la|el|por|y|,|;|vence|venc)/i)[0].trim()
+    if (c.length < 2 || /^(?:la|el|los|las|una|un|es|son|y|o|con|de|del)$/i.test(c)) return null
+    if (this.ASEGURADORAS_CONOCIDAS.test(c)) return null
+    return c
+  }
+
+  /**
+   * Número de días: "en 60 días" → 60 (para pólizas por vencer y clientes sin
+   * contacto).
+   */
+  private extractDiasDe(message: string): number | null {
+    const m = message.match(/\b(\d{1,3})\s*(?:d[ií]as?)\b/i)
+    if (!m) return null
+    const v = Number(m[1])
+    return v >= 1 && v <= 365 ? v : null
+  }
+
+  /**
+   * Número de siniestro: "SIN-001" / "SIN_001" / "S-12345" / "nº X" tras
+   * "siniestro".
+   */
+  private extractNumeroSiniestroDe(message: string): string | null {
+    const m = message.match(/\b(?:SIN[-_]\d+|S[-_]?\d{3,})\b/i)
+    if (m) return m[0]
+    const kw = message.match(/\bsiniestro\s*(?:n[úu]mero\s*|nº\s*|#\s*)?([A-Za-z0-9][A-Za-z0-9-]{2,})/i)
+    if (kw) {
+      let n = kw[1].trim()
+      n = n.split(/\s+(?:a|en|por|con|de|del|,|;)/i)[0].trim()
+      return n.length >= 3 ? n : null
+    }
+    return null
+  }
+
+  /**
+   * Descripción del siniestro: tras "descripción:" o el texto tras los dos
+   * puntos ("…: colisión leve, monto reclamado 1500" → "colisión leve").
+   */
+  private extractDescripcionSiniestroDe(message: string): string | null {
+    const kw = message.match(/(?:descripci[oó]n|descripcion)\s*:\s*([A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9][\s\S]{2,120})/i)
+    if (kw) {
+      let d = kw[1].trim()
+      d = d.split(/\s*(?:,|;)\s*monto\s+reclamado/i)[0].trim()
+      if (d.length >= 2) return d
+    }
+    const idx = message.indexOf(':')
+    if (idx >= 0) {
+      let d = message.slice(idx + 1).trim()
+      d = d.split(/\s*(?:,|;)\s*monto\s+reclamado/i)[0].trim()
+      d = d.replace(/["'”]+\s*$/, '').trim()
+      if (d.length >= 2) return d
+    }
+    return null
+  }
+
+  /**
+   * Monto reclamado: "monto reclamado 1500" → 1500, "reclamado 30000 MXN" →
+   * 30000.
+   */
+  private extractMontoReclamadoDe(message: string): number | null {
+    const m = message.match(/(?:monto\s+reclamado|monto\s+de\s+la\s+reclamaci[oó]n|reclamad[oa]|reclamando)\s*(?::|de|por)?\s*(\d+(?:[.,]\d{1,2})?)/i)
+    if (!m) return null
+    const v = parseFloat(m[1].replace(',', '.'))
+    return Number.isFinite(v) ? v : null
+  }
+
+  /**
+   * Indemnización: "con indemnización 1200" → 1200, "monto indemnizado 800" →
+   * 800.
+   */
+  private extractIndemnizacionDe(message: string): number | null {
+    const m = message.match(/(?:indemnizaci[oó]n|monto\s+indemnizado|indemnizado)\s*(?::|de|por)?\s*(\d+(?:[.,]\d{1,2})?)/i)
+    if (!m) return null
+    const v = parseFloat(m[1].replace(',', '.'))
+    return Number.isFinite(v) ? v : null
+  }
+
+  /**
+   * Motivo de rechazo: tras los dos puntos o "por" ("rechaza el siniestro
+   * SIN-002 por no estar cubierto" → "no estar cubierto").
+   */
+  private extractMotivoRechazoDe(message: string): string | null {
+    const idx = message.indexOf(':')
+    if (idx >= 0) {
+      const m = message.slice(idx + 1).trim().replace(/["'”]+\s*$/, '').trim()
+      if (m.length >= 3) return m
+    }
+    const m = message.match(/\bpor\s+(.{3,60})$/i)
+    if (m) {
+      const r = m[1].trim().replace(/["'”]+\s*$/, '').trim()
+      return r.length >= 3 ? r : null
+    }
+    return null
+  }
+
+  /**
+   * Fecha de inicio de cobertura: la fecha que sigue a "inicia/inicio/empieza/
+   * desde" ("inicia hoy" → hoy, "inicia el 2026-09-01" → 2026-09-01).
+   */
+  private extractFechaInicioDe(message: string): string | null {
+    const m = message.match(/(?:inicia|inicio|empieza|desde|fecha\s+de\s+inicio)\s*(?:el\s+|el\s+d[ií]a\s+)?([A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9/\- ]{3,25})/i)
+    if (!m) return null
+    return this.extractFechaDe(m[1])
   }
 
   /**
@@ -1581,6 +1987,57 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
       const idx = message.indexOf(':')
       const content = (idx >= 0 ? message.slice(idx + 1) : message).trim()
       return content.length >= 2 ? content.replace(/["'”]+\s*$/, '').trim() : null
+    }
+    // ─── Módulo Seguros (Noveno entrenamiento) ───
+    if (param === 'numeroPoliza') {
+      return this.extractNumeroPolizaDe(message)
+    }
+    if (param === 'aseguradora') {
+      return this.extractAseguradoraDe(message)
+    }
+    if (param === 'ramo') {
+      return this.extractRamoSeguroDe(message)
+    }
+    if (param === 'estado') {
+      return this.extractEstadoPolizaDe(message) || this.extractEstadoSiniestroDe(message) || this.extractEstadoRenovacionDe(message)
+    }
+    if (param === 'primaAnual' || param === 'prima') {
+      const v = this.extractPrimaDe(message)
+      return v !== null ? String(v) : null
+    }
+    if (param === 'sumaAsegurada') {
+      const v = this.extractSumaAseguradaDe(message)
+      return v !== null ? String(v) : null
+    }
+    if (param === 'fechaInicio' || param === 'fechaSuceso' || param === 'fechaCierre' || param === 'fechaReporte') {
+      return this.extractFechaDe(message) || this.extractFechaInicioDe(message)
+    }
+    if (param === 'cliente') {
+      return this.extractClienteSeguroDe(message)
+    }
+    if (param === 'dias') {
+      const v = this.extractDiasDe(message)
+      return v !== null ? String(v) : null
+    }
+    if (param === 'poliza') {
+      return this.extractPolizaRefDe(message)
+    }
+    if (param === 'siniestro' || param === 'numeroSiniestro') {
+      return this.extractNumeroSiniestroDe(message) || this.extractPolizaRefDe(message)
+    }
+    if (param === 'descripcion') {
+      return this.extractDescripcionSiniestroDe(message)
+    }
+    if (param === 'montoReclamado') {
+      const v = this.extractMontoReclamadoDe(message)
+      return v !== null ? String(v) : null
+    }
+    if (param === 'montoIndemnizado') {
+      const v = this.extractIndemnizacionDe(message)
+      return v !== null ? String(v) : null
+    }
+    if (param === 'motivoRechazo') {
+      return this.extractMotivoRechazoDe(message)
     }
     return null
   }

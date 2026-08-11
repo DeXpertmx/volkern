@@ -93,11 +93,13 @@ describe('insurance-intents — siniestros', () => {
     expect(intent.destructive).toBe(false);
   });
 
-  it('actualizar_siniestro exige siniestro y acepta estado/montoIndemnizado/motivoRechazo', () => {
+  it('actualizar_siniestro exige siniestro + estado y acepta montoIndemnizado/motivoRechazo', () => {
     const intent = insuranceIntents.find(i => i.name === 'actualizar_siniestro')!;
-    expect(intent.requiredParams).toEqual(['siniestro']);
+    // estado es requerido porque el wrapper update_siniestro lo exige (el
+    // clasificador lo infiere del verbo: rechaza→RECHAZADO, cierra→CERRADO…)
+    expect(intent.requiredParams).toEqual(['siniestro', 'estado']);
     expect(intent.optionalParams).toEqual(
-      expect.arrayContaining(['estado', 'montoIndemnizado', 'motivoRechazo', 'notas', 'fechaCierre']),
+      expect.arrayContaining(['montoIndemnizado', 'motivoRechazo', 'notas', 'fechaCierre']),
     );
   });
 });
