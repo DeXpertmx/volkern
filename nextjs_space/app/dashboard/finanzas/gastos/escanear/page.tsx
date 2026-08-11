@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
 import { Camera, Receipt, Scan, Loader2, ArrowLeft, CheckCircle2, Image as ImageIcon, FileText } from 'lucide-react'
+import IvaRatesEditor from '@/components/finance/IvaRatesEditor'
 
 interface EmisorInfo {
   nombre: string | null
@@ -95,10 +96,14 @@ export default function EscanearGastoPage() {
   const [saving, setSaving] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [showSelect, setShowSelect] = useState(true)
-  // Tipos de IVA del proveedor detectado: se ofrecen como opciones para el IVA %
+  // Tipos de IVA del proveedor: se ofrecen como opciones para el IVA % y se
+  // guardan en el proveedor al registrar el gasto.
   const [supplierVatRates, setSupplierVatRates] = useState<number[]>([])
+  // Si el usuario editó los tipos manualmente, el lookup no debe sobreescribirlos
+  const [ratesTouched, setRatesTouched] = useState(false)
 
   const lookupSupplierVatRates = async (name: string) => {
+    if (ratesTouched) return
     if (!name.trim()) { setSupplierVatRates([]); return }
     try {
       const res = await fetch(`/api/erp/suppliers?search=${encodeURIComponent(name)}`)
@@ -111,7 +116,7 @@ export default function EscanearGastoPage() {
         setSupplierVatRates([])
       }
     } catch {
-      setSupplierVatRates([])
+      /* sin cambios */
     }
   }
 
@@ -300,11 +305,26 @@ export default function EscanearGastoPage() {
         const existing = await existingRes.json()
         if (Array.isArray(existing) && existing.length > 0) {
           supplierId = existing[0].id
+          // Guardar los tipos de IVA definidos en el formulario (si el usuario
+          // los editó; si no, no tocamos los del proveedor existente).
+          if (ratesTouched) {
+            try {
+              await fetch(`/api/erp/suppliers/${supplierId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ vatRates: supplierVatRates }),
+              })
+            } catch { /* no bloquea el registro del gasto */ }
+          }
         } else {
           const createRes = await fetch('/api/erp/suppliers', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: form.supplier, category: form.category }),
+            body: JSON.stringify({
+              name: form.supplier,
+              category: form.category,
+              vatRates: ratesTouched ? supplierVatRates : undefined,
+            }),
           })
           if (createRes.ok) {
             const created = await createRes.json()
@@ -566,7 +586,10 @@ export default function EscanearGastoPage() {
                   <Label>Proveedor</Label>
                   <Input
                     value={form.supplier}
-                    onChange={e => setForm(p => ({ ...p, supplier: e.target.value }))}
+                    onChange={e => {
+                      setForm(p => ({ ...p, supplier: e.target.value }))
+                      setRatesTouched(false)
+                    }}
                     onBlur={() => lookupSupplierVatRates(form.supplier)}
                     placeholder="Nombre del proveedor"
                   />
@@ -581,6 +604,21 @@ export default function EscanearGastoPage() {
                   </Select>
                 </div>
               </div>
+
+              {form.supplier && (
+                <div className="space-y-2">
+                  <Label>Tipos de IVA del proveedor</Label>
+                  <IvaRatesEditor
+                    value={supplierVatRates}
+                    onChange={v => { setRatesTouched(true); setSupplierVatRates(v) }}
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    {ratesTouched
+                      ? 'Se guardarán en el proveedor al registrar el gasto.'
+                      : 'Se cargan automáticamente si el proveedor ya existe en tu base.'}
+                  </p>
+                </div>
+              )}
 
               {rawOcrText && (
                 <details className="border rounded-lg p-3 bg-muted/30">
