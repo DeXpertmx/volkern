@@ -40,6 +40,15 @@ interface ExpenseVerificationDetailsProps {
     exifLng?: number
     isAnomaly: boolean
     receiptUrl?: string | null
+    // Desglose de impuestos (Veri*factu)
+    taxableBase?: number | null
+    vatRate?: number | null
+    vatAmount?: number | null
+    metadata?: {
+      irpfRate?: number | null
+      irpfAmount?: number | null
+      totalFactura?: number | null
+    } | null
   }
   tenantConfig: {
     baseLatitude: number
@@ -106,6 +115,50 @@ export default function ExpenseVerificationDetails({ expense, tenantConfig }: Ex
                  <p className="text-xs text-muted-foreground font-medium">Gobernanza de integridad criptográfica y Chain-of-Trust.</p>
              </div>
          </div>
+      </div>
+
+      {/* Desglose de Impuestos */}
+      <div className="lg:col-span-12">
+        <Card className="border-none shadow-premium">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-xs font-black uppercase tracking-widest flex items-center gap-2">
+              <FileDigit className="w-4 h-4 text-indigo-500" />
+              Desglose de Impuestos
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 shadow-inner">
+                <p className="text-[9px] font-black text-muted-foreground uppercase mb-1">Base Imponible</p>
+                <p className="text-sm font-black tracking-tight">
+                  {expense.taxableBase != null ? `€${expense.taxableBase.toFixed(2)}` : '—'}
+                </p>
+              </div>
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 shadow-inner">
+                <p className="text-[9px] font-black text-muted-foreground uppercase mb-1">IVA</p>
+                <p className="text-sm font-black tracking-tight">
+                  {expense.vatAmount != null
+                    ? `€${expense.vatAmount.toFixed(2)}${expense.vatRate != null ? ` (${expense.vatRate}%)` : ''}`
+                    : '—'}
+                </p>
+              </div>
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 shadow-inner">
+                <p className="text-[9px] font-black text-muted-foreground uppercase mb-1">IRPF (Retención)</p>
+                <p className="text-sm font-black tracking-tight">
+                  {expense.metadata?.irpfAmount != null
+                    ? `€${expense.metadata.irpfAmount.toFixed(2)}${expense.metadata.irpfRate != null ? ` (${expense.metadata.irpfRate}%)` : ''}`
+                    : '—'}
+                </p>
+              </div>
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 shadow-inner">
+                <p className="text-[9px] font-black text-muted-foreground uppercase mb-1">Total Factura</p>
+                <p className="text-sm font-black tracking-tight">
+                  {expense.metadata?.totalFactura != null ? `€${expense.metadata.totalFactura.toFixed(2)}` : `€${expense.amount.toFixed(2)}`}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <Card className="lg:col-span-5 border-none shadow-premium bg-slate-50/50">

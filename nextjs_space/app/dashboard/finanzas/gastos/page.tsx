@@ -64,6 +64,8 @@ export default function GastosPage() {
                   <th className="px-6 py-4 text-[10px] font-black uppercase text-muted-foreground tracking-widest">Fecha</th>
                   <th className="px-6 py-4 text-[10px] font-black uppercase text-muted-foreground tracking-widest">Descripción</th>
                   <th className="px-6 py-4 text-[10px] font-black uppercase text-muted-foreground tracking-widest">Proveedor</th>
+                  <th className="px-6 py-4 text-[10px] font-black uppercase text-muted-foreground tracking-widest text-right">Base</th>
+                  <th className="px-6 py-4 text-[10px] font-black uppercase text-muted-foreground tracking-widest text-right">IVA</th>
                   <th className="px-6 py-4 text-[10px] font-black uppercase text-muted-foreground tracking-widest">Estado</th>
                   <th className="px-6 py-4 text-[10px] font-black uppercase text-muted-foreground tracking-widest text-center">Verifactu</th>
                   <th className="px-6 py-4 text-[10px] font-black uppercase text-muted-foreground tracking-widest text-right">Monto</th>
@@ -71,7 +73,7 @@ export default function GastosPage() {
               </thead>
               <tbody className="divide-y">
                 {isLoading ? (
-                  <tr><td colSpan={6} className="px-6 py-10 text-center text-muted-foreground font-medium">Cargando datos...</td></tr>
+                  <tr><td colSpan={8} className="px-6 py-10 text-center text-muted-foreground font-medium">Cargando datos...</td></tr>
                 ) : (expenses && expenses.length > 0) ? (
                   expenses.map((expense: any) => (
                     <tr 
@@ -87,6 +89,18 @@ export default function GastosPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4 text-sm font-medium text-slate-600">{expense.supplier?.name}</td>
+                      <td className="px-6 py-4 text-right">
+                        <span className="text-xs font-semibold text-slate-600">
+                          {expense.taxableBase != null ? `€${expense.taxableBase.toFixed(2)}` : '—'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <span className="text-xs font-semibold text-slate-600">
+                          {expense.vatAmount != null
+                            ? `€${expense.vatAmount.toFixed(2)}${expense.vatRate != null ? ` (${expense.vatRate}%)` : ''}`
+                            : '—'}
+                        </span>
+                      </td>
                       <td className="px-6 py-4">
                         <Badge className={`rounded-lg text-[10px] font-bold uppercase border-none ${expense.status === 'PAID' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                           {expense.status}
@@ -112,7 +126,7 @@ export default function GastosPage() {
                     </tr>
                   ))
                 ) : (
-                   <tr><td colSpan={6} className="px-6 py-20 text-center font-medium text-slate-400">No se encontraron gastos registrados.</td></tr>
+                   <tr><td colSpan={8} className="px-6 py-20 text-center font-medium text-slate-400">No se encontraron gastos registrados.</td></tr>
                 )}
               </tbody>
             </table>
