@@ -150,7 +150,16 @@ export class IntentClassifierAgent {
     const schema = this.intentsSchema.find(i => i.name === intent);
     if (!schema) return [];
     
-    return schema.requiredParams.filter((param: string) => !extractedParams[param]);
+    const missing = schema.requiredParams.filter((param: string) => !extractedParams[param]);
+
+    // agendar_cita: el contacto puede venir como nombre O email. Si falta por
+    // completo se pide el NOMBRE (nunca el email — el wrapper auto-registra el
+    // lead con email sintético cuando solo se da el nombre).
+    if (intent === 'agendar_cita' && !extractedParams.nombre && !extractedParams.email) {
+      if (!missing.includes('nombre')) missing.push('nombre');
+    }
+
+    return missing;
   }
 
   private buildSystemPrompt(
@@ -895,8 +904,10 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     const hasCitas = /\b(?:citas?|reuni[oó]n|reuniones)\b/i.test(message)
     const QUERY_CITAS = /qu[eé]\s+(?:citas?|reuniones?)\s+(?:tengo|hay|tienes|tenemos|tiene)\b/i
     const LIST_CITAS = /\b(?:lista|listame|mu[eé]strame|muestra|ver|ens[eé][ñn]ame|dame)\s+(?:mis\s+|las\s+|tus\s+)?(?:citas?|reuniones?)\b/i
-    // "tengo una cita para mañana" es una afirmación, no una consulta de listado
-    const DATE_CITAS = /^(?!.*\b(?:tengo|tienes|tenemos|tiene|hay|hago|haces|quedo|quedamos)\b).*\b(?:citas?|reuniones?)\s+(?:de|para|del)\s+(?:hoy|ma[nñ]ana|esta\s+semana|la\s+semana|el\s+(?:lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo))\b/i
+    // "tengo una cita para mañana" es una afirmación, no una consulta de listado.
+    // También se excluyen los verbos de agenda: "agenda una cita para mañana"
+    // es una petición de crear, no un listado (bug corregido — caía en mis_citas).
+    const DATE_CITAS = /^(?!.*\b(?:tengo|tienes|tenemos|tiene|hay|hago|haces|quedo|quedamos|agenda|agendar|programa|programar|reserva|reservar|aparta|apartar|crea|crear|haz|hacer|pon|ponme)\b).*\b(?:citas?|reuniones?)\s+(?:de|para|del)\s+(?:hoy|ma[nñ]ana|esta\s+semana|la\s+semana|el\s+(?:lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo))\b/i
     if (hasCitas && (QUERY_CITAS.test(message) || LIST_CITAS.test(message) || DATE_CITAS.test(message))) {
       // "qué citas tengo mañana" → filtrar por ese día. El wrapper de
       // get_upcoming_bookings espera el parámetro `date` (no `fecha`).

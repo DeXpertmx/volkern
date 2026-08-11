@@ -811,7 +811,7 @@ describe('IntentClassifier — ruta determinista (sin LLM)', () => {
     expect(result.needsMoreInfo).toBe(false);
   });
 
-  it('programa reunión con nombre el viernes a las 15:30 (pide email: el skill lo exige)', async () => {
+  it('programa reunión con nombre el viernes a las 15:30 (sin email → listo: el wrapper auto-registra)', async () => {
     const result = await classifier.classify({
       ...base,
       message: 'programa reunión con Juan Pérez el viernes a las 15:30',
@@ -820,8 +820,9 @@ describe('IntentClassifier — ruta determinista (sin LLM)', () => {
     expect(result.extractedParams.nombre).toBe('Juan Pérez');
     expect(result.extractedParams.fecha).toBe(nextWeekday(5));
     expect(result.extractedParams.hora).toBe('15:30');
-    expect(result.needsMoreInfo).toBe(true);
-    expect(result.missingParams).toContain('email');
+    // Email NO es requerido: si el lead no está en el CRM, el wrapper lo
+    // registra automáticamente con email sintético.
+    expect(result.needsMoreInfo).toBe(false);
   });
 
   it('agenda videollamada con 2pm → tipo videollamada y hora 14:00', async () => {
@@ -956,17 +957,30 @@ describe('IntentClassifier — ruta determinista (sin LLM)', () => {
     expect(result.intent).not.toBe('mis_citas');
   });
 
-  it('multi-turno: completa el email faltante de agendar_cita (tras EMAIL_REQUIRED)', async () => {
+  it('multi-turno: completa el nombre faltante de agendar_cita (sin pedir email)', async () => {
     const result = await classifier.classify({
       ...base,
-      message: 'maria@volkern.test',
+      message: 'María García',
       pendingIntent: 'agendar_cita',
-      collectedEntities: { nombre: 'Juan Pérez', fecha: tomorrow(), hora: '10:00' },
-      missingEntities: ['email'],
+      collectedEntities: { fecha: tomorrow(), hora: '10:00' },
+      missingEntities: ['nombre'],
     });
     expect(result.intent).toBe('agendar_cita');
-    expect(result.extractedParams.email).toBe('maria@volkern.test');
+    expect(result.extractedParams.nombre).toBe('María García');
     expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('agendar sin nombre → pide nombre (no email)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'agenda una cita para mañana a las 10am',
+    });
+    expect(result.intent).toBe('agendar_cita');
+    expect(result.extractedParams.fecha).toBe(tomorrow());
+    expect(result.extractedParams.hora).toBe('10:00');
+    expect(result.needsMoreInfo).toBe(true);
+    expect(result.missingParams).toContain('nombre');
+    expect(result.missingParams).not.toContain('email');
   });
 
   it('el día de la semana coincide con hoy → usa la próxima semana (semántica de agenda)', async () => {

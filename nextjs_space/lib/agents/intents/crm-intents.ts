@@ -159,15 +159,16 @@ export const crmIntents: IntentSchema[] = [
   // ========== CITAS / BOOKINGS ==========
   {
     name: 'agendar_cita',
-    description: 'Agendar una cita o reunión con un lead',
-    // email es requerido porque create_booking lo exige (para buscar/crear el
-    // lead): si falta, el bot pregunta y completa el flujo en el siguiente turno.
-    requiredParams: ['fecha', 'hora', 'email'],
-    optionalParams: ['nombre', 'duracion', 'notas', 'tipo'],
+    description: 'Agendar una cita o reunión con un lead. El bot busca el lead por nombre o email; si no existe en el CRM lo registra automáticamente (email sintético si solo se da el nombre) y vincula la cita',
+    // Solo fecha+hora son obligatorios: el wrapper resuelve el contacto por
+    // nombre O email (si falta el nombre lo deriva del email; si falta el
+    // email y el lead no existe, lo auto-registra con email sintético).
+    requiredParams: ['fecha', 'hora'],
+    optionalParams: ['nombre', 'email', 'telefono', 'duracion', 'notas', 'tipo'],
     examples: [
+      'agenda cita con Juan Pérez para mañana a las 10am',
       'agenda cita con juan@email.com para mañana a las 10am',
-      'programa reunión con María el viernes a las 15:30 por 1 hora',
-      'crea una cita con alejandra.vvalvede@gmail.com el 2024-12-20 a las 11:00'
+      'programa reunión con María el viernes a las 15:30 por 1 hora'
     ],
     destructive: false
   },
