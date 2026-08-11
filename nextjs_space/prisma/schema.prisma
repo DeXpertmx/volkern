@@ -4128,6 +4128,10 @@ model Supplier {
   category     String
   balance      Float     @default(0)
   active       Boolean   @default(true)
+  // Tipos de IVA que aplica este proveedor (p. ej. [21, 10, 4]). Un
+  // proveedor puede facturar a varios tipos; al registrar un gasto se
+  // ofrecen como opciones para el IVA del documento.
+  vatRates     Float[]   @default([])
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   expenses     Expense[]
