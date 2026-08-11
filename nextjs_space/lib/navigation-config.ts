@@ -66,7 +66,9 @@ import {
   Radio,
   Radar,
   Scale,
-  Mail
+  Mail,
+  ShieldAlert,
+  History
 } from 'lucide-react'
 import type { PermissionModule } from '@/lib/permissions'
 
@@ -244,7 +246,8 @@ export const HUBS: HubConfig[] = [
       '/dashboard/seguros/cartera',
       '/dashboard/seguros/aseguradoras',
       '/dashboard/seguros/portfolio',
-      '/dashboard/seguros/productos'
+      '/dashboard/seguros/productos',
+      '/dashboard/seguros/siniestros'
     ],
     items: [
       { name: 'Dashboard Seguros', href: '/dashboard/seguros', icon: LayoutDashboard, planModule: 'insurance', description: 'KPIs de cartera y renovaciones' },
@@ -254,6 +257,7 @@ export const HUBS: HubConfig[] = [
       { name: 'Renovaciones', href: '/dashboard/seguros/renovaciones', icon: RotateCw, planModule: 'insurance', description: 'Motor de renovaciones y alertas' },
       { name: 'Cartera IA', href: '/dashboard/seguros/cartera', icon: BarChart3, planModule: 'insurance', description: 'Mapa de cartera y oportunidades IA' },
       { name: 'Aseguradoras', href: '/dashboard/seguros/aseguradoras', icon: Building2, planModule: 'insurance', description: 'Directorio de aseguradoras y productos' },
+      { name: 'Siniestros', href: '/dashboard/seguros/siniestros', icon: ShieldAlert, planModule: 'insurance', description: 'Gestión del ciclo de vida de los siniestros' },
     ]
   },
   {

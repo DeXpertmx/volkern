@@ -42,6 +42,7 @@ import * as marketingSkills from './marketing-skills';
 import * as adSkills from './ads-skills';
 import * as realEstateSkills from './real-estate-skills';
 import * as insuranceSkills from './insurance-skills';
+import * as siniestrosSkills from './siniestros-skills';
 import * as logisticsSkills from './logistics-skills';
 import * as interactionSkills from './interaction-skills';
 import * as billingSkills from './billing-skills';
@@ -770,6 +771,171 @@ const cancelBookingWrapper = async (input: {
 }
 
 
+// ─── Wrappers de Siniestros: el orquestador pasa números/nombres en español;
+// el skill core exige ids y enum EstadoSiniestro en mayúsculas ───────────────
+
+const ESTADOS_SINIESTRO = ['REPORTADO', 'EN_TRAMITE', 'ABIERTO', 'PAGADO', 'RECHAZADO', 'CERRADO'] as const;
+type EstadoSiniestro = (typeof ESTADOS_SINIESTRO)[number];
+
+const ESTADO_SINIESTRO_ALIAS: Record<string, EstadoSiniestro> = {
+  'reportado': 'REPORTADO',
+  'en tramite': 'EN_TRAMITE',
+  'en trámite': 'EN_TRAMITE',
+  'tramite': 'EN_TRAMITE',
+  'trámite': 'EN_TRAMITE',
+  'abierto': 'ABIERTO',
+  'pagado': 'PAGADO',
+  'rechazado': 'RECHAZADO',
+  'cerrado': 'CERRADO',
+};
+
+function normalizeEstadoSiniestro(raw?: string): EstadoSiniestro | undefined {
+  if (!raw) return undefined;
+  const upper = raw.trim().toUpperCase();
+  if ((ESTADOS_SINIESTRO as readonly string[]).includes(upper)) return upper as EstadoSiniestro;
+  return ESTADO_SINIESTRO_ALIAS[raw.trim().toLowerCase().replace(/\s+/g, ' ')];
+}
+
+/**
+ * Resuelve la póliza por id cuid (API) o por número (chatbot).
+ */
+async function resolvePolizaId(tenantId: string, ref?: string): Promise<string> {
+  if (!ref) throw new Error('Necesito saber a qué póliza se refiere (su número).');
+  if (/^c[a-z0-9]{20,}$/i.test(ref)) return ref;
+  const { prisma } = await import('@/lib/db');
+  const poliza = await prisma.poliza.findFirst({
+    where: { tenantId, numeroPoliza: { contains: ref, mode: 'insensitive' as const } },
+    orderBy: { fechaVencimiento: 'desc' },
+    select: { id: true, numeroPoliza: true },
+  });
+  if (!poliza) throw new Error(`No encontré ninguna póliza "${ref}" en tu cartera.`);
+  return poliza.id;
+}
+
+/**
+ * Resuelve el siniestro por id cuid o por numeroSiniestro (chatbot).
+ */
+async function resolveSiniestroId(tenantId: string, ref?: string): Promise<string> {
+  if (!ref) throw new Error('Necesito saber a qué siniestro te refieres (su nº de siniestro).');
+  if (/^c[a-z0-9]{20,}$/i.test(ref)) return ref;
+  const { prisma } = await import('@/lib/db');
+  const siniestro = await prisma.siniestro.findFirst({
+    where: { tenantId, numeroSiniestro: { contains: ref, mode: 'insensitive' as const } },
+    orderBy: { fechaSuceso: 'desc' },
+    select: { id: true, numeroSiniestro: true },
+  });
+  if (!siniestro) throw new Error(`No encontré ningún siniestro "${ref}".`);
+  return siniestro.id;
+}
+
+const createSiniestroWrapper = async (input: {
+  tenantId: string;
+  poliza?: string;
+  polizaId?: string;
+  descripcion?: string;
+  numeroSiniestro?: string;
+  fechaSuceso?: string;
+  fechaReporte?: string;
+  montoReclamado?: number | string;
+  deducible?: number | string;
+  moneda?: string;
+  estado?: string;
+  notas?: string;
+  userId?: string;
+}) => {
+  if (!input.descripcion || !String(input.descripcion).trim()) {
+    throw new Error('Describe brevemente el siniestro para poder reportarlo.');
+  }
+  const polizaId = input.polizaId || (input.poliza ? await resolvePolizaId(input.tenantId, input.poliza) : undefined);
+  if (!polizaId) throw new Error('Necesito saber contra qué póliza es el siniestro.');
+
+  return siniestrosSkills.createSiniestro({
+    tenantId: input.tenantId,
+    polizaId,
+    descripcion: String(input.descripcion),
+    numeroSiniestro: input.numeroSiniestro,
+    fechaSuceso: input.fechaSuceso,
+    fechaReporte: input.fechaReporte,
+    montoReclamado: input.montoReclamado !== undefined && input.montoReclamado !== '' ? Number(input.montoReclamado) : undefined,
+    deducible: input.deducible !== undefined && input.deducible !== '' ? Number(input.deducible) : undefined,
+    moneda: input.moneda,
+    estado: normalizeEstadoSiniestro(input.estado),
+    notas: input.notas,
+    createdById: input.userId,
+  });
+};
+
+const listSiniestrosWrapper = async (input: {
+  tenantId: string;
+  estado?: string;
+  cliente?: string;
+  aseguradora?: string;
+  page?: number;
+  limit?: number;
+}) => {
+  const { tenantId } = input;
+  const { prisma } = await import('@/lib/db');
+  let clienteId: string | undefined;
+  let aseguradoraId: string | undefined;
+  if (input.cliente) {
+    const c = await prisma.contact.findFirst({
+      where: { tenantId, nombre: { contains: input.cliente, mode: 'insensitive' as const } },
+      select: { id: true },
+    });
+    if (!c) throw new Error(`No encontré ningún cliente llamado "${input.cliente}".`);
+    clienteId = c.id;
+  }
+  if (input.aseguradora) {
+    const a = await prisma.aseguradora.findFirst({
+      where: { tenantId, nombre: { contains: input.aseguradora, mode: 'insensitive' as const } },
+      select: { id: true },
+    });
+    if (!a) throw new Error(`No encontré ninguna aseguradora llamada "${input.aseguradora}".`);
+    aseguradoraId = a.id;
+  }
+  return siniestrosSkills.listSiniestros({
+    tenantId: input.tenantId,
+    estado: normalizeEstadoSiniestro(input.estado),
+    clienteId,
+    aseguradoraId,
+    page: input.page,
+    limit: input.limit,
+  });
+};
+
+const updateSiniestroWrapper = async (input: {
+  tenantId: string;
+  siniestro?: string;
+  id?: string;
+  estado?: string;
+  montoIndemnizado?: number | string;
+  motivoRechazo?: string;
+  notas?: string;
+  fechaCierre?: string;
+}) => {
+  const estado = normalizeEstadoSiniestro(input.estado);
+  if (!estado) {
+    throw new Error(
+      'Indica el estado al que quieres pasar el siniestro (en trámite, abierto, pagado, rechazado o cerrado).',
+    );
+  }
+  const id = input.id || (input.siniestro ? await resolveSiniestroId(input.tenantId, input.siniestro) : undefined);
+  if (!id) throw new Error('Necesito saber a qué siniestro te refieres.');
+
+  return siniestrosSkills.updateEstadoSiniestro({
+    tenantId: input.tenantId,
+    id,
+    estado,
+    montoIndemnizado:
+      input.montoIndemnizado !== undefined && input.montoIndemnizado !== ''
+        ? Number(input.montoIndemnizado)
+        : undefined,
+    motivoRechazo: input.motivoRechazo,
+    notas: input.notas,
+    fechaCierre: input.fechaCierre,
+  });
+};
+
 export const skills = {
   // Contactos
   create_contact: createContactWrapper,
@@ -917,6 +1083,9 @@ export const skills = {
   polizas_por_vencer: insuranceSkills.polizas_por_vencer,
   renovaciones_pendientes: insuranceSkills.renovaciones_pendientes,
   clientes_sin_contacto: insuranceSkills.clientes_sin_contacto,
+  create_siniestro: createSiniestroWrapper,
+  list_siniestros: listSiniestrosWrapper,
+  update_siniestro: updateSiniestroWrapper,
 
   // ERP Logística
   get_shipment_status: logisticsSkills.getShipmentStatus,

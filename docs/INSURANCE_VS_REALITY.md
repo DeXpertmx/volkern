@@ -248,3 +248,20 @@
 
 EOF
 echo "---DOC-CREATED---"
+
+---
+
+## ✅ Fase 5.1 Siniestros — COMPLETADA (working tree, pendiente de commit)
+
+| Entregable Fase 5.1 | Estado | Notas |
+|---|---|---|
+| `model Siniestro` | ✅ | Commit `c6c0597` — Schema.prisma valid + back-refs en 5 modelos |
+| `enum EstadoSiniestro` | ✅ | Commit `c6c0597` — 6 estados: REPORTADO → EN_TRAMITE → ABIERTO → PAGADO / RECHAZADO → CERRADO |
+| Skill wrapper `lib/skills/siniestros-skills.ts` | ✅ | Commit `bc72d48` (+21 tests) |
+| API `/api/insurance/siniestros` (CRUD) | ✅ | Working tree — auth dual Bearer CRON_SECRET / session |
+| UI `/dashboard/seguros/siniestros/page.tsx` | ✅ | Working tree — listado + filtros + alta + detalle con transiciones validadas |
+| Tests vitest | ✅ | `api-siniestros.test.ts` (23) + `siniestros-intents.test.ts` (14) — 361 tests verdes en suite afectada |
+| Seed demo siniestros | ✅ | `scripts/seed-siniestros-demo.ts` — 6 siniestros cubriendo los 6 estados |
+| Intents en orchestrator (crear/listar/actualizar) | ✅ | `insurance-intents.ts` + `INTENT_TO_SKILL` + `intentModules` + `execution-engine` formatters |
+
+> Pendiente operativo: commitear el trabajo acumulado (API + UI + seed + intents + tests).

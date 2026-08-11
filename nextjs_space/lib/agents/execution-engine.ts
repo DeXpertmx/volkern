@@ -323,6 +323,29 @@ export const ExecutionEngine = {
         const suffix = total > 5 ? `\n… y ${total - 5} más` : '';
         return `👥 *Clientes sin contacto (${dias}d):*\n${lines.join('\n')}${suffix}`;
       }
+
+      // ─── Siniestros (Fase 5.1) ───
+      case 'create_siniestro':
+      case 'update_siniestro':
+        return data?.message ? `🛡️ ${this.escapeMarkdown(String(data.message))}` : '';
+      case 'list_siniestros': {
+        const siniestros = data?.siniestros || [];
+        const total = Number(data?.total ?? (Array.isArray(siniestros) ? siniestros.length : 0));
+        if (!Array.isArray(siniestros) || siniestros.length === 0) return '🛡️ No hay siniestros registrados.';
+        const lines = siniestros.slice(0, 5).map((s: any) => {
+          const num = this.escapeMarkdown(String(s?.numeroSiniestro || s?.descripcion?.slice(0, 24) || '—'));
+          const cliente = this.escapeMarkdown(String(s?.cliente?.nombre || ''));
+          const ase = this.escapeMarkdown(String(s?.aseguradora?.nombre || ''));
+          const estado = this.escapeMarkdown(String(s?.estado || '').replace('_', ' '));
+          const monto =
+            s?.montoReclamado !== null && s?.montoReclamado !== undefined
+              ? ` · ${this.escapeMarkdown(String(s.montoReclamado))} ${this.escapeMarkdown(String(s?.moneda || ''))}`
+              : '';
+          return `• ${num} — ${cliente} (${ase}) [${estado}]${monto}`;
+        });
+        const suffix = total > 5 ? `\n… y ${total - 5} más` : '';
+        return `🛡️ *Siniestros (${total}):*\n${lines.join('\n')}${suffix}`;
+      }
       default:
         return '';
     }
