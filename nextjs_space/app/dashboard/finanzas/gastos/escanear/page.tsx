@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner'
 import { Camera, Receipt, Scan, Loader2, ArrowLeft, CheckCircle2, Image as ImageIcon, FileText } from 'lucide-react'
 import IvaRatesEditor from '@/components/finance/IvaRatesEditor'
+import { computeVatAmount } from '@/lib/finance/vat'
 
 interface EmisorInfo {
   nombre: string | null
@@ -118,6 +119,22 @@ export default function EscanearGastoPage() {
     } catch {
       /* sin cambios */
     }
+  }
+
+  // Aplica un tipo de IVA y recalcula la cuota si hay base imponible
+  const applyVatRate = (rate: string) => {
+    setForm(p => {
+      const vatAmount = computeVatAmount(p.taxableBase, rate)
+      return { ...p, vatRate: rate, vatAmount: vatAmount || p.vatAmount }
+    })
+  }
+
+  // Aplica la base imponible y recalcula la cuota si hay tipo de IVA
+  const applyTaxableBase = (base: string) => {
+    setForm(p => {
+      const vatAmount = computeVatAmount(base, p.vatRate)
+      return { ...p, taxableBase: base, vatAmount: vatAmount || p.vatAmount }
+    })
   }
 
   const [form, setForm] = useState({
@@ -727,7 +744,7 @@ export default function EscanearGastoPage() {
                   <div className="grid grid-cols-3 gap-3">
                     <div>
                       <Label>Base Imponible</Label>
-                      <Input type="number" step="0.01" value={form.taxableBase} onChange={e => setForm(p => ({ ...p, taxableBase: e.target.value }))} placeholder="0.00" />
+                      <Input type="number" step="0.01" value={form.taxableBase} onChange={e => applyTaxableBase(e.target.value)} placeholder="0.00" />
                     </div>
                     <div>
                       <Label>IVA %</Label>
@@ -735,7 +752,7 @@ export default function EscanearGastoPage() {
                         <div className="flex gap-2">
                           <Select
                             value={form.vatRate && supplierVatRates.map(String).includes(form.vatRate) ? form.vatRate : 'custom'}
-                            onValueChange={v => setForm(p => ({ ...p, vatRate: v === 'custom' ? p.vatRate : v }))}
+                            onValueChange={v => applyVatRate(v === 'custom' ? form.vatRate : v)}
                           >
                             <SelectTrigger className="w-full"><SelectValue placeholder="Seleccionar tipo" /></SelectTrigger>
                             <SelectContent>
@@ -746,11 +763,11 @@ export default function EscanearGastoPage() {
                             </SelectContent>
                           </Select>
                           {(!form.vatRate || !supplierVatRates.map(String).includes(form.vatRate)) && (
-                            <Input type="number" step="0.01" value={form.vatRate} onChange={e => setForm(p => ({ ...p, vatRate: e.target.value }))} placeholder="21" className="w-20" />
+                            <Input type="number" step="0.01" value={form.vatRate} onChange={e => applyVatRate(e.target.value)} placeholder="21" className="w-20" />
                           )}
                         </div>
                       ) : (
-                        <Input type="number" step="0.01" value={form.vatRate} onChange={e => setForm(p => ({ ...p, vatRate: e.target.value }))} placeholder="21" />
+                        <Input type="number" step="0.01" value={form.vatRate} onChange={e => applyVatRate(e.target.value)} placeholder="21" />
                       )}
                     </div>
                     <div>
