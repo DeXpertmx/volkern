@@ -25,6 +25,7 @@ Anotado el 2026-08-11. Estado real de cada tema para retomar donde se quedó.
 9. ~~**403 por wildcard `{ all: true }` en permisos**~~ — resuelto en código (pendiente de deploy): `hasPermission`/`getVisibleModules` ahora entienden `permisos.all === true` y `permisos[module] === true` (shape de `bootstrap-admin.ts`). Afectaba a tenants nuevos (dexpert incluido): `GET /api/deals` daba 403.
 10. ~~**Múltiples tipos de IVA por proveedor**~~ — implementado (pendiente de deploy): `Supplier.vatRates` (Float[], columna aplicada en Neon), editor en la página de proveedores (crear + detalle), y el formulario de gasto ofrece un select con los tipos del proveedor (pre-rellenado por OCR, con opción manual). Tests `erp-suppliers.test.ts`.
 11. ~~**Autocalcular cuota de IVA en el gasto**~~ — implementado (pendiente de deploy): al elegir el tipo o cambiar la base imponible, `vatAmount` se recalcula (base × tipo / 100) vía `lib/finance/vat.ts`. Tests `vat.test.ts`.
+12. ~~**Mostrar base/IVA/IRPF en gastos**~~ — implementado (pendiente de deploy): columnas Base e IVA en el listado, y tarjeta "Desglose de Impuestos" (base, IVA, IRPF, total) en el detalle de verificación.
 
 ## Notas operativas
 
