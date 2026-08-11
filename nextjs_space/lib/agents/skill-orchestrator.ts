@@ -560,6 +560,7 @@ export const SkillOrchestratorAgent = {
       monto: '💰 ¿Cuál es el monto?',
       concepto: '📝 ¿Cuál es el concepto?',
       invoiceId: '🧾 ¿Cuál es el ID o número de factura?',
+      factura: '🧾 ¿Cuál es el número de la factura? (ej: FAC-001 o #123)',
       razon: '❓ ¿Cuál es el motivo de la rectificación?',
       motivo: '❓ ¿Cuál es el motivo?',
       proveedor: '🏢 ¿Cuál es el nombre del proveedor?',

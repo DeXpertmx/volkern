@@ -86,22 +86,25 @@ describe('financeIntents', () => {
   it('debe incluir crear_factura', () => {
     const intent = financeIntents.find(i => i.name === 'crear_factura');
     expect(intent).toBeDefined();
-    expect(intent!.requiredParams).toContain('leadId');
-    expect(intent!.optionalParams).toContain('monto');
+    // El wrapper resuelve el lead/contacto por email o nombre, así que los
+    // requeridos son lo que el usuario dice: cliente (nombre/email) y monto.
+    expect(intent!.requiredParams).toContain('cliente');
+    expect(intent!.requiredParams).toContain('monto');
     expect(intent!.optionalParams).toContain('concepto');
+    expect(intent!.optionalParams).toContain('email');
   });
 
   it('debe incluir estado_fiscal', () => {
     const intent = financeIntents.find(i => i.name === 'estado_fiscal');
     expect(intent).toBeDefined();
-    expect(intent!.requiredParams).toContain('invoiceId');
+    expect(intent!.requiredParams).toContain('factura');
   });
 
   it('rectificar_factura debe ser destructive', () => {
     const intent = financeIntents.find(i => i.name === 'rectificar_factura');
     expect(intent).toBeDefined();
     expect(intent!.destructive).toBe(true);
-    expect(intent!.requiredParams).toContain('invoiceId');
+    expect(intent!.requiredParams).toContain('factura');
     expect(intent!.requiredParams).toContain('razon');
   });
 

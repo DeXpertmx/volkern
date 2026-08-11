@@ -55,6 +55,11 @@ const MISSING_ENTITY_PROMPTS: Record<string, string> = {
   tags: '🏷️ ¿Algunas etiquetas? (separadas por coma)',
   monto: '💰 ¿Cuál es el monto?',
   concepto: '📝 ¿Cuál es el concepto?',
+
+  // Facturación
+  factura: '🧾 ¿Cuál es el número de la factura? (ej: FAC-001 o #123)',
+  razon: '❓ ¿Cuál es el motivo de la rectificación?',
+  cliente: '👤 ¿Para quién es? (nombre o email del cliente)',
   titulo: '📝 ¿Cuál es el título?',
   contexto: '📋 ¿Puedes darme más contexto?',
   appointment_id: '🔖 ¿Cuál es el ID de la cita?',
@@ -74,7 +79,7 @@ const MISSING_ENTITY_PROMPTS: Record<string, string> = {
   primaAnual: '💰 ¿Cuál es la prima anual?',
   sumaAsegurada: '🛡️ ¿Cuál es la suma asegurada?',
   formaPago: '💳 ¿Cuál es la forma de pago? (ANUAL, SEMESTRAL, TRIMESTRAL, MENSUAL)',
-  cliente: '👤 ¿Cuál es el nombre o email del cliente asegurado?',
+
   dias: '📅 ¿En cuántos días? (ej: 30, 60, 90)',
   riesgo: '⚠️ ¿Incluir solo renovaciones en riesgo? (true/false)',
   estado: '📋 ¿A qué estado? (en trámite, abierto, pagado, rechazado, cerrado…)',

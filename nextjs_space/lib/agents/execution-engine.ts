@@ -611,6 +611,33 @@ export const ExecutionEngine = {
         const suffix = total > 5 ? `\n… y ${total - 5} más` : '';
         return `🛡️ *Siniestros (${total}):*\n${lines.join('\n')}${suffix}`;
       }
+
+      // ─── Facturación & Veri*factu (Décimo entrenamiento) ───
+      case 'create_invoice': {
+        const numero = this.escapeMarkdown(String(data?.numero || data?.sequenceNumber || ''));
+        const monto = data?.monto !== undefined && data?.monto !== null ? this.escapeMarkdown(String(data.monto)) : '';
+        const moneda = data?.moneda ? ` ${this.escapeMarkdown(String(data.moneda))}` : '';
+        const sello = data?.isSealed || data?.verifactuVersion === 2 ? ' · sello Veri*factu ✅' : '';
+        return `🧾 *Factura creada:* ${numero}${monto ? ` por ${monto}${moneda}` : ''}${sello}.`;
+      }
+      case 'cancel_invoice': {
+        const numero = this.escapeMarkdown(String(data?.numero || ''));
+        const anulada = data?.fiscalStatus === 'anulada' ? ' (anulada)' : '';
+        return `🗑️ *Factura cancelada:* ${numero}${anulada}.`;
+      }
+      case 'get_invoice_fiscal_status': {
+        const numero = this.escapeMarkdown(String(data?.numero || ''));
+        const estado = data?.fiscalStatus ? ` · Estado: ${this.escapeMarkdown(String(data.fiscalStatus))}` : '';
+        const sello = data?.isSealed
+          ? `✅ Válida (Veri*factu${data?.verifactuVersion ? ` v${this.escapeMarkdown(String(data.verifactuVersion))}` : ''})`
+          : '⚠️ Sin sello';
+        return `🔎 *Estado fiscal de ${numero}:* ${sello}${estado}.`;
+      }
+      case 'rectify_invoice': {
+        const numero = this.escapeMarkdown(String(data?.numero || ''));
+        const monto = data?.monto !== undefined && data?.monto !== null ? ` por ${this.escapeMarkdown(String(data.monto))} ${this.escapeMarkdown(String(data?.moneda || 'EUR'))}` : '';
+        return `🔄 *Factura rectificada:* ${numero}${monto}. La factura anterior queda anulada.`;
+      }
       default:
         return '';
     }
