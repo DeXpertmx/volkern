@@ -102,6 +102,9 @@ export default function EscanearGastoPage() {
   const [supplierVatRates, setSupplierVatRates] = useState<number[]>([])
   // Si el usuario editó los tipos manualmente, el lookup no debe sobreescribirlos
   const [ratesTouched, setRatesTouched] = useState(false)
+  // Tramos de IVA (varias bases con distintos tipos) para facturas mixtas
+  const [ivaRows, setIvaRows] = useState<{ id: number; base: string; rate: string }[]>([])
+  const nextIvaRowId = useRef(0)
 
   const lookupSupplierVatRates = async (name: string) => {
     if (ratesTouched) return
@@ -181,6 +184,75 @@ export default function EscanearGastoPage() {
     operationDate: '',
     iban: '',
   })
+
+  // ─── Tramos de IVA: sincroniza los agregados del formulario ───────────
+  const syncTotalsFromRows = (rows: typeof ivaRows) => {
+    if (rows.length === 0) return
+    const bases = rows.map(r => parseFloat(r.base)).filter(Number.isFinite)
+    const vats = rows
+      .map(r => computePercentageAmount(r.base, r.rate))
+      .map(v => parseFloat(v))
+      .filter(Number.isFinite)
+    const rates = rows.map(r => r.rate).filter(r => r !== '')
+    const uniform = rates.length === rows.length && new Set(rates).size === 1 ? rates[0] : ''
+    setForm(p => ({
+      ...p,
+      taxableBase: bases.length ? bases.reduce((a, b) => a + b, 0).toFixed(2) : p.taxableBase,
+      vatAmount: vats.length ? vats.reduce((a, b) => a + b, 0).toFixed(2) : p.vatAmount,
+      vatRate: uniform,
+    }))
+  }
+
+  const addIvaRow = () => {
+    // El primer tramo arranca con los valores actuales del desglose único
+    const rows = ivaRows.length === 0 && (form.taxableBase || form.vatRate)
+      ? [{ id: nextIvaRowId.current++, base: form.taxableBase, rate: form.vatRate }]
+      : [...ivaRows, { id: nextIvaRowId.current++, base: '', rate: '' }]
+    setIvaRows(rows)
+    syncTotalsFromRows(rows)
+  }
+
+  const updateIvaRow = (id: number, field: 'base' | 'rate', value: string) => {
+    const rows = ivaRows.map(r => (r.id === id ? { ...r, [field]: value } : r))
+    setIvaRows(rows)
+    syncTotalsFromRows(rows)
+  }
+
+  const removeIvaRow = (id: number) => {
+    const rows = ivaRows.filter(r => r.id !== id)
+    setIvaRows(rows)
+    if (rows.length > 0) syncTotalsFromRows(rows)
+  }
+
+  const ivaTotals = ivaRows.reduce(
+    (acc, r) => {
+      const b = parseFloat(r.base)
+      const v = computePercentageAmount(r.base, r.rate)
+      return {
+        base: acc.base + (Number.isFinite(b) ? b : 0),
+        vat: acc.vat + (v ? parseFloat(v) : 0),
+      }
+    },
+    { base: 0, vat: 0 }
+  )
+
+  // ─── Receptor: pre-rellena con los datos fiscales del tenant (emisor) ──
+  const loadTenantReceptor = async () => {
+    try {
+      const res = await fetch('/api/configuracion/fiscal/emisores?principal=true')
+      const data = await res.json()
+      const emisor = Array.isArray(data?.emisores) ? data.emisores[0] : null
+      if (!emisor) return
+      setForm(p => ({
+        ...p,
+        receptorNombre: p.receptorNombre || emisor.razonSocial || '',
+        receptorNif: p.receptorNif || emisor.idFiscal || '',
+        receptorDireccion: p.receptorDireccion || [emisor.direccion, emisor.codigoPostal, emisor.ciudad].filter(Boolean).join(', '),
+      }))
+    } catch {
+      /* silencioso: el usuario puede rellenar el receptor a mano */
+    }
+  }
 
   // Aviso de conciliación: base + IVA − IRPF debe cuadrar con el total OCR
   const totalsMismatch = computeInvoiceTotalMismatch(form.taxableBase, form.vatAmount, form.irpfAmount, form.totalFactura)
@@ -295,6 +367,7 @@ export default function EscanearGastoPage() {
         })),
       }))
       setShowForm(true)
+      loadTenantReceptor()
     } catch (err: any) {
       if (err?.name === 'AbortError') {
         toast.error('El OCR está tardando demasiado. Usa "Sin OCR" para ir al formulario.')
@@ -310,6 +383,7 @@ export default function EscanearGastoPage() {
   const goToForm = () => {
     setShowForm(true)
     setShowSelect(false)
+    loadTenantReceptor()
   }
 
   const formatDetectedDate = (dateStr: string): string => {
@@ -801,6 +875,35 @@ export default function EscanearGastoPage() {
                       <Label>Cuota IRPF</Label>
                       <Input type="number" step="0.01" value={form.irpfAmount} onChange={e => setForm(p => ({ ...p, irpfAmount: e.target.value }))} placeholder="-240.00" />
                     </div>
+                  </div>
+
+                  {/* Tramos de IVA: varias bases con distintos tipos */}
+                  <div className="border-t pt-3 mt-2">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Tramos de IVA (varias bases)</span>
+                      <Button type="button" variant="outline" size="sm" onClick={addIvaRow} className="rounded-lg h-7 text-[10px] font-bold uppercase">Añadir tramo</Button>
+                    </div>
+                    {ivaRows.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        Si la factura tiene varias bases con distintos tipos de IVA (p. ej. 21% y 10%), añade un tramo por cada una.
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        {ivaRows.map(row => (
+                          <div key={row.id} className="grid grid-cols-[1fr_90px_110px_auto] gap-2 items-center">
+                            <Input type="number" step="0.01" placeholder="Base imponible" value={row.base} onChange={e => updateIvaRow(row.id, 'base', e.target.value)} className="h-9 rounded-lg" />
+                            <Input type="number" step="0.01" placeholder="IVA %" value={row.rate} onChange={e => updateIvaRow(row.id, 'rate', e.target.value)} className="h-9 rounded-lg" />
+                            <span className="text-xs font-bold text-slate-600 text-right">€{computePercentageAmount(row.base, row.rate) || '0.00'}</span>
+                            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={() => removeIvaRow(row.id)} aria-label="Quitar tramo">×</Button>
+                          </div>
+                        ))}
+                        <div className="flex justify-between text-xs font-black pt-2 border-t">
+                          <span>Base total: <span className="text-foreground">€{ivaTotals.base.toFixed(2)}</span></span>
+                          <span>IVA total: <span className="text-foreground">€{ivaTotals.vat.toFixed(2)}</span></span>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground">Los totales se sincronizan con el desglose superior (Base Imponible / Cuota IVA).</p>
+                      </div>
+                    )}
                   </div>
 
                   {totalsMismatch && (
