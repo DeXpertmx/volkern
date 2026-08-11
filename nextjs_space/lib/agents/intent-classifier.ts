@@ -178,6 +178,14 @@ export class IntentClassifierAgent {
       return missing.filter((p: string) => p !== 'nombre');
     }
 
+    // Real estate: el usuario se refiere a la propiedad por id, nombre o zona
+    // ("la casa del centro"); el parámetro 'propiedad' satisface el
+    // requiredParams 'propiedadId' del schema.
+    const RE_PROP_INTENTS = ['generar_descripcion_inmueble', 'sugerir_precio_inmueble', 'calificar_inmueble', 'calcular_comision_franquicia']
+    if (RE_PROP_INTENTS.includes(intent) && extractedParams.propiedad) {
+      return missing.filter((p: string) => p !== 'propiedadId');
+    }
+
     return missing;
   }
 
@@ -382,7 +390,7 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     // Entidades de proveedores sin verbo: "lista de proveedores", "qué proveedores tengo"
     const PROVEEDOR_TRIGGER = /\bproveedor(?:es)?\b/i
     // Entidades de catálogo sin verbo: "qué productos hay", "precio de X", "cuánto cuesta X"
-    const CATALOGO_TRIGGER = /\b(?:cat[aá]logo|productos?|servicios?|art[ií]culos?|inmuebles?|propiedades?|precios?|cu[aá]nto\s+cuesta|cu[aá]nto\s+vale|qu[eé]\s+precio|precio\s+de)\b/i
+    const CATALOGO_TRIGGER = /\b(?:cat[aá]logo|productos?|servicios?|art[ií]culos?|inmuebles?|propiedad(?:es)?|precios?|cu[aá]nto\s+cuesta|cu[aá]nto\s+vale|qu[eé]\s+precio|precio\s+de)\b/i
     // Entidades de inventario sin verbo: "stock bajo", "existencias", "entrada/salida de X unidades"
     const INVENTARIO_TRIGGER = /\b(?:inventario|stock|existencias|unidades|reorden|ruptura)\b/i
     // Entidades de seguros sin verbo: "qué pólizas vencen", "siniestros abiertos",
@@ -401,7 +409,11 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     // feedback", "sugerencias de campaña", "bloque hero para la landing",
     // "SEO de la página", "test A/B", "programaciones activas" (decimotercero)
     const MARKETING_TRIGGER = /\b(?:copy|post|publicaci[oó]n|texto\s+publicitario|sentimiento|opinan|opini[oó]n|feedback|comentarios?|rese[nñ]as?|campa[nñ]as?|marketing|bloque|secci[oó]n|landing|seo|metadatos|keywords?|palabras\s+clave|tests?|programaci[oó]n(?:es)?|horarios?\s+programados|automatizaci[oó]n|automatiza|automatizar|reglas\s+automa[á]?ticas?)\b/i
-    if (!ACTION_VERB.test(message) && !ENTITY_TRIGGER.test(message) && !FILTER_ONLY.test(message) && !CITA_TRIGGER.test(message) && !FINANZA_TRIGGER.test(message) && !TAREA_TRIGGER.test(message) && !PROVEEDOR_TRIGGER.test(message) && !CATALOGO_TRIGGER.test(message) && !INVENTARIO_TRIGGER.test(message) && !INSURANCE_TRIGGER.test(message) && !FACTURA_TRIGGER.test(message) && !LOGISTICA_TRIGGER.test(message) && !RRHH_TRIGGER.test(message) && !MARKETING_TRIGGER.test(message)) return null
+    // Entidades de real estate sin verbo: "la casa del centro", "departamento
+    // en alquiler", "precio de la propiedad", "comisión de la venta"
+    // (decimocuarto entrenamiento)
+    const RE_TRIGGER = /\b(?:inmuebles?|propiedad(?:es)?|departamentos?|casas?|pisos?|oficinas?|locales?|terrenos?|solares?|chalets?|villas?|alquiler|en\s+venta|presupuesto\s+de|precio\s+(?:de|sugerido|de\s+venta)|comisi[oó]n(?:es)?\s+de|score\s+de\s+calidad|franquicia)\b/i
+    if (!ACTION_VERB.test(message) && !ENTITY_TRIGGER.test(message) && !FILTER_ONLY.test(message) && !CITA_TRIGGER.test(message) && !FINANZA_TRIGGER.test(message) && !TAREA_TRIGGER.test(message) && !PROVEEDOR_TRIGGER.test(message) && !CATALOGO_TRIGGER.test(message) && !INVENTARIO_TRIGGER.test(message) && !INSURANCE_TRIGGER.test(message) && !FACTURA_TRIGGER.test(message) && !LOGISTICA_TRIGGER.test(message) && !RRHH_TRIGGER.test(message) && !MARKETING_TRIGGER.test(message) && !RE_TRIGGER.test(message)) return null
 
     const extracted: Record<string, any> = {}
     const email = message.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,})/)
@@ -870,6 +882,82 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
       const variante = this.extractVarianteDe(message)
       if (variante) extracted.variante = variante
       return { intent: 'declarar_ganador', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 0t. GENERAR DESCRIPCIÓN INMUEBLE ("genera la descripción de la
+    // propiedad #PROP-001", "escribe la descripción de la casa en venta") ═══
+    const PROP_ENTITY = /\b(?:propiedad|inmueble|casa|departamento|piso|oficina|local|terreno|chalet|villa)\b/i
+    const DESCRIPCION_SIGNAL = /\b(?:descripci[oó]n)\b/i
+    const GENERAR_VERB = /\b(?:genera|generar|crea|crear|escribe|escribir|redacta|redactar|dame|hazme)\b/i
+    if (DESCRIPCION_SIGNAL.test(message) && PROP_ENTITY.test(message) && GENERAR_VERB.test(message)) {
+      const propiedad = this.extractPropiedadDe(message)
+      if (propiedad) extracted.propiedad = propiedad
+      return { intent: 'generar_descripcion_inmueble', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 0u. SUGERIR PRECIO ("sugiere un precio para la propiedad #PROP-001",
+    // "a qué precio debería vender la casa de la colonia Roma") ═══
+    const PRECIO_SIGNAL = /\b(?:precio|a\s+qu[eé]\s+precio|cu[aá]nto\s+vale|cu[aá]nto\s+cuesta|estimaci[oó]n\s+de\s+precio)\b/i
+    const PRECIO_VERB = /\b(?:sugiere|sugerir|vender|vende|alquilar|alquila|deber[ií]a|vale|cuesta|cu[aá]nto|dame|estimaci[oó]n)\b/i
+    if (PRECIO_SIGNAL.test(message) && PROP_ENTITY.test(message) && PRECIO_VERB.test(message)) {
+      const propiedad = this.extractPropiedadDe(message)
+      if (propiedad) extracted.propiedad = propiedad
+      const tipoOperacion = /\b(?:alquilar|alquiler|rentar|renta)\b/i.test(message)
+        ? 'alquiler'
+        : (/\b(?:vender|vende|venta|comprar)\b/i.test(message) ? 'venta' : undefined)
+      if (tipoOperacion) extracted.tipo_operacion = tipoOperacion
+      return { intent: 'sugerir_precio_inmueble', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 0v. CALIFICAR INMUEBLE ("califica la propiedad #PROP-001", "qué
+    // score de calidad tiene el inmueble del centro") ═══
+    const CALIFICAR_SIGNAL = /\b(?:califica|calificar|score\s+de\s+calidad|puntuaci[oó]n|eval[uú]a|evaluar|qu[eé]\s+score)\b/i
+    if (CALIFICAR_SIGNAL.test(message) && PROP_ENTITY.test(message)) {
+      const propiedad = this.extractPropiedadDe(message)
+      if (propiedad) extracted.propiedad = propiedad
+      return { intent: 'calificar_inmueble', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 0w. BUSCAR INMUEBLES ("busca inmuebles en venta en Madrid",
+    // "qué departamentos en alquiler hay en Barcelona") ═══
+    const BUSCAR_RE_VERB = /\b(?:busca|buscar|encuentra|encontrar|mu[eé]strame|listame|hay|qu[eé]\s+[a-záéíóúñü]+\s+en)\b/i
+    const INMUEBLE_BUSQ = /\b(?:inmuebles?|propiedad(?:es)?|departamentos?|casas?|pisos?|oficinas?|locales?|terrenos?|solares?)\b/i
+    if (BUSCAR_RE_VERB.test(message) && INMUEBLE_BUSQ.test(message)) {
+      const tipoOperacion = /\b(?:venta|comprar|compr[ée])\b/i.test(message)
+        ? 'venta'
+        : (/\b(?:alquiler|rentar|arrendar|renta)\b/i.test(message) ? 'alquiler' : undefined)
+      if (tipoOperacion) extracted.tipo_operacion = tipoOperacion
+      const tipoInmueble = this.extractTipoInmuebleDe(message)
+      if (tipoInmueble) extracted.tipo_inmueble = tipoInmueble
+      const zona = this.extractZonaDe(message)
+      if (zona) extracted.zona = zona
+      const habitaciones = this.extractHabitacionesDe(message)
+      if (habitaciones) extracted.habitaciones = habitaciones
+      return { intent: 'buscar_inmuebles', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 0x. RECOMENDAR INMUEBLES ("recomiéndame propiedades para un
+    // inversor con presupuesto de 500k") ═══
+    const RECOMENDAR_VERB = /\b(?:recomi[eé]ndame|recomendar|sugiere\s+propiedades|sugerir\s+propiedades|dame\s+recomendaciones|qu[eé]\s+inmuebles\s+le\s+puedo)\b/i
+    if (RECOMENDAR_VERB.test(message)) {
+      const presupuesto = this.extractPresupuestoDe(message)
+      if (presupuesto) extracted.presupuesto = presupuesto
+      const tipoOperacion = /\b(?:alquilar|alquiler|rentar|renta)\b/i.test(message)
+        ? 'alquiler'
+        : (/\b(?:comprar|venta|inversor)\b/i.test(message) ? 'venta' : undefined)
+      if (tipoOperacion) extracted.tipo_operacion = tipoOperacion
+      const zona = this.extractZonaDe(message)
+      if (zona) extracted.zona = zona
+      return { intent: 'recomendar_inmuebles', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 0y. CALCULAR COMISIÓN ("calcula la comisión de la propiedad
+    // #PROP-001", "cuánto gana el agente por la venta del inmueble") ═══
+    const COMISION_SIGNAL = /\b(?:comisi[oó]n|comisiones|split|cu[aá]nto\s+gana)\b/i
+    if (COMISION_SIGNAL.test(message) && (PROP_ENTITY.test(message) || /\b(?:franquicia|agente|agencia)\b/i.test(message))) {
+      const propiedad = this.extractPropiedadDe(message)
+      if (propiedad) extracted.propiedad = propiedad
+      return { intent: 'calcular_comision_franquicia', confidence: 0.85, extractedParams: extracted }
     }
 
     // ═══ 0. CONVERTIR LEAD (antes que crear: "convierte… en contacto" también
@@ -2122,6 +2210,86 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
   }
 
   /**
+   * Extrae la referencia de la propiedad: id/sku ("#PROP-001", "PROP-001") o
+   * descriptiva ("la casa de la colonia Roma" → "la colonia Roma", "el
+   * departamento en la playa" → "playa").
+   */
+  private extractPropiedadDe(message: string): string | null {
+    // 1. Id/sku: "#PROP-001", "propiedad PROP-001"
+    const ref = message.match(/(?:propiedad|inmueble)\s*(?:#\s*|n[úu]mero\s+)?(PROP-\d{1,6}|\d{1,6})/i)
+    if (ref && ref[1]) return ref[1]
+    // 2. Descriptiva: "la casa de la colonia Roma", "el departamento en la playa"
+    const kw = message.match(/\b(?:la|el|una|un|mi|del|de\s+la)\s+(casa|departamento|piso|oficina|local|terreno|chalet|villa|inmueble|propiedad)(?:\s+(?:de|del|de\s+la|en|en\s+el|en\s+la|que\s+est[aá]\s+en))?\s+([A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9][A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9'\- ]{1,40})/i)
+    if (kw) {
+      let refDesc = kw[2].trim()
+      refDesc = refDesc.split(/\s+(?:en\s+venta|en\s+alquiler|para|con\s+nota|que\s+est[aá])\b/i)[0].trim()
+      refDesc = refDesc.replace(/["'”]+\s*$/, '').trim()
+      // Normaliza el artículo: "la playa" → "playa" (consistente con
+      // "la colonia Roma" → "colonia Roma").
+      refDesc = refDesc.replace(/^(?:la|el|los|las|una|un)\s+/i, '').trim()
+      if (/^(?:venta|alquiler|arriendo)$/i.test(refDesc)) return kw[1]
+      if (refDesc.length >= 2) return refDesc
+      return kw[1]
+    }
+    // Respuesta multi-turno: "la del centro", "el de la playa"
+    const pron = message.match(/\b(?:la|el|los|las)\s+(?:de|del)\s+([A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9][A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9'\- ]{1,25})/i)
+    if (pron) return pron[1].trim()
+    return null
+  }
+
+  /**
+   * Extrae el tipo de inmueble: casa/chalet → Casa, departamento/piso →
+   * Departamento, oficina/local → Oficina, terreno/solar → Terreno.
+   */
+  private extractTipoInmuebleDe(message: string): string | null {
+    if (/\b(?:casas?|chalets?|villas?|adosados?)\b/i.test(message)) return 'Casa'
+    if (/\b(?:departamentos?|pisos?|apartamentos?)\b/i.test(message)) return 'Departamento'
+    if (/\b(?:oficinas?|locales?\s+comerciales?)\b/i.test(message)) return 'Oficina'
+    if (/\b(?:terrenos?|solares?)\b/i.test(message)) return 'Terreno'
+    return null
+  }
+
+  /**
+   * Extrae la zona/ciudad tras "en": "en Madrid", "en la playa" (salta
+   * "en venta"/"en alquiler").
+   */
+  private extractZonaDe(message: string): string | null {
+    const m = message.match(/\ben\s+(?!(?:venta|alquiler|arriendo|comprar|rentar)\b)([A-Za-zÁÉÍÓÚÑÜáéíóúñü][A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9'\- ]{1,25})/i)
+    if (m) {
+      let zona = m[1].trim()
+      zona = zona.split(/\s+(?:con|de\s+m[aá]s|para|y|por|con\s+alberca)\b/i)[0].trim()
+      zona = zona.replace(/["'”]+\s*$/, '').trim()
+      if (zona.length >= 2) return zona
+    }
+    return null
+  }
+
+  /**
+   * Extrae el número de habitaciones: "con más de 3 habitaciones", "3
+   * dormitorios", "2 recámaras".
+   */
+  private extractHabitacionesDe(message: string): string | null {
+    const m = message.match(/\b(?:m[aá]s\s+de\s+)?(\d{1,2})\s*(?:habitaciones|habs?|dormitorios?|rec[aá]maras?|cuartos?)\b/i)
+    if (m) return m[1]
+    return null
+  }
+
+  /**
+   * Extrae el presupuesto: "presupuesto de 500k", "500 mil", "presupuesto
+   * de 500,000", "500000". Normaliza a número.
+   */
+  private extractPresupuestoDe(message: string): string | null {
+    const k = message.match(/\b(?:presupuesto\s+(?:de\s+)?)?(\d{1,3}(?:[.,]\d{3})?)\s*(k|mil)\b/i)
+    if (k) {
+      const base = Number(k[1].replace(/[.,]/g, ''))
+      return String(k[2] === 'k' ? base * 1000 : base * 1000)
+    }
+    const plain = message.match(/\b(?:presupuesto\s+(?:de\s+)?)?(\d{4,7})\b/i)
+    if (plain) return plain[1]
+    return null
+  }
+
+  /**
    * Extrae la hora de "a las 10am", "a las 15:30", "las 2pm", "10:00 AM",
    * "2:30 PM". Normaliza a HH:MM (24h).
    */
@@ -2884,6 +3052,25 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     if (param === 'dias' || param === 'daysOfWeek') {
       const dias = this.extractDiasSemanaDe(message)
       return dias ? dias.join(',') : null
+    }
+    // ─── Módulo Real Estate (Decimocuarto entrenamiento) ───
+    if (param === 'propiedad' || param === 'propiedadId' || param === 'propertyId') {
+      return this.extractPropiedadDe(message)
+    }
+    if (param === 'tipo_operacion' || param === 'operationType') {
+      return /\b(?:alquiler|rentar|arrendar|renta|alquilar)\b/i.test(message) ? 'alquiler' : (/\b(?:venta|vender|comprar)\b/i.test(message) ? 'venta' : null)
+    }
+    if (param === 'tipo_inmueble' || param === 'propertyType') {
+      return this.extractTipoInmuebleDe(message)
+    }
+    if (param === 'zona' || param === 'ciudad' || param === 'city') {
+      return this.extractZonaDe(message)
+    }
+    if (param === 'habitaciones' || param === 'bedrooms') {
+      return this.extractHabitacionesDe(message)
+    }
+    if (param === 'presupuesto' || param === 'precioMax' || param === 'budget') {
+      return this.extractPresupuestoDe(message)
     }
     return null
   }

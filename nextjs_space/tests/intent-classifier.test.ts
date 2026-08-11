@@ -1493,14 +1493,13 @@ describe('IntentClassifier — ruta determinista (sin LLM)', () => {
     expect(result.extractedParams.query).toContain('consultoría');
   });
 
-  it('busca propiedades en Madrid por menos de 300000 → tipo inmueble + precioMax', async () => {
+  it('busca propiedades en Madrid por menos de 300000 → buscar_inmuebles (módulo RE)', async () => {
     const result = await classifier.classify({
       ...base,
       message: 'busca propiedades en Madrid por menos de 300000',
     });
-    expect(result.intent).toBe('buscar_catalogo');
-    expect(result.extractedParams.tipo).toBe('inmueble');
-    expect(result.extractedParams.precioMax).toBe(300000);
+    expect(result.intent).toBe('buscar_inmuebles');
+    expect(result.extractedParams.zona).toBe('Madrid');
   });
 
   it('qué productos de tipo inmueble por más de 150000 → precioMin', async () => {
@@ -3086,6 +3085,236 @@ describe('IntentClassifier — ruta determinista (sin LLM)', () => {
       message: 'crea un lead de la empresa Facturación SA',
     });
     expect(result.intent).toBe('crear_lead');
+  });
+
+  // ═══ DÉCIMO CUARTO ENTRENAMIENTO (módulo Real Estate): descripciones,
+  // precios, scores, búsqueda, recomendaciones y comisiones ═══
+
+  // ── generar_descripcion_inmueble ──
+  it('genera la descripción de la propiedad #PROP-001 → generar_descripcion_inmueble', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'genera la descripción de la propiedad #PROP-001',
+    });
+    expect(result.intent).toBe('generar_descripcion_inmueble');
+    expect(result.extractedParams.propiedad).toBe('PROP-001');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('escribe la descripción de la casa en venta → genera descripción (ref tipo)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'escribe la descripción de la casa en venta',
+    });
+    expect(result.intent).toBe('generar_descripcion_inmueble');
+    expect(result.extractedParams.propiedad).toBe('casa');
+  });
+
+  it('redacta la descripción del departamento en la playa → zona como ref', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'redacta la descripción del departamento en la playa',
+    });
+    expect(result.intent).toBe('generar_descripcion_inmueble');
+    expect(result.extractedParams.propiedad).toBe('playa');
+  });
+
+  it('genera la descripción sin propiedad → pide propiedad', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'genera la descripción',
+    });
+    expect(result.intent).not.toBe('generar_descripcion_inmueble');
+  });
+
+  // ── sugerir_precio_inmueble ──
+  it('sugiere un precio para la propiedad #PROP-001 → sugerir_precio_inmueble', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'sugiere un precio para la propiedad #PROP-001',
+    });
+    expect(result.intent).toBe('sugerir_precio_inmueble');
+    expect(result.extractedParams.propiedad).toBe('PROP-001');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('a qué precio debería vender la casa de la colonia Roma → precio venta', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'a qué precio debería vender la casa de la colonia Roma',
+    });
+    expect(result.intent).toBe('sugerir_precio_inmueble');
+    expect(result.extractedParams.propiedad).toBe('colonia Roma');
+    expect(result.extractedParams.tipo_operacion).toBe('venta');
+  });
+
+  it('cuánto vale alquilar el departamento del centro → precio alquiler', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cuánto vale alquilar el departamento del centro',
+    });
+    expect(result.intent).toBe('sugerir_precio_inmueble');
+    expect(result.extractedParams.propiedad).toBe('centro');
+    expect(result.extractedParams.tipo_operacion).toBe('alquiler');
+  });
+
+  it('sugiere un precio sin propiedad → pide propiedad', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'sugiere un precio',
+    });
+    expect(result.intent).not.toBe('sugerir_precio_inmueble');
+  });
+
+  // ── calificar_inmueble ──
+  it('califica la propiedad #PROP-001 → calificar_inmueble', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'califica la propiedad #PROP-001',
+    });
+    expect(result.intent).toBe('calificar_inmueble');
+    expect(result.extractedParams.propiedad).toBe('PROP-001');
+  });
+
+  it('qué score de calidad tiene el inmueble del centro → calificar_inmueble', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'qué score de calidad tiene el inmueble del centro',
+    });
+    expect(result.intent).toBe('calificar_inmueble');
+    expect(result.extractedParams.propiedad).toBe('centro');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('multi-turno: completa la propiedad de calificar_inmueble', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'la del centro',
+      pendingIntent: 'calificar_inmueble',
+      collectedEntities: {},
+      missingEntities: ['propiedadId'],
+    });
+    expect(result.intent).toBe('calificar_inmueble');
+    expect(result.extractedParams.propiedadId).toBe('centro');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  // ── buscar_inmuebles ──
+  it('busca inmuebles en venta en Madrid → buscar_inmuebles', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'busca inmuebles en venta en Madrid',
+    });
+    expect(result.intent).toBe('buscar_inmuebles');
+    expect(result.extractedParams.tipo_operacion).toBe('venta');
+    expect(result.extractedParams.zona).toBe('Madrid');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('qué departamentos en alquiler hay en Barcelona → tipo y zona', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'qué departamentos en alquiler hay en Barcelona',
+    });
+    expect(result.intent).toBe('buscar_inmuebles');
+    expect(result.extractedParams.tipo_operacion).toBe('alquiler');
+    expect(result.extractedParams.tipo_inmueble).toBe('Departamento');
+    expect(result.extractedParams.zona).toBe('Barcelona');
+  });
+
+  it('encuentra casas con alberca en la playa → tipo casa y zona playa', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'encuentra casas con alberca en la playa',
+    });
+    expect(result.intent).toBe('buscar_inmuebles');
+    expect(result.extractedParams.tipo_inmueble).toBe('Casa');
+    expect(result.extractedParams.zona).toBe('la playa');
+  });
+
+  it('busca propiedades de lujo con más de 3 habitaciones → habitaciones', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'busca propiedades de lujo con más de 3 habitaciones',
+    });
+    expect(result.intent).toBe('buscar_inmuebles');
+    expect(result.extractedParams.habitaciones).toBe('3');
+  });
+
+  it('"busca un producto en el catálogo" NO es buscar_inmuebles', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'busca un producto en el catálogo',
+    });
+    expect(result.intent).not.toBe('buscar_inmuebles');
+    expect(result.intent).toBe('buscar_catalogo');
+  });
+
+  // ── recomendar_inmuebles ──
+  it('recomiéndame propiedades para un inversor con presupuesto de 500k', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'recomiéndame propiedades para un inversor con presupuesto de 500k',
+    });
+    expect(result.intent).toBe('recomendar_inmuebles');
+    expect(result.extractedParams.presupuesto).toBe('500000');
+    expect(result.extractedParams.tipo_operacion).toBe('venta');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('sugiere propiedades para alguien que quiere alquilar oficina → alquiler', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'sugiere propiedades para alguien que quiere alquilar oficina',
+    });
+    expect(result.intent).toBe('recomendar_inmuebles');
+    expect(result.extractedParams.tipo_operacion).toBe('alquiler');
+  });
+
+  // ── calcular_comision_franquicia ──
+  it('calcula la comisión de la propiedad #PROP-001 → calcular_comision_franquicia', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'calcula la comisión de la propiedad #PROP-001',
+    });
+    expect(result.intent).toBe('calcular_comision_franquicia');
+    expect(result.extractedParams.propiedad).toBe('PROP-001');
+  });
+
+  it('cuánto gana el agente por la venta del inmueble → comisión (pide propiedad)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cuánto gana el agente por la venta del inmueble',
+    });
+    expect(result.intent).toBe('calcular_comision_franquicia');
+    expect(result.needsMoreInfo).toBe(true);
+    expect(result.missingParams).toContain('propiedadId');
+  });
+
+  // ── negativos de real estate ──
+  it('"genera la descripción del producto X" NO es real estate', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'genera la descripción del producto X',
+    });
+    expect(result.intent).not.toBe('generar_descripcion_inmueble');
+  });
+
+  it('"califica el lead de Juan" NO es calificar_inmueble', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'califica el lead de Juan',
+    });
+    expect(result.intent).not.toBe('calificar_inmueble');
+  });
+
+  it('"cuánto cuesta el producto X" NO es sugerir_precio_inmueble', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cuánto cuesta el producto X',
+    });
+    expect(result.intent).not.toBe('sugerir_precio_inmueble');
+    expect(result.intent).toBe('buscar_catalogo');
   });
 });
 
