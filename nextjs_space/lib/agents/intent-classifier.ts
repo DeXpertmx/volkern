@@ -186,6 +186,15 @@ export class IntentClassifierAgent {
       return missing.filter((p: string) => p !== 'propiedadId');
     }
 
+    // ERP industrial: el usuario se refiere al producto por nombre ('producto')
+    // y al proyecto por nombre ('proyecto') — el wrapper resuelve a los ids.
+    if (['calcular_costo_produccion', 'verificar_mermas', 'registrar_inspeccion_calidad'].includes(intent) && extractedParams.producto) {
+      return missing.filter((p: string) => p !== 'productoId');
+    }
+    if (intent === 'rentabilidad_proyecto' && extractedParams.proyecto) {
+      return missing.filter((p: string) => p !== 'proyectoId');
+    }
+
     return missing;
   }
 
@@ -400,6 +409,9 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     // Entidades de facturación sin verbo: "factura para X", "estado fiscal de
     // FAC-001", "verifica la integridad de la factura" (décimo entrenamiento)
     const FACTURA_TRIGGER = /\b(?:facturas?|factur[aá]ci[oó]n|facturar|estado\s+fiscal|integridad\s+fiscal)\b/i
+    // Entidades de ERP industrial sin verbo: producción, calidad, mermas,
+    // proyectos y watchdog (décimo sexto entrenamiento)
+    const ERP_TRIGGER = /\b(?:producci[oó]n|manufactura|fabricar|fabricaci[oó]n|calidad|mermas?|desperdicios?|scrap|inspecci[oó]n|qc\b|proyectos?|watchdog|reorden|reponer|desviaci[oó]n|rentabilidad\s+del\s+proyecto)\b/i
     // Entidades de logística sin verbo: "estado del envío TRK-123", "cómo está
     // la flota", "qué pedidos en tránsito", "ITV próxima a vencer" (undécimo)
     const LOGISTICA_TRIGGER = /\b(?:env[ií]os?|tracking|pedidos?|flota|veh[ií]culos?|cami[oó]nes?|rutas?|reparto|entregas?|paquetes?|itv|almac[eé]n(?:es)?)\b/i
@@ -414,7 +426,7 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     // en alquiler", "precio de la propiedad", "comisión de la venta"
     // (decimocuarto entrenamiento)
     const RE_TRIGGER = /\b(?:inmuebles?|propiedad(?:es)?|departamentos?|casas?|pisos?|oficinas?|locales?|terrenos?|solares?|chalets?|villas?|alquiler|en\s+venta|presupuesto\s+de|precio\s+(?:de|sugerido|de\s+venta)|comisi[oó]n(?:es)?\s+de|score\s+de\s+calidad|franquicia)\b/i
-    if (!ACTION_VERB.test(message) && !ENTITY_TRIGGER.test(message) && !FILTER_ONLY.test(message) && !CITA_TRIGGER.test(message) && !FINANZA_TRIGGER.test(message) && !TAREA_TRIGGER.test(message) && !PROVEEDOR_TRIGGER.test(message) && !CATALOGO_TRIGGER.test(message) && !INVENTARIO_TRIGGER.test(message) && !INSURANCE_TRIGGER.test(message) && !FACTURA_TRIGGER.test(message) && !LOGISTICA_TRIGGER.test(message) && !RRHH_TRIGGER.test(message) && !MARKETING_TRIGGER.test(message) && !RE_TRIGGER.test(message)) return null
+    if (!ACTION_VERB.test(message) && !ENTITY_TRIGGER.test(message) && !FILTER_ONLY.test(message) && !CITA_TRIGGER.test(message) && !FINANZA_TRIGGER.test(message) && !TAREA_TRIGGER.test(message) && !PROVEEDOR_TRIGGER.test(message) && !CATALOGO_TRIGGER.test(message) && !INVENTARIO_TRIGGER.test(message) && !INSURANCE_TRIGGER.test(message) && !FACTURA_TRIGGER.test(message) && !LOGISTICA_TRIGGER.test(message) && !RRHH_TRIGGER.test(message) && !MARKETING_TRIGGER.test(message) && !RE_TRIGGER.test(message) && !ERP_TRIGGER.test(message)) return null
 
     const extracted: Record<string, any> = {}
     const email = message.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,})/)
@@ -1230,6 +1242,87 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
       const titulo = this.extractTituloDe(message)
       if (titulo) extracted.servicio = titulo
       return { intent: 'agendar_cita', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 11a. WATCHDOG INVENTARIO ("revisa las alertas de inventario", "qué
+    // productos necesito reponer", "ejecuta el watchdog", "hay productos por
+    // debajo del punto de reorden") ═══
+    // Nota: "riesgo de ruptura" y "stock bajo" siguen siendo salud_inventario.
+    const WATCHDOG_SIGNAL = /\b(?:watchdog|alertas?\s+de\s+inventario|revisa\s+las\s+alertas|reponer|reabastecer|punto\s+de\s+reorden|debajo\s+(?:del|de\s+su)\s+punto|por\s+debajo\s+del\s+punto|sugiere\s+compras)\b/i
+    if (WATCHDOG_SIGNAL.test(message) && /\b(?:inventario|stock|reponer|reorden|watchdog|alertas?)\b/i.test(message)) {
+      return { intent: 'watchdog_inventario', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 11b. DETECTAR ANOMALÍAS DE CALIDAD ("detecta anomalías de calidad",
+    // "hay problemas de calidad con algún proveedor", "análisis de calidad") ═══
+    const ANOMALIAS_CALIDAD = /\b(?:anomal[ií]as?\s+de\s+calidad|problemas?\s+de\s+calidad|an[aá]lisis\s+de\s+calidad|fallos?\s+de\s+calidad|calidad\s+del\s+[úu]ltimo\s+lote)\b/i
+    if (ANOMALIAS_CALIDAD.test(message)) {
+      return { intent: 'detectar_anomalias_calidad', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 11c. CALCULAR COSTO DE PRODUCCIÓN ("calcula el costo de producción
+    // del producto X", "cuánto cuesta fabricar el producto Y", "dame el costo
+    // de manufactura del lote Z") ═══
+    const COSTO_PRODUCCION = /\b(?:costo|coste)\s+(?:de\s+)?(?:producci[oó]n|manufactura|fabricaci[oó]n|proyectado)\b|\b(?:fabricar|manufactura|producir)\b|costo\s+de\s+fabricaci[oó]n\b/i
+    if (COSTO_PRODUCCION.test(message) && !/\b(?:gastos?|egresos?|gast[ée])\b/i.test(message)) {
+      const loteMatch = message.match(/\blote\s+([A-Za-z0-9-]{1,20})\b/i)
+      const producto = this.extractProductoDe(message) || this.extractProductoIndustrialDe(message) || (loteMatch ? loteMatch[1] : null)
+      if (producto) extracted.producto = producto
+      const cantidad = this.extractCantidadStockDe(message)
+      if (cantidad !== null) extracted.cantidad = cantidad
+      return { intent: 'calcular_costo_produccion', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 11d. VERIFICAR MERMAS ("verifica las mermas de la orden de
+    // producción #OP-001", "reporta merma de 3 unidades", "audita el
+    // desperdicio del producto X") ═══
+    const MERMA_SIGNAL = /\b(?:verifica|verificar|audita|auditar|reporta|reportar|registra|registrar)\s+(?:las\s+|la\s+|una\s+|el\s+)?(?:mermas?|desperdicios?|scrap)\b|\b(?:reporta|reportar)\s+merma\b/i
+    if (MERMA_SIGNAL.test(message)) {
+      const orden = this.extractOrdenProduccionDe(message)
+      if (orden) extracted.ordenProduccionId = orden
+      const producto = this.extractProductoDe(message) || this.extractProductoIndustrialDe(message)
+      if (producto) extracted.producto = producto
+      const cantidad = this.extractCantidadStockDe(message)
+      if (cantidad !== null) extracted.cantidad = cantidad
+      const url = message.match(/https?:\/\/[^\s]+/i)
+      if (url) extracted.evidenciaUrl = url[0]
+      return { intent: 'verificar_mermas', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 11e. REGISTRAR INSPECCIÓN DE CALIDAD ("registra inspección de
+    // calidad del producto X, resultado aprobado", "crea un registro de QC
+    // para el lote #L-123, rechazado") ═══
+    const INSPECCION_QC = /\b(?:registra|registrar|crea|crear|anota|anotar)\s+(?:una\s+|la\s+|un\s+)?(?:inspecci[oó]n|registro|control)\s+de\s+calidad\b|\b(?:registro|registra)\s+de\s+qc\b/i
+    if (INSPECCION_QC.test(message)) {
+      const producto = this.extractProductoDe(message) || this.extractProductoIndustrialDe(message)
+      if (producto) extracted.producto = producto
+      const resultado = this.extractResultadoQcDe(message)
+      if (resultado) extracted.resultado = resultado
+      const lote = message.match(/\b#?L-?\d{1,6}\b/i)
+      if (lote) extracted.lote = lote[0].replace(/^#/, '')
+      const inspector = this.extractInspectorDe(message)
+      if (inspector) extracted.inspector = inspector
+      return { intent: 'registrar_inspeccion_calidad', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 11f. RENTABILIDAD DE PROYECTO ("cuál es la rentabilidad del proyecto
+    // Alpha", "dame el profitability del proyecto X", "cómo va el proyecto Y
+    // financieramente") ═══
+    const PROYECTO_RENTABILIDAD = /\b(?:rentabilidad|profitability)\b.*\bproyecto\b|\bproyecto\b.*\b(?:rentabilidad|profitability|financieramente)\b|c[oó]mo\s+va\s+el\s+proyecto\b/i
+    if (PROYECTO_RENTABILIDAD.test(message)) {
+      const proyecto = this.extractProyectoDe(message)
+      if (proyecto) extracted.proyecto = proyecto
+      return { intent: 'rentabilidad_proyecto', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 11g. DESVIACIONES DE PROYECTO ("detecta desviaciones en mis
+    // proyectos", "hay proyectos con problemas de presupuesto", "qué proyectos
+    // se están desviando del plan") ═══
+    const DESVIACIONES = /\b(?:desviaci[oó]n(?:es)?|desviando|fuera\s+del\s+plan|problemas?\s+de\s+presupuesto)\b.*\bproyecto|\bproyecto.*\b(?:desviaci[oó]n|desviando|fuera\s+del\s+plan)\b/i
+    if (DESVIACIONES.test(message)) {
+      const proyecto = this.extractProyectoDe(message)
+      if (proyecto) extracted.proyecto = proyecto
+      return { intent: 'desviaciones_proyecto', confidence: 0.85, extractedParams: extracted }
     }
 
     // ═══ 12. REGISTRAR GASTO ("registra gasto de 45.90 en comida",
@@ -2500,6 +2593,23 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
   }
 
   /**
+   * Extrae el producto en frases industriales sin la palabra "producto":
+   * "producción del panel solar" → panel solar, "fabricar el inversor" →
+   * inversor, "desperdicio del panel solar" → panel solar, "inspección de
+   * calidad del panel solar" → panel solar.
+   */
+  private extractProductoIndustrialDe(message: string): string | null {
+    const m = message.match(/(?:producci[oó]n|fabricar|manufactura|desperdicio|merma(?:s)?\s+(?:de|en)|inspecci[oó]n\s+de\s+calidad|control\s+de\s+calidad|registro\s+de\s+qc)\s+(?:(?:del|de\s+la|de\s+los|de\s+las|de|el|la|los|las|para\s+el|para\s+la)\s+)?([A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9][A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9'\- ]{1,50})/i)
+    if (!m) return null
+    let p = m[1].trim()
+    p = p.split(/\s*(?:,|;|resultado|con\s+notas?|notas?|en\s+el\s+lote|unidades?|uds?|piezas?)\b/i)[0].trim()
+    p = p.replace(/["'”]+\s*$/, '').trim()
+    // "manufactura del lote Z" → la ref es la etiqueta del lote, no el lote en sí
+    if (/^lote\s+/i.test(p)) p = p.replace(/^lote\s+/i, '').trim()
+    return p.length >= 2 ? p : null
+  }
+
+  /**
    * Extrae la cantidad de stock: "entrada de 50 unidades" → 50,
    * "salida de 10" → 10, "consume 5 unidades" → 5.
    */
@@ -2515,6 +2625,48 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
       if (Number.isFinite(v)) return v
     }
     return null
+  }
+
+  /**
+   * Extrae la referencia de orden de producción / work order:
+   * "#OP-001" → OP-001, "la orden #123" → 123, batch "L-987".
+   */
+  private extractOrdenProduccionDe(message: string): string | null {
+    const m = message.match(/\b(?:#?OP-?\d{1,6}|#?WO-?\d{1,6}|batch\s+(?:#?[A-Z0-9-]{2,12})|orden\s+(?:de\s+producci[oó]n\s+)?#?\d{1,6})\b/i)
+    if (m) return m[0].replace(/^#/, '').trim()
+    return null
+  }
+
+  /**
+   * Extrae el resultado de una inspección de calidad:
+   * "aprobado/conforme/pasa" → PASSED, "rechazado/falla/failed" → FAILED.
+   */
+  private extractResultadoQcDe(message: string): string | null {
+    if (/\b(?:aprobad[oa]|conforme|pasa|pas[oó]|ok|bien|pass(?:ed)?)\b/i.test(message)) return 'PASSED'
+    if (/\b(?:rechazad[oa]|falla|fall[oó]|fail(?:ed)?|no\s+conforme|defectuos[oa])\b/i.test(message)) return 'FAILED'
+    return null
+  }
+
+  /**
+   * Extrae el inspector de una inspección de calidad ("inspector: María").
+   */
+  private extractInspectorDe(message: string): string | null {
+    const m = message.match(/(?:inspector|por|realizada\s+por)\s*(?::|\s+por)?\s+([A-Z][A-Za-zÁÉÍÓÚÑÜáéíóúñü]+(?:\s+[A-Z][A-Za-zÁÉÍÓÚÑÜáéíóúñü]+)?)/i)
+    if (m && /\b(?:inspector|realizada\s+por)\b/i.test(message)) return m[1]
+    return null
+  }
+
+  /**
+   * Extrae el nombre del proyecto: "del proyecto Alpha" → Alpha,
+   * "proyecto X" → X, "el proyecto de la obra central" → la obra central.
+   */
+  private extractProyectoDe(message: string): string | null {
+    const m = message.match(/(?:del\s+proyecto|proyecto)\s+([A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9][A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9'\- ]{1,40})/i)
+    if (!m) return null
+    let p = m[1].trim()
+    p = p.split(/\s*(?:,|;|\bde\s+mis\b|\bque\s+|\bfinancieramente\b|\bprofitability\b)\b/i)[0].trim()
+    p = p.replace(/["'”]+\s*$/, '').trim()
+    return p.length >= 2 ? p : null
   }
 
   /**
@@ -3066,6 +3218,27 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     }
     if (param === 'empleadoId' || param === 'employeeId') {
       return this.extractNombreAfter(message, /\b(?:empleado|colaborador|de|del)\s+/i)
+    }
+    // ─── Módulo ERP Industrial (Décimo sexto entrenamiento) ───
+    if (param === 'productoId' || param === 'productId') {
+      return this.extractProductoDe(message) || this.extractProductoWebDe(message) || (message.trim().length >= 2 ? message.trim() : null)
+    }
+    if (param === 'ordenProduccionId' || param === 'workOrderId') {
+      return this.extractOrdenProduccionDe(message) || (message.trim().length >= 2 ? message.trim() : null)
+    }
+    if (param === 'resultado' || param === 'status') {
+      return this.extractResultadoQcDe(message)
+    }
+    if (param === 'proyectoId' || param === 'projectId' || param === 'proyecto') {
+      return this.extractProyectoDe(message) || (message.trim().length >= 2 ? message.trim() : null)
+    }
+    if (param === 'cantidad') {
+      const v = this.extractCantidadStockDe(message)
+      return v !== null ? String(v) : null
+    }
+    if (param === 'lote') {
+      const m = message.match(/\b#?L-?\d{1,6}\b/i)
+      return m ? m[0].replace(/^#/, '') : null
     }
     // ─── Módulo Marketing/Ads (Decimotercer entrenamiento) ───
     if (param === 'tema' || param === 'topic') {

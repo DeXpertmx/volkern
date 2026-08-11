@@ -476,6 +476,78 @@ export const ExecutionEngine = {
         const wh = data?.warehouse ? this.escapeMarkdown(String(data.warehouse)) : '';
         return `📤 *Consumo registrado.*${wh ? ` Almacén: ${wh}.` : ''} Stock actualizado.`;
       }
+      case 'inventory_watchdog': {
+        if (data?.status === 'OK') return `📦 ${this.escapeMarkdown(String(data?.message || 'Inventario saludable.'))}`;
+        const alerts = Array.isArray(data?.alerts) ? data.alerts : [];
+        const count = Number(data?.alertsCount ?? alerts.length);
+        const lines = alerts.slice(0, 5).map((a: any) => {
+          const msg = String(a?.message || '').replace(/<[^>]+>/g, '');
+          return `• ${this.escapeMarkdown(msg)}`;
+        });
+        const suffix = count > 5 ? `\n… y ${count - 5} alertas más` : '';
+        return `⚠️ *Watchdog de inventario — ${count} alerta(s) de reposición:*\n${lines.join('\n')}${suffix}`;
+      }
+      case 'calculate_production_cost': {
+        const product = data?.productName ? this.escapeMarkdown(String(data.productName)) : 'Producto';
+        const qty = Number(data?.quantity ?? 1);
+        const total = data?.totalCost != null ? this.escapeMarkdown(Number(data.totalCost).toLocaleString('es-ES')) : '—';
+        const unit = data?.unitCost != null ? this.escapeMarkdown(Number(data.unitCost).toFixed(2)) : '—';
+        const material = data?.materialCost != null ? this.escapeMarkdown(Number(data.materialCost).toLocaleString('es-ES')) : '—';
+        const labor = data?.laborCost != null ? this.escapeMarkdown(Number(data.laborCost).toLocaleString('es-ES')) : '—';
+        return `🏭 *Costo de producción — ${product} (${qty}u):*\n🧱 Materiales: ${material}€\n👷 Mano de obra: ${labor}€\n💰 Costo total: ${total}€ (${unit}€/u)`;
+      }
+      case 'detect_quality_anomalies': {
+        if (data?.status === 'OPTIMAL') return `✅ ${this.escapeMarkdown(String(data?.message || 'Sin anomalías de calidad.'))}`;
+        const report = data?.data || {};
+        const total = Number(report?.totalFailures ?? 0);
+        const source = report?.topFailureSource ? this.escapeMarkdown(String(report.topFailureSource)) : '';
+        const supplier = report?.supplierAlert ? `\n🏢 ${this.escapeMarkdown(String(report.supplierAlert))}` : '';
+        const rec = report?.recommendation ? `\n💡 ${this.escapeMarkdown(String(report.recommendation))}` : '';
+        const risk = String(report?.riskLevel || 'MEDIUM');
+        const riskLabel: Record<string, string> = { HIGH: '🔴 Alto', MEDIUM: '🟡 Medio', LOW: '🟢 Bajo' };
+        return `✅ *Anomalías de calidad (${total} en 30 días):*\n🎯 Fuente: ${source}\n⚠️ Riesgo: ${riskLabel[risk] || risk}${supplier}${rec}`;
+      }
+      case 'verify_waste_integrity': {
+        const status = String(data?.status || '');
+        const statusLabel: Record<string, string> = {
+          VERIFIED: '🟢 VERIFICADA',
+          FLAGGED_FOR_REVIEW: '🟡 REVISIÓN',
+          REJECTED: '🔴 RECHAZADA',
+        };
+        const verdict = data?.verdict ? `\n🔍 Veredicto: ${this.escapeMarkdown(String(data.verdict))}` : '';
+        const root = data?.rootCause ? `\n🎯 Causa raíz: ${this.escapeMarkdown(String(data.rootCause))}` : '';
+        const action = data?.correctiveAction ? `\n🛠 Acción: ${this.escapeMarkdown(String(data.correctiveAction))}` : '';
+        const recapture = data?.isRecapture ? '\n📸 Se solicita recaptura de evidencia.' : '';
+        return `♻️ *Merma auditada (Vision-Lock):* ${statusLabel[status] || status}${verdict}${root}${action}${recapture}`;
+      }
+      case 'register_qc_inspection': {
+        const hash = data?.integrityHash ? String(data.integrityHash).slice(0, 16) + '…' : '';
+        return `✅ *Inspección de calidad registrada.*${hash ? `\n🔐 Hash SHA-256: ${this.escapeMarkdown(hash)}` : ''}\n${data?.message ? this.escapeMarkdown(String(data.message)) : ''}`;
+      }
+      case 'get_project_profitability': {
+        const income = data?.totalIncome != null ? this.escapeMarkdown(Number(data.totalIncome).toLocaleString('es-ES')) : '—';
+        const expenses = data?.totalExpenses != null ? this.escapeMarkdown(Number(data.totalExpenses).toLocaleString('es-ES')) : '—';
+        const materials = data?.materialCosts != null ? this.escapeMarkdown(Number(data.materialCosts).toLocaleString('es-ES')) : '—';
+        const net = data?.netProfit != null ? this.escapeMarkdown(Number(data.netProfit).toLocaleString('es-ES')) : '—';
+        const margin = data?.margin != null ? this.escapeMarkdown(String(data.margin)) : '—';
+        const status = String(data?.status || '');
+        const statusLabel: Record<string, string> = { HEALTHY: '🟢', WARNING: '🟡', CRITICAL: '🔴' };
+        return `📐 *Rentabilidad del proyecto:*\n💰 Ingresos: ${income}€\n💸 Gastos: ${expenses}€\n🧱 Materiales: ${materials}€\n📈 Resultado: ${net}€ (margen ${margin}%) ${statusLabel[status] || ''}`;
+      }
+      case 'detect_project_drifting': {
+        const projects = Array.isArray(data?.projects) ? data.projects : [];
+        if (projects.length === 0) return '📐 No hay proyectos con desviaciones detectadas.';
+        const lines = projects.slice(0, 6).map((p: any) => {
+          const level = String(p?.driftLevel || 'LOW');
+          const label: Record<string, string> = { LOW: '🟢', MEDIUM: '🟡', HIGH: '🔴' };
+          const delayed = Number(p?.delayedMilestonesCount ?? 0);
+          const margin = p?.currentMargin != null ? this.escapeMarkdown(String(p.currentMargin)) : '—';
+          const rec = p?.recommendation ? ` — ${this.escapeMarkdown(String(p.recommendation))}` : '';
+          return `${label[level] || '⚪'} ${this.escapeMarkdown(String(p?.projectId || ''))} · margen ${margin}%${delayed > 0 ? ` · ${delayed} hitos retrasados` : ''}${rec}`;
+        });
+        const suffix = projects.length > 6 ? `\n… y ${projects.length - 6} más` : '';
+        return `📐 *Desviaciones en proyectos (${projects.length}):*\n${lines.join('\n')}${suffix}`;
+      }
       case 'analyze_burn_rate': {
         const months = Number(data?.periodMonths ?? 3);
         const periodo = months === 1 ? '1 mes' : `${months} meses`;
