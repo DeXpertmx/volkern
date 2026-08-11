@@ -99,7 +99,8 @@ export function DashboardContent() {
   })
   const [visibleWidgets, setVisibleWidgets] = useState<string[]>(() => {
     const saved = lsLoad()
-    if (Array.isArray(saved?.visibleWidgets) && saved.visibleWidgets.length > 0) return saved.visibleWidgets
+    const savedVisible = saved?.visibleWidgets
+    if (Array.isArray(savedVisible) && savedVisible.length > 0) return savedVisible
     return ALL_WIDGET_IDS
   })
   const [mounted, setMounted] = useState(false)

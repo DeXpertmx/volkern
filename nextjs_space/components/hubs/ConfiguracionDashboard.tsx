@@ -37,6 +37,7 @@ import { ImageUploader } from "@/components/ui/image-uploader";
 import EqualityConfigSection from "@/components/equality/EqualityConfigSection";
 import { NotificationConfig } from "@/components/dashboard/notifications/NotificationConfig";
 import { EmailSmtpConfig } from "@/components/dashboard/email/EmailSmtpConfig";
+import { ConfigHistorial } from "@/components/config/ConfigHistorial";
 import Link from "next/link";
 import { Switch } from "@/components/ui/switch";
 import { ALL_MODULES } from "@/lib/plans";
@@ -322,6 +323,8 @@ export function ConfiguracionDashboard({ activeSection }: ConfiguracionDashboard
   const [config, setConfig] = useState<any>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const saveStateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [tenantModules, setTenantModules] = useState<string[]>([]);
   const [modulesLoading, setModulesLoading] = useState(false);
   const [togglingModule, setTogglingModule] = useState<string | null>(null);
@@ -401,6 +404,8 @@ export function ConfiguracionDashboard({ activeSection }: ConfiguracionDashboard
 
   const handleSaveConfig = async () => {
     setSaving(true);
+    setSaveState('saving');
+    if (saveStateTimer.current) clearTimeout(saveStateTimer.current);
     try {
       const res = await fetch("/api/configuracion", {
         method: "POST",
@@ -409,12 +414,16 @@ export function ConfiguracionDashboard({ activeSection }: ConfiguracionDashboard
       });
       if (res.ok) {
         toast.success("Configuración guardada");
+        setSaveState('saved');
         // El POST de configuración completa ya incluye horariosAtencion
         setHorariosDirty(false);
+        saveStateTimer.current = setTimeout(() => setSaveState('idle'), 2500);
       } else {
+        setSaveState('error');
         toast.error("Error al guardar");
       }
     } catch (error) {
+      setSaveState('error');
       toast.error("Error de conexión");
     } finally {
       setSaving(false);
@@ -597,9 +606,17 @@ export function ConfiguracionDashboard({ activeSection }: ConfiguracionDashboard
                       </p>
                     </div>
                   </div>
-                  <Button onClick={handleSaveConfig} className="premium-gradient-primary rounded-full px-8">
-                    {saving ? "Guardando..." : "Guardar Cambios"}
-                  </Button>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <Button onClick={handleSaveConfig} className="premium-gradient-primary rounded-full px-8">
+                      {saving ? "Guardando..." : "Guardar Cambios"}
+                    </Button>
+                    {saveState === 'saved' && (
+                      <span className="text-sm text-emerald-600 font-medium flex items-center gap-1">Guardado ✓</span>
+                    )}
+                    {saveState === 'error' && (
+                      <span className="text-sm text-red-600 font-medium flex items-center gap-1">Error al guardar — reintenta</span>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
 
@@ -619,9 +636,17 @@ export function ConfiguracionDashboard({ activeSection }: ConfiguracionDashboard
                       maxImages={1}
                     />
                   </div>
-                  <Button onClick={handleSaveConfig} className="premium-gradient-primary rounded-full px-8">
-                    {saving ? "Guardando..." : "Guardar Cambios"}
-                  </Button>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <Button onClick={handleSaveConfig} className="premium-gradient-primary rounded-full px-8">
+                      {saving ? "Guardando..." : "Guardar Cambios"}
+                    </Button>
+                    {saveState === 'saved' && (
+                      <span className="text-sm text-emerald-600 font-medium flex items-center gap-1">Guardado ✓</span>
+                    )}
+                    {saveState === 'error' && (
+                      <span className="text-sm text-red-600 font-medium flex items-center gap-1">Error al guardar — reintenta</span>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -755,6 +780,8 @@ export function ConfiguracionDashboard({ activeSection }: ConfiguracionDashboard
           )}
 
           {activeSection === "email" && <EmailSmtpConfig />}
+
+          {activeSection === "historial" && <ConfigHistorial />}
 
           {activeSection === "billing" && (
             <div className="p-12 text-center">

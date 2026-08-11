@@ -524,7 +524,7 @@ export default function EscanearGastoPage() {
                       </div>
                     </div>
                   ) : (
-                    <img src={capturedImage} alt="Comprobante" className="max-w-full max-h-[200px] object-contain" />
+                    <img src={capturedImage || undefined} alt="Comprobante" className="max-w-full max-h-[200px] object-contain" />
                   )}
                 </div>
               )}
