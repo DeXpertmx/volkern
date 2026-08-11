@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeVatAmount, computePercentageAmount, computeInvoiceTotalMismatch } from '@/lib/finance/vat';
+import { computeVatAmount, computePercentageAmount, computeInvoiceTotalMismatch, fillEmptyTranches } from '@/lib/finance/vat';
 
 describe('computeVatAmount', () => {
   it('calcula la cuota: base × tipo / 100', () => {
@@ -71,5 +71,51 @@ describe('computeInvoiceTotalMismatch (conciliación de totales)', () => {
   it('trata cuota de IVA o IRPF ausentes como 0', () => {
     expect(computeInvoiceTotalMismatch('100', '', '', '100')).toBeNull();
     expect(computeInvoiceTotalMismatch('100', '21', '', '121')).toBeNull();
+  });
+});
+
+describe('fillEmptyTranches (reparto automático del total)', () => {
+  const rows = (bases: (string | number)[]) =>
+    bases.map(b => ({ base: String(b), rate: '' }));
+
+  it('reparte los tramos vacíos a partes iguales para cuadrar el total', () => {
+    // Ejemplo del usuario: primero 300 @ 21%, los otros dos se calculan solos
+    const result = fillEmptyTranches(rows(['300', '', '']), 2000);
+    expect(result).toEqual(['300', '850.00', '850.00']);
+  });
+
+  it('si se llena el segundo, el tercero se calcula como el resto', () => {
+    const result = fillEmptyTranches(rows(['300', '900', '']), 2000);
+    expect(result).toEqual(['300', '900', '800.00']);
+  });
+
+  it('el último tramo absorbe el redondeo y la suma cuadra exacta', () => {
+    const result = fillEmptyTranches(rows(['300', '', '', '']), 2000);
+    const sum = result!.reduce((acc, b) => acc + parseFloat(b), 0);
+    expect(result).toEqual(['300', '566.67', '566.67', '566.66']);
+    expect(sum).toBeCloseTo(2000, 2);
+  });
+
+  it('no toca los tramos ya rellenos', () => {
+    const result = fillEmptyTranches(rows(['300', '', '850']), 2000);
+    expect(result).toEqual(['300', '850.00', '850']);
+  });
+
+  it('respetar fillableIndices excluye tramos (p. ej. vaciados a propósito)', () => {
+    const result = fillEmptyTranches(rows(['300', '', '850']), 2000, [1]);
+    expect(result).toEqual(['300', '850.00', '850']);
+  });
+
+  it('devuelve null con objetivo inválido o sin nada que repartir', () => {
+    expect(fillEmptyTranches(rows(['300', '', '']), '')).toBeNull();
+    expect(fillEmptyTranches(rows(['300', '', '']), 0)).toBeNull();
+    expect(fillEmptyTranches(rows(['300', '900', '800']), 2000)).toBeNull();
+    expect(fillEmptyTranches(rows(['300', '', '']), 100)).toBeNull(); // resto <= 0
+    expect(fillEmptyTranches([], 2000)).toBeNull();
+  });
+
+  it('acepta el objetivo como string', () => {
+    const result = fillEmptyTranches(rows(['300', '', '']), '2000');
+    expect(result).toEqual(['300', '850.00', '850.00']);
   });
 });
