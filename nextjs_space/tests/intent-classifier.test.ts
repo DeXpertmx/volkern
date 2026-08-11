@@ -3513,6 +3513,294 @@ describe('IntentClassifier — ruta determinista (sin LLM)', () => {
     });
     expect(result.intent).toBe('analizar_sentimiento');
   });
+
+  // ═══ DÉCIMO SEXTO ENTRENAMIENTO (ERP Industrial): producción, calidad,
+  // proyectos y watchdog de inventario ═══
+
+  // ── watchdog_inventario ──
+  it('revisa las alertas de inventario → watchdog_inventario', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'revisa las alertas de inventario',
+    });
+    expect(result.intent).toBe('watchdog_inventario');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('qué productos necesito reponer → watchdog_inventario', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'qué productos necesito reponer',
+    });
+    expect(result.intent).toBe('watchdog_inventario');
+  });
+
+  it('ejecuta el watchdog de inventario → watchdog_inventario', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'ejecuta el watchdog de inventario',
+    });
+    expect(result.intent).toBe('watchdog_inventario');
+  });
+
+  it('"hay riesgo de ruptura de stock" sigue siendo salud_inventario', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'hay riesgo de ruptura de stock',
+    });
+    expect(result.intent).toBe('salud_inventario');
+  });
+
+  // ── detectar_anomalias_calidad ──
+  it('detecta anomalías de calidad → detectar_anomalias_calidad', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'detecta anomalías de calidad',
+    });
+    expect(result.intent).toBe('detectar_anomalias_calidad');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('hay problemas de calidad con algún proveedor → detectar_anomalias_calidad', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'hay problemas de calidad con algún proveedor',
+    });
+    expect(result.intent).toBe('detectar_anomalias_calidad');
+  });
+
+  // ── calcular_costo_produccion ──
+  it('calcula el costo de producción del panel solar → calcular_costo_produccion', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'calcula el costo de producción del panel solar',
+    });
+    expect(result.intent).toBe('calcular_costo_produccion');
+    expect(result.extractedParams.producto).toBe('panel solar');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('cuánto cuesta fabricar el inversor → calcular_costo_produccion', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cuánto cuesta fabricar el inversor',
+    });
+    expect(result.intent).toBe('calcular_costo_produccion');
+    expect(result.extractedParams.producto).toBe('inversor');
+  });
+
+  it('dame el costo de manufactura del lote Z → ref lote', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'dame el costo de manufactura del lote Z',
+    });
+    expect(result.intent).toBe('calcular_costo_produccion');
+    expect(result.extractedParams.producto).toBe('Z');
+  });
+
+  it('calcular costo sin producto → pide producto', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'calcula el costo de producción',
+    });
+    expect(result.intent).toBe('calcular_costo_produccion');
+    expect(result.needsMoreInfo).toBe(true);
+    expect(result.missingParams).toContain('productoId');
+  });
+
+  // ── verificar_mermas ──
+  it('verifica las mermas de la orden #OP-001 → verificar_mermas', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'verifica las mermas de la orden de producción #OP-001',
+    });
+    expect(result.intent).toBe('verificar_mermas');
+    expect(result.extractedParams.ordenProduccionId).toBe('OP-001');
+  });
+
+  it('reporta merma de 3 unidades en la orden #OP-002 → cantidad + orden', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'reporta merma de 3 unidades en la orden #OP-002',
+    });
+    expect(result.intent).toBe('verificar_mermas');
+    expect(result.extractedParams.cantidad).toBe(3);
+    expect(result.extractedParams.ordenProduccionId).toBe('OP-002');
+  });
+
+  it('audita el desperdicio del panel solar → verificar_mermas con producto', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'audita el desperdicio del panel solar',
+    });
+    expect(result.intent).toBe('verificar_mermas');
+    expect(result.extractedParams.producto).toBe('panel solar');
+  });
+
+  // ── registrar_inspeccion_calidad ──
+  it('registra inspección de calidad del panel solar, resultado aprobado → PASSED', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'registra inspección de calidad del panel solar, resultado aprobado',
+    });
+    expect(result.intent).toBe('registrar_inspeccion_calidad');
+    expect(result.extractedParams.producto).toBe('panel solar');
+    expect(result.extractedParams.resultado).toBe('PASSED');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('crea un registro de QC para el lote #L-123, rechazado → FAILED + lote', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'crea un registro de QC para el lote #L-123, rechazado',
+    });
+    expect(result.intent).toBe('registrar_inspeccion_calidad');
+    expect(result.extractedParams.resultado).toBe('FAILED');
+    expect(result.extractedParams.lote).toBe('L-123');
+  });
+
+  it('registra inspección sin resultado → pide resultado', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'registra inspección de calidad del panel solar',
+    });
+    expect(result.intent).toBe('registrar_inspeccion_calidad');
+    expect(result.needsMoreInfo).toBe(true);
+    expect(result.missingParams).toContain('resultado');
+  });
+
+  // ── rentabilidad_proyecto ──
+  it('cuál es la rentabilidad del proyecto Alpha → rentabilidad_proyecto', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cuál es la rentabilidad del proyecto Alpha',
+    });
+    expect(result.intent).toBe('rentabilidad_proyecto');
+    expect(result.extractedParams.proyecto).toBe('Alpha');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('cómo va el proyecto Norte financieramente → rentabilidad_proyecto', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cómo va el proyecto Norte financieramente',
+    });
+    expect(result.intent).toBe('rentabilidad_proyecto');
+    expect(result.extractedParams.proyecto).toBe('Norte');
+  });
+
+  it('"dame la rentabilidad global del negocio" NO es rentabilidad_proyecto', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'dame la rentabilidad global del negocio',
+    });
+    expect(result.intent).toBe('analizar_rentabilidad_global');
+    expect(result.intent).not.toBe('rentabilidad_proyecto');
+  });
+
+  // ── desviaciones_proyecto ──
+  it('detecta desviaciones en mis proyectos → desviaciones_proyecto', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'detecta desviaciones en mis proyectos',
+    });
+    expect(result.intent).toBe('desviaciones_proyecto');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('qué proyectos se están desviando del plan → desviaciones_proyecto', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'qué proyectos se están desviando del plan',
+    });
+    expect(result.intent).toBe('desviaciones_proyecto');
+  });
+
+  // ── multi-turno ERP ──
+  it('multi-turno: completa el producto de calcular_costo_produccion', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'el panel solar',
+      pendingIntent: 'calcular_costo_produccion',
+      collectedEntities: {},
+      missingEntities: ['productoId'],
+    });
+    expect(result.intent).toBe('calcular_costo_produccion');
+    expect(result.extractedParams.productoId).toBe('el panel solar');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('multi-turno: completa el resultado de registrar_inspeccion_calidad', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'rechazado',
+      pendingIntent: 'registrar_inspeccion_calidad',
+      collectedEntities: { productoId: 'X' },
+      missingEntities: ['resultado'],
+    });
+    expect(result.intent).toBe('registrar_inspeccion_calidad');
+    expect(result.extractedParams.resultado).toBe('FAILED');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('multi-turno: completa la orden de verificar_mermas', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: '#OP-005',
+      pendingIntent: 'verificar_mermas',
+      collectedEntities: {},
+      missingEntities: ['ordenProduccionId'],
+    });
+    expect(result.intent).toBe('verificar_mermas');
+    expect(result.extractedParams.ordenProduccionId).toBe('OP-005');
+  });
+
+  it('multi-turno: completa el proyecto de rentabilidad_proyecto', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'la obra central',
+      pendingIntent: 'rentabilidad_proyecto',
+      collectedEntities: {},
+      missingEntities: ['proyectoId'],
+    });
+    expect(result.intent).toBe('rentabilidad_proyecto');
+    expect(result.extractedParams.proyectoId).toBe('la obra central');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  // ── negativos / regresiones de ERP industrial ──
+  it('"consume 5 unidades del producto Y" sigue siendo consumir_inventario', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'consume 5 unidades del producto Y',
+    });
+    expect(result.intent).toBe('consumir_inventario');
+  });
+
+  it('"registra un gasto de 300€ en software" sigue siendo registrar_gasto', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'registra un gasto de 300€ en software',
+    });
+    expect(result.intent).toBe('registrar_gasto');
+  });
+
+  it('"cuánto cuesta el producto X" NO es costo de producción (es catálogo)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cuánto cuesta el producto X',
+    });
+    expect(result.intent).not.toBe('calcular_costo_produccion');
+    expect(result.intent).toBe('buscar_catalogo');
+  });
+
+  it('"anomalías en los gastos" NO es calidad (es auditoría financiera)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'hay anomalías en los gastos',
+    });
+    expect(result.intent).not.toBe('detectar_anomalias_calidad');
+  });
 });
 
 describe('IntentClassifier — getRequiredParams', () => {

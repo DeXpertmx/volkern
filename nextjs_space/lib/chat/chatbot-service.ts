@@ -122,6 +122,12 @@ const MISSING_ENTITY_PROMPTS: Record<string, string> = {
   pais: '🌎 ¿De qué país o jurisdicción? (ej: España, México, USA/LLC)',
   region: '🌎 ¿De qué país o jurisdicción? (ej: España, México, USA/LLC)',
 
+  // ERP Industrial (producción, calidad, proyectos)
+  ordenProduccionId: '🏭 ¿De qué orden de producción es la merma? (ej: #OP-001 o el batch)',
+  resultado: '✅ ¿Cuál es el resultado de la inspección? (aprobado o rechazado)',
+  proyectoId: '📐 ¿De qué proyecto? (ej: su nombre)',
+  proyecto: '📐 ¿De qué proyecto? (ej: su nombre)',
+
   // Real Estate
   propiedad: '🏠 ¿De qué propiedad? (ej: #PROP-001, la casa del centro, el departamento en la playa)',
   propiedadId: '🏠 ¿De qué propiedad? (ej: #PROP-001, la casa del centro)',

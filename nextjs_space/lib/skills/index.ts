@@ -2320,6 +2320,157 @@ const analyzeGlobalProfitabilityWrapper = async (input: {
   });
 };
 
+// ─── ERP Industrial (Décimo sexto entrenamiento) ───
+// Wrappers: traducen las referencias del chatbot (nombre/sku de producto,
+// orden de producción, proyecto por nombre) a los ids que exigen los skills
+// core de producción, calidad y proyectos.
+
+// Resuelve un producto por sku o nombre dentro del tenant (con su nombre,
+// para mensajes de error y creación de puntos de control de calidad).
+async function resolveCatalogoItemConNombre(tenantId: string, ref: string): Promise<{ id: string; nombre: string } | null> {
+  const { prisma } = await import('@/lib/db');
+  const item = await prisma.catalogoItem.findFirst({
+    where: {
+      tenantId,
+      OR: [{ sku: { contains: ref, mode: 'insensitive' as const } }, { nombre: { contains: ref, mode: 'insensitive' as const } }],
+    },
+    select: { id: true, nombre: true, sku: true },
+  });
+  return item ? { id: item.id, nombre: item.nombre } : null;
+}
+
+const calculateProductionCostWrapper = async (input: {
+  tenantId: string;
+  producto?: string;
+  productoId?: string;
+  productId?: string;
+  cantidad?: number | string;
+}) => {
+  const { tenantId } = input;
+  const ref = input.productoId || input.producto || input.productId;
+  if (!ref) throw new Error('Necesito saber qué producto fabricar (su nombre o sku).');
+  const { prisma } = await import('@/lib/db');
+  const item = await resolveCatalogoItemConNombre(tenantId, ref);
+  if (!item) throw new Error(`No encontré el producto "${ref}" en el catálogo.`);
+  const bom = await prisma.billOfMaterials.findFirst({
+    where: { tenantId, productId: item.id },
+    select: { id: true },
+  });
+  if (!bom) throw new Error(`El producto "${item.nombre}" no tiene BoM (lista de materiales) registrada.`);
+  const quantity = Number(input.cantidad) > 0 ? Number(input.cantidad) : 1;
+  return productionSkills.calculate_production_cost({ tenantId, bomId: bom.id, quantity });
+};
+
+const verifyWasteIntegrityWrapper = async (input: {
+  tenantId: string;
+  ordenProduccionId?: string;
+  workOrderId?: string;
+  evidenciaUrl?: string;
+  wasteImage?: string;
+}) => {
+  const { tenantId } = input;
+  const orderRef = input.ordenProduccionId || input.workOrderId;
+  if (!orderRef) throw new Error('Necesito saber la orden de producción de la merma (ej: #OP-001 o el batch).');
+  const { prisma } = await import('@/lib/db');
+  const wo = await prisma.workOrder.findFirst({
+    where: { tenantId, OR: [{ id: orderRef }, { batchNumber: orderRef }] },
+    select: { id: true },
+  });
+  if (!wo) throw new Error(`No encontré la orden de producción "${orderRef}".`);
+  const wasteImage = input.evidenciaUrl || input.wasteImage;
+  if (!wasteImage) throw new Error('Necesito la foto de la merma (evidencia) para el análisis Vision-Lock.');
+  return productionSkills.verify_waste_integrity({ tenantId, workOrderId: wo.id, wasteImage });
+};
+
+const registerQcInspectionWrapper = async (input: {
+  tenantId: string;
+  userId?: string;
+  producto?: string;
+  productoId?: string;
+  productId?: string;
+  resultado?: string;
+  status?: string;
+  lote?: string;
+  inspector?: string;
+  notas?: string;
+}) => {
+  const { tenantId } = input;
+  const ref = input.productoId || input.producto || input.productId;
+  if (!ref) throw new Error('Necesito saber de qué producto es la inspección de calidad.');
+  const rawStatus = String(input.resultado || input.status || '').toLowerCase();
+  const status = /rechazad|falla|fall[oó]|fail|no\s+conforme|defectuos/.test(rawStatus) ? 'FAILED' : 'PASSED';
+  const { prisma } = await import('@/lib/db');
+  const item = await resolveCatalogoItemConNombre(tenantId, ref);
+  if (!item) throw new Error(`No encontré el producto "${ref}" en el catálogo.`);
+  // El core exige un punto de control (QualityPoint): lo resolvemos por nombre
+  // del producto o lo creamos si no existe.
+  let point = await prisma.qualityPoint.findFirst({
+    where: { tenantId, name: { contains: item.nombre, mode: 'insensitive' } },
+    select: { id: true },
+  });
+  if (!point) {
+    point = await prisma.qualityPoint.create({
+      data: { tenantId, name: item.nombre, description: `Control de calidad de ${item.nombre}` },
+      select: { id: true },
+    });
+  }
+  return qualitySkills.register_qc_inspection({
+    tenantId,
+    pointId: point.id,
+    status,
+    measuredValue: input.lote ? `Lote ${input.lote}` : undefined,
+    inspectorId: input.userId || input.inspector || 'SYSTEM',
+  });
+};
+
+const getProjectProfitabilityWrapper = async (input: {
+  tenantId: string;
+  proyecto?: string;
+  proyectoId?: string;
+  projectId?: string;
+}) => {
+  const { tenantId } = input;
+  const ref = input.proyectoId || input.projectId || input.proyecto;
+  if (!ref) throw new Error('Necesito saber de qué proyecto calcular la rentabilidad (su nombre).');
+  const { prisma } = await import('@/lib/db');
+  const project = await prisma.project.findFirst({
+    where: { tenantId, OR: [{ id: ref }, { name: { contains: ref, mode: 'insensitive' } }] },
+    select: { id: true },
+  });
+  if (!project) throw new Error(`No encontré el proyecto "${ref}".`);
+  return projectSkills.getProjectProfitability({ tenantId, projectId: project.id });
+};
+
+const detectProjectDriftingWrapper = async (input: {
+  tenantId: string;
+  proyecto?: string;
+  proyectoId?: string;
+  projectId?: string;
+}) => {
+  const { tenantId } = input;
+  const ref = input.proyectoId || input.projectId || input.proyecto;
+  const { prisma } = await import('@/lib/db');
+  if (ref) {
+    const project = await prisma.project.findFirst({
+      where: { tenantId, OR: [{ id: ref }, { name: { contains: ref, mode: 'insensitive' } }] },
+      select: { id: true },
+    });
+    if (!project) throw new Error(`No encontré el proyecto "${ref}".`);
+    const result = await projectSkills.detectProjectDrifting({ tenantId, projectId: project.id });
+    return { projects: [result] };
+  }
+  const projects = await prisma.project.findMany({ where: { tenantId }, select: { id: true } });
+  const results: any[] = [];
+  for (const p of projects) {
+    try {
+      results.push(await projectSkills.detectProjectDrifting({ tenantId, projectId: p.id }));
+    } catch {
+      // un proyecto sin datos no debe romper el análisis del resto
+    }
+  }
+  return { projects: results };
+};
+
 export const skills = {
   // Contactos
   create_contact: createContactWrapper,
@@ -2421,8 +2572,8 @@ export const skills = {
   inventory_watchdog: inventoryWatchdogSkills.inventoryWatchdog,
   
   // ERP Proyectos
-  get_project_profitability: projectSkills.getProjectProfitability,
-  detect_project_drifting: projectSkills.detectProjectDrifting,
+  get_project_profitability: getProjectProfitabilityWrapper,
+  detect_project_drifting: detectProjectDriftingWrapper,
   
   // ERP Consolidación (The Financial Brain)
   analyze_global_profitability: analyzeGlobalProfitabilityWrapper,
@@ -2431,12 +2582,12 @@ export const skills = {
   tax_prospector: taxProspectorWrapper,
   
   // ERP Producción (MRP)
-  calculate_production_cost: productionSkills.calculate_production_cost,
-  verify_waste_integrity: productionSkills.verify_waste_integrity,
+  calculate_production_cost: calculateProductionCostWrapper,
+  verify_waste_integrity: verifyWasteIntegrityWrapper,
 
   // ERP Calidad (QC)
   detect_quality_anomalies: qualitySkills.detect_quality_anomalies,
-  register_qc_inspection: qualitySkills.register_qc_inspection,
+  register_qc_inspection: registerQcInspectionWrapper,
 
   // ERP RRHH (HRM)
   talent_retention_risk: talentRetentionRiskWrapper,
