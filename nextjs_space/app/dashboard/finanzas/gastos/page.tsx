@@ -1,11 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Search, Receipt, Filter, Eye, ShieldCheck, AlertTriangle, Scan } from "lucide-react"
+import { Plus, Search, Receipt, Eye, ShieldCheck, Scan, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react"
 import { 
   Sheet, 
   SheetContent, 
@@ -18,12 +18,68 @@ import ExpenseVerificationDetails from "@/components/finance/ExpenseVerification
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
+type SortKey = 'date' | 'supplier' | 'base' | 'iva' | 'amount'
+type PresenceFilter = 'all' | 'with' | 'without'
+
+function SortIcon({ active, dir }: { active: boolean; dir: 'asc' | 'desc' }) {
+  if (!active) return <ArrowUpDown className="w-3 h-3 inline-block ml-1 opacity-40" />
+  return dir === 'asc'
+    ? <ArrowUp className="w-3 h-3 inline-block ml-1" />
+    : <ArrowDown className="w-3 h-3 inline-block ml-1" />
+}
+
 export default function GastosPage() {
   const { data, isLoading } = useSWR('/api/erp/expenses', fetcher)
   const [selectedExpense, setSelectedExpense] = useState<any>(null)
 
+  // ─── Filtros y ordenación ──────────────────────────────────────────────
+  const [supplierFilter, setSupplierFilter] = useState('all')
+  const [baseFilter, setBaseFilter] = useState<PresenceFilter>('all')
+  const [ivaFilter, setIvaFilter] = useState<PresenceFilter>('all')
+  const [sortKey, setSortKey] = useState<SortKey>('date')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+
   const expenses = data?.expenses || []
   const tenantConfig = data?.tenantConfig || { baseLatitude: 40.416775, baseLongitude: -3.703790 }
+
+  // Proveedores únicos presentes en los gastos (para el filtro)
+  const suppliers = useMemo(() => {
+    const map = new Map<string, any>()
+    expenses.forEach((e: any) => { if (e.supplier?.id) map.set(e.supplier.id, e.supplier) })
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name))
+  }, [expenses])
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortKey(key)
+      setSortDir(key === 'supplier' ? 'asc' : 'desc')
+    }
+  }
+
+  const filteredExpenses = useMemo(() => {
+    const list = [...expenses]
+    list.sort((a: any, b: any) => {
+      let cmp = 0
+      switch (sortKey) {
+        case 'date': cmp = new Date(a.date).getTime() - new Date(b.date).getTime(); break
+        case 'supplier': cmp = (a.supplier?.name || '').localeCompare(b.supplier?.name || ''); break
+        case 'base': cmp = (a.taxableBase ?? -1) - (b.taxableBase ?? -1); break
+        case 'iva': cmp = (a.vatAmount ?? -1) - (b.vatAmount ?? -1); break
+        case 'amount': cmp = a.amount - b.amount; break
+      }
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+    return list.filter((e: any) =>
+      (supplierFilter === 'all' || e.supplier?.id === supplierFilter) &&
+      (baseFilter === 'all' || (baseFilter === 'with' ? e.taxableBase != null : e.taxableBase == null)) &&
+      (ivaFilter === 'all' || (ivaFilter === 'with' ? e.vatAmount != null : e.vatAmount == null))
+    )
+  }, [expenses, sortKey, sortDir, supplierFilter, baseFilter, ivaFilter])
+
+  const thBase = "px-6 py-4 text-[10px] font-black uppercase text-muted-foreground tracking-widest"
+  const thButton = "inline-flex items-center gap-1 uppercase tracking-widest hover:text-foreground transition-colors"
 
   return (
     <div className="space-y-6">
@@ -44,15 +100,39 @@ export default function GastosPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input className="w-full bg-slate-100 dark:bg-slate-900 border-none rounded-xl pl-10 pr-4 py-3 text-sm" placeholder="Buscar por descripción..." />
         </div>
-        <div className="md:col-span-2 flex gap-2">
-            <Button variant="outline" className="rounded-xl border-none bg-slate-100 dark:bg-slate-900 font-bold text-xs uppercase"><Filter className="w-3 h-3 mr-2"/> Categoría</Button>
-            <Button variant="outline" className="rounded-xl border-none bg-slate-100 dark:bg-slate-900 font-bold text-xs uppercase"><Filter className="w-3 h-3 mr-2"/> Estado</Button>
-        </div>
+        <select
+          value={supplierFilter}
+          onChange={e => setSupplierFilter(e.target.value)}
+          className="w-full bg-slate-100 dark:bg-slate-900 border-none rounded-xl px-4 py-3 text-sm font-bold appearance-none outline-none cursor-pointer"
+        >
+          <option value="all">Todos los proveedores</option>
+          {suppliers.map(s => (
+            <option key={s.id} value={s.id}>{s.name}</option>
+          ))}
+        </select>
+        <select
+          value={baseFilter}
+          onChange={e => setBaseFilter(e.target.value as PresenceFilter)}
+          className="w-full bg-slate-100 dark:bg-slate-900 border-none rounded-xl px-4 py-3 text-sm font-bold appearance-none outline-none cursor-pointer"
+        >
+          <option value="all">Base: todas</option>
+          <option value="with">Base: solo con dato</option>
+          <option value="without">Base: sin dato</option>
+        </select>
+        <select
+          value={ivaFilter}
+          onChange={e => setIvaFilter(e.target.value as PresenceFilter)}
+          className="w-full bg-slate-100 dark:bg-slate-900 border-none rounded-xl px-4 py-3 text-sm font-bold appearance-none outline-none cursor-pointer"
+        >
+          <option value="all">IVA: todo</option>
+          <option value="with">IVA: solo con cuota</option>
+          <option value="without">IVA: sin cuota</option>
+        </select>
       </div>
 
       <Card className="border-none shadow-sm">
@@ -61,21 +141,41 @@ export default function GastosPage() {
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b bg-slate-50/50">
-                  <th className="px-6 py-4 text-[10px] font-black uppercase text-muted-foreground tracking-widest">Fecha</th>
-                  <th className="px-6 py-4 text-[10px] font-black uppercase text-muted-foreground tracking-widest">Descripción</th>
-                  <th className="px-6 py-4 text-[10px] font-black uppercase text-muted-foreground tracking-widest">Proveedor</th>
-                  <th className="px-6 py-4 text-[10px] font-black uppercase text-muted-foreground tracking-widest text-right">Base</th>
-                  <th className="px-6 py-4 text-[10px] font-black uppercase text-muted-foreground tracking-widest text-right">IVA</th>
-                  <th className="px-6 py-4 text-[10px] font-black uppercase text-muted-foreground tracking-widest">Estado</th>
-                  <th className="px-6 py-4 text-[10px] font-black uppercase text-muted-foreground tracking-widest text-center">Verifactu</th>
-                  <th className="px-6 py-4 text-[10px] font-black uppercase text-muted-foreground tracking-widest text-right">Monto</th>
+                  <th className={thBase}>
+                    <button onClick={() => toggleSort('date')} className={thButton}>
+                      Fecha <SortIcon active={sortKey === 'date'} dir={sortDir} />
+                    </button>
+                  </th>
+                  <th className={thBase}>Descripción</th>
+                  <th className={thBase}>
+                    <button onClick={() => toggleSort('supplier')} className={thButton}>
+                      Proveedor <SortIcon active={sortKey === 'supplier'} dir={sortDir} />
+                    </button>
+                  </th>
+                  <th className={`${thBase} text-right`}>
+                    <button onClick={() => toggleSort('base')} className={`${thButton} justify-end`}>
+                      Base <SortIcon active={sortKey === 'base'} dir={sortDir} />
+                    </button>
+                  </th>
+                  <th className={`${thBase} text-right`}>
+                    <button onClick={() => toggleSort('iva')} className={`${thButton} justify-end`}>
+                      IVA <SortIcon active={sortKey === 'iva'} dir={sortDir} />
+                    </button>
+                  </th>
+                  <th className={thBase}>Estado</th>
+                  <th className={`${thBase} text-center`}>Verifactu</th>
+                  <th className={`${thBase} text-right`}>
+                    <button onClick={() => toggleSort('amount')} className={`${thButton} justify-end`}>
+                      Monto <SortIcon active={sortKey === 'amount'} dir={sortDir} />
+                    </button>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y">
                 {isLoading ? (
                   <tr><td colSpan={8} className="px-6 py-10 text-center text-muted-foreground font-medium">Cargando datos...</td></tr>
-                ) : (expenses && expenses.length > 0) ? (
-                  expenses.map((expense: any) => (
+                ) : (filteredExpenses.length > 0) ? (
+                  filteredExpenses.map((expense: any) => (
                     <tr 
                       key={expense.id} 
                       className="hover:bg-indigo-50/30 transition-colors group cursor-pointer"
@@ -126,7 +226,7 @@ export default function GastosPage() {
                     </tr>
                   ))
                 ) : (
-                   <tr><td colSpan={8} className="px-6 py-20 text-center font-medium text-slate-400">No se encontraron gastos registrados.</td></tr>
+                   <tr><td colSpan={8} className="px-6 py-20 text-center font-medium text-slate-400">No se encontraron gastos que coincidan con los filtros.</td></tr>
                 )}
               </tbody>
             </table>
