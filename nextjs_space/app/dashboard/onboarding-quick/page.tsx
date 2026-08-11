@@ -178,7 +178,14 @@ export default function OnboardingQuickPage() {
       })
       clearTimeout(timeoutId)
       const data = await res.json().catch(() => ({}))
-      if (data?.success) setStep(3)
+      if (data?.success) {
+        // El canal de mensajería (Chatwoot) es best-effort: si falló, se avisa
+        // suave y el onboarding continúa (se puede configurar después).
+        if (data?.chatwootWarning) {
+          toast.warning(data.chatwootWarning)
+        }
+        setStep(3)
+      }
       else {
         const msg = data?.error || 'Error al preparar el espacio de trabajo'
         setProvisionError(msg)

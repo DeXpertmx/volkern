@@ -8,6 +8,7 @@ import prisma from '@/lib/db';
 interface ProvisioningResult {
   success: boolean;
   chatwootAccountId?: number;
+  chatwootWarning?: string;
   error?: string;
 }
 
@@ -43,10 +44,17 @@ async function quickProvisionTenant(tenantId: string): Promise<ProvisioningResul
       chatwootAccountId: account.id
     };
   } catch (error: any) {
-    console.error('[Quick Provision] Error:', error);
+    // Chatwoot es un add-on best-effort: una falla aquí NO debe bloquear el
+    // onboarding del nuevo tenant. Se loguea el detalle completo (status + URL
+    // + body) para diagnóstico y se devuelve una advertencia amigable; el
+    // canal puede provisionarse después desde Integraciones.
+    console.error('[Quick Provision] Chatwoot error (no bloquea el onboarding):', {
+      message: error?.message,
+      baseUrl: chatwootUrl,
+    });
     return {
-      success: false,
-      error: error.message
+      success: true,
+      chatwootWarning: 'No se pudo conectar el canal de mensajería (Chatwoot). Podrás configurarlo más tarde desde Integraciones.'
     };
   }
 }

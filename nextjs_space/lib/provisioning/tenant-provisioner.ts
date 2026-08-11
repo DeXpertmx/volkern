@@ -85,8 +85,10 @@ export interface TenantProvisioningSuccess {
     tenantId: string;
     chatwootAccountId?: number;
     telegramInboxId?: number;
-    /** true cuando se omitó Telegram en el input. */
+    /** true cuando se omitó Telegram en el input o no pudo provisionarse. */
     telegramSkipped: boolean;
+    /** true cuando Chatwoot no está configurado o falló (best-effort). */
+    chatwootSkipped?: boolean;
 }
 
 export type ProvisioningResult = TenantProvisioningSuccess | TenantProvisioningResult;
@@ -476,36 +478,37 @@ export async function provisionTenant(input: TenantProvisioningInput): Promise<T
         }
     }
 
-    // PASO 3: Crear cuenta en Chatwoot
-    let chatwootAccountId: number;
-    let chatwootApiToken: string;
-    
-    try {
-        const account = await chatwootApi.createAccount(empresa, 'es');
-        chatwootAccountId = account.id;
-        
-        console.log('[Provisioner] Chatwoot account created:', chatwootAccountId);
-        
-        // Crear usuario admin en Chatwoot
-        await chatwootApi.createAccountUser(chatwootAccountId, email, empresa, 'administrator');
-        
-        // Por ahora usamos el super admin token para operaciones
-        // En producción, deberíamos generar un token específico
-        chatwootApiToken = process.env.CHATWOOT_SUPER_ADMIN_TOKEN || '';
-        
-    } catch (error: any) {
-        console.error('[Provisioner] Chatwoot account error:', error);
-        // Rollback: eliminar tenant
-        await prisma.tenant.delete({ where: { id: tenantId } });
-        
-        return {
-            success: false,
-            error: {
-                code: 'CHATWOOT_ACCOUNT_ERROR',
-                message: error.message,
-                step: 'create_chatwoot_account',
-            },
-        };
+    // PASO 3: Crear cuenta en Chatwoot (best-effort)
+    // Chatwoot es un add-on de mensajería: si no está configurado o falla,
+    // el tenant se crea igual y el canal puede provisionarse después. Antes
+    // este paso BORRABA el tenant recién creado y bloqueaba el signup con un
+    // error 404 crudo cuando CHATWOOT_BASE_URL apuntaba al host equivocado.
+    let chatwootAccountId: number | undefined;
+    let chatwootApiToken: string = '';
+    let chatwootSkipped = false;
+
+    if (!process.env.CHATWOOT_BASE_URL || !process.env.CHATWOOT_SUPER_ADMIN_TOKEN) {
+        chatwootSkipped = true;
+        console.log('[Provisioner] Chatwoot no configurado (CHATWOOT_BASE_URL/TOKEN) — se omite, best-effort.');
+    } else {
+        try {
+            const account = await chatwootApi.createAccount(empresa, 'es');
+            chatwootAccountId = account.id;
+            
+            console.log('[Provisioner] Chatwoot account created:', chatwootAccountId);
+            
+            // Crear usuario admin en Chatwoot
+            await chatwootApi.createAccountUser(chatwootAccountId, email, empresa, 'administrator');
+            
+            // Por ahora usamos el super admin token para operaciones
+            // En producción, deberíamos generar un token específico
+            chatwootApiToken = process.env.CHATWOOT_SUPER_ADMIN_TOKEN || '';
+        } catch (error: any) {
+            // No bloquea el signup: se loguea el detalle (status + URL) y se
+            // continúa. El canal de mensajería se provisiona después.
+            console.error('[Provisioner] Chatwoot error (non-fatal, se omite el canal):', error?.message || error);
+            chatwootSkipped = true;
+        }
     }
 
     // PASOS 4-7: opcionalmente añadir canal de Telegram completo (inbox + hub
@@ -515,11 +518,11 @@ export async function provisionTenant(input: TenantProvisioningInput): Promise<T
     const webhookSecret = crypto.randomBytes(32).toString('hex');
     const webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://volkern.app'}/api/webhooks/nexus-sync`;
     let telegramInboxId: number | undefined;
-    if (telegramProvided) {
+    if (telegramProvided && chatwootAccountId) {
         const tg = await addTelegramChannelToTenant({
             tenantId,
             tenantName: empresa,
-            chatwootAccountId: chatwootAccountId!,
+            chatwootAccountId,
             chatwootApiToken,
             botName: telegram!.botName,
             botToken: telegram!.botToken,
@@ -540,6 +543,9 @@ export async function provisionTenant(input: TenantProvisioningInput): Promise<T
                 },
             };
         }
+    } else if (telegramProvided) {
+        console.warn('[Provisioner] Telegram proporcionado pero Chatwoot no disponible — se omite. Puedes conectarlo después vía POST /api/admin/tenants/{id}/telegram.');
+        telegramInboxId = undefined;
     } else {
         console.log('[Provisioner] Telegram skipped (no bot en input). El broker puede conectarlo después vía POST /api/admin/tenants/{id}/telegram.');
         telegramInboxId = undefined;
@@ -613,7 +619,8 @@ export async function provisionTenant(input: TenantProvisioningInput): Promise<T
         tenantId,
         chatwootAccountId,
         telegramInboxId,
-        telegramSkipped: !telegramProvided,
+        telegramSkipped: !telegramProvided || chatwootSkipped,
+        chatwootSkipped,
         // Discriminación TypeScript-narrow-friendly: si telegramInboxId está
         // definido el broker lo configuró, si no, fue skipped. Lo dejamos
         // como opcional aunque TS no narrowe desde el union — los callers

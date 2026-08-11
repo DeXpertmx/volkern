@@ -186,14 +186,17 @@ export async function POST(request: NextRequest) {
             success: true,
             tenantId: successResult.tenantId,
             chatwootAccountId: successResult.chatwootAccountId,
+            chatwootSkipped: successResult.chatwootSkipped ?? false,
             telegramInboxId: successResult.telegramInboxId,
             telegramSkipped: successResult.telegramSkipped ?? false,
             moneda: monedaNormalizada ?? 'MXN',
             monedaInferenciaSource: monedaNormalizada ? 'EXPLICIT' : 'FALLBACK',
             vertical: verticalNormalizado ?? null,
-            message: successResult.telegramSkipped
-                ? 'Tenant creado. Telegram quedó pendiente de configuración — puedes añadirlo desde /admin/partner-onboarding.'
-                : 'Tenant creado exitosamente con Telegram configurado',
+            message: successResult.chatwootSkipped
+                ? 'Tenant creado. El canal de mensajería quedó pendiente — puedes configurarlo desde Integraciones.'
+                : successResult.telegramSkipped
+                    ? 'Tenant creado. Telegram quedó pendiente de configuración — puedes añadirlo desde /admin/partner-onboarding.'
+                    : 'Tenant creado exitosamente con Telegram configurado',
         });
 
     } catch (error: any) {
