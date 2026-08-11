@@ -2503,6 +2503,189 @@ describe('IntentClassifier — ruta determinista (sin LLM)', () => {
     expect(result.intent).not.toBe('reorganizar_almacen');
     expect(result.intent).not.toBe('optimizar_ruta');
   });
+
+  // ═══ DUODÉCIMO ENTRENAMIENTO (módulo RRHH): briefing, vacaciones y riesgo
+  // de rotación ═══
+
+  // ── resumen_rrhh ──
+  it('dame el resumen diario de RH → resumen_rrhh', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'dame el resumen diario de RH',
+    });
+    expect(result.intent).toBe('resumen_rrhh');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('briefing de recursos humanos → resumen_rrhh', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'briefing de recursos humanos',
+    });
+    expect(result.intent).toBe('resumen_rrhh');
+  });
+
+  it('cómo está el equipo hoy → resumen_rrhh', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cómo está el equipo hoy',
+    });
+    expect(result.intent).toBe('resumen_rrhh');
+  });
+
+  it('estado de fuerza del día → resumen_rrhh', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'estado de fuerza del día',
+    });
+    expect(result.intent).toBe('resumen_rrhh');
+  });
+
+  // ── aprobar_vacaciones ──
+  it('aprueba la solicitud de vacaciones #123 → aprobar_vacaciones con solicitudId', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'aprueba la solicitud de vacaciones #123',
+    });
+    expect(result.intent).toBe('aprobar_vacaciones');
+    expect(result.extractedParams.solicitudId).toBe('123');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('autoriza vacaciones de María con nota → aprobar_vacaciones con nombre y nota', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'autoriza vacaciones de María con nota: "Disfruta tus días"',
+    });
+    expect(result.intent).toBe('aprobar_vacaciones');
+    expect(result.extractedParams.nombre).toBe('María');
+    expect(result.extractedParams.nota).toContain('Disfruta tus días');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('confirma la solicitud de vacaciones de Juan Pérez → aprobar_vacaciones por nombre', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'confirma la solicitud de vacaciones de Juan Pérez',
+    });
+    expect(result.intent).toBe('aprobar_vacaciones');
+    expect(result.extractedParams.nombre).toBe('Juan Pérez');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('aprueba la solicitud de vacaciones VAC-88 → aprobar_vacaciones con solicitudId', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'aprueba la solicitud de vacaciones VAC-88',
+    });
+    expect(result.intent).toBe('aprobar_vacaciones');
+    expect(result.extractedParams.solicitudId).toBe('VAC-88');
+  });
+
+  it('aprueba las vacaciones sin contacto → pide la solicitud', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'aprueba las vacaciones',
+    });
+    expect(result.intent).toBe('aprobar_vacaciones');
+    expect(result.needsMoreInfo).toBe(true);
+    expect(result.missingParams).toContain('solicitudId');
+  });
+
+  it('multi-turno: completa la solicitud de aprobar_vacaciones por nombre', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'la de María',
+      pendingIntent: 'aprobar_vacaciones',
+      collectedEntities: {},
+      missingEntities: ['solicitudId'],
+    });
+    expect(result.intent).toBe('aprobar_vacaciones');
+    expect(result.extractedParams.solicitudId).toBe('María');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  // ── riesgo_rotacion ──
+  it('analiza el riesgo de rotación del equipo → riesgo_rotacion', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'analiza el riesgo de rotación del equipo',
+    });
+    expect(result.intent).toBe('riesgo_rotacion');
+    expect(result.extractedParams.nombre).toBeUndefined();
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('quién tiene riesgo de irse → riesgo_rotacion', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'quién tiene riesgo de irse',
+    });
+    expect(result.intent).toBe('riesgo_rotacion');
+  });
+
+  it('dame el análisis de retención de talento → riesgo_rotacion', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'dame el análisis de retención de talento',
+    });
+    expect(result.intent).toBe('riesgo_rotacion');
+  });
+
+  it('analiza el riesgo de rotación de María → riesgo_rotacion con nombre', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'analiza el riesgo de rotación de María',
+    });
+    expect(result.intent).toBe('riesgo_rotacion');
+    expect(result.extractedParams.nombre).toBe('María');
+  });
+
+  it('multi-turno: completa el empleado de riesgo_rotacion', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'de Carlos',
+      pendingIntent: 'riesgo_rotacion',
+      collectedEntities: {},
+      missingEntities: ['empleadoId'],
+    });
+    expect(result.intent).toBe('riesgo_rotacion');
+    expect(result.extractedParams.empleadoId).toBe('Carlos');
+  });
+
+  // ── negativos de RRHH ──
+  it('"aprueba el gasto de 50 euros" NO es aprobar_vacaciones', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'aprueba el gasto de 50 euros',
+    });
+    expect(result.intent).not.toBe('aprobar_vacaciones');
+  });
+
+  it('"dame el estado de la flota" NO es resumen_rrhh', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'dame el estado de la flota',
+    });
+    expect(result.intent).toBe('estado_flota');
+    expect(result.intent).not.toBe('resumen_rrhh');
+  });
+
+  it('"cuántas vacaciones le quedan a María" NO es aprobar_vacaciones', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cuántas vacaciones le quedan a María',
+    });
+    expect(result.intent).not.toBe('aprobar_vacaciones');
+  });
+
+  it('"envía un briefing de ventas" NO es resumen_rrhh', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'envía un briefing de ventas',
+    });
+    expect(result.intent).not.toBe('resumen_rrhh');
+  });
 });
 
 describe('IntentClassifier — getRequiredParams', () => {

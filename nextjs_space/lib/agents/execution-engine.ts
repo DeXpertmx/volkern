@@ -683,6 +683,47 @@ export const ExecutionEngine = {
       case 'suggest_warehouse_reorg': {
         return `🏭 ${this.escapeMarkdown(String(data?.suggestion || 'Sin sugerencia de reorganización.'))}`;
       }
+
+      // ─── RRHH (Duodécimo entrenamiento) ───
+      case 'get_hr_daily_brief': {
+        if (data?.text) return `👥 ${this.escapeMarkdown(String(data.text))}`;
+        const m = data?.metrics || {};
+        const activos = Number(m?.activeCount ?? 0);
+        const total = Number(m?.totalCount ?? 0);
+        const ausentes = Number(m?.absentCount ?? 0);
+        const alertas = Number(m?.integrityAlerts ?? 0);
+        const conflictos = Array.isArray(m?.criticalConflicts) ? m.criticalConflicts.length : 0;
+        let out = `👥 *Resumen RRHH:* ${activos} de ${total} activos (${ausentes} ausentes).`;
+        out += `\n🔍 Alertas de integridad: ${alertas}.`;
+        out += `\n⚠️ Conflictos con hitos críticos: ${conflictos}.`;
+        return out;
+      }
+      case 'approve_vacation_voice': {
+        const empleado = data?.empleadoNombre
+          ? ` de ${this.escapeMarkdown(String(data.empleadoNombre))}`
+          : '';
+        const fechas = data?.vacation?.startDate || data?.vacation?.endDate
+          ? `\n🗓 ${data.vacation.startDate ? new Date(data.vacation.startDate).toISOString().slice(0, 10) : '—'} → ${data.vacation.endDate ? new Date(data.vacation.endDate).toISOString().slice(0, 10) : '—'}`
+          : '';
+        return `🏖️ *Vacaciones aprobadas*${empleado}.${fechas}`;
+      }
+      case 'talent_retention_risk': {
+        if (data?.teamAnalysis) {
+          const resumen = data?.summary ? `\n${String(data.summary)}` : '';
+          const top =
+            data?.mostAtRisk && data.mostAtRisk.riskLevel !== 'LOW'
+              ? `\n⚠️ *Mayor riesgo:* ${this.escapeMarkdown(String(data.mostAtRisk.employeeName))} (${this.escapeMarkdown(String(data.mostAtRisk.riskLevel))})`
+              : '';
+          return `⚠️ *Riesgo de rotación del equipo:*\n🔴 Alto: ${data.highRisk ?? 0} · 🟡 Medio: ${data.mediumRisk ?? 0} · 🟢 Analizados: ${data.analyzed ?? 0}${resumen}${top}`;
+        }
+        const nivel = String(data?.riskLevel || 'LOW');
+        const icono = nivel === 'HIGH' ? '🔴' : nivel === 'MEDIUM' ? '🟡' : '🟢';
+        const nombre = this.escapeMarkdown(String(data?.employeeName || ''));
+        const carga = data?.factors?.workload ? this.escapeMarkdown(String(data.factors.workload)) : '';
+        const formacion = data?.factors?.trainingMaturity ? this.escapeMarkdown(String(data.factors.trainingMaturity)) : '';
+        const rec = data?.recommendation ? `\n💡 ${this.escapeMarkdown(String(data.recommendation))}` : '';
+        return `${icono} *Riesgo de rotación — ${nombre}:* ${nivel}${carga ? `\n📊 ${carga}` : ''}${formacion ? `\n🎓 ${formacion}` : ''}${rec}`;
+      }
       default:
         return '';
     }
