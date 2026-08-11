@@ -103,6 +103,20 @@ const MISSING_ENTITY_PROMPTS: Record<string, string> = {
   solicitudId: '🔖 ¿Qué solicitud de vacaciones? (ej: #123 o el nombre del empleado)',
   nota: '📝 ¿Quieres agregar una nota? (ej: nota: "Disfruta tus días")',
   empleadoId: '👤 ¿De qué empleado? (ej: nombre del colaborador)',
+
+  // Marketing
+  tema: '🎯 ¿Sobre qué tema? (ej: nuestro nuevo producto)',
+  formato: '📮 ¿En qué formato? (email, LinkedIn, YouTube, TikTok)',
+  tono: '🎨 ¿Qué tono prefieres? (profesional, amigable, agresivo, educativo)',
+  texto: '💬 ¿Qué texto o comentarios quieres analizar?',
+  tipoBloque: '🧱 ¿Qué tipo de bloque? (hero, features, testimonials, cta, pricing…)',
+  tituloPagina: '📄 ¿Para qué página? (ej: servicios, ventas, contacto)',
+
+  // ADS
+  campania: '📣 ¿De qué campaña? (ej: verano, Meta, Google Ads)',
+  test: '🧪 ¿De qué test A/B? (ej: el de la campaña de verano)',
+  programacion: '⏰ ¿Qué programación quieres eliminar? (ej: la de la campaña de Meta)',
+  variante: '🔀 ¿Qué variante declaras ganadora? (A, B, C…)',
 }
 
 export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput> {

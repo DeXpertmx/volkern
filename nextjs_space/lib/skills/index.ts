@@ -1850,6 +1850,294 @@ const talentRetentionRiskWrapper = async (input: {
   }
 }
 
+// ─── Wrappers de Marketing (Decimotercer entrenamiento): el core espera
+// topic/platform (inglés) y pageTitle/contentSnippet; el chatbot habla de
+// tema/formato y páginas por nombre ─────────────────────────────────────────
+
+const generateMarketingCopyWrapper = async (input: {
+  tenantId: string;
+  tema?: string;
+  topic?: string;
+  formato?: string;
+  platform?: string;
+  tono?: string;
+  tone?: string;
+}) => {
+  const topic = input.topic || input.tema
+  if (!topic || !String(topic).trim()) {
+    throw new Error('Indica el tema del copy para poder generarlo (requerido).')
+  }
+  const platformRaw = String(input.platform || input.formato || 'EMAIL')
+  const platform = ['EMAIL', 'LINKEDIN', 'YOUTUBE', 'TIKTOK'].includes(platformRaw)
+    ? (platformRaw as 'EMAIL' | 'LINKEDIN' | 'YOUTUBE' | 'TIKTOK')
+    : 'EMAIL'
+  return marketingSkills.generate_marketing_copy({
+    tenantId: input.tenantId,
+    topic: String(topic),
+    platform,
+    tone: (input.tone || input.tono) as any,
+  });
+};
+
+const analyzeMarketingSentimentWrapper = async (input: {
+  tenantId: string;
+  texto?: string;
+  text?: string;
+  platform?: string;
+}) => {
+  const text = input.text || input.texto
+  if (!text || !String(text).trim()) {
+    throw new Error('Dame el texto o comentarios a analizar (requerido).')
+  }
+  return marketingSkills.analyze_marketing_sentiment({
+    tenantId: input.tenantId,
+    text: String(text),
+    platform: input.platform || 'SOCIAL',
+  });
+};
+
+const suggestCampaignOptimizationWrapper = async (input: {
+  tenantId: string;
+  campania?: string;
+  campaignId?: string;
+}) => {
+  let campaignId = input.campaignId
+  if (!campaignId && input.campania) {
+    const { prisma } = await import('@/lib/db')
+    const camp = await prisma.adCampaign.findFirst({
+      where: { tenantId: input.tenantId, name: { contains: input.campania, mode: 'insensitive' as const } },
+      select: { id: true },
+    })
+    if (!camp) throw new Error(`No encontré ninguna campaña llamada "${input.campania}".`)
+    campaignId = camp.id
+  }
+  return marketingSkills.suggest_campaign_optimization({
+    tenantId: input.tenantId,
+    campaignId: campaignId || '',
+  });
+};
+
+const generateWebCreatorBlockWrapper = async (input: {
+  tenantId: string;
+  producto?: string;
+  description?: string;
+  tipoBloque?: string;
+  category?: string;
+}) => {
+  const category = input.category || input.tipoBloque
+  if (!category || !String(category).trim()) {
+    throw new Error('Indica el tipo de bloque (hero, features, testimonials, cta…) para generarlo (requerido).')
+  }
+  return marketingSkills.generate_web_creator_block({
+    tenantId: input.tenantId,
+    description: String(input.description || input.producto || ''),
+    category: String(category),
+  });
+};
+
+const generateSeoMetadataWrapper = async (input: {
+  tenantId: string;
+  tituloPagina?: string;
+  pageTitle?: string;
+  contenido?: string;
+  contentSnippet?: string;
+}) => {
+  const pageTitle = input.pageTitle || input.tituloPagina
+  if (!pageTitle || !String(pageTitle).trim()) {
+    throw new Error('Indica la página para generar su SEO (requerido).')
+  }
+  return marketingSkills.generate_seo_metadata({
+    tenantId: input.tenantId,
+    pageTitle: String(pageTitle),
+    contentSnippet: input.contentSnippet || input.contenido || '',
+  });
+};
+
+// ─── Wrappers de ADS (Decimotercer entrenamiento): el chatbot habla de
+// campañas/tests por nombre; el core espera campaignId/testId/scheduleId ─────
+
+async function resolveCampaignId(tenantId: string, ref?: string): Promise<string> {
+  if (!ref || !String(ref).trim()) throw new Error('Necesito saber de qué campaña se trata (su nombre).')
+  const refClean = String(ref).trim()
+  if (/^c[a-z0-9]{20,}$/i.test(refClean)) return refClean
+  const { prisma } = await import('@/lib/db')
+  const camp = await prisma.adCampaign.findFirst({
+    where: { tenantId, name: { contains: refClean, mode: 'insensitive' as const } },
+    orderBy: { updatedAt: 'desc' },
+    select: { id: true, name: true },
+  })
+  if (!camp) throw new Error(`No encontré ninguna campaña "${refClean}" en tu cuenta de anuncios.`)
+  return camp.id
+}
+
+async function resolveScheduleId(tenantId: string, ref?: string): Promise<string> {
+  if (!ref || !String(ref).trim()) throw new Error('Necesito saber qué programación quieres eliminar.')
+  const refClean = String(ref).trim()
+  if (/^c[a-z0-9]{20,}$/i.test(refClean)) return refClean
+  const { prisma } = await import('@/lib/db')
+  const schedule = await prisma.adSchedule.findFirst({
+    where: { tenantId, name: { contains: refClean, mode: 'insensitive' as const } },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true },
+  })
+  if (schedule) return schedule.id
+  // Fallback: la ref puede ser el nombre de la campaña
+  const camp = await prisma.adCampaign.findFirst({
+    where: { tenantId, name: { contains: refClean, mode: 'insensitive' as const } },
+    select: { id: true },
+  })
+  if (camp) {
+    const byCamp = await prisma.adSchedule.findFirst({
+      where: { tenantId, campaignId: camp.id },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    })
+    if (byCamp) return byCamp.id
+  }
+  throw new Error(`No encontré ninguna programación "${refClean}".`)
+}
+
+async function resolveAbTestId(tenantId: string, ref?: string): Promise<string> {
+  if (!ref || !String(ref).trim()) throw new Error('Necesito saber de qué test A/B se trata.')
+  const refClean = String(ref).trim()
+  if (/^c[a-z0-9]{20,}$/i.test(refClean)) return refClean
+  const { prisma } = await import('@/lib/db')
+  const test = await prisma.adABTest.findFirst({
+    where: {
+      tenantId,
+      OR: [
+        { name: { contains: refClean, mode: 'insensitive' as const } },
+        { campaign: { name: { contains: refClean, mode: 'insensitive' as const } } },
+      ],
+    },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true },
+  })
+  if (!test) throw new Error(`No encontré ningún test A/B "${refClean}".`)
+  return test.id
+}
+
+const createAdScheduleWrapper = async (input: {
+  tenantId: string;
+  campania?: string;
+  campaignId?: string;
+  accion?: string;
+  action?: string;
+  dias?: string[] | string;
+  daysOfWeek?: string[];
+  horaInicio?: string;
+  horaFin?: string;
+  timezone?: string;
+}) => {
+  const campaignId =
+    input.campaignId || (input.campania ? await resolveCampaignId(input.tenantId, input.campania) : undefined)
+  if (!campaignId) throw new Error('Necesito saber a qué campaña programar (su nombre).')
+  const days: string[] = Array.isArray(input.dias)
+    ? input.dias
+    : input.dias
+      ? String(input.dias).split(',').map((d) => d.trim().toUpperCase()).filter(Boolean)
+      : input.daysOfWeek || ['MON', 'TUE', 'WED', 'THU', 'FRI']
+  const accion = String(input.action || input.accion || 'ACTIVATE').toUpperCase() === 'PAUSE' ? 'PAUSE' : 'ACTIVATE'
+  return adSkills.create_ad_schedule({
+    tenantId: input.tenantId,
+    campaignId,
+    name: `${accion === 'PAUSE' ? 'Pausa' : 'Activación'} — ${String(input.campania || 'campaña').slice(0, 30)}`,
+    daysOfWeek: days,
+    startTime: input.horaInicio || '09:00',
+    endTime: input.horaFin || '18:00',
+    action: accion,
+    timezone: input.timezone,
+  });
+};
+
+const listAdSchedulesWrapper = async (input: {
+  tenantId: string;
+  campania?: string;
+  campaignId?: string;
+}) => {
+  const campaignId =
+    input.campaignId || (input.campania ? await resolveCampaignId(input.tenantId, input.campania) : undefined)
+  return adSkills.list_ad_schedules({ tenantId: input.tenantId, campaignId });
+};
+
+const deleteAdScheduleWrapper = async (input: {
+  tenantId: string;
+  programacion?: string;
+  scheduleId?: string;
+}) => {
+  const scheduleId =
+    input.scheduleId || (input.programacion ? await resolveScheduleId(input.tenantId, input.programacion) : undefined)
+  if (!scheduleId) throw new Error('Necesito saber qué programación quieres eliminar.')
+  return adSkills.delete_ad_schedule({ tenantId: input.tenantId, scheduleId });
+};
+
+const createAbTestWrapper = async (input: {
+  tenantId: string;
+  campania?: string;
+  campaignId?: string;
+  nombre?: string;
+  name?: string;
+  metric?: string;
+  variants?: Array<{ label: string }>;
+  autoDeclarar?: boolean;
+  autoDeclare?: boolean;
+}) => {
+  const campaignId =
+    input.campaignId || (input.campania ? await resolveCampaignId(input.tenantId, input.campania) : undefined)
+  if (!campaignId) throw new Error('Necesito saber para qué campaña es el test A/B (su nombre).')
+  const name = input.name || input.nombre || `Test A/B — ${String(input.campania || campaignId).slice(0, 30)}`
+  return adSkills.create_ab_test({
+    tenantId: input.tenantId,
+    campaignId,
+    name,
+    metric: input.metric || 'CTR',
+    variants: input.variants || [{ label: 'A' }, { label: 'B' }],
+    autoDeclare: Boolean(input.autoDeclare ?? input.autoDeclarar),
+  });
+};
+
+const startAbTestWrapper = async (input: {
+  tenantId: string;
+  test?: string;
+  testId?: string;
+}) => {
+  const testId = input.testId || (input.test ? await resolveAbTestId(input.tenantId, input.test) : undefined)
+  if (!testId) throw new Error('Necesito saber qué test A/B quieres iniciar.')
+  return adSkills.start_ab_test({ tenantId: input.tenantId, testId });
+};
+
+const calculateAbTestSignificanceWrapper = async (input: {
+  tenantId: string;
+  test?: string;
+  testId?: string;
+}) => {
+  const testId = input.testId || (input.test ? await resolveAbTestId(input.tenantId, input.test) : undefined)
+  if (!testId) throw new Error('Necesito saber de qué test A/B quieres la significancia.')
+  return adSkills.calculate_ab_test_significance({ tenantId: input.tenantId, testId });
+};
+
+const declareAbTestWinnerWrapper = async (input: {
+  tenantId: string;
+  test?: string;
+  testId?: string;
+  variante?: string;
+  variantId?: string;
+}) => {
+  const testId = input.testId || (input.test ? await resolveAbTestId(input.tenantId, input.test) : undefined)
+  if (!testId) throw new Error('Necesito saber de qué test A/B quieres declarar ganador.')
+  let variantId = input.variantId
+  if (!variantId && input.variante) {
+    const { prisma } = await import('@/lib/db')
+    const variant = await prisma.adABTestVariant.findFirst({
+      where: { abTestId: testId, label: { equals: input.variante, mode: 'insensitive' as const } },
+      select: { id: true },
+    })
+    if (!variant) throw new Error(`No encontré la variante "${input.variante}" en ese test A/B.`)
+    variantId = variant.id
+  }
+  return adSkills.declare_ab_test_winner({ tenantId: input.tenantId, testId, variantId });
+};
+
 export const skills = {
   // Contactos
   create_contact: createContactWrapper,
@@ -2012,23 +2300,24 @@ export const skills = {
   suggest_warehouse_reorg: suggestWarehouseReorgWrapper,
   track_order: trackOrderWrapper,
 
-  // Marketing Hub
-  generate_marketing_copy: marketingSkills.generate_marketing_copy,
-  analyze_marketing_sentiment: marketingSkills.analyze_marketing_sentiment,
-  suggest_campaign_optimization: marketingSkills.suggest_campaign_optimization,
-  generate_web_creator_block: marketingSkills.generate_web_creator_block,
-  generate_seo_metadata: marketingSkills.generate_seo_metadata,
+  // Marketing Hub (wrappers: mapean tema/formato → topic/platform y
+  // tituloPagina → pageTitle; resuelven campaña por nombre)
+  generate_marketing_copy: generateMarketingCopyWrapper,
+  analyze_marketing_sentiment: analyzeMarketingSentimentWrapper,
+  suggest_campaign_optimization: suggestCampaignOptimizationWrapper,
+  generate_web_creator_block: generateWebCreatorBlockWrapper,
+  generate_seo_metadata: generateSeoMetadataWrapper,
   advise_on_automation_rules: marketingSkills.advise_on_automation_rules,
 
-  // ─── ADS Skills ───────────────────────────────────────────────────
-  create_ad_schedule: adSkills.create_ad_schedule,
-  list_ad_schedules: adSkills.list_ad_schedules,
+  // ─── ADS Skills (wrappers: resuelven campaña/test/programación por nombre) ─
+  create_ad_schedule: createAdScheduleWrapper,
+  list_ad_schedules: listAdSchedulesWrapper,
   toggle_ad_schedule: adSkills.toggle_ad_schedule,
-  delete_ad_schedule: adSkills.delete_ad_schedule,
-  create_ab_test: adSkills.create_ab_test,
-  start_ab_test: adSkills.start_ab_test,
-  calculate_ab_test_significance: adSkills.calculate_ab_test_significance,
-  declare_ab_test_winner: adSkills.declare_ab_test_winner,
+  delete_ad_schedule: deleteAdScheduleWrapper,
+  create_ab_test: createAbTestWrapper,
+  start_ab_test: startAbTestWrapper,
+  calculate_ab_test_significance: calculateAbTestSignificanceWrapper,
+  declare_ab_test_winner: declareAbTestWinnerWrapper,
 } as const;
 
 export type SkillName = keyof typeof skills;

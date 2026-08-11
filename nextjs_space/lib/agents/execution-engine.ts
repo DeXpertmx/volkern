@@ -724,6 +724,73 @@ export const ExecutionEngine = {
         const rec = data?.recommendation ? `\n💡 ${this.escapeMarkdown(String(data.recommendation))}` : '';
         return `${icono} *Riesgo de rotación — ${nombre}:* ${nivel}${carga ? `\n📊 ${carga}` : ''}${formacion ? `\n🎓 ${formacion}` : ''}${rec}`;
       }
+
+      // ─── Marketing (Decimotercer entrenamiento) ───
+      case 'generate_marketing_copy': {
+        const copy = data?.copy ? this.escapeMarkdown(String(data.copy)) : '';
+        const plat = data?.platform ? ` · ${this.escapeMarkdown(String(data.platform))}` : '';
+        const tono = data?.tone ? ` (tono ${this.escapeMarkdown(String(data.tone))})` : '';
+        return `✍️ *Copy generado*${plat}${tono}:\n${copy}`;
+      }
+      case 'analyze_marketing_sentiment': {
+        const s = String(data?.sentiment || 'NEUTRAL');
+        const icono = s === 'POSITIVE' ? '🟢' : s === 'NEGATIVE' ? '🔴' : '🟡';
+        const score = data?.score !== undefined ? ` (${this.escapeMarkdown(String(data.score))})` : '';
+        const texto = data?.text ? `\n💬 "${this.escapeMarkdown(String(data.text))}"` : '';
+        return `${icono} *Sentimiento:* ${this.escapeMarkdown(s)}${score}${texto}`;
+      }
+      case 'suggest_campaign_optimization': {
+        const items = Array.isArray(data?.suggestions) ? data.suggestions : [];
+        if (items.length === 0) return '📣 No hay sugerencias de campaña por ahora.';
+        const conf = data?.confidence ? ` (confianza ${this.escapeMarkdown(String(data.confidence))})` : '';
+        const lines = items.slice(0, 5).map((s: any) => `• ${this.escapeMarkdown(String(s))}`).join('\n');
+        return `📣 *Sugerencias de campaña*${conf}:\n${lines}`;
+      }
+      case 'generate_web_creator_block': {
+        const desc = data?.description ? `\n📝 ${this.escapeMarkdown(String(data.description))}` : '';
+        return `🧱 *Bloque generado:*${desc}\nPuedes pegarlo en el editor visual (GrapesJS) o pedirme otro tipo.`;
+      }
+      case 'generate_seo_metadata': {
+        const titulo = data?.metaTitulo ? `\n🏷 *Title:* ${this.escapeMarkdown(String(data.metaTitulo))}` : '';
+        const desc = data?.metaDescripcion ? `\n📝 *Description:* ${this.escapeMarkdown(String(data.metaDescripcion))}` : '';
+        const kw = data?.metaKeywords ? `\n🔑 *Keywords:* ${this.escapeMarkdown(String(data.metaKeywords))}` : '';
+        return `🔎 *SEO generado:*${titulo}${desc}${kw}`;
+      }
+      case 'advise_on_automation_rules': {
+        const items = Array.isArray(data?.suggestions) ? data.suggestions : [];
+        if (items.length === 0) return '🤖 No hay sugerencias de automatización por ahora.';
+        const lines = items.slice(0, 5).map((s: any) => `• *${this.escapeMarkdown(String(s?.name || ''))}*: ${this.escapeMarkdown(String(s?.reason || ''))}`).join('\n');
+        return `🤖 *Automatizaciones sugeridas:*\n${lines}`;
+      }
+
+      // ─── ADS: programación de campañas y tests A/B ───
+      case 'create_ad_schedule': {
+        return data?.message ? `⏰ ${this.escapeMarkdown(String(data.message))}` : '⏰ Programación creada.';
+      }
+      case 'list_ad_schedules': {
+        const items = Array.isArray(data?.schedules) ? data.schedules : [];
+        if (items.length === 0) return '📋 No hay programaciones activas.';
+        const lines = items.slice(0, 8).map((s: any) => {
+          const nombre = this.escapeMarkdown(String(s?.name || ''));
+          const camp = s?.campaign?.name ? ` — ${this.escapeMarkdown(String(s.campaign.name))}` : '';
+          const dias = Array.isArray(s?.daysOfWeek) ? (s.daysOfWeek as string[]).join(',').toLowerCase() : '';
+          const horario = `${this.escapeMarkdown(String(s?.startTime || ''))}–${this.escapeMarkdown(String(s?.endTime || ''))}`;
+          const act = s?.enabled === false ? ' ⏸' : ' ✅';
+          return `• ${nombre}${camp} · ${dias} · ${horario}${act}`;
+        });
+        const total = Number(data?.total ?? items.length);
+        const suffix = total > 8 ? `\n… y ${total - 8} más` : '';
+        return `📋 *Programaciones (${total}):*\n${lines.join('\n')}${suffix}`;
+      }
+      case 'delete_ad_schedule': {
+        return data?.message ? `🗑️ ${this.escapeMarkdown(String(data.message))}` : '🗑️ Programación eliminada.';
+      }
+      case 'create_ab_test':
+      case 'start_ab_test':
+      case 'calculate_ab_test_significance':
+      case 'declare_ab_test_winner': {
+        return data?.message ? `🧪 ${this.escapeMarkdown(String(data.message))}` : '🧪 Operación A/B completada.';
+      }
       default:
         return '';
     }

@@ -2686,6 +2686,407 @@ describe('IntentClassifier — ruta determinista (sin LLM)', () => {
     });
     expect(result.intent).not.toBe('resumen_rrhh');
   });
+
+  // ═══ DÉCIMO TERCER ENTRENAMIENTO (módulo Marketing + ADS): copy,
+  // sentimiento, campañas, bloques web, SEO, automatización y tests A/B ═══
+
+  // ── generar_copy ──
+  it('genera un copy para email sobre nuestro nuevo producto → generar_copy', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'genera un copy para una campaña de email sobre nuestro nuevo producto',
+    });
+    expect(result.intent).toBe('generar_copy');
+    expect(result.extractedParams.tema).toBe('nuestro nuevo producto');
+    expect(result.extractedParams.formato).toBe('EMAIL');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('crea un post promocionando descuento → generar_copy con tema', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'crea un post para redes sociales promocionando descuento',
+    });
+    expect(result.intent).toBe('generar_copy');
+    expect(result.extractedParams.tema).toBe('descuento');
+    expect(result.extractedParams.formato).toBe('EMAIL');
+  });
+
+  it('escribe un texto publicitario para LinkedIn → generar_copy sin tema (pide)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'escribe un texto publicitario para LinkedIn',
+    });
+    expect(result.intent).toBe('generar_copy');
+    expect(result.extractedParams.formato).toBe('LINKEDIN');
+    expect(result.needsMoreInfo).toBe(true);
+    expect(result.missingParams).toContain('tema');
+  });
+
+  it('genera un copy con tono formal → extrae tono professional', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'genera un copy sobre el nuevo servicio con un tono formal',
+    });
+    expect(result.intent).toBe('generar_copy');
+    expect(result.extractedParams.tono).toBe('professional');
+  });
+
+  it('multi-turno: completa el tema faltante de generar_copy', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'sobre nuestro nuevo producto',
+      pendingIntent: 'generar_copy',
+      collectedEntities: { formato: 'EMAIL' },
+      missingEntities: ['tema'],
+    });
+    expect(result.intent).toBe('generar_copy');
+    expect(result.extractedParams.tema).toBe('nuestro nuevo producto');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  // ── analizar_sentimiento ──
+  it('analiza el sentimiento de este feedback: "El servicio fue excelente"', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'analiza el sentimiento de este feedback: "El servicio fue excelente"',
+    });
+    expect(result.intent).toBe('analizar_sentimiento');
+    expect(result.extractedParams.texto).toBe('El servicio fue excelente');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('analiza estos comentarios: "Muy mal servicio" → analizar_sentimiento', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'analiza estos comentarios: "Muy mal servicio"',
+    });
+    expect(result.intent).toBe('analizar_sentimiento');
+    expect(result.extractedParams.texto).toBe('Muy mal servicio');
+  });
+
+  it('qué opinan los clientes sobre nosotros → analizar_sentimiento (pide texto)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'qué opinan los clientes sobre nosotros',
+    });
+    expect(result.intent).toBe('analizar_sentimiento');
+    expect(result.needsMoreInfo).toBe(true);
+    expect(result.missingParams).toContain('texto');
+  });
+
+  // ── sugerir_campania ──
+  it('sugiere mejoras para mi campaña actual → sugerir_campania', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'sugiere mejoras para mi campaña actual',
+    });
+    expect(result.intent).toBe('sugerir_campania');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('cómo puedo optimizar mis campañas de marketing → sugerir_campania', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cómo puedo optimizar mis campañas de marketing',
+    });
+    expect(result.intent).toBe('sugerir_campania');
+    expect(result.intent).not.toBe('optimizar_ruta');
+  });
+
+  it('dame sugerencias de campaña → sugerir_campania', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'dame sugerencias de campaña',
+    });
+    expect(result.intent).toBe('sugerir_campania');
+  });
+
+  // ── generar_web_block ──
+  it('genera un bloque hero para la landing de mi producto → generar_web_block', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'genera un bloque hero para la landing de mi producto',
+    });
+    expect(result.intent).toBe('generar_web_block');
+    expect(result.extractedParams.tipoBloque).toBe('hero');
+    expect(result.extractedParams.producto).toBe('mi producto');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('dame un bloque CTA para promocionar el servicio → generar_web_block', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'dame un bloque CTA para promocionar el servicio',
+    });
+    expect(result.intent).toBe('generar_web_block');
+    expect(result.extractedParams.tipoBloque).toBe('cta');
+    expect(result.extractedParams.producto).toBe('el servicio');
+  });
+
+  it('crea una sección de testimonios para la web → generar_web_block (español)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'crea una sección de testimonios para la web',
+    });
+    expect(result.intent).toBe('generar_web_block');
+    expect(result.extractedParams.tipoBloque).toBe('testimonials');
+    expect(result.needsMoreInfo).toBe(true);
+  });
+
+  it('genera un bloque sin tipo → pide tipoBloque', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'genera un bloque para mi landing',
+    });
+    expect(result.intent).toBe('generar_web_block');
+    expect(result.needsMoreInfo).toBe(true);
+    expect(result.missingParams).toContain('tipoBloque');
+  });
+
+  // ── generar_seo ──
+  it('genera el SEO para la página de servicios → generar_seo', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'genera el SEO para la página de servicios',
+    });
+    expect(result.intent).toBe('generar_seo');
+    expect(result.extractedParams.tituloPagina).toBe('servicios');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('dame metadatos SEO para mi landing de ventas → generar_seo', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'dame metadatos SEO para mi landing de ventas',
+    });
+    expect(result.intent).toBe('generar_seo');
+    expect(result.extractedParams.tituloPagina).toBe('ventas');
+    expect(result.intent).not.toBe('generar_web_block');
+  });
+
+  it('crea keywords para mi página de producto → generar_seo', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'crea keywords para mi página de producto',
+    });
+    expect(result.intent).toBe('generar_seo');
+    expect(result.extractedParams.tituloPagina).toBe('producto');
+  });
+
+  it('genera el SEO sin página → pide tituloPagina', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'genera el SEO',
+    });
+    expect(result.intent).toBe('generar_seo');
+    expect(result.needsMoreInfo).toBe(true);
+    expect(result.missingParams).toContain('tituloPagina');
+  });
+
+  // ── sugerir_automatizacion ──
+  it('sugiere reglas de automatización para mi negocio → sugerir_automatizacion', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'sugiere reglas de automatización para mi negocio',
+    });
+    expect(result.intent).toBe('sugerir_automatizacion');
+  });
+
+  it('cómo puedo automatizar mi marketing → sugerir_automatizacion', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cómo puedo automatizar mi marketing',
+    });
+    expect(result.intent).toBe('sugerir_automatizacion');
+  });
+
+  // ── ADS: programar_campania / listar_horarios / eliminar_horario ──
+  it('pausa mi campaña de Google Ads los fines de semana → programar_campania', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'pausa mi campaña de Google Ads los fines de semana',
+    });
+    expect(result.intent).toBe('programar_campania');
+    expect(result.extractedParams.campania).toBe('Google Ads');
+    expect(result.extractedParams.accion).toBe('PAUSE');
+    expect(result.extractedParams.dias).toEqual(['SAT', 'SUN']);
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('programa mi campaña de Meta en horario laboral → programar_campania', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'programa mi campaña de Meta para que se active en horario laboral',
+    });
+    expect(result.intent).toBe('programar_campania');
+    expect(result.extractedParams.campania).toBe('Meta');
+    expect(result.extractedParams.accion).toBe('ACTIVATE');
+    expect(result.extractedParams.horaInicio).toBe('09:00');
+    expect(result.extractedParams.horaFin).toBe('18:00');
+  });
+
+  it('activa la campaña de verano de lunes a viernes de 9 a 18 → días y horario', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'activa la campaña de verano solo de lunes a viernes de 9 a 18',
+    });
+    expect(result.intent).toBe('programar_campania');
+    expect(result.extractedParams.campania).toBe('verano');
+    expect(result.extractedParams.dias).toEqual(['MON', 'TUE', 'WED', 'THU', 'FRI']);
+    expect(result.extractedParams.horaInicio).toBe('09:00');
+    expect(result.extractedParams.horaFin).toBe('18:00');
+  });
+
+  it('muéstrame las programaciones activas → listar_horarios', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'muéstrame las programaciones activas',
+    });
+    expect(result.intent).toBe('listar_horarios');
+  });
+
+  it('elimina la programación de la campaña de verano → eliminar_horario', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'elimina la programación de la campaña de verano',
+    });
+    expect(result.intent).toBe('eliminar_horario');
+    expect(result.extractedParams.programacion).toBe('verano');
+  });
+
+  it('borra el horario de la campaña de Meta → eliminar_horario', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'borra el horario de la campaña de Meta',
+    });
+    expect(result.intent).toBe('eliminar_horario');
+    expect(result.extractedParams.programacion).toBe('Meta');
+  });
+
+  it('elimina la programación sin referir → pide programacion', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'elimina la programación',
+    });
+    expect(result.intent).toBe('eliminar_horario');
+    expect(result.needsMoreInfo).toBe(true);
+    expect(result.missingParams).toContain('programacion');
+  });
+
+  // ── ADS: tests A/B ──
+  it('crea un test A/B para la campaña de verano → crear_test_ab', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'crea un test A/B para la campaña de verano',
+    });
+    expect(result.intent).toBe('crear_test_ab');
+    expect(result.extractedParams.campania).toBe('verano');
+    expect(result.extractedParams.nombre).toBe('Test A/B — verano');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('crea un test A/B sin campaña → pide campania (no nombre, se sintetiza)', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'crea un test A/B',
+    });
+    expect(result.intent).toBe('crear_test_ab');
+    expect(result.needsMoreInfo).toBe(true);
+    expect(result.missingParams).toContain('campania');
+    expect(result.missingParams).not.toContain('nombre');
+  });
+
+  it('inicia el test A/B de la campaña de verano → iniciar_test_ab', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'inicia el test A/B de la campaña de verano',
+    });
+    expect(result.intent).toBe('iniciar_test_ab');
+    expect(result.extractedParams.test).toBe('verano');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('cómo va el test A/B de la campaña de productos → evaluar_test_ab', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cómo va el test A/B de la campaña de productos',
+    });
+    expect(result.intent).toBe('evaluar_test_ab');
+    expect(result.extractedParams.test).toBe('productos');
+  });
+
+  it('dame la significancia del test de la campaña de verano → evaluar_test_ab', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'dame la significancia del test de la campaña de verano',
+    });
+    expect(result.intent).toBe('evaluar_test_ab');
+    expect(result.extractedParams.test).toBe('verano');
+  });
+
+  it('declara ganador el test A/B de la campaña de verano → declarar_ganador', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'declara ganador el test A/B de la campaña de verano',
+    });
+    expect(result.intent).toBe('declarar_ganador');
+    expect(result.extractedParams.test).toBe('verano');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('declara ganadora la variante B del test de Facebook → variante B', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'declara ganadora la variante B del test de Facebook',
+    });
+    expect(result.intent).toBe('declarar_ganador');
+    expect(result.extractedParams.test).toBe('Facebook');
+    expect(result.extractedParams.variante).toBe('B');
+  });
+
+  // ── negativos de marketing/ads ──
+  it('"genera un informe de ventas" NO es generar_copy', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'genera un informe de ventas',
+    });
+    expect(result.intent).not.toBe('generar_copy');
+  });
+
+  it('"analiza mis gastos" NO es analizar_sentimiento', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'analiza mis gastos',
+    });
+    expect(result.intent).toBe('analizar_gastos');
+    expect(result.intent).not.toBe('analizar_sentimiento');
+  });
+
+  it('"sugiere una ruta de reparto" NO es sugerir_campania', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'sugiere una ruta de reparto',
+    });
+    expect(result.intent).toBe('optimizar_ruta');
+    expect(result.intent).not.toBe('sugerir_campania');
+  });
+
+  it('"programa una reunión para mañana" NO es programar_campania', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'programa una reunión para mañana',
+    });
+    expect(result.intent).not.toBe('programar_campania');
+  });
+
+  it('"crea un lead de la empresa Facturación SA" sigue siendo crear_lead', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'crea un lead de la empresa Facturación SA',
+    });
+    expect(result.intent).toBe('crear_lead');
+  });
 });
 
 describe('IntentClassifier — getRequiredParams', () => {
