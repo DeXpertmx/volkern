@@ -5,6 +5,7 @@
  */
 
 import { encrypt } from '@/lib/core/crypto';
+import crypto from 'crypto';
 
 // Sin CHATWOOT_BASE_URL el cliente está deshabilitado: el default anterior
 // ('https://volkern.dimension.expert') apuntaba al gateway de Volkern, no a
@@ -397,16 +398,36 @@ class ChatwootApiClient {
         role: string = 'administrator'
     ): Promise<ChatwootUser> {
         console.log('[ChatwootAPI] Creating user for account:', accountId, email);
-        
+
+        // Chatwoot exige que el usuario EXISTA antes de vincularlo a una
+        // cuenta: `POST /platform/api/v1/accounts/:id/account_users` devuelve
+        // 422 "User must exist" si no hay user_id. Flujo canónico de la wiki
+        // de Chatwoot: crear Account -> crear User (platform users API, que
+        // además reutiliza el usuario si ya existe por email) -> vincular con
+        // account_users { user_id, role }.
+        const user = await this.request<ChatwootUser>(
+            '/platform/api/v1/users',
+            {
+                method: 'POST',
+                body: JSON.stringify({
+                    name,
+                    email,
+                    // La plataforma exige password con política fuerte (mayúscula,
+                    // minúscula, número, especial); generamos una aleatoria. Los
+                    // admins del tenant no la usan para login directo: el hub
+                    // opera con tokens de API (ver ChatwootPlatformUser).
+                    password: `A1!${crypto.randomBytes(10).toString('base64url')}`,
+                }),
+            }
+        );
+
         return this.request<ChatwootUser>(
             `/platform/api/v1/accounts/${accountId}/account_users`,
             {
                 method: 'POST',
                 body: JSON.stringify({
-                    email,
-                    name,
+                    user_id: user.id,
                     role,
-                    auto_confirm: true,
                 }),
             }
         );
