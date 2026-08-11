@@ -2471,6 +2471,49 @@ const detectProjectDriftingWrapper = async (input: {
   return { projects: results };
 };
 
+// ─── Proactividad, Auditoría y Campo (Décimo séptimo entrenamiento) ───
+// Wrappers: convierten los parámetros del chatbot (días de inactividad, nombre
+// del lead) a lo que exigen los skills core (horas, leadId).
+
+const detectGhostingWrapper = async (input: {
+  tenantId: string;
+  dias_inactivo?: number | string;
+  dias?: number | string;
+}) => {
+  const dias = Number(input.dias_inactivo ?? input.dias ?? 0) || 0;
+  const hours = dias > 0 ? Math.round(dias * 24) : 48;
+  return proactivitySkills.detectGhosting({ tenantId: input.tenantId, hours });
+};
+
+const generateSuccessPathWrapper = async (input: {
+  tenantId: string;
+  email?: string;
+  nombre?: string;
+  leadId?: string;
+}) => {
+  const { tenantId } = input;
+  let leadId = input.leadId;
+  if (!leadId) {
+    const { prisma } = await import('@/lib/db');
+    if (input.email) {
+      const lead = await prisma.lead.findFirst({
+        where: { tenantId, email: input.email },
+        select: { id: true },
+      });
+      leadId = lead?.id;
+    } else if (input.nombre) {
+      const nombre = String(input.nombre).replace(/^(?:de|del|la|el)\s+/i, '').trim();
+      const lead = await prisma.lead.findFirst({
+        where: { tenantId, nombre: { contains: nombre, mode: 'insensitive' } },
+        select: { id: true },
+      });
+      leadId = lead?.id;
+    }
+  }
+  if (!leadId) throw new Error('No encontré ese lead en el CRM. Dame su email o su nombre completo.');
+  return proactivitySkills.generateSuccessPath({ tenantId, leadId });
+};
+
 export const skills = {
   // Contactos
   create_contact: createContactWrapper,
@@ -2546,8 +2589,8 @@ export const skills = {
   generate_landing_draft: webCreatorSkills.generateLandingDraft,
   
   // Proactividad & Training
-  detect_ghosting: proactivitySkills.detectGhosting,
-  generate_success_path: proactivitySkills.generateSuccessPath,
+  detect_ghosting: detectGhostingWrapper,
+  generate_success_path: generateSuccessPathWrapper,
   generate_customer_response: trainingSkills.generateCustomerResponse,
   generate_post_mortem: trainingSkills.generatePostMortem,
   

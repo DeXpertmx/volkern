@@ -3801,6 +3801,243 @@ describe('IntentClassifier — ruta determinista (sin LLM)', () => {
     });
     expect(result.intent).not.toBe('detectar_anomalias_calidad');
   });
+
+  // ═══ DÉCIMO SÉPTIMO ENTRENAMIENTO (Proactividad, Auditoría y Campo):
+  // ghosting, ruta de éxito, integridad financiera, fugas y campo ═══
+
+  // ── detectar_ghosting ──
+  it('detecta leads fantasmas → detectar_ghosting', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'detecta leads fantasmas',
+    });
+    expect(result.intent).toBe('detectar_ghosting');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('qué leads están inactivos en etapa negociación → detectar_ghosting', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'qué leads están inactivos en etapa negociación',
+    });
+    expect(result.intent).toBe('detectar_ghosting');
+    expect(result.intent).not.toBe('listar_leads');
+  });
+
+  it('encuentra leads que no han tenido actividad en 7 días → días de inactividad', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'encuentra leads que no han tenido actividad en 7 días',
+    });
+    expect(result.intent).toBe('detectar_ghosting');
+    expect(result.extractedParams.dias_inactivo).toBe(7);
+  });
+
+  it('hay leads que dejaron de responder → detectar_ghosting', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'hay leads que dejaron de responder',
+    });
+    expect(result.intent).toBe('detectar_ghosting');
+  });
+
+  it('"lista mis leads" sigue siendo listar_leads', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'lista mis leads',
+    });
+    expect(result.intent).toBe('listar_leads');
+  });
+
+  // ── generar_ruta_exito ──
+  it('genera una ruta de éxito para juan@email.com → generar_ruta_exito', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'genera una ruta de éxito para juan@email.com',
+    });
+    expect(result.intent).toBe('generar_ruta_exito');
+    expect(result.extractedParams.email).toBe('juan@email.com');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('cómo puedo cerrar el deal con María García → ruta por nombre', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'cómo puedo cerrar el deal con María García',
+    });
+    expect(result.intent).toBe('generar_ruta_exito');
+    expect(result.extractedParams.nombre).toContain('María');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('sugiere siguiente paso para el lead de Carlos → ruta de éxito', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'sugiere siguiente paso para el lead de Carlos',
+    });
+    expect(result.intent).toBe('generar_ruta_exito');
+  });
+
+  it('genera la ruta sin lead → pide el lead', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'genera una ruta de éxito',
+    });
+    expect(result.intent).toBe('generar_ruta_exito');
+    expect(result.needsMoreInfo).toBe(true);
+    expect(result.missingParams).toContain('email');
+  });
+
+  it('multi-turno: completa el lead de generar_ruta_exito por nombre', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'Ana Torres',
+      pendingIntent: 'generar_ruta_exito',
+      collectedEntities: {},
+      missingEntities: ['email'],
+    });
+    expect(result.intent).toBe('generar_ruta_exito');
+    expect(result.extractedParams.nombre).toBe('Ana Torres');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  // ── auditar_integridad_gastos ──
+  it('audita la integridad de los gastos → auditar_integridad_gastos', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'audita la integridad de los gastos',
+    });
+    expect(result.intent).toBe('auditar_integridad_gastos');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('hay discrepancias en los gastos de este mes → auditar_integridad_gastos', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'hay discrepancias en los gastos de este mes',
+    });
+    expect(result.intent).toBe('auditar_integridad_gastos');
+  });
+
+  it('revisa si hay gastos duplicados o sospechosos → auditar_integridad_gastos', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'revisa si hay gastos duplicados o sospechosos',
+    });
+    expect(result.intent).toBe('auditar_integridad_gastos');
+  });
+
+  it('"hay anomalías en los gastos" ahora es auditar_integridad_gastos', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'hay anomalías en los gastos',
+    });
+    expect(result.intent).toBe('auditar_integridad_gastos');
+  });
+
+  // ── auditar_integridad ──
+  it('audita la integridad financiera → auditar_integridad', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'audita la integridad financiera',
+    });
+    expect(result.intent).toBe('auditar_integridad');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('verifica la integridad fiscal → auditar_integridad', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'verifica la integridad fiscal',
+    });
+    expect(result.intent).toBe('auditar_integridad');
+  });
+
+  it('hay brechas en Veri*factu → auditar_integridad', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'hay brechas en Veri*factu',
+    });
+    expect(result.intent).toBe('auditar_integridad');
+  });
+
+  // ── auditar_fugas_materiales ──
+  it('audita las fugas de materiales → auditar_fugas_materiales', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'audita las fugas de materiales',
+    });
+    expect(result.intent).toBe('auditar_fugas_materiales');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('hay mermas sospechosas en el inventario → auditar_fugas_materiales', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'hay mermas sospechosas en el inventario',
+    });
+    expect(result.intent).toBe('auditar_fugas_materiales');
+  });
+
+  it('detecta desviaciones de stock contra producción → auditar_fugas_materiales', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'detecta desviaciones de stock contra producción',
+    });
+    expect(result.intent).toBe('auditar_fugas_materiales');
+  });
+
+  // ── actividad_campo ──
+  it('dónde están los técnicos en campo hoy → actividad_campo', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'dónde están los técnicos en campo hoy',
+    });
+    expect(result.intent).toBe('actividad_campo');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('muéstrame la actividad de campo → actividad_campo', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'muéstrame la actividad de campo',
+    });
+    expect(result.intent).toBe('actividad_campo');
+  });
+
+  it('qué activos están desplegados → actividad_campo', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'qué activos están desplegados',
+    });
+    expect(result.intent).toBe('actividad_campo');
+  });
+
+  // ── negativos / regresiones ──
+  it('"detecta anomalías de calidad" sigue siendo calidad, no auditoría', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'detecta anomalías de calidad',
+    });
+    expect(result.intent).toBe('detectar_anomalias_calidad');
+  });
+
+  it('"verifica las mermas de la orden #OP-001" sigue siendo verificar_mermas', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'verifica las mermas de la orden #OP-001',
+    });
+    expect(result.intent).toBe('verificar_mermas');
+    expect(result.intent).not.toBe('auditar_fugas_materiales');
+  });
+
+  it('"audita la integridad de la factura FAC-001" sigue siendo estado_fiscal', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'audita la integridad de la factura FAC-001',
+    });
+    expect(result.intent).toBe('estado_fiscal');
+  });
 });
 
 describe('IntentClassifier — getRequiredParams', () => {
