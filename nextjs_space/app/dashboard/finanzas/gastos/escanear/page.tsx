@@ -142,7 +142,7 @@ export default function EscanearGastoPage() {
   const [registeringSupplier, setRegisteringSupplier] = useState(false)
   // Modal de registro: completa la ficha del nuevo proveedor
   const [supplierModalOpen, setSupplierModalOpen] = useState(false)
-  const [supplierModal, setSupplierModal] = useState({ name: '', taxId: '', email: '', phone: '', category: 'otros' })
+  const [supplierModal, setSupplierModal] = useState({ name: '', taxId: '', email: '', phone: '', category: 'otros', vatRates: [] as number[] })
 
   // Carga la lista de proveedores registrados al abrir el formulario
   useEffect(() => {
@@ -375,6 +375,7 @@ export default function EscanearGastoPage() {
       email: '',
       phone: '',
       category: form.category,
+      vatRates: [...supplierVatRates],
     })
     setSupplierModalOpen(true)
   }
@@ -397,7 +398,7 @@ export default function EscanearGastoPage() {
           email: supplierModal.email.trim() || undefined,
           phone: supplierModal.phone.trim() || undefined,
           category: supplierModal.category,
-          vatRates: supplierVatRates.length > 0 ? supplierVatRates : undefined,
+          vatRates: supplierModal.vatRates.length > 0 ? supplierModal.vatRates : undefined,
           ...parseSupplierAddress(form.issuerAddress),
         }),
       })
@@ -409,6 +410,9 @@ export default function EscanearGastoPage() {
       setSelectedSupplier(data)
       setAllSuppliers(prev => [...prev.filter(p => p.id !== data.id), data].sort((a, b) => (a.name || '').localeCompare(b.name || '')))
       setSupplierModalOpen(false)
+      // Los tipos de IVA del modal pasan al formulario (el proveedor ya los tiene)
+      setSupplierVatRates(supplierModal.vatRates)
+      setRatesTouched(false)
       // Si el usuario corrigió el nombre en el modal, se refleja en el gasto
       setForm(p => ({
         ...p,
@@ -416,6 +420,8 @@ export default function EscanearGastoPage() {
         issuerName: p.issuerName || data.name,
         issuerTaxId: p.issuerTaxId || data.taxId || '',
       }))
+      // Crea los tramos de IVA según los tipos registrados
+      autoCreateTramos(supplierModal.vatRates)
       toast.success(`Proveedor «${data.name}» registrado`)
     } catch {
       toast.error('Error de conexión al registrar proveedor')
@@ -1243,6 +1249,14 @@ export default function EscanearGastoPage() {
                 <Label>Teléfono</Label>
                 <Input type="tel" value={supplierModal.phone} onChange={e => setSupplierModal(m => ({ ...m, phone: e.target.value }))} placeholder="+34 600 000 000" />
               </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Tipos de IVA aplicables</Label>
+              <IvaRatesEditor
+                value={supplierModal.vatRates}
+                onChange={vatRates => setSupplierModal(m => ({ ...m, vatRates }))}
+              />
+              <p className="text-[10px] text-muted-foreground">Se usan para crear los tramos del desglose y se guardan en la ficha del proveedor.</p>
             </div>
             {form.issuerAddress && (
               <p className="text-[10px] text-muted-foreground">
