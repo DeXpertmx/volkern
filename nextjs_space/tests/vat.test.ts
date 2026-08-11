@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeVatAmount, computePercentageAmount } from '@/lib/finance/vat';
+import { computeVatAmount, computePercentageAmount, computeInvoiceTotalMismatch } from '@/lib/finance/vat';
 
 describe('computeVatAmount', () => {
   it('calcula la cuota: base × tipo / 100', () => {
@@ -42,5 +42,34 @@ describe('computePercentageAmount (IRPF / retenciones)', () => {
   it('devuelve "" si falta base o tipo', () => {
     expect(computePercentageAmount('', '15')).toBe('');
     expect(computePercentageAmount('1600', '')).toBe('');
+  });
+});
+
+describe('computeInvoiceTotalMismatch (conciliación de totales)', () => {
+  it('devuelve null cuando cuadra (base + IVA − IRPF = total)', () => {
+    expect(computeInvoiceTotalMismatch('1600', '336', '240', '1696')).toBeNull();
+    expect(computeInvoiceTotalMismatch('100', '21', '15', '106')).toBeNull();
+  });
+
+  it('tolera redondeos de hasta ±0.02', () => {
+    expect(computeInvoiceTotalMismatch('1600', '336', '240', '1696.01')).toBeNull();
+  });
+
+  it('devuelve el desajuste cuando no cuadra', () => {
+    const m = computeInvoiceTotalMismatch('1600', '336', '240', '1700');
+    expect(m).not.toBeNull();
+    expect(m!.expected).toBeCloseTo(1696, 5);
+    expect(m!.difference).toBeCloseTo(-4, 5);
+  });
+
+  it('devuelve null si faltan base o total', () => {
+    expect(computeInvoiceTotalMismatch('', '336', '240', '1696')).toBeNull();
+    expect(computeInvoiceTotalMismatch('1600', '336', '240', '')).toBeNull();
+    expect(computeInvoiceTotalMismatch('', '', '', '')).toBeNull();
+  });
+
+  it('trata cuota de IVA o IRPF ausentes como 0', () => {
+    expect(computeInvoiceTotalMismatch('100', '', '', '100')).toBeNull();
+    expect(computeInvoiceTotalMismatch('100', '21', '', '121')).toBeNull();
   });
 });

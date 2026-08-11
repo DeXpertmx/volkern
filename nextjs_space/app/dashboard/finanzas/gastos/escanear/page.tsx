@@ -8,9 +8,9 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
-import { Camera, Receipt, Scan, Loader2, ArrowLeft, CheckCircle2, Image as ImageIcon, FileText } from 'lucide-react'
+import { Camera, Receipt, Scan, Loader2, ArrowLeft, CheckCircle2, Image as ImageIcon, FileText, AlertTriangle } from 'lucide-react'
 import IvaRatesEditor from '@/components/finance/IvaRatesEditor'
-import { computeVatAmount, computePercentageAmount } from '@/lib/finance/vat'
+import { computeVatAmount, computePercentageAmount, computeInvoiceTotalMismatch } from '@/lib/finance/vat'
 
 interface EmisorInfo {
   nombre: string | null
@@ -181,6 +181,9 @@ export default function EscanearGastoPage() {
     operationDate: '',
     iban: '',
   })
+
+  // Aviso de conciliación: base + IVA − IRPF debe cuadrar con el total OCR
+  const totalsMismatch = computeInvoiceTotalMismatch(form.taxableBase, form.vatAmount, form.irpfAmount, form.totalFactura)
 
   const handleFileCapture = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -799,6 +802,20 @@ export default function EscanearGastoPage() {
                       <Input type="number" step="0.01" value={form.irpfAmount} onChange={e => setForm(p => ({ ...p, irpfAmount: e.target.value }))} placeholder="-240.00" />
                     </div>
                   </div>
+
+                  {totalsMismatch && (
+                    <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800">
+                      <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                      <div className="space-y-1">
+                        <p className="text-xs font-black uppercase tracking-tight">Los totales no cuadran</p>
+                        <p className="text-xs font-medium">
+                          Base + IVA − IRPF = <span className="font-bold">€{totalsMismatch.expected.toFixed(2)}</span>, pero el total de la factura es{' '}
+                          <span className="font-bold">€{parseFloat(form.totalFactura).toFixed(2)}</span> (diferencia{' '}
+                          <span className="font-bold">€{totalsMismatch.difference.toFixed(2)}</span>). Revisa los importes antes de guardar.
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
                   {/* IBAN */}
                   <div className="border-b pb-2 mb-2 mt-4">
