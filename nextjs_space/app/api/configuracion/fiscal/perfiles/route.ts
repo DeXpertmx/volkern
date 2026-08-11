@@ -5,6 +5,33 @@ import { prisma } from '@/lib/db'
 import { withTenantAuth } from '@/lib/api-key-auth'
 import { validateFiscalId, aplicaInversionSujetoPasivo, PAISES_UE } from '@/lib/fiscal-validation'
 
+// La tabla real (y el schema.prisma) usan nif/country/address/city/province/
+// zipCode; la API y el componente trabajan con idFiscal/pais/direccionFiscal/
+// ciudadFiscal/estadoFiscal/codigoPostalFiscal. Mapeamos en ambas direcciones
+// para que el frontend funcione sin tocar la BD (las migraciones nuevas nunca
+// se aplicaron a Neon; la columna real es la vieja).
+function mapearPerfil(p: any) {
+  return {
+    ...p,
+    idFiscal: p.nif ?? null,
+    pais: p.country ?? null,
+    direccionFiscal: p.address ?? null,
+    ciudadFiscal: p.city ?? null,
+    estadoFiscal: p.province ?? null,
+    codigoPostalFiscal: p.zipCode ?? null,
+  };
+}
+
+// Mapeo nombre API (nuevo) -> columna real (vieja)
+const CAMPO_BD: Record<string, string> = {
+  idFiscal: 'nif',
+  pais: 'country',
+  direccionFiscal: 'address',
+  ciudadFiscal: 'city',
+  estadoFiscal: 'province',
+  codigoPostalFiscal: 'zipCode',
+}
+
 // GET - Listar perfiles fiscales de clientes
 export const GET = withTenantAuth(async (req, auth) => {
   try {
@@ -37,7 +64,7 @@ export const GET = withTenantAuth(async (req, auth) => {
     })
 
     return NextResponse.json({
-      perfiles,
+      perfiles: perfiles.map(mapearPerfil),
       total: perfiles.length
     })
   } catch (error) {
@@ -130,34 +157,34 @@ export const POST = withTenantAuth(async (req, auth) => {
       return NextResponse.json({ error: `ID Fiscal inválido: ${validacion.error}` }, { status: 400 })
     }
 
-    // Crear perfil fiscal en la BD del Tenant
+    // Crear perfil fiscal en la BD del Tenant (columnas reales: nif/country/...)
     const perfil = await prisma.perfilFiscalCliente.create({
       data: {
         tenantId: tenantId,
         leadId: leadId || null,
         contactId: contactId || null,
         razonSocial,
-        pais,
+        nif: validacion.formatted || idFiscal,
+        country: pais,
         tipoIdFiscal,
-        idFiscal: validacion.formatted || idFiscal,
         regimenFiscal,
         idIntracomunitario: idIntracomunitario?.toUpperCase() || null,
-        direccionFiscal,
-        ciudadFiscal,
-        estadoFiscal,
-        codigoPostalFiscal,
+        address: direccionFiscal,
+        city: ciudadFiscal,
+        province: estadoFiscal,
+        zipCode: codigoPostalFiscal,
         exentoImpuestos,
         motivoExencion: exentoImpuestos ? motivoExencion : null,
         aplicaRetencion,
         idFiscalValidado: validacion.valid
-      } as any,
+      },
       include: {
         lead: { select: { id: true, nombre: true, email: true } },
         contact: { select: { id: true, nombre: true, email: true } }
       }
     })
 
-    return NextResponse.json(perfil, { status: 201 })
+    return NextResponse.json(mapearPerfil(perfil), { status: 201 })
   } catch (error) {
     console.error('Error al crear perfil fiscal:', error)
     return NextResponse.json(

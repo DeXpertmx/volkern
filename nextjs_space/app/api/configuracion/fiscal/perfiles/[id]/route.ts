@@ -5,6 +5,22 @@ import { prisma } from '@/lib/db'
 import { authenticateRequest } from '@/lib/api-key-auth'
 import { validateFiscalId, PAISES_UE } from '@/lib/fiscal-validation'
 
+// La tabla real (y el schema.prisma) usan nif/country/address/city/province/
+// zipCode; la API y el componente trabajan con idFiscal/pais/direccionFiscal/
+// ciudadFiscal/estadoFiscal/codigoPostalFiscal. Este mapper expone los nombres
+// nuevos al frontend sin tocar la BD.
+function mapearPerfil(p: any) {
+  return {
+    ...p,
+    idFiscal: p.nif ?? null,
+    pais: p.country ?? null,
+    direccionFiscal: p.address ?? null,
+    ciudadFiscal: p.city ?? null,
+    estadoFiscal: p.province ?? null,
+    codigoPostalFiscal: p.zipCode ?? null,
+  };
+}
+
 // GET - Obtener perfil fiscal específico
 export async function GET(
   req: NextRequest,
@@ -38,7 +54,7 @@ export async function GET(
       )
     }
 
-    return NextResponse.json(perfil)
+    return NextResponse.json(mapearPerfil(perfil))
   } catch (error) {
     console.error('Error al obtener perfil fiscal:', error)
     return NextResponse.json(
@@ -78,9 +94,9 @@ export async function PATCH(
 
     const pe = perfilExistente as any;
 
-    // Validar ID fiscal si se está actualizando
-    if (body.idFiscal && body.idFiscal !== pe.idFiscal) {
-      const pais = body.pais || pe.pais
+    // Validar ID fiscal si se está actualizando (columna real: nif)
+    if (body.idFiscal && body.idFiscal !== pe.nif) {
+      const pais = body.pais || pe.country
       const tipoIdFiscal = body.tipoIdFiscal || pe.tipoIdFiscal
       
       const validacion = validateFiscalId(pais, tipoIdFiscal, body.idFiscal)
@@ -97,8 +113,8 @@ export async function PATCH(
 
     // Validar ID intracomunitario si se actualiza
     if (body.idIntracomunitario) {
-      const pais = body.pais || pe.pais
-      if (PAISES_UE.includes(pais) && !body.idIntracomunitario.toUpperCase().startsWith(pe.pais)) {
+      const pais = body.pais || pe.country
+      if (PAISES_UE.includes(pais) && !body.idIntracomunitario.toUpperCase().startsWith(pais)) {
         return NextResponse.json(
           { error: `El ID intracomunitario debe comenzar con ${pais}` },
           { status: 400 }
@@ -107,18 +123,32 @@ export async function PATCH(
       body.idIntracomunitario = body.idIntracomunitario.toUpperCase()
     }
 
-    // Preparar datos para actualizar
+    // Mapear nombres de la API (nuevos) a las columnas reales de la BD:
+    // la tabla/schema actuales usan nif/country/address/city/province/zipCode,
+    // no idFiscal/pais/direccionFiscal/ciudadFiscal/estadoFiscal/codigoPostalFiscal.
+    // Escribir los nombres nuevos hacía que Prisma lanzara "Unknown argument" -> 500.
+    const MAP_CAMPO_BD: Record<string, string> = {
+      'idFiscal': 'nif',
+      'pais': 'country',
+      'direccionFiscal': 'address',
+      'ciudadFiscal': 'city',
+      'estadoFiscal': 'province',
+      'codigoPostalFiscal': 'zipCode',
+    }
+
+    // Preparar datos para actualizar (nombres de columna reales)
     const updateData: any = {}
     const camposPermitidos = [
-      'razonSocial', 'pais', 'tipoIdFiscal', 'idFiscal', 'regimenFiscal',
-      'idIntracomunitario', 'direccionFiscal', 'ciudadFiscal', 'estadoFiscal',
-      'codigoPostalFiscal', 'exentoImpuestos', 'motivoExencion', 'aplicaRetencion',
-      'idFiscalValidado', 'fechaValidacion'
+      'razonSocial', 'tipoIdFiscal', 'regimenFiscal',
+      'idIntracomunitario', 'exentoImpuestos', 'motivoExencion', 'aplicaRetencion',
+      'idFiscalValidado', 'fechaValidacion',
+      'nif', 'country', 'address', 'city', 'province', 'zipCode'
     ]
 
     for (const campo of camposPermitidos) {
-      if (body[campo] !== undefined) {
-        updateData[campo] = body[campo]
+      const fuente = Object.keys(MAP_CAMPO_BD).find(k => MAP_CAMPO_BD[k] === campo) || campo
+      if (body[fuente] !== undefined) {
+        updateData[campo] = body[fuente]
       }
     }
 
@@ -139,7 +169,7 @@ export async function PATCH(
       }
     })
 
-    return NextResponse.json(perfil)
+    return NextResponse.json(mapearPerfil(perfil))
   } catch (error) {
     console.error('Error al actualizar perfil fiscal:', error)
     return NextResponse.json(

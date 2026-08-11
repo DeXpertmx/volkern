@@ -319,7 +319,7 @@ export default function PerfilesFiscalesTab({ onUpdate }: Props) {
                 Nuevo Perfil
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-w-3xl">
               <DialogHeader>
                 <DialogTitle>{editingPerfil ? 'Editar Perfil' : 'Nuevo Perfil Fiscal'}</DialogTitle>
                 <DialogDescription>
@@ -327,6 +327,7 @@ export default function PerfilesFiscalesTab({ onUpdate }: Props) {
                 </DialogDescription>
               </DialogHeader>
 
+              <div className="max-h-[65vh] overflow-y-auto pr-1">
               <div className="grid grid-cols-2 gap-4 py-4">
                 <div className="col-span-2">
                   <h4 className="font-medium mb-3 text-sm text-muted-foreground">Asociar a</h4>
@@ -511,6 +512,7 @@ export default function PerfilesFiscalesTab({ onUpdate }: Props) {
                   />
                   <Label>Exento de Impuestos</Label>
                 </div>
+              </div>
               </div>
 
               <DialogFooter>
