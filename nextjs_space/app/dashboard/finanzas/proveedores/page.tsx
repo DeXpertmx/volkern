@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -51,6 +51,19 @@ export default function ProveedoresPage() {
   const { data: suppliers, isLoading, mutate } = useSWR('/api/erp/suppliers', fetcher)
   const [createOpen, setCreateOpen] = useState(false)
   const [detailSupplier, setDetailSupplier] = useState<any>(null)
+  const [deepLinkedId, setDeepLinkedId] = useState<string | null>(null)
+
+  // Entrada directa a una ficha desde el listado de gastos (?proveedor=ID)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    setDeepLinkedId(params.get('proveedor'))
+  }, [])
+  useEffect(() => {
+    if (!deepLinkedId || !Array.isArray(suppliers) || suppliers.length === 0) return
+    const found = suppliers.find((s: any) => s.id === deepLinkedId)
+    if (found) setDetailSupplier(found)
+    setDeepLinkedId(null) // abre una sola vez, aunque los datos se refresquen
+  }, [deepLinkedId, suppliers])
   const [detailSaving, setDetailSaving] = useState(false)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState(emptyForm)

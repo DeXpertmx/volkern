@@ -188,7 +188,22 @@ export default function GastosPage() {
                           <span className="text-sm font-bold tracking-tight">{expense.description}</span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm font-medium text-slate-600">{expense.supplier?.name}</td>
+                      <td className="px-6 py-4">
+                        {expense.supplier ? (
+                          <Link
+                            href={`/dashboard/finanzas/proveedores?proveedor=${expense.supplier.id}`}
+                            onClick={e => e.stopPropagation()}
+                            className="block group/sup hover:text-primary transition-colors"
+                          >
+                            <span className="text-sm font-bold text-slate-700 group-hover/sup:text-primary">{expense.supplier.name}</span>
+                            {expense.supplier.taxId && (
+                              <span className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mt-0.5">{expense.supplier.taxId}</span>
+                            )}
+                          </Link>
+                        ) : (
+                          <span className="text-sm font-medium text-slate-400">—</span>
+                        )}
+                      </td>
                       <td className="px-6 py-4 text-right">
                         <span className="text-xs font-semibold text-slate-600">
                           {expense.taxableBase != null ? `€${expense.taxableBase.toFixed(2)}` : '—'}
