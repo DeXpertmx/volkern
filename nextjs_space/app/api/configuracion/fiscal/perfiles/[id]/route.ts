@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { authenticateRequest } from '@/lib/api-key-auth'
-import { validateFiscalId, PAISES_UE } from '@/lib/fiscal-validation'
+import { validateFiscalId, PAISES_UE, normalizarPais } from '@/lib/fiscal-validation'
 
 // La tabla real (y el schema.prisma) usan nif/country/address/city/province/
 // zipCode; la API y el componente trabajan con idFiscal/pais/direccionFiscal/
@@ -13,7 +13,7 @@ function mapearPerfil(p: any) {
   return {
     ...p,
     idFiscal: p.nif ?? null,
-    pais: p.country ?? null,
+    pais: normalizarPais(p.country),
     direccionFiscal: p.address ?? null,
     ciudadFiscal: p.city ?? null,
     estadoFiscal: p.province ?? null,
@@ -94,9 +94,12 @@ export async function PATCH(
 
     const pe = perfilExistente as any;
 
+    // Normalizar país (nombre -> código) para validaciones y persistencia
+    if (body.pais) body.pais = normalizarPais(body.pais)
+
     // Validar ID fiscal si se está actualizando (columna real: nif)
     if (body.idFiscal && body.idFiscal !== pe.nif) {
-      const pais = body.pais || pe.country
+      const pais = normalizarPais(body.pais || pe.country) || pe.country
       const tipoIdFiscal = body.tipoIdFiscal || pe.tipoIdFiscal
       
       const validacion = validateFiscalId(pais, tipoIdFiscal, body.idFiscal)
@@ -113,7 +116,7 @@ export async function PATCH(
 
     // Validar ID intracomunitario si se actualiza
     if (body.idIntracomunitario) {
-      const pais = body.pais || pe.country
+      const pais = normalizarPais(body.pais || pe.country) || pe.country
       if (PAISES_UE.includes(pais) && !body.idIntracomunitario.toUpperCase().startsWith(pais)) {
         return NextResponse.json(
           { error: `El ID intracomunitario debe comenzar con ${pais}` },

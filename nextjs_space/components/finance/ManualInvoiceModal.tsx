@@ -56,8 +56,8 @@ interface ContactResult {
   company?: { id: string; nombre: string } | null;
   perfilFiscal?: {
     nif: string;
-    direccionFiscal?: string;
-    ciudadFiscal?: string;
+    address?: string;
+    city?: string;
     razonSocial?: string;
     pais?: string;
     tipoIdFiscal?: string;
@@ -107,7 +107,7 @@ function ContactoSelector({
 
   // Nuevo contacto inline
   const [newContact, setNewContact] = useState({ nombre: '', email: '', telefono: '', tipo: 'person' as 'person' | 'company' });
-  const [newFiscal, setNewFiscal] = useState({ nif: '', razonSocial: '', direccionFiscal: '', ciudadFiscal: '', pais: 'España', tipoIdFiscal: 'NIF' });
+  const [newFiscal, setNewFiscal] = useState({ nif: '', razonSocial: '', direccionFiscal: '', ciudadFiscal: '', pais: 'ES', tipoIdFiscal: 'NIF' });
   const [creating, setCreating] = useState(false);
 
   const searchContacts = useCallback(async (q: string) => {
@@ -190,7 +190,7 @@ function ContactoSelector({
       handleSelect(contact);
       setShowNew(false);
       setNewContact({ nombre: '', email: '', telefono: '', tipo: 'person' });
-      setNewFiscal({ nif: '', razonSocial: '', direccionFiscal: '', ciudadFiscal: '', pais: 'España', tipoIdFiscal: 'NIF' });
+      setNewFiscal({ nif: '', razonSocial: '', direccionFiscal: '', ciudadFiscal: '', pais: 'ES', tipoIdFiscal: 'NIF' });
     } catch (_) {
       toast.error('Error de red al crear contacto');
     } finally { setCreating(false); }
@@ -217,8 +217,8 @@ function ContactoSelector({
             <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600 bg-white/60 rounded-lg p-2.5 border border-primary/10">
               {fp.nif && <span><span className="font-medium">NIF:</span> {fp.nif}</span>}
               {fp.razonSocial && <span><span className="font-medium">R.Social:</span> {fp.razonSocial}</span>}
-              {fp.direccionFiscal && <span><span className="font-medium">Dir.:</span> {fp.direccionFiscal}</span>}
-              {fp.ciudadFiscal && <span>{fp.ciudadFiscal}</span>}
+              {fp.address && <span><span className="font-medium">Dir.:</span> {fp.address}</span>}
+              {fp.city && <span>{fp.city}</span>}
               {!fp.nif && <span className="text-amber-600 italic">Sin datos fiscales configurados</span>}
             </div>
           )}
@@ -567,7 +567,7 @@ export function ManualInvoiceModal({ open, onOpenChange, onSuccess }: ManualInvo
           clienteNombre: contactoSeleccionado.nombre,
           clienteEmail: contactoSeleccionado.email,
           clienteNif: contactoSeleccionado.perfilFiscal?.nif || undefined,
-          clienteDireccion: contactoSeleccionado.perfilFiscal?.direccionFiscal || undefined,
+          clienteDireccion: contactoSeleccionado.perfilFiscal?.address || undefined,
           moneda,
           notas,
           tipoDescuento,

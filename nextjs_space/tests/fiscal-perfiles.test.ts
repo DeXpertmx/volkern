@@ -212,4 +212,25 @@ describe('GET /api/configuracion/fiscal/perfiles/:id', () => {
     expect(json.idFiscal).toBe('B12345674');
     expect(json.pais).toBe('ES');
   });
+
+  it('normaliza país nombre -> código (España -> ES) para la UI', async () => {
+    (prisma.perfilFiscalCliente.findFirst as any).mockResolvedValue({ ...perfilExistente, country: 'España' });
+
+    const res = await GET_ONE(makeReq({}), { params: { id: 'perfil-1' } });
+    const json = await res.json();
+    expect(json.pais).toBe('ES');
+  });
+});
+
+describe('normalización de país en POST', () => {
+  it('guarda el código aunque el frontend envíe el nombre', async () => {
+    (prisma.lead.findFirst as any).mockResolvedValue({ id: 'lead-1', tenantId: 'tenant-1' });
+    (prisma.perfilFiscalCliente.findFirst as any).mockResolvedValue(null);
+    (prisma.perfilFiscalCliente.create as any).mockResolvedValue(perfilExistente);
+
+    const res = await POST(makeReq({ ...payloadFrontend, pais: 'España' }));
+    expect(res.status).toBe(201);
+    const data = (prisma.perfilFiscalCliente.create as any).mock.calls[0][0].data;
+    expect(data.country).toBe('ES');
+  });
 });
