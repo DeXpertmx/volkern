@@ -4,6 +4,25 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
 import { getDownloadUrl } from '@/lib/s3';
+import { AuditService } from '@/lib/audit-service';
+
+// Intenta parsear un valor guardado como JSON; si no, lo devuelve crudo
+function tryParse(valor: string): any {
+  try {
+    return JSON.parse(valor);
+  } catch {
+    return valor;
+  }
+}
+
+// Claves sensibles que NUNCA deben quedar en claro en el historial
+const CLAVES_SENSIBLES = /password|secret|token|apikey|api_key/i;
+
+// Prepara un valor para el historial enmascarando secretos
+function valorParaHistorial(clave: string, valor: any): any {
+  if (CLAVES_SENSIBLES.test(clave)) return '[REDACTED]';
+  return valor;
+}
 
 // GET /api/configuracion - Obtener configuración del tenant
 export const GET = withTenantAuth(async (request, auth) => {
@@ -17,11 +36,7 @@ export const GET = withTenantAuth(async (request, auth) => {
     
     // Convertir array a objeto
     const configObj = config.reduce((acc: any, item) => {
-      try {
-        acc[item.clave] = JSON.parse(item.valor);
-      } catch {
-        acc[item.clave] = item.valor;
-      }
+      acc[item.clave] = tryParse(item.valor);
       return acc;
     }, {});
 
@@ -79,35 +94,73 @@ export const POST = withTenantAuth(async (request, auth) => {
       return valor;
     };
 
+    // Filtrar claves internas (prefijo _) y el wrapper legacy 'data'
+    const entradas = Object.entries(body).filter(
+      ([clave, valor]) =>
+        !clave.startsWith('_') &&
+        clave !== 'data' &&
+        valor !== undefined &&
+        valor !== null
+    );
+
+    // Obtener valores actuales (para el historial de cambios) de las claves a guardar
+    const clavesAGuardar = entradas.map(([clave]) => clave);
+    const actuales = clavesAGuardar.length
+      ? await prisma.configuracion.findMany({
+          where: { tenantId, clave: { in: clavesAGuardar } },
+          select: { clave: true, valor: true },
+        })
+      : [];
+    const valorActual = new Map(actuales.map(a => [a.clave, a.valor]));
+
     // Guardar cada configuración en la DB aislada del tenant
-    for (const [clave, valor] of Object.entries(body)) {
-      if (valor !== undefined && valor !== null) {
-        let valorFinal: string;
-        
-        if (clave === 'logo_corporativo') {
-          valorFinal = extractS3Key(String(valor)) || String(valor);
-        } 
-        else if (typeof valor === 'object' && valor !== null) {
-          valorFinal = JSON.stringify(valor);
-        } 
-        else {
-          valorFinal = String(valor);
-        }
-        
-        await prisma.configuracion.upsert({
-          where: { 
-            tenantId_clave: {
-              tenantId: tenantId,
-              clave,
-            }
-          },
-          update: { valor: valorFinal },
-          create: { 
+    for (const [clave, valor] of entradas) {
+      let valorFinal: string;
+
+      if (clave === 'logo_corporativo') {
+        valorFinal = extractS3Key(String(valor)) || String(valor);
+      }
+      else if (typeof valor === 'object' && valor !== null) {
+        valorFinal = JSON.stringify(valor);
+      }
+      else {
+        valorFinal = String(valor);
+      }
+
+      const antes = valorActual.get(clave);
+      await prisma.configuracion.upsert({
+        where: {
+          tenantId_clave: {
             tenantId: tenantId,
-            clave, 
-            valor: valorFinal 
-          },
-        });
+            clave,
+          }
+        },
+        update: { valor: valorFinal },
+        create: {
+          tenantId: tenantId,
+          clave,
+          valor: valorFinal
+        },
+      });
+
+      // Registrar el cambio en el historial (solo si realmente cambió).
+      // La auditoría NUNCA debe poder fallar el guardado: si el log falla,
+      // se ignora silenciosamente (la config ya quedó persistida).
+      if (antes !== valorFinal) {
+        try {
+          await AuditService.log({
+            tenantId,
+            userId: auth.user?.id,
+            action: 'actualizar_configuracion',
+            entity: 'configuracion',
+            entityId: clave,
+            description: `Configuración '${clave}' actualizada`,
+            changesBefore: antes !== undefined ? { [clave]: valorParaHistorial(clave, tryParse(antes)) } : null,
+            changesAfter: { [clave]: valorParaHistorial(clave, tryParse(valorFinal)) },
+          });
+        } catch {
+          // No romper el guardado por un fallo de auditoría
+        }
       }
     }
 

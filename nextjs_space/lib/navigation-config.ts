@@ -545,6 +545,7 @@ export const HUBS: HubConfig[] = [
       { name: 'Equipo', href: '/dashboard/equipo', icon: UserCog, planModule: 'equipo', description: 'Gestión de usuarios' },
       { name: 'Integraciones', href: '/dashboard/integraciones', icon: Plug, planModule: 'integraciones', description: 'Conexión con apps externas' },
       { name: 'Módulos', href: '/dashboard/configuracion?section=modulos', icon: LayoutGrid, description: 'Activar/desactivar funciones' },
+      { name: 'Historial de Configuración', href: '/dashboard/configuracion?section=historial', icon: History, description: 'Quién cambió cada ajuste y cuándo' },
       { name: 'Auditoría', href: '/dashboard/auditoria', icon: Activity, description: 'Historial completo de acciones en el sistema' },
       { name: 'Compliance ⚡', href: '/dashboard/configuracion?section=compliance', icon: ShieldCheck, description: 'Control de compliance y procesos obligatorios' },
       { name: 'Privacidad GDPR', href: '/dashboard/compliance/gdpr', icon: Lock, description: 'Exportar y anonimizar tus datos personales' },
