@@ -1,14 +1,16 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { toast } from 'sonner'
-import { Camera, Receipt, Scan, Loader2, ArrowLeft, CheckCircle2, Image as ImageIcon, FileText, AlertTriangle } from 'lucide-react'
+import { Camera, Receipt, Scan, Loader2, ArrowLeft, CheckCircle2, Image as ImageIcon, FileText, AlertTriangle, Check, ChevronsUpDown, Plus } from 'lucide-react'
 import IvaRatesEditor from '@/components/finance/IvaRatesEditor'
 import { computeVatAmount, computePercentageAmount, computeInvoiceTotalMismatch, fillEmptyTranches } from '@/lib/finance/vat'
 
@@ -80,6 +82,28 @@ const CATEGORIES = [
   { value: 'otros', label: 'Otros' },
 ]
 
+// Extrae streetName/postalCode/city de un domicilio en formato libre
+function parseSupplierAddress(addr: string): { streetName?: string; postalCode?: string; city?: string } {
+  if (!addr) return {}
+  const postal = addr.match(/\b(\d{5})\b/)
+  const postalCode = postal ? postal[1] : undefined
+  const parts = addr.split(',').map(s => s.trim()).filter(Boolean)
+  const streetName = parts[0] || undefined
+  let city = parts.length > 1 ? parts[parts.length - 1] : undefined
+  if (city) {
+    if (postalCode) city = city.replace(postalCode, '')
+    city = city.replace(/^[,\s]+|[,\s]+$/g, '').trim() || undefined
+  }
+  return { streetName, postalCode, city }
+}
+
+// Compone el domicilio de un proveedor registrado para el campo Emisor
+function buildSupplierAddress(s: any): string {
+  const street = [s.streetType, s.streetName, s.streetNumber].filter(Boolean).join(' ')
+  const extra = [s.postalCode, s.city, s.province].filter(Boolean).join(', ')
+  return [street, extra].filter(Boolean).join(', ')
+}
+
 export default function EscanearGastoPage() {
   const router = useRouter()
   const cameraInputRef = useRef<HTMLInputElement>(null)
@@ -109,24 +133,21 @@ export default function EscanearGastoPage() {
   const [trancheTarget, setTrancheTarget] = useState('')
   // Tramos que el usuario vació a propósito: no se autocompletan
   const [lockedEmptyRows, setLockedEmptyRows] = useState<Set<number>>(new Set())
+  // Proveedores registrados: lista para el buscador y proveedor seleccionado
+  const [allSuppliers, setAllSuppliers] = useState<any[]>([])
+  const [selectedSupplier, setSelectedSupplier] = useState<any | null>(null)
+  const [supplierOpen, setSupplierOpen] = useState(false)
+  const [supplierQuery, setSupplierQuery] = useState('')
+  const [registeringSupplier, setRegisteringSupplier] = useState(false)
 
-  const lookupSupplierVatRates = async (name: string) => {
-    if (ratesTouched) return
-    if (!name.trim()) { setSupplierVatRates([]); return }
-    try {
-      const res = await fetch(`/api/erp/suppliers?search=${encodeURIComponent(name)}`)
-      const list = await res.json()
-      if (Array.isArray(list) && list.length > 0) {
-        const exact = list.find((s: any) => (s.name || '').toLowerCase() === name.trim().toLowerCase())
-        const s = exact || list[0]
-        setSupplierVatRates(Array.isArray(s?.vatRates) ? s.vatRates : [])
-      } else {
-        setSupplierVatRates([])
-      }
-    } catch {
-      /* sin cambios */
-    }
-  }
+  // Carga la lista de proveedores registrados al abrir el formulario
+  useEffect(() => {
+    if (!showForm) return
+    fetch('/api/erp/suppliers')
+      .then(r => r.json())
+      .then(list => { if (Array.isArray(list)) setAllSuppliers(list) })
+      .catch(() => { /* el buscador sigue funcionando con lo que haya */ })
+  }, [showForm])
 
   // Aplica un tipo de IVA y recalcula la cuota si hay base imponible
   const applyVatRate = (rate: string) => {
@@ -201,6 +222,10 @@ export default function EscanearGastoPage() {
     iban: '',
   })
 
+  // Ref con el form siempre actual (para usarlo en flujos async tras el OCR)
+  const formRef = useRef(form)
+  formRef.current = form
+
   // ─── Tramos de IVA: sincroniza los agregados del formulario ───────────
   const syncTotalsFromRows = (rows: typeof ivaRows) => {
     if (rows.length === 0) return
@@ -274,6 +299,99 @@ export default function EscanearGastoPage() {
     const withDist = applyDistribution(rows)
     setIvaRows(withDist)
     if (withDist.length > 0) syncTotalsFromRows(withDist)
+  }
+
+  // ─── Proveedor: selección, autofill del emisor y registro ────────────
+  // Crea tramos de IVA automáticamente según los tipos de IVA del proveedor
+  const autoCreateTramos = (rates: number[] | undefined | null) => {
+    if (!Array.isArray(rates) || rates.length === 0) return
+    if (ivaRows.length > 0) return // no pisa tramos que ya existan
+    const rows = rates.map(r => ({ id: nextIvaRowId.current++, base: '', rate: String(r) }))
+    const target = trancheTarget || formRef.current.taxableBase
+    if (target) setTrancheTarget(target)
+    const withDist = applyDistribution(rows, target)
+    setIvaRows(withDist)
+    syncTotalsFromRows(withDist)
+  }
+
+  // Selección de un proveedor registrado: rellena emisor y crea los tramos
+  const selectSupplier = (s: any) => {
+    setSelectedSupplier(s)
+    setSupplierQuery('')
+    setSupplierOpen(false)
+    setRatesTouched(false)
+    setSupplierVatRates(Array.isArray(s.vatRates) ? s.vatRates : [])
+    setForm(p => ({
+      ...p,
+      supplier: s.name,
+      issuerName: p.issuerName || s.name || '',
+      issuerTaxId: p.issuerTaxId || s.taxId || '',
+      issuerAddress: p.issuerAddress || buildSupplierAddress(s),
+    }))
+    autoCreateTramos(s.vatRates)
+  }
+
+  // Proveedor no registrado: usar el nombre tecleado como nuevo proveedor
+  const chooseNewSupplier = (name: string) => {
+    const clean = name.trim()
+    setSelectedSupplier(null)
+    setSupplierQuery('')
+    setSupplierOpen(false)
+    setRatesTouched(false)
+    setSupplierVatRates([])
+    setForm(p => ({
+      ...p,
+      supplier: clean,
+      issuerName: p.issuerName || clean,
+    }))
+  }
+
+  // Tras el OCR: si el proveedor detectado ya está registrado, aplica sus
+  // datos (emisor, tipos de IVA y tramos) automáticamente.
+  const matchSupplierByName = async (name: string | null) => {
+    if (!name || !name.trim()) return
+    try {
+      const res = await fetch(`/api/erp/suppliers?search=${encodeURIComponent(name.trim())}`)
+      const list = await res.json()
+      if (!Array.isArray(list) || list.length === 0) return
+      const exact = list.find((s: any) => (s.name || '').toLowerCase() === name.trim().toLowerCase())
+      const s = exact || list[0]
+      selectSupplier(s)
+      setAllSuppliers(prev => (prev.some(p => p.id === s.id) ? prev : [...prev, s]))
+    } catch {
+      /* silencioso: el usuario puede elegir el proveedor en el buscador */
+    }
+  }
+
+  // Registra el proveedor con los datos fiscales del emisor
+  const registerSupplierNow = async () => {
+    if (!form.supplier) return
+    setRegisteringSupplier(true)
+    try {
+      const res = await fetch('/api/erp/suppliers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: form.supplier,
+          taxId: form.issuerTaxId || undefined,
+          category: form.category,
+          vatRates: supplierVatRates.length > 0 ? supplierVatRates : undefined,
+          ...parseSupplierAddress(form.issuerAddress),
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error || 'Error al registrar proveedor')
+        return
+      }
+      setSelectedSupplier(data)
+      setAllSuppliers(prev => [...prev.filter(p => p.id !== data.id), data].sort((a, b) => (a.name || '').localeCompare(b.name || '')))
+      toast.success(`Proveedor «${data.name}» registrado`)
+    } catch {
+      toast.error('Error de conexión al registrar proveedor')
+    } finally {
+      setRegisteringSupplier(false)
+    }
   }
 
   const ivaTotals = ivaRows.reduce(
@@ -420,6 +538,7 @@ export default function EscanearGastoPage() {
       }))
       setShowForm(true)
       loadTenantReceptor()
+      matchSupplierByName(ext.supplier)
     } catch (err: any) {
       if (err?.name === 'AbortError') {
         toast.error('El OCR está tardando demasiado. Usa "Sin OCR" para ir al formulario.')
@@ -483,7 +602,9 @@ export default function EscanearGastoPage() {
             body: JSON.stringify({
               name: form.supplier,
               category: form.category,
+              taxId: form.issuerTaxId || undefined,
               vatRates: ratesTouched ? supplierVatRates : undefined,
+              ...parseSupplierAddress(form.issuerAddress),
             }),
           })
           if (createRes.ok) {
@@ -744,15 +865,43 @@ export default function EscanearGastoPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label>Proveedor</Label>
-                  <Input
-                    value={form.supplier}
-                    onChange={e => {
-                      setForm(p => ({ ...p, supplier: e.target.value }))
-                      setRatesTouched(false)
-                    }}
-                    onBlur={() => lookupSupplierVatRates(form.supplier)}
-                    placeholder="Nombre del proveedor"
-                  />
+                  <Popover open={supplierOpen} onOpenChange={setSupplierOpen}>
+                    <PopoverTrigger asChild>
+                      <Button type="button" variant="outline" role="combobox" aria-expanded={supplierOpen} className="w-full justify-between font-normal">
+                        <span className="truncate">{form.supplier || 'Buscar o escribir proveedor…'}</span>
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Buscar proveedor…" value={supplierQuery} onValueChange={setSupplierQuery} />
+                        <CommandList>
+                          <CommandEmpty>{allSuppliers.length === 0 ? 'No tienes proveedores registrados todavía. Escribe el nombre para crear uno.' : 'No hay proveedores con ese nombre.'}</CommandEmpty>
+                          {allSuppliers.length > 0 && (
+                            <CommandGroup heading="Proveedores registrados">
+                              {allSuppliers.map(s => (
+                                <CommandItem
+                                  key={s.id}
+                                  value={`${s.name} ${s.taxId || ''}`.trim()}
+                                  onSelect={() => selectSupplier(s)}
+                                >
+                                  <Check className={`mr-2 h-4 w-4 ${form.supplier === s.name ? 'opacity-100' : 'opacity-0'}`} />
+                                  <span className="truncate">{s.name}</span>
+                                  {s.taxId && <span className="ml-auto pl-2 text-xs text-muted-foreground">{s.taxId}</span>}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          )}
+                          {supplierQuery.trim() && !allSuppliers.some(s => (s.name || '').toLowerCase() === supplierQuery.trim().toLowerCase()) && (
+                            <CommandItem value={`${supplierQuery.trim()} como nuevo proveedor`} onSelect={() => chooseNewSupplier(supplierQuery)} className="text-primary">
+                              <Plus className="mr-2 h-4 w-4" />
+                              Registrar «{supplierQuery.trim()}» como nuevo proveedor
+                            </CommandItem>
+                          )}
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 <div>
                   <Label>Categoría</Label>
@@ -764,6 +913,18 @@ export default function EscanearGastoPage() {
                   </Select>
                 </div>
               </div>
+
+              {form.supplier && !selectedSupplier && (
+                <div className="rounded-lg border border-dashed border-amber-300 bg-amber-50/60 p-3 space-y-2">
+                  <p className="text-xs text-muted-foreground">
+                    «{form.supplier}» no está en tu base de proveedores. Rellena sus datos fiscales en «Datos Fiscales (Verifactu)» y regístralo, o se registrará solo al guardar el gasto.
+                  </p>
+                  <Button type="button" variant="outline" size="sm" onClick={registerSupplierNow} disabled={registeringSupplier} className="h-7 text-xs">
+                    {registeringSupplier ? <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> : <Plus className="h-3.5 w-3.5 mr-2" />}
+                    Registrar proveedor
+                  </Button>
+                </div>
+              )}
 
               {form.supplier && (
                 <div className="space-y-2">
@@ -843,8 +1004,11 @@ export default function EscanearGastoPage() {
                   </div>
 
                   {/* Emisor */}
-                  <div className="border-b pb-2 mb-2">
+                  <div className="border-b pb-2 mb-2 flex items-center justify-between">
                     <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Emisor (Quien vende)</span>
+                    {selectedSupplier && (
+                      <span className="text-[10px] font-semibold text-emerald-600">✓ Datos del proveedor registrado</span>
+                    )}
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -862,9 +1026,10 @@ export default function EscanearGastoPage() {
                   </div>
 
                   {/* Receptor */}
-                  <div className="border-b pb-2 mb-2 mt-4">
+                  <div className="border-b pb-2 mb-1 mt-4">
                     <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Receptor (Cliente)</span>
                   </div>
+                  <p className="text-[10px] text-muted-foreground mb-2">Autorelleno con los datos fiscales de tu empresa (Emisor principal).</p>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label>Nombre / Razón Social</Label>
