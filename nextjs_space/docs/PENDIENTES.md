@@ -19,7 +19,7 @@ Anotado el 2026-08-11. Estado real de cada tema para retomar donde se quedó.
 4. **`.env.production`** sigue con CHATWOOT vacío (best-effort desactiva el canal en ese entorno) — activar URL+token si el despliegue de producción lo necesita.
 5. **Resend: el plan solo permite 1 dominio** — el PASO 8 del provisioner falla con 403 para cada tenant nuevo (queda `pending_dns`). Decidir: subir plan, dominios por defecto, o aceptar configuración manual.
 6. **Integrar `scripts/e2e-provision-chatwoot.ts` como check de regresión** en deploy/CI.
-7. **Campo "Motivo de exención" en el modal de perfil fiscal** — marcar "Exento de Impuestos" sin motivo sigue fallando (400); el modal no tiene el campo.
+7. ~~**Campo "Motivo de exención" en el modal**~~ — resuelto `748a8bd`: el modal tiene el input obligatorio y el flujo exento ya no da 400.
 8. **Unificar `ConfiguracionFiscalEmisor` vs `PerfilFiscalCliente`** — dos modelos paralelos de datos fiscales (emisor propio vs clientes) con campos distintos; verificar que la facturación los usa coherentemente.
 
 ## Notas operativas
