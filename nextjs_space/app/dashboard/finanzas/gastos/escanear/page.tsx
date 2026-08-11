@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import { Camera, Receipt, Scan, Loader2, ArrowLeft, CheckCircle2, Image as ImageIcon, FileText, AlertTriangle, Check, ChevronsUpDown, Plus } from 'lucide-react'
 import IvaRatesEditor from '@/components/finance/IvaRatesEditor'
@@ -139,6 +140,9 @@ export default function EscanearGastoPage() {
   const [supplierOpen, setSupplierOpen] = useState(false)
   const [supplierQuery, setSupplierQuery] = useState('')
   const [registeringSupplier, setRegisteringSupplier] = useState(false)
+  // Modal de registro: completa la ficha del nuevo proveedor
+  const [supplierModalOpen, setSupplierModalOpen] = useState(false)
+  const [supplierModal, setSupplierModal] = useState({ name: '', taxId: '', email: '', phone: '', category: 'otros' })
 
   // Carga la lista de proveedores registrados al abrir el formulario
   useEffect(() => {
@@ -363,18 +367,36 @@ export default function EscanearGastoPage() {
     }
   }
 
-  // Registra el proveedor con los datos fiscales del emisor
-  const registerSupplierNow = async () => {
-    if (!form.supplier) return
+  // Abre el modal para completar la ficha del nuevo proveedor
+  const openSupplierModal = () => {
+    setSupplierModal({
+      name: form.supplier,
+      taxId: form.issuerTaxId || '',
+      email: '',
+      phone: '',
+      category: form.category,
+    })
+    setSupplierModalOpen(true)
+  }
+
+  // Guarda el proveedor con la ficha completa (email, teléfono, categoría…)
+  const submitSupplierRegistration = async () => {
+    const name = supplierModal.name.trim()
+    if (!name) {
+      toast.error('El nombre del proveedor es obligatorio')
+      return
+    }
     setRegisteringSupplier(true)
     try {
       const res = await fetch('/api/erp/suppliers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: form.supplier,
-          taxId: form.issuerTaxId || undefined,
-          category: form.category,
+          name,
+          taxId: supplierModal.taxId.trim() || undefined,
+          email: supplierModal.email.trim() || undefined,
+          phone: supplierModal.phone.trim() || undefined,
+          category: supplierModal.category,
           vatRates: supplierVatRates.length > 0 ? supplierVatRates : undefined,
           ...parseSupplierAddress(form.issuerAddress),
         }),
@@ -386,6 +408,14 @@ export default function EscanearGastoPage() {
       }
       setSelectedSupplier(data)
       setAllSuppliers(prev => [...prev.filter(p => p.id !== data.id), data].sort((a, b) => (a.name || '').localeCompare(b.name || '')))
+      setSupplierModalOpen(false)
+      // Si el usuario corrigió el nombre en el modal, se refleja en el gasto
+      setForm(p => ({
+        ...p,
+        supplier: data.name,
+        issuerName: p.issuerName || data.name,
+        issuerTaxId: p.issuerTaxId || data.taxId || '',
+      }))
       toast.success(`Proveedor «${data.name}» registrado`)
     } catch {
       toast.error('Error de conexión al registrar proveedor')
@@ -919,8 +949,8 @@ export default function EscanearGastoPage() {
                   <p className="text-xs text-muted-foreground">
                     «{form.supplier}» no está en tu base de proveedores. Rellena sus datos fiscales en «Datos Fiscales (Verifactu)» y regístralo, o se registrará solo al guardar el gasto.
                   </p>
-                  <Button type="button" variant="outline" size="sm" onClick={registerSupplierNow} disabled={registeringSupplier} className="h-7 text-xs">
-                    {registeringSupplier ? <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> : <Plus className="h-3.5 w-3.5 mr-2" />}
+                  <Button type="button" variant="outline" size="sm" onClick={openSupplierModal} className="h-7 text-xs">
+                    <Plus className="h-3.5 w-3.5 mr-2" />
                     Registrar proveedor
                   </Button>
                 </div>
@@ -1176,6 +1206,59 @@ export default function EscanearGastoPage() {
           </Card>
         </div>
       )}
+
+      {/* Modal: completar la ficha del nuevo proveedor antes de registrarlo */}
+      <Dialog open={supplierModalOpen} onOpenChange={setSupplierModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-black tracking-tight uppercase">Registrar Proveedor</DialogTitle>
+            <DialogDescription>Completa la ficha de «{supplierModal.name}» para guardarlo en tu base.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Razón Social / Nombre</Label>
+              <Input value={supplierModal.name} onChange={e => setSupplierModal(m => ({ ...m, name: e.target.value }))} placeholder="Nombre del proveedor" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>NIF / CIF</Label>
+                <Input value={supplierModal.taxId} onChange={e => setSupplierModal(m => ({ ...m, taxId: e.target.value }))} placeholder="B12345678" />
+              </div>
+              <div>
+                <Label>Categoría</Label>
+                <Select value={supplierModal.category} onValueChange={v => setSupplierModal(m => ({ ...m, category: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Email</Label>
+                <Input type="email" value={supplierModal.email} onChange={e => setSupplierModal(m => ({ ...m, email: e.target.value }))} placeholder="proveedor@empresa.com" />
+              </div>
+              <div>
+                <Label>Teléfono</Label>
+                <Input type="tel" value={supplierModal.phone} onChange={e => setSupplierModal(m => ({ ...m, phone: e.target.value }))} placeholder="+34 600 000 000" />
+              </div>
+            </div>
+            {form.issuerAddress && (
+              <p className="text-[10px] text-muted-foreground">
+                Domicilio: {form.issuerAddress} (se registrará en la ficha).
+              </p>
+            )}
+          </div>
+          <DialogFooter className="pt-2">
+            <Button variant="outline" onClick={() => setSupplierModalOpen(false)} disabled={registeringSupplier}>Cancelar</Button>
+            <Button onClick={submitSupplierRegistration} disabled={registeringSupplier}>
+              {registeringSupplier ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
+              {registeringSupplier ? 'Registrando…' : 'Guardar proveedor'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
