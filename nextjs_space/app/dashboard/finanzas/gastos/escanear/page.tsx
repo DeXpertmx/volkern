@@ -14,6 +14,7 @@ import { toast } from 'sonner'
 import { Camera, Receipt, Scan, Loader2, ArrowLeft, CheckCircle2, Image as ImageIcon, FileText, AlertTriangle, Check, ChevronsUpDown, Plus } from 'lucide-react'
 import IvaRatesEditor from '@/components/finance/IvaRatesEditor'
 import { computeVatAmount, computePercentageAmount, computeInvoiceTotalMismatch, fillEmptyTranches } from '@/lib/finance/vat'
+import { validateFiscalId, getFiscalIdConfigsByCountry, normalizarPais } from '@/lib/fiscal-validation'
 
 interface EmisorInfo {
   nombre: string | null
@@ -105,6 +106,21 @@ function buildSupplierAddress(s: any): string {
   return [street, extra].filter(Boolean).join(', ')
 }
 
+// Países con configuración fiscal (los mismos que usa el validador de perfiles)
+const SUPPLIER_COUNTRIES = [
+  'España', 'México', 'Estados Unidos', 'Chile', 'Argentina', 'Colombia',
+  'Perú', 'Brasil', 'Reino Unido', 'Alemania', 'Francia', 'Italia', 'Portugal',
+]
+
+// Detecta el tipo de ID fiscal español por su formato (NIF/CIF/NIE)
+function detectTipoIdEspanol(id: string): 'NIF' | 'CIF' | 'NIE' | null {
+  const clean = id.trim().toUpperCase()
+  if (/^[XYZ]/.test(clean)) return 'NIE'
+  if (/^\d/.test(clean)) return 'NIF'
+  if (/^[A-Z]/.test(clean)) return 'CIF'
+  return null
+}
+
 export default function EscanearGastoPage() {
   const router = useRouter()
   const cameraInputRef = useRef<HTMLInputElement>(null)
@@ -142,7 +158,8 @@ export default function EscanearGastoPage() {
   const [registeringSupplier, setRegisteringSupplier] = useState(false)
   // Modal de registro: completa la ficha del nuevo proveedor
   const [supplierModalOpen, setSupplierModalOpen] = useState(false)
-  const [supplierModal, setSupplierModal] = useState({ name: '', taxId: '', email: '', phone: '', category: 'otros', vatRates: [] as number[] })
+  const [supplierModal, setSupplierModal] = useState({ name: '', taxId: '', email: '', phone: '', category: 'otros', pais: 'España', vatRates: [] as number[] })
+  const [supplierTaxIdError, setSupplierTaxIdError] = useState('')
 
   // Carga la lista de proveedores registrados al abrir el formulario
   useEffect(() => {
@@ -375,9 +392,28 @@ export default function EscanearGastoPage() {
       email: '',
       phone: '',
       category: form.category,
+      pais: 'España',
       vatRates: [...supplierVatRates],
     })
+    setSupplierTaxIdError('')
     setSupplierModalOpen(true)
+  }
+
+  // Valida el NIF/CIF con la misma lógica fiscal que los perfiles
+  const validateModalTaxId = (): string | null => {
+    const id = supplierModal.taxId.trim()
+    if (!id) return null // opcional: sin ID no se valida
+    const paisCode = normalizarPais(supplierModal.pais) || supplierModal.pais
+    const configs = getFiscalIdConfigsByCountry(paisCode)
+    if (configs.length === 0) return null // país sin configuración → aceptar
+    const tipos: string[] = paisCode === 'ES'
+      ? [detectTipoIdEspanol(id)].filter((t): t is 'NIF' | 'CIF' | 'NIE' => t !== null)
+      : configs.map(c => c.tipoId)
+    if (tipos.length === 0) return 'Formato de NIF/CIF no reconocido (NIF, CIF o NIE).'
+    for (const tipo of tipos) {
+      if (validateFiscalId(paisCode, tipo, id).valid) return null
+    }
+    return `El identificador fiscal no es válido para ${supplierModal.pais}. Revisa el formato o el país.`
   }
 
   // Guarda el proveedor con la ficha completa (email, teléfono, categoría…)
@@ -385,6 +421,12 @@ export default function EscanearGastoPage() {
     const name = supplierModal.name.trim()
     if (!name) {
       toast.error('El nombre del proveedor es obligatorio')
+      return
+    }
+    const taxIdError = validateModalTaxId()
+    if (taxIdError) {
+      setSupplierTaxIdError(taxIdError)
+      toast.error(taxIdError)
       return
     }
     setRegisteringSupplier(true)
@@ -398,6 +440,7 @@ export default function EscanearGastoPage() {
           email: supplierModal.email.trim() || undefined,
           phone: supplierModal.phone.trim() || undefined,
           category: supplierModal.category,
+          country: supplierModal.pais,
           vatRates: supplierModal.vatRates.length > 0 ? supplierModal.vatRates : undefined,
           ...parseSupplierAddress(form.issuerAddress),
         }),
@@ -1228,8 +1271,34 @@ export default function EscanearGastoPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>NIF / CIF</Label>
-                <Input value={supplierModal.taxId} onChange={e => setSupplierModal(m => ({ ...m, taxId: e.target.value }))} placeholder="B12345678" />
+                <Input
+                  value={supplierModal.taxId}
+                  onChange={e => {
+                    setSupplierModal(m => ({ ...m, taxId: e.target.value }))
+                    setSupplierTaxIdError('')
+                  }}
+                  placeholder="B12345678"
+                  className={supplierTaxIdError ? 'border-destructive' : ''}
+                />
+                {supplierTaxIdError && (
+                  <p className="text-[11px] font-medium text-destructive mt-1">{supplierTaxIdError}</p>
+                )}
               </div>
+              <div>
+                <Label>País</Label>
+                <select
+                  value={supplierModal.pais}
+                  onChange={e => {
+                    setSupplierModal(m => ({ ...m, pais: e.target.value }))
+                    setSupplierTaxIdError('')
+                  }}
+                  className="w-full bg-background border rounded-xl px-3 py-2.5 text-sm outline-none"
+                >
+                  {SUPPLIER_COUNTRIES.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Categoría</Label>
                 <Select value={supplierModal.category} onValueChange={v => setSupplierModal(m => ({ ...m, category: v }))}>
@@ -1239,16 +1308,14 @@ export default function EscanearGastoPage() {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Email</Label>
                 <Input type="email" value={supplierModal.email} onChange={e => setSupplierModal(m => ({ ...m, email: e.target.value }))} placeholder="proveedor@empresa.com" />
               </div>
-              <div>
-                <Label>Teléfono</Label>
-                <Input type="tel" value={supplierModal.phone} onChange={e => setSupplierModal(m => ({ ...m, phone: e.target.value }))} placeholder="+34 600 000 000" />
-              </div>
+            </div>
+            <div>
+              <Label>Teléfono</Label>
+              <Input type="tel" value={supplierModal.phone} onChange={e => setSupplierModal(m => ({ ...m, phone: e.target.value }))} placeholder="+34 600 000 000" />
             </div>
             <div className="space-y-1.5">
               <Label>Tipos de IVA aplicables</Label>
