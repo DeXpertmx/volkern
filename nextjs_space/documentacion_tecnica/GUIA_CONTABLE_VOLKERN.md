@@ -374,11 +374,13 @@ El sistema genera automáticamente los datos para las declaraciones fiscales. El
 | Modelo | Impuesto | Periodicidad | Cómo se calcula |
 |--------|----------|-------------|-----------------|
 | **303** | IVA | Trimestral | `Total IVA Repercutido (477) − Total IVA Soportado (472)` |
-| **111** | Retenciones IRPF | Trimestral | Suma de todas las retenciones practicadas (nóminas, profesionales, alquileres) |
+| **111** | Retenciones IRPF | Trimestral | Suma de las retenciones practicadas (nóminas, profesionales) |
+| **115** | Retenciones por arrendamientos | Trimestral | Gastos de alquiler con retención (19% de la renta) |
 | **130** | Pago fraccionado IRPF | Trimestral | `(Ingresos del Grupo 7 − Gastos del Grupo 6) × 20%` |
 | **347** | Operaciones con terceros | Anual | Facturas emitidas + Gastos recibidos por cada NIF, si superan 3.005,06 € |
 | **349** | Operac. intracomunitarias | Trimestral | Facturas a clientes UE + Compras a proveedores UE con NIF intracomunitario |
 | **390** | Resumen anual IVA | Anual | Consolida los 4 modelos 303 del año |
+| **180** | Resumen anual retenciones arrendamientos | Anual | Consolida los 4 modelos 115, agrupado por arrendador |
 
 ### 9.2. Ejemplo: Modelo 303 del 1er Trimestre 2026
 
