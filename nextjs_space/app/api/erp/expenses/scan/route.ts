@@ -4,7 +4,7 @@ export const maxDuration = 60;
 import { NextResponse } from 'next/server'
 import { withTenantAuth } from '@/lib/api-key-auth'
 import { uploadFile } from '@/lib/s3'
-import { parseInvoiceText, VisionResult, FALLBACK } from '@/lib/invoice-parser'
+import { normalizeVatBreakdown, parseInvoiceText, sanitizeSupplierName, VisionResult, FALLBACK } from '@/lib/invoice-parser'
 import { overlayFromOcrSpace, OcrOverlay } from '@/lib/finance/ocr-template'
 
 export async function callVision(buffer: Buffer, mimeType: string): Promise<{ result: VisionResult | null; rawText: string; overlay: OcrOverlay | null }> {
@@ -251,29 +251,38 @@ Reglas importantes:
       : 'Las APIs de visión configuradas (4 proveedores) no pudieron extraer datos de la imagen. Prueba con mejor iluminación o usa "Sin OCR".')
   console.warn(`[Vision] ❌ ${diagnostic}`)
   return { result: null, rawText, overlay }
-}
-
-function normalizeVisionResult(input: any): VisionResult | null {
+}function normalizeVisionResult(input: any): VisionResult | null {
   if (!input || typeof input !== 'object') return null
   const totals = input.totales && typeof input.totales === 'object' ? input.totales : {}
-  const rawBreakdown = Array.isArray(totals.desglose_iva)
-    ? totals.desglose_iva
-    : (Array.isArray(input.desglose_iva) ? input.desglose_iva : [])
-  const desglose_iva = rawBreakdown
-    .map((row: any) => ({
-      tipo: Number(row?.tipo ?? row?.tipo_iva ?? row?.rate),
-      base: Number(row?.base ?? row?.base_imponible),
-      cuota: Number(row?.cuota ?? row?.cuota_iva ?? row?.amount),
-    }))
-    .filter((row: any) => Number.isFinite(row.tipo) && Number.isFinite(row.base) && Number.isFinite(row.cuota))
+
+  // Proveedor limpio: la IA a veces arrastra fechas, moneda y demás cabecera
+  // al campo de razón social. Sanearlo evita registrar un proveedor con basura.
+  const rawSupplier = input.emisor?.nombre ?? input.supplier ?? input.issuerName ?? null
+  const cleanedSupplier = sanitizeSupplierName(rawSupplier)
+  const rawIssuer = sanitizeSupplierName(input.emisor?.nombre) ?? cleanedSupplier
+  const rawSupplierFlat = sanitizeSupplierName(input.supplier ?? input.issuerName) ?? cleanedSupplier
+
+  // Desglose de IVA tolerante a formatos (es/inglés, anidado o plano)
+  const desglose_iva = normalizeVatBreakdown(totals.desglose_iva ?? input.desglose_iva)
+  // Si el modelo no devolvió desglose pero sí tipo/base/cuota, derivarlo
+  const derivedBreakdown =
+    desglose_iva.length === 0 &&
+    Number.isFinite(Number(totals.tipo_iva)) &&
+    Number.isFinite(Number(totals.base_imponible)) &&
+    Number.isFinite(Number(totals.cuota_iva)) &&
+    Number(totals.base_imponible) > 0
+      ? [{ tipo: Number(totals.tipo_iva), base: Number(totals.base_imponible), cuota: Number(totals.cuota_iva) }]
+      : desglose_iva
 
   const normalized: VisionResult = {
     ...FALLBACK,
     ...input,
-    emisor: { ...FALLBACK.emisor, ...(input.emisor || {}) },
+    emisor: { ...FALLBACK.emisor, ...(input.emisor || {}), nombre: rawIssuer },
     receptor: { ...FALLBACK.receptor, ...(input.receptor || {}) },
     lineas: Array.isArray(input.lineas) ? input.lineas : [],
-    totales: { ...FALLBACK.totales, ...totals, desglose_iva: desglose_iva.length ? desglose_iva : undefined },
+    supplier: rawSupplierFlat,
+    issuerName: rawIssuer,
+    totales: { ...FALLBACK.totales, ...totals, desglose_iva: derivedBreakdown.length ? derivedBreakdown : undefined },
   }
   return normalized
 }
