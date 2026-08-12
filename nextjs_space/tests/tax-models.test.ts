@@ -124,7 +124,9 @@ function makeExpense(overrides: Partial<any> = {}) {
     supplierId: 'supplier-1',
     description: 'Servicio hosting Alemania',
     amount: 1500,
+    category: 'otros',
     date: new Date('2026-02-20'),
+    metadata: {},
     supplier: { id: 'supplier-1', name: 'Proveedor DE GmbH', taxId: 'DE987654321', active: true },
     ...overrides,
   };
@@ -531,6 +533,194 @@ describe('Modelo 349 — fileModelo349Return', () => {
         entidad: 'MODELO_349',
         entidadId: '2026_Q2',
         metadata: expect.objectContaining({ year: 2026, quarter: 2 }),
+      },
+    });
+  });
+});
+
+// ============================================================
+// MODELO 115 — IRPF Retenciones por Arrendamientos
+// ============================================================
+function makeRentExpense(overrides: Partial<any> = {}) {
+  return makeExpense({
+    id: 'rent-1',
+    supplierId: 'supplier-rent',
+    description: 'Alquiler local oficina',
+    amount: 1000,
+    category: 'alquiler',
+    date: new Date('2026-02-10'),
+    metadata: { irpfRate: 19, irpfAmount: 190, totalFactura: 1190 },
+    supplier: { id: 'supplier-rent', name: 'Arrendador Pérez', taxId: 'B12345678', active: true },
+    ...overrides,
+  });
+}
+
+describe('Modelo 115 — getQuarterlyModelo115Report', () => {
+  it('debe retornar hasActivity=false cuando no hay gastos de alquiler', async () => {
+    mockExpenseFindMany.mockResolvedValue([]);
+
+    const report = await TaxService.getQuarterlyModelo115Report(TENANT_ID, 2026, 1);
+
+    expect(report.hasActivity).toBe(false);
+    expect(report.totalRentBase).toBe(0);
+    expect(report.totalRetentions).toBe(0);
+    expect(report.retentionRate).toBe(19);
+    expect(report.details).toEqual([]);
+  });
+
+  it('debe sumar las retenciones de los alquileres del trimestre', async () => {
+    mockExpenseFindMany.mockResolvedValue([
+      makeRentExpense({ id: 'r1', amount: 1000, metadata: { irpfRate: 19, irpfAmount: 190 }, date: new Date('2026-01-10') }),
+      makeRentExpense({ id: 'r2', amount: 2000, metadata: { irpfRate: 19, irpfAmount: 380 }, date: new Date('2026-02-10') }),
+      makeRentExpense({ id: 'r3', amount: 1500, metadata: { irpfRate: 19, irpfAmount: 285 }, date: new Date('2026-03-10') }),
+    ]);
+
+    const report = await TaxService.getQuarterlyModelo115Report(TENANT_ID, 2026, 1);
+
+    expect(report.hasActivity).toBe(true);
+    expect(report.totalRentBase).toBe(4500);
+    expect(report.totalRetentions).toBe(855); // 190 + 380 + 285
+    expect(report.details).toHaveLength(3);
+  });
+
+  it('debe ignorar alquileres sin retención practicada', async () => {
+    mockExpenseFindMany.mockResolvedValue([
+      makeRentExpense({ id: 'r1', amount: 1000, metadata: { irpfRate: 19, irpfAmount: 190 } }),
+      makeRentExpense({ id: 'r2', amount: 800, metadata: { irpfAmount: 0 } }),
+      makeRentExpense({ id: 'r3', amount: 500, metadata: {} }),
+    ]);
+
+    const report = await TaxService.getQuarterlyModelo115Report(TENANT_ID, 2026, 1);
+
+    expect(report.details).toHaveLength(1);
+    expect(report.totalRentBase).toBe(1000);
+    expect(report.totalRetentions).toBe(190);
+  });
+
+  it('debe filtrar solo gastos con categoría alquiler', async () => {
+    mockExpenseFindMany.mockResolvedValue([]);
+
+    await TaxService.getQuarterlyModelo115Report(TENANT_ID, 2026, 1);
+
+    expect(mockExpenseFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          tenantId: TENANT_ID,
+          category: 'alquiler',
+        }),
+      })
+    );
+  });
+
+  it('debe incluir datos del proveedor (arrendador) en los detalles', async () => {
+    mockExpenseFindMany.mockResolvedValue([
+      makeRentExpense(),
+    ]);
+
+    const report = await TaxService.getQuarterlyModelo115Report(TENANT_ID, 2026, 1);
+
+    expect(report.details[0].supplierName).toBe('Arrendador Pérez');
+    expect(report.details[0].supplierTaxId).toBe('B12345678');
+    expect(report.details[0].retentionRate).toBe(19);
+    expect(report.details[0].retentionAmount).toBe(190);
+  });
+});
+
+describe('Modelo 115 — fileModelo115Return', () => {
+  it('debe crear auditLog con accion MODELO_115_FILED', async () => {
+    mockAuditLogCreate.mockResolvedValue({ id: 'log-1' });
+
+    await TaxService.fileModelo115Return(TENANT_ID, 2026, 2, USER_ID);
+
+    expect(mockAuditLogCreate).toHaveBeenCalledWith({
+      data: {
+        tenantId: TENANT_ID,
+        usuarioId: USER_ID,
+        accion: 'MODELO_115_FILED',
+        entidad: 'MODELO_115',
+        entidadId: '2026_Q2',
+        metadata: expect.objectContaining({ year: 2026, quarter: 2 }),
+      },
+    });
+  });
+});
+
+// ============================================================
+// MODELO 180 — Resumen Anual Retenciones Arrendamientos
+// ============================================================
+describe('Modelo 180 — getAnnualModelo180Report', () => {
+  it('debe retornar hasActivity=false cuando no hay retenciones', async () => {
+    mockExpenseFindMany.mockResolvedValue([]);
+
+    const report = await TaxService.getAnnualModelo180Report(TENANT_ID, 2026);
+
+    expect(report.hasActivity).toBe(false);
+    expect(report.totalLandlords).toBe(0);
+    expect(report.totalRetentions).toBe(0);
+    expect(report.quarters).toHaveLength(4);
+  });
+
+  it('debe consolidar los 4 trimestres y agrupar por arrendador', async () => {
+    // Q1: 2 rentas del mismo arrendador; Q2-Q4: vacíos
+    mockExpenseFindMany
+      .mockResolvedValueOnce([
+        makeRentExpense({ id: 'r1', amount: 1000, metadata: { irpfRate: 19, irpfAmount: 190 }, date: new Date('2026-01-10') }),
+        makeRentExpense({ id: 'r2', amount: 2000, metadata: { irpfRate: 19, irpfAmount: 380 }, date: new Date('2026-03-15') }),
+      ])
+      .mockResolvedValue([])
+      .mockResolvedValue([])
+      .mockResolvedValue([]);
+
+    const report = await TaxService.getAnnualModelo180Report(TENANT_ID, 2026);
+
+    expect(report.hasActivity).toBe(true);
+    expect(report.totalLandlords).toBe(1);
+    expect(report.totalRentBase).toBe(3000);
+    expect(report.totalRetentions).toBe(570); // 190 + 380
+    expect(report.landlords[0].supplierName).toBe('Arrendador Pérez');
+    expect(report.landlords[0].invoiceCount).toBe(2);
+    expect(report.quarters[0].totalRetentions).toBe(570);
+    expect(report.quarters[1].totalRetentions).toBe(0);
+  });
+
+  it('debe agrupar por arrendador cuando hay varios', async () => {
+    mockExpenseFindMany
+      .mockResolvedValueOnce([
+        makeRentExpense({ id: 'r1', amount: 1000, metadata: { irpfRate: 19, irpfAmount: 190 }, date: new Date('2026-01-10') }),
+        makeRentExpense({
+          id: 'r2',
+          amount: 500,
+          supplierId: 'supplier-2',
+          metadata: { irpfRate: 19, irpfAmount: 95 },
+          date: new Date('2026-02-10'),
+          supplier: { id: 'supplier-2', name: 'Arrendador García', taxId: 'C98765432', active: true },
+        }),
+      ])
+      .mockResolvedValue([])
+      .mockResolvedValue([])
+      .mockResolvedValue([]);
+
+    const report = await TaxService.getAnnualModelo180Report(TENANT_ID, 2026);
+
+    expect(report.totalLandlords).toBe(2);
+    expect(report.landlords).toHaveLength(2);
+  });
+});
+
+describe('Modelo 180 — fileModelo180Return', () => {
+  it('debe crear auditLog anual sin quarter', async () => {
+    mockAuditLogCreate.mockResolvedValue({ id: 'log-1' });
+
+    await TaxService.fileModelo180Return(TENANT_ID, 2026, USER_ID);
+
+    expect(mockAuditLogCreate).toHaveBeenCalledWith({
+      data: {
+        tenantId: TENANT_ID,
+        usuarioId: USER_ID,
+        accion: 'MODELO_180_FILED',
+        entidad: 'MODELO_180',
+        entidadId: '2026',
+        metadata: expect.objectContaining({ year: 2026 }),
       },
     });
   });

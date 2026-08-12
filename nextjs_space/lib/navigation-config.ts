@@ -316,6 +316,8 @@ export const HUBS: HubConfig[] = [
       { name: 'Conciliación Bancaria', href: '/dashboard/finanzas/contabilidad/reconciliacion', icon: Calculator, planModule: 'finanzas', description: 'Sincronización con bancos e IA' },
       { name: 'Impuestos (Modelo 303)', href: '/dashboard/finanzas/contabilidad/impuestos', icon: FileText, planModule: 'finanzas', requiredRegion: 'ES', description: 'Automatización de IVA trimestral' },
       { name: 'Retenciones (Modelo 111)', href: '/dashboard/finanzas/contabilidad/retenciones', icon: Percent, planModule: 'finanzas', requiredRegion: 'ES', description: 'Retenciones IRPF trimestrales' },
+      { name: 'Arrendamientos (Modelo 115)', href: '/dashboard/finanzas/contabilidad/modelo115', icon: Home, planModule: 'finanzas', requiredRegion: 'ES', description: 'Retención trimestral por alquiler de inmuebles urbanos' },
+      { name: 'Resumen Arrendamientos (Modelo 180)', href: '/dashboard/finanzas/contabilidad/modelo180', icon: FileText, planModule: 'finanzas', requiredRegion: 'ES', description: 'Resumen anual de retenciones sobre arrendamientos' },
       { name: 'Pago Fraccionado (Modelo 130)', href: '/dashboard/finanzas/contabilidad/modelo130', icon: Calculator, planModule: 'finanzas', requiredRegion: 'ES', description: 'IRPF estimación directa trimestral' },
       { name: 'Intracomunitario (Modelo 349)', href: '/dashboard/finanzas/contabilidad/modelo349', icon: Globe, planModule: 'finanzas', requiredRegion: 'ES', description: 'Operaciones intracomunitarias UE trimestrales' },
       { name: 'Terceros (Modelo 347)', href: '/dashboard/finanzas/contabilidad/modelo347', icon: Building2, planModule: 'finanzas', requiredRegion: 'ES', description: 'Operaciones anuales con terceros >3.005€' },

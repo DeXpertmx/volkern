@@ -78,6 +78,7 @@ const CATEGORIES = [
   { value: 'transporte', label: 'Transporte' },
   { value: 'suministros', label: 'Suministros' },
   { value: 'oficina', label: 'Oficina' },
+  { value: 'alquiler', label: 'Alquiler' },
   { value: 'tecnologia', label: 'Tecnología' },
   { value: 'marketing', label: 'Marketing' },
   { value: 'profesional', label: 'Profesional' },

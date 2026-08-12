@@ -117,6 +117,47 @@ export interface Modelo349ReportSummary {
   hasOperations: boolean;
 }
 
+export interface Modelo115Detail {
+  expenseId: string;
+  supplierId: string;
+  supplierName: string;
+  supplierTaxId: string;
+  description: string;
+  date: string;
+  base: number;
+  retentionRate: number;
+  retentionAmount: number;
+}
+
+export interface Modelo115ReportSummary {
+  year: number;
+  quarter: number;
+  totalRentBase: number;
+  totalRetentions: number;
+  retentionRate: number; // Tipo estándar del Modelo 115 (19%)
+  hasActivity: boolean;
+  details: Modelo115Detail[];
+}
+
+export interface Modelo180Landlord {
+  supplierId: string;
+  supplierName: string;
+  supplierTaxId: string;
+  invoiceCount: number;
+  totalRentBase: number;
+  totalRetentions: number;
+}
+
+export interface Modelo180ReportSummary {
+  year: number;
+  landlords: Modelo180Landlord[];
+  totalLandlords: number;
+  totalRentBase: number;
+  totalRetentions: number;
+  quarters: { quarter: number; totalRentBase: number; totalRetentions: number }[];
+  hasActivity: boolean;
+}
+
 export class TaxService {
   private static readonly EU_COUNTRY_CODES = ['DE', 'FR', 'IT', 'PT', 'NL', 'BE', 'AT', 'IE', 'PL', 'SE', 'DK', 'FI', 'GR', 'CZ', 'RO', 'HU', 'SK', 'BG', 'HR', 'SI', 'LT', 'LV', 'EE', 'CY', 'LU', 'MT'];
 
@@ -636,6 +677,166 @@ export class TaxService {
         metadata: {
           year,
           quarter,
+          filedAt: new Date().toISOString()
+        }
+      } as any
+    });
+  }
+
+  /**
+   * Calcula la retención trimestral por arrendamiento de inmuebles urbanos (Modelo 115).
+   *
+   * Fuente: gastos con categoría 'alquiler' que practicaron retención de IRPF
+   * (metadata.irpfAmount > 0). El arrendatario que paga un alquiler a un
+   * arrendador (persona física o entidad sin actividad) debe retener el 19%
+   * del importe y declararlo en el Modelo 115.
+   */
+  static async getQuarterlyModelo115Report(tenantId: string, year: number, quarter: number): Promise<Modelo115ReportSummary> {
+    const months = this.getMonthsForQuarter(quarter);
+    const startDate = new Date(year, months[0] - 1, 1);
+    const endDate = new Date(year, months[2], 0, 23, 59, 59, 999);
+
+    const expenses = await prisma.expense.findMany({
+      where: {
+        tenantId,
+        date: { gte: startDate, lte: endDate },
+        category: 'alquiler',
+      },
+      include: {
+        supplier: true,
+      },
+      orderBy: { date: 'asc' },
+    });
+
+    const details: Modelo115Detail[] = [];
+    let totalRentBase = 0;
+    let totalRetentions = 0;
+
+    for (const exp of expenses) {
+      const meta = (exp.metadata as any) || {};
+      const retentionAmount = Number(meta.irpfAmount) || 0;
+      // Solo los arriendos con retención practicada entran en el Modelo 115
+      if (retentionAmount <= 0) continue;
+
+      const retentionRate = Number(meta.irpfRate) || 0;
+      const base = Number(exp.taxableBase) || Number(exp.amount) || 0;
+      totalRentBase += base;
+      totalRetentions += retentionAmount;
+      details.push({
+        expenseId: exp.id,
+        supplierId: exp.supplierId,
+        supplierName: exp.supplier?.name || '',
+        supplierTaxId: exp.supplier?.taxId || '',
+        description: exp.description,
+        date: exp.date.toISOString(),
+        base: Math.round(base * 100) / 100,
+        retentionRate,
+        retentionAmount: Math.round(retentionAmount * 100) / 100,
+      });
+    }
+
+    return {
+      year,
+      quarter,
+      totalRentBase: Math.round(totalRentBase * 100) / 100,
+      totalRetentions: Math.round(totalRetentions * 100) / 100,
+      retentionRate: 19, // Tipo estándar de retención por arrendamiento de inmuebles urbanos
+      hasActivity: details.length > 0,
+      details,
+    };
+  }
+
+  /**
+   * Marca el periodo del Modelo 115 como presentado (registro informativo)
+   */
+  static async fileModelo115Return(tenantId: string, year: number, quarter: number, userId?: string) {
+    return await prisma.auditLog.create({
+      data: {
+        tenantId,
+        usuarioId: userId || '',
+        accion: 'MODELO_115_FILED',
+        entidad: 'MODELO_115',
+        entidadId: `${year}_Q${quarter}`,
+        metadata: {
+          year,
+          quarter,
+          filedAt: new Date().toISOString()
+        }
+      } as any
+    });
+  }
+
+  /**
+   * Genera el resumen anual de retenciones por arrendamiento (Modelo 180).
+   * Consolida los 4 trimestres del Modelo 115 y agrupa por arrendador
+   * (proveedor), con el total de rentas pagadas y retenciones practicadas.
+   */
+  static async getAnnualModelo180Report(tenantId: string, year: number): Promise<Modelo180ReportSummary> {
+    const quarterSummaries: Modelo115ReportSummary[] = [];
+    for (const q of [1, 2, 3, 4]) {
+      quarterSummaries.push(await this.getQuarterlyModelo115Report(tenantId, year, q));
+    }
+
+    const landlordMap = new Map<string, Modelo180Landlord>();
+    for (const qs of quarterSummaries) {
+      for (const d of qs.details) {
+        const existing = landlordMap.get(d.supplierId);
+        if (existing) {
+          existing.invoiceCount++;
+          existing.totalRentBase += d.base;
+          existing.totalRetentions += d.retentionAmount;
+        } else {
+          landlordMap.set(d.supplierId, {
+            supplierId: d.supplierId,
+            supplierName: d.supplierName,
+            supplierTaxId: d.supplierTaxId,
+            invoiceCount: 1,
+            totalRentBase: d.base,
+            totalRetentions: d.retentionAmount,
+          });
+        }
+      }
+    }
+
+    const landlords = Array.from(landlordMap.values())
+      .map(l => ({
+        ...l,
+        totalRentBase: Math.round(l.totalRentBase * 100) / 100,
+        totalRetentions: Math.round(l.totalRetentions * 100) / 100,
+      }))
+      .sort((a, b) => b.totalRetentions - a.totalRetentions);
+
+    const totalRentBase = landlords.reduce((s, l) => s + l.totalRentBase, 0);
+    const totalRetentions = landlords.reduce((s, l) => s + l.totalRetentions, 0);
+
+    return {
+      year,
+      landlords,
+      totalLandlords: landlords.length,
+      totalRentBase: Math.round(totalRentBase * 100) / 100,
+      totalRetentions: Math.round(totalRetentions * 100) / 100,
+      quarters: quarterSummaries.map(qs => ({
+        quarter: qs.quarter,
+        totalRentBase: qs.totalRentBase,
+        totalRetentions: qs.totalRetentions,
+      })),
+      hasActivity: landlords.length > 0,
+    };
+  }
+
+  /**
+   * Marca el ejercicio del Modelo 180 como presentado (registro informativo)
+   */
+  static async fileModelo180Return(tenantId: string, year: number, userId?: string) {
+    return await prisma.auditLog.create({
+      data: {
+        tenantId,
+        usuarioId: userId || '',
+        accion: 'MODELO_180_FILED',
+        entidad: 'MODELO_180',
+        entidadId: `${year}`,
+        metadata: {
+          year,
           filedAt: new Date().toISOString()
         }
       } as any
