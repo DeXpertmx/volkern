@@ -11,37 +11,43 @@ interface BalanceSheetReport {
   pasivo: { sections: BalanceSheetSection[]; total: number }
 }
 
-const ACTIVO_SECTIONS: { label: string; groupFilter: (g: number) => boolean }[] = [
-  { label: 'A) Activo No Corriente', groupFilter: (g) => g === 2 },
-  { label: 'B) Activo Corriente', groupFilter: (g) => g === 3 || g === 4 || g === 5 },
+type SectionFilter = (a: { code: string; group: number }) => boolean
+
+const ACTIVO_SECTIONS: { label: string; filter: SectionFilter }[] = [
+  { label: 'A) Activo No Corriente', filter: (a) => a.group === 2 },
+  { label: 'B) Activo Corriente', filter: (a) => a.group === 3 || a.group === 4 || a.group === 5 },
 ]
 
-const PASIVO_SECTIONS: { label: string; groupFilter: (g: number) => boolean }[] = [
-  { label: 'A) Patrimonio Neto', groupFilter: (g) => g === 1 },
-  { label: 'B) Pasivo No Corriente', groupFilter: (g) => false },
-  { label: 'C) Pasivo Corriente', groupFilter: (g) => g === 4 || g === 5 },
+const PASIVO_SECTIONS: { label: string; filter: SectionFilter }[] = [
+  // Grupo 1, cuentas de patrimonio neto (capital, reservas, resultados…)
+  { label: 'A) Patrimonio Neto', filter: (a) => a.group === 1 && parseInt(a.code.slice(0, 3), 10) < 140 },
+  // Grupo 1, provisiones y deudas a largo plazo (160+)
+  { label: 'B) Pasivo No Corriente', filter: (a) => a.group === 1 && parseInt(a.code.slice(0, 3), 10) >= 140 },
+  { label: 'C) Pasivo Corriente', filter: (a) => a.group === 4 || a.group === 5 },
 ]
 
 function buildSection(
   accounts: { code: string; name: string; type: string; balance: number; group: number }[],
   typeFilter: string,
-  sections: { label: string; groupFilter: (g: number) => boolean }[]
+  sections: { label: string; filter: SectionFilter }[]
 ): { sections: BalanceSheetSection[]; total: number } {
   const result: BalanceSheetSection[] = []
   let total = 0
 
   for (const sec of sections) {
     const accs = accounts
-      .filter((a) => a.type === typeFilter && sec.groupFilter(a.group) && a.balance !== 0)
-      .map((a) => ({ code: a.code, name: a.name, balance: a.balance }))
+      .filter((a) => a.type === typeFilter && sec.filter(a) && a.balance !== 0)
+      // Valor absoluto: las cuentas de HABER (pasivo/patrimonio) tienen saldo
+      // negativo por convención interna; en el balance se muestran en positivo
+      .map((a) => ({ code: a.code, name: a.name, balance: Math.abs(a.balance) }))
       .sort((a, b) => a.code.localeCompare(b.code))
 
-    const sectionTotal = accs.reduce((s, a) => s + a.balance, 0)
+    const sectionTotal = Math.round(accs.reduce((s, a) => s + a.balance, 0) * 100) / 100
     total += sectionTotal
     result.push({ label: sec.label, accounts: accs, total: sectionTotal })
   }
 
-  return { sections: result, total }
+  return { sections: result, total: Math.round(total * 100) / 100 }
 }
 
 export async function getBalanceSheet(tenantId: string): Promise<BalanceSheetReport> {
