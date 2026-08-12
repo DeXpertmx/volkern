@@ -16,6 +16,14 @@ import {
   type OcrTemplateField,
 } from '@/lib/finance/ocr-template'
 import { detectWordBoxes } from '@/lib/finance/ocr-boxes'
+import {
+  ZOOM_MAX,
+  ZOOM_MIN,
+  ZOOM_STEP,
+  ZOOM_WHEEL_STEP,
+  adaptiveLensParams,
+  clampZoom,
+} from '@/components/finance/ocr-viewer-shared'
 
 interface OcrCorrectionModalProps {
   open: boolean
@@ -81,6 +89,13 @@ export default function OcrCorrectionModal({ open, onClose, imageUrl, pdfPages, 
   // tesseract.js las detecta localmente sobre la imagen que se muestra.
   const [localOverlay, setLocalOverlay] = useState<OcrOverlay | null>(null)
   const [detecting, setDetecting] = useState(false)
+  // Zoom del visor: escala la imagen (y las regiones, que usan % del
+  // contenedor) para seleccionar los datos con más precisión.
+  const [zoom, setZoom] = useState(1)
+  // Lupa que sigue al cursor mientras se dibuja: {x, y} en px CSS del
+  // contenedor (sin zoom), sus dimensiones y los parámetros adaptativos
+  // (tamaño y aumento según la densidad de píxeles de la imagen).
+  const [lensPos, setLensPos] = useState<{ x: number; y: number; w: number; h: number; size: number; zoom: number } | null>(null)
 
   const effectiveOverlay = overlay || localOverlay
   const currentPageNumber = pdfPages?.length ? pdfPage + 1 : 1
@@ -88,6 +103,8 @@ export default function OcrCorrectionModal({ open, onClose, imageUrl, pdfPages, 
   const currentPageFields = fields.filter(f => (f.page ?? 1) === currentPageNumber)
   const containerRef = useRef<HTMLDivElement>(null)
   const drawingRef = useRef<{ startX: number; startY: number } | null>(null)
+  const imagePanelRef = useRef<HTMLDivElement>(null)
+  const imgRef = useRef<HTMLImageElement>(null)
 
   const colorFor = (field: string) => FIELD_COLORS[OCR_FIELD_DEFS.findIndex(f => f.field === field) % FIELD_COLORS.length]
 
@@ -100,6 +117,7 @@ export default function OcrCorrectionModal({ open, onClose, imageUrl, pdfPages, 
     setFields([])
     setDrawing(null)
     setPdfPage(0)
+    setZoom(1)
     setTemplates([])
     setActiveTemplateId(NEW_TEMPLATE_ID)
     setTemplateName('Formato 1')
@@ -136,7 +154,22 @@ export default function OcrCorrectionModal({ open, onClose, imageUrl, pdfPages, 
   useEffect(() => {
     setLocalOverlay(null)
     setDrawing(null)
+    setZoom(1)
   }, [currentImageUrl])
+
+  // Zoom con Ctrl + rueda sobre el panel de la imagen. Se usa un listener
+  // nativo porque el onWheel de React es pasivo y no permite preventDefault.
+  useEffect(() => {
+    const el = imagePanelRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey) return
+      e.preventDefault()
+      setZoom(z => clampZoom(+(z - (e.deltaY > 0 ? ZOOM_WHEEL_STEP : -ZOOM_WHEEL_STEP)).toFixed(2)))
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
 
   // Si no hay cajas del proveedor de visión, detectarlas localmente
   useEffect(() => {
@@ -182,6 +215,21 @@ export default function OcrCorrectionModal({ open, onClose, imageUrl, pdfPages, 
     }
   }
 
+  // Actualiza la lupa: convierte el cursor (relativo 0..1) a px CSS del
+  // contenedor usando el rect medido (que ya incluye el zoom del visor) y
+  // calcula el tamaño/aumento adaptativos según la densidad de la imagen.
+  const updateLens = (p: { x: number; y: number }) => {
+    const el = containerRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0) return
+    const w = rect.width / zoom
+    const h = rect.height / zoom
+    const naturalW = imgRef.current?.naturalWidth || 0
+    const { size, zoom: lensZoom } = adaptiveLensParams(naturalW, w)
+    setLensPos({ x: p.x * w, y: p.y * h, w, h, size, zoom: lensZoom })
+  }
+
   const onPointerDown = (e: React.PointerEvent) => {
     if (!selectedField) return
     const p = toRelative(e)
@@ -189,6 +237,7 @@ export default function OcrCorrectionModal({ open, onClose, imageUrl, pdfPages, 
     e.currentTarget.setPointerCapture(e.pointerId)
     drawingRef.current = { startX: p.x, startY: p.y }
     setDrawing({ x: p.x, y: p.y, w: 0, h: 0 })
+    updateLens(p)
   }
 
   const onPointerMove = (e: React.PointerEvent) => {
@@ -202,9 +251,11 @@ export default function OcrCorrectionModal({ open, onClose, imageUrl, pdfPages, 
       w: Math.abs(p.x - startX),
       h: Math.abs(p.y - startY),
     })
+    updateLens(p)
   }
 
   const onPointerUp = () => {
+    setLensPos(null)
     if (!drawingRef.current || !drawing || !selectedField) return
     const region = { ...drawing }
     drawingRef.current = null
@@ -417,14 +468,25 @@ export default function OcrCorrectionModal({ open, onClose, imageUrl, pdfPages, 
           </div>
 
           {/* Imagen + overlay */}
-          <div className="flex-1 min-w-0 overflow-auto bg-slate-100 rounded-lg p-3">
-            {pdfPages && pdfPages.length > 1 && (
-              <div className="mb-2 flex items-center justify-between rounded-lg border bg-white px-2 py-1.5">
-                <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => setPdfPage(page => Math.max(0, page - 1))} disabled={pdfPage === 0}>← Anterior</Button>
-                <span className="text-xs font-bold text-muted-foreground">Página {currentPageNumber} de {pdfPages.length}</span>
-                <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => setPdfPage(page => Math.min(pdfPages.length - 1, page + 1))} disabled={pdfPage >= pdfPages.length - 1}>Siguiente →</Button>
+          <div ref={imagePanelRef} className="flex-1 min-w-0 overflow-auto bg-slate-100 rounded-lg p-3">
+            <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border bg-white px-2 py-1.5">
+              {pdfPages && pdfPages.length > 1 ? (
+                <div className="flex items-center gap-1">
+                  <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => setPdfPage(page => Math.max(0, page - 1))} disabled={pdfPage === 0}>← Anterior</Button>
+                  <span className="text-xs font-bold text-muted-foreground">Página {currentPageNumber} de {pdfPages.length}</span>
+                  <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => setPdfPage(page => Math.min(pdfPages.length - 1, page + 1))} disabled={pdfPage >= pdfPages.length - 1}>Siguiente →</Button>
+                </div>
+              ) : (
+                <span />
+              )}
+              {/* Zoom de precisión para seleccionar los datos */}
+              <div className="flex items-center gap-1">
+                <Button type="button" variant="outline" size="sm" className="h-7 w-7 p-0 text-xs" onClick={() => setZoom(z => clampZoom(+(z - ZOOM_STEP).toFixed(2)))} disabled={zoom <= ZOOM_MIN} title="Reducir (Ctrl + rueda)">−</Button>
+                <span className="text-xs font-bold text-muted-foreground w-12 text-center tabular-nums">{Math.round(zoom * 100)}%</span>
+                <Button type="button" variant="outline" size="sm" className="h-7 w-7 p-0 text-xs" onClick={() => setZoom(z => clampZoom(+(z + ZOOM_STEP).toFixed(2)))} disabled={zoom >= ZOOM_MAX} title="Ampliar (Ctrl + rueda)">＋</Button>
+                <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setZoom(1)} disabled={zoom === 1} title="Restablecer zoom">100%</Button>
               </div>
-            )}
+            </div>
             {!currentImageUrl ? (
               <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
                 No hay imagen disponible (los PDFs se corrigen con el texto OCR crudo).
@@ -432,13 +494,13 @@ export default function OcrCorrectionModal({ open, onClose, imageUrl, pdfPages, 
             ) : (
               <div
                 ref={containerRef}
-                className="relative inline-block touch-none select-none"
-                style={{ cursor: selectedField ? 'crosshair' : 'default' }}
+                className="relative inline-block touch-none select-none origin-top-left"
+                style={{ cursor: selectedField ? 'crosshair' : 'default', zoom }}
                 onPointerDown={onPointerDown}
                 onPointerMove={onPointerMove}
                 onPointerUp={onPointerUp}
               >
-                <img src={currentImageUrl} alt={`Factura, página ${currentPageNumber}`} className="block max-w-full" draggable={false} />
+                <img ref={imgRef} src={currentImageUrl} alt={`Factura, página ${currentPageNumber}`} className="block max-w-full" draggable={false} />
                 {/* Detección local de palabras en curso */}
                 {detecting && (
                   <div className="absolute inset-0 flex items-center justify-center bg-white/70">
@@ -489,6 +551,24 @@ export default function OcrCorrectionModal({ open, onClose, imageUrl, pdfPages, 
                       background: `${colorFor(selectedField)}1a`,
                     }}
                   />
+                )}
+                {/* Lupa: amplía la zona del cursor sin cambiar el zoom del visor */}
+                {lensPos && (
+                  <div
+                    className="absolute z-10 pointer-events-none overflow-hidden rounded-lg border-2 border-white shadow-xl"
+                    style={{
+                      left: Math.min(lensPos.w - lensPos.size, Math.max(0, lensPos.x + 18)),
+                      top: Math.min(lensPos.h - lensPos.size, Math.max(0, lensPos.y - lensPos.size - 18)),
+                      width: lensPos.size,
+                      height: lensPos.size,
+                      backgroundImage: `url(${currentImageUrl})`,
+                      backgroundRepeat: 'no-repeat',
+                      backgroundSize: `${lensPos.w * lensPos.zoom}px ${lensPos.h * lensPos.zoom}px`,
+                      backgroundPosition: `${lensPos.size / 2 - lensPos.x * lensPos.zoom}px ${lensPos.size / 2 - lensPos.y * lensPos.zoom}px`,
+                    }}
+                  >
+                    <div className="absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/80" />
+                  </div>
                 )}
               </div>
             )}
