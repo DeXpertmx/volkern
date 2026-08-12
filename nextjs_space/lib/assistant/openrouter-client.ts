@@ -162,16 +162,29 @@ async function callGemma426b(
 }
 
 /**
- * Llama a inclusionai/ling-3.0-flash:free via OpenRouter.
+ * Llama a inclusionai/ling-3.0-tiny:free via OpenRouter.
  * Proveedor DISTINTO a Google (Inclusion AI): no comparte el pool rate-limit
  * de Google AI Studio, así que sigue funcionando cuando gemma-4-31b/26b dan
- * 429 a la vez. Verificado: responde en ~1s con contenido real en español.
+ * 429 a la vez. El slug anterior (ling-3.0-flash:free) fue retirado en 2026
+ * (404); el modelo free actual de Inclusion es ling-3.0-tiny:free.
  */
 async function callLing30Flash(
   messages: OpenRouterMessage[],
   timeoutMs = 20000
 ): Promise<OpenRouterResponse> {
-  return callOpenRouter('inclusionai/ling-3.0-flash:free', messages, 0.3, 8192, timeoutMs);
+  return callOpenRouter('inclusionai/ling-3.0-tiny:free', messages, 0.3, 8192, timeoutMs);
+}
+
+/**
+ * Llama a nvidia/nemotron-3-ultra-550b-a55b:free via OpenRouter.
+ * Respaldo free de NVIDIA (mejor calidad general del tier free, 1M de
+ * contexto) e inmune al pool rate-limit de Google AI Studio.
+ */
+async function callNemotron3UltraFree(
+  messages: OpenRouterMessage[],
+  timeoutMs = 20000
+): Promise<OpenRouterResponse> {
+  return callOpenRouter('nvidia/nemotron-3-ultra-550b-a55b:free', messages, 0.3, 8192, timeoutMs);
 }
 
 /**
@@ -303,7 +316,7 @@ export async function callWebCreatorWithFallback(
   // 2. Ling 3.0 Flash via OpenRouter — proveedor distinto a Google, inmune al
   //     pool rate-limit de Google AI Studio
   try {
-    console.log('[AI WebCreator] Fallback a inclusionai/ling-3.0-flash:free...');
+    console.log('[AI WebCreator] Fallback a inclusionai/ling-3.0-tiny:free...');
     const response = await callLing30Flash(messages, 45000);
     console.log('[AI WebCreator] ✅ Ling 3.0 Flash respondió correctamente');
     return response;
@@ -321,9 +334,19 @@ export async function callWebCreatorWithFallback(
     }
   }
 
-  // 5. Fallback final: Google Gemini 2.5 Flash directo
+  // 5. Nemotron 3 Ultra free (NVIDIA) via OpenRouter
   try {
-    console.log('[AI WebCreator] Fallback final a Google Gemini 2.5 Flash...');
+    console.log('[AI WebCreator] Fallback a nvidia/nemotron-3-ultra-550b-a55b:free...');
+    const response = await callNemotron3UltraFree(messages, 45000);
+    console.log('[AI WebCreator] ✅ Nemotron 3 Ultra respondió correctamente');
+    return response;
+  } catch (error) {
+    console.warn('[AI WebCreator] Nemotron 3 Ultra falló:', error);
+  }
+
+  // 6. Fallback final: Google Gemini directo (GEMINI_MODEL)
+  try {
+    console.log(`[AI WebCreator] Fallback final a Google Gemini (${GEMINI_MODEL})...`);
     const response = await callGemini25Flash(messages, 15000);
     console.log('[AI WebCreator] ✅ Gemini respondió correctamente');
     return response;
@@ -334,14 +357,23 @@ export async function callWebCreatorWithFallback(
 }
 
 /**
- * Llama a Google Gemini 2.5 Flash directamente (fallback cuando OpenRouter falla o como último recurso).
+ * Modelo Gemini usado como fallback final. `gemini-2.5-flash` fue retirado
+ * para nuevos usuarios (404) en 2026; la familia estable actual es Gemini 3.
+ * `gemini-3.5-flash-lite` es estable, rápido y económico (alto rendimiento a
+ * bajo costo). Configurable vía GOOGLE_GEMINI_MODEL sin tocar código.
+ */
+const GEMINI_MODEL = process.env.GOOGLE_GEMINI_MODEL || 'gemini-3.5-flash-lite';
+
+/**
+ * Llama a Google Gemini (fallback cuando OpenRouter falla o como último recurso).
+ * Usa GEMINI_MODEL (default gemini-3.5-flash-lite; antes gemini-2.5-flash, retirado).
  */
 async function callGemini25Flash(
   messages: OpenRouterMessage[],
   timeoutMs = 90000
 ): Promise<OpenRouterResponse> {
   const GOOGLE_AI_KEY = process.env.GOOGLE_AI_KEY;
-  const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GOOGLE_AI_KEY}`;
+  const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GOOGLE_AI_KEY}`;
 
   if (!GOOGLE_AI_KEY) {
     throw new Error('GOOGLE_AI_KEY no configurada');
@@ -379,7 +411,7 @@ async function callGemini25Flash(
 
   if (!response.ok) {
     const error = await response.text();
-    throw new Error(`Gemini 2.5 Flash error: ${response.status} - ${error}`);
+    throw new Error(`Gemini (${GEMINI_MODEL}) error: ${response.status} - ${error}`);
   }
 
   const data = await response.json();
@@ -453,9 +485,21 @@ export async function callAssistantWithFallback(
     }
   }
 
-  // 5. Fallback final: Google Gemini 2.5 Flash directo
+  // 4. Nemotron 3 Ultra free (NVIDIA) via OpenRouter — otro proveedor no-Google
+  //     (inmune al pool 429) y de mayor calidad que Gemma dentro del tier free.
   try {
-    console.log('[AI] Fallback final a Google Gemini 2.5 Flash...');
+    console.log('[AI] Fallback a nvidia/nemotron-3-ultra-550b-a55b:free...');
+    const response = await callNemotron3UltraFree(messages, hopTimeout);
+    console.log('[AI] ✅ Nemotron 3 Ultra respondió correctamente');
+    return response;
+  } catch (nemotronError) {
+    console.warn('[AI] Nemotron 3 Ultra falló:', nemotronError);
+  }
+
+  // 5. Fallback final: Google Gemini directo (GEMINI_MODEL, default
+  //     gemini-3.5-flash-lite — gemini-2.5-flash fue retirado en 2026)
+  try {
+    console.log(`[AI] Fallback final a Google Gemini (${GEMINI_MODEL})...`);
     // El último recurso debe caber en el presupuesto del webhook de Telegram
     // (25s): el clasificador pasa 10s por hop, así que Gemini no puede esperar
     // 30s (reventaría el PIPELINE_TIMEOUT). Se acota a máx 15s.
@@ -624,9 +668,19 @@ export async function callOpenRouterWithFallback(
     }
   }
 
-  // 4. Fallback final: Google Gemini 2.5 Flash directo
+  // 5. Nemotron 3 Ultra free (NVIDIA) via OpenRouter
   try {
-    console.log('[AI] Fallback final a Google Gemini 2.5 Flash...');
+    console.log('[AI] Fallback a nvidia/nemotron-3-ultra-550b-a55b:free...');
+    const response = await callNemotron3UltraFree(messages, 20000);
+    console.log('[AI] ✅ Nemotron 3 Ultra respondió correctamente');
+    return response;
+  } catch (nemotronError) {
+    console.warn('[AI] Nemotron 3 Ultra falló:', nemotronError);
+  }
+
+  // 6. Fallback final: Google Gemini directo (GEMINI_MODEL)
+  try {
+    console.log(`[AI] Fallback final a Google Gemini (${GEMINI_MODEL})...`);
     const response = await callGemini25Flash(messages, 15000);
     console.log('[AI] ✅ Gemini respondió correctamente');
     return response;
