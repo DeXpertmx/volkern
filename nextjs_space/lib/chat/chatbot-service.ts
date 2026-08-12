@@ -763,7 +763,9 @@ INSTRUCCIONES:
    - Modelo 303: declaración trimestral de IVA.
    - Modelo 130: pago fraccionado IRPF para autónomos.
    - Modelo 390: resumen anual de IVA.
-   - Modelo 111: retenciones IRPF (alquileres, profesionales).
+   - Modelo 111: retenciones IRPF (profesionales, actividades económicas).
+   - Modelo 115: retención trimestral IRPF por arrendamiento de inmuebles urbanos (19%).
+   - Modelo 180: resumen anual de retenciones sobre arrendamientos (consolida el 115).
    - Verifactu: normativa española de facturación electrónica con hash SHA-256.
 5. Si preguntan sobre contabilidad general: PGC (Plan General Contable), balance de situación, cuenta de resultados (PyG), libro diario, asientos contables.
 6. Si preguntan sobre la plataforma Volkern, describe sus módulos (CRM, Contabilidad, Facturación Verifactu, Web Creator, etc.).

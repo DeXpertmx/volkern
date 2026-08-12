@@ -7,7 +7,7 @@ import { TaxService } from './tax-service';
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 export interface FiscalModelDeadline {
-  model: string;            // '303', '111', '130', '349', '347', '390'
+  model: string;            // '303', '111', '115', '130', '349', '347', '390', '180'
   name: string;             // 'IVA Trimestral'
   type: 'quarterly' | 'annual' | 'monthly';
   quarter?: number;         // 1-4 para trimestrales
@@ -40,10 +40,12 @@ export class FiscalCalendarService {
    * 
    * Modelo 303 (IVA): 20 abril, 20 julio, 20 octubre, 30 enero
    * Modelo 111 (IRPF retenciones): 20 abril, 20 julio, 20 octubre, 30 enero  
+   * Modelo 115 (IRPF retenciones arrendamientos): 20 abril, 20 julio, 20 octubre, 30 enero
    * Modelo 130 (IRPF estimación directa): 20 abril, 20 julio, 20 octubre, 30 enero
    * Modelo 349 (IVA intracomunitario): 30 abril, 30 julio, 30 octubre, 30 enero
    * Modelo 347 (Operaciones terceros): 31 marzo (anual)
    * Modelo 390 (IVA anual): 30 enero (anual, resumen anual IVA)
+   * Modelo 180 (resumen anual retenciones arrendamientos): 30 enero (anual)
    */
   static readonly MODELS: Record<string, {
     name: string;
@@ -67,6 +69,17 @@ export class FiscalCalendarService {
     '111': {
       name: 'Retenciones IRPF',
       description: 'Declaración trimestral de retenciones e ingresos a cuenta del IRPF',
+      type: 'quarterly',
+      dueDayMonth: {
+        1: { day: 20, month: 4 },
+        2: { day: 20, month: 7 },
+        3: { day: 20, month: 10 },
+        4: { day: 30, month: 1 },
+      },
+    },
+    '115': {
+      name: 'Retenciones Arrendamientos',
+      description: 'Retención trimestral por arrendamiento de inmuebles urbanos',
       type: 'quarterly',
       dueDayMonth: {
         1: { day: 20, month: 4 },
@@ -109,6 +122,12 @@ export class FiscalCalendarService {
       type: 'annual',
       annualDueDayMonth: { day: 30, month: 1 },
     },
+    '180': {
+      name: 'Resumen Retenciones Arrendamientos',
+      description: 'Resumen anual de retenciones e ingresos a cuenta sobre arrendamientos de inmuebles urbanos',
+      type: 'annual',
+      annualDueDayMonth: { day: 30, month: 1 },
+    },
   } as any;
 
   /**
@@ -131,7 +150,7 @@ export class FiscalCalendarService {
     const deadlines: FiscalModelDeadline[] = [];
 
     // Modelos trimestrales
-    const quarterlyModels = ['303', '111', '130', '349'];
+    const quarterlyModels = ['303', '111', '115', '130', '349'];
     const quartersToCheck = quarter ? [quarter] : [1, 2, 3, 4];
 
     for (const modelId of quarterlyModels) {
@@ -192,6 +211,23 @@ export class FiscalCalendarService {
         periodLabel: `Anual ${year}`,
         status: diff390 < 0 ? 'overdue' : 'pending',
         daysUntilDue: diff390,
+      });
+    }
+
+    // Modelo 180 (anual - vence 30 enero)
+    const model180 = this.MODELS['180'] as any;
+    const due180 = new Date(year + 1, model180.annualDueDayMonth!.month - 1, model180.annualDueDayMonth!.day);
+    const diff180 = Math.ceil((due180.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    if (diff180 >= -90) {
+      deadlines.push({
+        model: '180',
+        name: model180.name,
+        type: 'annual',
+        year,
+        dueDate: due180,
+        periodLabel: `Anual ${year}`,
+        status: diff180 < 0 ? 'overdue' : 'pending',
+        daysUntilDue: diff180,
       });
     }
 
@@ -295,6 +331,30 @@ export class FiscalCalendarService {
               estimatedAmount = report.resultToPay;
             }
             isFiled = false; // Modelo 130 no tiene flag isFiled en TaxRecord
+          } catch {
+            // Si falla la consulta, no incluimos estimación
+          }
+        }
+
+        if (deadline.model === '115' && deadline.quarter) {
+          try {
+            const report = await TaxService.getQuarterlyModelo115Report(tenantId, deadline.year, deadline.quarter);
+            if (report.hasActivity && report.totalRetentions > 0) {
+              estimatedAmount = report.totalRetentions;
+            }
+            isFiled = false; // Modelo 115 no tiene flag isFiled en TaxRecord
+          } catch {
+            // Si falla la consulta, no incluimos estimación
+          }
+        }
+
+        if (deadline.model === '180') {
+          try {
+            const report = await TaxService.getAnnualModelo180Report(tenantId, deadline.year);
+            if (report.hasActivity && report.totalRetentions > 0) {
+              estimatedAmount = report.totalRetentions;
+            }
+            isFiled = false; // Modelo 180 no tiene flag isFiled en TaxRecord
           } catch {
             // Si falla la consulta, no incluimos estimación
           }

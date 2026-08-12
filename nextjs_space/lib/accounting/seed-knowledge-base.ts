@@ -34,12 +34,32 @@ Obligatorio para autónomos persona física. Se presenta por internet en la sede
   {
     title: 'Modelo 111 - Retenciones IRPF',
     content: `El Modelo 111 es la declaración trimestral de retenciones del IRPF.
-Se aplica a: arrendamientos de inmuebles urbanos, profesionales autónomos, y ciertos rendimientos del capital mobiliario.
-Porcentajes: 19% para profesionales, 24% para alquileres (desde 2023).
+Se aplica a: retenciones por rendimientos del trabajo y actividades económicas (profesionales autónomos) y ciertos rendimientos del capital mobiliario.
+Porcentaje general: 15% para profesionales (desde 2025), 19% para otros rendimientos.
 Se presenta en abril, julio, octubre y enero.
+Las retenciones por arrendamiento de inmuebles urbanos se declaran en el Modelo 115 (y su resumen anual en el Modelo 180).
 Incluye el resumen anual en el Modelo 190.`,
     category: 'FISCAL',
     tags: ['IRPF', 'modelo111', 'retenciones', 'AEAT', 'trimestral'],
+  },
+  {
+    title: 'Modelo 115 - Retenciones por Arrendamientos',
+    content: `El Modelo 115 es la declaración trimestral de retenciones del IRPF por arrendamiento de inmuebles urbanos.
+Debes presentarlo cuando pagas el alquiler de un local u otro inmueble urbano a un arrendador (persona física o entidad sin actividad) y le practicas la retención.
+Tipo de retención: 19% sobre la renta pagada (tipo general para arrendamientos de inmuebles urbanos).
+Se presenta en abril (1T), julio (2T), octubre (3T) y enero (4T).
+El resumen anual de estas retenciones se presenta en el Modelo 180.`,
+    category: 'FISCAL',
+    tags: ['IRPF', 'modelo115', 'arrendamientos', 'alquiler', 'retenciones', 'AEAT', 'trimestral'],
+  },
+  {
+    title: 'Modelo 180 - Resumen Anual de Retenciones por Arrendamientos',
+    content: `El Modelo 180 es la declaración informativa anual de retenciones e ingresos a cuenta sobre arrendamientos de inmuebles urbanos.
+Resume los 4 trimestres del Modelo 115 del ejercicio anterior, detallando cada arrendador con sus rentas pagadas y retenciones practicadas.
+Se presenta durante el mes de enero del año siguiente.
+Es obligatorio cuando has practicado retenciones por arrendamiento durante el ejercicio.`,
+    category: 'FISCAL',
+    tags: ['IRPF', 'modelo180', 'arrendamientos', 'alquiler', 'resumen', 'anual', 'AEAT'],
   },
   {
     title: 'Modelo 390 - Resumen Anual de IVA',
