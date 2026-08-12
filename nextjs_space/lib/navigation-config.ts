@@ -324,6 +324,8 @@ export const HUBS: HubConfig[] = [
       { name: 'IVA Anual (Modelo 390)', href: '/dashboard/finanzas/contabilidad/modelo390', icon: PieChart, planModule: 'finanzas', requiredRegion: 'ES', description: 'Resumen anual de IVA — consolidación 4T' },
       { name: 'Calendario Fiscal', href: '/dashboard/finanzas/contabilidad/calendario-fiscal', icon: CalendarDays, planModule: 'finanzas', requiredRegion: 'ES', description: 'Vencimientos AEAT con alertas automáticas' },
       { name: 'Gastos', href: '/dashboard/finanzas/gastos', icon: ListTodo, planModule: 'finanzas', description: 'Listado de egresos y facturas' },
+      { name: 'Clientes', href: '/dashboard/contactos', icon: UserCheck, planModule: 'contactos', description: 'Base de contactos y clientes' },
+      { name: 'Empresas', href: '/dashboard/empresas', icon: Building2, planModule: 'empresas', description: 'Directorio de empresas' },
       { name: 'Proveedores', href: '/dashboard/finanzas/proveedores', icon: Building2, planModule: 'finanzas', description: 'Directorio de proveedores' },
       { name: 'Balance de Situación', href: '/dashboard/finanzas/contabilidad/balance', icon: Scale, planModule: 'finanzas', description: 'Activo, Pasivo y Patrimonio Neto' },
       { name: 'Cuenta de Resultados', href: '/dashboard/finanzas/contabilidad/cuenta-resultados', icon: FileText, planModule: 'finanzas', description: 'Pérdidas y Ganancias del periodo' },
