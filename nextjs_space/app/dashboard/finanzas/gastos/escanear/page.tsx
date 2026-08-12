@@ -736,8 +736,11 @@ export default function EscanearGastoPage() {
       if (nif) q.set('nif', nif)
       const res = await fetch(`/api/erp/expenses/ocr-templates?${q.toString()}`)
       const data = await res.json()
-      if (!data?.template?.fields?.length) return
-      const values = applyTemplate(overlay, data.template.fields)
+      // Puede haber varias plantillas (formatos distintos): usamos la más
+      // reciente, que es la más probable para el documento actual.
+      const template = Array.isArray(data?.templates) ? data.templates[0] : data?.template
+      if (!template?.fields?.length) return
+      const values = applyTemplate(overlay, template.fields)
       const count = Object.keys(values).length
       if (count === 0) return
       mergeTemplateValues(values)
