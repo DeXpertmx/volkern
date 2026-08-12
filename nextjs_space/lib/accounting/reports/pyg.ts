@@ -24,7 +24,7 @@ interface PyGReport {
 export async function getPyG(tenantId: string): Promise<PyGReport> {
   const accounts = await prisma.accountingAccount.findMany({
     where: { tenantId, type: { in: ['GASTO', 'INGRESO'] } },
-    orderBy: { group: 'asc' as any, code: 'asc' } as any,
+    orderBy: { code: 'asc' },
   })
 
   const gastos = accounts

@@ -42,6 +42,41 @@ beforeEach(() => {
 });
 
 // ============================================================
+// GUARDIA DE SCHEMA: el orderBy debe usar solo campos reales del modelo
+// (regresión: un `orderBy: { group } as any` pasaba typecheck pero
+// reventaba en runtime con "Unknown argument `group`" en producción)
+// ============================================================
+describe('Guardia de schema — orderBy de los reportes', () => {
+  const SCHEMA_FIELDS = ['id', 'tenantId', 'code', 'name', 'type', 'balance'];
+
+  async function getOrderBy(fn: (id: string) => Promise<unknown>) {
+    await fn(TENANT_ID);
+    return mockAccountFindMany.mock.calls[0][0]?.orderBy;
+  }
+
+  it('trial-balance ordena solo por campos válidos del modelo', async () => {
+    const orderBy = await getOrderBy(getTrialBalance);
+    for (const key of Object.keys(orderBy ?? {})) {
+      expect(SCHEMA_FIELDS).toContain(key);
+    }
+  });
+
+  it('pyg ordena solo por campos válidos del modelo', async () => {
+    const orderBy = await getOrderBy(getPyG);
+    for (const key of Object.keys(orderBy ?? {})) {
+      expect(SCHEMA_FIELDS).toContain(key);
+    }
+  });
+
+  it('balance-sheet ordena solo por campos válidos del modelo', async () => {
+    const orderBy = await getOrderBy(getBalanceSheet);
+    for (const key of Object.keys(orderBy ?? {})) {
+      expect(SCHEMA_FIELDS).toContain(key);
+    }
+  });
+});
+
+// ============================================================
 // BALANCE DE COMPROBACIÓN (Trial Balance)
 // ============================================================
 describe('Balance de Comprobación — getTrialBalance', () => {
