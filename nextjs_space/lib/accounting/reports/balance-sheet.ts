@@ -53,7 +53,7 @@ function buildSection(
 export async function getBalanceSheet(tenantId: string): Promise<BalanceSheetReport> {
   const accounts = await prisma.accountingAccount.findMany({
     where: { tenantId, type: { in: ['ACTIVO', 'PASIVO'] } },
-    orderBy: { group: 'asc' as any, code: 'asc' } as any,
+    orderBy: { code: 'asc' },
   })
 
   const accountsWithGroup = accounts.map((a) => ({
