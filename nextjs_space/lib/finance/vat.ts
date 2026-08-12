@@ -110,15 +110,16 @@ export function fillLastTranche(
 }
 
 /**
- * Conciliación del total de factura: base + IVA − IRPF debe cuadrar con el
- * total detectado. Devuelve null si faltan datos o la diferencia está dentro
- * de la tolerancia (por defecto ±0.02 por redondeos); si no, el desajuste.
+ * Conciliación del total de factura:  base + IVA + recargo − IRPF debe cuadrar con el
+ * total detectado. El recargo es opcional para mantener la compatibilidad
+ * con facturas que no lo usan.
  */
 export function computeInvoiceTotalMismatch(
   base: string,
   vatAmount: string,
   irpfAmount: string,
   totalFactura: string,
+  surchargeAmount = '',
   tolerance = 0.02
 ): { expected: number; difference: number } | null {
   const b = parseFloat(base)
@@ -127,7 +128,8 @@ export function computeInvoiceTotalMismatch(
 
   const v = parseFloat(vatAmount)
   const i = parseFloat(irpfAmount)
-  const expected = b + (Number.isFinite(v) ? v : 0) - (Number.isFinite(i) ? i : 0)
+  const s = parseFloat(surchargeAmount)
+  const expected = b + (Number.isFinite(v) ? v : 0) + (Number.isFinite(s) ? s : 0) - (Number.isFinite(i) ? i : 0)
   const difference = expected - t
 
   if (Math.abs(difference) <= tolerance) return null

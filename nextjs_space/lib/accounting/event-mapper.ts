@@ -168,62 +168,81 @@ export class AccountingEventMapper {
     const meta = (expense.metadata as Record<string, unknown>) || {};
     const irpfAmount = Number(meta.irpfAmount) || 0;
     const irpfRate = Number(meta.irpfRate) || 0;
+    const surchargeAmount = Number(meta.surchargeAmount) || 0;
+    const surchargeRate = Number(meta.surchargeRate) || 0;
+    const operationType = String(meta.operationType || 'nacional').toLowerCase();
+    const reverseCharge = operationType === 'intracomunitaria' || operationType === 'inversion_sujeto_pasivo';
+    const excludesSpanishVat = ['exportacion', 'exenta', 'no_sujeta', 'canarias_igic'].includes(operationType);
+    const breakdown = Array.isArray(meta.vatBreakdown)
+      ? (meta.vatBreakdown as Array<Record<string, unknown>>)
+        .map(row => ({ rate: Number(row.rate), base: Number(row.base), amount: Number(row.amount) }))
+        .filter(row => Number.isFinite(row.rate) && Number.isFinite(row.base) && Number.isFinite(row.amount) && row.amount > 0)
+      : [];
+    const effectiveBreakdown = excludesSpanishVat ? [] : breakdown;
 
-    // Desglose real (Verifactu) o estimación desde el total
+    // Desglose real (Verifactu) o estimación desde el total.
     let base = Number(expense.taxableBase);
-    let vat = Number(expense.vatAmount);
+    let vat = effectiveBreakdown.length > 0
+      ? effectiveBreakdown.reduce((sum, row) => sum + row.amount, 0)
+      : Number(expense.vatAmount);
     let vatRate = Number(expense.vatRate);
 
     if (!Number.isFinite(base) || base <= 0) {
-      // Sin desglose: amount incluye IVA (tipo real o 21% por defecto)
       const total = Number(expense.amount);
       const rate = vatRate > 0 ? vatRate : 21;
-      base = Math.round((total / (1 + rate / 100)) * 100) / 100;
-      vat = vat > 0 ? vat : Math.round((total - base) * 100) / 100;
+      base = reverseCharge || excludesSpanishVat
+        ? Math.round((total - surchargeAmount) * 100) / 100
+        : Math.round((total / (1 + rate / 100)) * 100) / 100;
+      if (!reverseCharge && !excludesSpanishVat) vat = vat > 0 ? vat : Math.round((total - base) * 100) / 100;
       vatRate = rate;
     } else if (!Number.isFinite(vat) || vat <= 0) {
       vat = Math.round((base * ((vatRate > 0 ? vatRate : 21) / 100)) * 100) / 100;
     }
+    if (excludesSpanishVat) vat = 0;
     if (!(vatRate > 0)) vatRate = 21;
 
     // Try confirmed AI classification first
     const confirmedCode = meta?.confirmedAccountCode as string | undefined;
     const expenseAccount = confirmedCode ?? this.fallbackAccountForCategory(expense.category);
 
-    // Líneas balanceadas: Debe(base + IVA) = Haber(pago proveedor + retención)
-    const payable = Math.round((base + vat - irpfAmount) * 100) / 100;
-    const lines: EntryLineInput[] = [
-      { accountId: accounts[expenseAccount], debit: base, credit: 0 },
-    ];
-    if (vat > 0) lines.push({ accountId: accounts['472'], debit: vat, credit: 0 });
-    lines.push({ accountId: accounts['410'], debit: 0, credit: payable });
+    // Operaciones con inversión del sujeto pasivo tienen IVA soportado y
+    // autorrepercutido; las no sujetas/exentas no llevan IVA español.
+    const supplierPayable = Math.round((base + (reverseCharge || excludesSpanishVat ? 0 : vat) + surchargeAmount - irpfAmount) * 100) / 100;
+    const lines: EntryLineInput[] = [{ accountId: accounts[expenseAccount], debit: base, credit: 0 }];
+    if (effectiveBreakdown.length > 0) {
+      effectiveBreakdown.forEach(row => {
+        lines.push({ accountId: accounts['472'], debit: row.amount, credit: 0 });
+        if (reverseCharge) lines.push({ accountId: accounts['477'], debit: 0, credit: row.amount });
+      });
+    } else if (vat > 0) {
+      lines.push({ accountId: accounts['472'], debit: vat, credit: 0 });
+      if (reverseCharge) lines.push({ accountId: accounts['477'], debit: 0, credit: vat });
+    }
+    if (surchargeAmount > 0) lines.push({ accountId: accounts['472'], debit: surchargeAmount, credit: 0 });
+    lines.push({ accountId: accounts['410'], debit: 0, credit: supplierPayable });
     if (irpfAmount > 0) lines.push({ accountId: accounts['4751'], debit: 0, credit: irpfAmount });
 
     const expenseDate = expense.date ?? expense.createdAt;
     const periodMonth = expenseDate.getMonth() + 1;
     const periodYear = expenseDate.getFullYear();
 
-    // Impactos fiscales: IVA soportado (Modelo 303) + retención IRPF (Modelo 111)
+    // Impactos fiscales: los reverse charge alimentan ambos lados del IVA;
+    // exentas/exportaciones/no sujetas no se registran como IVA soportado.
     const taxImpacts: TaxImpactInput[] = [];
-    if (vat > 0) {
-      taxImpacts.push({
-        type: 'IVA_SOPORTADO',
-        baseAmount: base,
-        taxRate: vatRate,
-        taxAmount: vat,
-        periodMonth,
-        periodYear,
+    if (effectiveBreakdown.length > 0) {
+      effectiveBreakdown.forEach(row => {
+        taxImpacts.push({ type: 'IVA_SOPORTADO', baseAmount: row.base, taxRate: row.rate, taxAmount: row.amount, periodMonth, periodYear });
+        if (reverseCharge) taxImpacts.push({ type: 'IVA_REPERCUTIDO', baseAmount: row.base, taxRate: row.rate, taxAmount: row.amount, periodMonth, periodYear });
       });
+    } else if (vat > 0) {
+      taxImpacts.push({ type: 'IVA_SOPORTADO', baseAmount: base, taxRate: vatRate, taxAmount: vat, periodMonth, periodYear });
+      if (reverseCharge) taxImpacts.push({ type: 'IVA_REPERCUTIDO', baseAmount: base, taxRate: vatRate, taxAmount: vat, periodMonth, periodYear });
+    }
+    if (surchargeAmount > 0) {
+      taxImpacts.push({ type: 'RECARGO_EQUIVALENCIA', baseAmount: base, taxRate: surchargeRate, taxAmount: surchargeAmount, periodMonth, periodYear });
     }
     if (irpfAmount > 0) {
-      taxImpacts.push({
-        type: 'IRPF_RETENCION',
-        baseAmount: base,
-        taxRate: irpfRate,
-        taxAmount: irpfAmount,
-        periodMonth,
-        periodYear,
-      });
+      taxImpacts.push({ type: 'IRPF_RETENCION', baseAmount: base, taxRate: irpfRate, taxAmount: irpfAmount, periodMonth, periodYear });
     }
 
     return await EntryManager.createEntry({

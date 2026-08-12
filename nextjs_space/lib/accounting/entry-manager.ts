@@ -11,7 +11,7 @@ export interface EntryLineInput {
 }
 
 export interface TaxImpactInput {
-  type: 'IVA_REPERCUTIDO' | 'IVA_SOPORTADO' | 'IRPF_RETENCION';
+  type: 'IVA_REPERCUTIDO' | 'IVA_SOPORTADO' | 'RECARGO_EQUIVALENCIA' | 'IRPF_RETENCION';
   baseAmount: number;
   taxRate: number;
   taxAmount: number;

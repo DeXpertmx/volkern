@@ -14,7 +14,9 @@ import {
   Fingerprint,
   Navigation,
   ExternalLink,
-  Image as ImageIcon
+  Image as ImageIcon,
+  CalendarClock,
+  CreditCard
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -33,6 +35,8 @@ interface ExpenseVerificationDetailsProps {
     description: string
     amount: number
     currency: string
+    dueDate?: string | Date | null
+    paymentMethod?: string | null
     fingerprint?: string
     parentFingerprint?: string
     verificationStatus: string
@@ -47,6 +51,10 @@ interface ExpenseVerificationDetailsProps {
     metadata?: {
       irpfRate?: number | null
       irpfAmount?: number | null
+      surchargeRate?: number | null
+      surchargeAmount?: number | null
+      taxRegime?: string | null
+      operationType?: string | null
       totalFactura?: number | null
     } | null
   }
@@ -58,6 +66,12 @@ interface ExpenseVerificationDetailsProps {
 
 export default function ExpenseVerificationDetails({ expense, tenantConfig }: ExpenseVerificationDetailsProps) {
   const [isValidating, setIsValidating] = useState(false)
+
+  const formatDate = (value?: string | Date | null) => {
+    if (!value) return '—'
+    const date = new Date(value)
+    return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('es-ES').format(date)
+  }
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -131,14 +145,14 @@ export default function ExpenseVerificationDetails({ expense, tenantConfig }: Ex
               <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 shadow-inner">
                 <p className="text-[9px] font-black text-muted-foreground uppercase mb-1">Base Imponible</p>
                 <p className="text-sm font-black tracking-tight">
-                  {expense.taxableBase != null ? `€${expense.taxableBase.toFixed(2)}` : '—'}
+                  {expense.taxableBase != null ? `${expense.currency || 'EUR'} ${expense.taxableBase.toFixed(2)}` : '—'}
                 </p>
               </div>
               <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 shadow-inner">
                 <p className="text-[9px] font-black text-muted-foreground uppercase mb-1">IVA</p>
                 <p className="text-sm font-black tracking-tight">
                   {expense.vatAmount != null
-                    ? `€${expense.vatAmount.toFixed(2)}${expense.vatRate != null ? ` (${expense.vatRate}%)` : ''}`
+                    ? `${expense.currency || 'EUR'} ${expense.vatAmount.toFixed(2)}${expense.vatRate != null ? ` (${expense.vatRate}%)` : ''}`
                     : '—'}
                 </p>
               </div>
@@ -146,20 +160,71 @@ export default function ExpenseVerificationDetails({ expense, tenantConfig }: Ex
                 <p className="text-[9px] font-black text-muted-foreground uppercase mb-1">IRPF (Retención)</p>
                 <p className="text-sm font-black tracking-tight">
                   {expense.metadata?.irpfAmount != null
-                    ? `€${expense.metadata.irpfAmount.toFixed(2)}${expense.metadata.irpfRate != null ? ` (${expense.metadata.irpfRate}%)` : ''}`
+                    ? `${expense.currency || 'EUR'} ${expense.metadata.irpfAmount.toFixed(2)}${expense.metadata.irpfRate != null ? ` (${expense.metadata.irpfRate}%)` : ''}`
                     : '—'}
                 </p>
               </div>
               <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 shadow-inner">
                 <p className="text-[9px] font-black text-muted-foreground uppercase mb-1">Total Factura</p>
                 <p className="text-sm font-black tracking-tight">
-                  {expense.metadata?.totalFactura != null ? `€${expense.metadata.totalFactura.toFixed(2)}` : `€${expense.amount.toFixed(2)}`}
+                  {expense.metadata?.totalFactura != null
+                    ? `${expense.currency || 'EUR'} ${expense.metadata.totalFactura.toFixed(2)}`
+                    : `${expense.currency || 'EUR'} ${expense.amount.toFixed(2)}`}
                 </p>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Régimen y operación fiscal */}
+      <Card className="lg:col-span-12 border-none shadow-premium">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-xs font-black uppercase tracking-widest">Clasificación fiscal</CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+            <p className="text-[9px] font-black text-muted-foreground uppercase mb-1">Régimen</p>
+            <p className="text-sm font-black">{expense.metadata?.taxRegime || '—'}</p>
+          </div>
+          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+            <p className="text-[9px] font-black text-muted-foreground uppercase mb-1">Operación</p>
+            <p className="text-sm font-black">{expense.metadata?.operationType || '—'}</p>
+          </div>
+          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+            <p className="text-[9px] font-black text-muted-foreground uppercase mb-1">Tipo recargo</p>
+            <p className="text-sm font-black">{expense.metadata?.surchargeRate != null ? `${expense.metadata.surchargeRate}%` : '—'}</p>
+          </div>
+          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+            <p className="text-[9px] font-black text-muted-foreground uppercase mb-1">Cuota recargo</p>
+            <p className="text-sm font-black">{expense.metadata?.surchargeAmount != null ? `${expense.currency || 'EUR'} ${expense.metadata.surchargeAmount.toFixed(2)}` : '—'}</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Condiciones de pago capturadas desde la factura */}
+      <Card className="lg:col-span-12 border-none shadow-premium">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-xs font-black uppercase tracking-widest flex items-center gap-2">
+            <CalendarClock className="w-4 h-4 text-indigo-500" />
+            Condiciones de pago
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+            <p className="text-[9px] font-black text-muted-foreground uppercase mb-1">Vencimiento</p>
+            <p className="text-sm font-black">{formatDate(expense.dueDate)}</p>
+          </div>
+          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+            <p className="text-[9px] font-black text-muted-foreground uppercase mb-1">Moneda</p>
+            <p className="text-sm font-black">{expense.currency || 'EUR'}</p>
+          </div>
+          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+            <p className="text-[9px] font-black text-muted-foreground uppercase mb-1 flex items-center gap-1"><CreditCard className="w-3 h-3" /> Forma de pago</p>
+            <p className="text-sm font-black">{expense.paymentMethod || '—'}</p>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="lg:col-span-5 border-none shadow-premium bg-slate-50/50">
         <CardHeader className="pb-3 text-center lg:text-left">

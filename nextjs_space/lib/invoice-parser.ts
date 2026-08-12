@@ -29,6 +29,8 @@ export interface TotalesFactura {
   cuota_iva: number | null
   tipo_irpf: number | null
   cuota_irpf: number | null
+  tipo_recargo: number | null
+  cuota_recargo: number | null
   total_factura: number | null
   desglose_iva?: DesgloseIva[]
 }
@@ -39,6 +41,9 @@ export interface VisionResult {
   serie: string | null
   fecha_emision: string | null   // DD/MM/AAAA
   fecha_operacion: string | null  // DD/MM/AAAA (solo si distinta)
+  fecha_vencimiento: string | null // DD/MM/AAAA
+  moneda: string | null
+  forma_pago: string | null
 
   // Partes
   emisor: EmisorInfo
@@ -49,6 +54,8 @@ export interface VisionResult {
 
   // Totales e impuestos
   totales: TotalesFactura
+  regimen_fiscal: string | null
+  tipo_operacion: string | null
 
   // IBAN
   iban: string | null
@@ -285,6 +292,18 @@ export function parseInvoiceText(text: string): VisionResult | null {
   const fechaVencMatch = full.match(/(?:fecha\s+de\s+vencimiento|vencimiento)\s*[:.]?\s*(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/i)
   let fecha_emision: string | null = fechaExpMatch ? fmtDate(fechaExpMatch[1], fechaExpMatch[2], fechaExpMatch[3]) : null
   let fecha_operacion: string | null = fechaOpMatch ? fmtDate(fechaOpMatch[1], fechaOpMatch[2], fechaOpMatch[3]) : null
+  const fecha_vencimiento: string | null = fechaVencMatch ? fmtDate(fechaVencMatch[1], fechaVencMatch[2], fechaVencMatch[3]) : null
+
+  // Moneda: conservar el código ISO cuando aparezca (EUR, USD, MXN…),
+  // incluso si el documento solo muestra el símbolo €.
+  const currencyMatch = full.match(/\b(EUR|USD|MXN|GBP|CHF|CAD|ARS|COP|CLP|PEN|BRL)\b/i)
+  const moneda = currencyMatch ? currencyMatch[1].toUpperCase() : (full.includes('€') ? 'EUR' : null)
+
+  // Forma de pago: tomar solo el valor posterior a la etiqueta, sin absorber
+  // la fecha de vencimiento ni el resto de la sección de condiciones.
+  const paymentLine = lines.find(line => /^(?:forma\s+de\s+pago|m[eé]todo\s+de\s+pago|medio\s+de\s+pago)\s*[:.]/i.test(line))
+  const paymentMatch = paymentLine?.match(/^(?:forma\s+de\s+pago|m[eé]todo\s+de\s+pago|medio\s+de\s+pago)\s*[:.]\s*(.+)$/i)
+  const forma_pago = paymentMatch ? paymentMatch[1].trim() : null
   if (!fecha_emision && allDates.length > 0) {
     const [_, d1, m1, y1] = allDates[0]
     fecha_emision = fmtDate(d1, m1, y1)
@@ -478,8 +497,13 @@ export function parseInvoiceText(text: string): VisionResult | null {
 
   // ── Base Imponible ──
   let baseImponible: number | null = null
+  // Priorizar la etiqueta de total: en una tabla de varios IVA aparece
+  // también "Base Imponible" como encabezado y el regex genérico podía
+  // capturar por error la primera cuota del desglose.
+  const baseTotalMatch = full.match(/base\s+imponible\s+total\s*[:.]?\s*€?\s*([\d]{1,3}(?:[.,][\d]{3})*(?:[.,]\s*\d{1,2})?)/i)
   const baseMatch = full.match(/(?:base\s+imponible|subtotal|importe\s+neto)[^:]{0,25}[:.]?\s*€?\s*([\d]{1,3}(?:[.,][\d]{3})*(?:[.,]\s*\d{1,2})?)/i)
-  if (baseMatch) baseImponible = toNum(baseMatch[1])
+  if (baseTotalMatch) baseImponible = toNum(baseTotalMatch[1])
+  else if (baseMatch) baseImponible = toNum(baseMatch[1])
 
   // ── IVA ──
   let tipoIva: number | null = null
@@ -500,6 +524,12 @@ export function parseInvoiceText(text: string): VisionResult | null {
   }
 
   if (desgloseIva.length > 0) {
+    // Si no había una etiqueta explícita de base total, la suma de los tramos
+    // es la fuente fiable. Evita quedarse con la primera cuota capturada por
+    // el encabezado "Base Imponible" de la tabla.
+    if (!baseTotalMatch) {
+      baseImponible = desgloseIva.reduce((sum, item) => sum + item.base, 0)
+    }
     // El tipo de IVA principal es el de mayor base imponible
     const mainIva = desgloseIva.reduce((prev, curr) => (curr.base > prev.base ? curr : prev))
     tipoIva = mainIva.tipo
@@ -527,6 +557,37 @@ export function parseInvoiceText(text: string): VisionResult | null {
   if (hasIrpfLabel && tipoIrpf === null) tipoIrpf = 0
   const irpfAmtMatch = full.match(/(?:irpf|retenci[oó]n)[^:]*:\s*€?\s*[-–]?\s*([\d]{1,3}(?:[.,][\d]{3})*(?:[.,]\s*\d{1,2})?)/i)
   if (irpfAmtMatch) cuotaIrpf = -Math.abs(toNum(irpfAmtMatch[1]) || 0)
+
+  // ── Recargo de equivalencia y tipo de operación ──
+  let tipoRecargo: number | null = null
+  let cuotaRecargo: number | null = null
+  const recargoRateMatch = full.match(/recargo(?:\s+de\s+equivalencia)?[^0-9-]*(-?\d{1,2}(?:[.,]\d+)?)\s*%/i)
+  if (recargoRateMatch) tipoRecargo = toNum(recargoRateMatch[1])
+  const recargoAmountMatch = full.match(/recargo(?:\s+de\s+equivalencia)?[^:]*:\s*€?\s*([\d]{1,3}(?:[.,][\d]{3})*(?:[.,]\s*\d{1,2})?)/i)
+  if (recargoAmountMatch) cuotaRecargo = toNum(recargoAmountMatch[1])
+
+  let regimenFiscal: string | null = null
+  if (/recargo\s+de\s+equivalencia/i.test(full)) regimenFiscal = 'recargo_equivalencia'
+  else if (/inversi[oó]n\s+del\s+sujeto\s+pasivo/i.test(full)) regimenFiscal = 'inversion_sujeto_pasivo'
+  else if (/intracomunitaria?|adquisici[oó]n\s+intracomunitaria/i.test(full)) regimenFiscal = 'intracomunitaria'
+  else if (/igic/i.test(full)) regimenFiscal = 'igic'
+  else if (/no\s+sujeta?|no\s+sujeto/i.test(full)) regimenFiscal = 'no_sujeta'
+  else if (/exenta?|exento/i.test(full)) regimenFiscal = 'exenta'
+  else if (/iva/i.test(full)) regimenFiscal = 'general'
+
+  const tipoOperacion = /intracomunitaria?|adquisici[oó]n\s+intracomunitaria/i.test(full)
+    ? 'intracomunitaria'
+    : /exportaci[oó]n/i.test(full)
+      ? 'exportacion'
+      : /inversi[oó]n\s+del\s+sujeto\s+pasivo/i.test(full)
+        ? 'inversion_sujeto_pasivo'
+        : /igic/i.test(full)
+          ? 'canarias_igic'
+          : /no\s+sujeta?|no\s+sujeto/i.test(full)
+            ? 'no_sujeta'
+            : /exenta?|exento/i.test(full)
+              ? 'exenta'
+              : 'nacional'
 
   // ── Total Factura ──
   let totalFactura: number | null = null
@@ -590,6 +651,9 @@ export function parseInvoiceText(text: string): VisionResult | null {
     serie,
     fecha_emision,
     fecha_operacion,
+    fecha_vencimiento,
+    moneda,
+    forma_pago,
     emisor: {
       nombre: emisorNombre,
       nif: emisorNif,
@@ -607,11 +671,15 @@ export function parseInvoiceText(text: string): VisionResult | null {
       cuota_iva: cuotaIva,
       tipo_irpf: tipoIrpf,
       cuota_irpf: cuotaIrpf,
+      tipo_recargo: tipoRecargo,
+      cuota_recargo: cuotaRecargo,
       total_factura: totalFactura,
       desglose_iva: desgloseIva.length > 0 ? desgloseIva : undefined,
     },
     iban,
     category,
+    regimen_fiscal: regimenFiscal,
+    tipo_operacion: tipoOperacion,
     verifactu,
 
     // Campos planos legacy
@@ -636,6 +704,9 @@ export const FALLBACK: VisionResult = {
   serie: null,
   fecha_emision: null,
   fecha_operacion: null,
+  fecha_vencimiento: null,
+  moneda: null,
+  forma_pago: null,
   emisor: { nombre: null, nif: null, direccion: null },
   receptor: { nombre: null, nif: null, direccion: null },
   lineas: [],
@@ -645,11 +716,15 @@ export const FALLBACK: VisionResult = {
     cuota_iva: null,
     tipo_irpf: null,
     cuota_irpf: null,
+    tipo_recargo: null,
+    cuota_recargo: null,
     total_factura: null,
     desglose_iva: undefined,
   },
   iban: null,
   category: 'otros',
+  regimen_fiscal: null,
+  tipo_operacion: null,
   verifactu: false,
   supplier: null,
   total: null,

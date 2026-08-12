@@ -18,7 +18,8 @@ import OcrComparisonModal, { type ComparisonItem } from '@/components/finance/Oc
 import { computeVatAmount, computePercentageAmount, computeInvoiceTotalMismatch, fillEmptyTranches, fillLastTranche } from '@/lib/finance/vat'
 import { validateFiscalId, getFiscalIdConfigsByCountry, normalizarPais } from '@/lib/fiscal-validation'
 import { applyTemplate, findRegionForValue, getOcrFieldDef, sameFieldValue, validateReference, valuesEquivalent, type OcrOverlay, type OcrTemplateField, type RegionProposal } from '@/lib/finance/ocr-template'
-import { renderPdfFirstPage } from '@/lib/finance/pdf-render'
+import { buildExpenseEntryProposal } from '@/lib/finance/expense-entry-proposal'
+import { createPdfFromPageRange, detectPdfDocumentGroups, renderPdfPages, type PdfDocumentGroup } from '@/lib/finance/pdf-render'
 
 interface EmisorInfo {
   nombre: string | null
@@ -39,13 +40,22 @@ interface LineaFactura {
   importe: number | null
 }
 
+interface DesgloseIva {
+  tipo: number
+  base: number
+  cuota: number
+}
+
 interface TotalesFactura {
   base_imponible: number | null
   tipo_iva: number | null
   cuota_iva: number | null
   tipo_irpf: number | null
   cuota_irpf: number | null
+  tipo_recargo: number | null
+  cuota_recargo: number | null
   total_factura: number | null
+  desglose_iva?: DesgloseIva[]
 }
 
 interface ExtractedData {
@@ -54,6 +64,11 @@ interface ExtractedData {
   serie: string | null
   fecha_emision: string | null
   fecha_operacion: string | null
+  fecha_vencimiento: string | null
+  moneda: string | null
+  forma_pago: string | null
+  regimen_fiscal: string | null
+  tipo_operacion: string | null
   emisor: EmisorInfo
   receptor: ReceptorInfo
   lineas: LineaFactura[]
@@ -149,6 +164,11 @@ export default function EscanearGastoPage() {
   const [appliedTemplateRef, setAppliedTemplateRef] = useState<{ id: string; supplierName: string; nif?: string | null; fields: OcrTemplateField[] } | null>(null)
   // Primera página del PDF renderizada a imagen con pdf.js (para el visualizador)
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null)
+  const [pdfPreviewPages, setPdfPreviewPages] = useState<string[]>([])
+  const [pdfGroups, setPdfGroups] = useState<PdfDocumentGroup[]>([])
+  const [selectedPdfGroupId, setSelectedPdfGroupId] = useState<string | null>(null)
+  const [pdfInboxDocumentIds, setPdfInboxDocumentIds] = useState<Record<string, string>>({})
+  const [pdfBatchLoading, setPdfBatchLoading] = useState(false)
   // Aprendizaje automático: regiones propuestas al corregir campos a mano tras
   // el escaneo (campo de formulario → propuesta detectada sobre la imagen)
   const [ocrProposals, setOcrProposals] = useState<Record<string, RegionProposal>>({})
@@ -163,6 +183,7 @@ export default function EscanearGastoPage() {
   const localOverlayLoadedRef = useRef(false)
   const proposalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [saving, setSaving] = useState(false)
+  const [duplicateCandidate, setDuplicateCandidate] = useState<{ body: Record<string, any>; message: string; duplicate?: { id?: string; invoiceNumber?: string | null; amount?: number; date?: string; currency?: string; description?: string } } | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [showSelect, setShowSelect] = useState(true)
   // Tipos de IVA del proveedor: se ofrecen como opciones para el IVA % y se
@@ -172,6 +193,8 @@ export default function EscanearGastoPage() {
   const [ratesTouched, setRatesTouched] = useState(false)
   // Tramos de IVA (varias bases con distintos tipos) para facturas mixtas
   const [ivaRows, setIvaRows] = useState<{ id: number; base: string; rate: string }[]>([])
+  const ivaRowsRef = useRef(ivaRows)
+  ivaRowsRef.current = ivaRows
   const nextIvaRowId = useRef(0)
   // Total base a repartir entre los tramos (los vacíos se autocompletan)
   const [trancheTarget, setTrancheTarget] = useState('')
@@ -227,6 +250,17 @@ export default function EscanearGastoPage() {
     })
   }
 
+  // Aplica el recargo de equivalencia y lo recalcula sobre la base total.
+  // En facturas con varios tipos de IVA el usuario puede corregir la cuota
+  // manualmente si el proveedor usa tipos de recargo distintos por tramo.
+  const applySurchargeRate = (rate: string) => {
+    setForm(p => ({
+      ...p,
+      surchargeRate: rate,
+      surchargeAmount: computePercentageAmount(p.taxableBase, rate) || p.surchargeAmount,
+    }))
+  }
+
   // Aplica la base imponible y recalcula cuota de IVA y retención de IRPF
   const applyTaxableBase = (base: string) => {
     // Con tramos activos, la base imponible es el total a repartir: los
@@ -256,6 +290,9 @@ export default function EscanearGastoPage() {
     supplier: '',
     category: 'otros',
     date: new Date().toISOString().split('T')[0],
+    dueDate: '',
+    currency: 'EUR',
+    paymentMethod: '',
     receiptUrl: '',
     // Identificación factura
     invoiceNumber: '',
@@ -276,6 +313,10 @@ export default function EscanearGastoPage() {
     vatAmount: '',
     irpfRate: '',
     irpfAmount: '',
+    surchargeRate: '',
+    surchargeAmount: '',
+    taxRegime: '',
+    operationType: '',
     totalFactura: '',
     operationDate: '',
     iban: '',
@@ -375,7 +416,7 @@ export default function EscanearGastoPage() {
   // Crea tramos de IVA automáticamente según los tipos de IVA del proveedor
   const autoCreateTramos = (rates: number[] | undefined | null) => {
     if (!Array.isArray(rates) || rates.length === 0) return
-    if (ivaRows.length > 0) return // no pisa tramos que ya existan
+    if (ivaRowsRef.current.length > 0) return // no pisa tramos ya detectados o introducidos
     const rows = rates.map(r => ({ id: nextIvaRowId.current++, base: '', rate: String(r) }))
     const target = trancheTarget || formRef.current.taxableBase
     if (target) setTrancheTarget(target)
@@ -385,6 +426,40 @@ export default function EscanearGastoPage() {
   }
 
   // Selección de un proveedor registrado: rellena emisor y crea los tramos
+  // Carga el desglose que devolvió la IA/OCR en los tramos editables del
+  // formulario. Conserva los tres (o más) tipos y sus bases individuales.
+  const applyDetectedVatBreakdown = (breakdown: unknown) => {
+    if (!Array.isArray(breakdown)) return false
+    const valid = breakdown
+      .map((row: any) => ({
+        tipo: Number(row?.tipo ?? row?.tipo_iva ?? row?.rate),
+        base: Number(row?.base ?? row?.base_imponible),
+        cuota: Number(row?.cuota ?? row?.cuota_iva ?? row?.amount),
+      }))
+      .filter(row => Number.isFinite(row.tipo) && Number.isFinite(row.base) && row.base >= 0 && Number.isFinite(row.cuota))
+    if (valid.length === 0) return false
+
+    const rows = valid.map(row => ({
+      id: nextIvaRowId.current++,
+      base: row.base.toFixed(2),
+      rate: row.tipo.toString(),
+    }))
+    const totalBase = valid.reduce((sum, row) => sum + row.base, 0)
+    const totalVat = valid.reduce((sum, row) => sum + row.cuota, 0)
+    const rates = valid.map(row => row.tipo.toString())
+    const uniform = new Set(rates).size === 1 ? rates[0] : ''
+    setIvaRows(rows)
+    setTrancheTarget(totalBase.toFixed(2))
+    setLockedEmptyRows(new Set())
+    setForm(p => ({
+      ...p,
+      taxableBase: totalBase.toFixed(2),
+      vatAmount: totalVat.toFixed(2),
+      vatRate: uniform,
+    }))
+    return true
+  }
+
   const selectSupplier = (s: any) => {
     setSelectedSupplier(s)
     setSupplierQuery('')
@@ -534,6 +609,24 @@ export default function EscanearGastoPage() {
     { base: 0, vat: 0 }
   )
 
+  const entryProposal = buildExpenseEntryProposal({
+    category: form.category,
+    amount: form.totalFactura || form.amount,
+    taxableBase: form.taxableBase,
+    vatRate: form.vatRate,
+    vatAmount: form.vatAmount,
+    irpfAmount: form.irpfAmount,
+    surchargeAmount: form.surchargeAmount,
+    operationType: form.operationType || (form.taxRegime === 'recargo_equivalencia' ? 'recargo_equivalencia' : 'nacional'),
+    vatBreakdown: ivaRows
+      .map(row => ({
+        rate: parseFloat(row.rate),
+        base: parseFloat(row.base),
+        amount: parseFloat(computePercentageAmount(row.base, row.rate)),
+      }))
+      .filter(row => Number.isFinite(row.rate) && Number.isFinite(row.base) && Number.isFinite(row.amount)),
+  })
+
   // ─── Receptor: pre-rellena con los datos fiscales del tenant (emisor) ──
   const loadTenantReceptor = async () => {
     try {
@@ -552,8 +645,8 @@ export default function EscanearGastoPage() {
     }
   }
 
-  // Aviso de conciliación: base + IVA − IRPF debe cuadrar con el total OCR
-  const totalsMismatch = computeInvoiceTotalMismatch(form.taxableBase, form.vatAmount, form.irpfAmount, form.totalFactura)
+  // Aviso de conciliación: base + IVA + recargo − IRPF debe cuadrar con el total OCR
+  const totalsMismatch = computeInvoiceTotalMismatch(form.taxableBase, form.vatAmount, form.irpfAmount, form.totalFactura, form.surchargeAmount)
 
   const handleFileCapture = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -564,10 +657,46 @@ export default function EscanearGastoPage() {
     setIsPdf(pdf)
     setCapturedImage(pdf ? null : URL.createObjectURL(file))
     setPdfPreviewUrl(null)
+    setPdfPreviewPages([])
+    setPdfGroups([])
+    setSelectedPdfGroupId(null)
+    setPdfInboxDocumentIds({})
+    setPdfBatchLoading(false)
     setScanOverlay(null)
+    setIvaRows([])
+    setTrancheTarget('')
+    setLockedEmptyRows(new Set())
     setShowSelect(false)
     setShowForm(false)
     setScanResult(null)
+    if (pdf) {
+      setPdfBatchLoading(true)
+      detectPdfDocumentGroups(file)
+        .then(async groups => {
+          setPdfGroups(groups)
+          setSelectedPdfGroupId(groups[0]?.id || null)
+          // Persistir el lote en la bandeja una sola vez: las entradas comparten
+          // el archivo original y conservan su rango de páginas.
+          const inboxForm = new FormData()
+          inboxForm.append('file', file, file.name)
+          inboxForm.append('groups', JSON.stringify(groups.map(group => ({ label: group.label, pageStart: group.pageStart, pageEnd: group.pageEnd }))))
+          const inboxResponse = await fetch('/api/erp/expenses/inbox', { method: 'POST', body: inboxForm })
+          if (inboxResponse.ok) {
+            const inboxData = await inboxResponse.json()
+            const ids: Record<string, string> = {}
+            ;(inboxData.documents || []).forEach((document: any, index: number) => {
+              if (groups[index]) ids[groups[index].id] = document.id
+            })
+            setPdfInboxDocumentIds(ids)
+          }
+        })
+        .catch(() => {
+          setPdfGroups([])
+          setSelectedPdfGroupId(null)
+          setPdfInboxDocumentIds({})
+        })
+        .finally(() => setPdfBatchLoading(false))
+    }
   }, [])
 
   const prepareFile = async (file: File, maxDim = 1200, quality = 0.6): Promise<{ blob: Blob; mimeType: string; fileName: string }> => {
@@ -598,7 +727,15 @@ export default function EscanearGastoPage() {
     setScanMessage(pdf ? 'Leyendo factura PDF...' : 'Preparando imagen...')
 
     try {
-      const { blob, mimeType, fileName } = await prepareFile(capturedFile)
+      let scanFile = capturedFile
+      const selectedGroup = pdfGroups.find(group => group.id === selectedPdfGroupId)
+      if (pdf && selectedGroup && (selectedGroup.pageStart > 1 || selectedGroup.pageEnd < Math.max(...pdfGroups.map(group => group.pageEnd)))) {
+        setScanMessage(`Separando ${selectedGroup.label} (páginas ${selectedGroup.pageStart}-${selectedGroup.pageEnd})...`)
+        scanFile = await createPdfFromPageRange(capturedFile, selectedGroup.pageStart, selectedGroup.pageEnd, `${selectedGroup.label.replace(/[^a-z0-9_-]+/gi, '_')}.pdf`)
+        setCapturedFile(scanFile)
+        setCapturedFileName(scanFile.name)
+      }
+      const { blob, mimeType, fileName } = await prepareFile(scanFile)
       setScanMessage(pdf ? 'Extrayendo datos del PDF...' : 'Enviando a OCR...')
       const formData = new FormData()
       formData.append('file', blob, fileName)
@@ -628,6 +765,14 @@ export default function EscanearGastoPage() {
 
       setScanMessage('Analizando datos...')
       setScanResult(data)
+      const inboxId = selectedPdfGroupId ? pdfInboxDocumentIds[selectedPdfGroupId] : null
+      if (inboxId) {
+        fetch('/api/erp/expenses/inbox', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: inboxId, status: 'REVIEW', extractedData: data.extracted || null }),
+        }).catch(() => { /* el escaneo continúa aunque la bandeja no responda */ })
+      }
       setRawOcrText(data.rawText || '')
       setScanOverlay(data.overlay || null)
       const ext: ExtractedData = data.extracted
@@ -644,6 +789,9 @@ export default function EscanearGastoPage() {
         supplier: ext.supplier || '',
         category: ext.category || 'otros',
         date: ext.date ? formatDetectedDate(ext.date) : prev.date,
+        dueDate: ext.fecha_vencimiento ? formatDetectedDate(ext.fecha_vencimiento) : '',
+        currency: ext.moneda || 'EUR',
+        paymentMethod: ext.forma_pago || '',
         receiptUrl: data.receiptUrl,
         // Identificación factura
         invoiceNumber: ext.numero_factura || ext.invoiceNumber || '',
@@ -662,6 +810,10 @@ export default function EscanearGastoPage() {
         vatAmount: ext.totales?.cuota_iva?.toString() || ext.vatAmount?.toString() || '',
         irpfRate: ext.totales?.tipo_irpf?.toString() || '',
         irpfAmount: ext.totales?.cuota_irpf?.toString() || '',
+        surchargeRate: ext.totales?.tipo_recargo?.toString() || '',
+        surchargeAmount: ext.totales?.cuota_recargo?.toString() || '',
+        taxRegime: ext.regimen_fiscal || '',
+        operationType: ext.tipo_operacion || '',
         totalFactura: ext.totales?.total_factura?.toString() || ext.total?.toString() || '',
         operationDate: ext.fecha_operacion ? formatDetectedDate(ext.fecha_operacion) : (ext.operationDate ? formatDetectedDate(ext.operationDate) : ''),
         iban: ext.iban || '',
@@ -673,6 +825,9 @@ export default function EscanearGastoPage() {
           importe: l.importe?.toString() || '',
         })),
       }))
+      // Si la factura tiene varios tipos de IVA, materializarlos como tramos
+      // inmediatamente; antes solo se conservaba el IVA principal.
+      applyDetectedVatBreakdown(ext.totales?.desglose_iva)
       setShowForm(true)
       loadTenantReceptor()
       matchSupplierByName(ext.supplier)
@@ -691,7 +846,7 @@ export default function EscanearGastoPage() {
       setScanMessage('')
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [capturedFile])
+  }, [capturedFile, pdfGroups, selectedPdfGroupId, pdfInboxDocumentIds])
 
   const goToForm = () => {
     setShowForm(true)
@@ -718,12 +873,19 @@ export default function EscanearGastoPage() {
       const next = { ...p }
       if (values.fecha_emision) next.date = formatDetectedDate(values.fecha_emision)
       if (values.fecha_operacion) next.operationDate = formatDetectedDate(values.fecha_operacion)
+      if (values.fecha_vencimiento) next.dueDate = formatDetectedDate(values.fecha_vencimiento)
       if (values.numero_factura) next.invoiceNumber = values.numero_factura
+      if (values.moneda) next.currency = values.moneda.toUpperCase()
+      if (values.forma_pago) next.paymentMethod = values.forma_pago
       if (values.base_imponible) next.taxableBase = values.base_imponible
       if (values.tipo_iva) next.vatRate = values.tipo_iva
       if (values.cuota_iva) next.vatAmount = values.cuota_iva
       if (values.tipo_irpf) next.irpfRate = values.tipo_irpf
       if (values.cuota_irpf) next.irpfAmount = values.cuota_irpf
+      if (values.tipo_recargo) next.surchargeRate = values.tipo_recargo
+      if (values.cuota_recargo) next.surchargeAmount = values.cuota_recargo
+      if (values.regimen_fiscal) next.taxRegime = values.regimen_fiscal
+      if (values.tipo_operacion) next.operationType = values.tipo_operacion
       if (values.total_factura) {
         next.totalFactura = values.total_factura
         next.amount = values.total_factura
@@ -733,26 +895,30 @@ export default function EscanearGastoPage() {
         next.supplier = next.supplier || values.emisor_nombre
       }
       if (values.emisor_nif) next.issuerTaxId = values.emisor_nif
+      if (values.emisor_direccion) next.issuerAddress = values.emisor_direccion
+      if (values.receptor_nombre) next.receptorNombre = values.receptor_nombre
+      if (values.receptor_nif) next.receptorNif = values.receptor_nif
+      if (values.receptor_direccion) next.receptorDireccion = values.receptor_direccion
       if (values.iban) next.iban = values.iban
       return next
     })
   }
 
-  // Renderiza la primera página del PDF a imagen (solo la primera vez) para
-  // que el visualizador de corrección funcione también con facturas PDF.
-  // Devuelve la URL renderizada (o null si no aplica / falla).
+  // Renderiza todas las páginas del PDF una sola vez para que el visualizador
+  // pueda navegar por facturas multipágina.
   const ensurePdfPreview = useCallback(async (): Promise<string | null> => {
     if (!isPdf || !capturedFile) return null
-    if (pdfPreviewUrl) return pdfPreviewUrl
+    if (pdfPreviewPages.length > 0) return pdfPreviewPages[0]
     try {
-      const url = await renderPdfFirstPage(capturedFile)
-      setPdfPreviewUrl(url)
-      return url
+      const pages = await renderPdfPages(capturedFile)
+      setPdfPreviewPages(pages)
+      setPdfPreviewUrl(pages[0] || null)
+      return pages[0] || null
     } catch (err: any) {
       console.error('[OcrCorrection] Error al renderizar PDF:', err?.message || err)
       return null
     }
-  }, [isPdf, capturedFile, pdfPreviewUrl])
+  }, [isPdf, capturedFile, pdfPreviewPages.length])
 
   // Valor que el parser genérico extrajo para un campo de plantilla (para comparar)
   const parserExtractedValue = (ext: ExtractedData, field: string): string | null => {
@@ -760,15 +926,26 @@ export default function EscanearGastoPage() {
     switch (field) {
       case 'fecha_emision': return ext.fecha_emision || null
       case 'fecha_operacion': return ext.fecha_operacion || null
+      case 'fecha_vencimiento': return ext.fecha_vencimiento || null
       case 'numero_factura': return ext.numero_factura || ext.invoiceNumber || null
+      case 'moneda': return ext.moneda || null
+      case 'forma_pago': return ext.forma_pago || null
       case 'base_imponible': return num(ext.totales?.base_imponible ?? ext.taxableBase)
       case 'tipo_iva': return num(ext.totales?.tipo_iva ?? ext.vatRate)
       case 'cuota_iva': return num(ext.totales?.cuota_iva ?? ext.vatAmount)
       case 'tipo_irpf': return num(ext.totales?.tipo_irpf)
       case 'cuota_irpf': return num(ext.totales?.cuota_irpf)
+      case 'tipo_recargo': return num(ext.totales?.tipo_recargo)
+      case 'cuota_recargo': return num(ext.totales?.cuota_recargo)
+      case 'regimen_fiscal': return ext.regimen_fiscal || null
+      case 'tipo_operacion': return ext.tipo_operacion || null
       case 'total_factura': return num(ext.totales?.total_factura ?? ext.total)
       case 'emisor_nombre': return ext.emisor?.nombre || ext.issuerName || null
       case 'emisor_nif': return ext.emisor?.nif || ext.issuerTaxId || null
+      case 'emisor_direccion': return ext.emisor?.direccion || null
+      case 'receptor_nombre': return ext.receptor?.nombre || null
+      case 'receptor_nif': return ext.receptor?.nif || null
+      case 'receptor_direccion': return ext.receptor?.direccion || null
       case 'iban': return ext.iban || null
       default: return null
     }
@@ -792,7 +969,9 @@ export default function EscanearGastoPage() {
   // Cuando la plantilla discrepa con lo que leyó el parser genérico, en vez de
   // sobrescribir a ciegas abre la comparación lado a lado para confirmar.
   const applySavedTemplate = async (ext: ExtractedData | null, overlay: OcrOverlay | null) => {
-    if (!ext || !overlay) return
+    // Aunque el proveedor de visión no devuelva cajas (caso habitual con
+    // OpenRouter/Gemini y PDFs), el visualizador puede generarlas localmente.
+    if (!ext) return
     const supplierName = (ext.supplier || ext.issuerName || '').trim()
     if (!supplierName) return
     try {
@@ -890,15 +1069,26 @@ export default function EscanearGastoPage() {
     amount: 'total_factura',
     date: 'fecha_emision',
     operationDate: 'fecha_operacion',
+    dueDate: 'fecha_vencimiento',
     invoiceNumber: 'numero_factura',
+    currency: 'moneda',
+    paymentMethod: 'forma_pago',
     taxableBase: 'base_imponible',
     vatRate: 'tipo_iva',
     vatAmount: 'cuota_iva',
     irpfRate: 'tipo_irpf',
     irpfAmount: 'cuota_irpf',
+    surchargeRate: 'tipo_recargo',
+    surchargeAmount: 'cuota_recargo',
+    taxRegime: 'regimen_fiscal',
+    operationType: 'tipo_operacion',
     totalFactura: 'total_factura',
     issuerName: 'emisor_nombre',
     issuerTaxId: 'emisor_nif',
+    issuerAddress: 'emisor_direccion',
+    receptorNombre: 'receptor_nombre',
+    receptorNif: 'receptor_nif',
+    receptorDireccion: 'receptor_direccion',
     iban: 'iban',
   }
 
@@ -924,14 +1114,25 @@ export default function EscanearGastoPage() {
       case 'total_factura': return form.totalFactura || form.amount || null
       case 'fecha_emision': return form.date || null
       case 'fecha_operacion': return form.operationDate || null
+      case 'fecha_vencimiento': return form.dueDate || null
       case 'numero_factura': return form.invoiceNumber || null
+      case 'moneda': return form.currency || null
+      case 'forma_pago': return form.paymentMethod || null
       case 'base_imponible': return form.taxableBase || null
       case 'tipo_iva': return form.vatRate || null
       case 'cuota_iva': return form.vatAmount || null
       case 'tipo_irpf': return form.irpfRate || null
       case 'cuota_irpf': return form.irpfAmount || null
+      case 'tipo_recargo': return form.surchargeRate || null
+      case 'cuota_recargo': return form.surchargeAmount || null
+      case 'regimen_fiscal': return form.taxRegime || null
+      case 'tipo_operacion': return form.operationType || null
       case 'emisor_nombre': return form.issuerName || null
       case 'emisor_nif': return form.issuerTaxId || null
+      case 'emisor_direccion': return form.issuerAddress || null
+      case 'receptor_nombre': return form.receptorNombre || null
+      case 'receptor_nif': return form.receptorNif || null
+      case 'receptor_direccion': return form.receptorDireccion || null
       case 'iban': return form.iban || null
       default: return null
     }
@@ -1076,6 +1277,51 @@ export default function EscanearGastoPage() {
     )
   }
 
+  const submitExpenseBody = async (body: Record<string, any>, allowDuplicate = false) => {
+    const res = await fetch('/api/erp/expenses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...body, allowDuplicate }),
+    })
+    const data = await res.json().catch(() => ({}))
+
+    if (res.ok) {
+      const inboxId = selectedPdfGroupId ? pdfInboxDocumentIds[selectedPdfGroupId] : null
+      if (inboxId) {
+        fetch('/api/erp/expenses/inbox', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: inboxId, status: 'PROCESSED', expenseId: data.id, extractedData: body }),
+        }).catch(() => { /* el gasto ya está guardado; la bandeja se puede reconciliar después */ })
+      }
+      toast.success('Gasto registrado correctamente')
+      router.push('/dashboard/finanzas/gastos')
+      return true
+    }
+
+    if (res.status === 409 && data.code === 'POSSIBLE_DUPLICATE' && !allowDuplicate) {
+      setDuplicateCandidate({ body, message: data.error || 'Se encontró un posible duplicado.', duplicate: data.duplicate })
+      return false
+    }
+
+    toast.error(data.error || 'Error al crear gasto')
+    return false
+  }
+
+  const confirmDuplicateExpense = async () => {
+    if (!duplicateCandidate) return
+    const body = duplicateCandidate.body
+    setDuplicateCandidate(null)
+    setSaving(true)
+    try {
+      await submitExpenseBody(body, true)
+    } catch {
+      toast.error('Error de conexión')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const saveExpense = async () => {
     if (!form.amount || !form.description) {
       toast.error('Descripción e importe son requeridos')
@@ -1130,6 +1376,10 @@ export default function EscanearGastoPage() {
       const body: Record<string, any> = {
         description: form.description,
         amount: parseFloat(form.amount),
+        currency: form.currency || 'EUR',
+        date: form.date || undefined,
+        dueDate: form.dueDate || undefined,
+        paymentMethod: form.paymentMethod || undefined,
         category: form.category,
         supplierId,
         status: 'PAID',
@@ -1140,6 +1390,10 @@ export default function EscanearGastoPage() {
         vatAmount: form.vatAmount || undefined,
         irpfRate: form.irpfRate || undefined,
         irpfAmount: form.irpfAmount || undefined,
+        surchargeRate: form.surchargeRate || undefined,
+        surchargeAmount: form.surchargeAmount || undefined,
+        taxRegime: form.taxRegime || undefined,
+        operationType: form.operationType || undefined,
         totalFactura: form.totalFactura || undefined,
         operationDate: form.operationDate || undefined,
         issuerName: form.issuerName || undefined,
@@ -1156,22 +1410,15 @@ export default function EscanearGastoPage() {
           precio_unitario: l.precio ? parseFloat(l.precio) : null,
           importe: l.importe ? parseFloat(l.importe) : null,
         })) : undefined,
+        vatBreakdown: ivaRows.length > 0 ? ivaRows.map(row => ({
+          rate: parseFloat(row.rate),
+          base: parseFloat(row.base),
+          amount: parseFloat(computePercentageAmount(row.base, row.rate)),
+        })).filter(row => Number.isFinite(row.rate) && Number.isFinite(row.base) && Number.isFinite(row.amount)) : undefined,
       }
       if (form.receiptUrl) body.receiptUrl = form.receiptUrl
 
-      const res = await fetch('/api/erp/expenses', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-
-      if (res.ok) {
-        toast.success('Gasto registrado correctamente')
-        router.push('/dashboard/finanzas/gastos')
-      } else {
-        const err = await res.json()
-        toast.error(err.error || 'Error al crear gasto')
-      }
+      await submitExpenseBody(body)
     } catch {
       toast.error('Error de conexión')
     } finally {
@@ -1193,9 +1440,15 @@ export default function EscanearGastoPage() {
     setRawOcrText('')
     setScanOverlay(null)
     setPdfPreviewUrl(null)
+    setPdfPreviewPages([])
+    setPdfGroups([])
+    setSelectedPdfGroupId(null)
+    setPdfInboxDocumentIds({})
+    setPdfBatchLoading(false)
     setOcrProposals({})
     setProposalBusy({})
     setSavingProposal(null)
+    setDuplicateCandidate(null)
     setOcrProposalForModal(null)
     scannedExtRef.current = null
     localOverlayRef.current = null
@@ -1229,6 +1482,13 @@ export default function EscanearGastoPage() {
       irpfAmount: '',
       totalFactura: '',
       operationDate: '',
+      surchargeRate: '',
+      surchargeAmount: '',
+      taxRegime: '',
+      operationType: '',
+      dueDate: '',
+      currency: 'EUR',
+      paymentMethod: '',
       iban: '',
     })
   }
@@ -1319,6 +1579,32 @@ export default function EscanearGastoPage() {
                 <img src={capturedImage!} alt="Captura" className="w-full max-h-[50vh] object-contain" />
               )}
             </div>
+            {isPdf && (
+              <div className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50/60 p-3 space-y-2">
+                <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-indigo-950">
+                  <Sparkles className="h-3.5 w-3.5 text-indigo-600" />
+                  {pdfBatchLoading ? 'Analizando páginas del PDF…' : pdfGroups.length > 1 ? 'Documentos detectados en el PDF' : 'Documento PDF listo'}
+                </div>
+                {pdfBatchLoading ? (
+                  <div className="flex items-center gap-2 text-xs text-indigo-700"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Buscando separadores de facturas…</div>
+                ) : (
+                  <div className="space-y-1">
+                    {pdfGroups.map(group => (
+                      <button
+                        key={group.id}
+                        type="button"
+                        onClick={() => setSelectedPdfGroupId(group.id)}
+                        className={`w-full rounded-lg border px-3 py-2 text-left text-xs transition-colors ${selectedPdfGroupId === group.id ? 'border-indigo-500 bg-white ring-1 ring-indigo-300' : 'border-indigo-100 bg-white/60 hover:bg-white'}`}
+                      >
+                        <span className="font-bold text-indigo-950">{group.label}</span>
+                        <span className="ml-2 text-indigo-600">páginas {group.pageStart}–{group.pageEnd}</span>
+                      </button>
+                    ))}
+                    {pdfGroups.length === 1 && <p className="text-[10px] text-indigo-700">Si el PDF es un escaneo sin texto incrustado, se procesa como un único documento para evitar separar páginas incorrectamente.</p>}
+                  </div>
+                )}
+              </div>
+            )}
             <div className="flex gap-3 mt-4 justify-center flex-wrap">
               <Button variant="outline" onClick={resetAll}>
                 {isPdf ? <FileText className="h-4 w-4 mr-2" /> : <Camera className="h-4 w-4 mr-2" />} {isPdf ? 'Nuevo PDF' : 'Nueva Foto'}
@@ -1326,7 +1612,7 @@ export default function EscanearGastoPage() {
               <Button variant="outline" onClick={goToForm}>
                 <Receipt className="h-4 w-4 mr-2" /> Sin OCR
               </Button>
-              <Button onClick={runScan} disabled={scanning} className="min-w-[180px]">
+              <Button onClick={runScan} disabled={scanning || pdfBatchLoading} className="min-w-[180px]">
                 {scanning ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Scan className="h-4 w-4 mr-2" />}
                 {scanning ? (scanMessage || 'Escaneando...') : isPdf ? 'Extraer Datos del PDF' : 'Escanear Ticket'}
               </Button>
@@ -1351,7 +1637,7 @@ export default function EscanearGastoPage() {
               <CardTitle className="text-lg flex items-center gap-2">
                 {scanResult?.ocrTimedOut ? <><span className="text-amber-500">⚠</span> OCR no disponible</> : scanResult ? <><CheckCircle2 className="h-5 w-5 text-emerald-500" /> Datos Extraídos</> : <><Receipt className="h-5 w-5" /> Datos del Gasto</>}
               </CardTitle>
-              {scanOverlay && (capturedImage || isPdf) && (
+              {(capturedImage || isPdf) && (
                 <Button
                   type="button"
                   variant="outline"
@@ -1540,6 +1826,33 @@ export default function EscanearGastoPage() {
                   {renderProposalChip('operationDate')}
                   {renderProposalChip('totalFactura')}
 
+                  {/* Vencimiento, moneda y pago */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <Label>Fecha Vencimiento</Label>
+                      <Input type="date" value={form.dueDate} onChange={e => { const v = e.target.value; setForm(p => ({ ...p, dueDate: v })); maybeProposeRegion('dueDate', v) }} />
+                    </div>
+                    <div>
+                      <Label>Moneda</Label>
+                      <select
+                        value={form.currency}
+                        onChange={e => { const v = e.target.value; setForm(p => ({ ...p, currency: v })); maybeProposeRegion('currency', v) }}
+                        className="w-full bg-background border rounded-xl px-3 py-2.5 text-sm outline-none"
+                      >
+                        {['EUR', 'USD', 'MXN', 'GBP', 'CHF', 'CAD', 'ARS', 'COP', 'CLP', 'PEN', 'BRL'].map(currency => (
+                          <option key={currency} value={currency}>{currency}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <Label>Forma de Pago</Label>
+                      <Input value={form.paymentMethod} onChange={e => { const v = e.target.value; setForm(p => ({ ...p, paymentMethod: v })); maybeProposeRegion('paymentMethod', v) }} placeholder="Transferencia, tarjeta…" />
+                    </div>
+                  </div>
+                  {renderProposalChip('dueDate')}
+                  {renderProposalChip('currency')}
+                  {renderProposalChip('paymentMethod')}
+
                   {/* Emisor */}
                   <div className="border-b pb-2 mb-2 flex items-center justify-between">
                     <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Emisor (Quien vende)</span>
@@ -1561,7 +1874,7 @@ export default function EscanearGastoPage() {
                   {renderProposalChip('issuerTaxId')}
                   <div>
                     <Label>Domicilio Fiscal</Label>
-                    <Input value={form.issuerAddress} onChange={e => setForm(p => ({ ...p, issuerAddress: e.target.value }))} placeholder="C/ Ejemplo 123, 28001 Madrid" />
+                    <Input value={form.issuerAddress} onChange={e => { const v = e.target.value; setForm(p => ({ ...p, issuerAddress: v })); maybeProposeRegion('issuerAddress', v) }} placeholder="C/ Ejemplo 123, 28001 Madrid" />
                   </div>
 
                   {/* Receptor */}
@@ -1572,16 +1885,16 @@ export default function EscanearGastoPage() {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label>Nombre / Razón Social</Label>
-                      <Input value={form.receptorNombre} onChange={e => setForm(p => ({ ...p, receptorNombre: e.target.value }))} placeholder="Nombre del cliente" />
+                      <Input value={form.receptorNombre} onChange={e => { const v = e.target.value; setForm(p => ({ ...p, receptorNombre: v })); maybeProposeRegion('receptorNombre', v) }} placeholder="Nombre del cliente" />
                     </div>
                     <div>
                       <Label>NIF / CIF</Label>
-                      <Input value={form.receptorNif} onChange={e => setForm(p => ({ ...p, receptorNif: e.target.value }))} placeholder="12345678Z" />
+                      <Input value={form.receptorNif} onChange={e => { const v = e.target.value; setForm(p => ({ ...p, receptorNif: v })); maybeProposeRegion('receptorNif', v) }} placeholder="12345678Z" />
                     </div>
                   </div>
                   <div>
                     <Label>Domicilio</Label>
-                    <Input value={form.receptorDireccion} onChange={e => setForm(p => ({ ...p, receptorDireccion: e.target.value }))} placeholder="Avda. Constitución 12, Sevilla" />
+                    <Input value={form.receptorDireccion} onChange={e => { const v = e.target.value; setForm(p => ({ ...p, receptorDireccion: v })); maybeProposeRegion('receptorDireccion', v) }} placeholder="Avda. Constitución 12, Sevilla" />
                   </div>
 
                   {/* Totales e Impuestos */}
@@ -1637,6 +1950,54 @@ export default function EscanearGastoPage() {
                   </div>
                   {renderProposalChip('irpfRate')}
                   {renderProposalChip('irpfAmount')}
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Régimen fiscal</Label>
+                      <Select value={form.taxRegime || 'general'} onValueChange={v => { setForm(p => ({ ...p, taxRegime: v })); maybeProposeRegion('taxRegime', v) }}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="general">Régimen general</SelectItem>
+                          <SelectItem value="recargo_equivalencia">Recargo de equivalencia</SelectItem>
+                          <SelectItem value="intracomunitaria">Intracomunitaria</SelectItem>
+                          <SelectItem value="inversion_sujeto_pasivo">Inversión del sujeto pasivo</SelectItem>
+                          <SelectItem value="exenta">Exenta</SelectItem>
+                          <SelectItem value="no_sujeta">No sujeta</SelectItem>
+                          <SelectItem value="igic">IGIC</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Tipo de operación</Label>
+                      <Select value={form.operationType || 'nacional'} onValueChange={v => { setForm(p => ({ ...p, operationType: v })); maybeProposeRegion('operationType', v) }}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="nacional">Nacional</SelectItem>
+                          <SelectItem value="intracomunitaria">Intracomunitaria</SelectItem>
+                          <SelectItem value="exportacion">Exportación</SelectItem>
+                          <SelectItem value="inversion_sujeto_pasivo">Inversión del sujeto pasivo</SelectItem>
+                          <SelectItem value="exenta">Exenta</SelectItem>
+                          <SelectItem value="no_sujeta">No sujeta</SelectItem>
+                          <SelectItem value="canarias_igic">Canarias (IGIC)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  {renderProposalChip('taxRegime')}
+                  {renderProposalChip('operationType')}
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Recargo de equivalencia %</Label>
+                      <Input type="number" step="0.01" value={form.surchargeRate} onChange={e => { applySurchargeRate(e.target.value); maybeProposeRegion('surchargeRate', e.target.value) }} placeholder="5.20" />
+                    </div>
+                    <div>
+                      <Label>Cuota recargo</Label>
+                      <Input type="number" step="0.01" value={form.surchargeAmount} onChange={e => { const v = e.target.value; setForm(p => ({ ...p, surchargeAmount: v })); maybeProposeRegion('surchargeAmount', v) }} placeholder="0.00" />
+                    </div>
+                  </div>
+                  {renderProposalChip('surchargeRate')}
+                  {renderProposalChip('surchargeAmount')}
 
                   {/* Tramos de IVA: varias bases con distintos tipos */}
                   <div className="border-t pt-3 mt-2">
@@ -1706,11 +2067,55 @@ export default function EscanearGastoPage() {
                       <div className="space-y-1">
                         <p className="text-xs font-black uppercase tracking-tight">Los totales no cuadran</p>
                         <p className="text-xs font-medium">
-                          Base + IVA − IRPF = <span className="font-bold">€{totalsMismatch.expected.toFixed(2)}</span>, pero el total de la factura es{' '}
+                          Base + IVA + recargo − IRPF = <span className="font-bold">€{totalsMismatch.expected.toFixed(2)}</span>, pero el total de la factura es{' '}
                           <span className="font-bold">€{parseFloat(form.totalFactura).toFixed(2)}</span> (diferencia{' '}
                           <span className="font-bold">€{totalsMismatch.difference.toFixed(2)}</span>). Revisa los importes antes de guardar.
                         </p>
                       </div>
+                    </div>
+                  )}
+
+                  {/* Asiento contable propuesto */}
+                  {(form.amount || form.taxableBase) && (
+                    <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-4 space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="h-4 w-4 text-indigo-600" />
+                          <span className="text-xs font-black uppercase tracking-wider text-indigo-950">Asiento contable propuesto</span>
+                        </div>
+                        <span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase ${entryProposal.totalMatches ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                          {entryProposal.totalMatches ? 'Cuadra' : 'Revisar total'}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-[11px] text-indigo-950">
+                        <span>Cuenta de gasto: <strong>{entryProposal.expenseAccountCode} · {entryProposal.expenseAccountName}</strong></span>
+                        <span className="text-right">A pagar proveedor: <strong>{form.currency || 'EUR'} {entryProposal.supplierPayable.toFixed(2)}</strong></span>
+                      </div>
+                      <p className="text-[10px] font-semibold text-indigo-800">{entryProposal.treatmentLabel}</p>
+                      <div className="overflow-x-auto rounded-lg border border-indigo-100 bg-white/80">
+                        <table className="w-full text-[11px]">
+                          <thead className="border-b border-indigo-100 text-indigo-500">
+                            <tr><th className="px-2 py-1 text-left">Cuenta</th><th className="px-2 py-1 text-left">Concepto</th><th className="px-2 py-1 text-right">Debe</th><th className="px-2 py-1 text-right">Haber</th></tr>
+                          </thead>
+                          <tbody>
+                            {entryProposal.lines.map((line, index) => (
+                              <tr key={`${line.accountCode}-${index}`} className="border-b border-indigo-50 last:border-0">
+                                <td className="px-2 py-1 font-bold">{line.accountCode}</td>
+                                <td className="px-2 py-1">{line.accountName}</td>
+                                <td className="px-2 py-1 text-right">{line.debit > 0 ? line.debit.toFixed(2) : '—'}</td>
+                                <td className="px-2 py-1 text-right">{line.credit > 0 ? line.credit.toFixed(2) : '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      {!entryProposal.totalMatches && (
+                        <p className="text-[10px] font-medium text-amber-800">Los componentes fiscales difieren del total detectado en {form.currency || 'EUR'} {entryProposal.sourceTotal.toFixed(2)} por {form.currency || 'EUR'} {Math.abs(entryProposal.difference).toFixed(2)}. Revisa la factura antes de guardar.</p>
+                      )}
+                      {entryProposal.requiresFiscalReview && (
+                        <p className="text-[10px] font-medium text-amber-800">Esta operación requiere revisión fiscal: el IVA se trata como {entryProposal.reverseChargeVat > 0 ? 'autorrepercutido y soportado' : 'no IVA español'} y no se aplicará como una factura nacional estándar.</p>
+                      )}
+                      <p className="text-[10px] text-indigo-700">Se generará automáticamente después de guardar el gasto; esta vista solo permite revisarlo antes.</p>
                     </div>
                   )}
 
@@ -1737,6 +2142,34 @@ export default function EscanearGastoPage() {
           </Card>
         </div>
       )}
+
+      {/* Confirmación de posible factura duplicada */}
+      <Dialog open={duplicateCandidate !== null} onOpenChange={open => { if (!open) setDuplicateCandidate(null) }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-700">
+              <AlertTriangle className="h-5 w-5" /> Posible factura duplicada
+            </DialogTitle>
+            <DialogDescription>
+              {duplicateCandidate?.message} Revisa el gasto existente antes de continuar.
+            </DialogDescription>
+          </DialogHeader>
+          {duplicateCandidate?.duplicate && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-1 text-sm">
+              <p><span className="font-semibold">Factura:</span> {duplicateCandidate.duplicate.invoiceNumber || 'Sin número'}</p>
+              <p><span className="font-semibold">Importe:</span> {duplicateCandidate.duplicate.currency || 'EUR'} {Number(duplicateCandidate.duplicate.amount || 0).toFixed(2)}</p>
+              <p><span className="font-semibold">Fecha:</span> {duplicateCandidate.duplicate.date ? new Intl.DateTimeFormat('es-ES').format(new Date(duplicateCandidate.duplicate.date)) : '—'}</p>
+              {duplicateCandidate.duplicate.description && <p><span className="font-semibold">Descripción:</span> {duplicateCandidate.duplicate.description}</p>}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDuplicateCandidate(null)}>Cancelar</Button>
+            <Button variant="destructive" onClick={confirmDuplicateExpense} disabled={saving}>
+              Guardar de todos modos
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal: completar la ficha del nuevo proveedor antes de registrarlo */}
       <Dialog open={supplierModalOpen} onOpenChange={setSupplierModalOpen}>
@@ -1830,7 +2263,8 @@ export default function EscanearGastoPage() {
         // Fuentes locales primero (blob/data URL) para que tesseract pueda
         // leerlas sin problemas de CORS; la URL de S3 solo como último recurso.
         imageUrl={isPdf ? pdfPreviewUrl : capturedImage || form.receiptUrl}
-        overlay={scanOverlay}
+        pdfPages={isPdf ? pdfPreviewPages : undefined}
+        overlay={isPdf ? null : scanOverlay}
         supplierName={form.supplier || form.issuerName}
         supplierNif={form.issuerTaxId}
         onApply={mergeTemplateValues}

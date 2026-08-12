@@ -175,6 +175,9 @@ describe('OCR_FIELD_DEFS', () => {
   it('define los campos anotables con etiqueta y normalizador', () => {
     expect(OCR_FIELD_DEFS.some(f => f.field === 'fecha_emision')).toBe(true)
     expect(OCR_FIELD_DEFS.some(f => f.field === 'total_factura')).toBe(true)
+    expect(OCR_FIELD_DEFS.some(f => f.field === 'receptor_nombre')).toBe(true)
+    expect(OCR_FIELD_DEFS.some(f => f.field === 'receptor_nif')).toBe(true)
+    expect(OCR_FIELD_DEFS.some(f => f.field === 'receptor_direccion')).toBe(true)
     for (const def of OCR_FIELD_DEFS) {
       expect(def.label.length).toBeGreaterThan(0)
       expect(typeof def.normalize).toBe('function')
@@ -185,6 +188,17 @@ describe('OCR_FIELD_DEFS', () => {
 function overlayOf(): OcrOverlay {
   return overlayFromOcrSpace(sampleOverlay())!
 }
+
+describe('applyTemplate · páginas PDF', () => {
+  it('solo aplica las regiones de la página activa', () => {
+    const overlay = overlayOf()
+    const pageOne = { ...region('numero_factura', 365, 105, 200, 45), page: 1 }
+    const pageTwo = { ...region('fecha_emision', 300, 140, 300, 70), page: 2 }
+
+    expect(applyTemplate(overlay, [pageOne, pageTwo], 1)).toEqual({ numero_factura: 'F2026-00142' })
+    expect(applyTemplate(overlay, [pageOne, pageTwo], 2)).toEqual({ fecha_emision: '24/07/2026' })
+  })
+})
 
 describe('findRegionForValue', () => {
   it('encuentra la región de una fecha corregida a mano (formato ISO del input)', () => {

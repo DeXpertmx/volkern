@@ -68,9 +68,18 @@ describe('computeInvoiceTotalMismatch (conciliación de totales)', () => {
     expect(computeInvoiceTotalMismatch('', '', '', '')).toBeNull();
   });
 
-  it('trata cuota de IVA o IRPF ausentes como 0', () => {
+  it('trata cuota de IVA, recargo o IRPF ausentes como 0', () => {
     expect(computeInvoiceTotalMismatch('100', '', '', '100')).toBeNull();
     expect(computeInvoiceTotalMismatch('100', '21', '', '121')).toBeNull();
+    expect(computeInvoiceTotalMismatch('100', '21', '', '121', '')).toBeNull();
+  });
+
+  it('suma el recargo de equivalencia al total esperado', () => {
+    expect(computeInvoiceTotalMismatch('600', '87', '', '718.20', '31.20')).toBeNull();
+    const mismatch = computeInvoiceTotalMismatch('600', '87', '', '687', '31.20');
+    expect(mismatch).not.toBeNull();
+    expect(mismatch!.expected).toBeCloseTo(718.2, 5);
+    expect(mismatch!.difference).toBeCloseTo(31.2, 5);
   });
 });
 

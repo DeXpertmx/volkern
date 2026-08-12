@@ -57,6 +57,7 @@ const ACCOUNTS = [
   { id: 'a572', code: '572' },
   { id: 'a621', code: '621' },
   { id: 'a623', code: '623' },
+  { id: 'a628', code: '628' },
   { id: 'a629', code: '629' },
 ];
 
@@ -127,6 +128,19 @@ describe('Gasto con IVA y retención → 303 + 111', () => {
     expect(report.result).toBe(-210);
   });
 
+  it('el Modelo 303 mantiene el recargo separado del IVA soportado', async () => {
+    mockTaxRecordFindMany.mockResolvedValue([
+      { id: 'tr-vat', type: 'IVA_SOPORTADO', baseAmount: 600, taxAmount: 87, periodMonth: 8, periodYear: 2026, isFiled: false, entry: { id: 'e2', date: new Date('2026-08-12') } },
+      { id: 'tr-surcharge', type: 'RECARGO_EQUIVALENCIA', baseAmount: 600, taxAmount: 31.2, periodMonth: 8, periodYear: 2026, isFiled: false, entry: { id: 'e2', date: new Date('2026-08-12') } },
+    ]);
+
+    const report = await TaxService.getQuarterlyVatReport(TENANT_ID, 2026, 3);
+
+    expect(report.inputVat.amount).toBe(87);
+    expect(report.equivalenceSurcharge).toEqual({ base: 600, amount: 31.2 });
+    expect(report.result).toBe(-87);
+  });
+
   it('el Modelo 111 reporta la retención IRPF del gasto', async () => {
     mockTaxRecordFindMany.mockResolvedValue([
       { id: 'tr-irpf', type: 'IRPF_RETENCION', baseAmount: 1000, taxAmount: 150, periodMonth: 2, periodYear: 2026, isFiled: false, entry: { id: 'e1', date: new Date('2026-02-10') } },
@@ -162,6 +176,109 @@ describe('Gasto con IVA y retención → 303 + 111', () => {
     mockEntryFindFirst.mockResolvedValue({ id: 'existing' });
     await AccountingEventMapper.mapExpenseToEntry('exp-1');
     expect(mockEntryCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('contabiliza tramos múltiples y recargo sin perder el equilibrio', async () => {
+    mockExpenseFindUnique.mockResolvedValue({
+      id: 'exp-multi-vat',
+      tenantId: TENANT_ID,
+      supplierId: 'sup-1',
+      description: 'Suministros con varios IVA',
+      amount: 718.2,
+      category: 'suministros',
+      date: new Date('2026-08-12'),
+      createdAt: new Date('2026-08-12'),
+      taxableBase: 600,
+      vatRate: null,
+      vatAmount: 87,
+      metadata: {
+        vatBreakdown: [
+          { rate: 21, base: 300, amount: 63 },
+          { rate: 10, base: 200, amount: 20 },
+          { rate: 4, base: 100, amount: 4 },
+        ],
+        surchargeRate: 5.2,
+        surchargeAmount: 31.2,
+      },
+      supplier: { id: 'sup-1', name: 'Proveedor', taxId: 'B12345678' },
+    });
+
+    await AccountingEventMapper.mapExpenseToEntry('exp-multi-vat');
+
+    const data = createdEntryData();
+    expect(data.lines.create).toEqual([
+      { accountId: 'a628', debit: 600, credit: 0 },
+      { accountId: 'a472', debit: 63, credit: 0 },
+      { accountId: 'a472', debit: 20, credit: 0 },
+      { accountId: 'a472', debit: 4, credit: 0 },
+      { accountId: 'a472', debit: 31.2, credit: 0 },
+      { accountId: 'a410', debit: 0, credit: 718.2 },
+    ]);
+    expect(data.taxImpact.create).toHaveLength(4);
+    expect(data.taxImpact.create.filter((impact: any) => impact.type === 'IVA_SOPORTADO').map((impact: any) => [impact.taxRate, impact.baseAmount, impact.taxAmount])).toEqual([
+      [21, 300, 63],
+      [10, 200, 20],
+      [4, 100, 4],
+    ]);
+    expect(data.taxImpact.create.find((impact: any) => impact.type === 'RECARGO_EQUIVALENCIA')).toMatchObject({
+      baseAmount: 600, taxRate: 5.2, taxAmount: 31.2,
+    });
+  });
+
+  it('contabiliza inversión del sujeto pasivo con IVA soportado y repercutido', async () => {
+    mockExpenseFindUnique.mockResolvedValue({
+      id: 'exp-reverse',
+      tenantId: TENANT_ID,
+      supplierId: 'sup-eu',
+      description: 'Servicio intracomunitario',
+      amount: 1000,
+      category: 'profesional',
+      date: new Date('2026-08-12'),
+      createdAt: new Date('2026-08-12'),
+      taxableBase: 1000,
+      vatRate: 21,
+      vatAmount: 210,
+      metadata: { operationType: 'intracomunitaria' },
+      supplier: { id: 'sup-eu', name: 'Proveedor UE', taxId: 'EU123' },
+    });
+
+    await AccountingEventMapper.mapExpenseToEntry('exp-reverse');
+
+    const data = createdEntryData();
+    expect(data.lines.create).toEqual([
+      { accountId: 'a623', debit: 1000, credit: 0 },
+      { accountId: 'a472', debit: 210, credit: 0 },
+      { accountId: 'a477', debit: 0, credit: 210 },
+      { accountId: 'a410', debit: 0, credit: 1000 },
+    ]);
+    expect(data.taxImpact.create.map((impact: any) => impact.type)).toEqual(['IVA_SOPORTADO', 'IVA_REPERCUTIDO']);
+  });
+
+  it('no registra IVA español en una operación exenta', async () => {
+    mockExpenseFindUnique.mockResolvedValue({
+      id: 'exp-exempt',
+      tenantId: TENANT_ID,
+      supplierId: 'sup-1',
+      description: 'Operación exenta',
+      amount: 1000,
+      category: 'otros',
+      date: new Date('2026-08-12'),
+      createdAt: new Date('2026-08-12'),
+      taxableBase: 1000,
+      vatRate: 21,
+      vatAmount: 210,
+      metadata: { operationType: 'exenta' },
+      supplier: { id: 'sup-1', name: 'Proveedor exento', taxId: 'B12345678' },
+    });
+
+    await AccountingEventMapper.mapExpenseToEntry('exp-exempt');
+
+    const data = createdEntryData();
+    expect(data.lines.create).toEqual([
+      { accountId: 'a629', debit: 1000, credit: 0 },
+      { accountId: 'a410', debit: 0, credit: 1000 },
+    ]);
+    expect(data.taxImpact).toBeUndefined();
   });
 
   it('sin desglose Verifactu estima IVA 21% desde el total', async () => {
