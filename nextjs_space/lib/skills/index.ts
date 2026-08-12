@@ -46,6 +46,8 @@ import * as siniestrosSkills from './siniestros-skills';
 import * as logisticsSkills from './logistics-skills';
 import * as interactionSkills from './interaction-skills';
 import * as billingSkills from './billing-skills';
+import * as taxSkills from './tax-skills';
+import * as accountingSkills from './accounting-skills';
 import { eventBus, EVENTS } from './event-bus';
 import { fromZonedTime } from 'date-fns-tz';
 
@@ -2623,6 +2625,16 @@ export const skills = {
   audit_expense_integrity: consolidationSkills.auditExpenseIntegrity,
   project_financial_forecast: consolidationSkills.projectFinancialForecast,
   tax_prospector: taxProspectorWrapper,
+
+  // Impuestos & Declaraciones (Décimo octavo entrenamiento)
+  tax_overview: taxSkills.consultaImpuestosPendientes,
+  tax_model_report: taxSkills.resumenModeloImpuesto,
+  file_tax_return: taxSkills.marcarImpuestoPresentado,
+
+  // Contabilidad (Décimo noveno entrenamiento)
+  balance_sheet: accountingSkills.informeBalance,
+  profit_loss: accountingSkills.informeCuentaResultados,
+  trial_balance: accountingSkills.informeBalanceComprobacion,
   
   // ERP Producción (MRP)
   calculate_production_cost: calculateProductionCostWrapper,
@@ -2803,6 +2815,12 @@ export function listSkills(): Array<{ name: SkillName; description: string; cate
     { name: 'audit_expense_integrity', description: 'Verifica si los gastos registrados coinciden con los hashes de seguridad y detecta anomalías', category: 'finance' },
     { name: 'project_financial_forecast', description: 'Predice el flujo de caja (Cash Flow) basado en el pipeline de ventas y gastos fijos', category: 'finance' },
     { name: 'tax_prospector', description: 'Proyección fiscal regional (MX, ES, US-LLC)', category: 'finance' },
+    { name: 'tax_overview', description: 'Declaraciones fiscales pendientes o próximas a vencer (calendario fiscal)', category: 'finance' },
+    { name: 'tax_model_report', description: 'Resumen de un modelo fiscal concreto (303, 111, 115, 130, 180, 390, 347, 349)', category: 'finance' },
+    { name: 'file_tax_return', description: 'Marcar una declaración fiscal como presentada (303, 111, 115, 130, 180, 390, 347, 349)', category: 'finance' },
+    { name: 'balance_sheet', description: 'Balance general (activo, pasivo y patrimonio neto)', category: 'finance' },
+    { name: 'profit_loss', description: 'Cuenta de resultados (PyG): ingresos, gastos y resultado', category: 'finance' },
+    { name: 'trial_balance', description: 'Balance de comprobación: sumas y saldos de todas las cuentas', category: 'finance' },
     // ERP Producción (MRP)
     { name: 'calculate_production_cost', description: 'Calcula el costo proyectado de fabricación (BoM + Mano de Obra)', category: 'production' },
     { name: 'verify_waste_integrity', description: 'Auditoría visual de mermas e integridad de planta vía Gemma Vision', category: 'production' },

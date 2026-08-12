@@ -171,4 +171,85 @@ export const financeIntents: IntentSchema[] = [
     ],
     destructive: false
   },
+
+  // ========== IMPUESTOS & DECLARACIONES (Décimo octavo entrenamiento) ==========
+  // Permiten consultar el calendario fiscal y el resumen de cada modelo desde
+  // Telegram sin depender del LLM (ruta determinista en el clasificador).
+  {
+    name: 'impuestos_pendientes',
+    description: 'Consultar las declaraciones fiscales pendientes o próximas a vencer (calendario fiscal): modelos 303, 111, 115, 130, 180, 390, 347 y 349',
+    requiredParams: [],
+    optionalParams: [],
+    examples: [
+      'qué impuestos tengo que declarar',
+      'qué declaraciones vencen pronto',
+      'impuestos por pagar este mes',
+      'dame mi calendario fiscal'
+    ],
+    destructive: false
+  },
+  {
+    name: 'resumen_impuesto',
+    description: 'Consultar el resumen de un impuesto o modelo fiscal concreto del periodo: IVA/Modelo 303, retenciones IRPF/111, arrendamientos/115, IRPF/130, intracomunitario/349, resumen anual/180, operaciones terceros/347 o IVA anual/390',
+    requiredParams: ['modelo'],
+    optionalParams: ['trimestre', 'anio'],
+    examples: [
+      'dame el modelo 303 del tercer trimestre',
+      'cuánto IVA tengo que pagar este trimestre',
+      'modelo 115 de este trimestre',
+      'retenciones de IRPF del segundo trimestre',
+      'modelo 180 del 2026'
+    ],
+    destructive: false
+  },
+  {
+    name: 'marcar_impuesto_presentado',
+    description: 'Marcar una declaración fiscal como presentada (cierra los registros del periodo). Requiere el modelo (303, 111, 115, 130, 180, 390, 347, 349)',
+    requiredParams: ['modelo'],
+    optionalParams: ['trimestre', 'anio'],
+    examples: [
+      'marca como presentado el modelo 303 del tercer trimestre',
+      'presenté el modelo 111 del trimestre',
+      'marca presentada la declaración del 115'
+    ],
+    destructive: false
+  },
+
+  // ========== CONTABILIDAD (Décimo noveno entrenamiento) ==========
+  {
+    name: 'balance_general',
+    description: 'Consultar el balance general o de situación (activo, pasivo y patrimonio neto)',
+    requiredParams: [],
+    optionalParams: [],
+    examples: [
+      'dame el balance general',
+      'cómo está mi balance de situación',
+      'dame el balance de la empresa'
+    ],
+    destructive: false
+  },
+  {
+    name: 'cuenta_resultados',
+    description: 'Consultar la cuenta de resultados (PyG): ingresos, gastos y resultado del ejercicio',
+    requiredParams: [],
+    optionalParams: [],
+    examples: [
+      'dame la cuenta de resultados',
+      'cuánto gané este mes',
+      'cuál es el resultado del ejercicio'
+    ],
+    destructive: false
+  },
+  {
+    name: 'balance_comprobacion',
+    description: 'Consultar el balance de comprobación (sumas y saldos de todas las cuentas)',
+    requiredParams: [],
+    optionalParams: [],
+    examples: [
+      'dame el balance de comprobación',
+      'la comprobación de sumas y saldos',
+      'dame el balance de comprobación de la contabilidad'
+    ],
+    destructive: false
+  },
 ];

@@ -111,6 +111,12 @@ const INTENT_TO_SKILL: Record<string, string> = {
   'proyeccion_impuestos': 'tax_prospector',
   'analizar_rentabilidad_global': 'analyze_global_profitability',
   'auditar_integridad_gastos': 'audit_expense_integrity',
+  'impuestos_pendientes': 'tax_overview',
+  'resumen_impuesto': 'tax_model_report',
+  'marcar_impuesto_presentado': 'file_tax_return',
+  'balance_general': 'balance_sheet',
+  'cuenta_resultados': 'profit_loss',
+  'balance_comprobacion': 'trial_balance',
 
   // ─── ERP: Inventario ───
   'salud_inventario': 'get_inventory_health',
@@ -744,6 +750,12 @@ export const SkillOrchestratorAgent = {
         'analizar_rentabilidad_global': 'finanzas',
         'auditar_integridad_gastos': 'finanzas',
         'auditar_integridad': 'finanzas',
+        'impuestos_pendientes': 'finanzas',
+        'resumen_impuesto': 'finanzas',
+        'marcar_impuesto_presentado': 'finanzas',
+        'balance_general': 'finanzas',
+        'cuenta_resultados': 'finanzas',
+        'balance_comprobacion': 'finanzas',
 
         // ERP - Inventario
         'salud_inventario': 'inventario',
@@ -871,6 +883,12 @@ export const SkillOrchestratorAgent = {
       'desviaciones_proyecto': '📐 No tienes acceso al módulo de *Proyectos*. Contacta al administrador.',
       'auditar_integridad_gastos': '💳 No tienes acceso al módulo de *Finanzas*. Contacta al administrador.',
       'auditar_integridad': '💳 No tienes acceso al módulo de *Finanzas*. Contacta al administrador.',
+      'impuestos_pendientes': '🧾 No tienes acceso al módulo de *Impuestos*. Contacta al administrador.',
+      'resumen_impuesto': '🧾 No tienes acceso al módulo de *Impuestos*. Contacta al administrador.',
+      'marcar_impuesto_presentado': '🧾 No tienes acceso al módulo de *Impuestos*. Contacta al administrador.',
+      'balance_general': '📊 No tienes acceso al módulo de *Contabilidad*. Contacta al administrador.',
+      'cuenta_resultados': '📊 No tienes acceso al módulo de *Contabilidad*. Contacta al administrador.',
+      'balance_comprobacion': '📊 No tienes acceso al módulo de *Contabilidad*. Contacta al administrador.',
       'auditar_fugas_materiales': '📦 No tienes acceso al módulo de *Inventario*. Contacta al administrador.',
       'actividad_campo': '🚚 No tienes acceso al módulo de *Logística*. Contacta al administrador.',
       'resumen_rrhh': '👥 No tienes acceso al módulo de *RRHH*. Contacta al administrador.',
