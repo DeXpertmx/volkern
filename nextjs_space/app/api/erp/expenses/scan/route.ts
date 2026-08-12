@@ -111,8 +111,16 @@ Reglas importantes:
   }
 
   // ── 1. OCR.space (proveedor gratuito — 25K requests/mes, soporta PDFs e imágenes) ──
-  const ocrSpaceKey = process.env.OCR_SPACE_API_KEY
-  if (ocrSpaceKey) {
+  // Se soporta una clave secundaria (OCR_SPACE_API_KEY_BACKUP) como alternativa:
+  // si la principal falla (HTTP, límite mensual, error de procesado o sin texto
+  // utilizable), se reintenta automáticamente con la de respaldo antes de caer
+  // a los proveedores de IA.
+  const ocrSpaceKeys = [
+    process.env.OCR_SPACE_API_KEY,
+    process.env.OCR_SPACE_API_KEY_BACKUP,
+  ].filter((k): k is string => typeof k === 'string' && k.trim().length > 0)
+
+  for (const ocrSpaceKey of ocrSpaceKeys) {
     try {
       const res = await fetch('https://api.ocr.space/parse/image', {
         method: 'POST',
@@ -154,6 +162,10 @@ Reglas importantes:
       }
     } catch (err: any) {
       console.error('[Vision] OCR.space fetch error:', err?.message)
+    }
+    // Queda una clave por probar: avisar y continuar con ella
+    if (ocrSpaceKey !== ocrSpaceKeys[ocrSpaceKeys.length - 1]) {
+      console.warn('[Vision] OCR.space falló con la clave principal, reintentando con la de respaldo…')
     }
   }
 
@@ -261,7 +273,7 @@ Reglas importantes:
   }
 
   const missingKeys: string[] = []
-  if (!ocrSpaceKey) missingKeys.push('OCR_SPACE_API_KEY')
+  if (ocrSpaceKeys.length === 0) missingKeys.push('OCR_SPACE_API_KEY')
   if (!openrouterKey) missingKeys.push('OPENROUTER_API_KEY')
   if (!googleKey) missingKeys.push('GOOGLE_AI_KEY')
   if (!deepseekKey) missingKeys.push('DEEPSEEK_API_KEY')
@@ -351,7 +363,7 @@ export const POST = withTenantAuth(async (req, auth) => {
     // Construir mensaje diagnóstico si falló
     let diagnostic: string | null = null
     if (!visionResult) {
-      const ocrSpaceKey = !!process.env.OCR_SPACE_API_KEY
+      const ocrSpaceKey = !!(process.env.OCR_SPACE_API_KEY || process.env.OCR_SPACE_API_KEY_BACKUP)
       const openrouterKey = !!process.env.OPENROUTER_API_KEY
       const googleKey = !!process.env.GOOGLE_AI_KEY
       const deepseekKey = !!process.env.DEEPSEEK_API_KEY
