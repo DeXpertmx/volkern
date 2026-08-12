@@ -85,6 +85,34 @@ describe('clasificador — agendar cita por nombre sin email', () => {
     expect(result.extractedParams.fecha).toBeTruthy();
     expect(result.extractedParams.hora).toBe('10:00');
   });
+
+  // Regresión: "reunión por Google meet con X" caía al LLM (caído en
+  // producción: 402/404/429) y el usuario veía "Lo siento, ocurrió un error".
+  it('"crear una reunión por Google meet con X mañana a las 6pm" → agendar_cita determinista', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'Ayúdame a crear una reunión por Google meet con Juan Antonio Moreno mañana a las 6pm',
+    });
+    expect(result.rawResponse).toBe('[determinista]'); // sin LLM
+    expect(result.intent).toBe('agendar_cita');
+    expect(result.extractedParams.nombre).toBe('Juan Antonio Moreno');
+    expect(result.extractedParams.fecha).toBeTruthy();
+    expect(result.extractedParams.hora).toBe('18:00');
+    expect(result.extractedParams.tipo).toBe('videollamada');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
+  it('"crear una reunión por Zoom con X" → agendar_cita determinista', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'crea una reunión por Zoom con María García el viernes a las 15:30',
+    });
+    expect(result.rawResponse).toBe('[determinista]');
+    expect(result.intent).toBe('agendar_cita');
+    expect(result.extractedParams.nombre).toBe('María García');
+    expect(result.extractedParams.tipo).toBe('videollamada');
+    expect(result.extractedParams.hora).toBe('15:30');
+  });
 });
 
 // ─── 3. Wrapper: auto-registro del lead si no está en el CRM ───────────────
