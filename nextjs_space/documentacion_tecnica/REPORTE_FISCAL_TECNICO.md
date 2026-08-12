@@ -14,14 +14,16 @@
 2. [TaxService: El motor de cálculo fiscal](#2-taxservice-el-motor-de-cálculo-fiscal)
 3. [Modelo 303 — IVA Trimestral](#3-modelo-303--iva-trimestral)
 4. [Modelo 111 — Retenciones IRPF](#4-modelo-111--retenciones-irpf)
-5. [Modelo 130 — Pago Fraccionado IRPF](#5-modelo-130--pago-fraccionado-irpf)
-6. [Modelo 347 — Operaciones con Terceros](#6-modelo-347--operaciones-con-terceros)
-7. [Modelo 349 — Operaciones Intracomunitarias](#7-modelo-349--operaciones-intracomunitarias)
-8. [Modelo 390 — Resumen Anual IVA](#8-modelo-390--resumen-anual-iva)
-9. [Reportes Contables (Trial Balance, PyG, Balance Sheet)](#9-reportes-contables)
-10. [Dashboard Contable](#10-dashboard-contable)
-11. [Calendario Fiscal y Notificaciones](#11-calendario-fiscal-y-notificaciones)
-12. [Flujo de Datos Completo](#12-flujo-de-datos-completo)
+5. [Modelo 115 — Retenciones por Arrendamientos](#5-modelo-115--retenciones-por-arrendamientos)
+6. [Modelo 130 — Pago Fraccionado IRPF](#6-modelo-130--pago-fraccionado-irpf)
+7. [Modelo 347 — Operaciones con Terceros](#7-modelo-347--operaciones-con-terceros)
+8. [Modelo 349 — Operaciones Intracomunitarias](#8-modelo-349--operaciones-intracomunitarias)
+9. [Modelo 390 — Resumen Anual IVA](#9-modelo-390--resumen-anual-iva)
+10. [Modelo 180 — Resumen Anual Retenciones Arrendamientos](#10-modelo-180--resumen-anual-retenciones-arrendamientos)
+11. [Reportes Contables (Trial Balance, PyG, Balance Sheet)](#11-reportes-contables)
+12. [Dashboard Contable](#12-dashboard-contable)
+13. [Calendario Fiscal y Notificaciones](#13-calendario-fiscal-y-notificaciones)
+14. [Flujo de Datos Completo](#14-flujo-de-datos-completo)
 
 ---
 
@@ -70,6 +72,10 @@ Todos los reportes fiscales se calculan en **tiempo real** desde los datos conta
 | `POST` | `/api/accounting/taxes/vat` | Marcar 303 como presentado |
 | `GET` | `/api/accounting/taxes/irpf?year=&quarter=` | Obtener Modelo 111 |
 | `POST` | `/api/accounting/taxes/irpf` | Marcar 111 como presentado |
+| `GET` | `/api/accounting/taxes/modelo115?year=&quarter=` | Obtener Modelo 115 |
+| `POST` | `/api/accounting/taxes/modelo115` | Marcar 115 como presentado |
+| `GET` | `/api/accounting/taxes/modelo180?year=` | Obtener Modelo 180 |
+| `POST` | `/api/accounting/taxes/modelo180` | Marcar 180 como presentado |
 | `GET` | `/api/accounting/taxes/modelo130?year=&quarter=` | Obtener Modelo 130 |
 | `POST` | `/api/accounting/taxes/modelo130` | Marcar 130 como presentado |
 | `GET` | `/api/accounting/taxes/modelo347?year=` | Obtener Modelo 347 |
@@ -238,11 +244,48 @@ summary.totalRetentions = summary.retentions.amount
 Los `TaxRecord` de tipo `IRPF_RETENCION` se generan en:
 - **`mapPayrollToEntry()`:** Retención de IRPF de nóminas (cuenta 4751).
 - **Facturas de profesionales:** Cuando se emite una factura a un profesional con retención.
-- **Alquileres:** Retenciones por arrendamiento de inmuebles.
+
+> Las retenciones por **arrendamiento de inmuebles urbanos** se declaran en el **Modelo 115** (y su resumen anual en el **Modelo 180**), no en el 111.
 
 ---
 
-## 5. Modelo 130 — Pago Fraccionado IRPF
+## 5. Modelo 115 — Retenciones por Arrendamientos
+
+**Endpoint:** `GET /api/accounting/taxes/modelo115?year=2026&quarter=1`
+**Método:** `TaxService.getQuarterlyModelo115Report(tenantId, year, quarter)`
+
+### Algoritmo
+
+Se calcula desde los **gastos** (no desde `TaxRecord`): gastos con categoría `alquiler` que practicaron retención de IRPF (`metadata.irpfAmount > 0`). Tipo general: **19%**.
+
+```typescript
+const expenses = await prisma.expense.findMany({
+  where: {
+    tenantId,
+    date: { gte: startDate, lte: endDate },
+    category: 'alquiler',
+  },
+  include: { supplier: true },
+  orderBy: { date: 'asc' }
+})
+
+for (const exp of expenses) {
+  const retentionAmount = Number(exp.metadata?.irpfAmount) || 0
+  if (retentionAmount <= 0) continue  // solo arriendos con retención
+  summary.totalRentBase += Number(exp.taxableBase) || Number(exp.amount)
+  summary.totalRetentions += retentionAmount
+}
+```
+
+### Origen de los datos
+
+- **Gastos con categoría «Alquiler»** con retención de IRPF en `metadata` (`irpfRate`, `irpfAmount`).
+- El detalle incluye el **arrendador** (proveedor), su NIF, la renta y la retención practicada.
+- El registro de presentación se hace vía `AuditLog` (`MODELO_115_FILED`), igual que el 130/349.
+
+---
+
+## 6. Modelo 130 — Pago Fraccionado IRPF
 
 **Endpoint:** `GET /api/accounting/taxes/modelo130?year=2026&quarter=1`
 **Método:** `TaxService.getQuarterlyModelo130Report(tenantId, year, quarter)`
@@ -295,7 +338,7 @@ Crea un `AuditLog` con acción `MODELO_130_FILED`. No modifica `TaxRecord` porqu
 
 ---
 
-## 6. Modelo 347 — Operaciones con Terceros
+## 7. Modelo 347 — Operaciones con Terceros
 
 **Endpoint:** `GET /api/accounting/taxes/modelo347?year=2025`
 **Método:** `TaxService.getAnnualModelo347Report(tenantId, year)`
@@ -349,7 +392,7 @@ Crea `AuditLog` con acción `MODELO_347_FILED`.
 
 ---
 
-## 7. Modelo 349 — Operaciones Intracomunitarias
+## 8. Modelo 349 — Operaciones Intracomunitarias
 
 **Endpoint:** `GET /api/accounting/taxes/modelo349?year=2026&quarter=1`
 **Método:** `TaxService.getQuarterlyModelo349Report(tenantId, year, quarter)`
@@ -425,7 +468,7 @@ private static readonly EU_COUNTRY_CODES = [
 
 ---
 
-## 8. Modelo 390 — Resumen Anual IVA
+## 9. Modelo 390 — Resumen Anual IVA
 
 **Endpoint:** `GET /api/accounting/taxes/modelo390?year=2025`
 **Método:** `TaxService.getAnnualModelo390Report(tenantId, year)`
@@ -471,11 +514,42 @@ const unfiledCount = await prisma.taxRecord.count({
 
 ---
 
-## 9. Reportes Contables
+## 10. Modelo 180 — Resumen Anual Retenciones Arrendamientos
+
+**Endpoint:** `GET /api/accounting/taxes/modelo180?year=2026`
+**Método:** `TaxService.getAnnualModelo180Report(tenantId, year)`
+
+### Algoritmo
+
+Consolida los 4 trimestres del Modelo 115 y agrupa por **arrendador** (proveedor):
+
+```typescript
+const quarterSummaries = [1, 2, 3, 4].map(q =>
+  await this.getQuarterlyModelo115Report(tenantId, year, q)
+)
+
+for (const qs of quarterSummaries) {
+  for (const d of qs.details) {
+    // Agrupar por supplierId: rentas pagadas + retenciones por arrendador
+    landlord.totalRentBase += d.base
+    landlord.totalRetentions += d.retentionAmount
+  }
+}
+```
+
+### Salida
+
+- **`landlords`:** detalle por arrendador (nombre, NIF, nº de rentas, rentas pagadas, retenciones).
+- **`quarters`:** consolidación trimestral (lo declarado en cada Modelo 115).
+- Registro de presentación vía `AuditLog` (`MODELO_180_FILED`).
+
+---
+
+## 11. Reportes Contables
 
 Los tres reportes contables fundamentales se generan mediante servicios independientes en `lib/accounting/reports/`.
 
-### 9.1. Balance de Sumas y Saldos (Trial Balance)
+### 11.1. Balance de Sumas y Saldos (Trial Balance)
 
 **Archivo:** `lib/accounting/reports/trial-balance.ts`
 **Endpoint:** `GET /api/accounting/reports/trial-balance`
@@ -509,7 +583,7 @@ export async function getTrialBalance(tenantId: string) {
 - `balance < 0` → saldo acreedor (se muestra en columna HABER)
 - El `balance` se actualiza automáticamente en cada creación de asiento (`EntryManager.createEntry()`)
 
-### 9.2. Pérdidas y Ganancias (PyG)
+### 11.2. Pérdidas y Ganancias (PyG)
 
 **Archivo:** `lib/accounting/reports/pyg.ts`
 **Endpoint:** `GET /api/accounting/reports/pyg`
@@ -537,7 +611,7 @@ export async function getPyG(tenantId: string) {
 
 **Agrupación:** Las cuentas se agrupan por el primer dígito del código (Grupo PGC). Grupo 6 → Gastos, Grupo 7 → Ingresos.
 
-### 9.3. Balance de Situación (Balance Sheet)
+### 11.3. Balance de Situación (Balance Sheet)
 
 **Archivo:** `lib/accounting/reports/balance-sheet.ts`
 **Endpoint:** `GET /api/accounting/reports/balance-sheet`
@@ -572,7 +646,7 @@ export const GET = withTenantAuth(async (_request, auth) => {
 
 ---
 
-## 10. Dashboard Contable
+## 12. Dashboard Contable
 
 **Endpoint:** `GET /api/accounting/dashboard`
 **Archivo:** `app/api/accounting/dashboard/route.ts`
@@ -606,7 +680,7 @@ const bankConnections = await prisma.bankConnection.findMany({
 
 ---
 
-## 11. Calendario Fiscal y Notificaciones
+## 13. Calendario Fiscal y Notificaciones
 
 ### FiscalCalendarService
 
@@ -670,7 +744,7 @@ const alreadyNotified = new Set(recentNotifications.map(n => n.entidadId))
 
 ---
 
-## 12. Flujo de Datos Completo
+## 14. Flujo de Datos Completo
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐

@@ -14,19 +14,21 @@
 2. [De dónde salen los datos fiscales](#2-de-dónde-salen-los-datos-fiscales)
 3. [Modelo 303 — IVA Trimestral](#3-modelo-303--iva-trimestral)
 4. [Modelo 111 — Retenciones de IRPF](#4-modelo-111--retenciones-de-irpf)
-5. [Modelo 130 — Pago Fraccionado de IRPF](#5-modelo-130--pago-fraccionado-de-irpf)
-6. [Modelo 347 — Operaciones con Terceros](#6-modelo-347--operaciones-con-terceros)
-7. [Modelo 349 — Operaciones Intracomunitarias](#7-modelo-349--operaciones-intracomunitarias)
-8. [Modelo 390 — Resumen Anual de IVA](#8-modelo-390--resumen-anual-de-iva)
-9. [Reportes Contables](#9-reportes-contables)
-10. [Calendario Fiscal y Alertas](#10-calendario-fiscal-y-alertas)
-11. [Resumen: Qué reporte y cuándo](#11-resumen-qué-reporte-y-cuándo)
+5. [Modelo 115 — Retenciones por Arrendamientos](#5-modelo-115--retenciones-por-arrendamientos)
+6. [Modelo 130 — Pago Fraccionado de IRPF](#6-modelo-130--pago-fraccionado-de-irpf)
+7. [Modelo 347 — Operaciones con Terceros](#7-modelo-347--operaciones-con-terceros)
+8. [Modelo 349 — Operaciones Intracomunitarias](#8-modelo-349--operaciones-intracomunitarias)
+9. [Modelo 390 — Resumen Anual de IVA](#9-modelo-390--resumen-anual-de-iva)
+10. [Modelo 180 — Resumen Anual de Retenciones por Arrendamientos](#10-modelo-180--resumen-anual-de-retenciones-por-arrendamientos)
+11. [Reportes Contables](#11-reportes-contables)
+12. [Calendario Fiscal y Alertas](#12-calendario-fiscal-y-alertas)
+13. [Resumen: Qué reporte y cuándo](#13-resumen-qué-reporte-y-cuándo)
 
 ---
 
 ## 1. Introducción
 
-Volkern genera automáticamente los **6 modelos fiscales** que una empresa española necesita presentar ante la AEAT, más los **3 informes contables** fundamentales. Todo ello se calcula en tiempo real a partir de los asientos contables que el sistema registra automáticamente al contabilizar facturas, gastos y nóminas.
+Volkern genera automáticamente los **8 modelos fiscales** que una empresa española necesita presentar ante la AEAT, más los **3 informes contables** fundamentales. Todo ello se calcula en tiempo real a partir de los asientos contables que el sistema registra automáticamente al contabilizar facturas, gastos y nóminas.
 
 **Lo que el contable debe saber:**
 
@@ -57,7 +59,7 @@ Cada vez que se registra un asiento contable con impacto fiscal (IVA, IRPF), el 
 | Cuota | 210,00 € |
 | Periodo | Febrero 2026 |
 
-Este registro alimenta automáticamente los modelos 303, 111, 390 y el calendario fiscal.
+Este registro alimenta automáticamente los modelos 303, 111, 115, 130, 347, 349, 390, 180 y el calendario fiscal.
 
 ---
 
@@ -132,7 +134,8 @@ El contable pulsa **"Marcar como presentado"**. A partir de ese momento:
 Declaración trimestral de las retenciones de IRPF practicadas a:
 - **Empleados** (nóminas)
 - **Profesionales** (facturas de autónomos con retención)
-- **Arrendadores** (alquileres con retención)
+
+> Las retenciones por **arrendamiento de inmuebles urbanos** se declaran en el **Modelo 115** (y su resumen anual en el **Modelo 180**), no en el 111.
 
 ### ¿Cómo se calcula?
 
@@ -155,11 +158,41 @@ Igual que el 303, pero filtrando solo los registros de tipo **"Retención IRPF"*
 
 - **Nóminas:** El sistema calcula la retención al registrar cada nómina (cuenta 4751).
 - **Profesionales:** Al registrar una factura de un proveedor profesional con retención.
-- **Alquileres:** Al registrar un gasto de alquiler con retención.
 
 ---
 
-## 5. Modelo 130 — Pago Fraccionado de IRPF
+## 5. Modelo 115 — Retenciones por Arrendamientos
+
+### ¿Qué es?
+
+Declaración **trimestral** de las retenciones de IRPF que debes practicar al pagar el alquiler de un **inmueble urbano** a un arrendador (persona física o entidad sin actividad económica). Tipo general de retención: **19%** sobre la renta pagada.
+
+### ¿Cómo se calcula?
+
+El sistema toma los gastos con categoría **«Alquiler»** que incluyeron retención de IRPF en el trimestre:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                 RETENCIONES POR ARRENDAMIENTO (1T 2026)      │
+│                                                             │
+│  Alquiler local (base 1.500€ × 19%) ..............   285,00 € │
+│  Alquiler oficina (base 1.000€ × 19%) ............   190,00 € │
+│  ─────────────────────────────────────────────────          │
+│  Rentas pagadas ................................ 2.500,00 €   │
+│  Retenciones a ingresar ........................   475,00 €   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Origen de los datos
+
+- **Gastos con categoría «Alquiler»** registrados en el sistema con retención de IRPF (`metadata.irpfAmount > 0`).
+- El detalle muestra el **arrendador** (proveedor), su NIF, la renta y la retención practicada.
+- Presentación: 20 abril, 20 julio, 20 octubre y 30 enero.
+- El resumen anual de estas retenciones se declara en el **Modelo 180**.
+
+---
+
+## 6. Modelo 130 — Pago Fraccionado de IRPF
 
 ### ¿Qué es?
 
@@ -230,7 +263,7 @@ Gastos:
 
 ---
 
-## 6. Modelo 347 — Operaciones con Terceros
+## 7. Modelo 347 — Operaciones con Terceros
 
 ### ¿Qué es?
 
@@ -290,7 +323,7 @@ Total importe proveedores:     3.751,00 €
 
 ---
 
-## 7. Modelo 349 — Operaciones Intracomunitarias
+## 8. Modelo 349 — Operaciones Intracomunitarias
 
 ### ¿Qué es?
 
@@ -343,7 +376,7 @@ Lista blanca de los 27 países: Alemania (DE), Francia (FR), Italia (IT), Portug
 
 ---
 
-## 8. Modelo 390 — Resumen Anual de IVA
+## 9. Modelo 390 — Resumen Anual de IVA
 
 ### ¿Qué es?
 
@@ -374,11 +407,40 @@ El sistema indica si cada trimestre ha sido "presentado" o está "pendiente", pa
 
 ---
 
-## 9. Reportes Contables
+## 10. Modelo 180 — Resumen Anual de Retenciones por Arrendamientos
+
+### ¿Qué es?
+
+Declaración **anual informativa** de las retenciones e ingresos a cuenta sobre **arrendamientos de inmuebles urbanos**. Se presenta en **enero** del año siguiente y resume los 4 trimestres del Modelo 115.
+
+### ¿Cómo se calcula?
+
+El sistema consolida los 4 trimestres del Modelo 115 y agrupa las retenciones **por arrendador**:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  MODELO 180 — EJERCICIO 2026                                 │
+│                                                             │
+│  Arrendador            │ NIF        │ Rentas      │ Reten.   │
+│  ──────────────────────┼────────────┼─────────────┼───────── │
+│  Inmobiliaria Ruiz S.L.│ B12345678  │ 6.000,00 €  │ 1.140 €  │
+│  García, Ana           │ 45678901X  │ 4.000,00 €  │  760 €  │
+│  ──────────────────────┼────────────┼─────────────┼───────── │
+│  TOTAL                 │            │10.000,00 €  │ 1.900 €  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Estado de los trimestres
+
+El dashboard muestra la consolidación trimestral (retenciones declaradas en cada Modelo 115) para que el contable verifique que los 4 trimestres cuadran antes de presentar el 180.
+
+---
+
+## 11. Reportes Contables
 
 Además de los modelos fiscales, el sistema genera los 3 informes contables fundamentales.
 
-### 9.1. Balance de Sumas y Saldos
+### 11.1. Balance de Sumas y Saldos
 
 Muestra **todas las cuentas** con su saldo deudor o acreedor.
 
@@ -400,7 +462,7 @@ Muestra **todas las cuentas** con su saldo deudor o acreedor.
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 9.2. Pérdidas y Ganancias (PyG)
+### 11.2. Pérdidas y Ganancias (PyG)
 
 Muestra el **resultado del ejercicio** (beneficio o pérdida):
 
@@ -430,7 +492,7 @@ Muestra el **resultado del ejercicio** (beneficio o pérdida):
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 9.3. Balance de Situación
+### 11.3. Balance de Situación
 
 Muestra la **situación patrimonial** de la empresa:
 
@@ -459,7 +521,7 @@ Muestra la **situación patrimonial** de la empresa:
 
 ---
 
-## 10. Calendario Fiscal y Alertas
+## 12. Calendario Fiscal y Alertas
 
 ### Plazos de presentación
 
@@ -467,10 +529,12 @@ Muestra la **situación patrimonial** de la empresa:
 |--------|----------|-------------|-------|
 | **303** | IVA | Trimestral | 20 abril / 20 julio / 20 octubre / 30 enero |
 | **111** | Retenciones IRPF | Trimestral | Los mismos que el 303 |
+| **115** | Retenciones por arrendamientos | Trimestral | Los mismos que el 303 |
 | **130** | Pago fraccionado IRPF | Trimestral | Los mismos que el 303 |
 | **349** | Operaciones intracomunitarias | Trimestral | 30 abril / 30 julio / 30 octubre / 30 enero |
 | **347** | Operaciones con terceros | Anual | 31 de marzo (año siguiente) |
 | **390** | Resumen anual IVA | Anual | 30 de enero (año siguiente) |
+| **180** | Resumen anual retenciones arrendamientos | Anual | 30 de enero (año siguiente) |
 
 ### Sistema de alertas
 
@@ -482,32 +546,30 @@ El sistema avisa proactivamente:
 
 ---
 
-## 11. Resumen: Qué reporte y cuándo
+## 13. Resumen: Qué reporte y cuándo
 
 ### Calendario trimestral tipo
 
 | Cuándo | Qué hacer |
 |--------|-----------|
-| **Abril** (1-20) | Revisar y presentar: 303 (1T), 111 (1T), 130 (1T), 349 (1T) |
-| **Julio** (1-20) | Revisar y presentar: 303 (2T), 111 (2T), 130 (2T) |
+| **Abril** (1-20) | Revisar y presentar: 303 (1T), 111 (1T), 115 (1T), 130 (1T), 349 (1T) |
+| **Julio** (1-20) | Revisar y presentar: 303 (2T), 111 (2T), 115 (2T), 130 (2T) |
 | **Julio** (1-30) | Revisar y presentar: 349 (2T) |
-| **Octubre** (1-20) | Revisar y presentar: 303 (3T), 111 (3T), 130 (3T) |
+| **Octubre** (1-20) | Revisar y presentar: 303 (3T), 111 (3T), 115 (3T), 130 (3T) |
 | **Octubre** (1-30) | Revisar y presentar: 349 (3T) |
-| **Enero** (1-30) | Revisar y presentar: 303 (4T), 111 (4T), 130 (4T), 349 (4T), **390 (anual)** |
+| **Enero** (1-30) | Revisar y presentar: 303 (4T), 111 (4T), 115 (4T), 130 (4T), 349 (4T), **390 (anual)**, **180 (anual)** |
 | **Marzo** (1-31) | Revisar y presentar: **347 (anual)** |
 
 ### Operativa recomendada
 
 1. **Cada trimestre**, unos días antes del vencimiento:
-   - Abrir el panel de cada modelo (303, 111, 130, 349).
+   - Abrir el panel de cada modelo (303, 111, 115, 130, 349).
    - Revisar que los importes cuadran con la contabilidad.
    - Pulsar "Marcar como presentado".
 
 2. **En enero**, además de los trimestrales:
    - Revisar el **Modelo 390** (resumen anual de IVA). El sistema ya ha consolidado los 4 trimestres.
-
-3. **En marzo**:
-   - Revisar el **Modelo 347** (operaciones con terceros >3.005,06€). Verificar que todos los NIF son correctos.
+   - Revisar el **Modelo 180** (resumen anual de retenciones por arrendamientos).
 
 4. **En cualquier momento:**
    - Consultar el **Balance de Sumas y Saldos** para verificar que no hay descuadres.
