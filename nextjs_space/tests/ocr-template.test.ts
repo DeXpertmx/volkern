@@ -5,6 +5,8 @@ import {
   wordsInRegion,
   OCR_FIELD_DEFS,
   sameFieldValue,
+  fieldFormat,
+  validateReference,
   type OcrTemplateField,
 } from '@/lib/finance/ocr-template'
 
@@ -107,6 +109,41 @@ describe('applyTemplate', () => {
       region('campo_inexistente', 300, 140, 300, 70),
     ])
     expect(values).toEqual({})
+  })
+})
+
+describe('fieldFormat', () => {
+  it('clasifica fechas, importes, NIF, folios y texto', () => {
+    expect(fieldFormat('24/07/2026')).toBe('date')
+    expect(fieldFormat('02-08-26')).toBe('date')
+    expect(fieldFormat('1.696,00')).toBe('money')
+    expect(fieldFormat('1696.00')).toBe('money')
+    expect(fieldFormat('336')).toBe('money')
+    expect(fieldFormat('B87654321')).toBe('nif')
+    expect(fieldFormat('12345678Z')).toBe('nif')
+    expect(fieldFormat('F2026-00142')).toBe('alnum')
+    expect(fieldFormat('INNOVATECH SOLUCIONES')).toBe('text')
+  })
+})
+
+describe('validateReference', () => {
+  it('acepta el mismo valor o valores del mismo formato (cada factura varía)', () => {
+    expect(validateReference('24/07/2026', '24/07/2026').ok).toBe(true)
+    expect(validateReference('02/08/2026', '24/07/2026').ok).toBe(true) // misma fecha, distinto día
+    expect(validateReference('1500.00', '1000.00').ok).toBe(true) // mismo formato importe
+    expect(validateReference('F2026-00199', 'F2026-00142').ok).toBe(true) // mismo formato folio
+    expect(validateReference('B87654321', 'B87654321').ok).toBe(true)
+  })
+
+  it('marca cuando el formato deja de coincidir con la referencia', () => {
+    expect(validateReference('1000.00', '24/07/2026').ok).toBe(false) // importe donde había fecha
+    expect(validateReference('24/07/2026', '1000.00').ok).toBe(false) // fecha donde había importe
+    expect(validateReference('1.210,00', 'F2026-00142').ok).toBe(false) // importe donde había folio
+  })
+
+  it('sin referencia no valida (ok)', () => {
+    expect(validateReference('1000.00', null).ok).toBe(true)
+    expect(validateReference('1000.00', undefined).ok).toBe(true)
   })
 })
 

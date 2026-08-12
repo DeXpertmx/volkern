@@ -28,6 +28,13 @@ export interface OcrTemplateField {
   y: number
   w: number
   h: number
+  /**
+   * Valor de referencia (el corregido/confirmado cuando se aprendió la
+   * plantilla). Se usa para validar lecturas futuras: si un campo deja de
+   * producir valores con su mismo formato, la región probablemente apunta
+   * al sitio equivocado.
+   */
+  reference?: string | null
 }
 
 /** Overlay de OCR.space: dimensiones de la imagen + palabras con cajas. */
@@ -169,6 +176,39 @@ function parseNumberLenient(s: string): number | null {
  * "24/07/2026" == "24/07/2026". Usada para decidir si la plantilla discrepa
  * de lo que leyó el parser genérico.
  */
+export type FieldFormat = 'date' | 'money' | 'nif' | 'alnum' | 'text'
+
+/** Clasifica el formato de un valor de campo (para validar contra la referencia). */
+export function fieldFormat(s: string): FieldFormat {
+  const clean = s.trim()
+  if (/^\d{1,2}[./-]\d{1,2}[./-]\d{2,4}$/.test(clean)) return 'date'
+  const upper = clean.toUpperCase()
+  if (/^[A-Z]\d{7,8}[A-Z0-9]?$/.test(upper) || /^\d{8}[A-Z]$/.test(upper)) return 'nif'
+  // Importe: sin letras (evita que un folio tipo "F2026-00142" pase por money
+  // tras normalizar) y que sea numérico al parsearlo.
+  if (!/[A-Za-zÀ-ÿ]/.test(clean) && parseNumberLenient(clean) !== null) return 'money'
+  if (/[A-Za-zÀ-ÿ]/.test(clean) && /\d/.test(clean)) return 'alnum'
+  return 'text'
+}
+
+/**
+ * Valida una lectura contra el valor de referencia guardado en la plantilla.
+ * Valores del MISMO formato se consideran válidos (cada factura trae datos
+ * distintos: fechas, folios e importes cambian), pero si el formato cambia
+ * (la referencia era una fecha y ahora sale un importe) la región apunta mal.
+ */
+export function validateReference(
+  extracted: string,
+  reference: string | null | undefined
+): { ok: boolean; reason?: string } {
+  if (!reference) return { ok: true }
+  const a = extracted.trim().toLowerCase()
+  const b = reference.trim().toLowerCase()
+  if (a === b) return { ok: true }
+  if (fieldFormat(extracted) === fieldFormat(reference)) return { ok: true }
+  return { ok: false, reason: 'Formato distinto al guardado en la plantilla' }
+}
+
 export function sameFieldValue(a: string, b: string): boolean {
   const x = a.trim().toLowerCase().replace(/\s+/g, '')
   const y = b.trim().toLowerCase().replace(/\s+/g, '')

@@ -17,7 +17,7 @@ import OcrCorrectionModal from '@/components/finance/OcrCorrectionModal'
 import OcrComparisonModal, { type ComparisonItem } from '@/components/finance/OcrComparisonModal'
 import { computeVatAmount, computePercentageAmount, computeInvoiceTotalMismatch, fillEmptyTranches, fillLastTranche } from '@/lib/finance/vat'
 import { validateFiscalId, getFiscalIdConfigsByCountry, normalizarPais } from '@/lib/fiscal-validation'
-import { applyTemplate, getOcrFieldDef, sameFieldValue, type OcrOverlay } from '@/lib/finance/ocr-template'
+import { applyTemplate, getOcrFieldDef, sameFieldValue, validateReference, type OcrOverlay, type OcrTemplateField } from '@/lib/finance/ocr-template'
 import { renderPdfFirstPage } from '@/lib/finance/pdf-render'
 
 interface EmisorInfo {
@@ -145,6 +145,8 @@ export default function EscanearGastoPage() {
   const [correctionOpen, setCorrectionOpen] = useState(false)
   // Comparación lado a lado entre el OCR genérico y la plantilla (confirmar antes de aplicar)
   const [comparisonItems, setComparisonItems] = useState<ComparisonItem[] | null>(null)
+  // Plantilla que se auto-aplicó: para actualizar sus referencias al confirmar
+  const [appliedTemplateRef, setAppliedTemplateRef] = useState<{ id: string; supplierName: string; nif?: string | null; fields: OcrTemplateField[] } | null>(null)
   // Primera página del PDF renderizada a imagen con pdf.js (para el visualizador)
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -795,17 +797,26 @@ export default function EscanearGastoPage() {
       const count = Object.keys(values).length
       if (count === 0) return
 
-      // Solo discrepancias: campo donde la plantilla difiere del parser (o el
-      // parser no lo leyó). Si todo coincide, se aplica sin molestar.
+      // Guardar referencias de la plantilla aplicada para actualizarlas al confirmar
+      setAppliedTemplateRef({ id: template.id, supplierName, nif: template.nif, fields: template.fields })
+
+      // Discrepancias: campo donde la plantilla difiere del parser (o el parser
+      // no lo leyó), o donde la lectura no coincide con el formato de la
+      // referencia guardada (la región puede apuntar mal). Si no hay ninguna,
+      // se aplica sin molestar.
       const mismatches: ComparisonItem[] = []
       for (const [field, templateValue] of Object.entries(values)) {
         const parserVal = parserExtractedValue(ext, field)
-        if (parserVal === null || !sameFieldValue(parserVal, templateValue)) {
+        const ref = template.fields?.find((f: OcrTemplateField) => f.field === field)?.reference ?? null
+        const refCheck = validateReference(templateValue, ref)
+        if (parserVal === null || !sameFieldValue(parserVal, templateValue) || !refCheck.ok) {
           mismatches.push({
             field,
             label: getOcrFieldDef(field)?.label || field,
             ocrValue: parserVal,
             templateValue,
+            reference: ref,
+            formatMismatch: !refCheck.ok,
           })
         }
       }
@@ -821,13 +832,35 @@ export default function EscanearGastoPage() {
     }
   }
 
-  // Confirmación de la comparación: aplica solo los campos marcados
+  // Confirmación de la comparación: aplica solo los campos marcados y guarda
+  // el valor confirmado como referencia en la plantilla (aprendizaje continuo).
   const confirmTemplateComparison = (values: Record<string, string>) => {
     const count = Object.keys(values).length
     mergeTemplateValues(values)
     setComparisonItems(null)
     if (count > 0) {
       toast.success(`${count} campo${count !== 1 ? 's' : ''} corregido${count !== 1 ? 's' : ''} con la plantilla del proveedor`)
+      // Actualizar la referencia de los campos confirmados (best-effort)
+      const applied = appliedTemplateRef
+      setAppliedTemplateRef(null)
+      if (applied) {
+        const updatedFields = applied.fields.map(f => ({
+          ...f,
+          reference: values[f.field] ?? f.reference ?? null,
+        }))
+        fetch('/api/erp/expenses/ocr-templates', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            supplierName: applied.supplierName,
+            nif: applied.nif || undefined,
+            templateId: applied.id,
+            fields: updatedFields,
+          }),
+        }).catch(() => { /* no bloquea: la referencia se re-aprenderá en el siguiente guardado */ })
+      }
+    } else {
+      setAppliedTemplateRef(null)
     }
   }
 

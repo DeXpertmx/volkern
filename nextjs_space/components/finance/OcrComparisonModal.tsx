@@ -12,6 +12,10 @@ export interface ComparisonItem {
   ocrValue: string | null
   /** Lo que extrae la plantilla desde la región. */
   templateValue: string
+  /** Valor de referencia guardado en la plantilla al aprenderla. */
+  reference?: string | null
+  /** La lectura no coincide con el formato del valor de referencia. */
+  formatMismatch?: boolean
 }
 
 interface OcrComparisonModalProps {
@@ -64,11 +68,12 @@ export default function OcrComparisonModal({ open, items, onConfirm, onClose }: 
         </DialogHeader>
 
         <div className="space-y-1.5 max-h-[50vh] overflow-y-auto pr-1">
-          <div className="grid grid-cols-[2rem_1fr_1fr_1fr] gap-2 items-center px-2 py-1.5 rounded-md bg-muted text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+          <div className="grid grid-cols-[2rem_1fr_1fr_1.2fr_1fr] gap-2 items-center px-2 py-1.5 rounded-md bg-muted text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
             <span />
             <span>Campo</span>
             <span>OCR leyó</span>
             <span>Plantilla dice</span>
+            <span>Referencia</span>
           </div>
           {items.map(item => {
             const on = selected.has(item.field)
@@ -77,18 +82,30 @@ export default function OcrComparisonModal({ open, items, onConfirm, onClose }: 
                 key={item.field}
                 type="button"
                 onClick={() => toggle(item.field)}
-                className={`grid grid-cols-[2rem_1fr_1fr_1fr] gap-2 items-center w-full text-left px-2 py-2 rounded-lg border transition-colors ${
-                  on ? 'border-emerald-300 bg-emerald-50/60' : 'border-muted-foreground/20 opacity-60'
+                className={`grid grid-cols-[2rem_1fr_1fr_1.2fr_1fr] gap-2 items-center w-full text-left px-2 py-2 rounded-lg border transition-colors ${
+                  on
+                    ? item.formatMismatch ? 'border-amber-400 bg-amber-50/60' : 'border-emerald-300 bg-emerald-50/60'
+                    : 'border-muted-foreground/20 opacity-60'
                 }`}
               >
-                <span className="text-emerald-700">
+                <span className={item.formatMismatch ? 'text-amber-600' : 'text-emerald-700'}>
                   {on ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4 text-muted-foreground" />}
                 </span>
-                <span className="text-xs font-semibold">{item.label}</span>
+                <span className="text-xs font-semibold flex items-center gap-1">
+                  {item.label}
+                  {item.formatMismatch && (
+                    <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-amber-700 bg-amber-100 rounded px-1 py-0.5" title="La lectura no coincide con el formato del valor guardado en la plantilla">
+                      ⚠ formato
+                    </span>
+                  )}
+                </span>
                 <span className={`text-xs font-mono ${item.ocrValue ? '' : 'text-muted-foreground italic'}`}>
                   {item.ocrValue || '— no leído —'}
                 </span>
                 <span className="text-xs font-mono text-emerald-800 font-semibold">{item.templateValue}</span>
+                <span className={`text-[11px] font-mono ${item.reference ? '' : 'text-muted-foreground'}`}>
+                  {item.reference || '—'}
+                </span>
               </button>
             )
           })}

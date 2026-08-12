@@ -11,6 +11,7 @@ import {
   OCR_FIELD_DEFS,
   applyTemplate,
   getOcrFieldDef,
+  validateReference,
   type OcrOverlay,
   type OcrTemplateField,
 } from '@/lib/finance/ocr-template'
@@ -209,6 +210,13 @@ export default function OcrCorrectionModal({ open, onClose, imageUrl, overlay, s
     }
     setSaving(true)
     try {
+      // Cada campo guarda como referencia el valor que la región extrae ahora
+      // (el leído/corregido con el que se aprende la plantilla); si la región
+      // no extrae nada, se conserva la referencia previa si existía.
+      const fieldsToSave = fields.map(f => ({
+        ...f,
+        reference: extractedValues[f.field] ?? f.reference ?? null,
+      }))
       const res = await fetch('/api/erp/expenses/ocr-templates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -216,7 +224,7 @@ export default function OcrCorrectionModal({ open, onClose, imageUrl, overlay, s
           supplierName,
           nif: supplierNif || undefined,
           name,
-          fields,
+          fields: fieldsToSave,
           ...(isEditing ? { templateId: activeTemplateId } : {}),
         }),
       })
@@ -436,6 +444,7 @@ export default function OcrCorrectionModal({ open, onClose, imageUrl, overlay, s
                 {fields.map(f => {
                   const def = getOcrFieldDef(f.field)
                   const value = extractedValues[f.field]
+                  const refCheck = value ? validateReference(value, f.reference) : null
                   return (
                     <div key={f.field} className="rounded-md border p-2">
                       <p className="text-[10px] font-semibold flex items-center gap-1.5">
@@ -445,6 +454,12 @@ export default function OcrCorrectionModal({ open, onClose, imageUrl, overlay, s
                       <p className={`text-xs mt-0.5 font-mono ${value ? 'text-emerald-700' : 'text-muted-foreground'}`}>
                         {value || '— no encontrado —'}
                       </p>
+                      {f.reference && (
+                        <p className={`text-[10px] mt-0.5 flex items-center gap-1 ${refCheck?.ok ? 'text-emerald-600' : 'text-amber-600'}`}>
+                          {refCheck?.ok ? '✓ formato OK' : '⚠ formato distinto al guardado'}
+                          <span className="text-muted-foreground">(ref: {f.reference})</span>
+                        </p>
+                      )}
                     </div>
                   )
                 })}
