@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { withTenantAuth } from '@/lib/api-key-auth'
 import { prisma } from '@/lib/db'
-import { OcrTemplateField } from '@/lib/finance/ocr-template'
+import { OcrTemplateField, VatRowTemplate } from '@/lib/finance/ocr-template'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,6 +11,7 @@ interface TemplateRow {
   nif: string | null
   name: string
   fields: unknown
+  vatRows: unknown
   updatedAt: Date
 }
 
@@ -21,6 +22,7 @@ function serializeTemplate(t: TemplateRow) {
     nif: t.nif,
     name: t.name,
     fields: t.fields as unknown as OcrTemplateField[],
+    vatRows: t.vatRows as unknown as VatRowTemplate[],
     updatedAt: t.updatedAt,
   }
 }
@@ -54,13 +56,16 @@ export const GET = withTenantAuth(async (req, auth) => {
 })
 
 // POST /api/erp/expenses/ocr-templates
-// { supplierName, nif?, name?, fields, templateId? }
-//  - Con templateId: actualiza esa plantilla (nombre, campos, nif).
+// { supplierName, nif?, name?, fields?, vatRows?, templateId? }
+//  - Con templateId: actualiza esa plantilla (nombre, campos, tramos, nif).
 //  - Sin templateId: crea una plantilla nueva con `name` (default "Formato N").
+//  - `vatRows` (opcional) guarda las posiciones de las filas de IVA aprendidas
+//    al confirmar los tramos; puede enviarse solo, sin `fields`.
 export const POST = withTenantAuth(async (req, auth) => {
   const body = await req.json().catch(() => null)
   const supplierName = (body?.supplierName || '').trim()
   const fields: OcrTemplateField[] = Array.isArray(body?.fields) ? body.fields : []
+  const vatRows: VatRowTemplate[] = Array.isArray(body?.vatRows) ? body.vatRows : []
   const nif = body?.nif ? String(body.nif).trim() : null
   const templateId = body?.templateId ? String(body.templateId) : null
   const requestedName = body?.name ? String(body.name).trim() : ''
@@ -68,12 +73,20 @@ export const POST = withTenantAuth(async (req, auth) => {
   if (!supplierName) {
     return NextResponse.json({ error: 'supplierName es obligatorio' }, { status: 400 })
   }
-  if (fields.length === 0) {
-    return NextResponse.json({ error: 'Debes anotar al menos un campo en la imagen' }, { status: 400 })
+  if (fields.length === 0 && vatRows.length === 0) {
+    return NextResponse.json({ error: 'Debes anotar al menos un campo o un tramo de IVA en la imagen' }, { status: 400 })
   }
   for (const f of fields) {
     if (!f.field || !isFinite(f.x) || !isFinite(f.y) || !isFinite(f.w) || !isFinite(f.h)) {
       return NextResponse.json({ error: 'Coordenadas de región inválidas' }, { status: 400 })
+    }
+  }
+  for (const v of vatRows) {
+    if (!v.rate || !v.base || !v.cuota ||
+      !isFinite(v.rate.x) || !isFinite(v.rate.y) || !isFinite(v.rate.w) || !isFinite(v.rate.h) ||
+      !isFinite(v.base.x) || !isFinite(v.base.y) || !isFinite(v.base.w) || !isFinite(v.base.h) ||
+      !isFinite(v.cuota.x) || !isFinite(v.cuota.y) || !isFinite(v.cuota.w) || !isFinite(v.cuota.h)) {
+      return NextResponse.json({ error: 'Coordenadas de fila de IVA inválidas' }, { status: 400 })
     }
   }
 
@@ -100,7 +113,15 @@ export const POST = withTenantAuth(async (req, auth) => {
     }
     const template = await prisma.supplierOcrTemplate.update({
       where: { id: existing.id },
-      data: { supplierName, nif: resolvedNif, name: requestedName || undefined, fields: fields as any },
+      data: {
+        supplierName,
+        nif: resolvedNif,
+        name: requestedName || undefined,
+        // Solo se tocan los campos enviados: guardar tramos no borra las
+        // regiones de texto aprendidas y viceversa.
+        ...(fields.length > 0 ? { fields: fields as any } : {}),
+        ...(vatRows.length > 0 ? { vatRows: vatRows as any } : {}),
+      },
     })
     return NextResponse.json({ success: true, template: serializeTemplate(template as TemplateRow) })
   }
@@ -116,7 +137,7 @@ export const POST = withTenantAuth(async (req, auth) => {
 
   try {
     const template = await prisma.supplierOcrTemplate.create({
-      data: { tenantId, supplierName, nif: resolvedNif, name, fields: fields as any },
+      data: { tenantId, supplierName, nif: resolvedNif, name, fields: fields as any, vatRows: vatRows as any },
     })
     return NextResponse.json({ success: true, template: serializeTemplate(template as TemplateRow) })
   } catch (err: any) {

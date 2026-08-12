@@ -1,3 +1,5 @@
+import type { OcrOverlay, OcrWord, VatRowTemplate } from '@/lib/finance/ocr-template'
+
 export interface EmisorInfo {
   nombre: string | null
   nif: string | null
@@ -152,6 +154,286 @@ export function normalizeVatBreakdown(breakdown: unknown): { tipo: number; base:
     .filter(row => Number.isFinite(row.tipo) && Number.isFinite(row.base) && Number.isFinite(row.cuota))
   // Sin duplicados exactos
   return rows.filter((row, idx) => rows.findIndex(r => r.tipo === row.tipo && r.base === row.base && r.cuota === row.cuota) === idx)
+}
+
+// ─── Asociación posicional de tramos de IVA ─────────────────────────────────
+// El texto plano leído por el OCR pierde la geometría: dos filas de impuestos
+// pueden llegar desordenadas o con la cuota de una fila pegada a la base de
+// otra. Cuando hay cajas de palabras con posición (OCR.space o detección
+// local con tesseract), agrupamos las palabras en filas por su centro vertical
+// y asignamos en cada fila tipo → base → cuota por orden horizontal, de modo
+// que cada tramo detectado queda asociado a sus valores reales aunque el texto
+// venga revuelto.
+
+// Agrupa palabras por fila usando el centro vertical (tolerante a la altura
+// de letra y al ruido del OCR). Las filas quedan ordenadas de arriba abajo.
+function groupOverlayRows(words: OcrWord[]): OcrWord[][] {
+  const sorted = words.slice().sort((a, b) => a.y - b.y || a.x - b.x)
+  const rows: OcrWord[][] = []
+  for (const w of sorted) {
+    const cy = w.y + w.h / 2
+    const row = rows.find(r => {
+      const first = r[0]
+      const fcy = first.y + first.h / 2
+      return Math.abs(cy - fcy) <= Math.max(8, Math.max(first.h, w.h) * 0.75)
+    })
+    if (row) row.push(w)
+    else rows.push([w])
+  }
+  return rows
+}
+
+// Extrae el tipo de IVA de un token tipo "21%", "21,00%" o "21, 00%".
+function rateFromToken(text: string): number | null {
+  const m = text.match(/(\d{1,2}(?:[.,]\d+)?)\s*%/i)
+  if (!m) return null
+  const n = toNum(m[1])
+  return n === null ? null : Math.round(n * 100) / 100
+}
+
+// ¿El token es un importe (sin letras ni %)? Devuelve su valor o null.
+function moneyFromToken(text: string): number | null {
+  const t = text.replace(/[€$£]/g, '').trim()
+  if (!t || /[A-Za-zÀ-ÿ%]/.test(t)) return null
+  return toNum(t)
+}
+
+// Tramo con la geometría de sus tokens (para poder aprender la posición).
+interface VatRowTokens {
+  tipo: number
+  base: number
+  cuota: number
+  rateTok: OcrWord
+  baseTok: OcrWord
+  cuotaTok: OcrWord
+}
+
+// Convierte una fila de impuestos en tramos {tipo, base, cuota} con los tokens
+// que originaron cada columna. Tolerante a:
+// - columnas en distinto orden ("63,00 € 300,00 €" → se detecta la cuota),
+// - el total del tramo incluido en la misma fila (base + cuota → se descarta),
+// - varios tramos en una misma línea (dos columnas juntas),
+// - el "%" como palabra separada del número.
+// Solo emite filas cuya relación tipo × base ≈ cuota se cumpla; si no, la
+// descarta (mejor no inventar un tramo que guardar uno mal asociado).
+function rowsWithTokens(row: OcrWord[]): VatRowTokens[] {
+  const tokens = row.slice().sort((a, b) => a.x - b.x)
+  // Un "%" suelto convierte el número anterior en el tipo ("21,00" "%")
+  for (let i = 1; i < tokens.length; i++) {
+    if (/^%+$/.test(tokens[i].text.trim()) && moneyFromToken(tokens[i - 1].text) !== null && rateFromToken(tokens[i - 1].text) === null) {
+      tokens[i - 1] = { ...tokens[i - 1], text: tokens[i - 1].text + '%' }
+    }
+  }
+
+  const result: VatRowTokens[] = []
+  let current: { rate: number | null; rateTok: OcrWord | null; moneys: OcrWord[] } | null = null
+  // Importes que aparecen antes del primer tipo de la fila (la base suele
+  // preceder a la columna de IVA: "Base 300,00 | IVA 21% | Cuota 63,00").
+  let pending: OcrWord[] = []
+  const flush = () => {
+    if (!current || current.rate === null || current.rateTok === null || current.moneys.length < 2) {
+      current = null
+      return
+    }
+    let moneys = current.moneys.slice()
+    let baseTok = moneys[0]
+    let cuotaTok = moneys[1]
+    let base = moneyFromToken(baseTok.text) ?? 0
+    let cuota = moneyFromToken(cuotaTok.text) ?? 0
+    // Si hay un tercer importe que es la suma base+cuota, es el total del tramo
+    if (moneys.length >= 3 && Math.abs((moneyFromToken(moneys[2].text) ?? 0) - (base + cuota)) < 0.02) {
+      moneys = moneys.slice(0, 2)
+    }
+    const ratio = current.rate / 100
+    const direct = Math.abs(base * ratio - cuota)
+    const swapped = Math.abs(cuota * ratio - base)
+    const tol = Math.max(0.02, Math.abs(base * ratio) * 0.02, Math.abs(cuota * ratio) * 0.02)
+    // Si la cuota y la base llegaron en orden inverso, corregir el emparejamiento
+    if (swapped < direct && swapped <= tol) {
+      ;[baseTok, cuotaTok] = [cuotaTok, baseTok]
+    }
+    const b = moneyFromToken(baseTok.text) ?? 0
+    const c = moneyFromToken(cuotaTok.text) ?? 0
+    const ok = Math.min(direct, swapped) <= Math.max(tol, 0.02) || (current.rate === 0 && c === 0)
+    if (ok) {
+      result.push({
+        tipo: current.rate,
+        base: Math.round(b * 100) / 100,
+        cuota: Math.round(c * 100) / 100,
+        rateTok: current.rateTok,
+        baseTok,
+        cuotaTok,
+      })
+    }
+    current = null
+  }
+
+  for (const t of tokens) {
+    const rate = rateFromToken(t.text)
+    if (rate !== null) {
+      flush()
+      current = { rate, rateTok: t, moneys: pending }
+      pending = []
+      continue
+    }
+    const money = moneyFromToken(t.text)
+    if (money !== null) {
+      if (current) current.moneys.push(t)
+      else pending.push(t)
+    }
+  }
+  flush()
+  return result
+}
+
+// Puntúa un desglose contra los totales de la factura: menor es mejor. Incluye
+// la suma de bases contra base_imponible, base+cuota contra total_factura y la
+// coherencia interna de cada tramo (cuota ≈ base × tipo), que detecta cuotas
+// intercambiadas entre filas del mismo tipo.
+function reconcileScore(rows: DesgloseIva[], totals?: { base_imponible?: number | null; total_factura?: number | null }): number | null {
+  if (rows.length === 0) return Infinity
+  let err = 0
+  let refs = 0
+  const baseSum = rows.reduce((s, r) => s + r.base, 0)
+  const vatSum = rows.reduce((s, r) => s + r.cuota, 0)
+  if (totals?.base_imponible && totals.base_imponible > 0) {
+    err += Math.abs(baseSum - totals.base_imponible) / totals.base_imponible
+    refs++
+  }
+  if (totals?.total_factura && totals.total_factura > 0) {
+    err += Math.abs(baseSum + vatSum - totals.total_factura) / totals.total_factura
+    refs++
+  }
+  for (const r of rows) {
+    if (r.base > 0 && r.tipo > 0) {
+      const expected = (r.base * r.tipo) / 100
+      err += Math.abs(r.cuota - expected) / Math.max(expected, 0.01)
+      refs++
+    }
+  }
+  return refs > 0 ? err / refs : null
+}
+
+/**
+ * Re-asocia los tramos de IVA detectados usando la posición de las palabras en
+ * la imagen. Devuelve el mejor desglose entre el detectado (modelo/regex sobre
+ * texto plano) y el reconstruido por geometría, decidiendo por cómo cuadra cada
+ * candidato con los totales de la factura.
+ */
+export function associateVatRowsByPosition(
+  overlay: OcrOverlay | null | undefined,
+  detected: DesgloseIva[],
+  totals?: { base_imponible?: number | null; total_factura?: number | null }
+): DesgloseIva[] {
+  if (!overlay || overlay.width <= 0 || overlay.height <= 0 || !Array.isArray(overlay.words) || overlay.words.length === 0) {
+    return detected
+  }
+  const positional = vatRowGeometry(overlay).map(({ tipo, base, cuota }) => ({ tipo, base, cuota }))
+  const unique = positional.filter((r, i) => positional.findIndex(x => x.tipo === r.tipo && x.base === r.base && x.cuota === r.cuota) === i)
+  if (unique.length === 0) return detected
+
+  const dScore = reconcileScore(detected, totals)
+  const pScore = reconcileScore(unique, totals)
+  // Sin totales de referencia: gana el que aporte más filas (más información)
+  if (pScore === null || dScore === null) {
+    if (unique.length > detected.length) return unique
+    if (unique.length < detected.length) return detected
+    return detected
+  }
+  if (Math.abs(pScore - dScore) < 1e-9) return unique.length >= detected.length ? unique : detected
+  return pScore < dScore ? unique : detected
+}
+
+/** Región relativa 0..1 de una palabra, con un pequeño margen. */
+function regionOfWord(w: OcrWord, imgW: number, imgH: number, pad = 0.006): { x: number; y: number; w: number; h: number } {
+  const x = Math.max(0, w.x / imgW - pad)
+  const y = Math.max(0, w.y / imgH - pad)
+  return {
+    x,
+    y,
+    w: Math.min(1 - x, w.w / imgW + pad * 2),
+    h: Math.min(1 - y, w.h / imgH + pad * 2),
+  }
+}
+
+/** Una fila de impuestos con las regiones de sus columnas (para aprender). */
+export interface VatRowGeometry {
+  tipo: number
+  base: number
+  cuota: number
+  /** Región del tipo de IVA (0..1 sobre la imagen). */
+  rateRegion: { x: number; y: number; w: number; h: number }
+  /** Región de la base imponible del tramo. */
+  baseRegion: { x: number; y: number; w: number; h: number }
+  /** Región de la cuota del tramo. */
+  cuotaRegion: { x: number; y: number; w: number; h: number }
+  page: number
+}
+
+/**
+ * Tramos de IVA con la posición real de cada columna en la imagen. Es la base
+ * para aprender la plantilla del proveedor cuando el usuario confirma los
+ * tramos: en el siguiente escaneo se extraen por geometría sin re-asociar.
+ */
+export function vatRowGeometry(overlay: OcrOverlay | null | undefined, page = 1): VatRowGeometry[] {
+  if (!overlay || overlay.width <= 0 || overlay.height <= 0 || !Array.isArray(overlay.words) || overlay.words.length === 0) return []
+  const out: VatRowGeometry[] = []
+  for (const row of groupOverlayRows(overlay.words)) {
+    for (const r of rowsWithTokens(row)) {
+      out.push({
+        tipo: r.tipo,
+        base: r.base,
+        cuota: r.cuota,
+        rateRegion: regionOfWord(r.rateTok, overlay.width, overlay.height),
+        baseRegion: regionOfWord(r.baseTok, overlay.width, overlay.height),
+        cuotaRegion: regionOfWord(r.cuotaTok, overlay.width, overlay.height),
+        page,
+      })
+    }
+  }
+  return out
+}
+
+// Texto de las palabras cuyo centro cae dentro de una región.
+function wordsTextInRegion(overlay: OcrOverlay, region: { x: number; y: number; w: number; h: number }): string {
+  const rx = region.x * overlay.width
+  const ry = region.y * overlay.height
+  const rw = region.w * overlay.width
+  const rh = region.h * overlay.height
+  return overlay.words
+    .filter(w => {
+      const cx = w.x + w.w / 2
+      const cy = w.y + w.h / 2
+      return cx >= rx && cx <= rx + rw && cy >= ry && cy <= ry + rh
+    })
+    .slice()
+    .sort((a, b) => a.y - b.y || a.x - b.x)
+    .map(w => w.text)
+    .join(' ')
+}
+
+/**
+ * Extrae los tramos de IVA de una plantilla aprendida por posición: para cada
+ * fila guardada lee el tipo, la base y la cuota de sus regiones en el overlay
+ * del nuevo escaneo, sin re-detectar ni re-asociar.
+ */
+export function applyVatRowTemplate(
+  overlay: OcrOverlay | null | undefined,
+  vatRows: VatRowTemplate[],
+  page = 1
+): DesgloseIva[] {
+  if (!overlay || overlay.width <= 0 || overlay.height <= 0 || !Array.isArray(vatRows) || vatRows.length === 0) return []
+  const out: DesgloseIva[] = []
+  for (const v of vatRows) {
+    if ((v.page ?? 1) !== page) continue
+    const tipo = rateFromToken(wordsTextInRegion(overlay, v.rate))
+    const base = moneyFromToken(wordsTextInRegion(overlay, v.base))
+    const cuota = moneyFromToken(wordsTextInRegion(overlay, v.cuota))
+    if (tipo !== null && base !== null && cuota !== null) {
+      out.push({ tipo, base: Math.round(base * 100) / 100, cuota: Math.round(cuota * 100) / 100 })
+    }
+  }
+  return out
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────

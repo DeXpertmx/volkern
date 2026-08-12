@@ -4,7 +4,7 @@ export const maxDuration = 60;
 import { NextResponse } from 'next/server'
 import { withTenantAuth } from '@/lib/api-key-auth'
 import { uploadFile } from '@/lib/s3'
-import { normalizeVatBreakdown, parseInvoiceText, sanitizeSupplierName, VisionResult, FALLBACK } from '@/lib/invoice-parser'
+import { associateVatRowsByPosition, normalizeVatBreakdown, parseInvoiceText, sanitizeSupplierName, VisionResult, FALLBACK } from '@/lib/invoice-parser'
 import { overlayFromOcrSpace, OcrOverlay } from '@/lib/finance/ocr-template'
 
 export async function callVision(buffer: Buffer, mimeType: string): Promise<{ result: VisionResult | null; rawText: string; overlay: OcrOverlay | null }> {
@@ -89,6 +89,27 @@ Reglas importantes:
 
   console.log(`[Vision] Procesando ${isPdf ? 'PDF' : 'imagen'} (${(buffer.length / 1024).toFixed(1)} KB, ${mimeType})`)
 
+  // Re-asocia los tramos de IVA por la posición de las palabras en la imagen:
+  // el texto plano leído pierde la geometría y puede desordenar o emparejar
+  // mal base/cuota; con las cajas de OCR.space se recupera la fila real.
+  const finalize = (parsed: VisionResult | null) => {
+    if (parsed && overlay && overlay.words.length > 0) {
+      const totals = parsed.totales
+      const improved = associateVatRowsByPosition(overlay, totals.desglose_iva ?? [], totals)
+      if (improved.length > 0 && improved !== totals.desglose_iva) {
+        const main = improved.reduce((p, c) => (c.base > p.base ? c : p), improved[0])
+        parsed.totales = {
+          ...totals,
+          desglose_iva: improved,
+          tipo_iva: main.tipo,
+          cuota_iva: improved.reduce((s, r) => s + r.cuota, 0),
+          base_imponible: totals.base_imponible ?? improved.reduce((s, r) => s + r.base, 0),
+        }
+      }
+    }
+    return { result: parsed, rawText, overlay }
+  }
+
   // ── 1. OCR.space (proveedor gratuito — 25K requests/mes, soporta PDFs e imágenes) ──
   const ocrSpaceKey = process.env.OCR_SPACE_API_KEY
   if (ocrSpaceKey) {
@@ -120,7 +141,7 @@ Reglas importantes:
             const parsed = parseInvoiceText(rawText)
             if (parsed) {
               console.log('[Vision] ✅ OCR.space + parseInvoiceText extrajeron datos')
-              return { result: parsed, rawText, overlay }
+              return finalize(parsed)
             }
             console.warn('[Vision] OCR.space extrajo texto pero parseInvoiceText no encontró campos estructurados')
           }
@@ -163,7 +184,7 @@ Reglas importantes:
           const parsed = parseJsonResult(raw)
           if (parsed) {
             console.log('[Vision] ✅ OpenRouter GPT-4o-mini extrajo datos correctamente')
-            return { result: parsed, rawText, overlay }
+            return finalize(parsed)
           }
         } else {
           const errText = await res.text()
@@ -193,7 +214,7 @@ Reglas importantes:
         const parsed = parseJsonResult(raw)
         if (parsed) {
           console.log('[Vision] ✅ Gemini extrajo datos correctamente')
-          return { result: parsed, rawText, overlay }
+          return finalize(parsed)
         }
       } else {
         const errText = await res.text()
@@ -231,7 +252,7 @@ Reglas importantes:
         const parsed = parseJsonResult(raw)
         if (parsed) {
           console.log('[Vision] ✅ DeepSeek extrajo datos')
-          return { result: parsed, rawText, overlay }
+          return finalize(parsed)
         }
       }
     } catch {

@@ -259,6 +259,14 @@ describe('findRegionForValue', () => {
     expect(proposal).not.toBeNull()
     expect(proposal!.matchedText).toBe('21%')
   })
+
+  it('encuentra la base imponible de un tramo corregida a mano (matching monetario)', () => {
+    const overlay = overlayOf()
+    const proposal = findRegionForValue(overlay, '1600', getOcrFieldDef('base_imponible')!)
+    expect(proposal).not.toBeNull()
+    expect(proposal!.field).toBe('base_imponible')
+    expect(proposal!.matchedText).toBe('1.600,00')
+  })
 })
 
 describe('valuesEquivalent', () => {

@@ -91,6 +91,18 @@ export default function GastosInboxPage() {
                     <div className="min-w-0">
                       <p className="font-bold truncate">{document.fileName}</p>
                       <p className="text-xs text-muted-foreground">Páginas {document.pageStart}–{document.pageEnd} · {new Date(document.createdAt).toLocaleString('es-ES')}</p>
+                      {/* Desglose de IVA leído por el OCR: base y cuota por tramo,
+                          para auditar la asociación posicional de las filas. */}
+                      {Array.isArray(document.extractedData?.totales?.desglose_iva) && document.extractedData.totales.desglose_iva.length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                          <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">IVA:</span>
+                          {document.extractedData.totales.desglose_iva.map((row: any, i: number) => (
+                            <span key={i} className="inline-flex items-center gap-1 rounded-full border border-indigo-100 bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 tabular-nums">
+                              {Number(row.tipo)}% · €{Number(row.base).toFixed(2)} → €{Number(row.cuota).toFixed(2)}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
