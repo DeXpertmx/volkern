@@ -403,15 +403,18 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     // mensajes de búsqueda/listado ("busca el lead…", "lista los contactos…")
     // nunca entrarían en la ruta determinista. También acepta frases de filtro
     // sin verbo: "leads en estado X", "contactos tipo empresa".
-    const ACTION_VERB = /\b(?:agrega|crea|registra|nuev[oa]|añade|alta|abre|busca|encuentra|consulta|localiza|lista|listame|mu[eé]strame|muestra|ver|ens[eé][ñn]ame|dame|convierte|convertir|pasa|transforma|mueve|actualiza|cambia|modifica|pon|ponle|anota|anotar|tuve|registro|agenda|agendar|programa|programar|reserva|reservar|aparta|apartar|cancela|cancelar|anula|anular|reagenda|reagendar|confirmar|analiza|analizar|revisa|revisar|completa|completar|termina|terminar|finaliza|finalizar|marca|marcar|cierra|cerrar)\b/i
+    const ACTION_VERB = /\b(?:agrega|crea|registra|nuev[oa]|añade|alta|abre|busca|encuentra|consulta|localiza|lista|listame|mu[eé]strame|muestra|ver|ens[eé][ñn]ame|dame|convierte|convertir|pasa|transforma|mueve|actualiza|cambia|modifica|pon|ponle|anota|anotar|tuve|registro|agenda|agendar|programa|programar|reserva|reservar|aparta|apartar|cancela|cancelar|anula|anular|reagenda|reagendar|confirmar|analiza|analizar|revisa|revisar|completa|completar|termina|terminar|finaliza|finalizar|marca|marcar|cierra|cerrar|presenta|presentar|present[ée])\b/i
     const FILTER_ONLY = /\b(?:contactos?|leads?)\b.*\b(?:en\s+estado|por\s+estado|tipo|que\s+contengan|tags?)\b/i
     // Entidades del pipeline sin verbo: "cómo va mi pipeline", "qué deals tengo"
     const ENTITY_TRIGGER = /\b(?:pipeline|deals?|negocios?|oportunidad)\b/i
     // Entidades de citas sin verbo: "qué citas tengo", "reunión con X"
     const CITA_TRIGGER = /\b(?:citas?|reuni[oó]n|reuniones|videollamada)\b/i
     // Entidades de finanzas sin verbo: "gasto de 300€", "cómo vamos de gastos",
-    // "proyección financiera", "impuestos", "rentabilidad" (décimo quinto entrenamiento)
-    const FINANZA_TRIGGER = /\b(?:gastos?|egresos?|gast[ée]|burn\s*rate|salud\s+financiera|flujo\s+de\s+caja|proyecci[oó]n|pron[oó]stic(?:o|a|os)?|forecast|impuestos?|fiscal|provisi[oó]n|rentabilidad|ebitda|margen|financieramente)\b/i
+    // "proyección financiera", "impuestos", "rentabilidad" (décimo quinto
+    // entrenamiento). "iva/retenciones/modelo NNN" (décimo octavo: impuestos y
+    // declaraciones desde Telegram) — si no matchean ningún intent determinista
+    // el clasificador cae al LLM igualmente.
+    const FINANZA_TRIGGER = /\b(?:gastos?|egresos?|gast[ée]|burn\s*rate|salud\s+financiera|flujo\s+de\s+caja|proyecci[oó]n|pron[oó]stic(?:o|a|os)?|forecast|impuestos?|fiscal|provisi[oó]n|rentabilidad|ebitda|margen|financieramente|iva\b|retenciones?|modelo\s*\d{3}|modelos?\s+por\s+(?:presentar|declarar)|declaraci[oó]n\b|balance\b|comprobaci[oó]n\b|sumas\s+y\s+saldos|cuenta\s+de\s+resultados|resultado\s+del\s+ejercicio|gan[eé]|ganancias)\b/i
     // Entidades de tareas/notas sin verbo: "qué tareas tengo", "ver notas de X"
     const TAREA_TRIGGER = /\b(?:tareas?|pendientes?|notas?|to[- ]?do)\b/i
     // Entidades de proveedores sin verbo: "lista de proveedores", "qué proveedores tengo"
@@ -1421,6 +1424,101 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
       const fecha = this.extractFechaDe(message)
       if (fecha) extracted.fecha = fecha
       return { intent: 'registrar_gasto', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 12a-0. IMPUESTOS Y DECLARACIONES (Décimo octavo entrenamiento):
+    // consultar el calendario fiscal o el resumen de un modelo concreto desde
+    // Telegram sin depender del LLM. Va ANTES de proyeccion_impuestos para que
+    // "qué impuestos tengo que declarar" no caiga en la proyección regional. ═══
+    const MODELO_REF = message.match(/\bmodelo\s*(\d{3})\b/i)
+
+    // 12a-0-bis. MARCAR DECLARACIÓN COMO PRESENTADA (acción de escritura del
+    // módulo fiscal). Se detecta ANTES que resumen_impuesto para que "marca
+    // como presentado el modelo 303" no se lea como consulta. ═══
+    // "marca como presentado…", "marca presentada la declaración…",
+    // "presenté el modelo 111…" (verbos de haber presentado).
+    const MARCAR_PRESENTADO =
+      /\b(?:marca|marcar)\s+(?:como\s+)?(?:presentad[oa]|la\s+declaraci[oó]n)\b|\b(?:present[ée]|presentar|declar[ée]|declarar)\s+(?:el\s+|la\s+|una\s+)?(?:modelo|declaraci[oó]n)\b/i
+    const MODELO_KNOWNS = /\b(?:303|111|115|130|180|390|347|349)\b/
+    if (MARCAR_PRESENTADO.test(message) && (MODELO_REF || MODELO_KNOWNS.test(message))) {
+      const modeloMatch = MODELO_REF || message.match(MODELO_KNOWNS)
+      if (modeloMatch) {
+        // MODELO_REF captura el número en [1]; MODELO_KNOWNS lo devuelve en [0]
+        // (no tiene grupo de captura).
+        extracted.modelo = MODELO_REF ? modeloMatch[1] : modeloMatch[0]
+        const trimestreMatch =
+          message.match(/\b(?:trimestre|[tq])\s*([1-4])\b/i) ||
+          message.match(/\b([1-4])\s*(?:er|º|o)?\s*trimestre\b/i)
+        if (trimestreMatch) {
+          extracted.trimestre = parseInt(trimestreMatch[1], 10)
+        } else if (/\bprimer\s*trimestre\b/i.test(message)) {
+          extracted.trimestre = 1
+        } else if (/\bsegundo\s*trimestre\b/i.test(message)) {
+          extracted.trimestre = 2
+        } else if (/\btercer\s*trimestre\b/i.test(message)) {
+          extracted.trimestre = 3
+        } else if (/\bcuarto\s*trimestre\b/i.test(message)) {
+          extracted.trimestre = 4
+        }
+        const yearMatch = message.match(/\b(19|20)\d{2}\b/)
+        if (yearMatch) extracted.anio = yearMatch[0]
+        return { intent: 'marcar_impuesto_presentado', confidence: 0.85, extractedParams: extracted }
+      }
+    }
+
+    const IMPUESTOS_PENDIENTES =
+      /\b(?:declaraciones?\s+(?:pendientes?|por\s+(?:presentar|declarar)|pr[oó]ximas?|vencidas?)|impuestos?\s+(?:pendientes?|por\s+(?:declarar|pagar|presentar)|que\s+(?:tengo|tiene|tenemos)\s+que\s+declarar)|qu[eé]\s+impuestos?\s+(?:tengo|tiene|tenemos)\s+(?:que\s+declarar|por\s+declarar)|qu[eé]\s+vence\s+(?:este\s+mes|pronto|pr[oó]ximamente)|calendario\s+fiscal|modelos?\s+por\s+(?:presentar|declarar)|impuestos?\s+que\s+vencen|cu[aá]ndo\s+(?:tengo|tiene)\s+que\s+declarar)\b/i
+    if (IMPUESTOS_PENDIENTES.test(message) && !MODELO_REF) {
+      return { intent: 'impuestos_pendientes', confidence: 0.85, extractedParams: extracted }
+    }
+
+    const RESUMEN_IMPUESTO_SIGNAL =
+      /\bmodelo\s*\d{3}\b|retenciones?\s+(?:de\s+)?irpf|arrendamientos?\s+de\s+inmuebles?\b|intracomunitari|operaciones\s+con\s+terceros|resumen\s+anual\s+de\s+retenciones|iva\s+anual/i
+    const hasIvaContext = /\biva\b/i.test(message) && /\b(?:pagar|declarar|trimestre|soportado|repercutido|modelo)\b/i.test(message)
+    if (RESUMEN_IMPUESTO_SIGNAL.test(message) || hasIvaContext) {
+      let modelo: string | null = MODELO_REF ? MODELO_REF[1] : null
+      if (!modelo) {
+        if (/\bretenciones?\s+(?:de\s+)?irpf\b/i.test(message)) modelo = '111'
+        else if (/\barrendamientos?\b/i.test(message)) modelo = '115'
+        else if (/\bintracomunitari\b/i.test(message)) modelo = '349'
+        else if (/\boperaciones\s+con\s+terceros\b/i.test(message)) modelo = '347'
+        else if (/\biva\s+anual\b/i.test(message)) modelo = '390'
+        else if (/\biva\b/i.test(message)) modelo = '303'
+        else if (/\birpf\b/i.test(message)) modelo = '130'
+      }
+      if (modelo) {
+        extracted.modelo = modelo
+        const trimestreMatch =
+          message.match(/\b(?:trimestre|[tq])\s*([1-4])\b/i) ||
+          message.match(/\b([1-4])\s*(?:er|º|o)?\s*trimestre\b/i)
+        if (trimestreMatch) {
+          extracted.trimestre = parseInt(trimestreMatch[1], 10)
+        } else if (/\bprimer\s*trimestre\b/i.test(message)) {
+          extracted.trimestre = 1
+        } else if (/\bsegundo\s*trimestre\b/i.test(message)) {
+          extracted.trimestre = 2
+        } else if (/\btercer\s*trimestre\b/i.test(message)) {
+          extracted.trimestre = 3
+        } else if (/\bcuarto\s*trimestre\b/i.test(message)) {
+          extracted.trimestre = 4
+        }
+        const yearMatch = message.match(/\b(19|20)\d{2}\b/)
+        if (yearMatch) extracted.anio = yearMatch[0]
+        return { intent: 'resumen_impuesto', confidence: 0.85, extractedParams: extracted }
+      }
+    }
+
+    // ═══ 12a-1. CONTABILIDAD (Décimo noveno entrenamiento): balance general,
+    // cuenta de resultados y balance de comprobación desde Telegram sin LLM.
+    // "balance de comprobación" se resuelve ANTES que "balance general". ═══
+    if (/\bcomprobaci[oó]n\b/i.test(message) && (/(?:balance|balanza)\b|sumas\s+y\s+saldos/i.test(message) || /\bcomprobaci[oó]n\s+de\s+sumas/i.test(message))) {
+      return { intent: 'balance_comprobacion', confidence: 0.85, extractedParams: extracted }
+    }
+    if (/\b(?:balance|balanza)\b/i.test(message) && !/\bcomprobaci[oó]n\b/i.test(message)) {
+      return { intent: 'balance_general', confidence: 0.85, extractedParams: extracted }
+    }
+    if (/\b(?:cuenta\s+de\s+resultados|p[oó]g|pyg|resultado\s+del\s+ejercicio|cu[aá]nto\s+(?:he\s+|me\s+)?gan[eé](?:mos)?|ganancias)\b/i.test(message)) {
+      return { intent: 'cuenta_resultados', confidence: 0.85, extractedParams: extracted }
     }
 
     // ═══ 12a. PROYECCIÓN DE IMPUESTOS ("calcula la provisión de impuestos

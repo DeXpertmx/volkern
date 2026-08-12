@@ -638,6 +638,130 @@ export const ExecutionEngine = {
         const advice = data?.advice ? `\n💡 ${this.escapeMarkdown(String(data.advice))}` : '';
         return `🧾 *Provisión de impuestos (${regionLabel[region] || region}):*\n💰 Estimación: ${liability}€${advice}`;
       }
+      // ─── Impuestos & Declaraciones (Décimo octavo entrenamiento) ───
+      case 'tax_overview': {
+        const upcoming: any[] = data?.upcoming || [];
+        const overdue: any[] = data?.overdue || [];
+        const fmtAmount = (a: any) =>
+          a != null && Number(a) !== 0
+            ? ` · 💰 ${this.escapeMarkdown(Number(a).toLocaleString('es-ES'))}€`
+            : '';
+        const fmtDeadline = (d: any) => {
+          const model = this.escapeMarkdown(String(d?.model || ''));
+          const name = this.escapeMarkdown(String(d?.name || ''));
+          const period = d?.periodLabel ? ` (${this.escapeMarkdown(String(d.periodLabel))})` : '';
+          const due = d?.dueDate
+            ? this.escapeMarkdown(new Date(d.dueDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }))
+            : '';
+          const days = d?.daysUntilDue !== undefined ? ` · ${d.daysUntilDue < 0 ? 'venció hace' : 'faltan'} ${this.escapeMarkdown(String(Math.abs(Number(d.daysUntilDue))))}d` : '';
+          return `• Modelo ${model} · ${name}${period} — ${due}${days}${fmtAmount(d.estimatedAmount)}`;
+        };
+        const overdueLines = overdue.slice(0, 4).map(fmtDeadline);
+        const upcomingLines = upcoming.slice(0, 6).map(fmtDeadline);
+        const parts: string[] = [];
+        if (overdueLines.length > 0) parts.push(`🔴 *Vencidas (${overdue.length}):*\n${overdueLines.join('\n')}`);
+        if (upcomingLines.length > 0) parts.push(`📅 *Por declarar (${upcoming.length}):*\n${upcomingLines.join('\n')}`);
+        if (parts.length === 0) return '✅ No tienes declaraciones pendientes ni vencidas.';
+        return `🧾 *Impuestos y declaraciones:*\n\n${parts.join('\n\n')}`;
+      }
+      case 'tax_model_report': {
+        const modelo = this.escapeMarkdown(String(data?.modelo || ''));
+        const nombre = this.escapeMarkdown(String(data?.nombre || ''));
+        const periodo = data?.trimestre
+          ? `T${this.escapeMarkdown(String(data.trimestre))} ${this.escapeMarkdown(String(data.año || new Date().getFullYear()))}`
+          : `Anual ${this.escapeMarkdown(String(data.año || new Date().getFullYear()))}`;
+        const eur = (n: any) => this.escapeMarkdown(Number(n || 0).toLocaleString('es-ES'));
+        const report: any = data?.report || {};
+        const header = `🧾 *Modelo ${modelo} — ${nombre} (${periodo}):*`;
+        if (modelo === '303') {
+          const out = report.outputVat?.amount || 0;
+          const inn = report.inputVat?.amount || 0;
+          const sur = report.equivalenceSurcharge?.amount || 0;
+          const result = Number(report.result ?? out - inn);
+          return `${header}\n📤 IVA repercutido: ${eur(out)}€\n📥 IVA soportado: ${eur(inn)}€${sur ? `\n➕ Recargo equiv.: ${eur(sur)}€` : ''}\n💰 Resultado: ${eur(result)}€${result > 0 ? ' a ingresar' : result < 0 ? ' a compensar' : ''}`;
+        }
+        if (modelo === '111') {
+          const total = Number(report.totalRetentions ?? report.retentions?.amount ?? 0);
+          return `${header}\n📥 Base retenciones: ${eur(report.retentions?.base)}€\n💰 Retenciones a ingresar: ${eur(total)}€`;
+        }
+        if (modelo === '115') {
+          if (report.hasActivity === false) return `${header}\nℹ️ Sin retenciones por arrendamientos en el periodo.`;
+          return `${header}\n🏠 Rentas base: ${eur(report.totalRentBase)}€\n💰 Retenciones (${Number(report.retentionRate ?? 19)}%): ${eur(report.totalRetentions)}€`;
+        }
+        if (modelo === '130') {
+          if (report.hasActivity === false) return `${header}\nℹ️ Sin actividad en el periodo.`;
+          return `${header}\n💰 Ingresos: ${eur(report.totalIncome)}€\n💸 Gastos: ${eur(report.totalExpenses)}€\n📈 Pago fraccionado (${Number(report.paymentRate ?? 20) * 100}%): ${eur(report.resultToPay)}€`;
+        }
+        if (modelo === '349') {
+          if (report.hasOperations === false) return `${header}\nℹ️ Sin operaciones intracomunitarias en el periodo.`;
+          return `${header}\n📤 Entregas: ${report.deliveryCount ?? 0} · ${eur(report.totalDeliveries)}€\n📥 Adquisiciones: ${report.acquisitionCount ?? 0} · ${eur(report.totalAcquisitions)}€`;
+        }
+        if (modelo === '347') {
+          if (report.hasOperations === false) return `${header}\nℹ️ Sin operaciones que reportar.`;
+          return `${header}\n👥 Contrapartes: ${report.totalOperations ?? 0}\n💰 Importe total: ${eur(report.totalAmount)}€`;
+        }
+        if (modelo === '390') {
+          if (report.hasActivity === false) return `${header}\nℹ️ Sin actividad anual.`;
+          return `${header}\n📤 IVA repercutido: ${eur(report.annualOutputVatAmount)}€\n📥 IVA soportado: ${eur(report.annualInputVatAmount)}€\n💰 Resultado anual: ${eur(report.annualResult)}€`;
+        }
+        if (modelo === '180') {
+          if (report.hasActivity === false) return `${header}\nℹ️ Sin retenciones por arrendamientos en el año.`;
+          return `${header}\n🏠 Arrendadores: ${report.totalLandlords ?? 0}\n💰 Retenciones totales: ${eur(report.totalRetentions)}€`;
+        }
+        return `${header}\nℹ️ Resumen disponible.`;
+      }
+      case 'file_tax_return': {
+        const modelo = this.escapeMarkdown(String(data?.modelo || ''));
+        const nombre = this.escapeMarkdown(String(data?.nombre || ''));
+        const periodo = data?.trimestre
+          ? `T${this.escapeMarkdown(String(data.trimestre))} ${this.escapeMarkdown(String(data.año || new Date().getFullYear()))}`
+          : `anual ${this.escapeMarkdown(String(data.año || new Date().getFullYear()))}`;
+        const count = Number(data?.actualizados ?? 0);
+        return `✅ *Modelo ${modelo} (${nombre}) del ${periodo} marcado como presentado.*\n${count > 0 ? `${count} registro(s) actualizados.` : 'No había registros pendientes para ese periodo.'}`;
+      }
+      // ─── Contabilidad (Décimo noveno entrenamiento) ───
+      case 'balance_sheet': {
+        const report: any = data?.report || {};
+        const eur = (n: any) => this.escapeMarkdown(Number(n || 0).toLocaleString('es-ES'));
+        const fmtSection = (sec: any) => `\n▪ ${this.escapeMarkdown(String(sec?.label || ''))}: ${eur(sec?.total)}€`;
+        const activo = report.activo || {};
+        const pasivo = report.pasivo || {};
+        const activoSections = Array.isArray(activo.sections) ? activo.sections.map(fmtSection).join('') : '';
+        const pasivoSections = Array.isArray(pasivo.sections) ? pasivo.sections.map(fmtSection).join('') : '';
+        const totalActivo = Number(activo.total ?? 0);
+        const totalPasivo = Number(pasivo.total ?? 0);
+        const diferencia = Math.round((totalActivo - totalPasivo) * 100) / 100;
+        return `📊 *Balance General:*\n🟢 *Activo:* ${eur(totalActivo)}€${activoSections}\n🔴 *Pasivo + Patrimonio:* ${eur(totalPasivo)}€${pasivoSections}\n${diferencia !== 0 ? `⚖️ Diferencia: ${eur(diferencia)}€ (debe cuadrar a 0)` : '✅ Cuadra (activo = pasivo + patrimonio neto).'}`;
+      }
+      case 'profit_loss': {
+        const report: any = data?.report || {};
+        const eur = (n: any) => this.escapeMarkdown(Number(n || 0).toLocaleString('es-ES'));
+        const ingresos = Number(report.totalIngresos ?? 0);
+        const gastos = Number(report.totalGastos ?? 0);
+        const resultado = Number(report.resultadoEjercicio ?? 0);
+        const secciones = Array.isArray(report.sections) && report.sections.length > 0
+          ? '\n' + report.sections.map((s: any) => `▪ ${this.escapeMarkdown(String(s?.label || ''))}: ${eur(s?.total)}€`).join('\n')
+          : '';
+        return `📈 *Cuenta de Resultados:*\n💰 Ingresos: ${eur(ingresos)}€\n💸 Gastos: ${eur(gastos)}€\n📊 Resultado del ejercicio: ${eur(resultado)}€${resultado >= 0 ? ' (beneficio)' : ' (pérdida)'}${secciones}`;
+      }
+      case 'trial_balance': {
+        const report: any = data?.report || {};
+        const eur = (n: any) => this.escapeMarkdown(Number(n || 0).toLocaleString('es-ES'));
+        const rows: any[] = report.rows || [];
+        if (rows.length === 0) return '🧮 El balance de comprobación está vacío (no hay cuentas).';
+        const lines = rows.slice(0, 10).map((r: any) => {
+          const code = this.escapeMarkdown(String(r?.code || ''));
+          const name = this.escapeMarkdown(String(r?.name || ''));
+          const d = Number(r?.debit ?? 0);
+          const c = Number(r?.credit ?? 0);
+          return `• ${code} ${name} — debe ${eur(d)}€ / haber ${eur(c)}€`;
+        });
+        const suffix = rows.length > 10 ? `\n… y ${rows.length - 10} cuentas más` : '';
+        const totalDebit = Number(report.totalDebit ?? 0);
+        const totalCredit = Number(report.totalCredit ?? 0);
+        const cuadra = Math.abs(totalDebit - totalCredit) < 0.01;
+        return `🧮 *Balance de Comprobación (${rows.length} cuentas):*\n${lines.join('\n')}${suffix}\n\nΣ Debe: ${eur(totalDebit)}€ · Σ Haber: ${eur(totalCredit)}€\n${cuadra ? '✅ Sumas cuadradas.' : '⚠️ Las sumas NO cuadran.'}`;
+      }
       case 'analyze_global_profitability': {
         const income = data?.revenue != null ? this.escapeMarkdown(Number(data.revenue).toLocaleString('es-ES')) : '—';
         const expenses = data?.expenses != null ? this.escapeMarkdown(Number(data.expenses).toLocaleString('es-ES')) : '—';
