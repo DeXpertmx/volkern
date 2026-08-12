@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
-import { Loader2, Save, Wand2, Trash2, MousePointerClick, X } from 'lucide-react'
+import { Loader2, Save, Wand2, Trash2, MousePointerClick, X, Plus } from 'lucide-react'
 import {
   OCR_FIELD_DEFS,
   applyTemplate,
@@ -16,7 +18,7 @@ import {
 interface OcrCorrectionModalProps {
   open: boolean
   onClose: () => void
-  /** URL de la imagen subida (S3). Solo imágenes — los PDFs no tienen imagen. */
+  /** URL de la imagen (S3 para imágenes, página 1 renderizada para PDFs). */
   imageUrl: string | null
   overlay: OcrOverlay | null
   supplierName: string
@@ -25,29 +27,48 @@ interface OcrCorrectionModalProps {
   onApply: (values: Record<string, string>) => void
 }
 
+interface TemplateMeta {
+  id: string
+  supplierName: string
+  nif: string | null
+  name: string
+  fields: OcrTemplateField[]
+  updatedAt: string
+}
+
+const NEW_TEMPLATE_ID = '__new__'
+
 // Color por campo para distinguir las regiones anotadas
 const FIELD_COLORS = [
   '#7c3aed', '#0891b2', '#d97706', '#059669', '#db2777', '#4f46e5', '#ca8a04', '#0284c7', '#9333ea', '#16a34a', '#e11d48', '#0d9488',
 ]
 
 export default function OcrCorrectionModal({ open, onClose, imageUrl, overlay, supplierName, supplierNif, onApply }: OcrCorrectionModalProps) {
+  const [templates, setTemplates] = useState<TemplateMeta[]>([])
+  const [activeTemplateId, setActiveTemplateId] = useState<string>(NEW_TEMPLATE_ID)
+  const [templateName, setTemplateName] = useState('Formato 1')
   const [fields, setFields] = useState<OcrTemplateField[]>([])
   const [selectedField, setSelectedField] = useState<string>(OCR_FIELD_DEFS[0].field)
   const [drawing, setDrawing] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
   const [loadingTemplate, setLoadingTemplate] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [templateExists, setTemplateExists] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const drawingRef = useRef<{ startX: number; startY: number } | null>(null)
 
   const colorFor = (field: string) => FIELD_COLORS[OCR_FIELD_DEFS.findIndex(f => f.field === field) % FIELD_COLORS.length]
 
-  // Carga la plantilla existente del proveedor al abrir
+  const isEditing = activeTemplateId !== NEW_TEMPLATE_ID
+  const activeTemplate = templates.find(t => t.id === activeTemplateId) || null
+
+  // Carga todas las plantillas del proveedor al abrir
   useEffect(() => {
     if (!open) return
     setFields([])
     setDrawing(null)
-    setTemplateExists(false)
+    setTemplates([])
+    setActiveTemplateId(NEW_TEMPLATE_ID)
+    setTemplateName('Formato 1')
     if (!supplierName) return
     setLoadingTemplate(true)
     const q = new URLSearchParams({ supplierName })
@@ -55,14 +76,32 @@ export default function OcrCorrectionModal({ open, onClose, imageUrl, overlay, s
     fetch(`/api/erp/expenses/ocr-templates?${q.toString()}`)
       .then(r => r.json())
       .then(data => {
-        if (data?.template?.fields?.length) {
-          setFields(data.template.fields)
-          setTemplateExists(true)
+        const list: TemplateMeta[] = Array.isArray(data?.templates) ? data.templates : (data?.template ? [data.template] : [])
+        setTemplates(list)
+        if (list.length > 0) {
+          // La más reciente es la más probable para el formato actual
+          setActiveTemplateId(list[0].id)
+          setTemplateName(list[0].name)
+          setFields(list[0].fields || [])
         }
       })
       .catch(() => {})
       .finally(() => setLoadingTemplate(false))
   }, [open, supplierName, supplierNif])
+
+  const loadTemplate = (id: string) => {
+    if (id === NEW_TEMPLATE_ID) {
+      setActiveTemplateId(NEW_TEMPLATE_ID)
+      setFields([])
+      setTemplateName(`Formato ${templates.length + 1}`)
+      return
+    }
+    const t = templates.find(x => x.id === id)
+    if (!t) return
+    setActiveTemplateId(id)
+    setTemplateName(t.name)
+    setFields(t.fields || [])
+  }
 
   const regionOf = (field: string) => fields.find(f => f.field === field)
 
@@ -140,21 +179,69 @@ export default function OcrCorrectionModal({ open, onClose, imageUrl, overlay, s
       toast.warning('Dibuja al menos una región sobre la imagen antes de guardar la plantilla')
       return
     }
+    const name = templateName.trim()
+    if (!name) {
+      toast.warning('Ponle un nombre a la plantilla (p. ej. "Factura estándar" o "Sucursal Madrid")')
+      return
+    }
     setSaving(true)
     try {
       const res = await fetch('/api/erp/expenses/ocr-templates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ supplierName, nif: supplierNif || undefined, fields }),
+        body: JSON.stringify({
+          supplierName,
+          nif: supplierNif || undefined,
+          name,
+          fields,
+          ...(isEditing ? { templateId: activeTemplateId } : {}),
+        }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Error al guardar')
-      setTemplateExists(true)
-      toast.success(`Plantilla guardada para «${supplierName}». El próximo escaneo de este proveedor la usará automáticamente.`)
+      toast.success(`Plantilla «${name}» guardada para ${supplierName}`)
+      // Refresca la lista local para que el selector refleje el cambio
+      const listRes = await fetch(`/api/erp/expenses/ocr-templates?${new URLSearchParams({ supplierName })}`)
+      const listData = await listRes.json()
+      if (Array.isArray(listData?.templates)) {
+        setTemplates(listData.templates)
+        const saved = listData.templates.find((t: TemplateMeta) => t.name === name) || listData.templates[0]
+        if (saved) {
+          setActiveTemplateId(saved.id)
+          setTemplateName(saved.name)
+          setFields(saved.fields || [])
+        }
+      }
     } catch (err: any) {
       toast.error(err.message || 'Error al guardar la plantilla')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!isEditing || !activeTemplateId) return
+    if (!window.confirm(`¿Eliminar la plantilla «${templateName}» de ${supplierName}?`)) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/erp/expenses/ocr-templates?id=${encodeURIComponent(activeTemplateId)}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Error al eliminar')
+      toast.success(`Plantilla «${templateName}» eliminada`)
+      const rest = templates.filter(t => t.id !== activeTemplateId)
+      setTemplates(rest)
+      if (rest.length > 0) {
+        setActiveTemplateId(rest[0].id)
+        setTemplateName(rest[0].name)
+        setFields(rest[0].fields || [])
+      } else {
+        setActiveTemplateId(NEW_TEMPLATE_ID)
+        setTemplateName('Formato 1')
+        setFields([])
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Error al eliminar')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -167,10 +254,40 @@ export default function OcrCorrectionModal({ open, onClose, imageUrl, overlay, s
             Corregir datos sobre la imagen
           </DialogTitle>
           <DialogDescription>
-            Selecciona un campo, dibuja un rectángulo sobre la imagen donde aparezca ese dato y guarda la plantilla
-            para que el sistema lo lea solo en los próximos escaneos de {supplierName || 'este proveedor'}.
+            Selecciona el formato del proveedor (o crea uno nuevo), dibuja un rectángulo sobre cada dato que el OCR
+            no leyó bien y guarda la plantilla para que el sistema lo lea solo en los próximos escaneos.
           </DialogDescription>
         </DialogHeader>
+
+        {/* Selector de plantilla */}
+        <div className="flex items-center gap-2 pb-2 border-b">
+          <span className="text-xs font-semibold text-muted-foreground shrink-0">Plantilla:</span>
+          <Select value={activeTemplateId} onValueChange={loadTemplate} disabled={loadingTemplate}>
+            <SelectTrigger className="w-52 h-8 text-sm">
+              <SelectValue placeholder="Elegir plantilla…" />
+            </SelectTrigger>
+            <SelectContent>
+              {templates.map(t => (
+                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+              ))}
+              <SelectItem value={NEW_TEMPLATE_ID} className="text-primary">
+                ＋ Nueva plantilla
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          <Input
+            value={templateName}
+            onChange={e => setTemplateName(e.target.value)}
+            placeholder="Nombre del formato (p. ej. Factura estándar)"
+            className="h-8 text-sm flex-1"
+          />
+          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => loadTemplate(NEW_TEMPLATE_ID)} title="Crear nueva plantilla" disabled={loadingTemplate}>
+            <Plus className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-destructive" onClick={handleDelete} title="Eliminar esta plantilla" disabled={!isEditing || deleting || loadingTemplate}>
+            {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+          </Button>
+        </div>
 
         <div className="flex flex-1 gap-4 min-h-0">
           {/* Lista de campos */}
@@ -304,7 +421,7 @@ export default function OcrCorrectionModal({ open, onClose, imageUrl, overlay, s
             )}
             {loadingTemplate && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground mt-2">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Cargando plantilla…
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Cargando plantillas…
               </div>
             )}
           </div>
@@ -312,9 +429,11 @@ export default function OcrCorrectionModal({ open, onClose, imageUrl, overlay, s
 
         <DialogFooter className="pt-3 border-t items-center">
           <p className="text-[11px] text-muted-foreground mr-auto">
-            {templateExists
-              ? 'Este proveedor ya tiene plantilla guardada: se usará automáticamente en el próximo escaneo.'
-              : 'Sin plantilla guardada para este proveedor todavía.'}
+            {templates.length === 0
+              ? 'Sin plantillas guardadas para este proveedor todavía.'
+              : isEditing
+                ? `Editando «${templateName}» (${templates.length} plantilla${templates.length !== 1 ? 's' : ''} para este proveedor).`
+                : `Nueva plantilla — ya hay ${templates.length} guardada${templates.length !== 1 ? 's' : ''} para este proveedor.`}
           </p>
           <Button variant="outline" onClick={onClose}>
             <X className="h-4 w-4 mr-1.5" /> Cerrar
@@ -324,7 +443,7 @@ export default function OcrCorrectionModal({ open, onClose, imageUrl, overlay, s
           </Button>
           <Button onClick={handleSave} disabled={saving || !supplierName}>
             {saving ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Save className="h-4 w-4 mr-1.5" />}
-            Guardar plantilla
+            {isEditing ? 'Actualizar plantilla' : 'Guardar plantilla'}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -4156,13 +4156,16 @@ model SupplierOcrTemplate {
   supplierName String
   // NIF del proveedor si se conoce (clave secundaria de coincidencia)
   nif          String?
+  // Nombre del formato (p. ej. "Factura estándar", "Sucursal Madrid") — un
+  // mismo proveedor puede tener varias plantillas para formatos distintos
+  name         String   @default("Formato 1")
   // [{ field, label, x, y, w, h }] — coordenadas relativas 0..1
   fields       Json
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  @@index([tenantId, supplierName])
+  @@unique([tenantId, supplierName, name])
   @@index([tenantId, nif])
   @@map("erp_supplier_ocr_templates")
 }
