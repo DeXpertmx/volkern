@@ -17,8 +17,8 @@ import OcrCorrectionModal from '@/components/finance/OcrCorrectionModal'
 import OcrComparisonModal, { type ComparisonItem } from '@/components/finance/OcrComparisonModal'
 import { computeVatAmount, computePercentageAmount, computeInvoiceTotalMismatch, fillEmptyTranches, fillLastTranche } from '@/lib/finance/vat'
 import { validateFiscalId, getFiscalIdConfigsByCountry, normalizarPais } from '@/lib/fiscal-validation'
-import { sanitizeSupplierName } from '@/lib/invoice-parser'
-import { applyTemplate, findRegionForValue, getOcrFieldDef, sameFieldValue, validateReference, valuesEquivalent, type OcrOverlay, type OcrTemplateField, type RegionProposal } from '@/lib/finance/ocr-template'
+import { applyVatRowTemplate, associateVatRowsByPosition, sanitizeSupplierName, vatRowGeometry, type VatRowGeometry } from '@/lib/invoice-parser'
+import { applyTemplate, findRegionForValue, getOcrFieldDef, sameFieldValue, validateReference, valuesEquivalent, type OcrOverlay, type OcrTemplateField, type RegionProposal, type VatRowTemplate } from '@/lib/finance/ocr-template'
 import { buildExpenseEntryProposal } from '@/lib/finance/expense-entry-proposal'
 import { createPdfFromPageRange, detectPdfDocumentGroups, renderPdfPages, type PdfDocumentGroup } from '@/lib/finance/pdf-render'
 
@@ -385,6 +385,7 @@ export default function EscanearGastoPage() {
   }
 
   const updateIvaRow = (id: number, field: 'base' | 'rate', value: string) => {
+    const prev = ivaRows.find(r => r.id === id)?.[field] || ''
     let rows = ivaRows.map(r => (r.id === id ? { ...r, [field]: value } : r))
     if (field === 'base') {
       // Si el usuario vacía un tramo a propósito, no lo autocompletamos
@@ -399,6 +400,8 @@ export default function EscanearGastoPage() {
     }
     setIvaRows(rows)
     syncTotalsFromRows(rows)
+    // Corrección manual de un tramo: proponer la región para la plantilla
+    maybeProposeTrancheRegion(id, field, prev, value)
   }
 
   const removeIvaRow = (id: number) => {
@@ -464,6 +467,91 @@ export default function EscanearGastoPage() {
       vatRate: uniform,
     }))
     return true
+  }
+
+  // Proveedores de visión sin coordenadas (OpenRouter/Gemini/DeepSeek) no
+  // devuelven cajas de palabras y a veces no leen los tramos de IVA. Detecta
+  // las palabras localmente y reconstruye el desglose por la posición de las
+  // filas de impuestos en la imagen. Corre en segundo plano y no pisa tramos
+  // que el usuario ya haya empezado a editar.
+  const improveBreakdownFromImage = async (ext: ExtractedData) => {
+    try {
+      const boxes = await detectLocalBoxes()
+      if (!boxes) return
+      const improved = associateVatRowsByPosition(boxes, ext.totales?.desglose_iva || [], ext.totales)
+      if (improved.length === 0) return
+      if (ivaRowsRef.current.length > 0) return // el usuario ya editó tramos a mano
+      applyDetectedVatBreakdown(improved)
+    } catch { /* silencioso: los tramos se pueden completar a mano */ }
+  }
+
+  // Empareja los tramos confirmados en el formulario con las filas geométricas
+  // del overlay (por tipo y base, con fallback por orden) para guardar la
+  // posición de cada columna en la plantilla del proveedor.
+  const matchTramosToGeometry = (rows: { base: string; rate: string }[], geometry: VatRowGeometry[]): VatRowTemplate[] => {
+    const used = new Set<number>()
+    const out: VatRowTemplate[] = []
+    const eq = (a: number, b: number) => Math.abs(a - b) < 0.02
+    for (const row of rows) {
+      const rate = Number(row.rate)
+      const base = Number(row.base)
+      if (!Number.isFinite(rate) || !Number.isFinite(base)) continue
+      const exact = geometry.findIndex((g, i) => !used.has(i) && eq(g.tipo, rate) && eq(g.base, base))
+      const idx = exact >= 0 ? exact : geometry.findIndex((g, i) => !used.has(i) && eq(g.tipo, rate))
+      if (idx < 0) continue
+      used.add(idx)
+      const g = geometry[idx]
+      const cuotaNum = Number(computePercentageAmount(row.base, row.rate))
+      out.push({
+        rate: g.rateRegion,
+        base: g.baseRegion,
+        cuota: g.cuotaRegion,
+        reference: { tipo: rate, base, cuota: Number.isFinite(cuotaNum) ? cuotaNum : g.cuota },
+        page: g.page,
+      })
+    }
+    return out
+  }
+
+  // Al confirmar el gasto con tramos materializados, aprende la posición de
+  // sus filas de IVA en la plantilla del proveedor: el siguiente escaneo las
+  // extraerá por geometría sin re-detectar ni re-asociar. Silencioso y en
+  // segundo plano (no bloquea el guardado).
+  const saveVatRowTemplate = async () => {
+    const rows = ivaRowsRef.current
+    if (rows.length === 0) return
+    const supplierName = (formRef.current.supplier || formRef.current.issuerName || '').trim()
+    if (!supplierName) return
+    try {
+      const overlay = await getEffectiveOverlay()
+      if (!overlay) return
+      const geometry = vatRowGeometry(overlay, 1)
+      if (geometry.length === 0) return
+      const vatRows = matchTramosToGeometry(rows, geometry)
+      if (vatRows.length === 0) return
+      const q = new URLSearchParams({ supplierName })
+      if (formRef.current.issuerTaxId) q.set('nif', formRef.current.issuerTaxId)
+      const listRes = await fetch(`/api/erp/expenses/ocr-templates?${q.toString()}`)
+      const listData = await listRes.json()
+      const templates = Array.isArray(listData?.templates) ? listData.templates : []
+      const body: Record<string, any> = {
+        supplierName,
+        nif: formRef.current.issuerTaxId || undefined,
+        vatRows,
+      }
+      if (templates.length > 0) {
+        // Fusionar en la más reciente (la más probable para este formato)
+        body.templateId = templates[0].id
+        body.name = templates[0].name
+      }
+      const res = await fetch('/api/erp/expenses/ocr-templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) return
+      console.log(`[OcrVat] ${vatRows.length} tramo${vatRows.length !== 1 ? 's' : ''} aprendido${vatRows.length !== 1 ? 's' : ''} en la plantilla de ${supplierName}`)
+    } catch { /* silencioso: se re-aprenderá en el próximo guardado */ }
   }
 
   const selectSupplier = (s: any, fromOcrAutoMatch = false) => {
@@ -784,6 +872,12 @@ export default function EscanearGastoPage() {
       setRawOcrText(data.rawText || '')
       setScanOverlay(data.overlay || null)
       const ext: ExtractedData = data.extracted
+      // Proveedores de visión sin coordenadas: si no leyeron el desglose de
+      // IVA, intentar recuperarlo por la posición de las filas en la imagen
+      // (detección local de palabras en segundo plano).
+      if (!data.overlay && (!ext.totales?.desglose_iva || ext.totales.desglose_iva.length === 0)) {
+        void improveBreakdownFromImage(ext)
+      }
       // Aprendizaje automático: este escaneo es la referencia para saber si el
       // usuario corrige un campo a mano (y qué valor corregir sobre la imagen).
       scannedExtRef.current = ext
@@ -995,7 +1089,8 @@ export default function EscanearGastoPage() {
       // Puede haber varias plantillas (formatos distintos): usamos la más
       // reciente, que es la más probable para el documento actual.
       const template = Array.isArray(data?.templates) ? data.templates[0] : data?.template
-      if (!template?.fields?.length) return
+      const vatTemplate: VatRowTemplate[] = Array.isArray(template?.vatRows) ? template.vatRows : []
+      if (!template?.fields?.length && vatTemplate.length === 0) return
 
       // Cajas de palabras: las del proveedor de visión si existen; si no
       // (OpenRouter/Gemini no devuelven coordenadas), se detectan localmente
@@ -1003,6 +1098,16 @@ export default function EscanearGastoPage() {
       if (!overlay) toast.info('Detectando palabras del documento para aplicar la plantilla…')
       const boxes = overlay ?? (await detectLocalBoxes())
       if (!boxes) return
+
+      // Tramos de IVA aprendidos por posición: extraerlos de sus regiones y
+      // materializarlos directamente (el layout confirmado del proveedor manda
+      // sobre lo que haya leído el modelo esta vez).
+      if (vatTemplate.length > 0) {
+        const breakdown = applyVatRowTemplate(boxes, vatTemplate, 1)
+        if (breakdown.length > 0) applyDetectedVatBreakdown(breakdown)
+      }
+
+      if (!template?.fields?.length) return
       const values = applyTemplate(boxes, template.fields)
       const count = Object.keys(values).length
       if (count === 0) return
@@ -1187,6 +1292,44 @@ export default function EscanearGastoPage() {
     }, 450)
   }
 
+  // ─── Aprendizaje de tramos de IVA ───────────────────────────────────────
+  // Mismo mecanismo que los campos de texto pero por fila de tramo: cuando el
+  // usuario ajusta a mano la base o el tipo de un tramo tras el escaneo, se
+  // busca ese valor en las cajas del OCR y se propone guardar la región en la
+  // plantilla del proveedor. Los agregados del desglose (base/IVA/IRPF) no
+  // sirven porque con tramos se derivan de las filas y pueden mezclar tipos.
+  const maybeProposeTrancheRegion = (rowId: number, field: 'base' | 'rate', prevValue: string, value: string) => {
+    if (proposalTimerRef.current) clearTimeout(proposalTimerRef.current)
+    proposalTimerRef.current = setTimeout(async () => {
+      const ocrField = field === 'rate' ? 'tipo_iva' : 'base_imponible'
+      const def = getOcrFieldDef(ocrField)
+      if (!def) return
+      const key = `tranche:${rowId}:${field}`
+      const t = value.trim()
+      if (!t || !scannedExtRef.current) {
+        setOcrProposals(p => { const n = { ...p }; delete n[key]; return n })
+        return
+      }
+      // Re-escribir lo mismo que ya traía la fila no es una corrección
+      if (prevValue && valuesEquivalent(prevValue, t)) {
+        setOcrProposals(p => { const n = { ...p }; delete n[key]; return n })
+        return
+      }
+      setProposalBusy(b => ({ ...b, [key]: true }))
+      try {
+        const overlay = await getEffectiveOverlay()
+        const proposal = overlay ? findRegionForValue(overlay, t, def) : null
+        setOcrProposals(p => {
+          if (!proposal) { const n = { ...p }; delete n[key]; return n }
+          // La referencia guardada es el valor corregido de la fila
+          return { ...p, [key]: { ...proposal, reference: t } }
+        })
+      } finally {
+        setProposalBusy(b => { const n = { ...b }; delete n[key]; return n })
+      }
+    }, 450)
+  }
+
   const dismissProposal = (formField: string) => {
     setOcrProposals(p => { const n = { ...p }; delete n[formField]; return n })
   }
@@ -1218,7 +1361,9 @@ export default function EscanearGastoPage() {
     try {
       const region: OcrTemplateField = {
         ...proposal.region,
-        reference: referenceFor(proposal.field) || null,
+        // Los tramos llevan su referencia en la propuesta (el valor corregido
+        // de la fila); los campos de texto usan el valor actual del formulario.
+        reference: proposal.reference ?? (referenceFor(proposal.field) || null),
       }
       const q = new URLSearchParams({ supplierName })
       if (form.issuerTaxId) q.set('nif', form.issuerTaxId)
@@ -1307,6 +1452,9 @@ export default function EscanearGastoPage() {
         }).catch(() => { /* el gasto ya está guardado; la bandeja se puede reconciliar después */ })
       }
       toast.success('Gasto registrado correctamente')
+      // Confirmación de los tramos: aprender su posición en la plantilla del
+      // proveedor para que el siguiente escaneo los extraiga sin re-detectar.
+      void saveVatRowTemplate()
       router.push('/dashboard/finanzas/gastos')
       return true
     }
@@ -2057,11 +2205,16 @@ export default function EscanearGastoPage() {
                           </div>
                         </div>
                         {ivaRows.map(row => (
-                          <div key={row.id} className="grid grid-cols-[1fr_90px_110px_auto] gap-2 items-center">
-                            <Input type="number" step="0.01" placeholder="Base imponible" value={row.base} onChange={e => updateIvaRow(row.id, 'base', e.target.value)} className="h-9 rounded-lg" />
-                            <Input type="number" step="0.01" placeholder="IVA %" value={row.rate} onChange={e => updateIvaRow(row.id, 'rate', e.target.value)} className="h-9 rounded-lg" />
-                            <span className="text-xs font-bold text-slate-600 text-right">€{computePercentageAmount(row.base, row.rate) || '0.00'}</span>
-                            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={() => removeIvaRow(row.id)} aria-label="Quitar tramo">×</Button>
+                          <div key={row.id} className="space-y-1">
+                            <div className="grid grid-cols-[1fr_90px_110px_auto] gap-2 items-center">
+                              <Input type="number" step="0.01" placeholder="Base imponible" value={row.base} onChange={e => updateIvaRow(row.id, 'base', e.target.value)} className="h-9 rounded-lg" />
+                              <Input type="number" step="0.01" placeholder="IVA %" value={row.rate} onChange={e => updateIvaRow(row.id, 'rate', e.target.value)} className="h-9 rounded-lg" />
+                              <span className="text-xs font-bold text-slate-600 text-right">€{computePercentageAmount(row.base, row.rate) || '0.00'}</span>
+                              <Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={() => removeIvaRow(row.id)} aria-label="Quitar tramo">×</Button>
+                            </div>
+                            {/* Aprendizaje: propuesta de región al corregir un tramo a mano */}
+                            {renderProposalChip(`tranche:${row.id}:base`)}
+                            {renderProposalChip(`tranche:${row.id}:rate`)}
                           </div>
                         ))}
                         <div className="flex justify-between text-xs font-black pt-2 border-t">

@@ -56,6 +56,8 @@ interface ExpenseVerificationDetailsProps {
       taxRegime?: string | null
       operationType?: string | null
       totalFactura?: number | null
+      // Desglose por tramo: { rate|tipo, base, amount|cuota } por fila de IVA
+      vatBreakdown?: Array<Record<string, number | string | null>> | null
     } | null
   }
   tenantConfig: {
@@ -81,6 +83,23 @@ export default function ExpenseVerificationDetails({ expense, tenantConfig }: Ex
       default: return 'bg-slate-100 text-slate-700'
     }
   }
+
+  // Tramos de IVA guardados al confirmar el gasto (asociación posicional):
+  // tolera los formatos { rate, base, amount } del formulario y
+  // { tipo, base, cuota } del desglose del OCR.
+  const rawBreakdown: Array<Record<string, number | string | null>> = Array.isArray(expense.metadata?.vatBreakdown)
+    ? (expense.metadata?.vatBreakdown ?? [])
+    : []
+  const vatRows = rawBreakdown
+    .map(row => ({
+      rate: Number(row.rate ?? row.tipo ?? row.tipo_iva),
+      base: Number(row.base ?? row.base_imponible ?? row.taxableBase),
+      cuota: Number(row.amount ?? row.cuota ?? row.cuota_iva ?? row.vatAmount),
+    }))
+    .filter(r => Number.isFinite(r.rate) && Number.isFinite(r.base) && Number.isFinite(r.cuota))
+  const vatBaseTotal = vatRows.reduce((s, r) => s + r.base, 0)
+  const vatCuotaTotal = vatRows.reduce((s, r) => s + r.cuota, 0)
+  const cur = expense.currency || 'EUR'
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -173,6 +192,43 @@ export default function ExpenseVerificationDetails({ expense, tenantConfig }: Ex
                 </p>
               </div>
             </div>
+
+            {/* Tramos de IVA: base y cuota por tipo, para auditar la
+                asociación posicional de las filas de impuestos. */}
+            {vatRows.length > 0 && (
+              <div className="mt-4 overflow-hidden rounded-xl border border-slate-200">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-slate-50 text-left text-[9px] font-black uppercase tracking-widest text-muted-foreground">
+                      <th className="px-3 py-2">Tipo</th>
+                      <th className="px-3 py-2 text-right">Base imponible</th>
+                      <th className="px-3 py-2 text-right">Cuota IVA</th>
+                      <th className="px-3 py-2 text-right">Total tramo</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {vatRows.map((row, i) => (
+                      <tr key={i}>
+                        <td className="px-3 py-2 font-black">{row.rate}%</td>
+                        <td className="px-3 py-2 text-right font-semibold text-slate-700 tabular-nums">{cur} {row.base.toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right font-semibold text-emerald-700 tabular-nums">{cur} {row.cuota.toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right font-bold tabular-nums">{cur} {(row.base + row.cuota).toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  {vatRows.length > 1 && (
+                    <tfoot>
+                      <tr className="bg-slate-50 font-black uppercase">
+                        <td className="px-3 py-2 text-[10px] tracking-widest">Total</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{cur} {vatBaseTotal.toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right text-emerald-700 tabular-nums">{cur} {vatCuotaTotal.toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{cur} {(vatBaseTotal + vatCuotaTotal).toFixed(2)}</td>
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

@@ -46,6 +46,25 @@ export interface OcrOverlay {
   words: OcrWord[]
 }
 
+/**
+ * Plantilla de tramos de IVA: posición (relativa 0..1) de las columnas
+ * tipo/base/cuota de cada fila de impuestos del proveedor. Se aprende cuando
+ * el usuario confirma los tramos tras el escaneo y permite extraerlos en el
+ * siguiente escaneo por geometría, sin volver a detectar ni re-asociar.
+ */
+export interface VatRowTemplate {
+  /** Región del tipo de IVA (p. ej. "21,00 %"). */
+  rate: { x: number; y: number; w: number; h: number }
+  /** Región de la base imponible del tramo. */
+  base: { x: number; y: number; w: number; h: number }
+  /** Región de la cuota del tramo. */
+  cuota: { x: number; y: number; w: number; h: number }
+  /** Valores confirmados cuando se aprendió la plantilla (referencia). */
+  reference?: { tipo: number; base: number; cuota: number } | null
+  /** Página del PDF a la que pertenecen las regiones (1 por defecto). */
+  page?: number
+}
+
 /** Definición de un campo anotable: cómo se etiqueta y cómo se normaliza su valor. */
 export interface OcrFieldDef {
   field: string
@@ -270,6 +289,13 @@ export interface RegionProposal {
   matchedText: string
   /** 1 = coincidencia exacta, 0.85 = subcadena (palabra más larga). */
   confidence: number
+  /**
+   * Valor corregido que se guardará como referencia de la plantilla. Para los
+   * tramos de IVA es el valor editado en la fila (el formulario solo guarda
+   * agregados, así que no se puede derivar después); para los campos de texto
+   * se deja null y se usa el valor actual del formulario al guardar.
+   */
+  reference?: string | null
 }
 
 // Clave canónica de comparación: fecha, importe, NIF o texto en mayúsculas.

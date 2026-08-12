@@ -4163,6 +4163,10 @@ model SupplierOcrTemplate {
   name         String   @default("Formato 1")
   // [{ field, label, x, y, w, h }] — coordenadas relativas 0..1
   fields       Json
+  // [{ rate: {x,y,w,h}, base: {x,y,w,h}, cuota: {x,y,w,h}, reference?, page? }]
+  // Posiciones de las columnas de cada fila de impuestos, aprendidas al
+  // confirmar los tramos tras el escaneo (asociación posicional de IVA).
+  vatRows      Json?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
