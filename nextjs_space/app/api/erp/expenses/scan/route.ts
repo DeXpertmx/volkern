@@ -5,12 +5,14 @@ import { NextResponse } from 'next/server'
 import { withTenantAuth } from '@/lib/api-key-auth'
 import { uploadFile } from '@/lib/s3'
 import { parseInvoiceText, VisionResult, FALLBACK } from '@/lib/invoice-parser'
+import { overlayFromOcrSpace, OcrOverlay } from '@/lib/finance/ocr-template'
 
-async function callVision(buffer: Buffer, mimeType: string): Promise<{ result: VisionResult | null; rawText: string }> {
+async function callVision(buffer: Buffer, mimeType: string): Promise<{ result: VisionResult | null; rawText: string; overlay: OcrOverlay | null }> {
   const base64 = buffer.toString('base64')
   const dataUrl = `data:${mimeType};base64,${base64}`
   const isPdf = mimeType === 'application/pdf'
   let rawText = ''
+  let overlay: OcrOverlay | null = null
 
   const prompt = `Eres un extractor de datos de facturas españolas. Analiza el ${isPdf ? 'documento PDF' : 'documento/imagen'} y devuelve SOLO un JSON válido sin markdown ni explicaciones. Usa punto para decimales (ej: 121.00). Fechas en formato DD/MM/AAAA.
 
@@ -85,12 +87,15 @@ Si un campo no está disponible pon null. Si no hay líneas de detalle, pon arra
         const json = await res.json()
         if (!json.IsErroredOnProcessing && json.OCRExitCode === 1) {
           rawText = (json.ParsedResults?.[0]?.ParsedText || '').trim()
+          // Las cajas de palabras (TextOverlay) son la base del visualizador
+          // de corrección y del aprendizaje de plantillas por proveedor.
+          overlay = overlayFromOcrSpace(json)
           if (rawText) {
-            console.log(`[Vision] OCR.space extrajo ${rawText.length} caracteres de texto`)
+            console.log(`[Vision] OCR.space extrajo ${rawText.length} caracteres de texto` + (overlay ? ` y ${overlay.words.length} cajas de palabras` : ''))
             const parsed = parseInvoiceText(rawText)
             if (parsed) {
               console.log('[Vision] ✅ OCR.space + parseInvoiceText extrajeron datos')
-              return { result: parsed, rawText }
+              return { result: parsed, rawText, overlay }
             }
             console.warn('[Vision] OCR.space extrajo texto pero parseInvoiceText no encontró campos estructurados')
           }
@@ -133,7 +138,7 @@ Si un campo no está disponible pon null. Si no hay líneas de detalle, pon arra
           const parsed = parseJsonResult(raw)
           if (parsed) {
             console.log('[Vision] ✅ OpenRouter GPT-4o-mini extrajo datos correctamente')
-            return { result: parsed, rawText }
+            return { result: parsed, rawText, overlay }
           }
         } else {
           const errText = await res.text()
@@ -163,7 +168,7 @@ Si un campo no está disponible pon null. Si no hay líneas de detalle, pon arra
         const parsed = parseJsonResult(raw)
         if (parsed) {
           console.log('[Vision] ✅ Gemini extrajo datos correctamente')
-          return { result: parsed, rawText }
+          return { result: parsed, rawText, overlay }
         }
       } else {
         const errText = await res.text()
@@ -201,7 +206,7 @@ Si un campo no está disponible pon null. Si no hay líneas de detalle, pon arra
         const parsed = parseJsonResult(raw)
         if (parsed) {
           console.log('[Vision] ✅ DeepSeek extrajo datos')
-          return { result: parsed, rawText }
+          return { result: parsed, rawText, overlay }
         }
       }
     } catch {
@@ -220,7 +225,7 @@ Si un campo no está disponible pon null. Si no hay líneas de detalle, pon arra
       ? `Faltan: ${missingKeys.join(', ')}. Las APIs configuradas no devolvieron datos válidos.`
       : 'Las APIs de visión configuradas (4 proveedores) no pudieron extraer datos de la imagen. Prueba con mejor iluminación o usa "Sin OCR".')
   console.warn(`[Vision] ❌ ${diagnostic}`)
-  return { result: null, rawText }
+  return { result: null, rawText, overlay }
 }
 
 function parseJsonResult(raw: string): VisionResult | null {
@@ -251,10 +256,12 @@ export const POST = withTenantAuth(async (req, auth) => {
 
     let visionResult: VisionResult | null = null
     let rawText = ''
+    let overlay: OcrOverlay | null = null
     try {
       const visionResponse = await callVision(buffer, file.type || 'image/jpeg')
       visionResult = visionResponse.result
       rawText = visionResponse.rawText
+      overlay = visionResponse.overlay
     } catch (err: any) {
       console.error('[ExpenseScan] Vision error:', err?.message)
     }
@@ -284,6 +291,7 @@ export const POST = withTenantAuth(async (req, auth) => {
       ocrTimedOut: !visionResult,
       extracted,
       rawText,
+      overlay,
       diagnostic,
     })
   } catch (error: any) {

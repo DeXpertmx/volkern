@@ -11,10 +11,12 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { toast } from 'sonner'
-import { Camera, Receipt, Scan, Loader2, ArrowLeft, CheckCircle2, Image as ImageIcon, FileText, AlertTriangle, Check, ChevronsUpDown, Plus } from 'lucide-react'
+import { Camera, Receipt, Scan, Loader2, ArrowLeft, CheckCircle2, Image as ImageIcon, FileText, AlertTriangle, Check, ChevronsUpDown, Plus, MousePointerClick } from 'lucide-react'
 import IvaRatesEditor from '@/components/finance/IvaRatesEditor'
+import OcrCorrectionModal from '@/components/finance/OcrCorrectionModal'
 import { computeVatAmount, computePercentageAmount, computeInvoiceTotalMismatch, fillEmptyTranches, fillLastTranche } from '@/lib/finance/vat'
 import { validateFiscalId, getFiscalIdConfigsByCountry, normalizarPais } from '@/lib/fiscal-validation'
+import { applyTemplate, type OcrOverlay } from '@/lib/finance/ocr-template'
 
 interface EmisorInfo {
   nombre: string | null
@@ -136,6 +138,9 @@ export default function EscanearGastoPage() {
   const [scanMessage, setScanMessage] = useState('')
   const [scanResult, setScanResult] = useState<any>(null)
   const [rawOcrText, setRawOcrText] = useState('')
+  // Cajas de palabras del OCR (TextOverlay) para el visualizador de corrección
+  const [scanOverlay, setScanOverlay] = useState<OcrOverlay | null>(null)
+  const [correctionOpen, setCorrectionOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [showSelect, setShowSelect] = useState(true)
@@ -601,6 +606,7 @@ export default function EscanearGastoPage() {
       setScanMessage('Analizando datos...')
       setScanResult(data)
       setRawOcrText(data.rawText || '')
+      setScanOverlay(data.overlay || null)
       const ext: ExtractedData = data.extracted
       setForm(prev => ({
         ...prev,
@@ -641,6 +647,8 @@ export default function EscanearGastoPage() {
       setShowForm(true)
       loadTenantReceptor()
       matchSupplierByName(ext.supplier)
+      // Si este proveedor ya tiene plantilla aprendida, corregir con ella
+      applySavedTemplate(ext.supplier, ext.emisor?.nif || ext.issuerTaxId || null, data.overlay || null)
     } catch (err: any) {
       if (err?.name === 'AbortError') {
         toast.error('El OCR está tardando demasiado. Usa "Sin OCR" para ir al formulario.')
@@ -669,6 +677,54 @@ export default function EscanearGastoPage() {
       return `${y}-${m}-${d}`
     }
     return new Date().toISOString().split('T')[0]
+  }
+
+  // ─── Corrección con plantilla: mapea valores extraídos por región al form ──
+  // `values` viene del modal o del auto-aplicado: { field → texto normalizado }
+  const mergeTemplateValues = (values: Record<string, string>) => {
+    setForm(p => {
+      const next = { ...p }
+      if (values.fecha_emision) next.date = formatDetectedDate(values.fecha_emision)
+      if (values.fecha_operacion) next.operationDate = formatDetectedDate(values.fecha_operacion)
+      if (values.numero_factura) next.invoiceNumber = values.numero_factura
+      if (values.base_imponible) next.taxableBase = values.base_imponible
+      if (values.tipo_iva) next.vatRate = values.tipo_iva
+      if (values.cuota_iva) next.vatAmount = values.cuota_iva
+      if (values.tipo_irpf) next.irpfRate = values.tipo_irpf
+      if (values.cuota_irpf) next.irpfAmount = values.cuota_irpf
+      if (values.total_factura) {
+        next.totalFactura = values.total_factura
+        next.amount = values.total_factura
+      }
+      if (values.emisor_nombre) {
+        next.issuerName = values.emisor_nombre
+        next.supplier = next.supplier || values.emisor_nombre
+      }
+      if (values.emisor_nif) next.issuerTaxId = values.emisor_nif
+      if (values.iban) next.iban = values.iban
+      return next
+    })
+  }
+
+  // Tras el OCR: si el proveedor ya tiene plantilla aprendida, aplica los
+  // campos extraídos desde las regiones guardadas (los del parser genérico
+  // que no coincidan quedan corregidos automáticamente).
+  const applySavedTemplate = async (supplierName: string | null, nif: string | null, overlay: OcrOverlay | null) => {
+    if (!supplierName || !supplierName.trim() || !overlay) return
+    try {
+      const q = new URLSearchParams({ supplierName: supplierName.trim() })
+      if (nif) q.set('nif', nif)
+      const res = await fetch(`/api/erp/expenses/ocr-templates?${q.toString()}`)
+      const data = await res.json()
+      if (!data?.template?.fields?.length) return
+      const values = applyTemplate(overlay, data.template.fields)
+      const count = Object.keys(values).length
+      if (count === 0) return
+      mergeTemplateValues(values)
+      toast.success(`Plantilla de ${supplierName.trim()} aplicada (${count} campo${count !== 1 ? 's' : ''} corregido${count !== 1 ? 's' : ''})`)
+    } catch {
+      /* silencioso: el formulario ya tiene los datos del OCR genérico */
+    }
   }
 
   const saveExpense = async () => {
@@ -929,10 +985,16 @@ export default function EscanearGastoPage() {
       {showForm && (
         <div className="space-y-4">
           <Card>
-            <CardHeader>
+            <CardHeader className="flex-row items-center justify-between space-y-0">
               <CardTitle className="text-lg flex items-center gap-2">
                 {scanResult?.ocrTimedOut ? <><span className="text-amber-500">⚠</span> OCR no disponible</> : scanResult ? <><CheckCircle2 className="h-5 w-5 text-emerald-500" /> Datos Extraídos</> : <><Receipt className="h-5 w-5" /> Datos del Gasto</>}
               </CardTitle>
+              {scanOverlay && capturedImage && !isPdf && (
+                <Button type="button" variant="outline" size="sm" onClick={() => setCorrectionOpen(true)} className="shrink-0">
+                  <MousePointerClick className="h-4 w-4 mr-1.5" />
+                  Ajustar lectura
+                </Button>
+              )}
             </CardHeader>
             <CardContent className="space-y-4">
               {(form.receiptUrl && (capturedImage || isPdf)) && (
@@ -1379,6 +1441,17 @@ export default function EscanearGastoPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Modal: visualizador de corrección OCR (aprende la plantilla del proveedor) */}
+      <OcrCorrectionModal
+        open={correctionOpen}
+        onClose={() => setCorrectionOpen(false)}
+        imageUrl={form.receiptUrl || capturedImage}
+        overlay={scanOverlay}
+        supplierName={form.supplier || form.issuerName}
+        supplierNif={form.issuerTaxId}
+        onApply={mergeTemplateValues}
+      />
     </div>
   )
 }

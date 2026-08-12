@@ -355,6 +355,7 @@ model Tenant {
   strategicThresholds            StrategicThreshold[]
   stripeFiscalLinks              StripeFiscalLink?
   suppliers                      Supplier[]
+  supplierOcrTemplates           SupplierOcrTemplate[]
   userGuidanceLogs               UserGuidanceLog[]
   erp_vacation_requests          erp_vacation_requests[]
   warehouses                     Warehouse[]
@@ -4140,6 +4141,30 @@ model Supplier {
   @@index([tenantId])
   @@index([category])
   @@map("erp_suppliers")
+}
+
+// Plantilla de lectura aprendida por proveedor: regiones (coordenadas
+// relativas 0..1 sobre la imagen) donde cada campo de la factura aparece
+// siempre. Se aprende cuando el usuario corrige un escaneo señalando en la
+// imagen dónde está cada dato; en el siguiente escaneo del mismo proveedor
+// el sistema extrae los campos desde esas regiones en lugar de fiarse solo
+// del parser genérico.
+model SupplierOcrTemplate {
+  id           String   @id @default(cuid())
+  tenantId     String
+  // Proveedor al que pertenece la plantilla (nombre tal y como aparece en el OCR)
+  supplierName String
+  // NIF del proveedor si se conoce (clave secundaria de coincidencia)
+  nif          String?
+  // [{ field, label, x, y, w, h }] — coordenadas relativas 0..1
+  fields       Json
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, supplierName])
+  @@index([tenantId, nif])
+  @@map("erp_supplier_ocr_templates")
 }
 
 model Expense {
