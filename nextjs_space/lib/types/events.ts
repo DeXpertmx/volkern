@@ -105,6 +105,7 @@ export const EVENTS = {
   PAYMENT_TO_SUPPLIER: 'payment_to_supplier',
   EXPENSE_SUBMITTED: 'expense_submitted',
   EXPENSE_APPROVED: 'expense_approved',
+  EXPENSE_CREATED: 'expense_created',
   PAYROLL_GENERATED: 'payroll_generated',
   BUDGET_ALERT: 'budget_alert',
 
@@ -537,6 +538,12 @@ export interface ExpenseApprovedEvent extends BaseEventPayload {
   aprobadoPor: string;
 }
 
+export interface ExpenseCreatedEvent extends BaseEventPayload {
+  expenseId: string;
+  monto: number;
+  categoria: string;
+}
+
 export interface PayrollGeneratedEvent extends BaseEventPayload {
   payrollId: string;
   periodo: string;
@@ -693,6 +700,7 @@ export type EventPayloadMap = {
   [EVENTS.INVOICE_OVERDUE]: InvoiceOverdueEvent;
   [EVENTS.EXPENSE_SUBMITTED]: ExpenseSubmittedEvent;
   [EVENTS.EXPENSE_APPROVED]: ExpenseApprovedEvent;
+  [EVENTS.EXPENSE_CREATED]: ExpenseCreatedEvent;
   [EVENTS.PAYROLL_GENERATED]: PayrollGeneratedEvent;
   [EVENTS.BUDGET_ALERT]: BudgetAlertEvent;
 

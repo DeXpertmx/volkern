@@ -28,7 +28,8 @@ export class EntryManager {
     description: string;
     reference?: string;
     lines: EntryLineInput[];
-    taxImpact?: TaxImpactInput;
+    taxImpact?: TaxImpactInput;   // Un solo impacto (compatibilidad)
+    taxImpacts?: TaxImpactInput[]; // Varios impactos (p. ej. IVA + IRPF en un gasto)
   }) {
     // 1. Validate balance
     const totalDebit = data.lines.reduce((sum, l) => sum + l.debit, 0);
@@ -47,11 +48,12 @@ export class EntryManager {
 
     const previousHash = lastEntry?.entryHash || 'GENESIS';
 
-    // 3. Prepare entry hash
+    // 3. Prepare entry hash (ordenar una copia: NO mutar el array original,
+    //    para que las líneas se persistan en el orden en que se reciben)
     const entryData = JSON.stringify({
       tenantId: data.tenantId,
       description: data.description,
-      lines: data.lines.sort((a, b) => a.accountId.localeCompare(b.accountId)),
+      lines: [...data.lines].sort((a, b) => a.accountId.localeCompare(b.accountId)),
       previousHash
     });
 
@@ -61,6 +63,10 @@ export class EntryManager {
 
     // 4. Persistence in transaction
     return await prisma.$transaction(async (tx) => {
+      // Impactos fiscales: soporta uno o varios (p. ej. IVA soportado + IRPF)
+      const impacts: TaxImpactInput[] =
+        data.taxImpacts ?? (data.taxImpact ? [data.taxImpact] : []);
+
       // Create Entry
       const entry = await tx.accountingEntry.create({
         data: {
@@ -76,16 +82,16 @@ export class EntryManager {
               credit: l.credit
             }))
           },
-          taxImpact: data.taxImpact ? {
-            create: {
+          taxImpact: impacts.length > 0 ? {
+            create: impacts.map(i => ({
               tenantId: data.tenantId,
-              type: data.taxImpact.type as any,
-              baseAmount: data.taxImpact.baseAmount,
-              taxRate: data.taxImpact.taxRate,
-              taxAmount: data.taxImpact.taxAmount,
-              periodMonth: data.taxImpact.periodMonth,
-              periodYear: data.taxImpact.periodYear
-            }
+              type: i.type as any,
+              baseAmount: i.baseAmount,
+              taxRate: i.taxRate,
+              taxAmount: i.taxAmount,
+              periodMonth: i.periodMonth,
+              periodYear: i.periodYear
+            }))
           } : undefined
         },
         include: { lines: true, taxImpact: true }

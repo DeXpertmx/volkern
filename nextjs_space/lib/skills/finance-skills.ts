@@ -175,6 +175,17 @@ export async function createExpense(input: CreateExpenseInput) {
       }
     });
 
+    // Notificar a la contabilidad para que genere el asiento y los registros
+    // fiscales (IVA soportado → Modelo 303, retención IRPF → Modelo 111)
+    eventBus.emitEvent(EVENTS.EXPENSE_CREATED, {
+      tenantId: input.tenantId,
+      expenseId: updatedExpense.id,
+      monto: updatedExpense.amount,
+      categoria: updatedExpense.category,
+      source: 'app' as const,
+      timestamp: new Date(),
+    });
+
     return updatedExpense;
   });
 }
