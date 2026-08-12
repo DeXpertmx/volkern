@@ -67,6 +67,60 @@ export const POST = withTenantAuth(async (request, auth) => {
       return NextResponse.json({ error: 'Faltan campos obligatorios' }, { status: 400 });
     }
 
+    // Bloqueo preventivo de duplicados. Primero usamos el número de factura
+    // por proveedor; si no existe, hacemos una comprobación conservadora por
+    // proveedor + importe + día. Se puede saltar solo con confirmación expresa
+    // desde el formulario (allowDuplicate=true).
+    const tenantId = auth.tenant!.id;
+    const invoiceNumber = typeof body.invoiceNumber === 'string' ? body.invoiceNumber.trim() : '';
+    const candidateDate = body.date ? new Date(body.date) : new Date();
+    let duplicate: any = null;
+
+    if (!body.allowDuplicate) {
+      if (invoiceNumber) {
+        duplicate = await prisma.expense.findFirst({
+          where: { tenantId, supplierId: body.supplierId, invoiceNumber },
+          select: { id: true, invoiceNumber: true, amount: true, date: true, currency: true, description: true },
+          orderBy: { createdAt: 'desc' },
+        });
+      } else if (!Number.isNaN(candidateDate.getTime())) {
+        const start = new Date(candidateDate);
+        start.setUTCHours(0, 0, 0, 0);
+        const end = new Date(start);
+        end.setUTCDate(end.getUTCDate() + 1);
+        const amount = Number(body.totalFactura || body.amount);
+        if (Number.isFinite(amount)) {
+          duplicate = await prisma.expense.findFirst({
+            where: {
+              tenantId,
+              supplierId: body.supplierId,
+              amount,
+              date: { gte: start, lt: end },
+            },
+            select: { id: true, invoiceNumber: true, amount: true, date: true, currency: true, description: true },
+            orderBy: { createdAt: 'desc' },
+          });
+        }
+      }
+    }
+
+    if (duplicate) {
+      return NextResponse.json({
+        code: 'POSSIBLE_DUPLICATE',
+        error: invoiceNumber
+          ? `Ya existe una factura ${invoiceNumber} de este proveedor.`
+          : 'Ya existe un gasto del mismo proveedor con el mismo importe y fecha.',
+        duplicate: {
+          id: duplicate.id,
+          invoiceNumber: duplicate.invoiceNumber,
+          amount: duplicate.amount,
+          date: duplicate.date,
+          currency: duplicate.currency,
+          description: duplicate.description,
+        },
+      }, { status: 409 });
+    }
+
     const expense = await (skills as any).create_expense({
       tenantId: auth.tenant!.id,
       createdById: auth.user!.id,
@@ -74,6 +128,10 @@ export const POST = withTenantAuth(async (request, auth) => {
       leadId: body.leadId,
       description: body.description,
       amount: parseFloat(body.amount),
+      currency: body.currency || 'EUR',
+      date: body.date ? new Date(body.date) : undefined,
+      dueDate: body.dueDate ? new Date(body.dueDate) : undefined,
+      paymentMethod: body.paymentMethod,
       category: body.category || 'General',
       receiptUrl: body.receiptUrl,
       status: body.status || 'PAID',
@@ -85,6 +143,10 @@ export const POST = withTenantAuth(async (request, auth) => {
       vatAmount: body.vatAmount ? parseFloat(body.vatAmount) : undefined,
       irpfRate: body.irpfRate ? parseFloat(body.irpfRate) : undefined,
       irpfAmount: body.irpfAmount ? parseFloat(body.irpfAmount) : undefined,
+      surchargeRate: body.surchargeRate ? parseFloat(body.surchargeRate) : undefined,
+      surchargeAmount: body.surchargeAmount ? parseFloat(body.surchargeAmount) : undefined,
+      taxRegime: body.taxRegime,
+      operationType: body.operationType,
       totalFactura: body.totalFactura ? parseFloat(body.totalFactura) : undefined,
       operationDate: body.operationDate ? new Date(body.operationDate) : undefined,
       issuerName: body.issuerName,
@@ -95,6 +157,7 @@ export const POST = withTenantAuth(async (request, auth) => {
       receptorDireccion: body.receptorDireccion,
       iban: body.iban,
       lineas: body.lineas,
+      vatBreakdown: Array.isArray(body.vatBreakdown) ? body.vatBreakdown : undefined,
     });
 
     return NextResponse.json(expense);

@@ -22,6 +22,8 @@ interface OcrCorrectionModalProps {
   onClose: () => void
   /** URL de la imagen (S3 para imágenes, página 1 renderizada para PDFs). */
   imageUrl: string | null
+  /** Páginas renderizadas del PDF; si existe, habilita navegación multipágina. */
+  pdfPages?: string[]
   overlay: OcrOverlay | null
   supplierName: string
   supplierNif: string
@@ -64,8 +66,9 @@ const FIELD_COLORS = [
   '#7c3aed', '#0891b2', '#d97706', '#059669', '#db2777', '#4f46e5', '#ca8a04', '#0284c7', '#9333ea', '#16a34a', '#e11d48', '#0d9488',
 ]
 
-export default function OcrCorrectionModal({ open, onClose, imageUrl, overlay, supplierName, supplierNif, onApply, autoProposal }: OcrCorrectionModalProps) {
+export default function OcrCorrectionModal({ open, onClose, imageUrl, pdfPages, overlay, supplierName, supplierNif, onApply, autoProposal }: OcrCorrectionModalProps) {
   const [templates, setTemplates] = useState<TemplateMeta[]>([])
+  const [pdfPage, setPdfPage] = useState(0)
   const [activeTemplateId, setActiveTemplateId] = useState<string>(NEW_TEMPLATE_ID)
   const [templateName, setTemplateName] = useState('Formato 1')
   const [fields, setFields] = useState<OcrTemplateField[]>([])
@@ -80,6 +83,9 @@ export default function OcrCorrectionModal({ open, onClose, imageUrl, overlay, s
   const [detecting, setDetecting] = useState(false)
 
   const effectiveOverlay = overlay || localOverlay
+  const currentPageNumber = pdfPages?.length ? pdfPage + 1 : 1
+  const currentImageUrl = pdfPages?.[pdfPage] || imageUrl
+  const currentPageFields = fields.filter(f => (f.page ?? 1) === currentPageNumber)
   const containerRef = useRef<HTMLDivElement>(null)
   const drawingRef = useRef<{ startX: number; startY: number } | null>(null)
 
@@ -93,6 +99,7 @@ export default function OcrCorrectionModal({ open, onClose, imageUrl, overlay, s
     if (!open) return
     setFields([])
     setDrawing(null)
+    setPdfPage(0)
     setTemplates([])
     setActiveTemplateId(NEW_TEMPLATE_ID)
     setTemplateName('Formato 1')
@@ -125,13 +132,19 @@ export default function OcrCorrectionModal({ open, onClose, imageUrl, overlay, s
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, autoProposal])
 
+  // Al cambiar de página hay que descartar las cajas de la página anterior.
+  useEffect(() => {
+    setLocalOverlay(null)
+    setDrawing(null)
+  }, [currentImageUrl])
+
   // Si no hay cajas del proveedor de visión, detectarlas localmente
   useEffect(() => {
     if (!open) return
-    if (overlay || localOverlay || !imageUrl) return
+    if (overlay || localOverlay || !currentImageUrl) return
     let cancelled = false
     setDetecting(true)
-    detectWordBoxes(imageUrl)
+    detectWordBoxes(currentImageUrl)
       .then(boxes => {
         if (!cancelled && boxes) setLocalOverlay(boxes)
       })
@@ -139,7 +152,7 @@ export default function OcrCorrectionModal({ open, onClose, imageUrl, overlay, s
         if (!cancelled) setDetecting(false)
       })
     return () => { cancelled = true }
-  }, [open, overlay, localOverlay, imageUrl])
+  }, [open, overlay, localOverlay, currentImageUrl])
 
   const loadTemplate = (id: string) => {
     if (id === NEW_TEMPLATE_ID) {
@@ -155,7 +168,7 @@ export default function OcrCorrectionModal({ open, onClose, imageUrl, overlay, s
     setFields(t.fields || [])
   }
 
-  const regionOf = (field: string) => fields.find(f => f.field === field)
+  const regionOf = (field: string) => fields.find(f => f.field === field && (f.page ?? 1) === currentPageNumber)
 
   // Convierte un evento de puntero a coordenadas relativas 0..1
   const toRelative = (e: React.PointerEvent): { x: number; y: number } | null => {
@@ -198,18 +211,21 @@ export default function OcrCorrectionModal({ open, onClose, imageUrl, overlay, s
     setDrawing(null)
     if (region.w < 0.01 || region.h < 0.01) return // clic sin arrastre: ignorar
     const def = getOcrFieldDef(selectedField)
-    setFields(prev => [...prev.filter(f => f.field !== selectedField), { field: selectedField, label: def?.label || selectedField, ...region }])
+    setFields(prev => [
+      ...prev.filter(f => f.field !== selectedField || (f.page ?? 1) !== currentPageNumber),
+      { field: selectedField, label: def?.label || selectedField, page: currentPageNumber, ...region },
+    ])
   }
 
   const removeRegion = (field: string) => {
-    setFields(prev => prev.filter(f => f.field !== field))
+    setFields(prev => prev.filter(f => f.field !== field || (f.page ?? 1) !== currentPageNumber))
   }
 
   // Extrae valores de todas las regiones y los aplica al formulario
   const extractedValues = useMemo(() => {
     if (!effectiveOverlay || fields.length === 0) return {}
-    return applyTemplate(effectiveOverlay, fields)
-  }, [effectiveOverlay, fields])
+    return applyTemplate(effectiveOverlay, fields, currentPageNumber)
+  }, [effectiveOverlay, fields, currentPageNumber])
 
   const handleApply = () => {
     const values = extractedValues
@@ -359,9 +375,7 @@ export default function OcrCorrectionModal({ open, onClose, imageUrl, overlay, s
           <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-destructive" onClick={handleDelete} title="Eliminar esta plantilla" disabled={!isEditing || deleting || loadingTemplate}>
             {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
           </Button>
-        </div>
-
-        <div className="flex flex-1 gap-4 min-h-0">
+        </div>          <div className="flex flex-1 gap-4 min-h-0">
           {/* Lista de campos */}
           <div className="w-56 shrink-0 overflow-y-auto border rounded-lg p-2 space-y-1">
             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-1 pb-1">
@@ -404,7 +418,14 @@ export default function OcrCorrectionModal({ open, onClose, imageUrl, overlay, s
 
           {/* Imagen + overlay */}
           <div className="flex-1 min-w-0 overflow-auto bg-slate-100 rounded-lg p-3">
-            {!imageUrl ? (
+            {pdfPages && pdfPages.length > 1 && (
+              <div className="mb-2 flex items-center justify-between rounded-lg border bg-white px-2 py-1.5">
+                <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => setPdfPage(page => Math.max(0, page - 1))} disabled={pdfPage === 0}>← Anterior</Button>
+                <span className="text-xs font-bold text-muted-foreground">Página {currentPageNumber} de {pdfPages.length}</span>
+                <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => setPdfPage(page => Math.min(pdfPages.length - 1, page + 1))} disabled={pdfPage >= pdfPages.length - 1}>Siguiente →</Button>
+              </div>
+            )}
+            {!currentImageUrl ? (
               <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
                 No hay imagen disponible (los PDFs se corrigen con el texto OCR crudo).
               </div>
@@ -417,7 +438,7 @@ export default function OcrCorrectionModal({ open, onClose, imageUrl, overlay, s
                 onPointerMove={onPointerMove}
                 onPointerUp={onPointerUp}
               >
-                <img src={imageUrl} alt="Factura" className="block max-w-full" draggable={false} />
+                <img src={currentImageUrl} alt={`Factura, página ${currentPageNumber}`} className="block max-w-full" draggable={false} />
                 {/* Detección local de palabras en curso */}
                 {detecting && (
                   <div className="absolute inset-0 flex items-center justify-center bg-white/70">
@@ -441,9 +462,9 @@ export default function OcrCorrectionModal({ open, onClose, imageUrl, overlay, s
                   />
                 ))}
                 {/* Regiones guardadas */}
-                {fields.map(f => (
+                {currentPageFields.map(f => (
                   <div
-                    key={f.field}
+                    key={`${f.field}-${f.page ?? 1}`}
                     className="absolute border-2 pointer-events-none"
                     style={{ left: `${f.x * 100}%`, top: `${f.y * 100}%`, width: `${f.w * 100}%`, height: `${f.h * 100}%`, borderColor: colorFor(f.field), background: `${colorFor(f.field)}1a` }}
                   >
@@ -482,12 +503,12 @@ export default function OcrCorrectionModal({ open, onClose, imageUrl, overlay, s
               <p className="text-xs text-muted-foreground p-2">Aún no hay regiones dibujadas.</p>
             ) : (
               <div className="space-y-1.5">
-                {fields.map(f => {
+                {currentPageFields.map(f => {
                   const def = getOcrFieldDef(f.field)
                   const value = extractedValues[f.field]
                   const refCheck = value ? validateReference(value, f.reference) : null
                   return (
-                    <div key={f.field} className="rounded-md border p-2">
+                    <div key={`${f.field}-${f.page ?? 1}`} className="rounded-md border p-2">
                       <p className="text-[10px] font-semibold flex items-center gap-1.5">
                         <span className="h-2 w-2 rounded-full" style={{ background: colorFor(f.field) }} />
                         {def?.label}
@@ -525,7 +546,7 @@ export default function OcrCorrectionModal({ open, onClose, imageUrl, overlay, s
           <Button variant="outline" onClick={onClose}>
             <X className="h-4 w-4 mr-1.5" /> Cerrar
           </Button>
-          <Button variant="secondary" onClick={handleApply} disabled={!imageUrl || fields.length === 0}>
+          <Button variant="secondary" onClick={handleApply} disabled={!currentImageUrl || currentPageFields.length === 0}>
             <Wand2 className="h-4 w-4 mr-1.5" /> Aplicar a los datos
           </Button>
           <Button onClick={handleSave} disabled={saving || !supplierName}>

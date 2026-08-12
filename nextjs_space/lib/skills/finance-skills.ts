@@ -35,6 +35,8 @@ export interface CreateExpenseInput {
   amount: number;
   currency?: string;
   date?: Date;
+  dueDate?: Date;
+  paymentMethod?: string;
   category: string;
   receiptUrl?: string;
   status?: 'PENDING' | 'PAID' | 'VOID';
@@ -49,6 +51,10 @@ export interface CreateExpenseInput {
   vatAmount?: number;
   irpfRate?: number;
   irpfAmount?: number;
+  surchargeRate?: number;
+  surchargeAmount?: number;
+  taxRegime?: string;
+  operationType?: string;
   totalFactura?: number;
   operationDate?: Date;
   issuerName?: string;
@@ -62,6 +68,8 @@ export interface CreateExpenseInput {
   iban?: string;
   // Líneas de detalle
   lineas?: { descripcion: string | null; cantidad: number | null; precio_unitario: number | null; importe: number | null }[];
+  // Desglose de IVA corregido o detectado por tramos
+  vatBreakdown?: { rate: number; base: number; amount: number }[];
 }
 
 /**
@@ -109,7 +117,7 @@ export async function createExpense(input: CreateExpenseInput) {
     );
 
     // Extraer campos nuevos (no existen en Prisma) para guardarlos en metadata
-    const { serie, irpfRate, irpfAmount, totalFactura, receptorNombre, receptorNif, receptorDireccion, iban, ...prismaInput } = input
+    const { serie, irpfRate, irpfAmount, surchargeRate, surchargeAmount, taxRegime, operationType, totalFactura, receptorNombre, receptorNif, receptorDireccion, iban, vatBreakdown, ...prismaInput } = input
     
     const expense = await prisma.expense.create({
       data: {
@@ -122,12 +130,17 @@ export async function createExpense(input: CreateExpenseInput) {
           serie: serie || null,
           irpfRate: irpfRate || null,
           irpfAmount: irpfAmount || null,
+          surchargeRate: surchargeRate || null,
+          surchargeAmount: surchargeAmount || null,
+          taxRegime: taxRegime || null,
+          operationType: operationType || null,
           totalFactura: totalFactura || null,
           receptorNombre: receptorNombre || null,
           receptorNif: receptorNif || null,
           receptorDireccion: receptorDireccion || null,
           iban: iban || null,
           lineas: input.lineas || null,
+          vatBreakdown: vatBreakdown || null,
         },
       },
       include: {

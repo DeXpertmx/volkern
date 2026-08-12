@@ -90,6 +90,7 @@ model User {
   digitalCard             DigitalCard?               @relation("UserDigitalCard")
   employee                Employee?
   expensesCreated         Expense[]                  @relation("ExpenseCreator")
+  expenseInboxDocuments   ExpenseInboxDocument[]
   erp_sales_order_audits  erp_sales_order_audits[]
   stockMovements          StockMovement[]            @relation("StockMovementUser")
   googleCalendar          GoogleCalendarIntegration? @relation("UserGoogleCalendar")
@@ -310,6 +311,7 @@ model Tenant {
   employees                      Employee[]
   erp_expense_claims             erp_expense_claims[]
   expenses                       Expense[]
+  expenseInboxDocuments          ExpenseInboxDocument[]
   externalLeads                  ExternalLead[]
   financialAudits                FinancialAudit[]
   financialSummaries             FinancialSummary[]
@@ -4180,6 +4182,8 @@ model Expense {
   amount             Float
   currency           String   @default("EUR")
   date               DateTime @default(now())
+  dueDate            DateTime?
+  paymentMethod      String?
   status             String   @default("PAID")
   category           String
   receiptUrl         String?
@@ -4217,6 +4221,29 @@ model Expense {
   @@index([status])
   @@index([date])
   @@map("erp_expenses")
+}
+
+model ExpenseInboxDocument {
+  id            String   @id @default(cuid())
+  tenantId      String
+  createdById   String
+  fileName      String
+  storageKey    String
+  documentType  String   @default("invoice")
+  status        String   @default("PENDING_REVIEW")
+  pageStart     Int      @default(1)
+  pageEnd       Int      @default(1)
+  extractedData Json?
+  expenseId     String?
+  errorMessage  String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdBy     User     @relation(fields: [createdById], references: [id])
+
+  @@index([tenantId, status])
+  @@index([tenantId, createdAt])
+  @@map("erp_expense_inbox_documents")
 }
 
 model Warehouse {
@@ -6656,6 +6683,7 @@ enum AccountingEntryStatus {
 enum TaxType {
   IVA_REPERCUTIDO
   IVA_SOPORTADO
+  RECARGO_EQUIVALENCIA
   IRPF_RETENCION
   IS_PAGO_CUENTA
 }

@@ -12,6 +12,10 @@ export interface VatReportSummary {
     base: number;
     amount: number;
   };
+  equivalenceSurcharge: {
+    base: number;
+    amount: number;
+  };
   result: number;
   details: any[];
 }
@@ -182,7 +186,7 @@ export class TaxService {
         tenantId,
         periodYear: year,
         periodMonth: { in: months },
-        type: { in: [TaxType.IVA_REPERCUTIDO, TaxType.IVA_SOPORTADO] }
+        type: { in: [TaxType.IVA_REPERCUTIDO, TaxType.IVA_SOPORTADO, TaxType.RECARGO_EQUIVALENCIA] }
       },
       include: {
         entry: true
@@ -194,6 +198,7 @@ export class TaxService {
       quarter,
       outputVat: { base: 0, amount: 0 },
       inputVat: { base: 0, amount: 0 },
+      equivalenceSurcharge: { base: 0, amount: 0 },
       result: 0,
       details: records
     };
@@ -208,6 +213,9 @@ export class TaxService {
       } else if (record.type === TaxType.IVA_SOPORTADO) {
         summary.inputVat.base += base;
         summary.inputVat.amount += amount;
+      } else if (record.type === TaxType.RECARGO_EQUIVALENCIA) {
+        summary.equivalenceSurcharge.base += base;
+        summary.equivalenceSurcharge.amount += amount;
       }
     }
 

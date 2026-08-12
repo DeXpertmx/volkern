@@ -28,6 +28,8 @@ export interface OcrTemplateField {
   y: number
   w: number
   h: number
+  /** Página del PDF a la que pertenece la región (1 por defecto para imágenes y plantillas antiguas). */
+  page?: number
   /**
    * Valor de referencia (el corregido/confirmado cuando se aprendió la
    * plantilla). Se usa para validar lecturas futuras: si un campo deja de
@@ -101,15 +103,26 @@ function normText(raw: string): string | null {
 export const OCR_FIELD_DEFS: OcrFieldDef[] = [
   { field: 'fecha_emision', label: 'Fecha de la factura', normalize: normDate },
   { field: 'fecha_operacion', label: 'Fecha de operación', normalize: normDate },
+  { field: 'fecha_vencimiento', label: 'Fecha de vencimiento', normalize: normDate },
   { field: 'numero_factura', label: 'Nº de factura (folio)', normalize: normText },
+  { field: 'moneda', label: 'Moneda', normalize: normText },
+  { field: 'forma_pago', label: 'Forma de pago', normalize: normText },
   { field: 'base_imponible', label: 'Base imponible', normalize: normMoney },
   { field: 'tipo_iva', label: 'Tipo de IVA (%)', normalize: normText },
   { field: 'cuota_iva', label: 'Cuota de IVA', normalize: normMoney },
   { field: 'tipo_irpf', label: 'Retención IRPF (%)', normalize: normText },
   { field: 'cuota_irpf', label: 'Cuota de IRPF', normalize: normMoney },
+  { field: 'tipo_recargo', label: 'Recargo de equivalencia (%)', normalize: normText },
+  { field: 'cuota_recargo', label: 'Cuota de recargo', normalize: normMoney },
+  { field: 'regimen_fiscal', label: 'Régimen fiscal', normalize: normText },
+  { field: 'tipo_operacion', label: 'Tipo de operación', normalize: normText },
   { field: 'total_factura', label: 'Total de la factura', normalize: normMoney },
   { field: 'emisor_nombre', label: 'Proveedor (razón social)', normalize: normText },
   { field: 'emisor_nif', label: 'NIF/CIF del proveedor', normalize: normNif },
+  { field: 'emisor_direccion', label: 'Domicilio del proveedor', normalize: normText },
+  { field: 'receptor_nombre', label: 'Receptor (razón social)', normalize: normText },
+  { field: 'receptor_nif', label: 'NIF/CIF del receptor', normalize: normNif },
+  { field: 'receptor_direccion', label: 'Domicilio del receptor', normalize: normText },
   { field: 'iban', label: 'IBAN', normalize: normText },
 ]
 
@@ -139,11 +152,13 @@ export function wordsInRegion(words: OcrWord[], imgW: number, imgH: number, regi
  */
 export function applyTemplate(
   overlay: OcrOverlay,
-  fields: OcrTemplateField[]
+  fields: OcrTemplateField[],
+  page = 1
 ): Record<string, string> {
   if (!overlay || overlay.width <= 0 || overlay.height <= 0 || !Array.isArray(fields)) return {}
   const result: Record<string, string> = {}
   for (const region of fields) {
+    if ((region.page ?? 1) !== page) continue
     const def = getOcrFieldDef(region.field)
     if (!def) continue
     const inside = wordsInRegion(overlay.words, overlay.width, overlay.height, region)

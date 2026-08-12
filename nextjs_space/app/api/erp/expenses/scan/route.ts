@@ -7,7 +7,7 @@ import { uploadFile } from '@/lib/s3'
 import { parseInvoiceText, VisionResult, FALLBACK } from '@/lib/invoice-parser'
 import { overlayFromOcrSpace, OcrOverlay } from '@/lib/finance/ocr-template'
 
-async function callVision(buffer: Buffer, mimeType: string): Promise<{ result: VisionResult | null; rawText: string; overlay: OcrOverlay | null }> {
+export async function callVision(buffer: Buffer, mimeType: string): Promise<{ result: VisionResult | null; rawText: string; overlay: OcrOverlay | null }> {
   const base64 = buffer.toString('base64')
   const dataUrl = `data:${mimeType};base64,${base64}`
   const isPdf = mimeType === 'application/pdf'
@@ -22,6 +22,11 @@ Estructura exacta del JSON:
   "serie": "F2026",
   "fecha_emision": "24/07/2026",
   "fecha_operacion": "20/07/2026",
+  "fecha_vencimiento": "24/08/2026",
+  "moneda": "EUR",
+  "forma_pago": "Transferencia bancaria a 30 días",
+  "regimen_fiscal": "general",
+  "tipo_operacion": "nacional",
 
   "emisor": {
     "nombre": "INNOVATECH SOLUCIONES S.L.",
@@ -48,8 +53,15 @@ Estructura exacta del JSON:
     "base_imponible": 1600.00,
     "tipo_iva": 21.0,
     "cuota_iva": 336.00,
+    "desglose_iva": [
+      { "tipo": 21.0, "base": 1000.00, "cuota": 210.00 },
+      { "tipo": 10.0, "base": 400.00, "cuota": 40.00 },
+      { "tipo": 4.0, "base": 200.00, "cuota": 8.00 }
+    ],
     "tipo_irpf": 15.0,
     "cuota_irpf": -240.00,
+    "tipo_recargo": 5.2,
+    "cuota_recargo": 52.00,
     "total_factura": 1696.00
   },
 
@@ -57,7 +69,20 @@ Estructura exacta del JSON:
   "category": "profesional"
 }
 
-Si un campo no está disponible pon null. Si no hay líneas de detalle, pon array vacío [].`
+Reglas importantes:
+- Devuelve TODOS los tramos de IVA visibles en la factura dentro de totales.desglose_iva, uno por cada tipo, con tipo, base y cuota. No reduzcas una factura con varios tipos a un único IVA.
+- tipo_iva y cuota_iva son solo el tipo de mayor base y la suma de cuotas; el desglose completo siempre va en desglose_iva.
+- fecha_emision solo es la fecha etiquetada como emisión, expedición o factura.
+- fecha_operacion solo se rellena si existe una etiqueta explícita de operación/devengo. Nunca copies aquí fecha de vencimiento, fecha de pago o fecha de emisión; si no aparece, usa null.
+- fecha_vencimiento debe contener exclusivamente la fecha de vencimiento, pago o due date; no la mezcles con fecha_operacion.
+- moneda debe ser un código ISO (EUR, USD, MXN…) cuando aparezca; si solo aparece €, devuelve EUR.
+- forma_pago debe contener solo el método/condiciones de pago (transferencia, tarjeta, domiciliación, contado…), no una fecha.
+- regimen_fiscal debe ser uno de: general, recargo_equivalencia, exenta, no_sujeta, intracomunitaria, inversion_sujeto_pasivo o igic.
+- tipo_operacion debe ser uno de: nacional, intracomunitaria, exportacion, inversion_sujeto_pasivo, exenta, no_sujeta o canarias_igic.
+- Si existe recargo de equivalencia, devuelve tipo_recargo y cuota_recargo además del IVA normal; no sumes el recargo dentro de cuota_iva.
+- emisor es quien vende y receptor es quien compra/recibe. No mezcles nombres, fechas, moneda ni etiquetas de la cabecera con la razón social.
+- Si el receptor es tu empresa y no se lee, deja sus campos en null: el formulario los completará con los datos fiscales del tenant.
+- Si un campo no está disponible pon null. Si no hay líneas de detalle, pon array vacío [].`
 
   const timeoutMs = isPdf ? 45000 : 30000
   const maxTokens = isPdf ? 4096 : 1024
@@ -228,13 +253,38 @@ Si un campo no está disponible pon null. Si no hay líneas de detalle, pon arra
   return { result: null, rawText, overlay }
 }
 
+function normalizeVisionResult(input: any): VisionResult | null {
+  if (!input || typeof input !== 'object') return null
+  const totals = input.totales && typeof input.totales === 'object' ? input.totales : {}
+  const rawBreakdown = Array.isArray(totals.desglose_iva)
+    ? totals.desglose_iva
+    : (Array.isArray(input.desglose_iva) ? input.desglose_iva : [])
+  const desglose_iva = rawBreakdown
+    .map((row: any) => ({
+      tipo: Number(row?.tipo ?? row?.tipo_iva ?? row?.rate),
+      base: Number(row?.base ?? row?.base_imponible),
+      cuota: Number(row?.cuota ?? row?.cuota_iva ?? row?.amount),
+    }))
+    .filter((row: any) => Number.isFinite(row.tipo) && Number.isFinite(row.base) && Number.isFinite(row.cuota))
+
+  const normalized: VisionResult = {
+    ...FALLBACK,
+    ...input,
+    emisor: { ...FALLBACK.emisor, ...(input.emisor || {}) },
+    receptor: { ...FALLBACK.receptor, ...(input.receptor || {}) },
+    lineas: Array.isArray(input.lineas) ? input.lineas : [],
+    totales: { ...FALLBACK.totales, ...totals, desglose_iva: desglose_iva.length ? desglose_iva : undefined },
+  }
+  return normalized
+}
+
 function parseJsonResult(raw: string): VisionResult | null {
   raw = raw.replace(/```(?:json)?\n?/gi, '').replace(/```\n?$/g, '').trim()
   const start = raw.indexOf('{')
   const end = raw.lastIndexOf('}')
   if (start === -1 || end === -1) return null
   try {
-    return JSON.parse(raw.substring(start, end + 1))
+    return normalizeVisionResult(JSON.parse(raw.substring(start, end + 1)))
   } catch {
     return null
   }
