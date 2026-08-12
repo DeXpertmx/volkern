@@ -1247,10 +1247,15 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     // (si no, se evalúa solo en la posición de inicio y "tengo una cita para…"
     // seguía pasando desde la posición siguiente).
     const NO_AGENDAR_STMT = /^(?!.*\b(?:tengo|tienes|tenemos|tiene|hay|hago|haces|quedo|quedamos|dej[oa])\b)/i
+    // La 4ª alternativa cubre "reunión por Google meet con X", "videollamada
+    // por Zoom con X"… (el sustantivo va seguido de la plataforma antes de
+    // "con"): sin ella, ese patrón caía al LLM — que en producción puede
+    // estar caído (402/404/429) y el usuario veía "Lo siento, ocurrió un error".
     const AGENDAR_VERB = new RegExp(
       NO_AGENDAR_STMT.source + '.*\\b(?:agenda|agendar|programa|programar|reserva|reservar|aparta|apartar)\\b' +
-      '|' + NO_AGENDAR_STMT.source + '.*\\b(?:haz|hacer|crea|crear|pon)\\s+(?:me\\s+|una\\s+|la\\s+)?cita\\b' +
-      '|' + NO_AGENDAR_STMT.source + '.*\\b(?:cita|reuni[oó]n)\\s+(?:con|para)\\b',
+      '|' + NO_AGENDAR_STMT.source + '.*\\b(?:haz|hacer|crea|crear|pon)\\s+(?:me\\s+|una\\s+|la\\s+)?(?:cita|reuni[oó]n)\\b' +
+      '|' + NO_AGENDAR_STMT.source + '.*\\b(?:cita|reuni[oó]n|videollamada)\\s+(?:con|para)\\b' +
+      '|' + NO_AGENDAR_STMT.source + '.*\\b(?:cita|reuni[oó]n|videollamada)\\s+(?:por|de|en)\\s+(?:google\\s*)?(?:meet|zoom|teams?|video\\s*llamada|videollamada)\\b',
       'i'
     )
     if (AGENDAR_VERB.test(message) && /\b(?:cita|reuni[oó]n|reuniones|videollamada)\b/i.test(message)) {
