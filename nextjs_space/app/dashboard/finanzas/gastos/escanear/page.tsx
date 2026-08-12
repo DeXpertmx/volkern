@@ -170,6 +170,14 @@ export default function EscanearGastoPage() {
       .catch(() => { /* el buscador sigue funcionando con lo que haya */ })
   }, [showForm])
 
+  // Entrada directa al formulario manual (?manual=1), p. ej. desde
+  // "Registrar Gasto" del listado
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('manual') === '1') goToForm()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // Aplica un tipo de IVA y recalcula la cuota si hay base imponible
   const applyVatRate = (rate: string) => {
     setForm(p => {
