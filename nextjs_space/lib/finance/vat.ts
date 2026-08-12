@@ -73,6 +73,43 @@ export function fillEmptyTranches(
 }
 
 /**
+ * Modo "resto en el último": solo el último tramo rellenable absorbe el
+ * resto (target − suma de los ya rellenos); los tramos intermedios vacíos
+ * se dejan vacíos hasta que el usuario los llene.
+ *
+ * `fillableIndices` permite excluir tramos (p. ej. los que el usuario acaba
+ * de vaciar a propósito para teclear otro valor). Devuelve null si no hay
+ * nada que repartir (objetivo inválido, sin tramos rellenables o resto <= 0).
+ */
+export function fillLastTranche(
+  rows: VatTranche[],
+  target: string | number,
+  fillableIndices?: number[]
+): string[] | null {
+  const t = typeof target === 'number' ? target : parseFloat(target)
+  if (!Number.isFinite(t) || t <= 0) return null
+
+  const isFilled = (r: VatTranche) => {
+    const b = parseFloat(r.base)
+    return Number.isFinite(b) && b > 0
+  }
+  const fillable =
+    fillableIndices ?? rows.map((_, i) => i).filter(i => !isFilled(rows[i]))
+  if (fillable.length === 0) return null
+
+  const sumFilled = rows.reduce(
+    (acc, r) => acc + (isFilled(r) ? parseFloat(r.base) : 0),
+    0
+  )
+  const remaining = t - sumFilled
+  if (remaining <= 0.005) return null
+
+  const result = rows.map(r => r.base)
+  result[fillable[fillable.length - 1]] = remaining.toFixed(2)
+  return result
+}
+
+/**
  * Conciliación del total de factura: base + IVA − IRPF debe cuadrar con el
  * total detectado. Devuelve null si faltan datos o la diferencia está dentro
  * de la tolerancia (por defecto ±0.02 por redondeos); si no, el desajuste.

@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { toast } from 'sonner'
 import { Camera, Receipt, Scan, Loader2, ArrowLeft, CheckCircle2, Image as ImageIcon, FileText, AlertTriangle, Check, ChevronsUpDown, Plus } from 'lucide-react'
 import IvaRatesEditor from '@/components/finance/IvaRatesEditor'
-import { computeVatAmount, computePercentageAmount, computeInvoiceTotalMismatch, fillEmptyTranches } from '@/lib/finance/vat'
+import { computeVatAmount, computePercentageAmount, computeInvoiceTotalMismatch, fillEmptyTranches, fillLastTranche } from '@/lib/finance/vat'
 import { validateFiscalId, getFiscalIdConfigsByCountry, normalizarPais } from '@/lib/fiscal-validation'
 
 interface EmisorInfo {
@@ -148,6 +148,9 @@ export default function EscanearGastoPage() {
   const nextIvaRowId = useRef(0)
   // Total base a repartir entre los tramos (los vacíos se autocompletan)
   const [trancheTarget, setTrancheTarget] = useState('')
+  // Modo de reparto: 'equal' reparte a partes iguales entre los vacíos;
+  // 'last' deja los intermedios vacíos y solo el último absorbe el resto
+  const [trancheMode, setTrancheMode] = useState<'equal' | 'last'>('equal')
   // Tramos que el usuario vació a propósito: no se autocompletan
   const [lockedEmptyRows, setLockedEmptyRows] = useState<Set<number>>(new Set())
   // Proveedores registrados: lista para el buscador y proveedor seleccionado
@@ -276,7 +279,7 @@ export default function EscanearGastoPage() {
   // ─── Tramos de IVA: reparto automático del total ─────────────────────
   // Rellena los tramos vacíos (no bloqueados) para que la suma de bases
   // cuadre con el total a repartir. Devuelve las filas resultantes.
-  const applyDistribution = (rows: typeof ivaRows, target?: string) => {
+  const applyDistribution = (rows: typeof ivaRows, target?: string, mode?: 'equal' | 'last') => {
     const t = target ?? trancheTarget
     const parsed = parseFloat(t)
     if (!Number.isFinite(parsed) || parsed <= 0) return rows
@@ -284,8 +287,19 @@ export default function EscanearGastoPage() {
       .map((r, i) => ({ r, i }))
       .filter(({ r }) => !(parseFloat(r.base) > 0) && !lockedEmptyRows.has(r.id))
       .map(({ i }) => i)
-    const distributed = fillEmptyTranches(rows, parsed, fillable)
+    const m = mode ?? trancheMode
+    const distributed = m === 'last'
+      ? fillLastTranche(rows, parsed, fillable)
+      : fillEmptyTranches(rows, parsed, fillable)
     return distributed ? rows.map((r, i) => ({ ...r, base: distributed[i] })) : rows
+  }
+
+  // Cambia el modo de reparto y reaplica la distribución con el nuevo modo
+  const changeTrancheMode = (mode: 'equal' | 'last') => {
+    setTrancheMode(mode)
+    const rows = applyDistribution(ivaRows, trancheTarget, mode)
+    setIvaRows(rows)
+    syncTotalsFromRows(rows)
   }
 
   const addIvaRow = () => {
@@ -1209,6 +1223,22 @@ export default function EscanearGastoPage() {
                             placeholder="0.00"
                             className="w-28 h-8 rounded-lg"
                           />
+                          <div className="flex rounded-lg border overflow-hidden shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => changeTrancheMode('equal')}
+                              className={`px-2 py-1 text-[10px] font-bold uppercase transition-colors ${trancheMode === 'equal' ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground hover:bg-accent'}`}
+                            >
+                              Repartir
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => changeTrancheMode('last')}
+                              className={`px-2 py-1 text-[10px] font-bold uppercase transition-colors ${trancheMode === 'last' ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground hover:bg-accent'}`}
+                            >
+                              Resto en último
+                            </button>
+                          </div>
                         </div>
                         {ivaRows.map(row => (
                           <div key={row.id} className="grid grid-cols-[1fr_90px_110px_auto] gap-2 items-center">
@@ -1222,7 +1252,7 @@ export default function EscanearGastoPage() {
                           <span>Base total: <span className="text-foreground">€{ivaTotals.base.toFixed(2)}</span></span>
                           <span>IVA total: <span className="text-foreground">€{ivaTotals.vat.toFixed(2)}</span></span>
                         </div>
-                        <p className="text-[10px] text-muted-foreground">Los tramos vacíos se reparten automáticamente para cuadrar el total (el último absorbe el redondeo). Los totales se sincronizan con el desglose superior (Base Imponible / Cuota IVA).</p>
+                        <p className="text-[10px] text-muted-foreground">«Repartir» distribuye el total a partes iguales entre los tramos vacíos (el último absorbe el redondeo). «Resto en último» deja los intermedios vacíos y solo rellena el último con lo que falte para cuadrar el total. Los totales se sincronizan con el desglose superior (Base Imponible / Cuota IVA).</p>
                       </div>
                     )}
                   </div>
