@@ -14,6 +14,7 @@ import {
   type OcrOverlay,
   type OcrTemplateField,
 } from '@/lib/finance/ocr-template'
+import { detectWordBoxes } from '@/lib/finance/ocr-boxes'
 
 interface OcrCorrectionModalProps {
   open: boolean
@@ -53,6 +54,12 @@ export default function OcrCorrectionModal({ open, onClose, imageUrl, overlay, s
   const [loadingTemplate, setLoadingTemplate] = useState(false)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  // Fallback: si el proveedor de visión no devolvió cajas (p. ej. OpenRouter),
+  // tesseract.js las detecta localmente sobre la imagen que se muestra.
+  const [localOverlay, setLocalOverlay] = useState<OcrOverlay | null>(null)
+  const [detecting, setDetecting] = useState(false)
+
+  const effectiveOverlay = overlay || localOverlay
   const containerRef = useRef<HTMLDivElement>(null)
   const drawingRef = useRef<{ startX: number; startY: number } | null>(null)
 
@@ -88,6 +95,22 @@ export default function OcrCorrectionModal({ open, onClose, imageUrl, overlay, s
       .catch(() => {})
       .finally(() => setLoadingTemplate(false))
   }, [open, supplierName, supplierNif])
+
+  // Si no hay cajas del proveedor de visión, detectarlas localmente
+  useEffect(() => {
+    if (!open) return
+    if (overlay || localOverlay || !imageUrl) return
+    let cancelled = false
+    setDetecting(true)
+    detectWordBoxes(imageUrl)
+      .then(boxes => {
+        if (!cancelled && boxes) setLocalOverlay(boxes)
+      })
+      .finally(() => {
+        if (!cancelled) setDetecting(false)
+      })
+    return () => { cancelled = true }
+  }, [open, overlay, localOverlay, imageUrl])
 
   const loadTemplate = (id: string) => {
     if (id === NEW_TEMPLATE_ID) {
@@ -155,9 +178,9 @@ export default function OcrCorrectionModal({ open, onClose, imageUrl, overlay, s
 
   // Extrae valores de todas las regiones y los aplica al formulario
   const extractedValues = useMemo(() => {
-    if (!overlay || fields.length === 0) return {}
-    return applyTemplate(overlay, fields)
-  }, [overlay, fields])
+    if (!effectiveOverlay || fields.length === 0) return {}
+    return applyTemplate(effectiveOverlay, fields)
+  }, [effectiveOverlay, fields])
 
   const handleApply = () => {
     const values = extractedValues
@@ -346,16 +369,24 @@ export default function OcrCorrectionModal({ open, onClose, imageUrl, overlay, s
                 onPointerUp={onPointerUp}
               >
                 <img src={imageUrl} alt="Factura" className="block max-w-full" draggable={false} />
+                {/* Detección local de palabras en curso */}
+                {detecting && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-white/70">
+                    <span className="flex items-center gap-2 text-sm font-semibold text-primary">
+                      <Loader2 className="h-4 w-4 animate-spin" /> Detectando palabras del documento…
+                    </span>
+                  </div>
+                )}
                 {/* Cajas de palabras del OCR */}
-                {overlay?.words.map((w, i) => (
+                {effectiveOverlay?.words.map((w, i) => (
                   <div
                     key={i}
                     className="absolute border border-sky-400/40 bg-sky-400/5 pointer-events-none"
                     style={{
-                      left: `${(w.x / overlay.width) * 100}%`,
-                      top: `${(w.y / overlay.height) * 100}%`,
-                      width: `${(w.w / overlay.width) * 100}%`,
-                      height: `${(w.h / overlay.height) * 100}%`,
+                      left: `${(w.x / effectiveOverlay.width) * 100}%`,
+                      top: `${(w.y / effectiveOverlay.height) * 100}%`,
+                      width: `${(w.w / effectiveOverlay.width) * 100}%`,
+                      height: `${(w.h / effectiveOverlay.height) * 100}%`,
                     }}
                     title={w.text}
                   />

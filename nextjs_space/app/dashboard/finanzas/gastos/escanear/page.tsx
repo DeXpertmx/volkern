@@ -719,13 +719,17 @@ export default function EscanearGastoPage() {
 
   // Renderiza la primera página del PDF a imagen (solo la primera vez) para
   // que el visualizador de corrección funcione también con facturas PDF.
-  const ensurePdfPreview = useCallback(async () => {
-    if (!isPdf || !capturedFile || pdfPreviewUrl) return
+  // Devuelve la URL renderizada (o null si no aplica / falla).
+  const ensurePdfPreview = useCallback(async (): Promise<string | null> => {
+    if (!isPdf || !capturedFile) return null
+    if (pdfPreviewUrl) return pdfPreviewUrl
     try {
       const url = await renderPdfFirstPage(capturedFile)
       setPdfPreviewUrl(url)
+      return url
     } catch (err: any) {
       console.error('[OcrCorrection] Error al renderizar PDF:', err?.message || err)
+      return null
     }
   }, [isPdf, capturedFile, pdfPreviewUrl])
 
@@ -749,6 +753,20 @@ export default function EscanearGastoPage() {
     }
   }
 
+  // Detecta las cajas localmente (tesseract.js) sobre la imagen que ve el
+  // usuario, para cuando el proveedor de visión no devuelve coordenadas.
+  const detectLocalBoxes = async (): Promise<OcrOverlay | null> => {
+    const src = isPdf ? await ensurePdfPreview() : capturedImage
+    if (!src) return null
+    try {
+      const { detectWordBoxes } = await import('@/lib/finance/ocr-boxes')
+      return await detectWordBoxes(src)
+    } catch (err: any) {
+      console.error('[OcrCorrection] Error detectando palabras:', err?.message || err)
+      return null
+    }
+  }
+
   // Tras el OCR: si el proveedor ya tiene plantilla aprendida, la aplica.
   // Cuando la plantilla discrepa con lo que leyó el parser genérico, en vez de
   // sobrescribir a ciegas abre la comparación lado a lado para confirmar.
@@ -766,7 +784,14 @@ export default function EscanearGastoPage() {
       // reciente, que es la más probable para el documento actual.
       const template = Array.isArray(data?.templates) ? data.templates[0] : data?.template
       if (!template?.fields?.length) return
-      const values = applyTemplate(overlay, template.fields)
+
+      // Cajas de palabras: las del proveedor de visión si existen; si no
+      // (OpenRouter/Gemini no devuelven coordenadas), se detectan localmente
+      // con tesseract.js sobre la imagen que ve el usuario.
+      if (!overlay) toast.info('Detectando palabras del documento para aplicar la plantilla…')
+      const boxes = overlay ?? (await detectLocalBoxes())
+      if (!boxes) return
+      const values = applyTemplate(boxes, template.fields)
       const count = Object.keys(values).length
       if (count === 0) return
 
@@ -1533,7 +1558,9 @@ export default function EscanearGastoPage() {
       <OcrCorrectionModal
         open={correctionOpen}
         onClose={() => setCorrectionOpen(false)}
-        imageUrl={isPdf ? pdfPreviewUrl : form.receiptUrl || capturedImage}
+        // Fuentes locales primero (blob/data URL) para que tesseract pueda
+        // leerlas sin problemas de CORS; la URL de S3 solo como último recurso.
+        imageUrl={isPdf ? pdfPreviewUrl : capturedImage || form.receiptUrl}
         overlay={scanOverlay}
         supplierName={form.supplier || form.issuerName}
         supplierNif={form.issuerTaxId}

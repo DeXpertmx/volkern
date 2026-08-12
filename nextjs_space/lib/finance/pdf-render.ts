@@ -1,20 +1,18 @@
 // Renderiza la primera página de un PDF a una imagen (data URL) en el navegador.
 // Se usa para que el visualizador de corrección OCR funcione también con
 // facturas en PDF: pdf.js dibuja la página en un canvas y las cajas de
-// palabras del OCR (TextOverlay de OCR.space) se superponen con el mismo
-// aspecto, ya que el modal las posiciona en porcentajes.
+// palabras se superponen con el mismo aspecto, ya que el visualizador las
+// posiciona en porcentajes.
 //
 // Solo debe importarse desde componentes cliente (usa DOM APIs).
 
-// Worker empaquetado (import `?url` de Next.js): el worker se sirve como
-// asset estático del build, sin depender de un CDN. La declaración de tipos
-// del sufijo `?url` vive en lib/finance/pdf-worker-url.d.ts.
-// eslint-disable-next-line import/no-unresolved
-import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
-
 export async function renderPdfFirstPage(file: File, maxDim = 1800): Promise<string> {
   const pdfjs = await import('pdfjs-dist')
-  pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
+
+  // Worker de pdf.js: se carga desde CDN (jsdelivr) con la versión instalada.
+  // Un import `?url` del .mjs no se resuelve como asset en webpack (Next 14),
+  // y la app no impone CSP, así que el CDN es la opción fiable.
+  pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
 
   const buf = await file.arrayBuffer()
   const doc = await pdfjs.getDocument({ data: buf }).promise
