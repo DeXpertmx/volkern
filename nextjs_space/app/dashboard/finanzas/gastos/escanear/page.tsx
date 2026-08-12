@@ -17,6 +17,7 @@ import OcrCorrectionModal from '@/components/finance/OcrCorrectionModal'
 import { computeVatAmount, computePercentageAmount, computeInvoiceTotalMismatch, fillEmptyTranches, fillLastTranche } from '@/lib/finance/vat'
 import { validateFiscalId, getFiscalIdConfigsByCountry, normalizarPais } from '@/lib/fiscal-validation'
 import { applyTemplate, type OcrOverlay } from '@/lib/finance/ocr-template'
+import { renderPdfFirstPage } from '@/lib/finance/pdf-render'
 
 interface EmisorInfo {
   nombre: string | null
@@ -141,6 +142,8 @@ export default function EscanearGastoPage() {
   // Cajas de palabras del OCR (TextOverlay) para el visualizador de corrección
   const [scanOverlay, setScanOverlay] = useState<OcrOverlay | null>(null)
   const [correctionOpen, setCorrectionOpen] = useState(false)
+  // Primera página del PDF renderizada a imagen con pdf.js (para el visualizador)
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [showSelect, setShowSelect] = useState(true)
@@ -542,6 +545,8 @@ export default function EscanearGastoPage() {
     setCapturedFileName(file.name)
     setIsPdf(pdf)
     setCapturedImage(pdf ? null : URL.createObjectURL(file))
+    setPdfPreviewUrl(null)
+    setScanOverlay(null)
     setShowSelect(false)
     setShowForm(false)
     setScanResult(null)
@@ -649,6 +654,8 @@ export default function EscanearGastoPage() {
       matchSupplierByName(ext.supplier)
       // Si este proveedor ya tiene plantilla aprendida, corregir con ella
       applySavedTemplate(ext.supplier, ext.emisor?.nif || ext.issuerTaxId || null, data.overlay || null)
+      // PDF: renderizar la primera página para poder anotar sobre la imagen
+      if (pdf) ensurePdfPreview()
     } catch (err: any) {
       if (err?.name === 'AbortError') {
         toast.error('El OCR está tardando demasiado. Usa "Sin OCR" para ir al formulario.')
@@ -659,6 +666,7 @@ export default function EscanearGastoPage() {
       setScanning(false)
       setScanMessage('')
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [capturedFile])
 
   const goToForm = () => {
@@ -705,6 +713,18 @@ export default function EscanearGastoPage() {
       return next
     })
   }
+
+  // Renderiza la primera página del PDF a imagen (solo la primera vez) para
+  // que el visualizador de corrección funcione también con facturas PDF.
+  const ensurePdfPreview = useCallback(async () => {
+    if (!isPdf || !capturedFile || pdfPreviewUrl) return
+    try {
+      const url = await renderPdfFirstPage(capturedFile)
+      setPdfPreviewUrl(url)
+    } catch (err: any) {
+      console.error('[OcrCorrection] Error al renderizar PDF:', err?.message || err)
+    }
+  }, [isPdf, capturedFile, pdfPreviewUrl])
 
   // Tras el OCR: si el proveedor ya tiene plantilla aprendida, aplica los
   // campos extraídos desde las regiones guardadas (los del parser genérico
@@ -842,6 +862,8 @@ export default function EscanearGastoPage() {
     setCapturedFileName('')
     setScanResult(null)
     setRawOcrText('')
+    setScanOverlay(null)
+    setPdfPreviewUrl(null)
     setShowForm(false)
     setShowSelect(true)
     setForm({
@@ -989,8 +1011,14 @@ export default function EscanearGastoPage() {
               <CardTitle className="text-lg flex items-center gap-2">
                 {scanResult?.ocrTimedOut ? <><span className="text-amber-500">⚠</span> OCR no disponible</> : scanResult ? <><CheckCircle2 className="h-5 w-5 text-emerald-500" /> Datos Extraídos</> : <><Receipt className="h-5 w-5" /> Datos del Gasto</>}
               </CardTitle>
-              {scanOverlay && capturedImage && !isPdf && (
-                <Button type="button" variant="outline" size="sm" onClick={() => setCorrectionOpen(true)} className="shrink-0">
+              {scanOverlay && (capturedImage || isPdf) && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => { setCorrectionOpen(true); ensurePdfPreview() }}
+                  className="shrink-0"
+                >
                   <MousePointerClick className="h-4 w-4 mr-1.5" />
                   Ajustar lectura
                 </Button>
@@ -1446,7 +1474,7 @@ export default function EscanearGastoPage() {
       <OcrCorrectionModal
         open={correctionOpen}
         onClose={() => setCorrectionOpen(false)}
-        imageUrl={form.receiptUrl || capturedImage}
+        imageUrl={isPdf ? pdfPreviewUrl : form.receiptUrl || capturedImage}
         overlay={scanOverlay}
         supplierName={form.supplier || form.issuerName}
         supplierNif={form.issuerTaxId}
