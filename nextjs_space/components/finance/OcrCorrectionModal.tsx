@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
-import { Loader2, Save, Wand2, Trash2, MousePointerClick, X, Plus } from 'lucide-react'
+import { Loader2, Save, Wand2, Trash2, MousePointerClick, X, Plus, Sparkles } from 'lucide-react'
 import {
   OCR_FIELD_DEFS,
   applyTemplate,
@@ -27,6 +27,18 @@ interface OcrCorrectionModalProps {
   supplierNif: string
   /** Recibe los valores extraídos por campo (p. ej. { fecha_emision: '24/07/2026' }). */
   onApply: (values: Record<string, string>) => void
+  /**
+   * Propuesta automática (aprendizaje): al corregir un campo a mano tras el
+   * escaneo, el sistema detectó dónde está ese valor en la imagen. Se
+   * preselecciona el campo y se pre-dibuja la región para que el usuario la
+   * ajuste si quiere y la guarde en la plantilla.
+   */
+  autoProposal?: {
+    field: string
+    label: string
+    region: OcrTemplateField
+    matchedText: string
+  } | null
 }
 
 interface TemplateMeta {
@@ -40,12 +52,19 @@ interface TemplateMeta {
 
 const NEW_TEMPLATE_ID = '__new__'
 
+// Añade la región propuesta a la lista si el campo aún no tiene una.
+function mergeProposal(base: OcrTemplateField[], proposal: { field: string; region: OcrTemplateField } | null | undefined): OcrTemplateField[] {
+  if (!proposal) return base
+  if (base.some(f => f.field === proposal.field)) return base
+  return [...base, proposal.region]
+}
+
 // Color por campo para distinguir las regiones anotadas
 const FIELD_COLORS = [
   '#7c3aed', '#0891b2', '#d97706', '#059669', '#db2777', '#4f46e5', '#ca8a04', '#0284c7', '#9333ea', '#16a34a', '#e11d48', '#0d9488',
 ]
 
-export default function OcrCorrectionModal({ open, onClose, imageUrl, overlay, supplierName, supplierNif, onApply }: OcrCorrectionModalProps) {
+export default function OcrCorrectionModal({ open, onClose, imageUrl, overlay, supplierName, supplierNif, onApply, autoProposal }: OcrCorrectionModalProps) {
   const [templates, setTemplates] = useState<TemplateMeta[]>([])
   const [activeTemplateId, setActiveTemplateId] = useState<string>(NEW_TEMPLATE_ID)
   const [templateName, setTemplateName] = useState('Formato 1')
@@ -90,12 +109,21 @@ export default function OcrCorrectionModal({ open, onClose, imageUrl, overlay, s
           // La más reciente es la más probable para el formato actual
           setActiveTemplateId(list[0].id)
           setTemplateName(list[0].name)
-          setFields(list[0].fields || [])
+          setFields(mergeProposal(list[0].fields || [], autoProposal))
         }
       })
       .catch(() => {})
       .finally(() => setLoadingTemplate(false))
-  }, [open, supplierName, supplierNif])
+  }, [open, supplierName, supplierNif, autoProposal])
+
+  // Propuesta automática (aprendizaje): preselecciona el campo corregido y
+  // pre-dibuja la región detectada para que el usuario la ajuste si quiere.
+  useEffect(() => {
+    if (!open || !autoProposal) return
+    setSelectedField(autoProposal.field)
+    setFields(prev => mergeProposal(prev, autoProposal))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, autoProposal])
 
   // Si no hay cajas del proveedor de visión, detectarlas localmente
   useEffect(() => {
@@ -289,6 +317,19 @@ export default function OcrCorrectionModal({ open, onClose, imageUrl, overlay, s
             no leyó bien y guarda la plantilla para que el sistema lo lea solo en los próximos escaneos.
           </DialogDescription>
         </DialogHeader>
+
+        {/* Propuesta automática: región detectada al corregir un campo a mano */}
+        {autoProposal && (
+          <div className="flex items-start gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs text-violet-800">
+            <Sparkles className="h-3.5 w-3.5 mt-0.5 shrink-0 text-violet-600" />
+            <p>
+              <span className="font-bold">Propuesta automática:</span> se ha dibujado la región de{' '}
+              <span className="font-bold">«{autoProposal.label}»</span> donde aparece{' '}
+              <span className="font-mono font-bold">«{autoProposal.matchedText}»</span>. Ajústala arrastrando si hace
+              falta y pulsa <span className="font-bold">Guardar plantilla</span> para que el sistema la aprenda.
+            </p>
+          </div>
+        )}
 
         {/* Selector de plantilla */}
         <div className="flex items-center gap-2 pb-2 border-b">

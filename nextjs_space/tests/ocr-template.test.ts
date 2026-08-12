@@ -4,10 +4,14 @@ import {
   applyTemplate,
   wordsInRegion,
   OCR_FIELD_DEFS,
+  findRegionForValue,
+  getOcrFieldDef,
   sameFieldValue,
+  valuesEquivalent,
   fieldFormat,
   validateReference,
   type OcrTemplateField,
+  type OcrOverlay,
 } from '@/lib/finance/ocr-template'
 
 // Imagen 1000x1400 (formato típico A4 escaneado)
@@ -175,5 +179,83 @@ describe('OCR_FIELD_DEFS', () => {
       expect(def.label.length).toBeGreaterThan(0)
       expect(typeof def.normalize).toBe('function')
     }
+  })
+})
+
+function overlayOf(): OcrOverlay {
+  return overlayFromOcrSpace(sampleOverlay())!
+}
+
+describe('findRegionForValue', () => {
+  it('encuentra la región de una fecha corregida a mano (formato ISO del input)', () => {
+    const overlay = overlayOf()
+    const proposal = findRegionForValue(overlay, '2026-07-24', getOcrFieldDef('fecha_emision')!)
+    expect(proposal).not.toBeNull()
+    expect(proposal!.field).toBe('fecha_emision')
+    expect(proposal!.matchedText).toBe('24/07/2026')
+    // La región debe contener la palabra de la fecha (x 400-550, y 160-190)
+    expect(proposal!.region.x * IMG_W).toBeGreaterThan(380)
+    expect(proposal!.region.x * IMG_W).toBeLessThan(430)
+    expect(proposal!.region.y * IMG_H).toBeLessThan(160)
+    expect((proposal!.region.y + proposal!.region.h) * IMG_H).toBeGreaterThan(190)
+  })
+
+  it('encuentra un folio con coincidencia exacta', () => {
+    const overlay = overlayOf()
+    const proposal = findRegionForValue(overlay, 'F2026-00142', getOcrFieldDef('numero_factura')!)
+    expect(proposal).not.toBeNull()
+    expect(proposal!.matchedText).toBe('F2026-00142')
+  })
+
+  it('encuentra un importe europeo comparando el valor numérico', () => {
+    const overlay = overlayOf()
+    const proposal = findRegionForValue(overlay, '1696', getOcrFieldDef('total_factura')!)
+    expect(proposal).not.toBeNull()
+    expect(proposal!.matchedText).toBe('1.696,00')
+    // El importe 336,00 no debe ganar aunque 336 sea subcadena de 1696
+    expect(proposal!.region.x * IMG_W).toBeGreaterThan(700)
+  })
+
+  it('encuentra el NIF con guiones', () => {
+    const overlay = overlayOf()
+    const proposal = findRegionForValue(overlay, 'B87654321', getOcrFieldDef('emisor_nif')!)
+    expect(proposal).not.toBeNull()
+    expect(proposal!.matchedText).toBe('B-87654321')
+  })
+
+  it('encuentra una razón social de varias palabras juntando la línea', () => {
+    const overlay = overlayOf()
+    const proposal = findRegionForValue(overlay, 'INNOVATECH SOLUCIONES', getOcrFieldDef('emisor_nombre')!)
+    expect(proposal).not.toBeNull()
+    expect(proposal!.matchedText).toBe('INNOVATECH SOLUCIONES')
+    // La línea abarca ambas palabras (x 100-440, y 220-250)
+    expect(proposal!.region.x * IMG_W).toBeLessThan(120)
+    expect((proposal!.region.x + proposal!.region.w) * IMG_W).toBeGreaterThan(430)
+  })
+
+  it('no propone nada cuando el valor no está en el documento', () => {
+    const overlay = overlayOf()
+    expect(findRegionForValue(overlay, '99/99/9999', getOcrFieldDef('fecha_emision')!)).toBeNull()
+    expect(findRegionForValue(overlay, 'ZZZZ-99999', getOcrFieldDef('numero_factura')!)).toBeNull()
+  })
+
+  it('no confunde el tipo de IVA con un importe de otra fila', () => {
+    const overlay = overlayOf()
+    const proposal = findRegionForValue(overlay, '21', getOcrFieldDef('tipo_iva')!)
+    expect(proposal).not.toBeNull()
+    expect(proposal!.matchedText).toBe('21%')
+  })
+})
+
+describe('valuesEquivalent', () => {
+  it('considera equivalentes fechas en formatos distintos', () => {
+    expect(valuesEquivalent('2026-07-24', '24/07/2026')).toBe(true)
+    expect(valuesEquivalent('2026-07-24', '25/07/2026')).toBe(false)
+  })
+
+  it('considera equivalentes NIF con y sin guiones e importes', () => {
+    expect(valuesEquivalent('B87654321', 'B-87654321')).toBe(true)
+    expect(valuesEquivalent('1696', '1.696,00')).toBe(true)
+    expect(valuesEquivalent('1696', '1600')).toBe(false)
   })
 })

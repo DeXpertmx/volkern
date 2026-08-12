@@ -218,6 +218,181 @@ export function sameFieldValue(a: string, b: string): boolean {
   return nx !== null && ny !== null && Math.abs(nx - ny) < 0.005
 }
 
+// Normaliza fechas en cualquier formato común, incluido el ISO del <input
+// type="date"> ("2026-07-24" → "24/07/2026").
+function normDateLoose(raw: string): string | null {
+  const s = raw.trim()
+  const ymd = s.match(/^(\d{4})[\s./-]{1,3}(\d{1,2})[\s./-]{1,3}(\d{1,2})$/)
+  if (ymd) return `${ymd[3].padStart(2, '0')}/${ymd[2].padStart(2, '0')}/${ymd[1]}`
+  return normDate(s)
+}
+
+/**
+ * ¿Dos valores de un campo representan lo mismo aunque estén en formatos
+ * distintos? ("2026-07-24" ≈ "24/07/2026", "B-87654321" ≈ "B87654321",
+ * "1.210,00" ≈ 1210). Se usa para saber si el usuario CAMBIÓ de verdad un
+ * campo tras el escaneo o solo lo re-escribió igual que lo leyó el OCR.
+ */
+export function valuesEquivalent(a: string, b: string): boolean {
+  if (sameFieldValue(a, b)) return true
+  const da = normDateLoose(a)
+  const db = normDateLoose(b)
+  if (da && db && da === db) return true
+  const na = normNif(a)
+  const nb = normNif(b)
+  if (na && nb && na === nb) return true
+  return false
+}
+
+// ─── Aprendizaje automático: proponer la región de un valor corregido ───────
+
+/** Propuesta de región: dónde está un valor corregido en la imagen del OCR. */
+export interface RegionProposal {
+  field: string
+  label: string
+  region: OcrTemplateField
+  /** Texto tal como aparece en el OCR (para mostrarlo en el aviso). */
+  matchedText: string
+  /** 1 = coincidencia exacta, 0.85 = subcadena (palabra más larga). */
+  confidence: number
+}
+
+// Clave canónica de comparación: fecha, importe, NIF o texto en mayúsculas.
+// El prefijo evita colisiones entre tipos ("m:21" no es "t:21").
+function normalizeToken(raw: string, def: OcrFieldDef): string | null {
+  const s = raw.trim()
+  if (!s) return null
+  const d = normDateLoose(s)
+  if (d) return `d:${d}`
+  // Importe o porcentaje ("1.210,00", "21%") — sin letras para no confundir
+  // un folio tipo "F2026-00142" con un importe.
+  if (!/[A-Za-zÀ-ÿ]/.test(s)) {
+    const n = toNum(s)
+    if (n !== null) return `m:${n}`
+  }
+  const nif = normNif(s)
+  if (nif && (/^[A-Z]\d{7,8}[A-Z0-9]?$/.test(nif) || /^\d{8}[A-Z]$/.test(nif))) return `n:${nif}`
+  return `t:${s.replace(/\s+/g, ' ').toUpperCase()}`
+}
+
+// Puntuación de una palabra/línea contra el valor objetivo.
+function tokenScore(key: string, target: string, moneyLike: boolean): number {
+  if (key === target) return 1
+  const a = key.replace(/\s+/g, '').toLowerCase()
+  const b = target.replace(/\s+/g, '').toLowerCase()
+  if (a === b) return 1
+  // Para importes la igualdad numérica ya cubre los formatos ("m:1210" ==
+  // "m:1210"); la subcadena solo para textos (nombres, folios, IBAN…).
+  if (!moneyLike && (a.includes(b) || b.includes(a))) {
+    if (Math.min(a.length, b.length) >= 4) return 0.85
+  }
+  return 0
+}
+
+// Agrupa palabras por línea (mismo centro vertical) para poder comparar
+// valores de varias palabras (razón social, dirección, IBAN…).
+function groupLines(words: OcrWord[]): OcrWord[][] {
+  const sorted = words.slice().sort((a, b) => a.y - b.y || a.x - b.x)
+  const lines: OcrWord[][] = []
+  for (const w of sorted) {
+    const cy = w.y + w.h / 2
+    const line = lines.find(l => {
+      const first = l[0]
+      const fcy = first.y + first.h / 2
+      return Math.abs(cy - fcy) <= Math.max(6, Math.max(first.h, w.h) * 0.7)
+    })
+    if (line) line.push(w)
+    else lines.push([w])
+  }
+  return lines
+}
+
+// Caja de un conjunto de palabras en coordenadas relativas 0..1.
+function bboxOf(words: OcrWord[], imgW: number, imgH: number): { x: number; y: number; w: number; h: number } {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  for (const w of words) {
+    minX = Math.min(minX, w.x)
+    minY = Math.min(minY, w.y)
+    maxX = Math.max(maxX, w.x + w.w)
+    maxY = Math.max(maxY, w.y + w.h)
+  }
+  const x = Math.max(0, minX / imgW)
+  const y = Math.max(0, minY / imgH)
+  return {
+    x,
+    y,
+    w: Math.min(1 - x, (maxX - minX) / imgW),
+    h: Math.min(1 - y, (maxY - minY) / imgH),
+  }
+}
+
+// Expande un poco la región (para incluir la etiqueta o el símbolo € adyacente)
+// y la mantiene dentro de 0..1.
+function padRegion(r: { x: number; y: number; w: number; h: number }, pad: number): { x: number; y: number; w: number; h: number } {
+  const x = Math.max(0, r.x - pad)
+  const y = Math.max(0, r.y - pad)
+  const w = Math.min(1 - x, r.w + pad * 2)
+  const h = Math.min(1 - y, r.h + pad * 2)
+  return { x, y, w, h }
+}
+
+/**
+ * Busca en el overlay del OCR dónde está un valor concreto (el que el usuario
+ * acaba de corregir a mano en el formulario) y devuelve la región relativa
+ * para guardarla en la plantilla del proveedor — el modo de aprendizaje
+ * automático: corriges un campo y el sistema te propone la caja.
+ *
+ * Compara palabra a palabra y línea a línea (para nombres/direcciones), con
+ * normalización por tipo: fechas en cualquier formato, importes europeos/US,
+ * NIF con o sin guiones. Devuelve null si no encuentra nada fiable (≥ 0.85).
+ */
+export function findRegionForValue(
+  overlay: OcrOverlay,
+  value: string,
+  def: OcrFieldDef
+): RegionProposal | null {
+  if (!overlay || overlay.width <= 0 || overlay.height <= 0) return null
+  const target = normalizeToken(value, def)
+  if (!target) return null
+  // Los campos de importe solo se casan por igualdad numérica (no subcadena).
+  const moneyLike = def.normalize === normMoney || def.normalize === normText && /%|iva|irpf/i.test(def.label)
+  const words = overlay.words
+
+  let best: { score: number; boxWords: OcrWord[]; text: string } | null = null
+
+  // Palabra individual
+  for (const w of words) {
+    const key = normalizeToken(w.text, def)
+    if (!key) continue
+    const score = tokenScore(key, target, moneyLike)
+    if (score > 0 && (!best || score > best.score)) {
+      best = { score, boxWords: [w], text: w.text }
+    }
+  }
+
+  // Línea completa (razón social, dirección, IBAN partido…)
+  for (const line of groupLines(words)) {
+    const joined = line.map(w => w.text).join(' ')
+    const key = normalizeToken(joined, def)
+    if (!key) continue
+    const score = tokenScore(key, target, moneyLike)
+    if (score > 0 && (!best || score > best.score)) {
+      best = { score, boxWords: line, text: joined }
+    }
+  }
+
+  if (!best || best.score < 0.85) return null
+
+  const region = padRegion(bboxOf(best.boxWords, overlay.width, overlay.height), 0.015)
+  return {
+    field: def.field,
+    label: def.label,
+    region: { field: def.field, label: def.label, ...region },
+    matchedText: best.text,
+    confidence: best.score,
+  }
+}
+
 /**
  * Convierte el `TextOverlay` de OCR.space (JSON crudo) al formato interno.
  * Devuelve null si el overlay no trae palabras.

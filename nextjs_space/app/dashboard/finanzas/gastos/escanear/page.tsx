@@ -11,13 +11,13 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { toast } from 'sonner'
-import { Camera, Receipt, Scan, Loader2, ArrowLeft, CheckCircle2, Image as ImageIcon, FileText, AlertTriangle, Check, ChevronsUpDown, Plus, MousePointerClick } from 'lucide-react'
+import { Camera, Receipt, Scan, Loader2, ArrowLeft, CheckCircle2, Image as ImageIcon, FileText, AlertTriangle, Check, ChevronsUpDown, Plus, MousePointerClick, Sparkles, Save, X } from 'lucide-react'
 import IvaRatesEditor from '@/components/finance/IvaRatesEditor'
 import OcrCorrectionModal from '@/components/finance/OcrCorrectionModal'
 import OcrComparisonModal, { type ComparisonItem } from '@/components/finance/OcrComparisonModal'
 import { computeVatAmount, computePercentageAmount, computeInvoiceTotalMismatch, fillEmptyTranches, fillLastTranche } from '@/lib/finance/vat'
 import { validateFiscalId, getFiscalIdConfigsByCountry, normalizarPais } from '@/lib/fiscal-validation'
-import { applyTemplate, getOcrFieldDef, sameFieldValue, validateReference, type OcrOverlay, type OcrTemplateField } from '@/lib/finance/ocr-template'
+import { applyTemplate, findRegionForValue, getOcrFieldDef, sameFieldValue, validateReference, valuesEquivalent, type OcrOverlay, type OcrTemplateField, type RegionProposal } from '@/lib/finance/ocr-template'
 import { renderPdfFirstPage } from '@/lib/finance/pdf-render'
 
 interface EmisorInfo {
@@ -149,6 +149,19 @@ export default function EscanearGastoPage() {
   const [appliedTemplateRef, setAppliedTemplateRef] = useState<{ id: string; supplierName: string; nif?: string | null; fields: OcrTemplateField[] } | null>(null)
   // Primera página del PDF renderizada a imagen con pdf.js (para el visualizador)
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null)
+  // Aprendizaje automático: regiones propuestas al corregir campos a mano tras
+  // el escaneo (campo de formulario → propuesta detectada sobre la imagen)
+  const [ocrProposals, setOcrProposals] = useState<Record<string, RegionProposal>>({})
+  const [proposalBusy, setProposalBusy] = useState<Record<string, boolean>>({})
+  const [savingProposal, setSavingProposal] = useState<string | null>(null)
+  // Propuesta mostrada dentro del visualizador ("Ver en imagen")
+  const [ocrProposalForModal, setOcrProposalForModal] = useState<{ field: string; label: string; region: OcrTemplateField; matchedText: string } | null>(null)
+  // Datos que extrajo el escaneo (para distinguir la corrección manual) y
+  // overlay local cacheados para proponer regiones sin re-detectar
+  const scannedExtRef = useRef<ExtractedData | null>(null)
+  const localOverlayRef = useRef<OcrOverlay | null>(null)
+  const localOverlayLoadedRef = useRef(false)
+  const proposalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [saving, setSaving] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [showSelect, setShowSelect] = useState(true)
@@ -618,6 +631,12 @@ export default function EscanearGastoPage() {
       setRawOcrText(data.rawText || '')
       setScanOverlay(data.overlay || null)
       const ext: ExtractedData = data.extracted
+      // Aprendizaje automático: este escaneo es la referencia para saber si el
+      // usuario corrige un campo a mano (y qué valor corregir sobre la imagen).
+      scannedExtRef.current = ext
+      setOcrProposals({})
+      localOverlayRef.current = null
+      localOverlayLoadedRef.current = false
       setForm(prev => ({
         ...prev,
         description: ext.supplier ? `Gasto en ${ext.supplier}` : '',
@@ -864,6 +883,199 @@ export default function EscanearGastoPage() {
     }
   }
 
+  // ─── Aprendizaje automático: proponer la región de un campo corregido ─────
+  // Al corregir a mano un campo tras el escaneo, se busca ese valor en las
+  // cajas de palabras del OCR y se propone la región para la plantilla.
+  const FORM_FIELD_TO_OCR: Record<string, string> = {
+    amount: 'total_factura',
+    date: 'fecha_emision',
+    operationDate: 'fecha_operacion',
+    invoiceNumber: 'numero_factura',
+    taxableBase: 'base_imponible',
+    vatRate: 'tipo_iva',
+    vatAmount: 'cuota_iva',
+    irpfRate: 'tipo_irpf',
+    irpfAmount: 'cuota_irpf',
+    totalFactura: 'total_factura',
+    issuerName: 'emisor_nombre',
+    issuerTaxId: 'emisor_nif',
+    iban: 'iban',
+  }
+
+  // Con tramos de IVA activos los agregados del desglose se derivan de las
+  // filas: no hay una región única que proponer para ellos.
+  const TAX_FIELDS_WITH_TRANCHES = ['taxableBase', 'vatRate', 'vatAmount', 'irpfRate', 'irpfAmount']
+
+  // Cajas de palabras: las del proveedor de visión si existen; si no, las
+  // detectadas localmente con tesseract (cacheadas para no repetir el OCR).
+  const getEffectiveOverlay = async (): Promise<OcrOverlay | null> => {
+    if (scanOverlay) return scanOverlay
+    if (localOverlayLoadedRef.current) return localOverlayRef.current
+    const boxes = await detectLocalBoxes()
+    localOverlayRef.current = boxes
+    localOverlayLoadedRef.current = true
+    return boxes
+  }
+
+  // Valor corregido del formulario para un campo de plantilla (la referencia
+  // que se guarda con la región aprendida).
+  const referenceFor = (ocrField: string): string | null => {
+    switch (ocrField) {
+      case 'total_factura': return form.totalFactura || form.amount || null
+      case 'fecha_emision': return form.date || null
+      case 'fecha_operacion': return form.operationDate || null
+      case 'numero_factura': return form.invoiceNumber || null
+      case 'base_imponible': return form.taxableBase || null
+      case 'tipo_iva': return form.vatRate || null
+      case 'cuota_iva': return form.vatAmount || null
+      case 'tipo_irpf': return form.irpfRate || null
+      case 'cuota_irpf': return form.irpfAmount || null
+      case 'emisor_nombre': return form.issuerName || null
+      case 'emisor_nif': return form.issuerTaxId || null
+      case 'iban': return form.iban || null
+      default: return null
+    }
+  }
+
+  // Busca la región del valor corregido (con debounce para no lanzar el OCR
+  // en cada tecla). Solo propone si el usuario CAMBIÓ el valor respecto a lo
+  // que leyó el escaneo — re-escribir lo mismo no es un aprendizaje.
+  const maybeProposeRegion = (formField: string, value: string) => {
+    if (proposalTimerRef.current) clearTimeout(proposalTimerRef.current)
+    proposalTimerRef.current = setTimeout(async () => {
+      const ocrField = FORM_FIELD_TO_OCR[formField]
+      if (!ocrField) return
+      const def = getOcrFieldDef(ocrField)
+      if (!def) return
+      const t = value.trim()
+      if (!t || (ivaRows.length > 0 && TAX_FIELDS_WITH_TRANCHES.includes(formField))) {
+        setOcrProposals(p => { const n = { ...p }; delete n[formField]; return n })
+        return
+      }
+      const ext = scannedExtRef.current
+      if (!ext) return // sin escaneo previo no hay nada que aprender
+      const parserVal = parserExtractedValue(ext, ocrField)
+      if (parserVal !== null && valuesEquivalent(parserVal, t)) {
+        // El usuario no cambió nada respecto a lo leído: descartar propuesta
+        setOcrProposals(p => { const n = { ...p }; delete n[formField]; return n })
+        return
+      }
+      setProposalBusy(b => ({ ...b, [formField]: true }))
+      try {
+        const overlay = await getEffectiveOverlay()
+        const proposal = overlay ? findRegionForValue(overlay, t, def) : null
+        setOcrProposals(p => {
+          if (!proposal) { const n = { ...p }; delete n[formField]; return n }
+          return { ...p, [formField]: proposal }
+        })
+      } finally {
+        setProposalBusy(b => { const n = { ...b }; delete n[formField]; return n })
+      }
+    }, 450)
+  }
+
+  const dismissProposal = (formField: string) => {
+    setOcrProposals(p => { const n = { ...p }; delete n[formField]; return n })
+  }
+
+  // Abre el visualizador con la propuesta pre-dibujada para ajustarla
+  const openProposalInViewer = (formField: string) => {
+    const proposal = ocrProposals[formField]
+    if (!proposal) return
+    setOcrProposalForModal({
+      field: proposal.field,
+      label: proposal.label,
+      region: proposal.region,
+      matchedText: proposal.matchedText,
+    })
+    setCorrectionOpen(true)
+  }
+
+  // Guarda la región propuesta en la plantilla del proveedor: si ya existe una
+  // plantilla se fusiona en la más reciente; si no, se crea una nueva.
+  const saveProposalToTemplate = async (formField: string) => {
+    const proposal = ocrProposals[formField]
+    if (!proposal) return
+    const supplierName = (form.supplier || form.issuerName || '').trim()
+    if (!supplierName) {
+      toast.error('Indica primero el proveedor para guardar la plantilla')
+      return
+    }
+    setSavingProposal(formField)
+    try {
+      const region: OcrTemplateField = {
+        ...proposal.region,
+        reference: referenceFor(proposal.field) || null,
+      }
+      const q = new URLSearchParams({ supplierName })
+      if (form.issuerTaxId) q.set('nif', form.issuerTaxId)
+      const listRes = await fetch(`/api/erp/expenses/ocr-templates?${q.toString()}`)
+      const listData = await listRes.json()
+      const templates = Array.isArray(listData?.templates) ? listData.templates : []
+      const body: Record<string, any> = {
+        supplierName,
+        nif: form.issuerTaxId || undefined,
+        fields: [region],
+      }
+      if (templates.length > 0) {
+        // Fusionar en la más reciente (la más probable para este formato)
+        const existing = templates[0]
+        body.templateId = existing.id
+        body.name = existing.name
+        body.fields = (existing.fields || [])
+          .filter((f: OcrTemplateField) => f.field !== proposal.field)
+          .concat(region)
+      }
+      const res = await fetch('/api/erp/expenses/ocr-templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Error al guardar')
+      toast.success(`Región de «${proposal.label}» guardada en la plantilla de ${supplierName}`)
+      dismissProposal(formField)
+    } catch (err: any) {
+      toast.error(err.message || 'Error al guardar la plantilla')
+    } finally {
+      setSavingProposal(null)
+    }
+  }
+
+  // Chip de propuesta que aparece bajo el campo corregido
+  const renderProposalChip = (formField: string) => {
+    if (proposalBusy[formField]) {
+      return (
+        <div className="mt-1.5 flex items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-2 py-1.5 text-[11px] text-violet-700">
+          <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+          Buscando la región del valor corregido…
+        </div>
+      )
+    }
+    const proposal = ocrProposals[formField]
+    if (!proposal) return null
+    const supplierName = (form.supplier || form.issuerName || '').trim()
+    return (
+      <div className="mt-1.5 flex flex-wrap items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-2 py-1.5 text-[11px]">
+        <Sparkles className="h-3 w-3 text-violet-600 shrink-0" />
+        <span className="text-violet-800">
+          <span className="font-bold">«{proposal.matchedText}»</span> encontrado en la imagen — guardar región de{' '}
+          <span className="font-bold">{proposal.label.toLowerCase()}</span> en la plantilla{supplierName ? ` de ${supplierName}` : ''}?
+        </span>
+        <Button type="button" size="sm" className="h-6 px-2 text-[11px]" onClick={() => saveProposalToTemplate(formField)} disabled={savingProposal === formField}>
+          {savingProposal === formField ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Save className="h-3 w-3 mr-1" />}
+          Guardar
+        </Button>
+        <Button type="button" variant="outline" size="sm" className="h-6 px-2 text-[11px]" onClick={() => openProposalInViewer(formField)}>
+          Ver en imagen
+        </Button>
+        <button type="button" onClick={() => dismissProposal(formField)} className="ml-auto text-violet-400 hover:text-violet-700" aria-label="Descartar propuesta">
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    )
+  }
+
   const saveExpense = async () => {
     if (!form.amount || !form.description) {
       toast.error('Descripción e importe son requeridos')
@@ -981,6 +1193,17 @@ export default function EscanearGastoPage() {
     setRawOcrText('')
     setScanOverlay(null)
     setPdfPreviewUrl(null)
+    setOcrProposals({})
+    setProposalBusy({})
+    setSavingProposal(null)
+    setOcrProposalForModal(null)
+    scannedExtRef.current = null
+    localOverlayRef.current = null
+    localOverlayLoadedRef.current = false
+    if (proposalTimerRef.current) {
+      clearTimeout(proposalTimerRef.current)
+      proposalTimerRef.current = null
+    }
     setShowForm(false)
     setShowSelect(true)
     setForm({
@@ -1164,13 +1387,15 @@ export default function EscanearGastoPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label>Importe <span className="text-destructive">*</span></Label>
-                  <Input type="number" step="0.01" value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} placeholder="0.00" />
+                  <Input type="number" step="0.01" value={form.amount} onChange={e => { const v = e.target.value; setForm(p => ({ ...p, amount: v })); maybeProposeRegion('amount', v) }} placeholder="0.00" />
                 </div>
                 <div>
                   <Label>Fecha</Label>
-                  <Input type="date" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} />
+                  <Input type="date" value={form.date} onChange={e => { const v = e.target.value; setForm(p => ({ ...p, date: v })); maybeProposeRegion('date', v) }} />
                 </div>
               </div>
+              {renderProposalChip('amount')}
+              {renderProposalChip('date')}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label>Proveedor</Label>
@@ -1292,25 +1517,28 @@ export default function EscanearGastoPage() {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label>Nº Factura</Label>
-                      <Input value={form.invoiceNumber} onChange={e => setForm(p => ({ ...p, invoiceNumber: e.target.value }))} placeholder="F2026-00142" />
+                      <Input value={form.invoiceNumber} onChange={e => { const v = e.target.value; setForm(p => ({ ...p, invoiceNumber: v })); maybeProposeRegion('invoiceNumber', v) }} placeholder="F2026-00142" />
                     </div>
                     <div>
                       <Label>Serie</Label>
                       <Input value={form.serie} onChange={e => setForm(p => ({ ...p, serie: e.target.value }))} placeholder="F2026" />
                     </div>
                   </div>
+                  {renderProposalChip('invoiceNumber')}
 
                   {/* Fechas */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label>Fecha Operación</Label>
-                      <Input type="date" value={form.operationDate} onChange={e => setForm(p => ({ ...p, operationDate: e.target.value }))} />
+                      <Input type="date" value={form.operationDate} onChange={e => { const v = e.target.value; setForm(p => ({ ...p, operationDate: v })); maybeProposeRegion('operationDate', v) }} />
                     </div>
                     <div>
                       <Label>Total Factura</Label>
-                      <Input type="number" step="0.01" value={form.totalFactura} onChange={e => setForm(p => ({ ...p, totalFactura: e.target.value }))} placeholder="0.00" />
+                      <Input type="number" step="0.01" value={form.totalFactura} onChange={e => { const v = e.target.value; setForm(p => ({ ...p, totalFactura: v })); maybeProposeRegion('totalFactura', v) }} placeholder="0.00" />
                     </div>
                   </div>
+                  {renderProposalChip('operationDate')}
+                  {renderProposalChip('totalFactura')}
 
                   {/* Emisor */}
                   <div className="border-b pb-2 mb-2 flex items-center justify-between">
@@ -1322,13 +1550,15 @@ export default function EscanearGastoPage() {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label>Razón Social</Label>
-                      <Input value={form.issuerName} onChange={e => setForm(p => ({ ...p, issuerName: e.target.value }))} placeholder="Nombre o razón social" />
+                      <Input value={form.issuerName} onChange={e => { const v = e.target.value; setForm(p => ({ ...p, issuerName: v })); maybeProposeRegion('issuerName', v) }} placeholder="Nombre o razón social" />
                     </div>
                     <div>
                       <Label>NIF / CIF</Label>
-                      <Input value={form.issuerTaxId} onChange={e => setForm(p => ({ ...p, issuerTaxId: e.target.value }))} placeholder="B12345678" />
+                      <Input value={form.issuerTaxId} onChange={e => { const v = e.target.value; setForm(p => ({ ...p, issuerTaxId: v })); maybeProposeRegion('issuerTaxId', v) }} placeholder="B12345678" />
                     </div>
                   </div>
+                  {renderProposalChip('issuerName')}
+                  {renderProposalChip('issuerTaxId')}
                   <div>
                     <Label>Domicilio Fiscal</Label>
                     <Input value={form.issuerAddress} onChange={e => setForm(p => ({ ...p, issuerAddress: e.target.value }))} placeholder="C/ Ejemplo 123, 28001 Madrid" />
@@ -1361,7 +1591,7 @@ export default function EscanearGastoPage() {
                   <div className="grid grid-cols-3 gap-3">
                     <div>
                       <Label>Base Imponible</Label>
-                      <Input type="number" step="0.01" value={form.taxableBase} onChange={e => applyTaxableBase(e.target.value)} placeholder="0.00" />
+                      <Input type="number" step="0.01" value={form.taxableBase} onChange={e => { applyTaxableBase(e.target.value); maybeProposeRegion('taxableBase', e.target.value) }} placeholder="0.00" />
                     </div>
                     <div>
                       <Label>IVA %</Label>
@@ -1380,28 +1610,33 @@ export default function EscanearGastoPage() {
                             </SelectContent>
                           </Select>
                           {(!form.vatRate || !supplierVatRates.map(String).includes(form.vatRate)) && (
-                            <Input type="number" step="0.01" value={form.vatRate} onChange={e => applyVatRate(e.target.value)} placeholder="21" className="w-20" />
+                            <Input type="number" step="0.01" value={form.vatRate} onChange={e => { applyVatRate(e.target.value); maybeProposeRegion('vatRate', e.target.value) }} placeholder="21" className="w-20" />
                           )}
                         </div>
                       ) : (
-                        <Input type="number" step="0.01" value={form.vatRate} onChange={e => applyVatRate(e.target.value)} placeholder="21" />
+                        <Input type="number" step="0.01" value={form.vatRate} onChange={e => { applyVatRate(e.target.value); maybeProposeRegion('vatRate', e.target.value) }} placeholder="21" />
                       )}
                     </div>
                     <div>
                       <Label>Cuota IVA</Label>
-                      <Input type="number" step="0.01" value={form.vatAmount} onChange={e => setForm(p => ({ ...p, vatAmount: e.target.value }))} placeholder="0.00" />
+                      <Input type="number" step="0.01" value={form.vatAmount} onChange={e => { const v = e.target.value; setForm(p => ({ ...p, vatAmount: v })); maybeProposeRegion('vatAmount', v) }} placeholder="0.00" />
                     </div>
                   </div>
+                  {renderProposalChip('taxableBase')}
+                  {renderProposalChip('vatRate')}
+                  {renderProposalChip('vatAmount')}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label>IRPF % (Retención)</Label>
-                      <Input type="number" step="0.01" value={form.irpfRate} onChange={e => applyIrpfRate(e.target.value)} placeholder="15" />
+                      <Input type="number" step="0.01" value={form.irpfRate} onChange={e => { applyIrpfRate(e.target.value); maybeProposeRegion('irpfRate', e.target.value) }} placeholder="15" />
                     </div>
                     <div>
                       <Label>Cuota IRPF</Label>
-                      <Input type="number" step="0.01" value={form.irpfAmount} onChange={e => setForm(p => ({ ...p, irpfAmount: e.target.value }))} placeholder="-240.00" />
+                      <Input type="number" step="0.01" value={form.irpfAmount} onChange={e => { const v = e.target.value; setForm(p => ({ ...p, irpfAmount: v })); maybeProposeRegion('irpfAmount', v) }} placeholder="-240.00" />
                     </div>
                   </div>
+                  {renderProposalChip('irpfRate')}
+                  {renderProposalChip('irpfAmount')}
 
                   {/* Tramos de IVA: varias bases con distintos tipos */}
                   <div className="border-t pt-3 mt-2">
@@ -1485,7 +1720,8 @@ export default function EscanearGastoPage() {
                   </div>
                   <div>
                     <Label>IBAN</Label>
-                    <Input value={form.iban} onChange={e => setForm(p => ({ ...p, iban: e.target.value }))} placeholder="ES9100491234561234567890" />
+                    <Input value={form.iban} onChange={e => { const v = e.target.value; setForm(p => ({ ...p, iban: v })); maybeProposeRegion('iban', v) }} placeholder="ES9100491234561234567890" />
+                  {renderProposalChip('iban')}
                   </div>
                 </div>
               </details>
@@ -1590,7 +1826,7 @@ export default function EscanearGastoPage() {
       {/* Modal: visualizador de corrección OCR (aprende la plantilla del proveedor) */}
       <OcrCorrectionModal
         open={correctionOpen}
-        onClose={() => setCorrectionOpen(false)}
+        onClose={() => { setCorrectionOpen(false); setOcrProposalForModal(null) }}
         // Fuentes locales primero (blob/data URL) para que tesseract pueda
         // leerlas sin problemas de CORS; la URL de S3 solo como último recurso.
         imageUrl={isPdf ? pdfPreviewUrl : capturedImage || form.receiptUrl}
@@ -1598,6 +1834,7 @@ export default function EscanearGastoPage() {
         supplierName={form.supplier || form.issuerName}
         supplierNif={form.issuerTaxId}
         onApply={mergeTemplateValues}
+        autoProposal={ocrProposalForModal}
       />
 
       {/* Comparación lado a lado: confirmar antes de aplicar la plantilla */}
