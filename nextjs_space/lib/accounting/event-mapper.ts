@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/db';
-import { EntryManager } from './entry-manager';
+import { EntryManager, EntryLineInput, TaxImpactInput } from './entry-manager';
 
 export class AccountingEventMapper {
   /**
@@ -47,6 +47,7 @@ export class AccountingEventMapper {
   /**
    * Maps a signed payroll record to a ledger entry.
    * 640 (Wages) -> 4751 (IRPF) + 476 (SS) + 572 (Bank/Debt)
+   * Crea el TaxRecord de IRPF_RETENCION que alimenta el Modelo 111.
    */
   static async mapPayrollToEntry(payrollId: string) {
     const payroll = await prisma.payrollRecord.findUnique({
@@ -57,12 +58,14 @@ export class AccountingEventMapper {
 
     const tenantId = payroll.tenantId;
     const accounts = await this.getTenantAccounts(tenantId);
-    
-    // Decrypting amount (simulated for now, usually handled by a vault service)
-    const grossAmount = 2500; // Mock for demo
-    const irpf = grossAmount * 0.15;
-    const ssEmployee = grossAmount * 0.06;
-    const netAmount = grossAmount - irpf - ssEmployee;
+
+    // Datos reales cuando el registro los trae en metadata; si no, fallback demo
+    const meta = (payroll.metadata as Record<string, unknown>) || {};
+    const grossAmount = Number(meta.grossAmount) || Number(meta.bruto) || 2500;
+    const irpfRate = Number(meta.irpfRate) || Number(meta.irpf) || 15;
+    const irpf = Number(meta.irpfAmount) || Math.round(grossAmount * (irpfRate / 100) * 100) / 100;
+    const ssEmployee = Number(meta.ssEmployee) || Math.round(grossAmount * 0.06 * 100) / 100;
+    const netAmount = Number(meta.netAmount) || Math.round((grossAmount - irpf - ssEmployee) * 100) / 100;
 
     return await EntryManager.createEntry({
       tenantId,
@@ -73,14 +76,77 @@ export class AccountingEventMapper {
         { accountId: accounts['4751'], debit: 0, credit: irpf },
         { accountId: accounts['476'], debit: 0, credit: ssEmployee },
         { accountId: accounts['572'], debit: 0, credit: netAmount }
-      ]
+      ],
+      taxImpact: {
+        type: 'IRPF_RETENCION',
+        baseAmount: grossAmount,
+        taxRate: irpfRate,
+        taxAmount: irpf,
+        periodMonth: payroll.month,
+        periodYear: payroll.year
+      }
+    });
+  }
+
+  /**
+   * Maps a sealed ES payroll record (PayrollRecordES) to a ledger entry.
+   * 640 (Wages) -> 4751 (IRPF) + 476 (SS) + 572 (Bank/Debt)
+   * Crea el TaxRecord de IRPF_RETENCION que alimenta el Modelo 111.
+   */
+  static async mapPayrollEsToEntry(payrollId: string) {
+    const payroll = await prisma.payrollRecordES.findUnique({
+      where: { id: payrollId }
+    });
+
+    if (!payroll) throw new Error('Registro de nómina ES no encontrado');
+
+    const tenantId = payroll.tenantId;
+    const accounts = await this.getTenantAccounts(tenantId);
+
+    // Idempotencia: no duplicar si ya existe asiento para esta nómina
+    const existing = await prisma.accountingEntry.findFirst({
+      where: { reference: payrollId }
+    });
+    if (existing) return existing;
+
+    const grossAmount = Number(payroll.grossTotal);
+    const irpf = Number(payroll.irpfTotal);
+    const ssEmployee = Number(payroll.socialSecurityWorker);
+    const netAmount = Number(payroll.netTotal);
+    const irpfRate = grossAmount > 0 ? Math.round((irpf / grossAmount) * 10000) / 100 : 0;
+
+    // El periodo viene como 'YYYY-MM'
+    const [year, month] = (payroll.period || '').split('-').map(Number);
+    const periodYear = Number.isFinite(year) && year > 2000 ? year : new Date().getFullYear();
+    const periodMonth = Number.isFinite(month) && month >= 1 && month <= 12 ? month : new Date().getMonth() + 1;
+
+    return await EntryManager.createEntry({
+      tenantId,
+      description: `Nómina ${payroll.period} - ID: ${payroll.id}`,
+      reference: payroll.id,
+      lines: [
+        { accountId: accounts['640'], debit: grossAmount, credit: 0 },
+        { accountId: accounts['4751'], debit: 0, credit: irpf },
+        { accountId: accounts['476'], debit: 0, credit: ssEmployee },
+        { accountId: accounts['572'], debit: 0, credit: netAmount }
+      ],
+      taxImpact: {
+        type: 'IRPF_RETENCION',
+        baseAmount: grossAmount,
+        taxRate: irpfRate,
+        taxAmount: irpf,
+        periodMonth,
+        periodYear
+      }
     });
   }
 
   /**
    * Maps a validated expense to a ledger entry.
-   * 600/621/629 (Expense) -> 400/410 (Supplier) + 472 (VAT)
-   * Uses AI classification (if confirmed) or falls back to category mapping.
+   * 600/621/629 (Expense) -> 400/410 (Supplier) + 472 (VAT) + 4751 (IRPF)
+   * Usa el desglose Verifactu real (taxableBase/vatAmount/irpfAmount) cuando
+   * está disponible y crea los TaxRecords que alimentan el Modelo 303
+   * (IVA soportado) y el Modelo 111 (retención IRPF).
    */
   static async mapExpenseToEntry(expenseId: string) {
     const expense = await prisma.expense.findUnique({
@@ -93,34 +159,79 @@ export class AccountingEventMapper {
     const tenantId = expense.tenantId;
     const accounts = await this.getTenantAccounts(tenantId);
 
-    const total = Number(expense.amount);
-    const taxRate = 0.21;
-    const subtotal = total / (1 + taxRate);
-    const vat = total - subtotal;
+    // Idempotencia: no duplicar si ya existe asiento para este gasto
+    const existing = await prisma.accountingEntry.findFirst({
+      where: { reference: expenseId }
+    });
+    if (existing) return existing;
+
+    const meta = (expense.metadata as Record<string, unknown>) || {};
+    const irpfAmount = Number(meta.irpfAmount) || 0;
+    const irpfRate = Number(meta.irpfRate) || 0;
+
+    // Desglose real (Verifactu) o estimación desde el total
+    let base = Number(expense.taxableBase);
+    let vat = Number(expense.vatAmount);
+    let vatRate = Number(expense.vatRate);
+
+    if (!Number.isFinite(base) || base <= 0) {
+      // Sin desglose: amount incluye IVA (tipo real o 21% por defecto)
+      const total = Number(expense.amount);
+      const rate = vatRate > 0 ? vatRate : 21;
+      base = Math.round((total / (1 + rate / 100)) * 100) / 100;
+      vat = vat > 0 ? vat : Math.round((total - base) * 100) / 100;
+      vatRate = rate;
+    } else if (!Number.isFinite(vat) || vat <= 0) {
+      vat = Math.round((base * ((vatRate > 0 ? vatRate : 21) / 100)) * 100) / 100;
+    }
+    if (!(vatRate > 0)) vatRate = 21;
 
     // Try confirmed AI classification first
-    const meta = expense.metadata as Record<string, unknown> | null;
     const confirmedCode = meta?.confirmedAccountCode as string | undefined;
-
     const expenseAccount = confirmedCode ?? this.fallbackAccountForCategory(expense.category);
+
+    // Líneas balanceadas: Debe(base + IVA) = Haber(pago proveedor + retención)
+    const payable = Math.round((base + vat - irpfAmount) * 100) / 100;
+    const lines: EntryLineInput[] = [
+      { accountId: accounts[expenseAccount], debit: base, credit: 0 },
+    ];
+    if (vat > 0) lines.push({ accountId: accounts['472'], debit: vat, credit: 0 });
+    lines.push({ accountId: accounts['410'], debit: 0, credit: payable });
+    if (irpfAmount > 0) lines.push({ accountId: accounts['4751'], debit: 0, credit: irpfAmount });
+
+    const expenseDate = expense.date ?? expense.createdAt;
+    const periodMonth = expenseDate.getMonth() + 1;
+    const periodYear = expenseDate.getFullYear();
+
+    // Impactos fiscales: IVA soportado (Modelo 303) + retención IRPF (Modelo 111)
+    const taxImpacts: TaxImpactInput[] = [];
+    if (vat > 0) {
+      taxImpacts.push({
+        type: 'IVA_SOPORTADO',
+        baseAmount: base,
+        taxRate: vatRate,
+        taxAmount: vat,
+        periodMonth,
+        periodYear,
+      });
+    }
+    if (irpfAmount > 0) {
+      taxImpacts.push({
+        type: 'IRPF_RETENCION',
+        baseAmount: base,
+        taxRate: irpfRate,
+        taxAmount: irpfAmount,
+        periodMonth,
+        periodYear,
+      });
+    }
 
     return await EntryManager.createEntry({
       tenantId,
       description: `Gasto: ${expense.description}`,
       reference: expense.id,
-      lines: [
-        { accountId: accounts[expenseAccount], debit: subtotal, credit: 0 },
-        { accountId: accounts['472'], debit: vat, credit: 0 },
-        { accountId: accounts['410'], debit: 0, credit: total }
-      ],
-      taxImpact: {
-        type: 'IVA_SOPORTADO',
-        baseAmount: subtotal,
-        taxRate: 21,
-        taxAmount: vat,
-        periodMonth: expense.createdAt.getMonth() + 1,
-        periodYear: expense.createdAt.getFullYear()
-      }
+      lines,
+      taxImpacts: taxImpacts.length > 0 ? taxImpacts : undefined,
     });
   }
 

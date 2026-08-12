@@ -11,6 +11,8 @@ import {
 import { PayrollEngineES } from "@/lib/finance/payroll/es/payroll-engine-es";
 import { PayrollSealer } from "@/lib/finance/payroll/es/payroll-sealer";
 import { shipNominaToAEAT } from "@/lib/erp/aeat-nomina-adapter";
+import { eventBus } from "@/lib/skills/event-bus";
+import { EVENTS } from "@/lib/types/events";
 
 import { writePartnerAuditLog, getRequestMetadata, ensurePartnerApiKey } from "@/lib/erp/partner-audit-log";
 // ════════════════════════════════════════════════════════════════════════════
@@ -408,6 +410,27 @@ export const POST = withTenantAuth(
               reason: `seal:${msg}`,
             });
             continue;
+          }
+
+          // 4b. Notificar a la contabilidad: genera el asiento y el TaxRecord
+          //     de IRPF_RETENCION (Modelo 111). Es un evento asíncrono que
+          //     nunca bloquea el run: la nómina sellada es la fuente de verdad
+          //     y la contabilización se registra en logs si falla.
+          try {
+            eventBus.emitEvent(EVENTS.PAYROLL_GENERATED, {
+              tenantId,
+              payrollId: record.id,
+              periodo: record.period,
+              totalEmpleados: 1,
+              montoTotal: Number(record.netTotal),
+              source: "webhook",
+              timestamp: new Date(),
+            });
+          } catch (accountingErr) {
+            console.warn(
+              `[Payroll] Evento de contabilización no enviado para ${record.id}:`,
+              accountingErr instanceof Error ? accountingErr.message : accountingErr
+            );
           }
 
           // 5. AEAT submission

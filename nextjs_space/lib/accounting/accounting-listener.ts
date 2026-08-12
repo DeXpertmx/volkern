@@ -27,7 +27,49 @@ export function initializeAccountingListeners() {
     }
   });
 
-  // 2. Listen for payments to settle debt (Optional, based on flow)
+  // 2. Listen for new expenses to create ledger entries + tax records
+  //    (IVA soportado → Modelo 303, retención IRPF → Modelo 111)
+  eventBus.onEvent(EVENTS.EXPENSE_CREATED, async (payload) => {
+    try {
+      skillsLogger.info(`[Accounting] Processing auto-entry for expense: ${payload.expenseId}`, {
+        tenantId: payload.tenantId,
+      });
+
+      await AccountingEventMapper.mapExpenseToEntry(payload.expenseId);
+
+      skillsLogger.info(`[Accounting] Auto-entry created for expense: ${payload.expenseId}`, {
+        tenantId: payload.tenantId,
+      });
+    } catch (error: any) {
+      skillsLogger.error(`[Accounting] Failed to create auto-entry for expense: ${payload.expenseId}`, {
+        error: error.message,
+        tenantId: payload.tenantId,
+      } as any);
+    }
+  });
+
+  // 3. Listen for generated payrolls to create ledger entries + tax records
+  //    (retención IRPF de nóminas → Modelo 111)
+  eventBus.onEvent(EVENTS.PAYROLL_GENERATED, async (payload) => {
+    try {
+      skillsLogger.info(`[Accounting] Processing auto-entry for payroll: ${payload.payrollId}`, {
+        tenantId: payload.tenantId,
+      });
+
+      await AccountingEventMapper.mapPayrollEsToEntry(payload.payrollId);
+
+      skillsLogger.info(`[Accounting] Auto-entry created for payroll: ${payload.payrollId}`, {
+        tenantId: payload.tenantId,
+      });
+    } catch (error: any) {
+      skillsLogger.error(`[Accounting] Failed to create auto-entry for payroll: ${payload.payrollId}`, {
+        error: error.message,
+        tenantId: payload.tenantId,
+      } as any);
+    }
+  });
+
+  // 4. Listen for payments to settle debt (Optional, based on flow)
   eventBus.onEvent(EVENTS.PAYMENT_RECEIVED, async (payload) => {
     try {
       // Logic for automatic payment accounting if reference is available
