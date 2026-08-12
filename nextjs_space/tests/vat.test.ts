@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeVatAmount, computePercentageAmount, computeInvoiceTotalMismatch, fillEmptyTranches } from '@/lib/finance/vat';
+import { computeVatAmount, computePercentageAmount, computeInvoiceTotalMismatch, fillEmptyTranches, fillLastTranche } from '@/lib/finance/vat';
 
 describe('computeVatAmount', () => {
   it('calcula la cuota: base × tipo / 100', () => {
@@ -117,5 +117,58 @@ describe('fillEmptyTranches (reparto automático del total)', () => {
   it('acepta el objetivo como string', () => {
     const result = fillEmptyTranches(rows(['300', '', '']), '2000');
     expect(result).toEqual(['300', '850.00', '850.00']);
+  });
+});
+
+describe('fillLastTranche (modo resto en el último)', () => {
+  const rows = (bases: (string | number)[]) =>
+    bases.map(b => ({ base: String(b), rate: '' }));
+
+  it('deja los intermedios vacíos y solo rellena el último con el resto', () => {
+    // Ejemplo del usuario: 3 tramos, primero 300 @ 21%, los demás se quedan
+    // vacíos hasta llenarlos; el último absorbe lo que falte
+    const result = fillLastTranche(rows(['300', '', '']), 2000);
+    expect(result).toEqual(['300', '', '1700.00']);
+  });
+
+  it('si se llena un intermedio, el último se recalcula como el resto', () => {
+    const result = fillLastTranche(rows(['300', '900', '']), 2000);
+    expect(result).toEqual(['300', '900', '800.00']);
+  });
+
+  it('el último absorbe el redondeo y la suma cuadra exacta', () => {
+    const result = fillLastTranche(rows(['300', '', '', '']), 2000);
+    const sum = result!.reduce((acc, b) => acc + parseFloat(b || '0'), 0);
+    expect(result).toEqual(['300', '', '', '1700.00']);
+    expect(sum).toBeCloseTo(2000, 2);
+  });
+
+  it('no toca los tramos ya rellenos', () => {
+    // Solo el índice 2 está vacío: es el último rellenable y absorbe el resto
+    const result = fillLastTranche(rows(['300', '900', '']), 2000);
+    expect(result).toEqual(['300', '900', '800.00']);
+    const result2 = fillLastTranche(rows(['300', '', '850']), 2000);
+    expect(result2).toEqual(['300', '850.00', '850']);
+  });
+
+  it('con un solo tramo vacío se comporta igual que el reparto simple', () => {
+    const result = fillLastTranche(rows(['300', '900', '800']), 2000);
+    expect(result).toBeNull(); // nada que repartir
+    const result2 = fillLastTranche(rows(['300', '900', '']), 2000);
+    expect(result2).toEqual(['300', '900', '800.00']);
+  });
+
+  it('respetar fillableIndices excluye tramos (p. ej. vaciados a propósito)', () => {
+    // fillable solo [1]: el último rellenable es el índice 1
+    const result = fillLastTranche(rows(['300', '', '850']), 2000, [1]);
+    expect(result).toEqual(['300', '850.00', '850']);
+  });
+
+  it('devuelve null con objetivo inválido o sin nada que repartir', () => {
+    expect(fillLastTranche(rows(['300', '', '']), '')).toBeNull();
+    expect(fillLastTranche(rows(['300', '', '']), 0)).toBeNull();
+    expect(fillLastTranche(rows(['300', '900', '800']), 2000)).toBeNull();
+    expect(fillLastTranche(rows(['300', '', '']), 100)).toBeNull(); // resto <= 0
+    expect(fillLastTranche([], 2000)).toBeNull();
   });
 });
