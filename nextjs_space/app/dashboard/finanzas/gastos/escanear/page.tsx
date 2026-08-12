@@ -17,6 +17,7 @@ import OcrCorrectionModal from '@/components/finance/OcrCorrectionModal'
 import OcrComparisonModal, { type ComparisonItem } from '@/components/finance/OcrComparisonModal'
 import { computeVatAmount, computePercentageAmount, computeInvoiceTotalMismatch, fillEmptyTranches, fillLastTranche } from '@/lib/finance/vat'
 import { validateFiscalId, getFiscalIdConfigsByCountry, normalizarPais } from '@/lib/fiscal-validation'
+import { sanitizeSupplierName } from '@/lib/invoice-parser'
 import { applyTemplate, findRegionForValue, getOcrFieldDef, sameFieldValue, validateReference, valuesEquivalent, type OcrOverlay, type OcrTemplateField, type RegionProposal } from '@/lib/finance/ocr-template'
 import { buildExpenseEntryProposal } from '@/lib/finance/expense-entry-proposal'
 import { createPdfFromPageRange, detectPdfDocumentGroups, renderPdfPages, type PdfDocumentGroup } from '@/lib/finance/pdf-render'
@@ -437,6 +438,8 @@ export default function EscanearGastoPage() {
         cuota: Number(row?.cuota ?? row?.cuota_iva ?? row?.amount),
       }))
       .filter(row => Number.isFinite(row.tipo) && Number.isFinite(row.base) && row.base >= 0 && Number.isFinite(row.cuota))
+    // Aunque el modelo devuelva una sola fila, la materializamos como tramo
+    // para que el usuario vea el IVA aplicado y pueda añadir más tramos.
     if (valid.length === 0) return false
 
     const rows = valid.map(row => ({
@@ -782,11 +785,15 @@ export default function EscanearGastoPage() {
       setOcrProposals({})
       localOverlayRef.current = null
       localOverlayLoadedRef.current = false
+      // El nombre del proveedor llega ya saneado por la API, pero protegemos
+      // aquí también por si llega de otro flujo: solo la razón social, sin
+      // fechas, moneda ni etiquetas de la cabecera de la factura.
+      const safeSupplier = sanitizeSupplierName(ext.supplier ?? ext.issuerName) ?? ''
       setForm(prev => ({
         ...prev,
-        description: ext.supplier ? `Gasto en ${ext.supplier}` : '',
+        description: safeSupplier ? `Gasto en ${safeSupplier}` : '',
         amount: ext.total ? ext.total.toString() : '',
-        supplier: ext.supplier || '',
+        supplier: safeSupplier,
         category: ext.category || 'otros',
         date: ext.date ? formatDetectedDate(ext.date) : prev.date,
         dueDate: ext.fecha_vencimiento ? formatDetectedDate(ext.fecha_vencimiento) : '',

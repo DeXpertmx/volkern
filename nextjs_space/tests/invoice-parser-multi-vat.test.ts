@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseInvoiceText } from '@/lib/invoice-parser'
+import { normalizeVatBreakdown, parseInvoiceText, sanitizeSupplierName } from '@/lib/invoice-parser'
 
 describe('parseInvoiceText · facturas con varios IVA', () => {
   it('conserva los tres tramos con sus bases y cuotas', () => {
@@ -43,5 +43,34 @@ describe('parseInvoiceText · facturas con varios IVA', () => {
     expect(result!.totales.base_imponible).toBe(600)
     expect(result!.totales.cuota_iva).toBe(87)
     expect(result!.totales.total_factura).toBe(718.2)
+  })
+
+  it('sanea el nombre del proveedor y descarta la cabecera de la factura', () => {
+    expect(sanitizeSupplierName('SUMINISTROS GENERALES DEL SUR S.L. Fecha Emisión: 12/08/2026 Vencimiento: 12/09/2026 Moneda: EUR (€)'))
+      .toBe('SUMINISTROS GENERALES DEL SUR S.L.')
+    expect(sanitizeSupplierName('INNOVATECH SOLUCIONES S.L. Fecha Emisión: 24/07/2026'))
+      .toBe('INNOVATECH SOLUCIONES S.L.')
+    expect(sanitizeSupplierName('ACME S.A. Teléfono: 912 345 678 · www.acme.es'))
+      .toBe('ACME S.A.')
+    expect(sanitizeSupplierName('   ')).toBeNull()
+    expect(sanitizeSupplierName('Fecha Emisión: 12/08/2026')).toBeNull()
+  })
+
+  it('normaliza el desglose de IVA con formatos variados del modelo', () => {
+    expect(normalizeVatBreakdown([
+      { tipo: 21, base: 300, cuota: 63 },
+      { tipo: 10, base: '200,00 €', cuota: '20,00 €' },
+    ])).toEqual([
+      { tipo: 21, base: 300, cuota: 63 },
+      { tipo: 10, base: 200, cuota: 20 },
+    ])
+    expect(normalizeVatBreakdown([
+      { rate: 21, taxableBase: 300, vatAmount: 63 },
+      { rate: 10, taxableBase: 200, vatAmount: 20 },
+    ])).toEqual([
+      { tipo: 21, base: 300, cuota: 63 },
+      { tipo: 10, base: 200, cuota: 20 },
+    ])
+    expect(normalizeVatBreakdown([{ tipo: 21, base: 300 }])).toEqual([])
   })
 })

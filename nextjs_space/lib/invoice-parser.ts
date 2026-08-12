@@ -83,6 +83,79 @@ export interface VisionResult {
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
+// Sanitiza el nombre de un proveedor extraído por OCR/IA. Algunos modelos
+// devuelven en el campo de razón social texto extra de la cabecera de la
+// factura (fechas, vencimiento, moneda, forma de pago, dirección, teléfono…).
+// Cortamos en el primer marcador de cabecera y eliminamos ruido residual.
+export function sanitizeSupplierName(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null
+  let name = raw.replace(/\s+/g, ' ').trim()
+  if (!name) return null
+
+  // Primer marcador que indica el final del nombre real (etiquetas de cabecera)
+  const boundary = name.search(
+    /\b(?:fecha\s*(?:de\s*)?(?:emisi[oó]n|expedici[oó]n|operaci[oó]n|vencimiento|pago|factura|valor|entrega|albar[áa]n)?|vencimiento|vence\s*el|moneda|divisa|forma\s+de\s+pago|condiciones?\s+de\s+pago|n[úu]mero\s+de\s+factura|n°?\s*factura|factura\s*n[ºo°]?|c[oó]digo|ref\.?\s*[:.]?|tel[eé]fono|telf\.?|e?-?mail|fax|web\s*:|iban\s*:|cuenta\s+|nif|cif|dni|domicilio|direcci[oó]n|calle|avda?\.|registro\s+mercantil|p[áa]gina)\b[\s\S]*$/i
+  )
+  if (boundary === 0) return null // la cabecera ocupa todo el campo: sin proveedor
+  if (boundary > 0) name = name.slice(0, boundary).trim()
+
+  // Si quedaron fechas sueltas, monedas o importes embebidos, cortarlos.
+  // Cuidado con no comernos el punto de "S.L.": solo quitamos separadores
+  // finales si van precedidos de un marcador de cabecera ya recortado.
+  name = name
+    .replace(/\s+(?:\d{1,2})[/.-](?:\d{1,2})[/.-](?:\d{2,4})\b/g, '')
+    .replace(/\s*[(（]?\s*(?:EUR|USD|MXN|GBP|CHF|CAD|ARS|COP|CLP|PEN|BRL)\s*[)）]?\s*$/i, '')
+    .replace(/\s+€\s*$/, '')
+    .trim()
+
+  // Limpiar separadores finales solitarios ("ACME S.L." se conserva; "ACME:" no)
+  name = name.replace(/(\S[^:.\-–—]{2})\s*[:.\-–—]+\s*$/, '$1').trim()
+
+  if (name.length < 2) return null
+  // Solo ruido (números, símbolos) → no es un proveedor
+  if (!/[A-Za-zÁÉÍÓÚÑáéíóúñÀ-ÿ]/.test(name)) return null
+  return name
+}
+
+// Normaliza el desglose de IVA tolerando formatos del modelo: nombres en
+// español/inglés, arrays anidados en totales o a nivel raíz, y cuotas con
+// o sin símbolo de euro. Devuelve [] si no hay filas válidas.
+// Convierte un importe procedente del modelo a número, tolerando coma decimal
+// europea y símbolo de euro ("200,00 €" → 200, "1.234,56" → 1234.56).
+function amountToNumber(value: unknown): number {
+  if (typeof value === 'number') return value
+  if (typeof value !== 'string') return NaN
+  let cleaned = value.replace(/[€\s]/g, '').trim()
+  if (!cleaned) return NaN
+  // Coma como separador decimal (formato europeo)
+  if (cleaned.includes(',') && !cleaned.includes('.')) {
+    cleaned = cleaned.replace(',', '.')
+  } else if (cleaned.includes(',') && cleaned.includes('.')) {
+    // Último separador es la coma → decimal europeo con puntos de miles
+    cleaned = cleaned.lastIndexOf(',') > cleaned.lastIndexOf('.')
+      ? cleaned.replace(/\./g, '').replace(',', '.')
+      : cleaned.replace(/,/g, '')
+  }
+  return Number(cleaned)
+}
+
+export function normalizeVatBreakdown(breakdown: unknown): { tipo: number; base: number; cuota: number }[] {
+  const candidates: any[] = Array.isArray(breakdown)
+    ? breakdown
+    : (breakdown && typeof breakdown === 'object' ? Object.values(breakdown).filter(Array.isArray).flat() : [])
+  const rows = candidates
+    .map((row: any) => ({
+      tipo: Number(row?.tipo ?? row?.tipo_iva ?? row?.iva ?? row?.rate ?? row?.type ?? row?.vatRate ?? row?.porcentaje),
+      base: amountToNumber(row?.base ?? row?.base_imponible ?? row?.taxableBase ?? row?.baseImponible),
+      cuota: amountToNumber(row?.cuota ?? row?.cuota_iva ?? row?.importe ?? row?.amount ?? row?.vatAmount),
+    }))
+    .filter(row => Number.isFinite(row.tipo) && Number.isFinite(row.base) && Number.isFinite(row.cuota))
+  // Sin duplicados exactos
+  return rows.filter((row, idx) => rows.findIndex(r => r.tipo === row.tipo && r.base === row.base && r.cuota === row.cuota) === idx)
+}
+
+// ─── Helpers ───────────────────────────────────────────────────────────────
+
 // Convierte un importe a número, tolerando separadores de miles/decimales europeos y US.
 // Ej: "1.600,00" => 1600.00 ; "1,200.00" => 1200.00 ; "1 696,00" => 1696.00 ; "1600" => 1600
 function toNum(s: string): number | null {
@@ -510,8 +583,9 @@ export function parseInvoiceText(text: string): VisionResult | null {
   let cuotaIva: number | null = null
   const desgloseIva: DesgloseIva[] = []
 
-  // Desglose por tipo de IVA: buscar líneas tipo "21,00 %  600,10 €  126,02 €"
-  const ivaRowRegex = /^(\d{1,2}(?:[.,]\d+)?)\s*%\s*([\d]{1,3}(?:[.,][\d]{3})*(?:[.,]\s*\d{1,2})?)\s*€?\s*([\d]{1,3}(?:[.,][\d]{3})*(?:[.,]\s*\d{1,2})?)\s*€?/i
+  // Desglose por tipo de IVA: buscar líneas tipo "21,00 %  600,10 €  126,02 €",
+  // "IVA 21% · Base 600,10 · Cuota 126,02" o filas de tabla con varios tramos.
+  const ivaRowRegex = /^(?:\d{1,3}(?:[.,]\d{3})*\s*x\s*)?(\d{1,2}(?:[.,]\d+)?)\s*%\s*(?:[^\d€]*?)?\s*([\d]{1,3}(?:[.,][\d]{3})*(?:[.,]\s*\d{1,2})?)\s*€?\s*[^\d€]*?\s*([\d]{1,3}(?:[.,][\d]{3})*(?:[.,]\s*\d{1,2})?)\s*€?/i
   for (const line of lines) {
     const m = line.match(ivaRowRegex)
     if (m) {
@@ -519,6 +593,19 @@ export function parseInvoiceText(text: string): VisionResult | null {
         tipo: toNum(m[1]) || 0,
         base: toNum(m[2]) || 0,
         cuota: toNum(m[3]) || 0,
+      })
+    }
+  }
+
+  // Variante con etiquetas: "IVA 21% - 600,10 - 126,02"
+  if (desgloseIva.length === 0) {
+    const labeledRowRegex = /(?:iva|cuota)[^\n]*?(\d{1,2}(?:[.,]\d+)?)\s*%\s*[-–:]?\s*([\d]{1,3}(?:[.,][\d]{3})*(?:[.,]\s*\d{1,2})?)[^\n]*?\s*[-–:]?\s*([\d]{1,3}(?:[.,][\d]{3})*(?:[.,]\s*\d{1,2})?)/gi
+    let labeledMatch: RegExpExecArray | null
+    while ((labeledMatch = labeledRowRegex.exec(full)) !== null) {
+      desgloseIva.push({
+        tipo: toNum(labeledMatch[1]) || 0,
+        base: toNum(labeledMatch[2]) || 0,
+        cuota: toNum(labeledMatch[3]) || 0,
       })
     }
   }
