@@ -14,9 +14,10 @@ import { toast } from 'sonner'
 import { Camera, Receipt, Scan, Loader2, ArrowLeft, CheckCircle2, Image as ImageIcon, FileText, AlertTriangle, Check, ChevronsUpDown, Plus, MousePointerClick } from 'lucide-react'
 import IvaRatesEditor from '@/components/finance/IvaRatesEditor'
 import OcrCorrectionModal from '@/components/finance/OcrCorrectionModal'
+import OcrComparisonModal, { type ComparisonItem } from '@/components/finance/OcrComparisonModal'
 import { computeVatAmount, computePercentageAmount, computeInvoiceTotalMismatch, fillEmptyTranches, fillLastTranche } from '@/lib/finance/vat'
 import { validateFiscalId, getFiscalIdConfigsByCountry, normalizarPais } from '@/lib/fiscal-validation'
-import { applyTemplate, type OcrOverlay } from '@/lib/finance/ocr-template'
+import { applyTemplate, getOcrFieldDef, sameFieldValue, type OcrOverlay } from '@/lib/finance/ocr-template'
 import { renderPdfFirstPage } from '@/lib/finance/pdf-render'
 
 interface EmisorInfo {
@@ -142,6 +143,8 @@ export default function EscanearGastoPage() {
   // Cajas de palabras del OCR (TextOverlay) para el visualizador de corrección
   const [scanOverlay, setScanOverlay] = useState<OcrOverlay | null>(null)
   const [correctionOpen, setCorrectionOpen] = useState(false)
+  // Comparación lado a lado entre el OCR genérico y la plantilla (confirmar antes de aplicar)
+  const [comparisonItems, setComparisonItems] = useState<ComparisonItem[] | null>(null)
   // Primera página del PDF renderizada a imagen con pdf.js (para el visualizador)
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -653,7 +656,7 @@ export default function EscanearGastoPage() {
       loadTenantReceptor()
       matchSupplierByName(ext.supplier)
       // Si este proveedor ya tiene plantilla aprendida, corregir con ella
-      applySavedTemplate(ext.supplier, ext.emisor?.nif || ext.issuerTaxId || null, data.overlay || null)
+      applySavedTemplate(ext, data.overlay || null)
       // PDF: renderizar la primera página para poder anotar sobre la imagen
       if (pdf) ensurePdfPreview()
     } catch (err: any) {
@@ -726,13 +729,36 @@ export default function EscanearGastoPage() {
     }
   }, [isPdf, capturedFile, pdfPreviewUrl])
 
-  // Tras el OCR: si el proveedor ya tiene plantilla aprendida, aplica los
-  // campos extraídos desde las regiones guardadas (los del parser genérico
-  // que no coincidan quedan corregidos automáticamente).
-  const applySavedTemplate = async (supplierName: string | null, nif: string | null, overlay: OcrOverlay | null) => {
-    if (!supplierName || !supplierName.trim() || !overlay) return
+  // Valor que el parser genérico extrajo para un campo de plantilla (para comparar)
+  const parserExtractedValue = (ext: ExtractedData, field: string): string | null => {
+    const num = (v: number | null | undefined): string | null => (v === null || v === undefined ? null : String(v))
+    switch (field) {
+      case 'fecha_emision': return ext.fecha_emision || null
+      case 'fecha_operacion': return ext.fecha_operacion || null
+      case 'numero_factura': return ext.numero_factura || ext.invoiceNumber || null
+      case 'base_imponible': return num(ext.totales?.base_imponible ?? ext.taxableBase)
+      case 'tipo_iva': return num(ext.totales?.tipo_iva ?? ext.vatRate)
+      case 'cuota_iva': return num(ext.totales?.cuota_iva ?? ext.vatAmount)
+      case 'tipo_irpf': return num(ext.totales?.tipo_irpf)
+      case 'cuota_irpf': return num(ext.totales?.cuota_irpf)
+      case 'total_factura': return num(ext.totales?.total_factura ?? ext.total)
+      case 'emisor_nombre': return ext.emisor?.nombre || ext.issuerName || null
+      case 'emisor_nif': return ext.emisor?.nif || ext.issuerTaxId || null
+      case 'iban': return ext.iban || null
+      default: return null
+    }
+  }
+
+  // Tras el OCR: si el proveedor ya tiene plantilla aprendida, la aplica.
+  // Cuando la plantilla discrepa con lo que leyó el parser genérico, en vez de
+  // sobrescribir a ciegas abre la comparación lado a lado para confirmar.
+  const applySavedTemplate = async (ext: ExtractedData | null, overlay: OcrOverlay | null) => {
+    if (!ext || !overlay) return
+    const supplierName = (ext.supplier || ext.issuerName || '').trim()
+    if (!supplierName) return
     try {
-      const q = new URLSearchParams({ supplierName: supplierName.trim() })
+      const q = new URLSearchParams({ supplierName })
+      const nif = ext.emisor?.nif || ext.issuerTaxId || null
       if (nif) q.set('nif', nif)
       const res = await fetch(`/api/erp/expenses/ocr-templates?${q.toString()}`)
       const data = await res.json()
@@ -743,10 +769,40 @@ export default function EscanearGastoPage() {
       const values = applyTemplate(overlay, template.fields)
       const count = Object.keys(values).length
       if (count === 0) return
-      mergeTemplateValues(values)
-      toast.success(`Plantilla de ${supplierName.trim()} aplicada (${count} campo${count !== 1 ? 's' : ''} corregido${count !== 1 ? 's' : ''})`)
+
+      // Solo discrepancias: campo donde la plantilla difiere del parser (o el
+      // parser no lo leyó). Si todo coincide, se aplica sin molestar.
+      const mismatches: ComparisonItem[] = []
+      for (const [field, templateValue] of Object.entries(values)) {
+        const parserVal = parserExtractedValue(ext, field)
+        if (parserVal === null || !sameFieldValue(parserVal, templateValue)) {
+          mismatches.push({
+            field,
+            label: getOcrFieldDef(field)?.label || field,
+            ocrValue: parserVal,
+            templateValue,
+          })
+        }
+      }
+
+      if (mismatches.length === 0) {
+        mergeTemplateValues(values)
+        toast.success(`Plantilla de ${supplierName} aplicada (${count} campo${count !== 1 ? 's' : ''} verificado${count !== 1 ? 's' : ''})`)
+      } else {
+        setComparisonItems(mismatches)
+      }
     } catch {
       /* silencioso: el formulario ya tiene los datos del OCR genérico */
+    }
+  }
+
+  // Confirmación de la comparación: aplica solo los campos marcados
+  const confirmTemplateComparison = (values: Record<string, string>) => {
+    const count = Object.keys(values).length
+    mergeTemplateValues(values)
+    setComparisonItems(null)
+    if (count > 0) {
+      toast.success(`${count} campo${count !== 1 ? 's' : ''} corregido${count !== 1 ? 's' : ''} con la plantilla del proveedor`)
     }
   }
 
@@ -1482,6 +1538,14 @@ export default function EscanearGastoPage() {
         supplierName={form.supplier || form.issuerName}
         supplierNif={form.issuerTaxId}
         onApply={mergeTemplateValues}
+      />
+
+      {/* Comparación lado a lado: confirmar antes de aplicar la plantilla */}
+      <OcrComparisonModal
+        open={comparisonItems !== null}
+        items={comparisonItems || []}
+        onConfirm={confirmTemplateComparison}
+        onClose={() => setComparisonItems(null)}
       />
     </div>
   )
