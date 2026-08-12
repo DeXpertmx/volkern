@@ -4,6 +4,7 @@ import {
   applyTemplate,
   wordsInRegion,
   OCR_FIELD_DEFS,
+  sameFieldValue,
   type OcrTemplateField,
 } from '@/lib/finance/ocr-template'
 
@@ -106,6 +107,26 @@ describe('applyTemplate', () => {
       region('campo_inexistente', 300, 140, 300, 70),
     ])
     expect(values).toEqual({})
+  })
+})
+
+describe('sameFieldValue', () => {
+  it('considera iguales los importes en formatos distintos', () => {
+    expect(sameFieldValue('1.696,00', '1696.00')).toBe(true)
+    expect(sameFieldValue('1696', '1696.00')).toBe(true)
+    expect(sameFieldValue('1 696,00', '1696.00')).toBe(true)
+    expect(sameFieldValue('336,00', '336.00')).toBe(true)
+  })
+
+  it('distingue importes distintos', () => {
+    expect(sameFieldValue('1696.00', '1600.00')).toBe(false)
+    expect(sameFieldValue('336.00', '210.00')).toBe(false)
+  })
+
+  it('compara texto y fechas de forma normalizada', () => {
+    expect(sameFieldValue('24/07/2026', '24/07/2026')).toBe(true)
+    expect(sameFieldValue('INNOVATECH SOLUCIONES', 'innovateth soluciones')).toBe(false)
+    expect(sameFieldValue('B87654321', 'B-87654321'.replace(/-/g, ''))).toBe(true)
   })
 })
 

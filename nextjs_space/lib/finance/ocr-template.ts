@@ -149,6 +149,35 @@ export function applyTemplate(
   return result
 }
 
+// Convierte texto a número tolerando formatos europeos y US
+// ("1.696,00" → 1696, "1696.00" → 1696, "1,200.50" → 1200.50).
+function parseNumberLenient(s: string): number | null {
+  const cleaned = s.replace(/[^\d.,-]/g, '')
+  if (!cleaned) return null
+  const m = cleaned.match(/^(.*[.,])(\d{1,2})$/)
+  if (m) {
+    const n = parseFloat(`${m[1].replace(/[.,]/g, '')}.${m[2]}`)
+    return isFinite(n) ? n : null
+  }
+  const n = parseFloat(cleaned.replace(/[.,]/g, ''))
+  return isFinite(n) ? n : null
+}
+
+/**
+ * Compara dos valores de un campo tolerando formatos distintos:
+ * "1.696,00" ≈ 1696 ≈ "1696.00" ≈ "1 696,00" (mismo importe) y
+ * "24/07/2026" == "24/07/2026". Usada para decidir si la plantilla discrepa
+ * de lo que leyó el parser genérico.
+ */
+export function sameFieldValue(a: string, b: string): boolean {
+  const x = a.trim().toLowerCase().replace(/\s+/g, '')
+  const y = b.trim().toLowerCase().replace(/\s+/g, '')
+  if (x === y) return true
+  const nx = parseNumberLenient(x)
+  const ny = parseNumberLenient(y)
+  return nx !== null && ny !== null && Math.abs(nx - ny) < 0.005
+}
+
 /**
  * Convierte el `TextOverlay` de OCR.space (JSON crudo) al formato interno.
  * Devuelve null si el overlay no trae palabras.
