@@ -108,9 +108,11 @@ export default function GastosPage() {
               <Scan className="w-4 h-4 mr-2" /> Escanear
             </Button>
           </Link>
-          <Button className="rounded-xl font-bold uppercase text-xs tracking-wider">
-            <Plus className="w-4 h-4 mr-2" /> Registrar Gasto
-          </Button>
+          <Link href="/dashboard/finanzas/gastos/escanear?manual=1">
+            <Button className="rounded-xl font-bold uppercase text-xs tracking-wider">
+              <Plus className="w-4 h-4 mr-2" /> Registrar Gasto
+            </Button>
+          </Link>
         </div>
       </div>
 
