@@ -414,15 +414,18 @@ export default function EscanearGastoPage() {
   }
 
   // ─── Proveedor: selección, autofill del emisor y registro ────────────
-  // Crea tramos de IVA automáticamente según los tipos de IVA del proveedor
-  const autoCreateTramos = (rates: number[] | undefined | null) => {
+  // Crea tramos de IVA automáticamente según los tipos de IVA del proveedor.
+  // `override=true` (auto-match tras el OCR) reemplaza los tramos detectados
+  // por los tipos registrados del proveedor: son la fuente fiable de sus IVAs.
+  const autoCreateTramos = (rates: number[] | undefined | null, override = false) => {
     if (!Array.isArray(rates) || rates.length === 0) return
-    if (ivaRowsRef.current.length > 0) return // no pisa tramos ya detectados o introducidos
+    if (!override && ivaRowsRef.current.length > 0) return // no pisa tramos ya detectados o introducidos
     const rows = rates.map(r => ({ id: nextIvaRowId.current++, base: '', rate: String(r) }))
-    const target = trancheTarget || formRef.current.taxableBase
+    const target = trancheTarget || formRef.current.taxableBase || ''
     if (target) setTrancheTarget(target)
     const withDist = applyDistribution(rows, target)
     setIvaRows(withDist)
+    setLockedEmptyRows(new Set())
     syncTotalsFromRows(withDist)
   }
 
@@ -463,7 +466,7 @@ export default function EscanearGastoPage() {
     return true
   }
 
-  const selectSupplier = (s: any) => {
+  const selectSupplier = (s: any, fromOcrAutoMatch = false) => {
     setSelectedSupplier(s)
     setSupplierQuery('')
     setSupplierOpen(false)
@@ -476,7 +479,8 @@ export default function EscanearGastoPage() {
       issuerTaxId: p.issuerTaxId || s.taxId || '',
       issuerAddress: p.issuerAddress || buildSupplierAddress(s),
     }))
-    autoCreateTramos(s.vatRates)
+    // Tras el OCR, los tipos del proveedor mandan sobre los detectados
+    autoCreateTramos(s.vatRates, fromOcrAutoMatch)
   }
 
   // Proveedor no registrado: usar el nombre tecleado como nuevo proveedor
@@ -504,7 +508,7 @@ export default function EscanearGastoPage() {
       if (!Array.isArray(list) || list.length === 0) return
       const exact = list.find((s: any) => (s.name || '').toLowerCase() === name.trim().toLowerCase())
       const s = exact || list[0]
-      selectSupplier(s)
+      selectSupplier(s, true)
       setAllSuppliers(prev => (prev.some(p => p.id === s.id) ? prev : [...prev, s]))
     } catch {
       /* silencioso: el usuario puede elegir el proveedor en el buscador */
@@ -590,8 +594,9 @@ export default function EscanearGastoPage() {
         issuerName: p.issuerName || data.name,
         issuerTaxId: p.issuerTaxId || data.taxId || '',
       }))
-      // Crea los tramos de IVA según los tipos registrados
-      autoCreateTramos(supplierModal.vatRates)
+      // Crea los tramos de IVA según los tipos registrados. Si el OCR ya
+      // creó tramos detectados, los tipos elegidos para el proveedor mandan.
+      autoCreateTramos(supplierModal.vatRates, true)
       toast.success(`Proveedor «${data.name}» registrado`)
     } catch {
       toast.error('Error de conexión al registrar proveedor')
@@ -2282,6 +2287,8 @@ export default function EscanearGastoPage() {
       <OcrComparisonModal
         open={comparisonItems !== null}
         items={comparisonItems || []}
+        imageUrl={isPdf ? pdfPreviewUrl : capturedImage || form.receiptUrl}
+        pdfPages={isPdf ? pdfPreviewPages : undefined}
         onConfirm={confirmTemplateComparison}
         onClose={() => setComparisonItems(null)}
       />
