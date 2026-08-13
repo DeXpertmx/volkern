@@ -19,9 +19,18 @@ RUN apt-get update -qq && \
 
 # Copiar archivos de dependencias
 COPY package.json package-lock.json ./
+# Dependencia local file:./eslint-rules (plugin de ESLint del proyecto)
+COPY eslint-rules ./eslint-rules
 
 # Instalar TODAS las dependencias (incluyendo devDeps para el build)
-RUN npm ci --ignore-scripts && \
+# El lock contiene un peer-conflict conocido: zod-to-openapi@8.5.0 (peer zod@^4)
+# vs zod@^3 del proyecto. Reproducimos el entorno local (que funciona):
+#   - npm 9.2.0 (el de la máquina de desarrollo; npm 10 rechaza el lock por peer-conflict)
+#   - --legacy-peer-deps (resolución zod@3 real)
+#   - (npx patch-package || true) con paréntesis: si npm ci falla, la capa falla y no se cachea
+RUN npm install -g npm@9.2.0 && \
+    npm ci --ignore-scripts --legacy-peer-deps && \
+    (npx patch-package || true) && \
     npm rebuild esbuild && \
     true
 
@@ -42,6 +51,27 @@ COPY --from=deps /app/package.json ./package.json
 
 # Copiar código fuente
 COPY . .
+
+# ─── NEXT_PUBLIC_* horneados en el build (client-side) ───
+# Se pasan con --build-arg al construir la imagen (ej. deploy-vps).
+ARG NEXT_PUBLIC_APP_URL
+ARG NEXT_PUBLIC_CANVA_CLIENT_ID
+ARG NEXT_PUBLIC_CDN_URL
+ARG NEXT_PUBLIC_CHATWOOT_URL
+ARG NEXT_PUBLIC_GOOGLE_FONTS_APIKEY
+ARG NEXT_PUBLIC_ONESIGNAL_APP_ID
+ARG NEXT_PUBLIC_ONESIGNAL_SAFARI_WEB_ID
+ARG NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+ARG NEXT_PUBLIC_VAPID_PUBLIC_KEY
+ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL \
+    NEXT_PUBLIC_CANVA_CLIENT_ID=$NEXT_PUBLIC_CANVA_CLIENT_ID \
+    NEXT_PUBLIC_CDN_URL=$NEXT_PUBLIC_CDN_URL \
+    NEXT_PUBLIC_CHATWOOT_URL=$NEXT_PUBLIC_CHATWOOT_URL \
+    NEXT_PUBLIC_GOOGLE_FONTS_APIKEY=$NEXT_PUBLIC_GOOGLE_FONTS_APIKEY \
+    NEXT_PUBLIC_ONESIGNAL_APP_ID=$NEXT_PUBLIC_ONESIGNAL_APP_ID \
+    NEXT_PUBLIC_ONESIGNAL_SAFARI_WEB_ID=$NEXT_PUBLIC_ONESIGNAL_SAFARI_WEB_ID \
+    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=$NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY \
+    NEXT_PUBLIC_VAPID_PUBLIC_KEY=$NEXT_PUBLIC_VAPID_PUBLIC_KEY
 
 # Generar Prisma Client + Build Next.js (standalone)
 RUN npx prisma generate

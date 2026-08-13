@@ -43,10 +43,11 @@ docker-compose*.yml
 README.md
 docs/
 
-# Scripts (except entrypoint)
+# Scripts (except entrypoint y seed-formularios-demo, importado por app/api/signup)
 scripts/*.ts
 scripts/*.sh
 !scripts/docker-entrypoint.sh
+!scripts/seed-formularios-demo.ts
 
 # Tests
 *.test.ts

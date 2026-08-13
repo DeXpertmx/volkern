@@ -17,7 +17,13 @@ export const authOptions: NextAuthOptions = {
         sameSite: 'lax',
         path: '/',
         secure: process.env.NODE_ENV === 'production',
-        ...(process.env.NODE_ENV === 'production' ? { domain: '.volkern.app' } : {}),
+        // Dominio de cookie configurable por despliegue:
+        //  - por defecto '.volkern.app' (multi-tenant en Vercel, sin cambios)
+        //  - AUTH_COOKIE_DOMAIN=none → cookie host-only (despliegues en otros dominios,
+        //    p.ej. erp.dimension.expert en el VPS)
+        ...(process.env.NODE_ENV === 'production' && process.env.AUTH_COOKIE_DOMAIN !== 'none'
+          ? { domain: process.env.AUTH_COOKIE_DOMAIN || '.volkern.app' }
+          : {}),
       }
     }
   },
