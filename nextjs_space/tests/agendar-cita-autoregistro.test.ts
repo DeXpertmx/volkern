@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   leadCreate: vi.fn(),
   createBooking: vi.fn(),
   userFindMany: vi.fn(),
+  configFindUnique: vi.fn(),
   gcalFindFirst: vi.fn(),
   citaUpdate: vi.fn(),
 }));
@@ -17,6 +18,7 @@ vi.mock('@/lib/db', () => ({
     lead: { findFirst: mocks.leadFindFirst, create: mocks.leadCreate },
     contact: { findFirst: mocks.contactFindFirst },
     user: { findMany: mocks.userFindMany },
+    configuracion: { findUnique: mocks.configFindUnique },
     googleCalendarIntegration: { findFirst: mocks.gcalFindFirst },
     cita: { update: mocks.citaUpdate },
   },
@@ -45,6 +47,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   // Defaults: sin usuario con timezone y sin integración de Google Calendar
   mocks.userFindMany.mockResolvedValue([]);
+  mocks.configFindUnique.mockResolvedValue(null);
   mocks.gcalFindFirst.mockResolvedValue(null);
 });
 
@@ -122,6 +125,48 @@ describe('clasificador — agendar cita por nombre sin email', () => {
     expect(result.extractedParams.tipo).toBe('videollamada');
     expect(result.extractedParams.hora).toBe('15:30');
   });
+
+  it('normaliza el mensaje interno de continuación sin contaminar el nombre con fecha o tipo', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'Agendar una cita con Alejandra Velázquez el 2026-08-14 a las 16:00 por videollamada con email alevvalverde@gmail.com teléfono +34664702631',
+    });
+    expect(result.intent).toBe('agendar_cita');
+    expect(result.extractedParams.nombre).toBe('Alejandra Velázquez');
+    expect(result.extractedParams.email).toBe('alevvalverde@gmail.com');
+    expect(result.extractedParams.telefono).toContain('34664702631');
+    expect(result.extractedParams.fecha).toBe('2026-08-14');
+    expect(result.extractedParams.hora).toBe('16:00');
+  });
+
+  it('multi-turno determinista conserva registrarContacto/email/telefono/empresa del contexto', async () => {
+    // Reproduce el bucle: tras confirmar y aportar datos, la ruta determinista
+    // volvía a preguntar la confirmación porque se perdía registrarContacto.
+    const result = await classifier.classify({
+      ...base,
+      message: 'Agendar una cita con Alejandra Velázquez el 2026-08-14 a las 16:00 por videollamada',
+      pendingIntent: 'agendar_cita',
+      collectedEntities: {
+        nombre: 'Alejandra Velázquez',
+        fecha: '2026-08-14',
+        hora: '16:00',
+        tipo: 'videollamada',
+        email: 'alevvalverde@gmail.com',
+        telefono: '+34664702631',
+        empresa: 'ARA Works',
+        registrarContacto: 'true',
+      },
+      missingEntities: [],
+    });
+    expect(result.intent).toBe('agendar_cita');
+    expect(result.rawResponse).toBe('[determinista]');
+    expect(result.extractedParams.registrarContacto).toBe('true');
+    expect(result.extractedParams.email).toBe('alevvalverde@gmail.com');
+    expect(result.extractedParams.telefono).toContain('34664702631');
+    expect(result.extractedParams.empresa).toBe('ARA Works');
+    expect(result.extractedParams.nombre).toBe('Alejandra Velázquez');
+    expect(result.needsMoreInfo).toBe(false);
+  });
 });
 
 // ─── 3. Wrapper: auto-registro del lead si no está en el CRM ───────────────
@@ -130,43 +175,21 @@ describe('create_booking — auto-registro del lead', () => {
   const fecha = '2026-08-12';
   const hora = '10:00';
 
-  it('lead NO existe por nombre → lo crea con email sintético + teléfono y vincula la cita', async () => {
-    mocks.leadFindFirst.mockResolvedValue(null); // no hay lead con ese nombre
-    mocks.contactFindFirst.mockResolvedValue(null); // ni contacto
-    mocks.leadCreate.mockResolvedValue({ id: 'lead-auto-1', email: 'juan.perez@auto.volkern.local' } as any);
-    mocks.createBooking.mockResolvedValue({ id: 'cita-1' } as any);
+  it('lead NO existe sin email real → no inventa datos ni crea lead/cita', async () => {
+    mocks.leadFindFirst.mockResolvedValue(null);
+    mocks.contactFindFirst.mockResolvedValue(null);
 
-    const result = await (skills as any).create_booking({
+    await expect((skills as any).create_booking({
       tenantId: TENANT,
       nombre: 'Juan Pérez',
       telefono: '+34600123456',
       fecha,
       hora,
-      registrarContacto: 'true', // el chatbot confirmó el registro
-    });
+      registrarContacto: 'true',
+    })).rejects.toThrow(/email real|No voy a inventar/i);
 
-    // Auto-registro: lead creado con email sintético determinista y teléfono
-    expect(mocks.leadCreate).toHaveBeenCalledTimes(1);
-    expect(mocks.leadCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          tenantId: TENANT,
-          nombre: 'Juan Pérez',
-          email: 'juan.perez@auto.volkern.local',
-          telefono: '+34600123456',
-        }),
-      }),
-    );
-    // La cita se crea contra ese lead (createBooking reutiliza el email)
-    expect(mocks.createBooking).toHaveBeenCalledWith(
-      expect.objectContaining({
-        tenantId: TENANT,
-        email: 'juan.perez@auto.volkern.local',
-        nombre: 'Juan Pérez',
-        telefono: '+34600123456',
-      }),
-    );
-    expect(result).toEqual({ id: 'cita-1' });
+    expect(mocks.leadCreate).not.toHaveBeenCalled();
+    expect(mocks.createBooking).not.toHaveBeenCalled();
   });
 
   it('lead YA existe por nombre → lo reutiliza, no crea duplicado', async () => {
@@ -181,20 +204,31 @@ describe('create_booking — auto-registro del lead', () => {
     );
   });
 
-  it('con email del usuario → no genera sintético, pasa el email tal cual', async () => {
-    mocks.leadFindFirst.mockResolvedValue(null); // no existe por nombre
+  it('con email real y confirmación → crea el lead con los datos aportados', async () => {
+    mocks.leadFindFirst.mockResolvedValue(null);
     mocks.contactFindFirst.mockResolvedValue(null);
+    mocks.leadCreate.mockResolvedValue({ id: 'lead-real-1', email: 'juan@empresa.com' } as any);
     mocks.createBooking.mockResolvedValue({ id: 'cita-1' } as any);
 
     await (skills as any).create_booking({
       tenantId: TENANT,
       nombre: 'Juan Pérez',
       email: 'juan@empresa.com',
+      telefono: '+34600123456',
+      empresa: 'Empresa Real',
       fecha,
       hora,
+      registrarContacto: 'true',
     });
 
-    expect(mocks.leadCreate).not.toHaveBeenCalled(); // createBooking lo crea por email
+    expect(mocks.leadCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        nombre: 'Juan Pérez',
+        email: 'juan@empresa.com',
+        telefono: '+34600123456',
+        empresa: 'Empresa Real',
+      }),
+    }));
     expect(mocks.createBooking).toHaveBeenCalledWith(
       expect.objectContaining({ email: 'juan@empresa.com', nombre: 'Juan Pérez' }),
     );
@@ -208,9 +242,13 @@ describe('create_booking — auto-registro del lead', () => {
       email: 'maria.garcia@empresa.com',
       fecha,
       hora,
+      registrarContacto: 'true',
     });
 
-    expect(mocks.leadCreate).not.toHaveBeenCalled(); // createBooking lo crea por email
+    mocks.leadCreate.mockResolvedValue({ id: 'lead-email-1', email: 'maria.garcia@empresa.com' } as any);
+    expect(mocks.leadCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ email: 'maria.garcia@empresa.com' }),
+    }));
     expect(mocks.createBooking).toHaveBeenCalledWith(
       expect.objectContaining({ email: 'maria.garcia@empresa.com', nombre: 'maria garcia' }),
     );
@@ -234,15 +272,16 @@ describe('create_booking — auto-registro del lead', () => {
     expect(mocks.createBooking).not.toHaveBeenCalled();
   });
 
-  it('nombre con acentos → email sintético sin acentos', async () => {
+  it('nombre con acentos + email real → conserva el nombre y email sin inventar', async () => {
     mocks.leadFindFirst.mockResolvedValue(null);
     mocks.contactFindFirst.mockResolvedValue(null);
-    mocks.leadCreate.mockResolvedValue({ id: 'lead-auto-2' } as any);
+    mocks.leadCreate.mockResolvedValue({ id: 'lead-real-2' } as any);
     mocks.createBooking.mockResolvedValue({ id: 'cita-2' } as any);
 
     await (skills as any).create_booking({
       tenantId: TENANT,
       nombre: 'María José Fernández',
+      email: 'maria.fernandez@empresa.es',
       fecha,
       hora,
       registrarContacto: 'true',
@@ -250,7 +289,7 @@ describe('create_booking — auto-registro del lead', () => {
 
     expect(mocks.leadCreate).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ email: 'maria.jose.fernandez@auto.volkern.local' }),
+        data: expect.objectContaining({ email: 'maria.fernandez@empresa.es' }),
       }),
     );
   });

@@ -339,9 +339,11 @@ export const SkillOrchestratorAgent = {
             hora: entities.hora || entities.time,
             nombre: entities.nombre,
             email: entities.email,
+            telefono: entities.telefono,
             titulo: entities.servicio || entities.service || entities.titulo,
             tipo: entities.tipo,
             ubicacion: entities.ubicacion,
+            empresa: entities.empresa,
             // Confirmación del chatbot: "registrarContacto=true" solo llega si
             // el usuario confirmó registrar a una persona que no está en el CRM.
             registrarContacto: entities.registrarContacto,
