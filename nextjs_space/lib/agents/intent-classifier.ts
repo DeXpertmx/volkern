@@ -299,7 +299,16 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     if (params.pendingIntent) {
       const freshDet = this.detectIntentDeterministically(params.message)
       if (freshDet) {
-        return await this.completeDeterministic(params, freshDet.intent, freshDet.extractedParams)
+        // Continuar el mismo intent pendiente: fusionar las entidades ya
+        // capturadas en turnos previos (registrarContacto, email, teléfono,
+        // empresa…). Sin esta fusión, el flujo multi-turno de agendar_cita
+        // perdía registrarContacto y el chatbot volvía a preguntar la
+        // confirmación en un bucle infinito. Si el usuario cambió de intent,
+        // la intención nueva gana sin contaminarse.
+        const merged = freshDet.intent === params.pendingIntent
+          ? { ...(params.collectedEntities || {}), ...freshDet.extractedParams }
+          : freshDet.extractedParams
+        return await this.completeDeterministic(params, freshDet.intent, merged)
       }
       const completed = this.tryMultiTurnDeterministic(params)
       if (completed) return completed
@@ -1271,6 +1280,8 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
       if (hora) extracted.hora = hora
       const tipo = this.extractTipoCitaDe(message)
       if (tipo) extracted.tipo = tipo
+      const empresa = this.extractEmpresaDe(message)
+      if (empresa) extracted.empresa = empresa
       const titulo = this.extractTituloDe(message)
       if (titulo) extracted.servicio = titulo
       return { intent: 'agendar_cita', confidence: 0.85, extractedParams: extracted }
@@ -1757,8 +1768,10 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
       .replace(/\bma[nñ]ana\b|\bhoy\b/gi, ' ')
       .replace(/\b(?:el|este)\s+(?:pr[oó]xim[oa]\s+)?(?:domingo|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado)\b/gi, ' ')
       .replace(/\b\d{1,2}\s+de\s+[A-Za-zÁÉÍÓÚÑÜáéíóúñü]+\b/gi, ' ')
-      .replace(/\b\d{1,2}[\/-]\d{1,2}(?:[\/-]\d{2,4})?\b/gi, ' ')
+      .replace(/\b(?:el|este)\s+\d{4}[-/]\d{1,2}[-/]\d{1,2}\b/gi, ' ')
       .replace(/\b\d{4}[-/]\d{1,2}[-/]\d{1,2}\b/gi, ' ')
+      .replace(/\b\d{1,2}[\/-]\d{1,2}(?:[\/-]\d{2,4})?\b/gi, ' ')
+      .replace(/\bpor\s+(?:videollamada|video|virtual|online|zoom|meet|google\s+meet)\b/gi, ' ')
       // Horas: "a las 10am", "a las 15:30", "las 2pm" (no se cuelan en el nombre)
       .replace(/\b(?:a\s+las|a\s+la|las)\s+\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?)?\b/gi, ' ')
       .replace(/\s{2,}/g, ' ')

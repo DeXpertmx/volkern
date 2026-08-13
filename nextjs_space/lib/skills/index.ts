@@ -781,22 +781,6 @@ const getPhoneByNameWrapper = async (input: { tenantId: string; nombre: string }
   throw new Error(`No se encontró teléfono para el nombre "${nombre}"`);
 };
 
-/**
- * Email sintético determinista para leads sin email (cita desde Telegram):
- * "Juan Pérez" → "juan.perez@auto.volkern.local". Marca @auto.volkern.local
- * para que nadie envíe emails reales a una dirección que no existe.
- */
-function emailSinteticoParaLead(nombre: string): string {
-  const slug = nombre
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // quitar acentos
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '.')
-    .replace(/^\.+|\.+$/g, '')
-    .slice(0, 40)
-  return `${slug || 'contacto'}@auto.volkern.local`
-}
-
 const createBookingWrapper = async (input: { 
   tenantId: string; 
   email?: string; 
@@ -807,10 +791,11 @@ const createBookingWrapper = async (input: {
   titulo?: string;
   tipo?: string;
   ubicacion?: string;
+  empresa?: string;
   registrarContacto?: string;
   userId?: string;
 }) => {
-  const { tenantId, email, telefono, nombre, fecha, hora, titulo, tipo, ubicacion, registrarContacto, userId } = input;
+  const { tenantId, email, telefono, nombre, fecha, hora, titulo, tipo, ubicacion, empresa, registrarContacto, userId } = input;
   const { prisma } = await import('@/lib/db');
 
   // ── Limpiar nombre: extraer solo el nombre real ──
@@ -842,21 +827,46 @@ const createBookingWrapper = async (input: {
   }
 
   let targetEmail = email
+  let crmRecordFound = false
 
-  // ── Buscar contacto existente ──
-  if (targetNombre) {
-    const lead = await prisma.lead.findFirst({ 
-      where: { tenantId, nombre: { contains: targetNombre, mode: 'insensitive' } } 
+  // ── Buscar primero por email y después por nombre ──
+  // Si ya existe como lead o contacto, la cita se vincula a su ficha; si no,
+  // solo se crea un lead nuevo después de recibir datos reales y confirmación.
+  if (targetEmail) {
+    const leadByEmail = await prisma.lead.findFirst({
+      where: { tenantId, email: targetEmail },
+    })
+    if (leadByEmail) {
+      crmRecordFound = true
+      targetNombre = leadByEmail.nombre
+      targetEmail = leadByEmail.email
+    } else {
+      const contactByEmail = await prisma.contact.findFirst({
+        where: { tenantId, email: targetEmail },
+      })
+      if (contactByEmail) {
+        crmRecordFound = true
+        targetNombre = contactByEmail.nombre
+        targetEmail = contactByEmail.email
+      }
+    }
+  }
+
+  if (!crmRecordFound && targetNombre) {
+    const lead = await prisma.lead.findFirst({
+      where: { tenantId, nombre: { contains: targetNombre, mode: 'insensitive' } }
     });
-    
+
     if (lead) {
+      crmRecordFound = true
       targetEmail = targetEmail || lead.email
       targetNombre = lead.nombre
     } else {
-      const contact = await prisma.contact.findFirst({ 
-        where: { tenantId, nombre: { contains: targetNombre, mode: 'insensitive' } } 
+      const contact = await prisma.contact.findFirst({
+        where: { tenantId, nombre: { contains: targetNombre, mode: 'insensitive' } }
       });
       if (contact) {
+        crmRecordFound = true
         targetEmail = targetEmail || contact.email
         targetNombre = contact.nombre
       }
@@ -875,31 +885,30 @@ const createBookingWrapper = async (input: {
     throw new Error('Necesito saber con quién agendar la cita: dame el nombre o email del contacto (requerido).')
   }
 
-  // ── Si no hay email: registrar el lead SOLO con confirmación explícita ──
-  // (El modelo Lead exige email, pero desde Telegram el usuario suele dar solo
-  // el nombre. El chatbot pregunta antes de registrar a una persona que no
-  // está en el CRM (ver chatbot-service): si el usuario confirma, llega aquí
-  // con registrarContacto='true'. Sin confirmación NO se auto-registra — se
-  // lanza un error claro para que el canal pregunte de nuevo.)
-  if (!targetEmail) {
+  // ── Un lead nuevo requiere email real y confirmación explícita ──
+  // Nunca se inventan dominios .local ni se envía correo a datos ficticios.
+  if (!crmRecordFound) {
     if (registrarContacto !== 'true') {
       throw new Error(
         'Esa persona no está registrada en tu CRM. Confirma que quieres registrarla como lead para agendar la cita (responde "sí").'
       )
     }
-    // TS no infiere la correlación a través del throw previo: aquí targetNombre
-    // siempre es string (si ambos faltaran ya habríamos lanzado antes).
+    if (!targetEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(targetEmail)) {
+      throw new Error(
+        'Para registrar a esta persona necesito su email real. No voy a inventar una dirección; responde con un correo válido.'
+      )
+    }
     const nombreFinal = targetNombre as string
-    targetEmail = emailSinteticoParaLead(nombreFinal)
     await prisma.lead.create({
       data: {
         tenantId,
         nombre: nombreFinal,
         email: targetEmail,
         telefono: telefono || null,
+        empresa: empresa || null,
         fuente: 'booking',
-        notas: 'Lead registrado desde el chat (confirmado por el usuario) sin email para agendar la cita.',
-        metadataExterna: { sinEmail: true, origen: 'chat', confirmado: true },
+        notas: 'Lead registrado desde el chat con confirmación explícita del usuario.',
+        metadataExterna: { origen: 'chat', confirmado: true },
       },
     })
   }
@@ -927,20 +936,28 @@ const createBookingWrapper = async (input: {
     return { h, min }
   }
 
-  // ── Zona horaria del tenant: usar la del primer usuario con timezone ──
-  // El servidor corre en UTC; sin esto, "6pm" (hora del usuario en
-  // Europe/Madrid, UTC+2) se agendaría 2h tarde. Se busca el usuario del
-  // tenant con timezone configurada (fallback America/Mexico_City).
+  // ── Zona horaria del tenant ──
+  // La configuración del tenant tiene prioridad. Antes se tomaba el primer
+  // usuario, lo que podía seleccionar al administrador con America/Mexico_City
+  // aunque el propietario trabajara en Europe/Madrid (4pm terminaba a las 22h).
   let timezone = 'America/Mexico_City'
   try {
-    const tzUsers = await prisma.user.findMany({
-      where: { tenantId } as any,
-      select: { timezone: true },
-      take: 20,
+    const tenantTimezone = await prisma.configuracion.findUnique({
+      where: { tenantId_clave: { tenantId, clave: 'timezone' } },
+      select: { valor: true },
     })
-    const tzUser = tzUsers.find((u: any) => u.timezone)
-    if (tzUser?.timezone) timezone = tzUser.timezone
-  } catch { /* mantener fallback */ }
+    if (tenantTimezone?.valor) {
+      timezone = tenantTimezone.valor
+    } else {
+      const tzUsers = await prisma.user.findMany({
+        where: { tenantId } as any,
+        select: { timezone: true },
+        take: 20,
+      })
+      const tzUser = tzUsers.find((u: any) => u.timezone)
+      if (tzUser?.timezone) timezone = tzUser.timezone
+    }
+  } catch { /* mantener America/Mexico_City como fallback histórico */ }
 
   let dt: Date
   try {
@@ -1000,7 +1017,7 @@ const createBookingWrapper = async (input: {
 
   const bookingResult = await bookingSkills.createBooking({
     tenantId,
-    email: targetEmail,
+    email: targetEmail as string,
     telefono,
     nombre: targetNombre as string,
     titulo: titulo || 'Cita de Seguimiento',
