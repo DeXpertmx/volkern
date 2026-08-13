@@ -73,6 +73,17 @@ export async function createTask(input: CreateTaskInput) {
     throw new Error('Lead no encontrado');
   }
 
+  // Validar asignadoA: canales externos (Telegram/WhatsApp) pasan el id de
+  // conversación como userId, que NO es un usuario real → sin asignar.
+  let asignadoAValido: string | null = null;
+  if (asignadoA) {
+    const usuario = await prisma.user.findFirst({
+      where: { id: asignadoA, tenantId },
+      select: { id: true },
+    });
+    if (usuario) asignadoAValido = asignadoA;
+  }
+
   // 2. Crear en Core
   const task = await prisma.task.create({
     data: {
@@ -82,7 +93,7 @@ export async function createTask(input: CreateTaskInput) {
       tipo,
       descripcion,
       fechaVencimiento,
-      asignadoA,
+      asignadoA: asignadoAValido,
       completada: false,
     } as any,
   });

@@ -807,9 +807,10 @@ const createBookingWrapper = async (input: {
   titulo?: string;
   tipo?: string;
   ubicacion?: string;
+  registrarContacto?: string;
   userId?: string;
 }) => {
-  const { tenantId, email, telefono, nombre, fecha, hora, titulo, tipo, ubicacion, userId } = input;
+  const { tenantId, email, telefono, nombre, fecha, hora, titulo, tipo, ubicacion, registrarContacto, userId } = input;
   const { prisma } = await import('@/lib/db');
 
   // ── Limpiar nombre: extraer solo el nombre real ──
@@ -874,12 +875,18 @@ const createBookingWrapper = async (input: {
     throw new Error('Necesito saber con quién agendar la cita: dame el nombre o email del contacto (requerido).')
   }
 
-  // ── Si no hay email: auto-registrar el lead ──
+  // ── Si no hay email: registrar el lead SOLO con confirmación explícita ──
   // (El modelo Lead exige email, pero desde Telegram el usuario suele dar solo
-  // el nombre. Se genera un email sintético determinista y se crea el lead con
-  // el teléfono si viene; createBooking lo reutiliza por email → la cita queda
-  // vinculada al lead recién registrado, sin duplicados.)
+  // el nombre. El chatbot pregunta antes de registrar a una persona que no
+  // está en el CRM (ver chatbot-service): si el usuario confirma, llega aquí
+  // con registrarContacto='true'. Sin confirmación NO se auto-registra — se
+  // lanza un error claro para que el canal pregunte de nuevo.)
   if (!targetEmail) {
+    if (registrarContacto !== 'true') {
+      throw new Error(
+        'Esa persona no está registrada en tu CRM. Confirma que quieres registrarla como lead para agendar la cita (responde "sí").'
+      )
+    }
     // TS no infiere la correlación a través del throw previo: aquí targetNombre
     // siempre es string (si ambos faltaran ya habríamos lanzado antes).
     const nombreFinal = targetNombre as string
@@ -891,8 +898,8 @@ const createBookingWrapper = async (input: {
         email: targetEmail,
         telefono: telefono || null,
         fuente: 'booking',
-        notas: 'Lead registrado automáticamente desde el chat sin email para agendar la cita.',
-        metadataExterna: { sinEmail: true, origen: 'chat' },
+        notas: 'Lead registrado desde el chat (confirmado por el usuario) sin email para agendar la cita.',
+        metadataExterna: { sinEmail: true, origen: 'chat', confirmado: true },
       },
     })
   }
@@ -920,6 +927,21 @@ const createBookingWrapper = async (input: {
     return { h, min }
   }
 
+  // ── Zona horaria del tenant: usar la del primer usuario con timezone ──
+  // El servidor corre en UTC; sin esto, "6pm" (hora del usuario en
+  // Europe/Madrid, UTC+2) se agendaría 2h tarde. Se busca el usuario del
+  // tenant con timezone configurada (fallback America/Mexico_City).
+  let timezone = 'America/Mexico_City'
+  try {
+    const tzUsers = await prisma.user.findMany({
+      where: { tenantId } as any,
+      select: { timezone: true },
+      take: 20,
+    })
+    const tzUser = tzUsers.find((u: any) => u.timezone)
+    if (tzUser?.timezone) timezone = tzUser.timezone
+  } catch { /* mantener fallback */ }
+
   let dt: Date
   try {
     if (fecha && hora) {
@@ -930,9 +952,13 @@ const createBookingWrapper = async (input: {
         const [y, m, d] = [fechaMatch[1], fechaMatch[2], fechaMatch[3]].map(Number)
         const horaParsed = parseHora(hora)
         if (horaParsed) {
-          dt = new Date(y, m - 1, d, horaParsed.h, horaParsed.min, 0, 0)
+          // Interpretar la hora en la zona del usuario, no en la del servidor
+          dt = fromZonedTime(
+            `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}T${String(horaParsed.h).padStart(2, '0')}:${String(horaParsed.min).padStart(2, '0')}:00`,
+            timezone
+          )
         } else {
-          dt = new Date(y, m - 1, d, 12, 0, 0, 0)
+          dt = fromZonedTime(`${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}T12:00:00`, timezone)
         }
       } else {
         // Fallback: new Date con string completo
@@ -972,7 +998,7 @@ const createBookingWrapper = async (input: {
     ubicacionFinal = ubicacion || 'Por confirmar ubicación'
   }
 
-  return bookingSkills.createBooking({
+  const bookingResult = await bookingSkills.createBooking({
     tenantId,
     email: targetEmail,
     telefono,
@@ -985,6 +1011,51 @@ const createBookingWrapper = async (input: {
     ubicacion: ubicacionFinal,
     source: 'app'
   });
+
+  // ── Sincronizar con Google Calendar si el tenant tiene integración activa ──
+  // El usuario pidió "reunión por Google Meet": además de guardar la cita en
+  // el CRM, hay que crear el evento real en Google Calendar (con link de Meet
+  // de verdad) para que aparezca en su calendario. Sin esto, la cita quedaba
+  // solo en BD con un placeholder meet.google.com/new.
+  const esVideollamada = !!(tipo && /videollamada|video|meet|virtual|en línea|online|zoom|google/i.test(tipo))
+  const citaId = bookingResult?.cita?.id
+  if (citaId) {
+    try {
+      const integration = await prisma.googleCalendarIntegration.findFirst({
+        where: { tenantId, activo: true },
+      })
+      if (integration?.userId) {
+        const { createCalendarEvent } = await import('@/lib/google-calendar')
+        const calendarEvent = await createCalendarEvent(integration.userId, {
+          id: citaId,
+          titulo: bookingResult.cita.titulo || 'Cita de Seguimiento',
+          descripcion: bookingResult.cita.descripcion || undefined,
+          fechaHora: bookingResult.cita.fechaHora,
+          duracion: bookingResult.cita.duracion,
+          leadNombre: bookingResult.lead?.nombre,
+          leadEmail: bookingResult.lead?.email,
+          generarMeet: esVideollamada,
+          targetCalendarId: integration.calendarId || undefined,
+        })
+        if (calendarEvent?.hangoutLink) {
+          await prisma.cita.update({
+            where: { id: citaId },
+            data: {
+              linkReunion: calendarEvent.hangoutLink,
+              ubicacion: 'Google Meet (Virtual)',
+            },
+          })
+          bookingResult.cita.linkReunion = calendarEvent.hangoutLink
+          bookingResult.cita.ubicacion = 'Google Meet (Virtual)'
+        }
+      }
+    } catch (gcalError: any) {
+      console.error('[createBookingWrapper] Error sincronizando Google Calendar:', gcalError?.message || gcalError)
+      // No romper el agendado: la cita ya está guardada en el CRM
+    }
+  }
+
+  return bookingResult;
 };
 
 // ─── Wrapper para registrar gasto: mapea params español → inglés y busca/crea proveedor ──────

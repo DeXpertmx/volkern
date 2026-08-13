@@ -209,6 +209,17 @@ export async function createLead(input: CreateLeadInput) {
   if (!nombre) throw new Error('nombre es requerido');
   if (!email) throw new Error('email es requerido');
 
+  // Validar asignadoA: canales externos (Telegram/WhatsApp) pasan el id de
+  // conversación como userId, que NO es un usuario real → sin asignar.
+  let asignadoAValido: string | null = null;
+  if (asignadoA) {
+    const usuario = await prisma.user.findFirst({
+      where: { id: asignadoA, tenantId },
+      select: { id: true },
+    });
+    if (usuario) asignadoAValido = asignadoA;
+  }
+
   // 2. Crear en Core
   const lead = await prisma.lead.create({
     data: {
@@ -221,7 +232,7 @@ export async function createLead(input: CreateLeadInput) {
       cargo,
       empresa,
       linkedin,
-      asignadoA,
+      asignadoA: asignadoAValido,
       estado: 'nuevo',
     },
   });

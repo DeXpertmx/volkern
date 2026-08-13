@@ -7,12 +7,18 @@ const mocks = vi.hoisted(() => ({
   contactFindFirst: vi.fn(),
   leadCreate: vi.fn(),
   createBooking: vi.fn(),
+  userFindMany: vi.fn(),
+  gcalFindFirst: vi.fn(),
+  citaUpdate: vi.fn(),
 }));
 
 vi.mock('@/lib/db', () => ({
   prisma: {
     lead: { findFirst: mocks.leadFindFirst, create: mocks.leadCreate },
     contact: { findFirst: mocks.contactFindFirst },
+    user: { findMany: mocks.userFindMany },
+    googleCalendarIntegration: { findFirst: mocks.gcalFindFirst },
+    cita: { update: mocks.citaUpdate },
   },
 }));
 
@@ -37,6 +43,9 @@ const base = { userId: 'u1', tenantId: TENANT };
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Defaults: sin usuario con timezone y sin integración de Google Calendar
+  mocks.userFindMany.mockResolvedValue([]);
+  mocks.gcalFindFirst.mockResolvedValue(null);
 });
 
 // ─── 1. Schema: fecha+hora requeridos, nombre/email opcionales ─────────────
@@ -133,6 +142,7 @@ describe('create_booking — auto-registro del lead', () => {
       telefono: '+34600123456',
       fecha,
       hora,
+      registrarContacto: 'true', // el chatbot confirmó el registro
     });
 
     // Auto-registro: lead creado con email sintético determinista y teléfono
@@ -212,18 +222,130 @@ describe('create_booking — auto-registro del lead', () => {
     ).rejects.toThrow(/nombre o email/);
   });
 
+  it('lead NO existe y SIN confirmación → NO auto-registra, pide confirmar', async () => {
+    mocks.leadFindFirst.mockResolvedValue(null);
+    mocks.contactFindFirst.mockResolvedValue(null);
+
+    await expect(
+      (skills as any).create_booking({ tenantId: TENANT, nombre: 'Nueva Persona', fecha, hora }),
+    ).rejects.toThrow(/Confirma|no está registrada/i);
+
+    expect(mocks.leadCreate).not.toHaveBeenCalled();
+    expect(mocks.createBooking).not.toHaveBeenCalled();
+  });
+
   it('nombre con acentos → email sintético sin acentos', async () => {
     mocks.leadFindFirst.mockResolvedValue(null);
     mocks.contactFindFirst.mockResolvedValue(null);
     mocks.leadCreate.mockResolvedValue({ id: 'lead-auto-2' } as any);
     mocks.createBooking.mockResolvedValue({ id: 'cita-2' } as any);
 
-    await (skills as any).create_booking({ tenantId: TENANT, nombre: 'María José Fernández', fecha, hora });
+    await (skills as any).create_booking({
+      tenantId: TENANT,
+      nombre: 'María José Fernández',
+      fecha,
+      hora,
+      registrarContacto: 'true',
+    });
 
     expect(mocks.leadCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ email: 'maria.jose.fernandez@auto.volkern.local' }),
       }),
     );
+  });
+});
+
+// ─── 4. Sincronización con Google Calendar + zona horaria ─────────────────
+
+describe('create_booking — Google Calendar + timezone', () => {
+  const fecha = '2026-08-13';
+  const hora = '18:00';
+
+  it('con integración activa y tipo videollamada → crea evento en Google Calendar con Meet y actualiza la cita', async () => {
+    mocks.leadFindFirst.mockResolvedValue({ id: 'lead-1', nombre: 'Juan Pérez', email: 'juan@x.com' } as any);
+    mocks.userFindMany.mockResolvedValue([{ timezone: 'Europe/Madrid' }] as any);
+    mocks.gcalFindFirst.mockResolvedValue({ userId: 'gcal-user', calendarId: 'primary' } as any);
+    mocks.createBooking.mockResolvedValue({
+      id: 'cita-1',
+      cita: {
+        id: 'cita-1',
+        titulo: 'Cita de Seguimiento',
+        descripcion: 'Tipo: videollamada',
+        fechaHora: new Date('2026-08-13T16:00:00.000Z'),
+        duracion: 30,
+        linkReunion: null,
+        ubicacion: null,
+      },
+      lead: { id: 'lead-1', nombre: 'Juan Pérez', email: 'juan@x.com' },
+    } as any);
+
+    // Mock de createCalendarEvent
+    const createCalendarEventMock = vi.fn().mockResolvedValue({
+      hangoutLink: 'https://meet.google.com/abc-defg-hij',
+    });
+    vi.doMock('@/lib/google-calendar', () => ({
+      createCalendarEvent: createCalendarEventMock,
+    }));
+    const { skills: skillsReloaded } = await import('@/lib/skills');
+
+    await (skillsReloaded as any).create_booking({
+      tenantId: TENANT,
+      nombre: 'Juan Pérez',
+      fecha,
+      hora,
+      tipo: 'videollamada',
+    });
+
+    // Buscó la integración activa del tenant
+    expect(mocks.gcalFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { tenantId: TENANT, activo: true } }),
+    );
+    // Creó el evento en Google Calendar con Meet
+    expect(createCalendarEventMock).toHaveBeenCalledWith(
+      'gcal-user',
+      expect.objectContaining({
+        id: 'cita-1',
+        generarMeet: true,
+        targetCalendarId: 'primary',
+        leadEmail: 'juan@x.com',
+      }),
+    );
+    // Actualizó la cita con el link real de Meet
+    expect(mocks.citaUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'cita-1' },
+        data: expect.objectContaining({ linkReunion: 'https://meet.google.com/abc-defg-hij' }),
+      }),
+    );
+  });
+
+  it('sin integración activa → no llama a Google Calendar y no falla', async () => {
+    mocks.leadFindFirst.mockResolvedValue({ id: 'lead-1', nombre: 'Juan Pérez', email: 'juan@x.com' } as any);
+    mocks.gcalFindFirst.mockResolvedValue(null);
+    mocks.createBooking.mockResolvedValue({ id: 'cita-1', cita: { id: 'cita-1' } } as any);
+
+    const result = await (skills as any).create_booking({
+      tenantId: TENANT,
+      nombre: 'Juan Pérez',
+      fecha,
+      hora,
+    });
+
+    expect(mocks.gcalFindFirst).toHaveBeenCalled();
+    expect(mocks.citaUpdate).not.toHaveBeenCalled();
+    expect(result).toEqual({ id: 'cita-1', cita: { id: 'cita-1' } });
+  });
+
+  it('usa la timezone del usuario del tenant para construir la fecha (18:00 Madrid = 16:00 UTC)', async () => {
+    mocks.leadFindFirst.mockResolvedValue({ id: 'lead-1', nombre: 'Juan Pérez', email: 'juan@x.com' } as any);
+    mocks.userFindMany.mockResolvedValue([{ timezone: 'Europe/Madrid' }] as any);
+    mocks.createBooking.mockResolvedValue({ id: 'cita-1', cita: { id: 'cita-1' } } as any);
+
+    await (skills as any).create_booking({ tenantId: TENANT, nombre: 'Juan Pérez', fecha, hora });
+
+    // 18:00 en Europe/Madrid (agosto, UTC+2) == 16:00 UTC
+    const callArgs = mocks.createBooking.mock.calls[0][0];
+    expect(callArgs.fechaHora.toISOString()).toBe('2026-08-13T16:00:00.000Z');
   });
 });
