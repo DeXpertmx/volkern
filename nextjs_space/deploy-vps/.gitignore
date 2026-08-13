@@ -1,0 +1,4 @@
+# ⚠️ NUNCA commitear: credenciales reales generadas por generar-env-vps.sh
+.env.vps
+.db_pass
+.env.neon

@@ -6,6 +6,11 @@ const withBundleAnalyzer = process.env.ANALYZE === 'true'
   : (config) => config;
 
 const nextConfig = {
+  // ═══ Output standalone ═══════════════════════════════
+  // Necesario para el Dockerfile (copia .next/standalone).
+  // En Vercel no afecta: Vercel usa su propio empaquetado.
+  output: 'standalone',
+
   // ═══ ESLint ════════════════════════════════════════════
   eslint: {
     ignoreDuringBuilds: true,

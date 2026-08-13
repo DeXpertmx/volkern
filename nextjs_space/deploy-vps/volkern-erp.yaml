@@ -1,0 +1,93 @@
+# ═══════════════════════════════════════════════════════════
+# Volkern ERP — Stack para el VPS (Docker Swarm)
+# Uso:  docker stack deploy -c volkern-erp.yaml volkern-erp
+# Red compartida: DXnet (Traefik + servicios existentes)
+# Dominio: https://erp.dimension.expert
+# ═══════════════════════════════════════════════════════════
+version: "3.8"
+
+services:
+  # ─── PostgreSQL (propio del ERP, patrón del stack volkern/table) ───
+  postgres:
+    # PG17 para coincidir con Neon (el dump de Neon 17.10 requiere cliente 17+)
+    image: postgres:17-alpine
+    volumes:
+      - volkern_erp_postgres_data:/var/lib/postgresql/data
+    networks:
+      - DXnet
+    environment:
+      POSTGRES_USER: volkern_erp
+      POSTGRES_PASSWORD: __DB_PASS__
+      POSTGRES_DB: volkern_erp
+    deploy:
+      mode: replicated
+      replicas: 1
+      resources:
+        limits:
+          memory: 768M
+      restart_policy:
+        condition: any
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U volkern_erp -d volkern_erp"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ─── App Next.js (imagen construida fuera del VPS) ───────────────
+  app:
+    image: volkern-erp:latest
+    env_file:
+      - .env
+    environment:
+      # El usuario volkern del contenedor no tiene /home propio; npx prisma
+      # necesita un cache npm escribible para migrate deploy en el arranque.
+      - HOME=/tmp
+      - npm_config_cache=/tmp/.npm
+      # Next.js standalone bindea a process.env.HOSTNAME; sin esto escucha solo
+      # en la IP del contenedor y el healthcheck de localhost:3000 falla.
+      - HOSTNAME=0.0.0.0
+    networks:
+      - DXnet
+    deploy:
+      mode: replicated
+      replicas: 1
+      resources:
+        limits:
+          memory: 1536M
+      restart_policy:
+        condition: any
+      labels:
+        - "traefik.enable=true"
+        # volkern.app: TLS lo termina Cloudflare (su edge cert). Sin certresolver
+        # en el origen (el challenge HTTP-01 no atraviesa Cloudflare).
+        # priority alta: el stack volkern/table tiene un catch-all HostRegexp(`{host:.+}`)
+        # (22 chars) que gana a Host(volkern.app) por longitud; con priority explícita
+        # nos aseguramos de enrutar a la app del ERP.
+        # Router renombrado (volkern_erp_main): fuerza registro limpio en Traefik
+        # (el router volkern_erp anterior quedó stale con la regla combinada vieja).
+        - "traefik.http.routers.volkern_erp_main.rule=Host(`volkern.app`)"
+        - "traefik.http.routers.volkern_erp_main.priority=100"
+        - "traefik.http.routers.volkern_erp_main.entrypoints=websecure"
+        # OBLIGATORIO: sin tls=true, Traefik no asocia el router a websecure y el
+        # catch-all del stack table (HostRegexp, tls:true) se lleva el tráfico.
+        # Sin certresolver: Cloudflare termina el TLS de volkern.app en el borde.
+        - "traefik.http.routers.volkern_erp_main.tls=true"
+        # www.volkern.app: DNS directo al VPS → cert Let's Encrypt en el origen
+        - "traefik.http.routers.volkern_erp_www.rule=Host(`www.volkern.app`)"
+        - "traefik.http.routers.volkern_erp_www.priority=100"
+        - "traefik.http.routers.volkern_erp_www.entrypoints=websecure"
+        - "traefik.http.routers.volkern_erp_www.tls.certresolver=letsencryptresolver"
+        # Acceso de transición (se depreca cuando volkern.app esté estable)
+        - "traefik.http.routers.volkern_erp_dim.rule=Host(`erp.dimension.expert`)"
+        - "traefik.http.routers.volkern_erp_dim.priority=100"
+        - "traefik.http.routers.volkern_erp_dim.entrypoints=websecure"
+        - "traefik.http.routers.volkern_erp_dim.tls.certresolver=letsencryptresolver"
+        - "traefik.http.services.volkern_erp.loadbalancer.server.port=3000"
+
+volumes:
+  volkern_erp_postgres_data:
+
+networks:
+  DXnet:
+    external: true
