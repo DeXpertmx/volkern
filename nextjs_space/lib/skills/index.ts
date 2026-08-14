@@ -1116,6 +1116,7 @@ const createBookingWrapper = async (input: {
 const createExpenseWrapper = async (input: {
   tenantId: string;
   userId?: string;
+  createdById?: string;
   monto?: number;
   amount?: number;
   concepto?: string;
@@ -1126,7 +1127,7 @@ const createExpenseWrapper = async (input: {
   fecha?: string;
   date?: string;
 }) => {
-  const { tenantId, userId, monto, amount, concepto, description, proveedor, categoria, category, fecha, date } = input;
+  const { tenantId, userId, createdById, monto, amount, concepto, description, proveedor, categoria, category, fecha, date } = input;
   const { prisma } = await import('@/lib/db');
   
   // Mapear params español → inglés
@@ -1178,9 +1179,22 @@ const createExpenseWrapper = async (input: {
 
   const parsedDate = fecha || date ? new Date(fecha || date || '') : undefined;
 
+  // Resolver el creador: la ruta /api/erp/expenses pasa createdById (ya validado
+  // contra la copia de usuarios del tenant); el motor puede pasar userId. Si no
+  // llega ninguno, usar el primer usuario del tenant (evita FK rota con 'system').
+  const resolvedCreatedById = createdById || userId ||
+    (await prisma.user.findFirst({
+      where: { tenantId },
+      select: { id: true },
+      orderBy: { createdAt: 'asc' },
+    }))?.id;
+  if (!resolvedCreatedById) {
+    throw new Error('No se pudo identificar el usuario que crea el gasto.');
+  }
+
   return financeSkills.createExpense({
     tenantId,
-    createdById: userId || 'system',
+    createdById: resolvedCreatedById,
     supplierId,
     description: finalDescription,
     amount: Number(finalAmount),
