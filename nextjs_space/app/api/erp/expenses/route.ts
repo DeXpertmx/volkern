@@ -183,6 +183,8 @@ export const POST = withTenantAuth(async (request, auth) => {
       vatAmount: body.vatAmount ? parseFloat(body.vatAmount) : undefined,
       irpfRate: body.irpfRate ? parseFloat(body.irpfRate) : undefined,
       irpfAmount: body.irpfAmount ? parseFloat(body.irpfAmount) : undefined,
+      ivaRetentionRate: body.ivaRetentionRate ? parseFloat(body.ivaRetentionRate) : undefined,
+      ivaRetentionAmount: body.ivaRetentionAmount ? parseFloat(body.ivaRetentionAmount) : undefined,
       surchargeRate: body.surchargeRate ? parseFloat(body.surchargeRate) : undefined,
       surchargeAmount: body.surchargeAmount ? parseFloat(body.surchargeAmount) : undefined,
       taxRegime: body.taxRegime,
