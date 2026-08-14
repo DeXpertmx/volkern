@@ -22,13 +22,13 @@ export async function GET(request: NextRequest) {
     if (error) {
       console.log('⚠️ Usuario rechazó permisos de Google Calendar');
       return NextResponse.redirect(
-        new URL('/dashboard/citas?error=google_calendar_denied', request.url)
+        new URL('/dashboard/citas?error=google_calendar_denied', process.env.NEXTAUTH_URL || 'https://volkern.app')
       );
     }
 
     if (!code || !state) {
       return NextResponse.redirect(
-        new URL('/dashboard/citas?error=google_calendar_invalid', request.url)
+        new URL('/dashboard/citas?error=google_calendar_invalid', process.env.NEXTAUTH_URL || 'https://volkern.app')
       );
     }
 
@@ -127,13 +127,13 @@ export async function GET(request: NextRequest) {
 
     // Redirigir al usuario de vuelta a la página de citas
     return NextResponse.redirect(
-      new URL('/dashboard/citas?success=google_calendar_connected', request.url)
+      new URL('/dashboard/citas?success=google_calendar_connected', process.env.NEXTAUTH_URL || 'https://volkern.app')
     );
   } catch (error: any) {
     console.error('❌ Error en callback de Google Calendar:', error.message);
     console.error('Stack:', error.stack);
     return NextResponse.redirect(
-      new URL('/dashboard/citas?error=google_calendar_error', request.url)
+      new URL('/dashboard/citas?error=google_calendar_error', process.env.NEXTAUTH_URL || 'https://volkern.app')
     );
   }
 }
