@@ -94,7 +94,7 @@ interface ExtractedData {
 }
 
 const CATEGORIES = [
-  { value: 'alimentacion', label: 'Alimentación' },
+  { value: 'mercaderias', label: 'Mercaderías' },
   { value: 'transporte', label: 'Transporte' },
   { value: 'suministros', label: 'Suministros' },
   { value: 'oficina', label: 'Oficina' },
