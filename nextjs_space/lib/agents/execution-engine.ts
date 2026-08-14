@@ -781,10 +781,16 @@ export const ExecutionEngine = {
         const cita = data?.cita || data;
         const titulo = cita?.titulo ? this.escapeMarkdown(String(cita.titulo)) : 'Cita';
         const nombre = data?.lead?.nombre ? this.escapeMarkdown(String(data.lead.nombre)) : (data?.nombre ? this.escapeMarkdown(String(data.nombre)) : '');
-        const fecha = cita?.fechaHora
-          ? new Date(cita.fechaHora).toLocaleString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
-          : 'la fecha indicada';
-        return `📅 *Cita agendada:* ${titulo}${nombre ? ` con ${nombre}` : ''}\n🗓 ${this.escapeMarkdown(fecha)}`;
+        // Si el skill devolvió fechaHoraLocal (formateada en la zona horaria del
+        // tenant), usarla: el toLocaleString del servidor está en UTC y mostraría
+        // una hora distinta a la que el usuario pidió.
+        const fecha = cita?.fechaHoraLocal
+          ? String(cita.fechaHoraLocal)
+          : cita?.fechaHora
+            ? new Date(cita.fechaHora).toLocaleString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
+            : 'la fecha indicada';
+        const duplicada = data?.duplicada ? '\n⚠️ Ya tenías una cita agendada a esa hora; no creé un duplicado.' : '';
+        return `📅 *Cita agendada:* ${titulo}${nombre ? ` con ${nombre}` : ''}\n🗓 ${this.escapeMarkdown(fecha)}${duplicada}`;
       }
       case 'get_upcoming_bookings': {
         const citas = data?.citas || [];

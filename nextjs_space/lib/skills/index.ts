@@ -1015,6 +1015,26 @@ const createBookingWrapper = async (input: {
     ubicacionFinal = ubicacion || 'Por confirmar ubicación'
   }
 
+  // ── Evitar duplicados: si ya existe una cita del mismo contacto con la
+  // misma fecha/hora creada en los últimos minutos (intento repetido desde
+  // Telegram), devolverla en vez de crear otra.
+  try {
+    const dup = await prisma.cita.findFirst({
+      where: {
+        tenantId,
+        fechaHora: dt,
+        lead: { email: targetEmail },
+        fechaCreacion: { gte: new Date(Date.now() - 10 * 60 * 1000) },
+      },
+      include: { lead: true },
+    })
+    if (dup) {
+      const dupResult = { cita: dup, lead: dup.lead }
+      ;(dupResult as any).duplicada = true
+      return dupResult
+    }
+  } catch { /* si falla el check de duplicados, seguir con la creación normal */ }
+
   const bookingResult = await bookingSkills.createBooking({
     tenantId,
     email: targetEmail as string,
@@ -1028,6 +1048,22 @@ const createBookingWrapper = async (input: {
     ubicacion: ubicacionFinal,
     source: 'app'
   });
+
+  // ── Añadir la hora formateada en la zona del tenant para que el mensaje
+  // de confirmación muestre la hora local (no la UTC del servidor) ──
+  try {
+    const fechaLocal = new Date(bookingResult.cita.fechaHora)
+    if (!isNaN(fechaLocal.getTime())) {
+      ;(bookingResult.cita as any).fechaHoraLocal = fechaLocal.toLocaleString('es-MX', {
+        timeZone: timezone,
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    }
+  } catch { /* si el formateo falla, el mensaje usa el fallback del formateador */ }
 
   // ── Sincronizar con Google Calendar si el tenant tiene integración activa ──
   // El usuario pidió "reunión por Google Meet": además de guardar la cita en

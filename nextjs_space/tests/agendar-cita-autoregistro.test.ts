@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   configFindUnique: vi.fn(),
   gcalFindFirst: vi.fn(),
   citaUpdate: vi.fn(),
+  citaFindFirst: vi.fn(),
 }));
 
 vi.mock('@/lib/db', () => ({
@@ -20,7 +21,7 @@ vi.mock('@/lib/db', () => ({
     user: { findMany: mocks.userFindMany },
     configuracion: { findUnique: mocks.configFindUnique },
     googleCalendarIntegration: { findFirst: mocks.gcalFindFirst },
-    cita: { update: mocks.citaUpdate },
+    cita: { update: mocks.citaUpdate, findFirst: mocks.citaFindFirst },
   },
 }));
 
@@ -49,6 +50,7 @@ beforeEach(() => {
   mocks.userFindMany.mockResolvedValue([]);
   mocks.configFindUnique.mockResolvedValue(null);
   mocks.gcalFindFirst.mockResolvedValue(null);
+  mocks.citaFindFirst.mockResolvedValue(null); // sin duplicado previo
 });
 
 // ─── 1. Schema: fecha+hora requeridos, nombre/email opcionales ─────────────
@@ -386,5 +388,52 @@ describe('create_booking — Google Calendar + timezone', () => {
     // 18:00 en Europe/Madrid (agosto, UTC+2) == 16:00 UTC
     const callArgs = mocks.createBooking.mock.calls[0][0];
     expect(callArgs.fechaHora.toISOString()).toBe('2026-08-13T16:00:00.000Z');
+  });
+
+  it('si ya existe una cita del mismo contacto a la misma hora (creada hace <10min) → no crea duplicado', async () => {
+    mocks.leadFindFirst.mockResolvedValue({ id: 'lead-1', nombre: 'Juan Pérez', email: 'juan@x.com' } as any);
+    mocks.userFindMany.mockResolvedValue([{ timezone: 'Europe/Madrid' }] as any);
+    mocks.citaFindFirst.mockResolvedValue({
+      id: 'cita-existente',
+      titulo: 'Cita de Seguimiento',
+      fechaHora: new Date('2026-08-13T16:00:00.000Z'),
+      lead: { id: 'lead-1', nombre: 'Juan Pérez', email: 'juan@x.com' },
+    } as any);
+
+    const result = await (skills as any).create_booking({
+      tenantId: TENANT,
+      nombre: 'Juan Pérez',
+      fecha,
+      hora,
+    });
+
+    expect(mocks.createBooking).not.toHaveBeenCalled();
+    expect(result.duplicada).toBe(true);
+    expect(result.cita.id).toBe('cita-existente');
+  });
+
+  it('añade fechaHoraLocal formateada en la timezone del tenant (16:00 UTC → 18:00 Madrid)', async () => {
+    mocks.leadFindFirst.mockResolvedValue({ id: 'lead-1', nombre: 'Juan Pérez', email: 'juan@x.com' } as any);
+    mocks.userFindMany.mockResolvedValue([{ timezone: 'Europe/Madrid' }] as any);
+    mocks.createBooking.mockResolvedValue({
+      id: 'cita-1',
+      cita: {
+        id: 'cita-1',
+        titulo: 'Cita de Seguimiento',
+        fechaHora: new Date('2026-08-13T16:00:00.000Z'),
+      },
+      lead: { id: 'lead-1', nombre: 'Juan Pérez', email: 'juan@x.com' },
+    } as any);
+
+    const result = await (skills as any).create_booking({
+      tenantId: TENANT,
+      nombre: 'Juan Pérez',
+      fecha: '2026-08-13',
+      hora: '18:00',
+    });
+
+    expect(result.cita.fechaHoraLocal).toBeTruthy();
+    // 16:00 UTC en Europe/Madrid (agosto) = 18:00 → formateado como 06:00 p.m.
+    expect(String(result.cita.fechaHoraLocal)).toMatch(/06:00/);
   });
 });

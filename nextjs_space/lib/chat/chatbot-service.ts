@@ -155,7 +155,21 @@ function esConfirmacionNegativa(message: string): boolean {
 function extraerDatosContacto(message: string): { email?: string; telefono?: string; empresa?: string } {
   const email = message.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0]
   const telefono = message.match(/(?:tel(?:éfono)?|móvil|movil|phone)?\s*[:\-]?\s*(\+?\d[\d\s().-]{7,}\d)/i)?.[1]?.trim()
-  const empresa = message.match(/\b(?:empresa|compañ[ií]a|compania)\s*(?:es|:)?\s*([^,;\n]+?)(?=\s*(?:,|;|tel(?:éfono)?|móvil|movil|$))/i)?.[1]?.trim()
+  // Empresa: primero con la palabra clave ("empresa X"), luego el segmento que
+  // queda tras email y teléfono en "email, teléfono, empresa" (sin necesidad de
+  // escribir la palabra empresa), y por último cualquier texto suelto al final.
+  let empresa = message.match(/\b(?:empresa|compañ[ií]a|compania)\s*(?:es|:)?\s*([^,;\n]+?)(?=\s*(?:,|;|tel(?:éfono)?|móvil|movil|$))/i)?.[1]?.trim()
+  if (!empresa) {
+    // Dividir por comas y tomar el primer segmento que no sea email ni teléfono
+    // y que no contenga palabras de relleno de la frase original.
+    const partes = message.split(',').map((p) => p.trim()).filter(Boolean)
+    const noEsEmail = (s: string) => !/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(s)
+    const noEsTelefono = (s: string) => !/^\+?\d[\d\s().-]{7,}\d$/.test(s.replace(/^(?:tel(?:éfono)?|móvil|movil|phone)\s*[:\-]?\s*/i, ''))
+    const candidata = partes.find((p) => noEsEmail(p) && noEsTelefono(p))
+    if (candidata && !/^(?:si|sí|no|email|tel(?:éfono)?|móvil|movil|empresa)$/i.test(candidata)) {
+      empresa = candidata
+    }
+  }
   return { email, telefono, empresa }
 }
 

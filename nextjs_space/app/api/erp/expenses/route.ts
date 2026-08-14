@@ -67,11 +67,36 @@ export const POST = withTenantAuth(async (request, auth) => {
       return NextResponse.json({ error: 'Faltan campos obligatorios' }, { status: 400 });
     }
 
+    // El usuario de sesión vive en el control plane, pero `Expense.createdBy`
+    // tiene una FK contra la copia de usuarios de la base de datos del tenant.
+    // En algunas cuentas (especialmente las provisionadas antes del aislamiento
+    // por tenant) ambos IDs no coinciden. Resolver aquí un creador existente
+    // evita el 500/FK que impedía guardar la captura manual.
+    const tenantId = auth.tenant!.id;
+    const tenantDb = auth.db as any;
+    let createdById = auth.user?.id;
+    if (tenantDb?.user && createdById) {
+      const creatorInTenant = await tenantDb.user.findFirst({
+        where: { id: createdById, tenantId },
+        select: { id: true },
+      });
+      if (!creatorInTenant) {
+        const fallbackCreator = await tenantDb.user.findFirst({
+          where: { tenantId },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true },
+        });
+        createdById = fallbackCreator?.id;
+      }
+    }
+    if (!createdById) {
+      return NextResponse.json({ error: 'No hay un usuario válido para registrar este gasto.' }, { status: 422 });
+    }
+
     // Bloqueo preventivo de duplicados. Primero usamos el número de factura
     // por proveedor; si no existe, hacemos una comprobación conservadora por
     // proveedor + importe + día. Se puede saltar solo con confirmación expresa
     // desde el formulario (allowDuplicate=true).
-    const tenantId = auth.tenant!.id;
     const invoiceNumber = typeof body.invoiceNumber === 'string' ? body.invoiceNumber.trim() : '';
     const candidateDate = body.date ? new Date(body.date) : new Date();
     let duplicate: any = null;
@@ -121,9 +146,24 @@ export const POST = withTenantAuth(async (request, auth) => {
       }, { status: 409 });
     }
 
+    // Si la captura es manual o el OCR dejó vacío el receptor, completar desde
+    // el perfil fiscal principal del tenant (la empresa que recibe el gasto).
+    const fiscalReceiver = await prisma.configuracionFiscalEmisor.findFirst({
+      where: { tenantId, activo: true },
+      orderBy: [{ esPrincipal: 'desc' }, { fechaCreacion: 'asc' }],
+      select: { razonSocial: true, idFiscal: true, direccion: true, codigoPostal: true, ciudad: true },
+    });
+    const receptorNombre = body.receptorNombre || fiscalReceiver?.razonSocial;
+    const receptorNif = body.receptorNif || fiscalReceiver?.idFiscal;
+    const receptorDireccion = body.receptorDireccion || (
+      fiscalReceiver
+        ? [fiscalReceiver.direccion, fiscalReceiver.codigoPostal, fiscalReceiver.ciudad].filter(Boolean).join(', ')
+        : undefined
+    );
+
     const expense = await (skills as any).create_expense({
-      tenantId: auth.tenant!.id,
-      createdById: auth.user!.id,
+      tenantId,
+      createdById,
       supplierId: body.supplierId,
       leadId: body.leadId,
       description: body.description,
@@ -152,17 +192,21 @@ export const POST = withTenantAuth(async (request, auth) => {
       issuerName: body.issuerName,
       issuerAddress: body.issuerAddress,
       issuerTaxId: body.issuerTaxId,
-      receptorNombre: body.receptorNombre,
-      receptorNif: body.receptorNif,
-      receptorDireccion: body.receptorDireccion,
+      receptorNombre,
+      receptorNif,
+      receptorDireccion,
       iban: body.iban,
       lineas: body.lineas,
       vatBreakdown: Array.isArray(body.vatBreakdown) ? body.vatBreakdown : undefined,
     });
 
     return NextResponse.json(expense);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating expense:', error);
-    return NextResponse.json({ error: 'Error al registrar el gasto' }, { status: 500 });
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes('erp_expenses_createdById_fkey')) {
+      return NextResponse.json({ error: 'No se encontró un usuario válido para registrar el gasto.' }, { status: 422 });
+    }
+    return NextResponse.json({ error: 'Error al registrar el gasto', details: process.env.NODE_ENV === 'development' ? message : undefined }, { status: 500 });
   }
 }, ['erp:write']);
