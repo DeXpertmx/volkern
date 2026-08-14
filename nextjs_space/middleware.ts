@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { resolveLegacyRedirect } from '@/lib/legacy-redirects'
 import { getToken } from 'next-auth/jwt'
 import { checkEdgeRateLimit } from '@/lib/edge-rate-limiter'
 import {
@@ -138,72 +139,15 @@ export async function middleware(request: NextRequest) {
     return withHeaders(NextResponse.next())
   }
 
-  // ─── Rutas legacy /[tenant]/<seccion>/* (modo subdominio revertido) ──
-  // app/[tenant]/<seccion> eran copias del modo multi-tenant con slug en
-  // el path (revertido a subdominios). El acceso real usa subdominio
-  // (rewrite a /p/ o rutas canónicas). Redirigimos cualquier URL con el
-  // slug en el path a la canónica, PERO solo cuando el primer segmento NO
-  // es una ruta top-level real de la app: /academy/dashboard,
-  // /soluciones/marketing y /admin/marketing son canónicas y deben pasar.
-  // Los slugs de tenant no colisionan: los nombres reservados (www, app,
-  // api, auth, login, register, dashboard, webcreator, admin) y todas las
-  // rutas top-level están excluidos.
-  const TOP_LEVEL = new Set([
-    'academy', 'admin', 'api', 'auth', 'booking', 'checkout', 'cita',
-    'compliance-pro', 'contrato', 'cotizacion', 'dashboard', 'delete-data',
-    'docs', 'ecosistema', 'embed', 'estudiante', 'login', 'marketing',
-    'marketing-template-editor', 'member', 'neting', 'p', 'payment', 'portal',
-    'precios', 'privacy', 'reembolsos', 'register', 'resolve-payment', 'signup',
-    'soluciones', 'tarjeta', 'template-editor', 'terms', 'test-post',
-    'verifactu', 'verify', 'webcreator', 'www', 'app',
-  ])
-
-  const tenantSectionMatch = pathname.match(/^\/([^/]+)\/(academy|booking|cita|contrato|estudiante|member|marketing|portal|tarjeta|webcreator)(\/.*)?$/)
-  if (tenantSectionMatch && !TOP_LEVEL.has(tenantSectionMatch[1]) && !PUBLIC.has(pathname)) {
-    const section = tenantSectionMatch[2]
-    const rest = tenantSectionMatch[3] || ''
-    const dest = new URL(`/${section}${rest}`, request.nextUrl.origin)
-    return withHeaders(NextResponse.redirect(dest, 308))
-  }
-
-  // ─── Rutas legacy /[tenant]/dashboard/* ──────────────────────────────
-  // El árbol app/[tenant]/dashboard/... era el mecanismo viejo de
-  // multi-tenant (slug del tenant en el path). El flujo actual redirige a
-  // /dashboard/... que resuelve el tenant por sesión/subdominio, y varias
-  // de esas páginas legacy eran copias viejas SIN features recientes
-  // (trato fiscal, retenciones, escaneo de gastos, etc.). Redirigimos
-  // cualquier URL con el slug en el path a su canónica para que nadie vea
-  // una versión desactualizada. Igual que arriba, el primer segmento no
-  // debe ser una ruta top-level (p. ej. /academy/dashboard es canónica).
-  const tenantDashMatch = pathname.match(/^\/([^/]+)\/dashboard(\/.*)?$/)
-  if (tenantDashMatch && !TOP_LEVEL.has(tenantDashMatch[1])) {
-    const rest = tenantDashMatch[2] || ''
-    // Sub-rutas legacy sin canónica directa → su sección padre
-    const LEGACY_PARENT: Record<string, string> = {
-      '/support/analytics': '/dashboard/support',
-      '/configuracion/accounting': '/dashboard/configuracion',
-      '/configuracion/agency': '/dashboard/configuracion',
-      // Páginas raíz sin canónica directa (módulos accesibles por hubs)
-      '/equality': '/dashboard/perfil',
-      '/sales': '/dashboard/sales/billing',
-    }
-    const target = LEGACY_PARENT[rest] || `/dashboard${rest}`
-    const dest = new URL(target, request.nextUrl.origin)
-    return withHeaders(NextResponse.redirect(dest, 308))
-  }
-
-  // ─── Rutas legacy /[tenant]/[pageSlug] (páginas públicas por path) ──
-  // app/[tenant]/[pageSlug] era la forma vieja de servir páginas públicas
-  // del tenant (slug en el path). La canónica es /p/[tenantSlug]/[pageSlug]
-  // (favicon dinámico + resolveTenantBySlug). Redirigimos /{slug}/{page}
-  // → /p/{slug}/{page} cuando el primer segmento NO es una ruta top-level
-  // real de la app (para no capturar /tarjeta/{id}, /booking/{slug}, etc.).
-  // Debe ir DESPUÉS de la regla de dashboard para que /{slug}/dashboard
-  // caiga en esta y no en /p/.
-  const pageSlugMatch = pathname.match(/^\/([^/]+)\/([^/]+)$/)
-  if (pageSlugMatch && !TOP_LEVEL.has(pageSlugMatch[1]) && !PUBLIC.has(pathname)) {
-    const [, slug, page] = pageSlugMatch
-    const dest = new URL(`/p/${slug}/${page}`, request.nextUrl.origin)
+  // ─── Rutas legacy /[tenant]/... (modo subdominio revertido) ─────────
+  // app/[tenant]/... era el mecanismo viejo de multi-tenant (slug del
+  // tenant en el path), revertido a subdominios. La lógica pura vive en
+  // lib/legacy-redirects.ts (con tests): redirige /{slug}/dashboard/*,
+  // /{slug}/<seccion>/* y /{slug}/{page} a sus canónicas con 308, sin
+  // tocar las rutas top-level reales de la app.
+  const legacy = resolveLegacyRedirect(pathname)
+  if (legacy) {
+    const dest = new URL(legacy.to, request.nextUrl.origin)
     return withHeaders(NextResponse.redirect(dest, 308))
   }
 
