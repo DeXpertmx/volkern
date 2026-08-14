@@ -1113,21 +1113,11 @@ const createBookingWrapper = async (input: {
 
 // ─── Wrapper para registrar gasto: mapea params español → inglés y busca/crea proveedor ──────
 
-const createExpenseWrapper = async (input: {
-  tenantId: string;
-  userId?: string;
-  createdById?: string;
-  monto?: number;
-  amount?: number;
-  concepto?: string;
-  description?: string;
-  proveedor?: string;
-  categoria?: string;
-  category?: string;
-  fecha?: string;
-  date?: string;
-}) => {
-  const { tenantId, userId, createdById, monto, amount, concepto, description, proveedor, categoria, category, fecha, date } = input;
+const createExpenseWrapper = async (input: any) => {
+  const {
+    tenantId, userId, createdById, monto, amount, concepto, description,
+    proveedor, categoria, category, fecha, date, supplierId: inputSupplierId,
+  } = input;
   const { prisma } = await import('@/lib/db');
   
   // Mapear params español → inglés
@@ -1139,9 +1129,13 @@ const createExpenseWrapper = async (input: {
     throw new Error('El monto es requerido para registrar el gasto.');
   }
 
-  // Buscar o crear proveedor por nombre
+  // Buscar o crear proveedor por nombre; si la ruta ya resuelve el proveedor
+  // (supplierId), usarlo directamente — antes se descartaba y caía a "Gastos
+  // Varios", perdiendo además los campos Verifactu del gasto.
   let supplierId: string;
-  if (proveedor) {
+  if (inputSupplierId) {
+    supplierId = inputSupplierId;
+  } else if (proveedor) {
     let supplier = await prisma.supplier.findFirst({
       where: {
         tenantId,
@@ -1192,6 +1186,15 @@ const createExpenseWrapper = async (input: {
     throw new Error('No se pudo identificar el usuario que crea el gasto.');
   }
 
+  // Reenviar el resto de campos (Verifactu + retenciones + pago) al core;
+  // antes el wrapper los descartaba silenciosamente.
+  const {
+    tenantId: _t, userId: _u, createdById: _c, monto: _m, amount: _a,
+    concepto: _co, description: _d, proveedor: _p, categoria: _ca,
+    category: _cat, fecha: _f, date: _da, supplierId: _s,
+    ...rest
+  } = input;
+
   return financeSkills.createExpense({
     tenantId,
     createdById: resolvedCreatedById,
@@ -1201,6 +1204,7 @@ const createExpenseWrapper = async (input: {
     category: finalCategory,
     date: parsedDate,
     status: 'PAID',
+    ...rest,
   });
 };
 

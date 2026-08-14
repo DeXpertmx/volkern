@@ -51,6 +51,9 @@ export interface CreateExpenseInput {
   vatAmount?: number;
   irpfRate?: number;
   irpfAmount?: number;
+  // Retención de IVA (casos legales específicos, p. ej. 1%)
+  ivaRetentionRate?: number;
+  ivaRetentionAmount?: number;
   surchargeRate?: number;
   surchargeAmount?: number;
   taxRegime?: string;
@@ -91,6 +94,49 @@ export async function createSupplier(input: CreateSupplierInput) {
 }
 
 /**
+ * Calcula la retención aplicable a un gasto según el trato fiscal del
+ * proveedor (art. 101 LIRPF / art. 84 LIVA). Reglas:
+ *   • Si ya vienen irpfRate/irpfAmount explícitos (formulario/OCR), se
+ *     respetan tal cual.
+ *   • Si no, se usa el % configurado en el proveedor (> 0) sobre la base
+ *     imponible (o el importe total si no se desglosa).
+ * Función pura: fácil de testear sin BD.
+ */
+export function applySupplierRetention(params: {
+  supplierIrpfRetention: number;
+  supplierIvaRetention: number;
+  irpfRate?: number;
+  irpfAmount?: number;
+  ivaRetentionRate?: number;
+  ivaRetentionAmount?: number;
+  baseImponible: number;
+}): {
+  irpfRate: number | undefined;
+  irpfAmount: number | undefined;
+  ivaRetentionRate: number | undefined;
+  ivaRetentionAmount: number | undefined;
+} {
+  const { supplierIrpfRetention, supplierIvaRetention, baseImponible } = params;
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+
+  let irpfRate = params.irpfRate;
+  let irpfAmount = params.irpfAmount;
+  let ivaRetentionRate = params.ivaRetentionRate;
+  let ivaRetentionAmount = params.ivaRetentionAmount;
+
+  if (irpfRate == null && supplierIrpfRetention > 0) {
+    irpfRate = supplierIrpfRetention;
+    irpfAmount = round2(baseImponible * (supplierIrpfRetention / 100));
+  }
+  if (ivaRetentionRate == null && supplierIvaRetention > 0) {
+    ivaRetentionRate = supplierIvaRetention;
+    ivaRetentionAmount = round2(baseImponible * (supplierIvaRetention / 100));
+  }
+
+  return { irpfRate, irpfAmount, ivaRetentionRate, ivaRetentionAmount };
+}
+
+/**
  * Registrar un nuevo gasto
  */
 export async function createExpense(input: CreateExpenseInput) {
@@ -116,8 +162,28 @@ export async function createExpense(input: CreateExpenseInput) {
       tenant?.baseLongitude || null
     );
 
+    // ── Retención automática según el trato fiscal del proveedor ──────────
+    // Si la ruta/OCR no trae irpfRate/irpfAmount explícitos, se aplica la
+    // retención configurada en el proveedor (fiscalRegime → irpfRetention /
+    // ivaRetention). Base = base imponible declarada, o el importe total si
+    // no se desglosa. La retención se guarda en metadata y se devuelve.
+    const supplierWithFiscal = await prisma.supplier.findUnique({
+      where: { id: input.supplierId },
+      select: { irpfRetention: true, ivaRetention: true, fiscalRegime: true },
+    });
+    const retention = applySupplierRetention({
+      supplierIrpfRetention: supplierWithFiscal?.irpfRetention ?? 0,
+      supplierIvaRetention: supplierWithFiscal?.ivaRetention ?? 0,
+      irpfRate: input.irpfRate,
+      irpfAmount: input.irpfAmount,
+      ivaRetentionRate: input.ivaRetentionRate,
+      ivaRetentionAmount: input.ivaRetentionAmount,
+      baseImponible: input.taxableBase ?? input.amount,
+    });
+    const { irpfRate, irpfAmount, ivaRetentionRate, ivaRetentionAmount } = retention;
+
     // Extraer campos nuevos (no existen en Prisma) para guardarlos en metadata
-    const { serie, irpfRate, irpfAmount, surchargeRate, surchargeAmount, taxRegime, operationType, totalFactura, receptorNombre, receptorNif, receptorDireccion, iban, vatBreakdown, ...prismaInput } = input
+    const { serie, surchargeRate, surchargeAmount, taxRegime, operationType, totalFactura, receptorNombre, receptorNif, receptorDireccion, iban, vatBreakdown, irpfRate: _ir, irpfAmount: _ia, ivaRetentionRate: _ivr, ivaRetentionAmount: _iva, ...prismaInput } = input
     
     const expense = await prisma.expense.create({
       data: {
@@ -130,6 +196,8 @@ export async function createExpense(input: CreateExpenseInput) {
           serie: serie || null,
           irpfRate: irpfRate || null,
           irpfAmount: irpfAmount || null,
+          ivaRetentionRate: ivaRetentionRate || null,
+          ivaRetentionAmount: ivaRetentionAmount || null,
           surchargeRate: surchargeRate || null,
           surchargeAmount: surchargeAmount || null,
           taxRegime: taxRegime || null,
@@ -195,6 +263,10 @@ export async function createExpense(input: CreateExpenseInput) {
       expenseId: updatedExpense.id,
       monto: updatedExpense.amount,
       categoria: updatedExpense.category,
+      retencionIrpf: irpfAmount || null,
+      retencionIrpfRate: irpfRate || null,
+      retencionIva: ivaRetentionAmount || null,
+      retencionIvaRate: ivaRetentionRate || null,
       source: 'app' as const,
       timestamp: new Date(),
     });
