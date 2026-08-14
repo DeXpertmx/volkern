@@ -4112,10 +4112,21 @@ model Supplier {
   // proveedor puede facturar a varios tipos; al registrar un gasto se
   // ofrecen como opciones para el IVA del documento.
   vatRates     Float[]   @default([])
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  expenses     Expense[]
-  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // ── Trato fiscal (retenciones por ley) ───────────────────────────────
+  // fiscalRegime: régimen legal del proveedor que determina las retenciones
+  //   aplicables al pagarle (IRPF/IVA). Presets: EMPRESA (sin retención),
+  //   PROFESIONAL (IRPF 15%), PRIMER_ANO (IRPF 7%), ARRENDADOR (IRPF 19%)
+  //   y CUSTOM (porcentajes manuales).
+  fiscalRegime String  @default("EMPRESA")
+  // Porcentaje de retención IRPF aplicable (p. ej. 15 → 15%).
+  irpfRetention Float  @default(0)
+  // Porcentaje de retención de IVA aplicable (casos legales específicos,
+  // p. ej. 1 → 1%).
+  ivaRetention  Float  @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  expenses      Expense[]
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([category])

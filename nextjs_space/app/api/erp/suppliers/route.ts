@@ -50,12 +50,22 @@ export const POST = withTenantAuth(async (request, auth) => {
           .filter((v: number) => Number.isFinite(v) && v >= 0)
       : [];
 
+    // Trato fiscal: régimen legal + porcentajes de retención (IRPF/IVA)
+    const fiscalRegime = typeof body.fiscalRegime === 'string' ? body.fiscalRegime : 'EMPRESA';
+    const irpfN = Number(body.irpfRetention);
+    const ivaN = Number(body.ivaRetention);
+    const irpfRetention = Number.isFinite(irpfN) && irpfN >= 0 ? irpfN : 0;
+    const ivaRetention = Number.isFinite(ivaN) && ivaN >= 0 ? ivaN : 0;
+
     const supplier = await prisma.supplier.create({
       data: {
         tenantId: auth.tenant!.id,
         name: body.name,
         taxId: body.taxId,
         vatRates,
+        fiscalRegime,
+        irpfRetention,
+        ivaRetention,
         email: body.email,
         phone: body.phone,
         streetType: body.streetType,

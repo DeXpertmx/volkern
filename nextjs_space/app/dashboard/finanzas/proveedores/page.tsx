@@ -12,6 +12,7 @@ import Link from "next/link"
 import useSWR from "swr"
 import { toast } from "sonner"
 import IvaRatesEditor from "@/components/finance/IvaRatesEditor"
+import FiscalRegimeEditor from "@/components/finance/FiscalRegimeEditor"
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
@@ -46,7 +47,7 @@ function formatAddress(s: any): string {
   return parts.length ? parts.join(', ') : 'No especificada'
 }
 
-const emptyForm = { name: '', taxId: '', email: '', phone: '', streetType: '', streetName: '', streetNumber: '', staircase: '', floor: '', door: '', postalCode: '', city: '', province: '', country: 'España', category: 'Varios', vatRates: [] as number[] }
+const emptyForm = { name: '', taxId: '', email: '', phone: '', streetType: '', streetName: '', streetNumber: '', staircase: '', floor: '', door: '', postalCode: '', city: '', province: '', country: 'España', category: 'Varios', vatRates: [] as number[], fiscalRegime: 'EMPRESA', irpfRetention: 0, ivaRetention: 0 }
 
 export default function ProveedoresPage() {
   const { data: suppliers, isLoading, mutate } = useSWR('/api/erp/suppliers', fetcher)
@@ -100,13 +101,18 @@ export default function ProveedoresPage() {
       const res = await fetch(`/api/erp/suppliers/${detailSupplier.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vatRates: detailSupplier.vatRates || [] })
+        body: JSON.stringify({
+          vatRates: detailSupplier.vatRates || [],
+          fiscalRegime: detailSupplier.fiscalRegime || 'EMPRESA',
+          irpfRetention: detailSupplier.irpfRetention ?? 0,
+          ivaRetention: detailSupplier.ivaRetention ?? 0,
+        })
       })
       if (!res.ok) throw new Error()
-      toast.success('Tipos de IVA actualizados')
+      toast.success('Datos fiscales actualizados')
       mutate()
     } catch {
-      toast.error('Error al guardar los tipos de IVA')
+      toast.error('Error al guardar los datos fiscales')
     } finally {
       setDetailSaving(false)
     }
@@ -229,6 +235,15 @@ export default function ProveedoresPage() {
               <Label className="text-[11px] font-bold uppercase tracking-widest">Tipos de IVA aplicables</Label>
               <IvaRatesEditor value={form.vatRates} onChange={vatRates => setForm({ ...form, vatRates })} />
             </div>
+            <div className="space-y-3 border-t pt-4 mt-2">
+              <Label className="text-[11px] font-bold uppercase tracking-widest flex items-center gap-1.5"><Receipt className="w-3 h-3" /> Trato fiscal (retenciones)</Label>
+              <FiscalRegimeEditor
+                regime={form.fiscalRegime}
+                irpfRetention={form.irpfRetention}
+                ivaRetention={form.ivaRetention}
+                onChange={({ fiscalRegime, irpfRetention, ivaRetention }) => setForm({ ...form, fiscalRegime, irpfRetention, ivaRetention })}
+              />
+            </div>
             <div className="space-y-1.5">
               <Label className="text-[11px] font-bold uppercase tracking-widest">Categoría</Label>
               <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} className="w-full bg-background border rounded-xl px-4 py-2.5 text-sm font-medium outline-none">
@@ -324,6 +339,12 @@ export default function ProveedoresPage() {
                     ).map((label: string) => (
                       <span key={label} className="rounded-lg bg-slate-100 dark:bg-slate-800 text-[10px] font-bold px-2 py-0.5">{label}</span>
                     ))}
+                    {Number(supplier.irpfRetention) > 0 && (
+                      <span className="rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-[10px] font-bold px-2 py-0.5">IRPF {supplier.irpfRetention}%</span>
+                    )}
+                    {Number(supplier.ivaRetention) > 0 && (
+                      <span className="rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-[10px] font-bold px-2 py-0.5">IVA ret. {supplier.ivaRetention}%</span>
+                    )}
                  </div>
 
                  <div className="pt-4 border-t flex items-center justify-between">
@@ -400,6 +421,17 @@ export default function ProveedoresPage() {
                 onChange={vatRates => setDetailSupplier({ ...detailSupplier, vatRates })}
               />
               <p className="text-[10px] text-muted-foreground">Estos tipos se ofrecen al registrar un gasto de este proveedor.</p>
+            </div>
+            <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900 space-y-3">
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Trato fiscal (retenciones)</p>
+              <FiscalRegimeEditor
+                regime={detailSupplier?.fiscalRegime || 'EMPRESA'}
+                irpfRetention={detailSupplier?.irpfRetention ?? 0}
+                ivaRetention={detailSupplier?.ivaRetention ?? 0}
+                onChange={({ fiscalRegime, irpfRetention, ivaRetention }) =>
+                  setDetailSupplier({ ...detailSupplier, fiscalRegime, irpfRetention, ivaRetention })
+                }
+              />
             </div>
             <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900 space-y-3">
               <div className="flex items-center justify-between">
