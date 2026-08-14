@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { toast } from 'sonner'
 import { Camera, Receipt, Scan, Loader2, ArrowLeft, CheckCircle2, Image as ImageIcon, FileText, AlertTriangle, Check, ChevronsUpDown, Plus, MousePointerClick, Sparkles, Save, X } from 'lucide-react'
 import IvaRatesEditor from '@/components/finance/IvaRatesEditor'
+import FiscalRegimeEditor from '@/components/finance/FiscalRegimeEditor'
 import OcrCorrectionModal from '@/components/finance/OcrCorrectionModal'
 import OcrComparisonModal, { type ComparisonItem } from '@/components/finance/OcrComparisonModal'
 import { computeVatAmount, computePercentageAmount, computeInvoiceTotalMismatch, fillEmptyTranches, fillLastTranche } from '@/lib/finance/vat'
@@ -201,7 +202,10 @@ export default function EscanearGastoPage() {
   const [registeringSupplier, setRegisteringSupplier] = useState(false)
   // Modal de registro: completa la ficha del nuevo proveedor
   const [supplierModalOpen, setSupplierModalOpen] = useState(false)
-  const [supplierModal, setSupplierModal] = useState({ name: '', taxId: '', email: '', phone: '', category: 'otros', pais: 'España', vatRates: [] as number[] })
+  const [supplierModal, setSupplierModal] = useState({
+    name: '', taxId: '', email: '', phone: '', category: 'otros', pais: 'España',
+    vatRates: [] as number[], fiscalRegime: 'EMPRESA', irpfRetention: 0, ivaRetention: 0,
+  })
   const [supplierTaxIdError, setSupplierTaxIdError] = useState('')
 
   // Carga la lista de proveedores registrados al abrir el formulario
@@ -240,6 +244,14 @@ export default function EscanearGastoPage() {
     })
   }
 
+  // Aplica la retención de IVA y recalcula su cuota sobre la base
+  const applyIvaRetentionRate = (rate: string) => {
+    setForm(p => {
+      const ivaRetentionAmount = rate.trim() ? computePercentageAmount(p.taxableBase, rate) : ''
+      return { ...p, ivaRetentionRate: rate, ivaRetentionAmount: ivaRetentionAmount || '' }
+    })
+  }
+
   // Aplica el recargo de equivalencia y lo recalcula sobre la base total.
   // En facturas con varios tipos de IVA el usuario puede corregir la cuota
   // manualmente si el proveedor usa tipos de recargo distintos por tramo.
@@ -265,11 +277,13 @@ export default function EscanearGastoPage() {
     setForm(p => {
       const vatAmount = computeVatAmount(base, p.vatRate)
       const irpfAmount = computePercentageAmount(base, p.irpfRate)
+      const ivaRetentionAmount = computePercentageAmount(base, p.ivaRetentionRate)
       return {
         ...p,
         taxableBase: base,
         vatAmount: vatAmount || p.vatAmount,
         irpfAmount: irpfAmount || p.irpfAmount,
+        ivaRetentionAmount: ivaRetentionAmount || p.ivaRetentionAmount,
       }
     })
   }
@@ -303,6 +317,8 @@ export default function EscanearGastoPage() {
     vatAmount: '',
     irpfRate: '',
     irpfAmount: '',
+    ivaRetentionRate: '',
+    ivaRetentionAmount: '',
     surchargeRate: '',
     surchargeAmount: '',
     taxRegime: '',
@@ -326,12 +342,17 @@ export default function EscanearGastoPage() {
       .filter(Number.isFinite)
     const rates = rows.map(r => r.rate).filter(r => r !== '')
     const uniform = rates.length === rows.length && new Set(rates).size === 1 ? rates[0] : ''
-    setForm(p => ({
-      ...p,
-      taxableBase: bases.length ? bases.reduce((a, b) => a + b, 0).toFixed(2) : p.taxableBase,
-      vatAmount: vats.length ? vats.reduce((a, b) => a + b, 0).toFixed(2) : p.vatAmount,
-      vatRate: uniform,
-    }))
+    setForm(p => {
+      const taxableBase = bases.length ? bases.reduce((a, b) => a + b, 0).toFixed(2) : p.taxableBase
+      return {
+        ...p,
+        taxableBase,
+        vatAmount: vats.length ? vats.reduce((a, b) => a + b, 0).toFixed(2) : p.vatAmount,
+        vatRate: uniform,
+        irpfAmount: p.irpfRate ? computePercentageAmount(taxableBase, p.irpfRate) || p.irpfAmount : p.irpfAmount,
+        ivaRetentionAmount: p.ivaRetentionRate ? computePercentageAmount(taxableBase, p.ivaRetentionRate) || p.ivaRetentionAmount : p.ivaRetentionAmount,
+      }
+    })
   }
 
   // ─── Tramos de IVA: reparto automático del total ─────────────────────
@@ -549,13 +570,24 @@ export default function EscanearGastoPage() {
     setSupplierOpen(false)
     setRatesTouched(false)
     setSupplierVatRates(Array.isArray(s.vatRates) ? s.vatRates : [])
-    setForm(p => ({
-      ...p,
-      supplier: s.name,
-      issuerName: p.issuerName || s.name || '',
-      issuerTaxId: p.issuerTaxId || s.taxId || '',
-      issuerAddress: p.issuerAddress || buildSupplierAddress(s),
-    }))
+    setForm(p => {
+      const base = p.taxableBase || p.amount
+      const explicitIrpf = p.irpfRate.trim() !== ''
+      const explicitIvaRetention = p.ivaRetentionRate.trim() !== ''
+      const supplierIrpf = Number(s.irpfRetention) || 0
+      const supplierIva = Number(s.ivaRetention) || 0
+      return {
+        ...p,
+        supplier: s.name,
+        issuerName: p.issuerName || s.name || '',
+        issuerTaxId: p.issuerTaxId || s.taxId || '',
+        issuerAddress: p.issuerAddress || buildSupplierAddress(s),
+        irpfRate: explicitIrpf ? p.irpfRate : supplierIrpf > 0 ? String(supplierIrpf) : '',
+        irpfAmount: explicitIrpf ? p.irpfAmount : supplierIrpf > 0 ? computePercentageAmount(base, String(supplierIrpf)) : '',
+        ivaRetentionRate: explicitIvaRetention ? p.ivaRetentionRate : supplierIva > 0 ? String(supplierIva) : '',
+        ivaRetentionAmount: explicitIvaRetention ? p.ivaRetentionAmount : supplierIva > 0 ? computePercentageAmount(base, String(supplierIva)) : '',
+      }
+    })
     // Tras el OCR, los tipos del proveedor mandan sobre los detectados
     autoCreateTramos(s.vatRates, fromOcrAutoMatch)
   }
@@ -602,6 +634,9 @@ export default function EscanearGastoPage() {
       category: form.category,
       pais: 'España',
       vatRates: [...supplierVatRates],
+      fiscalRegime: Number(form.irpfRate) > 0 || Number(form.ivaRetentionRate) > 0 ? 'CUSTOM' : 'EMPRESA',
+      irpfRetention: Number(form.irpfRate) || 0,
+      ivaRetention: Number(form.ivaRetentionRate) || 0,
     })
     setSupplierTaxIdError('')
     setSupplierModalOpen(true)
@@ -650,6 +685,9 @@ export default function EscanearGastoPage() {
           category: supplierModal.category,
           country: supplierModal.pais,
           vatRates: supplierModal.vatRates.length > 0 ? supplierModal.vatRates : undefined,
+          fiscalRegime: supplierModal.fiscalRegime,
+          irpfRetention: supplierModal.irpfRetention,
+          ivaRetention: supplierModal.ivaRetention,
           ...parseSupplierAddress(form.issuerAddress),
         }),
       })
@@ -665,12 +703,23 @@ export default function EscanearGastoPage() {
       setSupplierVatRates(supplierModal.vatRates)
       setRatesTouched(false)
       // Si el usuario corrigió el nombre en el modal, se refleja en el gasto
-      setForm(p => ({
-        ...p,
-        supplier: data.name,
-        issuerName: p.issuerName || data.name,
-        issuerTaxId: p.issuerTaxId || data.taxId || '',
-      }))
+      setForm(p => {
+        const base = p.taxableBase || p.amount
+        const explicitIrpf = p.irpfRate.trim() !== ''
+        const explicitIvaRetention = p.ivaRetentionRate.trim() !== ''
+        const supplierIrpf = Number(data.irpfRetention) || 0
+        const supplierIva = Number(data.ivaRetention) || 0
+        return {
+          ...p,
+          supplier: data.name,
+          issuerName: p.issuerName || data.name,
+          issuerTaxId: p.issuerTaxId || data.taxId || '',
+          irpfRate: explicitIrpf ? p.irpfRate : supplierIrpf > 0 ? String(supplierIrpf) : '',
+          irpfAmount: explicitIrpf ? p.irpfAmount : supplierIrpf > 0 ? computePercentageAmount(base, String(supplierIrpf)) : '',
+          ivaRetentionRate: explicitIvaRetention ? p.ivaRetentionRate : supplierIva > 0 ? String(supplierIva) : '',
+          ivaRetentionAmount: explicitIvaRetention ? p.ivaRetentionAmount : supplierIva > 0 ? computePercentageAmount(base, String(supplierIva)) : '',
+        }
+      })
       // Crea los tramos de IVA según los tipos registrados. Si el OCR ya
       // creó tramos detectados, los tipos elegidos para el proveedor mandan.
       autoCreateTramos(supplierModal.vatRates, true)
@@ -1544,6 +1593,8 @@ export default function EscanearGastoPage() {
         vatAmount: form.vatAmount || undefined,
         irpfRate: form.irpfRate || undefined,
         irpfAmount: form.irpfAmount || undefined,
+        ivaRetentionRate: form.ivaRetentionRate || undefined,
+        ivaRetentionAmount: form.ivaRetentionAmount || undefined,
         surchargeRate: form.surchargeRate || undefined,
         surchargeAmount: form.surchargeAmount || undefined,
         taxRegime: form.taxRegime || undefined,
@@ -1603,6 +1654,10 @@ export default function EscanearGastoPage() {
     setProposalBusy({})
     setSavingProposal(null)
     setDuplicateCandidate(null)
+    setSelectedSupplier(null)
+    setSupplierVatRates([])
+    setRatesTouched(false)
+    setSupplierQuery('')
     setOcrProposalForModal(null)
     scannedExtRef.current = null
     localOverlayRef.current = null
@@ -1634,6 +1689,8 @@ export default function EscanearGastoPage() {
       vatAmount: '',
       irpfRate: '',
       irpfAmount: '',
+      ivaRetentionRate: '',
+      ivaRetentionAmount: '',
       totalFactura: '',
       operationDate: '',
       surchargeRate: '',
@@ -1912,6 +1969,17 @@ export default function EscanearGastoPage() {
                       ? 'Se guardarán en el proveedor al registrar el gasto.'
                       : 'Se cargan automáticamente si el proveedor ya existe en tu base.'}
                   </p>
+                  <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3 space-y-1">
+                    <p className="text-xs font-semibold text-amber-900">Retenciones del proveedor</p>
+                    {selectedSupplier ? (
+                      <p className="text-[11px] text-amber-800">
+                        IRPF {Number(selectedSupplier.irpfRetention) || 0}% · IVA {Number(selectedSupplier.ivaRetention) || 0}%
+                        {' '}- se aplican automáticamente al guardar el gasto.
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-amber-800">Configúralas al pulsar «Registrar proveedor».</p>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -2104,6 +2172,16 @@ export default function EscanearGastoPage() {
                   </div>
                   {renderProposalChip('irpfRate')}
                   {renderProposalChip('irpfAmount')}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Retención IVA %</Label>
+                      <Input type="number" step="0.01" min="0" max="100" value={form.ivaRetentionRate} onChange={e => applyIvaRetentionRate(e.target.value)} placeholder="2" />
+                    </div>
+                    <div>
+                      <Label>Cuota retención IVA</Label>
+                      <Input type="number" step="0.01" value={form.ivaRetentionAmount} onChange={e => setForm(p => ({ ...p, ivaRetentionAmount: e.target.value }))} placeholder="20.00" />
+                    </div>
+                  </div>
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -2332,7 +2410,7 @@ export default function EscanearGastoPage() {
 
       {/* Modal: completar la ficha del nuevo proveedor antes de registrarlo */}
       <Dialog open={supplierModalOpen} onOpenChange={setSupplierModalOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="w-[calc(100vw-2rem)] max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-lg font-black tracking-tight uppercase">Registrar Proveedor</DialogTitle>
             <DialogDescription>Completa la ficha de «{supplierModal.name}» para guardarlo en tu base.</DialogDescription>
@@ -2398,6 +2476,18 @@ export default function EscanearGastoPage() {
                 onChange={vatRates => setSupplierModal(m => ({ ...m, vatRates }))}
               />
               <p className="text-[10px] text-muted-foreground">Se usan para crear los tramos del desglose y se guardan en la ficha del proveedor.</p>
+            </div>
+            <div className="space-y-3 border-t pt-4">
+              <Label className="text-xs font-bold uppercase tracking-wider">Trato fiscal (retenciones)</Label>
+              <FiscalRegimeEditor
+                regime={supplierModal.fiscalRegime}
+                irpfRetention={supplierModal.irpfRetention}
+                ivaRetention={supplierModal.ivaRetention}
+                onChange={({ fiscalRegime, irpfRetention, ivaRetention }) =>
+                  setSupplierModal(m => ({ ...m, fiscalRegime, irpfRetention, ivaRetention }))
+                }
+              />
+              <p className="text-[10px] text-muted-foreground">Estas retenciones quedarán vinculadas al proveedor y se aplicarán automáticamente a los gastos escaneados.</p>
             </div>
             {form.issuerAddress && (
               <p className="text-[10px] text-muted-foreground">

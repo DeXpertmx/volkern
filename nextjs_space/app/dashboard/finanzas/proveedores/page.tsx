@@ -154,12 +154,13 @@ export default function ProveedoresPage() {
       </div>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="sm:max-w-md rounded-2xl">
+        <DialogContent className="w-[calc(100vw-2rem)] !max-w-none max-h-[92vh] overflow-y-auto rounded-2xl">
           <DialogHeader>
             <DialogTitle className="text-xl font-black tracking-tight uppercase">Nuevo Proveedor</DialogTitle>
             <DialogDescription>Registra un nuevo socio o suministrador en tu base.</DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleCreate} className="space-y-4">
+          <form onSubmit={handleCreate} className="space-y-5">
+            <div className="grid gap-6 md:grid-cols-2">
             <div className="space-y-1.5">
               <Label className="text-[11px] font-bold uppercase tracking-widest">Nombre *</Label>
               <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Razón social o nombre comercial" className="rounded-xl" required />
@@ -251,7 +252,8 @@ export default function ProveedoresPage() {
                 {EXPENSE_CATEGORIES.map(c => <option key={c.value} value={c.label}>{c.label}</option>)}
               </select>
             </div>
-            <DialogFooter className="pt-2">
+            </div>
+            <DialogFooter className="pt-1">
               <Button type="button" variant="ghost" onClick={() => setCreateOpen(false)} className="rounded-xl">Cancelar</Button>
               <Button type="submit" disabled={saving || !form.name.trim()} className="rounded-xl font-bold uppercase text-xs tracking-wider">
                 {saving ? 'Guardando...' : 'Guardar Proveedor'}
@@ -353,7 +355,7 @@ export default function ProveedoresPage() {
       </div>
 
       <Dialog open={!!detailSupplier} onOpenChange={(open) => { if (!open) setDetailSupplier(null) }}>
-        <DialogContent className="sm:max-w-lg rounded-2xl">
+        <DialogContent className="w-[calc(100vw-2rem)] max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl">
           <DialogHeader>
             <div className="flex items-center gap-3 mb-1">
               <div className="p-2.5 rounded-xl bg-primary/10 text-primary">
