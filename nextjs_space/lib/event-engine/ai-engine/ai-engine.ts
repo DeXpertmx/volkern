@@ -164,12 +164,12 @@ export class AIEngine {
   }
 
   private static async callGemini(prompt: string, options: { temperature: number; max_tokens: number }): Promise<AIResponse> {
-    const apiKey = process.env.GEMINI_API_KEY
+    const apiKey = process.env.GOOGLE_AI_KEY
     if (!apiKey) {
       throw new Error('Gemini not configured')
     }
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${apiKey}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

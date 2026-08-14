@@ -5,7 +5,7 @@ import { withTenantAuth } from '@/lib/api-key-auth';
 import { prisma } from '@/lib/db';
 
 const GOOGLE_AI_KEY = process.env.GOOGLE_AI_KEY;
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GOOGLE_AI_KEY}`;
+const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${GOOGLE_AI_KEY}`;
 
 const SYSTEM_PROMPT = `Eres un arquitecto experto en GrapesJS y Volkern CRM. Tu tarea es generar el JSON de "projectData" para una landing page completa basándote en la descripción del usuario.
 

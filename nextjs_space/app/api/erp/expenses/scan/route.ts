@@ -211,7 +211,7 @@ Reglas importantes:
   const googleKey = process.env.GOOGLE_AI_KEY
   if (googleKey) {
     try {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${googleKey}`, {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-3.5-flash-lite:generateContent?key=${googleKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
