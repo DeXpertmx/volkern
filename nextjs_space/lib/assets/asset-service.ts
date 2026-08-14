@@ -60,6 +60,15 @@ export class AssetService {
 
       if (createTicket) {
         const asset = await tx.asset.findUnique({ where: { id: assetId } });
+        // support_tickets.creatorId es FK requerida a User: resolver un usuario real del tenant
+        const creator = await tx.user.findFirst({
+          where: { tenantId },
+          select: { id: true },
+          orderBy: { createdAt: 'asc' },
+        });
+        if (!creator) {
+          throw new Error('No se pudo identificar el usuario creador del ticket de mantenimiento.');
+        }
         // Crear ticket en Taskforce
         const ticket = await tx.supportTicket.create({
           data: {
@@ -71,7 +80,7 @@ export class AssetService {
             source: 'SYSTEM',
             entityType: 'ASSET',
             entityId: assetId,
-            creatorId: 'SYSTEM' // O un ID de sistema
+            creatorId: creator.id
           }
         });
         
