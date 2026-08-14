@@ -162,7 +162,7 @@ Adjuntar el nuevo EXPLAIN ANALYZE al doc `docs/CRON-MAINTENANCE.md` §7.3 con fe
 | # | Acción | Resultado |
 |---|--------|-----------|
 | 1 | Creada migración auto-Prisma en `prisma/migrations/20260702000000_add_attendance_composite_index/migration.sql` con `CREATE INDEX "erp_attendance_logs_tenantId_timestamp_idx" ON "erp_attendance_logs" ("tenantId", "timestamp")` | ✅ Archivo commit-ready, sha256=`41e8cc9535679868620d0ad62d3763c7b69b20136521217c28a42982ba0cfd82` |
-| 2 | Eliminada `prisma/migrations/manual/20260702_attendance_composite_index.sql` y actualizado `manual/README.md` con nueva política arquitectónica | ✅ Split-brain eliminado; manual/ queda reservado para CONCURRENTLY-only |
+| 2 | Eliminada `prisma/migrations/manual/20260702_attendance_composite_index.sql` y actualizado `manual/README.md` con nueva política arquitectónica (la carpeta vive ahora en `prisma/manual-migrations/`, fuera del directorio que Prisma escanea en `migrate deploy`) | ✅ Split-brain eliminado; manual/ queda reservado para CONCURRENTLY-only |
 | 3 | Aplicada via raw SQL (`prisma db execute --stdin`) y reconciliada con `npx prisma migrate resolve --applied` | ✅ Índice en DB + formal-applied en `_prisma_migrations` |
 | 4 | `ANALYZE erp_attendance_logs` para refrescar planner stats | ✅ Stats actualizadas |
 | 5 | Re-corrido `bash scripts/check-cleanup-attendance-index.sh` contra staging | ❌ Verifier exit **1** (abajo explicación) |

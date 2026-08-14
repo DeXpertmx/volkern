@@ -1366,7 +1366,7 @@ curl -sS -X GET "$BASE_URL/api/cron/cleanup-attendance?dryRun=1"   -H "Accept: a
 | `app/api/cron/google-calendar-renew/route.ts` | Implementación cron C (disparado por GH Actions) |
 | `prisma/schema.prisma` | Definición de modelos `Attendance`, `IdempotencyKey`, `AttendanceRules` (composite index al final del bloque) |
 | `prisma/migrations/20260702000000_add_attendance_composite_index/migration.sql` | Auto-Prisma migration: `CREATE INDEX "erp_attendance_logs_tenantId_timestamp_idx"` (post-fix 2026-07-02) |
-| `prisma/migrations/manual/` | Reservado para DDL CONCURRENTLY no auto-aplicable (tablas ultra-grandes) — ver `manual/README.md` |
+| `prisma/manual-migrations/` | Reservado para DDL CONCURRENTLY no auto-aplicable (tablas ultra-grandes) — ver `manual-migrations/README.md` |
 | `scripts/verify-cleanup-attendance-index.sql` | EXPLAIN ANALYZE reproducible del composite index |
 | `scripts/check-cleanup-attendance-index.sh` | CI-friendly verifier (exit 0=PASS, 1=FAIL regresión) |
 | `docs/DPIA-ASISTENCIA-GPS.md` | Evaluación de impacto (Data Protection Impact Assessment) |
