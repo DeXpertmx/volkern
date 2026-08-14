@@ -2417,10 +2417,16 @@ const calculateFranchiseCommissionsWrapper = async (input: {
   if (!deal) {
     throw new Error('No encontré ninguna operación (deal) vinculada a esa propiedad para calcular la comisión.')
   }
+  // Comision.userId es FK obligatoria a User: resolver un usuario real del
+  // tenant si no llega userId (nunca 'SYSTEM', que no existe en la tabla User).
+  const commissionUserId = input.userId || (await prisma.user.findFirst({ where: { tenantId }, select: { id: true }, orderBy: { createdAt: 'asc' } }))?.id;
+  if (!commissionUserId) {
+    throw new Error('No se pudo identificar el usuario para la comisión.');
+  }
   return realEstateSkills.calculate_franchise_commissions({
     tenantId,
     dealId: deal.id,
-    userId: input.userId || 'SYSTEM',
+    userId: commissionUserId,
   });
 };
 

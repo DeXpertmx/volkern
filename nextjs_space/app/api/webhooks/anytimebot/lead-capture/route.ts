@@ -152,7 +152,7 @@ export async function POST(request: NextRequest) {
       await prisma.auditLog.create({
         data: {
           tenantId,
-          userId: 'system',
+          userId: null,
           accion: 'lead_actualizado',
           entidad: 'Lead',
           entidadId: existingLead.id,
@@ -215,7 +215,7 @@ export async function POST(request: NextRequest) {
     await prisma.auditLog.create({
       data: {
         tenantId,
-        userId: 'system',
+        userId: null,
         accion: 'lead_creado',
         entidad: 'Lead',
         entidadId: newLead.id,

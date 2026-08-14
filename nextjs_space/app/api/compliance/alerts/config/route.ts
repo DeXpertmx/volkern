@@ -112,7 +112,7 @@ export async function PUT(request: NextRequest) {
     await prisma.auditLog.create({
       data: {
         tenantId,
-        userId: (session.user as any).id || 'system',
+        userId: (session.user as any).id || null,
         accion: 'ALERT_THRESHOLD_UPDATED',
         entidad: 'Tenant',
         entidadId: tenantId,

@@ -144,7 +144,7 @@ async function procesarMensajeRecibido(
     // Registrar en audit log
     await prisma.auditLog.create({
       data: {
-        userId: integration.usuarioAsignadoId || 'system',
+        userId: integration.usuarioAsignadoId || null,
         tenantId: integration.tenantId,
         accion: 'lead_creado_plaudern',
         entidad: 'Lead',

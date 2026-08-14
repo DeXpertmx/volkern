@@ -63,7 +63,7 @@ export const POST = withPublicTenant(async (req, tenantId, params) => {
         data: {
           dealId: cotizacion.dealId,
           tenantId: tenantId,
-          userId: 'system',
+          userId: null,
           tipo: 'cotizacion_aceptada',
           titulo: 'Cotización aceptada por cliente',
           descripcion: `El cliente aceptó la cotización ${cotizacion.numero} desde el enlace público`,
@@ -75,7 +75,7 @@ export const POST = withPublicTenant(async (req, tenantId, params) => {
     await prisma.auditLog.create({
       data: {
         tenantId: tenantId,
-        userId: 'cliente',
+        userId: null,
         accion: 'aceptar',
         entidad: 'cotizacion',
         entidadId: cotizacion.id,

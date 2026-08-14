@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
       await prisma.auditLog.create({
         data: {
           tenantId,
-          userId: 'system',
+          userId: null,
           accion: 'lead_creado',
           entidad: 'Lead',
           entidadId: lead.id,
@@ -194,7 +194,7 @@ export async function POST(request: NextRequest) {
         await prisma.auditLog.create({
           data: {
             tenantId,
-            userId: 'system',
+            userId: null,
             accion: 'cita_cancelada',
             entidad: 'Cita',
             entidadId: existingCita.id,
@@ -267,7 +267,7 @@ export async function POST(request: NextRequest) {
         await prisma.auditLog.create({
           data: {
             tenantId,
-            userId: 'system',
+            userId: null,
             accion: 'cita_reprogramada',
             entidad: 'Cita',
             entidadId: existingCita.id,
@@ -370,7 +370,7 @@ export async function POST(request: NextRequest) {
     await prisma.auditLog.create({
       data: {
         tenantId,
-        userId: 'system',
+        userId: null,
         accion: 'cita_creada',
         entidad: 'Cita',
         entidadId: newCita.id,

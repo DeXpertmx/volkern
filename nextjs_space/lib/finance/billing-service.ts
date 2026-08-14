@@ -51,7 +51,7 @@ export class BillingService {
     await (prisma.auditLog.create as any)({
       data: {
         tenantId,
-        userId: systemUser?.id || 'SYSTEM',
+        userId: systemUser?.id || null,
         accion: 'ORDEN_VENTA_SIGNED',
         entidad: 'OrdenVenta',
         entidadId: ordenVentaId,
@@ -99,7 +99,7 @@ export class BillingService {
       await prisma.auditLog.create({
         data: {
           tenantId,
-          userId: systemUser?.id || 'SYSTEM',
+          userId: systemUser?.id || null,
           accion: 'ORDEN_VENTA_FACTURADA',
           entidad: 'Invoice',
           entidadId: invoice.id,
@@ -114,7 +114,7 @@ export class BillingService {
       await prisma.auditLog.create({
         data: {
           tenantId,
-          userId: systemUser?.id || 'SYSTEM',
+          userId: systemUser?.id || null,
           accion: 'ORDEN_VENTA_FACTURA_ERROR',
           entidad: 'OrdenVenta',
           entidadId: ordenVentaId,
