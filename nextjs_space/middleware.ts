@@ -142,11 +142,24 @@ export async function middleware(request: NextRequest) {
   // app/[tenant]/<seccion> eran copias del modo multi-tenant con slug en
   // el path (revertido a subdominios). El acceso real usa subdominio
   // (rewrite a /p/ o rutas canónicas). Redirigimos cualquier URL con el
-  // slug en el path a la canónica. La regex solo matchea cuando el segundo
-  // segmento es una de las secciones legacy — las rutas reales (p. ej.
-  // /academy/dashboard, /tarjeta/{id}) no coinciden.
+  // slug en el path a la canónica, PERO solo cuando el primer segmento NO
+  // es una ruta top-level real de la app: /academy/dashboard,
+  // /soluciones/marketing y /admin/marketing son canónicas y deben pasar.
+  // Los slugs de tenant no colisionan: los nombres reservados (www, app,
+  // api, auth, login, register, dashboard, webcreator, admin) y todas las
+  // rutas top-level están excluidos.
+  const TOP_LEVEL = new Set([
+    'academy', 'admin', 'api', 'auth', 'booking', 'checkout', 'cita',
+    'compliance-pro', 'contrato', 'cotizacion', 'dashboard', 'delete-data',
+    'docs', 'ecosistema', 'embed', 'estudiante', 'login', 'marketing',
+    'marketing-template-editor', 'member', 'neting', 'p', 'payment', 'portal',
+    'precios', 'privacy', 'reembolsos', 'register', 'resolve-payment', 'signup',
+    'soluciones', 'tarjeta', 'template-editor', 'terms', 'test-post',
+    'verifactu', 'verify', 'webcreator', 'www', 'app',
+  ])
+
   const tenantSectionMatch = pathname.match(/^\/([^/]+)\/(academy|booking|cita|contrato|estudiante|member|marketing|portal|tarjeta|webcreator)(\/.*)?$/)
-  if (tenantSectionMatch && !PUBLIC.has(pathname)) {
+  if (tenantSectionMatch && !TOP_LEVEL.has(tenantSectionMatch[1]) && !PUBLIC.has(pathname)) {
     const section = tenantSectionMatch[2]
     const rest = tenantSectionMatch[3] || ''
     const dest = new URL(`/${section}${rest}`, request.nextUrl.origin)
@@ -159,11 +172,11 @@ export async function middleware(request: NextRequest) {
   // /dashboard/... que resuelve el tenant por sesión/subdominio, y varias
   // de esas páginas legacy eran copias viejas SIN features recientes
   // (trato fiscal, retenciones, escaneo de gastos, etc.). Redirigimos
-  // CUALQUIER URL con el slug en el path a su canónica para que nadie vea
-  // una versión desactualizada. No colisiona con rutas reales: ningún
-  // segmento top-level de la app tiene subsegmento "dashboard".
+  // cualquier URL con el slug en el path a su canónica para que nadie vea
+  // una versión desactualizada. Igual que arriba, el primer segmento no
+  // debe ser una ruta top-level (p. ej. /academy/dashboard es canónica).
   const tenantDashMatch = pathname.match(/^\/([^/]+)\/dashboard(\/.*)?$/)
-  if (tenantDashMatch) {
+  if (tenantDashMatch && !TOP_LEVEL.has(tenantDashMatch[1])) {
     const rest = tenantDashMatch[2] || ''
     // Sub-rutas legacy sin canónica directa → su sección padre
     const LEGACY_PARENT: Record<string, string> = {
@@ -176,6 +189,21 @@ export async function middleware(request: NextRequest) {
     }
     const target = LEGACY_PARENT[rest] || `/dashboard${rest}`
     const dest = new URL(target, request.nextUrl.origin)
+    return withHeaders(NextResponse.redirect(dest, 308))
+  }
+
+  // ─── Rutas legacy /[tenant]/[pageSlug] (páginas públicas por path) ──
+  // app/[tenant]/[pageSlug] era la forma vieja de servir páginas públicas
+  // del tenant (slug en el path). La canónica es /p/[tenantSlug]/[pageSlug]
+  // (favicon dinámico + resolveTenantBySlug). Redirigimos /{slug}/{page}
+  // → /p/{slug}/{page} cuando el primer segmento NO es una ruta top-level
+  // real de la app (para no capturar /tarjeta/{id}, /booking/{slug}, etc.).
+  // Debe ir DESPUÉS de la regla de dashboard para que /{slug}/dashboard
+  // caiga en esta y no en /p/.
+  const pageSlugMatch = pathname.match(/^\/([^/]+)\/([^/]+)$/)
+  if (pageSlugMatch && !TOP_LEVEL.has(pageSlugMatch[1]) && !PUBLIC.has(pathname)) {
+    const [, slug, page] = pageSlugMatch
+    const dest = new URL(`/p/${slug}/${page}`, request.nextUrl.origin)
     return withHeaders(NextResponse.redirect(dest, 308))
   }
 
