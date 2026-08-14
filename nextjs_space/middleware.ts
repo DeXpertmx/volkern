@@ -155,6 +155,9 @@ export async function middleware(request: NextRequest) {
       '/support/analytics': '/dashboard/support',
       '/configuracion/accounting': '/dashboard/configuracion',
       '/configuracion/agency': '/dashboard/configuracion',
+      // Páginas raíz sin canónica directa (módulos accesibles por hubs)
+      '/equality': '/dashboard/perfil',
+      '/sales': '/dashboard/sales/billing',
     }
     const target = LEGACY_PARENT[rest] || `/dashboard${rest}`
     const dest = new URL(target, request.nextUrl.origin)
