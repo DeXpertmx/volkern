@@ -114,31 +114,14 @@ COPY --from=builder /app/prisma ./prisma
 # Copiar Prisma Client generado (Next.js standalone trace a veces no lo incluye)
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
-# ── Prisma CLI (versión exacta del proyecto) para migrate deploy ──
-# El standalone de Next.js NO incluye el CLI de Prisma (es devDependency).
-# Sin esto, el entrypoint ejecuta `npx prisma migrate deploy` y npx descarga
-# la ÚLTIMA versión del registry (7.x), que no soporta `url` en el datasource
-# (Prisma 7 requiere driver adapter) → el deploy de migraciones falla en cada
-# boot. Copiamos el CLI 6.7.0 local + sus dependencias (engines con los
-# binarios schema-engine/migration-engine) para que npx resuelva la versión
-# correcta sin red ni descargas.
-COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
-COPY --from=builder /app/node_modules/@prisma/config ./node_modules/@prisma/config
-COPY --from=builder /app/node_modules/@prisma/debug ./node_modules/@prisma/debug
-COPY --from=builder /app/node_modules/@prisma/engines ./node_modules/@prisma/engines
-COPY --from=builder /app/node_modules/@prisma/engines-version ./node_modules/@prisma/engines-version
-COPY --from=builder /app/node_modules/@prisma/fetch-engine ./node_modules/@prisma/fetch-engine
-COPY --from=builder /app/node_modules/@prisma/get-platform ./node_modules/@prisma/get-platform
-# esbuild: dependencia de @prisma/config (carga de prisma.config.ts)
-COPY --from=builder /app/node_modules/esbuild ./node_modules/esbuild
-COPY --from=builder /app/node_modules/esbuild-register ./node_modules/esbuild-register
-# Binario del CLI: wrapper explícito (el standalone puede no tener .bin/prisma
-# ni preservar symlinks del builder)
-RUN mkdir -p /app/node_modules/.bin && \
-    printf '#!/bin/sh\nexec node /app/node_modules/prisma/build/index.js "$@"\n' > /app/node_modules/.bin/prisma && \
-    chmod +x /app/node_modules/.bin/prisma
+# ── Migraciones: se aplican con el job `volkern-erp:migrator` (ver
+# deploy-vps/run-migrations.sh) ANTES del service update. El runner NO incluye
+# el CLI de Prisma a propósito: añade ~100 MB y el deploy de migraciones debe
+# ser un paso explícito del pipeline, no un efecto secundario del boot (npx
+# descargaría la última versión 7.x, incompatible con el datasource `url`).
+# El runner conserva @prisma/client (para las data migrations del entrypoint).
 
-# Entrypoint para migraciones + start
+# Entrypoint para data migrations + start
 COPY --from=builder /app/scripts/docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
@@ -153,3 +136,40 @@ USER volkern
 
 ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["node", "server.js"]
+
+
+# ─── Stage 4: Migrator (job de migraciones) ──────────────────
+# Imagen mínima con el CLI de Prisma 6.7.0 del proyecto + schema, para
+# ejecutar `migrate deploy` como job one-shot antes de cada deploy
+# (deploy-vps/run-migrations.sh). Mantiene el mismo binario/engines que el
+# build (sin descargar la última versión del registry).
+FROM node:20-slim AS migrator
+WORKDIR /app
+
+# OpenSSL para que Prisma detecte libssl y los engines funcionen
+# (node:20-slim no lo trae instalado por defecto)
+RUN apt-get update -qq && \
+    apt-get install -y -qq --no-install-recommends openssl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# CLI de Prisma + dependencias (engines con schema-engine/libquery)
+COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
+COPY --from=builder /app/node_modules/@prisma/config ./node_modules/@prisma/config
+COPY --from=builder /app/node_modules/@prisma/debug ./node_modules/@prisma/debug
+COPY --from=builder /app/node_modules/@prisma/engines ./node_modules/@prisma/engines
+COPY --from=builder /app/node_modules/@prisma/engines-version ./node_modules/@prisma/engines-version
+COPY --from=builder /app/node_modules/@prisma/fetch-engine ./node_modules/@prisma/fetch-engine
+COPY --from=builder /app/node_modules/@prisma/get-platform ./node_modules/@prisma/get-platform
+COPY --from=builder /app/node_modules/esbuild ./node_modules/esbuild
+COPY --from=builder /app/node_modules/esbuild-register ./node_modules/esbuild-register
+# Binario del CLI: wrapper explícito
+RUN mkdir -p /app/node_modules/.bin && \
+    printf '#!/bin/sh\nexec node /app/node_modules/prisma/build/index.js "$@"\n' > /app/node_modules/.bin/prisma && \
+    chmod +x /app/node_modules/.bin/prisma
+
+# Schema + migraciones
+COPY --from=builder /app/prisma ./prisma
+
+# Job por defecto: aplicar migraciones y salir
+ENTRYPOINT ["/app/node_modules/.bin/prisma"]
+CMD ["migrate", "deploy"]
