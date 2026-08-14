@@ -138,6 +138,29 @@ export async function middleware(request: NextRequest) {
     return withHeaders(NextResponse.next())
   }
 
+  // ─── Rutas legacy /[tenant]/dashboard/* ──────────────────────────────
+  // El árbol app/[tenant]/dashboard/... era el mecanismo viejo de
+  // multi-tenant (slug del tenant en el path). El flujo actual redirige a
+  // /dashboard/... que resuelve el tenant por sesión/subdominio, y varias
+  // de esas páginas legacy eran copias viejas SIN features recientes
+  // (trato fiscal, retenciones, escaneo de gastos, etc.). Redirigimos
+  // CUALQUIER URL con el slug en el path a su canónica para que nadie vea
+  // una versión desactualizada. No colisiona con rutas reales: ningún
+  // segmento top-level de la app tiene subsegmento "dashboard".
+  const tenantDashMatch = pathname.match(/^\/([^/]+)\/dashboard(\/.*)?$/)
+  if (tenantDashMatch) {
+    const rest = tenantDashMatch[2] || ''
+    // Sub-rutas legacy sin canónica directa → su sección padre
+    const LEGACY_PARENT: Record<string, string> = {
+      '/support/analytics': '/dashboard/support',
+      '/configuracion/accounting': '/dashboard/configuracion',
+      '/configuracion/agency': '/dashboard/configuracion',
+    }
+    const target = LEGACY_PARENT[rest] || `/dashboard${rest}`
+    const dest = new URL(target, request.nextUrl.origin)
+    return withHeaders(NextResponse.redirect(dest, 308))
+  }
+
   // Allow .well-known paths (AI plugin discovery, etc.)
   if (pathname.startsWith('/.well-known/')) {
     return withHeaders(NextResponse.next())
