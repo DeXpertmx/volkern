@@ -2,6 +2,12 @@
 
 Este repositorio separa las migrations en dos carpetas:
 
+> **Nota**: esta carpeta vive en `prisma/manual-migrations/` (fuera de
+> `prisma/migrations/`) a propósito: Prisma trata toda subcarpeta de
+> `prisma/migrations/` como una migración y exige `migration.sql`, así
+> que una carpeta de documentación ahí hacía fallar `migrate deploy`
+> con P3015 en el boot del contenedor.
+
 ## `migrations/`
 
 Migrations autogeneradas / versionadas con Prisma. Aplicables con:
@@ -21,7 +27,7 @@ Convenciones:
 - **Default path** para añadir índices compuestos, columnas, FKs, enums,
   o cualquier DDL/DML en tablas de staging/prod de tamaño pequeño/medio.
 
-## `migrations/manual/`
+## `manual-migrations/`
 
 Migrations escritas a mano para casos donde el camino auto-Prisma causa
 **lock inaceptable** (escritura mantenida en tablas con > 100M filas donde
@@ -30,7 +36,7 @@ un `CREATE INDEX` no transaccionado requiere CONCURRENTLY).
 Aplicables **manualmente** fuera del flujo `migrate deploy`:
 
 ```bash
-psql "$DATABASE_URL" -f migrations/manual/<file>.sql
+psql "$DATABASE_URL" -f prisma/manual-migrations/<file>.sql
 ```
 
 ⚠️ Después de aplicar el SQL, es OBLIGATORIO reconciliar el historial de
