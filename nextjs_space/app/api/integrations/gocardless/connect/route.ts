@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.redirect(new URL('/auth/login', request.url));
+      return NextResponse.redirect(new URL('/auth/login', process.env.NEXTAUTH_URL || 'https://volkern.app'));
     }
 
     const { searchParams } = new URL(request.url);
@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
       ? 'https://connect.gocardless.com/oauth/authorize' 
       : 'https://connect-sandbox.gocardless.com/oauth/authorize';
 
-    const redirectUri = `${request.nextUrl.origin}/api/integrations/gocardless/callback`;
+    const redirectUri = `${process.env.NEXTAUTH_URL || 'https://volkern.app'}/api/integrations/gocardless/callback`;
 
     const oauthParams = new URLSearchParams({
       client_id: GOCARDLESS_CLIENT_ID,
