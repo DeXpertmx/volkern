@@ -138,6 +138,21 @@ export async function middleware(request: NextRequest) {
     return withHeaders(NextResponse.next())
   }
 
+  // ─── Rutas legacy /[tenant]/<seccion>/* (modo subdominio revertido) ──
+  // app/[tenant]/<seccion> eran copias del modo multi-tenant con slug en
+  // el path (revertido a subdominios). El acceso real usa subdominio
+  // (rewrite a /p/ o rutas canónicas). Redirigimos cualquier URL con el
+  // slug en el path a la canónica. La regex solo matchea cuando el segundo
+  // segmento es una de las secciones legacy — las rutas reales (p. ej.
+  // /academy/dashboard, /tarjeta/{id}) no coinciden.
+  const tenantSectionMatch = pathname.match(/^\/([^/]+)\/(academy|booking|cita|contrato|estudiante|member|marketing|portal|tarjeta|webcreator)(\/.*)?$/)
+  if (tenantSectionMatch && !PUBLIC.has(pathname)) {
+    const section = tenantSectionMatch[2]
+    const rest = tenantSectionMatch[3] || ''
+    const dest = new URL(`/${section}${rest}`, request.nextUrl.origin)
+    return withHeaders(NextResponse.redirect(dest, 308))
+  }
+
   // ─── Rutas legacy /[tenant]/dashboard/* ──────────────────────────────
   // El árbol app/[tenant]/dashboard/... era el mecanismo viejo de
   // multi-tenant (slug del tenant en el path). El flujo actual redirige a
