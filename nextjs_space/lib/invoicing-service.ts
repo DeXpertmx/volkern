@@ -147,10 +147,11 @@ export class InvoicingService {
       }
     })
 
+    const appUrl = process.env.NEXTAUTH_URL || 'https://volkern.app';
     const flow = await client.billingRequestFlows.create({
       links: { billing_request: billingRequest.id },
-      redirect_uri: `https://volkern.com/api/integrations/gocardless/callback?tenantId=${tenantId}&leadId=${leadId || ''}&contactId=${contactId || ''}`,
-      exit_uri: `https://volkern.com/dashboard/integraciones?tab=contabilidad`
+      redirect_uri: `${appUrl}/api/integrations/gocardless/callback?tenantId=${tenantId}&leadId=${leadId || ''}&contactId=${contactId || ''}`,
+      exit_uri: `${appUrl}/dashboard/integraciones?tab=contabilidad`
     })
 
     return {

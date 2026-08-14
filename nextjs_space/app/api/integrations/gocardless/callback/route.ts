@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('[GoCardless Callback] OAuth Error:', error);
-      return NextResponse.redirect(new URL('/dashboard/integraciones?error=gocardless_failed', request.url));
+      return NextResponse.redirect(new URL('/dashboard/integraciones?error=gocardless_failed', process.env.NEXTAUTH_URL || 'https://volkern.app'));
     }
 
     if (!code || !state) {
@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
         client_secret: GOCARDLESS_CLIENT_SECRET,
         code,
         grant_type: 'authorization_code',
-        redirect_uri: `${request.nextUrl.origin}/api/integrations/gocardless/callback`,
+        redirect_uri: `${process.env.NEXTAUTH_URL || 'https://volkern.app'}/api/integrations/gocardless/callback`,
       }),
     });
 
@@ -90,9 +90,9 @@ export async function GET(request: NextRequest) {
     });
 
     // Redirigir a la landing page de éxito
-    return NextResponse.redirect(new URL('/dashboard/integraciones/gocardless/success', request.url));
+    return NextResponse.redirect(new URL('/dashboard/integraciones/gocardless/success', process.env.NEXTAUTH_URL || 'https://volkern.app'));
   } catch (error) {
     console.error('[GoCardless Callback] Error:', error);
-    return NextResponse.redirect(new URL('/dashboard/integraciones?error=gocardless_error', request.url));
+    return NextResponse.redirect(new URL('/dashboard/integraciones?error=gocardless_error', process.env.NEXTAUTH_URL || 'https://volkern.app'));
   }
 }

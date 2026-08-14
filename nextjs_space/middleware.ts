@@ -280,7 +280,9 @@ export async function middleware(request: NextRequest) {
       cookieName: 'next-auth.session-token'
     })
     if (!token) {
-      const loginUrl = new URL('/auth/login', request.url)
+      // Usar la URL pública en vez de request.url: el standalone de Next.js
+      // reconstruye request.url con HOSTNAME=0.0.0.0 y mandaría al login 0.0.0.0:3000
+      const loginUrl = new URL('/auth/login', process.env.NEXTAUTH_URL || 'https://volkern.app')
       loginUrl.searchParams.set('callbackUrl', pathname)
       return withHeaders(NextResponse.redirect(loginUrl))
     }

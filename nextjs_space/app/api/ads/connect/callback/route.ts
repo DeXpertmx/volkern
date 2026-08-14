@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
 
     // Si la plataforma devolvió un error (usuario canceló)
     if (error) {
-      const dashboardUrl = new URL('/dashboard/ads', req.url);
+      const dashboardUrl = new URL('/dashboard/ads', process.env.NEXTAUTH_URL || 'https://volkern.app');
       dashboardUrl.searchParams.set('oauth_error', error);
       if (errorDescription) {
         dashboardUrl.searchParams.set('oauth_error_description', errorDescription);
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
     // Validar plataforma
     const platformValidation = AdPlatformSchema.safeParse(platformParam);
     if (!platformValidation.success || !code || !state) {
-      const dashboardUrl = new URL('/dashboard/ads', req.url);
+      const dashboardUrl = new URL('/dashboard/ads', process.env.NEXTAUTH_URL || 'https://volkern.app');
       dashboardUrl.searchParams.set('oauth_error', 'invalid_params');
       return NextResponse.redirect(dashboardUrl);
     }
@@ -41,8 +41,9 @@ export async function GET(req: NextRequest) {
     const platform = platformValidation.data;
     const tenantId = state;
 
-    // Determinar redirectUri original a partir de la URL actual
-    const redirectUri = `${req.nextUrl.origin}/api/ads/connect/callback`;
+    // Determinar redirectUri a partir de la URL pública (no de request.url,
+    // que en el standalone de Next.js se reconstruye como 0.0.0.0:3000)
+    const redirectUri = `${process.env.NEXTAUTH_URL || 'https://volkern.app'}/api/ads/connect/callback`;
 
     // Completar la conexión con el código de autorización
     await getConnector(platform as AdPlatform).connect(tenantId, {
@@ -52,12 +53,12 @@ export async function GET(req: NextRequest) {
     });
 
     // Redirigir al dashboard con éxito
-    const dashboardUrl = new URL('/dashboard/ads', req.url);
+    const dashboardUrl = new URL('/dashboard/ads', process.env.NEXTAUTH_URL || 'https://volkern.app');
     dashboardUrl.searchParams.set('oauth_success', platform);
     return NextResponse.redirect(dashboardUrl);
   } catch (error: any) {
     console.error('[ADS Connect Callback] Error:', error);
-    const dashboardUrl = new URL('/dashboard/ads', req.url);
+    const dashboardUrl = new URL('/dashboard/ads', process.env.NEXTAUTH_URL || 'https://volkern.app');
     dashboardUrl.searchParams.set('oauth_error', 'connection_failed');
     dashboardUrl.searchParams.set('oauth_error_description', error.message);
     return NextResponse.redirect(dashboardUrl);
