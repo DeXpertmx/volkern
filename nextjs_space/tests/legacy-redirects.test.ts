@@ -92,6 +92,49 @@ describe('resolveLegacyRedirect — rutas canónicas deben pasar (null)', () => 
   });
 });
 
+describe('resolveLegacyRedirect — casos límite', () => {
+  it('maneja slugs de tenant con guiones en todas las reglas', () => {
+    expect(resolveLegacyRedirect('/mi-empresa-sa/dashboard/gastos')).toEqual({
+      to: '/dashboard/gastos',
+    });
+    expect(resolveLegacyRedirect('/mi-empresa-sa/academy/dashboard')).toEqual({
+      to: '/academy/dashboard',
+    });
+    expect(resolveLegacyRedirect('/mi-empresa-sa/mi-pagina-publica')).toEqual({
+      to: '/p/mi-empresa-sa/mi-pagina-publica',
+    });
+  });
+
+  it('no redirige rutas de 3+ segmentos que no son legacy (pageSlug es exactamente 2)', () => {
+    expect(resolveLegacyRedirect('/empresa/a/b')).toBeNull();
+    expect(resolveLegacyRedirect('/empresa/a/b/c')).toBeNull();
+    expect(resolveLegacyRedirect('/p/empresa/mi-pagina/sub')).toBeNull();
+  });
+
+  it('ignora query strings (la función recibe solo el pathname)', () => {
+    expect(resolveLegacyRedirect('/empresa/dashboard/gastos?mes=2026-08')).toEqual({
+      to: '/dashboard/gastos',
+    });
+    expect(resolveLegacyRedirect('/empresa/mi-pagina?utm_source=x&ref=1')).toEqual({
+      to: '/p/empresa/mi-pagina',
+    });
+  });
+
+  it('maneja slugs numéricos y con puntos', () => {
+    expect(resolveLegacyRedirect('/empresa-123/dashboard')).toEqual({ to: '/dashboard' });
+    expect(resolveLegacyRedirect('/empresa.dev/mi-pagina')).toEqual({
+      to: '/p/empresa.dev/mi-pagina',
+    });
+  });
+
+  it('no redirige si el slug coincide con una ruta top-level (colisión total)', () => {
+    // Un slug hipotético llamado igual que una sección canónica NO debe
+    // redirigir: la ruta canónica gana.
+    expect(resolveLegacyRedirect('/tarjeta/mi-pagina')).toBeNull();
+    expect(resolveLegacyRedirect('/portal/xyz')).toBeNull();
+  });
+});
+
 describe('resolveLegacyRedirect — coherencia del set TOP_LEVEL', () => {
   it('contiene todas las secciones legacy (no se pueden auto-redirigir)', () => {
     const sections = [

@@ -38,13 +38,23 @@ export default defineConfig({
         '**/*.spec.ts',
         '**/*.d.ts',
       ],
-      // Umbrales actuales basados en cobertura real (179 tests en 10 archivos).
-      // Meta progresiva: subir 5pp por sprint hasta llegar al 60% en todos los métricos.
+      // Umbrales globales basados en cobertura real de la suite completa
+      // (201+ archivos, 5200+ tests): stmts 38%, branches 72%, funcs 45%.
+      // Se fijan ligeramente por debajo para no romper en variaciones
+      // locales, con meta progresiva de subirlos por sprint.
       thresholds: {
-        lines: 3,
-        branches: 40,
-        functions: 8,
-        statements: 3,
+        lines: 32,
+        branches: 68,
+        functions: 40,
+        statements: 32,
+        // La lógica de redirects legacy es pura y debe mantenerse al 100%:
+        // cualquier nueva rama sin test rompe el coverage.
+        'lib/legacy-redirects.ts': {
+          lines: 100,
+          branches: 100,
+          functions: 100,
+          statements: 100,
+        },
       },
     },
   },
