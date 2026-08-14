@@ -1,0 +1,11 @@
+-- Elimina la tabla legacy `notifications` (modelo Notification).
+--
+-- La tabla estaba vacía (0 filas) y el modelo no se usaba desde ningún
+-- punto del código: el centro de notificaciones usa InAppNotification
+-- (in_app_notifications), y los logs usan NotificationLog/auditLog.
+-- Ninguna tabla hace REFERENCES a "notifications" (sin FKs entrantes),
+-- y la relación inversa `User.notifications` se eliminó del schema.
+--
+-- Backup previo conservado en producción:
+--   CREATE TABLE "notifications_backup_20260814" AS TABLE "notifications";
+DROP TABLE "notifications";

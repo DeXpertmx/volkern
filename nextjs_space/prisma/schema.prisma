@@ -381,7 +381,6 @@ model Tenant {
   n8nWorkflows                   N8nWorkflow[]                    @relation("TenantN8nWorkflows")
   notificationLogs               NotificationLog[]
   notificationChannels           NotificationChannel[]
-  notifications                  Notification[]
   ordenesVenta                   OrdenVenta[]
   outgoingWebhookDeliveries      OutgoingWebhookDelivery[]
   outgoingWebhooks               OutgoingWebhook[]
@@ -2346,28 +2345,6 @@ model Deal {
   @@index([fechaCreacion])
   @@index([pipelineId])
   @@map("deals")
-}
-
-model Notification {
-  id            String    @id @default(cuid())
-  tenantId      String
-  userId        String
-  titulo        String
-  mensaje       String
-  tipo          String    @default("info")
-  link          String?
-  leido         Boolean   @default(false)
-  archivado     Boolean   @default(false)
-  metadata      Json?     @db.Json
-  fechaCreacion DateTime  @default(now())
-  fechaLeido    DateTime?
-  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  @@index([tenantId])
-  @@index([userId])
-  @@index([leido])
-  @@index([fechaCreacion])
-  @@map("notifications")
 }
 
 model CampaignLead {
