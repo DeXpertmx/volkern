@@ -726,9 +726,14 @@ export default function EscanearGastoPage() {
   // ─── Receptor: pre-rellena con los datos fiscales del tenant (emisor) ──
   const loadTenantReceptor = async () => {
     try {
-      const res = await fetch('/api/configuracion/fiscal/emisores?principal=true')
+      // No limitar la consulta a `esPrincipal=true`: perfiles fiscales antiguos
+      // pueden no tener ese indicador aunque sean el único perfil activo del
+      // tenant. El API ordena el principal primero y después los demás.
+      const res = await fetch('/api/configuracion/fiscal/emisores?activo=true')
+      if (!res.ok) return
       const data = await res.json()
-      const emisor = Array.isArray(data?.emisores) ? data.emisores[0] : null
+      const emisores = Array.isArray(data?.emisores) ? data.emisores : []
+      const emisor = emisores.find((item: any) => item.esPrincipal) || emisores[0]
       if (!emisor) return
       setForm(p => ({
         ...p,
