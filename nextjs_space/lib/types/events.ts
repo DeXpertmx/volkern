@@ -542,6 +542,11 @@ export interface ExpenseCreatedEvent extends BaseEventPayload {
   expenseId: string;
   monto: number;
   categoria: string;
+  // Retenciones aplicadas (IRPF → Modelo 111; IVA retenido → casos legales)
+  retencionIrpf?: number | null;
+  retencionIrpfRate?: number | null;
+  retencionIva?: number | null;
+  retencionIvaRate?: number | null;
 }
 
 export interface PayrollGeneratedEvent extends BaseEventPayload {

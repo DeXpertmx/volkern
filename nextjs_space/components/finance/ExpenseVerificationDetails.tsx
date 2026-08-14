@@ -51,6 +51,9 @@ interface ExpenseVerificationDetailsProps {
     metadata?: {
       irpfRate?: number | null
       irpfAmount?: number | null
+      // Retención de IVA (casos legales específicos)
+      ivaRetentionRate?: number | null
+      ivaRetentionAmount?: number | null
       surchargeRate?: number | null
       surchargeAmount?: number | null
       taxRegime?: string | null
@@ -246,6 +249,14 @@ export default function ExpenseVerificationDetails({ expense, tenantConfig }: Ex
           <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
             <p className="text-[9px] font-black text-muted-foreground uppercase mb-1">Operación</p>
             <p className="text-sm font-black">{expense.metadata?.operationType || '—'}</p>
+          </div>
+          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+            <p className="text-[9px] font-black text-muted-foreground uppercase mb-1">Retención IVA</p>
+            <p className="text-sm font-black">
+              {expense.metadata?.ivaRetentionAmount != null
+                ? `${expense.currency || 'EUR'} ${expense.metadata.ivaRetentionAmount.toFixed(2)}${expense.metadata.ivaRetentionRate != null ? ` (${expense.metadata.ivaRetentionRate}%)` : ''}`
+                : '—'}
+            </p>
           </div>
           <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
             <p className="text-[9px] font-black text-muted-foreground uppercase mb-1">Tipo recargo</p>

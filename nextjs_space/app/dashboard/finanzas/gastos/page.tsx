@@ -178,6 +178,7 @@ export default function GastosPage() {
                       IVA <SortIcon active={sortKey === 'iva'} dir={sortDir} />
                     </button>
                   </th>
+                  <th className={`${thBase} text-right`}>Retención</th>
                   <th className={thBase}>Estado</th>
                   <th className={`${thBase} text-center`}>Verifactu</th>
                   <th className={`${thBase} text-right`}>
@@ -189,7 +190,7 @@ export default function GastosPage() {
               </thead>
               <tbody className="divide-y">
                 {isLoading ? (
-                  <tr><td colSpan={8} className="px-6 py-10 text-center text-muted-foreground font-medium">Cargando datos...</td></tr>
+                  <tr><td colSpan={9} className="px-6 py-10 text-center text-muted-foreground font-medium">Cargando datos...</td></tr>
                 ) : (filteredExpenses.length > 0) ? (
                   filteredExpenses.map((expense: any) => (
                     <tr 
@@ -232,6 +233,24 @@ export default function GastosPage() {
                             : '—'}
                         </span>
                       </td>
+                      <td className="px-6 py-4 text-right">
+                        {(expense.metadata?.irpfAmount != null || expense.metadata?.ivaRetentionAmount != null) ? (
+                          <div className="flex flex-col items-end gap-0.5">
+                            {expense.metadata?.irpfAmount != null && (
+                              <span className="text-xs font-bold text-amber-600 tabular-nums">
+                                IRPF {expense.metadata.irpfAmount.toFixed(2)}{expense.metadata.irpfRate != null ? ` (${expense.metadata.irpfRate}%)` : ''}
+                              </span>
+                            )}
+                            {expense.metadata?.ivaRetentionAmount != null && (
+                              <span className="text-xs font-bold text-amber-600 tabular-nums">
+                                IVA {expense.metadata.ivaRetentionAmount.toFixed(2)}{expense.metadata.ivaRetentionRate != null ? ` (${expense.metadata.ivaRetentionRate}%)` : ''}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-300">—</span>
+                        )}
+                      </td>
                       <td className="px-6 py-4">
                         <Badge className={`rounded-lg text-[10px] font-bold uppercase border-none ${expense.status === 'PAID' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                           {expense.status}
@@ -257,7 +276,7 @@ export default function GastosPage() {
                     </tr>
                   ))
                 ) : (
-                   <tr><td colSpan={8} className="px-6 py-20 text-center font-medium text-slate-400">No se encontraron gastos que coincidan con los filtros.</td></tr>
+                   <tr><td colSpan={9} className="px-6 py-20 text-center font-medium text-slate-400">No se encontraron gastos que coincidan con los filtros.</td></tr>
                 )}
               </tbody>
             </table>
