@@ -31,13 +31,16 @@ for k in "${!VARS[@]}"; do
 done
 echo "Build args NEXT_PUBLIC (${#ARGS[@]}/2 claves): $(printf '%s\n' "${!VARS[@]}" | sort | tr '\n' ' ')"
 
-echo "=== docker build (puede tardar 10-20 min) ==="
-docker build --progress=plain "${ARGS[@]}" -t volkern-erp:latest .
+# ── Imagen principal (runner) ──
+# IMPORTANTE: taggear SIEMPRE con --target runner. El Dockerfile termina en el
+# stage `migrator`; sin --target, `docker build -t volkern-erp:latest` taggearía
+# el migrator en vez del runner (bug ya detectado).
+echo "=== docker build runner (puede tardar 10-20 min) ==="
+docker build --progress=plain "${ARGS[@]}" --target runner -t volkern-erp:latest .
 echo "=== Build OK: $(docker image inspect volkern-erp:latest --format '{{.Size}} bytes') ==="
 
 # ── Imagen migrator (job de migraciones, sin el CLI en el runner) ──
 # Se construye con el mismo contexto y las capas del builder ya cacheadas.
-# docker build --target migrator usa la misma cache de las etapas deps/builder.
 echo "=== docker build migrator (target) ==="
 docker build --progress=plain "${ARGS[@]}" --target migrator -t volkern-erp:migrator .
 echo "=== Migrator OK: $(docker image inspect volkern-erp:migrator --format '{{.Size}} bytes') ==="
