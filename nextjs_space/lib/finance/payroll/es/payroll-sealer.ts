@@ -113,7 +113,7 @@ export class PayrollSealer {
       await prisma.auditLog.create({
         data: {
           tenantId: record.tenantId,
-          userId: 'SYSTEM',
+          userId: null,
           accion: 'VIOLACION_INTEGRIDAD_NOMINA',
           entidad: 'PayrollRecordES',
           entidadId: record.id,

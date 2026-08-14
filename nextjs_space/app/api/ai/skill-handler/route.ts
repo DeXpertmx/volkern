@@ -225,10 +225,16 @@ export const POST = withTenantAuth(async (req, auth) => {
       }
 
       case 'generate_post_mortem': {
+        // TrainingSession.userId es FK obligatoria a User: resolver un usuario
+        // real del tenant (nunca 'system', que no existe en la tabla User).
+        const resolvedUserId = userId || (await prisma.user.findFirst({ where: { tenantId }, select: { id: true }, orderBy: { createdAt: 'asc' } }))?.id || null;
+        if (!resolvedUserId) {
+          return NextResponse.json({ error: 'No se pudo identificar el usuario para el post-mortem.' }, { status: 422 });
+        }
         const result = await (skills as any).generate_post_mortem(
           payload.leadId, 
           tenantId, 
-          userId || 'system', 
+          resolvedUserId, 
           payload.history
         );
         return NextResponse.json({ success: true, data: result });
@@ -241,16 +247,21 @@ export const POST = withTenantAuth(async (req, auth) => {
     // --- AUDITORÍA DE USO (PHASE 2) ---
     // Registramos el uso en el tenant destino para facturación y auditoría de la agencia
     try {
-      await (prisma as any).agentSkillLog.create({
-        data: {
-          userId: auth.user?.id || 'system',
-          tenantId: tenantId, // El tenant donde ocurrió la acción
-          apiKeyId: auth.apiKey?.id || null,
-          toolExecuted: action_name,
-          statusCode: 200,
-          payloadSummary: { action: action_name, timestamp: new Date().toISOString() }
-        }
-      });
+      // agent_skill_logs.userId es FK obligatoria a User: resolver un usuario
+      // real del tenant si auth.user no está (evita 'system' inexistente).
+      const logUserId = auth.user?.id || (await prisma.user.findFirst({ where: { tenantId }, select: { id: true }, orderBy: { createdAt: 'asc' } }))?.id;
+      if (logUserId) {
+        await (prisma as any).agentSkillLog.create({
+          data: {
+            userId: logUserId,
+            tenantId: tenantId, // El tenant donde ocurrió la acción
+            apiKeyId: auth.apiKey?.id || null,
+            toolExecuted: action_name,
+            statusCode: 200,
+            payloadSummary: { action: action_name, timestamp: new Date().toISOString() }
+          }
+        });
+      }
     } catch (logError) {
       console.error('[Skill-Handler] Failed to log usage:', logError);
     }

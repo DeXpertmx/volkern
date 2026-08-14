@@ -84,7 +84,7 @@ export class DunningService {
       await prisma.auditLog.create({
         data: {
           tenantId: subscription.tenantId,
-          userId: systemUser?.id || 'SYSTEM',
+          userId: systemUser?.id || null,
           accion: 'DUNNING_RECOVERY_SUCCESS',
           entidad: 'ClientSubscription',
           entidadId: subscriptionId,

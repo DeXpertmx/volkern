@@ -344,7 +344,7 @@ export async function POST(request: NextRequest) {
                     subscriptionId: session.subscription,
                     customerId: session.customer
                   } as any,
-                  userId: 'system',
+                  userId: null,
                   tenantId: subTenantId
                 }
               })

@@ -97,23 +97,28 @@ async function handleCallStart(tenantId: string, payload: any) {
   // Find Lead
   const lead = await findLeadByPhone(tenantId, targetNumber);
 
-  // For inbound calls, show a pop-up to agents
+  // For inbound calls, show a pop-up to agents.
+  // inAppNotification.userId es FK obligatoria a User: resolver un usuario real
+  // del tenant (no usar 'system', que no existe en la tabla User).
   if (!isOutbound) {
-    await prisma.inAppNotification.create({
-      data: {
-        tenantId,
-        userId: 'system', // Targeted notifications can be added later if agents have assigned extensions
-        title: 'Llamada Entrante',
-        body: `Llamada de ${targetNumber} ${lead ? `(${lead.nombre})` : '(Número desconocido)'}`,
-        type: 'incoming_call',
+    const notifUser = await prisma.user.findFirst({ where: { tenantId }, select: { id: true }, orderBy: { createdAt: 'asc' } });
+    if (notifUser) {
+      await prisma.inAppNotification.create({
         data: {
-          callerId: targetNumber,
-          leadId: lead?.id,
-          callId: payload.call_id_with_prefix || payload.call_id,
-          startTime: payload.call_start,
+          tenantId,
+          userId: notifUser.id,
+          title: 'Llamada Entrante',
+          body: `Llamada de ${targetNumber} ${lead ? `(${lead.nombre})` : '(Número desconocido)'}`,
+          type: 'incoming_call',
+          data: {
+            callerId: targetNumber,
+            leadId: lead?.id,
+            callId: payload.call_id_with_prefix || payload.call_id,
+            startTime: payload.call_start,
+          }
         }
-      }
-    });
+      });
+    }
   }
 
   console.log(`[Zadarma Webhook] Call start processed${isOutbound ? ' (Outbound)' : ''} from ${callerId} to ${destination}`);

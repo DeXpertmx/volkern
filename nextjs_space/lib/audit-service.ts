@@ -30,7 +30,7 @@ export class AuditService {
   static async log(input: AuditLogInput) {
     const timestamp = new Date();
     const previousHash = await getPreviousHash(input.tenantId, timestamp);
-    const dbUserId = input.userId === 'SYSTEM' || !input.userId ? null : input.userId;
+    const dbUserId = input.userId === 'SYSTEM' || input.userId === 'system' || !input.userId ? null : input.userId;
 
     const hash = createAuditHash({
       tenantId: input.tenantId,

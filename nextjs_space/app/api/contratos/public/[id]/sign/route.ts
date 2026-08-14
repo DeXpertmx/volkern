@@ -54,7 +54,7 @@ export const POST = withPublicTenant(async (request, tenantId, params) => {
     await prisma.auditLog.create({
       data: {
         tenantId,
-        userId: 'cliente',
+        userId: null,
         accion: 'firmar',
         entidad: 'contrato',
         entidadId: contrato.id,
