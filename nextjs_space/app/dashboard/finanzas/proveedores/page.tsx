@@ -13,6 +13,7 @@ import useSWR from "swr"
 import { toast } from "sonner"
 import IvaRatesEditor from "@/components/finance/IvaRatesEditor"
 import FiscalRegimeEditor from "@/components/finance/FiscalRegimeEditor"
+import { EXPENSE_CATEGORIES } from "@/lib/finance/expense-categories"
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
@@ -47,7 +48,7 @@ function formatAddress(s: any): string {
   return parts.length ? parts.join(', ') : 'No especificada'
 }
 
-const emptyForm = { name: '', taxId: '', email: '', phone: '', streetType: '', streetName: '', streetNumber: '', staircase: '', floor: '', door: '', postalCode: '', city: '', province: '', country: 'España', category: 'Varios', vatRates: [] as number[], fiscalRegime: 'EMPRESA', irpfRetention: 0, ivaRetention: 0 }
+const emptyForm = { name: '', taxId: '', email: '', phone: '', streetType: '', streetName: '', streetNumber: '', staircase: '', floor: '', door: '', postalCode: '', city: '', province: '', country: 'España', category: 'Otros', vatRates: [] as number[], fiscalRegime: 'EMPRESA', irpfRetention: 0, ivaRetention: 0 }
 
 export default function ProveedoresPage() {
   const { data: suppliers, isLoading, mutate } = useSWR('/api/erp/suppliers', fetcher)
@@ -247,23 +248,7 @@ export default function ProveedoresPage() {
             <div className="space-y-1.5">
               <Label className="text-[11px] font-bold uppercase tracking-widest">Categoría</Label>
               <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} className="w-full bg-background border rounded-xl px-4 py-2.5 text-sm font-medium outline-none">
-                <option value="Varios">Varios</option>
-                <option value="Software">Software</option>
-                <option value="Marketing">Marketing</option>
-                <option value="Logística">Logística</option>
-                <option value="Consultoría">Consultoría</option>
-                <option value="Hosting">Hosting</option>
-                <option value="Servicios Profesionales">Servicios Profesionales</option>
-                <option value="Materia Prima">Materia Prima</option>
-                <option value="Transporte">Transporte</option>
-                <option value="Mantenimiento">Mantenimiento</option>
-                <option value="Telecomunicaciones">Telecomunicaciones</option>
-                <option value="Seguros">Seguros</option>
-                <option value="Servicios Públicos">Servicios Públicos</option>
-                <option value="Papelería">Papelería</option>
-                <option value="Equipo de Cómputo">Equipo de Cómputo</option>
-                <option value="Alimentos y Bebidas">Alimentos y Bebidas</option>
-                <option value="Capacitación">Capacitación</option>
+                {EXPENSE_CATEGORIES.map(c => <option key={c.value} value={c.label}>{c.label}</option>)}
               </select>
             </div>
             <DialogFooter className="pt-2">
@@ -396,7 +381,7 @@ export default function ProveedoresPage() {
               </div>
               <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900 space-y-1">
                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5"><Tag className="w-3 h-3" /> Categoría</p>
-                <p className="text-sm font-medium">{detailSupplier?.category || 'Varios'}</p>
+                <p className="text-sm font-medium">{detailSupplier?.category || 'Otros'}</p>
               </div>
               <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900 space-y-1">
                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5"><CreditCard className="w-3 h-3" /> Balance</p>

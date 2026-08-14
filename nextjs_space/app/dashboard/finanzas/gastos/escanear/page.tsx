@@ -20,6 +20,7 @@ import { validateFiscalId, getFiscalIdConfigsByCountry, normalizarPais } from '@
 import { applyVatRowTemplate, associateVatRowsByPosition, sanitizeSupplierName, vatRowGeometry, type VatRowGeometry } from '@/lib/invoice-parser'
 import { applyTemplate, findRegionForValue, getOcrFieldDef, sameFieldValue, validateReference, valuesEquivalent, type OcrOverlay, type OcrTemplateField, type RegionProposal, type VatRowTemplate } from '@/lib/finance/ocr-template'
 import { buildExpenseEntryProposal } from '@/lib/finance/expense-entry-proposal'
+import { EXPENSE_CATEGORIES } from '@/lib/finance/expense-categories'
 import { createPdfFromPageRange, detectPdfDocumentGroups, renderPdfPages, type PdfDocumentGroup } from '@/lib/finance/pdf-render'
 
 interface EmisorInfo {
@@ -92,18 +93,6 @@ interface ExtractedData {
   issuerTaxId: string | null
   rawText: string
 }
-
-const CATEGORIES = [
-  { value: 'mercaderias', label: 'Mercaderías' },
-  { value: 'transporte', label: 'Transporte' },
-  { value: 'suministros', label: 'Suministros' },
-  { value: 'oficina', label: 'Oficina' },
-  { value: 'alquiler', label: 'Alquiler' },
-  { value: 'tecnologia', label: 'Tecnología' },
-  { value: 'marketing', label: 'Marketing' },
-  { value: 'profesional', label: 'Profesional' },
-  { value: 'otros', label: 'Otros' },
-]
 
 // Extrae streetName/postalCode/city de un domicilio en formato libre
 function parseSupplierAddress(addr: string): { streetName?: string; postalCode?: string; city?: string } {
@@ -1893,7 +1882,7 @@ export default function EscanearGastoPage() {
                   <Select value={form.category} onValueChange={v => setForm(p => ({ ...p, category: v }))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                      {EXPENSE_CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -2389,7 +2378,7 @@ export default function EscanearGastoPage() {
                 <Select value={supplierModal.category} onValueChange={v => setSupplierModal(m => ({ ...m, category: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                    {EXPENSE_CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>

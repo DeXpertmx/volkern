@@ -16,7 +16,7 @@ describe('buildExpenseEntryProposal', () => {
     expect(proposal.totalMatches).toBe(true)
     expect(proposal.balanced).toBe(true)
     expect(proposal.lines).toEqual([
-      { accountCode: '623', accountName: 'Servicios profesionales independientes', debit: 1000, credit: 0 },
+      { accountCode: '623', accountName: 'Servicios de profesionales independientes', debit: 1000, credit: 0 },
       { accountCode: '472', accountName: 'IVA soportado', debit: 210, credit: 0 },
       { accountCode: '410', accountName: 'Acreedores por prestaciones de servicios', debit: 0, credit: 1060 },
       { accountCode: '4751', accountName: 'HP acreedora por retenciones practicadas', debit: 0, credit: 150 },
