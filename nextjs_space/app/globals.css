@@ -364,3 +364,21 @@ body.puck-editor-active [data-radix-portal] [data-state] {
   right: 6px !important;
   font-size: 18px !important;
 }
+
+/* ── Dialog/Sheet: ancho mínimo para todos los modales ──────────────
+ * El {@link DialogContent} base trae max-w-lg (32rem ≈ 512px),
+ * lo que rompe modales largos en volkern (proveedores, gastos…).
+ * Este override ignora cualquier `max-w-*` heredado o por clase y
+ * fija ancho y alto a casi pantalla completa para que todos los
+ * modales largos se vean en columnas.
+ */
+[data-state="open"][role="dialog"] {
+  width: min(96vw, 1280px) !important;
+  max-width: min(96vw, 1280px) !important;
+  height: min(92dvh, 1100px) !important;
+  max-height: min(92dvh, 1100px) !important;
+}
+[data-state="open"][role="dialog"] .grid {
+  /* Permite que el grid de dos columnas respire sin desbordes */
+  min-height: 0;
+}
