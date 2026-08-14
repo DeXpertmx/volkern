@@ -114,6 +114,30 @@ COPY --from=builder /app/prisma ./prisma
 # Copiar Prisma Client generado (Next.js standalone trace a veces no lo incluye)
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
+# ── Prisma CLI (versión exacta del proyecto) para migrate deploy ──
+# El standalone de Next.js NO incluye el CLI de Prisma (es devDependency).
+# Sin esto, el entrypoint ejecuta `npx prisma migrate deploy` y npx descarga
+# la ÚLTIMA versión del registry (7.x), que no soporta `url` en el datasource
+# (Prisma 7 requiere driver adapter) → el deploy de migraciones falla en cada
+# boot. Copiamos el CLI 6.7.0 local + sus dependencias (engines con los
+# binarios schema-engine/migration-engine) para que npx resuelva la versión
+# correcta sin red ni descargas.
+COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
+COPY --from=builder /app/node_modules/@prisma/config ./node_modules/@prisma/config
+COPY --from=builder /app/node_modules/@prisma/debug ./node_modules/@prisma/debug
+COPY --from=builder /app/node_modules/@prisma/engines ./node_modules/@prisma/engines
+COPY --from=builder /app/node_modules/@prisma/engines-version ./node_modules/@prisma/engines-version
+COPY --from=builder /app/node_modules/@prisma/fetch-engine ./node_modules/@prisma/fetch-engine
+COPY --from=builder /app/node_modules/@prisma/get-platform ./node_modules/@prisma/get-platform
+# esbuild: dependencia de @prisma/config (carga de prisma.config.ts)
+COPY --from=builder /app/node_modules/esbuild ./node_modules/esbuild
+COPY --from=builder /app/node_modules/esbuild-register ./node_modules/esbuild-register
+# Binario del CLI: wrapper explícito (el standalone puede no tener .bin/prisma
+# ni preservar symlinks del builder)
+RUN mkdir -p /app/node_modules/.bin && \
+    printf '#!/bin/sh\nexec node /app/node_modules/prisma/build/index.js "$@"\n' > /app/node_modules/.bin/prisma && \
+    chmod +x /app/node_modules/.bin/prisma
+
 # Entrypoint para migraciones + start
 COPY --from=builder /app/scripts/docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh

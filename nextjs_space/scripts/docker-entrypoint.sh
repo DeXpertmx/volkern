@@ -35,10 +35,26 @@ fi
 
 # ─── 2. Ejecutar migraciones ───────────────────────────────
 echo "→ Ejecutando migraciones de Prisma..."
-if ! npx prisma migrate deploy 2>&1; then
+# Usar el CLI local (copiado en la imagen, versión 6.x del proyecto) en vez
+# de dejar que npx descargue la última versión del registry (7.x no soporta
+# `url` en el datasource → migrate deploy falla en cada boot). El binario
+# está en node_modules/.bin/prisma (wrapper a prisma/build/index.js).
+if [ -x /app/node_modules/.bin/prisma ]; then
+  PRISMA="node /app/node_modules/prisma/build/index.js"
+  # Sin comillas en $PRISMA a propósito: la palabra "node" y la ruta deben
+  # expandirse como dos argumentos del shell.
+  echo "   ✓ CLI local de Prisma: $($PRISMA --version 2>/dev/null | grep -oE '^prisma[[:space:]]+:[[:space:]]+[0-9.]+' || echo 'versión no detectada')"
+elif command -v npx >/dev/null 2>&1; then
+  echo "   ⚠️  CLI de Prisma no está en la imagen; npx descargará la versión del registry."
+  PRISMA="npx prisma"
+else
+  echo "   ⚠️  Sin CLI de Prisma disponible; se omiten las migraciones."
+  PRISMA=""
+fi
+if [ -n "$PRISMA" ] && ! $PRISMA migrate deploy 2>&1; then
   if [ "${ALLOW_DB_PUSH:-false}" = "true" ]; then
     echo "⚠️  ALLOW_DB_PUSH=true — ejecutando db push (puede causar pérdida de datos)"
-    npx prisma db push --accept-data-loss 2>&1 || echo "⚠️  db push falló, continuando..."
+    $PRISMA db push --accept-data-loss 2>&1 || echo "⚠️  db push falló, continuando..."
   else
     echo "⚠️  migrate deploy falló. Para usar db push, setear ALLOW_DB_PUSH=true"
     echo "   Continuando sin migraciones..."
