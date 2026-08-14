@@ -54,8 +54,13 @@ export interface LegacyRedirect {
  * legacy `/[tenant]/...`, o `null` si es una ruta canónica que debe pasar.
  */
 export function resolveLegacyRedirect(pathname: string): LegacyRedirect | null {
+  // Solo evaluamos el path (sin query string ni fragmento). El middleware
+  // pasa request.nextUrl.pathname (ya sin query), pero la función debe ser
+  // robusta si se le pasa una URL completa.
+  const p = pathname.split('?')[0].split('#')[0]
+
   // 1. Secciones legacy: /{slug}/<seccion>/*
-  const sectionMatch = pathname.match(
+  const sectionMatch = p.match(
     new RegExp(`^/([^/]+)/(${LEGACY_SECTIONS.join('|')})(/.*)?$`)
   )
   if (sectionMatch && !TOP_LEVEL.has(sectionMatch[1])) {
@@ -65,14 +70,14 @@ export function resolveLegacyRedirect(pathname: string): LegacyRedirect | null {
   }
 
   // 2. Dashboard legacy: /{slug}/dashboard/*
-  const dashMatch = pathname.match(/^\/([^/]+)\/dashboard(\/.*)?$/)
+  const dashMatch = p.match(/^\/([^/]+)\/dashboard(\/.*)?$/)
   if (dashMatch && !TOP_LEVEL.has(dashMatch[1])) {
     const rest = dashMatch[2] || ''
     return { to: LEGACY_PARENT[rest] || `/dashboard${rest}` }
   }
 
   // 3. PageSlug legacy: /{slug}/{page} → /p/{slug}/{page}
-  const pageSlugMatch = pathname.match(/^\/([^/]+)\/([^/]+)$/)
+  const pageSlugMatch = p.match(/^\/([^/]+)\/([^/]+)$/)
   if (pageSlugMatch && !TOP_LEVEL.has(pageSlugMatch[1])) {
     const [, slug, page] = pageSlugMatch
     return { to: `/p/${slug}/${page}` }
