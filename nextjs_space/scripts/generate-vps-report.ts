@@ -289,7 +289,7 @@ const HTML = `<!DOCTYPE html>
 <tr><td rowspan="4"><strong>IA / LLM</strong></td><td><code>OPENROUTER_API_KEY</code></td><td>OpenRouter (principal)</td></tr>
 <tr><td><code>OPENAI_API_KEY</code></td><td>OpenAI (fallback)</td></tr>
 <tr><td><code>ANTHROPIC_API_KEY</code></td><td>Anthropic (fallback)</td></tr>
-<tr><td><code>GEMINI_API_KEY</code></td><td>Gemini (fallback)</td></tr>
+<tr><td><code>GOOGLE_AI_KEY</code></td><td>Google AI / Gemini</td></tr>
 <tr><td rowspan="2"><strong>Push</strong></td><td><code>ONESIGNAL_APP_ID</code></td><td>App ID</td></tr>
 <tr><td><code>ONESIGNAL_API_KEY</code></td><td>API key</td></tr>
 <tr><td rowspan="2"><strong>WhatsApp</strong></td><td><code>EVOLUTION_API_URL</code></td><td>URL Evolution API</td></tr>
