@@ -82,6 +82,39 @@ describe('PATCH /api/erp/suppliers/[id]', () => {
     );
   });
 
+  it('actualiza el trato fiscal (régimen + retenciones IRPF/IVA)', async () => {
+    vi.mocked(prisma.supplier.findFirst).mockResolvedValue({ ...supplierBase } as any);
+    vi.mocked(prisma.supplier.update).mockResolvedValue({
+      ...supplierBase,
+      fiscalRegime: 'PROFESIONAL',
+      irpfRetention: 15,
+      ivaRetention: 0,
+    } as any);
+
+    const res = await PATCH(
+      makeReq({ fiscalRegime: 'PROFESIONAL', irpfRetention: 15, ivaRetention: 0 }),
+      { params: { id: 'sup-1' } } as any
+    );
+    expect(res.status).toBe(200);
+    expect(prisma.supplier.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ fiscalRegime: 'PROFESIONAL', irpfRetention: 15, ivaRetention: 0 }),
+      })
+    );
+  });
+
+  it('valida porcentajes no numéricos o negativos en la retención', async () => {
+    vi.mocked(prisma.supplier.findFirst).mockResolvedValue({ ...supplierBase } as any);
+    vi.mocked(prisma.supplier.update).mockResolvedValue({ ...supplierBase } as any);
+
+    await PATCH(makeReq({ irpfRetention: -5, ivaRetention: 'abc' }), { params: { id: 'sup-1' } } as any);
+    expect(prisma.supplier.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ irpfRetention: 0, ivaRetention: 0 }),
+      })
+    );
+  });
+
   it('devuelve 404 si el proveedor no pertenece al tenant', async () => {
     vi.mocked(prisma.supplier.findFirst).mockResolvedValue(null as any);
 
@@ -112,6 +145,36 @@ describe('POST /api/erp/suppliers', () => {
     expect(prisma.supplier.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ vatRates: [21, 10] }),
+      })
+    );
+  });
+
+  it('crea el proveedor con trato fiscal y retenciones', async () => {
+    vi.mocked(prisma.supplier.create).mockResolvedValue({
+      ...supplierBase,
+      fiscalRegime: 'ARRENDADOR',
+      irpfRetention: 19,
+      ivaRetention: 0,
+    } as any);
+
+    const res = await POST(
+      new Request('http://localhost/api/erp/suppliers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Locales SL',
+          category: 'Varios',
+          fiscalRegime: 'ARRENDADOR',
+          irpfRetention: 19,
+          ivaRetention: 0,
+        }),
+      }) as any,
+      {} as any
+    );
+    expect(res.status).toBe(200);
+    expect(prisma.supplier.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ fiscalRegime: 'ARRENDADOR', irpfRetention: 19, ivaRetention: 0 }),
       })
     );
   });

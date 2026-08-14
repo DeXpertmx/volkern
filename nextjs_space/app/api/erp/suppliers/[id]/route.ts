@@ -38,6 +38,19 @@ export const PATCH = withTenantAuth(async (request, auth, { params }) => {
         : [];
     }
 
+    // Trato fiscal: régimen legal + porcentajes de retención
+    if (body.fiscalRegime !== undefined && typeof body.fiscalRegime === 'string') {
+      data.fiscalRegime = body.fiscalRegime;
+    }
+    if (body.irpfRetention !== undefined) {
+      const n = Number(body.irpfRetention);
+      data.irpfRetention = Number.isFinite(n) && n >= 0 ? n : 0;
+    }
+    if (body.ivaRetention !== undefined) {
+      const n = Number(body.ivaRetention);
+      data.ivaRetention = Number.isFinite(n) && n >= 0 ? n : 0;
+    }
+
     const updated = await prisma.supplier.update({
       where: { id: params.id },
       data,
