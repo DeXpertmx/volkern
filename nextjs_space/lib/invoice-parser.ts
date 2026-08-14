@@ -993,16 +993,21 @@ export function parseInvoiceText(text: string): VisionResult | null {
   // ── Verifactu ──
   const verifactu = /VERI[\s\*]?FACTU|QR\s*AEAT|factura\s*verificable\s*en\s*la\s*sede/i.test(full)
 
-  // ── Categoría (heurística) ──
+  // ── Categoría (heurística, catálogo único) ──
   let category = 'otros'
   const catMap: Record<string, string[]> = {
     mercaderias: ['supermercado', 'restaurante', 'comida', 'alimentaci', 'cafeter', 'bar ', 'panader', 'carnicer', 'fruter'],
+    materias_primas: ['materia prima', 'materias primas'],
     transporte: ['gasolinera', 'combustible', 'carburante', 'peaje', 'aparcamiento', 'parking', 'uber', 'taxi', 'renfe', 'vueling', 'iberia', 'transporte', 'gasolina'],
     suministros: ['luz', 'electricidad', 'agua', 'gas', 'telefónica', 'movistar', 'vodafone', 'orange', 'suministro', 'endesa', 'iberdrola', 'naturgy'],
+    alquiler: ['alquiler', 'arrendamiento', 'renta'],
     oficina: ['papelería', 'librería', 'material oficina', 'fichero', 'impresora', 'tóner', 'cartucho', 'oficina'],
     tecnologia: ['apple', 'amazon', 'software', 'hosting', 'dominio', 'aws', 'google cloud', 'azure', 'microsoft', 'adobe', 'tecnolog', 'informática'],
-    marketing: ['google ads', 'facebook ads', 'meta ads', 'publicidad', 'marketing', 'seo', 'sem', 'redes sociales'],
-    profesional: ['asesor', 'abogado', 'notario', 'gestor', 'consultor', 'auditor', 'arquitecto', 'ingeniero', 'procurador', 'registrador'],
+    marketing: ['google ads', 'facebook ads', 'meta ads', 'publicidad', 'marketing', 'seo', 'sem', 'redes sociales', 'propaganda'],
+    profesional: ['asesor', 'abogado', 'notario', 'gestor', 'consultor', 'auditor', 'arquitecto', 'ingeniero', 'procurador', 'registrador', 'honorarios'],
+    mantenimiento: ['mantenimiento', 'reparación', 'reparacion', 'avería', 'conservación'],
+    seguros: ['seguro'],
+    banca: ['banca', 'bancario', 'comisión bancaria', 'comision bancaria'],
   }
   for (const [cat, keywords] of Object.entries(catMap)) {
     if (keywords.some(k => lowerFull.includes(k))) {

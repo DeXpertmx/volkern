@@ -43,27 +43,7 @@ export interface ExpenseEntryProposal {
   lines: ExpenseEntryProposalLine[]
 }
 
-const CATEGORY_ACCOUNTS: Array<[string, string, string]> = [
-  ['compras', '600', 'Compras de mercaderías'],
-  ['materias primas', '601', 'Compras de materias primas'],
-  ['arrendamiento', '621', 'Arrendamientos y cánones'],
-  ['alquiler', '621', 'Arrendamientos y cánones'],
-  ['reparacion', '622', 'Reparaciones y conservación'],
-  ['honorarios', '623', 'Servicios profesionales independientes'],
-  ['profesional', '623', 'Servicios profesionales independientes'],
-  ['transporte', '624', 'Transportes'],
-  ['seguro', '625', 'Primas de seguros'],
-  ['banca', '626', 'Servicios bancarios'],
-  ['publicidad', '627', 'Publicidad, propaganda y relaciones públicas'],
-  ['suministro', '628', 'Suministros'],
-  ['luz', '628', 'Suministros'],
-  ['agua', '628', 'Suministros'],
-  ['gas', '628', 'Suministros'],
-  ['telefono', '628', 'Suministros'],
-  ['marketing', '629', 'Otros servicios'],
-  ['software', '629', 'Otros servicios'],
-  ['suscripcion', '629', 'Otros servicios'],
-]
+import { accountForExpenseCategory } from '@/lib/finance/expense-categories'
 
 const REVERSE_CHARGE_OPERATIONS = new Set(['intracomunitaria', 'inversion_sujeto_pasivo'])
 const NO_SPANISH_VAT_OPERATIONS = new Set(['exportacion', 'exenta', 'no_sujeta', 'canarias_igic'])
@@ -78,9 +58,7 @@ function roundMoney(value: number): number {
 }
 
 function accountForCategory(category: string): { code: string; name: string } {
-  const normalized = category.toLowerCase().trim()
-  const found = CATEGORY_ACCOUNTS.find(([keyword]) => normalized.includes(keyword))
-  return found ? { code: found[1], name: found[2] } : { code: '629', name: 'Otros servicios' }
+  return accountForExpenseCategory(category)
 }
 
 function operationTreatment(operationType: string): { label: string; review: boolean } {
