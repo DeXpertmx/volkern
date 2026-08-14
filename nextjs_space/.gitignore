@@ -12,6 +12,8 @@ traccar-data/
 tests/lint/
 # scratch/ = locally-managed tooling only
 scratch/
+# agent checkpoints (local-only noise)
+.checkpoints/
 # typecheck output artifacts
 typecheck_output.txt
 # .husky/ is TRACKED — contains shared quality gates (typecheck, lint, fixture, vitest)
