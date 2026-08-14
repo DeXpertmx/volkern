@@ -6,7 +6,7 @@
  *
  *   1. < 7 días  →  Promedio simple de los días disponibles
  *   2. 7-30 días  →  Media móvil ponderada con tendencia lineal
- *   3. > 30 días  →  LLM (OpenRouter / Gemma 2) con contexto de serie temporal
+ *   3. > 30 días  →  LLM (gemini-3.5-flash-lite vía Google AI) con contexto de serie temporal
  *
  * Incluye detección de anomalías mediante desviación estándar sobre media móvil.
  *
@@ -237,9 +237,9 @@ export class AdPredictor {
     },
     dataPoints: HistoricalDataPoint[],
   ): Promise<{ predictions: CampaignPrediction['predictions']; confidence: number }> {
-    const apiKey = process.env.OPENROUTER_API_KEY;
+    const apiKey = process.env.GOOGLE_AI_KEY;
     if (!apiKey) {
-      throw new Error('OPENROUTER_API_KEY no configurada');
+      throw new Error('GOOGLE_AI_KEY no configurada');
     }
 
     // Usar últimos 60-90 días
@@ -272,31 +272,36 @@ export class AdPredictor {
       monthPattern,
     );
 
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            responseMimeType: 'application/json',
+            temperature: 0.3,
+            maxOutputTokens: 8192,
+          },
+        }),
       },
-      body: JSON.stringify({
-        model: 'google/gemini-2.0-flash-001',
-        messages: [{ role: 'user', content: prompt }],
-        response_format: { type: 'json_object' },
-      }),
-    });
+    );
 
     if (!response.ok) {
       const errorBody = await response.text().catch(() => '');
-      throw new Error(`OpenRouter API error ${response.status}: ${errorBody}`);
+      throw new Error(`Gemini API error ${response.status}: ${errorBody}`);
     }
 
     const result = (await response.json()) as {
-      choices?: { message?: { content?: string } }[];
+      candidates?: { content?: { parts?: { text?: string }[] } }[];
     };
 
-    const content = result?.choices?.[0]?.message?.content;
+    const content = result?.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!content) {
-      throw new Error('OpenRouter: respuesta vacía o sin contenido');
+      throw new Error('Gemini: respuesta vacía o sin contenido');
     }
 
     const parsed = JSON.parse(content) as {
@@ -309,7 +314,7 @@ export class AdPredictor {
     };
 
     if (!parsed.predictions?.nextDay || !parsed.predictions?.nextWeek || !parsed.predictions?.nextMonth) {
-      throw new Error('OpenRouter: respuesta JSON incompleta');
+      throw new Error('Gemini: respuesta JSON incompleta');
     }
 
     const mapToMetricPrediction = (

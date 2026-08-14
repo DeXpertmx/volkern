@@ -13,7 +13,7 @@
  *   SCHEDULE   — Analisis de tasa de conversion por hora/dia
  *   PLATFORM   — Comparacion de ROAS entre plataformas
  *
- * Para recomendaciones complejas usa OpenRouter con Gemini 2.0 Flash.
+ * Para recomendaciones complejas usa gemini-3.5-flash-lite (Google AI).
  *
  * @see PLAN_ADS_INTELLIGENCE.md — Fase 5
  */
@@ -30,8 +30,8 @@ import type {
 
 // ─── Constantes ───────────────────────────────────────────────────────
 
-const OPENROUTER_MODEL = 'google/gemini-2.0-flash-001';
-const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const GEMINI_MODEL = 'gemini-3.5-flash-lite';
+const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 const RECOMMENDATION_WINDOW_DAYS = 90;
 const MIN_DATA_DAYS = 30;
 
@@ -1186,9 +1186,9 @@ export class RecommendationEngine {
     tenantId: string,
     _platform: AdPlatform,
   ): Promise<RecommendationResult | null> {
-    const apiKey = process.env.OPENROUTER_API_KEY;
+    const apiKey = process.env.GOOGLE_AI_KEY;
     if (!apiKey) {
-      logger.warn({ campaignId }, 'RecommendationEngine: OPENROUTER_API_KEY no configurada');
+      logger.warn({ campaignId }, 'RecommendationEngine: GOOGLE_AI_KEY no configurada');
       return null;
     }
 
@@ -1255,18 +1255,18 @@ export class RecommendationEngine {
         + '  "implementation": {}\n'
         + '}';
 
-      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      const response = await fetch(`${GEMINI_BASE_URL}/${GEMINI_MODEL}:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + apiKey,
         },
         body: JSON.stringify({
-          model: 'google/gemini-2.0-flash-001',
-          messages: [{ role: 'user', content: prompt }],
-          response_format: { type: 'json_object' },
-          temperature: 0.3,
-          max_tokens: 1024,
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            responseMimeType: 'application/json',
+            temperature: 0.3,
+            maxOutputTokens: 1024,
+          },
         }),
       });
 
@@ -1274,16 +1274,16 @@ export class RecommendationEngine {
         const errorText = await response.text();
         logger.warn(
           { campaignId, status: response.status },
-          'RecommendationEngine: Error en OpenRouter: ' + response.status + ' - ' + errorText,
+          'RecommendationEngine: Error en Gemini: ' + response.status + ' - ' + errorText,
         );
         return null;
       }
 
       const data = await response.json();
-      const content = data?.choices?.[0]?.message?.content;
+      const content = data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
       if (!content) {
-        logger.warn({ campaignId }, 'RecommendationEngine: OpenRouter retorno respuesta vacia');
+        logger.warn({ campaignId }, 'RecommendationEngine: Gemini retorno respuesta vacia');
         return null;
       }
 

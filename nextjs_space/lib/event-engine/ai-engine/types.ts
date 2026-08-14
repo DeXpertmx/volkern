@@ -67,7 +67,7 @@ export const MODEL_CONFIGS: Record<AIModel, AIModelConfig> = {
   },
   gemini: {
     provider: 'google',
-    model: 'gemini-pro',
+    model: 'gemini-3.5-flash-lite',
     maxTokens: 8192,
     temperature: 0.7
   }

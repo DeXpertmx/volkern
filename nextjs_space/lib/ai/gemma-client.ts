@@ -21,7 +21,7 @@ export async function callGemma(
   options: { temperature?: number; maxTokens?: number; responseMimeType?: string } = {}
 ): Promise<GemmaResponse> {
   const GOOGLE_AI_KEY = process.env.GOOGLE_AI_KEY;
-  const MODEL = process.env.GEMMA_MODEL || 'gemini-flash-latest'; 
+  const MODEL = process.env.GEMMA_MODEL || 'gemini-3.5-flash-lite'; 
   const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GOOGLE_AI_KEY}`;
 
   if (!GOOGLE_AI_KEY) {
