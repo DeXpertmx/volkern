@@ -5,7 +5,6 @@ import useSWR from 'swr';
 import { ChannelSidebar } from './ChannelSidebar';
 import { MessageFeed } from './MessageFeed';
 import { MessageComposer } from './MessageComposer';
-import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { Loader2, Hash, Lock, Volume2, Settings, Users, Search, Star } from 'lucide-react';
 
@@ -55,7 +54,7 @@ export function ConnectLayout() {
   );
 
   return (
-    <div className="flex h-[calc(100vh-120px)] bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-200">
+    <div className="flex min-h-0 flex-1 overflow-hidden border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
       {/* Sidebar de Canales */}
       <ChannelSidebar 
         channels={channelsArray} 
@@ -64,11 +63,11 @@ export function ConnectLayout() {
       />
 
       {/* Feed de Mensajes */}
-      <div className="flex-1 flex flex-col bg-slate-50/10">
+      <div className="flex min-w-0 flex-1 flex-col bg-slate-50/60 dark:bg-slate-950/40">
         {activeChannel ? (
           <>
             {/* Header del Canal */}
-            <header className="h-16 border-b border-slate-100 flex items-center justify-between px-8 bg-white/50 backdrop-blur-md sticky top-0 z-10">
+            <header className="flex h-[4.5rem] shrink-0 items-center justify-between border-b border-slate-200/80 bg-white px-6 dark:border-slate-800 dark:bg-slate-900">
               <div className="flex items-center gap-4">
                 <div className="h-10 w-10 rounded-xl bg-primary/5 flex items-center justify-center text-primary">
                   {activeChannel.type === 'private' ? <Lock className="w-5 h-5" /> : <Hash className="w-5 h-5" />}
@@ -99,13 +98,13 @@ export function ConnectLayout() {
                   <input 
                     type="text" 
                     placeholder="BUSCAR EN CANAL..." 
-                    className="h-9 w-48 bg-slate-100/50 border-none rounded-xl pl-9 text-[9px] font-black uppercase tracking-widest focus:ring-2 focus:ring-primary/20 transition-all"
+                    className="h-9 w-48 rounded-lg border border-slate-200 bg-slate-50 pl-9 text-[9px] font-black uppercase tracking-widest transition-all focus:bg-white focus:ring-2 focus:ring-primary/20 dark:border-slate-700 dark:bg-slate-800 dark:focus:bg-slate-900"
                   />
                 </div>
-                <button className="h-9 w-9 rounded-xl hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-primary transition-all">
+                <button className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition-all hover:bg-slate-100 hover:text-primary dark:hover:bg-slate-800">
                   <Users className="w-4 h-4" />
                 </button>
-                <button className="h-9 w-9 rounded-xl hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-primary transition-all">
+                <button className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition-all hover:bg-slate-100 hover:text-primary dark:hover:bg-slate-800">
                   <Settings className="w-4 h-4" />
                 </button>
               </div>
