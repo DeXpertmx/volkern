@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
-import { Loader2, Box, FileText, TrendingUp, Info, AtSign, LifeBuoy } from 'lucide-react';
+import { Loader2, Box, FileText, TrendingUp, Info, AtSign, LifeBuoy, MessageSquare } from 'lucide-react';
 
 const fetcher = (url: string) => fetch(url).then(res => res.json());
 
@@ -77,7 +77,7 @@ export function MessageFeed({ channelId }: MessageFeedProps) {
   return (
     <div 
       ref={scrollRef}
-      className="flex-1 overflow-y-auto p-8 space-y-6 scroll-smooth bg-[#fdfdfd]"
+      className="min-h-0 flex-1 space-y-6 overflow-y-auto bg-slate-50/70 p-6 scroll-smooth dark:bg-slate-950/30"
     >
       {data && data[data.length-1]?.nextCursor && (
         <div className="flex justify-center pb-4">
@@ -90,7 +90,19 @@ export function MessageFeed({ channelId }: MessageFeedProps) {
         </div>
       )}
 
-      {messages.map((message, i) => (
+      {messages.length === 0 ? (
+        <div className="flex h-full min-h-[280px] items-center justify-center px-6 py-16">
+          <div className="max-w-sm text-center">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-200 bg-white text-primary shadow-sm dark:border-slate-700 dark:bg-slate-900">
+              <MessageSquare className="h-6 w-6" />
+            </div>
+            <h3 className="text-sm font-black tracking-tight text-slate-800 dark:text-slate-100">Este canal está listo</h3>
+            <p className="mt-2 text-xs leading-relaxed text-slate-500">
+              Comparte una actualización, menciona a un compañero o usa un comando para iniciar la conversación.
+            </p>
+          </div>
+        </div>
+      ) : messages.map((message) => (
         <MessageItem key={message.id} message={message} />
       ))}
     </div>

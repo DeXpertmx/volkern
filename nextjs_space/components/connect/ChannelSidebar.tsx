@@ -25,9 +25,9 @@ export function ChannelSidebar({ channels, activeChannelId, onSelectChannel }: C
   const canCreateChannels = ['Admin', 'Owner', 'Operator', 'Superadmin'].includes(userRole);
 
   return (
-    <div className="w-72 bg-slate-900 border-r border-slate-800 flex flex-col">
+    <aside className="flex w-64 min-h-0 shrink-0 flex-col border-r border-slate-800 bg-slate-950">
       {/* Header Sidebar */}
-      <div className="p-6 border-b border-slate-800 flex items-center justify-between">
+      <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
         <div>
           <h1 className="text-white font-black uppercase text-xs tracking-widest flex items-center gap-2">
             Volkern <span className="text-primary font-black italic">Connect</span>
@@ -45,7 +45,7 @@ export function ChannelSidebar({ channels, activeChannelId, onSelectChannel }: C
       </div>
 
       {/* Navegación de Canales */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-8 scrollbar-hide">
+      <div className="min-h-0 flex-1 space-y-7 overflow-y-auto p-3 scrollbar-hide">
         
         {/* Canales Institucionales */}
         <div className="space-y-3">
@@ -105,7 +105,7 @@ export function ChannelSidebar({ channels, activeChannelId, onSelectChannel }: C
       </div>
 
       {/* Perfil Usuario (Inferior) */}
-      <div className="p-4 bg-slate-950/50 mt-auto border-t border-slate-800">
+      <div className="mt-auto border-t border-slate-800 bg-slate-950/70 p-4">
         <div className="flex items-center gap-3">
           <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-indigo-600 flex items-center justify-center text-white text-[10px] font-black uppercase">
             {userInitial}
@@ -116,7 +116,7 @@ export function ChannelSidebar({ channels, activeChannelId, onSelectChannel }: C
           </div>
         </div>
       </div>
-    </div>
+    </aside>
   );
 }
 

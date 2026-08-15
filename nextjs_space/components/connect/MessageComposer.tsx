@@ -47,8 +47,8 @@ export function MessageComposer({ channelId, onMessageSent }: MessageComposerPro
   };
 
   return (
-    <div className="p-6 bg-white border-t border-slate-100">
-      <div className="max-w-5xl mx-auto">
+    <div className="shrink-0 border-t border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+      <div className="w-full">
         <div className="bg-slate-50 border-2 border-slate-100 rounded-3xl p-2 shadow-inner focus-within:border-primary/20 focus-within:bg-white transition-all">
           <textarea 
             value={content}
@@ -79,7 +79,7 @@ export function MessageComposer({ channelId, onMessageSent }: MessageComposerPro
           </div>
         </div>
         
-        <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.2em] mt-3 text-center">
+        <p className="mt-2 text-center text-[8px] font-black uppercase tracking-[0.2em] text-slate-400">
           Shift + Enter para nueva línea • Menciones con @ • Comandos con /
         </p>
       </div>
