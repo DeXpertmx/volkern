@@ -261,6 +261,39 @@ describe('GET /api/cotizaciones', () => {
     );
   });
 
+  it('debe filtrar por contacto para mostrar cotizaciones en su timeline', async () => {
+    (prisma.cotizacion.findMany as any).mockResolvedValue([mockCotizaciones[0]]);
+
+    await GET(
+      mockRequest('https://volkern.app/api/cotizaciones?contactId=cl0contact00000000000000001'),
+    );
+
+    expect(prisma.cotizacion.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ contactId: 'cl0contact00000000000000001' }),
+      }),
+    );
+  });
+
+  it('debe filtrar por empresa incluyendo cotizaciones ligadas a sus deals', async () => {
+    (prisma.cotizacion.findMany as any).mockResolvedValue([]);
+
+    await GET(
+      mockRequest('https://volkern.app/api/cotizaciones?companyId=cl0company00000000000000001'),
+    );
+
+    expect(prisma.cotizacion.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: [
+            { contactId: 'cl0company00000000000000001' },
+            { deal: { companyId: 'cl0company00000000000000001' } },
+          ],
+        }),
+      }),
+    );
+  });
+
   it('debe filtrar por estado', async () => {
     (prisma.cotizacion.findMany as any).mockResolvedValue([mockCotizaciones[1]]);
 
@@ -431,6 +464,7 @@ describe('POST /api/cotizaciones', () => {
       mockRequest('https://volkern.app/api/cotizaciones', {
         titulo: 'Cotización Completa',
         descripcion: 'Descripción detallada',
+        contactId: 'cl0contact00000000000000001',
         moneda: 'USD',
         validezDias: 60,
         terminosPago: '50% anticipo, 50% contra entrega',
@@ -450,6 +484,7 @@ describe('POST /api/cotizaciones', () => {
         data: expect.objectContaining({
           titulo: 'Cotización Completa',
           descripcion: 'Descripción detallada',
+          contactId: 'cl0contact00000000000000001',
           moneda: 'USD',
           validezDias: 60,
           terminosPago: '50% anticipo, 50% contra entrega',
@@ -646,7 +681,7 @@ describe('POST /api/cotizaciones', () => {
     expect(data.total).toBe(221);
   });
 
-  it('debe calcular items con descuento por item', async () => {
+  it('debe calcular items con descuento fijo en la moneda de la cotización', async () => {
     (prisma.cotizacion.findFirst as any).mockResolvedValue(null);
     (prisma.cotizacion.create as any).mockResolvedValue({ id: 'cot-item-desc' });
 
@@ -666,10 +701,43 @@ describe('POST /api/cotizaciones', () => {
 
     const processedItem = (prisma.cotizacion.create as any).mock.calls[0][0].data.items.create[0];
 
-    // subtotalItem = 10 * 100 = 1000, con 15% desc: 1000 * 0.85 = 850
-    expect(processedItem.subtotal).toBe(850);
+    // subtotal bruto = 10 * 100 = 1000, descuento fijo de 15 = 985
+    expect(processedItem.subtotal).toBe(985);
     expect(processedItem.descuento).toBe(15);
-    expect(processedItem.total).toBe(850); // sin impuesto
+    expect(processedItem.total).toBe(985); // sin impuesto
+  });
+
+  it('debe aceptar un descuento fijo igual al importe de la línea sin producir un total negativo', async () => {
+    (prisma.cotizacion.findFirst as any).mockResolvedValue(null);
+    (prisma.cotizacion.create as any).mockResolvedValue({ id: 'cot-desc-total' });
+
+    await POST(
+      mockRequest('https://volkern.app/api/cotizaciones', {
+        titulo: 'Descuento total',
+        items: [{ concepto: 'Implementación', cantidad: 1, precioUnitario: 500, descuento: 500 }],
+      }),
+    );
+
+    const data = (prisma.cotizacion.create as any).mock.calls[0][0].data;
+    expect(data.items.create[0].descuento).toBe(500);
+    expect(data.items.create[0].subtotal).toBe(0);
+    expect(data.items.create[0].total).toBe(0);
+    expect(data.total).toBe(0);
+  });
+
+  it('debe rechazar un descuento fijo superior al importe de la línea', async () => {
+    (prisma.cotizacion.findFirst as any).mockResolvedValue(null);
+
+    const response = await POST(
+      mockRequest('https://volkern.app/api/cotizaciones', {
+        titulo: 'Descuento inválido',
+        items: [{ concepto: 'Implementación', cantidad: 1, precioUnitario: 500, descuento: 500.01 }],
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toContain('no puede superar');
+    expect(prisma.cotizacion.create).not.toHaveBeenCalled();
   });
 
   // ── Numeración secuencial ──────────────────────────────────────────────

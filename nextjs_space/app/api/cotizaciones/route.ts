@@ -24,7 +24,7 @@ const CotizacionItemInputSchema = z.object({
 });
 
 /** Schema de cotización que el cliente envía (sin campos calculados) */
-const CotizacionInputSchema = z.object({
+export const CotizacionInputSchema = z.object({
   dealId: CommonSchemas.id.optional().nullable(),
   leadId: CommonSchemas.id.optional().nullable(),
   contactId: CommonSchemas.id.optional().nullable(),
@@ -48,12 +48,81 @@ const CotizacionInputSchema = z.object({
 });
 
 // GET - Listar cotizaciones
+/**
+ * Calcula las líneas de una cotización.
+ * `CotizacionItem.descuento` representa un importe fijo en la moneda de la cotización,
+ * no un porcentaje. La interfaz de Nueva Cotización muestra el descuento como euros.
+ */
+export function calculateCotizacionItems(items: any[], catalogoMap: Map<string, any>, impuestos: number) {
+  const processedItems: any[] = []
+  let subtotal = 0
+  let totalImpuestos = 0
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]
+    const catalogoItem = item.catalogoItemId ? catalogoMap.get(item.catalogoItemId) : null
+    const concepto = item.concepto || catalogoItem?.nombre
+    const descripcion = item.descripcion ?? catalogoItem?.descripcion
+    const cantidad = Number(item.cantidad) || 1
+    const precioUnitario = Number(item.precioUnitario)
+    const subtotalBruto = Math.round(cantidad * precioUnitario * 100) / 100
+    const descuento = Math.round(Math.max(0, Number(item.descuento) || 0) * 100) / 100
+
+    if (descuento > subtotalBruto + 0.001) {
+      return {
+        error: `El descuento de «${concepto || `línea ${i + 1}`}» no puede superar ${subtotalBruto.toFixed(2)} ${item.moneda || ''}`.trim(),
+      }
+    }
+
+    const categoria = item.categoria || catalogoItem?.categoriaFiscal
+    const sku = item.sku || catalogoItem?.sku
+    const tasaImpuestoId = item.tasaImpuestoId || catalogoItem?.tasaImpuestoId
+    const tienePorcentajeExplicito = item.porcentajeImpuesto !== undefined && item.porcentajeImpuesto !== null
+    const porcentajeImpuesto = Math.max(0, Number(
+      tienePorcentajeExplicito
+        ? item.porcentajeImpuesto
+        : catalogoItem?.tasaImpuesto?.porcentaje ?? (catalogoItem?.categoriaFiscal === 'exento' ? 0 : impuestos)
+    ) || 0)
+    const subtotalItem = Math.round((subtotalBruto - descuento) * 100) / 100
+    const montoImpuesto = Math.round(subtotalItem * (porcentajeImpuesto / 100) * 100) / 100
+    const totalItem = Math.round((subtotalItem + montoImpuesto) * 100) / 100
+
+    processedItems.push({
+      catalogoItemId: item.catalogoItemId || null,
+      concepto,
+      descripcion,
+      cantidad,
+      precioUnitario,
+      descuento,
+      subtotal: subtotalItem,
+      tasaImpuestoId,
+      porcentajeImpuesto,
+      montoImpuesto,
+      impuestos: montoImpuesto,
+      total: totalItem,
+      orden: i + 1,
+      categoria,
+      sku,
+      aplicaRetencion: item.aplicaRetencion || false,
+      porcentajeRetencion: Number(item.porcentajeRetencion) || 0,
+      montoRetencion: 0,
+    })
+
+    subtotal += subtotalItem
+    totalImpuestos += montoImpuesto
+  }
+
+  return { processedItems, subtotal, totalImpuestos }
+}
+
 export const GET = withTenantAuth(async (req, auth) => {
   try {
     const tenantId = auth.tenant!.id;
     const { searchParams } = new URL(req.url)
     const dealId = searchParams.get('dealId')
     const leadId = searchParams.get('leadId')
+    const contactId = searchParams.get('contactId')
+    const companyId = searchParams.get('companyId')
     const estado = searchParams.get('estado')
 
     const where: any = {
@@ -62,6 +131,13 @@ export const GET = withTenantAuth(async (req, auth) => {
 
     if (dealId) where.dealId = dealId
     if (leadId) where.leadId = leadId
+    if (contactId) where.contactId = contactId
+    if (companyId) {
+      where.OR = [
+        { contactId: companyId },
+        { deal: { companyId } },
+      ]
+    }
     if (estado) where.estado = estado
 
     // El proxy de prisma redirige automáticamente a la base de datos física del tenant
@@ -116,6 +192,7 @@ export const POST = withTenantAuth(async (req, auth) => {
     const {
       dealId,
       leadId,
+      contactId,
       titulo,
       descripcion,
       items,
@@ -150,74 +227,17 @@ export const POST = withTenantAuth(async (req, auth) => {
       catalogoMap = new Map(catalogoItems.map(c => [c.id, c]))
     }
 
-    // 2. Procesar items
-    const processedItems: any[] = []
-    let subtotalCalc = 0
-    let totalImpuestosCalc = 0
-
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i]
-      const catalogoItem = item.catalogoItemId ? catalogoMap.get(item.catalogoItemId) : null
-
-      const concepto = item.concepto || catalogoItem?.nombre
-      const descripcionItem = item.descripcion ?? catalogoItem?.descripcion
-      const cantidad = parseFloat(item.cantidad as any) || 1
-      const precioUnitario = parseFloat(item.precioUnitario as any) ?? catalogoItem?.precioBase ?? 0
-      const descuentoItem = parseFloat((item.descuento as any) || 0)
-      const categoria = item.categoria || catalogoItem?.categoriaFiscal
-      const sku = item.sku || catalogoItem?.sku
-      const tasaImpuestoId = item.tasaImpuestoId || catalogoItem?.tasaImpuestoId
-      const tienePorcentajeExplicito = item.porcentajeImpuesto !== undefined && item.porcentajeImpuesto !== null
-
-      let subtotalItem = cantidad * precioUnitario
-      if (descuentoItem > 0) {
-        subtotalItem = subtotalItem * (1 - descuentoItem / 100)
-      }
-      subtotalItem = Math.round(subtotalItem * 100) / 100
-
-      // No usar `||` aquí: 0% es un valor fiscal válido y debe respetarse.
-      // La prioridad es: porcentaje enviado por línea > tasa del catálogo >
-      // exento por categoría > IVA general para líneas manuales.
-      let porcentajeImpuesto = tienePorcentajeExplicito
-        ? Number(item.porcentajeImpuesto)
-        : catalogoItem?.tasaImpuesto?.porcentaje ?? (
-          catalogoItem?.categoriaFiscal === 'exento' ? 0 : impuestos
-        )
-      if (!Number.isFinite(porcentajeImpuesto) || porcentajeImpuesto < 0) porcentajeImpuesto = 0
-      const montoImpuesto = Math.round(subtotalItem * (porcentajeImpuesto / 100) * 100) / 100
-
-      const totalItem = subtotalItem + montoImpuesto
-
-      processedItems.push({
-        catalogoItemId: item.catalogoItemId || null,
-        concepto,
-        descripcion: descripcionItem,
-        cantidad,
-        precioUnitario,
-        descuento: descuentoItem,
-        subtotal: subtotalItem,
-        tasaImpuestoId,
-        porcentajeImpuesto,
-        montoImpuesto,
-        impuestos: montoImpuesto,
-        total: totalItem,
-        orden: i + 1,
-        categoria,
-        sku,
-        aplicaRetencion: item.aplicaRetencion || false,
-        porcentajeRetencion: parseFloat((item.porcentajeRetencion as any) || 0),
-        montoRetencion: 0,
-      })
-
-      subtotalCalc += subtotalItem
-      totalImpuestosCalc += montoImpuesto
+    // 2. Procesar items. El descuento de línea es un importe fijo.
+    const calculated = calculateCotizacionItems(items, catalogoMap, impuestos)
+    if ('error' in calculated) {
+      return NextResponse.json({ error: calculated.error }, { status: 400 })
     }
 
-    const subtotal = subtotalCalc
-    const descuentoMonto = subtotal * (descuentoPorcentaje / 100)
-    const baseImponible = subtotal - descuentoMonto
-    const impuestosProporcionales = totalImpuestosCalc * (baseImponible / subtotal || 1)
-    const total = baseImponible + impuestosProporcionales
+    const { processedItems, subtotal, totalImpuestos } = calculated
+    const descuentoMonto = Math.round(subtotal * (descuentoPorcentaje / 100) * 100) / 100
+    const baseImponible = Math.round((subtotal - descuentoMonto) * 100) / 100
+    const impuestosProporcionales = Math.round(totalImpuestos * (baseImponible / subtotal || 1) * 100) / 100
+    const total = Math.round((baseImponible + impuestosProporcionales) * 100) / 100
 
     // 3. Generar número de cotización (Secuencial por Tenant)
     const año = new Date().getFullYear()
@@ -244,6 +264,7 @@ export const POST = withTenantAuth(async (req, auth) => {
         tenantId: tenantId,
         dealId: dealId || null,
         leadId: leadId || null,
+        contactId: contactId || null,
         creadoPorId: userId,
         emisorId: emisorId || null,
         numero,

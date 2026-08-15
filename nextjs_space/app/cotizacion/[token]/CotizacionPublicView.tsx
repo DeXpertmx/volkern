@@ -36,6 +36,7 @@ import {
 } from '@/components/ui/dialog'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
+import { calculateCotizacionDisplayTotals } from '@/lib/cotizaciones/cotizacion-totals'
 
 interface CotizacionItem {
   id: string
@@ -85,6 +86,12 @@ export default function CotizacionPublicView({ cotizacion }: { cotizacion: Cotiz
       currency: cotizacion.moneda || 'MXN'
     }).format(amount)
   }
+
+  const displayTotals = calculateCotizacionDisplayTotals(
+    cotizacion.items,
+    cotizacion.subtotal,
+    cotizacion.descuentoMonto,
+  )
 
   const isExpired = () => {
     if (!cotizacion.fechaVencimiento) return false
@@ -269,15 +276,29 @@ export default function CotizacionPublicView({ cotizacion }: { cotizacion: Cotiz
               </TableBody>
               <TableFooter>
                 <TableRow>
-                  <TableCell colSpan={3}>Subtotal</TableCell>
-                  <TableCell className="text-right">{formatCurrency(cotizacion.subtotal)}</TableCell>
+                  <TableCell colSpan={3}>Subtotal bruto</TableCell>
+                  <TableCell className="text-right">{formatCurrency(displayTotals.subtotalBruto)}</TableCell>
                 </TableRow>
-                {cotizacion.descuentoPorcentaje > 0 && (
+                {displayTotals.descuentosLineas > 0 && (
                   <TableRow className="text-green-600">
-                    <TableCell colSpan={3}>Descuento ({cotizacion.descuentoPorcentaje}%)</TableCell>
-                    <TableCell className="text-right">-{formatCurrency(cotizacion.descuentoMonto)}</TableCell>
+                    <TableCell colSpan={3}>Descuentos por línea</TableCell>
+                    <TableCell className="text-right">-{formatCurrency(displayTotals.descuentosLineas)}</TableCell>
                   </TableRow>
                 )}
+                <TableRow>
+                  <TableCell colSpan={3}>Subtotal</TableCell>
+                  <TableCell className="text-right">{formatCurrency(displayTotals.subtotal)}</TableCell>
+                </TableRow>
+                {displayTotals.descuentoGlobal > 0 && (
+                  <TableRow className="text-green-600">
+                    <TableCell colSpan={3}>Descuento global{cotizacion.descuentoPorcentaje > 0 ? ` (${cotizacion.descuentoPorcentaje}%)` : ''}</TableCell>
+                    <TableCell className="text-right">-{formatCurrency(displayTotals.descuentoGlobal)}</TableCell>
+                  </TableRow>
+                )}
+                <TableRow>
+                  <TableCell colSpan={3}>Base imponible</TableCell>
+                  <TableCell className="text-right">{formatCurrency(displayTotals.baseImponible)}</TableCell>
+                </TableRow>
                 <TableRow>
                   <TableCell colSpan={3}>IVA</TableCell>
                   <TableCell className="text-right">{formatCurrency(cotizacion.impuestos)}</TableCell>
