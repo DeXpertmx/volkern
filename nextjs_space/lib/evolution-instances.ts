@@ -564,19 +564,46 @@ export async function getProfileInfo(
 
     const profile = await response.json();
 
+    // Fallback: si fetchProfile no devuelve el número (algunas versiones de
+    // Evolution no resuelven `number: me`), obtener el ownerJid desde
+    // fetchInstances, que sí lo expone con la instancia conectada.
+    let phoneNumber = profile?.id?.replace('@s.whatsapp.net', '');
+    let profileName = profile?.name || profile?.notify;
+    let profilePicUrl = profile?.profilePicUrl;
+
+    if (!phoneNumber || !profileName) {
+      try {
+        const instancesRes = await fetch(`${EVOLUTION_API_URL}/instance/fetchInstances`, {
+          headers: { apikey: EVOLUTION_API_KEY },
+        });
+        if (instancesRes.ok) {
+          const instances = await instancesRes.json();
+          const found = Array.isArray(instances)
+            ? instances.find((inst: any) => inst?.instance?.instanceName === instanceName || inst?.name === instanceName)
+            : null;
+          const ownerJid = found?.ownerJid || found?.instance?.ownerJid || '';
+          phoneNumber = phoneNumber || String(ownerJid).replace('@s.whatsapp.net', '').replace('@g.us', '') || undefined;
+          profileName = profileName || found?.profileName || found?.instance?.profileName || undefined;
+          profilePicUrl = profilePicUrl || found?.profilePicUrl || found?.instance?.profilePicUrl || undefined;
+        }
+      } catch (instErr) {
+        console.warn('⚠️ No se pudo obtener el ownerJid desde fetchInstances:', instErr);
+      }
+    }
+
     // Actualizar información de perfil en base de datos
-    if (profile) {
+    if (phoneNumber || profileName || profilePicUrl) {
       await prisma.userWhatsAppInstance.updateMany({
         where: { instanceName },
         data: {
-          phoneNumber: profile.id?.replace('@s.whatsapp.net', ''),
-          profileName: profile.name || profile.notify,
-          profilePicUrl: profile.profilePicUrl
-        }
+          ...(phoneNumber ? { phoneNumber } : {}),
+          ...(profileName ? { profileName } : {}),
+          ...(profilePicUrl ? { profilePicUrl } : {}),
+        },
       });
     }
 
-    return { success: true, profile };
+    return { success: true, profile: { ...profile, id: phoneNumber ? `${phoneNumber}@s.whatsapp.net` : profile?.id, name: profileName, profilePicUrl } };
   } catch (error) {
     console.error('Error al obtener info de perfil:', error);
     return {
