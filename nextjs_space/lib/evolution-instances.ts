@@ -1013,8 +1013,15 @@ export async function sendMessageWithUserInstance(
   mediaUrl?: string
 ): Promise<{ success: boolean; messageId?: string; error?: string }> {
   try {
-    // Asegurar formato correcto del número
-    const formattedNumber = to.includes('@') ? to : `${to}@s.whatsapp.net`;
+    // Asegurar formato correcto del número: normalizar a JID (sin '+', sin
+    // sufijo @s.whatsapp.net) — puede llegar como '5215...', '+5215...' o
+    // '5215...@s.whatsapp.net' (p.ej. desde conversation.contact.phone_number).
+    const cleanNumber = to
+      .replace('@s.whatsapp.net', '')
+      .replace('@g.us', '')
+      .replace(/\+/g, '')
+      .replace(/[\s\-\()]/g, '');
+    const formattedNumber = `${cleanNumber}@s.whatsapp.net`;
 
     const payload: any = {
       number: formattedNumber,
