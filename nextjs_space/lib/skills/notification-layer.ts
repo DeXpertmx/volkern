@@ -284,18 +284,22 @@ export class NotificationService {
         tenantId: _context.tenantId,
       });
 
-      // 2. Fallback to Resend if SES failed and Resend is configured
-      if (!result.success && process.env.RESEND_API_KEY) {
-        console.warn('[NotificationLayer] SES email failed, trying Resend fallback:', result.error);
+      // Resend solo es fallback cuando el tenant no tiene SMTP propio.
+      // Si está configurado, sus avisos nunca deben salir por otro proveedor.
+      if (!result.success && process.env.RESEND_API_KEY && !result.tenantSmtpConfigured) {
+        console.warn('[NotificationLayer] SMTP/SES falló sin SMTP tenant, probando Resend:', result.error);
         const { sendEmail: sendResendEmail } = await import('@/lib/resend-email');
-        result = await sendResendEmail({
-          to: recipient.email,
-          subject,
-          html,
-          text: content.body,
-          tenantSubdomain,
-          tenantName,
-        });
+        result = {
+          ...(await sendResendEmail({
+            to: recipient.email,
+            subject,
+            html,
+            text: content.body,
+            tenantSubdomain,
+            tenantName,
+          })),
+          tenantSmtpConfigured: false,
+        };
       }
 
       if (!result.success) {

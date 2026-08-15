@@ -42,12 +42,39 @@ interface SendEmailParams {
 
 const tenantTransporterCache = new Map<string, nodemailer.Transporter>()
 
+type TenantTransportResolution = {
+  enabled: boolean
+  transporter?: nodemailer.Transporter
+  fromAddress?: string
+  error?: string
+}
+
 function getTenantTransporterKey(tenantId: string, config: { host: string; port: number; user: string; password: string; encryption: string }): string {
   return `${tenantId}:${config.host}:${config.port}:${config.user}:${config.encryption}`
 }
 
-async function getTransporter(tenantId?: string): Promise<{ transporter: nodemailer.Transporter; fromAddress: string } | null> {
-  if (!tenantId) return null
+async function resolveTenantId(identifier?: string): Promise<string | undefined> {
+  if (!identifier) return undefined
+
+  try {
+    const tenant = await prisma.tenant.findFirst({
+      where: {
+        OR: [
+          { id: identifier },
+          { subdomain: identifier },
+          { slug: identifier },
+        ],
+      },
+      select: { id: true },
+    })
+    return tenant?.id
+  } catch {
+    return undefined
+  }
+}
+
+async function getTransporter(tenantId?: string): Promise<TenantTransportResolution> {
+  if (!tenantId) return { enabled: false }
 
   try {
     const configs = await prisma.configuracion.findMany({
@@ -55,8 +82,12 @@ async function getTransporter(tenantId?: string): Promise<{ transporter: nodemai
     })
 
     const map = Object.fromEntries(configs.map(c => [c.clave, c.valor]))
-    if (map.smtp_enabled !== 'true') return null
-    if (!map.smtp_host || !map.smtp_user || !map.smtp_password) return null
+    const enabled = String(map.smtp_enabled).toLowerCase() === 'true'
+    if (!enabled) return { enabled: false }
+
+    if (!map.smtp_host || !map.smtp_user || !map.smtp_password) {
+      return { enabled: true, error: 'El SMTP del tenant está habilitado pero incompleto' }
+    }
 
     const host = map.smtp_host
     const port = parseInt(map.smtp_port) || 587
@@ -78,9 +109,10 @@ async function getTransporter(tenantId?: string): Promise<{ transporter: nodemai
     const fromEmail = map.smtp_from_email || map.smtp_user
     const fromAddress = fromName ? `"${fromName}" <${fromEmail}>` : fromEmail
 
-    return { transporter: tenantTransporterCache.get(cacheKey)!, fromAddress }
+    return { enabled: true, transporter: tenantTransporterCache.get(cacheKey)!, fromAddress }
   } catch {
-    return null
+    // Si no se puede consultar la configuración, no afirmamos que SMTP esté activo.
+    return { enabled: false }
   }
 }
 
@@ -95,14 +127,29 @@ export async function sendEmail({
   tenantId,
   attachments,
 }: SendEmailParams) {
-  try {
-    const tenantTransport = await getTransporter(tenantId)
+  let tenantSmtpConfigured = false
 
-    // En producción puede no existir SMTP global aunque Resend sí esté
-    // configurado. No intentemos enviar con nodemailer sin credenciales:
-    // eso produce `Missing credentials for "PLAIN"` y rompe los OTP públicos.
-    if (!tenantTransport && !hasDefaultSmtpCredentials()) {
-      return await sendResendEmail({
+  try {
+    // Algunos avisos antiguos entregan el identificador como tenantSubdomain.
+    // Resolver ambos formatos mantiene la prioridad SMTP del tenant en todo el
+    // sistema sin depender del proveedor global.
+    const smtpTenantId = tenantId || await resolveTenantId(tenantSubdomain)
+    const tenantTransport = await getTransporter(smtpTenantId)
+    tenantSmtpConfigured = tenantTransport.enabled
+
+    // El SMTP habilitado por el tenant tiene prioridad absoluta. No se debe
+    // cambiar silenciosamente a Resend ni al SMTP global si falla.
+    if (tenantTransport.error) {
+      return {
+        success: false,
+        error: tenantTransport.error,
+        tenantSmtpConfigured,
+      }
+    }
+
+    // Si no hay SMTP del tenant ni credenciales SMTP globales, usamos Resend.
+    if (!tenantTransport.transporter && !hasDefaultSmtpCredentials()) {
+      const result = await sendResendEmail({
         to,
         subject,
         html,
@@ -110,10 +157,11 @@ export async function sendEmail({
         from: from || getFromAddress(tenantSubdomain),
         replyTo,
       })
+      return { ...result, tenantSmtpConfigured }
     }
 
-    const transporter = tenantTransport?.transporter || defaultTransporter
-    const fromAddress = from || tenantTransport?.fromAddress || getFromAddress(tenantSubdomain)
+    const transporter = tenantTransport.transporter || defaultTransporter
+    const fromAddress = from || tenantTransport.fromAddress || getFromAddress(tenantSubdomain)
 
     const info = await transporter.sendMail({
       from: fromAddress,
@@ -128,18 +176,20 @@ export async function sendEmail({
       },
     })
 
-    console.log(`[SES] Email enviado${tenantTransport ? ' (SMTP tenant)' : ''}:`, info.messageId)
+    console.log(`[SES] Email enviado${tenantTransport.transporter ? ' (SMTP tenant)' : ''}:`, info.messageId)
 
     return {
       success: true,
       messageId: info.messageId,
       data: info,
+      tenantSmtpConfigured,
     }
   } catch (error: any) {
     console.error('[SES] Error enviando email:', error)
     return {
       success: false,
       error: error.message,
+      tenantSmtpConfigured,
     }
   }
 }
