@@ -2509,6 +2509,7 @@ model Cotizacion {
   lead                Lead?                      @relation(fields: [leadId], references: [id])
   tenant              Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   ordenesVenta        OrdenVenta[]               @relation("CotizacionOrdenesVenta")
+  acceptanceChallenges CotizacionAcceptanceChallenge[]
 
   @@unique([tenantId, numero])
   @@index([tenantId])
@@ -2517,6 +2518,28 @@ model Cotizacion {
   @@index([estado])
   @@index([fechaCreacion])
   @@map("cotizaciones")
+}
+
+model CotizacionAcceptanceChallenge {
+  id               String      @id @default(cuid())
+  cotizacionId     String
+  tenantId         String
+  channel          String
+  destinationMasked String
+  codeHash         String
+  challengeTokenHash String
+  attempts         Int         @default(0)
+  maxAttempts      Int         @default(5)
+  expiresAt        DateTime
+  lastSentAt       DateTime    @default(now())
+  verifiedAt       DateTime?
+  createdAt        DateTime    @default(now())
+  cotizacion       Cotizacion  @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
+
+  @@index([cotizacionId, createdAt])
+  @@index([tenantId])
+  @@index([expiresAt])
+  @@map("cotizacion_acceptance_challenges")
 }
 
 model CotizacionItem {

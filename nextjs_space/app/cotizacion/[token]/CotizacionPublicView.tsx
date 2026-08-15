@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
@@ -50,6 +51,7 @@ interface CotizacionItem {
 
 interface Cotizacion {
   id: string
+  tenantId: string
   numero: string
   titulo: string
   descripcion: string | null
@@ -79,6 +81,12 @@ export default function CotizacionPublicView({ cotizacion }: { cotizacion: Cotiz
   const [accepting, setAccepting] = useState(false)
   const [showAcceptDialog, setShowAcceptDialog] = useState(false)
   const [downloadingPdf, setDownloadingPdf] = useState(false)
+  const [verificationChannels, setVerificationChannels] = useState<Array<{ channel: 'email' | 'whatsapp'; destinationMasked: string }>>([])
+  const [selectedChannel, setSelectedChannel] = useState<'email' | 'whatsapp' | null>(null)
+  const [verificationStep, setVerificationStep] = useState<'channel' | 'code'>('channel')
+  const [challengeId, setChallengeId] = useState('')
+  const [challengeToken, setChallengeToken] = useState('')
+  const [verificationCode, setVerificationCode] = useState('')
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('es-MX', {
@@ -99,26 +107,81 @@ export default function CotizacionPublicView({ cotizacion }: { cotizacion: Cotiz
            !['aceptada', 'rechazada'].includes(cotizacion.estado)
   }
 
-  const handleAccept = async () => {
+  const openVerificationDialog = async () => {
     setAccepting(true)
     try {
-      const res = await fetch(`/api/cotizaciones/public/${cotizacion.id}/accept`, {
+      const res = await fetch(`/api/cotizaciones/public/${cotizacion.id}/verification?tenantId=${encodeURIComponent(cotizacion.tenantId)}`)
+      const data = await res.json()
+      if (!res.ok || !data.channels?.length) {
+        toast.error(data.error || 'Esta cotización no tiene un email o WhatsApp válido para verificar la aceptación')
+        return
+      }
+      setVerificationChannels(data.channels)
+      setSelectedChannel(data.channels[0].channel)
+      setVerificationStep('channel')
+      setVerificationCode('')
+      setShowAcceptDialog(true)
+    } catch (error) {
+      toast.error('No se pudieron consultar los canales de verificación')
+    } finally {
+      setAccepting(false)
+    }
+  }
+
+  const requestVerificationCode = async () => {
+    if (!selectedChannel) return
+    setAccepting(true)
+    try {
+      const res = await fetch(`/api/cotizaciones/public/${cotizacion.id}/verification`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenantId: cotizacion.tenantId, channel: selectedChannel }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error || 'No se pudo enviar el código')
+        return
+      }
+      setChallengeId(data.challengeId)
+      setChallengeToken(data.challengeToken)
+      setVerificationStep('code')
+      toast.success(`Código enviado a ${data.destinationMasked}`)
+    } catch (error) {
+      toast.error('Error de conexión al enviar el código')
+    } finally {
+      setAccepting(false)
+    }
+  }
+
+  const handleAccept = async () => {
+    if (!challengeId || !challengeToken || !/^\d{6}$/.test(verificationCode)) {
+      toast.error('Introduce el código de 6 dígitos')
+      return
+    }
+
+    setAccepting(true)
+    try {
+      const res = await fetch(`/api/cotizaciones/public/${cotizacion.id}/verification/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ip: 'client' // El servidor obtendrá la IP real
-        })
+          tenantId: cotizacion.tenantId,
+          challengeId,
+          challengeToken,
+          code: verificationCode,
+        }),
       })
+      const data = await res.json()
 
       if (res.ok) {
-        toast.success('¡Cotización aceptada!')
+        toast.success('¡Cotización aceptada y verificada!')
         setShowAcceptDialog(false)
         window.location.reload()
       } else {
-        toast.error('Error al aceptar la cotización')
+        toast.error(data.error || 'Código inválido')
       }
     } catch (error) {
-      toast.error('Error de conexión')
+      toast.error('Error de conexión al verificar la aceptación')
     } finally {
       setAccepting(false)
     }
@@ -341,7 +404,7 @@ export default function CotizacionPublicView({ cotizacion }: { cotizacion: Cotiz
             <Button 
               size="lg" 
               className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
-              onClick={() => setShowAcceptDialog(true)}
+              onClick={() => void openVerificationDialog()}
             >
               <CheckCircle className="h-5 w-5 mr-2" />
               Aceptar Cotización
@@ -360,14 +423,13 @@ export default function CotizacionPublicView({ cotizacion }: { cotizacion: Cotiz
         </div>
       </div>
 
-      {/* Accept dialog */}
+      {/* Verification dialog */}
       <Dialog open={showAcceptDialog} onOpenChange={setShowAcceptDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Confirmar Aceptación</DialogTitle>
+            <DialogTitle>Verificar y aceptar cotización</DialogTitle>
             <DialogDescription>
-              Al aceptar esta cotización, confirmas tu interés en los servicios/productos descritos.
-              El proveedor se pondrá en contacto contigo para los siguientes pasos.
+              Para proteger al cliente, enviaremos un código temporal al email o WhatsApp registrado.
             </DialogDescription>
           </DialogHeader>
           <div className="bg-gray-50 p-4 rounded-lg">
@@ -376,17 +438,59 @@ export default function CotizacionPublicView({ cotizacion }: { cotizacion: Cotiz
               <span className="text-xl font-bold">{formatCurrency(cotizacion.total)}</span>
             </div>
           </div>
+
+          {verificationStep === 'channel' ? (
+            <div className="space-y-3">
+              <p className="text-sm font-medium">¿Dónde quieres recibirlo?</p>
+              {verificationChannels.map((option) => (
+                <button
+                  key={option.channel}
+                  type="button"
+                  onClick={() => setSelectedChannel(option.channel)}
+                  className={`w-full rounded-lg border p-3 text-left transition-colors ${selectedChannel === option.channel ? 'border-indigo-600 bg-indigo-50' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  <span className="font-medium">{option.channel === 'email' ? 'Email' : 'WhatsApp'}</span>
+                  <span className="block text-sm text-muted-foreground">{option.destinationMasked}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Introduce el código de 6 dígitos que enviamos a {verificationChannels.find((option) => option.channel === selectedChannel)?.destinationMasked}.
+              </p>
+              <Input
+                inputMode="numeric"
+                autoFocus
+                maxLength={6}
+                placeholder="123456"
+                value={verificationCode}
+                onChange={(event) => setVerificationCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                className="text-center text-2xl tracking-[0.5em] font-bold"
+              />
+              <p className="text-xs text-muted-foreground">El código caduca en 10 minutos y tiene un máximo de 5 intentos.</p>
+            </div>
+          )}
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAcceptDialog(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleAccept} disabled={accepting}>
+            {verificationStep === 'code' && (
+              <Button variant="ghost" onClick={() => setVerificationStep('channel')} disabled={accepting}>
+                Cambiar canal
+              </Button>
+            )}
+            <Button
+              onClick={verificationStep === 'channel' ? requestVerificationCode : handleAccept}
+              disabled={accepting || (verificationStep === 'channel' ? !selectedChannel : verificationCode.length !== 6)}
+            >
               {accepting ? (
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
               ) : (
                 <CheckCircle className="h-4 w-4 mr-2" />
               )}
-              Confirmar Aceptación
+              {verificationStep === 'channel' ? 'Enviar código' : 'Verificar y aceptar'}
             </Button>
           </DialogFooter>
         </DialogContent>
