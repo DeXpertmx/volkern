@@ -721,7 +721,7 @@ async function syncInboxMembers(
   inboxId: number,
   accountAccessToken: string,
   chatwootApi: any,
-): Promise<void> {
+): Promise<number[]> {
   const memberIds: number[] = []
 
   // El bot siempre: el puente API opera con él.
@@ -759,6 +759,7 @@ async function syncInboxMembers(
     await chatwootApi.addInboxMembers(chatwootAccountId, inboxId, memberIds, accountAccessToken)
     console.log('[Chatwoot] Miembros del inbox añadidos:', memberIds.join(','))
   }
+  return memberIds
 }
 
 /**
@@ -793,7 +794,8 @@ export async function ensureChatwootInboxForInstance(
     })
     if (existingChannel?.chatwootInboxId) {
       // Asegurar también la membresía del inbox (bot + admins del tenant) en
-      // caso de que se haya creado antes de este fix.
+      // caso de que se haya creado antes de este fix, y persistir el asignado
+      // por defecto si el canal no lo tiene.
       try {
         const hubConfigEarly = await prisma.messagingHubConfig.findUnique({
           where: { tenantId: instance.tenantId },
@@ -801,7 +803,20 @@ export async function ensureChatwootInboxForInstance(
         if (hubConfigEarly?.chatwootAccountId) {
           const chatwootApiEarly = (await import('@/lib/nexus/chatwoot-api')).chatwootApi
           const accountTokenEarly = await chatwootApiEarly.ensureBotUserInAccount(hubConfigEarly.chatwootAccountId)
-          await syncInboxMembers(instance.tenantId, hubConfigEarly.chatwootAccountId, existingChannel.chatwootInboxId, accountTokenEarly, chatwootApiEarly)
+          const memberIds = await syncInboxMembers(instance.tenantId, hubConfigEarly.chatwootAccountId, existingChannel.chatwootInboxId, accountTokenEarly, chatwootApiEarly)
+          const existingConfig: any = existingChannel.config || {}
+          if (!existingConfig.defaultAssigneeId && memberIds.length > 0) {
+            const botUserEarly = await chatwootApiEarly.getOrCreateBotUser()
+            const defaultAssignee = memberIds.find((id: number) => id !== botUserEarly?.id)
+            if (defaultAssignee) {
+              existingConfig.defaultAssigneeId = defaultAssignee
+              await prisma.channel.update({
+                where: { id: existingChannel.id },
+                data: { config: existingConfig },
+              })
+              console.log('[Chatwoot] Asignado por defecto persistido para canal existente:', defaultAssignee)
+            }
+          }
         }
       } catch (earlyErr) {
         console.warn('[Chatwoot] No se pudo sincronizar miembros del inbox existente:', earlyErr instanceof Error ? earlyErr.message : earlyErr)
@@ -872,7 +887,15 @@ export async function ensureChatwootInboxForInstance(
     // Guardar el canal y la referencia del inbox. El secret del webhook de
     // Chatwoot va en el config del canal (NO en messagingHubConfig.webhookSecret,
     // que es exclusivo del flujo Telegram/nexus-sync y es UNIQUE).
-    const channelConfig = {
+    const channelConfig: {
+      provider: string;
+      instanceName: string;
+      phoneNumber: string;
+      apiUrl: string;
+      webhookUrl: string;
+      chatwootWebhookSecret: string;
+      defaultAssigneeId?: number;
+    } = {
       provider: 'evolution',
       instanceName,
       phoneNumber,
@@ -942,9 +965,29 @@ export async function ensureChatwootInboxForInstance(
 
     // Miembros del inbox: el bot siempre + usuarios Admin del tenant (mapeo por
     // email). Sin membresía, los agentes no ven las conversaciones del inbox
-    // en el hub ("Sin asignar"/"Todas" quedan vacías).
+    // en el hub ("Sin asignar"/"Todas" quedan vacías). Se guarda además el
+    // primer agente no-bot como asignado por defecto para las conversaciones.
     try {
-      await syncInboxMembers(instance.tenantId, chatwootAccountId, inbox.id, accountAccessToken, chatwootApi)
+      const memberIds = await syncInboxMembers(instance.tenantId, chatwootAccountId, inbox.id, accountAccessToken, chatwootApi)
+      if (memberIds.length > 0 && !channelConfig.defaultAssigneeId) {
+        const botUser = await chatwootApi.getOrCreateBotUser()
+        const defaultAssignee = memberIds.find((id: number) => id !== botUser?.id)
+        if (defaultAssignee) {
+          channelConfig.defaultAssigneeId = defaultAssignee
+          // Persistir en el canal (se creó/actualizó justo arriba con la
+          // config sin el asignado; aquí se completa).
+          const channelRow = await prisma.channel.findFirst({
+            where: { tenantId: instance.tenantId, type: 'whatsapp' },
+          })
+          if (channelRow) {
+            await prisma.channel.update({
+              where: { id: channelRow.id },
+              data: { config: channelConfig },
+            })
+            console.log('[Chatwoot] Asignado por defecto persistido:', defaultAssignee)
+          }
+        }
+      }
     } catch (memberErr) {
       console.warn('[Chatwoot] Error añadiendo miembros al inbox:', memberErr instanceof Error ? memberErr.message : memberErr)
     }
