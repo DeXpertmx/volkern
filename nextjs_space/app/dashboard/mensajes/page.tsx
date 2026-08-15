@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { MessagingLayout } from '@/components/messaging/MessagingLayout'
 import { SidebarFilters } from '@/components/messaging/SidebarFilters'
@@ -9,6 +9,7 @@ import { ChatWindow } from '@/components/messaging/ChatWindow'
 import { ContactDetailsSidebar } from '@/components/messaging/ContactDetailsSidebar'
 import { toast } from 'sonner'
 import { useSession } from 'next-auth/react'
+import { notifyIncomingMessage } from '@/hooks/use-incoming-messages'
 
 import { ArrowLeft, ChevronLeft, MessageSquare, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -25,18 +26,56 @@ export default function MensajesPage() {
   const [selectedConversation, setSelectedConversation] = useState<any>(null)
   const [messages, setMessages] = useState<any[]>([])
   const [activeFilter, setActiveFilter] = useState('all')
+  // Referencia del último snapshot de conversaciones para detectar novedades
+  const knownRef = useRef<Map<string, { noLeidos: number; ultimoMensaje: string }>>(new Map())
 
-  const fetchConversaciones = async () => {
+  const fetchConversaciones = async (silent = false) => {
     try {
-      setLoading(true)
+      if (!silent) setLoading(true)
       const response = await fetch('/api/mensajes/conversaciones')
       const data = await response.json()
       if (response.ok) {
-        setConversaciones(data.conversaciones || [])
+        const lista = data.conversaciones || []
+        setConversaciones(lista)
+        
+        // Detectar novedades (solo en el polling, no en la carga inicial)
+        if (silent && knownRef.current.size > 0) {
+          const nuevos: any[] = []
+          for (const conv of lista) {
+            const prev = knownRef.current.get(conv.id)
+            const noLeidos = conv.noLeidos || 0
+            if (!prev) {
+              if (noLeidos > 0) nuevos.push(conv)
+              knownRef.current.set(conv.id, { noLeidos, ultimoMensaje: conv.ultimoMensaje || '' })
+            } else if (noLeidos > prev.noLeidos) {
+              nuevos.push(conv)
+              knownRef.current.set(conv.id, { noLeidos, ultimoMensaje: conv.ultimoMensaje || '' })
+            } else {
+              knownRef.current.set(conv.id, { noLeidos, ultimoMensaje: conv.ultimoMensaje || '' })
+            }
+          }
+          for (const conv of nuevos) {
+            notifyIncomingMessage(
+              '💬 Nuevo mensaje',
+              `${conv.contactoNombre || 'Contacto'}: ${conv.ultimoMensaje || ''}`,
+              `/dashboard/mensajes?id=${conv.id}`
+            )
+          }
+          // Si la conversación seleccionada recibió un mensaje nuevo, refrescarla
+          const seleccionadaActualizada = nuevos.find((c: any) => c.id === currentId)
+          if (seleccionadaActualizada && currentId) {
+            fetchMessages(currentId)
+          }
+        } else if (silent) {
+          // Primera pasada del polling: poblar el estado sin notificar
+          for (const conv of lista) {
+            knownRef.current.set(conv.id, { noLeidos: conv.noLeidos || 0, ultimoMensaje: conv.ultimoMensaje || '' })
+          }
+        }
         
         // If there's an ID in the URL, select it
         if (currentId) {
-          const found = data.conversaciones.find((c: any) => c.id === currentId)
+          const found = lista.find((c: any) => c.id === currentId)
           if (found) setSelectedConversation(found)
         }
       }
@@ -67,6 +106,8 @@ export default function MensajesPage() {
 
   useEffect(() => {
     fetchConversaciones()
+    const interval = setInterval(() => fetchConversaciones(true), 10000)
+    return () => clearInterval(interval)
   }, [])
 
   useEffect(() => {
