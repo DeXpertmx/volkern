@@ -187,7 +187,6 @@ export const HUBS: HubConfig[] = [
       { name: 'Automatizaciones', href: '/dashboard/automatizaciones', icon: Workflow, planModule: 'automatizaciones', description: 'Flujos de trabajo automáticos' },
       { name: 'Chatbot', href: '/dashboard/chatbot', icon: Bot, planModule: 'chatbot_whatsapp', description: 'Asistente inteligente' },
       { name: 'Analytics del Chatbot', href: '/dashboard/chatbot/analytics', icon: PieChart, planModule: 'chatbot_whatsapp', description: 'Métricas, patrones y sugerencias' },
-      { name: 'Plaudern IA', href: '/dashboard/plaudern', icon: Bot, planModule: 'chatbot_whatsapp', description: 'Agente conversacional IA' },
       { name: 'Chat en vivo', href: '/dashboard/live-chat', icon: Headset, planModule: 'mensajes', description: 'Chat en tiempo real con visitantes' },
     ]
   },
@@ -540,6 +539,7 @@ export const HUBS: HubConfig[] = [
       { name: 'Notificaciones', href: '/dashboard/configuracion?section=notificaciones', icon: Bell, description: 'Alertas y correos' },
       { name: 'Config. Fiscal', href: '/dashboard/configuracion?section=fiscal', icon: Calculator, description: 'Facturación e impuestos' },
       { name: 'Telefonía', href: '/dashboard/configuracion?section=telefonia', icon: PhoneCall, description: 'Líneas y desvíos' },
+      { name: 'Mi WhatsApp Personal', href: '/dashboard/configuracion/mi-whatsapp', icon: MessageCircle, description: 'Conecta tu WhatsApp con Evolution API' },
       { name: 'Reparto Leads', href: '/dashboard/configuracion?section=reparto', icon: RotateCw, description: 'Asignación de ejecutivos' },
       { name: 'Campos de Leads', href: '/dashboard/configuracion?section=leads', icon: ListTodo, description: 'Personalización de campos' },
       { name: 'Documentos', href: '/dashboard/configuracion?section=documentos', icon: FileText, description: 'Ajustes de contratos' },
