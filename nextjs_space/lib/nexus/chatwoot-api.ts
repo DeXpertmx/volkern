@@ -484,13 +484,14 @@ class ChatwootApiClient {
             accountToken
         );
 
-        let contactId: number;
+        let contactId: number | undefined;
 
         if (contacts.payload && contacts.payload.length > 0) {
             contactId = contacts.payload[0].id;
         } else {
-            // Crear contacto
-            const newContact = await this.request<{ payload: { id: number } }>(
+            // Crear contacto. Chatwoot 4.x devuelve el contacto en
+            // payload.contact.id (no payload.id).
+            const newContact = await this.request<{ payload: { contact?: { id: number }; id?: number } }>(
                 `/api/v1/accounts/${accountId}/contacts`,
                 {
                     method: 'POST',
@@ -503,7 +504,11 @@ class ChatwootApiClient {
                 },
                 accountToken
             );
-            contactId = newContact.payload.id;
+            contactId = newContact?.payload?.contact?.id ?? newContact?.payload?.id;
+        }
+
+        if (!contactId) {
+            throw new Error('No se pudo obtener el ID del contacto en Chatwoot.');
         }
 
         // Asegurar que el contacto tenga un contact_inbox (source_id) para este
