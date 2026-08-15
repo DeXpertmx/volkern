@@ -4,6 +4,7 @@
  * Permite que cada miembro del equipo conecte su propio WhatsApp
  */
 
+import crypto from 'node:crypto';
 import prisma from '@/lib/db';
 
 // Credenciales de Evolution API (desde las API secrets configuradas)
@@ -100,6 +101,110 @@ async function configureWebhooks(
       success: false,
       error: error instanceof Error ? error.message : 'Error desconocido'
     };
+  }
+}
+
+/**
+ * Crear una instancia nueva en Evolution API, configurar sus webhooks y dejarla
+ * lista para que el usuario escanee el QR desde Volkern.
+ */
+export async function createAndConnectInstance(
+  userId: string,
+  tenantId: string,
+  requestedName?: string
+): Promise<{ success: boolean; instance?: any; error?: string }> {
+  const cleanInstanceName = (requestedName || `volkern_${tenantId.slice(-8)}_${crypto.randomBytes(3).toString('hex')}`)
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]/g, '_')
+    .slice(0, 40)
+
+  try {
+    if (!EVOLUTION_API_KEY) {
+      return { success: false, error: 'Evolution API no está configurado en el servidor.' }
+    }
+
+    const existingLocal = await prisma.userWhatsAppInstance.findFirst({
+      where: { userId, tenantId },
+    })
+    if (existingLocal) {
+      return { success: false, error: 'Ya tienes una instancia de WhatsApp. Desconecta la actual antes de crear otra.' }
+    }
+
+    const response = await fetch(`${EVOLUTION_API_URL}/instance/create`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: EVOLUTION_API_KEY,
+      },
+      body: JSON.stringify({
+        instanceName: cleanInstanceName,
+        qrcode: true,
+        integration: 'WHATSAPP-BAILEYS',
+      }),
+      signal: AbortSignal.timeout(15000),
+    })
+
+    if (!response.ok) {
+      await response.text()
+      if (response.status === 409) {
+        return { success: false, error: `La instancia "${cleanInstanceName}" ya existe en Evolution API. Elige otro nombre.` }
+      }
+      return { success: false, error: `Evolution API rechazó la creación de la instancia (HTTP ${response.status}).` }
+    }
+
+    const created = await response.json()
+    const webhookUrl = `${process.env.NEXTAUTH_URL || 'https://volkern.app'}/api/webhook/evolution/${cleanInstanceName}`
+    await configureWebhooks(cleanInstanceName, webhookUrl)
+
+    let qrBase64 = created.base64 || created.qrcode?.base64 || created.qrCode?.base64 || ''
+    let qrCode = created.code || created.qrcode?.code || created.qrCode?.code || ''
+    let pairingCode = created.pairingCode || created.qrcode?.pairingCode
+
+    if (!qrBase64) {
+      const qrResult = await getQRCode(cleanInstanceName)
+      if (qrResult.success && qrResult.qrCode) {
+        qrBase64 = qrResult.qrCode.base64
+        qrCode = qrResult.qrCode.code
+        pairingCode = qrResult.qrCode.pairingCode
+      }
+    }
+
+    const instance = await prisma.userWhatsAppInstance.create({
+      data: {
+        userId,
+        tenantId,
+        instanceName: cleanInstanceName,
+        status: 'connecting',
+        qrCode: qrBase64 || undefined,
+        qrCodeExpiry: qrBase64 ? new Date(Date.now() + 60000) : undefined,
+      },
+    })
+
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        tenantId,
+        accion: 'crear_conectar',
+        entidad: 'UserWhatsAppInstance',
+        entidadId: instance.id,
+        descripcion: `Instancia de WhatsApp creada desde Volkern: ${cleanInstanceName}`,
+      },
+    })
+
+    return {
+      success: true,
+      instance: {
+        ...instance,
+        qrCode: qrBase64 || null,
+        qrCodeData: qrBase64 ? { base64: qrBase64, code: qrCode, pairingCode } : null,
+      },
+    }
+  } catch (error) {
+    console.error('❌ Error al crear instancia de WhatsApp:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error desconocido al crear la instancia',
+    }
   }
 }
 
@@ -501,6 +606,163 @@ export async function deleteInstance(
       success: false,
       error: error instanceof Error ? error.message : 'Error desconocido'
     };
+  }
+}
+
+/**
+ * Conecta la instancia de WhatsApp a Chatwoot creando el inbox Evolution.
+ * Se ejecuta automáticamente cuando la instancia queda conectada (open) para
+ * tener el número real del propietario antes de crear el canal.
+ */
+export async function ensureChatwootInboxForInstance(
+  instanceName: string
+): Promise<{ success: boolean; inboxId?: number; error?: string }> {
+  const chatwootUrl = process.env.CHATWOOT_BASE_URL
+  const chatwootToken = process.env.CHATWOOT_SUPER_ADMIN_TOKEN
+  if (!chatwootUrl || !chatwootToken) {
+    return { success: false, error: 'Chatwoot no está configurado en el servidor.' }
+  }
+  if (!EVOLUTION_API_KEY) {
+    return { success: false, error: 'Evolution API no está configurado en el servidor.' }
+  }
+
+  try {
+    const instance = await prisma.userWhatsAppInstance.findFirst({
+      where: { instanceName },
+      include: { tenant: { select: { nombre: true } } },
+    })
+    if (!instance) {
+      return { success: false, error: 'Instancia no encontrada.' }
+    }
+
+    // Evitar duplicados: si ya existe un canal WhatsApp del tenant, reutilizar.
+    const existingChannel = await prisma.channel.findFirst({
+      where: { tenantId: instance.tenantId, type: 'whatsapp' },
+    })
+    if (existingChannel?.chatwootInboxId) {
+      return { success: true, inboxId: existingChannel.chatwootInboxId }
+    }
+
+    const hubConfig = await prisma.messagingHubConfig.findUnique({
+      where: { tenantId: instance.tenantId },
+    })
+
+    const chatwootApi = (await import('@/lib/nexus/chatwoot-api')).chatwootApi
+    let chatwootAccountId = hubConfig?.chatwootAccountId ?? null
+    let accountAccessToken: string | null = null
+
+    if (!chatwootAccountId) {
+      const { account, accessToken } = await chatwootApi.createAccountWithAccess(
+        instance.tenant?.nombre || 'Empresa',
+        'es',
+      )
+      chatwootAccountId = account.id
+      accountAccessToken = accessToken
+    } else {
+      accountAccessToken = await chatwootApi.ensureBotUserInAccount(chatwootAccountId)
+    }
+
+    // Teléfono real del propietario (puede llegar del perfil ya sincronizado)
+    let phoneNumber = instance.phoneNumber || ''
+    if (!phoneNumber) {
+      const profileResult = await getProfileInfo(instanceName)
+      phoneNumber = profileResult.profile?.id?.replace('@s.whatsapp.net', '') || phoneNumber
+    }
+    if (!phoneNumber) {
+      return { success: false, error: 'Aún no hay número de WhatsApp disponible para crear el canal.' }
+    }
+
+    const webhookUrl = `${process.env.NEXTAUTH_URL || 'https://volkern.app'}/api/webhook/evolution/${instanceName}`
+    const inbox = await chatwootApi.createEvolutionWhatsAppInbox(
+      chatwootAccountId,
+      `WhatsApp - ${instance.tenant?.nombre || 'Empresa'}`,
+      phoneNumber,
+      EVOLUTION_API_KEY,
+      EVOLUTION_API_URL,
+      webhookUrl,
+      accountAccessToken,
+    )
+
+    // Guardar el canal y la referencia del inbox
+    if (existingChannel) {
+      await prisma.channel.update({
+        where: { id: existingChannel.id },
+        data: {
+          isActive: true,
+          chatwootInboxId: inbox.id,
+          config: {
+            provider: 'evolution',
+            instanceName,
+            phoneNumber,
+            apiUrl: EVOLUTION_API_URL,
+            webhookUrl,
+          },
+        },
+      })
+    } else {
+      await prisma.channel.create({
+        data: {
+          tenantId: instance.tenantId,
+          type: 'whatsapp',
+          name: `WhatsApp - ${instance.tenant?.nombre || 'Empresa'}`,
+          chatwootInboxId: inbox.id,
+          isActive: true,
+          isDefault: true,
+          config: {
+            provider: 'evolution',
+            instanceName,
+            phoneNumber,
+            apiUrl: EVOLUTION_API_URL,
+            webhookUrl,
+          },
+        },
+      })
+    }
+
+    // Actualizar hub config (se crea si el tenant aún no tiene uno)
+    const webhookSecret = hubConfig?.webhookSecret || crypto.randomBytes(32).toString('hex')
+    const syncWebhookUrl = `${process.env.NEXTAUTH_URL || 'https://volkern.app'}/api/webhooks/nexus-sync`
+    if (hubConfig) {
+      await prisma.messagingHubConfig.update({
+        where: { tenantId: instance.tenantId },
+        data: {
+          isActive: true,
+          chatwootAccountId,
+          whatsappInboxId: inbox.id,
+        },
+      })
+    } else {
+      await prisma.messagingHubConfig.create({
+        data: {
+          tenantId: instance.tenantId,
+          isActive: true,
+          hubBaseUrl: chatwootUrl,
+          hubApiToken: chatwootToken,
+          hubAccountId: String(chatwootAccountId),
+          chatwootAccountId,
+          whatsappInboxId: inbox.id,
+          webhookSecret,
+          webhookUrl: syncWebhookUrl,
+          autoProvisioned: true,
+          provisionedAt: new Date(),
+        },
+      })
+    }
+
+    // Habilitar Nexus en el tenant
+    await prisma.tenant.update({
+      where: { id: instance.tenantId },
+      data: { nexusEnabled: true },
+    })
+
+    console.log('[Chatwoot] Inbox Evolution creado para instancia:', instanceName, 'id:', inbox.id)
+    return { success: true, inboxId: inbox.id }
+  } catch (error) {
+    console.error('❌ Error conectando instancia a Chatwoot:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error desconocido conectando a Chatwoot',
+    }
   }
 }
 

@@ -277,6 +277,44 @@ class ChatwootApiClient {
     }
 
     /**
+     * Crear inbox de WhatsApp (Evolution API)
+     * El canal Evolution de Chatwoot recibe los mensajes mediante el webhook
+     * configurado en la instancia de Evolution (url + apikey).
+     */
+    async createEvolutionWhatsAppInbox(
+        accountId: number,
+        name: string,
+        phoneNumber: string,
+        evolutionApiKey: string,
+        evolutionApiUrl: string,
+        evolutionWebhookUrl: string,
+        accountToken: string
+    ): Promise<ChatwootInbox> {
+        console.log('[ChatwootAPI] Creating Evolution WhatsApp inbox for account:', accountId);
+
+        return this.request<ChatwootInbox>(
+            `/api/v1/accounts/${accountId}/inboxes`,
+            {
+                method: 'POST',
+                body: JSON.stringify({
+                    name,
+                    channel: {
+                        type: 'whatsapp',
+                        provider: 'evolution',
+                        phone_number: phoneNumber,
+                        provider_config: {
+                            apikey: evolutionApiKey,
+                            url: evolutionApiUrl,
+                            webhook_url: evolutionWebhookUrl,
+                        },
+                    },
+                }),
+            },
+            accountToken
+        );
+    }
+
+    /**
      * Crear inbox de WhatsApp vía Twilio
      */
     async createTwilioWhatsAppInbox(

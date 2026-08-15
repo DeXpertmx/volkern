@@ -7,6 +7,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
+import { ensureChatwootInboxForInstance } from '@/lib/evolution-instances';
 
 /**
  * POST - Recibir eventos de Evolution API
@@ -97,9 +98,11 @@ export async function POST(
             }
           });
           console.log('✅ Instancia conectada exitosamente');
-          
-          // Intentar obtener info del perfil
-          console.log('📱 Intentando obtener info del perfil...');
+
+          // Conectar el canal a Chatwoot con el número real del propietario
+          console.log('🔗 Conectando instancia a Chatwoot...');
+          const chatwootResult = await ensureChatwootInboxForInstance(instance.instanceName);
+          console.log('📦 Chatwoot inbox result:', chatwootResult);
         } else if (state === 'connecting') {
           newStatus = 'connecting';
           await prisma.userWhatsAppInstance.update({
