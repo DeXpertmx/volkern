@@ -636,6 +636,27 @@ class ChatwootApiClient {
         );
     }
 
+    /**
+     * Asignar una conversación a un agente (para que aparezca en su vista
+     * "Mis conversaciones"/asignadas del hub).
+     */
+    async assignConversation(
+        accountId: number,
+        conversationId: number,
+        assigneeId: number,
+        accountToken: string
+    ): Promise<{ payload: any }> {
+        console.log('[ChatwootAPI] Assigning conversation:', conversationId, '→ user', assigneeId);
+        return this.request<{ payload: any }>(
+            `/api/v1/accounts/${accountId}/conversations/${conversationId}/assignments`,
+            {
+                method: 'POST',
+                body: JSON.stringify({ assignee_id: assigneeId }),
+            },
+            accountToken
+        );
+    }
+
     // ========== WEBHOOKS ==========
 
     /**

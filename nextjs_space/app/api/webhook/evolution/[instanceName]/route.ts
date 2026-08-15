@@ -298,6 +298,26 @@ export async function POST(
               { messageType: fromMe ? 'outgoing' : 'incoming' },
             );
             console.log(`✅ Mensaje ${fromMe ? 'saliente' : 'entrante'} sincronizado a Chatwoot:`, conversation.id);
+
+            // Asignar la conversación al agente por defecto del tenant (el
+            // primer no-bot persistido en el config del canal) para que
+            // aparezca en su vista asignada del hub.
+            const assigneeId = (channel.config as any)?.defaultAssigneeId;
+            if (assigneeId) {
+              try {
+                await chatwootApi.assignConversation(
+                  hubConfig.chatwootAccountId,
+                  conversation.id,
+                  assigneeId,
+                  accountToken,
+                );
+                console.log('✅ Conversación asignada al agente:', assigneeId);
+              } catch (assignErr) {
+                console.warn('⚠️ No se pudo asignar la conversación:', assignErr instanceof Error ? assignErr.message : assignErr);
+              }
+            } else {
+              console.log('ℹ️ Sin asignado por defecto configurado para el canal; conversación sin asignar');
+            }
           } else {
             console.log('⚠️ Sin canal/hub Chatwoot configurado aún para sincronizar mensaje');
           }
