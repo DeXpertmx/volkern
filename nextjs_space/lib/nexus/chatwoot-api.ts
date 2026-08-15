@@ -553,7 +553,10 @@ class ChatwootApiClient {
                     method: 'POST',
                     body: JSON.stringify({
                         inbox_id: inboxId,
-                        phone_number: contactIdentifier.startsWith('+') ? contactIdentifier : undefined,
+                        // Siempre guardar el número (sin el sufijo @s.whatsapp.net):
+                        // el puente saliente lee conversation.contact.phone_number
+                        // para reenviar la respuesta del agente a WhatsApp.
+                        phone_number: contactIdentifier.includes('@') ? contactIdentifier.split('@')[0] : contactIdentifier,
                         email: contactIdentifier.includes('@') ? contactIdentifier : undefined,
                         name: contactIdentifier,
                     }),
