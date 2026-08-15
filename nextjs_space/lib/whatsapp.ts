@@ -71,13 +71,13 @@ async function loadCredentialsFromDB(tenantId: string): Promise<WhatsAppCredenti
     })
 
     if (!integration || !integration.credenciales) {
-      throw new Error('Evolution API no configurado. Conecta tu WhatsApp en Configuración → Mi WhatsApp Personal.')
+      throw new Error('WhatsApp no está conectado. Conecta tu número en Configuración → Mi WhatsApp Personal.')
     }
 
     const creds = integration.credenciales as any
 
     if (!creds.api_key || !creds.instance_name) {
-      throw new Error('Credenciales de Evolution API incompletas.')
+      throw new Error('La configuración de WhatsApp está incompleta.')
     }
 
     return {

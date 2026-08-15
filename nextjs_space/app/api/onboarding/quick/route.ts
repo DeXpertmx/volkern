@@ -54,7 +54,7 @@ async function quickProvisionTenant(tenantId: string): Promise<ProvisioningResul
     });
     return {
       success: true,
-      chatwootWarning: 'No se pudo conectar el canal de mensajería (Chatwoot). Podrás configurarlo más tarde desde Integraciones.'
+      chatwootWarning: 'No se pudo conectar el canal de mensajería. Podrás configurarlo más tarde desde Integraciones.'
     };
   }
 }

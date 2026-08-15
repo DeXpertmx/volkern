@@ -120,7 +120,7 @@ export async function createAndConnectInstance(
 
   try {
     if (!EVOLUTION_API_KEY) {
-      return { success: false, error: 'Evolution API no está configurado en el servidor.' }
+      return { success: false, error: 'El servicio de WhatsApp no está configurado en el servidor.' }
     }
 
     const existingLocal = await prisma.userWhatsAppInstance.findFirst({
@@ -147,9 +147,9 @@ export async function createAndConnectInstance(
     if (!response.ok) {
       await response.text()
       if (response.status === 409) {
-        return { success: false, error: `La instancia "${cleanInstanceName}" ya existe en Evolution API. Elige otro nombre.` }
+        return { success: false, error: `La instancia "${cleanInstanceName}" ya existe. Elige otro nombre.` }
       }
-      return { success: false, error: `Evolution API rechazó la creación de la instancia (HTTP ${response.status}).` }
+      return { success: false, error: `No se pudo crear la instancia de WhatsApp (HTTP ${response.status}).` }
     }
 
     const created = await response.json()
@@ -226,7 +226,7 @@ export async function connectToExistingInstance(
       console.error('❌ EVOLUTION_API_KEY no está configurado');
       return {
         success: false,
-        error: 'Evolution API no está configurado. Por favor contacta al administrador.'
+        error: 'El servicio de WhatsApp no está configurado. Por favor contacta al administrador.'
       };
     }
 
@@ -234,7 +234,7 @@ export async function connectToExistingInstance(
       console.error('❌ EVOLUTION_API_URL no está configurado');
       return {
         success: false,
-        error: 'URL de Evolution API no está configurado. Por favor contacta al administrador.'
+        error: 'La URL del servicio de WhatsApp no está configurada. Por favor contacta al administrador.'
       };
     }
 
@@ -294,9 +294,9 @@ export async function connectToExistingInstance(
       console.error('❌ Instancia no encontrada:', cleanInstanceName);
       return {
         success: false,
-        error: `La instancia "${cleanInstanceName}" no existe en Evolution API. Por favor:\n\n` +
+        error: `La instancia "${cleanInstanceName}" no existe. Por favor:\n\n` +
           '1. Verifica que el nombre esté escrito correctamente\n' +
-          '2. Asegúrate de haber creado la instancia en el panel de Evolution API primero\n' +
+          '2. Asegúrate de haber creado la instancia en el panel de WhatsApp primero\n' +
           '3. El nombre es sensible a mayúsculas y minúsculas'
       };
     }
@@ -380,7 +380,7 @@ export async function getQRCode(
       if (response.status === 404) {
         userMessage = 'Instancia no encontrada. Por favor crea una nueva instancia.';
       } else if (response.status === 401 || response.status === 403) {
-        userMessage = 'Error de autenticación con Evolution API.';
+        userMessage = 'Error de autenticación con el servicio de WhatsApp.';
       }
 
       return {
@@ -639,10 +639,10 @@ export async function ensureChatwootInboxForInstance(
   const chatwootUrl = process.env.CHATWOOT_BASE_URL
   const chatwootToken = process.env.CHATWOOT_SUPER_ADMIN_TOKEN
   if (!chatwootUrl || !chatwootToken) {
-    return { success: false, error: 'Chatwoot no está configurado en el servidor.' }
+    return { success: false, error: 'El centro de comunicaciones no está configurado en el servidor.' }
   }
   if (!EVOLUTION_API_KEY) {
-    return { success: false, error: 'Evolution API no está configurado en el servidor.' }
+    return { success: false, error: 'El servicio de WhatsApp no está configurado en el servidor.' }
   }
 
   try {
@@ -799,7 +799,7 @@ export async function ensureChatwootInboxForInstance(
     console.error('❌ Error conectando instancia a Chatwoot:', error)
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Error desconocido conectando a Chatwoot',
+      error: error instanceof Error ? error.message : 'Error desconocido conectando el canal de mensajería',
     }
   }
 }

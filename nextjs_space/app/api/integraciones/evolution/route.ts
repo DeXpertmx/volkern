@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
     if (!integration) {
       return NextResponse.json({ 
         configured: false,
-        message: 'Evolution API no configurado'
+        message: 'WhatsApp no configurado'
       })
     }
 
@@ -160,7 +160,7 @@ export async function POST(req: NextRequest) {
         data: {
           tenantId: user.tenantId,
           tipo: 'evolution',
-          nombre: 'Evolution API',
+          nombre: 'WhatsApp',
           credenciales: {
             api_key,
             instance_name,
@@ -187,7 +187,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: 'Evolution API configurado exitosamente',
+      message: 'WhatsApp configurado exitosamente',
       integration: {
         id: integration.id,
         activo: integration.activo,
@@ -198,7 +198,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error('❌ Error al configurar Evolution API:', error)
     return NextResponse.json({ 
-      error: 'Error al configurar Evolution API',
+      error: 'Error al configurar WhatsApp',
       details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 })
   }
