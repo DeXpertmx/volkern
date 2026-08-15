@@ -171,20 +171,24 @@ export async function POST(request: NextRequest) {
     }
 
     // 🧠 Mapear account_id → tenant (aislamiento real)
-    const tenant = await prisma.tenant.findFirst({
-      where: {
-        OR: [
-          { configuracion: { path: ['chatwootAccountId'], equals: chatwootAccountId } },
-          { metadata: { path: ['chatwootAccountId'], equals: chatwootAccountId } }
-        ]
-      } as any,
-      include: {
-        integrations: {
-          where: { tipo: 'chatwoot', activo: true },
-          select: { credenciales: true }
-        }
-      } as any
-    });
+    // El modelo Tenant solo tiene `configuracion` (no `metadata`); si el path
+    // query falla (schema antiguo), se usa el fallback por hubConfig más abajo.
+    let tenant: { id: string; configuracion?: any; integrations?: any[] } | null = null;
+    try {
+      tenant = await prisma.tenant.findFirst({
+        where: {
+          configuracion: { path: ['chatwootAccountId'], equals: chatwootAccountId },
+        } as any,
+        include: {
+          integrations: {
+            where: { tipo: 'chatwoot', activo: true },
+            select: { credenciales: true }
+          }
+        } as any
+      });
+    } catch (tenantLookupError) {
+      console.warn('[ChatwootWebhook] Lookup por configuracion falló, usando hubConfig:', tenantLookupError instanceof Error ? tenantLookupError.message : tenantLookupError);
+    }
 
     // Si no encuentra por configuración, buscar en integrations
     let tenantId: string | null = tenant?.id || null;
