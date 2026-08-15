@@ -139,8 +139,9 @@ export async function POST(
           console.log('✅ Contador de mensajes actualizado');
         }
 
-        // 🔄 PUENTE ENTRANTE: mensaje de un contacto → crear conversación en
-        // Chatwoot para que el agente lo vea (canal API + REST).
+        // 🔄 PUENTE ENTRANTE: mensaje de un contacto → sincronizar en la bandeja
+        // local de Volkern (lead + conversación + mensaje) y crear la conversación
+        // en Chatwoot para que el agente la vea (canal API + REST).
         if (!body.data?.key?.fromMe) {
           try {
             const remoteJid = body.data?.key?.remoteJid || '';
@@ -148,10 +149,86 @@ export async function POST(
               body.data?.message?.conversation ||
               body.data?.message?.extendedTextMessage?.text ||
               body.data?.message?.imageMessage?.caption ||
+              body.data?.message?.documentMessage?.caption ||
+              body.data?.message?.videoMessage?.caption ||
               '';
+            const fromName = body.data?.pushName || '';
 
             if (remoteJid && textContent) {
               const phoneNumber = remoteJid.replace('@s.whatsapp.net', '').replace('@g.us', '');
+              const cleanPhone = phoneNumber.replace(/[\s\-\()]/g, '');
+
+              // ── Sincronización local (bandeja de Volkern) ──
+              let lead = await prisma.lead.findFirst({
+                where: { tenantId: instance.tenantId, telefono: { contains: cleanPhone.slice(-10) } },
+              });
+              if (!lead) {
+                lead = await prisma.lead.create({
+                  data: {
+                    tenantId: instance.tenantId,
+                    nombre: fromName || `WhatsApp ${cleanPhone.slice(-4)}`,
+                    telefono: phoneNumber,
+                    email: `wa-${cleanPhone.slice(-10)}@temp.volkern.com`,
+                    fuente: 'whatsapp-evolution',
+                    estado: 'nuevo',
+                    scoreValue: 30,
+                  },
+                });
+              }
+
+              let localConversation = await prisma.conversation.findFirst({
+                where: { leadId: lead.id, canal: 'whatsapp', tenantId: instance.tenantId },
+              });
+              if (!localConversation) {
+                localConversation = await prisma.conversation.create({
+                  data: {
+                    tenantId: instance.tenantId,
+                    leadId: lead.id,
+                    contactoNombre: lead.nombre,
+                    contactoTelefono: phoneNumber,
+                    canal: 'whatsapp',
+                    estado: 'abierta',
+                    ultimoMensaje: textContent,
+                    fechaUltimoMensaje: new Date(),
+                    noLeidos: 1,
+                    externalRef: `evolution_${cleanPhone.slice(-10)}`,
+                  },
+                });
+              } else {
+                await prisma.conversation.update({
+                  where: { id: localConversation.id },
+                  data: {
+                    ultimoMensaje: textContent,
+                    fechaUltimoMensaje: new Date(),
+                    noLeidos: { increment: 1 },
+                    estado: 'abierta',
+                  },
+                });
+              }
+
+              const externalRef = `evolution_msg_${body.data?.key?.id || Date.now()}`;
+              const existingMsg = await prisma.message.findUnique({ where: { externalRef } }).catch(() => null);
+              if (!existingMsg) {
+                await prisma.message.create({
+                  data: {
+                    conversationId: localConversation.id,
+                    contenido: textContent,
+                    direccion: 'entrante',
+                    canal: 'whatsapp',
+                    estado: 'entregado',
+                    externalRef,
+                    metadatos: {
+                      evolutionMessageId: body.data?.key?.id,
+                      evolutionInstance: instance.instanceName,
+                      fromNumber: phoneNumber,
+                      fromName,
+                    },
+                  },
+                });
+                console.log('✅ Mensaje entrante guardado localmente:', localConversation.id);
+              }
+
+              // ── Sincronización a Chatwoot (agente lo ve en la bandeja del hub) ──
               const channel = await prisma.channel.findFirst({
                 where: { tenantId: instance.tenantId, type: 'whatsapp' },
               });
@@ -179,9 +256,34 @@ export async function POST(
               } else {
                 console.log('⚠️ Sin canal/hub Chatwoot configurado aún para sincronizar mensaje');
               }
+
+              // 🔔 Emitir evento para que el chatbot procese la respuesta entrante
+              try {
+                const { eventBus, EVENTS } = await import('@/lib/skills/event-bus');
+                eventBus.emitEvent(EVENTS.MESSAGE_RECEIVED as any, {
+                  tenantId: instance.tenantId,
+                  messageId: body.data?.key?.id || String(Date.now()),
+                  conversationId: localConversation.id,
+                  content: textContent,
+                  canal: 'whatsapp',
+                  source: 'evolution',
+                  timestamp: new Date(),
+                  metadata: {
+                    sender_type: 'contact',
+                    channel_type: 'whatsapp',
+                    contact: {
+                      name: fromName || lead.nombre,
+                      phone: phoneNumber,
+                    },
+                    localConversationId: localConversation.id,
+                  },
+                } as any);
+              } catch (eventErr) {
+                console.error('❌ Error emitiendo evento MESSAGE_RECEIVED:', eventErr);
+              }
             }
           } catch (bridgeError) {
-            console.error('❌ Error sincronizando mensaje entrante a Chatwoot:', bridgeError);
+            console.error('❌ Error sincronizando mensaje entrante:', bridgeError);
           }
         }
         break;

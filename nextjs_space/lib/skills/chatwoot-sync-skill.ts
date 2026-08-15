@@ -182,7 +182,9 @@ export async function syncOutgoingChatwootMessage(payload: {
     // Extraer ID de conversación de Chatwoot del externalRef (format: chatwoot_{id})
     const chatwootConversationId = parseInt(conversation.externalRef.replace('chatwoot_', ''));
     
-    // 2. Buscar integración de Chatwoot para obtener el token
+    // 2. Obtener el token de la cuenta de Chatwoot:
+    //    - Integración legacy (integration.configuracion.accountToken)
+    //    - Hub config moderno (messagingHubConfig → bot user)
     const integration = await prisma.integration.findFirst({
       where: { 
         tenantId, 
@@ -191,12 +193,36 @@ export async function syncOutgoingChatwootMessage(payload: {
       }
     });
 
-    if (!integration || !integration.configuracion) {
-        return { success: false, reason: 'Integración de Chatwoot no configurada o inactiva' };
+    let accountToken = '';
+    if (integration?.configuracion) {
+      const config = integration.configuracion as any;
+      accountToken = config.accountToken || config.accessToken || '';
     }
 
-    const config = integration.configuracion as any;
-    const accountToken = config.accountToken || config.accessToken;
+    if (!accountToken) {
+      // Flujo moderno: usar el bot user del hub (mismo token que crea los inboxes)
+      try {
+        const hub = await prisma.messagingHubConfig.findFirst({
+          where: { tenantId, chatwootAccountId: conversation.chatwootAccountId },
+          select: { hubApiToken: true },
+        });
+        const rawToken = hub?.hubApiToken;
+        if (rawToken) {
+          try {
+            const { decrypt } = await import('@/lib/core/crypto');
+            accountToken = decrypt(rawToken);
+          } catch {
+            accountToken = rawToken;
+          }
+        }
+        if (!accountToken) {
+          const { chatwootApi } = await import('@/lib/nexus/chatwoot-api');
+          accountToken = await chatwootApi.ensureBotUserInAccount(conversation.chatwootAccountId);
+        }
+      } catch (tokenError) {
+        return { success: false, reason: 'No se pudo obtener el token de Chatwoot: ' + (tokenError instanceof Error ? tokenError.message : String(tokenError)) };
+      }
+    }
 
     if (!accountToken) {
         return { success: false, reason: 'Token de Chatwoot no encontrado en la configuración' };

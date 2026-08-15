@@ -15,10 +15,53 @@ interface WhatsAppCredentials {
 /**
  * Cargar credenciales desde la base de datos
  * @param tenantId ID del tenant (opcional si se usa con sesión)
+ *
+ * Prioridad:
+ * 1. Instancia de WhatsApp conectada desde Volkern (UserWhatsAppInstance
+ *    status=connected + canal whatsapp con config.instanceName). Usa la API
+ *    Key global del servidor (EVOLUTION_API_KEY/EVOLUTION_API_URL).
+ * 2. Integración legacy de Evolution API (credenciales por tenant).
  */
 async function loadCredentialsFromDB(tenantId: string): Promise<WhatsAppCredentials> {
   try {
-    // Buscar integración de Evolution API para el tenant
+    // 1. Instancia conectada desde Volkern (flujo Mi WhatsApp Personal)
+    const instance = await prisma.userWhatsAppInstance.findFirst({
+      where: { tenantId, status: 'connected' },
+      orderBy: { fechaConexion: 'desc' },
+      select: { instanceName: true },
+    })
+
+    if (instance?.instanceName) {
+      const apiKey = process.env.EVOLUTION_API_KEY
+      const apiUrl = process.env.EVOLUTION_API_URL || 'https://api.dimension.expert'
+      if (apiKey) {
+        return {
+          api_key: apiKey,
+          instance_name: instance.instanceName,
+          api_url: apiUrl,
+        }
+      }
+    }
+
+    // 2. Fallback: canal whatsapp configurado (provider evolution)
+    const channel = await prisma.channel.findFirst({
+      where: { tenantId, type: 'whatsapp', isActive: true },
+      select: { config: true },
+    })
+    const channelConfig = (channel?.config as any) || {}
+    if (channelConfig.instanceName) {
+      const apiKey = channelConfig.apiKey || process.env.EVOLUTION_API_KEY
+      const apiUrl = channelConfig.apiUrl || process.env.EVOLUTION_API_URL || 'https://api.dimension.expert'
+      if (apiKey) {
+        return {
+          api_key: apiKey,
+          instance_name: channelConfig.instanceName,
+          api_url: apiUrl,
+        }
+      }
+    }
+
+    // 3. Integración legacy de Evolution API para el tenant
     const integration = await prisma.integration.findFirst({
       where: {
         tenantId: tenantId,
@@ -28,7 +71,7 @@ async function loadCredentialsFromDB(tenantId: string): Promise<WhatsAppCredenti
     })
 
     if (!integration || !integration.credenciales) {
-      throw new Error('Evolution API no configurado. Por favor configura la integración en Dashboard → Integraciones.')
+      throw new Error('Evolution API no configurado. Conecta tu WhatsApp en Configuración → Mi WhatsApp Personal.')
     }
 
     const creds = integration.credenciales as any
