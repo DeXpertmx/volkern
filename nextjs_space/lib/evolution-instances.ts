@@ -711,6 +711,57 @@ export async function deleteInstance(
 }
 
 /**
+ * Añade como miembros del inbox de Chatwoot al bot y a los usuarios Admin del
+ * tenant (mapeo por email, creando el usuario en Chatwoot si no existe). Sin
+ * membresía, los agentes no ven las conversaciones del inbox en el hub.
+ */
+async function syncInboxMembers(
+  tenantId: string,
+  chatwootAccountId: number,
+  inboxId: number,
+  accountAccessToken: string,
+  chatwootApi: any,
+): Promise<void> {
+  const memberIds: number[] = []
+
+  // El bot siempre: el puente API opera con él.
+  try {
+    const botUser = await chatwootApi.getOrCreateBotUser()
+    if (botUser?.id && !memberIds.includes(botUser.id)) memberIds.push(botUser.id)
+  } catch (botErr) {
+    console.warn('[Chatwoot] No se pudo obtener el bot:', botErr instanceof Error ? botErr.message : botErr)
+  }
+
+  // Admins del tenant (rol Admin) vinculados por email
+  const tenantAdmins = await prisma.user.findMany({
+    where: {
+      tenantId,
+      role: { nombre: { in: ['Admin', 'admin', 'Administrador', 'administrator'] } },
+    },
+    select: { email: true, name: true },
+  })
+  for (const admin of tenantAdmins) {
+    if (!admin.email) continue
+    try {
+      const userId = await chatwootApi.ensureUserInAccountByEmail(
+        chatwootAccountId,
+        admin.email,
+        admin.name || admin.email,
+        accountAccessToken,
+      )
+      if (userId && !memberIds.includes(userId)) memberIds.push(userId)
+    } catch (adminErr) {
+      console.warn('[Chatwoot] No se pudo vincular admin del tenant:', adminErr instanceof Error ? adminErr.message : adminErr)
+    }
+  }
+
+  if (memberIds.length > 0) {
+    await chatwootApi.addInboxMembers(chatwootAccountId, inboxId, memberIds, accountAccessToken)
+    console.log('[Chatwoot] Miembros del inbox añadidos:', memberIds.join(','))
+  }
+}
+
+/**
  * Conecta la instancia de WhatsApp a Chatwoot creando el inbox Evolution.
  * Se ejecuta automáticamente cuando la instancia queda conectada (open) para
  * tener el número real del propietario antes de crear el canal.
@@ -741,6 +792,20 @@ export async function ensureChatwootInboxForInstance(
       where: { tenantId: instance.tenantId, type: 'whatsapp' },
     })
     if (existingChannel?.chatwootInboxId) {
+      // Asegurar también la membresía del inbox (bot + admins del tenant) en
+      // caso de que se haya creado antes de este fix.
+      try {
+        const hubConfigEarly = await prisma.messagingHubConfig.findUnique({
+          where: { tenantId: instance.tenantId },
+        })
+        if (hubConfigEarly?.chatwootAccountId) {
+          const chatwootApiEarly = (await import('@/lib/nexus/chatwoot-api')).chatwootApi
+          const accountTokenEarly = await chatwootApiEarly.ensureBotUserInAccount(hubConfigEarly.chatwootAccountId)
+          await syncInboxMembers(instance.tenantId, hubConfigEarly.chatwootAccountId, existingChannel.chatwootInboxId, accountTokenEarly, chatwootApiEarly)
+        }
+      } catch (earlyErr) {
+        console.warn('[Chatwoot] No se pudo sincronizar miembros del inbox existente:', earlyErr instanceof Error ? earlyErr.message : earlyErr)
+      }
       return { success: true, inboxId: existingChannel.chatwootInboxId }
     }
 
@@ -874,6 +939,15 @@ export async function ensureChatwootInboxForInstance(
       where: { id: instance.tenantId },
       data: { nexusEnabled: true },
     })
+
+    // Miembros del inbox: el bot siempre + usuarios Admin del tenant (mapeo por
+    // email). Sin membresía, los agentes no ven las conversaciones del inbox
+    // en el hub ("Sin asignar"/"Todas" quedan vacías).
+    try {
+      await syncInboxMembers(instance.tenantId, chatwootAccountId, inbox.id, accountAccessToken, chatwootApi)
+    } catch (memberErr) {
+      console.warn('[Chatwoot] Error añadiendo miembros al inbox:', memberErr instanceof Error ? memberErr.message : memberErr)
+    }
 
     console.log('[Chatwoot] Inbox Evolution creado para instancia:', instanceName, 'id:', inbox.id)
     return { success: true, inboxId: inbox.id }

@@ -397,6 +397,62 @@ class ChatwootApiClient {
         );
     }
 
+    /**
+     * Añadir agentes como miembros de un inbox. Sin membresía, los agentes no
+     * ven las conversaciones del inbox en las vistas "Sin asignar"/"Todas"
+     * del hub.
+     */
+    async addInboxMembers(
+        accountId: number,
+        inboxId: number,
+        userIds: number[],
+        accountToken: string
+    ): Promise<{ payload: any[] }> {
+        console.log('[ChatwootAPI] Adding inbox members:', inboxId, userIds);
+        return this.request<{ payload: any[] }>(
+            `/api/v1/accounts/${accountId}/inbox_members`,
+            {
+                method: 'POST',
+                body: JSON.stringify({ inbox_id: inboxId, user_ids: userIds }),
+            },
+            accountToken
+        );
+    }
+
+    /**
+     * Asegura que un usuario exista en Chatwoot (idempotente por email, la
+     * plataforma reutiliza el usuario si ya existe) y esté vinculado a la
+     * cuenta del tenant como agente. Devuelve el user_id de Chatwoot.
+     */
+    async ensureUserInAccountByEmail(
+        accountId: number,
+        email: string,
+        name: string,
+        accountToken: string
+    ): Promise<number> {
+        const user = await this.request<{ id: number }>(
+            '/platform/api/v1/users',
+            {
+                method: 'POST',
+                body: JSON.stringify({
+                    name,
+                    email,
+                    // La plataforma exige password fuerte; el usuario opera con
+                    // tokens de API, no con login directo a esta cuenta.
+                    password: `A1!${crypto.randomBytes(10).toString('base64url')}`,
+                }),
+            }
+        );
+        await this.request(
+            `/platform/api/v1/accounts/${accountId}/account_users`,
+            {
+                method: 'POST',
+                body: JSON.stringify({ user_id: user.id, role: 'agent' }),
+            }
+        );
+        return user.id;
+    }
+
     // ========== ACCESS TOKENS ==========
 
     /**
