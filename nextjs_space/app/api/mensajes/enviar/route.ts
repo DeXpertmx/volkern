@@ -86,26 +86,73 @@ export const POST = withTenantAuth(async (request, auth) => {
 
     // Prioridad: Si la conversación está vinculada a Chatwoot (Hub de Comunicaciones)
     if (conversacion.externalRef?.startsWith('chatwoot_')) {
-      try {
-        const { syncOutgoingChatwootMessage } = await import('@/lib/skills/chatwoot-sync-skill');
-        const chatwootRes = await syncOutgoingChatwootMessage({
-          tenantId,
-          conversationId: conversacion.id,
-          content: contenidoFinal,
-          messageId: 'PENDING_SYNC' // Se manejará dentro o lo actualizaremos luego
-        });
-
-        if (chatwootRes.success) {
-          resultado = { success: true, messageId: chatwootRes.chatwootMessageId };
-        } else {
-          estado = 'error';
-          errorMensaje = chatwootRes.reason || 'Error al enviar a través del Hub';
-          resultado = { success: false, error: errorMensaje };
+      // WhatsApp: enviar por la instancia Evolution (nuevo flujo Mi WhatsApp
+      // Personal o legacy) y reflejar el mensaje en Chatwoot para que el agente
+      // lo vea en la bandeja. El puente entrante (webhook Evolution) crea la
+      // conversación en Chatwoot; aquí cerramos el ciclo enviando al cliente.
+      if (canal === 'whatsapp') {
+        if (!conversacion.contactoTelefono) {
+          return NextResponse.json({ error: 'No hay número de teléfono para WhatsApp' }, { status: 400 })
         }
-      } catch (e: any) {
-        estado = 'error';
-        errorMensaje = e.message;
-        resultado = { success: false, error: e.message };
+        let whatsappResult: any
+        if (mediaUrl) {
+          let finalMediaUrl = mediaUrl
+          if (mediaUrl.includes('mensajes/') && !mediaUrl.startsWith('http')) {
+            finalMediaUrl = await getDownloadUrl(mediaUrl)
+          }
+          whatsappResult = await sendWhatsAppMessageWithMedia(
+            conversacion.contactoTelefono,
+            contenidoFinal,
+            finalMediaUrl,
+            (mediaType as 'image' | 'video' | 'document') || 'image',
+            tenantId
+          )
+        } else {
+          whatsappResult = await sendWhatsAppMessage(conversacion.contactoTelefono, contenidoFinal, tenantId)
+        }
+
+        if (!whatsappResult.success) {
+          estado = 'error'
+          errorMensaje = whatsappResult.error
+          resultado = { success: false, error: whatsappResult.error }
+        } else {
+          resultado = { success: true, messageId: whatsappResult.messageId }
+          // Reflejar en Chatwoot (no es crítico: si falla, el envío al cliente
+          // ya se hizo y Chatwoot lo verá por su propio webhook de salida).
+          try {
+            const { syncOutgoingChatwootMessage } = await import('@/lib/skills/chatwoot-sync-skill');
+            await syncOutgoingChatwootMessage({
+              tenantId,
+              conversationId: conversacion.id,
+              content: contenidoFinal,
+              messageId: 'PENDING_SYNC',
+            });
+          } catch (syncErr) {
+            console.warn('[mensajes/enviar] No se pudo reflejar en Chatwoot:', syncErr);
+          }
+        }
+      } else {
+        try {
+          const { syncOutgoingChatwootMessage } = await import('@/lib/skills/chatwoot-sync-skill');
+          const chatwootRes = await syncOutgoingChatwootMessage({
+            tenantId,
+            conversationId: conversacion.id,
+            content: contenidoFinal,
+            messageId: 'PENDING_SYNC' // Se manejará dentro o lo actualizaremos luego
+          });
+
+          if (chatwootRes.success) {
+            resultado = { success: true, messageId: chatwootRes.chatwootMessageId };
+          } else {
+            estado = 'error';
+            errorMensaje = chatwootRes.reason || 'Error al enviar a través del Hub';
+            resultado = { success: false, error: errorMensaje };
+          }
+        } catch (e: any) {
+          estado = 'error';
+          errorMensaje = e.message;
+          resultado = { success: false, error: e.message };
+        }
       }
     } else if (canal === 'whatsapp') {
       if (!conversacion.contactoTelefono) {
