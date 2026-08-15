@@ -24,8 +24,13 @@ export async function POST(
     const instanceName = params.instanceName;
     const body = await request.json();
 
+    // Evolution envía los eventos en minúsculas con puntos (messages.upsert,
+    // connection.update, qrcode.updated...); normalizar a MAYÚSCULAS_CON_GUION
+    // para que el switch los procese.
+    const event = String(body.event || '').toUpperCase().replace(/\./g, '_');
+
     console.log('📨 Webhook recibido para instancia:', instanceName);
-    console.log('📦 Evento:', body.event);
+    console.log('📦 Evento:', body.event, '→ normalizado:', event);
     console.log('📄 Datos completos:', JSON.stringify(body, null, 2));
 
     // Buscar la instancia en la base de datos
@@ -47,7 +52,7 @@ export async function POST(
     console.log('✅ Instancia encontrada en BD:', instance.id);
 
     // Procesar según el tipo de evento
-    switch (body.event) {
+    switch (event) {
       case 'QRCODE_UPDATED':
         console.log('🔍 Procesando QRCODE_UPDATED...');
         // Actualizar QR code en la base de datos

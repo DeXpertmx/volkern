@@ -7,6 +7,7 @@ import { Toaster } from '@/components/ui/sonner';
 import { SessionProvider } from '@/components/session-provider';
 import { ThemeProvider } from '@/components/theme-provider';
 import { PushNotificationInit } from '@/components/providers/PushNotificationInit';
+import { IncomingMessageWatcher } from '@/components/messaging/IncomingMessageWatcher';
 import { PWAInstallPrompt } from '@/components/providers/PWAInstallPrompt';
 import { CookieConsentBanner } from '@/components/public/CookieConsentBanner';
 
@@ -56,6 +57,7 @@ export default function RootLayout({
         <SessionProvider>
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem={true}>
             <PushNotificationInit />
+            <IncomingMessageWatcher />
             <PWAInstallPrompt />
             {children}
             <CookieConsentBanner />
