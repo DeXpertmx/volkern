@@ -538,11 +538,19 @@ export async function checkInstanceStatus(
 }
 
 /**
- * Obtener información del perfil de WhatsApp conectado
+ * Obtener información del perfil de WhatsApp conectado.
+ *
+ * fetchProfile con `number: 'me'` no funciona en algunas versiones de
+ * Evolution (devuelve 400); por eso primero se intenta con 'me', y si no hay
+ * datos se obtiene el ownerJid desde fetchInstances y se reintenta el perfil
+ * con el número real del propietario.
  */
 export async function getProfileInfo(
   instanceName: string
 ): Promise<{ success: boolean; profile?: any; error?: string }> {
+  let profile: any = {};
+
+  // 1. Intento con `number: 'me'` (funciona en la mayoría de versiones)
   try {
     const response = await fetch(`${EVOLUTION_API_URL}/chat/fetchProfile/${instanceName}`, {
       method: 'POST',
@@ -550,67 +558,100 @@ export async function getProfileInfo(
         'Content-Type': 'application/json',
         'apikey': EVOLUTION_API_KEY
       },
-      body: JSON.stringify({
-        number: 'me' // Obtener info del propio usuario
-      })
+      body: JSON.stringify({ number: 'me' })
     });
-
-    if (!response.ok) {
-      return {
-        success: false,
-        error: `Error al obtener perfil: ${response.status}`
-      };
-    }
-
-    const profile = await response.json();
-
-    // Fallback: si fetchProfile no devuelve el número (algunas versiones de
-    // Evolution no resuelven `number: me`), obtener el ownerJid desde
-    // fetchInstances, que sí lo expone con la instancia conectada.
-    let phoneNumber = profile?.id?.replace('@s.whatsapp.net', '');
-    let profileName = profile?.name || profile?.notify;
-    let profilePicUrl = profile?.profilePicUrl;
-
-    if (!phoneNumber || !profileName) {
-      try {
-        const instancesRes = await fetch(`${EVOLUTION_API_URL}/instance/fetchInstances`, {
-          headers: { apikey: EVOLUTION_API_KEY },
-        });
-        if (instancesRes.ok) {
-          const instances = await instancesRes.json();
-          const found = Array.isArray(instances)
-            ? instances.find((inst: any) => inst?.instance?.instanceName === instanceName || inst?.name === instanceName)
-            : null;
-          const ownerJid = found?.ownerJid || found?.instance?.ownerJid || '';
-          phoneNumber = phoneNumber || String(ownerJid).replace('@s.whatsapp.net', '').replace('@g.us', '') || undefined;
-          profileName = profileName || found?.profileName || found?.instance?.profileName || undefined;
-          profilePicUrl = profilePicUrl || found?.profilePicUrl || found?.instance?.profilePicUrl || undefined;
-        }
-      } catch (instErr) {
-        console.warn('⚠️ No se pudo obtener el ownerJid desde fetchInstances:', instErr);
+    if (response.ok) {
+      const json = await response.json();
+      if (json && (json.id || json.name)) {
+        profile = json;
       }
+    } else {
+      console.warn(`⚠️ fetchProfile(me) devolvió ${response.status}; se usará el fallback por ownerJid`);
     }
-
-    // Actualizar información de perfil en base de datos
-    if (phoneNumber || profileName || profilePicUrl) {
-      await prisma.userWhatsAppInstance.updateMany({
-        where: { instanceName },
-        data: {
-          ...(phoneNumber ? { phoneNumber } : {}),
-          ...(profileName ? { profileName } : {}),
-          ...(profilePicUrl ? { profilePicUrl } : {}),
-        },
-      });
-    }
-
-    return { success: true, profile: { ...profile, id: phoneNumber ? `${phoneNumber}@s.whatsapp.net` : profile?.id, name: profileName, profilePicUrl } };
-  } catch (error) {
-    console.error('Error al obtener info de perfil:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Error desconocido'
-    };
+  } catch (profileErr) {
+    console.warn('⚠️ Error en fetchProfile(me):', profileErr);
   }
+
+  let phoneNumber = String(profile?.id || '').replace('@s.whatsapp.net', '').replace('@g.us', '');
+  let profileName = profile?.name || profile?.notify;
+  let profilePicUrl = profile?.profilePicUrl;
+
+  // 2. Fallback: obtener ownerJid desde fetchInstances (siempre disponible
+  //    con la instancia conectada) y reintentar el perfil con el número real.
+  if (!phoneNumber || !profileName) {
+    try {
+      const instancesRes = await fetch(`${EVOLUTION_API_URL}/instance/fetchInstances`, {
+        headers: { apikey: EVOLUTION_API_KEY },
+      });
+      if (instancesRes.ok) {
+        const instances = await instancesRes.json();
+        const found = Array.isArray(instances)
+          ? instances.find((inst: any) => inst?.instance?.instanceName === instanceName || inst?.name === instanceName)
+          : null;
+        const ownerJid = found?.ownerJid || found?.instance?.ownerJid || '';
+        const ownerNumber = String(ownerJid).replace('@s.whatsapp.net', '').replace('@g.us', '');
+
+        if (!phoneNumber && ownerNumber) {
+          phoneNumber = ownerNumber;
+        }
+        if (!profileName) {
+          profileName = found?.profileName || found?.instance?.profileName || undefined;
+        }
+        if (!profilePicUrl) {
+          profilePicUrl = found?.profilePicUrl || found?.instance?.profilePicUrl || undefined;
+        }
+
+        // Reintento del perfil con el número real del propietario
+        if (ownerNumber && (!profile?.name || !profile?.profilePicUrl)) {
+          try {
+            const retry = await fetch(`${EVOLUTION_API_URL}/chat/fetchProfile/${instanceName}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', apikey: EVOLUTION_API_KEY },
+              body: JSON.stringify({ number: ownerNumber }),
+            });
+            if (retry.ok) {
+              const retryJson = await retry.json();
+              // Algunas versiones devuelven `wuid`/`picture` en vez de `id`/`profilePicUrl`
+              profile = {
+                ...profile,
+                ...(retryJson?.id || retryJson?.wuid ? { id: retryJson.id || retryJson.wuid } : {}),
+                ...(retryJson?.name ? { name: retryJson.name } : {}),
+                ...(retryJson?.profilePicUrl || retryJson?.picture ? { profilePicUrl: retryJson.profilePicUrl || retryJson.picture } : {}),
+              };
+              profileName = profile.name || profileName;
+              profilePicUrl = profile.profilePicUrl || profilePicUrl;
+            }
+          } catch (retryErr) {
+            console.warn('⚠️ Error reintentando fetchProfile con número real:', retryErr);
+          }
+        }
+      }
+    } catch (instErr) {
+      console.warn('⚠️ No se pudo obtener el ownerJid desde fetchInstances:', instErr);
+    }
+  }
+
+  // Actualizar información de perfil en base de datos
+  if (phoneNumber || profileName || profilePicUrl) {
+    await prisma.userWhatsAppInstance.updateMany({
+      where: { instanceName },
+      data: {
+        ...(phoneNumber ? { phoneNumber } : {}),
+        ...(profileName ? { profileName } : {}),
+        ...(profilePicUrl ? { profilePicUrl } : {}),
+      },
+    });
+  }
+
+  return {
+    success: true,
+    profile: {
+      ...profile,
+      id: phoneNumber ? `${phoneNumber}@s.whatsapp.net` : profile?.id,
+      name: profileName,
+      profilePicUrl,
+    },
+  };
 }
 
 /**
