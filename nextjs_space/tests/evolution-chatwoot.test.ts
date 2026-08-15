@@ -6,7 +6,8 @@ const mocks = vi.hoisted(() => ({
   update: vi.fn(),
   createAccountWithAccess: vi.fn(),
   ensureBotUserInAccount: vi.fn(),
-  createEvolutionWhatsAppInbox: vi.fn(),
+  createApiInbox: vi.fn(),
+  configureWebhook: vi.fn(),
 }))
 
 vi.mock('@/lib/db', () => ({
@@ -21,7 +22,8 @@ vi.mock('@/lib/nexus/chatwoot-api', () => ({
   chatwootApi: {
     createAccountWithAccess: mocks.createAccountWithAccess,
     ensureBotUserInAccount: mocks.ensureBotUserInAccount,
-    createEvolutionWhatsAppInbox: mocks.createEvolutionWhatsAppInbox,
+    createApiInbox: mocks.createApiInbox,
+    configureWebhook: mocks.configureWebhook,
   },
 }))
 
@@ -60,7 +62,12 @@ describe('conexión automática de instancia Evolution a Chatwoot', () => {
       accessToken: 'account-token',
     })
     mocks.ensureBotUserInAccount.mockResolvedValue('account-token')
-    mocks.createEvolutionWhatsAppInbox.mockResolvedValue({ id: 99, name: 'WhatsApp - Dimension eXpert' })
+    mocks.createApiInbox.mockResolvedValue({ id: 99, name: 'WhatsApp - Dimension eXpert' })
+    mocks.configureWebhook.mockResolvedValue({
+      id: 7,
+      url: 'https://volkern.app/api/integrations/webhook/chatwoot',
+      secret: 'test-secret',
+    })
   })
 
   it('crea cuenta, usa el número del perfil y crea el inbox Evolution en Chatwoot', async () => {
@@ -84,15 +91,13 @@ describe('conexión automática de instancia Evolution a Chatwoot', () => {
     expect(result.success).toBe(true)
     expect(result.inboxId).toBe(99)
     expect(mocks.createAccountWithAccess).toHaveBeenCalledWith('Dimension eXpert', 'es')
-    expect(mocks.createEvolutionWhatsAppInbox).toHaveBeenCalledWith(
+    expect(mocks.createApiInbox).toHaveBeenCalledWith(
       42,
       'WhatsApp - Dimension eXpert',
-      '34600111222',
-      expect.any(String),
-      'https://api.dimension.expert',
-      'https://volkern.app/api/webhook/evolution/volkern_test',
+      '',
       'account-token',
     )
+    expect(mocks.configureWebhook).toHaveBeenCalled()
     // Se guardó el canal con el inbox y se activó Nexus
     expect(mocks.create).toHaveBeenCalled()
     expect(mocks.update).toHaveBeenCalled()
@@ -122,7 +127,7 @@ describe('conexión automática de instancia Evolution a Chatwoot', () => {
     expect(result.success).toBe(true)
     expect(result.inboxId).toBe(88)
     expect(mocks.createAccountWithAccess).not.toHaveBeenCalled()
-    expect(mocks.createEvolutionWhatsAppInbox).not.toHaveBeenCalled()
+    expect(mocks.createApiInbox).not.toHaveBeenCalled()
   })
 
   it('falla limpio si Chatwoot no está configurado', async () => {
@@ -133,6 +138,6 @@ describe('conexión automática de instancia Evolution a Chatwoot', () => {
 
     expect(result.success).toBe(false)
     expect(result.error).toContain('Chatwoot')
-    expect(mocks.createEvolutionWhatsAppInbox).not.toHaveBeenCalled()
+    expect(mocks.createApiInbox).not.toHaveBeenCalled()
   })
 })

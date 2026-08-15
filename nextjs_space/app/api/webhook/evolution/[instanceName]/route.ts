@@ -138,6 +138,52 @@ export async function POST(
           });
           console.log('✅ Contador de mensajes actualizado');
         }
+
+        // 🔄 PUENTE ENTRANTE: mensaje de un contacto → crear conversación en
+        // Chatwoot para que el agente lo vea (canal API + REST).
+        if (!body.data?.key?.fromMe) {
+          try {
+            const remoteJid = body.data?.key?.remoteJid || '';
+            const textContent =
+              body.data?.message?.conversation ||
+              body.data?.message?.extendedTextMessage?.text ||
+              body.data?.message?.imageMessage?.caption ||
+              '';
+
+            if (remoteJid && textContent) {
+              const phoneNumber = remoteJid.replace('@s.whatsapp.net', '').replace('@g.us', '');
+              const channel = await prisma.channel.findFirst({
+                where: { tenantId: instance.tenantId, type: 'whatsapp' },
+              });
+              const hubConfig = await prisma.messagingHubConfig.findUnique({
+                where: { tenantId: instance.tenantId },
+              });
+
+              if (channel?.chatwootInboxId && hubConfig?.chatwootAccountId) {
+                const { chatwootApi } = await import('@/lib/nexus/chatwoot-api');
+                const accountToken = await chatwootApi.ensureBotUserInAccount(hubConfig.chatwootAccountId);
+                const conversation = await chatwootApi.getOrCreateConversation(
+                  hubConfig.chatwootAccountId,
+                  channel.chatwootInboxId,
+                  phoneNumber,
+                  accountToken,
+                );
+                await chatwootApi.sendMessage(
+                  hubConfig.chatwootAccountId,
+                  conversation.id,
+                  textContent,
+                  accountToken,
+                  { messageType: 'incoming' },
+                );
+                console.log('✅ Mensaje entrante sincronizado a Chatwoot:', conversation.id);
+              } else {
+                console.log('⚠️ Sin canal/hub Chatwoot configurado aún para sincronizar mensaje');
+              }
+            }
+          } catch (bridgeError) {
+            console.error('❌ Error sincronizando mensaje entrante a Chatwoot:', bridgeError);
+          }
+        }
         break;
 
       case 'MESSAGES_UPDATE':
