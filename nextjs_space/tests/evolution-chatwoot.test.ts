@@ -137,7 +137,7 @@ describe('conexión automática de instancia Evolution a Chatwoot', () => {
     const result = await ensureChatwootInboxForInstance('volkern_test')
 
     expect(result.success).toBe(false)
-    expect(result.error).toContain('Chatwoot')
+    expect(result.error).toContain('centro de comunicaciones')
     expect(mocks.createApiInbox).not.toHaveBeenCalled()
   })
 })

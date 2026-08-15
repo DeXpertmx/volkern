@@ -196,8 +196,8 @@ const INTEGRACIONES_DISPONIBLES = [
   },
   {
     tipo: 'evolution',
-    nombre: 'Evolution API',
-    descripcion: 'Conecta tu WhatsApp Business para enviar y recibir mensajes directamente',
+    nombre: 'WhatsApp',
+    descripcion: 'Conecta tu WhatsApp para enviar y recibir mensajes directamente',
     icono: MessageSquare,
     color: 'bg-green-600',
     categoria: 'mensajeria',
@@ -206,11 +206,11 @@ const INTEGRACIONES_DISPONIBLES = [
       { name: 'instance_name', label: 'Nombre de Instancia', type: 'text', placeholder: 'nombre-instancia', required: true },
       { name: 'api_url', label: 'URL de API (opcional)', type: 'text', placeholder: 'https://evo.abacus.ai', defaultValue: 'https://evo.abacus.ai' }
     ],
-    instrucciones: 'Para configurar Evolution API:',
+    instrucciones: 'Para configurar WhatsApp:',
     pasos: [
-      '1. Obtén tu API Key desde tu panel de Evolution API',
+      '1. Obtén tu API Key desde tu panel de WhatsApp',
       '2. Copia el nombre de tu instancia de WhatsApp',
-      '3. Configura el webhook en Evolution API:',
+      '3. Configura el webhook de WhatsApp:',
       '   • URL: https://volkern.app/api/webhooks/evolution',
       '   • Eventos: messages.upsert',
       '4. Escanea el código QR para conectar tu WhatsApp',
@@ -478,7 +478,7 @@ export default function IntegracionesPage() {
               allIntegrations.push({
                 id: evolutionData.integration.id,
                 tipo: 'evolution',
-                nombre: 'Evolution API',
+                nombre: 'WhatsApp',
                 conectado: evolutionData.integration.conectado,
                 activo: evolutionData.integration.activo,
                 credenciales: {
@@ -837,11 +837,11 @@ export default function IntegracionesPage() {
         const data = await res.json()
 
         if (res.ok && data.success) {
-          toast.success(data.message || 'Integración con Evolution API configurada exitosamente')
+          toast.success(data.message || 'WhatsApp configurado exitosamente')
           cerrarDialog()
           await cargarIntegraciones()
         } else {
-          toast.error(data.error || 'Error al configurar Evolution API', {
+          toast.error(data.error || 'Error al configurar WhatsApp', {
             duration: 5000,
           })
           

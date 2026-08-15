@@ -234,7 +234,7 @@ export default function MiWhatsAppPage() {
 
   // Desconectar WhatsApp
   const disconnectWhatsApp = async () => {
-    if (!confirm('¿Estás seguro de que deseas desconectar tu WhatsApp?\n\nSe eliminará la instancia de Evolution API y el enlace con Chatwoot.')) {
+    if (!confirm('¿Estás seguro de que deseas desconectar tu WhatsApp?\n\nSe eliminará la instancia de WhatsApp y el enlace con el centro de comunicaciones.')) {
       return;
     }
 
@@ -343,8 +343,8 @@ export default function MiWhatsAppPage() {
       <Alert className="mb-4 bg-green-50 border-green-200">
         <CheckCircle2 className="h-4 w-4 text-green-600" />
         <AlertDescription className="text-green-800">
-          <strong>Conexión automática:</strong> Volkern creará la instancia en Evolution API,
-          configurará el webhook y mostrará aquí el QR para vincular tu teléfono.
+          <strong>Conexión automática:</strong> Volkern creará la instancia de WhatsApp,
+          la dejará lista y mostrará aquí el QR para vincular tu teléfono.
         </AlertDescription>
       </Alert>
 
@@ -535,7 +535,7 @@ export default function MiWhatsAppPage() {
             <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
               <h4 className="font-medium text-blue-800 mb-2">📋 Requisitos previos:</h4>
               <ul className="space-y-1 text-sm text-blue-700">
-                <li>• Evolution API debe estar disponible para Volkern</li>
+                <li>• El servicio de WhatsApp debe estar disponible para Volkern</li>
                 <li>• Un teléfono con WhatsApp para escanear el QR</li>
                 <li>• No tener otra instancia activa en este usuario</li>
               </ul>
