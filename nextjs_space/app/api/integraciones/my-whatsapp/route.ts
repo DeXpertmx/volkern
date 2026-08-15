@@ -7,6 +7,7 @@ import prisma from '@/lib/db';
 import {
 
   connectToExistingInstance,
+  createAndConnectInstance,
   deleteInstance,
   getUserInstance
 } from '@/lib/evolution-instances';
@@ -82,8 +83,8 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * POST - Conectar a una instancia EXISTENTE de WhatsApp
- * El usuario debe proporcionar el nombre de la instancia que creó manualmente en Evolution API
+ * POST - Crear una instancia nueva o conectar una instancia existente de WhatsApp
+ * Si no se proporciona nombre, Evolution API genera una instancia desde Volkern.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -101,19 +102,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Usuario sin tenant' }, { status: 400 });
     }
 
-    // Obtener el nombre de instancia del body
-    const body = await request.json();
-    const { instanceName } = body;
+    const body = await request.json().catch(() => ({}));
+    const instanceName = typeof body.instanceName === 'string' ? body.instanceName.trim() : '';
 
-    if (!instanceName) {
-      return NextResponse.json(
-        { error: 'Por favor proporciona el nombre de la instancia' },
-        { status: 400 }
-      );
-    }
-
-    // Conectar a instancia existente
-    const result = await connectToExistingInstance(user.id, user.tenantId, instanceName);
+    // Sin nombre: crear automáticamente en Evolution API. Con nombre:
+    // conservar compatibilidad y conectar una instancia ya existente.
+    const result = instanceName
+      ? await connectToExistingInstance(user.id, user.tenantId, instanceName)
+      : await createAndConnectInstance(user.id, user.tenantId);
 
     if (!result.success) {
       return NextResponse.json(

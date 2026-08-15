@@ -96,14 +96,8 @@ export default function MiWhatsAppPage() {
     }
   };
 
-  // Conectar a instancia existente
+  // Crear una instancia automáticamente o conectar una existente si se indicó nombre
   const connectInstance = async () => {
-    // Validar que se ingresó el nombre
-    if (!instanceName || instanceName.trim() === '') {
-      toast.error('Por favor ingresa el nombre de tu instancia de WhatsApp');
-      return;
-    }
-
     try {
       setConnecting(true);
       const response = await fetch('/api/integraciones/my-whatsapp', {
@@ -112,7 +106,7 @@ export default function MiWhatsAppPage() {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          instanceName: instanceName.trim()
+          instanceName: instanceName.trim() || undefined
         })
       });
 
@@ -325,13 +319,11 @@ export default function MiWhatsAppPage() {
       </div>
 
       {/* Advertencia importante */}
-      <Alert className="mb-4 bg-yellow-50 border-yellow-200">
-        <AlertCircle className="h-4 w-4 text-yellow-600" />
-        <AlertDescription className="text-yellow-800">
-          <strong>Importante:</strong> Debes crear la instancia manualmente en tu panel de Evolution API 
-          primero. Este sistema se conecta a instancias existentes, no las crea automáticamente. 
-          Si no tienes acceso al panel de Evolution API, utiliza la instancia compartida desde 
-          el módulo de Mensajes principal.
+      <Alert className="mb-4 bg-green-50 border-green-200">
+        <CheckCircle2 className="h-4 w-4 text-green-600" />
+        <AlertDescription className="text-green-800">
+          <strong>Conexión automática:</strong> Volkern creará la instancia en Evolution API,
+          configurará el webhook y mostrará aquí el QR para vincular tu teléfono.
         </AlertDescription>
       </Alert>
 
@@ -490,10 +482,10 @@ export default function MiWhatsAppPage() {
             <div className="bg-gray-50 p-6 rounded-lg space-y-3">
               <h3 className="font-semibold text-lg">¿Cómo funciona?</h3>
               <ol className="list-decimal list-inside space-y-2 text-gray-600">
-                <li>Crea una instancia en tu panel de Evolution API</li>
-                <li>Copia el nombre de la instancia</li>
-                <li>Pégalo aquí abajo y haz clic en "Conectar"</li>
+                <li>Pulsa "Crear y conectar WhatsApp"</li>
+                <li>Volkern crea la instancia y configura el webhook</li>
                 <li>Escanea el código QR con tu WhatsApp</li>
+                <li>Espera a que el estado cambie a conectado</li>
                 <li>¡Listo! Empieza a gestionar tus conversaciones</li>
               </ol>
             </div>
@@ -501,9 +493,9 @@ export default function MiWhatsAppPage() {
             <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
               <h4 className="font-medium text-blue-800 mb-2">📋 Requisitos previos:</h4>
               <ul className="space-y-1 text-sm text-blue-700">
-                <li>• Acceso al panel de Evolution API</li>
-                <li>• Instancia ya creada en Evolution API</li>
-                <li>• Nombre exacto de tu instancia (sensible a mayúsculas)</li>
+                <li>• Evolution API debe estar disponible para Volkern</li>
+                <li>• Un teléfono con WhatsApp para escanear el QR</li>
+                <li>• No tener otra instancia activa en este usuario</li>
               </ul>
             </div>
 
@@ -520,25 +512,25 @@ export default function MiWhatsAppPage() {
             {/* Campo para ingresar nombre de instancia */}
             <div className="space-y-2">
               <label htmlFor="instanceName" className="block text-sm font-medium text-gray-700">
-                Nombre de tu instancia de Evolution API
+                Nombre de instancia (opcional)
               </label>
               <input
                 id="instanceName"
                 type="text"
                 value={instanceName}
                 onChange={(e) => setInstanceName(e.target.value)}
-                placeholder="Ejemplo: Arktech1234"
+                placeholder="Déjalo vacío para generarlo automáticamente"
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
                 disabled={connecting}
               />
               <p className="text-xs text-gray-500">
-                Ingresa el nombre exacto de la instancia que creaste en el panel de Evolution API
+                Puedes dejarlo vacío; Volkern generará un nombre único y creará la instancia por ti.
               </p>
             </div>
 
             <Button
               onClick={connectInstance}
-              disabled={connecting || !instanceName.trim()}
+              disabled={connecting}
               className="w-full h-12 text-lg"
             >
               {connecting ? (
@@ -549,7 +541,7 @@ export default function MiWhatsAppPage() {
               ) : (
                 <>
                   <Smartphone className="h-5 w-5 mr-2" />
-                  Conectar a mi instancia
+                  Crear y conectar WhatsApp
                 </>
               )}
             </Button>
