@@ -569,6 +569,83 @@ describe('POST /api/cotizaciones', () => {
     expect(createData.total).toBe(1210);
   });
 
+  it('debe respetar IVA 0% explícito aunque el artículo del catálogo tenga 21%', async () => {
+    (prisma.cotizacion.findFirst as any).mockResolvedValue(null);
+    (prisma.catalogoItem.findMany as any).mockResolvedValue([{
+      id: 'cl0cat00000000000000000021',
+      nombre: 'Servicio exento',
+      descripcion: null,
+      precioBase: 100,
+      categoriaFiscal: 'general',
+      sku: null,
+      tasaImpuestoId: 'tax-21',
+      tasaImpuesto: { id: 'tax-21', porcentaje: 21 },
+    }]);
+    (prisma.cotizacion.create as any).mockResolvedValue({ id: 'cot-exento' });
+
+    await POST(
+      mockRequest('https://volkern.app/api/cotizaciones', {
+        titulo: 'Servicio exento',
+        items: [{
+          catalogoItemId: 'cl0cat00000000000000000021',
+          concepto: 'Servicio exento',
+          cantidad: 1,
+          precioUnitario: 100,
+          porcentajeImpuesto: 0,
+        }],
+      }),
+    );
+
+    const item = (prisma.cotizacion.create as any).mock.calls[0][0].data.items.create[0];
+    expect(item.porcentajeImpuesto).toBe(0);
+    expect(item.montoImpuesto).toBe(0);
+    expect(item.total).toBe(100);
+  });
+
+  it('debe calcular varios tipos de IVA por línea en la misma cotización', async () => {
+    (prisma.cotizacion.findFirst as any).mockResolvedValue(null);
+    (prisma.catalogoItem.findMany as any).mockResolvedValue([
+      {
+        id: 'cl0cat00000000000000000010',
+        nombre: 'Servicio exento',
+        descripcion: null,
+        precioBase: 100,
+        categoriaFiscal: 'exento',
+        sku: null,
+        tasaImpuestoId: null,
+        tasaImpuesto: null,
+      },
+      {
+        id: 'cl0cat00000000000000000021',
+        nombre: 'Servicio general',
+        descripcion: null,
+        precioBase: 100,
+        categoriaFiscal: 'general',
+        sku: null,
+        tasaImpuestoId: 'tax-21',
+        tasaImpuesto: { id: 'tax-21', porcentaje: 21 },
+      },
+    ]);
+    (prisma.cotizacion.create as any).mockResolvedValue({ id: 'cot-multi-iva' });
+
+    await POST(
+      mockRequest('https://volkern.app/api/cotizaciones', {
+        titulo: 'Varios IVAs',
+        impuestos: 10,
+        items: [
+          { catalogoItemId: 'cl0cat00000000000000000010', concepto: 'Servicio exento', cantidad: 1, precioUnitario: 100, porcentajeImpuesto: 0 },
+          { catalogoItemId: 'cl0cat00000000000000000021', concepto: 'Servicio general', cantidad: 1, precioUnitario: 100, porcentajeImpuesto: 21 },
+        ],
+      }),
+    );
+
+    const data = (prisma.cotizacion.create as any).mock.calls[0][0].data;
+    expect(data.items.create.map((item: any) => item.porcentajeImpuesto)).toEqual([0, 21]);
+    expect(data.items.create.map((item: any) => item.montoImpuesto)).toEqual([0, 21]);
+    expect(data.impuestos).toBe(21);
+    expect(data.total).toBe(221);
+  });
+
   it('debe calcular items con descuento por item', async () => {
     (prisma.cotizacion.findFirst as any).mockResolvedValue(null);
     (prisma.cotizacion.create as any).mockResolvedValue({ id: 'cot-item-desc' });

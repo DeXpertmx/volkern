@@ -15,7 +15,7 @@ const CotizacionItemInputSchema = z.object({
   precioUnitario: CommonSchemas.montoPositivo,
   descuento: z.coerce.number().min(0).default(0),
   tasaImpuestoId: CommonSchemas.id.optional().nullable(),
-  porcentajeImpuesto: z.coerce.number().min(0).optional(),
+  porcentajeImpuesto: z.coerce.number().min(0).max(100).optional(),
   aplicaRetencion: z.boolean().optional(),
   porcentajeRetencion: z.coerce.number().min(0).optional(),
   catalogoItemId: CommonSchemas.id.optional().nullable(),
@@ -32,6 +32,9 @@ const CotizacionInputSchema = z.object({
   descripcion: z.string().max(5000).optional().nullable(),
   items: z.array(CotizacionItemInputSchema).min(1, 'Se requiere al menos un item').max(200),
   descuentoPorcentaje: z.coerce.number().min(0).max(100).default(0),
+  // IVA general solo para líneas manuales que no traen porcentaje propio.
+  // Los artículos del catálogo conservan su tasa por línea.
+  impuestos: z.coerce.number().min(0).max(100).default(0),
   moneda: CommonSchemas.moneda,
   validezDias: z.coerce.number().int().min(1).max(365).default(30),
   terminosPago: z.string().max(500).optional().nullable(),
@@ -117,6 +120,7 @@ export const POST = withTenantAuth(async (req, auth) => {
       descripcion,
       items,
       descuentoPorcentaje = 0,
+      impuestos = 0,
       moneda = 'EUR',
       validezDias = 30,
       terminosPago,
@@ -163,6 +167,7 @@ export const POST = withTenantAuth(async (req, auth) => {
       const categoria = item.categoria || catalogoItem?.categoriaFiscal
       const sku = item.sku || catalogoItem?.sku
       const tasaImpuestoId = item.tasaImpuestoId || catalogoItem?.tasaImpuestoId
+      const tienePorcentajeExplicito = item.porcentajeImpuesto !== undefined && item.porcentajeImpuesto !== null
 
       let subtotalItem = cantidad * precioUnitario
       if (descuentoItem > 0) {
@@ -170,10 +175,15 @@ export const POST = withTenantAuth(async (req, auth) => {
       }
       subtotalItem = Math.round(subtotalItem * 100) / 100
 
-      let porcentajeImpuesto = parseFloat((item.porcentajeImpuesto as any) || 0)
-      if (catalogoItem?.tasaImpuesto && !item.porcentajeImpuesto) {
-        porcentajeImpuesto = catalogoItem.tasaImpuesto.porcentaje
-      }
+      // No usar `||` aquí: 0% es un valor fiscal válido y debe respetarse.
+      // La prioridad es: porcentaje enviado por línea > tasa del catálogo >
+      // exento por categoría > IVA general para líneas manuales.
+      let porcentajeImpuesto = tienePorcentajeExplicito
+        ? Number(item.porcentajeImpuesto)
+        : catalogoItem?.tasaImpuesto?.porcentaje ?? (
+          catalogoItem?.categoriaFiscal === 'exento' ? 0 : impuestos
+        )
+      if (!Number.isFinite(porcentajeImpuesto) || porcentajeImpuesto < 0) porcentajeImpuesto = 0
       const montoImpuesto = Math.round(subtotalItem * (porcentajeImpuesto / 100) * 100) / 100
 
       const totalItem = subtotalItem + montoImpuesto

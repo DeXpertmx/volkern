@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -90,13 +90,16 @@ export default function NuevaCotizacionPage() {
   const [terminosPago, setTerminosPago] = useState('')
   const [notasCliente, setNotasCliente] = useState('')
 
-  // Inicializar moneda e impuestos con la configuración fiscal del tenant
+  // Inicializar moneda e impuestos una sola vez. Un IVA 0% elegido por el
+  // usuario es válido y no debe volver a sustituirse por el valor del tenant.
+  const fiscalDefaultsApplied = useRef(false)
   useEffect(() => {
-    if (!loadingFiscal && fiscalConfig) {
+    if (!loadingFiscal && fiscalConfig && !fiscalDefaultsApplied.current) {
       if (!moneda) setMoneda(fiscalConfig.currencyCode)
-      if (impuestos === 0) setImpuestos(fiscalConfig.taxRate)
+      setImpuestos(fiscalConfig.taxRate)
+      fiscalDefaultsApplied.current = true
     }
-  }, [fiscalConfig, loadingFiscal, moneda, impuestos])
+  }, [fiscalConfig, loadingFiscal, moneda])
 
   const [items, setItems] = useState<CotizacionItem[]>([{
     id: crypto.randomUUID(),
@@ -187,7 +190,11 @@ export default function NuevaCotizacionPage() {
         concepto: catalogoItem.nombre,
         descripcion: catalogoItem.descripcion || '',
         precioUnitario: catalogoItem.precioBase,
-        tasaImpuesto: catalogoItem.tasaImpuesto?.porcentaje,
+        // El catálogo manda por línea. La categoría exento también implica 0%
+        // aunque el artículo no tenga una relación TasaImpuesto configurada.
+        tasaImpuesto: catalogoItem.tasaImpuesto?.porcentaje ?? (
+          catalogoItem.categoriaFiscal === 'exento' ? 0 : undefined
+        ),
       }
       updated.total = (updated.cantidad * updated.precioUnitario) - updated.descuento
       return updated
@@ -231,12 +238,22 @@ export default function NuevaCotizacionPage() {
     setItems(prev => prev.filter(item => item.id !== id))
   }
 
-  // Calcular totales
+  // Calcular totales por línea. El IVA general solo sirve como valor por
+  // defecto para líneas manuales; los artículos del catálogo conservan su
+  // propio tipo, permitiendo una cotización con 0%, 10%, 21%, etc.
   const subtotal = items.reduce((sum, item) => sum + item.total, 0)
   const descuentoMonto = subtotal * (descuentoPorcentaje / 100)
   const baseImponible = subtotal - descuentoMonto
-  const montoImpuestos = baseImponible * (impuestos / 100)
+  const factorDescuento = subtotal > 0 ? baseImponible / subtotal : 1
+  const impuestosPorLinea = items.map(item => {
+    const base = Math.round(item.total * factorDescuento * 100) / 100
+    const tasa = item.tasaImpuesto ?? impuestos
+    return Math.round(base * (tasa / 100) * 100) / 100
+  })
+  const montoImpuestos = impuestosPorLinea.reduce((sum, amount) => sum + amount, 0)
   const total = baseImponible + montoImpuestos
+  const tasasActivas = Array.from(new Set(items.map(item => item.tasaImpuesto ?? impuestos)))
+    .sort((a, b) => a - b)
 
   const handleSubmit = async () => {
     if (!titulo) {
@@ -277,7 +294,10 @@ export default function NuevaCotizacionPage() {
             cantidad: item.cantidad,
             precioUnitario: item.precioUnitario,
             descuento: item.descuento,
-            porcentajeImpuesto: item.tasaImpuesto || 0
+            // Enviar siempre el tipo efectivo: 0 es un valor explícito y no
+            // debe caer al IVA del catálogo por un operador ||.
+            tasaImpuestoId: item.catalogoItem?.tasaImpuesto?.id || null,
+            porcentajeImpuesto: item.tasaImpuesto ?? impuestos
           }))
         })
       })
@@ -542,7 +562,7 @@ export default function NuevaCotizacionPage() {
                             />
                           )}
 
-                          <div className="grid grid-cols-4 gap-4">
+                          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                             <div className="space-y-1">
                               <Label className="text-[10px] uppercase text-muted-foreground font-bold">Cant.</Label>
                               <Input
@@ -567,6 +587,18 @@ export default function NuevaCotizacionPage() {
                                 type="number"
                                 value={item.descuento}
                                 onChange={(e) => updateItem(item.id, 'descuento', parseFloat(e.target.value) || 0)}
+                                className="h-8"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-[10px] uppercase text-muted-foreground font-bold">IVA %</Label>
+                              <Input
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="0.01"
+                                value={item.tasaImpuesto ?? impuestos}
+                                onChange={(e) => updateItem(item.id, 'tasaImpuesto', parseFloat(e.target.value) || 0)}
                                 className="h-8"
                               />
                             </div>
@@ -624,12 +656,18 @@ export default function NuevaCotizacionPage() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label>{fiscalConfig?.taxName || 'IVA'} (%)</Label>
+                        <Label>{fiscalConfig?.taxName || 'IVA'} por defecto (%)</Label>
                         <Input
                           type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
                           value={impuestos}
                           onChange={(e) => setImpuestos(parseFloat(e.target.value) || 0)}
                         />
+                        <p className="text-[10px] text-muted-foreground">
+                          Se usa solo en líneas manuales; cada producto o servicio conserva su propio IVA.
+                        </p>
                       </div>
                     </div>
 
@@ -719,7 +757,7 @@ export default function NuevaCotizacionPage() {
                   <span className="font-semibold">{formatCurrency(baseImponible)}</span>
                 </div>
                 <div className="flex justify-between text-sm border-b border-dashed pb-3">
-                  <span className="text-muted-foreground font-medium uppercase tracking-wider text-[10px]">{fiscalConfig?.taxName || 'IVA'} ({impuestos}%)</span>
+                  <span className="text-muted-foreground font-medium uppercase tracking-wider text-[10px]">{fiscalConfig?.taxName || 'IVA'} por líneas ({tasasActivas.map(rate => `${rate}%`).join(' + ')})</span>
                   <span className="font-semibold">{formatCurrency(montoImpuestos)}</span>
                 </div>
                 <div className="flex justify-between items-end pt-2">
