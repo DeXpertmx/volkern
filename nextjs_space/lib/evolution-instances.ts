@@ -51,20 +51,25 @@ async function configureWebhooks(
     console.log('🔗 Configurando webhooks para instancia:', instanceName);
     console.log('🌐 Webhook URL:', webhookUrl);
 
+    // Evolution API v2 exige envolver el payload en un objeto `webhook`:
+    // { webhook: { url, events, ... } }. Sin el wrapper devuelve 400
+    // "instance requires property webhook" y la instancia queda sin eventos.
     const webhookConfig = {
-      enabled: true,
-      url: webhookUrl,
-      webhook_by_events: false, // Recibir todos los eventos en una sola URL
-      webhook_base64: true, // IMPORTANTE: Habilitar Base64 para medios
-      events: [
-        'QRCODE_UPDATED',
-        'CONNECTION_UPDATE',
-        'MESSAGES_SET',
-        'MESSAGES_UPSERT',
-        'MESSAGES_UPDATE',
-        'MESSAGES_DELETE',
-        'SEND_MESSAGE'
-      ]
+      webhook: {
+        enabled: true,
+        url: webhookUrl,
+        webhook_by_events: false, // Recibir todos los eventos en una sola URL
+        webhook_base64: true, // IMPORTANTE: Habilitar Base64 para medios
+        events: [
+          'QRCODE_UPDATED',
+          'CONNECTION_UPDATE',
+          'MESSAGES_SET',
+          'MESSAGES_UPSERT',
+          'MESSAGES_UPDATE',
+          'MESSAGES_DELETE',
+          'SEND_MESSAGE'
+        ]
+      }
     };
 
     console.log('📤 Webhook config:', JSON.stringify(webhookConfig, null, 2));
@@ -446,6 +451,16 @@ export async function getQRCode(
 }
 
 /**
+ * Mapea el estado de Evolution API (v2: `data.instance.state`, v1: `data.state`)
+ * a los estados internos de Volkern.
+ */
+export function mapEvolutionState(state: string | undefined): 'connected' | 'connecting' | 'disconnected' {
+  if (state === 'open') return 'connected';
+  if (state === 'connecting') return 'connecting';
+  return 'disconnected';
+}
+
+/**
  * Extrae el número y perfil del propietario desde el payload de CONNECTION_UPDATE
  * de Evolution API (campos `phone`, `name`, `id`/`ownerJid`, `profilePicUrl`).
  */
@@ -486,14 +501,13 @@ export async function checkInstanceStatus(
     }
 
     const data = await response.json();
-    
+
+    // Evolution API v2 devuelve el estado en `data.instance.state`
+    // (versiones antiguas en `data.state`). Soportar ambas.
+    const state = data?.instance?.state ?? data?.state;
+
     // Mapear estados de Evolution API a nuestros estados
-    let status = 'disconnected';
-    if (data.state === 'open') {
-      status = 'connected';
-    } else if (data.state === 'connecting') {
-      status = 'connecting';
-    }
+    const status = mapEvolutionState(state);
 
     // Actualizar estado en base de datos
     const updateData: any = { status };
