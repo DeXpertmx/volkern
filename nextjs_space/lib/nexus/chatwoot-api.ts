@@ -506,6 +506,25 @@ class ChatwootApiClient {
             contactId = newContact.payload.id;
         }
 
+        // Asegurar que el contacto tenga un contact_inbox (source_id) para este
+        // inbox. Chatwoot exige esa relación para abrir una conversación en el
+        // inbox; si el contacto existía de otro inbox (o sin vínculo), el POST
+        // /conversations devuelve 404 "Resource could not be found".
+        try {
+            await this.request(
+                `/api/v1/accounts/${accountId}/contacts/${contactId}/contact_inboxes`,
+                {
+                    method: 'POST',
+                    body: JSON.stringify({ inbox_id: inboxId }),
+                },
+                accountToken
+            );
+        } catch (contactInboxErr) {
+            // Si el contact_inbox ya existe, el endpoint responde 200; otros
+            // errores no deben romper el flujo (el POST /conversations lo dirá).
+            console.warn('[ChatwootAPI] contact_inboxes warning:', contactInboxErr instanceof Error ? contactInboxErr.message : contactInboxErr);
+        }
+
         // Crear conversación
         const conversation = await this.request<{ id: number; contact_id: number }>(
             `/api/v1/accounts/${accountId}/conversations`,
