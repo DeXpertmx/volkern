@@ -33,6 +33,7 @@ import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
+import { calculateCotizacionDisplayTotals } from '@/lib/cotizaciones/cotizacion-totals'
 import {
   Dialog,
   DialogContent,
@@ -308,6 +309,11 @@ export default function CotizacionDetailPage() {
 
   const estado = estadoConfig[isExpired() ? 'vencida' : cotizacion.estado] || estadoConfig.borrador
   const EstadoIcon = estado.icon
+  const displayTotals = calculateCotizacionDisplayTotals(
+    cotizacion.items,
+    cotizacion.subtotal,
+    cotizacion.descuentoMonto,
+  )
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
@@ -331,10 +337,16 @@ export default function CotizacionDetailPage() {
         
         <div className="flex gap-2">
           {cotizacion.estado === 'borrador' && (
-            <Button onClick={() => setSendModalOpen(true)}>
-              <Send className="h-4 w-4 mr-2" />
-              Enviar
-            </Button>
+            <>
+              <Button variant="outline" onClick={() => router.push(`/dashboard/cotizaciones/nueva?editId=${cotizacion.id}`)}>
+                <Edit className="h-4 w-4 mr-2" />
+                Editar
+              </Button>
+              <Button onClick={() => setSendModalOpen(true)}>
+                <Send className="h-4 w-4 mr-2" />
+                Enviar
+              </Button>
+            </>
           )}
           {cotizacion.tokenPublico && (
             <Button variant="outline" onClick={copyPublicLink}>
@@ -416,19 +428,37 @@ export default function CotizacionDetailPage() {
                 </TableBody>
                 <TableFooter>
                   <TableRow>
-                    <TableCell colSpan={4}>Subtotal</TableCell>
-                    <TableCell className="text-right">{formatCurrency(cotizacion.subtotal)}</TableCell>
+                    <TableCell colSpan={4}>Subtotal bruto</TableCell>
+                    <TableCell className="text-right">{formatCurrency(displayTotals.subtotalBruto)}</TableCell>
                   </TableRow>
-                  {cotizacion.descuentoPorcentaje > 0 && (
+                  {displayTotals.descuentosLineas > 0 && (
                     <TableRow>
                       <TableCell colSpan={4} className="text-green-600">
-                        Descuento ({cotizacion.descuentoPorcentaje}%)
+                        Descuentos por línea
                       </TableCell>
                       <TableCell className="text-right text-green-600">
-                        -{formatCurrency(cotizacion.descuentoMonto)}
+                        -{formatCurrency(displayTotals.descuentosLineas)}
                       </TableCell>
                     </TableRow>
                   )}
+                  <TableRow>
+                    <TableCell colSpan={4}>Subtotal</TableCell>
+                    <TableCell className="text-right">{formatCurrency(displayTotals.subtotal)}</TableCell>
+                  </TableRow>
+                  {displayTotals.descuentoGlobal > 0 && (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-green-600">
+                        Descuento global{cotizacion.descuentoPorcentaje > 0 ? ` (${cotizacion.descuentoPorcentaje}%)` : ''}
+                      </TableCell>
+                      <TableCell className="text-right text-green-600">
+                        -{formatCurrency(displayTotals.descuentoGlobal)}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  <TableRow>
+                    <TableCell colSpan={4}>Base imponible</TableCell>
+                    <TableCell className="text-right">{formatCurrency(displayTotals.baseImponible)}</TableCell>
+                  </TableRow>
                   <TableRow>
                     <TableCell colSpan={4}>IVA</TableCell>
                     <TableCell className="text-right">{formatCurrency(cotizacion.impuestos)}</TableCell>

@@ -17,6 +17,7 @@ import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import Link from 'next/link'
+import { UnifiedTimeline } from '@/components/unified-timeline'
 
 interface Contact {
   id: string
@@ -721,19 +722,7 @@ export default function EmpresaDetailPage() {
 
         {/* Actividad Tab */}
         <TabsContent value="actividad" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Timeline de Actividad</CardTitle>
-              <CardDescription>Historial de interacciones con esta empresa</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <p className="text-muted-foreground">
-                  El timeline de actividad se implementará próximamente
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+          <UnifiedTimeline companyId={companyId} />
         </TabsContent>
       </Tabs>
     </div>

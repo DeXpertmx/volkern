@@ -17,6 +17,7 @@ const CatalogItemSchema = z.object({
 const CatalogCotizacionCreateSchema = z.object({
   dealId: z.string().min(25).optional(),
   leadId: z.string().min(25).optional(),
+  contactId: z.string().min(25).optional(),
   titulo: z.string().min(1, 'Título requerido').max(500),
   descripcion: z.string().max(5000).optional(),
   catalogItems: z.array(CatalogItemSchema).min(1, 'Se requiere al menos un item').max(200),
@@ -52,6 +53,7 @@ export async function POST(req: NextRequest) {
     const {
       dealId,
       leadId,
+      contactId,
       titulo,
       descripcion,
       catalogItems,
@@ -194,6 +196,7 @@ export async function POST(req: NextRequest) {
         tenantId: auth.tenant!.id,
         dealId: dealId || null,
         leadId: leadId || null,
+        contactId: contactId || null,
         creadoPorId: auth.user?.id || null,
         emisorId: emisorId || null,
         numero,

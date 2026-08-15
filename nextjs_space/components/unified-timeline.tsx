@@ -32,6 +32,18 @@ interface Interaction {
   metadatos: Record<string, unknown> | null;
 }
 
+interface CotizacionTimelineEvent {
+  id: string;
+  numero: string;
+  titulo: string;
+  estado: string;
+  total: number;
+  moneda: string;
+  descuentoMonto: number;
+  descuentoPorcentaje: number;
+  fechaCreacion: string;
+}
+
 interface AuditLog {
   id: string;
   createdAt: string;
@@ -45,14 +57,15 @@ interface AuditLog {
 
 interface TimelineEvent {
   id: string;
-  type: 'interaction' | 'audit';
+  type: 'interaction' | 'audit' | 'quote';
   date: Date;
-  data: Interaction | AuditLog;
+  data: Interaction | AuditLog | CotizacionTimelineEvent;
 }
 
 interface UnifiedTimelineProps {
   leadId?: string;
   contactId?: string;
+  companyId?: string;
 }
 
 const interactionTypes = [
@@ -69,7 +82,7 @@ const resultados = [
   { value: 'negativo', label: 'Negativo', icon: ThumbsDown, color: 'bg-red-100 text-red-800' }
 ];
 
-export function UnifiedTimeline({ leadId, contactId }: UnifiedTimelineProps) {
+export function UnifiedTimeline({ leadId, contactId, companyId }: UnifiedTimelineProps) {
   const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -80,13 +93,18 @@ export function UnifiedTimeline({ leadId, contactId }: UnifiedTimelineProps) {
     fechaCreacion: new Date().toISOString().slice(0, 16)
   });
 
-  const entityId = leadId || contactId;
+  const entityId = leadId || contactId || companyId;
   const entityType = leadId ? 'Lead' : 'Contact';
-  const apiBase = leadId ? `/api/leads/${leadId}` : `/api/contacts/${contactId}`;
+  const apiBase = leadId ? `/api/leads/${leadId}` : `/api/contacts/${contactId || companyId}`;
+  const quotesApi = leadId
+    ? `/api/cotizaciones?leadId=${leadId}`
+    : companyId
+      ? `/api/cotizaciones?companyId=${companyId}`
+      : `/api/cotizaciones?contactId=${contactId}`;
 
   useEffect(() => {
     if (entityId) fetchTimelineData();
-  }, [leadId, contactId]);
+  }, [leadId, contactId, companyId]);
 
   const fetchTimelineData = async () => {
     try {
@@ -96,10 +114,15 @@ export function UnifiedTimeline({ leadId, contactId }: UnifiedTimelineProps) {
       // Soportar tanto el formato antiguo (array) como el nuevo ({ interactions: [...] })
       const interactions: Interaction[] = Array.isArray(interactionsData) ? interactionsData : (interactionsData.interactions || []);
 
-      // Cargar audit logs
-      const auditLogsRes = await fetch(`/api/audit-logs?entityId=${entityId}&entity=${entityType}`);
+      // Cargar audit logs y cotizaciones ligadas a la ficha.
+      const [auditLogsRes, cotizacionesRes] = await Promise.all([
+        fetch(`/api/audit-logs?entityId=${entityId}&entity=${entityType}`),
+        fetch(quotesApi),
+      ]);
       const auditData = auditLogsRes.ok ? await auditLogsRes.json() : { logs: [] };
       const auditLogs: AuditLog[] = auditData.logs || [];
+      const cotizacionesData = cotizacionesRes.ok ? await cotizacionesRes.json() : { cotizaciones: [] };
+      const cotizaciones: CotizacionTimelineEvent[] = cotizacionesData.cotizaciones || [];
 
       // Combinar y ordenar eventos
       const events: TimelineEvent[] = [
@@ -114,6 +137,12 @@ export function UnifiedTimeline({ leadId, contactId }: UnifiedTimelineProps) {
           type: 'audit' as const,
           date: new Date(log.createdAt),
           data: log
+        })),
+        ...cotizaciones.map(cotizacion => ({
+          id: `cotizacion-${cotizacion.id}`,
+          type: 'quote' as const,
+          date: new Date(cotizacion.fechaCreacion),
+          data: cotizacion
         }))
       ].sort((a, b) => b.date.getTime() - a.date.getTime());
 
@@ -301,6 +330,47 @@ export function UnifiedTimeline({ leadId, contactId }: UnifiedTimelineProps) {
 
             <div className="space-y-6">
               {timelineEvents.map((event) => {
+                if (event.type === 'quote') {
+                  const cotizacion = event.data as CotizacionTimelineEvent;
+                  const formattedTotal = new Intl.NumberFormat('es-MX', {
+                    style: 'currency',
+                    currency: cotizacion.moneda || 'EUR'
+                  }).format(cotizacion.total || 0);
+                  const hasDiscount = (cotizacion.descuentoMonto || 0) > 0;
+
+                  return (
+                    <a
+                      key={event.id}
+                      href={`/dashboard/cotizaciones/${cotizacion.id}`}
+                      className="block relative pl-14"
+                    >
+                      <div className="absolute left-4 top-1 w-5 h-5 rounded-full bg-white border-2 border-blue-400 flex items-center justify-center">
+                        <FileText className="h-3 w-3 text-blue-600" />
+                      </div>
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 hover:shadow-sm transition-shadow">
+                        <div className="flex items-start justify-between gap-3 mb-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Badge variant="outline" className="text-xs bg-white">Cotización</Badge>
+                            <Badge className="text-xs bg-blue-100 text-blue-800">{cotizacion.estado}</Badge>
+                          </div>
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">
+                            {format(event.date, "dd MMM yyyy, HH:mm", { locale: es })}
+                          </span>
+                        </div>
+                        <p className="text-sm font-semibold">{cotizacion.numero} · {cotizacion.titulo}</p>
+                        <div className="flex items-center gap-4 mt-2 text-sm text-slate-700">
+                          <span>Total: <strong>{formattedTotal}</strong></span>
+                          {hasDiscount && (
+                            <span className="text-emerald-700">
+                              Descuento: -{new Intl.NumberFormat('es-MX', { style: 'currency', currency: cotizacion.moneda || 'EUR' }).format(cotizacion.descuentoMonto)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </a>
+                  );
+                }
+
                 if (event.type === 'interaction') {
                   const interaction = event.data as Interaction;
                   const InteractionIcon = getInteractionIcon(interaction.tipo);

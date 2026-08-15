@@ -41,6 +41,7 @@ interface CotizacionItem {
   descuento: number
   total: number
   tasaImpuesto?: number
+  tasaImpuestoId?: string | null
   catalogoItem?: CatalogoItemResult | null
 }
 
@@ -65,6 +66,9 @@ export default function NuevaCotizacionPage() {
   const searchParams = useSearchParams()
   const leadIdParam = searchParams.get('leadId')
   const dealIdParam = searchParams.get('dealId')
+  const contactIdParam = searchParams.get('contactId')
+  const editIdParam = searchParams.get('editId')
+  const isEditing = Boolean(editIdParam)
 
   // Cargar configuración fiscal del tenant
   const { config: fiscalConfig, loading: loadingFiscal } = useFiscalConfig()
@@ -79,6 +83,7 @@ export default function NuevaCotizacionPage() {
   const [descripcion, setDescripcion] = useState('')
   const [leadId, setLeadId] = useState(leadIdParam || '')
   const [dealId, setDealId] = useState(dealIdParam || '')
+  const [contactId, setContactId] = useState(contactIdParam || '')
   const [clienteNombre, setClienteNombre] = useState('')
   const [clienteEmail, setClienteEmail] = useState('')
   const [clienteEmpresa, setClienteEmpresa] = useState('')
@@ -163,6 +168,50 @@ export default function NuevaCotizacionPage() {
       // /api/leads devuelve un array pelado (no { leads }): soportar ambos
       setLeads(Array.isArray(leadsData) ? leadsData : (leadsData.leads || []))
       if (dealsData.deals) setDeals(dealsData.deals)
+
+      if (editIdParam) {
+        const cotizacionRes = await fetch(`/api/cotizaciones/${editIdParam}`)
+        const cotizacionData = await cotizacionRes.json()
+        if (!cotizacionRes.ok || !cotizacionData.cotizacion) {
+          toast.error(cotizacionData.error || 'No se pudo cargar la cotización')
+          router.push('/dashboard/cotizaciones')
+          return
+        }
+
+        const cotizacion = cotizacionData.cotizacion
+        setTitulo(cotizacion.titulo || '')
+        setDescripcion(cotizacion.descripcion || '')
+        setLeadId(cotizacion.leadId || '')
+        setDealId(cotizacion.dealId || '')
+        setContactId(cotizacion.contactId || '')
+        setClienteNombre(cotizacion.clienteNombre || '')
+        setClienteEmail(cotizacion.clienteEmail || '')
+        setClienteEmpresa(cotizacion.clienteEmpresa || '')
+        setClienteTelefono(cotizacion.clienteTelefono || '')
+        setMoneda(cotizacion.moneda || 'EUR')
+        setValidezDias(cotizacion.validezDias || 30)
+        setDescuentoPorcentaje(cotizacion.descuentoPorcentaje || 0)
+        // `cotizacion.impuestos` es el importe total, no la tasa. Las líneas
+        // guardan su porcentaje real y se reutilizan al editar.
+        setImpuestos(cotizacion.items?.[0]?.porcentajeImpuesto ?? 0)
+        setTerminosPago(cotizacion.terminosPago || '')
+        setNotasCliente(cotizacion.notasCliente || '')
+        setItems((cotizacion.items || []).map((item: any, index: number) => ({
+          id: item.id || crypto.randomUUID(),
+          catalogoItemId: item.catalogoItemId || null,
+          concepto: item.concepto || '',
+          descripcion: item.descripcion || '',
+          cantidad: Number(item.cantidad) || 1,
+          precioUnitario: Number(item.precioUnitario) || 0,
+          descuento: Number(item.descuento) || 0,
+          // Recalcular desde precio, cantidad y descuento para no arrastrar
+          // totales corruptos de cotizaciones creadas con el bug anterior.
+          total: Math.max(0, (Number(item.cantidad) || 0) * (Number(item.precioUnitario) || 0) - (Number(item.descuento) || 0)),
+          tasaImpuesto: item.porcentajeImpuesto ?? 0,
+          tasaImpuestoId: item.tasaImpuestoId || null,
+          catalogoItem: null,
+        })))
+      }
     } catch (error) {
       console.error('Error loading data:', error)
     }
@@ -173,8 +222,10 @@ export default function NuevaCotizacionPage() {
       if (item.id !== id) return item
 
       const updated = { ...item, [field]: value }
-      // Recalculate total
-      updated.total = (updated.cantidad * updated.precioUnitario) - updated.descuento
+      const bruto = Math.max(0, Number(updated.cantidad) * Number(updated.precioUnitario))
+      updated.descuento = Math.min(bruto, Math.max(0, Number(updated.descuento) || 0))
+      // Recalculate total using a fixed monetary discount.
+      updated.total = Math.max(0, bruto - updated.descuento)
       return updated
     }))
   }
@@ -195,8 +246,11 @@ export default function NuevaCotizacionPage() {
         tasaImpuesto: catalogoItem.tasaImpuesto?.porcentaje ?? (
           catalogoItem.categoriaFiscal === 'exento' ? 0 : undefined
         ),
+        tasaImpuestoId: catalogoItem.tasaImpuesto?.id || null,
       }
-      updated.total = (updated.cantidad * updated.precioUnitario) - updated.descuento
+      const bruto = Math.max(0, Number(updated.cantidad) * Number(updated.precioUnitario))
+      updated.descuento = Math.min(bruto, Math.max(0, Number(updated.descuento) || 0))
+      updated.total = Math.max(0, bruto - updated.descuento)
       return updated
     }))
   }
@@ -212,6 +266,7 @@ export default function NuevaCotizacionPage() {
         descripcion: '',
         precioUnitario: 0,
         tasaImpuesto: undefined,
+        tasaImpuestoId: null,
         total: 0,
       }
     }))
@@ -266,17 +321,23 @@ export default function NuevaCotizacionPage() {
       toast.error('Agrega al menos un item válido')
       return
     }
+    const itemConDescuentoInvalido = itemsValidos.find(item => item.descuento > item.cantidad * item.precioUnitario)
+    if (itemConDescuentoInvalido) {
+      toast.error(`El descuento de «${itemConDescuentoInvalido.concepto}» no puede superar el importe de la línea`)
+      return
+    }
 
     setLoading(true)
     try {
-      const res = await fetch('/api/cotizaciones', {
-        method: 'POST',
+      const res = await fetch(isEditing ? `/api/cotizaciones/${editIdParam}` : '/api/cotizaciones', {
+        method: isEditing ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           titulo,
           descripcion,
           leadId: leadId || null,
           dealId: dealId || null,
+          contactId: contactId || null,
           clienteNombre,
           clienteEmail,
           clienteEmpresa,
@@ -296,7 +357,7 @@ export default function NuevaCotizacionPage() {
             descuento: item.descuento,
             // Enviar siempre el tipo efectivo: 0 es un valor explícito y no
             // debe caer al IVA del catálogo por un operador ||.
-            tasaImpuestoId: item.catalogoItem?.tasaImpuesto?.id || null,
+            tasaImpuestoId: item.tasaImpuestoId || item.catalogoItem?.tasaImpuesto?.id || null,
             porcentajeImpuesto: item.tasaImpuesto ?? impuestos
           }))
         })
@@ -305,7 +366,7 @@ export default function NuevaCotizacionPage() {
       const data = await res.json()
 
       if (res.ok && data.cotizacion) {
-        toast.success('Cotización creada exitosamente')
+        toast.success(isEditing ? 'Cotización actualizada exitosamente' : 'Cotización creada exitosamente')
         router.push(`/dashboard/cotizaciones/${data.cotizacion.id}`)
       } else {
         toast.error(data.error || 'Error al crear cotización')
@@ -340,8 +401,8 @@ export default function NuevaCotizacionPage() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Nueva Cotización</h1>
-            <p className="text-muted-foreground">Estructura tu propuesta comercial paso a paso</p>
+            <h1 className="text-3xl font-bold tracking-tight">{isEditing ? 'Editar Cotización' : 'Nueva Cotización'}</h1>
+            <p className="text-muted-foreground">{isEditing ? 'Corrige los datos y vuelve a calcular la propuesta' : 'Estructura tu propuesta comercial paso a paso'}</p>
           </div>
         </div>
       </div>
@@ -582,9 +643,12 @@ export default function NuevaCotizacionPage() {
                               />
                             </div>
                             <div className="space-y-1">
-                              <Label className="text-[10px] uppercase text-muted-foreground font-bold">Desc.</Label>
+                              <Label className="text-[10px] uppercase text-muted-foreground font-bold">Desc. (€)</Label>
                               <Input
                                 type="number"
+                                min="0"
+                                max={Math.max(0, item.cantidad * item.precioUnitario)}
+                                step="0.01"
                                 value={item.descuento}
                                 onChange={(e) => updateItem(item.id, 'descuento', parseFloat(e.target.value) || 0)}
                                 className="h-8"

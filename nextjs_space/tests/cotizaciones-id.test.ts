@@ -29,8 +29,8 @@ vi.mock('@/lib/api-key-auth', () => {
         tenant: { id: 'test-tenant-id', nombre: 'Test Tenant', slug: 'test', plan: 'growth' },
         user: { id: 'test-user-id', name: 'Test User', email: 'test@test.com' },
       };
-      // Handler usa params.id directamente (no destructuring { params })
-      return handler(request, mockAuth, { id: 'cot-1' });
+      // Next Route Handler entrega el contexto con params anidados.
+      return handler(request, mockAuth, { params: { id: 'cot-1' } });
     };
   };
   return { withTenantAuth: mockWithTenantAuth };
@@ -226,6 +226,44 @@ describe('PATCH /api/cotizaciones/[id]', () => {
     expect(response.status).toBe(200);
     const json = await response.json();
     expect(json.cotizacion.estado).toBe('enviada');
+  });
+
+  it('debe actualizar una cotización borrador completa y recalcular descuentos fijos', async () => {
+    (prisma.cotizacion.findFirst as any).mockResolvedValue({
+      ...mockCotizacion,
+      estado: 'borrador',
+      descuentoPorcentaje: 0,
+      impuestos: 0,
+    });
+    (prisma.cotizacion.update as any).mockResolvedValue({
+      ...mockCotizacion,
+      estado: 'borrador',
+      total: 0,
+    });
+
+    const response = await PATCH(
+      mockRequest('https://volkern.app/api/cotizaciones/cot-1', {
+        titulo: 'Implementación anual',
+        items: [{
+          concepto: 'Implementación',
+          cantidad: 1,
+          precioUnitario: 500,
+          descuento: 500,
+          porcentajeImpuesto: 0,
+        }],
+        descuentoPorcentaje: 0,
+        impuestos: 0,
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const updateData = (prisma.cotizacion.update as any).mock.calls[0][0].data;
+    expect(updateData.subtotal).toBe(0);
+    expect(updateData.total).toBe(0);
+    expect(updateData.items).toEqual({
+      deleteMany: {},
+      create: [expect.objectContaining({ descuento: 500, subtotal: 0, total: 0 })],
+    });
   });
 
   it('debe pasar estado a prisma.cotizacion.update', async () => {
