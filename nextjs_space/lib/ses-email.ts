@@ -1,6 +1,10 @@
 import nodemailer from 'nodemailer';
 import { prisma } from '@/lib/db';
-import { getFromAddress } from './resend-email';
+import { getFromAddress, sendEmail as sendResendEmail } from './resend-email';
+
+function hasDefaultSmtpCredentials(): boolean {
+  return Boolean(process.env.AWS_SES_USER && process.env.AWS_SES_PASSWORD)
+}
 
 const FROM_ADDRESSES: Record<string, string> = {
   admin: 'Volkern <noreply@volkern.app>',
@@ -93,6 +97,21 @@ export async function sendEmail({
 }: SendEmailParams) {
   try {
     const tenantTransport = await getTransporter(tenantId)
+
+    // En producción puede no existir SMTP global aunque Resend sí esté
+    // configurado. No intentemos enviar con nodemailer sin credenciales:
+    // eso produce `Missing credentials for "PLAIN"` y rompe los OTP públicos.
+    if (!tenantTransport && !hasDefaultSmtpCredentials()) {
+      return await sendResendEmail({
+        to,
+        subject,
+        html,
+        text,
+        from: from || getFromAddress(tenantSubdomain),
+        replyTo,
+      })
+    }
+
     const transporter = tenantTransport?.transporter || defaultTransporter
     const fromAddress = from || tenantTransport?.fromAddress || getFromAddress(tenantSubdomain)
 
