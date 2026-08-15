@@ -277,20 +277,21 @@ class ChatwootApiClient {
     }
 
     /**
-     * Crear inbox de WhatsApp (Evolution API)
-     * El canal Evolution de Chatwoot recibe los mensajes mediante el webhook
-     * configurado en la instancia de Evolution (url + apikey).
+     * Crear inbox de canal API (puente WhatsApp vía Evolution API)
+     *
+     * Chatwoot 4.x NO incluye el provider 'evolution' (solo `default` y
+     * `whatsapp_cloud`), así que el puente se implementa con un inbox tipo
+     * `api`: Volkern crea la conversación y el mensaje entrante vía la API
+     * REST de Chatwoot, y el webhook del canal API devuelve las respuestas
+     * del agente para reenviarlas a WhatsApp por Evolution.
      */
-    async createEvolutionWhatsAppInbox(
+    async createApiInbox(
         accountId: number,
         name: string,
-        phoneNumber: string,
-        evolutionApiKey: string,
-        evolutionApiUrl: string,
-        evolutionWebhookUrl: string,
+        webhookUrl: string,
         accountToken: string
     ): Promise<ChatwootInbox> {
-        console.log('[ChatwootAPI] Creating Evolution WhatsApp inbox for account:', accountId);
+        console.log('[ChatwootAPI] Creating API inbox for account:', accountId);
 
         return this.request<ChatwootInbox>(
             `/api/v1/accounts/${accountId}/inboxes`,
@@ -299,14 +300,8 @@ class ChatwootApiClient {
                 body: JSON.stringify({
                     name,
                     channel: {
-                        type: 'whatsapp',
-                        provider: 'evolution',
-                        phone_number: phoneNumber,
-                        provider_config: {
-                            apikey: evolutionApiKey,
-                            url: evolutionApiUrl,
-                            webhook_url: evolutionWebhookUrl,
-                        },
+                        type: 'api',
+                        webhook_url: webhookUrl,
                     },
                 }),
             },
@@ -565,15 +560,18 @@ class ChatwootApiClient {
 
     /**
      * Configurar webhook para la cuenta
+     * Chatwoot devuelve el `secret` del webhook en la respuesta; ese secret es
+     * el que firma cada payload (X-Chatwoot-Signature: sha256=HMAC(secret, ts.body))
+     * y debe guardarse para validar los eventos entrantes del hub.
      */
     async configureWebhook(
         accountId: number,
         webhookUrl: string,
         accountToken: string
-    ): Promise<{ id: number; url: string }> {
+    ): Promise<{ id: number; url: string; secret: string }> {
         console.log('[ChatwootAPI] Configuring webhook for account:', accountId);
         
-        return this.request(
+        const result = await this.request<{ payload: { webhook: { id: number; url: string; secret: string } } }>(
             `/api/v1/accounts/${accountId}/webhooks`,
             {
                 method: 'POST',
@@ -591,6 +589,13 @@ class ChatwootApiClient {
             },
             accountToken
         );
+
+        const webhook = result?.payload?.webhook;
+        return {
+            id: webhook?.id ?? 0,
+            url: webhook?.url ?? webhookUrl,
+            secret: webhook?.secret ?? '',
+        };
     }
 
     // ========== HEALTH CHECK ==========

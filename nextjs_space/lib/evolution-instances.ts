@@ -672,31 +672,55 @@ export async function ensureChatwootInboxForInstance(
       return { success: false, error: 'Aún no hay número de WhatsApp disponible para crear el canal.' }
     }
 
-    const webhookUrl = `${process.env.NEXTAUTH_URL || 'https://volkern.app'}/api/webhook/evolution/${instanceName}`
-    const inbox = await chatwootApi.createEvolutionWhatsAppInbox(
+    // Canal API de Chatwoot (4.x no soporta provider 'evolution'; el puente
+    // entrante lo hace Volkern vía REST y el webhook de cuenta devuelve las
+    // respuestas del agente para reenviarlas por Evolution).
+    const inbox = await chatwootApi.createApiInbox(
       chatwootAccountId,
       `WhatsApp - ${instance.tenant?.nombre || 'Empresa'}`,
-      phoneNumber,
-      EVOLUTION_API_KEY,
-      EVOLUTION_API_URL,
-      webhookUrl,
+      '',
       accountAccessToken,
     )
 
-    // Guardar el canal y la referencia del inbox
+    // Webhook de CUENTA de Chatwoot → Volkern: recibe las respuestas del
+    // agente (message_created outgoing) para reenviarlas a WhatsApp.
+    // Chatwoot devuelve el `secret` al crear el webhook; ese secret es el que
+    // firma cada payload y debe guardarse para validar los eventos.
+    const chatwootWebhookUrl = `${process.env.NEXTAUTH_URL || 'https://volkern.app'}/api/integrations/webhook/chatwoot`
+    let chatwootWebhookSecret = hubConfig?.webhookSecret || ''
+    try {
+      const webhookResult = await chatwootApi.configureWebhook(
+        chatwootAccountId,
+        chatwootWebhookUrl,
+        accountAccessToken,
+      )
+      if (webhookResult.secret) {
+        chatwootWebhookSecret = webhookResult.secret
+      }
+    } catch (webhookError) {
+      // Puede ya existir (url única por cuenta); no es crítico.
+      console.warn('[Chatwoot] Webhook de cuenta ya existente o error:', webhookError)
+    }
+
+    const webhookUrl = `${process.env.NEXTAUTH_URL || 'https://volkern.app'}/api/webhook/evolution/${instanceName}`
+    // Guardar el canal y la referencia del inbox. El secret del webhook de
+    // Chatwoot va en el config del canal (NO en messagingHubConfig.webhookSecret,
+    // que es exclusivo del flujo Telegram/nexus-sync y es UNIQUE).
+    const channelConfig = {
+      provider: 'evolution',
+      instanceName,
+      phoneNumber,
+      apiUrl: EVOLUTION_API_URL,
+      webhookUrl,
+      chatwootWebhookSecret,
+    }
     if (existingChannel) {
       await prisma.channel.update({
         where: { id: existingChannel.id },
         data: {
           isActive: true,
           chatwootInboxId: inbox.id,
-          config: {
-            provider: 'evolution',
-            instanceName,
-            phoneNumber,
-            apiUrl: EVOLUTION_API_URL,
-            webhookUrl,
-          },
+          config: channelConfig,
         },
       })
     } else {
@@ -708,19 +732,13 @@ export async function ensureChatwootInboxForInstance(
           chatwootInboxId: inbox.id,
           isActive: true,
           isDefault: true,
-          config: {
-            provider: 'evolution',
-            instanceName,
-            phoneNumber,
-            apiUrl: EVOLUTION_API_URL,
-            webhookUrl,
-          },
+          config: channelConfig,
         },
       })
     }
 
-    // Actualizar hub config (se crea si el tenant aún no tiene uno)
-    const webhookSecret = hubConfig?.webhookSecret || crypto.randomBytes(32).toString('hex')
+    // Actualizar hub config (se crea si el tenant aún no tiene uno) sin tocar
+    // webhookSecret (puede estar en uso por el flujo Telegram).
     const syncWebhookUrl = `${process.env.NEXTAUTH_URL || 'https://volkern.app'}/api/webhooks/nexus-sync`
     if (hubConfig) {
       await prisma.messagingHubConfig.update({
@@ -732,6 +750,7 @@ export async function ensureChatwootInboxForInstance(
         },
       })
     } else {
+      const webhookSecret = crypto.randomBytes(32).toString('hex')
       await prisma.messagingHubConfig.create({
         data: {
           tenantId: instance.tenantId,
