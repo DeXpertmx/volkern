@@ -72,7 +72,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       {!isMessaging && <Sidebar />}
       <main className={cn(
         "flex-1 flex flex-col min-w-0 transition-all duration-300 relative bg-slate-50/50 dark:bg-slate-950",
-        isMessaging ? "ml-0" : (isCollapsed ? "md:ml-20" : "md:ml-64")
+        isMessaging ? "ml-0" : (isCollapsed ? "md:ml-24" : "md:ml-72")
       )}>
         {!isMessaging && <DashboardHeader />}
         <div className="flex-1 overflow-y-auto relative scroll-smooth overflow-x-hidden">
