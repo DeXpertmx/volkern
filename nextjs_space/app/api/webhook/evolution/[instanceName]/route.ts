@@ -7,7 +7,11 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { ensureChatwootInboxForInstance } from '@/lib/evolution-instances';
+import {
+  ensureChatwootInboxForInstance,
+  extractOwnerProfileFromConnection,
+  getProfileInfo
+} from '@/lib/evolution-instances';
 
 /**
  * POST - Recibir eventos de Evolution API
@@ -86,18 +90,39 @@ export async function POST(
         let newStatus = 'disconnected';
         if (state === 'open' || state === 'connected') {
           newStatus = 'connected';
-          
-          // Si se conectó, limpiar el QR code
+
+          // Si se conectó, limpiar el QR code y persistir número/perfil del
+          // propietario (Evolution envía `phone` y `name` en CONNECTION_UPDATE)
+          const profile = extractOwnerProfileFromConnection(body.data);
+          const updateData: any = {
+            status: newStatus,
+            fechaConexion: new Date(),
+            qrCode: null,
+            qrCodeExpiry: null
+          };
+          if (profile.phoneNumber) updateData.phoneNumber = profile.phoneNumber;
+          if (profile.profileName) updateData.profileName = profile.profileName;
+          if (profile.profilePicUrl) updateData.profilePicUrl = profile.profilePicUrl;
+
           await prisma.userWhatsAppInstance.update({
             where: { id: instance.id },
-            data: {
-              status: newStatus,
-              fechaConexion: new Date(),
-              qrCode: null,
-              qrCodeExpiry: null
-            }
+            data: updateData
           });
           console.log('✅ Instancia conectada exitosamente');
+
+          // Backfill: si el payload no trajo el número, consultarlo a Evolution
+          // (getProfileInfo también persiste nombre/foto en la BD)
+          const current = await prisma.userWhatsAppInstance.findUnique({
+            where: { id: instance.id },
+            select: { phoneNumber: true, profileName: true }
+          });
+          if (!current?.phoneNumber || !current?.profileName) {
+            try {
+              await getProfileInfo(instance.instanceName);
+            } catch (profileError) {
+              console.warn('⚠️ No se pudo obtener el perfil del propietario:', profileError);
+            }
+          }
 
           // Conectar el canal a Chatwoot con el número real del propietario
           console.log('🔗 Conectando instancia a Chatwoot...');

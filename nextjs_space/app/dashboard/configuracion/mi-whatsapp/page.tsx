@@ -43,6 +43,7 @@ export default function MiWhatsAppPage() {
   const [instance, setInstance] = useState<WhatsAppInstance | null>(null);
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [showQR, setShowQR] = useState(false);
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
@@ -194,7 +195,18 @@ export default function MiWhatsAppPage() {
             clearInterval(pollingInterval);
             setPollingInterval(null);
           }
-          await fetchInstance();
+          // Mostrar el perfil al instante (número/name/foto) sin esperar recarga
+          if (data.profile && data.instance) {
+            const profile = data.profile;
+            setInstance({
+              ...data.instance,
+              phoneNumber: data.instance.phoneNumber || String(profile.id || '').replace('@s.whatsapp.net', '') || undefined,
+              profileName: data.instance.profileName || profile.name || profile.notify || undefined,
+              profilePicUrl: data.instance.profilePicUrl || profile.profilePicUrl || undefined,
+            });
+          } else {
+            await fetchInstance();
+          }
         } else if (data.instance) {
           setInstance(data.instance);
         }
@@ -222,12 +234,12 @@ export default function MiWhatsAppPage() {
 
   // Desconectar WhatsApp
   const disconnectWhatsApp = async () => {
-    if (!confirm('¿Estás seguro de que deseas desconectar tu WhatsApp?')) {
+    if (!confirm('¿Estás seguro de que deseas desconectar tu WhatsApp?\n\nSe eliminará la instancia de Evolution API y el enlace con Chatwoot.')) {
       return;
     }
 
     try {
-      setLoading(true);
+      setDisconnecting(true);
       const response = await fetch('/api/integraciones/my-whatsapp', {
         method: 'DELETE'
       });
@@ -256,8 +268,17 @@ export default function MiWhatsAppPage() {
       const errorMessage = error instanceof Error ? error.message : 'Error al desconectar WhatsApp';
       toast.error(errorMessage);
     } finally {
-      setLoading(false);
+      setDisconnecting(false);
     }
+  };
+
+  // Formatear número para mostrarlo legible (+34 600 12 34 56)
+  const formatPhone = (phone?: string) => {
+    if (!phone) return 'Número no disponible';
+    if (phone.startsWith('34') && phone.length === 11) {
+      return `+${phone.slice(0, 2)} ${phone.slice(2, 5)} ${phone.slice(5, 7)} ${phone.slice(7, 9)} ${phone.slice(9)}`;
+    }
+    return `+${phone}`;
   };
 
   // Renderizar estado de conexión
@@ -363,7 +384,7 @@ export default function MiWhatsAppPage() {
                       {instance.profileName || 'WhatsApp Personal'}
                     </CardTitle>
                     <CardDescription>
-                      {instance.phoneNumber || 'Número no disponible'}
+                      {formatPhone(instance.phoneNumber)}
                     </CardDescription>
                   </div>
                 </div>
@@ -402,6 +423,17 @@ export default function MiWhatsAppPage() {
                 </div>
               </div>
 
+              {/* Aviso si se perdió la conexión del teléfono */}
+              {instance.status === 'disconnected' && (
+                <Alert className="bg-red-50 border-red-200">
+                  <AlertCircle className="h-4 w-4 text-red-600" />
+                  <AlertDescription className="text-red-800">
+                    Tu WhatsApp está <strong>desconectado</strong>. Pulsa{' '}
+                    <strong>Mostrar QR Code</strong> para volver a vincular el teléfono.
+                  </AlertDescription>
+                </Alert>
+              )}
+
               {/* Acciones */}
               <div className="flex gap-2 pt-4">
                 {instance.status !== 'connected' && (
@@ -425,10 +457,20 @@ export default function MiWhatsAppPage() {
                 <Button
                   onClick={disconnectWhatsApp}
                   variant="destructive"
+                  disabled={disconnecting}
                   className="flex items-center gap-2"
                 >
-                  <Trash2 className="h-4 w-4" />
-                  Desconectar
+                  {disconnecting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Desconectando...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="h-4 w-4" />
+                      Desconectar
+                    </>
+                  )}
                 </Button>
               </div>
             </CardContent>

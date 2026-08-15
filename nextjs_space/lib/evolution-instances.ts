@@ -446,6 +446,25 @@ export async function getQRCode(
 }
 
 /**
+ * Extrae el número y perfil del propietario desde el payload de CONNECTION_UPDATE
+ * de Evolution API (campos `phone`, `name`, `id`/`ownerJid`, `profilePicUrl`).
+ */
+export function extractOwnerProfileFromConnection(data: any): {
+  phoneNumber?: string;
+  profileName?: string;
+  profilePicUrl?: string;
+} {
+  if (!data) return {};
+  const raw = data.phone || data.id || data.ownerJid || data.remoteJid || '';
+  const phoneNumber = String(raw).replace('@s.whatsapp.net', '').replace('@g.us', '');
+  return {
+    phoneNumber: phoneNumber || undefined,
+    profileName: data.name || data.profileName || data.notify || undefined,
+    profilePicUrl: data.profilePicUrl || data.profilePic || undefined,
+  };
+}
+
+/**
  * Verificar estado de conexión de una instancia
  */
 export async function checkInstanceStatus(
