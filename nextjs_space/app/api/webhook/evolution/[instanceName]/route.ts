@@ -189,6 +189,16 @@ export async function POST(
 
           const phoneNumber = remoteJid.replace('@s.whatsapp.net', '').replace('@g.us', '');
           const cleanPhone = phoneNumber.replace(/[\s\-\()]/g, '');
+
+          // Chat con uno mismo (notas de WhatsApp): el remitente es el propio
+          // número de la instancia. No se crea lead ni conversación ni se
+          // sincroniza al hub; solo cuenta en el contador de la instancia.
+          const ownerPhone = (instance.phoneNumber || '').replace(/[\s\-\()]/g, '');
+          if (ownerPhone && cleanPhone === ownerPhone) {
+            console.log('ℹ️ Self-chat (mensaje a uno mismo) ignorado para la bandeja:', cleanPhone);
+            break;
+          }
+
           // En salientes el pushName es el del propietario, no del contacto
           const contactName = !fromMe && pushName ? pushName : `WhatsApp ${cleanPhone.slice(-4)}`;
 
