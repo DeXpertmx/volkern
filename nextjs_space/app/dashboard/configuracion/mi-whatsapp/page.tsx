@@ -73,6 +73,7 @@ export default function MiWhatsAppPage() {
   const [failures, setFailures] = useState<DeliveryFailure[]>([]);
   const [loadingFailures, setLoadingFailures] = useState(true);
   const [resolvingIds, setResolvingIds] = useState<Set<string>>(new Set());
+  const [pendingCount, setPendingCount] = useState(0);
 
   // Cargar instancia y entregas no entregables al montar
   useEffect(() => {
@@ -126,10 +127,18 @@ export default function MiWhatsAppPage() {
   // Cargar entregas no entregables del tenant
   const fetchFailures = async () => {
     try {
-      const response = await fetch('/api/integraciones/my-whatsapp/no-entregables');
-      if (!response.ok) return;
-      const data = await response.json();
-      setFailures(data.failures || []);
+      const [listRes, countRes] = await Promise.all([
+        fetch('/api/integraciones/my-whatsapp/no-entregables'),
+        fetch('/api/integraciones/my-whatsapp/no-entregables?estado=pendiente&count=true'),
+      ]);
+      if (listRes.ok) {
+        const data = await listRes.json();
+        setFailures(data.failures || []);
+      }
+      if (countRes.ok) {
+        const data = await countRes.json();
+        if (typeof data.count === 'number') setPendingCount(data.count);
+      }
     } catch (error) {
       console.error('Error al cargar entregas no entregables:', error);
     } finally {
@@ -162,9 +171,13 @@ export default function MiWhatsAppPage() {
         throw new Error(err.error || `Error ${response.status}`);
       }
       toast.success('Entrega marcada como resuelta');
-      setFailures((prev) => prev.map((f) => (f.id === id
-        ? { ...f, estado: 'resuelto', resueltoPor: 'Yo', fechaResolucion: new Date().toISOString() }
-        : f)));
+      setFailures((prev) => {
+        const wasPending = prev.find((f) => f.id === id)?.estado === 'pendiente';
+        if (wasPending) setPendingCount((c) => Math.max(0, c - 1));
+        return prev.map((f) => (f.id === id
+          ? { ...f, estado: 'resuelto', resueltoPor: 'Yo', fechaResolucion: new Date().toISOString() }
+          : f));
+      });
     } catch (error) {
       console.error('Error al marcar como resuelta:', error);
       const msg = error instanceof Error ? error.message : 'Error al marcar como resuelta';
@@ -678,6 +691,11 @@ export default function MiWhatsAppPage() {
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-red-500" />
             <CardTitle className="text-lg">Mensajes no entregables</CardTitle>
+            {pendingCount > 0 && (
+              <Badge className="bg-red-500 text-white border-red-500">
+                {pendingCount} pendiente{pendingCount !== 1 ? 's' : ''}
+              </Badge>
+            )}
           </div>
           <CardDescription>
             Conversaciones donde WhatsApp rechazó el envío (número inexistente o no disponible).

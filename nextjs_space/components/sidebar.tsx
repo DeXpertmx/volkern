@@ -21,6 +21,7 @@ import { useWhitelabel } from '@/hooks/use-whitelabel'
 import { HUBS, type NavigationItem } from '@/lib/navigation-config'
 import { PunchClock } from '@/components/attendance/PunchClock'
 import { ComplianceBadge } from '@/components/compliance/ComplianceBadge'
+import { Badge } from '@/components/ui/badge'
 
 // Simple logger
 const log = (...args: any[]) => {
@@ -40,6 +41,7 @@ export function Sidebar() {
   const [tenantCountry, setTenantCountry] = useState<string>('ES')
   const [activeModules, setActiveModules] = useState<string[]>([])
   const [isLoadingModules, setIsLoadingModules] = useState(true)
+  const [undeliverableCount, setUndeliverableCount] = useState(0)
   const { config: whitelabelConfig } = useWhitelabel()
 
   useEffect(() => {
@@ -48,6 +50,28 @@ export function Sidebar() {
     const saved = localStorage.getItem('sidebar-collapsed')
     if (saved) setIsCollapsed(saved === 'true')
   }, [])
+
+  // Entregas no entregables de WhatsApp pendientes (badge en Comunicaciones y Mi WhatsApp)
+  useEffect(() => {
+    if (!session?.user) return
+    let active = true
+    const fetchCount = async () => {
+      try {
+        const res = await fetch('/api/integraciones/my-whatsapp/no-entregables?estado=pendiente&count=true')
+        if (!res.ok) return
+        const data = await res.json()
+        if (active && typeof data.count === 'number') setUndeliverableCount(data.count)
+      } catch {
+        // Silencioso: el badge es decorativo
+      }
+    }
+    fetchCount()
+    const interval = setInterval(fetchCount, 60000)
+    return () => {
+      active = false
+      clearInterval(interval)
+    }
+  }, [session])
 
   useEffect(() => {
     if (session?.user) {
@@ -239,6 +263,11 @@ export function Sidebar() {
                         <activeHub.icon className="h-5 w-5" />
                       </div>
                       <h2 className="text-xl font-black uppercase tracking-tighter">{activeHub.name}</h2>
+                      {activeHub.id === 'comunicaciones' && undeliverableCount > 0 && (
+                        <Badge className="bg-red-500 text-white border-red-500">
+                          {undeliverableCount} pendiente{undeliverableCount !== 1 ? 's' : ''}
+                        </Badge>
+                      )}
                     </div>
                   </div>
                 )}
@@ -270,6 +299,11 @@ export function Sidebar() {
                     >
                       <Icon className={cn("h-5 w-5 shrink-0 transition-transform group-hover:scale-110", isActive ? "text-white" : "text-muted-foreground")} />
                       {!isCollapsed && <span className="text-sm tracking-tight">{item.name}</span>}
+                      {item.href === '/dashboard/configuracion/mi-whatsapp' && undeliverableCount > 0 && (
+                        <Badge className="ml-auto bg-red-500 text-white border-red-500 text-[10px]">
+                          {undeliverableCount}
+                        </Badge>
+                      )}
                     </Link>
                   )
                 })}
@@ -355,6 +389,11 @@ export function Sidebar() {
                           <span className="text-sm font-bold tracking-tight">{hub.name}</span>
                           <span className="text-[10px] text-muted-foreground line-clamp-1">{hub.description}</span>
                         </div>
+                      )}
+                      {hub.id === 'comunicaciones' && undeliverableCount > 0 && (
+                        <Badge className="ml-auto bg-red-500 text-white border-red-500">
+                          {undeliverableCount}
+                        </Badge>
                       )}
                     </Link>
                   )

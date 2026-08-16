@@ -31,11 +31,19 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(Math.max(parseInt(url.searchParams.get('limit') || '50', 10) || 50, 1), 200);
     const estado = url.searchParams.get('estado') || undefined;
 
+    const where = {
+      tenantId: user.tenantId,
+      ...(estado ? { estado } : {}),
+    };
+
+    // Modo contador: devuelve solo el número de entregas (útil para badges del sidebar).
+    if (url.searchParams.get('count') === 'true') {
+      const count = await prisma.whatsAppDeliveryFailure.count({ where });
+      return NextResponse.json({ count });
+    }
+
     const failures = await prisma.whatsAppDeliveryFailure.findMany({
-      where: {
-        tenantId: user.tenantId,
-        ...(estado ? { estado } : {}),
-      },
+      where,
       orderBy: { fechaCreacion: 'desc' },
       take: limit,
     });
