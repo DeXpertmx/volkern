@@ -267,6 +267,22 @@ export async function POST(request: NextRequest) {
         (senderType && senderType.toLowerCase() !== 'contact');
       const content = message?.content || '';
       const inboxId = inbox?.id || data.inbox_id;
+      const contentAttributes = (message?.content_attributes as Record<string, any>) || {};
+      const volkernOrigin = contentAttributes.volkernOrigin;
+
+      // 🔁 Espejo creado por el webhook de Evolution (el mensaje YA está en
+      // WhatsApp y en la bandeja local): omitirlo por completo. Si se procesara,
+      // el puente saliente reenviaría el mensaje a Evolution y entraría en un
+      // bucle infinito (Chatwoot → webhook → Evolution → eco → Chatwoot...).
+      if (volkernOrigin === 'evolution-bridge') {
+        console.log('[ChatwootWebhook] Espejo del puente Evolution, omitido:', content.substring(0, 40));
+        return NextResponse.json({ ok: true, skipped: 'evolution-bridge' });
+      }
+
+      // Respuesta del chatbot: se reenvía a WhatsApp por el puente saliente
+      // (abajo), pero NO se re-sincroniza al CRM (el chatbot ya guardó el
+      // mensaje localmente con sendResponseToChatwoot).
+      const isChatbotOrigin = volkernOrigin === 'chatbot';
 
       if (isOutgoing && content && inboxId) {
         try {
@@ -296,6 +312,11 @@ export async function POST(request: NextRequest) {
         } catch (bridgeError) {
           console.error('[ChatwootWebhook] Error en puente saliente WhatsApp:', bridgeError);
         }
+      }
+
+      if (isChatbotOrigin) {
+        console.log('[ChatwootWebhook] Respuesta del chatbot (ya entregada por el puente), omitiendo sync local');
+        return NextResponse.json({ ok: true, skipped: 'chatbot' });
       }
     }
 
