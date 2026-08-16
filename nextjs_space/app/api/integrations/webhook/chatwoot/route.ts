@@ -302,6 +302,16 @@ export async function POST(request: NextRequest) {
       const isChatbotOrigin = volkernOrigin === 'chatbot';
 
       if (isOutgoing && content && inboxId) {
+        // Log estructurado del puente saliente para auditar entregas
+        // (éxitos y fallos): destino, messageId y latencia por reenvío.
+        const bridgeStartedAt = Date.now();
+        const bridgeMeta = {
+          evento: 'whatsapp_bridge_saliente',
+          tenantId,
+          conversationId: conversation?.id || null,
+          inboxId: Number(inboxId),
+          timestamp: new Date().toISOString(),
+        };
         try {
           const channel = await prisma.channel.findFirst({
             where: { tenantId, chatwootInboxId: Number(inboxId) },
@@ -311,7 +321,7 @@ export async function POST(request: NextRequest) {
             const channelConfig = (channel.config as any) || {};
             const instanceName = channelConfig.instanceName;
             // Número del cliente: del contacto de la conversación de Chatwoot
-            let phoneNumber = conversation?.contact?.phone_number ||
+            const phoneNumber = conversation?.contact?.phone_number ||
               conversation?.meta?.sender?.phone_number || '';
 
             if (instanceName && phoneNumber) {
@@ -321,13 +331,40 @@ export async function POST(request: NextRequest) {
                 phoneNumber,
                 content,
               );
-              console.log(`[ChatwootWebhook] Respuesta del agente reenviada a WhatsApp:`, sendResult);
+              const logEntry = {
+                ...bridgeMeta,
+                destino: phoneNumber,
+                instanceName,
+                channelId: channel.id,
+                messageId: sendResult.messageId || null,
+                latencyMs: Date.now() - bridgeStartedAt,
+                success: sendResult.success,
+                error: sendResult.error || null,
+              };
+              if (sendResult.success) {
+                console.log(`[ChatwootWebhook] ✅ Reenvío a WhatsApp OK: ${JSON.stringify(logEntry)}`);
+              } else {
+                console.error(`[ChatwootWebhook] ❌ Reenvío a WhatsApp FALLÓ: ${JSON.stringify(logEntry)}`);
+              }
             } else {
-              console.warn(`[ChatwootWebhook] Sin instanceName (${instanceName}) o número (${phoneNumber}) para reenviar`);
+              console.warn(`[ChatwootWebhook] Sin instanceName o número para reenviar: ${JSON.stringify({
+                ...bridgeMeta,
+                instanceName: instanceName || null,
+                destino: phoneNumber || null,
+              })}`);
             }
+          } else {
+            console.warn(`[ChatwootWebhook] Canal no encontrado o no es WhatsApp para inbox ${inboxId}: ${JSON.stringify({
+              ...bridgeMeta,
+              channelType: channel?.type || null,
+            })}`);
           }
         } catch (bridgeError) {
-          console.error('[ChatwootWebhook] Error en puente saliente WhatsApp:', bridgeError);
+          console.error(`[ChatwootWebhook] Error en puente saliente WhatsApp: ${JSON.stringify({
+            ...bridgeMeta,
+            error: bridgeError instanceof Error ? bridgeError.message : String(bridgeError),
+            latencyMs: Date.now() - bridgeStartedAt,
+          })}`);
         }
       }
 
