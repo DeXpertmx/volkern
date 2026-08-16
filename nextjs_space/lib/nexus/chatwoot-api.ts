@@ -661,6 +661,27 @@ class ChatwootApiClient {
         );
     }
 
+    /**
+     * Añadir etiquetas a una conversación (visibles en la vista del agente).
+     * El endpoint es idempotente: re-añadir una etiqueta existente no duplica.
+     */
+    async addLabels(
+        accountId: number,
+        conversationId: number,
+        labels: string[],
+        accountToken: string
+    ): Promise<{ payload: any }> {
+        console.log('[ChatwootAPI] Añadiendo labels a conversación:', conversationId, '→', labels);
+        return this.request<{ payload: any }>(
+            `/api/v1/accounts/${accountId}/conversations/${conversationId}/labels`,
+            {
+                method: 'POST',
+                body: JSON.stringify({ labels }),
+            },
+            accountToken
+        );
+    }
+
     // ========== WEBHOOKS ==========
 
     /**
