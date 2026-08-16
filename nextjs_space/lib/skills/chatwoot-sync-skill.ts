@@ -202,20 +202,35 @@ export async function syncOutgoingChatwootMessage(payload: {
     }
 
     // 2. Obtener el token de la cuenta de Chatwoot:
+    //    - Canal WhatsApp (config.apiToken): token REAL de agente del tenant
+    //      (el token del bot no puede crear mensajes salientes: 401
+    //      "not authorized for bots").
     //    - Integración legacy (integration.configuracion.accountToken)
     //    - Hub config moderno (messagingHubConfig → bot user)
-    const integration = await prisma.integration.findFirst({
-      where: { 
-        tenantId, 
-        tipo: 'chatwoot', 
-        activo: true 
-      }
+    const whatsappChannel = await prisma.channel.findFirst({
+      where: { tenantId, type: 'whatsapp', isActive: true },
+      select: { config: true },
     });
 
     let accountToken = '';
-    if (integration?.configuracion) {
-      const config = integration.configuracion as any;
-      accountToken = config.accountToken || config.accessToken || '';
+    if (whatsappChannel?.config) {
+      const config = whatsappChannel.config as any;
+      accountToken = config.apiToken || '';
+    }
+
+    if (!accountToken) {
+      const integration = await prisma.integration.findFirst({
+        where: {
+          tenantId,
+          tipo: 'chatwoot',
+          activo: true
+        }
+      });
+
+      if (integration?.configuracion) {
+        const config = integration.configuracion as any;
+        accountToken = config.accountToken || config.accessToken || '';
+      }
     }
 
     if (!accountToken) {
