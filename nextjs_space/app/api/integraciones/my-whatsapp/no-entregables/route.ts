@@ -66,6 +66,7 @@ export async function GET(request: NextRequest) {
         resueltoPor: f.resueltoPor,
         fechaResolucion: f.fechaResolucion,
         fechaCreacion: f.fechaCreacion,
+        resueltoDesde: f.resueltoDesde,
         hubUrl: hubUrl
           ? `${hubUrl}/accounts/${f.chatwootAccountId}/conversations/${f.chatwootConversationId}`
           : null,
@@ -106,6 +107,8 @@ export async function PATCH(request: NextRequest) {
       : typeof body.id === 'string'
         ? [body.id]
         : [];
+    // Auditoría: de dónde se resolvió (la notificación del sistema envía 'notificacion')
+    const resueltoDesde = body.origen === 'notificacion' ? 'notificacion' : 'app';
 
     if (ids.length === 0) {
       return NextResponse.json({ error: 'Se requiere el id de la entrega fallida' }, { status: 400 });
@@ -121,6 +124,7 @@ export async function PATCH(request: NextRequest) {
       data: {
         estado: 'resuelto',
         resueltoPor,
+        resueltoDesde,
         fechaResolucion: new Date(),
       },
     });

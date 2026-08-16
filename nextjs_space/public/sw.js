@@ -167,7 +167,7 @@ self.addEventListener('notificationclick', function(event) {
           const res = await fetch('/api/integraciones/my-whatsapp/no-entregables', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id }),
+            body: JSON.stringify({ id, origen: 'notificacion' }),
           })
           if (!res.ok) {
             // Sesión caducada o error: abrir la app para resolverla a mano.

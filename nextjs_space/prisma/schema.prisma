@@ -170,6 +170,7 @@ model WhatsAppDeliveryFailure {
   notaAgente             String?
   estado                 String    @default("pendiente") // pendiente | resuelto
   resueltoPor            String?
+  resueltoDesde          String? // app | notificacion (auditoría de quién/cómo se resolvió)
   fechaResolucion        DateTime?
   fechaCreacion          DateTime  @default(now())
   fechaEdicion           DateTime  @updatedAt
