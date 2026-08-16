@@ -1061,6 +1061,31 @@ export async function sendMessageWithUserInstance(
       .replace('@g.us', '')
       .replace(/\+/g, '')
       .replace(/[\s\-\()]/g, '');
+
+    // 🚫 Lista negra de números de prueba: evita enviar mensajes accidentales
+    // a números reales durante pruebas. Los prefijos se comprueban contra el
+    // número completo y contra la parte local (sin código de país 1-3 dígitos).
+    // Configurable con WA_TEST_BLOCK_PREFIXES (coma-separado); por defecto
+    // bloquea el rango de prueba 600999xxx.
+    const testPrefixes = (process.env.WA_TEST_BLOCK_PREFIXES || '600999')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (testPrefixes.length) {
+      let blockedPrefix: string | null = null;
+      for (let drop = 0; drop <= 3 && !blockedPrefix; drop++) {
+        const rest = drop === 0 ? cleanNumber : cleanNumber.slice(drop);
+        blockedPrefix = testPrefixes.find((p) => rest.startsWith(p)) || null;
+      }
+      if (blockedPrefix) {
+        console.warn(`[Evolution] Envío bloqueado por lista negra de prueba (prefijo ${blockedPrefix}): ${cleanNumber}`);
+        return {
+          success: false,
+          error: `Envío bloqueado: el número ${cleanNumber} está en la lista negra de prueba (prefijo ${blockedPrefix}). No se envió ningún mensaje.`,
+        };
+      }
+    }
+
     const formattedNumber = `${cleanNumber}@s.whatsapp.net`;
 
     const payload: any = {
