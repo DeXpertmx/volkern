@@ -14,6 +14,30 @@ import {
   isMessageKeyRecentlySent
 } from '@/lib/evolution-instances';
 
+/** Actualiza la fila de la instancia (usuario o negocio) según su tipo. */
+async function updateInstanceRow(
+  inst: { id: string },
+  kind: 'user' | 'tenant',
+  data: any
+) {
+  if (kind === 'tenant') {
+    return prisma.tenantWhatsAppInstance.update({ where: { id: inst.id }, data });
+  }
+  return prisma.userWhatsAppInstance.update({ where: { id: inst.id }, data });
+}
+
+/** Lee la fila de la instancia (usuario o negocio) según su tipo. */
+async function readInstanceRow(
+  inst: { id: string },
+  kind: 'user' | 'tenant',
+  select: any
+) {
+  if (kind === 'tenant') {
+    return prisma.tenantWhatsAppInstance.findUnique({ where: { id: inst.id }, select });
+  }
+  return prisma.userWhatsAppInstance.findUnique({ where: { id: inst.id }, select });
+}
+
 /**
  * POST - Recibir eventos de Evolution API
  */
@@ -34,10 +58,17 @@ export async function POST(
     console.log('📦 Evento:', body.event, '→ normalizado:', event);
     console.log('📄 Datos completos:', JSON.stringify(body, null, 2));
 
-    // Buscar la instancia en la base de datos
-    const instance = await prisma.userWhatsAppInstance.findFirst({
+    // Buscar la instancia en la BD: primero la del usuario (Mi WhatsApp), luego
+    // la del negocio (tenant). Ambas comparten los campos usados más abajo.
+    const userInstance = await prisma.userWhatsAppInstance.findFirst({
       where: { instanceName }
     });
+    const tenantInstance = userInstance
+      ? null
+      : await prisma.tenantWhatsAppInstance.findUnique({ where: { instanceName } }).catch(() => null);
+
+    const instance = userInstance || tenantInstance;
+    const kind: 'user' | 'tenant' = userInstance ? 'user' : 'tenant';
 
     if (!instance) {
       console.log('⚠️ Instancia no encontrada en BD:', instanceName);
@@ -50,7 +81,7 @@ export async function POST(
       });
     }
 
-    console.log('✅ Instancia encontrada en BD:', instance.id);
+    console.log(`✅ Instancia (${kind}) encontrada en BD:`, instance.id);
 
     // Procesar según el tipo de evento
     switch (event) {
@@ -71,13 +102,10 @@ export async function POST(
         }
 
         if (qrBase64) {
-          await prisma.userWhatsAppInstance.update({
-            where: { id: instance.id },
-            data: {
-              qrCode: qrBase64,
-              qrCodeExpiry: new Date(Date.now() + 60000),
-              status: 'connecting'
-            }
+          await updateInstanceRow(instance, kind, {
+            qrCode: qrBase64,
+            qrCodeExpiry: new Date(Date.now() + 60000),
+            status: 'connecting'
           });
           console.log('✅ QR Code actualizado vía webhook');
         } else {
@@ -110,18 +138,12 @@ export async function POST(
           if (profile.profileName) updateData.profileName = profile.profileName;
           if (profile.profilePicUrl) updateData.profilePicUrl = profile.profilePicUrl;
 
-          await prisma.userWhatsAppInstance.update({
-            where: { id: instance.id },
-            data: updateData
-          });
+          await updateInstanceRow(instance, kind, updateData);
           console.log('✅ Instancia conectada exitosamente');
 
           // Backfill: si el payload no trajo el número, consultarlo a Evolution
           // (getProfileInfo también persiste nombre/foto en la BD)
-          const current = await prisma.userWhatsAppInstance.findUnique({
-            where: { id: instance.id },
-            select: { phoneNumber: true, profileName: true }
-          });
+          const current = await readInstanceRow(instance, kind, { phoneNumber: true, profileName: true });
           if (!current?.phoneNumber || !current?.profileName) {
             try {
               await getProfileInfo(instance.instanceName);
@@ -132,21 +154,15 @@ export async function POST(
 
           // Conectar el canal a Chatwoot con el número real del propietario
           console.log('🔗 Conectando instancia a Chatwoot...');
-          const chatwootResult = await ensureChatwootInboxForInstance(instance.instanceName);
+          const chatwootResult = await ensureChatwootInboxForInstance(instance.instanceName, kind);
           console.log('📦 Chatwoot inbox result:', chatwootResult);
         } else if (state === 'connecting') {
           newStatus = 'connecting';
-          await prisma.userWhatsAppInstance.update({
-            where: { id: instance.id },
-            data: { status: newStatus }
-          });
+          await updateInstanceRow(instance, kind, { status: newStatus });
           console.log('⏳ Instancia en proceso de conexión');
         } else if (state === 'close' || state === 'closed' || state === 'disconnected') {
           newStatus = 'disconnected';
-          await prisma.userWhatsAppInstance.update({
-            where: { id: instance.id },
-            data: { status: newStatus }
-          });
+          await updateInstanceRow(instance, kind, { status: newStatus });
           console.log('⚠️ Instancia desconectada');
         } else {
           console.log('❓ Estado desconocido:', state);
@@ -158,12 +174,9 @@ export async function POST(
         console.log('💬 Mensaje:', body.data);
 
         // Contador de mensajes de la instancia (entrantes y salientes)
-        await prisma.userWhatsAppInstance.update({
-          where: { id: instance.id },
-          data: {
-            totalMensajes: { increment: 1 },
-            ultimoMensaje: new Date()
-          }
+        await updateInstanceRow(instance, kind, {
+          totalMensajes: { increment: 1 },
+          ultimoMensaje: new Date()
         });
 
         // 🔄 PUENTE BIDIRECCIONAL: mensajes de un contacto (entrantes) Y

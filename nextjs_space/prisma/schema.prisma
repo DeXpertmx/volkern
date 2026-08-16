@@ -131,6 +131,28 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
+model TenantWhatsAppInstance {
+  id            String    @id @default(cuid())
+  tenantId      String    @unique
+  instanceName  String    @unique
+  phoneNumber   String?
+  status        String    @default("disconnected")
+  qrCode        String?
+  qrCodeExpiry  DateTime?
+  profileName   String?
+  profilePicUrl String?
+  totalMensajes Int       @default(0)
+  ultimoMensaje DateTime?
+  fechaConexion DateTime?
+  fechaCreacion DateTime  @default(now())
+  fechaEdicion  DateTime  @updatedAt
+
+  tenant Tenant @relation("TenantBusinessWhatsApp", fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([status])
+}
+
 model UserWhatsAppInstance {
   id            String    @id @default(cuid())
   userId        String
@@ -272,6 +294,7 @@ model Tenant {
   other_Tenant             Tenant[]                  @relation("TenantToTenant")
   users                    User[]
   whatsappInstances        UserWhatsAppInstance[]    @relation("TenantWhatsAppInstances")
+  businessWhatsAppInstance TenantWhatsAppInstance[]  @relation("TenantBusinessWhatsApp")
   abTestResults            ABTestResult[]
   accountingAccounts       AccountingAccount[]
   bankConnections          BankConnection[]

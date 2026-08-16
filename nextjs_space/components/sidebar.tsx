@@ -373,7 +373,7 @@ export function Sidebar() {
                     >
                       <Icon className={cn("h-5 w-5 shrink-0 transition-transform group-hover:scale-110", isActive ? "text-white" : "text-muted-foreground")} />
                       {!isCollapsed && <span className="text-sm tracking-tight">{item.name}</span>}
-                      {item.href === '/dashboard/configuracion/mi-whatsapp' && undeliverableCount > 0 && (
+                      {(item.href === '/dashboard/configuracion/mi-whatsapp' || item.href === '/dashboard/configuracion/whatsapp-negocio') && undeliverableCount > 0 && (
                         <Badge className="ml-auto bg-red-500 text-white border-red-500 text-[10px]">
                           {undeliverableCount}
                         </Badge>

@@ -540,6 +540,7 @@ export const HUBS: HubConfig[] = [
       { name: 'Config. Fiscal', href: '/dashboard/configuracion?section=fiscal', icon: Calculator, description: 'Facturación e impuestos' },
       { name: 'Telefonía', href: '/dashboard/configuracion?section=telefonia', icon: PhoneCall, description: 'Líneas y desvíos' },
       { name: 'Mi WhatsApp Personal', href: '/dashboard/configuracion/mi-whatsapp', icon: MessageCircle, description: 'Conecta tu WhatsApp al CRM' },
+      { name: 'WhatsApp del Negocio', href: '/dashboard/configuracion/whatsapp-negocio', icon: Building2, description: 'Número dedicado del negocio para el chatbot' },
       { name: 'Reparto Leads', href: '/dashboard/configuracion?section=reparto', icon: RotateCw, description: 'Asignación de ejecutivos' },
       { name: 'Campos de Leads', href: '/dashboard/configuracion?section=leads', icon: ListTodo, description: 'Personalización de campos' },
       { name: 'Documentos', href: '/dashboard/configuracion?section=documentos', icon: FileText, description: 'Ajustes de contratos' },

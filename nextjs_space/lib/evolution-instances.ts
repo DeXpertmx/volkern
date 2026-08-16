@@ -808,7 +808,8 @@ async function syncInboxMembers(
  * tener el número real del propietario antes de crear el canal.
  */
 export async function ensureChatwootInboxForInstance(
-  instanceName: string
+  instanceName: string,
+  kind: 'user' | 'tenant' = 'user'
 ): Promise<{ success: boolean; inboxId?: number; error?: string }> {
   const chatwootUrl = process.env.CHATWOOT_BASE_URL
   const chatwootToken = process.env.CHATWOOT_SUPER_ADMIN_TOKEN
@@ -820,12 +821,19 @@ export async function ensureChatwootInboxForInstance(
   }
 
   try {
-    const instance = await prisma.userWhatsAppInstance.findFirst({
-      where: { instanceName },
-      include: { tenant: { select: { nombre: true } } },
-    })
+    // Soporta instancias de usuario (Mi WhatsApp) y del negocio (tenant):
+    // ambas tienen los mismos campos (tenantId, tenant.nombre, phoneNumber).
+    const instance = kind === 'tenant'
+      ? await prisma.tenantWhatsAppInstance.findFirst({
+          where: { instanceName },
+          include: { tenant: { select: { nombre: true } } },
+        })
+      : await prisma.userWhatsAppInstance.findFirst({
+          where: { instanceName },
+          include: { tenant: { select: { nombre: true } } },
+        })
     if (!instance) {
-      return { success: false, error: 'Instancia no encontrada.' }
+      return { success: false, error: kind === 'tenant' ? 'Instancia del negocio no encontrada.' : 'Instancia no encontrada.' }
     }
 
     // Evitar duplicados: si ya existe un canal WhatsApp del tenant, reutilizar.
@@ -1039,6 +1047,188 @@ export async function ensureChatwootInboxForInstance(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error desconocido conectando el canal de mensajería',
+    }
+  }
+}
+
+/**
+ * Conectar la instancia del NEGOCIO (tenant) a Chatwoot, creando el inbox
+ * Evolution y el canal, igual que la de usuario pero a nivel de tenant.
+ */
+export async function ensureChatwootInboxForTenantInstance(
+  instanceName: string
+): Promise<{ success: boolean; inboxId?: number; error?: string }> {
+  return ensureChatwootInboxForInstance(instanceName, 'tenant')
+}
+
+/**
+ * Crear la instancia de WhatsApp del NEGOCIO (tenant) en Evolution API,
+ * configurar sus webhooks y dejarla lista para escanear el QR desde Volkern.
+ * Solo puede existir una por tenant.
+ */
+export async function createTenantInstance(
+  tenantId: string
+): Promise<{ success: boolean; instance?: any; error?: string }> {
+  const cleanInstanceName = `negocio_${tenantId.slice(-8)}_${crypto.randomBytes(3).toString('hex')}`
+
+  try {
+    if (!EVOLUTION_API_KEY) {
+      return { success: false, error: 'El servicio de WhatsApp no está configurado en el servidor.' }
+    }
+
+    const existingLocal = await prisma.tenantWhatsAppInstance.findUnique({
+      where: { tenantId },
+    })
+    if (existingLocal) {
+      return { success: false, error: 'Tu negocio ya tiene un WhatsApp conectado. Desconéctalo antes de crear otro.' }
+    }
+
+    const response = await fetch(`${EVOLUTION_API_URL}/instance/create`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: EVOLUTION_API_KEY,
+      },
+      body: JSON.stringify({
+        instanceName: cleanInstanceName,
+        qrcode: true,
+        integration: 'WHATSAPP-BAILEYS',
+      }),
+      signal: AbortSignal.timeout(15000),
+    })
+
+    if (!response.ok) {
+      await response.text()
+      if (response.status === 409) {
+        return { success: false, error: `La instancia "${cleanInstanceName}" ya existe. Elige otro nombre.` }
+      }
+      return { success: false, error: `No se pudo crear la instancia de WhatsApp (HTTP ${response.status}).` }
+    }
+
+    const created = await response.json()
+    const webhookUrl = `${process.env.NEXTAUTH_URL || 'https://volkern.app'}/api/webhook/evolution/${cleanInstanceName}`
+    await configureWebhooks(cleanInstanceName, webhookUrl)
+
+    let qrBase64 = created.base64 || created.qrcode?.base64 || created.qrCode?.base64 || ''
+    let qrCode = created.code || created.qrcode?.code || created.qrCode?.code || ''
+    let pairingCode = created.pairingCode || created.qrcode?.pairingCode
+
+    if (!qrBase64) {
+      const qrResult = await getQRCode(cleanInstanceName)
+      if (qrResult.success && qrResult.qrCode) {
+        qrBase64 = qrResult.qrCode.base64
+        qrCode = qrResult.qrCode.code
+        pairingCode = qrResult.qrCode.pairingCode
+      }
+    }
+
+    const instance = await prisma.tenantWhatsAppInstance.create({
+      data: {
+        tenantId,
+        instanceName: cleanInstanceName,
+        status: 'connecting',
+        qrCode: qrBase64 || undefined,
+        qrCodeExpiry: qrBase64 ? new Date(Date.now() + 60000) : undefined,
+      },
+    })
+
+    await prisma.auditLog.create({
+      data: {
+        userId: null as any,
+        tenantId,
+        accion: 'crear_conectar',
+        entidad: 'TenantWhatsAppInstance',
+        entidadId: instance.id,
+        descripcion: `WhatsApp del negocio creado desde Volkern: ${cleanInstanceName}`,
+      },
+    })
+
+    return {
+      success: true,
+      instance: {
+        ...instance,
+        qrCode: qrBase64 || null,
+        qrCodeData: qrBase64 ? { base64: qrBase64, code: qrCode, pairingCode } : null,
+      },
+    }
+  } catch (error) {
+    console.error('❌ Error al crear WhatsApp del negocio:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error desconocido al crear la instancia',
+    }
+  }
+}
+
+/**
+ * Obtener la instancia de WhatsApp del negocio (tenant).
+ */
+export async function getTenantInstance(
+  tenantId: string
+): Promise<{ instance?: any; error?: string }> {
+  try {
+    const instance = await prisma.tenantWhatsAppInstance.findUnique({
+      where: { tenantId },
+    })
+    if (!instance) {
+      return { error: 'El negocio no tiene un WhatsApp conectado' }
+    }
+    return { instance }
+  } catch (error) {
+    console.error('Error al obtener WhatsApp del negocio:', error)
+    return {
+      error: error instanceof Error ? error.message : 'Error desconocido',
+    }
+  }
+}
+
+/**
+ * Desconectar y eliminar la instancia de WhatsApp del negocio (tenant).
+ */
+export async function deleteTenantInstance(
+  tenantId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const instance = await prisma.tenantWhatsAppInstance.findUnique({
+      where: { tenantId },
+    })
+
+    if (!instance) {
+      return { success: false, error: 'Instancia del negocio no encontrada' }
+    }
+
+    try {
+      await fetch(`${EVOLUTION_API_URL}/instance/delete/${instance.instanceName}`, {
+        method: 'DELETE',
+        headers: {
+          'apikey': EVOLUTION_API_KEY,
+        },
+      })
+    } catch (error) {
+      console.log('Instancia no existe en Evolution API, continuando con eliminación local')
+    }
+
+    await prisma.tenantWhatsAppInstance.delete({
+      where: { id: instance.id },
+    })
+
+    await prisma.auditLog.create({
+      data: {
+        userId: null as any,
+        tenantId,
+        accion: 'eliminar',
+        entidad: 'TenantWhatsAppInstance',
+        entidadId: instance.id,
+        descripcion: `WhatsApp del negocio eliminado: ${instance.instanceName}`,
+      },
+    })
+
+    return { success: true }
+  } catch (error) {
+    console.error('Error al eliminar WhatsApp del negocio:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error desconocido',
     }
   }
 }
