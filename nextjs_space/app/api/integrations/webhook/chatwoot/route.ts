@@ -291,9 +291,11 @@ export async function POST(request: NextRequest) {
       // WhatsApp y en la bandeja local): omitirlo por completo. Si se procesara,
       // el puente saliente reenviaría el mensaje a Evolution y entraría en un
       // bucle infinito (Chatwoot → webhook → Evolution → eco → Chatwoot...).
-      if (volkernOrigin === 'evolution-bridge') {
-        console.log('[ChatwootWebhook] Espejo del puente Evolution, omitido:', content.substring(0, 40));
-        return NextResponse.json({ ok: true, skipped: 'evolution-bridge' });
+      // También se omiten las notas privadas de "no entregable" creadas por
+      // el propio puente (volkernOrigin 'undeliverable-note').
+      if (volkernOrigin === 'evolution-bridge' || volkernOrigin === 'undeliverable-note') {
+        console.log('[ChatwootWebhook] Espejo del puente Evolution/nota interna, omitido:', content.substring(0, 40));
+        return NextResponse.json({ ok: true, skipped: volkernOrigin });
       }
 
       // Respuesta del chatbot: se reenvía a WhatsApp por el puente saliente
@@ -301,7 +303,8 @@ export async function POST(request: NextRequest) {
       // mensaje localmente con sendResponseToChatwoot).
       const isChatbotOrigin = volkernOrigin === 'chatbot';
 
-      if (isOutgoing && content && inboxId) {
+      // Las notas privadas de los agentes no deben salir por WhatsApp.
+      if (isOutgoing && !message.private && content && inboxId) {
         // Log estructurado del puente saliente para auditar entregas
         // (éxitos y fallos): destino, messageId y latencia por reenvío.
         const bridgeStartedAt = Date.now();
@@ -339,12 +342,24 @@ export async function POST(request: NextRequest) {
                 messageId: sendResult.messageId || null,
                 latencyMs: Date.now() - bridgeStartedAt,
                 success: sendResult.success,
+                status: sendResult.status || null,
                 error: sendResult.error || null,
               };
               if (sendResult.success) {
                 console.log(`[ChatwootWebhook] ✅ Reenvío a WhatsApp OK: ${JSON.stringify(logEntry)}`);
               } else {
                 console.error(`[ChatwootWebhook] ❌ Reenvío a WhatsApp FALLÓ: ${JSON.stringify(logEntry)}`);
+                // 🔴 Evolution 400 = el número no existe en WhatsApp: marcar la
+                // conversación en el hub como no entregable y notificar al
+                // agente (label + nota privada) en vez de silenciar el fallo.
+                if (sendResult.status === 400 && conversation?.id && chatwootAccountId) {
+                  await markConversationUndeliverable({
+                    chatwootAccountId,
+                    conversationId: Number(conversation.id),
+                    channelConfig,
+                    failedContent: content,
+                  });
+                }
               }
             } else {
               console.warn(`[ChatwootWebhook] Sin instanceName o número para reenviar: ${JSON.stringify({
@@ -437,4 +452,59 @@ async function processWebhook(
     eventEmitted: result.eventEmitted,
     error: result.error,
   } as any);
+}
+
+// ========== CONVERSACIONES NO ENTREGABLES ==========
+
+// Dedupe en memoria por conversación: evita repetir el label + nota privada
+// en cada reintento del webhook o en mensajes posteriores del mismo hilo.
+const undeliverableCache = new Map<string, number>();
+const UNDELIVERABLE_TTL_MS = 10 * 60 * 1000; // 10 minutos
+
+/**
+ * Marca una conversación del hub como NO entregable por WhatsApp cuando
+ * Evolution responde 400 (número inexistente) al reenviar la respuesta del
+ * agente: añade el label "no-entregable" y crea una nota privada para que el
+ * agente asignado la vea en el timeline y contacte por otro canal.
+ */
+async function markConversationUndeliverable(opts: {
+  chatwootAccountId: number;
+  conversationId: number;
+  channelConfig: Record<string, any>;
+  failedContent: string;
+}): Promise<void> {
+  const { chatwootAccountId, conversationId, channelConfig, failedContent } = opts;
+
+  // Ya marcada recientemente → no repetir nota ni label.
+  const cacheKey = `${chatwootAccountId}:${conversationId}`;
+  const now = Date.now();
+  const last = undeliverableCache.get(cacheKey);
+  if (last && now - last < UNDELIVERABLE_TTL_MS) return;
+  undeliverableCache.set(cacheKey, now);
+
+  // Token real de agente del canal (el del bot no puede crear salientes).
+  const accountToken = channelConfig?.apiToken || '';
+  if (!accountToken) {
+    console.warn('[ChatwootWebhook] Sin token de agente para marcar conversación no entregable');
+    return;
+  }
+
+  try {
+    const { chatwootApi } = await import('@/lib/nexus/chatwoot-api');
+    await chatwootApi.addLabels(chatwootAccountId, conversationId, ['no-entregable'], accountToken);
+    await chatwootApi.sendMessage(
+      chatwootAccountId,
+      conversationId,
+      `⚠️ Mensaje NO entregado por WhatsApp: el número del cliente no existe o no está disponible en esta cuenta. Contacta por otro canal.\n\nMensaje fallido: ${failedContent.substring(0, 200)}`,
+      accountToken,
+      {
+        messageType: 'outgoing',
+        private: true,
+        contentAttributes: { volkernOrigin: 'undeliverable-note' },
+      }
+    );
+    console.log(`[ChatwootWebhook] ✅ Conversación ${conversationId} marcada como no entregable (label + nota privada)`);
+  } catch (markErr) {
+    console.error('[ChatwootWebhook] Error marcando conversación no entregable:', markErr);
+  }
 }

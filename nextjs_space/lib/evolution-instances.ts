@@ -1051,7 +1051,7 @@ export async function sendMessageWithUserInstance(
   to: string,
   message: string,
   mediaUrl?: string
-): Promise<{ success: boolean; messageId?: string; error?: string }> {
+): Promise<{ success: boolean; messageId?: string; status?: number; error?: string }> {
   try {
     // Asegurar formato correcto del número: normalizar a JID (sin '+', sin
     // sufijo @s.whatsapp.net) — puede llegar como '5215...', '+5215...' o
@@ -1085,6 +1085,7 @@ export async function sendMessageWithUserInstance(
       const errorText = await response.text();
       return {
         success: false,
+        status: response.status,
         error: `Error al enviar mensaje: ${response.status} - ${errorText}`
       };
     }
