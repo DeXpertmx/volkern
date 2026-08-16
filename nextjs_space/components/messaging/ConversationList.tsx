@@ -35,15 +35,27 @@ interface ConversationListProps {
   selectedId: string | null;
   onSelect: (id: string) => void;
   loading: boolean;
+  activeTab?: string;
+  onTabChange?: (tab: string) => void;
+  counts?: { mias: number; sin_asignar: number; todas: number };
 }
 
 export function ConversationList({ 
   conversations, 
   selectedId, 
   onSelect, 
-  loading 
+  loading,
+  activeTab = 'todas',
+  onTabChange,
+  counts
 }: ConversationListProps) {
   
+  const tabs = [
+    { id: 'mias', label: 'Mías', count: counts?.mias ?? 0 },
+    { id: 'sin_asignar', label: 'Sin asignar', count: counts?.sin_asignar ?? 0 },
+    { id: 'todas', label: 'Todas', count: counts?.todas ?? conversations.length },
+  ];
+
   const getCanalIcon = (canal: string) => {
     switch (canal) {
       case 'whatsapp': return <Phone size={12} />;
@@ -89,9 +101,19 @@ export function ConversationList({
           />
         </div>
         <div className="flex gap-1 text-[11px] font-bold text-slate-400 uppercase tracking-tight">
-          <button className="px-2 py-1 text-blue-600 border-b-2 border-blue-600">Mías (8)</button>
-          <button className="px-2 py-1 hover:text-slate-600">Sin asignar (6)</button>
-          <button className="px-2 py-1 hover:text-slate-600">Todas (7)</button>
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => onTabChange?.(t.id)}
+              className={`px-2 py-1 transition-colors ${
+                activeTab === t.id
+                  ? 'text-blue-600 border-b-2 border-blue-600'
+                  : 'hover:text-slate-600 hover:border-b-2 hover:border-slate-300'
+              }`}
+            >
+              {t.label} ({t.count})
+            </button>
+          ))}
         </div>
       </div>
 

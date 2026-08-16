@@ -682,6 +682,72 @@ class ChatwootApiClient {
         );
     }
 
+    /**
+     * Listar conversaciones de la cuenta con su agente asignado (assignee).
+     * La respuesta de Chatwoot v4 incluye `meta.assignee` en cada conversación
+     * ({ id, name, email, ... } o null si está sin asignar). Se pagina hasta
+     * `maxPages` para cubrir bandejas grandes.
+     */
+    async listConversations(
+        accountId: number,
+        accountToken: string,
+        options?: { status?: string; assigneeType?: string; maxPages?: number }
+    ): Promise<{
+        conversations: {
+            id: number;
+            status: string;
+            assignee: { id: number; name: string; email: string } | null;
+        }[];
+        error?: string;
+    }> {
+        const maxPages = options?.maxPages || 5;
+        const conversations: { id: number; status: string; assignee: { id: number; name: string; email: string } | null }[] = [];
+        let page = 1;
+        try {
+            while (page <= maxPages) {
+                const params = new URLSearchParams({
+                    page: String(page),
+                    ...(options?.status ? { status: options.status } : {}),
+                    ...(options?.assigneeType ? { assignee_type: options.assigneeType } : {}),
+                });
+                const res = await this.request<{
+                    data?: { conversations?: any[] };
+                    payload?: any[];
+                    meta?: { pagination?: { next_page?: number | null } };
+                }>(
+                    `/api/v1/accounts/${accountId}/conversations?${params.toString()}`,
+                    { method: 'GET' },
+                    accountToken
+                );
+                const list = Array.isArray(res?.payload)
+                    ? res.payload
+                    : (res?.data?.conversations || []);
+                if (list.length === 0) break;
+                for (const conv of list) {
+                    const assigneeRaw = conv?.meta?.assignee || conv?.assignee || null;
+                    conversations.push({
+                        id: Number(conv?.id),
+                        status: String(conv?.status || 'open'),
+                        assignee: assigneeRaw && typeof assigneeRaw === 'object'
+                            ? {
+                                id: Number(assigneeRaw.id),
+                                name: String(assigneeRaw.name || assigneeRaw.available_name || ''),
+                                email: String((assigneeRaw.email || '').toLowerCase()),
+                            }
+                            : null,
+                    });
+                }
+                const next = res?.meta?.pagination?.next_page;
+                if (!next) break;
+                page += 1;
+            }
+            return { conversations };
+        } catch (err) {
+            console.error('[ChatwootAPI] Error listando conversaciones:', err instanceof Error ? err.message : err);
+            return { conversations, error: err instanceof Error ? err.message : 'Error listando conversaciones' };
+        }
+    }
+
     // ========== WEBHOOKS ==========
 
     /**
