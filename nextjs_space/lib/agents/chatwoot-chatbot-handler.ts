@@ -269,6 +269,83 @@ async function processMessage(payload: ChatwootMessagePayload) {
  * Procesa mensajes de WhatsApp (flujo simplificado sin user auth)
  * Usa LLM para generar respuestas y las envía vía Chatwoot API
  */
+/**
+ * Escalación en el hub: el cliente pidió hablar con un humano (contactar_humano).
+ * Libera la conversación del bot (deja de responder), la asigna al agente por
+ * defecto del tenant y le avisa con una nota privada. El número NO cambia: el
+ * agente responde desde el WhatsApp del negocio y el cliente no ve números
+ * personales; toda la conversación queda registrada en el hub.
+ */
+async function escalateConversationToHuman(opts: {
+  tenantId: string;
+  localConversationId: string;
+  chatwootAccountId?: number | null;
+  chatwootConversationId?: number | null;
+  botMessage: string;
+  payload: ChatwootMessagePayload;
+}) {
+  const { tenantId, localConversationId, chatwootAccountId, chatwootConversationId, botMessage, payload } = opts;
+  try {
+    // 1. Marcar localmente: el bot deja de responder a esta conversación.
+    const existing = await prisma.conversation.findUnique({
+      where: { id: localConversationId },
+      select: { hubMetadata: true },
+    }).catch(() => null);
+    const hubMeta = (existing?.hubMetadata as any) || {};
+    await prisma.conversation.update({
+      where: { id: localConversationId },
+      data: {
+        hubMetadata: {
+          ...hubMeta,
+          botEscalado: true,
+          escaladoEn: new Date().toISOString(),
+        },
+      },
+    }).catch((err) => console.warn('[Escalación] No se pudo marcar la conversación local:', err instanceof Error ? err.message : err));
+
+    // 2. Mensaje del bot indicando la transferencia (sale por el WhatsApp del negocio).
+    await sendResponseToChatwoot(tenantId, payload.conversationId || localConversationId, botMessage, payload);
+
+    // 3. En el hub: etiqueta + asignación al agente + nota privada de aviso.
+    if (!chatwootAccountId || !chatwootConversationId) {
+      console.warn('[Escalación] Sin IDs de Chatwoot para escalar la conversación local:', localConversationId);
+      return;
+    }
+
+    const channel = await prisma.channel.findFirst({
+      where: { tenantId, type: 'whatsapp', isActive: true },
+    });
+    const { chatwootApi } = await import('@/lib/nexus/chatwoot-api');
+    const accountToken = await chatwootApi.ensureBotUserInAccount(chatwootAccountId);
+
+    // Etiqueta 'escalado' (se crea sola en Chatwoot si no existe).
+    await chatwootApi.addLabels(chatwootAccountId, chatwootConversationId, ['escalado'], accountToken)
+      .catch((err) => console.warn('[Escalación] No se pudo etiquetar:', err instanceof Error ? err.message : err));
+
+    // Asignar al agente por defecto del canal (el que atiende el WhatsApp del negocio).
+    const assigneeId = (channel?.config as any)?.defaultAssigneeId;
+    if (assigneeId) {
+      await chatwootApi.assignConversation(chatwootAccountId, chatwootConversationId, assigneeId, accountToken)
+        .catch((err) => console.warn('[Escalación] No se pudo asignar al agente:', err instanceof Error ? err.message : err));
+    } else {
+      console.log('[Escalación] Sin asignado por defecto; la conversación queda sin asignar (visible para el equipo)');
+    }
+
+    // Nota privada: aviso al agente en el propio hilo (no sale por WhatsApp).
+    await chatwootApi.sendMessage(
+      chatwootAccountId,
+      chatwootConversationId,
+      '🔔 **Escalado por el chatbot**: el cliente pidió hablar con un humano.\nResponde desde aquí; tus mensajes salen por el WhatsApp del negocio y el cliente no ve números personales.',
+      accountToken,
+      { messageType: 'outgoing', private: true },
+    ).catch((err) => console.warn('[Escalación] No se pudo notificar al agente:', err instanceof Error ? err.message : err));
+
+    console.log('[Escalación] ✅ Conversación escalada a humano:', localConversationId);
+  } catch (error) {
+    console.error('[Escalación] Error:', error);
+  }
+}
+
 async function processWhatsAppMessage(payload: ChatwootMessagePayload) {
   const { tenantId, content, conversationId, metadata } = payload;
   const localConversationId = metadata?.localConversationId || conversationId;
@@ -278,8 +355,20 @@ async function processWhatsAppMessage(payload: ChatwootMessagePayload) {
 
     const conversation = await prisma.conversation.findUnique({
       where: { id: localConversationId },
-      select: { leadId: true, lead: { select: { id: true, nombre: true, email: true, telefono: true } } }
+      select: {
+        leadId: true,
+        chatwootAccountId: true,
+        hubMetadata: true,
+        lead: { select: { id: true, nombre: true, email: true, telefono: true } }
+      }
     });
+
+    // Si la conversación fue escalada a un humano, el bot ya no responde:
+    // el agente la atiende desde el hub con el mismo número del negocio.
+    if ((conversation?.hubMetadata as any)?.botEscalado) {
+      console.log('[Gemma/WhatsApp] Conversación escalada a humano; el bot no responde');
+      return;
+    }
 
     const result = await unifiedProcessMessage({
       tenantId,
@@ -296,6 +385,22 @@ async function processWhatsAppMessage(payload: ChatwootMessagePayload) {
       if (result.error !== 'rate_limit') {
         await sendResponseToChatwoot(tenantId, conversationId, result.response || 'Lo siento, no pude procesar tu mensaje.', payload);
       }
+      return;
+    }
+
+    // Escalación en el hub: el cliente pidió hablar con un humano (contactar_humano).
+    // Libera la conversación del bot, la asigna al agente y le notifica, SIN
+    // cambiar de número: el agente responde desde el WhatsApp del negocio.
+    if (result.action === 'transferir') {
+      const hubMeta = (conversation?.hubMetadata as any) || {};
+      await escalateConversationToHuman({
+        tenantId,
+        localConversationId,
+        chatwootAccountId: conversation?.chatwootAccountId || hubMeta.chatwootAccountId || null,
+        chatwootConversationId: hubMeta.chatwootConversationId || null,
+        botMessage: result.response,
+        payload,
+      });
       return;
     }
 
