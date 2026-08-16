@@ -269,16 +269,22 @@ export async function POST(request: NextRequest) {
     // outgoing de un usuario/agente, no del contacto), reenviar a WhatsApp por
     // la instancia Evolution vinculada al canal.
     if (event === 'message_created') {
-      const message = (data as any).message as Record<string, any> | undefined;
-      const inbox = (data as any).inbox as Record<string, any> | undefined;
-      const conversation = (data as any).conversation as Record<string, any> | undefined;
-      const senderType = message?.sender_type || message?.sender?.type || '';
-      const isOutgoing = String(message?.message_type) === 'outgoing' ||
-        String(message?.message_type) === '1' ||
+      // Chatwoot envía message_created con los campos del mensaje PLANOS a
+      // nivel superior (message_type, content, content_attributes, sender,
+      // id...) y SIN objeto `message` anidado. Algunas fuentes (tests,
+      // versiones previas) sí lo anidan. Se unifican ambos formatos: el
+      // anidado tiene prioridad sobre el plano.
+      const dataAny = data as any;
+      const message = { ...dataAny, ...((dataAny.message as Record<string, any>) || {}) };
+      const inbox = dataAny.inbox as Record<string, any> | undefined;
+      const conversation = dataAny.conversation as Record<string, any> | undefined;
+      const senderType = message.sender_type || message.sender?.type || '';
+      const isOutgoing = String(message.message_type) === 'outgoing' ||
+        String(message.message_type) === '1' ||
         (senderType && senderType.toLowerCase() !== 'contact');
-      const content = message?.content || '';
-      const inboxId = inbox?.id || data.inbox_id;
-      const contentAttributes = (message?.content_attributes as Record<string, any>) || {};
+      const content = message.content || '';
+      const inboxId = inbox?.id || dataAny.inbox_id;
+      const contentAttributes = (message.content_attributes as Record<string, any>) || {};
       const volkernOrigin = contentAttributes.volkernOrigin;
 
       // 🔁 Espejo creado por el webhook de Evolution (el mensaje YA está en
