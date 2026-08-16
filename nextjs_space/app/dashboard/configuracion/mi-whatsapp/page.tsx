@@ -22,7 +22,8 @@ import {
   AlertTriangle,
   ExternalLink,
   Mail,
-  Copy
+  Copy,
+  BellRing
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Image from 'next/image';
@@ -66,6 +67,7 @@ export default function MiWhatsAppPage() {
     notaAgente: string | null;
     estado: string;
     resueltoPor: string | null;
+    resueltoDesde: string | null;
     fechaResolucion: string | null;
     fechaCreacion: string;
     hubUrl: string | null;
@@ -764,6 +766,13 @@ export default function MiWhatsAppPage() {
                           >
                             {resolved ? 'Resuelto' : 'Pendiente'}
                           </Badge>
+                          {resolved && f.resueltoDesde === 'notificacion' && (
+                            <span className="text-[11px] text-gray-500 flex items-center gap-1" title={`Resuelto por ${f.resueltoPor || 'desconocido'} desde la notificación del sistema`}>
+                              <BellRing className="h-3.5 w-3.5" />
+                              Desde la notificación
+                              {f.resueltoPor ? ` · ${f.resueltoPor}` : ''}
+                            </span>
+                          )}
                         </div>
                         <p className="text-xs text-gray-500 mt-1">
                           {new Date(f.fechaCreacion).toLocaleString()}
