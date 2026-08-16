@@ -156,6 +156,27 @@ model UserWhatsAppInstance {
   @@index([status])
 }
 
+model WhatsAppDeliveryFailure {
+  id                     String    @id @default(cuid())
+  tenantId               String
+  instanceName           String?
+  chatwootAccountId      Int
+  chatwootConversationId Int // display_id de la conversación en el hub
+  contactoNombre         String?
+  telefono               String?
+  mensajeFallido         String?
+  notaAgente             String?
+  estado                 String    @default("pendiente") // pendiente | resuelto
+  resueltoPor            String?
+  fechaResolucion        DateTime?
+  fechaCreacion          DateTime  @default(now())
+  fechaEdicion           DateTime  @updatedAt
+
+  @@index([tenantId, estado])
+  @@index([chatwootConversationId])
+  @@index([fechaCreacion])
+}
+
 model Tenant {
   id                 String      @id @default(cuid())
   nombre             String

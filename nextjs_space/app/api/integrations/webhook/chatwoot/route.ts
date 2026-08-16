@@ -354,9 +354,13 @@ export async function POST(request: NextRequest) {
                 // agente (label + nota privada) en vez de silenciar el fallo.
                 if (sendResult.status === 400 && conversation?.id && chatwootAccountId) {
                   await markConversationUndeliverable({
+                    tenantId,
                     chatwootAccountId,
                     conversationId: Number(conversation.id),
                     channelConfig,
+                    instanceName,
+                    phoneNumber,
+                    contactName: conversation?.contact?.name || null,
                     failedContent: content,
                   });
                 }
@@ -468,19 +472,55 @@ const UNDELIVERABLE_TTL_MS = 10 * 60 * 1000; // 10 minutos
  * agente asignado la vea en el timeline y contacte por otro canal.
  */
 async function markConversationUndeliverable(opts: {
+  tenantId: string;
   chatwootAccountId: number;
   conversationId: number;
   channelConfig: Record<string, any>;
+  instanceName?: string;
+  phoneNumber?: string;
+  contactName?: string | null;
   failedContent: string;
 }): Promise<void> {
-  const { chatwootAccountId, conversationId, channelConfig, failedContent } = opts;
+  const {
+    tenantId,
+    chatwootAccountId,
+    conversationId,
+    channelConfig,
+    instanceName,
+    phoneNumber,
+    contactName,
+    failedContent,
+  } = opts;
 
-  // Ya marcada recientemente → no repetir nota ni label.
+  // Ya marcada recientemente → no repetir nota, label ni registro.
   const cacheKey = `${chatwootAccountId}:${conversationId}`;
   const now = Date.now();
   const last = undeliverableCache.get(cacheKey);
   if (last && now - last < UNDELIVERABLE_TTL_MS) return;
   undeliverableCache.set(cacheKey, now);
+
+  // Nota que verá el agente en el timeline del hub.
+  const noteText =
+    `⚠️ Mensaje NO entregado por WhatsApp: el número del cliente no existe o no está disponible en esta cuenta. Contacta por otro canal.\n\nMensaje fallido: ${failedContent.substring(0, 200)}`;
+
+  // Persistir el fallo para la vista de "No entregables" en Mi WhatsApp.
+  try {
+    await prisma.whatsAppDeliveryFailure.create({
+      data: {
+        tenantId,
+        instanceName: instanceName || null,
+        chatwootAccountId,
+        chatwootConversationId: conversationId,
+        contactoNombre: contactName || null,
+        telefono: phoneNumber || null,
+        mensajeFallido: failedContent.substring(0, 500),
+        notaAgente: noteText,
+        estado: 'pendiente',
+      },
+    });
+  } catch (persistErr) {
+    console.error('[ChatwootWebhook] Error persistiendo fallo de entrega:', persistErr);
+  }
 
   // Token real de agente del canal (el del bot no puede crear salientes).
   const accountToken = channelConfig?.apiToken || '';
@@ -495,7 +535,7 @@ async function markConversationUndeliverable(opts: {
     await chatwootApi.sendMessage(
       chatwootAccountId,
       conversationId,
-      `⚠️ Mensaje NO entregado por WhatsApp: el número del cliente no existe o no está disponible en esta cuenta. Contacta por otro canal.\n\nMensaje fallido: ${failedContent.substring(0, 200)}`,
+      noteText,
       accountToken,
       {
         messageType: 'outgoing',
