@@ -264,6 +264,22 @@ export async function syncOutgoingChatwootMessage(payload: {
 
     console.log(`[🔄 ChatwootSync] Enviando respuesta a Chatwoot: Conv ${chatwootConversationId}`);
 
+    // Convertir el formato interactivo de WhatsApp/Telegram
+    // (interactive.action.buttons) al formato input_select de Chatwoot (items).
+    // Sin la conversión, Chatwoot devuelve 422 "undefined method 'reject' for
+    // nil" y la respuesta del bot nunca llega al hub ni a WhatsApp.
+    const rawInteractive = (contentAttributes as any)?.interactive;
+    let chatwootContentAttributes: Record<string, any> = contentAttributes || {};
+    if (contentType === 'input_select' && rawInteractive?.action?.buttons?.length) {
+      chatwootContentAttributes = {
+        items: rawInteractive.action.buttons.map((btn: any, i: number) => ({
+          title: btn.reply?.title || btn.title || `Opción ${i + 1}`,
+          value: btn.reply?.id || btn.id || String(i),
+        })),
+        ...(rawInteractive.footer?.text ? { shared: rawInteractive.footer.text } : {}),
+      };
+    }
+
     // 3. Enviar mensaje a la API de Chatwoot. Se marca volkernOrigin: 'chatbot'
     //    para que el webhook de Chatwoot sepa que este mensaje ya fue/será
     //    entregado por el puente y no lo re-sincronice (evita duplicados).
@@ -276,7 +292,7 @@ export async function syncOutgoingChatwootMessage(payload: {
         messageType: 'outgoing',
         ...(contentType && { contentType }),
         contentAttributes: {
-          ...(contentAttributes || {}),
+          ...chatwootContentAttributes,
           volkernOrigin: 'chatbot',
         },
       }
