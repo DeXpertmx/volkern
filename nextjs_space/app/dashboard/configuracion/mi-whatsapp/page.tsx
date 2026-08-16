@@ -58,6 +58,8 @@ export default function MiWhatsAppPage() {
     chatwootConversationId: number;
     contactoNombre: string | null;
     telefono: string | null;
+    emailContacto: string | null;
+    empresa: string | null;
     mensajeFallido: string | null;
     notaAgente: string | null;
     estado: string;
@@ -699,6 +701,16 @@ export default function MiWhatsAppPage() {
                             <span className="text-sm text-gray-600 flex items-center gap-1">
                               <Phone className="h-3.5 w-3.5" />
                               {f.telefono}
+                            </span>
+                          )}
+                          {f.empresa && (
+                            <span className="text-sm text-gray-600 flex items-center gap-1">
+                              🏢 {f.empresa}
+                            </span>
+                          )}
+                          {f.emailContacto && (
+                            <span className="text-sm text-gray-600 flex items-center gap-1">
+                              📧 {f.emailContacto}
                             </span>
                           )}
                           <Badge
