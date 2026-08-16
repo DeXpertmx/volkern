@@ -53,6 +53,7 @@ interface UndeliverableItem {
   contactoNombre: string | null;
   telefono: string | null;
   empresa: string | null;
+  emailContacto: string | null;
   mensajeFallido: string | null;
   notaAgente: string | null;
   hubUrl: string | null;
@@ -91,9 +92,9 @@ async function notifyUndeliverable(f: UndeliverableItem) {
             vibrate: [100, 50, 100],
             actions: [
               { action: 'resolve', title: '✓ Marcar como resuelto' },
-              { action: 'open', title: 'Ver conversación' },
+              { action: 'email', title: '📧 Enviar email' },
             ],
-            data: { url, id: f.id },
+            data: { url, id: f.id, email: f.emailContacto },
           });
           shown = true;
         }
@@ -131,12 +132,23 @@ export function useUndeliverableNotifications(userId?: string | null): {
   const seededRef = useRef(false);
   const refreshRef = useRef<(() => void) | null>(null);
 
-  // Cuando el agente resuelve desde la notificación, refrescar badge/lista al instante.
+  // Mensajes del Service Worker: refresco tras resolver, y apertura de mailto (acción "Enviar email").
   useEffect(() => {
     if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
     const onMessage = (e: MessageEvent) => {
       if (e.data?.type === 'UNDELIVERABLE_RESOLVED') {
         refreshRef.current?.();
+      } else if (e.data?.type === 'OPEN_MAILTO' && typeof e.data.url === 'string') {
+        try {
+          const a = document.createElement('a');
+          a.href = e.data.url;
+          a.rel = 'noopener';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        } catch {
+          // Sin acceso a mailto (entorno raro); ignorar.
+        }
       }
     };
     navigator.serviceWorker.addEventListener('message', onMessage);
