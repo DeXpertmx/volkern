@@ -210,8 +210,8 @@ export function useUndeliverableNotifications(userId?: string | null): {
     const poll = async () => {
       try {
         const [countRes, listRes] = await Promise.all([
-          fetch('/api/integraciones/my-whatsapp/no-entregables?estado=pendiente&count=true'),
-          fetch('/api/integraciones/my-whatsapp/no-entregables?estado=pendiente&limit=20'),
+          fetch('/api/integraciones/whatsapp-negocio/no-entregables?estado=pendiente&count=true'),
+          fetch('/api/integraciones/whatsapp-negocio/no-entregables?estado=pendiente&limit=20'),
         ]);
         if (active && countRes.ok) {
           const d = await countRes.json();
