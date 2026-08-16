@@ -499,9 +499,46 @@ async function markConversationUndeliverable(opts: {
   if (last && now - last < UNDELIVERABLE_TTL_MS) return;
   undeliverableCache.set(cacheKey, now);
 
-  // Nota que verá el agente en el timeline del hub.
+  // 🔎 Buscar el lead/contacto en el CRM por teléfono para ofrecer
+  // alternativas de contacto (email, empresa, otro teléfono registrado)
+  // directamente en la nota privada del hub.
+  const altLines: string[] = [];
+  const digits = (phoneNumber || '').replace(/[^\d]/g, '');
+  if (digits.length >= 8) {
+    const suffix = digits.slice(-9);
+    try {
+      const lead = await prisma.lead.findFirst({
+        where: { tenantId, telefono: { endsWith: suffix } },
+        select: { nombre: true, email: true, telefono: true, empresa: true },
+      });
+      const contact = !lead
+        ? await prisma.contact.findFirst({
+            where: { tenantId, telefono: { endsWith: suffix } },
+            select: { nombre: true, email: true, telefono: true },
+          })
+        : null;
+      const rec: { nombre: string; email: string; telefono?: string | null; empresa?: string | null } | null = lead || contact;
+      if (rec) {
+        altLines.push(`👤 Contacto en CRM: ${rec.nombre}`);
+        if (rec.empresa) altLines.push(`🏢 Empresa: ${rec.empresa}`);
+        if (rec.email) altLines.push(`📧 Email: ${rec.email}`);
+        const recDigits = (rec.telefono || '').replace(/[^\d]/g, '');
+        if (recDigits && recDigits !== digits && rec.telefono) {
+          altLines.push(`☎️ Teléfono alternativo registrado: ${rec.telefono}`);
+        }
+      } else {
+        altLines.push('ℹ️ No se encontró ningún contacto en el CRM con este número.');
+      }
+    } catch (lookupErr) {
+      console.error('[ChatwootWebhook] Error buscando lead por teléfono:', lookupErr);
+    }
+  }
+
+  // Nota que verá el agente en el timeline del hub (con alternativas).
   const noteText =
-    `⚠️ Mensaje NO entregado por WhatsApp: el número del cliente no existe o no está disponible en esta cuenta. Contacta por otro canal.\n\nMensaje fallido: ${failedContent.substring(0, 200)}`;
+    `⚠️ Mensaje NO entregado por WhatsApp: el número del cliente no existe o no está disponible en esta cuenta. Contacta por otro canal.\n\n` +
+    (altLines.length ? `${altLines.join('\n')}\n\n` : '') +
+    `Mensaje fallido: ${failedContent.substring(0, 200)}`;
 
   // Persistir el fallo para la vista de "No entregables" en Mi WhatsApp.
   try {
