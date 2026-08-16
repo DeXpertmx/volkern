@@ -71,7 +71,7 @@ async function notifyUndeliverable(f: UndeliverableItem) {
     if (typeof window === 'undefined' || !('Notification' in window) || Notification.permission !== 'granted') return;
 
     const tag = `undeliverable-${f.id}`;
-    const url = f.hubUrl || '/dashboard/configuracion/mi-whatsapp';
+    const url = f.hubUrl || '/dashboard/configuracion/whatsapp-negocio';
     const title = `⚠️ Entrega no entregable: ${f.contactoNombre || 'Contacto desconocido'}`;
     const body = [f.telefono, f.empresa].filter(Boolean).join(' — ') || 'Número inexistente o no disponible';
 

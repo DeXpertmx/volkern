@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -45,7 +45,10 @@ export default function WhatsAppNegocioPage() {
   const [disconnecting, setDisconnecting] = useState(false);
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [showQR, setShowQR] = useState(false);
-  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
+  // useRef: el intervalo debe ser estable entre renders. Con useState, el
+  // closure de checkStatus ve el valor viejo (siempre null) y clearInterval no
+  // detiene el polling: el toast de "conectado" se repetía cada 3s en bucle.
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     fetchInstance();
@@ -54,11 +57,12 @@ export default function WhatsAppNegocioPage() {
   // Limpiar polling al desmontar
   useEffect(() => {
     return () => {
-      if (pollingInterval) {
-        clearInterval(pollingInterval);
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
       }
     };
-  }, [pollingInterval]);
+  }, []);
 
   // Fetch instancia del negocio
   const fetchInstance = async () => {
@@ -170,12 +174,16 @@ export default function WhatsAppNegocioPage() {
 
       if (data.success) {
         if (data.status === 'connected') {
-          toast.success('¡WhatsApp del negocio conectado exitosamente!');
+          // Solo notificar en la transición a conectado, no en cada poll.
+          const yaConectado = instance?.status === 'connected';
+          if (!yaConectado) {
+            toast.success('¡WhatsApp del negocio conectado exitosamente!');
+          }
           setShowQR(false);
           setQrCode(null);
-          if (pollingInterval) {
-            clearInterval(pollingInterval);
-            setPollingInterval(null);
+          if (pollingRef.current) {
+            clearInterval(pollingRef.current);
+            pollingRef.current = null;
           }
           if (data.profile && data.instance) {
             const profile = data.profile;
@@ -199,15 +207,15 @@ export default function WhatsAppNegocioPage() {
 
   // Iniciar polling de estado
   const startStatusPolling = () => {
-    if (pollingInterval) {
-      clearInterval(pollingInterval);
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
     }
 
     const interval = setInterval(() => {
       checkStatus();
     }, 3000);
 
-    setPollingInterval(interval);
+    pollingRef.current = interval;
   };
 
   // Desconectar WhatsApp del negocio
@@ -234,9 +242,9 @@ export default function WhatsAppNegocioPage() {
         setInstance(null);
         setQrCode(null);
         setShowQR(false);
-        if (pollingInterval) {
-          clearInterval(pollingInterval);
-          setPollingInterval(null);
+        if (pollingRef.current) {
+          clearInterval(pollingRef.current);
+          pollingRef.current = null;
         }
       } else {
         toast.error(data.error || 'Error al desconectar WhatsApp del negocio');

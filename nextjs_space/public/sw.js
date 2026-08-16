@@ -203,7 +203,7 @@ self.addEventListener('notificationclick', function(event) {
           }
         }
         // Sin email registrado o sin app abierta: ir donde está el contacto con su mailto.
-        return openNotificationUrl('/dashboard/configuracion/mi-whatsapp')
+        return openNotificationUrl('/dashboard/configuracion/whatsapp-negocio')
       })()
     )
     return
