@@ -22,6 +22,7 @@ import { HUBS, type NavigationItem } from '@/lib/navigation-config'
 import { PunchClock } from '@/components/attendance/PunchClock'
 import { ComplianceBadge } from '@/components/compliance/ComplianceBadge'
 import { Badge } from '@/components/ui/badge'
+import { useUndeliverableNotifications } from '@/hooks/use-undeliverable-notifications'
 
 // Simple logger
 const log = (...args: any[]) => {
@@ -41,8 +42,10 @@ export function Sidebar() {
   const [tenantCountry, setTenantCountry] = useState<string>('ES')
   const [activeModules, setActiveModules] = useState<string[]>([])
   const [isLoadingModules, setIsLoadingModules] = useState(true)
-  const [undeliverableCount, setUndeliverableCount] = useState(0)
   const { config: whitelabelConfig } = useWhitelabel()
+
+  // Conteo de entregas no entregables + avisos (sonido y notificación del sistema)
+  const undeliverableCount = useUndeliverableNotifications((session?.user as any)?.id || null)
 
   useEffect(() => {
     setMounted(true)
@@ -50,28 +53,6 @@ export function Sidebar() {
     const saved = localStorage.getItem('sidebar-collapsed')
     if (saved) setIsCollapsed(saved === 'true')
   }, [])
-
-  // Entregas no entregables de WhatsApp pendientes (badge en Comunicaciones y Mi WhatsApp)
-  useEffect(() => {
-    if (!session?.user) return
-    let active = true
-    const fetchCount = async () => {
-      try {
-        const res = await fetch('/api/integraciones/my-whatsapp/no-entregables?estado=pendiente&count=true')
-        if (!res.ok) return
-        const data = await res.json()
-        if (active && typeof data.count === 'number') setUndeliverableCount(data.count)
-      } catch {
-        // Silencioso: el badge es decorativo
-      }
-    }
-    fetchCount()
-    const interval = setInterval(fetchCount, 60000)
-    return () => {
-      active = false
-      clearInterval(interval)
-    }
-  }, [session])
 
   useEffect(() => {
     if (session?.user) {
