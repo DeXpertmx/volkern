@@ -14,9 +14,12 @@ import {
   ChevronLeft,
   ChevronRight,
   ArrowLeft,
-  Activity
+  Activity,
+  AlertTriangle
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
+import { formatDistanceToNow } from 'date-fns'
+import { es } from 'date-fns/locale'
 import { useWhitelabel } from '@/hooks/use-whitelabel'
 import { HUBS, type NavigationItem } from '@/lib/navigation-config'
 import { PunchClock } from '@/components/attendance/PunchClock'
@@ -45,7 +48,18 @@ export function Sidebar() {
   const { config: whitelabelConfig } = useWhitelabel()
 
   // Conteo de entregas no entregables + avisos (sonido y notificación del sistema)
-  const undeliverableCount = useUndeliverableNotifications((session?.user as any)?.id || null)
+  const { pendingCount: undeliverableCount, recentFailures } = useUndeliverableNotifications((session?.user as any)?.id || null)
+  const [badgePopoverOpen, setBadgePopoverOpen] = useState(false)
+
+  // Cerrar el popover de resumen con Escape
+  useEffect(() => {
+    if (!badgePopoverOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setBadgePopoverOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [badgePopoverOpen])
 
   useEffect(() => {
     setMounted(true)
@@ -194,16 +208,89 @@ export function Sidebar() {
         variant="ghost"
         size="icon"
         className="fixed top-4 left-4 z-50 md:hidden text-foreground relative"
-        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+        onClick={() => {
+          setBadgePopoverOpen(false)
+          setIsMobileMenuOpen(!isMobileMenuOpen)
+        }}
       >
         {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-        {/* Badge de entregas no entregables pendientes en el menú móvil, visible sin abrirlo */}
+        {/* Badge de entregas no entregables: al tocarlo abre el resumen sin abrir el menú */}
         {!isMobileMenuOpen && undeliverableCount > 0 && (
-          <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center border-2 border-background shadow">
+          <span
+            role="button"
+            tabIndex={0}
+            aria-label="Ver entregas no entregables"
+            onClick={(e) => {
+              e.stopPropagation()
+              setBadgePopoverOpen((open) => !open)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                e.stopPropagation()
+                setBadgePopoverOpen((open) => !open)
+              }
+            }}
+            className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center border-2 border-background shadow cursor-pointer hover:bg-red-600"
+          >
             {undeliverableCount}
           </span>
         )}
       </Button>
+
+      {/* Popover de resumen: últimas entregas no entregables (móvil, sin abrir el menú) */}
+      {badgePopoverOpen && (
+        <>
+          <div className="fixed inset-0 z-[55] md:hidden" onClick={() => setBadgePopoverOpen(false)} />
+          <div className="fixed left-4 top-14 z-[60] md:hidden w-[calc(100vw-2rem)] max-w-sm bg-background border rounded-2xl shadow-2xl p-4">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <p className="text-sm font-bold flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-red-500" />
+                Entregas no entregables
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setBadgePopoverOpen(false)
+                  window.location.href = '/dashboard/configuracion/mi-whatsapp'
+                }}
+                className="text-xs font-semibold text-primary hover:underline whitespace-nowrap"
+              >
+                Ver todas
+              </button>
+            </div>
+            {recentFailures.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Cargando…</p>
+            ) : (
+              <div className="space-y-2 max-h-72 overflow-y-auto">
+                {recentFailures.slice(0, 5).map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => {
+                      setBadgePopoverOpen(false)
+                      if (f.hubUrl) window.open(f.hubUrl, '_blank')
+                      else window.location.href = '/dashboard/configuracion/mi-whatsapp'
+                    }}
+                    className="w-full text-left border rounded-lg p-3 bg-red-50/50 border-red-200 hover:bg-red-50 transition-colors"
+                  >
+                    <p className="font-semibold text-sm text-gray-900 truncate">
+                      {f.contactoNombre || 'Contacto desconocido'}
+                    </p>
+                    <p className="text-xs text-gray-600 truncate">
+                      {f.telefono}
+                      {f.empresa ? ` · ${f.empresa}` : ''}
+                    </p>
+                    <p className="text-[10px] text-gray-400 mt-0.5">
+                      {formatDistanceToNow(new Date(f.fechaCreacion), { addSuffix: true, locale: es })}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
 
       {isMobileMenuOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden" onClick={() => setIsMobileMenuOpen(false)} />
