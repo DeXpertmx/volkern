@@ -26,17 +26,22 @@ export default function MensajesPage() {
   const [selectedConversation, setSelectedConversation] = useState<any>(null)
   const [messages, setMessages] = useState<any[]>([])
   const [activeFilter, setActiveFilter] = useState('all')
+  const [activeTab, setActiveTab] = useState('todas')
+  const [counts, setCounts] = useState<{ mias: number; sin_asignar: number; todas: number }>({ mias: 0, sin_asignar: 0, todas: 0 })
   // Referencia del último snapshot de conversaciones para detectar novedades
   const knownRef = useRef<Map<string, { noLeidos: number; ultimoMensaje: string }>>(new Map())
+  const tabRef = useRef(activeTab)
+  tabRef.current = activeTab
 
   const fetchConversaciones = async (silent = false) => {
     try {
       if (!silent) setLoading(true)
-      const response = await fetch('/api/mensajes/conversaciones')
+      const response = await fetch(`/api/mensajes/conversaciones?tab=${tabRef.current}`)
       const data = await response.json()
       if (response.ok) {
         const lista = data.conversaciones || []
         setConversaciones(lista)
+        if (data.counts) setCounts(data.counts)
         
         // Detectar novedades (solo en el polling, no en la carga inicial)
         if (silent && knownRef.current.size > 0) {
@@ -118,6 +123,14 @@ export default function MensajesPage() {
 
   const handleSelectConversation = (id: string) => {
     router.push(`/dashboard/mensajes?id=${id}`, { scroll: false })
+  }
+
+  const handleTabChange = (tab: string) => {
+    if (tab === activeTab) return
+    tabRef.current = tab
+    setActiveTab(tab)
+    setLoading(true)
+    fetchConversaciones()
   }
 
   const handleSendMessage = async (text: string, isNote: boolean) => {
@@ -232,6 +245,9 @@ export default function MensajesPage() {
             selectedId={currentId}
             onSelect={handleSelectConversation}
             loading={loading}
+            activeTab={activeTab}
+            onTabChange={handleTabChange}
+            counts={counts}
           />
 
           <ChatWindow 
