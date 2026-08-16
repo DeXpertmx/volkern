@@ -50,6 +50,8 @@ export async function GET(request: NextRequest) {
         chatwootConversationId: f.chatwootConversationId,
         contactoNombre: f.contactoNombre,
         telefono: f.telefono,
+        emailContacto: f.emailContacto,
+        empresa: f.empresa,
         mensajeFallido: f.mensajeFallido,
         notaAgente: f.notaAgente,
         estado: f.estado,

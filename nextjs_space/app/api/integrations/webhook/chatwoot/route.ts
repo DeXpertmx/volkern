@@ -506,6 +506,8 @@ async function markConversationUndeliverable(opts: {
   const altLines: string[] = [];
   let matchedLeadId: string | null = null;
   let matchedContactId: string | null = null;
+  let matchedEmail: string | null = null;
+  let matchedEmpresa: string | null = null;
   const digits = (phoneNumber || '').replace(/[^\d]/g, '');
   if (digits.length >= 8) {
     const suffix = digits.slice(-9);
@@ -524,6 +526,8 @@ async function markConversationUndeliverable(opts: {
       if (contact) matchedContactId = contact.id;
       const rec: { nombre: string; email: string; telefono?: string | null; empresa?: string | null } | null = lead || contact;
       if (rec) {
+        matchedEmail = rec.email || null;
+        matchedEmpresa = rec.empresa || null;
         altLines.push(`👤 Contacto en CRM: ${rec.nombre}`);
         if (rec.empresa) altLines.push(`🏢 Empresa: ${rec.empresa}`);
         if (rec.email) altLines.push(`📧 Email: ${rec.email}`);
@@ -555,6 +559,8 @@ async function markConversationUndeliverable(opts: {
         chatwootConversationId: conversationId,
         contactoNombre: contactName || null,
         telefono: phoneNumber || null,
+        emailContacto: matchedEmail,
+        empresa: matchedEmpresa,
         mensajeFallido: failedContent.substring(0, 500),
         notaAgente: noteText,
         estado: 'pendiente',

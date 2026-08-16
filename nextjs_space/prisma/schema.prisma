@@ -164,6 +164,8 @@ model WhatsAppDeliveryFailure {
   chatwootConversationId Int // display_id de la conversación en el hub
   contactoNombre         String?
   telefono               String?
+  emailContacto          String?
+  empresa                String?
   mensajeFallido         String?
   notaAgente             String?
   estado                 String    @default("pendiente") // pendiente | resuelto
