@@ -1,0 +1,178 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+
+/**
+ * Avisa al agente en tiempo real cuando el puente de WhatsApp marca una
+ * conversación como NO entregable (Evolution responde 400 por número
+ * inexistente): sonido (Web Audio, sin archivo) + notificación del sistema
+ * (si el permiso está concedido) + el contador de pendientes para badges.
+ *
+ * El set de "ya notificados" se persiste en localStorage (por usuario) para:
+ *  - no notificar dos veces la misma entrega (ni en recargas ni en el polling),
+ *  - notificar entregas que aparecieron mientras la app estaba cerrada
+ *    (al volver, cualquier pendiente no visto dispara el aviso),
+ *  - no disparar una ráfaga el primer día de adopción (se siembra el set).
+ */
+
+let audioCtx: AudioContext | null = null;
+
+/** Alarma breve de tres notas ascendentes, distinta del timbre de mensajes. */
+function playUndeliverableChime() {
+  try {
+    if (typeof window === 'undefined') return;
+    const Ctx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!Ctx) return;
+    audioCtx = audioCtx || new Ctx();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const now = audioCtx.currentTime;
+    const notes = [659.25, 880, 1318.51]; // Mi5 → La5 → Mi6 (ascendente, alerta)
+    notes.forEach((freq, i) => {
+      const osc = audioCtx!.createOscillator();
+      const gain = audioCtx!.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const start = now + i * 0.16;
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.26, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.45);
+      osc.connect(gain);
+      gain.connect(audioCtx!.destination);
+      osc.start(start);
+      osc.stop(start + 0.5);
+    });
+    // Vibración en móvil (patrón de alerta: on-off-on)
+    if (navigator.vibrate) navigator.vibrate([80, 50, 80]);
+  } catch {
+    // El navegador puede bloquear el audio hasta la primera interacción; no romper nada.
+  }
+}
+
+interface UndeliverableItem {
+  id: string;
+  contactoNombre: string | null;
+  telefono: string | null;
+  empresa: string | null;
+  mensajeFallido: string | null;
+  notaAgente: string | null;
+  hubUrl: string | null;
+}
+
+/** Notificación del sistema; al hacer clic abre la conversación en el hub. */
+function notifyUndeliverable(f: UndeliverableItem) {
+  playUndeliverableChime();
+  try {
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      const title = `⚠️ Entrega no entregable: ${f.contactoNombre || 'Contacto desconocido'}`;
+      const body = [f.telefono, f.empresa].filter(Boolean).join(' — ') || 'Número inexistente o no disponible';
+      const n = new Notification(title, {
+        body,
+        icon: '/volkern-icon.png',
+        tag: `undeliverable-${f.id}`, // evita duplicados por entrega
+      });
+      n.onclick = () => {
+        window.focus();
+        if (f.hubUrl) window.open(f.hubUrl, '_blank');
+        else window.location.href = '/dashboard/configuracion/mi-whatsapp';
+        n.close();
+      };
+      setTimeout(() => n.close(), 15000);
+    } else {
+      // Sin permiso del sistema: el sonido ya avisó; mantener la consola por si acaso.
+      console.info('[Undeliverable] Nueva entrega no entregable:', f.contactoNombre || f.telefono);
+    }
+  } catch {
+    // Safari/iOS puede lanzar excepción al construir Notification; ignorar.
+  }
+}
+
+/**
+ * Hook global: devuelve el número de entregas no entregables pendientes y
+ * dispara sonido + notificación cuando aparece una nueva.
+ * @param userId  id del usuario (clave de localStorage); null desactiva el polling.
+ */
+export function useUndeliverableNotifications(userId?: string | null): number {
+  const [pendingCount, setPendingCount] = useState(0);
+  const seededRef = useRef(false);
+
+  // Pedir permiso de notificaciones con el primer gesto del usuario (requisito de los navegadores)
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
+    if (Notification.permission === 'granted' || Notification.permission === 'denied') return;
+    const request = () => {
+      Notification.requestPermission().catch(() => {});
+    };
+    window.addEventListener('pointerdown', request, { once: true });
+    window.addEventListener('keydown', request, { once: true });
+    return () => {
+      window.removeEventListener('pointerdown', request);
+      window.removeEventListener('keydown', request);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!userId) return;
+    let active = true;
+    // Si cambia el usuario (logout/login), su set de "ya vistos" es distinto: re-sembrar.
+    seededRef.current = false;
+    const storageKey = `volkern-undeliverable-notified:${userId}`;
+
+    const getSeen = (): string[] => {
+      try {
+        return JSON.parse(localStorage.getItem(storageKey) || '[]');
+      } catch {
+        return [];
+      }
+    };
+    const saveSeen = (ids: string[]) => {
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(ids.slice(-200)));
+      } catch {
+        // localStorage lleno o bloqueado; seguir sin persistir.
+      }
+    };
+
+    const handleNew = (failures: UndeliverableItem[]) => {
+      if (!seededRef.current) {
+        // Primera adopción: registrar los pendientes existentes sin notificar (evita ráfaga inicial)
+        seededRef.current = true;
+        saveSeen(Array.from(new Set([...getSeen(), ...failures.map((f) => f.id)])));
+        return;
+      }
+      const seen = getSeen();
+      const seenSet = new Set(seen);
+      const fresh = failures.filter((f) => !seenSet.has(f.id));
+      if (fresh.length === 0) return;
+      saveSeen(Array.from(new Set([...seen, ...fresh.map((f) => f.id)])));
+      fresh.forEach((f) => notifyUndeliverable(f));
+    };
+
+    const poll = async () => {
+      try {
+        const [countRes, listRes] = await Promise.all([
+          fetch('/api/integraciones/my-whatsapp/no-entregables?estado=pendiente&count=true'),
+          fetch('/api/integraciones/my-whatsapp/no-entregables?estado=pendiente&limit=20'),
+        ]);
+        if (active && countRes.ok) {
+          const d = await countRes.json();
+          if (typeof d.count === 'number') setPendingCount(d.count);
+        }
+        if (active && listRes.ok) {
+          const d = await listRes.json();
+          handleNew(d.failures || []);
+        }
+      } catch {
+        // Silencioso: reintentará en el siguiente tick del polling.
+      }
+    };
+
+    poll();
+    const interval = setInterval(poll, 60000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [userId]);
+
+  return pendingCount;
+}
