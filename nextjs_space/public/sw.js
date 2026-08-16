@@ -89,7 +89,7 @@ async function networkFirstWithCache(request, cacheName) {
   try {
     // Forzar redirect:'follow' solo en navegaciones (vienen con redirect:'manual')
     // En GET normales, usar el redirect mode que traiga el request original.
-    const fetchOpts: RequestInit = request.mode === 'navigate'
+    const fetchOpts = request.mode === 'navigate'
       ? { redirect: 'follow' }
       : {}
     const response = await fetch(request, fetchOpts)
@@ -137,21 +137,54 @@ self.addEventListener('push', function(event) {
   }
 })
 
+async function openNotificationUrl(url) {
+  const clientList = await clients.matchAll({ type: 'window', includeUncontrolled: true })
+  for (const client of clientList) {
+    if (client.url === url && 'focus' in client) {
+      return client.focus()
+    }
+  }
+  if (clients.openWindow) {
+    return clients.openWindow(url)
+  }
+}
+
 self.addEventListener('notificationclick', function(event) {
-  event.notification.close()
+  const notification = event.notification
+  const action = event.action
+  const tag = notification.tag || ''
+  const data = notification.data || {}
 
-  const url = event.notification.data?.url || '/'
-
-  event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
-      for (const client of clientList) {
-        if (client.url === url && 'focus' in client) {
-          return client.focus()
+  // Acción "Resolver": marca la entrega como resuelta vía la API, sin abrir la app.
+  if (action === 'resolve') {
+    notification.close()
+    const match = tag.match(/^undeliverable-(.+)$/)
+    const id = match ? match[1] : data.id
+    event.waitUntil(
+      (async () => {
+        try {
+          if (!id) return openNotificationUrl(data.url || '/')
+          const res = await fetch('/api/integraciones/my-whatsapp/no-entregables', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id }),
+          })
+          if (!res.ok) {
+            // Sesión caducada o error: abrir la app para resolverla a mano.
+            return openNotificationUrl(data.url || '/')
+          }
+        } catch (e) {
+          return openNotificationUrl(data.url || '/')
         }
-      }
-      if (clients.openWindow) {
-        return clients.openWindow(url)
-      }
-    })
-  )
+        // Avisar a la app abierta para refrescar badge y lista al instante.
+        const clientList = await clients.matchAll({ type: 'window', includeUncontrolled: true })
+        clientList.forEach((client) => client.postMessage({ type: 'UNDELIVERABLE_RESOLVED', id }))
+      })()
+    )
+    return
+  }
+
+  // Acción "Ver" o clic simple: abrir la conversación (o la app).
+  notification.close()
+  event.waitUntil(openNotificationUrl(data.url || '/'))
 })

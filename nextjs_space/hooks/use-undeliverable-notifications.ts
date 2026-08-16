@@ -59,28 +59,58 @@ interface UndeliverableItem {
   fechaCreacion: string;
 }
 
-/** Notificación del sistema; al hacer clic abre la conversación en el hub. */
-function notifyUndeliverable(f: UndeliverableItem) {
+/**
+ * Notificación del sistema con acciones: "Marcar como resuelto" resuelve la
+ * entrega directamente (sin abrir la app) vía el Service Worker; "Ver" o el
+ * clic abren la conversación en el hub.
+ */
+async function notifyUndeliverable(f: UndeliverableItem) {
   playUndeliverableChime();
   try {
-    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-      const title = `⚠️ Entrega no entregable: ${f.contactoNombre || 'Contacto desconocido'}`;
-      const body = [f.telefono, f.empresa].filter(Boolean).join(' — ') || 'Número inexistente o no disponible';
-      const n = new Notification(title, {
-        body,
-        icon: '/volkern-icon.png',
-        tag: `undeliverable-${f.id}`, // evita duplicados por entrega
-      });
+    if (typeof window === 'undefined' || !('Notification' in window) || Notification.permission !== 'granted') return;
+
+    const tag = `undeliverable-${f.id}`;
+    const url = f.hubUrl || '/dashboard/configuracion/mi-whatsapp';
+    const title = `⚠️ Entrega no entregable: ${f.contactoNombre || 'Contacto desconocido'}`;
+    const body = [f.telefono, f.empresa].filter(Boolean).join(' — ') || 'Número inexistente o no disponible';
+
+    // Notificación del Service Worker: única forma de mostrar botones de acción
+    // ("Marcar como resuelto") y de que el clic se gestione con la app cerrada.
+    let shown = false;
+    if ('serviceWorker' in navigator) {
+      try {
+        let reg = await navigator.serviceWorker.getRegistration().catch(() => null);
+        if (!reg) reg = await navigator.serviceWorker.register('/sw.js').catch(() => null);
+        if (reg) {
+          await reg.showNotification(title, {
+            body,
+            icon: '/volkern-icon.png',
+            badge: '/volkern-icon.png',
+            tag,
+            renotify: true,
+            vibrate: [100, 50, 100],
+            actions: [
+              { action: 'resolve', title: '✓ Marcar como resuelto' },
+              { action: 'open', title: 'Ver conversación' },
+            ],
+            data: { url, id: f.id },
+          });
+          shown = true;
+        }
+      } catch {
+        shown = false;
+      }
+    }
+
+    if (!shown) {
+      // Fallback sin SW (Safari/iOS): notificación de página con clic que abre el hilo.
+      const n = new Notification(title, { body, icon: '/volkern-icon.png', tag });
       n.onclick = () => {
         window.focus();
-        if (f.hubUrl) window.open(f.hubUrl, '_blank');
-        else window.location.href = '/dashboard/configuracion/mi-whatsapp';
+        window.open(url, '_blank');
         n.close();
       };
       setTimeout(() => n.close(), 15000);
-    } else {
-      // Sin permiso del sistema: el sonido ya avisó; mantener la consola por si acaso.
-      console.info('[Undeliverable] Nueva entrega no entregable:', f.contactoNombre || f.telefono);
     }
   } catch {
     // Safari/iOS puede lanzar excepción al construir Notification; ignorar.
@@ -99,6 +129,19 @@ export function useUndeliverableNotifications(userId?: string | null): {
   const [pendingCount, setPendingCount] = useState(0);
   const [recentFailures, setRecentFailures] = useState<UndeliverableItem[]>([]);
   const seededRef = useRef(false);
+  const refreshRef = useRef<(() => void) | null>(null);
+
+  // Cuando el agente resuelve desde la notificación, refrescar badge/lista al instante.
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+    const onMessage = (e: MessageEvent) => {
+      if (e.data?.type === 'UNDELIVERABLE_RESOLVED') {
+        refreshRef.current?.();
+      }
+    };
+    navigator.serviceWorker.addEventListener('message', onMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage);
+  }, []);
 
   // Pedir permiso de notificaciones con el primer gesto del usuario (requisito de los navegadores)
   useEffect(() => {
@@ -173,11 +216,13 @@ export function useUndeliverableNotifications(userId?: string | null): {
       }
     };
 
+    refreshRef.current = poll;
     poll();
     const interval = setInterval(poll, 60000);
     return () => {
       active = false;
       clearInterval(interval);
+      refreshRef.current = null;
     };
   }, [userId]);
 
