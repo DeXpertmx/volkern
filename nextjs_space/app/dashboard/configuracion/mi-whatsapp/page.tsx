@@ -20,7 +20,9 @@ import {
   Calendar,
   AlertCircle,
   AlertTriangle,
-  ExternalLink
+  ExternalLink,
+  Mail,
+  Copy
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Image from 'next/image';
@@ -132,6 +134,16 @@ export default function MiWhatsAppPage() {
       console.error('Error al cargar entregas no entregables:', error);
     } finally {
       setLoadingFailures(false);
+    }
+  };
+
+  // Copiar email del contacto al portapapeles
+  const copyEmail = async (email: string) => {
+    try {
+      await navigator.clipboard.writeText(email);
+      toast.success('Email copiado');
+    } catch {
+      toast.error('No se pudo copiar el email');
     }
   };
 
@@ -710,7 +722,22 @@ export default function MiWhatsAppPage() {
                           )}
                           {f.emailContacto && (
                             <span className="text-sm text-gray-600 flex items-center gap-1">
-                              📧 {f.emailContacto}
+                              <Mail className="h-3.5 w-3.5" />
+                              <a
+                                href={`mailto:${f.emailContacto}`}
+                                className="text-blue-600 hover:underline"
+                                title="Enviar email"
+                              >
+                                {f.emailContacto}
+                              </a>
+                              <button
+                                type="button"
+                                onClick={() => copyEmail(f.emailContacto!)}
+                                className="text-gray-400 hover:text-gray-700 transition-colors"
+                                title="Copiar email"
+                              >
+                                <Copy className="h-3.5 w-3.5" />
+                              </button>
                             </span>
                           )}
                           <Badge
