@@ -7,6 +7,46 @@
 import crypto from 'node:crypto';
 import prisma from '@/lib/db';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Registro en memoria de claves de mensaje enviadas POR EL PUENTE
+// (sendMessageWithUserInstance). Evolution reenvía un evento messages.upsert
+// (fromMe) cuando nosotros mismos enviamos un mensaje: ese "eco" no debe
+// volver a sincronizarse a Chatwoot ni crear mensaje local, porque provocaría
+// un bucle infinito (Chatwoot → webhook → Evolution → eco → Chatwoot → ...).
+// Con la clave registrada, el webhook reconoce el eco y lo descarta.
+// ─────────────────────────────────────────────────────────────────────────────
+const recentlySentMessageKeys = new Map<string, number>();
+const SENT_KEY_TTL_MS = 10 * 60 * 1000; // 10 minutos
+
+/**
+ * Marca una clave de mensaje de Evolution como enviada por nuestro puente.
+ */
+export function markMessageKeyAsSent(keyId?: string | null): void {
+  if (!keyId) return;
+  recentlySentMessageKeys.set(keyId, Date.now());
+  if (recentlySentMessageKeys.size > 5000) {
+    const now = Date.now();
+    for (const [k, ts] of recentlySentMessageKeys) {
+      if (now - ts > SENT_KEY_TTL_MS) recentlySentMessageKeys.delete(k);
+    }
+  }
+}
+
+/**
+ * ¿Esta clave de mensaje fue enviada recientemente por nuestro puente?
+ * (es decir, el messages.upsert que llega es el eco de nuestro propio envío)
+ */
+export function isMessageKeyRecentlySent(keyId?: string | null): boolean {
+  if (!keyId) return false;
+  const ts = recentlySentMessageKeys.get(keyId);
+  if (!ts) return false;
+  if (Date.now() - ts > SENT_KEY_TTL_MS) {
+    recentlySentMessageKeys.delete(keyId);
+    return false;
+  }
+  return true;
+}
+
 // Credenciales de Evolution API (desde las API secrets configuradas)
 const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL || 'https://evo.abacus.ai';
 const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY || '';
@@ -1051,6 +1091,12 @@ export async function sendMessageWithUserInstance(
 
     const data = await response.json();
 
+    // Registrar la clave del mensaje enviado: cuando Evolution reenvíe el eco
+    // (messages.upsert fromMe), el webhook lo reconocerá y no lo re-sincronizará
+    // a Chatwoot (evita el bucle infinito del puente).
+    const messageKey = data.key?.id || data.messageId;
+    markMessageKeyAsSent(messageKey);
+
     // Actualizar estadísticas
     await prisma.userWhatsAppInstance.updateMany({
       where: { instanceName },
@@ -1062,7 +1108,7 @@ export async function sendMessageWithUserInstance(
 
     return {
       success: true,
-      messageId: data.key?.id || data.messageId
+      messageId: messageKey
     };
   } catch (error) {
     console.error('Error al enviar mensaje:', error);

@@ -19,12 +19,22 @@ export async function syncIncomingChatwootMessage(payload: {
 
   try {
     // 1. Buscar o crear la conversación localmente
-    // Usamos externalRef para mapear el ID de conversación de Chatwoot
+    // Preferencia: vínculo por hubMetadata.chatwootConversationId (puente
+    // WhatsApp/Evolution guarda el ID de la conversación del hub en la
+    // conversación local). Fallback: externalRef chatwoot_{id} (flujo legacy).
     const externalRef = `chatwoot_${conversationId}`;
-    
-    let conversation = await prisma.conversation.findUnique({
-      where: { externalRef }
-    });
+
+    let conversation = await prisma.conversation.findFirst({
+      where: {
+        hubMetadata: { path: ['chatwootConversationId'], equals: Number(conversationId) },
+      } as any,
+    }).catch(() => null);
+
+    if (!conversation) {
+      conversation = await prisma.conversation.findUnique({
+        where: { externalRef }
+      });
+    }
 
     if (!conversation) {
       console.log(`[🔄 ChatwootSync] Creando nueva conversación local para externalRef: ${externalRef}`);
@@ -174,14 +184,23 @@ export async function syncOutgoingChatwootMessage(payload: {
       include: { tenant: true }
     });
 
-    if (!conversation || !conversation.chatwootAccountId || !conversation.externalRef) {
+    if (!conversation) {
+      return { success: false, reason: 'Conversación local no encontrada' };
+    }
+
+    // ID de la conversación de Chatwoot: primero desde hubMetadata (puente
+    // WhatsApp/Evolution), fallback al externalRef legacy (format: chatwoot_{id})
+    const chatwootConversationId =
+      (conversation.hubMetadata as any)?.chatwootConversationId ||
+      (conversation.externalRef?.startsWith('chatwoot_')
+        ? parseInt(conversation.externalRef.replace('chatwoot_', ''), 10)
+        : undefined);
+
+    if (!conversation.chatwootAccountId || !chatwootConversationId) {
       // No es una conversación de Chatwoot o no tiene los IDs necesarios
       return { success: false, reason: 'No es una conversación vinculada a Chatwoot' };
     }
 
-    // Extraer ID de conversación de Chatwoot del externalRef (format: chatwoot_{id})
-    const chatwootConversationId = parseInt(conversation.externalRef.replace('chatwoot_', ''));
-    
     // 2. Obtener el token de la cuenta de Chatwoot:
     //    - Integración legacy (integration.configuracion.accountToken)
     //    - Hub config moderno (messagingHubConfig → bot user)
@@ -230,7 +249,9 @@ export async function syncOutgoingChatwootMessage(payload: {
 
     console.log(`[🔄 ChatwootSync] Enviando respuesta a Chatwoot: Conv ${chatwootConversationId}`);
 
-    // 3. Enviar mensaje a la API de Chatwoot
+    // 3. Enviar mensaje a la API de Chatwoot. Se marca volkernOrigin: 'chatbot'
+    //    para que el webhook de Chatwoot sepa que este mensaje ya fue/será
+    //    entregado por el puente y no lo re-sincronice (evita duplicados).
     const response = await chatwootApi.sendMessage(
       conversation.chatwootAccountId,
       chatwootConversationId,
@@ -239,7 +260,10 @@ export async function syncOutgoingChatwootMessage(payload: {
       {
         messageType: 'outgoing',
         ...(contentType && { contentType }),
-        ...(contentAttributes && { contentAttributes }),
+        contentAttributes: {
+          ...(contentAttributes || {}),
+          volkernOrigin: 'chatbot',
+        },
       }
     );
 

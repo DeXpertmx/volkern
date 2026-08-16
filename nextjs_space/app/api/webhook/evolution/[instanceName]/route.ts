@@ -10,7 +10,8 @@ import prisma from '@/lib/db';
 import {
   ensureChatwootInboxForInstance,
   extractOwnerProfileFromConnection,
-  getProfileInfo
+  getProfileInfo,
+  isMessageKeyRecentlySent
 } from '@/lib/evolution-instances';
 
 /**
@@ -172,6 +173,7 @@ export async function POST(
         try {
           const remoteJid = body.data?.key?.remoteJid || '';
           const fromMe = !!body.data?.key?.fromMe;
+          const messageKeyId = body.data?.key?.id || '';
           const textContent =
             body.data?.message?.conversation ||
             body.data?.message?.extendedTextMessage?.text ||
@@ -184,6 +186,16 @@ export async function POST(
           // Sin remitente o sin contenido (medios sin caption, etc.) solo cuenta
           if (!remoteJid || !textContent) {
             console.log('⚠️ Mensaje sin contenido/remitente; solo se actualizó el contador');
+            break;
+          }
+
+          // 🔁 ECO DEL PUENTE: si el mensaje fromMe fue enviado POR NOSOTROS
+          // (sendMessageWithUserInstance — respuesta del agente o del chatbot),
+          // Evolution lo reenvía aquí como eco. Se descarta: la respuesta ya
+          // quedó en la bandeja (vía sendResponseToChatwoot/sync del webhook de
+          // Chatwoot) y re-sincronizarla crearía un bucle infinito.
+          if (fromMe && isMessageKeyRecentlySent(messageKeyId)) {
+            console.log('🔁 Eco del puente ignorado (mensaje enviado por Volkern):', messageKeyId);
             break;
           }
 
@@ -290,12 +302,40 @@ export async function POST(
               phoneNumber,
               accountToken,
             );
+
+            // Persistir el vínculo Chatwoot en la conversación local ANTES del
+            // espejo: sin esto, syncOutgoingChatwootMessage (respuesta del
+            // chatbot/agente) no encuentra la conversación y la respuesta nunca
+            // sale por WhatsApp; y el webhook de Chatwoot no sabría a qué
+            // conversación local vincular el espejo.
+            await prisma.conversation.update({
+              where: { id: localConversation.id },
+              data: {
+                chatwootAccountId: hubConfig.chatwootAccountId,
+                chatwootInboxId: channel.chatwootInboxId,
+                hubMetadata: {
+                  chatwootConversationId: conversation.id,
+                  chatwootAccountId: hubConfig.chatwootAccountId,
+                  chatwootInboxId: channel.chatwootInboxId,
+                },
+              },
+            }).catch(err => console.warn('⚠️ No se pudo persistir vínculo Chatwoot en la conversación:', err instanceof Error ? err.message : err));
+
+            // Espejo en Chatwoot marcado con volkernOrigin: el webhook de
+            // Chatwoot lo detectará y NO lo reenviará a Evolution (evita
+            // duplicados/bucles). El mensaje real ya está en WhatsApp.
             await chatwootApi.sendMessage(
               hubConfig.chatwootAccountId,
               conversation.id,
               textContent,
               accountToken,
-              { messageType: fromMe ? 'outgoing' : 'incoming' },
+              {
+                messageType: fromMe ? 'outgoing' : 'incoming',
+                contentAttributes: {
+                  volkernOrigin: 'evolution-bridge',
+                  evolutionKey: messageKeyId,
+                },
+              },
             );
             console.log(`✅ Mensaje ${fromMe ? 'saliente' : 'entrante'} sincronizado a Chatwoot:`, conversation.id);
 
