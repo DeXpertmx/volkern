@@ -549,7 +549,7 @@ async function markConversationUndeliverable(opts: {
     (altLines.length ? `${altLines.join('\n')}\n\n` : '') +
     `Mensaje fallido: ${failedContent.substring(0, 200)}`;
 
-  // Persistir el fallo para la vista de "No entregables" en Mi WhatsApp.
+  // Persistir el fallo para la vista de "No entregables" en WhatsApp del Negocio.
   try {
     await prisma.whatsAppDeliveryFailure.create({
       data: {
@@ -573,9 +573,14 @@ async function markConversationUndeliverable(opts: {
   // 📋 Tarea de seguimiento automática: asignada al agente dueño de la
   // instancia (el que conectó el número) para contactar por otro canal.
   try {
-    const instanceOwner = await prisma.userWhatsAppInstance.findFirst({
-      where: { instanceName: instanceName || '' },
-      select: { userId: true },
+    // El WhatsApp del Negocio pertenece al tenant (no a un usuario): asignar la
+    // tarea al primer admin del tenant para que la gestione.
+    const instanceOwner = await prisma.user.findFirst({
+      where: {
+        tenantId,
+        role: { nombre: { in: ['Admin', 'admin', 'Administrador', 'administrator'] } },
+      },
+      select: { id: true },
     });
     const vencimiento = new Date();
     vencimiento.setDate(vencimiento.getDate() + 1);
@@ -589,7 +594,7 @@ async function markConversationUndeliverable(opts: {
         titulo: `Contactar por otro canal: ${contactName || (phoneNumber || 'cliente sin identificar')}`,
         descripcion: `WhatsApp no pudo entregar el mensaje (número inexistente o no disponible). Contacta por email u otro teléfono.\n\n${noteText}`,
         fechaVencimiento: vencimiento,
-        asignadoA: instanceOwner?.userId || null,
+        asignadoA: instanceOwner?.id || null,
         completada: false,
       },
     });

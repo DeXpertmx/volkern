@@ -17,15 +17,15 @@ interface WhatsAppCredentials {
  * @param tenantId ID del tenant (opcional si se usa con sesión)
  *
  * Prioridad:
- * 1. Instancia de WhatsApp conectada desde Volkern (UserWhatsAppInstance
- *    status=connected + canal whatsapp con config.instanceName). Usa la API
- *    Key global del servidor (EVOLUTION_API_KEY/EVOLUTION_API_URL).
+ * 1. Instancia de WhatsApp del Negocio conectada desde Volkern
+ *    (TenantWhatsAppInstance status=connected). Usa la API Key global del
+ *    servidor (EVOLUTION_API_KEY/EVOLUTION_API_URL).
  * 2. Integración legacy de Evolution API (credenciales por tenant).
  */
 async function loadCredentialsFromDB(tenantId: string): Promise<WhatsAppCredentials> {
   try {
-    // 1. Instancia conectada desde Volkern (flujo Mi WhatsApp Personal)
-    const instance = await prisma.userWhatsAppInstance.findFirst({
+    // 1. Instancia del WhatsApp del Negocio (conectada desde Configuración)
+    const instance = await prisma.tenantWhatsAppInstance.findFirst({
       where: { tenantId, status: 'connected' },
       orderBy: { fechaConexion: 'desc' },
       select: { instanceName: true },
@@ -71,7 +71,7 @@ async function loadCredentialsFromDB(tenantId: string): Promise<WhatsAppCredenti
     })
 
     if (!integration || !integration.credenciales) {
-      throw new Error('WhatsApp no está conectado. Conecta tu número en Configuración → Mi WhatsApp Personal.')
+      throw new Error('WhatsApp no está conectado. Conecta el número del negocio en Configuración → WhatsApp del Negocio.')
     }
 
     const creds = integration.credenciales as any

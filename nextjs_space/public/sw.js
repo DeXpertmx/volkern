@@ -164,7 +164,7 @@ self.addEventListener('notificationclick', function(event) {
       (async () => {
         try {
           if (!id) return openNotificationUrl(data.url || '/')
-          const res = await fetch('/api/integraciones/my-whatsapp/no-entregables', {
+          const res = await fetch('/api/integraciones/whatsapp-negocio/no-entregables', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id, origen: 'notificacion' }),
