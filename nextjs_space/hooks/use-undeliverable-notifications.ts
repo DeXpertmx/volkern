@@ -56,6 +56,7 @@ interface UndeliverableItem {
   mensajeFallido: string | null;
   notaAgente: string | null;
   hubUrl: string | null;
+  fechaCreacion: string;
 }
 
 /** Notificación del sistema; al hacer clic abre la conversación en el hub. */
@@ -91,8 +92,12 @@ function notifyUndeliverable(f: UndeliverableItem) {
  * dispara sonido + notificación cuando aparece una nueva.
  * @param userId  id del usuario (clave de localStorage); null desactiva el polling.
  */
-export function useUndeliverableNotifications(userId?: string | null): number {
+export function useUndeliverableNotifications(userId?: string | null): {
+  pendingCount: number;
+  recentFailures: UndeliverableItem[];
+} {
   const [pendingCount, setPendingCount] = useState(0);
+  const [recentFailures, setRecentFailures] = useState<UndeliverableItem[]>([]);
   const seededRef = useRef(false);
 
   // Pedir permiso de notificaciones con el primer gesto del usuario (requisito de los navegadores)
@@ -159,7 +164,9 @@ export function useUndeliverableNotifications(userId?: string | null): number {
         }
         if (active && listRes.ok) {
           const d = await listRes.json();
-          handleNew(d.failures || []);
+          const failures = d.failures || [];
+          setRecentFailures(failures);
+          handleNew(failures);
         }
       } catch {
         // Silencioso: reintentará en el siguiente tick del polling.
@@ -174,5 +181,5 @@ export function useUndeliverableNotifications(userId?: string | null): number {
     };
   }, [userId]);
 
-  return pendingCount;
+  return { pendingCount, recentFailures };
 }
