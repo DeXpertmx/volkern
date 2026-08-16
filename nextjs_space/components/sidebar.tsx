@@ -193,10 +193,16 @@ export function Sidebar() {
       <Button
         variant="ghost"
         size="icon"
-        className="fixed top-4 left-4 z-50 md:hidden text-foreground"
+        className="fixed top-4 left-4 z-50 md:hidden text-foreground relative"
         onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
       >
         {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+        {/* Badge de entregas no entregables pendientes en el menú móvil, visible sin abrirlo */}
+        {!isMobileMenuOpen && undeliverableCount > 0 && (
+          <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center border-2 border-background shadow">
+            {undeliverableCount}
+          </span>
+        )}
       </Button>
 
       {isMobileMenuOpen && (
