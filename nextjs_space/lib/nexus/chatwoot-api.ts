@@ -683,6 +683,35 @@ class ChatwootApiClient {
     }
 
     /**
+     * Listar los agentes de la cuenta (id, nombre, email). Se usa para mapear
+     * al agente de Chatwoot correspondiente al usuario autenticado de Volkern
+     * (por email) y así filtrar la pestaña "Mías" del hub.
+     */
+    async listAgents(
+        accountId: number,
+        accountToken: string
+    ): Promise<{ id: number; name: string; email: string }[]> {
+        try {
+            const res = await this.request<{ payload?: any[] } | any[]>(
+                `/api/v1/accounts/${accountId}/agents`,
+                { method: 'GET' },
+                accountToken
+            );
+            const list = Array.isArray(res) ? res : (res?.payload || []);
+            return list
+                .filter((a: any) => a && typeof a.id === 'number')
+                .map((a: any) => ({
+                    id: Number(a.id),
+                    name: String(a.name || a.available_name || ''),
+                    email: String((a.email || '').toLowerCase()),
+                }));
+        } catch (err) {
+            console.error('[ChatwootAPI] Error listando agentes:', err instanceof Error ? err.message : err);
+            return [];
+        }
+    }
+
+    /**
      * Listar conversaciones de la cuenta con su agente asignado (assignee).
      * La respuesta de Chatwoot v4 incluye `meta.assignee` en cada conversación
      * ({ id, name, email, ... } o null si está sin asignar). Se pagina hasta
@@ -698,11 +727,15 @@ class ChatwootApiClient {
             status: string;
             assignee: { id: number; name: string; email: string } | null;
         }[];
+        counts?: { mias: number; sin_asignar: number; todas: number };
         error?: string;
     }> {
         const maxPages = options?.maxPages || 5;
         const conversations: { id: number; status: string; assignee: { id: number; name: string; email: string } | null }[] = [];
         let page = 1;
+        // Chatwoot v4 devuelve en data.meta los contadores globales del account
+        // (mine_count/unassigned_count/all_count) exactos para las pestañas.
+        let counts: { mias: number; sin_asignar: number; todas: number } | undefined;
         try {
             while (page <= maxPages) {
                 const params = new URLSearchParams({
@@ -711,7 +744,7 @@ class ChatwootApiClient {
                     ...(options?.assigneeType ? { assignee_type: options.assigneeType } : {}),
                 });
                 const res = await this.request<{
-                    data?: { conversations?: any[] };
+                    data?: { payload?: any[]; meta?: Record<string, any> };
                     payload?: any[];
                     meta?: { pagination?: { next_page?: number | null } };
                 }>(
@@ -719,9 +752,19 @@ class ChatwootApiClient {
                     { method: 'GET' },
                     accountToken
                 );
+                // Chatwoot v4: { data: { payload: [...], meta: {...} } }
+                const innerData = (res?.data || {}) as { payload?: any[]; meta?: Record<string, any> };
                 const list = Array.isArray(res?.payload)
                     ? res.payload
-                    : (res?.data?.conversations || []);
+                    : (innerData.payload || []);
+                const meta = innerData.meta || {};
+                if (typeof meta.mine_count === 'number' && typeof meta.all_count === 'number') {
+                    counts = {
+                        mias: meta.mine_count,
+                        sin_asignar: meta.unassigned_count ?? 0,
+                        todas: meta.all_count,
+                    };
+                }
                 if (list.length === 0) break;
                 for (const conv of list) {
                     const assigneeRaw = conv?.meta?.assignee || conv?.assignee || null;
@@ -737,14 +780,16 @@ class ChatwootApiClient {
                             : null,
                     });
                 }
-                const next = res?.meta?.pagination?.next_page;
+                const next =
+                    (res?.meta as any)?.pagination?.next_page ??
+                    (innerData.meta as any)?.pagination?.next_page;
                 if (!next) break;
                 page += 1;
             }
-            return { conversations };
+            return { conversations, counts };
         } catch (err) {
             console.error('[ChatwootAPI] Error listando conversaciones:', err instanceof Error ? err.message : err);
-            return { conversations, error: err instanceof Error ? err.message : 'Error listando conversaciones' };
+            return { conversations, counts, error: err instanceof Error ? err.message : 'Error listando conversaciones' };
         }
     }
 
