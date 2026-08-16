@@ -501,22 +501,27 @@ async function markConversationUndeliverable(opts: {
 
   // 🔎 Buscar el lead/contacto en el CRM por teléfono para ofrecer
   // alternativas de contacto (email, empresa, otro teléfono registrado)
-  // directamente en la nota privada del hub.
+  // directamente en la nota privada del hub, y para vincular la tarea de
+  // seguimiento al registro correcto.
   const altLines: string[] = [];
+  let matchedLeadId: string | null = null;
+  let matchedContactId: string | null = null;
   const digits = (phoneNumber || '').replace(/[^\d]/g, '');
   if (digits.length >= 8) {
     const suffix = digits.slice(-9);
     try {
       const lead = await prisma.lead.findFirst({
         where: { tenantId, telefono: { endsWith: suffix } },
-        select: { nombre: true, email: true, telefono: true, empresa: true },
+        select: { id: true, nombre: true, email: true, telefono: true, empresa: true },
       });
       const contact = !lead
         ? await prisma.contact.findFirst({
             where: { tenantId, telefono: { endsWith: suffix } },
-            select: { nombre: true, email: true, telefono: true },
+            select: { id: true, nombre: true, email: true, telefono: true },
           })
         : null;
+      if (lead) matchedLeadId = lead.id;
+      if (contact) matchedContactId = contact.id;
       const rec: { nombre: string; email: string; telefono?: string | null; empresa?: string | null } | null = lead || contact;
       if (rec) {
         altLines.push(`👤 Contacto en CRM: ${rec.nombre}`);
@@ -557,6 +562,34 @@ async function markConversationUndeliverable(opts: {
     });
   } catch (persistErr) {
     console.error('[ChatwootWebhook] Error persistiendo fallo de entrega:', persistErr);
+  }
+
+  // 📋 Tarea de seguimiento automática: asignada al agente dueño de la
+  // instancia (el que conectó el número) para contactar por otro canal.
+  try {
+    const instanceOwner = await prisma.userWhatsAppInstance.findFirst({
+      where: { instanceName: instanceName || '' },
+      select: { userId: true },
+    });
+    const vencimiento = new Date();
+    vencimiento.setDate(vencimiento.getDate() + 1);
+    vencimiento.setHours(18, 0, 0, 0); // fin de jornada del día siguiente
+    await prisma.task.create({
+      data: {
+        tenantId,
+        ...(matchedLeadId ? { leadId: matchedLeadId } : {}),
+        ...(matchedContactId ? { contactId: matchedContactId } : {}),
+        tipo: 'seguimiento',
+        titulo: `Contactar por otro canal: ${contactName || (phoneNumber || 'cliente sin identificar')}`,
+        descripcion: `WhatsApp no pudo entregar el mensaje (número inexistente o no disponible). Contacta por email u otro teléfono.\n\n${noteText}`,
+        fechaVencimiento: vencimiento,
+        asignadoA: instanceOwner?.userId || null,
+        completada: false,
+      },
+    });
+    console.log(`[ChatwootWebhook] ✅ Tarea de seguimiento creada para conversación ${conversationId}`);
+  } catch (taskErr) {
+    console.error('[ChatwootWebhook] Error creando tarea de seguimiento:', taskErr);
   }
 
   // Token real de agente del canal (el del bot no puede crear salientes).
