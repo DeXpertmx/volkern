@@ -162,17 +162,18 @@ async function callGemma426b(
 }
 
 /**
- * Llama a inclusionai/ling-3.0-tiny:free via OpenRouter.
- * Proveedor DISTINTO a Google (Inclusion AI): no comparte el pool rate-limit
+ * Llama a dots-studio/dots-3-note-preview:free via OpenRouter.
+ * Proveedor DISTINTO a Google (Dots Studio): no comparte el pool rate-limit
  * de Google AI Studio, así que sigue funcionando cuando gemma-4-31b/26b dan
- * 429 a la vez. El slug anterior (ling-3.0-flash:free) fue retirado en 2026
- * (404); el modelo free actual de Inclusion es ling-3.0-tiny:free.
+ * 429 a la vez. Los slugs anteriores de Inclusion (ling-3.0-flash:free y
+ * ling-3.0-tiny:free) fueron retirados en 2026 (404); dots-3 responde 200
+ * con 512k de contexto.
  */
-async function callLing30Flash(
+async function callDotsStudioFree(
   messages: OpenRouterMessage[],
   timeoutMs = 20000
 ): Promise<OpenRouterResponse> {
-  return callOpenRouter('inclusionai/ling-3.0-tiny:free', messages, 0.3, 8192, timeoutMs);
+  return callOpenRouter('dots-studio/dots-3-note-preview:free', messages, 0.3, 8192, timeoutMs);
 }
 
 /**
@@ -316,8 +317,8 @@ export async function callWebCreatorWithFallback(
   // 2. Ling 3.0 Flash via OpenRouter — proveedor distinto a Google, inmune al
   //     pool rate-limit de Google AI Studio
   try {
-    console.log('[AI WebCreator] Fallback a inclusionai/ling-3.0-tiny:free...');
-    const response = await callLing30Flash(messages, 45000);
+    console.log('[AI WebCreator] Fallback a dots-studio/dots-3-note-preview:free...');
+    const response = await callDotsStudioFree(messages, 45000);
     console.log('[AI WebCreator] ✅ Ling 3.0 Flash respondió correctamente');
     return response;
   } catch (error) {
@@ -461,17 +462,17 @@ export async function callAssistantWithFallback(
     }
   }
 
-  // 2. Ling 3.0 Flash via OpenRouter — proveedor DISTINTO a Google, inmune al
-  //     rate-limit compartido del pool de Google AI Studio. Va ANTES que Gemma
-  //     porque cuando el pool de Google está 429 (lo más común), los Gemma
-  //     desperdician segundos preciosos del presupuesto de 25s del webhook.
+  // 2. Dots Studio 3 (free) via OpenRouter — proveedor DISTINTO a Google,
+  //     inmune al rate-limit compartido del pool de Google AI Studio. Va
+  //     ANTES que Gemma porque cuando el pool de Google está 429 (lo más
+  //     común), los Gemma desperdician segundos preciosos del presupuesto.
   try {
-    console.log('[AI] Fallback a inclusionai/ling-3.0-flash:free...');
-    const response = await callLing30Flash(messages, hopTimeout);
-    console.log('[AI] ✅ Ling 3.0 Flash respondió correctamente');
+    console.log('[AI] Fallback a dots-studio/dots-3-note-preview:free...');
+    const response = await callDotsStudioFree(messages, hopTimeout);
+    console.log('[AI] ✅ Dots Studio 3 respondió correctamente');
     return response;
-  } catch (lingError) {
-    console.warn('[AI] Ling 3.0 Flash falló:', lingError);
+  } catch (dotsError) {
+    console.warn('[AI] Dots Studio 3 falló:', dotsError);
   }
 
   // 3. Gemma 4 (31b → 26b) via OpenRouter — con atajo ante 429 del pool
@@ -646,15 +647,15 @@ export async function callOpenRouterWithFallback(
     console.warn(`[AI] ${model} falló:`, openRouterError);
   }
 
-  // 2. Ling 3.0 Flash via OpenRouter — proveedor distinto a Google
-  if (model !== 'inclusionai/ling-3.0-flash:free') {
+  // 2. Dots Studio 3 (free) via OpenRouter — proveedor distinto a Google
+  if (model !== 'dots-studio/dots-3-note-preview:free') {
     try {
-      console.log('[AI] Fallback a inclusionai/ling-3.0-flash:free...');
-      const response = await callLing30Flash(messages);
-      console.log('[AI] ✅ Ling 3.0 Flash respondió correctamente');
+      console.log('[AI] Fallback a dots-studio/dots-3-note-preview:free...');
+      const response = await callDotsStudioFree(messages);
+      console.log('[AI] ✅ Dots Studio 3 respondió correctamente');
       return response;
-    } catch (lingError) {
-      console.warn('[AI] Ling 3.0 Flash falló:', lingError);
+    } catch (dotsError) {
+      console.warn('[AI] Dots Studio 3 falló:', dotsError);
     }
   }
 
