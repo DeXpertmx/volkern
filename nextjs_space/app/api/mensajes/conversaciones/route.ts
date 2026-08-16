@@ -32,8 +32,15 @@ export const GET = withTenantAuth(async (request, auth) => {
     // Asignación real desde el hub (Chatwoot): mapa conversationId → assignee.
     // Si el hub no está disponible (sin token/account), todas quedan "sin
     // asignar" conocida: no romper la bandeja, solo mostrar sin filtro.
-    let assigneeByConv = new Map<number, string>() // conversationId -> email agente
+    let assigneeByConv = new Map<number, { id: number; email: string }>() // conversationId -> agente
+    let hubCounts: { mias: number; sin_asignar: number; todas: number } | undefined
     let hubAvailable = false
+    // Ids de los agentes de Chatwoot que representan al usuario autenticado:
+    //  - el agente cuyo email coincide con el del usuario (mapeo por email),
+    //  - el defaultAssigneeId del canal (el agente al que el bot asigna por
+    //    defecto las conversaciones entrantes; suele ser el operador del
+    //    número, que puede tener un email distinto en el hub).
+    let miAgentIds = new Set<number>()
     try {
       const [hub, channel] = await Promise.all([
         prisma.messagingHubConfig.findFirst({ where: { tenantId: auth.tenant!.id } }),
@@ -49,6 +56,15 @@ export const GET = withTenantAuth(async (request, auth) => {
         ''
       if (accountId && accountToken) {
         const { chatwootApi } = await import('@/lib/nexus/chatwoot-api')
+        // Mapear el usuario autenticado a su agente del hub (por email).
+        const agents = await chatwootApi.listAgents(accountId, accountToken)
+        const foundAgent = userEmail
+          ? agents.find((a: any) => a.email === userEmail)
+          : undefined
+        if (foundAgent?.id) miAgentIds.add(foundAgent.id)
+        const defaultAssigneeId = (channel?.config as any)?.defaultAssigneeId
+        if (typeof defaultAssigneeId === 'number') miAgentIds.add(defaultAssigneeId)
+
         const result = await chatwootApi.listConversations(accountId, accountToken, {
           status: 'all',
           assigneeType: 'all',
@@ -56,8 +72,9 @@ export const GET = withTenantAuth(async (request, auth) => {
         })
         if (!result.error) {
           hubAvailable = true
+          hubCounts = result.counts
           for (const c of result.conversations) {
-            if (c.assignee?.email) assigneeByConv.set(c.id, c.assignee.email)
+            if (c.assignee?.id) assigneeByConv.set(c.id, { id: c.assignee.id, email: c.assignee.email })
           }
         }
       }
@@ -100,37 +117,22 @@ export const GET = withTenantAuth(async (request, auth) => {
     ])
 
     // Enriquecer cada conversación con el agente asignado (email) y clasificarla.
-    let counts = { mias: 0, sin_asignar: 0, todas: total }
+    // Los contadores de las pestañas vienen del hub (data.meta de Chatwoot,
+    // exactos sobre todo el account); si no hay hub, caen a la página local.
+    const counts = hubCounts ?? { mias: 0, sin_asignar: 0, todas: total }
     const conversaciones = conversacionesRaw.map((c: any) => {
       const convId = (c.hubMetadata as any)?.chatwootConversationId
         ?? (typeof c.externalRef === 'string' && c.externalRef.startsWith('chatwoot_')
           ? Number(c.externalRef.replace('chatwoot_', ''))
           : null)
-      const asignadaA = hubAvailable && convId ? (assigneeByConv.get(Number(convId)) || null) : null
-      const esMia = !!asignadaA && asignadaA === userEmail
-      return { ...c, asignadaA, esMia }
-    })
-
-    if (hubAvailable) {
-      // Contadores reales sobre el total del tenant (sin paginar): consultar
-      // todas las conversaciones locales una sola vez para clasificar bien.
-      const allLocal = await prisma.conversation.findMany({
-        where,
-        select: { id: true, hubMetadata: true, externalRef: true },
-      })
-      let mias = 0
-      let sinAsignar = 0
-      for (const c of allLocal) {
-        const convId = (c.hubMetadata as any)?.chatwootConversationId
-          ?? (typeof c.externalRef === 'string' && c.externalRef.startsWith('chatwoot_')
-            ? Number(c.externalRef.replace('chatwoot_', ''))
-            : null)
-        const asignadaA = convId ? (assigneeByConv.get(Number(convId)) || null) : null
-        if (asignadaA === userEmail) mias += 1
-        else if (!asignadaA) sinAsignar += 1
+      const asignado = hubAvailable && convId ? (assigneeByConv.get(Number(convId)) || null) : null
+      const esMia = !!asignado && miAgentIds.has(asignado.id)
+      return {
+        ...c,
+        asignadaA: asignado ? (asignado.email || 'Asignado') : null,
+        esMia,
       }
-      counts = { mias, sin_asignar: sinAsignar, todas: allLocal.length }
-    }
+    })
 
     // Aplicar el filtro de la pestaña activa sobre la página devuelta. Si el
     // hub no está disponible (sin asignación conocida), degradar a "Todas" en
