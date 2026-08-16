@@ -869,6 +869,33 @@ export async function ensureChatwootInboxForInstance(
       } catch (earlyErr) {
         console.warn('[Chatwoot] No se pudo sincronizar miembros del inbox existente:', earlyErr instanceof Error ? earlyErr.message : earlyErr)
       }
+
+      // ── INSTANCIA DEL NEGOCIO: el canal del tenant debe apuntar al número
+      // del negocio, no a la instancia personal que pudo haber creado el canal
+      // antes. Si no se repunta, el puente saliente respondería por el WhatsApp
+      // personal del usuario en vez del número dedicado del negocio.
+      if (kind === 'tenant') {
+        const tenantConfig: any = existingChannel.config || {}
+        let tenantPhone = instance.phoneNumber || ''
+        if (!tenantPhone) {
+          const profileResult = await getProfileInfo(instanceName)
+          tenantPhone = profileResult.profile?.id?.replace('@s.whatsapp.net', '') || tenantPhone
+        }
+        const updatedConfig = {
+          ...tenantConfig,
+          provider: 'evolution',
+          instanceName,
+          phoneNumber: tenantPhone || tenantConfig.phoneNumber || '',
+          apiUrl: EVOLUTION_API_URL,
+          webhookUrl: `${process.env.NEXTAUTH_URL || 'https://volkern.app'}/api/webhook/evolution/${instanceName}`,
+        }
+        await prisma.channel.update({
+          where: { id: existingChannel.id },
+          data: { config: updatedConfig },
+        })
+        console.log('[Chatwoot] Canal repuntado al WhatsApp del negocio:', instanceName, '->', updatedConfig.phoneNumber)
+      }
+
       return { success: true, inboxId: existingChannel.chatwootInboxId }
     }
 
