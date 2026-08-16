@@ -491,7 +491,18 @@ async function sendFallbackResponse(
 // INICIALIZACIÓN DEL HANDLER
 // ============================================================
 
+// Guard idempotente: Next.js standalone puede instanciar este módulo en
+// varios bundles (instrumentation vs app), y cada webhook puede invocar la
+// inicialización. Sin el guard, cada llamada añadiría un listener más y el
+// bot respondería N veces por mensaje.
+let gemmaInitialized = false;
+
 export function initGemmaChatbot() {
+  if (gemmaInitialized) {
+    return;
+  }
+  gemmaInitialized = true;
+
   // Registrar handler para el evento MESSAGE_RECEIVED de Chatwoot
   eventBus.onEvent(EVENTS.MESSAGE_RECEIVED, async (payload: any) => {
     try {

@@ -365,6 +365,14 @@ export async function POST(
           // 🔔 Emitir evento solo para entrantes (el chatbot responde a contactos)
           if (!fromMe) {
             try {
+              // Asegurar que el chatbot (Gemma) escucha en ESTE bundle/process:
+              // en Next.js standalone, el listener registrado desde
+              // instrumentation.ts puede vivir en otra instancia del event bus
+              // (bundles separados) y nunca recibiría el evento. El registro es
+              // idempotente (flag interno).
+              const { initGemmaChatbot } = await import('@/lib/agents/chatwoot-chatbot-handler');
+              initGemmaChatbot();
+
               const { eventBus, EVENTS } = await import('@/lib/skills/event-bus');
               eventBus.emitEvent(EVENTS.MESSAGE_RECEIVED as any, {
                 tenantId: instance.tenantId,

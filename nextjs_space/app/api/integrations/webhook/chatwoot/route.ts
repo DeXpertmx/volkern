@@ -90,6 +90,17 @@ function isIdempotent(messageId: string): boolean {
 
 export async function POST(request: NextRequest) {
   try {
+    // Asegurar que el chatbot (Gemma) escucha en ESTE bundle/process antes de
+    // procesar el mensaje (el registro es idempotente). En Next.js standalone,
+    // el listener de instrumentation.ts puede vivir en otra instancia del
+    // event bus (bundles separados) y nunca recibiría los eventos.
+    try {
+      const { initGemmaChatbot } = await import('@/lib/agents/chatwoot-chatbot-handler');
+      initGemmaChatbot();
+    } catch (gemmaInitErr) {
+      console.error('[ChatwootWebhook] Error inicializando Gemma chatbot:', gemmaInitErr);
+    }
+
     // Leer body
     const rawBody = await request.text();
     let data: Record<string, unknown>;
