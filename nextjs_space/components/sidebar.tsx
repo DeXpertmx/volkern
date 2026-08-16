@@ -252,7 +252,7 @@ export function Sidebar() {
                 type="button"
                 onClick={() => {
                   setBadgePopoverOpen(false)
-                  window.location.href = '/dashboard/configuracion/mi-whatsapp'
+                  window.location.href = '/dashboard/configuracion/whatsapp-negocio'
                 }}
                 className="text-xs font-semibold text-primary hover:underline whitespace-nowrap"
               >
@@ -270,7 +270,7 @@ export function Sidebar() {
                     onClick={() => {
                       setBadgePopoverOpen(false)
                       if (f.hubUrl) window.open(f.hubUrl, '_blank')
-                      else window.location.href = '/dashboard/configuracion/mi-whatsapp'
+                      else window.location.href = '/dashboard/configuracion/whatsapp-negocio'
                     }}
                     className="w-full text-left border rounded-lg p-3 bg-red-50/50 border-red-200 hover:bg-red-50 transition-colors"
                   >
@@ -373,7 +373,7 @@ export function Sidebar() {
                     >
                       <Icon className={cn("h-5 w-5 shrink-0 transition-transform group-hover:scale-110", isActive ? "text-white" : "text-muted-foreground")} />
                       {!isCollapsed && <span className="text-sm tracking-tight">{item.name}</span>}
-                      {(item.href === '/dashboard/configuracion/mi-whatsapp' || item.href === '/dashboard/configuracion/whatsapp-negocio') && undeliverableCount > 0 && (
+                      {item.href === '/dashboard/configuracion/whatsapp-negocio' && undeliverableCount > 0 && (
                         <Badge className="ml-auto bg-red-500 text-white border-red-500 text-[10px]">
                           {undeliverableCount}
                         </Badge>
