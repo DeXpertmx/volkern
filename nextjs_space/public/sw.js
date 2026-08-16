@@ -184,7 +184,32 @@ self.addEventListener('notificationclick', function(event) {
     return
   }
 
-  // Acción "Ver" o clic simple: abrir la conversación (o la app).
+  // Acción "Enviar email": abre el cliente de correo con el email del contacto
+  // (mailto:). El SW no puede abrir mailto: directamente, así que se lo pide a la
+  // página abierta; si la app está cerrada, abre la vista donde está el contacto.
+  if (action === 'email') {
+    notification.close()
+    event.waitUntil(
+      (async () => {
+        if (data.email) {
+          const subject = encodeURIComponent('Contacto pendiente — WhatsApp no entregable')
+          const mailtoUrl = `mailto:${data.email}?subject=${subject}`
+          const clientList = await clients.matchAll({ type: 'window', includeUncontrolled: true })
+          const target = clientList.find((c) => c.url && c.url.startsWith(self.location.origin)) || clientList[0]
+          if (target) {
+            target.postMessage({ type: 'OPEN_MAILTO', url: mailtoUrl })
+            if ('focus' in target) return target.focus()
+            return
+          }
+        }
+        // Sin email registrado o sin app abierta: ir donde está el contacto con su mailto.
+        return openNotificationUrl('/dashboard/configuracion/mi-whatsapp')
+      })()
+    )
+    return
+  }
+
+  // Clic simple: abrir la conversación (o la app).
   notification.close()
   event.waitUntil(openNotificationUrl(data.url || '/'))
 })
