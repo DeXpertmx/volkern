@@ -18,7 +18,9 @@ import {
   User,
   Phone,
   Calendar,
-  AlertCircle
+  AlertCircle,
+  AlertTriangle,
+  ExternalLink
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Image from 'next/image';
@@ -49,9 +51,29 @@ export default function MiWhatsAppPage() {
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
   const [instanceName, setInstanceName] = useState<string>(''); // Nuevo estado para el nombre de instancia
 
-  // Cargar instancia al montar
+  // Entregas no entregables (Evolution 400 por número inexistente)
+  interface DeliveryFailure {
+    id: string;
+    chatwootAccountId: number;
+    chatwootConversationId: number;
+    contactoNombre: string | null;
+    telefono: string | null;
+    mensajeFallido: string | null;
+    notaAgente: string | null;
+    estado: string;
+    resueltoPor: string | null;
+    fechaResolucion: string | null;
+    fechaCreacion: string;
+    hubUrl: string | null;
+  }
+  const [failures, setFailures] = useState<DeliveryFailure[]>([]);
+  const [loadingFailures, setLoadingFailures] = useState(true);
+  const [resolvingIds, setResolvingIds] = useState<Set<string>>(new Set());
+
+  // Cargar instancia y entregas no entregables al montar
   useEffect(() => {
     fetchInstance();
+    fetchFailures();
   }, []);
 
   // Limpiar polling al desmontar
@@ -94,6 +116,51 @@ export default function MiWhatsAppPage() {
       toast.error(errorMessage);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Cargar entregas no entregables del tenant
+  const fetchFailures = async () => {
+    try {
+      const response = await fetch('/api/integraciones/my-whatsapp/no-entregables');
+      if (!response.ok) return;
+      const data = await response.json();
+      setFailures(data.failures || []);
+    } catch (error) {
+      console.error('Error al cargar entregas no entregables:', error);
+    } finally {
+      setLoadingFailures(false);
+    }
+  };
+
+  // Marcar una entrega fallida como resuelta
+  const markResolved = async (id: string) => {
+    if (resolvingIds.has(id)) return;
+    setResolvingIds((prev) => new Set(prev).add(id));
+    try {
+      const response = await fetch('/api/integraciones/my-whatsapp/no-entregables', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ error: 'Error desconocido' }));
+        throw new Error(err.error || `Error ${response.status}`);
+      }
+      toast.success('Entrega marcada como resuelta');
+      setFailures((prev) => prev.map((f) => (f.id === id
+        ? { ...f, estado: 'resuelto', resueltoPor: 'Yo', fechaResolucion: new Date().toISOString() }
+        : f)));
+    } catch (error) {
+      console.error('Error al marcar como resuelta:', error);
+      const msg = error instanceof Error ? error.message : 'Error al marcar como resuelta';
+      toast.error(msg);
+    } finally {
+      setResolvingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     }
   };
 
@@ -590,6 +657,120 @@ export default function MiWhatsAppPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Mensajes no entregables por WhatsApp */}
+      <Card className="mt-8">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-red-500" />
+            <CardTitle className="text-lg">Mensajes no entregables</CardTitle>
+          </div>
+          <CardDescription>
+            Conversaciones donde WhatsApp rechazó el envío (número inexistente o no disponible).
+            El agente fue notificado en el centro de comunicaciones; márcalas como resueltas cuando contactes por otro canal.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loadingFailures ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+            </div>
+          ) : failures.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <CheckCircle2 className="h-8 w-8 text-green-500 mb-2" />
+              <p className="text-gray-500">No hay entregas fallidas. ¡Todo enviando correctamente!</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {failures.map((f) => {
+                const resolved = f.estado === 'resuelto';
+                return (
+                  <div
+                    key={f.id}
+                    className={`border rounded-lg p-4 ${resolved ? 'bg-gray-50 border-gray-200' : 'bg-red-50/50 border-red-200'}`}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-semibold text-gray-900">
+                            {f.contactoNombre || 'Contacto desconocido'}
+                          </span>
+                          {f.telefono && (
+                            <span className="text-sm text-gray-600 flex items-center gap-1">
+                              <Phone className="h-3.5 w-3.5" />
+                              {f.telefono}
+                            </span>
+                          )}
+                          <Badge
+                            variant={resolved ? 'secondary' : 'destructive'}
+                            className={resolved ? '' : 'bg-red-500'}
+                          >
+                            {resolved ? 'Resuelto' : 'Pendiente'}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {new Date(f.fechaCreacion).toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {f.hubUrl && (
+                          <a
+                            href={f.hubUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                            Ver conversación
+                          </a>
+                        )}
+                        {!resolved && (
+                          <Button
+                            onClick={() => markResolved(f.id)}
+                            variant="outline"
+                            size="sm"
+                            disabled={resolvingIds.has(f.id)}
+                            className="flex items-center gap-1"
+                          >
+                            {resolvingIds.has(f.id) ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                            )}
+                            Marcar resuelto
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                    {f.mensajeFallido && (
+                      <div className="mt-3 bg-white rounded-md border border-gray-200 p-3">
+                        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                          Mensaje fallido
+                        </p>
+                        <p className="text-sm text-gray-800 break-words">{f.mensajeFallido}</p>
+                      </div>
+                    )}
+                    {f.notaAgente && (
+                      <div className="mt-2 bg-amber-50 rounded-md border border-amber-200 p-3">
+                        <p className="text-xs font-medium text-amber-700 uppercase tracking-wide mb-1">
+                          Nota enviada al agente
+                        </p>
+                        <p className="text-sm text-amber-900 break-words">{f.notaAgente}</p>
+                      </div>
+                    )}
+                    {resolved && f.resueltoPor && (
+                      <p className="text-xs text-gray-500 mt-2">
+                        Resuelto por {f.resueltoPor}
+                        {f.fechaResolucion ? ` el ${new Date(f.fechaResolucion).toLocaleString()}` : ''}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
