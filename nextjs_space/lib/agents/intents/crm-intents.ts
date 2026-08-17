@@ -194,7 +194,9 @@ export const crmIntents: IntentSchema[] = [
       'elimina mi reunión con juan@email.com de mañana',
       'anula la cita del viernes con María'
     ],
-    destructive: true
+    // CANCELAR ≠ BORRAR: cancelar una cita deja rastro (timeline) y es un
+    // flujo permitido sin la puerta de confirmación destructiva.
+    destructive: false
   },
   {
     name: 'reagendar_cita',
@@ -207,7 +209,9 @@ export const crmIntents: IntentSchema[] = [
       'mueve la cita #123 al martes a las 3:30pm',
       'cambia la cita de María del viernes al lunes'
     ],
-    destructive: true
+    // Reagendar cambia fecha/hora pero conserva la cita y su historial:
+    // no es destructivo.
+    destructive: false
   },
   {
     name: 'confirmar_cita',

@@ -16,6 +16,7 @@ export interface AdjustStockInput {
   userId?: string;
   referenceId?: string;
   targetWarehouseId?: string; // Solo para TRANSFER
+  metadata?: any; // Auditoría extra: canal, origen de la orden, etc.
 }
 
 /**
@@ -102,7 +103,8 @@ export async function adjustStock(input: AdjustStockInput) {
         quantityDelta: type === 'IN' ? quantity : -quantity,
       });
 
-      // 3. Registrar Movimiento
+      // 3. Registrar Movimiento (auditoría: quién, cuándo, motivo, origen de
+      // la orden y almacén destino en transferencias)
       const movement = await tx.stockMovement.create({
         data: {
           tenantId,
@@ -112,7 +114,13 @@ export async function adjustStock(input: AdjustStockInput) {
           type,
           quantity,
           reason,
-          referenceId
+          referenceId,
+          metadata: {
+            ...(input.metadata || {}),
+            ...(type === 'TRANSFER' && input.targetWarehouseId
+              ? { targetWarehouseId: input.targetWarehouseId }
+              : {}),
+          },
         }
       });
 

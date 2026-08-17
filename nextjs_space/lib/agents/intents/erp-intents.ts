@@ -131,7 +131,9 @@ export const erpIntents: IntentSchema[] = [
       'reporta merma de 3 unidades en la orden #OP-002',
       'registra scrap de producción con evidencia'
     ],
-    destructive: true
+    // Registrar mermas es trazabilidad (crea registro, no borra): la puerta
+    // destructiva aplica solo a acciones irreversibles.
+    destructive: false
   },
   {
     name: 'registrar_inspeccion_calidad',
