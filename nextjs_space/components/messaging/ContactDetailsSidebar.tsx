@@ -1,32 +1,60 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   User, 
   Mail, 
   Phone, 
-  Tag, 
-  Calendar, 
-  ExternalLink, 
   Edit3, 
   MoreHorizontal,
   ChevronRight,
-  TrendingUp,
   MapPin,
-  Clock,
-  Briefcase
+  Briefcase,
+  Plus,
+  X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
-import { cn } from '@/lib/utils';
+import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 
 interface ContactDetailsSidebarProps {
   contact: any;
   loading: boolean;
+  onUpdateTags?: (tags: string[]) => void;
 }
 
-export function ContactDetailsSidebar({ contact, loading }: ContactDetailsSidebarProps) {
+export function ContactDetailsSidebar({ contact, loading, onUpdateTags }: ContactDetailsSidebarProps) {
+  const router = useRouter();
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [addingTag, setAddingTag] = useState(false);
+  const [tagInput, setTagInput] = useState('');
+
+  const tags: string[] = Array.isArray(contact?.hubMetadata?.tags) ? contact.hubMetadata.tags : [];
+
+  const goToFicha = () => {
+    if (contact?.leadId) router.push(`/dashboard/leads/${contact.leadId}`);
+    else if (contact?.contactId) router.push(`/dashboard/contactos/${contact.contactId}`);
+    else toast.error('No hay ficha asociada a esta conversación');
+  };
+
+  const commitTags = (next: string[]) => {
+    onUpdateTags?.(next);
+  };
+
+  const addTag = () => {
+    const value = tagInput.trim();
+    if (!value) return;
+    if (tags.includes(value)) { setTagInput(''); setAddingTag(false); return; }
+    commitTags([...tags, value]);
+    setTagInput('');
+    setAddingTag(false);
+  };
+
+  const removeTag = (tag: string) => {
+    commitTags(tags.filter((t) => t !== tag));
+  };
+
   if (!contact && !loading) return null;
 
   return (
@@ -43,12 +71,20 @@ export function ContactDetailsSidebar({ contact, loading }: ContactDetailsSideba
           <h3 className="text-lg font-bold text-slate-900 text-center">{contact?.contactoNombre || 'Cargando...'}</h3>
           <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-4">Lead • Tecnico</p>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" className="h-8 rounded-lg text-xs gap-1 py-0 px-3 border-slate-200">
+            <Button variant="outline" size="sm" className="h-8 rounded-lg text-xs gap-1 py-0 px-3 border-slate-200" onClick={goToFicha}>
               <Edit3 size={12} /> Editar
             </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-slate-400 border border-slate-100 bg-white">
-              <MoreHorizontal size={14} />
-            </Button>
+            <div className="relative">
+              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-slate-400 border border-slate-100 bg-white" onClick={() => setMoreOpen(v => !v)}>
+                <MoreHorizontal size={14} />
+              </Button>
+              {moreOpen && (
+                <div className="absolute left-0 top-full mt-1 w-48 rounded-lg border bg-white shadow-lg z-30 py-1">
+                  <button className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50" onClick={() => { goToFicha(); setMoreOpen(false); }}>Ver ficha completa</button>
+                  <button className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50" onClick={() => { router.push('/dashboard/contactos'); setMoreOpen(false); }}>Buscar contacto</button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -97,9 +133,32 @@ export function ContactDetailsSidebar({ contact, loading }: ContactDetailsSideba
           <div className="space-y-4">
             <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b pb-2">Etiquetas</h4>
             <div className="flex flex-wrap gap-1.5">
-              <Badge variant="secondary" className="bg-slate-100 text-slate-600 hover:bg-slate-200 border-none text-[10px] px-2">Ventas</Badge>
-              <Badge variant="secondary" className="bg-slate-100 text-slate-600 hover:bg-slate-200 border-none text-[10px] px-2">Priority</Badge>
-              <Badge variant="secondary" className="bg-blue-100 text-blue-600 hover:bg-blue-200 border-none text-[10px] px-2">+ Agregar</Badge>
+              {tags.map((tag) => (
+                <Badge key={tag} variant="secondary" className="bg-slate-100 text-slate-600 hover:bg-slate-200 border-none text-[10px] px-2 gap-1">
+                  {tag}
+                  <button onClick={() => removeTag(tag)} className="hover:text-red-500"><X size={10} /></button>
+                </Badge>
+              ))}
+              {addingTag ? (
+                <div className="flex items-center gap-1">
+                  <input
+                    autoFocus
+                    value={tagInput}
+                    onChange={(e) => setTagInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') addTag();
+                      if (e.key === 'Escape') { setAddingTag(false); setTagInput(''); }
+                    }}
+                    placeholder="Etiqueta..."
+                    className="w-24 text-[10px] px-2 py-0.5 border rounded-full outline-none focus:border-blue-400"
+                  />
+                  <button onClick={addTag} className="text-blue-600"><Plus size={12} /></button>
+                </div>
+              ) : (
+                <Badge variant="secondary" className="bg-blue-100 text-blue-600 hover:bg-blue-200 border-none text-[10px] px-2 cursor-pointer" onClick={() => setAddingTag(true)}>
+                  + Agregar
+                </Badge>
+              )}
             </div>
           </div>
         </div>
@@ -107,7 +166,7 @@ export function ContactDetailsSidebar({ contact, loading }: ContactDetailsSideba
 
       {/* Footer Info */}
       <div className="p-4 border-t bg-slate-50/50">
-        <Button variant="outline" className="w-full h-10 border-slate-200 gap-2 text-slate-600 text-xs font-bold shadow-sm">
+        <Button variant="outline" className="w-full h-10 border-slate-200 gap-2 text-slate-600 text-xs font-bold shadow-sm" onClick={goToFicha}>
           Ver ficha completa <ChevronRight size={14} />
         </Button>
       </div>
