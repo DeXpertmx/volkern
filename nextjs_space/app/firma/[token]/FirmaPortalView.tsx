@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   ShieldCheck,
@@ -10,6 +10,7 @@ import {
   Loader2,
   PenLine,
   Mail,
+  MessageCircle,
   Download,
   AlertTriangle,
   ChevronRight,
@@ -123,18 +124,40 @@ const TIMELINE_LABELS: Record<string, string> = {
   cancelado: 'Cancelado',
 };
 
+interface FirmaChannel {
+  channel: 'email' | 'whatsapp';
+  destinationMasked: string;
+}
+
 export default function FirmaPortalView({ contrato, token }: { contrato: Contrato; token: string }) {
   const [nombre, setNombre] = useState('');
-  const [email, setEmail] = useState(contrato.clienteEmail || '');
+  const [email, setEmail] = useState('');
+  const [channels, setChannels] = useState<FirmaChannel[]>([]);
+  const [selectedChannel, setSelectedChannel] = useState<'email' | 'whatsapp'>('email');
+  const [verificationStep, setVerificationStep] = useState<'channel' | 'code'>('channel');
   const [sendingCode, setSendingCode] = useState(false);
   const [challenge, setChallenge] = useState<{
     challengeId: string;
     challengeToken: string;
     destinationMasked: string;
+    channel: 'email' | 'whatsapp';
   } | null>(null);
   const [code, setCode] = useState('');
   const [signing, setSigning] = useState(false);
   const [downloading, setDownloading] = useState(false);
+
+  // Cargar los canales de verificación disponibles (email/WhatsApp registrados)
+  useEffect(() => {
+    fetch(`/api/firma/${token}/code`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data.channels) && data.channels.length > 0) {
+          setChannels(data.channels);
+          setSelectedChannel(data.channels[0].channel);
+        }
+      })
+      .catch(() => {});
+  }, [token]);
 
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('es-MX', { style: 'currency', currency: contrato.moneda || 'MXN' }).format(amount);
@@ -154,14 +177,15 @@ export default function FirmaPortalView({ contrato, token }: { contrato: Contrat
       const res = await fetch(`/api/firma/${token}/code`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email || null }),
+        body: JSON.stringify({ channel: selectedChannel, email: email || null }),
       });
       const data = await res.json();
       if (!res.ok) {
         toast.error(data.error || 'No se pudo enviar el código');
         return;
       }
-      setChallenge({ challengeId: data.challengeId, challengeToken: data.challengeToken, destinationMasked: data.destinationMasked });
+      setChallenge({ challengeId: data.challengeId, challengeToken: data.challengeToken, destinationMasked: data.destinationMasked, channel: data.channel || selectedChannel });
+      setVerificationStep('code');
       toast.success(`Código enviado a ${data.destinationMasked}`);
     } catch {
       toast.error('Error de conexión al enviar el código');
@@ -333,14 +357,42 @@ export default function FirmaPortalView({ contrato, token }: { contrato: Contrat
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Email de verificación</Label>
-                  <Input
-                    type="email"
-                    placeholder="tucorreo@empresa.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    disabled={Boolean(challenge)}
-                  />
+                  <Label>¿Dónde quieres recibir el código?</Label>
+                  {channels.length > 0 ? (
+                    <div className="grid gap-2">
+                      {channels.map((option) => (
+                        <button
+                          key={option.channel}
+                          type="button"
+                          onClick={() => setSelectedChannel(option.channel)}
+                          disabled={Boolean(challenge)}
+                          className={`w-full rounded-lg border p-3 text-left transition-colors ${
+                            selectedChannel === option.channel
+                              ? 'border-blue-600 bg-blue-50'
+                              : 'border-gray-200 hover:bg-gray-50'
+                          }`}
+                        >
+                          <span className="flex items-center gap-2 font-medium">
+                            {option.channel === 'email' ? (
+                              <Mail className="h-4 w-4 text-blue-700" />
+                            ) : (
+                              <MessageCircle className="h-4 w-4 text-emerald-600" />
+                            )}
+                            {option.channel === 'email' ? 'Email' : 'WhatsApp'}
+                          </span>
+                          <span className="block text-sm text-muted-foreground">{option.destinationMasked}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <Input
+                      type="email"
+                      placeholder="tucorreo@empresa.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      disabled={Boolean(challenge)}
+                    />
+                  )}
                 </div>
               </div>
 
@@ -352,8 +404,13 @@ export default function FirmaPortalView({ contrato, token }: { contrato: Contrat
               ) : (
                 <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
                   <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
-                    <Mail className="h-4 w-4 inline mr-1" />
-                    Enviamos un código de 6 dígitos a {challenge.destinationMasked}. Revisa tu bandeja de entrada.
+                    {challenge.channel === 'whatsapp' ? (
+                      <MessageCircle className="h-4 w-4 inline mr-1 text-emerald-600" />
+                    ) : (
+                      <Mail className="h-4 w-4 inline mr-1" />
+                    )}
+                    Enviamos un código de 6 dígitos a {challenge.destinationMasked}. Revisa tu{' '}
+                    {challenge.channel === 'whatsapp' ? 'WhatsApp' : 'bandeja de entrada'}.
                   </div>
                   <div className="flex gap-3">
                     <Input
