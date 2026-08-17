@@ -12,7 +12,7 @@ export class ReadinessService {
         bom: {
           include: {
             components: {
-              include: { catalogoItem: true } as any
+              include: { component: true }
             }
           }
         }
@@ -26,16 +26,16 @@ export class ReadinessService {
     let itemsAvailable = 0;
 
     for (const component of (workOrder as any).bom.components) {
-      const requiredQty = component.cantidad * workOrder.quantityToMake;
+      const requiredQty = component.quantityRequired * workOrder.quantityToMake;
       
       // Consultar stock real filtrando por estado de calidad 'AVAILABLE'
-      const stock = await StockService.getAvailableStock(component.catalogItemId, tenantId);
+      const stock = await StockService.getAvailableStock(component.componentId, tenantId);
       
       const availableQty = Math.min(requiredQty, stock.available);
       const missingQty = Math.max(0, requiredQty - availableQty);
       
       const req = await (prisma as any).erp_material_requirements.upsert({
-        where: { id: `req_${workOrderId}_${component.catalogItemId}` },
+        where: { id: `req_${workOrderId}_${component.componentId}` },
         update: {
           requiredQty,
           availableQty,
@@ -43,10 +43,10 @@ export class ReadinessService {
           status: missingQty === 0 ? 'PENDING' : 'SHORTAGE'
         },
         create: {
-          id: `req_${workOrderId}_${component.catalogItemId}`,
+          id: `req_${workOrderId}_${component.componentId}`,
           tenantId,
           workOrderId,
-          catalogItemId: component.catalogItemId,
+          catalogItemId: component.componentId,
           requiredQty,
           availableQty,
           missingQty,
@@ -61,9 +61,9 @@ export class ReadinessService {
       if (missingQty > 0) {
         await (prisma as any).erp_material_shortages.create({
           data: {
-            id: `short_${Date.now()}_${component.catalogItemId}`,
+            id: `short_${Date.now()}_${component.componentId}`,
             tenantId,
-            catalogItemId: component.catalogItemId,
+            catalogItemId: component.componentId,
             missingQty,
             impactLevel: missingQty / requiredQty > 0.5 ? 'CRITICAL' : 'MEDIUM'
           }
@@ -95,7 +95,7 @@ export class ReadinessService {
     // Calcular cuántos lotes hay en cuarentena para estos requerimientos
     const quarantineLots = await (prisma as any).erp_inventory_lots.count({
       where: {
-        catalogItemId: { in: (workOrder as any).bom.components.map((c: any) => c.catalogItemId) },
+        catalogItemId: { in: (workOrder as any).bom.components.map((c: any) => c.componentId) },
         tenantId,
         status: 'QUARANTINE'
       }

@@ -17,7 +17,7 @@ export class SalesOrderService {
     userId?: string;
     reason?: string;
   }) {
-    const order = await (prisma as any).salesOrder.findUnique({
+    const order = await (prisma as any).erp_sales_orders.findUnique({
       where: { id: data.orderId, tenantId: data.tenantId }
     });
 
@@ -37,14 +37,14 @@ export class SalesOrderService {
     }
 
     // Actualizar pedido
-    const updatedOrder = await (prisma as any).salesOrder.update({
+    const updatedOrder = await (prisma as any).erp_sales_orders.update({
       where: { id: data.orderId },
       data: { status: data.newStatus },
-      include: { items: true }
+      include: { erp_sales_order_items: true }
     });
 
     // Crear log de auditoría
-    await (prisma as any).salesOrderAudit.create({
+    await (prisma as any).erp_sales_order_audits.create({
       data: {
         tenantId: data.tenantId,
         salesOrderId: data.orderId,
@@ -66,9 +66,9 @@ export class SalesOrderService {
    * Obtiene el resumen operativo de ventas para el Hub.
    */
   static async getSalesSummary(tenantId: string) {
-    const orders = await (prisma as any).salesOrder.findMany({
+    const orders = await (prisma as any).erp_sales_orders.findMany({
       where: { tenantId },
-      include: { contact: true, items: true }
+      include: { contacts: true, erp_sales_order_items: true }
     });
 
     const totalRevenue = orders.reduce((sum: number, o: any) => sum + o.totalPrice, 0);

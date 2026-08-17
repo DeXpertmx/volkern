@@ -159,9 +159,9 @@ export class HRService {
           employeeId,
           tenantId,
           status: 'ASSIGNED',
-          catalogoItem: { isOperationalBlocker: true }
+          catalogo_items: { isOperationalBlocker: true }
         },
-        include: { catalogoItem: true }
+        include: { catalogo_items: true }
       });
 
       erp_digital_access = await (prisma as any).erp_digital_access.findMany({

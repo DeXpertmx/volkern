@@ -117,10 +117,10 @@ export class AcademyAuthService {
       
       const session = await prisma.erp_academy_sessions.findUnique({
         where: { token, revoked: false },
-        include: { user: true } as any
+        include: { erp_academy_users: true }
       });
 
-      if (!session || session.expiresAt < new Date() || (session.user as any).status !== 'ACTIVE') {
+      if (!session || session.expiresAt < new Date() || (session.erp_academy_users as any).status !== 'ACTIVE') {
         return null;
       }
 

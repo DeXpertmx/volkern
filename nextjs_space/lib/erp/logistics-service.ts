@@ -13,8 +13,8 @@ export class LogisticsService {
       const order = await tx.erp_sales_orders.findUnique({
         where: { id: salesOrderId, tenantId },
         include: { 
-          items: { include: { catalogItem: true } },
-          reservations: { include: { lot: true } }
+          erp_sales_order_items: { include: { catalogo_items: true } },
+          erp_order_reservations: { include: { erp_inventory_lots: true } }
         } as any
       }) as any;
 
@@ -22,16 +22,16 @@ export class LogisticsService {
       if (order.status !== 'PROCESSING') throw new Error('El pedido no está en procesamiento');
 
       // 🛡️ VALIDACIÓN DE CALIDAD Y DISPONIBILIDAD
-      for (const res of order.reservations) {
+      for (const res of order.erp_order_reservations) {
         if (res.lotId) {
-          if (res.lot?.status !== 'AVAILABLE') {
-             throw new Error(`El lote ${res.lot?.batchNumber} está en ${res.lot?.status}. No se puede despachar.`);
+          if (res.erp_inventory_lots?.status !== 'AVAILABLE') {
+             throw new Error(`El lote ${res.erp_inventory_lots?.batchNumber} está en ${res.erp_inventory_lots?.status}. No se puede despachar.`);
           }
         } else if (res.workOrderId) {
           // Si es MTO, debe estar terminada (status READY en el item)
-          const item = order.items.find((i: any) => i.id === res.salesOrderItemId);
+          const item = order.erp_sales_order_items.find((i: any) => i.id === res.salesOrderItemId);
           if (item?.status !== 'READY') {
-            throw new Error(`El ítem ${item?.catalogItem.nombre} aún no está fabricado o aprobado.`);
+            throw new Error(`El ítem ${item?.catalogo_items.nombre} aún no está fabricado o aprobado.`);
           }
         }
       }
@@ -50,12 +50,12 @@ export class LogisticsService {
       } as any);
 
       // 2. Consumir el stock físicamente y actualizar estados
-      for (const res of order.reservations) {
+      for (const res of order.erp_order_reservations) {
         // Registrar movimiento de salida final
         await StockService.registerMovement({
           tenantId,
           warehouseId: 'MAIN_WH',
-          catalogoItemId: order.items.find((i: any) => i.id === res.salesOrderItemId)!.catalogItemId,
+          catalogoItemId: order.erp_sales_order_items.find((i: any) => i.id === res.salesOrderItemId)!.catalogItemId,
           lotId: res.lotId || undefined,
           quantity: -res.reservedQty,
           type: 'OUT',
@@ -126,21 +126,21 @@ export class LogisticsService {
         const order = await tx.erp_sales_orders.findUnique({
           where: { id: shipment.salesOrderId },
           include: { 
-            items: { include: { catalogItem: true } },
-            reservations: { include: { workOrder: true } }
+            erp_sales_order_items: { include: { catalogo_items: true } },
+            erp_order_reservations: { include: { erp_work_orders: true } }
           } as any
         }) as any;
 
         if (order) {
           let totalCost = 0;
-          for (const item of order.items) {
-            const res = order.reservations.find((r: any) => r.salesOrderItemId === item.id);
-            if (res?.workOrder) {
+          for (const item of order.erp_sales_order_items) {
+            const res = order.erp_order_reservations.find((r: any) => r.salesOrderItemId === item.id);
+            if (res?.erp_work_orders) {
               // Si fue fabricado, tomamos el costo real de la OP
-              totalCost += res.workOrder.quantityToMake * (item.catalogItem.precio / 2); // Simulación
+              totalCost += res.erp_work_orders.quantityToMake * (item.catalogo_items.precio / 2); // Simulación
             } else {
               // Si fue de stock, tomamos el costo base del catálogo
-              totalCost += item.quantity * (item.catalogItem.precio * 0.6); // Simulación
+              totalCost += item.quantity * (item.catalogo_items.precio * 0.6); // Simulación
             }
           }
 
@@ -208,13 +208,13 @@ export class LogisticsService {
     return await prisma.$transaction(async (tx) => {
       const order = await tx.erp_sales_orders.findUnique({
         where: { id: salesOrderId, tenantId },
-        include: { items: true } as any,
+        include: { erp_sales_order_items: true } as any,
       }) as any;
 
       if (!order) throw new Error('Pedido no encontrado');
 
       const pickingList = [];
-      for (const item of order.items as any[]) {
+      for (const item of order.erp_sales_order_items as any[]) {
         const stockLevels = await (tx as any).erp_stock_levels.findMany({
           where: {
             tenantId,
@@ -229,7 +229,7 @@ export class LogisticsService {
         });
 
         if (stockLevels.length === 0) {
-          throw new Error(`Stock insuficiente para ${item.catalogItem?.nombre || item.catalogoItemId}`);
+          throw new Error(`Stock insuficiente para ${item.catalogo_items?.nombre || item.catalogoItemId}`);
         }
 
         // Usar FIFO por lote
