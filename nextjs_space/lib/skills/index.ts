@@ -1318,6 +1318,7 @@ const adjustStockWrapper = async (input: {
     userId: input.userId,
     referenceId: input.referenceId,
     targetWarehouseId: input.targetWarehouseId,
+    metadata: { ordenDesde: 'Chatbot', ...(input as any).metadata },
   });
 };
 

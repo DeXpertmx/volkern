@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db'
+import { DESTRUCTIVE_INTENT_LABELS } from '@/lib/agents/destructive-labels'
 import { KnowledgeService } from '@/lib/knowledge/knowledge-service'
 import { callAssistantWithFallback, callAssistantWithToolLoop, OpenRouterMessage, OpenRouterTool } from '@/lib/assistant/openrouter-client'
 import { ChatMemoryService, filterClickedQuickReplies, isQuickReplyMatch } from '@/lib/chat/chat-memory'
@@ -175,6 +176,21 @@ function extraerDatosContacto(message: string): { email?: string; telefono?: str
 
 function mensajeSolicitarDatosContacto(nombre: string): string {
   return `📇 Para registrar a *${nombre || 'esta persona'}* necesito su **email real**. No inventaré ningún dato ni enviaré correos a direcciones ficticias.\n\nEnvíame el email y, si los tienes, también teléfono y empresa (por ejemplo: *persona@empresa.com, teléfono +34..., empresa ...*).`
+}
+
+// ─── Confirmación de acciones destructivas (regla de seguridad) ─────────────
+// Reglas claras del bot:
+//   • NUNCA se borra información. Las acciones marcadas como destructivas
+//     (borrar, eliminar, finalizar irreversiblemente) requieren confirmación
+//     explícita sí/no ANTES de ejecutarse.
+//   • CANCELAR ≠ BORRAR: cancelar una cita/factura deja rastro y es un flujo
+//     permitido sin la puerta de confirmación destructiva.
+//   • Toda orden queda auditada: quién (chat/usuario), cuándo (timestamp),
+//     motivo y desde dónde se dio la orden.
+
+function mensajeConfirmarDestructivo(intent: string): string {
+  const descripcion = DESTRUCTIVE_INTENT_LABELS[intent] || `ejecutar la acción *${intent}*`
+  return `⚠️ *Esta acción es sensible*: vas a ${descripcion}.\n\nNo se puede deshacer y quedará registrada con tu usuario, fecha y motivo.\n\n¿Confirmas que quiero ejecutarla? Responde *sí* o *no*.`
 }
 
 function mensajeParaClasificarCita(params: Record<string, any>): string {
@@ -375,6 +391,65 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
       console.log('[ChatbotService] Datos reales recibidos para el contacto: continuando agendado')
     }
 
+    // ═══ 0d. RESOLVER CONFIRMACIÓN DE ACCIÓN DESTRUCTIVA (sí/no) ═══
+    // El bot preguntó "¿Confirmas ejecutar X?" (acción destructiva/sensible) y
+    // el usuario responde sí/no. Si confirma, se ejecuta el intent pendiente
+    // con sus entidades guardadas; si no, se aborta y queda auditado como
+    // BLOCKED_SECURITY (quién rechazó qué, cuándo).
+    let overrideClassification: any = undefined
+    if (context.pendingIntent && context.missingEntities?.includes('confirmar_destructivo')) {
+      const intentPendiente = context.pendingIntent
+      const entitiesPendientes = { ...(context.collectedEntities || {}) }
+      if (esConfirmacionPositiva(message)) {
+        context.missingEntities = []
+        await memory.updateContext(conv.id, {
+          missingEntities: [],
+          collectedEntities: entitiesPendientes,
+        })
+        // Clasificación sintética: ejecutar el intent pendiente ya confirmado
+        overrideClassification = {
+          intent: intentPendiente,
+          extractedParams: entitiesPendientes,
+          confidence: 1,
+          needsMoreInfo: false,
+          missingParams: [],
+        }
+        console.log(`[ChatbotService] Acción destructiva CONFIRMADA: ${intentPendiente}`)
+      } else if (esConfirmacionNegativa(message)) {
+        await memory.updateContext(conv.id, { pendingIntent: undefined, missingEntities: [], collectedEntities: {} })
+        const finalMessage = `✅ Entendido, *NO ejecuté* ${DESTRUCTIVE_INTENT_LABELS[intentPendiente] || intentPendiente}. No se modificó nada.`
+        await memory.addMessage({
+          conversationId: conv.id,
+          content: finalMessage,
+          direction: 'saliente',
+          channel,
+          metadata: { source: 'chatbot', intent: intentPendiente, needsMoreInfo: false, blockedSecurity: true },
+        })
+        // Auditoría: quién rechazó qué acción destructiva y cuándo
+        try {
+          await (prisma as any).chatbotAuditLog.create({
+            data: {
+              tenantId,
+              sessionId: conv.id,
+              telegramUserId: String(input.userId || conv.id),
+              intent: intentPendiente,
+              skillParams: entitiesPendientes,
+              inputRaw: message,
+              status: 'BLOCKED_SECURITY',
+              errorMessage: 'Usuario rechazó la confirmación de acción destructiva',
+            },
+          })
+        } catch (err) {
+          console.warn('[ChatbotService] No se pudo auditar el rechazo destructivo:', err)
+        }
+        console.log(`[ChatbotService] Acción destructiva RECHAZADA: ${intentPendiente}`)
+        return { success: true, response: finalMessage }
+      } else {
+        // Respuesta ambigua → volver a preguntar (sin perder el estado pendiente)
+        return { success: true, response: mensajeConfirmarDestructivo(intentPendiente) }
+      }
+    }
+
     // ═══ Click vs free-text tracking ═══
     // Detect if the user's message resolves to one of the chips we last offered.
     // If yes: mark it as clicked (so we can dedupe it on the next offer).
@@ -395,7 +470,9 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
     }
 
     // ═══ 1. CLASIFICAR INTENCIÓN ═══
-    const classification = await intentClassifier.classify({
+    // Si el usuario acaba de confirmar una acción destructiva (bloque 0d), se
+    // ejecuta el intent pendiente directamente sin re-clasificar el "sí".
+    const classification = overrideClassification ?? (await intentClassifier.classify({
       message: classificationMessage,
       userId: input.userId || input.leadId || conv.id,
       tenantId,
@@ -406,7 +483,7 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
       pendingIntent: context.pendingIntent,
       collectedEntities: context.collectedEntities,
       missingEntities: context.missingEntities,
-    })
+    }))
 
     // ═══ 1b. ¿ES ACCIÓN EJECUTABLE? ═══
     // Se calcula ANTES del RAG: para acciones (crear contacto, agendar, etc.)
@@ -618,6 +695,36 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
         console.log('[ChatbotService] Contacto no registrado — pidiendo confirmación para registrar')
         return { success: true, response: pregunta }
       }
+    }
+
+    // ═══ 1d. ACCIÓN DESTRUCTIVA → PEDIR CONFIRMACIÓN EXPLÍCITA ═══
+    // Regla de seguridad: ningún intent marcado `destructive: true` se ejecuta
+    // sin confirmación sí/no del usuario. La confirmación se resuelve en el
+    // bloque 0d del turno siguiente (overrideClassification re-ejecuta el
+    // intent pendiente con sus entidades guardadas). El rechazo queda auditado
+    // como BLOCKED_SECURITY y el rechazo/confirmación incluyen quién/cuándo.
+    if (
+      isActionable &&
+      !classification.needsMoreInfo &&
+      !overrideClassification &&
+      intentClassifier.isDestructive(classification.intent)
+    ) {
+      const pregunta = mensajeConfirmarDestructivo(classification.intent)
+
+      await memory.updateContext(conv.id, {
+        pendingIntent: classification.intent,
+        missingEntities: ['confirmar_destructivo'],
+        collectedEntities: { ...(classification.extractedParams || {}) },
+      })
+      await memory.addMessage({
+        conversationId: conv.id,
+        content: pregunta,
+        direction: 'saliente',
+        channel,
+        metadata: { source: 'chatbot', intent: classification.intent, needsMoreInfo: true, missingEntity: 'confirmar_destructivo' },
+      })
+      console.log(`[ChatbotService] Acción destructiva (${classification.intent}) — pidiendo confirmación`)
+      return { success: true, response: pregunta }
     }
 
     // ═══ 2. SI ES UNA ACCIÓN CON PARÁMETROS COMPLETOS → EJECUTAR SKILL ═══
