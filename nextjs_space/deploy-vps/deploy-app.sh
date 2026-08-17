@@ -36,11 +36,19 @@ IMAGE="volkern-erp:latest"
 APP_URL="https://volkern.app"
 
 # ── Notificación Telegram (al terminar o fallar) ──────────────────
-# Credenciales: override por env DEPLOY_TELEGRAM_* o resolución automática
-# en el VPS (token del contenedor, admin_chat_id de la BD de integraciones).
+# Credenciales en cascada:
+#   1. Override por env DEPLOY_TELEGRAM_BOT_TOKEN / DEPLOY_TELEGRAM_CHAT_ID
+#   2. Archivo de config del VPS: /root/deploy-vps/.env.deploy (si existe)
+#   3. Resolución automática (token del contenedor, admin_chat_id de la BD)
 # Si no se puede resolver, el deploy continúa sin notificar.
 TG_BOT_TOKEN="${DEPLOY_TELEGRAM_BOT_TOKEN:-}"
 TG_CHAT_ID="${DEPLOY_TELEGRAM_CHAT_ID:-}"
+if [ -f "$(dirname "$0")/.env.deploy" ]; then
+  # shellcheck disable=SC1091
+  source "$(dirname "$0")/.env.deploy"
+fi
+TG_BOT_TOKEN="${DEPLOY_TELEGRAM_BOT_TOKEN:-$TG_BOT_TOKEN}"
+TG_CHAT_ID="${DEPLOY_TELEGRAM_CHAT_ID:-$TG_CHAT_ID}"
 DEPLOY_OK=0
 
 tg_resolve_credentials() {
