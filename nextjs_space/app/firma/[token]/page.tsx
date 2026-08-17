@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db';
 import { notFound } from 'next/navigation';
 import FirmaPortalView from './FirmaPortalView';
+import { resolvePlaceholders } from '@/lib/contratos/placeholders';
 
 interface PageProps {
   params: { token: string };
@@ -18,6 +19,9 @@ export default async function FirmaPortalPage({ params }: PageProps) {
       tenant: {
         select: {
           nombre: true,
+          razonSocial: true,
+          nifCif: true,
+          direccionFiscal: true,
           dominio: true,
           configuracion: true,
         },
@@ -54,8 +58,8 @@ export default async function FirmaPortalPage({ params }: PageProps) {
     impuestos: c.impuestos,
     total: c.total,
     moneda: c.moneda,
-    condicionesPago: c.condicionesPago,
-    clausulas: c.clausulas,
+    condicionesPago: resolvePlaceholders(c.condicionesPago, c, c.tenant),
+    clausulas: resolvePlaceholders(c.clausulas, c, c.tenant),
     notasCliente: c.notasCliente,
     fechaCreacion: c.fechaCreacion.toISOString(),
     fechaInicio: c.fechaInicio?.toISOString() || null,

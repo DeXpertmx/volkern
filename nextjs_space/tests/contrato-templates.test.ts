@@ -69,6 +69,11 @@ describe('Plantillas de contrato', () => {
     expect(arg.data[1].tipo).toBe('confidencialidad')
     expect(arg.data[0].clausulas).toContain('PRIMERA')
     expect(arg.data[1].clausulas).toContain('INFORMACIÓN CONFIDENCIAL')
+    // Las plantillas por defecto incluyen placeholders dinámicos
+    expect(arg.data[0].clausulas).toContain('{{cliente.nombre}}')
+    expect(arg.data[0].clausulas).toContain('{{fecha.inicio}}')
+    expect(arg.data[0].clausulas).toContain('{{empresa.nombre}}')
+    expect(arg.data[1].clausulas).toContain('{{empresa.nombre}}')
   })
 
   it('no siembra por defecto si el tenant ya tiene plantillas', async () => {

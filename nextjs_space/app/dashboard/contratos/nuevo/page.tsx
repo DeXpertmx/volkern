@@ -41,6 +41,7 @@ import { useFiscalConfig } from '@/hooks/use-fiscal-config'
 import { CatalogSearchSelect, CatalogoItemResult } from '@/components/catalogo/CatalogSearchSelect'
 import { ContactSearchSelect, ContactResult } from '@/components/ventas/ContactSearchSelect'
 import { ContratoTemplatesManager, ContratoTemplate } from '@/components/contratos/ContratoTemplatesManager'
+import { PlaceholderHelp } from '@/components/contratos/PlaceholderHelp'
 
 interface Item {
   id: string
@@ -670,6 +671,7 @@ function NuevoContratoContent() {
                     </div>
                     <div className="space-y-2">
                       <Label>Cláusulas Especiales</Label>
+                      <PlaceholderHelp onInsert={(t) => setClausulas(clausulas + (clausulas ? ' ' : '') + t)} />
                       <Textarea value={clausulas} onChange={(e) => setClausulas(e.target.value)} placeholder="Obligaciones y términos legales..." rows={4} />
                     </div>
                   </CardContent>
