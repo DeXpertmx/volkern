@@ -1,2 +1,2 @@
 -- AlterTable
-ALTER TABLE "Cotizacion" ADD COLUMN "clausulas" TEXT;
+ALTER TABLE "cotizaciones" ADD COLUMN "clausulas" TEXT;
