@@ -7,6 +7,13 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+SKIP_MIGRATOR=0
+for a in "$@"; do
+  case "$a" in
+    --skip-migrator) SKIP_MIGRATOR=1 ;;
+  esac
+done
+
 LOG=/tmp/volkern-build.log
 exec > >(tee "$LOG") 2>&1
 
@@ -41,6 +48,11 @@ echo "=== Build OK: $(docker image inspect volkern-erp:latest --format '{{.Size}
 
 # ── Imagen migrator (job de migraciones, sin el CLI en el runner) ──
 # Se construye con el mismo contexto y las capas del builder ya cacheadas.
-echo "=== docker build migrator (target) ==="
-docker build --progress=plain "${ARGS[@]}" --target migrator -t volkern-erp:migrator .
-echo "=== Migrator OK: $(docker image inspect volkern-erp:migrator --format '{{.Size}} bytes') ==="
+# Con --skip-migrator se omite (cambios que no tocan prisma/migrations).
+if [ "$SKIP_MIGRATOR" = "1" ]; then
+  echo "=== Migrator: omitido (--skip-migrator) ==="
+else
+  echo "=== docker build migrator (target) ==="
+  docker build --progress=plain "${ARGS[@]}" --target migrator -t volkern-erp:migrator .
+  echo "=== Migrator OK: $(docker image inspect volkern-erp:migrator --format '{{.Size}} bytes') ==="
+fi
