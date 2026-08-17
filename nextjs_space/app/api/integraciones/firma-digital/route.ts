@@ -34,6 +34,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ configured: false, tenantId: user.tenantId });
     }
 
+    const extra = (settings.settings as any) || {};
+
     return NextResponse.json({
       configured: true,
       tenantId: user.tenantId,
@@ -44,6 +46,8 @@ export async function GET(req: NextRequest) {
       webhookSecret: settings.webhookSecretEncrypted ? MASK : '',
       isActive: settings.isActive,
       settings: settings.settings,
+      // Modo opcional: aceptar webhooks sin firma HMAC (instancias LibreSign que no firman)
+      webhookSignatureOptional: extra.webhookSignatureOptional === true,
       // URL que debe registrarse como callback en la instancia LibreSign
       webhookUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/api/webhooks/signatures?tenantId=${user.tenantId}`
     });
@@ -70,7 +74,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { url, apiToken, webhookSecret, isActive, provider } = body;
+    const { url, apiToken, webhookSecret, isActive, provider, webhookSignatureOptional } = body;
 
     if (!url) {
       return NextResponse.json({ error: 'La URL de la instancia LibreSign es obligatoria' }, { status: 400 });
@@ -89,12 +93,22 @@ export async function POST(req: NextRequest) {
       ? encrypt(webhookSecret)
       : existing?.webhookSecretEncrypted || encrypt(crypto.randomBytes(32).toString('hex'));
 
+    // Fusionar el JSON de settings conservando campos previos (ej. webhookSignatureOptional)
+    const prevExtra = (existing?.settings as any) || {};
+    const settingsJson = {
+      ...prevExtra,
+      ...(typeof webhookSignatureOptional === 'boolean'
+        ? { webhookSignatureOptional }
+        : {})
+    };
+
     const data = {
       provider: provider || 'libresign',
       url,
       apiTokenEncrypted: tokenToStore,
       webhookSecretEncrypted: webhookSecretToStore,
-      isActive: isActive ?? true
+      isActive: isActive ?? true,
+      settings: Object.keys(settingsJson).length > 0 ? settingsJson : undefined
     };
 
     let settings;

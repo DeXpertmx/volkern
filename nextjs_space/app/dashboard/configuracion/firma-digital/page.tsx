@@ -19,6 +19,7 @@ interface FirmaDigitalSettings {
   apiToken?: string;
   webhookSecret?: string;
   isActive?: boolean;
+  webhookSignatureOptional?: boolean;
   webhookUrl?: string;
 }
 
@@ -31,6 +32,7 @@ export default function FirmaDigitalPage() {
   const [apiToken, setApiToken] = useState('');
   const [webhookSecret, setWebhookSecret] = useState('');
   const [isActive, setIsActive] = useState(true);
+  const [signatureOptional, setSignatureOptional] = useState(false);
 
   const fetchSettings = async () => {
     try {
@@ -50,6 +52,7 @@ export default function FirmaDigitalPage() {
         setApiToken(data.apiToken || '');
         setWebhookSecret(data.webhookSecret || '');
         setIsActive(data.isActive ?? true);
+        setSignatureOptional(data.webhookSignatureOptional ?? false);
       }
     } catch (error) {
       console.error('Error al cargar configuración de firma digital:', error);
@@ -74,7 +77,8 @@ export default function FirmaDigitalPage() {
           url,
           apiToken,
           webhookSecret,
-          isActive
+          isActive,
+          webhookSignatureOptional: signatureOptional
         })
       });
 
@@ -208,6 +212,32 @@ export default function FirmaDigitalPage() {
               <span
                 className={`pointer-events-none block h-5 w-5 rounded-full bg-white shadow-lg ring-0 transition-transform ${
                   isActive ? 'translate-x-6' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg border p-4">
+            <div>
+              <p className="text-sm font-medium">Aceptar webhooks sin firma</p>
+              <p className="text-xs text-muted-foreground">
+                Solo para instancias LibreSign que no firman sus webhooks. Con esto activado, las
+                peticiones sin cabecera de firma se aceptan (con aviso en logs); una firma presente
+                pero inválida se sigue rechazando.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={signatureOptional}
+              onClick={() => setSignatureOptional(!signatureOptional)}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors ${
+                signatureOptional ? 'bg-indigo-600' : 'bg-muted'
+              }`}
+            >
+              <span
+                className={`pointer-events-none block h-5 w-5 rounded-full bg-white shadow-lg ring-0 transition-transform ${
+                  signatureOptional ? 'translate-x-6' : 'translate-x-0.5'
                 }`}
               />
             </button>
