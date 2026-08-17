@@ -155,6 +155,13 @@ const INTENT_TO_SKILL: Record<string, string> = {
   'maximizar_rentabilidad_scheduling': 'maximize_schedule_profitability',
   'rentabilidad_produccion': 'analyze_production_profitability',
 
+  // ─── RRHH/Producción avanzada (Vigésimo-primer entrenamiento) ───
+  'resumen_gastos_pendientes': 'summarize_pending_expenses',
+  'impacto_vacaciones': 'analyze_vacation_impact',
+  'detectar_cuellos_botella': 'detect_bottlenecks',
+  'estrategia_ensamblaje': 'suggest_assembly_strategy',
+  'firma_digital_hr': 'orchestrate_digital_signature',
+
   // ─── Logística ───
   'estado_envio': 'get_shipment_status',
   'rastrear_pedido': 'track_order',
@@ -809,6 +816,13 @@ export const SkillOrchestratorAgent = {
         'riesgo_rotacion': 'rrhh',
         'ejecutar_nomina': 'rrhh',
         'anomalias_asistencia': 'rrhh',
+        'resumen_gastos_pendientes': 'rrhh',
+        'impacto_vacaciones': 'rrhh',
+        'firma_digital_hr': 'rrhh',
+
+        // Producción (bloque 21)
+        'detectar_cuellos_botella': 'produccion',
+        'estrategia_ensamblaje': 'produccion',
 
         // Logística
         'estado_envio': 'logistica',
@@ -927,6 +941,11 @@ export const SkillOrchestratorAgent = {
       'riesgo_rotacion': '👥 No tienes acceso al módulo de *RRHH*. Contacta al administrador.',
       'ejecutar_nomina': '👥 No tienes acceso al módulo de *RRHH*. Contacta al administrador.',
       'anomalias_asistencia': '👥 No tienes acceso al módulo de *RRHH*. Contacta al administrador.',
+      'resumen_gastos_pendientes': '👥 No tienes acceso al módulo de *RRHH*. Contacta al administrador.',
+      'impacto_vacaciones': '👥 No tienes acceso al módulo de *RRHH*. Contacta al administrador.',
+      'firma_digital_hr': '👥 No tienes acceso al módulo de *RRHH*. Contacta al administrador.',
+      'detectar_cuellos_botella': '🏭 No tienes acceso al módulo de *Producción*. Contacta al administrador.',
+      'estrategia_ensamblaje': '🏭 No tienes acceso al módulo de *Producción*. Contacta al administrador.',
       'predecir_fallo_activo': '🏭 No tienes acceso al módulo de *Producción*. Contacta al administrador.',
       'dashboard_mantenimiento': '🏭 No tienes acceso al módulo de *Producción*. Contacta al administrador.',
       'proyeccion_capacidad': '🏭 No tienes acceso al módulo de *Producción*. Contacta al administrador.',
@@ -1108,6 +1127,13 @@ Puedo ayudarte con:
       'analyze_schedule_optimization': 'Optimizar secuenciación',
       'maximize_schedule_profitability': 'Maximizar rentabilidad de scheduling',
       'analyze_production_profitability': 'Rentabilidad de producción',
+
+      // RRHH/Producción avanzada (Vigésimo-primer entrenamiento)
+      'summarize_pending_expenses': 'Resumen de gastos pendientes de autorizar',
+      'analyze_vacation_impact': 'Impacto de vacaciones',
+      'detect_bottlenecks': 'Detectar cuellos de botella',
+      'suggest_assembly_strategy': 'Estrategia de ensamblaje',
+      'orchestrate_digital_signature': 'Firma digital de RRHH',
 
       // RRHH
       'get_hr_daily_brief': 'Briefing diario de RRHH',

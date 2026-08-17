@@ -35,6 +35,7 @@ import * as consolidationSkills from './financial-consolidation-skills';
 import * as productionSkills from './production-management-skills';
 import * as qualitySkills from './quality-management-skills';
 import * as hrSkills from './hr-management-skills';
+import * as hrSigningSkill from './hr-signing-skill';
 import * as auditSkills from './audit-skills';
 import * as vaultPayrollSkills from './vault-payroll-skills';
 import * as operationalSkills from './operational-skills';
@@ -2727,6 +2728,145 @@ const simulateProductionScenarioWrapper = async (input: {
   return planningSkills.simulate_production_scenario({ tenantId, lineId: lineId as string, addedUnits: unidades });
 };
 
+/** Resuelve un empleado RRHH por id o nombre (tabla Employee). */
+const resolveEmployeeRef = async (tenantId: string, ref: string) => {
+  const { prisma } = await import('@/lib/db');
+  const esCuid = /^c[a-z0-9]{20,}$/i.test(ref);
+  if (esCuid) {
+    const byId = await (prisma as any).employee.findUnique({
+      where: { id: ref, tenantId },
+      select: { id: true, fullName: true },
+    });
+    if (byId) return byId;
+  }
+  const byName = await (prisma as any).employee.findFirst({
+    where: { tenantId, fullName: { contains: ref, mode: 'insensitive' as const }, isActive: true },
+    select: { id: true, fullName: true },
+  });
+  if (!byName) throw new Error(`No encontré ningún empleado llamado "${ref}".`);
+  return byName;
+};
+
+/** Wrapper impacto_vacaciones: empleado por nombre → datos reales → análisis. */
+const analyzeVacationImpactWrapper = async (input: {
+  tenantId: string;
+  nombre?: string;
+  empleado?: string;
+  employeeId?: string;
+}) => {
+  const ref = input.employeeId || input.nombre || input.empleado;
+  if (!ref) throw new Error('Necesito saber de qué empleado analizar el impacto de sus vacaciones (su nombre).');
+  const emp = await resolveEmployeeRef(input.tenantId, ref);
+  const { prisma } = await import('@/lib/db');
+
+  const requests = await (prisma as any).erp_vacation_requests.findMany({
+    where: { tenantId: input.tenantId, employeeId: emp.id },
+    orderBy: { createdAt: 'desc' },
+  });
+  const daysBetween = (d1: Date, d2: Date) => Math.max(1, Math.round((d2.getTime() - d1.getTime()) / 86400000) + 1);
+  const pending = requests.find((r: any) => r.status === 'PENDING');
+  const approved = requests.filter((r: any) => r.status === 'APPROVED');
+  const requestedDays = pending ? daysBetween(new Date(pending.startDate), new Date(pending.endDate)) : 0;
+  const daysUsed = approved.reduce((acc: number, r: any) => acc + daysBetween(new Date(r.startDate), new Date(r.endDate)), 0);
+  // Política legal estándar española: 30 días naturales/año (sin campo propio en BD).
+  const remainingDays = Math.max(0, 30 - daysUsed);
+
+  let assets: any[] = [];
+  let accesses: any[] = [];
+  try {
+    assets = await (prisma as any).erp_employee_assets.findMany({
+      where: { tenantId: input.tenantId, employeeId: emp.id, status: 'ASSIGNED' },
+    });
+  } catch {
+    // tabla opcional: no debe romper el análisis
+  }
+  try {
+    accesses = await (prisma as any).erp_digital_access.findMany({
+      where: { tenantId: input.tenantId, employeeId: emp.id, status: 'ACTIVE' },
+    });
+  } catch {
+    // tabla opcional: no debe romper el análisis
+  }
+
+  const data = {
+    employeeName: emp.fullName,
+    requestedDays,
+    remainingDays,
+    criticalMilestones: pending
+      ? [`Solicitud ${pending.id} del ${new Date(pending.startDate).toLocaleDateString('es-ES')} al ${new Date(pending.endDate).toLocaleDateString('es-ES')}`]
+      : [],
+    erp_employee_assets: assets,
+    erp_digital_access: accesses,
+    hasLogisticsConflict: assets.length > 0,
+    hasDigitalRisk: accesses.some((a: any) => a.isCritical),
+  };
+  const result = await hrSkills.analyze_vacation_impact(data);
+  return { ...result, message: `${result.text} Recomendación: ${result.recommendation}` };
+};
+
+/** Wrapper detectar_cuellos_botella: resultado de MRP en formato mensaje. */
+const detectBottlenecksWrapper = async (input: { tenantId: string }) => {
+  const bottlenecks = await productionSkills.detect_bottlenecks({ tenantId: input.tenantId });
+  if (!bottlenecks.length) {
+    return {
+      message: 'No hay cuellos de botella activos: ninguna orden en curso supera las 24h de retardo.',
+      count: 0,
+      bottlenecks: [],
+    };
+  }
+  return {
+    message: `Detectados ${bottlenecks.length} cuellos de botella en producción: ${bottlenecks
+      .map((b: any) => `#${b.batch} (${b.product}) — ${b.message}`)
+      .join(' | ')}`,
+    count: bottlenecks.length,
+    bottlenecks,
+  };
+};
+
+/** Wrapper estrategia_ensamblaje: orden opcicional por id/lote → estrategia. */
+const suggestAssemblyStrategyWrapper = async (input: { tenantId: string; workOrderId?: string; orden?: string }) => {
+  let workOrderId = input.workOrderId;
+  if (input.orden && !workOrderId) {
+    const { prisma } = await import('@/lib/db');
+    const esCuid = /^c[a-z0-9]{20,}$/i.test(input.orden);
+    const wo = await (prisma as any).workOrder.findFirst({
+      where: { tenantId: input.tenantId, ...(esCuid ? { id: input.orden } : { batchNumber: { contains: input.orden, mode: 'insensitive' as const } }) },
+      select: { id: true },
+    });
+    if (!wo) throw new Error(`No encontré la orden "${input.orden}".`);
+    workOrderId = wo.id;
+  }
+  return productionSkills.suggest_assembly_strategy({ tenantId: input.tenantId, workOrderId });
+};
+
+/** Wrapper firma_digital_hr: solicitud de vacaciones → sello digital. */
+const orchestrateDigitalSignatureWrapper = async (input: {
+  tenantId: string;
+  nombre?: string;
+  empleado?: string;
+  employeeId?: string;
+  solicitudId?: string;
+  vacationRequestId?: string;
+  userId?: string;
+}) => {
+  let refNombre = input.nombre || input.empleado || '';
+  if (!refNombre && input.employeeId) {
+    const emp = await resolveEmployeeRef(input.tenantId, input.employeeId);
+    refNombre = emp.fullName;
+  }
+  const resolved = await resolveVacationRequestId(
+    input.tenantId,
+    input.vacationRequestId || input.solicitudId,
+    refNombre
+  );
+  const result = await hrSigningSkill.orchestrate_digital_signature({
+    tenantId: input.tenantId,
+    entityType: 'VACATION',
+    entityId: resolved.id,
+    signerId: input.userId || 'SYSTEM',
+  });
+  return { ...result, empleadoNombre: resolved.empleadoNombre };
+};
 const detectProjectDriftingWrapper = async (input: {
   tenantId: string;
   proyecto?: string;
@@ -2957,6 +3097,13 @@ export const skills = {
   analyze_schedule_optimization: schedulingSkills.analyze_schedule_optimization,
   maximize_schedule_profitability: schedulingSkills.maximize_schedule_profitability,
   analyze_production_profitability: costSkills.analyze_production_profitability,
+
+  // RRHH/Producción avanzada (Vigésimo-primer entrenamiento Telegram)
+  summarize_pending_expenses: hrSkills.summarize_pending_expenses,
+  analyze_vacation_impact: analyzeVacationImpactWrapper,
+  detect_bottlenecks: detectBottlenecksWrapper,
+  suggest_assembly_strategy: suggestAssemblyStrategyWrapper,
+  orchestrate_digital_signature: orchestrateDigitalSignatureWrapper,
   
   // Real Estate (wrappers: resuelven la propiedad por id/nombre/zona y
   // construyen la búsqueda desde filtros en español)
@@ -3129,6 +3276,11 @@ export function listSkills(): Array<{ name: SkillName; description: string; cate
     { name: 'get_hr_daily_brief', description: 'Resumen ejecutivo narrativo (Briefing Militar) del estado de RRHH', category: 'hr' },
     { name: 'authorize_bulk_expenses', description: 'Autorización masiva con validación GPS VISION-LOCK', category: 'hr' },
     { name: 'approve_vacation_voice', description: 'Aprobar vacaciones con nota personalizada vía voz', category: 'hr' },
+    { name: 'summarize_pending_expenses', description: 'Resumen de gastos de empleados pendientes de autorización', category: 'hr' },
+    { name: 'analyze_vacation_impact', description: 'Analizar el impacto de las vacaciones de un empleado (días, activos y accesos críticos)', category: 'hr' },
+    { name: 'orchestrate_digital_signature', description: 'Firmar y sellar digitalmente documentos de RRHH (aprobaciones de vacaciones)', category: 'hr' },
+    { name: 'detect_bottlenecks', description: 'Detectar cuellos de botella actuales en producción (órdenes con retraso > 24h)', category: 'production' },
+    { name: 'suggest_assembly_strategy', description: 'Recomendar estrategia de ensamblaje para la línea actual', category: 'production' },
     { name: 'orchestrate_asset_transfer', description: 'Gestionar traspaso o devolución de activos críticos de personal', category: 'hr' },
     { name: 'mcp_access_watchdog', description: 'Watchdog de seguridad: detecta silos de conocimiento y concentración de poder digital', category: 'hr' },
     { name: 'generate_offboarding_security_kit', description: 'Generar roadmap de revocación de accesos (Kill-Switch) ante una baja', category: 'hr' },
