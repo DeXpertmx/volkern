@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Search, Receipt, Eye, ShieldCheck, Scan, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react"
+import { Plus, Search, Receipt, Eye, ShieldCheck, Scan, ArrowUp, ArrowDown, ArrowUpDown, FileSpreadsheet } from "lucide-react"
 import { 
   Sheet, 
   SheetContent, 
@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/sheet"
 import useSWR from "swr"
 import ExpenseVerificationDetails from "@/components/finance/ExpenseVerificationDetails"
+import { ImportGastosModal } from "@/components/finance/ImportGastosModal"
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
@@ -31,8 +32,9 @@ function SortIcon({ active, dir }: { active: boolean; dir: 'asc' | 'desc' }) {
 
 export default function GastosPage() {
   const router = useRouter()
-  const { data, isLoading } = useSWR('/api/erp/expenses', fetcher)
+  const { data, isLoading, mutate } = useSWR('/api/erp/expenses', fetcher)
   const [selectedExpense, setSelectedExpense] = useState<any>(null)
+  const [importOpen, setImportOpen] = useState(false)
 
   // ─── Filtros y ordenación ──────────────────────────────────────────────
   const [supplierFilter, setSupplierFilter] = useState('all')
@@ -103,6 +105,9 @@ export default function GastosPage() {
           <p className="text-muted-foreground">Control detallado de cada egreso operativo.</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" className="rounded-xl font-bold uppercase text-xs tracking-wider" onClick={() => setImportOpen(true)}>
+            <FileSpreadsheet className="w-4 h-4 mr-2 text-emerald-600" /> Importar Excel
+          </Button>
           <Link href="/dashboard/finanzas/gastos/escanear">
             <Button variant="outline" className="rounded-xl font-bold uppercase text-xs tracking-wider">
               <Scan className="w-4 h-4 mr-2" /> Escanear
@@ -283,6 +288,13 @@ export default function GastosPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Modal de importación masiva desde Excel */}
+      <ImportGastosModal
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onSuccess={() => mutate()}
+      />
 
       {/* Verification Detailed Side Panel */}
       <Sheet open={!!selectedExpense} onOpenChange={(open) => !open && setSelectedExpense(null)}>
