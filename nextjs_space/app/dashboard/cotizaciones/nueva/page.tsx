@@ -23,7 +23,8 @@ import {
   CheckCircle2,
   Settings2,
   FileText,
-  RefreshCw
+  RefreshCw,
+  FileStack
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Separator } from '@/components/ui/separator'
@@ -31,6 +32,7 @@ import { cn } from '@/lib/utils'
 import { useFiscalConfig } from '@/hooks/use-fiscal-config'
 import { CatalogSearchSelect, CatalogoItemResult } from '@/components/catalogo/CatalogSearchSelect'
 import { PlaceholderHelp } from '@/components/contratos/PlaceholderHelp'
+import { ContratoTemplatesManager, ContratoTemplate } from '@/components/contratos/ContratoTemplatesManager'
 
 interface CotizacionItem {
   id: string
@@ -76,6 +78,7 @@ export default function NuevaCotizacionPage() {
 
   const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
+  const [templatesOpen, setTemplatesOpen] = useState(false)
   const [leads, setLeads] = useState<Lead[]>([])
   const [deals, setDeals] = useState<Deal[]>([])
 
@@ -759,6 +762,15 @@ export default function NuevaCotizacionPage() {
                       </div>
                     </div>
                     <div className="mt-4 space-y-2">
+                      <div className="rounded-lg border border-dashed bg-slate-50/60 p-3 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 text-sm">
+                          <FileStack className="h-4 w-4 text-blue-700" />
+                          <span className="text-muted-foreground">¿Precargar el clausulado desde una plantilla de contrato?</span>
+                        </div>
+                        <Button type="button" size="sm" variant="outline" onClick={() => setTemplatesOpen(true)}>
+                          Elegir plantilla
+                        </Button>
+                      </div>
                       <Label>Cláusulas (se heredan al contrato al aceptar)</Label>
                       <PlaceholderHelp onInsert={(t) => setClausulas(clausulas + (clausulas ? ' ' : '') + t)} />
                       <Textarea
@@ -859,6 +871,17 @@ export default function NuevaCotizacionPage() {
           </Card>
         </div>
       </div>
+
+      {/* Gestor de plantillas de contrato: precarga el clausulado */}
+      <ContratoTemplatesManager
+        open={templatesOpen}
+        onOpenChange={setTemplatesOpen}
+        onSelect={(t: ContratoTemplate) => {
+          setClausulas(t.clausulas || '')
+          if (t.condicionesPago) setTerminosPago(t.condicionesPago)
+          toast.success(`Clausulado de "${t.nombre}" precargado`)
+        }}
+      />
     </div>
   )
 }
