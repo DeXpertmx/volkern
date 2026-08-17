@@ -400,16 +400,29 @@ export default function ContratoDetailPage() {
               {contrato.timeline && contrato.timeline.length > 0 ? (
                 <div className="relative pl-6 space-y-6 before:absolute before:left-[7px] before:top-2 before:bottom-2 before:w-0.5 before:bg-muted-foreground/20">
                   {contrato.timeline.map((ev) => {
+                    const actionLabels: Record<string, string> = {
+                      created: 'Creado',
+                      document_signed: 'Firmado',
+                      document_sent: 'Enviado a firma',
+                      document_able_to_sign: 'Listo para firmar',
+                      plan_pagos: 'Plan de pagos',
+                      pagado: 'Pago registrado',
+                      actualizado: 'Actualizado',
+                      cancelado: 'Cancelado'
+                    }
+                    const label = actionLabels[ev.action] || ev.action.replace(/_/g, ' ')
                     const isSigned = ev.action === 'document_signed'
-                    const isSent = ev.action === 'sent' || ev.action === 'document_able_to_sign'
+                    const isSent = ev.action === 'document_sent' || ev.action === 'sent' || ev.action === 'document_able_to_sign'
+                    const isCreated = ev.action === 'created'
+                    const isPago = ev.action === 'plan_pagos' || ev.action === 'pagado'
                     return (
                       <div key={ev.id} className="relative">
-                        <div className={`absolute -left-[26px] mt-1 h-4 w-4 rounded-full border-4 border-background ${isSigned ? 'bg-emerald-500/10' : isSent ? 'bg-indigo-500/10' : 'bg-muted'}`}>
-                          <div className={`h-1 w-1 rounded-full mt-[3px] ml-[3px] ${isSigned ? 'bg-emerald-500' : isSent ? 'bg-indigo-500' : 'bg-muted-foreground'}`} />
+                        <div className={`absolute -left-[26px] mt-1 h-4 w-4 rounded-full border-4 border-background ${isSigned ? 'bg-emerald-500/10' : isSent ? 'bg-indigo-500/10' : isPago ? 'bg-teal-500/10' : isCreated ? 'bg-slate-500/10' : 'bg-muted'}`}>
+                          <div className={`h-1 w-1 rounded-full mt-[3px] ml-[3px] ${isSigned ? 'bg-emerald-500' : isSent ? 'bg-indigo-500' : isPago ? 'bg-teal-500' : isCreated ? 'bg-slate-500' : 'bg-muted-foreground'}`} />
                         </div>
                         <div className="flex items-center gap-2">
-                          <Badge variant="outline" className={`text-[9px] uppercase tracking-wider ${isSigned ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : isSent ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : ''}`}>
-                            {isSigned ? 'Firmado' : isSent ? 'Enviado a firma' : ev.action.replace(/_/g, ' ')}
+                          <Badge variant="outline" className={`text-[9px] uppercase tracking-wider ${isSigned ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : isSent ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : isPago ? 'bg-teal-50 text-teal-700 border-teal-200' : ''}`}>
+                            {label}
                           </Badge>
                           <span className="text-[10px] text-muted-foreground">
                             {format(new Date(ev.createdAt), 'dd MMM yyyy HH:mm', { locale: es })}

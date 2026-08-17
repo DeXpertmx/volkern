@@ -153,6 +153,7 @@ export default function ContratosPage() {
       document_signed: { texto: '✍️ Firma recibida', color: 'text-green-600' },
       document_sent: { texto: '📤 Enviado a firmar', color: 'text-blue-600' },
       created: { texto: '➕ Creado', color: 'text-slate-600' },
+      plan_pagos: { texto: '📅 Plan de pagos', color: 'text-indigo-600' },
       pagado: { texto: '💳 Pago registrado', color: 'text-emerald-600' },
       actualizado: { texto: '✏️ Actualizado', color: 'text-slate-600' },
       cancelado: { texto: '✖️ Cancelado', color: 'text-red-600' }

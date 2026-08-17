@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
+import { addContratoTimelineEvent } from '@/lib/contratos/timeline';
 
 import { randomBytes } from 'crypto';
 
@@ -99,6 +100,15 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       include: { items: true, cotizacion: true }
     });
 
+    // Timeline del contrato: evento de creación
+    await addContratoTimelineEvent({
+      contratoId: contrato.id,
+      actorId: userId !== 'api' ? userId : null,
+      actorType: 'USER',
+      action: 'created',
+      note: `Contrato ${numero} creado desde la cotización ${cotizacion.numero} por ${contrato.total} ${contrato.moneda}`,
+      metadata: { numero, cotizacionId: cotizacion.id, total: contrato.total, moneda: contrato.moneda },
+    });
 
     return NextResponse.json(contrato, { status: 201 });
   } catch (error) {
