@@ -111,35 +111,52 @@ export class SignatureService {
     };
 
     try {
-      // 4. CALL LIBRESIGN API
+      // 4. CALL LIBRESIGN API (real endpoint: /ocs/v2.php/apps/libresign/api/v1/request-signature)
       let libreSignUuid = crypto.randomUUID(); // Fallback for dev
+      let signRequestIds: Record<string, number> = {};
       
       if (settings.url && settings.apiToken) {
         try {
-          const apiRes = await fetch(`${settings.url}/api/1.0/sign`, {
+          const apiUrl = `${settings.url.replace(/\/+$/, '')}/ocs/v2.php/apps/libresign/api/v1/request-signature?format=json`;
+          const apiRes = await fetch(apiUrl, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${settings.apiToken}`
+              'Authorization': `Bearer ${settings.apiToken}`,
+              'OCS-APIRequest': 'true'
             },
             body: JSON.stringify({
-              ...payload,
-              // Convert Buffer to base64 if required by VolkernSign API
-              file_base64: documentBuffer.toString('base64'),
-              file_name: options.fileName
+              name: options.fileName || title,
+              file: {
+                // Convert Buffer to base64 (LibreSign expects base64 PDF)
+                base64: documentBuffer.toString('base64')
+              },
+              signers: signers.map(s => ({
+                displayName: s.name,
+                identifyMethods: [
+                  { method: 'email', value: s.email }
+                ]
+              })),
+              callback: `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/signatures?tenantId=${tenantId}`
             })
           });
           
           if (!apiRes.ok) {
             const errorText = await apiRes.text();
-            console.warn('[SignatureService] VolkernSign API error:', errorText);
+            console.warn('[SignatureService] LibreSign API error:', errorText);
             // We continue with mock if it fails in dev, or throw in prod
           } else {
             const result = await apiRes.json();
-            libreSignUuid = result.uuid || libreSignUuid;
+            const data = result?.ocs?.data || result?.data || {};
+            libreSignUuid = data.uuid || libreSignUuid;
+            if (Array.isArray(data.signers)) {
+              signRequestIds = Object.fromEntries(
+                data.signers.map((s: any) => [s.email || s.identifyMethods?.[0]?.value, s.signRequestId])
+              );
+            }
           }
         } catch (fetchError) {
-          console.warn('[SignatureService] Could not reach VolkernSign server, using mock UUID.');
+          console.warn('[SignatureService] Could not reach LibreSign server, using mock UUID.');
         }
       }
       
@@ -152,7 +169,10 @@ export class SignatureService {
           leadId,
           title,
           status: 'sent',
-          signers: signers as any,
+          signers: signers.map((s, i) => ({
+            ...s,
+            signRequestId: signRequestIds[s.email]
+          })) as any,
           documentHash,
           documentUrl: options.fileName, // Logic to store on S3 could go here
           sentAt: new Date(),
@@ -178,10 +198,33 @@ export class SignatureService {
   }
 
   /**
-   * Handles incoming webhooks from VolkernSign to update document status.
+   * Handles incoming webhooks from LibreSign to update document status.
+   *
+   * LibreSign v14 envía multipart/form-data con `uuid`, `status` (int) y `file`.
+   * Se acepta también el formato JSON legacy `{ uuid, event, signer_email }`.
+   *
+   * FileStatus: 0=DRAFT, 1=ABLE_TO_SIGN, 2=PARTIAL_SIGNED, 3=SIGNED, 4=DELETED, 5=SIGNING_IN_PROGRESS
    */
   static async handleWebhook(tenantId: string, payload: any) {
-    const { uuid, event, signer_email } = payload;
+    // Normalizar payload: puede llegar como objeto plano (JSON) o con la
+    // envoltura de la ruta (que parsea multipart y pasa { uuid, status, ... })
+    const body = payload?.ocs?.data || payload;
+    const uuid = body.uuid;
+    if (!uuid) throw new Error('Missing uuid in webhook payload');
+
+    const statusCode = typeof body.status === 'string' && body.status.trim() !== ''
+      ? parseInt(body.status, 10)
+      : (typeof body.status === 'number' ? body.status : undefined);
+
+    // Mapear status de LibreSign a evento interno
+    let event = body.event;
+    if (!event && statusCode !== undefined) {
+      if (statusCode === 3) event = 'document_signed';
+      else if (statusCode === 2) event = 'document_partially_signed';
+      else if (statusCode === 1) event = 'document_able_to_sign';
+      else event = `document_status_${statusCode}`;
+    }
+    if (!event) event = 'document_updated';
 
     const request = await prisma.signatureRequest.findUnique({
       where: { libreSignUuid: uuid },
@@ -192,23 +235,21 @@ export class SignatureService {
 
     const prevHash = request.auditEvents[0]?.eventHash || '';
     
-    // Update individual signer status if needed (logic placeholder)
-    
     // Log event for Audit Trail
     const newEvent = await prisma.signatureAuditEvent.create({
       data: {
         signatureRequestId: request.id,
         eventType: event, // document_signed, viewed, etc.
-        signerEmail: signer_email,
+        signerEmail: body.signer_email || null,
         prevEventHash: prevHash,
         eventHash: crypto.createHash('sha256').update(`${request.id}-${event}-${prevHash}`).digest('hex'),
         timestamp: new Date(),
-        details: payload
+        details: body
       }
     });
 
-    // If fully signed, update main status
-    if (event === 'document_signed') {
+    // If fully signed (status 3), update main status
+    if (event === 'document_signed' || statusCode === 3) {
       await prisma.signatureRequest.update({
         where: { id: request.id },
         data: { 

@@ -1,0 +1,110 @@
+version: "3.7"
+services:
+
+  ## --------------------------- LIBRESIGN (NEXTCLOUD) --------------------------- ##
+
+  libresign:
+    image: nextcloud:apache
+    hostname: libresign
+    networks:
+      - DXnet
+
+    volumes:
+      - libresign_nextcloud:/var/www/html
+      - libresign_data:/var/lib/libresign
+
+    environment:
+      - TZ=America/Mexico_City
+      - POSTGRES_HOST=libresign-db
+      - POSTGRES_DB=libresign
+      - POSTGRES_USER=libresign
+      - POSTGRES_PASSWORD=libresign_pg_2026
+      - NEXTCLOUD_ADMIN_USER=admin
+      - NEXTCLOUD_ADMIN_PASSWORD=LibreSignAdmin2026!
+      - NEXTCLOUD_TRUSTED_DOMAINS=localhost firma.dimension.expert
+      - OVERWRITEPROTOCOL=https
+      - OVERWRITEHOST=firma.dimension.expert
+      - PHP_MEMORY_LIMIT=1G
+
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "2"
+          memory: 1536M
+      labels:
+        - traefik.enable=true
+        - traefik.http.routers.libresign.rule=Host(`firma.dimension.expert`)
+        - traefik.http.services.libresign.loadbalancer.server.port=80
+        - traefik.http.routers.libresign.service=libresign
+        - traefik.http.routers.libresign.tls.certresolver=letsencryptresolver
+        - traefik.http.routers.libresign.entrypoints=websecure
+        - traefik.http.routers.libresign.tls=true
+
+  ## --------------------------- POSTGRES --------------------------- ##
+
+  libresign-db:
+    image: postgres:16-alpine
+    hostname: libresign-db
+    networks:
+      - DXnet
+
+    volumes:
+      - libresign_pgdata:/var/lib/postgresql/data
+
+    environment:
+      - POSTGRES_DB=libresign
+      - POSTGRES_USER=libresign
+      - POSTGRES_PASSWORD=libresign_pg_2026
+
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+
+  ## --------------------------- REDIS --------------------------- ##
+
+  libresign-redis:
+    image: redis:7-alpine
+    hostname: libresign-redis
+    networks:
+      - DXnet
+
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+## --------------------------- ORION --------------------------- ##
+
+volumes:
+  libresign_nextcloud:
+    external: true
+    name: libresign_nextcloud
+  libresign_data:
+    external: true
+    name: libresign_data
+  libresign_pgdata:
+    external: true
+    name: libresign_pgdata
+
+networks:
+  DXnet:
+    external: true
+    name: DXnet

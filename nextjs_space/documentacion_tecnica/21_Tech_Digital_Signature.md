@@ -1,9 +1,10 @@
 # 21. Tech Hub: Firma Digital (LibreSign / VolkernSign)
 
-> **Estado actual (agosto 2026):** el módulo está **integrado en el código pero sin ningún
-> tenant configurado en producción** (0 registros en `ClientSignatureSettings` y 0 en
-> `SignatureRequest`). Esta guía documenta cómo funciona y cómo conectar una instancia
-> LibreSign cuando un tenant la requiera.
+> **Estado actual (agosto 2026):** existe una **instancia LibreSign de prueba en el VPS**
+> (`libresign` en DXnet, Nextcloud 34 + LibreSign 14.1.0) y el `SignatureService` habla con
+> la **API real** (`/ocs/v2.php/apps/libresign/api/v1`). El tenant DeXpert puede configurarla
+> desde el dashboard para pruebas. Esta guía documenta cómo funciona y cómo conectar una
+> instancia LibreSign por tenant.
 
 ---
 
@@ -161,6 +162,25 @@ await prisma.clientSignatureSettings.create({
    (`/dashboard/contratos/[id]` → botón de firma), debe crearse la `SignatureRequest` con un
    UUID real (no aleatorio), y el firmante debe recibir el correo de LibreSign.
 
+### API real de LibreSign (v14, verificada 17 ago 2026)
+
+El servicio usa el **endpoint real** de LibreSign (Nextcloud OCS), no una ruta inventada:
+
+| Aspecto | Valor |
+|---|---|
+| Crear solicitud | `POST {url}/ocs/v2.php/apps/libresign/api/v1/request-signature?format=json` |
+| Listar archivos (test) | `GET {url}/ocs/v2.php/apps/libresign/api/v1/file/list?format=json` |
+| Auth | `Authorization: Bearer <app-password>` + header `OCS-APIRequest: true` |
+| Payload | `{ name, file: { base64 }, signers: [{ displayName, identifyMethods: [{ method: "email", value }] }], callback }` |
+| Respuesta | `data.uuid` (UUID real), `data.signers[].signRequestId` |
+| Webhook entrante | multipart/form-data con `uuid`, `status` (int) y `file` (PDF firmado) |
+| Status codes | 0=DRAFT, 1=ABLE_TO_SIGN, 2=PARTIAL, **3=SIGNED**, 4=DELETED, 5=IN_PROGRESS |
+
+> **Nota webhook:** LibreSign **no firma** sus webhooks (los envía como multipart sin HMAC).
+> La ruta `/api/webhooks/signatures` acepta el formato nativo multipart como protocolo
+> LibreSign, y mantiene la verificación HMAC estricta solo para el formato JSON interno de
+> Volkern (`webhookSignatureOptional` como escape hatch para instancias que no firmen).
+
 ### Comportamiento de fallback (importante para pruebas)
 
 Si `url` o `apiToken` no están configurados, o la API de LibreSign no responde, el servicio
@@ -174,10 +194,24 @@ en producción debe configurarse la instancia real del tenant.
 
 | Verificación | Resultado |
 |---|---|
-| `ClientSignatureSettings` (tenants configurados) | **0** |
-| `SignatureRequest` (solicitudes creadas) | **0** |
-| Contenedores / stack LibreSign en el VPS | Ninguno |
+| Instancia LibreSign de prueba en el VPS | **Sí** (stack `libresign`, DXnet, Nextcloud 34.0.3 + LibreSign 14.1.0) |
+| `ClientSignatureSettings` (tenants configurados) | 0 (DeXpert puede configurar la de prueba desde el dashboard) |
+| `SignatureRequest` (solicitudes creadas) | 0 (se crean al probar el flujo) |
 | Impacto si no se configura | Ninguno: el módulo no bloquea flujos, solo hace fallback |
+
+### Instancia de prueba (detalles operativos)
+
+- **URL interna:** `http://libresign` (resoluble desde el contenedor de la app vía DXnet; también
+  `http://libresign_libresign`). El compose está en `/root/libresign.yaml` del VPS.
+- **Usuario:** `admin` / `LibreSignAdmin2026!` · **App password API:** generado con
+  `occ user:add-app-password` (se guarda cifrado en `ClientSignatureSettings` del tenant).
+- **Dependencias instaladas:** Java 21, JSignPDF 2.3.0, PDFtk 3.3.3, OpenSSL root cert.
+- **Método de identificación:** email (`identify_method`).
+- **Dominio público (opcional):** traefik ya tiene el router `firma.dimension.expert` en el
+  stack; solo falta crear el CNAME `firma.dimension.expert → terminator.dimension.expert`
+  en Cloudflare para que los emails de firma tengan enlaces públicos.
+- **Test E2E:** `scripts/test-contrato-firma.ts` con `LIBRESIGN_URL` + `LIBRESIGN_TOKEN`
+  verifica que el UUID devuelto existe en LibreSign (no fallback).
 
 El módulo de Contratos funciona sin la firma digital; la integración LibreSign se activa solo
 cuando un tenant configura sus credenciales.
@@ -201,8 +235,19 @@ se despliega una instancia nueva por cliente o se usa una instancia LibreSign ex
   - *Solución:* crear la configuración (§4) y verificar `isActive`.
 
 - **La solicitud se crea con UUID aleatorio (parece no llegar a LibreSign)**
-  - *Causa:* `url`/`apiToken` ausentes, o la instancia no responde (`[SignatureService] Could not reach VolkernSign server`).
-  - *Solución:* revisar URL/token y conectividad VPS → instancia LibreSign; el fallback es intencional para dev.
+  - *Causa:* `url`/`apiToken` ausentes, o la instancia no responde (`[SignatureService] Could not reach LibreSign server`).
+  - *Solución:* revisar URL/token y conectividad app → instancia LibreSign (`docker exec <app> curl http://libresign/status.php`); el fallback es intencional para dev.
+
+- **El webhook multipart de LibreSign devuelve 404 en `/api/v1.0/...`**
+  - *Causa:* la API real de LibreSign vive bajo `/ocs/v2.php/apps/libresign/api/v1/...`, no
+    en `/api/1.0/...` ni `/index.php/apps/libresign/api/v1.0/...` (rutas de versiones antiguas).
+  - *Solución:* el servicio ya usa la ruta OCS real; al apuntar a una instancia nueva verifica
+    que `GET {url}/ocs/v2.php/apps/libresign/api/v1/file/list?format=json` con Bearer devuelva 200.
+
+- **El webhook llega como multipart y el código esperaba JSON**
+  - *Causa:* LibreSign v14 envía `multipart/form-data` (`uuid`, `status`, `file`), no JSON con `event`.
+  - *Solución:* ya resuelto — la ruta detecta el content-type y normaliza `status` (3=SIGNED)
+    al evento `document_signed`.
 
 - **El webhook de eventos no actualiza la solicitud**
   - *Causa:* `tenantId` incorrecto en la callback_url, o evento con UUID desconocido.

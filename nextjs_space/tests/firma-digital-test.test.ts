@@ -83,7 +83,7 @@ describe('POST /api/integraciones/firma-digital/test', () => {
     expect(json.checks.nextcloud.ok).toBe(true);
     expect(json.checks.api.ok).toBe(true);
     expect(json.checks.nextcloud.detail).toContain('27.1.7');
-    expect(hits.some((u) => u.includes('/api/v1.0/file/list'))).toBe(true);
+    expect(hits.some((u) => u.includes('/ocs/v2.php/apps/libresign/api/v1/file/list'))).toBe(true);
   });
 
   it('usa el token guardado (descifrado) cuando el del formulario viene enmascarado', async () => {
