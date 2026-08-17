@@ -412,6 +412,7 @@ model Tenant {
   externalLeadSearches           ExternalLeadSearch[]
   googleCalendarIntegrations     GoogleCalendarIntegration[]      @relation("TenantGoogleCalendars")
   inAppNotifications             InAppNotification[]
+  firmaChallenges                ContratoFirmaChallenge[]
   incomingWebhookDeliveries      IncomingWebhookDelivery[]
   incomingWebhooks               IncomingWebhook[]
   integrations                   Integration[]
@@ -2695,6 +2696,7 @@ model Contrato {
   ordenesVenta         OrdenVenta[]               @relation("ContratoOrdenesVenta")
   signatureRequests    SignatureRequest[]
   timeline             ContratoTimeline[]
+  firmaChallenges      ContratoFirmaChallenge[]
 
   @@unique([tenantId, numero])
   @@index([tenantId])
@@ -2720,6 +2722,26 @@ model ContratoTimeline {
 
   @@index([contratoId, createdAt])
   @@map("contrato_timeline")
+}
+
+model ContratoFirmaChallenge {
+  id                 String    @id @default(cuid())
+  contratoId         String
+  tenantId           String
+  email              String
+  codeHash           String
+  challengeTokenHash String
+  attempts           Int       @default(0)
+  maxAttempts        Int       @default(5)
+  expiresAt          DateTime
+  verifiedAt         DateTime?
+  createdAt          DateTime  @default(now())
+  contrato           Contrato  @relation(fields: [contratoId], references: [id], onDelete: Cascade)
+  tenant             Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([contratoId])
+  @@index([tenantId])
+  @@map("contrato_firma_challenges")
 }
 
 model ContratoItem {

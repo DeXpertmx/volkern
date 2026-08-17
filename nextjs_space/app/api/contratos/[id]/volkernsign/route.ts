@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
 import { SignatureService } from '@/lib/signatures/SignatureService';
 import { generatePdf } from '@/lib/pdf-generator';
+import { sendEmail } from '@/lib/ses-email';
 
 // Logic based on app/api/contratos/public/[id]/pdf/route.ts
 function formatCurrency(amount: number, currency: string): string {
@@ -153,6 +154,39 @@ export const POST = withTenantAuth(async (request, auth, { params }) => {
         { email: contrato.clienteEmail!, name: contrato.clienteNombre || 'Cliente', role: 'Cliente' }
       ]
     });
+
+    // 3.5 Enviar al cliente el enlace del portal de firma (además del email de LibreSign)
+    if (contrato.clienteEmail) {
+      const baseUrl = process.env.NEXTAUTH_URL || 'https://volkern.app';
+      const portalUrl = `${baseUrl}/firma/${contrato.tokenPublico}`;
+      const formatCur = (amount: number) =>
+        `${formatCurrency(amount, contrato.moneda)}`;
+      try {
+        await sendEmail({
+          to: contrato.clienteEmail,
+          subject: `Firma del contrato ${contrato.numero} - ${contrato.titulo}`,
+          html: `
+            <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;background:#f4f4f4;">
+              <div style="background:#1e40af;padding:30px;border-radius:8px 8px 0 0;text-align:center;">
+                <h1 style="color:white;margin:0;font-size:22px;">${tenant?.nombre || 'Empresa'}</h1>
+                <p style="color:#93c5fd;margin:8px 0 0;font-size:13px;">Contrato ${contrato.numero}</p>
+              </div>
+              <div style="background:white;padding:30px;border-radius:0 0 8px 8px;">
+                <h2 style="color:#1e293b;margin:0 0 12px;">${contrato.titulo}</h2>
+                <p style="color:#64748b;line-height:1.6;">Te invitamos a revisar y firmar tu contrato desde nuestro portal seguro. Podrás ver el documento, su estado y firmarlo con un código de verificación.</p>
+                <p style="color:#1e293b;font-size:18px;font-weight:600;">Total: ${formatCur(contrato.total)}</p>
+                <div style="text-align:center;margin:28px 0;">
+                  <a href="${portalUrl}" style="background:#1e40af;color:white;padding:14px 30px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block;">Ver y Firmar Contrato</a>
+                </div>
+                <p style="color:#94a3b8;font-size:12px;text-align:center;">Si el botón no funciona, copia y pega: <a href="${portalUrl}" style="color:#3b82f6;">${portalUrl}</a></p>
+              </div>
+            </div>`,
+          tenantId,
+        });
+      } catch (mailErr: any) {
+        console.warn('[VolkernSign] No se pudo enviar el email del portal:', mailErr.message);
+      }
+    }
 
     return NextResponse.json({ 
       success: true, 
