@@ -549,7 +549,13 @@ export default function FirmaPortalView({ contrato, token }: { contrato: Contrat
               {contrato.condicionesPago && (
                 <div>
                   <p className="text-xs text-muted-foreground mb-1">Condiciones de pago</p>
-                  <p className="text-sm">{contrato.condicionesPago}</p>
+                  <p className="text-sm whitespace-pre-wrap">{contrato.condicionesPago}</p>
+                </div>
+              )}
+              {contrato.clausulas && (
+                <div className="rounded-lg border bg-slate-50 p-3">
+                  <p className="text-xs text-muted-foreground mb-1 font-medium">⚖️ Cláusulas del contrato</p>
+                  <p className="text-sm whitespace-pre-wrap text-justify">{contrato.clausulas}</p>
                 </div>
               )}
             </CardContent>
