@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Search, 
   Filter, 
@@ -11,7 +11,8 @@ import {
   Facebook, 
   Instagram, 
   Bot,
-  Circle
+  Circle,
+  Check
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -49,7 +50,22 @@ export function ConversationList({
   onTabChange,
   counts
 }: ConversationListProps) {
-  
+  const [search, setSearch] = useState('');
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [channelFilter, setChannelFilter] = useState<string | null>(null);
+
+  const CANALES = ['whatsapp', 'email', 'facebook', 'instagram', 'telegram', 'chatbot', 'telefono', 'web'];
+
+  const visibleConversations = conversations.filter((conv) => {
+    if (channelFilter && conv.canal !== channelFilter) return false;
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      const hay = (conv.contactoNombre || '').toLowerCase().includes(q) || (conv.ultimoMensaje || '').toLowerCase().includes(q);
+      if (!hay) return false;
+    }
+    return true;
+  });
+
   const tabs = [
     { id: 'mias', label: 'Mías', count: counts?.mias ?? 0 },
     { id: 'sin_asignar', label: 'Sin asignar', count: counts?.sin_asignar ?? 0 },
@@ -89,14 +105,45 @@ export function ConversationList({
             Conversaciones 
             <Badge variant="outline" className="text-[10px] h-5 px-1.5 font-bold">Abierta <Search size={10} className="ml-1 opacity-40"/></Badge>
           </h2>
-          <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400">
-            <Filter size={16} />
-          </Button>
+          <div className="relative">
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn("h-8 w-8", channelFilter ? "text-blue-600 bg-blue-50" : "text-slate-400")}
+              onClick={() => setFilterOpen(v => !v)}
+              title="Filtrar por canal"
+            >
+              <Filter size={16} />
+            </Button>
+            {filterOpen && (
+              <div className="absolute right-0 top-full mt-1 w-44 rounded-lg border bg-white shadow-lg z-30 py-1">
+                <button
+                  className={cn("w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center justify-between", !channelFilter && "font-bold text-blue-600")}
+                  onClick={() => { setChannelFilter(null); setFilterOpen(false); }}
+                >
+                  Todos los canales
+                  {!channelFilter && <Check size={14} />}
+                </button>
+                {CANALES.map((c) => (
+                  <button
+                    key={c}
+                    className={cn("w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center justify-between capitalize", channelFilter === c && "font-bold text-blue-600")}
+                    onClick={() => { setChannelFilter(c); setFilterOpen(false); }}
+                  >
+                    {c}
+                    {channelFilter === c && <Check size={14} />}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input 
             placeholder="Buscar por nombre o mensaje..." 
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
             className="pl-9 h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400/20 bg-slate-50/50"
           />
         </div>
@@ -131,12 +178,12 @@ export function ConversationList({
               </div>
             ))}
           </div>
-        ) : conversations.length === 0 ? (
+        ) : visibleConversations.length === 0 ? (
           <div className="p-12 text-center text-slate-400 italic text-sm">
             No se encontraron conversaciones
           </div>
         ) : (
-          conversations.map((conv) => (
+          visibleConversations.map((conv) => (
             <button
               key={conv.id}
               onClick={() => onSelect(conv.id)}

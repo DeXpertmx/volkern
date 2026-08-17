@@ -133,18 +133,18 @@ export default function MensajesPage() {
     fetchConversaciones()
   }
 
-  const handleSendMessage = async (text: string, isNote: boolean) => {
+  const handleSendMessage = async (text: string, isNote: boolean, mediaUrl?: string, mediaType?: string) => {
     if (!selectedConversation) return
 
     try {
       // Optimistic update
       const tempMsg = {
         id: Date.now().toString(),
-        contenido: text,
+        contenido: text || (mediaUrl ? '📎 Adjunto' : ''),
         direccion: 'saliente',
         fechaCreacion: new Date().toISOString(),
         tipo: isNote ? 'note' : 'message',
-        metadatos: { is_internal: isNote }
+        metadatos: { is_internal: isNote, mediaUrl: mediaUrl || undefined }
       }
       setMessages(prev => [...prev, tempMsg])
 
@@ -155,6 +155,8 @@ export default function MensajesPage() {
           conversationId: selectedConversation.id,
           contenido: text,
           canal: selectedConversation.canal,
+          mediaUrl: mediaUrl || undefined,
+          mediaType: mediaType || undefined,
           metadatos: { is_internal: isNote }
         }),
       })
@@ -169,6 +171,28 @@ export default function MensajesPage() {
       toast.error('Error al enviar mensaje')
     }
   }
+
+  const handleUpdateTags = async (tags: string[]) => {
+    if (!selectedConversation) return;
+    // Optimistic update
+    setSelectedConversation((prev: any) => ({
+      ...prev,
+      hubMetadata: { ...(prev?.hubMetadata || {}), tags },
+    }));
+    try {
+      const response = await fetch(`/api/mensajes/conversaciones/${selectedConversation.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hubMetadata: { tags } }),
+      });
+      if (!response.ok) {
+        toast.error('Error al guardar etiquetas');
+        fetchMessages(selectedConversation.id);
+      }
+    } catch {
+      toast.error('Error al guardar etiquetas');
+    }
+  };
 
   const handleResolve = async () => {
     if (!selectedConversation) return
@@ -262,6 +286,7 @@ export default function MensajesPage() {
             <ContactDetailsSidebar 
               contact={selectedConversation}
               loading={loadingMessages}
+              onUpdateTags={handleUpdateTags}
             />
           )}
         </MessagingLayout>

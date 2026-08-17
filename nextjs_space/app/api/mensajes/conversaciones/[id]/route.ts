@@ -57,7 +57,7 @@ export const PATCH = withTenantAuth(async (request, auth, { params }) => {
   try {
     const tenantId = auth.tenant!.id;
     const body = await request.json()
-    const { estado, leadId, estudianteId } = body
+    const { estado, leadId, estudianteId, hubMetadata } = body
 
     // Verificamos propiedad antes de editar
     const existing = await prisma.conversation.findFirst({
@@ -68,13 +68,18 @@ export const PATCH = withTenantAuth(async (request, auth, { params }) => {
       return NextResponse.json({ error: 'Conversación no encontrada' }, { status: 404 });
     }
 
+    // Solo actualizar los campos enviados (undefined = no tocar).
+    const data: any = {}
+    if (estado !== undefined) data.estado = estado
+    if (leadId !== undefined) data.leadId = leadId
+    if (estudianteId !== undefined) data.estudianteId = estudianteId
+    if (hubMetadata !== undefined) {
+      data.hubMetadata = { ...(existing.hubMetadata as any || {}), ...hubMetadata }
+    }
+
     const conversacion = await prisma.conversation.update({
       where: { id: params.id },
-      data: {
-        estado,
-        leadId,
-        estudianteId,
-      },
+      data,
       include: {
         lead: true,
         estudiante: true,
