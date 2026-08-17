@@ -2694,6 +2694,7 @@ model Contrato {
   tenant               Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   ordenesVenta         OrdenVenta[]               @relation("ContratoOrdenesVenta")
   signatureRequests    SignatureRequest[]
+  timeline             ContratoTimeline[]
 
   @@unique([tenantId, numero])
   @@index([tenantId])
@@ -2704,6 +2705,21 @@ model Contrato {
   @@index([fechaCreacion])
   @@index([contactId])
   @@map("contratos")
+}
+
+model ContratoTimeline {
+  id          String   @id @default(cuid())
+  contratoId  String
+  actorId     String?
+  actorType   String   @default("SYSTEM")
+  action      String
+  note        String?
+  metadata    Json?    @default("{}")
+  createdAt   DateTime @default(now())
+  contrato    Contrato @relation(fields: [contratoId], references: [id], onDelete: Cascade)
+
+  @@index([contratoId, createdAt])
+  @@map("contrato_timeline")
 }
 
 model ContratoItem {
