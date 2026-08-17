@@ -78,7 +78,10 @@ export default async function FirmaPortalPage({ params }: PageProps) {
       sentAt: sr.sentAt?.toISOString() || null,
       completedAt: sr.completedAt?.toISOString() || null,
       signers: sr.signers as any[],
+      // Nunca exponer el base64 al cliente; solo el indicador de disponibilidad
+      pdfFirmadoDisponible: Boolean(sr.signedPdfBase64),
     })),
+    pdfFirmadoDisponible: c.signatureRequests.some((sr) => Boolean(sr.signedPdfBase64)),
     timeline: c.timeline.map((t) => ({
       id: t.id,
       action: t.action,

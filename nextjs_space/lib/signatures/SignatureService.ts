@@ -277,7 +277,12 @@ export class SignatureService {
         where: { id: request.id },
         data: { 
           status: 'signed',
-          completedAt: new Date()
+          completedAt: new Date(),
+          // Guardar el PDF firmado que devuelve LibreSign (base64) para poder
+          // descargarlo desde el portal del cliente.
+          ...(typeof body.signedPdfBase64 === 'string' && body.signedPdfBase64
+            ? { signedPdfBase64: body.signedPdfBase64 }
+            : {})
         }
       });
 

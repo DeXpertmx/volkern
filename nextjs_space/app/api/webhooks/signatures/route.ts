@@ -57,10 +57,21 @@ export async function POST(req: NextRequest) {
       console.info(`[SignatureWebhook] Webhook multipart nativo aceptado para tenant ${tenantId}`);
       try {
         const formData = await req.formData();
+        // El campo `file` es el PDF firmado que devuelve LibreSign; lo pasamos
+        // en base64 para guardarlo en la SignatureRequest y permitir su descarga
+        // desde el portal del cliente.
+        let signedPdfBase64: string | null = null;
+        const fileField = formData.get('file');
+        if (fileField && typeof fileField !== 'string' && typeof (fileField as File).arrayBuffer === 'function') {
+          const buf = Buffer.from(await (fileField as File).arrayBuffer());
+          signedPdfBase64 = buf.toString('base64');
+          console.info(`[SignatureWebhook] PDF firmado recibido: ${buf.length} bytes`);
+        }
         payload = {
           uuid: formData.get('uuid'),
           status: formData.get('status'),
-          signer_email: formData.get('signer_email')
+          signer_email: formData.get('signer_email'),
+          signedPdfBase64
         };
       } catch {
         return NextResponse.json({ error: 'Invalid form body' }, { status: 400 });
