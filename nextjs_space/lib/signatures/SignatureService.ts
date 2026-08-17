@@ -50,6 +50,36 @@ export class SignatureService {
   }
 
   /**
+   * Verifica la firma HMAC-SHA256 de un webhook (patrón Stripe/GitHub):
+   * HMAC-SHA256(rawBody, webhookSecret) en hex, comparado en tiempo constante.
+   *
+   * Acepta el header en dos formatos:
+   *   - `x-libresign-signature: <hex>`            (hex puro, 64 caracteres)
+   *   - `x-hub-signature-256: sha256=<hex>`       (formato GitHub/Make.com)
+   */
+  static verifyWebhookSignature(
+    rawBody: string | Buffer,
+    signatureHeader: string | null | undefined,
+    webhookSecret: string
+  ): boolean {
+    if (!rawBody || !webhookSecret) return false;
+
+    const body = Buffer.isBuffer(rawBody) ? rawBody.toString('utf8') : rawBody;
+    const expected = crypto.createHmac('sha256', webhookSecret).update(body, 'utf8').digest('hex');
+
+    let provided = (signatureHeader || '').trim();
+    if (provided.startsWith('sha256=')) provided = provided.slice('sha256='.length);
+    provided = provided.trim();
+
+    if (!/^[a-f0-9]{64}$/i.test(provided)) return false;
+
+    const bufA = Buffer.from(expected, 'hex');
+    const bufB = Buffer.from(provided, 'hex');
+    if (bufA.length !== bufB.length) return false;
+    return crypto.timingSafeEqual(bufA, bufB);
+  }
+
+  /**
    * Main entry point to send a document to VolkernSign.
    * Note: This is a placeholder for the actual HTTP call to the VolkernSign API.
    */

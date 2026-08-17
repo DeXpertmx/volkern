@@ -5,6 +5,16 @@ import { SignatureService } from '@/lib/signatures/SignatureService';
 /**
  * Public Webhook endpoint for VolkernSign callbacks.
  * This endpoint should be registered in each client's VolkernSign instance.
+ *
+ * Seguridad: verifica la firma HMAC-SHA256 del body crudo usando el
+ * `webhookSecret` del tenant (comparación en tiempo constante). Cabeceras
+ * aceptadas (por orden): `x-libresign-signature`, `x-signature`,
+ * `x-hub-signature-256` (formato `sha256=<hex>`).
+ *
+ * Si la instancia LibreSign del tenant no firma sus webhooks, el admin puede
+ * marcar `webhookSignatureOptional: true` en `ClientSignatureSettings.settings`
+ * para aceptar peticiones sin firma (con warning en logs). Por defecto la
+ * verificación es ESTRICTA: petición sin firma o con firma inválida → 401.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -15,32 +25,61 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing tenantId parameter' }, { status: 400 });
     }
 
-    // 1. Get raw body for signature verification (if needed)
-    const payload = await req.json();
+    // 1. Leer el body CRUDO (necesario para el HMAC; no usar req.json() antes)
+    const rawBody = await req.text();
+    if (!rawBody) {
+      return NextResponse.json({ error: 'Empty body' }, { status: 400 });
+    }
 
-    // 2. Validate Tenant Settings and Webhook Secret (Conceptual)
+    // 2. Validar Tenant Settings y obtener el webhookSecret descifrado
     const settings = await SignatureService.getTenantSettings(tenantId);
-    
-    // TODO: Verify payload signature using settings.webhookSecret
-    // (VolkernSign usually sends a header to verify the source)
-    // const signature = req.headers.get('x-libresign-signature');
-    // if (!verify(payload, signature, settings.webhookSecret)) { ... }
 
-    // 3. Process the event
+    // 3. Verificar firma HMAC-SHA256 (x-libresign-signature | x-signature | x-hub-signature-256)
+    const signatureHeader =
+      req.headers.get('x-libresign-signature') ||
+      req.headers.get('x-signature') ||
+      req.headers.get('x-hub-signature-256');
+
+    // Opt-out por tenant: aceptar webhooks sin firma (instancias LibreSign que no firman).
+    const signatureOptional = !!(settings.settings as any)?.webhookSignatureOptional;
+
+    if (!signatureHeader) {
+      if (signatureOptional) {
+        console.warn(`[SignatureWebhook] Petición SIN firma aceptada (modo opcional) para tenant ${tenantId}`);
+      } else {
+        console.warn(`[SignatureWebhook] Firma faltante rechazada para tenant ${tenantId}`);
+        return NextResponse.json(
+          { error: 'Missing signature header (x-libresign-signature)' },
+          { status: 401 }
+        );
+      }
+    } else if (!SignatureService.verifyWebhookSignature(rawBody, signatureHeader, settings.webhookSecret)) {
+      console.warn(`[SignatureWebhook] Firma inválida rechazada para tenant ${tenantId}`);
+      return NextResponse.json({ error: 'Invalid webhook signature' }, { status: 401 });
+    }
+
+    // 4. Procesar el evento (el HMAC ya cubre el body completo)
+    let payload: any;
+    try {
+      payload = JSON.parse(rawBody);
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+
     const auditEvent = await SignatureService.handleWebhook(tenantId, payload);
 
     console.info(`[SignatureWebhook] Event ${payload.event} processed for tenant ${tenantId}`);
 
-    return NextResponse.json({ 
-      success: true, 
-      eventId: auditEvent.id 
+    return NextResponse.json({
+      success: true,
+      eventId: auditEvent.id
     });
 
   } catch (error: any) {
     console.error('[SignatureWebhook] Error processing webhook:', error.message);
-    return NextResponse.json({ 
-      error: 'Failed to process signature event', 
-      details: error.message 
+    return NextResponse.json({
+      error: 'Failed to process signature event',
+      details: error.message
     }, { status: 500 });
   }
 }
