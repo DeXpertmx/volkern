@@ -42,7 +42,8 @@ export const GET = withTenantAuth(async (request, auth) => {
         cotizacion: { select: { id: true, numero: true } },
         creadoPor: { select: { id: true, name: true } },
         items: true,
-        pagos: true
+        pagos: true,
+        timeline: { orderBy: { createdAt: 'desc' }, take: 1 }
       },
       orderBy: { fechaCreacion: 'desc' }
     });
