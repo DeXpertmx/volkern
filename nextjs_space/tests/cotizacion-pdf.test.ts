@@ -50,6 +50,53 @@ describe('PDF de cotizaciones', () => {
     expect(html).not.toContain('-€2,000.00')
   })
 
+  it('muestra las cláusulas con placeholders resueltos', () => {
+    const html = generateCotizacionHTML(
+      {
+        numero: 'COT-2026-0003',
+        estado: 'borrador',
+        moneda: 'EUR',
+        fechaCreacion: '2026-08-15T10:00:00Z',
+        fechaVencimiento: '2026-09-14T10:00:00Z',
+        clienteNombre: 'José Acevedo',
+        clienteEmpresa: 'Acevedo SL',
+        clienteEmail: 'jose@example.com',
+        clienteTelefono: '+34600000000',
+        subtotal: 100,
+        descuentoMonto: 10,
+        impuestos: 18.9,
+        total: 108.9,
+        clausulas:
+          'El cliente {{cliente.nombre}} ({{cliente.empresa}}) acepta el servicio. Importe: {{totales.total}}. Emisor: {{empresa.nombre}}.',
+        items: [],
+      },
+      { nombre: 'Volkern Insurance', razonSocial: 'Volkern Insurance SL', nifCif: 'B12345678', direccionFiscal: 'Calle 1' },
+    )
+
+    expect(html).toContain('Cláusulas')
+    expect(html).toContain('José Acevedo')
+    expect(html).toContain('Acevedo SL')
+    expect(html).toContain('€108.90')
+    expect(html).toContain('Volkern Insurance SL')
+    expect(html).not.toContain('{{cliente.nombre}}')
+  })
+
+  it('no muestra la sección de cláusulas si la cotización no tiene clausulado', () => {
+    const html = generateCotizacionHTML(
+      {
+        numero: 'COT-2026-0004',
+        estado: 'borrador',
+        moneda: 'EUR',
+        fechaCreacion: '2026-08-15T10:00:00Z',
+        clausulas: null,
+        items: [],
+      },
+      { nombre: 'Volkern Insurance' },
+    )
+
+    expect(html).not.toContain('Cláusulas')
+  })
+
   it('muestra el descuento global, la tasa de IVA por línea y el total recalculado', () => {
     const html = generateCotizacionHTML(
       {

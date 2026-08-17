@@ -1,3 +1,5 @@
+import { resolvePlaceholders } from '@/lib/contratos/placeholders';
+
 function escapeHtml(value: unknown): string {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -92,6 +94,25 @@ export function generateCotizacionHTML(cotizacion: any, tenant: any): string {
   const descuentoGlobalLabel = numberValue(cotizacion.descuentoPorcentaje) > 0
     ? ` (${numberValue(cotizacion.descuentoPorcentaje)}%)`
     : ''
+  const clausulas = resolvePlaceholders(
+    cotizacion.clausulas,
+    {
+      clienteNombre: cotizacion.clienteNombre,
+      clienteEmpresa: cotizacion.clienteEmpresa,
+      clienteEmail: cotizacion.clienteEmail,
+      clienteTelefono: cotizacion.clienteTelefono,
+      numero: cotizacion.numero,
+      titulo: cotizacion.titulo,
+      fechaInicio: cotizacion.fechaCreacion,
+      fechaFin: cotizacion.fechaVencimiento,
+      moneda: cotizacion.moneda,
+      subtotal: cotizacion.subtotal,
+      descuentoMonto: cotizacion.descuentoMonto,
+      impuestos: cotizacion.impuestos,
+      total: cotizacion.total,
+    },
+    safeTenant,
+  )
 
   return `
 <!DOCTYPE html>
@@ -236,6 +257,7 @@ export function generateCotizacionHTML(cotizacion: any, tenant: any): string {
 
     ${cotizacion.terminosPago || cotizacion.condicionesPago ? `<div class="notes-section"><h4>Condiciones de Pago</h4><div class="notes-content">${escapeHtml(cotizacion.terminosPago || cotizacion.condicionesPago)}</div></div>` : ''}
     ${cotizacion.notasCliente ? `<div class="notes-section"><h4>Notas</h4><div class="notes-content">${escapeHtml(cotizacion.notasCliente)}</div></div>` : ''}
+    ${clausulas ? `<div class="notes-section"><h4>Cláusulas</h4><div class="notes-content">${escapeHtml(clausulas)}</div></div>` : ''}
 
     <div class="footer">
       <p>Cotización generada por ${escapeHtml(safeTenant.nombre || 'Volkern CRM')}</p>
