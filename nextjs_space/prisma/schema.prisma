@@ -322,6 +322,7 @@ model Tenant {
   contentAssets                  ContentAsset[]
   contratoPagos                  ContratoPago[]
   contratos                      Contrato[]
+  contratoTemplates              ContratoTemplate[]
   cotizaciones                   Cotizacion[]
   dealActivities                 DealActivity[]
   dealAttachments                DealAttachment[]
@@ -2707,6 +2708,24 @@ model Contrato {
   @@index([fechaCreacion])
   @@index([contactId])
   @@map("contratos")
+}
+
+model ContratoTemplate {
+  id                 String   @id @default(cuid())
+  tenantId           String
+  nombre             String
+  tipo               String   @default("servicio") // servicio, confidencialidad, producto, mixto, suscripcion, otro
+  descripcion        String?
+  clausulas          String?
+  condicionesPago    String?
+  activo             Boolean  @default(true)
+  esPorDefecto       Boolean  @default(false) // plantilla genérica del sistema (no creada por el tenant)
+  fechaCreacion      DateTime @default(now())
+  fechaActualizacion DateTime @updatedAt
+  tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("contrato_templates")
 }
 
 model ContratoTimeline {
