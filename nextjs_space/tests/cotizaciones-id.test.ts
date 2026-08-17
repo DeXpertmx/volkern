@@ -36,6 +36,11 @@ vi.mock('@/lib/api-key-auth', () => {
   return { withTenantAuth: mockWithTenantAuth };
 });
 
+const crearOrdenVentaDesdeCotizacionMock = vi.fn();
+vi.mock('@/lib/ordenes-venta/from-cotizacion', () => ({
+  crearOrdenVentaDesdeCotizacion: (...args: any[]) => crearOrdenVentaDesdeCotizacionMock(...args),
+}));
+
 // ─── Imports ───────────────────────────────────────────────────────────────
 
 import { GET, PATCH, DELETE } from '@/app/api/cotizaciones/[id]/route';
@@ -341,6 +346,7 @@ describe('PATCH /api/cotizaciones/[id]', () => {
       estado: 'aceptada',
       fechaAceptacion: new Date('2025-05-26T10:00:00Z'),
     });
+    crearOrdenVentaDesdeCotizacionMock.mockResolvedValue({ orden: { id: 'ov-1' }, yaExistia: false });
 
     await PATCH(
       mockRequest('https://volkern.app/api/cotizaciones/cot-1', {
@@ -356,6 +362,45 @@ describe('PATCH /api/cotizaciones/[id]', () => {
         }),
       }),
     );
+  });
+
+  it('debe generar automáticamente la orden de venta al aceptar la cotización', async () => {
+    (prisma.cotizacion.findFirst as any).mockResolvedValue(mockCotizacion);
+    (prisma.cotizacion.update as any).mockResolvedValue({
+      ...mockCotizacion,
+      estado: 'aceptada',
+    });
+    crearOrdenVentaDesdeCotizacionMock.mockResolvedValue({ orden: { id: 'ov-1' }, yaExistia: false });
+
+    await PATCH(
+      mockRequest('https://volkern.app/api/cotizaciones/cot-1', {
+        estado: 'aceptada',
+      }),
+    );
+
+    expect(crearOrdenVentaDesdeCotizacionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cotizacionId: 'cot-1',
+        tenantId: 'test-tenant-id',
+        userId: 'test-user-id',
+      }),
+    );
+  });
+
+  it('NO debe generar orden de venta si el estado no es aceptada', async () => {
+    (prisma.cotizacion.findFirst as any).mockResolvedValue(mockCotizacion);
+    (prisma.cotizacion.update as any).mockResolvedValue({
+      ...mockCotizacion,
+      estado: 'enviada',
+    });
+
+    await PATCH(
+      mockRequest('https://volkern.app/api/cotizaciones/cot-1', {
+        estado: 'enviada',
+      }),
+    );
+
+    expect(crearOrdenVentaDesdeCotizacionMock).not.toHaveBeenCalled();
   });
 
   it('debe asignar fechaFirma e ipFirma cuando firmadoPorCliente es true y no tenía fechaFirma', async () => {

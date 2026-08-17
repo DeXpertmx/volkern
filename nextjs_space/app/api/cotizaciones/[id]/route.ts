@@ -6,6 +6,7 @@ import { withTenantAuth } from '@/lib/api-key-auth'
 import { ComplianceGate } from '@/lib/compliance-gate'
 import { validateBody } from '@/lib/validation'
 import { CotizacionInputSchema, calculateCotizacionItems } from '@/app/api/cotizaciones/route'
+import { crearOrdenVentaDesdeCotizacion } from '@/lib/ordenes-venta/from-cotizacion'
 
 function getCotizacionId(context: any): string | undefined {
   // Next entrega { params: { id } }; algunos tests y consumidores antiguos
@@ -48,6 +49,17 @@ export const GET = withTenantAuth(async (req, auth, params) => {
             dominio: true,
             configuracion: true,
           },
+        },
+        ordenesVenta: {
+          select: {
+            id: true,
+            numero: true,
+            estado: true,
+            total: true,
+            moneda: true,
+            fechaCreacion: true,
+          },
+          orderBy: { fechaCreacion: 'asc' },
         },
       },
     })
@@ -217,6 +229,21 @@ export const PATCH = withTenantAuth(async (req, auth, params) => {
         lead: true,
       },
     })
+
+    // Flujo de ventas: al marcar la cotización como aceptada se genera
+    // automáticamente la Orden de Venta para su revisión (idempotente,
+    // no bloquea la respuesta si falla).
+    if (estado === 'aceptada') {
+      try {
+        await crearOrdenVentaDesdeCotizacion({
+          cotizacionId: cotizacion.id,
+          tenantId,
+          userId: auth.user?.id ?? null,
+        })
+      } catch (ordenError) {
+        console.error('[PATCH cotizacion] No se pudo generar la orden de venta:', ordenError)
+      }
+    }
 
     // Si es aceptada y tiene deal, actualizar el deal
     if (estado === 'aceptada' && cotizacion.dealId) {

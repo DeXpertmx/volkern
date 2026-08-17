@@ -33,6 +33,10 @@ vi.mock('@/lib/api-key-auth', () => ({
 vi.mock('@/lib/ses-email', () => ({ sendEmail: sendEmailMock }))
 vi.mock('@/lib/whatsapp', () => ({ sendWhatsAppMessage: sendWhatsAppMessageMock }))
 vi.mock('next/headers', () => ({ headers: () => ({ get: () => '203.0.113.10' }) }))
+const crearOrdenVentaDesdeCotizacionMock = vi.fn()
+vi.mock('@/lib/ordenes-venta/from-cotizacion', () => ({
+  crearOrdenVentaDesdeCotizacion: (...args: any[]) => crearOrdenVentaDesdeCotizacionMock(...args),
+}))
 
 import { GET, POST } from '@/app/api/cotizaciones/public/[id]/verification/route'
 import { POST as VERIFY } from '@/app/api/cotizaciones/public/[id]/verification/verify/route'
@@ -74,6 +78,10 @@ describe('verificación de aceptación pública de cotizaciones', () => {
     prisma.cotizacionAcceptanceChallenge.delete.mockResolvedValue({})
     sendEmailMock.mockResolvedValue({ success: true })
     sendWhatsAppMessageMock.mockResolvedValue({ success: true })
+    crearOrdenVentaDesdeCotizacionMock.mockResolvedValue({
+      orden: { id: 'ov-1', numero: 'OV-2026-0001' },
+      yaExistia: false,
+    })
   })
 
   it('enmascara los destinos y no expone el email o teléfono completo', async () => {
@@ -159,6 +167,11 @@ describe('verificación de aceptación pública de cotizaciones', () => {
     }))
     expect(prisma.cotizacionAcceptanceChallenge.update).toHaveBeenLastCalledWith(expect.objectContaining({
       data: { verifiedAt: expect.any(Date) },
+    }))
+    // Al aceptar se genera automáticamente la orden de venta para su revisión
+    expect(crearOrdenVentaDesdeCotizacionMock).toHaveBeenCalledWith(expect.objectContaining({
+      cotizacionId: 'cot-1',
+      tenantId: 'tenant-1',
     }))
   })
 
