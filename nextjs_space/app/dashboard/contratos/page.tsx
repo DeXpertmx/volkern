@@ -44,7 +44,8 @@ import {
   TrendingUp,
   TrendingDown,
   ShieldCheck,
-  AlertTriangle
+  AlertTriangle,
+  FileStack
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -52,6 +53,7 @@ import { apiFetch } from '@/lib/api-client'
 import { DocumentPreview } from '@/components/document-preview'
 import { DocumentTimeline, TimelineEvent } from '@/components/document-timeline'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { ContratoTemplatesManager } from '@/components/contratos/ContratoTemplatesManager'
 
 interface Contrato {
   id: string
@@ -89,6 +91,7 @@ export default function ContratosPage() {
   const [tipoFilter, setTipoFilter] = useState('todos')
   const [selectedContrato, setSelectedContrato] = useState<Contrato | null>(null)
   const [isQuickViewOpen, setIsQuickViewOpen] = useState(false)
+  const [templatesOpen, setTemplatesOpen] = useState(false)
 
   useEffect(() => {
     fetchContratos()
@@ -244,6 +247,10 @@ export default function ContratosPage() {
           <p className="text-muted-foreground">Gestiona tus contratos y órdenes de venta</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setTemplatesOpen(true)}>
+            <FileStack className="h-4 w-4 mr-2" />
+            Plantillas
+          </Button>
           <Button variant="outline" onClick={() => router.push('/template-editor/document/new')}>
             <FileText className="h-4 w-4 mr-2" />
             Nuevo documento
@@ -254,6 +261,8 @@ export default function ContratosPage() {
           </Button>
         </div>
       </div>
+
+      <ContratoTemplatesManager open={templatesOpen} onOpenChange={setTemplatesOpen} />
 
       {/* Inteligencia de Retención (Fase 6) */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">

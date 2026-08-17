@@ -31,7 +31,8 @@ import {
   Calendar,
   Calculator,
   GripVertical,
-  RefreshCw
+  RefreshCw,
+  FileStack
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Separator } from '@/components/ui/separator'
@@ -39,6 +40,7 @@ import { cn } from '@/lib/utils'
 import { useFiscalConfig } from '@/hooks/use-fiscal-config'
 import { CatalogSearchSelect, CatalogoItemResult } from '@/components/catalogo/CatalogSearchSelect'
 import { ContactSearchSelect, ContactResult } from '@/components/ventas/ContactSearchSelect'
+import { ContratoTemplatesManager, ContratoTemplate } from '@/components/contratos/ContratoTemplatesManager'
 
 interface Item {
   id: string
@@ -76,6 +78,7 @@ function NuevoContratoContent() {
   const [saving, setSaving] = useState(false)
   const [loadingCotizacion, setLoadingCotizacion] = useState(false)
   const [step, setStep] = useState(1)
+  const [templatesOpen, setTemplatesOpen] = useState(false)
 
   // Formulario - Se inicializarán con la configuración fiscal
   const [titulo, setTitulo] = useState('')
@@ -384,6 +387,20 @@ function NuevoContratoContent() {
                     <CardDescription>Detalles básicos de identificación</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
+                    {/* Selector de plantilla reutilizable */}
+                    <div className="rounded-lg border border-dashed bg-slate-50/60 p-3 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 text-sm">
+                        <FileStack className="h-4 w-4 text-blue-700" />
+                        <span>
+                          <span className="font-medium">Plantilla:</span>{' '}
+                          {templatesOpen ? 'eligiendo…' : '¿Empezar desde una plantilla? (servicios, confidencialidad…)'}
+                        </span>
+                      </div>
+                      <Button type="button" size="sm" variant="outline" onClick={() => setTemplatesOpen(true)}>
+                        Elegir plantilla
+                      </Button>
+                    </div>
+
                     <div className="space-y-2">
                       <Label>Título del Contrato *</Label>
                       <Input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Ej: Contrato de Mantenimiento Anual" className="text-lg font-medium" />
@@ -783,6 +800,21 @@ function NuevoContratoContent() {
           </Card>
         </div>
       </div>
+
+      {/* Gestor de plantillas: al elegir, rellena los campos del contrato */}
+      <ContratoTemplatesManager
+        open={templatesOpen}
+        onOpenChange={setTemplatesOpen}
+        onSelect={(t: ContratoTemplate) => {
+          setTitulo(t.nombre)
+          if (t.tipo !== 'otro') setTipo(t.tipo === 'confidencialidad' ? 'servicio' : t.tipo)
+          setDescripcion(t.descripcion || '')
+          setClausulas(t.clausulas || '')
+          setCondicionesPago(t.condicionesPago || '')
+          toast.success(`Plantilla "${t.nombre}" aplicada`)
+          setTemplatesOpen(false)
+        }}
+      />
     </div>
   )
 }
