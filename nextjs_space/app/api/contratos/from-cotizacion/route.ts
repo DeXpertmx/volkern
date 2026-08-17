@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { authenticateRequest } from '@/lib/api-key-auth'
+import { addContratoTimelineEvent } from '@/lib/contratos/timeline'
 
 /**
  * POST /api/contratos/from-cotizacion
@@ -264,8 +265,26 @@ export async function POST(req: NextRequest) {
 
       if (pagos.length > 0) {
         await prisma.contratoPago.createMany({ data: pagos })
+        await addContratoTimelineEvent({
+          contratoId: contrato.id,
+          actorId: auth.user?.id || null,
+          actorType: 'USER',
+          action: 'plan_pagos',
+          note: `Plan de pagos generado: ${pagos.length} pagos de ${montoPorPago.toLocaleString()} ${contrato.moneda} (${frecuenciaPago})`,
+          metadata: { cantidadPagos: pagos.length, montoPorPago, frecuenciaPago, moneda: contrato.moneda },
+        })
       }
     }
+
+    // Timeline: evento de creación (después de crear los pagos para que queden primero)
+    await addContratoTimelineEvent({
+      contratoId: contrato.id,
+      actorId: auth.user?.id || null,
+      actorType: 'USER',
+      action: 'created',
+      note: `Contrato ${numero} creado desde la cotización ${cotizacion.numero} por ${contrato.total} ${contrato.moneda}`,
+      metadata: { numero, cotizacionId: cotizacion.id, total: contrato.total, moneda: contrato.moneda },
+    })
 
     // Actualizar estado de la cotización
     await prisma.cotizacion.update({

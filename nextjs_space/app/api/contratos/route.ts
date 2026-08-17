@@ -6,6 +6,7 @@ import { createSystemContext } from '@/lib/skills/context';
 import { withTenantAuth } from '@/lib/api-key-auth';
 import { validateBody } from '@/lib/validation';
 import { ContratoCreateSchema } from '@/lib/validation/schemas';
+import { addContratoTimelineEvent } from '@/lib/contratos/timeline';
 import { randomBytes } from 'crypto';
 
 // GET /api/contratos - Listar contratos
@@ -223,6 +224,16 @@ export const POST = withTenantAuth(async (request, auth) => {
       changesAfter: { numero, total, snapshot: { snapshotNombre, snapshotNif } },
       ipAddress: requestIp,
       userAgent
+    });
+
+    // 7.5 Timeline del contrato: evento de creación
+    await addContratoTimelineEvent({
+      contratoId: contrato.id,
+      actorId: userId,
+      actorType: 'USER',
+      action: 'created',
+      note: `Contrato ${numero} creado para ${snapshotNombre} por ${total.toLocaleString()} ${contrato.moneda}`,
+      metadata: { numero, total, tipo: contrato.tipo }
     });
 
     // 8. Notificación a Telegram (Sales Channel)

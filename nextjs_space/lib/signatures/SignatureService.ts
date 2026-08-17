@@ -190,6 +190,29 @@ export class SignatureService {
         }
       });
 
+      // 6.5 Timeline del contrato: evento de envío a firma
+      if (contratoId) {
+        try {
+          await prisma.contratoTimeline.create({
+            data: {
+              contratoId,
+              actorType: 'SYSTEM',
+              action: 'document_sent',
+              note: `Enviado a firmar a ${signers.map(s => s.email).join(', ')} (LibreSign)`,
+              metadata: {
+                signatureRequestId: request.id,
+                libreSignUuid,
+                signers: signers.map(s => ({ email: s.email, role: s.role }))
+              }
+            }
+          });
+          console.info(`[SignatureService] Timeline del contrato ${contratoId} actualizado con document_sent`);
+        } catch (timelineError: any) {
+          // No romper el envío si el timeline falla (log y continuar)
+          console.warn('[SignatureService] No se pudo registrar document_sent en el timeline:', timelineError.message);
+        }
+      }
+
       return request;
     } catch (error) {
       console.error('[SignatureService] Failed to create request:', error);
