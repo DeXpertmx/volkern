@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { FileSignature, Loader2, Save, CheckCircle2, XCircle, Copy, Info } from 'lucide-react';
+import { FileSignature, Loader2, Save, CheckCircle2, XCircle, Copy, Info, Plug, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface FirmaDigitalSettings {
@@ -26,6 +26,8 @@ interface FirmaDigitalSettings {
 export default function FirmaDigitalPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; checks: Record<string, { ok: boolean; detail: string }> } | null>(null);
   const [settings, setSettings] = useState<FirmaDigitalSettings | null>(null);
 
   const [url, setUrl] = useState('');
@@ -109,6 +111,41 @@ export default function FirmaDigitalPage() {
     }
   };
 
+  const handleTest = async () => {
+    if (!url.trim()) {
+      toast.error('Indica la URL de la instancia primero');
+      return;
+    }
+    try {
+      setTesting(true);
+      setTestResult(null);
+      const response = await fetch('/api/integraciones/firma-digital/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, apiToken })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Error desconocido' }));
+        throw new Error(errorData.error || `Error ${response.status}`);
+      }
+
+      const data = await response.json();
+      setTestResult(data);
+      if (data.success) {
+        toast.success('Conexión verificada correctamente');
+      } else {
+        toast.error('La conexión tiene problemas — revisa el detalle');
+      }
+    } catch (error) {
+      console.error('Error al probar conexión:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Error al probar la conexión';
+      toast.error(errorMessage);
+    } finally {
+      setTesting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -180,6 +217,38 @@ export default function FirmaDigitalPage() {
               Se cifra antes de guardarse. Si se deja enmascarado se conserva el actual.
             </p>
           </div>
+
+          <Button variant="outline" onClick={handleTest} disabled={testing || saving} className="w-full">
+            {testing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plug className="h-4 w-4 mr-2" />}
+            {testing ? 'Probando conexión...' : 'Probar conexión'}
+          </Button>
+
+          {testResult && (
+            <div className={`rounded-lg border p-4 space-y-2 ${testResult.success ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-red-500/40 bg-red-500/5'}`}>
+              <div className="flex items-center justify-between">
+                <p className={`text-sm font-semibold flex items-center gap-2 ${testResult.success ? 'text-emerald-600' : 'text-red-600'}`}>
+                  {testResult.success ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+                  {testResult.success ? 'Conexión correcta' : 'La conexión tiene problemas'}
+                </p>
+                <button onClick={() => setTestResult(null)} className="text-muted-foreground hover:text-foreground" aria-label="Cerrar">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              {Object.entries(testResult.checks).map(([key, check]) => (
+                <div key={key} className="flex items-start gap-2 text-sm">
+                  {check.ok
+                    ? <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+                    : <XCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />}
+                  <div>
+                    <p className="font-medium">{
+                      key === 'host' ? 'Host' : key === 'nextcloud' ? 'Instancia Nextcloud' : 'API + token'
+                    }</p>
+                    <p className="text-xs text-muted-foreground">{check.detail}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="webhookSecret">Webhook secret</Label>
