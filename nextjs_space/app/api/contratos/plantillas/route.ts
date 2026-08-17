@@ -56,6 +56,37 @@ async function seedDefaultTemplates(tenantId: string) {
   }
 }
 
+/**
+ * Actualiza las plantillas de sistema (esPorDefecto) que quedaron con el
+ * clausulado anterior (sin placeholders) para que reciban las cláusulas
+ * dinámicas actuales. No toca plantillas personalizadas del tenant.
+ */
+async function upgradeDefaultTemplates(tenantId: string) {
+  try {
+    const deSistema = await prisma.contratoTemplate.findMany({
+      where: { tenantId, esPorDefecto: true },
+    });
+    for (const plantilla of deSistema) {
+      // Solo actualizar si aún no trae placeholders (es la versión vieja)
+      if (plantilla.clausulas && !plantilla.clausulas.includes('{{')) {
+        const nueva = DEFAULT_TEMPLATES.find((t) => t.nombre === plantilla.nombre);
+        if (nueva) {
+          await prisma.contratoTemplate.update({
+            where: { id: plantilla.id },
+            data: {
+              descripcion: nueva.descripcion,
+              clausulas: nueva.clausulas,
+              condicionesPago: nueva.condicionesPago,
+            },
+          });
+        }
+      }
+    }
+  } catch (error: any) {
+    console.warn('No se pudieron actualizar las plantillas por defecto:', error.message);
+  }
+}
+
 // GET /api/contratos/plantillas - Listar plantillas del tenant
 export const GET = withTenantAuth(async (request, auth) => {
   try {
@@ -65,6 +96,9 @@ export const GET = withTenantAuth(async (request, auth) => {
     const existentes = await prisma.contratoTemplate.count({ where: { tenantId } });
     if (existentes === 0) {
       await seedDefaultTemplates(tenantId);
+    } else {
+      // Tenants ya existentes: actualizar las de sistema que quedaron viejas
+      await upgradeDefaultTemplates(tenantId);
     }
 
     const plantillas = await prisma.contratoTemplate.findMany({
