@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   resolvePlaceholders,
+  getUnresolvedPlaceholders,
   hasPlaceholders,
   formatCurrency,
   formatFecha,
@@ -86,6 +87,27 @@ describe('resolvePlaceholders', () => {
     expect(resolvePlaceholders(null, contrato, tenant)).toBe('')
     expect(resolvePlaceholders(undefined, contrato, tenant)).toBe('')
     expect(resolvePlaceholders('', contrato, tenant)).toBe('')
+  })
+})
+
+describe('getUnresolvedPlaceholders', () => {
+  it('devuelve solo los tokens sin dato en el contexto', () => {
+    const pending = getUnresolvedPlaceholders(
+      '{{cliente.nombre}} · {{cliente.email}} · {{empresa.rfc}}',
+      { clienteNombre: 'Juan' },
+      { rfc: 'A123' }
+    )
+    expect(pending).toEqual(['{{cliente.email}}'])
+  })
+
+  it('devuelve los tokens desconocidos como pendientes', () => {
+    const pending = getUnresolvedPlaceholders('Hola {{lo.que.sea}} y {{cliente.nombre}}', {}, {})
+    expect(pending).toEqual(['{{lo.que.sea}}', '{{cliente.nombre}}'])
+  })
+
+  it('no duplica tokens repetidos y respeta texto null', () => {
+    expect(getUnresolvedPlaceholders('{{a.b}} y {{a.b}}', {}, {})).toEqual(['{{a.b}}'])
+    expect(getUnresolvedPlaceholders(null)).toEqual([])
   })
 })
 

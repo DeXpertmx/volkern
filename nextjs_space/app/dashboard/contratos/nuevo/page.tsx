@@ -42,6 +42,7 @@ import { CatalogSearchSelect, CatalogoItemResult } from '@/components/catalogo/C
 import { ContactSearchSelect, ContactResult } from '@/components/ventas/ContactSearchSelect'
 import { ContratoTemplatesManager, ContratoTemplate } from '@/components/contratos/ContratoTemplatesManager'
 import { PlaceholderHelp } from '@/components/contratos/PlaceholderHelp'
+import { ClausulasPreview } from '@/components/contratos/ClausulasPreview'
 
 interface Item {
   id: string
@@ -234,6 +235,30 @@ function NuevoContratoContent() {
   const subtotalConDescuento = subtotal - descuentoMonto
   const ivaMonto = incluyeIva ? subtotalConDescuento * (tasaIva / 100) : 0
   const total = subtotalConDescuento + ivaMonto
+
+  // Contexto para la vista previa en vivo de placeholders en las cláusulas
+  const previewContext = {
+    clienteNombre,
+    clienteEmpresa,
+    clienteEmail,
+    clienteTelefono,
+    clienteRfc: clienteIdFiscal,
+    clienteDireccion,
+    titulo,
+    fechaInicio: fechaInicio ? new Date(fechaInicio + 'T12:00:00') : null,
+    fechaFin: fechaFin ? new Date(fechaFin + 'T12:00:00') : null,
+    moneda,
+    subtotal,
+    descuentoMonto,
+    impuestos: ivaMonto,
+    total,
+  }
+  const previewTenant = {
+    nombre: fiscalConfig?.emisor?.razonSocial || fiscalConfig?.emisor?.nombreComercial || undefined,
+    razonSocial: fiscalConfig?.emisor?.razonSocial || undefined,
+    nifCif: fiscalConfig?.emisor?.idFiscal || undefined,
+    direccionFiscal: fiscalConfig?.emisor?.direccion || undefined,
+  }
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('es-MX', { style: 'currency', currency: moneda || 'EUR' }).format(amount)
@@ -673,6 +698,7 @@ function NuevoContratoContent() {
                       <Label>Cláusulas Especiales</Label>
                       <PlaceholderHelp onInsert={(t) => setClausulas(clausulas + (clausulas ? ' ' : '') + t)} />
                       <Textarea value={clausulas} onChange={(e) => setClausulas(e.target.value)} placeholder="Obligaciones y términos legales..." rows={4} />
+                      <ClausulasPreview text={clausulas} context={previewContext} tenant={previewTenant} />
                     </div>
                   </CardContent>
                 </Card>
