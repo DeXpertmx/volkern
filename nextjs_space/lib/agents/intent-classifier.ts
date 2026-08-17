@@ -778,6 +778,17 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
       return { intent: 'resumen_rrhh', confidence: 0.85, extractedParams: extracted }
     }
 
+    // ═══ 0g-z. FIRMA DIGITAL RRHH ("firma digitalmente las vacaciones de X",
+    // "sella digitalmente...", "genera la aprobación sellada...") — definido
+    // ANTES de 0h porque "aprobación sellada" también contiene "vacaciones"
+    // y el verbo "aprobación" de la rama de aprobar.
+    const FIRMA_DIGITAL_SIGNAL = /\b(?:firma\s+digital(?:mente)?|firma\s+electr[oó]nica|sell[oa]\s+(?:digitalmente|digital)|aprobaci[oó]n\s+sellada|sello\s+digital)\b/i
+    if (FIRMA_DIGITAL_SIGNAL.test(message) && /\b(?:vacaciones|solicitud|aprobaci[oó]n|expediente)\b/i.test(message)) {
+      const nombre = this.extractNombreAfter(message, /\b(?:vacaciones|solicitud|aprobaci[oó]n|expediente)\s+(?:de|del|del\s+empleado)\s+/i)
+      if (nombre) extracted.nombre = nombre
+      return { intent: 'firma_digital_hr', confidence: 0.85, extractedParams: extracted }
+    }
+
     // ═══ 0h. APROBAR VACACIONES ("aprueba la solicitud de vacaciones #123",
     // "autoriza vacaciones de María con nota: Disfruta tus días",
     // "confirma la solicitud de vacaciones de Juan Pérez") ═══
@@ -1065,6 +1076,21 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
       return { intent: 'predecir_fallo_activo', confidence: 0.85, extractedParams: extracted }
     }
 
+    // 0z-e0. DETECTAR CUELLOS DE BOTELLA ("dónde está el cuello de botella en
+    // la planta", "retrasos críticos", "estrangulamientos") — definido
+    // ANTES de la proyección de capacidad, que captura genéricamente "cuellos
+    // de botella"; aquí solo entran las variantes de detección puntual.
+    const BOTTLENECK_SIGNAL =
+      /\bestrangul(?:ar|amiento)/i.test(message) ||
+      /\bretrasos?\s+cr[ií]ticos/i.test(message) ||
+      /\bcuellos?\s+de\s+botella\s+(?:actual|hoy|en\s+este\s+momento)\b/i.test(message) ||
+      /\b(?:d[oó]nde|cu[aá]l)\s+(?:est[áa]|queda|se\s+ubica)\s+el\s+cuello\b/i.test(message) ||
+      /\bqu[eé]\s+l[ií]neas?\s+se\s+est[aá]n\s+retrasando\b/i.test(message) ||
+      /\bbloqueando\s+(?:la\s+)?producci[oó]n\b/i.test(message)
+    if (BOTTLENECK_SIGNAL && /\b(?:producci[oó]n|planta|l[ií]nea|montaje|fabri)\b/i.test(message)) {
+      return { intent: 'detectar_cuellos_botella', confidence: 0.85, extractedParams: extracted }
+    }
+
     // 0z-e. PROYECCIÓN DE CAPACIDAD ("analiza la capacidad de la planta a 7
     // días", "cuellos de botella", "riesgos de saturación") ═══
     const CAPACIDAD_SIGNAL = /\b(?:capacidad\s+de\s+la\s+planta|capacidad\s+(?:de|en)\s+producci[oó]n|cuellos?\s+de\s+botella|saturaci[oó]n\s+(?:de\s+las\s+l[ií]neas|en\s+producci[oó]n)|capacidad\s+de\s+las\s+l[ií]neas[^p])\b/i
@@ -1115,6 +1141,37 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     const RENT_PROD_SIGNAL = /\b(?:rentabilidad\s+de\s+producci[oó]n|margen\s+(?:m[aá]s\s+)?bajo|margenes?\s+bajos|baja\s+(?:la\s+)?rentabilidad|[oó]rdenes\s+de\s+producci[oó]n\s+con\s+margen)\b/i
     if (RENT_PROD_SIGNAL.test(message)) {
       return { intent: 'rentabilidad_produccion', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 0z-1. RESUMEN GASTOS PENDIENTES RRHH ("qué gastos están pendientes
+    // de autorizar", "gastos de empleados sin aprobar") ═══
+    const GASTOS_PEND_SIGNAL =
+      /\bpendientes?\s+de\s+(?:autoriz|aprobar)/i.test(message) ||
+      /\b(?:sin|por)\s+(?:autoriz|aprobar)/i.test(message) ||
+      /\besperan?\s+(?:su\s+)?autorizaci[oó]n/i.test(message) ||
+      /\bautorizaci[oó]n\s+pendiente/i.test(message)
+    if (GASTOS_PEND_SIGNAL && /\bgastos?\b/i.test(message)) {
+      return { intent: 'resumen_gastos_pendientes', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 0z-2. IMPACTO DE VACACIONES ("cuál es el impacto de las vacaciones
+    // de María", "qué pasa si Carlos se va de vacaciones") ═══
+    const VAC_IMPACTO_SIGNAL =
+      /\b(?:impacto(?:s)?|afecta|afectar|analiza\s+el\s+impacto|eval[uú]a\s+(?:el\s+)?impacto)\b/i.test(message) ||
+      /\bqu[eé]\s+pas(?:a|ar[ií]a)\s+si/i.test(message) ||
+      /\b(?:c[oó]mo)\s+afecta\b/i.test(message)
+    if (VAC_IMPACTO_SIGNAL && /\b(?:vacaciones|d[ií]as\s+libres|permisos?)\b/i.test(message)) {
+      const nombre = this.extractNombreAfter(message, /\b(?:vacaciones|d[ií]as\s+libres|permisos?)\s+(?:de|del|del\s+empleado)\s+/i)
+      if (nombre) extracted.nombre = nombre
+      return { intent: 'impacto_vacaciones', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 0z-3. ESTRATEGIA DE ENSAMBLAJE ("mejor estrategia de ensamblaje",
+    // "cómo optimizar la línea de montaje") ═══
+    const ENSAMBLAJE_SIGNAL = /\b(?:ensamblaj|montaje|armado|l[ií]nea\s+de\s+producci[oó]n)\b/i
+    const ESTRATEGIA_VERB = /\b(?:estrategia|estrategias|optimiza|optimizar|optimizaci[oó]n|recomienda|recomend|sugiere|sugerir|mejora|mejorar|mejor)\b/i
+    if (ENSAMBLAJE_SIGNAL.test(message) && ESTRATEGIA_VERB.test(message)) {
+      return { intent: 'estrategia_ensamblaje', confidence: 0.85, extractedParams: extracted }
     }
 
     // ═══ 0. CONVERTIR LEAD (antes que crear: "convierte… en contacto" también
