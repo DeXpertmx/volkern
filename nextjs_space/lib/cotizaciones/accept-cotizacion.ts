@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db'
+import { crearOrdenVentaDesdeCotizacion } from '@/lib/ordenes-venta/from-cotizacion'
 
 export async function acceptCotizacionFromPublicLink({
   cotizacionId,
@@ -72,5 +73,19 @@ export async function acceptCotizacionFromPublicLink({
     },
   })
 
-  return { ok: true as const, cotizacion: updated }
+  // Flujo de ventas: al aceptar se genera la Orden de Venta automáticamente
+  // para su revisión. Es idempotente y no bloquea la aceptación si falla.
+  let ordenVenta = null
+  try {
+    const resultado = await crearOrdenVentaDesdeCotizacion({
+      cotizacionId: cotizacion.id,
+      tenantId,
+      userId: null,
+    })
+    ordenVenta = resultado.orden
+  } catch (error) {
+    console.error('[acceptCotizacionFromPublicLink] No se pudo generar la orden de venta:', error)
+  }
+
+  return { ok: true as const, cotizacion: updated, ordenVenta }
 }

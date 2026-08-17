@@ -102,6 +102,13 @@ interface Cotizacion {
     titulo: string
   } | null
   items: CotizacionItem[]
+  ordenesVenta?: {
+    id: string
+    numero: string
+    estado: string
+    total: number
+    moneda: string
+  }[]
   tenant: {
     nombre: string
     dominio: string | null
@@ -378,10 +385,19 @@ export default function CotizacionDetailPage() {
               </Button>
             </>
           )}
-          {cotizacion.estado === 'aceptada' && (
+          {cotizacion.estado === 'aceptada' && cotizacion.ordenesVenta && cotizacion.ordenesVenta.length > 0 && (
+            <Button
+              onClick={() => router.push(`/dashboard/ventas/ordenes/${cotizacion.ordenesVenta![0].id}`)}
+              className="bg-emerald-600 hover:bg-emerald-700"
+            >
+              <Eye className="h-4 w-4 mr-2" />
+              Revisar Orden de Venta
+            </Button>
+          )}
+          {cotizacion.estado === 'aceptada' && (!cotizacion.ordenesVenta || cotizacion.ordenesVenta.length === 0) && (
             <Button onClick={() => setConvertModalOpen(true)} className="bg-emerald-600 hover:bg-emerald-700">
               <FileText className="h-4 w-4 mr-2" />
-              Convertir a Orden
+              Generar Orden de Venta
             </Button>
           )}
         </div>
@@ -581,6 +597,35 @@ export default function CotizacionDetailPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Orden de venta */}
+          {cotizacion.estado === 'aceptada' && cotizacion.ordenesVenta && cotizacion.ordenesVenta.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Orden de Venta
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                {cotizacion.ordenesVenta.map((ov) => (
+                  <div key={ov.id} className="flex items-center justify-between">
+                    <div>
+                      <p className="font-bold">{ov.numero}</p>
+                      <Badge variant="outline" className="text-[10px] mt-1">{ov.estado}</Badge>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => router.push(`/dashboard/ventas/ordenes/${ov.id}`)}
+                    >
+                      Revisar <ExternalLink className="h-3 w-3 ml-1" />
+                    </Button>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Tracking */}
           {cotizacion.estado !== 'borrador' && (
