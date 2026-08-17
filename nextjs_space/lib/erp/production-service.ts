@@ -167,7 +167,7 @@ export class ProductionService {
     // 🔗 VINCULACIÓN COMERCIAL: Si esta orden nació de un pedido (MTO)
     const reservations = await (prisma as any).erp_order_reservations.findMany({
       where: { workOrderId, tenantId, status: 'ACTIVE' },
-      include: { salesOrderItem: true }
+      include: { erp_sales_order_items: true }
     });
 
     for (const res of reservations) {

@@ -275,8 +275,8 @@ export class VolkernActionRegistry {
     const { tenant_id, data } = context
     const message = config?.message as string || 'Nueva actualización de lead'
     
-    const leads = await prisma.lead.findUnique({ where: { id: data.lead_id as string }, include: { user: true } as any })
-    const owner = (leads as any)?.user
+    const leads = await prisma.lead.findUnique({ where: { id: data.lead_id as string }, include: { asignadoUsuario: true } as any })
+    const owner = (leads as any)?.asignadoUsuario
 
     if (owner?.telefono) {
       await sendWhatsAppMessage(owner.telefono, message, tenant_id)
