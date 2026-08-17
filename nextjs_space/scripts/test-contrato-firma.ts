@@ -12,6 +12,8 @@
  * Secrets por env (NO se imprimen):
  *   NEXTAUTH_SECRET="$(ssh ... printenv NEXTAUTH_SECRET)" \
  *   CUSTOMER_JWT_SECRET="$(ssh ... printenv CUSTOMER_JWT_SECRET)" \
+ *   LIBRESIGN_URL="http://libresign" (instancia real; sin él usa fallback de UUID) \
+ *   LIBRESIGN_TOKEN="..." (app password de LibreSign) \
  *   node scripts/test-contrato-firma.js
  */
 import jwt from 'jsonwebtoken'
@@ -92,11 +94,13 @@ async function main() {
   console.log(`=== Prueba E2E de contrato + firma digital (${BASE}) ===\n`)
 
   // 0. Configurar la firma digital con webhookSecret conocido (para probar el HMAC)
+  const libreSignUrl = process.env.LIBRESIGN_URL || 'https://firma.prueba.local'
+  const libreSignToken = process.env.LIBRESIGN_TOKEN || 'token-prueba'
   const config = await call('POST', '/api/integraciones/firma-digital', {
     cookie,
     body: {
-      url: 'https://firma.prueba.local',
-      apiToken: 'token-prueba',
+      url: libreSignUrl,
+      apiToken: libreSignToken,
       webhookSecret: WEBHOOK_SECRET,
       isActive: true,
       webhookSignatureOptional: false,
@@ -104,6 +108,7 @@ async function main() {
   })
   check('POST /api/integraciones/firma-digital (configurar)', config.status, 200)
   if (config.status !== 200) console.log(`   → ${config.text}`)
+  if (process.env.LIBRESIGN_URL) console.log(`   → instancia LibreSign REAL: ${libreSignUrl}`)
 
   // 1. Crear contrato de prueba
   const creado = await call('POST', '/api/contratos', {
@@ -136,7 +141,26 @@ async function main() {
   check('POST /api/contratos/[id]/volkernsign (firma)', firma.status, 200)
   if (firma.status === 200 && firma.json?.uuid) {
     requestUuid = firma.json.uuid
+    const isReal = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(firma.json.uuid)
     console.log(`   → requestId=${firma.json.requestId}, uuid=${requestUuid}`)
+    if (process.env.LIBRESIGN_URL) {
+      // Con instancia real, el uuid debe ser el devuelto por LibreSign (no fallback random)
+      // Verificar contra la API real que el documento existe
+      try {
+        const validate = await fetch(`${libreSignUrl}/ocs/v2.php/apps/libresign/api/v1/file/validate/uuid/${firma.json.uuid}?format=json`, {
+          headers: { Authorization: `Bearer ${libreSignToken}`, 'OCS-APIRequest': 'true' }
+        })
+        const vj: any = await validate.json().catch(() => null)
+        const ok = validate.status === 200 && (vj?.ocs?.meta?.status === 'ok' || vj?.ocs?.statuscode === 200)
+        if (ok) {
+          console.log(`   → ✓ DOCUMENTO EXISTE EN LIBRESIGN (uuid real, no fallback)`)
+        } else {
+          console.log(`   → ⚠ uuid con formato válido pero no encontrado en LibreSign (HTTP ${validate.status}): ${JSON.stringify(vj).slice(0, 200)}`)
+        }
+      } catch (e: any) {
+        console.log(`   → ⚠ no se pudo validar en LibreSign: ${e.message}`)
+      }
+    }
   } else {
     console.log(`   → ${firma.text}`)
   }

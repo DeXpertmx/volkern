@@ -25,50 +25,76 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing tenantId parameter' }, { status: 400 });
     }
 
-    // 1. Leer el body CRUDO (necesario para el HMAC; no usar req.json() antes)
-    const rawBody = await req.text();
-    if (!rawBody) {
-      return NextResponse.json({ error: 'Empty body' }, { status: 400 });
-    }
+    // 1. Detectar el formato del body ANTES de leerlo (evita consumir el stream dos veces)
+    const contentType = req.headers.get('content-type') || '';
+    const isNativeMultipart = contentType.includes('multipart/form-data') || contentType.includes('application/x-www-form-urlencoded');
 
     // 2. Validar Tenant Settings y obtener el webhookSecret descifrado
     const settings = await SignatureService.getTenantSettings(tenantId);
 
     // 3. Verificar firma HMAC-SHA256 (x-libresign-signature | x-signature | x-hub-signature-256)
+    // NOTA: LibreSign envía el webhook como multipart/form-data SIN firma HMAC
+    // (protocolo nativo). La verificación estricta aplica solo al formato JSON
+    // interno de Volkern; para multipart (LibreSign real) se acepta como protocolo
+    // nativo, avisando en logs. El opt-out webhookSignatureOptional sigue
+    // disponible para instancias que no firmen ni siquiera en JSON.
     const signatureHeader =
       req.headers.get('x-libresign-signature') ||
       req.headers.get('x-signature') ||
       req.headers.get('x-hub-signature-256');
 
-    // Opt-out por tenant: aceptar webhooks sin firma (instancias LibreSign que no firman).
+    // Opt-out por tenant: aceptar webhooks sin firma.
     const signatureOptional = !!(settings.settings as any)?.webhookSignatureOptional;
 
-    if (!signatureHeader) {
-      if (signatureOptional) {
-        console.warn(`[SignatureWebhook] Petición SIN firma aceptada (modo opcional) para tenant ${tenantId}`);
-      } else {
-        console.warn(`[SignatureWebhook] Firma faltante rechazada para tenant ${tenantId}`);
-        return NextResponse.json(
-          { error: 'Missing signature header (x-libresign-signature)' },
-          { status: 401 }
-        );
-      }
-    } else if (!SignatureService.verifyWebhookSignature(rawBody, signatureHeader, settings.webhookSecret)) {
-      console.warn(`[SignatureWebhook] Firma inválida rechazada para tenant ${tenantId}`);
-      return NextResponse.json({ error: 'Invalid webhook signature' }, { status: 401 });
-    }
-
-    // 4. Procesar el evento (el HMAC ya cubre el body completo)
+    // 4. Procesar el evento según el formato
     let payload: any;
-    try {
-      payload = JSON.parse(rawBody);
-    } catch {
-      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    if (isNativeMultipart) {
+      // Formato nativo de LibreSign: no firma los webhooks (multipart con uuid, status, file).
+      if (signatureHeader && !SignatureService.verifyWebhookSignature(await req.text(), signatureHeader, settings.webhookSecret)) {
+        console.warn(`[SignatureWebhook] Firma inválida rechazada para tenant ${tenantId}`);
+        return NextResponse.json({ error: 'Invalid webhook signature' }, { status: 401 });
+      }
+      console.info(`[SignatureWebhook] Webhook multipart nativo aceptado para tenant ${tenantId}`);
+      try {
+        const formData = await req.formData();
+        payload = {
+          uuid: formData.get('uuid'),
+          status: formData.get('status'),
+          signer_email: formData.get('signer_email')
+        };
+      } catch {
+        return NextResponse.json({ error: 'Invalid form body' }, { status: 400 });
+      }
+    } else {
+      // Formato JSON interno de Volkern: verificación HMAC estricta.
+      const rawBody = await req.text();
+      if (!rawBody) {
+        return NextResponse.json({ error: 'Empty body' }, { status: 400 });
+      }
+      if (!signatureHeader) {
+        if (signatureOptional) {
+          console.warn(`[SignatureWebhook] Petición SIN firma aceptada (modo opcional) para tenant ${tenantId}`);
+        } else {
+          console.warn(`[SignatureWebhook] Firma faltante rechazada para tenant ${tenantId}`);
+          return NextResponse.json(
+            { error: 'Missing signature header (x-libresign-signature)' },
+            { status: 401 }
+          );
+        }
+      } else if (!SignatureService.verifyWebhookSignature(rawBody, signatureHeader, settings.webhookSecret)) {
+        console.warn(`[SignatureWebhook] Firma inválida rechazada para tenant ${tenantId}`);
+        return NextResponse.json({ error: 'Invalid webhook signature' }, { status: 401 });
+      }
+      try {
+        payload = JSON.parse(rawBody);
+      } catch {
+        return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+      }
     }
 
     const auditEvent = await SignatureService.handleWebhook(tenantId, payload);
 
-    console.info(`[SignatureWebhook] Event ${payload.event} processed for tenant ${tenantId}`);
+    console.info(`[SignatureWebhook] Event ${payload?.event || payload?.status} processed for tenant ${tenantId}`);
 
     return NextResponse.json({
       success: true,

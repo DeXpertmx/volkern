@@ -111,8 +111,11 @@ export async function POST(req: NextRequest) {
     // ── 3. API + token ────────────────────────────────────────────────
     if (token) {
       try {
-        const apiRes = await fetchWithTimeout(`${url}/index.php/apps/libresign/api/v1.0/file/list`, {
-          headers: { Authorization: `Bearer ${token}` }
+        const apiRes = await fetchWithTimeout(`${url}/ocs/v2.php/apps/libresign/api/v1/file/list?format=json`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'OCS-APIRequest': 'true'
+          }
         });
         if (apiRes.status === 200) {
           checks.api = { ok: true, detail: 'Token aceptado: la API de LibreSign responde (200)' };
