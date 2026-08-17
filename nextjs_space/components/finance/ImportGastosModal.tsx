@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Upload, FileSpreadsheet, Loader2, CheckCircle2, AlertTriangle, XCircle, Download } from 'lucide-react';
+import { Upload, FileSpreadsheet, Loader2, CheckCircle2, AlertTriangle, XCircle, Download, Columns3, Wand2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface ImportRow {
@@ -33,8 +33,27 @@ interface ImportResult {
   errors: number;
   rows: ImportRow[];
   headerErrors?: string[];
+  detectedColumns?: string[];
+  autoMapping?: Record<string, number>;
   error?: string;
 }
+
+// Campos esperados (claves canónicas del mapeo)
+const FIELD_LABELS: { key: string; label: string; required?: boolean }[] = [
+  { key: 'NOMBRE', label: 'NOMBRE (proveedor)', required: true },
+  { key: 'C.I.F.', label: 'C.I.F. / NIF' },
+  { key: 'FECHA', label: 'FECHA', required: true },
+  { key: 'Nº FRA.', label: 'Nº de factura' },
+  { key: 'BASE 21%', label: 'BASE 21%' },
+  { key: 'BASE 10%', label: 'BASE 10%' },
+  { key: 'BASE 7,5%', label: 'BASE 7,5%' },
+  { key: 'BASE 5%', label: 'BASE 5%' },
+  { key: 'BASE 4%', label: 'BASE 4%' },
+  { key: 'BASE 2%', label: 'BASE 2%' },
+  { key: 'BASE 0%', label: 'BASE 0%' },
+  { key: 'IVA', label: 'IVA (cuota total)' },
+  { key: 'TOTAL', label: 'TOTAL' },
+];
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(n);
@@ -54,10 +73,21 @@ export function ImportGastosModal({
   const [result, setResult] = useState<ImportResult | null>(null);
   const [committed, setCommitted] = useState(false);
 
+  // ── Mapeo manual de columnas ──────────────────────────────────────────
+  const [showMapping, setShowMapping] = useState(false);
+  const [mapping, setMapping] = useState<Record<string, number | null>>({});
+  const [mappingTouched, setMappingTouched] = useState(false);
+  const [noHeader, setNoHeader] = useState(false);
+  const fileColumns = result?.detectedColumns || [];
+
   const reset = () => {
     setFile(null);
     setResult(null);
     setCommitted(false);
+    setShowMapping(false);
+    setMapping({});
+    setMappingTouched(false);
+    setNoHeader(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -72,6 +102,10 @@ export function ImportGastosModal({
     try {
       const formData = new FormData();
       formData.append('file', file);
+      if (showMapping && Object.keys(mapping).length > 0) {
+        formData.append('mapping', JSON.stringify(mapping));
+        formData.append('noHeader', String(noHeader));
+      }
       const res = await fetch(`/api/erp/expenses/import?mode=${mode}`, {
         method: 'POST',
         body: formData,
@@ -79,10 +113,19 @@ export function ImportGastosModal({
       const data: ImportResult = await res.json();
       if (!res.ok) {
         toast.error(data.error || 'Error al procesar el fichero');
-        if (data.headerErrors) setResult(data);
+        if (data.headerErrors) {
+          setResult(data);
+          setShowMapping(true);
+        }
         return;
       }
       setResult(data);
+
+      // Prellenar el mapeo con la detección automática la primera vez
+      if (!mappingTouched && data.autoMapping && Object.keys(data.autoMapping).length > 0) {
+        setMapping(data.autoMapping);
+      }
+
       if (mode === 'commit') {
         setCommitted(true);
         if (data.imported > 0) {
@@ -131,6 +174,20 @@ export function ImportGastosModal({
     setFile(f);
     setResult(null);
     setCommitted(false);
+    setShowMapping(false);
+    setMappingTouched(false);
+    run('preview');
+  };
+
+  const resetMapping = () => {
+    setMapping({});
+    setMappingTouched(false);
+    setNoHeader(false);
+    run('preview');
+  };
+
+  const applyMappingPreview = () => {
+    setMappingTouched(true);
     run('preview');
   };
 
@@ -198,6 +255,71 @@ export function ImportGastosModal({
               {result.headerErrors.map((e, i) => (
                 <p key={i} className="text-xs text-red-600">• {e}</p>
               ))}
+            </div>
+          )}
+
+          {/* Aviso cuando hay detección automática OK pero el fichero no coincide */}
+          {!result?.headerErrors && file && (
+            <button
+              onClick={() => setShowMapping(v => !v)}
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-emerald-600 transition-colors"
+            >
+              <Columns3 className="h-3.5 w-3.5" />
+              {showMapping ? 'Ocultar mapeo de columnas' : 'El fichero usa otras columnas? Mapear manualmente'}
+            </button>
+          )}
+
+          {/* Editor de mapeo manual */}
+          {showMapping && fileColumns.length > 0 && (
+            <div className="border border-blue-200 bg-blue-50/40 rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="font-bold text-sm text-blue-900 flex items-center gap-2">
+                  <Columns3 className="h-4 w-4" /> Mapeo de columnas
+                </p>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" className="h-7 text-[11px]" onClick={resetMapping}>
+                    <Wand2 className="h-3 w-3 mr-1" /> Detección automática
+                  </Button>
+                  <Button size="sm" className="h-7 text-[11px] bg-blue-600 hover:bg-blue-700" onClick={applyMappingPreview} disabled={loading}>
+                    {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3 mr-1" />}
+                    Previsualizar
+                  </Button>
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={noHeader}
+                  onChange={(e) => setNoHeader(e.target.checked)}
+                />
+                La primera fila ya son datos (el fichero no tiene encabezado)
+              </label>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {FIELD_LABELS.map(({ key, label, required }) => (
+                  <label key={key} className="flex items-center gap-2 text-xs">
+                    <span className="w-40 shrink-0 font-bold text-slate-700 truncate">
+                      {label}
+                      {required && <span className="text-red-500 ml-0.5">*</span>}
+                    </span>
+                    <select
+                      value={mapping[key] ?? ''}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setMapping((m) => ({ ...m, [key]: v === '' ? null : Number(v) }));
+                        setMappingTouched(true);
+                      }}
+                      className="flex-1 h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs outline-none focus:border-blue-400"
+                    >
+                      <option value="">— Ignorar —</option>
+                      {fileColumns.map((col, i) => (
+                        <option key={i} value={i}>{col}</option>
+                      ))}
+                    </select>
+                  </label>
+                ))}
+              </div>
             </div>
           )}
 

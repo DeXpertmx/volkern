@@ -86,44 +86,97 @@ interface ParsedRow {
   raw: any[];
 }
 
+/** Devuelve la clave canónica de una tasa (p. ej. 7.5 → 'BASE 7,5%'). */
+function rateKey(rate: number): string {
+  return `BASE ${String(rate).replace('.', ',')}%`;
+}
+
 /**
  * Analiza el contenido del fichero y devuelve las filas normalizadas además
  * de los errores de estructura (encabezados).
+ *
+ * Si se pasa un `mapping` (campo canónico → índice de columna 0-based) se usa
+ * ese mapeo en lugar de la detección automática por encabezado. Con
+ * `noHeader=true` los datos empiezan en la fila 0 (sin fila de encabezado).
  */
-function parseWorkbook(buffer: Buffer): { rows: ParsedRow[]; headerErrors: string[] } {
+function parseWorkbook(
+  buffer: Buffer,
+  opts: { mapping?: Record<string, number | null>; noHeader?: boolean } = {},
+): {
+  rows: ParsedRow[];
+  headerErrors: string[];
+  detectedColumns: string[];
+  autoMapping: Record<string, number>;
+} {
+  const empty = (headerErrors: string[] = []) => ({
+    rows: [],
+    headerErrors,
+    detectedColumns: [],
+    autoMapping: {} as Record<string, number>,
+  });
+
   const wb = XLSX.read(buffer, { type: 'buffer' });
   const ws = wb.Sheets[wb.SheetNames[0]];
-  if (!ws) return { rows: [], headerErrors: ['El fichero no contiene hojas'] };
+  if (!ws) return empty(['El fichero no contiene hojas']);
 
   const aoa = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, raw: false }) as any[][];
-  if (!aoa.length) return { rows: [], headerErrors: ['El fichero está vacío'] };
+  if (!aoa.length) return empty(['El fichero está vacío']);
 
-  const headerRow = aoa[0];
+  const { mapping, noHeader } = opts;
   const colIndex: Record<string, number> = {};
   const rateCols: { index: number; rate: number }[] = [];
+  const mappedIndexes = new Set<number>();
 
-  headerRow.forEach((h, i) => {
-    const key = normalizeHeader(String(h ?? ''));
-    if (!key) return;
-    if (/^BASE/.test(key)) {
-      const rateMatch = key.match(/(\d+(?:[.,]\d+)?)/);
-      if (rateMatch) {
-        const rate = parseFloat(rateMatch[1].replace(',', '.'));
-        if (RATE_COLUMNS.includes(rate)) rateCols.push({ index: i, rate });
+  if (mapping && Object.keys(mapping).length > 0) {
+    for (const [field, idx] of Object.entries(mapping)) {
+      if (idx == null || !Number.isFinite(idx) || idx < 0) continue;
+      mappedIndexes.add(idx);
+      if (field.startsWith('BASE ')) {
+        const m = field.match(/(\d+(?:[.,]\d+)?)/);
+        if (m) rateCols.push({ index: idx, rate: parseFloat(m[1].replace(',', '.')) });
+        continue;
       }
-      return;
+      colIndex[field] = idx;
     }
-    if (!colIndex[key]) colIndex[key] = i;
-  });
+  } else {
+    const headerRow = aoa[0];
+    headerRow.forEach((h, i) => {
+      const key = normalizeHeader(String(h ?? ''));
+      if (!key) return;
+      if (/^BASE/.test(key)) {
+        const rateMatch = key.match(/(\d+(?:[.,]\d+)?)/);
+        if (rateMatch) {
+          const rate = parseFloat(rateMatch[1].replace(',', '.'));
+          if (RATE_COLUMNS.includes(rate)) rateCols.push({ index: i, rate });
+        }
+        return;
+      }
+      if (!colIndex[key]) colIndex[key] = i;
+    });
+  }
 
   const headerErrors: string[] = [];
   const has = (k: string) => colIndex[k] !== undefined;
-  if (!has('NOMBRE') && !has('PROVEEDOR')) headerErrors.push('Falta la columna NOMBRE (proveedor).');
+  if (!has('NOMBRE')) headerErrors.push('Falta la columna NOMBRE (proveedor).');
   if (!has('FECHA')) headerErrors.push('Falta la columna FECHA.');
   if (rateCols.length === 0) headerErrors.push('No se detectaron columnas BASE x% (21, 10, 7,5, 5, 4, 2, 0).');
 
+  // Etiquetas disponibles del fichero (para mostrar y mapear en la UI)
+  const maxCols = Math.max(0, ...aoa.map((r) => r?.length ?? 0));
+  const headerLabels = noHeader ? [] : aoa[0] || [];
+  const detectedColumns: string[] = [];
+  for (let i = 0; i < maxCols; i++) {
+    detectedColumns.push(String(headerLabels[i] ?? '').trim() || `Columna ${i + 1}`);
+  }
+
+  // Mapeo efectivamente usado (para prellenar el editor de la UI)
+  const autoMapping: Record<string, number> = {};
+  for (const [k, v] of Object.entries(colIndex)) autoMapping[k] = v;
+  for (const rc of rateCols) autoMapping[rateKey(rc.rate)] = rc.index;
+
   const rows: ParsedRow[] = [];
-  for (let r = 1; r < aoa.length; r++) {
+  const startRow = mapping && noHeader ? 0 : 1;
+  for (let r = startRow; r < aoa.length; r++) {
     const rawRow = aoa[r];
     if (!rawRow || rawRow.every((c) => c == null || String(c).trim() === '')) continue;
 
@@ -151,7 +204,7 @@ function parseWorkbook(buffer: Buffer): { rows: ParsedRow[]; headerErrors: strin
     });
   }
 
-  return { rows, headerErrors };
+  return { rows, headerErrors, detectedColumns, autoMapping };
 }
 
 /**
@@ -230,17 +283,44 @@ export const POST = withTenantAuth(async (request, auth) => {
       return NextResponse.json({ error: 'El archivo supera el tamaño máximo (10 MB)' }, { status: 400 });
     }
 
+    // Mapeo manual de columnas (campo canónico → índice 0-based)
+    const mappingRaw = formData.get('mapping');
+    let mapping: Record<string, number | null> | undefined;
+    if (typeof mappingRaw === 'string' && mappingRaw.trim()) {
+      try {
+        mapping = JSON.parse(mappingRaw);
+        if (typeof mapping !== 'object' || mapping === null || Array.isArray(mapping)) {
+          return NextResponse.json({ error: 'El mapeo de columnas no es válido' }, { status: 400 });
+        }
+      } catch {
+        return NextResponse.json({ error: 'El mapeo de columnas no es válido' }, { status: 400 });
+      }
+    }
+    const noHeader = formData.get('noHeader') === 'true';
+
     const buffer = Buffer.from(await file.arrayBuffer());
-    const { rows, headerErrors } = parseWorkbook(buffer);
+    const { rows, headerErrors, detectedColumns, autoMapping } = parseWorkbook(buffer, {
+      mapping,
+      noHeader,
+    });
 
     if (headerErrors.length > 0) {
       return NextResponse.json(
-        { error: 'El fichero no tiene el formato esperado', headerErrors, rows: [] },
+        {
+          error: 'El fichero no tiene el formato esperado',
+          headerErrors,
+          rows: [],
+          detectedColumns,
+          autoMapping,
+        },
         { status: 422 },
       );
     }
     if (rows.length === 0) {
-      return NextResponse.json({ error: 'No se encontraron filas con datos' }, { status: 422 });
+      return NextResponse.json(
+        { error: 'No se encontraron filas con datos', detectedColumns, autoMapping },
+        { status: 422 },
+      );
     }
 
     // Resolver el usuario creador dentro del tenant (misma lógica que POST /expenses)
@@ -383,6 +463,8 @@ export const POST = withTenantAuth(async (request, auth) => {
       duplicates,
       errors: results.filter((r) => !r.ok).length,
       rows: results,
+      detectedColumns,
+      autoMapping,
     });
   } catch (error: any) {
     console.error('Error importando gastos:', error);

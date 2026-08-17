@@ -51,7 +51,7 @@ function buildWorkbookBuffer(rows: any[][]): Buffer {
   return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer
 }
 
-function makeRequest(buffer: Buffer, mode: string): Request {
+function makeRequest(buffer: Buffer, mode: string, extra?: Record<string, string>): Request {
   const req = new Request(`http://localhost/api/erp/expenses/import?mode=${mode}`, { method: 'POST' })
   const fakeFile = {
     name: 'gastos.xlsx',
@@ -59,10 +59,20 @@ function makeRequest(buffer: Buffer, mode: string): Request {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     arrayBuffer: async () => new Uint8Array(buffer).buffer,
   }
+  const fields: Record<string, string> = { ...(extra || {}) }
   // La ruta lee el archivo de formData.get('file'); sobreescribimos formData
   // para evitar depender del FormData/File globales del entorno de Node.
-  ;(req as any).formData = async () => ({ get: (k: string) => (k === 'file' ? fakeFile : null) })
+  ;(req as any).formData = async () => ({
+    get: (k: string) => (k === 'file' ? fakeFile : fields[k] ?? null),
+  })
   return req
+}
+
+function buildFlatWorkbookBuffer(rows: any[][]): Buffer {
+  const ws = XLSX.utils.aoa_to_sheet(rows)
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Datos')
+  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer
 }
 
 const SUPPLIER_1 = { id: 'sup-1', name: 'SUMINISTROS SL', taxId: 'B12345678', createdAt: new Date('2024-01-01') }
@@ -170,7 +180,91 @@ describe('POST /api/erp/expenses/import', () => {
     expect(json.headerErrors.join(' ')).toContain('BASE')
   })
 
-  it('marca error la fila sin nombre de proveedor', async () => {
+  it('mapea columnas manualmente cuando el fichero usa otros encabezados', async () => {
+    // Fichero con encabezados distintos y en otro orden
+    const buffer = buildFlatWorkbookBuffer([
+      ['Empresa', 'RUC', 'Emisión', 'Documento', 'Gravado', 'Impuesto', 'Importe'],
+      ['EMPRESA A SA', 'A11111111', '01/01/2026', 'FAC-100', 100, 21, 121],
+    ])
+    const mapping = JSON.stringify({
+      NOMBRE: 0,
+      'C.I.F.': 1,
+      FECHA: 2,
+      'Nº FRA.': 3,
+      'BASE 21%': 4,
+      IVA: 5,
+      TOTAL: 6,
+    })
+
+    const res = await POST(makeRequest(buffer, 'preview', { mapping }))
+    expect(res.status).toBe(200)
+    const json = await res.json()
+
+    expect(json.total).toBe(1)
+    const row = json.rows[0]
+    expect(row.ok).toBe(true)
+    expect(row.supplierName).toBe('EMPRESA A SA')
+    expect(row.supplierTaxId).toBe('A11111111')
+    expect(row.invoiceNumber).toBe('FAC-100')
+    expect(row.preview.tramos).toEqual([{ rate: 21, base: 100, amount: 21 }])
+    expect(row.preview.taxableBase).toBe(100)
+    expect(row.preview.total).toBe(121)
+  })
+
+  it('mapea por posición sin encabezado (noHeader) cuando el fichero solo trae datos', async () => {
+    const buffer = buildFlatWorkbookBuffer([
+      ['EMPRESA B SL', 'B22222222', '02/01/2026', 'FAC-200', 50, 5, 55],
+    ])
+    const mapping = JSON.stringify({
+      NOMBRE: 0,
+      'C.I.F.': 1,
+      FECHA: 2,
+      'Nº FRA.': 3,
+      'BASE 10%': 4,
+      IVA: 5,
+      TOTAL: 6,
+    })
+
+    const res = await POST(makeRequest(buffer, 'preview', { mapping, noHeader: 'true' }))
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json.total).toBe(1)
+    expect(json.rows[0].supplierName).toBe('EMPRESA B SL')
+    expect(json.rows[0].supplierTaxId).toBe('B22222222')
+    expect(json.rows[0].invoiceNumber).toBe('FAC-200')
+    expect(json.rows[0].preview.tramos).toEqual([{ rate: 10, base: 50, amount: 5 }])
+  })
+
+  it('devuelve 422 con detectedColumns para que la UI ofrezca el mapeo manual', async () => {
+    const aoa = [
+      ['EMPRESA', 'IMPORTE', 'NOTA'],
+      ['X', '10', 'hola'],
+    ]
+    const ws = XLSX.utils.aoa_to_sheet(aoa)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Datos')
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer
+
+    const res = await POST(makeRequest(buffer, 'preview'))
+    expect(res.status).toBe(422)
+    const json = await res.json()
+    expect(json.headerErrors.length).toBeGreaterThan(0)
+    expect(json.detectedColumns).toEqual(['EMPRESA', 'IMPORTE', 'NOTA'])
+  })
+
+  it('rechaza un mapeo con JSON inválido con 400', async () => {
+    const buffer = buildWorkbookBuffer([
+      ['EMPRESA', 'IMPORTE'],
+      ['X', '10'],
+    ])
+
+    const res = await POST(makeRequest(buffer, 'preview', { mapping: '{no-json' }))
+    expect(res.status).toBe(400)
+    const json = await res.json()
+    expect(json.error).toContain('mapeo')
+  })
+
+  it('marca error para la fila sin nombre de proveedor', async () => {
     const buffer = buildWorkbookBuffer([
       ['', 'B99999999', '05/01/2026', 'F-X', 10, '', '', '', '', '', '', 2.1, 12.1],
     ])
