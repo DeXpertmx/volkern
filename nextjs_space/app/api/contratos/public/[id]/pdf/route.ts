@@ -128,21 +128,105 @@ function generateContratoHTML(contrato: any, tenant: any): string {
     `;
   }
 
-  // Fallback to legacy static template
-  const items = contrato.items as any[];
+  // Fallback: documento legal completo con items, totales, condiciones y cláusulas
+  const items = (contrato.items as any[]) || [];
+  const itemsTableHTML = `
+    <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+      <thead>
+        <tr style="border-bottom: 2px solid #333; text-align: left;">
+          <th style="padding: 8px;">Descripción</th>
+          <th style="padding: 8px; text-align: center; width: 60px;">Cant.</th>
+          <th style="padding: 8px; text-align: right; width: 110px;">P. unitario</th>
+          <th style="padding: 8px; text-align: right; width: 110px;">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${items.map((item: any) => `
+          <tr style="border-bottom: 1px solid #eee;">
+            <td style="padding: 8px;">
+              <div style="font-weight: bold;">${item.concepto || ''}</div>
+              ${item.descripcion ? `<div style="font-size: 10px; color: #666;">${item.descripcion}</div>` : ''}
+            </td>
+            <td style="padding: 8px; text-align: center;">${item.cantidad}</td>
+            <td style="padding: 8px; text-align: right;">${formatCurrency(item.precioUnitario, contrato.moneda)}</td>
+            <td style="padding: 8px; text-align: right;">${formatCurrency((item.cantidad || 0) * (item.precioUnitario || 0), contrato.moneda)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+
+  const descuentoMonto = contrato.descuentoMonto || 0;
+  const impuestos = contrato.impuestos || 0;
+  const clausulasTexto = (contrato.clausulas || '').trim();
+
   return `
     <!DOCTYPE html>
     <html lang="es">
     <head>
       <meta charset="UTF-8">
       <style>
-        body { font-family: sans-serif; padding: 40px; }
-        .signatures-section { display: flex; justify-content: space-between; margin-top: 50px; }
+        body { font-family: 'Inter', 'Segoe UI', Arial, sans-serif; font-size: 11px; color: #333; line-height: 1.55; padding: 40px; }
+        h1 { font-size: 18px; margin: 0 0 4px; }
+        h2 { font-size: 13px; margin: 20px 0 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
+        .header-meta { color: #555; font-size: 11px; margin-bottom: 20px; }
+        .party-block { margin: 8px 0; }
+        .party-label { font-weight: bold; font-size: 10px; color: #777; text-transform: uppercase; letter-spacing: 0.5px; }
+        .totals { width: 260px; margin-left: auto; margin-top: 8px; }
+        .totals div { display: flex; justify-content: space-between; padding: 3px 0; }
+        .totals .total-row { border-top: 2px solid #333; font-weight: bold; font-size: 13px; padding-top: 6px; margin-top: 4px; }
+        .clausulas { white-space: pre-wrap; text-align: justify; }
+        .condiciones { white-space: pre-wrap; text-align: justify; }
+        .signatures-section { display: flex; justify-content: space-between; margin-top: 60px; gap: 40px; }
         .signature-box { width: 45%; text-align: center; }
         .signature-line { border-top: 1px solid #000; margin-bottom: 10px; }
+        .signature-label { font-size: 10px; }
+        .signed-badge { color: #15803d; font-weight: bold; margin-top: 4px; }
+        .footer { margin-top: 50px; border-top: 1px solid #ddd; padding-top: 8px; font-size: 9px; color: #888; text-align: center; }
       </style>
     </head>
     <body>
+      <h1>${contrato.titulo || 'Contrato de servicios'}</h1>
+      <div class="header-meta">
+        Contrato <strong>${contrato.numero || ''}</strong> · ${formatDate(contrato.fechaCreacion || new Date())}
+        ${contrato.fechaInicio ? ` · Inicio: ${formatDate(contrato.fechaInicio)}` : ''}
+        ${contrato.fechaFin ? ` · Fin: ${formatDate(contrato.fechaFin)}` : ''}
+      </div>
+
+      <h2>Partes</h2>
+      <div class="party-block">
+        <div class="party-label">El Prestador</div>
+        <div>${tenant?.razonSocial || tenant?.nombre || ''}</div>
+        <div>${(tenant as any)?.nifCif || (tenant as any)?.rfc || ''}${(tenant as any)?.direccionFiscal ? ` · ${(tenant as any)?.direccionFiscal}` : ''}</div>
+      </div>
+      <div class="party-block">
+        <div class="party-label">El Cliente</div>
+        <div>${contrato.clienteNombre || contrato.clienteEmpresa || ''}</div>
+        <div>${[contrato.clienteEmpresa, contrato.clienteIdFiscal, contrato.clienteDireccion].filter(Boolean).join(' · ')}</div>
+        ${contrato.clienteEmail ? `<div>${contrato.clienteEmail}</div>` : ''}
+      </div>
+
+      <h2>Objeto y servicios</h2>
+      ${contrato.descripcion ? `<p style="white-space: pre-wrap; text-align: justify;">${contrato.descripcion}</p>` : ''}
+      ${itemsTableHTML}
+      <div class="totals">
+        <div><span>Subtotal</span><span>${formatCurrency(contrato.subtotal || 0, contrato.moneda)}</span></div>
+        ${descuentoMonto > 0 ? `<div style="color: #dc2626;"><span>Descuento</span><span>-${formatCurrency(descuentoMonto, contrato.moneda)}</span></div>` : ''}
+        ${impuestos > 0 ? `<div><span>Impuestos (IVA)</span><span>${formatCurrency(impuestos, contrato.moneda)}</span></div>` : ''}
+        <div class="total-row"><span>TOTAL</span><span>${formatCurrency(contrato.total || 0, contrato.moneda)}</span></div>
+      </div>
+
+      ${contrato.condicionesPago ? `
+        <h2>Condiciones de pago</h2>
+        <div class="condiciones">${contrato.condicionesPago}</div>
+      ` : ''}
+
+      ${clausulasTexto ? `
+        <h2>Cláusulas</h2>
+        <div class="clausulas">${clausulasTexto}</div>
+      ` : ''}
+
+      <h2>Firmas</h2>
       <div class="signatures-section">
         <div class="signature-box">
           <div class="signature-line"></div>
@@ -165,8 +249,8 @@ function generateContratoHTML(contrato: any, tenant: any): string {
       </div>
       
       <div class="footer">
-        <p>Contrato generado por ${tenant?.nombre || 'Volkern CRM'}</p>
-        <p>Documento generado el ${formatDate(new Date())}</p>
+        <p>Contrato generado por ${tenant?.nombre || 'Volkern CRM'} · ${formatDate(new Date())}</p>
+        <p>Documento electrónico con valor legal según el marco normativo aplicable.</p>
       </div>
     </body>
     </html>
