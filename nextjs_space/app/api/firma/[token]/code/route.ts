@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { sendFirmaCode } from '@/lib/contratos/firma';
+import { getFirmaChannels, sendFirmaCode } from '@/lib/contratos/firma';
 
 function publicHeaders() {
   return {
@@ -12,12 +12,34 @@ function publicHeaders() {
   };
 }
 
-// POST /api/firma/[token]/code - Enviar código de verificación al firmante
+// GET /api/firma/[token]/code - Canales de verificación disponibles (email/WhatsApp)
+export async function GET(request: Request, { params }: { params: { token: string } }) {
+  try {
+    const contrato = await prisma.contrato.findUnique({
+      where: { tokenPublico: params.token },
+      select: { id: true, tenantId: true, firmadoPorCliente: true },
+    });
+
+    if (!contrato) {
+      return NextResponse.json({ error: 'Contrato no encontrado' }, { status: 404, headers: publicHeaders() });
+    }
+
+    const channels = await getFirmaChannels(contrato.id, contrato.tenantId);
+    return NextResponse.json({ channels, firmado: contrato.firmadoPorCliente }, { headers: publicHeaders() });
+  } catch (error) {
+    console.error('Error consultando canales de firma:', error);
+    return NextResponse.json(
+      { error: 'No se pudieron consultar los canales de verificación' },
+      { status: 500, headers: publicHeaders() },
+    );
+  }
+}
+
+// POST /api/firma/[token]/code - Enviar código de verificación por el canal elegido
 export async function POST(request: Request, { params }: { params: { token: string } }) {
   try {
     const contrato = await prisma.contrato.findUnique({
       where: { tokenPublico: params.token },
-      include: { signatureRequests: { orderBy: { createdAt: 'desc' }, take: 1 } },
     });
 
     if (!contrato) {
@@ -28,7 +50,9 @@ export async function POST(request: Request, { params }: { params: { token: stri
     const result = await sendFirmaCode({
       contratoId: contrato.id,
       tenantId: contrato.tenantId,
+      channel: body.channel || 'email',
       email: body.email || null,
+      telefono: body.telefono || null,
     });
 
     return NextResponse.json(result, { headers: publicHeaders() });

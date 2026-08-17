@@ -2728,7 +2728,9 @@ model ContratoFirmaChallenge {
   id                 String    @id @default(cuid())
   contratoId         String
   tenantId           String
-  email              String
+  channel            String    @default("email")
+  email              String?
+  telefono           String?
   codeHash           String
   challengeTokenHash String
   attempts           Int       @default(0)

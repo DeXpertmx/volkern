@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { hashAcceptanceSecret } from '@/lib/cotizaciones/acceptance-verification'
 
-const { prismaMock, sendEmailMock } = vi.hoisted(() => ({
+const { prismaMock, sendEmailMock, sendWhatsAppMock } = vi.hoisted(() => ({
   prismaMock: {
     contrato: {
       findFirst: vi.fn(),
@@ -13,7 +13,7 @@ const { prismaMock, sendEmailMock } = vi.hoisted(() => ({
       findUnique: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
-      delete: vi.fn(),
+      delete: vi.fn(async () => ({})),
     },
     signatureRequest: {
       findFirst: vi.fn(),
@@ -28,10 +28,12 @@ const { prismaMock, sendEmailMock } = vi.hoisted(() => ({
     inAppNotification: { createMany: vi.fn() },
   },
   sendEmailMock: vi.fn(),
+  sendWhatsAppMock: vi.fn(),
 }))
 
 vi.mock('@/lib/db', () => ({ prisma: prismaMock }))
 vi.mock('@/lib/ses-email', () => ({ sendEmail: sendEmailMock }))
+vi.mock('@/lib/whatsapp', () => ({ sendWhatsAppMessage: sendWhatsAppMock }))
 vi.mock('@/lib/contratos/timeline', () => ({
   addContratoTimelineEvent: vi.fn(async () => {}),
 }))
@@ -65,7 +67,9 @@ const contratoFirmaChallenge = {
   id: 'challenge-1',
   contratoId: 'ctr-1',
   tenantId: 'tenant-1',
+  channel: 'email',
   email: 'cliente@empresa.com',
+  telefono: null,
   maxAttempts: 5,
   attempts: 0,
   expiresAt: new Date(Date.now() + 10 * 60 * 1000),
@@ -85,6 +89,7 @@ describe('sendFirmaCode', () => {
       ...data,
     }))
     sendEmailMock.mockResolvedValue({ success: true })
+    sendWhatsAppMock.mockResolvedValue({ success: true })
   })
 
   it('envía el código al email del contrato y crea el reto', async () => {
@@ -125,6 +130,72 @@ describe('sendFirmaCode', () => {
     await expect(sendFirmaCode({ contratoId: 'ctr-1', tenantId: 'tenant-1' })).rejects.toThrow(
       'ya fue firmado',
     )
+  })
+
+  it('envía el código por WhatsApp si se elige ese canal y hay teléfono', async () => {
+    prisma.contrato.findFirst.mockResolvedValue({
+      ...contrato,
+      clienteEmail: null,
+      clienteTelefono: '+34600123456',
+    })
+
+    const result = await sendFirmaCode({
+      contratoId: 'ctr-1',
+      tenantId: 'tenant-1',
+      channel: 'whatsapp',
+    })
+
+    expect(sendEmailMock).not.toHaveBeenCalled()
+    expect(sendWhatsAppMock).toHaveBeenCalledTimes(1)
+    const call = sendWhatsAppMock.mock.calls[0]
+    expect(call[0]).toBe('+34600123456')
+    expect(call[1]).toContain('Código Volkern')
+    expect(call[2]).toBe('tenant-1')
+    expect(prisma.contratoFirmaChallenge.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ channel: 'whatsapp', telefono: '+34600123456', email: null }),
+      }),
+    )
+    expect(result.channel).toBe('whatsapp')
+    expect(result.destinationMasked).not.toContain('@')
+  })
+
+  it('usa el teléfono del cuerpo si se indica y es válido', async () => {
+    await sendFirmaCode({
+      contratoId: 'ctr-1',
+      tenantId: 'tenant-1',
+      channel: 'whatsapp',
+      telefono: '+34699887766',
+    })
+
+    expect(sendWhatsAppMock.mock.calls[0][0]).toBe('+34699887766')
+  })
+
+  it('rechaza WhatsApp sin teléfono válido (no inventa datos)', async () => {
+    prisma.contrato.findFirst.mockResolvedValue({
+      ...contrato,
+      clienteEmail: null,
+      clienteTelefono: null,
+    })
+
+    await expect(
+      sendFirmaCode({ contratoId: 'ctr-1', tenantId: 'tenant-1', channel: 'whatsapp' }),
+    ).rejects.toThrow('No hay un teléfono de WhatsApp válido')
+    expect(prisma.contratoFirmaChallenge.create).not.toHaveBeenCalled()
+  })
+
+  it('no crea el reto si el envío del código falla', async () => {
+    sendWhatsAppMock.mockResolvedValue({ success: false, error: 'boom' })
+    prisma.contrato.findFirst.mockResolvedValue({
+      ...contrato,
+      clienteEmail: null,
+      clienteTelefono: '+34600123456',
+    })
+
+    await expect(
+      sendFirmaCode({ contratoId: 'ctr-1', tenantId: 'tenant-1', channel: 'whatsapp' }),
+    ).rejects.toThrow('No se pudo enviar el código')
+    expect(prisma.contratoFirmaChallenge.delete).toHaveBeenCalled()
   })
 })
 
@@ -234,5 +305,36 @@ describe('signContratoConCodigo', () => {
       }),
     ).rejects.toThrow('Código inválido o caducado')
     expect(prisma.contrato.update).not.toHaveBeenCalled()
+  })
+
+  it('firma con un reto por WhatsApp (sin email) y registra el timeline con el teléfono', async () => {
+    prisma.contratoFirmaChallenge.findUnique.mockResolvedValue({
+      ...contratoFirmaChallenge,
+      channel: 'whatsapp',
+      email: null,
+      telefono: '+34600123456',
+    })
+
+    const result = await signContratoConCodigo({
+      contratoId: 'ctr-1',
+      tenantId: 'tenant-1',
+      challengeId: 'challenge-1',
+      challengeToken: 'tok-abc',
+      code: '123456',
+      nombreFirma: 'Cliente Prueba',
+      ip: '203.0.113.5',
+    })
+
+    expect(result.estado).toBe('vigente')
+    // Sin email: la SignatureRequest no se rompe (se deja como está)
+    expect(prisma.signatureRequest.update).toHaveBeenCalled()
+    // Timeline con el teléfono enmascarado/real
+    expect(addContratoTimelineEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'document_signed',
+        metadata: expect.objectContaining({ canal: 'whatsapp', telefono: '+34600123456', email: null }),
+      }),
+    )
+    expect(prisma.inAppNotification.createMany).toHaveBeenCalled()
   })
 })

@@ -1,34 +1,85 @@
 import { prisma } from '@/lib/db';
 import { sendEmail } from '@/lib/ses-email';
+import { sendWhatsAppMessage } from '@/lib/whatsapp';
 import {
+  AcceptanceChannel,
   generateAcceptanceCode,
   generateChallengeToken,
   hashAcceptanceSecret,
+  isValidAcceptanceDestination,
   matchesAcceptanceSecret,
   maskEmail,
+  maskPhone,
 } from '@/lib/cotizaciones/acceptance-verification';
 import { addContratoTimelineEvent } from '@/lib/contratos/timeline';
 
 const CHALLENGE_TTL_MS = 10 * 60 * 1000;
 const RESEND_COOLDOWN_MS = 60 * 1000;
 
+export interface FirmaChannel {
+  channel: AcceptanceChannel;
+  destinationMasked: string;
+}
+
 export interface FirmaCodeResult {
   challengeId: string;
   challengeToken: string;
   destinationMasked: string;
   expiresAt: string;
+  channel: AcceptanceChannel;
+}
+
+/** Destinos registrados del contrato (email / WhatsApp), sin inventar datos. */
+function getDestinations(contrato: any): { email?: string; telefono?: string } {
+  let email = contrato.clienteEmail || null;
+  let telefono = contrato.clienteTelefono || null;
+  // Fallback a los firmantes de la última solicitud de firma (preferir el del Cliente)
+  const signers = contrato.signatureRequests?.[0]?.signers;
+  if (Array.isArray(signers)) {
+    const firmaCliente =
+      signers.find((s: any) => s?.role === 'Cliente' && s?.email) || signers.find((s: any) => s?.email) || null;
+    if (!email && firmaCliente?.email) email = firmaCliente.email;
+    if (!telefono && firmaCliente?.telefono) telefono = firmaCliente.telefono;
+  }
+  return { email: email || undefined, telefono: telefono || undefined };
 }
 
 /**
- * Envía el código de verificación al email del firmante y crea el reto.
- * Nunca inventa emails: usa el del contrato o el del firmante en la SignatureRequest.
+ * Canales de verificación disponibles para un contrato (email y/o WhatsApp)
+ * con sus destinos enmascarados, igual que en la aceptación de cotizaciones.
+ */
+export async function getFirmaChannels(contratoId: string, tenantId: string): Promise<FirmaChannel[]> {
+  const contrato = await prisma.contrato.findFirst({
+    where: { id: contratoId, tenantId },
+    include: { signatureRequests: { orderBy: { createdAt: 'desc' }, take: 1 } },
+  });
+  if (!contrato) return [];
+
+  const { email, telefono } = getDestinations(contrato);
+  const channels: FirmaChannel[] = [];
+  if (isValidAcceptanceDestination('email', email)) {
+    channels.push({ channel: 'email', destinationMasked: maskEmail(email as string) });
+  }
+  if (isValidAcceptanceDestination('whatsapp', telefono)) {
+    channels.push({ channel: 'whatsapp', destinationMasked: maskPhone(telefono as string) });
+  }
+  return channels;
+}
+
+/**
+ * Envía el código de verificación por el canal elegido (email o WhatsApp) y
+ * crea el reto. Igual que la aceptación de cotizaciones: nunca inventa datos,
+ * usa los destinos registrados del contrato (o los indicados por el usuario).
  */
 export async function sendFirmaCode(params: {
   contratoId: string;
   tenantId: string;
+  channel?: AcceptanceChannel;
   email?: string | null;
+  telefono?: string | null;
 }): Promise<FirmaCodeResult> {
   const { contratoId, tenantId } = params;
+  const channel: AcceptanceChannel = params.channel === 'whatsapp' ? 'whatsapp' : 'email';
 
   const contrato = await prisma.contrato.findFirst({
     where: { id: contratoId, tenantId },
@@ -38,20 +89,27 @@ export async function sendFirmaCode(params: {
 
   if (contrato.firmadoPorCliente) throw new Error('El contrato ya fue firmado');
 
-  // Email real: el indicado por el usuario, el del contrato, o el de un firmante
-  let email = params.email?.trim() || null;
-  if (!email) email = contrato.clienteEmail || null;
-  if (!email && contrato.signatureRequests[0]?.signers) {
-    const signers = contrato.signatureRequests[0].signers as { email?: string }[];
-    email = signers.find((s) => s?.email)?.email || null;
+  // Destino real: el indicado por el usuario o el registrado del contrato/firmante
+  const registered = getDestinations(contrato);
+  let email: string | null = null;
+  let telefono: string | null = null;
+  if (channel === 'email') {
+    email = params.email?.trim() || registered.email || null;
+  } else {
+    telefono = params.telefono?.trim() || registered.telefono || null;
   }
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    throw new Error('No hay un email válido para enviar el código');
+
+  if (!isValidAcceptanceDestination(channel, channel === 'email' ? email : telefono)) {
+    throw new Error(
+      channel === 'email'
+        ? 'No hay un email válido para enviar el código'
+        : 'No hay un teléfono de WhatsApp válido para enviar el código',
+    );
   }
 
   const cooldownSince = new Date(Date.now() - RESEND_COOLDOWN_MS);
   const recent = await prisma.contratoFirmaChallenge.findFirst({
-    where: { contratoId, createdAt: { gte: cooldownSince } },
+    where: { contratoId, channel, createdAt: { gte: cooldownSince } },
     orderBy: { createdAt: 'desc' },
   });
   if (recent) {
@@ -60,11 +118,14 @@ export async function sendFirmaCode(params: {
 
   const code = generateAcceptanceCode();
   const challengeToken = generateChallengeToken();
+  const destination = (channel === 'email' ? email : telefono) as string;
   const challenge = await prisma.contratoFirmaChallenge.create({
     data: {
       contratoId,
       tenantId,
-      email,
+      channel,
+      email: channel === 'email' ? destination : email || null,
+      telefono: channel === 'whatsapp' ? destination : telefono || null,
       codeHash: hashAcceptanceSecret(code),
       challengeTokenHash: hashAcceptanceSecret(challengeToken),
       expiresAt: new Date(Date.now() + CHALLENGE_TTL_MS),
@@ -72,24 +133,31 @@ export async function sendFirmaCode(params: {
   });
 
   const message = `Código Volkern para firmar el contrato ${contrato.numero}: ${code}. Caduca en 10 minutos. Si no solicitaste esta firma, ignora este mensaje.`;
-  const delivery = await sendEmail({
-    to: email,
-    subject: `Código para firmar el contrato ${contrato.numero}`,
-    text: message,
-    html: `<p>${message}</p>`,
-    tenantId,
-  });
+  const delivery =
+    channel === 'email'
+      ? await sendEmail({
+          to: destination,
+          subject: `Código para firmar el contrato ${contrato.numero}`,
+          text: message,
+          html: `<p>${message}</p>`,
+          tenantId,
+        })
+      : await sendWhatsAppMessage(destination, message, tenantId);
 
   if (!delivery.success) {
     await prisma.contratoFirmaChallenge.delete({ where: { id: challenge.id } }).catch(() => {});
-    throw Object.assign(new Error('No se pudo enviar el código. Comprueba el email registrado.'), { status: 502 });
+    throw Object.assign(
+      new Error(`No se pudo enviar el código. Comprueba el ${channel === 'email' ? 'email' : 'teléfono'} registrado.`),
+      { status: 502 },
+    );
   }
 
   return {
     challengeId: challenge.id,
     challengeToken,
-    destinationMasked: maskEmail(email),
+    destinationMasked: channel === 'email' ? maskEmail(destination) : maskPhone(destination),
     expiresAt: challenge.expiresAt.toISOString(),
+    channel,
   };
 }
 
@@ -174,9 +242,12 @@ export async function signContratoConCodigo(params: {
     if (active) {
       const signers = (active.signers as any[]) || [];
       const email = challenge.email;
-      const updatedSigners = signers.map((s) =>
-        s?.email === email ? { ...s, signedAt: new Date().toISOString(), signedBy: nombreFirma.trim() } : s,
-      );
+      // Con WhatsApp no hay email: marcar firmado solo si coincide el email (si existe)
+      const updatedSigners = email
+        ? signers.map((s) =>
+            s?.email === email ? { ...s, signedAt: new Date().toISOString(), signedBy: nombreFirma.trim() } : s,
+          )
+        : signers;
       const allSigned = updatedSigners.length > 0 && updatedSigners.every((s) => Boolean(s?.signedAt));
       await prisma.signatureRequest.update({
         where: { id: active.id },
@@ -191,12 +262,22 @@ export async function signContratoConCodigo(params: {
     console.warn('[FirmaPortal] No se pudo actualizar la SignatureRequest:', sigErr.message);
   }
 
+  const destinoFirma =
+    challenge.channel === 'whatsapp'
+      ? challenge.telefono || 'teléfono registrado'
+      : challenge.email || 'email registrado';
   await addContratoTimelineEvent({
     contratoId: contrato.id,
     actorType: 'SYSTEM',
     action: 'document_signed',
-    note: `Firma digital recibida de ${challenge.email} (Portal Volkern)`,
-    metadata: { canal: 'portal', email: challenge.email, nombreFirma: nombreFirma.trim(), ip },
+    note: `Firma digital recibida de ${destinoFirma} por ${challenge.channel === 'whatsapp' ? 'WhatsApp' : 'email'} (Portal Volkern)`,
+    metadata: {
+      canal: challenge.channel,
+      email: challenge.email || null,
+      telefono: challenge.telefono || null,
+      nombreFirma: nombreFirma.trim(),
+      ip,
+    },
   });
 
   // Auditoría
@@ -251,10 +332,10 @@ export async function signContratoConCodigo(params: {
           tenantId,
           userId: u.id,
           title: '✍️ Contrato firmado',
-          body: `${contrato.numero} · ${contrato.titulo || 'Contrato'} fue firmado por ${challenge.email} desde el portal.`,
+          body: `${contrato.numero} · ${contrato.titulo || 'Contrato'} fue firmado por ${destinoFirma} desde el portal.`,
           type: 'contract_signed',
           actionUrl: `/dashboard/contratos/${contrato.id}`,
-          data: { contratoId: contrato.id, canal: 'portal' },
+          data: { contratoId: contrato.id, canal: challenge.channel },
         })),
       });
     }
