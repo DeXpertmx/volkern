@@ -543,6 +543,7 @@ export const HUBS: HubConfig[] = [
       { name: 'Reparto Leads', href: '/dashboard/configuracion?section=reparto', icon: RotateCw, description: 'Asignación de ejecutivos' },
       { name: 'Campos de Leads', href: '/dashboard/configuracion?section=leads', icon: ListTodo, description: 'Personalización de campos' },
       { name: 'Documentos', href: '/dashboard/configuracion?section=documentos', icon: FileText, description: 'Ajustes de contratos' },
+      { name: 'Firma Digital', href: '/dashboard/configuracion/firma-digital', icon: FileSignature, description: 'Instancia LibreSign para firma de contratos' },
       { name: 'Canal de Igualdad', href: '/dashboard/configuracion?section=igualdad', icon: ShieldCheck, description: 'Configuración de denuncias e inmutabilidad' },
       { name: 'Marca Blanca', href: '/dashboard/configuracion?section=whitelabel', icon: Palette, planModule: 'white_label', description: 'Personalización gráfica' },
       { name: 'Agencia', href: '/dashboard/agencia', icon: Building, description: 'Gestión de clientes (slots)', requiredAccountType: 'AGENCY' },
