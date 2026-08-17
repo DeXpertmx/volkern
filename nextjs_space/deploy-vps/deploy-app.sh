@@ -186,18 +186,41 @@ fi
 # ── 6. Limpieza automática (por defecto; --keep la desactiva) ──
 if [ "$CLEANUP" = "1" ]; then
   echo ""
-  echo "→ [6/6] Limpieza automática de tarballs en /tmp ..."
-  # Se eliminan también los residuos de despliegues anteriores para que
-  # /tmp no acumule GBs (los tarballs ya están cargados en Docker).
+  echo "→ [6/6] Limpieza automática ..."
+
+  # 6a. Tarballs del /tmp (incluye residuos de despliegues anteriores)
+  echo "→ [6a] Tarballs en /tmp ..."
   STALE=$(ls /tmp/volkern-erp-*.tar 2>/dev/null || true)
   if [ -z "$STALE" ]; then
     echo "   ✓ No hay tarballs que limpiar."
   else
     for t in $STALE; do rm -v "$t"; done
   fi
+
+  # 6b. Contenedores parados de volkern (tareas viejas de Swarm).
+  #     Cada `docker load` + `service update --force` deja la tarea anterior
+  #     parada; Swarm las conserva como historial y bloquean las imágenes
+  #     viejas. Se eliminan SOLO las de volkern-* para no tocar el historial
+  #     de otros proyectos del VPS.
+  echo "→ [6b] Contenedores parados volkern-* ..."
+  STOPPED_VOLKERN=$(docker ps -aq --filter status=exited --filter name=volkern 2>/dev/null || true)
+  if [ -z "$STOPPED_VOLKERN" ]; then
+    echo "   ✓ No hay contenedores volkern parados."
+  else
+    echo "   · Eliminando $(echo "$STOPPED_VOLKERN" | wc -l) contenedor(es) parado(s):"
+    echo "$STOPPED_VOLKERN" | xargs -r docker rm | wc -l | xargs -I{} echo "   · {} contenedor(es) eliminado(s)"
+  fi
+
+  # 6c. Imágenes dangling sin contenedor (las viejas de volkern-erp).
+  #     `docker image prune -f` solo elimina imágenes sin tag Y sin contenedor;
+  #     la imagen actual (running) y las de otros proyectos (con contenedores)
+  #     quedan intactas.
+  echo "→ [6c] Imágenes dangling ..."
+  PRUNED=$(docker image prune -f 2>/dev/null | tail -1 || true)
+  echo "   · $PRUNED"
 else
   echo ""
-  echo "→ [6/6] Limpieza: omitida (--keep). Los tarballs se conservan en /tmp."
+  echo "→ [6/6] Limpieza: omitida (--keep). Tarballs, contenedores e imágenes se conservan."
 fi
 
 DEPLOY_OK=1
