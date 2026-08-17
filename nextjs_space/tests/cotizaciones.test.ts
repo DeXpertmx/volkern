@@ -500,6 +500,29 @@ describe('POST /api/cotizaciones', () => {
     );
   });
 
+  it('debe guardar las cláusulas del clausulado legal', async () => {
+    (prisma.cotizacion.findFirst as any).mockResolvedValue(null);
+    (prisma.cotizacion.create as any).mockResolvedValue({ id: 'cot-clausulas' });
+
+    await POST(
+      mockRequest('https://volkern.app/api/cotizaciones', {
+        titulo: 'Cotización con cláusulas',
+        terminosPago: 'Pago a 30 días',
+        clausulas: 'PRIMERA. OBJETO. {{cliente.nombre}} contratará los servicios...',
+        items: [{ concepto: 'Servicio', cantidad: 1, precioUnitario: 100 }],
+      }),
+    );
+
+    expect(prisma.cotizacion.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          terminosPago: 'Pago a 30 días',
+          clausulas: 'PRIMERA. OBJETO. {{cliente.nombre}} contratará los servicios...',
+        }),
+      }),
+    );
+  });
+
   it('debe incluir items (con catalogoItem), deal, lead, emisor en el resultado', async () => {
     (prisma.cotizacion.findFirst as any).mockResolvedValue(null);
     (prisma.cotizacion.create as any).mockResolvedValue({ id: 'cot-include' });

@@ -2528,6 +2528,7 @@ model Cotizacion {
   moneda              String                     @default("MXN")
   validezDias         Int                        @default(30)
   terminosPago        String?
+  clausulas           String?
   notasInternas       String?
   notasCliente        String?
   fechaCreacion       DateTime                   @default(now())

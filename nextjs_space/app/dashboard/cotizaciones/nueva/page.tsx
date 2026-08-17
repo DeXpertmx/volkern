@@ -30,6 +30,7 @@ import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
 import { useFiscalConfig } from '@/hooks/use-fiscal-config'
 import { CatalogSearchSelect, CatalogoItemResult } from '@/components/catalogo/CatalogSearchSelect'
+import { PlaceholderHelp } from '@/components/contratos/PlaceholderHelp'
 
 interface CotizacionItem {
   id: string
@@ -93,6 +94,7 @@ export default function NuevaCotizacionPage() {
   const [descuentoPorcentaje, setDescuentoPorcentaje] = useState(0)
   const [impuestos, setImpuestos] = useState(0)
   const [terminosPago, setTerminosPago] = useState('')
+  const [clausulas, setClausulas] = useState('')
   const [notasCliente, setNotasCliente] = useState('')
 
   // Inicializar moneda e impuestos una sola vez. Un IVA 0% elegido por el
@@ -347,6 +349,7 @@ export default function NuevaCotizacionPage() {
           descuentoPorcentaje,
           impuestos,
           terminosPago,
+          clausulas,
           notasCliente,
           items: itemsValidos.map(item => ({
             catalogoItemId: item.catalogoItemId || null,
@@ -754,6 +757,16 @@ export default function NuevaCotizacionPage() {
                           rows={3}
                         />
                       </div>
+                    </div>
+                    <div className="mt-4 space-y-2">
+                      <Label>Cláusulas (se heredan al contrato al aceptar)</Label>
+                      <PlaceholderHelp onInsert={(t) => setClausulas(clausulas + (clausulas ? ' ' : '') + t)} />
+                      <Textarea
+                        value={clausulas}
+                          onChange={(e) => setClausulas(e.target.value)}
+                          placeholder="Obligaciones y términos legales..."
+                          rows={4}
+                        />
                     </div>
                   </CardContent>
                 </Card>

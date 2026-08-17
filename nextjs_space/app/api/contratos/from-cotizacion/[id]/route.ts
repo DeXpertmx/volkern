@@ -70,7 +70,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         total: cotizacion.total,
         moneda: cotizacion.moneda,
         condicionesPago: body.condicionesPago || cotizacion.terminosPago,
-        clausulas: body.clausulas,
+        clausulas: body.clausulas || cotizacion.clausulas || undefined,
         notasInternas: body.notasInternas,
         notasCliente: body.notasCliente || cotizacion.notasCliente,
         fechaInicio: body.fechaInicio ? new Date(body.fechaInicio) : null,
