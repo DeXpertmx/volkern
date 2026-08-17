@@ -203,7 +203,7 @@ export const POST = withTenantAuth(async (request, auth) => {
       include: {
         items: true,
         deal: true,
-        contact: true,
+        contacts: true,
         cotizacion: true
       } as any
     });

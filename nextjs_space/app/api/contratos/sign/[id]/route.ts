@@ -33,7 +33,7 @@ export const POST = withTenantAuth(async (request, auth, { params }) => {
     const [contrato, tenant] = await Promise.all([
       prisma.contrato.findUnique({
         where: { id: contractId, tenantId },
-        include: { items: true, contact: true } as any
+        include: { items: true, contacts: true } as any
       }),
       prisma.tenant.findUnique({
         where: { id: tenantId },
