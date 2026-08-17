@@ -257,6 +257,30 @@ export class SignatureService {
           completedAt: new Date()
         }
       });
+
+      // Registrar el evento en el timeline del contrato (si la solicitud está ligada a uno)
+      if (request.contratoId) {
+        try {
+          await prisma.contratoTimeline.create({
+            data: {
+              contratoId: request.contratoId,
+              actorType: 'SYSTEM',
+              action: 'document_signed',
+              note: `Firma digital recibida${body.signer_email ? ` de ${body.signer_email}` : ''} (LibreSign)`,
+              metadata: {
+                signatureRequestId: request.id,
+                libreSignUuid: uuid,
+                signerEmail: body.signer_email || null,
+                eventId: newEvent.id
+              }
+            }
+          });
+          console.info(`[SignatureService] Timeline del contrato ${request.contratoId} actualizado con document_signed`);
+        } catch (timelineError: any) {
+          // No romper el webhook si el timeline falla (log y continuar)
+          console.warn('[SignatureService] No se pudo registrar en el timeline del contrato:', timelineError.message);
+        }
+      }
       
       // TRIGGER: Automations / Workflows in Volkern
       // ... logic to notify Lead/Deal

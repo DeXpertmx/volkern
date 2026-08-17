@@ -25,6 +25,15 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter
 } from '@/components/ui/table'
 
+interface ContratoTimelineEvent {
+  id: string
+  action: string
+  note: string | null
+  actorType: string
+  metadata: any | null
+  createdAt: string
+}
+
 interface ContratoItem {
   id: string
   concepto: string
@@ -79,6 +88,7 @@ interface Contrato {
   snapshotMetadata: any | null
   templateData: any | null
   signatureRequests: any[] | null
+  timeline: ContratoTimelineEvent[] | null
   contact: { id: string; nombre: string; email: string } | null
   lead: { id: string; nombre: string } | null
   deal: { id: string; titulo: string; valor: number } | null
@@ -380,6 +390,41 @@ export default function ContratoDetailPage() {
               </CardContent>
             </Card>
           )}
+
+          {/* Timeline / Historial */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><Clock className="h-4 w-4" /> Historial del Contrato</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {contrato.timeline && contrato.timeline.length > 0 ? (
+                <div className="relative pl-6 space-y-6 before:absolute before:left-[7px] before:top-2 before:bottom-2 before:w-0.5 before:bg-muted-foreground/20">
+                  {contrato.timeline.map((ev) => {
+                    const isSigned = ev.action === 'document_signed'
+                    const isSent = ev.action === 'sent' || ev.action === 'document_able_to_sign'
+                    return (
+                      <div key={ev.id} className="relative">
+                        <div className={`absolute -left-[26px] mt-1 h-4 w-4 rounded-full border-4 border-background ${isSigned ? 'bg-emerald-500/10' : isSent ? 'bg-indigo-500/10' : 'bg-muted'}`}>
+                          <div className={`h-1 w-1 rounded-full mt-[3px] ml-[3px] ${isSigned ? 'bg-emerald-500' : isSent ? 'bg-indigo-500' : 'bg-muted-foreground'}`} />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className={`text-[9px] uppercase tracking-wider ${isSigned ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : isSent ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : ''}`}>
+                            {isSigned ? 'Firmado' : isSent ? 'Enviado a firma' : ev.action.replace(/_/g, ' ')}
+                          </Badge>
+                          <span className="text-[10px] text-muted-foreground">
+                            {format(new Date(ev.createdAt), 'dd MMM yyyy HH:mm', { locale: es })}
+                          </span>
+                        </div>
+                        <p className="text-sm mt-1 text-foreground/90">{ev.note || ev.action}</p>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">Sin eventos registrados todavía.</p>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Firmas */}
           <Card>

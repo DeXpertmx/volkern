@@ -26,6 +26,9 @@ export const GET = withTenantAuth(async (request, auth, { params }) => {
         signatureRequests: {
           orderBy: { createdAt: 'desc' },
           include: { auditEvents: { orderBy: { timestamp: 'desc' }, take: 5 } }
+        },
+        timeline: {
+          orderBy: { createdAt: 'desc' }
         }
       }
     });
