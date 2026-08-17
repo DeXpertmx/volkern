@@ -23,6 +23,7 @@ import {
 import { toast } from 'sonner'
 import { Loader2, Plus, Pencil, Trash2, FileText, ScrollText } from 'lucide-react'
 import { apiFetch } from '@/lib/api-client'
+import { PlaceholderHelp } from './PlaceholderHelp'
 
 export interface ContratoTemplate {
   id: string
@@ -255,6 +256,7 @@ export function ContratoTemplatesManager({
             </div>
             <div className="space-y-1.5">
               <Label>Cláusulas (clausulado legal)</Label>
+              <PlaceholderHelp onInsert={(t) => setForm({ ...form, clausulas: form.clausulas + (form.clausulas ? ' ' : '') + t })} />
               <Textarea
                 rows={6}
                 placeholder={'PRIMERA. Objeto...\nSEGUNDA. Duración...\nTERCERA. Confidencialidad...'}

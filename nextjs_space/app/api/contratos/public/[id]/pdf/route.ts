@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { generatePdf } from '@/lib/pdf-generator';
+import { resolvePlaceholders } from '@/lib/contratos/placeholders';
 
 function formatCurrency(amount: number, currency: string): string {
   const symbols: Record<string, string> = { MXN: '$', USD: '$', EUR: '€' };
@@ -109,6 +110,8 @@ function generateContratoHTML(contrato: any, tenant: any): string {
   
   if (isCustomTemplate) {
     const css = contrato.templateData?.css || '';
+    // Resolver placeholders dinámicos además de los tokens de hydrateTemplate
+    const hydrated = hydrateTemplate(resolvePlaceholders(contrato.clausulas, contrato, tenant), contrato, tenant);
     return `
       <!DOCTYPE html>
       <html lang="es">
@@ -122,7 +125,7 @@ function generateContratoHTML(contrato: any, tenant: any): string {
         </style>
       </head>
       <body>
-        ${hydrateTemplate(contrato.clausulas, contrato, tenant)}
+        ${hydrated}
       </body>
       </html>
     `;
@@ -158,7 +161,8 @@ function generateContratoHTML(contrato: any, tenant: any): string {
 
   const descuentoMonto = contrato.descuentoMonto || 0;
   const impuestos = contrato.impuestos || 0;
-  const clausulasTexto = (contrato.clausulas || '').trim();
+  const clausulasTexto = resolvePlaceholders((contrato.clausulas || '').trim(), contrato, tenant);
+  const condicionesPagoTexto = resolvePlaceholders(contrato.condicionesPago || '', contrato, tenant);
 
   return `
     <!DOCTYPE html>
@@ -216,9 +220,9 @@ function generateContratoHTML(contrato: any, tenant: any): string {
         <div class="total-row"><span>TOTAL</span><span>${formatCurrency(contrato.total || 0, contrato.moneda)}</span></div>
       </div>
 
-      ${contrato.condicionesPago ? `
+      ${condicionesPagoTexto ? `
         <h2>Condiciones de pago</h2>
-        <div class="condiciones">${contrato.condicionesPago}</div>
+        <div class="condiciones">${condicionesPagoTexto}</div>
       ` : ''}
 
       ${clausulasTexto ? `
