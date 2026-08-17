@@ -26,6 +26,7 @@ import { PunchClock } from '@/components/attendance/PunchClock'
 import { ComplianceBadge } from '@/components/compliance/ComplianceBadge'
 import { Badge } from '@/components/ui/badge'
 import { useUndeliverableNotifications } from '@/hooks/use-undeliverable-notifications'
+import { useContractSignatureNotifications } from '@/hooks/use-contract-signature-notifications'
 
 // Simple logger
 const log = (...args: any[]) => {
@@ -50,6 +51,9 @@ export function Sidebar() {
   // Conteo de entregas no entregables + avisos (sonido y notificación del sistema)
   const { pendingCount: undeliverableCount, recentFailures } = useUndeliverableNotifications((session?.user as any)?.id || null)
   const [badgePopoverOpen, setBadgePopoverOpen] = useState(false)
+
+  // Aviso al agente cuando un contrato queda firmado (document_signed)
+  useContractSignatureNotifications((session?.user as any)?.id || null)
 
   // Cerrar el popover de resumen con Escape
   useEffect(() => {

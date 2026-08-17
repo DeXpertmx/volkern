@@ -71,6 +71,12 @@ interface Contrato {
   deal: { id: string; nombre: string } | null
   lead: { id: string; nombre: string } | null
   cotizacion: { id: string; numero: string } | null
+  timeline?: {
+    id: string
+    action: string
+    note: string | null
+    createdAt: string
+  }[]
 }
 
 export default function ContratosPage() {
@@ -138,6 +144,26 @@ export default function ContratosPage() {
       otro: 'Otro'
     }
     return labels[tipo] || tipo
+  }
+
+  const getUltimoEvento = (contrato: Contrato) => {
+    const ev = contrato.timeline?.[0]
+    if (!ev) return null
+    const labels: Record<string, { texto: string; color: string }> = {
+      document_signed: { texto: '✍️ Firma recibida', color: 'text-green-600' },
+      document_sent: { texto: '📤 Enviado a firmar', color: 'text-blue-600' },
+      created: { texto: '➕ Creado', color: 'text-slate-600' },
+      pagado: { texto: '💳 Pago registrado', color: 'text-emerald-600' },
+      actualizado: { texto: '✏️ Actualizado', color: 'text-slate-600' },
+      cancelado: { texto: '✖️ Cancelado', color: 'text-red-600' }
+    }
+    const label = labels[ev.action] || { texto: ev.action.replace(/_/g, ' '), color: 'text-slate-600' }
+    return {
+      texto: label.texto,
+      color: label.color,
+      nota: ev.note,
+      fecha: format(new Date(ev.createdAt), 'dd MMM HH:mm', { locale: es })
+    }
   }
 
   const filteredContratos = contratos.filter(c => {
@@ -564,6 +590,7 @@ export default function ContratosPage() {
                 <TableHead>Tipo</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead>Firmas</TableHead>
+                <TableHead>Última actividad</TableHead>
                 <TableHead className="text-right">Total</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
@@ -571,7 +598,7 @@ export default function ContratosPage() {
             <TableBody>
               {filteredContratos.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                     No hay contratos que mostrar
                   </TableCell>
                 </TableRow>
@@ -611,6 +638,21 @@ export default function ContratosPage() {
                           {contrato.firmadoPorCliente ? '✓' : '○'} Cliente
                         </span>
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      {(() => {
+                        const ev = getUltimoEvento(contrato)
+                        if (!ev) return <span className="text-xs text-muted-foreground">—</span>
+                        return (
+                          <div className="min-w-[160px]">
+                            <p className={`text-xs font-semibold ${ev.color}`}>{ev.texto}</p>
+                            <p className="text-[11px] text-muted-foreground truncate max-w-[200px]" title={ev.nota || ''}>
+                              {ev.nota || ev.fecha}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground/70">{ev.fecha}</p>
+                          </div>
+                        )
+                      })()}
                     </TableCell>
                     <TableCell className="text-right font-medium">
                       {formatCurrency(contrato.total, contrato.moneda)}

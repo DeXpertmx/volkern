@@ -282,6 +282,44 @@ export class SignatureService {
         }
       }
       
+      // 🔔 Notificar a los agentes del tenant (in-app) cuando un contrato queda firmado
+      try {
+        const contrato = request.contratoId
+          ? await prisma.contrato.findUnique({
+              where: { id: request.contratoId },
+              select: { id: true, numero: true, titulo: true }
+            })
+          : null;
+        const targetUsers = await prisma.user.findMany({
+          where: { tenantId, estado: 'activo' },
+          select: { id: true },
+          take: 20
+        });
+        if (targetUsers.length > 0) {
+          await prisma.inAppNotification.createMany({
+            data: targetUsers.map(u => ({
+              tenantId,
+              userId: u.id,
+              title: '✍️ Contrato firmado',
+              body: contrato
+                ? `${contrato.numero} · ${contrato.titulo} fue firmado${body.signer_email ? ` por ${body.signer_email}` : ''}.`
+                : `Una solicitud de firma fue completada${body.signer_email ? ` por ${body.signer_email}` : ''}.`,
+              type: 'contract_signed',
+              actionUrl: contrato ? `/dashboard/contratos/${contrato.id}` : null,
+              data: {
+                signatureRequestId: request.id,
+                libreSignUuid: uuid,
+                contratoId: request.contratoId || null
+              }
+            }))
+          });
+          console.info(`[SignatureService] Notificación de contrato firmado enviada a ${targetUsers.length} usuarios del tenant`);
+        }
+      } catch (notifError: any) {
+        // No romper el webhook si la notificación falla (log y continuar)
+        console.warn('[SignatureService] No se pudo notificar a los agentes:', notifError.message);
+      }
+      
       // TRIGGER: Automations / Workflows in Volkern
       // ... logic to notify Lead/Deal
     }
