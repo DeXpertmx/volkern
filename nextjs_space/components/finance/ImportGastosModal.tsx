@@ -99,6 +99,28 @@ export function ImportGastosModal({
     }
   };
 
+  const downloadTemplate = async () => {
+    try {
+      const res = await fetch('/api/erp/expenses/import/template');
+      if (!res.ok) {
+        toast.error('No se pudo descargar la plantilla');
+        return;
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'plantilla-gastos.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success('Plantilla descargada');
+    } catch {
+      toast.error('Error al descargar la plantilla');
+    }
+  };
+
   const onFileChange = (f: File | null) => {
     if (!f) return;
     const ext = (f.name.split('.').pop() || '').toLowerCase();
@@ -122,8 +144,14 @@ export function ImportGastosModal({
             <FileSpreadsheet className="h-5 w-5 text-emerald-600" />
             Importar Gastos desde Excel
           </DialogTitle>
-          <DialogDescription>
-            Formato esperado: NOMBRE · C.I.F. · FECHA · Nº FRA. · BASE 21%..0% · IVA · TOTAL
+          <DialogDescription className="flex items-center gap-2">
+            <span>Formato esperado: NOMBRE · C.I.F. · FECHA · Nº FRA. · BASE 21%..0% · IVA · TOTAL</span>
+            <button
+              onClick={downloadTemplate}
+              className="inline-flex items-center gap-1 text-emerald-600 font-bold hover:underline text-xs whitespace-nowrap"
+            >
+              <Download className="h-3.5 w-3.5" /> Descargar plantilla (XLSX)
+            </button>
           </DialogDescription>
         </DialogHeader>
 
