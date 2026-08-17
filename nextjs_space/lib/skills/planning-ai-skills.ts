@@ -44,7 +44,7 @@ export async function simulate_production_scenario({
   lineId: string, 
   addedUnits: number 
 }) {
-  const line = await (prisma as any).productionLine.findUnique({ where: { id: lineId } });
+  const line = await (prisma as any).erp_production_lines.findUnique({ where: { id: lineId } });
   if (!line) return { error: 'Línea no encontrada' };
 
   // Simulamos carga: 0.5h por unidad

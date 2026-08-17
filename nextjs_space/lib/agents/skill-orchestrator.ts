@@ -142,6 +142,19 @@ const INTENT_TO_SKILL: Record<string, string> = {
   'aprobar_vacaciones': 'approve_vacation_voice',
   'riesgo_rotacion': 'talent_retention_risk',
 
+  // ─── Fábrica Avanzada (Vigésimo entrenamiento) ───
+  'ejecutar_nomina': 'orchestrate_secure_payroll',
+  'anomalias_asistencia': 'detect_attendance_anomalies',
+  'predecir_fallo_activo': 'predict_asset_failure',
+  'dashboard_mantenimiento': 'get_maintenance_dashboard',
+  'proyeccion_capacidad': 'analyze_capacity_forecast',
+  'simular_escenario_produccion': 'simulate_production_scenario',
+  'readiness_produccion': 'analyze_production_readiness',
+  'plan_compras': 'suggest_procurement_plan',
+  'optimizar_secuenciacion': 'analyze_schedule_optimization',
+  'maximizar_rentabilidad_scheduling': 'maximize_schedule_profitability',
+  'rentabilidad_produccion': 'analyze_production_profitability',
+
   // ─── Logística ───
   'estado_envio': 'get_shipment_status',
   'rastrear_pedido': 'track_order',
@@ -779,10 +792,23 @@ export const SkillOrchestratorAgent = {
         'rentabilidad_proyecto': 'proyectos',
         'desviaciones_proyecto': 'proyectos',
 
+        // Fábrica Avanzada (Vigésimo entrenamiento)
+        'predecir_fallo_activo': 'produccion',
+        'dashboard_mantenimiento': 'produccion',
+        'proyeccion_capacidad': 'produccion',
+        'simular_escenario_produccion': 'produccion',
+        'readiness_produccion': 'produccion',
+        'plan_compras': 'produccion',
+        'optimizar_secuenciacion': 'produccion',
+        'maximizar_rentabilidad_scheduling': 'produccion',
+        'rentabilidad_produccion': 'produccion',
+
         // RRHH
         'resumen_rrhh': 'rrhh',
         'aprobar_vacaciones': 'rrhh',
         'riesgo_rotacion': 'rrhh',
+        'ejecutar_nomina': 'rrhh',
+        'anomalias_asistencia': 'rrhh',
 
         // Logística
         'estado_envio': 'logistica',
@@ -899,6 +925,17 @@ export const SkillOrchestratorAgent = {
       'resumen_rrhh': '👥 No tienes acceso al módulo de *RRHH*. Contacta al administrador.',
       'aprobar_vacaciones': '👥 No tienes acceso al módulo de *RRHH*. Contacta al administrador.',
       'riesgo_rotacion': '👥 No tienes acceso al módulo de *RRHH*. Contacta al administrador.',
+      'ejecutar_nomina': '👥 No tienes acceso al módulo de *RRHH*. Contacta al administrador.',
+      'anomalias_asistencia': '👥 No tienes acceso al módulo de *RRHH*. Contacta al administrador.',
+      'predecir_fallo_activo': '🏭 No tienes acceso al módulo de *Producción*. Contacta al administrador.',
+      'dashboard_mantenimiento': '🏭 No tienes acceso al módulo de *Producción*. Contacta al administrador.',
+      'proyeccion_capacidad': '🏭 No tienes acceso al módulo de *Producción*. Contacta al administrador.',
+      'simular_escenario_produccion': '🏭 No tienes acceso al módulo de *Producción*. Contacta al administrador.',
+      'readiness_produccion': '🏭 No tienes acceso al módulo de *Producción*. Contacta al administrador.',
+      'plan_compras': '🏭 No tienes acceso al módulo de *Producción*. Contacta al administrador.',
+      'optimizar_secuenciacion': '🏭 No tienes acceso al módulo de *Producción*. Contacta al administrador.',
+      'maximizar_rentabilidad_scheduling': '🏭 No tienes acceso al módulo de *Producción*. Contacta al administrador.',
+      'rentabilidad_produccion': '🏭 No tienes acceso al módulo de *Producción*. Contacta al administrador.',
       'estado_envio': '🚚 No tienes acceso al módulo de *Logística*. Contacta al administrador.',
       'rastrear_pedido': '🚚 No tienes acceso al módulo de *Logística*. Contacta al administrador.',
       'tracking_envio': '🚚 No tienes acceso al módulo de *Logística*. Contacta al administrador.',
@@ -1058,6 +1095,19 @@ Puedo ayudarte con:
       // Proyectos
       'get_project_profitability': 'Rentabilidad de proyecto',
       'detect_project_drifting': 'Desviaciones de proyecto',
+
+      // Fábrica Avanzada (Vigésimo entrenamiento)
+      'orchestrate_secure_payroll': 'Ejecutar nómina segura',
+      'detect_attendance_anomalies': 'Anomalías de asistencia',
+      'predict_asset_failure': 'Predecir fallo de activo',
+      'get_maintenance_dashboard': 'Dashboard de mantenimiento',
+      'analyze_capacity_forecast': 'Proyección de capacidad',
+      'simulate_production_scenario': 'Simular escenario de producción',
+      'analyze_production_readiness': 'Readiness de producción',
+      'suggest_procurement_plan': 'Plan de compras',
+      'analyze_schedule_optimization': 'Optimizar secuenciación',
+      'maximize_schedule_profitability': 'Maximizar rentabilidad de scheduling',
+      'analyze_production_profitability': 'Rentabilidad de producción',
 
       // RRHH
       'get_hr_daily_brief': 'Briefing diario de RRHH',

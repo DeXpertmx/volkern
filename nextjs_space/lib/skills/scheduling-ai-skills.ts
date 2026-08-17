@@ -5,13 +5,13 @@ import { prisma } from '@/lib/db';
  * Analiza el plan actual y sugiere mejoras de secuencia
  */
 export async function analyze_schedule_optimization({ tenantId }: { tenantId: string }) {
-  const activePlan = await (prisma as any).schedulingPlan.findFirst({
+  const activePlan = await (prisma as any).erp_scheduling_plans.findFirst({
     where: { tenantId, status: 'ACTIVE' },
     include: {
-      assignments: {
+      erp_schedule_assignments: {
         include: {
-          workOrder: { include: { bom: true } },
-          line: true
+          erp_work_orders: { include: { bom: true } },
+          erp_production_lines: true
         }
       }
     }
@@ -22,8 +22,9 @@ export async function analyze_schedule_optimization({ tenantId }: { tenantId: st
   }
 
   // Lógica simplificada: Detectar solapamientos o setups costosos
-  const conflicts = activePlan.assignments.filter((a: any, i: number) => {
-    return activePlan.assignments.some((b: any, j: number) => i !== j && a.lineId === b.lineId && a.estimatedStart < b.estimatedEnd && b.estimatedStart < a.estimatedEnd);
+  const assignments = activePlan.erp_schedule_assignments;
+  const conflicts = assignments.filter((a: any, i: number) => {
+    return assignments.some((b: any, j: number) => i !== j && a.lineId === b.lineId && a.estimatedStart < b.estimatedEnd && b.estimatedStart < a.estimatedEnd);
   });
 
   return {
@@ -43,14 +44,14 @@ export async function analyze_schedule_optimization({ tenantId }: { tenantId: st
  * Re-prioriza el scheduling para maximizar el margen financiero
  */
 export async function maximize_schedule_profitability({ tenantId }: { tenantId: string }) {
-  const assignments = await (prisma as any).scheduleAssignment.findMany({
-    where: { tenantId, plan: { status: 'DRAFT' } },
-    include: { workOrder: { include: { costing: true } } }
+  const assignments = await (prisma as any).erp_schedule_assignments.findMany({
+    where: { tenantId, erp_scheduling_plans: { status: 'DRAFT' } },
+    include: { erp_work_orders: { include: { erp_production_costing: true } } }
   });
 
   const improvements = assignments
-    .filter((a: any) => a.workOrder.costing && a.workOrder.costing.margin > 30)
-    .map((a: any) => `Adelantar ${a.workOrder.batchNumber} (Margen: ${a.workOrder.costing?.margin}%)`);
+    .filter((a: any) => a.erp_work_orders.erp_production_costing && a.erp_work_orders.erp_production_costing.margin > 30)
+    .map((a: any) => `Adelantar ${a.erp_work_orders.batchNumber} (Margen: ${a.erp_work_orders.erp_production_costing?.margin}%)`);
 
   return {
     potentialMarginIncrease: '4.2%',

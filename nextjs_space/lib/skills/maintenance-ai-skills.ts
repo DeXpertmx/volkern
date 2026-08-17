@@ -6,18 +6,18 @@ import { MaintenanceService } from '@/lib/erp/maintenance-service';
  * Analiza el historial de un activo para predecir fallos inminentes
  */
 export async function predict_asset_failure({ tenantId, assetId }: { tenantId: string, assetId: string }) {
-  const asset = await (prisma as any).industrialAsset.findUnique({
+  const asset = await (prisma as any).erp_industrial_assets.findUnique({
     where: { id: assetId, tenantId },
     include: {
-      maintenanceOrders: { orderBy: { plannedDate: 'desc' }, take: 5 },
-      workOrders: { where: { status: 'COMPLETED' }, orderBy: { endDate: 'desc' }, take: 10 }
+      erp_maintenance_orders: { orderBy: { plannedDate: 'desc' }, take: 5 },
+      erp_work_orders: { where: { status: 'COMPLETED' }, orderBy: { endDate: 'desc' }, take: 10 }
     }
   });
 
   if (!asset) throw new Error('Activo no encontrado');
 
   // Lógica de predicción simulada (en fase real se enviaría a Gemma)
-  const usageIntensity = asset.workOrders.length > 5 ? 'HIGH' : 'NORMAL';
+  const usageIntensity = asset.erp_work_orders.length > 5 ? 'HIGH' : 'NORMAL';
   const hoursSinceLastMaintenance = asset.lastMaintenanceDate 
     ? (Date.now() - asset.lastMaintenanceDate.getTime()) / (1000 * 60 * 60)
     : asset.totalHoursWorked;
