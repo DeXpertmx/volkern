@@ -190,7 +190,8 @@ export async function POST(req: NextRequest) {
         condicionesPago: condicionesPago || cotizacion.terminosPago,
         frecuenciaPago,
         diaPago,
-        clausulas,
+        // Hereda las cláusulas de la cotización si el body no trae otras
+        clausulas: clausulas || cotizacion.clausulas || undefined,
         notasInternas: notasInternas || cotizacion.notasInternas,
         notasCliente: notasCliente || cotizacion.notasCliente,
         fechaInicio: fechaInicio ? new Date(fechaInicio) : null,

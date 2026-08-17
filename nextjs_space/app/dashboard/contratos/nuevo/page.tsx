@@ -149,6 +149,7 @@ function NuevoContratoContent() {
         setDescuentoPorcentaje(cot.descuentoPorcentaje || 0)
         setIncluyeIva(cot.impuestos > 0)
         setCondicionesPago(cot.terminosPago || '')
+        setClausulas(cot.clausulas || '')
         setNotasCliente(cot.notasCliente || '')
         setClienteNombre(cot.clienteNombre || '')
         setClienteEmail(cot.clienteEmail || '')

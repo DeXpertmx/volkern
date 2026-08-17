@@ -92,7 +92,7 @@ export const PATCH = withTenantAuth(async (req, auth, params) => {
     const { estado, firmadoPorCliente, ipFirma } = body
     const editableFields = [
       'dealId', 'leadId', 'titulo', 'descripcion', 'items', 'descuentoPorcentaje',
-      'impuestos', 'moneda', 'validezDias', 'terminosPago', 'notasCliente',
+      'impuestos', 'moneda', 'validezDias', 'terminosPago', 'clausulas', 'notasCliente',
       'notasInternas', 'clienteNombre', 'clienteEmail', 'clienteEmpresa',
       'clienteTelefono', 'emisorId',
     ]
