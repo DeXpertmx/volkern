@@ -59,6 +59,7 @@ interface SignatureRequest {
   sentAt: string | null;
   completedAt: string | null;
   signers: Signer[];
+  pdfFirmadoDisponible?: boolean;
 }
 
 interface TimelineEvent {
@@ -100,6 +101,7 @@ interface Contrato {
   items: ContratoItem[];
   signatureRequests: SignatureRequest[];
   timeline: TimelineEvent[];
+  pdfFirmadoDisponible: boolean;
   tenant: { nombre: string; dominio: string | null; configuracion: any };
 }
 
@@ -206,13 +208,17 @@ export default function FirmaPortalView({ contrato, token }: { contrato: Contrat
   const downloadPdf = async () => {
     setDownloading(true);
     try {
-      const res = await fetch(`/api/contratos/public/${token}/pdf`);
+      // Si ya hay PDF firmado, se descarga ese; si no, el PDF del contrato
+      const path = contrato.pdfFirmadoDisponible
+        ? `/api/contratos/public/${token}/pdf-firmado`
+        : `/api/contratos/public/${token}/pdf`;
+      const res = await fetch(path);
       if (!res.ok) throw new Error('Error');
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${contrato.numero}.pdf`;
+      a.download = contrato.pdfFirmadoDisponible ? `${contrato.numero}-firmado.pdf` : `${contrato.numero}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -242,10 +248,17 @@ export default function FirmaPortalView({ contrato, token }: { contrato: Contrat
             </div>
             <div className="flex items-center gap-3">
               <Badge className={`border ${estadoInfo.color}`}>{estadoInfo.texto}</Badge>
-              <Button variant="secondary" size="sm" onClick={downloadPdf} disabled={downloading}>
-                {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                <span className="ml-1 hidden sm:inline">PDF</span>
-              </Button>
+              {contrato.pdfFirmadoDisponible ? (
+                <Button size="sm" onClick={downloadPdf} disabled={downloading} className="bg-emerald-600 hover:bg-emerald-700">
+                  {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                  <span className="ml-1 hidden sm:inline">PDF firmado</span>
+                </Button>
+              ) : (
+                <Button variant="secondary" size="sm" onClick={downloadPdf} disabled={downloading}>
+                  {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                  <span className="ml-1 hidden sm:inline">PDF</span>
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -383,11 +396,18 @@ export default function FirmaPortalView({ contrato, token }: { contrato: Contrat
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <FileText className="h-4 w-4 text-blue-700" /> Documento
+              {contrato.pdfFirmadoDisponible && (
+                <Badge className="bg-emerald-600 ml-1">Firmado</Badge>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <iframe
-              src={`/api/contratos/public/${token}/pdf`}
+              src={
+                contrato.pdfFirmadoDisponible
+                  ? `/api/contratos/public/${token}/pdf-firmado`
+                  : `/api/contratos/public/${token}/pdf`
+              }
               className="w-full h-[600px] rounded-lg border bg-white"
               title={`Contrato ${contrato.numero}`}
             />

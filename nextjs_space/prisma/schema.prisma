@@ -3987,14 +3987,15 @@ model SignatureRequest {
   title         String
   status        String                @default("draft")
   signers       Json
-  documentHash  String?
-  documentUrl   String?
-  auditTrailUrl String?
-  sentAt        DateTime?
-  expiresAt     DateTime?
-  completedAt   DateTime?
-  createdAt     DateTime              @default(now())
-  updatedAt     DateTime              @updatedAt
+  documentHash     String?
+  documentUrl      String?
+  signedPdfBase64  String?
+  auditTrailUrl    String?
+  sentAt           DateTime?
+  expiresAt        DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
   auditEvents   SignatureAuditEvent[]
   contrato      Contrato?             @relation(fields: [contratoId], references: [id])
   lead          Lead?                 @relation(fields: [leadId], references: [id])

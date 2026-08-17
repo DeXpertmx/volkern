@@ -81,6 +81,31 @@ describe('SignatureService.handleWebhook → timeline del contrato', () => {
     expect(call.data.metadata.libreSignUuid).toBe('abc-123');
   });
 
+  it('guarda el PDF firmado en la SignatureRequest cuando el webhook lo envía', async () => {
+    await SignatureService.handleWebhook('t-1', {
+      uuid: 'abc-123',
+      status: 3,
+      signer_email: 'cliente@empresa.com',
+      signedPdfBase64: Buffer.from('%PDF-1.4 documento firmado').toString('base64'),
+    });
+
+    const updateCall = mocks.signatureRequestUpdate.mock.calls[0][0];
+    expect(updateCall.data.status).toBe('signed');
+    expect(updateCall.data.signedPdfBase64).toBe(Buffer.from('%PDF-1.4 documento firmado').toString('base64'));
+    expect(mocks.contratoTimelineCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('no rompe si el webhook no trae PDF firmado', async () => {
+    await SignatureService.handleWebhook('t-1', {
+      uuid: 'abc-123',
+      status: 3,
+      signer_email: 'cliente@empresa.com',
+    });
+
+    const updateCall = mocks.signatureRequestUpdate.mock.calls[0][0];
+    expect(updateCall.data.signedPdfBase64).toBeUndefined();
+  });
+
   it('normaliza event document_signed (JSON legacy) también registra timeline', async () => {
     await SignatureService.handleWebhook('t-1', {
       uuid: 'abc-123',
