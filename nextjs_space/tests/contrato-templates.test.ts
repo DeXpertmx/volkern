@@ -81,6 +81,53 @@ describe('Plantillas de contrato', () => {
     expect(prismaMock.contratoTemplate.createMany).not.toHaveBeenCalled()
   })
 
+  it('actualiza las plantillas de sistema viejas (sin placeholders) al listar', async () => {
+    // El tenant ya tiene plantillas, pero la de sistema quedó con el clausulado viejo
+    prismaMock.contratoTemplate.count.mockResolvedValue(1)
+    prismaMock.contratoTemplate.findMany.mockResolvedValue([
+      {
+        id: 't-sys',
+        nombre: 'Contrato de servicios',
+        tipo: 'servicio',
+        esPorDefecto: true,
+        clausulas: 'PRIMERA. OBJETO. El prestador se obliga...',
+      },
+      {
+        id: 't-custom',
+        nombre: 'Mi plantilla',
+        tipo: 'otro',
+        esPorDefecto: false,
+        clausulas: 'CLÁUSULA PERSONALIZADA sin placeholders',
+      },
+    ])
+    prismaMock.contratoTemplate.update.mockResolvedValue({ id: 't-sys' })
+
+    await GET(req('GET'))
+
+    // Solo se actualiza la de sistema (esPorDefecto) que no trae placeholders
+    expect(prismaMock.contratoTemplate.update).toHaveBeenCalledTimes(1)
+    const arg = prismaMock.contratoTemplate.update.mock.calls[0][0]
+    expect(arg.where.id).toBe('t-sys')
+    expect(arg.data.clausulas).toContain('{{cliente.nombre}}')
+  })
+
+  it('no actualiza plantillas de sistema que ya tienen placeholders', async () => {
+    prismaMock.contratoTemplate.count.mockResolvedValue(1)
+    prismaMock.contratoTemplate.findMany.mockResolvedValue([
+      {
+        id: 't-sys',
+        nombre: 'Contrato de servicios',
+        tipo: 'servicio',
+        esPorDefecto: true,
+        clausulas: 'PRIMERA. OBJETO. ... {{cliente.nombre}}',
+      },
+    ])
+
+    await GET(req('GET'))
+
+    expect(prismaMock.contratoTemplate.update).not.toHaveBeenCalled()
+  })
+
   it('crea una plantilla nueva', async () => {
     prismaMock.contratoTemplate.create.mockResolvedValue({
       id: 't-3',
