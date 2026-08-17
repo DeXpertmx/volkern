@@ -93,23 +93,20 @@ export function formatFecha(value?: Date | string | null): string {
 }
 
 /**
- * Reemplaza los placeholders {{...}} conocidos en un texto (cláusulas,
- * condiciones de pago, descripciones) con los datos reales del contrato
- * y del tenant. Los tokens desconocidos se dejan intactos.
+ * Construye el diccionario token → valor resuelto para un contrato/tenant.
+ * Los tokens que devuelven cadena vacía son placeholders sin dato.
  */
-export function resolvePlaceholders(
-  text: string | null | undefined,
+function buildPlaceholderValues(
   contrato?: PlaceholderContext | null,
   tenant?: TenantContext | null
-): string {
-  if (!text) return text || '';
+): Record<string, string> {
   const c = contrato || {};
   const t = tenant || {};
 
   const nombreEmpresa = t.razonSocial || t.nombre || '';
   const rfcEmpresa = t.nifCif || t.rfc || '';
 
-  const values: Record<string, string> = {
+  return {
     // Cliente (aliases lead.* → cliente.* por compatibilidad con templates GrapesJS)
     '{{cliente.nombre}}': c.clienteNombre || '',
     '{{lead.nombre}}': c.clienteNombre || '',
@@ -137,12 +134,46 @@ export function resolvePlaceholders(
     '{{totales.impuestos}}': formatCurrency(c.impuestos ?? 0, c.moneda),
     '{{totales.total}}': formatCurrency(c.total ?? 0, c.moneda),
   };
+}
+
+/**
+ * Reemplaza los placeholders {{...}} conocidos en un texto (cláusulas,
+ * condiciones de pago, descripciones) con los datos reales del contrato
+ * y del tenant. Los tokens desconocidos se dejan intactos.
+ */
+export function resolvePlaceholders(
+  text: string | null | undefined,
+  contrato?: PlaceholderContext | null,
+  tenant?: TenantContext | null
+): string {
+  if (!text) return text || '';
 
   let out = text;
-  for (const [token, value] of Object.entries(values)) {
+  for (const [token, value] of Object.entries(buildPlaceholderValues(contrato, tenant))) {
     out = out.split(token).join(value);
   }
   return out;
+}
+
+/**
+ * Devuelve la lista de tokens {{...}} presentes en el texto que NO tienen
+ * un valor resuelto (vacío o desconocido). Útil para avisar al usuario de
+ * qué placeholders quedarán sin rellenar.
+ */
+export function getUnresolvedPlaceholders(
+  text: string | null | undefined,
+  contrato?: PlaceholderContext | null,
+  tenant?: TenantContext | null
+): string[] {
+  if (!text) return [];
+  const values = buildPlaceholderValues(contrato, tenant);
+  const found = new Set<string>();
+  const re = /{{[a-zA-Z.]+}}/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    found.add(m[0]);
+  }
+  return Array.from(found).filter((token) => !values[token] || values[token].trim() === '');
 }
 
 /** Devuelve true si el texto contiene algún placeholder conocido. */
