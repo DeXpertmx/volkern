@@ -23,6 +23,13 @@ cd "$(dirname "$0")/.."
 
 VPS="root@62.171.134.195"
 SSH_KEY="${VOLKERN_SSH_KEY:-$HOME/.ssh/id_buffy_volkern}"
+# Si el script corre elevado (sudo/root) y la clave no está en /root/.ssh,
+# buscarla en los homes de usuarios reales (ej. /home/*/.ssh).
+if [ ! -f "$SSH_KEY" ]; then
+  for candidate in /home/*/.ssh/id_buffy_volkern; do
+    if [ -f "$candidate" ]; then SSH_KEY="$candidate"; break; fi
+  done
+fi
 SSH="ssh -i $SSH_KEY -o StrictHostKeyChecking=no -o ConnectTimeout=30"
 SCP="scp -i $SSH_KEY -o StrictHostKeyChecking=no"
 
