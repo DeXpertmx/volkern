@@ -33,7 +33,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
     const baseUrl = process.env.NEXTAUTH_URL || 'https://volkern.app';
-    const contratoUrl = `${baseUrl}/contrato/${contrato.tokenPublico}`;
+    // El portal del cliente: ver el contrato, su estado y firmarlo con verificación por código
+    const contratoUrl = `${baseUrl}/firma/${contrato.tokenPublico}`;
 
     // Formatear moneda
     const formatCurrency = (amount: number) => {

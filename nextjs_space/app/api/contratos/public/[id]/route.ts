@@ -10,6 +10,11 @@ export async function GET(request: Request, { params }: { params: { id: string }
       where: { tokenPublico: params.id },
       include: {
         items: { orderBy: { orden: 'asc' } },
+        signatureRequests: {
+          orderBy: { createdAt: 'desc' },
+          take: 3
+        },
+        timeline: { orderBy: { createdAt: 'desc' }, take: 20 },
         tenant: {
           select: {
             nombre: true,
