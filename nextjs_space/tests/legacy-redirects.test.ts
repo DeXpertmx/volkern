@@ -75,6 +75,11 @@ describe('resolveLegacyRedirect — rutas canónicas deben pasar (null)', () => 
     expect(resolveLegacyRedirect('/payment/success')).toBeNull();
   });
 
+  it('no toca el portal de firma /firma/{token} (el bug detectado en prod)', () => {
+    expect(resolveLegacyRedirect('/firma/e4ff1064-3684-4c75-918b-ba301e00bc89')).toBeNull();
+    expect(resolveLegacyRedirect('/firma/abc123')).toBeNull();
+  });
+
   it('no toca páginas y rutas top-level de 1 segmento', () => {
     expect(resolveLegacyRedirect('/dashboard/finanzas/proveedores')).toBeNull();
     expect(resolveLegacyRedirect('/login')).toBeNull();
