@@ -1074,7 +1074,7 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
 
     // 0z-f. SIMULAR ESCENARIO ("simula añadir 500 unidades a la línea A",
     // "qué pasaría si agrego 1000 unidades") ═══
-    const SIMULAR_SIGNAL = /\b(?:simula|simular|escenario|qu[eé]\s+pasaria\s+si|qu[eé]\s+impacto|impacto\s+de)\b/i
+    const SIMULAR_SIGNAL = /\b(?:simula|simulan|simular|simulado|escenario|qu[eé]\s+pasaria\s+si|qu[eé]\s+impacto|impacto\s+de)\b/i
     if (SIMULAR_SIGNAL.test(message) && /\bunidades?\b/i.test(message)) {
       const unidadesMatch = message.match(/(\d+)\s*unidades?/i)
       if (unidadesMatch) extracted.unidades = Number(unidadesMatch[1])

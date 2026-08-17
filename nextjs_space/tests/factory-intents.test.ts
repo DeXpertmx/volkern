@@ -237,3 +237,15 @@ describe('SkillOrchestrator — wiring del bloque fábrica avanzada', () => {
     expect(result.response).toContain('Producción');
   });
 });
+// ─── 5. Variantes del bloque (fix post-despliegue) ──────────────────────────
+
+describe('IntentClassifier — variantes de simulación sin LLM', () => {
+  const classifier = makeClassifier();
+  const base = { message: '', userId: 'user-1', tenantId: TENANT };
+
+  it('"se simulan 500 unidades en la línea A" → simular_escenario_produccion (vía determinista)', async () => {
+    const r = await classifier.classify({ ...base, message: 'se simulan 500 unidades en la línea A' });
+    expect(r.intent).toBe('simular_escenario_produccion');
+    expect(r.extractedParams.unidades).toBe(500);
+  });
+});
