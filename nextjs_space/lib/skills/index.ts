@@ -44,6 +44,12 @@ import * as realEstateSkills from './real-estate-skills';
 import * as insuranceSkills from './insurance-skills';
 import * as siniestrosSkills from './siniestros-skills';
 import * as logisticsSkills from './logistics-skills';
+import * as attendanceSkills from './attendance-skills';
+import * as maintenanceSkills from './maintenance-ai-skills';
+import * as planningSkills from './planning-ai-skills';
+import * as readinessSkills from './readiness-ai-skills';
+import * as schedulingSkills from './scheduling-ai-skills';
+import * as costSkills from './cost-ai-skills';
 import * as interactionSkills from './interaction-skills';
 import * as billingSkills from './billing-skills';
 import * as taxSkills from './tax-skills';
@@ -2591,6 +2597,136 @@ const getProjectProfitabilityWrapper = async (input: {
   return projectSkills.getProjectProfitability({ tenantId, projectId: project.id });
 };
 
+// ─── Wrappers de Fábrica Avanzada (Vigésimo entrenamiento): nómina segura,
+// asistencia/anomalías GPS, mantenimiento predictivo, capacidad, simulación,
+// readiness, plan de compras, secuenciación y rentabilidad de producción ──────
+
+/**
+ * Wrapper ejecutar_nomina: el skill core exige employeeId + ctx con rol
+ * OWNER/ADMIN. Resuelve el empleado por nombre o id (cuid) y construye el ctx
+ * consultando el rol real del usuario del tenant (nunca se inventa).
+ */
+const executePayrollWrapper = async (input: {
+  tenantId: string;
+  empleado?: string;
+  employeeId?: string;
+  userId?: string;
+}) => {
+  const { tenantId } = input;
+  const ref = input.employeeId || input.empleado;
+  if (!ref) throw new Error('Necesito saber de qué empleado ejecutar la nómina (su nombre).');
+  const { prisma } = await import('@/lib/db');
+
+  // 1. Resolver el empleado (id cuid o nombre)
+  let employeeId = ref;
+  const esCuid = /^c[a-z0-9]{20,}$/i.test(ref);
+  if (!esCuid) {
+    const emp = await prisma.employee.findFirst({
+      where: { tenantId, fullName: { contains: ref, mode: 'insensitive' as const }, isActive: true },
+      select: { id: true, fullName: true },
+    });
+    if (!emp) throw new Error(`No encontré ningún empleado llamado "${ref}".`);
+    employeeId = emp.id;
+  }
+
+  // 2. Rol real del usuario (OWNER/ADMIN habilitan el skill; si el usuario no
+  // existe o no tiene rol, el skill deniega — nunca se asume privilegio).
+  let role = 'USER';
+  if (input.userId) {
+    const user = await (prisma as any).user.findFirst({
+      where: { id: input.userId },
+      include: { role: true },
+      select: { id: true, role: { select: { nombre: true } } },
+    });
+    if (user?.role?.nombre) role = user.role.nombre;
+  }
+  const ctx = { user: { role }, tenant: { id: tenantId } } as any;
+
+  return vaultPayrollSkills.orchestrate_secure_payroll({
+    tenantId,
+    employeeId,
+    ctx,
+  });
+};
+
+/**
+ * Wrapper anomalías de asistencia: une la detección de patrones (viajes
+ * imposibles + proximidad) con la revisión de geo-anomalías marcadas.
+ */
+const attendanceAnomaliesWrapper = async (input: { tenantId: string }) => {
+  const { tenantId } = input;
+  const patterns = await attendanceSkills.anomaly_pattern_detection({ tenantId });
+  const geo = await attendanceSkills.geo_anomaly_review({ tenantId });
+  return {
+    impossibleTravel: patterns.impossibleTravel,
+    proximity: patterns.proximity,
+    geoAnomalies: geo,
+    total: patterns.impossibleTravel.length + patterns.proximity.length + geo.length,
+  };
+};
+
+/** Resuelve un activo industrial por id o nombre (tabla erp_industrial_assets). */
+const resolveIndustrialAssetId = async (tenantId: string, ref: string): Promise<string> => {
+  const { prisma } = await import('@/lib/db');
+  const esCuid = /^c[a-z0-9]{20,}$/i.test(ref);
+  if (esCuid) {
+    const byId = await (prisma as any).erp_industrial_assets.findUnique({ where: { id: ref, tenantId }, select: { id: true } });
+    if (byId) return byId.id;
+  }
+  const byName = await (prisma as any).erp_industrial_assets.findFirst({
+    where: { tenantId, name: { contains: ref, mode: 'insensitive' as const } },
+    select: { id: true, name: true },
+  });
+  if (!byName) throw new Error(`No encontré ningún activo industrial llamado "${ref}".`);
+  return byName.id;
+};
+
+/** Wrapper predecir_fallo_activo: activo por nombre → id. */
+const predictAssetFailureWrapper = async (input: { tenantId: string; activo?: string; assetId?: string }) => {
+  const ref = input.assetId || input.activo;
+  if (!ref) throw new Error('Necesito saber de qué activo predecir el fallo (su nombre).');
+  const assetId = await resolveIndustrialAssetId(input.tenantId, ref);
+  return maintenanceSkills.predict_asset_failure({ tenantId: input.tenantId, assetId });
+};
+
+/** Wrapper simular_escenario_produccion: línea por nombre → id + unidades. */
+const simulateProductionScenarioWrapper = async (input: {
+  tenantId: string;
+  linea?: string;
+  lineId?: string;
+  unidades?: number | string;
+  addedUnits?: number | string;
+}) => {
+  const { tenantId } = input;
+  const unidades = Number(input.unidades ?? input.addedUnits);
+  if (!Number.isFinite(unidades) || unidades <= 0) {
+    throw new Error('Necesito saber cuántas unidades añadir a la simulación.');
+  }
+  let lineId = input.lineId;
+  if (!lineId) {
+    const { prisma } = await import('@/lib/db');
+    // Si el usuario indicó una línea por nombre, resolverla; si no, usar la
+    // primera línea activa del tenant (el skill la necesita sí o sí).
+    const line = await (prisma as any).erp_production_lines.findFirst({
+      where: {
+        tenantId,
+        active: true,
+        ...(input.linea ? { name: { contains: input.linea, mode: 'insensitive' as const } } : {}),
+      },
+      select: { id: true, name: true },
+    });
+    if (!line) {
+      throw new Error(
+        input.linea
+          ? `No encontré la línea de producción "${input.linea}".`
+          : 'No encontré ninguna línea de producción activa para simular.'
+      );
+    }
+    lineId = line.id;
+  }
+  return planningSkills.simulate_production_scenario({ tenantId, lineId: lineId as string, addedUnits: unidades });
+};
+
 const detectProjectDriftingWrapper = async (input: {
   tenantId: string;
   proyecto?: string;
@@ -2806,9 +2942,21 @@ export const skills = {
 
   // Agentic Skills (Gemma 4 Optimized)
   audit_finance_integrity: auditSkills.audit_finance_integrity,
-  orchestrate_secure_payroll: vaultPayrollSkills.orchestrate_secure_payroll,
+  orchestrate_secure_payroll: executePayrollWrapper,
   get_field_activity: operationalSkills.get_field_activity,
   audit_material_leaks: operationalSkills.audit_material_leaks,
+
+  // Fábrica Avanzada (Vigésimo entrenamiento Telegram)
+  detect_attendance_anomalies: attendanceAnomaliesWrapper,
+  predict_asset_failure: predictAssetFailureWrapper,
+  get_maintenance_dashboard: maintenanceSkills.get_maintenance_dashboard,
+  analyze_capacity_forecast: planningSkills.analyze_capacity_forecast,
+  simulate_production_scenario: simulateProductionScenarioWrapper,
+  analyze_production_readiness: readinessSkills.analyze_production_readiness,
+  suggest_procurement_plan: readinessSkills.suggest_procurement_plan,
+  analyze_schedule_optimization: schedulingSkills.analyze_schedule_optimization,
+  maximize_schedule_profitability: schedulingSkills.maximize_schedule_profitability,
+  analyze_production_profitability: costSkills.analyze_production_profitability,
   
   // Real Estate (wrappers: resuelven la propiedad por id/nombre/zona y
   // construyen la búsqueda desde filtros en español)

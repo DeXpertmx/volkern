@@ -6,15 +6,15 @@ import { ReadinessService } from '@/lib/erp/readiness-service';
  * Detecta riesgos de bloqueo en órdenes de producción
  */
 export async function analyze_production_readiness({ tenantId }: { tenantId: string }) {
-  const readinessReports = await (prisma as any).productionReadiness.findMany({
+  const readinessReports = await (prisma as any).erp_production_readiness.findMany({
     where: { tenantId, readyToProduce: false },
     include: {
-      workOrder: {
+      erp_work_orders: {
         include: {
           bom: { include: { catalogoItem: true } },
-          materialRequirements: {
+          erp_material_requirements: {
             where: { status: 'SHORTAGE' },
-            include: { catalogItem: true }
+            include: { catalogo_items: true }
           }
         }
       }
@@ -31,9 +31,9 @@ export async function analyze_production_readiness({ tenantId }: { tenantId: str
     status: criticalIssues.length > 0 ? 'CRITICAL' : 'WARNING',
     message: `Se han detectado ${readinessReports.length} órdenes con faltantes de material.`,
     details: readinessReports.map((r: any) => ({
-      order: r.workOrder.batchNumber,
+      order: r.erp_work_orders.batchNumber,
       coverage: `${r.coveragePercent.toFixed(1)}%`,
-      missing: r.workOrder.materialRequirements.map((m: any) => m.catalogItem.nombre).join(', ')
+      missing: r.erp_work_orders.erp_material_requirements.map((m: any) => m.catalogo_items.nombre).join(', ')
     })),
     recommendations: [
       'Priorizar la compra de los insumos marcados en rojo.',
@@ -48,15 +48,15 @@ export async function analyze_production_readiness({ tenantId }: { tenantId: str
  * Genera sugerencias de compra o transferencia basadas en el plan de producción
  */
 export async function suggest_procurement_plan({ tenantId }: { tenantId: string }) {
-  const shortages = await (prisma as any).materialShortage.findMany({
+  const shortages = await (prisma as any).erp_material_shortages.findMany({
     where: { tenantId },
-    include: { catalogItem: true }
+    include: { catalogo_items: true }
   });
 
   if (shortages.length === 0) return { status: 'OK', message: 'No hay sugerencias de abastecimiento pendientes.' };
 
   const suggestions = shortages.map((s: any) => ({
-    item: s.catalogItem.nombre,
+    item: s.catalogo_items.nombre,
     suggestedAction: s.missingQty > 100 ? 'PURCHASE' : 'TRANSFER',
     quantity: s.missingQty,
     reason: `Faltante crítico para el cumplimiento del plan de producción semanal.`

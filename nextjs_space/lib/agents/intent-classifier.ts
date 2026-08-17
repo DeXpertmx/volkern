@@ -459,7 +459,12 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     // en alquiler", "precio de la propiedad", "comisión de la venta"
     // (decimocuarto entrenamiento)
     const RE_TRIGGER = /\b(?:inmuebles?|propiedad(?:es)?|departamentos?|casas?|pisos?|oficinas?|locales?|terrenos?|solares?|chalets?|villas?|alquiler|en\s+venta|presupuesto\s+de|precio\s+(?:de|sugerido|de\s+venta)|comisi[oó]n(?:es)?\s+de|score\s+de\s+calidad|franquicia)\b/i
-    if (!ACTION_VERB.test(message) && !ENTITY_TRIGGER.test(message) && !FILTER_ONLY.test(message) && !CITA_TRIGGER.test(message) && !FINANZA_TRIGGER.test(message) && !TAREA_TRIGGER.test(message) && !PROVEEDOR_TRIGGER.test(message) && !CATALOGO_TRIGGER.test(message) && !INVENTARIO_TRIGGER.test(message) && !INSURANCE_TRIGGER.test(message) && !FACTURA_TRIGGER.test(message) && !LOGISTICA_TRIGGER.test(message) && !RRHH_TRIGGER.test(message) && !MARKETING_TRIGGER.test(message) && !RE_TRIGGER.test(message) && !ERP_TRIGGER.test(message) && !AUDIT_OPS_TRIGGER.test(message)) return null
+    // Entidades de fábrica avanzada sin verbo sinverbo (vigésimo entrenamiento):
+    // "readiness de la producción", "cuellos de botella", "salud de los
+    // activos", "órdenes bloqueadas por faltantes", "plan de compras",
+    // "secuenciación", "marcajes sospechosos", "nómina de X"
+    const FACTORY_TRIGGER = /\b(?:n[oó]mina(?:s)?|asistencia|marcajes?|fichajes?|geo-?anomal[ií]as?|mantenimiento\s+predictivo|salud\s+de\s+los\s+activos|activo(?:s)?\s+industriales?|fallo\s+de\s+la\s+m[aá]quina|capacidad\s+de\s+la\s+planta|cuellos?\s+de\s+botella|saturaci[oó]n\s+de\s+las\s+l[ií]neas|readiness|faltantes?\s+de\s+material|plan\s+de\s+compras|aprovisionamiento|secuenciaci[oó]n|conflictos?\s+en\s+el\s+plan|margen\s+m[aá]s?\s+bajo|rentabilidad\s+de\s+producci[oó]n|margen\s+bajo)\b/i
+    if (!ACTION_VERB.test(message) && !ENTITY_TRIGGER.test(message) && !FILTER_ONLY.test(message) && !CITA_TRIGGER.test(message) && !FINANZA_TRIGGER.test(message) && !TAREA_TRIGGER.test(message) && !PROVEEDOR_TRIGGER.test(message) && !CATALOGO_TRIGGER.test(message) && !INVENTARIO_TRIGGER.test(message) && !INSURANCE_TRIGGER.test(message) && !FACTURA_TRIGGER.test(message) && !LOGISTICA_TRIGGER.test(message) && !RRHH_TRIGGER.test(message) && !MARKETING_TRIGGER.test(message) && !RE_TRIGGER.test(message) && !ERP_TRIGGER.test(message) && !AUDIT_OPS_TRIGGER.test(message) && !FACTORY_TRIGGER.test(message)) return null
 
     const extracted: Record<string, any> = {}
     const email = message.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,})/)
@@ -730,7 +735,9 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     // mantenimientos pendientes hay", "qué vehículos tienen ITV próxima") —
     // "salud/mantenimiento/ITV" → salud_flota; el resto → estado_flota ═══
     const FLOTA_SIGNAL = /\b(?:flota|veh[ií]culos?|cami[oó]nes?|itv|mantenimientos?\s+pendientes?|mantenimiento)\b/i
-    if (FLOTA_SIGNAL.test(message)) {
+    // El dashboard de mantenimiento industrial (bloque fábrica) no es de flota
+    const FLOTA_DASH_EXCL = /\b(?:dashboard|tablero|salud)\s+(?:de|del)?\s*(?:de\s+)?mantenimiento\b/i
+    if (FLOTA_SIGNAL.test(message) && !FLOTA_DASH_EXCL.test(message)) {
       const vehiculoId = this.extractVehiculoRefDe(message)
       if (vehiculoId) extracted.vehiculoId = vehiculoId
       if (/\b(?:salud|mantenimientos?\s+pendientes?|itv)\b/i.test(message)) {
@@ -1004,6 +1011,110 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
       const propiedad = this.extractPropiedadDe(message)
       if (propiedad) extracted.propiedad = propiedad
       return { intent: 'calcular_comision_franquicia', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 0z. FÁBRICA AVANZADA (Vigésimo entrenamiento): nómina segura,
+    // anomalías de asistencia, mantenimiento predictivo, capacidad, simulación,
+    // readiness, plan de compras, secuenciación y rentabilidad de producción.
+    // Se detectan ANTES que el resto del CRM: "ejecuta la nómina de Juan" tiene
+    // verbo de creación pero la entidad nómina gana; "qué órdenes no están
+    // listas" no es un listado de leads.
+    const NOMINA_ENTITY = /\b(?:n[oó]mina|n[oó]minas)\b/i
+    const NOMINA_VERB = /\b(?:ejecuta|ejecutar|procesa|procesar|calcula|calcular|genera|generar|prepara|preparar|dame|resumen|consolida|consolidar|paga|pagar)\b/i
+
+    // 0z-a. EJECUTAR NÓMINA ("ejecuta la nómina de Juan Pérez", "procesa la
+    // nómina del empleado María García") ═══
+    if (NOMINA_ENTITY.test(message) && NOMINA_VERB.test(message)) {
+      const msgEmpleado = message.replace(/\bn[oó]minas?\b/ig, ' ')
+      const nombreEmpleado = this.extractNombreAfter(msgEmpleado, /\b(?:de|del|empleado|colaborador|el)\s+/i)
+      if (nombreEmpleado) extracted.empleado = nombreEmpleado
+      return { intent: 'ejecutar_nomina', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // 0z-b. ANOMALÍAS DE ASISTENCIA ("detecta anomalías de asistencia",
+    // "hay marcajes sospechosos", "revisa las geo-anomalías de los marcajes") ═══
+    const ASISTENCIA_ENTITY = /\b(?:asistencia|marcajes?|fichajes?|geo-?anomal[ií]as?|punch(?:es)?)\b/i
+    const ANOMALIA_VERB = /\b(?:anomal[ií]as?|sospechos[oa]s?|spoofing|viajes?\s+imposibles?|proximidad|inveros[ií]mil|revisa|revisar|detecta|detectar|analiza|analizar)\b/i
+    if (ASISTENCIA_ENTITY.test(message) && ANOMALIA_VERB.test(message)) {
+      return { intent: 'anomalias_asistencia', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // 0z-d. DASHBOARD MANTENIMIENTO ("dame el dashboard de mantenimiento",
+    // "cómo está la salud de todos los activos") — definido antes que 0z-c
+    // para que la rama de predecir fallo pueda excluir los "estado/salud"
+    const DASH_SIGNAL = /\b(?:dashboard|tablero|salud|estado)\s+(?:de|del)?\s*mantenimiento|salud\s+de\s+(?:todos\s+los\s+)?activos|estado\s+del\s+mantenimiento|mantenimiento\s+de\s+la\s+planta/i
+    if (DASH_SIGNAL.test(message)) {
+      return { intent: 'dashboard_mantenimiento', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // 0z-c. PREDECIR FALLO ACTIVO ("predice el fallo del activo prensa S1",
+    // "cuál es el riesgo de fallo de la máquina a", "mantenimiento predictivo
+    // del activo X") ═══
+    const ACTIVO_ENTITY = /\b(?:activo|m[aá]quina|equipo|prensa|horno|robot|l[ií]nea)\b/i
+    const FALLO_SIGNAL = /\b(?:predice|predecir|fallo|falla|riesgo\s+de|mantenimiento\s+predictivo|probabilidad\s+de)\b/i
+    if (ACTIVO_ENTITY.test(message) && FALLO_SIGNAL.test(message) && !DASH_SIGNAL.test(message)) {
+      const nombreActivo = this.extractNombreAfter(message, /\b(?:del\s+activo|de\s+la\s+m[aá]quina|del\s+equipo|de\s+la\s+prensa|del\s+robot|de\s+la\s+l[ií]nea|activo)\s+/i)
+      if (nombreActivo) extracted.activo = nombreActivo
+      else {
+        // Fallback: capturar la primera persona tras el verbo ("predice el
+        // fallo del activo prensa S1" → "prensa S1")
+        const after = message.split(/predecir|predice\s+(?:fallos?|el\s+fallo)/i).pop() || message
+        const m = after.match(/\b(?:del|de|en)\s+(.+)$/i)
+        if (m) extracted.activo = m[1].trim()
+      }
+      return { intent: 'predecir_fallo_activo', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // 0z-e. PROYECCIÓN DE CAPACIDAD ("analiza la capacidad de la planta a 7
+    // días", "cuellos de botella", "riesgos de saturación") ═══
+    const CAPACIDAD_SIGNAL = /\b(?:capacidad\s+de\s+la\s+planta|capacidad\s+(?:de|en)\s+producci[oó]n|cuellos?\s+de\s+botella|saturaci[oó]n\s+(?:de\s+las\s+l[ií]neas|en\s+producci[oó]n)|capacidad\s+de\s+las\s+l[ií]neas[^p])\b/i
+    if (CAPACIDAD_SIGNAL.test(message)) {
+      return { intent: 'proyeccion_capacidad', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // 0z-f. SIMULAR ESCENARIO ("simula añadir 500 unidades a la línea A",
+    // "qué pasaría si agrego 1000 unidades") ═══
+    const SIMULAR_SIGNAL = /\b(?:simula|simular|escenario|qu[eé]\s+pasaria\s+si|qu[eé]\s+impacto|impacto\s+de)\b/i
+    if (SIMULAR_SIGNAL.test(message) && /\bunidades?\b/i.test(message)) {
+      const unidadesMatch = message.match(/(\d+)\s*unidades?/i)
+      if (unidadesMatch) extracted.unidades = Number(unidadesMatch[1])
+      const lineaMatch = message.match(/\bl[ií]nea\s+([A-Za-z0-9]+)/i)
+      if (lineaMatch) extracted.linea = lineaMatch[1]
+      return { intent: 'simular_escenario_produccion', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // 0z-g. READINESS ("qué órdenes no están listas para producir",
+    // "órdenes bloqueadas por faltantes de material") ═══
+    const READINESS_SIGNAL = /\b(?:readiness|listas?\s+para\s+producir|bloqueadas?\s+por\s+faltantes|faltantes?\s+de\s+material|cobertura\s+de\s+material|no\s+est[aá]n\s+(?:listas|preparadas))\b/i
+    if (READINESS_SIGNAL.test(message)) {
+      return { intent: 'readiness_produccion', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // 0z-h. PLAN DE COMPRAS ("sugiere el plan de compras de insumos", "qué
+    // materiales necesito compra") ═══
+    const PLAN_COMPRAS_SIGNAL = /\b(?:plan\s+de\s+compras|plan\s+de\s+aprovisionamiento|qu[eé]\s+(?:materiales|insumos|material)\s+(?:necesito|comprar|hace\s+falta)|aprovisionamiento|sugerencias?\s+de\s+compra)\b/i
+    if (PLAN_COMPRAS_SIGNAL.test(message)) {
+      return { intent: 'plan_compras', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // 0z-i. OPTIMIZAR SECUENCIACIÓN ("optimiza la secuenciación", "conflictos
+    // en el plan de secuencia") ═══
+    const SECUENCIA_SIGNAL = /\b(?:secuenciaci[oó]n|secuencia\s+de\s+producci[oó]n|conflictos?\s+en\s+el\s+plan|plan\s+de\s+secuencia)\b/i
+    const OPTIMIZAR_SEC_VERB = /\b(?:optimiza|optimizar|sugiere|sugerir|analiza|analizar|mejora|mejorar)\b/i
+    if (SECUENCIA_SIGNAL.test(message) && OPTIMIZAR_SEC_VERB.test(message)) {
+      return { intent: 'optimizar_secuenciacion', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // 0z-j. MAXIMIZAR RENTABILIDAD SCHEDULING ═══
+    if (/\b(?:maximiza|maximizar|re-?prioriza|prioriza)\b/i.test(message) && /\b(?:rentabilidad|margen|rentable)\b/i.test(message) && /\b(?:plan|scheduling|secuenciaci[oó]n|[oó]rdenes)\b/i.test(message)) {
+      return { intent: 'maximizar_rentabilidad_scheduling', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // 0z-k. RENTABILIDAD PRODUCCIÓN ("por qué baja la rentabilidad de
+    // producción", "órdenes con margen bajo") ═══
+    const RENT_PROD_SIGNAL = /\b(?:rentabilidad\s+de\s+producci[oó]n|margen\s+(?:m[aá]s\s+)?bajo|margenes?\s+bajos|baja\s+(?:la\s+)?rentabilidad|[oó]rdenes\s+de\s+producci[oó]n\s+con\s+margen)\b/i
+    if (RENT_PROD_SIGNAL.test(message)) {
+      return { intent: 'rentabilidad_produccion', confidence: 0.85, extractedParams: extracted }
     }
 
     // ═══ 0. CONVERTIR LEAD (antes que crear: "convierte… en contacto" también

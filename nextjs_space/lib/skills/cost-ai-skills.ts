@@ -5,22 +5,24 @@ import { prisma } from '@/lib/db';
  * Detecta causas de baja rentabilidad en órdenes de producción
  */
 export async function analyze_production_profitability({ tenantId }: { tenantId: string }) {
-  const lowMarginOrders = await (prisma as any).productionCosting.findMany({
+  const lowMarginRows = await (prisma as any).erp_production_costing.findMany({
     where: { 
       tenantId,
       margin: { lt: 20 } // Menos del 20% de margen
     },
     include: {
-      workOrder: {
+      erp_work_orders: {
         include: {
           bom: { include: { catalogoItem: true } },
-          asset: true
+          erp_industrial_assets: true
         }
       }
     },
     orderBy: { margin: 'asc' },
     take: 5
   });
+
+  const lowMarginOrders = lowMarginRows;
 
   if (lowMarginOrders.length === 0) {
     return { status: 'OPTIMAL', message: 'Todas las órdenes recientes mantienen márgenes saludables (>20%).' };
@@ -33,7 +35,7 @@ export async function analyze_production_profitability({ tenantId }: { tenantId:
 
     return {
       orderId: order.workOrderId,
-      product: order.workOrder.bom.catalogoItem?.nombre,
+      product: order.erp_work_orders.bom.catalogoItem?.nombre,
       margin: `${order.margin.toFixed(2)}%`,
       variance: `${order.variance.toFixed(2)}€`,
       rootCause,
