@@ -116,6 +116,33 @@ export function buildEmailBody(opts: {
 }
 
 /**
+ * Elimina los placeholders que el LLM inventa al componer el cuerpo del email
+ * (ej. "[Link de Calendario]") junto con el separador que los precede. Así la
+ * firma es quien aporta el link/nombre real, sin dejar texto fantasma.
+ */
+const LLM_PLACEHOLDER_INNER =
+  'link(?:\\s+(?:de|del|al)?\\s*calendario)?' +
+  '|enlace(?:\\s+(?:de|del|al)?\\s*calendario)?' +
+  '|url|calendar|calendario' +
+  '|nombre(?:\\s+(?:de|del)\\s+cliente)?' +
+  '|fecha(?:\\s+de\\s+(?:emisi[oó]n|operaci[oó]n|vencimiento))?' +
+  '|email|correo(?:\\s+electr[oó]nico)?' +
+  '|tel[eé]fono|m[oó]vil|firma|nif|cif';
+
+const LLM_PLACEHOLDER_RE = new RegExp(
+  `(\\s*[:：\\-–—]\\s*)?\\[\\s*(?:${LLM_PLACEHOLDER_INNER})\\s*\\]`,
+  'gi'
+);
+
+export function cleanEmailBody(text: string): string {
+  if (!text) return '';
+  let out = text.replace(LLM_PLACEHOLDER_RE, '');
+  out = out.replace(/[ \t]{2,}/g, ' ');      // espacios dobles
+  out = out.replace(/ *\n{3,} */g, '\n\n'); // saltos de línea excesivos
+  return out.trim();
+}
+
+/**
  * Wrapper send_message: el core exige conversationId del hub, pero desde
  * Telegram/WhatsApp el usuario pide "envía un email/mensaje a X" sin
  * conversación. Resuelve el destinatario (lead o contacto por email/nombre),
@@ -282,7 +309,7 @@ const sendMessageWrapper = async (input: {
       : null;
     const firmaNombre = sender?.name || tenant?.nombre || 'tu asesor';
     textoEnviado = buildEmailBody({
-      contenido,
+      contenido: cleanEmailBody(contenido),
       firmaNombre,
       bookingTitle: sender?.bookingTitle,
       tenantNombre: tenant?.nombre,
