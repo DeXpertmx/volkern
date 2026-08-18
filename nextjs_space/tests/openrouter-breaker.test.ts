@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { withBreaker, _resetCircuitBreakerForTests } from '@/lib/assistant/openrouter-client';
+import { withBreaker, _resetCircuitBreakerForTests, isDeepSeekEnabled } from '@/lib/assistant/openrouter-client';
 
 describe('circuit breaker de la cadena LLM', () => {
   beforeEach(() => {
@@ -63,5 +63,28 @@ describe('circuit breaker de la cadena LLM', () => {
     } catch (e: any) {
       expect(e.circuitOpen).toBe(true);
     }
+  });
+
+  describe('isDeepSeekEnabled (interruptor DEEPSEEK_DISABLED)', () => {
+    const original = process.env.DEEPSEEK_DISABLED;
+    afterEach(() => {
+      if (original === undefined) delete process.env.DEEPSEEK_DISABLED;
+      else process.env.DEEPSEEK_DISABLED = original;
+    });
+
+    it('está habilitado por defecto (sin la variable)', () => {
+      delete process.env.DEEPSEEK_DISABLED;
+      expect(isDeepSeekEnabled()).toBe(true);
+    });
+
+    it('se desactiva con DEEPSEEK_DISABLED=1', () => {
+      process.env.DEEPSEEK_DISABLED = '1';
+      expect(isDeepSeekEnabled()).toBe(false);
+    });
+
+    it('se desactiva con DEEPSEEK_DISABLED=true', () => {
+      process.env.DEEPSEEK_DISABLED = 'true';
+      expect(isDeepSeekEnabled()).toBe(false);
+    });
   });
 });
