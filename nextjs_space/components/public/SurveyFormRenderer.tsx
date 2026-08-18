@@ -6,6 +6,30 @@ import { Survey } from 'survey-react-ui';
 import 'survey-core/survey-core.min.css';
 import { toast } from 'sonner';
 
+/**
+ * Normaliza el JSON del formulario para las vistas externas (preview, embed,
+ * página pública): si un campo tiene la etiqueta (title) vacía, SurveyJS por
+ * defecto muestra el `name` (el key interno) como título. Para que el nombre
+ * interno del campo NUNCA aparezca al cliente, se oculta el título y la
+ * numeración de ese campo — solo se ve el placeholder.
+ */
+export function hideEmptyTitles(json: Record<string, unknown>): Record<string, unknown> {
+  const clone = JSON.parse(JSON.stringify(json || {}));
+  const pages = Array.isArray(clone.pages) ? clone.pages : [clone];
+  for (const page of pages) {
+    const elements = Array.isArray(page?.elements) ? page.elements : [];
+    for (const el of elements) {
+      const title = String(el?.title ?? '').trim();
+      if (!title) {
+        // Ocultar el título para que SurveyJS no muestre el `name` interno
+        el.titleLocation = 'hidden';
+        el.hideNumber = true;
+      }
+    }
+  }
+  return clone;
+}
+
 type SurveyFormRendererProps = {
   /** SurveyJS JSON model definition */
   surveyJson: Record<string, unknown>;
@@ -35,7 +59,8 @@ export const SurveyFormRenderer: React.FC<SurveyFormRendererProps> = ({
   const [model, setModel] = useState<Model | null>(null);
 
   useEffect(() => {
-    const survey = new Model(surveyJson);
+    const normalized = hideEmptyTitles(surveyJson);
+    const survey = new Model(normalized);
 
     // Locale
     survey.locale = 'es';
