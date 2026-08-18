@@ -384,45 +384,50 @@ async function callDeepSeekV4FlashDirect(
 }
 
 /**
- * Pipeline de llamada para Web Creator (DeepSeek V4 Flash prioritario):
- * 1. DeepSeek V4 Flash directo (API nativa) — PRIMARIO
- * 2. google/gemma-4-31b-it:free via OpenRouter (respaldo 1)
- * 3. google/gemma-4-26b-a4b-it:free via OpenRouter (respaldo 2)
- * 4. Google Gemini 2.5 Flash directo (respaldo final)
+ * Pipeline de llamada para Web Creator (Google Gemini prioritario):
+ * 1. Google Gemini directo (GEMINI_MODEL) — PRIMARIO: responde rápido y con
+ *    JSON limpio forzado (response_mime_type). Es el único que entra en el
+ *    presupuesto de ~100s de Cloudflare con páginas completas de 16K tokens.
+ * 2. dots-studio/dots-3-note-preview:free via OpenRouter (respaldo)
+ * 3. google/gemma-4-31b/26b-it:free via OpenRouter (respaldo)
+ * 4. nvidia/nemotron-3-ultra-550b-a55b:free via OpenRouter (respaldo)
+ * 5. DeepSeek V4 Flash directo (último recurso; suele estar sin saldo/402)
  */
 export async function callWebCreatorWithFallback(
   messages: OpenRouterMessage[],
   maxTokens = 16384
 ): Promise<OpenRouterResponse> {
-  // 1. DeepSeek V4 Flash directo (con circuit breaker; desactivable por env)
-  if (isDeepSeekEnabled()) {
-    try {
-      console.log('[AI WebCreator] Intentando DeepSeek V4 Flash (API directa)...');
-      // Generaciones largas (hasta 16K tokens): timeout amplio para no caer en
-      // fallbacks espurios por latencia legítima.
-      const response = await withBreaker('deepseek-chat', () => callDeepSeekV4FlashDirect(messages, undefined, 60000, maxTokens));
-      console.log('[AI WebCreator] ✅ DeepSeek V4 Flash respondió correctamente');
-      return response;
-    } catch (error) {
-      if (!(error as any)?.circuitOpen) console.warn('[AI WebCreator] DeepSeek V4 Flash falló:', error);
-    }
+  // 1. Google Gemini directo (GEMINI_MODEL) — PRIMARIO del Web Creator:
+  //    es el único que responde fiable, rápido y con JSON limpio (forzado
+  //    con response_mime_type). Ling/Nemotron se cuelgan hasta el timeout con
+  //    generaciones largas (16K tokens) y hacen que el request exceda el
+  //    límite de 100s de Cloudflare (HTTP 524). Gemini va ANTES que ellos
+  //    para que la página salga en ~30-40s.
+  try {
+    console.log(`[AI WebCreator] Intentando Google Gemini (${GEMINI_MODEL})...`);
+    const response = await callGemini25Flash(messages, 60000, maxTokens);
+    console.log('[AI WebCreator] ✅ Gemini respondió correctamente');
+    return response;
+  } catch (error) {
+    console.warn('[AI WebCreator] Gemini falló:', error);
   }
 
-  // 2. Ling 3.0 Flash via OpenRouter — proveedor distinto a Google, inmune al
-  //     pool rate-limit de Google AI Studio
+  // 3. Ling 3.0 Flash via OpenRouter — proveedor distinto a Google, inmune al
+  //     pool rate-limit de Google AI Studio. Timeout corto: con 16K tokens
+  //     tiende a colgarse y no merece quemar el presupuesto del proxy.
   try {
     console.log('[AI WebCreator] Fallback a dots-studio/dots-3-note-preview:free...');
-    const response = await withBreaker('dots-studio/dots-3-note-preview:free', () => callDotsStudioFree(messages, 60000, maxTokens));
+    const response = await withBreaker('dots-studio/dots-3-note-preview:free', () => callDotsStudioFree(messages, 30000, maxTokens));
     console.log('[AI WebCreator] ✅ Ling 3.0 Flash respondió correctamente');
     return response;
   } catch (error) {
     if (!(error as any)?.circuitOpen) console.warn('[AI WebCreator] Ling 3.0 Flash falló:', error);
   }
 
-  // 3+4. Gemma 4 (31b → 26b) via OpenRouter — con atajo ante 429 del pool
+  // 4+5. Gemma 4 (31b → 26b) via OpenRouter — con atajo ante 429 del pool
   //       compartido de Google
   {
-    const gemmaResponse = await withBreaker('google/gemma-4-chain', () => callGoogleGemmaChain(messages, 60000, undefined, maxTokens)).catch((e) => {
+    const gemmaResponse = await withBreaker('google/gemma-4-chain', () => callGoogleGemmaChain(messages, 30000, undefined, maxTokens)).catch((e) => {
       if (!e?.circuitOpen) console.warn('[AI WebCreator] Gemma 4 falló:', e);
       return null;
     });
@@ -432,26 +437,32 @@ export async function callWebCreatorWithFallback(
     }
   }
 
-  // 5. Nemotron 3 Ultra free (NVIDIA) via OpenRouter
+  // 6. Nemotron 3 Ultra free (NVIDIA) via OpenRouter
   try {
     console.log('[AI WebCreator] Fallback a nvidia/nemotron-3-ultra-550b-a55b:free...');
-    const response = await withBreaker('nvidia/nemotron-3-ultra-550b-a55b:free', () => callNemotron3UltraFree(messages, 60000, maxTokens));
+    const response = await withBreaker('nvidia/nemotron-3-ultra-550b-a55b:free', () => callNemotron3UltraFree(messages, 30000, maxTokens));
     console.log('[AI WebCreator] ✅ Nemotron 3 Ultra respondió correctamente');
     return response;
   } catch (error) {
     if (!(error as any)?.circuitOpen) console.warn('[AI WebCreator] Nemotron 3 Ultra falló:', error);
   }
 
-  // 6. Fallback final: Google Gemini directo (GEMINI_MODEL)
-  try {
-    console.log(`[AI WebCreator] Fallback final a Google Gemini (${GEMINI_MODEL})...`);
-    const response = await callGemini25Flash(messages, 30000, maxTokens);
-    console.log('[AI WebCreator] ✅ Gemini respondió correctamente');
-    return response;
-  } catch (error) {
-    console.error('[AI WebCreator] ❌ Todos los modelos fallaron:', error);
-    throw error;
+  // 7. Último recurso: DeepSeek V4 Flash directo (suele estar sin saldo/402,
+  //    por eso va al final en Web Creator — si devuelve 402 se lanza el error
+  //    y el reintento compacto tomará el relevo)
+  if (isDeepSeekEnabled()) {
+    try {
+      console.log('[AI WebCreator] Último recurso: DeepSeek V4 Flash (API directa)...');
+      const response = await withBreaker('deepseek-chat', () => callDeepSeekV4FlashDirect(messages, undefined, 45000, maxTokens));
+      console.log('[AI WebCreator] ✅ DeepSeek V4 Flash respondió correctamente');
+      return response;
+    } catch (error) {
+      if (!(error as any)?.circuitOpen) console.warn('[AI WebCreator] DeepSeek V4 Flash falló:', error);
+    }
   }
+
+  console.error('[AI WebCreator] ❌ Todos los modelos fallaron');
+  throw new Error('Todos los modelos de Web Creator fallaron');
 }
 
 /**
