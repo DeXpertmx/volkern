@@ -150,7 +150,7 @@ Responde ÚNICAMENTE con un JSON array, sin markdown:
       { role: 'user', content: message },
     ]
 
-    const response = await callAssistantWithFallback(messages, 10000)
+    const response = await callAssistantWithFallback(messages, 5000)
     const content = response.choices?.[0]?.message?.content || ''
 
     // Extraer JSON array
