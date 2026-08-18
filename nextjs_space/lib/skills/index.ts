@@ -97,6 +97,25 @@ const findLeadByEmailWrapper = async (input: { email?: string; nombre?: string; 
 };
 
 /**
+ * Compone el cuerpo de un email enviado desde el chatbot: el mensaje + una
+ * firma con el nombre del remitente, su título y (si está activo su booking)
+ * el link de calendario para que el cliente agende la próxima reunión.
+ */
+export function buildEmailBody(opts: {
+  contenido: string;
+  firmaNombre: string;
+  bookingTitle?: string | null;
+  tenantNombre?: string | null;
+  bookingUrl?: string | null;
+}): string {
+  const lineas = ['—', opts.firmaNombre];
+  if (opts.bookingTitle) lineas.push(opts.bookingTitle);
+  if (opts.tenantNombre && opts.tenantNombre !== opts.firmaNombre) lineas.push(opts.tenantNombre);
+  if (opts.bookingUrl) lineas.push('', `📅 Agenda una reunión conmigo: ${opts.bookingUrl}`);
+  return `${opts.contenido}\n\n${lineas.join('\n')}`;
+}
+
+/**
  * Wrapper send_message: el core exige conversationId del hub, pero desde
  * Telegram/WhatsApp el usuario pide "envía un email/mensaje a X" sin
  * conversación. Resuelve el destinatario (lead o contacto por email/nombre),
@@ -190,11 +209,43 @@ const sendMessageWrapper = async (input: {
   }
 
   // 4. Enviar por el canal real
+  const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { nombre: true } });
+  let textoEnviado = contenido;
+
   if (channel === 'email') {
-    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { nombre: true } });
-    const subject = `Mensaje de ${tenant?.nombre || 'tu asesor'}`;
+    // Resolver el remitente (quien dio la orden) para la firma y el link de su
+    // calendario. En Telegram userId es el id de la conversación, no un User,
+    // así que se cae al primer admin del tenant.
+    let sender: any = null;
+    if (userId) {
+      sender = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, name: true, bookingEnabled: true, bookingSlug: true, bookingTitle: true },
+      }).catch(() => null);
+    }
+    if (!sender) {
+      sender = await prisma.user.findFirst({
+        where: { tenantId, role: { nombre: 'ADMIN' } },
+        select: { id: true, name: true, bookingEnabled: true, bookingSlug: true, bookingTitle: true },
+      });
+    }
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://volkern.app';
+    const bookingUrl = sender?.bookingEnabled && sender?.bookingSlug
+      ? `${appUrl}/booking/${sender.bookingSlug}`
+      : null;
+    const firmaNombre = sender?.name || tenant?.nombre || 'tu asesor';
+    textoEnviado = buildEmailBody({
+      contenido,
+      firmaNombre,
+      bookingTitle: sender?.bookingTitle,
+      tenantNombre: tenant?.nombre,
+      bookingUrl,
+    });
+
+    const subject = `Mensaje de ${firmaNombre}`;
     const { sendEmail } = await import('@/lib/ses-email');
-    const result = await sendEmail({ to: destinatarioEmail, subject, text: contenido, tenantId });
+    const result = await sendEmail({ to: destinatarioEmail, subject, text: textoEnviado, tenantId });
     if (!result?.success) {
       throw new Error(`No se pudo enviar el email: ${result?.error || 'error desconocido'}`);
     }
@@ -242,7 +293,7 @@ const sendMessageWrapper = async (input: {
       await conversationSkills.sendMessage({
         tenantId,
         conversationId: conversation.id,
-        contenido,
+        contenido: textoEnviado,
         canal: channel,
         direccion: 'salida',
         userId,
@@ -255,7 +306,7 @@ const sendMessageWrapper = async (input: {
   }
 
   const canalLabel = channel === 'email' ? 'Email' : 'WhatsApp';
-  const recorte = contenido.length > 120 ? contenido.substring(0, 120) + '…' : contenido;
+  const recorte = textoEnviado.length > 120 ? textoEnviado.substring(0, 120) + '…' : textoEnviado;
   return {
     ok: true,
     channel,
