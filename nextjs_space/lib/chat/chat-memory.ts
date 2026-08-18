@@ -86,6 +86,26 @@ export function filterClickedQuickReplies(
 
 const MAX_HISTORY = 30
 
+// Límites del contexto persistido: los facts son aditivos (datos del
+// contacto, preferencias) pero se acumulaban sin control porque cada
+// addFact reescribía el array completo y updateContext lo concatenaba →
+// duplicación exponencial. Se deduplican y se acotan a los N más recientes.
+const MAX_FACTS = 60
+const MAX_FACT_LENGTH = 400
+
+function dedupeAndCapFacts(facts: string[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const f of facts) {
+    const norm = (f || '').trim().slice(0, MAX_FACT_LENGTH)
+    if (norm && !seen.has(norm)) {
+      seen.add(norm)
+      out.push(norm)
+    }
+  }
+  return out.slice(-MAX_FACTS)
+}
+
 export class ChatMemoryService {
   constructor(private tenantId: string) {}
 
@@ -215,10 +235,12 @@ export class ChatMemoryService {
             collectedEntities: updates.collectedEntities !== undefined
               ? updates.collectedEntities
               : (current.collectedEntities || {}),
-            facts: [
+            // facts: merge con deduplicación + tope. addFact pasa el array
+            // completo, así que el append simple duplicaba todo en cada turno.
+            facts: dedupeAndCapFacts([
               ...(current.facts || []),
               ...(updates.facts || []),
-            ],
+            ]),
           },
         },
       },
