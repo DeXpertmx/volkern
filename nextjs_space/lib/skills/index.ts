@@ -97,6 +97,175 @@ const findLeadByEmailWrapper = async (input: { email?: string; nombre?: string; 
 };
 
 /**
+ * Wrapper send_message: el core exige conversationId del hub, pero desde
+ * Telegram/WhatsApp el usuario pide "envía un email/mensaje a X" sin
+ * conversación. Resuelve el destinatario (lead o contacto por email/nombre),
+ * elige el canal, envía de verdad (email vía SMTP del tenant → Resend, o
+ * WhatsApp vía Evolution) y registra la conversación + mensaje en el hub.
+ */
+const sendMessageWrapper = async (input: {
+  tenantId: string;
+  conversationId?: string;
+  email?: string;
+  nombre?: string;
+  mensaje?: string;
+  contenido?: string;
+  canal?: string;
+  userId?: string;
+  sessionId?: string;
+}) => {
+  const { tenantId, conversationId, email, nombre, canal, userId } = input;
+  const contenido = (input.mensaje || input.contenido || '').trim();
+
+  if (!tenantId) throw new Error('tenantId es requerido');
+  if (!contenido) throw new Error('No tengo el contenido del mensaje. ¿Qué quieres decirle?');
+
+  // Flujo del hub/app: si ya hay conversación, delegar al core tal cual.
+  if (conversationId) {
+    return conversationSkills.sendMessage({
+      tenantId,
+      conversationId,
+      contenido,
+      canal: canal || 'telegram',
+      direccion: 'salida',
+      userId,
+      source: 'webhook',
+    });
+  }
+
+  const { prisma } = await import('@/lib/db');
+
+  // 2. Resolver destinatario en el CRM (lead primero, luego contacto).
+  //    El email puede venir vacío o con ruido; solo se usa si parece email.
+  const emailLimpio = typeof email === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+    ? email.trim().toLowerCase()
+    : null;
+
+  let lead: any = null;
+  let contact: any = null;
+  if (emailLimpio) {
+    lead = await contactSkills.findLeadByEmail(emailLimpio, tenantId);
+    if (!lead) contact = await contactSkills.findContactByEmail(emailLimpio, tenantId);
+  }
+  if (!lead && !contact && nombre) {
+    lead = await prisma.lead.findFirst({
+      where: { tenantId, nombre: { contains: nombre, mode: 'insensitive' } },
+    });
+    if (!lead) {
+      contact = await prisma.contact.findFirst({
+        where: { tenantId, nombre: { contains: nombre, mode: 'insensitive' } },
+      });
+    }
+  }
+
+  if (!lead && !contact) {
+    const ref = nombre ? `"${nombre}"` : emailLimpio ? `con el email ${emailLimpio}` : 'esa persona';
+    throw new Error(
+      `No encontré a ${ref} en tu CRM. Pásame su email real (por ejemplo: persona@empresa.com) o regístralo(a) primero.`
+    );
+  }
+
+  const destinatarioNombre = lead?.nombre || contact?.nombre || nombre || 'el contacto';
+  const destinatarioEmail = lead?.email || contact?.email || emailLimpio;
+  const destinatarioTelefono = lead?.telefono || contact?.telefono;
+
+  // 3. Elegir canal: explícito → inferido por contenido → email si hay email,
+  //    si no WhatsApp.
+  const canalLower = (canal || '').toLowerCase();
+  let channel: 'email' | 'whatsapp' = 'email';
+  if (canalLower.includes('whatsapp') || canalLower === 'wa') channel = 'whatsapp';
+  else if (canalLower.includes('email') || canalLower.includes('correo')) channel = 'email';
+  else if (!destinatarioEmail && destinatarioTelefono) channel = 'whatsapp';
+
+  if (channel === 'email' && !destinatarioEmail) {
+    throw new Error(
+      `No encontré el email de ${destinatarioNombre} en tu CRM${destinatarioTelefono ? ' (sí tiene teléfono)' : ''}. ` +
+      `Registra su email o dime que lo envíe por WhatsApp.`
+    );
+  }
+  if (channel === 'whatsapp' && !destinatarioTelefono) {
+    throw new Error(
+      `No encontré el teléfono de ${destinatarioNombre} en tu CRM. Registra su teléfono o dime su email para enviarle un correo.`
+    );
+  }
+
+  // 4. Enviar por el canal real
+  if (channel === 'email') {
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { nombre: true } });
+    const subject = `Mensaje de ${tenant?.nombre || 'tu asesor'}`;
+    const { sendEmail } = await import('@/lib/ses-email');
+    const result = await sendEmail({ to: destinatarioEmail, subject, text: contenido, tenantId });
+    if (!result?.success) {
+      throw new Error(`No se pudo enviar el email: ${result?.error || 'error desconocido'}`);
+    }
+  } else {
+    const { sendWhatsAppMessage } = await import('@/lib/whatsapp');
+    try {
+      await sendWhatsAppMessage(destinatarioTelefono, contenido, tenantId);
+    } catch (e: any) {
+      throw new Error(`No se pudo enviar el WhatsApp: ${e?.message || 'error desconocido'}`);
+    }
+  }
+
+  // 5. Registrar la conversación + mensaje en el hub (timeline). Si falla el
+  //    registro, no se bloquea la respuesta: el envío ya ocurrió.
+  try {
+    let conversation: any = null;
+    if (lead) {
+      conversation = await conversationSkills.getOrCreateConversation({
+        tenantId,
+        leadId: lead.id,
+        canal: channel,
+        contactoNombre: destinatarioNombre,
+        contactoEmail: destinatarioEmail || undefined,
+        contactoTelefono: destinatarioTelefono || undefined,
+        userId,
+        source: 'webhook',
+      });
+    } else {
+      conversation = await prisma.conversation.findFirst({
+        where: { tenantId, contactoEmail: destinatarioEmail, canal: channel, estado: 'abierta' },
+      });
+      if (!conversation) {
+        conversation = await conversationSkills.createConversation({
+          tenantId,
+          canal: channel,
+          contactoNombre: destinatarioNombre,
+          contactoEmail: destinatarioEmail || undefined,
+          contactoTelefono: destinatarioTelefono || undefined,
+          userId,
+          source: 'webhook',
+        });
+      }
+    }
+    if (conversation) {
+      await conversationSkills.sendMessage({
+        tenantId,
+        conversationId: conversation.id,
+        contenido,
+        canal: channel,
+        direccion: 'salida',
+        userId,
+        source: 'webhook',
+        metadatos: { via: 'telegram' },
+      });
+    }
+  } catch (e) {
+    console.warn('[sendMessageWrapper] Envío OK pero no se pudo registrar en el hub:', e);
+  }
+
+  const canalLabel = channel === 'email' ? 'Email' : 'WhatsApp';
+  const recorte = contenido.length > 120 ? contenido.substring(0, 120) + '…' : contenido;
+  return {
+    ok: true,
+    channel,
+    destinatario: destinatarioNombre,
+    destinatarioEmail: destinatarioEmail || destinatarioTelefono || '',
+    message: `✅ ${canalLabel} enviado a ${destinatarioNombre}${destinatarioEmail ? ` (${destinatarioEmail})` : ''}:\n"${recorte}"`,
+  };
+};
+
+/**
  * Wrapper convert_lead: el skill core exige leadId, pero el orquestador solo
  * pasa email/nombre desde el chatbot. Resuelve el lead (por email exacto o por
  * nombre insensible a mayúsculas) y evita reconvertir leads ya convertidos.
@@ -2973,7 +3142,7 @@ export const skills = {
   create_conversation: conversationSkills.createConversation,
   get_conversation: getConversationWrapper,
   get_or_create_conversation: conversationSkills.getOrCreateConversation,
-  send_message: conversationSkills.sendMessage,
+  send_message: sendMessageWrapper,
   close_conversation: conversationSkills.closeConversation,
   
   // Tareas

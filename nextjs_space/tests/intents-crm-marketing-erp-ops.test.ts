@@ -106,15 +106,15 @@ describe('crmIntents', () => {
     expect(i.requiredParams).toEqual([]);
   });
 
-  it('cancelar_cita debe ser destructive=true', () => {
+  it('cancelar_cita debe ser destructive=false (cancelar ≠ borrar)', () => {
     const i = crmIntents.find(x => x.name === 'cancelar_cita')!;
-    expect(i.destructive).toBe(true);
+    expect(i.destructive).toBe(false);
     expect(i.requiredParams).toContain('nombre');
   });
 
-  it('reagendar_cita debe ser destructive=true', () => {
+  it('reagendar_cita debe ser destructive=false (cancelar ≠ borrar)', () => {
     const i = crmIntents.find(x => x.name === 'reagendar_cita')!;
-    expect(i.destructive).toBe(true);
+    expect(i.destructive).toBe(false);
   });
 
   it('debe incluir confirmar_cita', () => {
@@ -129,10 +129,12 @@ describe('crmIntents', () => {
   });
 
   // ── Conversaciones & Mensajes ──
-  it('debe incluir enviar_mensaje', () => {
+  it('debe incluir enviar_mensaje (mensaje requerido; email/nombre/canal opcionales)', () => {
     const i = crmIntents.find(x => x.name === 'enviar_mensaje')!;
-    expect(i.requiredParams).toContain('email');
     expect(i.requiredParams).toContain('mensaje');
+    expect(i.optionalParams).toContain('email');
+    expect(i.optionalParams).toContain('nombre');
+    expect(i.optionalParams).toContain('canal');
   });
 
   it('debe incluir enviar_mensaje_interno', () => {
@@ -205,10 +207,10 @@ describe('crmIntents', () => {
     expect(i.requiredParams).toContain('email');
   });
 
-  // ── Edge: no destructive intents beyond what's allowed ──
-  it('solo cancelar_cita y reagendar_cita deben ser destructive=true', () => {
+  // ── Edge: cancelar/reagendar dejan rastro, no son destructivos ──
+  it('ningún intent de citas debe ser destructive (cancelar ≠ borrar)', () => {
     const destructive = crmIntents.filter(i => i.destructive).map(i => i.name);
-    expect(destructive).toEqual(['cancelar_cita', 'reagendar_cita']);
+    expect(destructive).toEqual([]);
   });
 });
 
@@ -316,9 +318,9 @@ describe('erpIntents', () => {
     expect(i.requiredParams).toEqual([]);
   });
 
-  it('solo ajustar_stock, consumir_inventario y verificar_mermas deben ser destructive', () => {
+  it('solo ajustar_stock y consumir_inventario deben ser destructive (verificar_mermas es trazabilidad)', () => {
     const destructive = erpIntents.filter(i => i.destructive).map(i => i.name);
-    expect(destructive).toEqual(['ajustar_stock', 'consumir_inventario', 'verificar_mermas']);
+    expect(destructive).toEqual(['ajustar_stock', 'consumir_inventario']);
   });
 });
 

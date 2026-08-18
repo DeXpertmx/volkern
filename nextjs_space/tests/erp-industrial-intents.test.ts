@@ -124,7 +124,7 @@ describe('erp-intents — industrial', () => {
     expect(merma.requiredParams).toContain('ordenProduccionId');
     expect(qc.requiredParams).toContain('resultado');
     expect(rent.requiredParams).toContain('proyectoId');
-    expect(merma.destructive).toBe(true);
+    expect(merma.destructive).toBe(false); // trazabilidad, no destruye
     expect(qc.destructive).toBe(false);
   });
 });

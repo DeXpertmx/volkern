@@ -6,6 +6,22 @@ vi.mock('@/lib/db', () => ({ prisma: {} }));
 import { ExecutionEngine } from '@/lib/agents/execution-engine';
 
 describe('ExecutionEngine.formatSkillResult — Ventas (listados y búsqueda)', () => {
+  it('send_message muestra la confirmación amigable del envío', () => {
+    const msg = ExecutionEngine.formatSkillResult('send_message', {
+      ok: true,
+      channel: 'email',
+      destinatario: 'Alejandra Velázquez',
+      destinatarioEmail: 'alejandra@test.com',
+      message: '✅ Email enviado a Alejandra Velázquez (alejandra@test.com):\n"Gracias por la reunión"',
+    });
+    expect(msg).toContain('Email enviado');
+    expect(msg).toContain('Alejandra Velázquez');
+  });
+
+  it('send_message con string usa el texto directo', () => {
+    expect(ExecutionEngine.formatSkillResult('send_message', '✅ WhatsApp enviado')).toBe('✅ WhatsApp enviado');
+  });
+
   it('find_lead_by_email muestra los datos del lead encontrado', () => {
     const msg = ExecutionEngine.formatSkillResult('find_lead_by_email', {
       nombre: 'Juan Pérez',
