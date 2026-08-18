@@ -66,7 +66,12 @@ export function AIGeneratorModal({ isOpen, onClose, onGenerate }: AIGeneratorMod
       })
 
       if (!response.ok) {
-        throw new Error("No se pudo generar la página")
+        let msg = "No se pudo generar la página"
+        try {
+          const err = await response.json()
+          msg = err.error || msg
+        } catch { /* cuerpo no JSON */ }
+        throw new Error(msg)
       }
 
       const data = await response.json()
