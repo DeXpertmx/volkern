@@ -352,7 +352,19 @@ export default function AutomationBuilderPage() {
         })
       }
 
-      if (!response.ok) throw new Error('Error al guardar')
+      if (!response.ok) {
+        // Mostrar el motivo real del servidor (ej. límite de plan alcanzado)
+        let detail = 'Error al guardar'
+        try {
+          const errBody = await response.json()
+          detail = errBody.message || errBody.error || detail
+          if (errBody.code === 'LIMIT_REACHED' && errBody.details) {
+            const { current, max } = errBody.details
+            detail = `${detail} (${current}/${max})`
+          }
+        } catch { /* cuerpo no JSON */ }
+        throw new Error(detail)
+      }
 
       const savedAutomation = await response.json()
       toast.success('Automatización guardada correctamente')
@@ -364,7 +376,8 @@ export default function AutomationBuilderPage() {
       }
     } catch (error) {
       console.error('Error:', error)
-      toast.error('Error al guardar automatización')
+      const msg = error instanceof Error && error.message ? error.message : 'Error al guardar automatización'
+      toast.error(msg)
     } finally {
       setSaving(false)
     }
