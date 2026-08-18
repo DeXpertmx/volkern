@@ -10,14 +10,28 @@
 
 | Bot | Rol | Quién lo usa | Qué recibe |
 |---|---|---|---|
-| **`volkerncrm_bot`** (ID `8657932328`, "Volkern System") | **Bot general del SISTEMA** | El desarrollador / admin de la plataforma | Notificaciones de deploy, alertas de errores del sistema, reportes de problemas. Es el `TELEGRAM_BOT_TOKEN` del entorno y el fallback del webhook. |
-| **Bot del tenant** (uno por tenant, conectado en su integración de Telegram) | **Bot del CHATBOT** | Los usuarios de ese tenant | Conversación con Volkern: registrar gastos, agendar citas, consultar leads, etc. Cada tenant usa el suyo. |
+| **`volkerncrm_bot`** (ID `8657932328`, "Volkern System") | **Bot general del SISTEMA** | El desarrollador / admin de la plataforma | **Solo avisos del sistema**: notificaciones de deploy, alertas de errores de la plataforma, reportes de problemas. Es el `TELEGRAM_BOT_TOKEN` del entorno y el fallback del webhook. **Nunca** recibe conversación del chatbot ni avisos de datos de ningún tenant. |
+| **Bot del tenant** (uno por tenant, conectado en su integración de Telegram) | **Bot del CHATBOT + avisos de ese tenant** | Los usuarios de ese tenant | Conversación con Volkern (registrar gastos, agendar citas, consultar leads…) **y todos los avisos de los datos de SU tenant**: confirmaciones destructivas, citas, cotizaciones aceptadas, firmas de contratos, entregas de WhatsApp no entregables, alertas de stock/visión, tareas de seguimiento, etc. Cada tenant usa el suyo y **solo recibe lo suyo**. |
 
 **Regla de oro**: el entrenamiento de la IA (los bloques de intents) es del
 **motor**, no del bot. Un intent entrenado una vez funciona para cualquier
 tenant que conecte su bot. `volkerncrm_bot` se usa para probar el entrenamiento
 porque es el bot del desarrollador, pero **no** es "el bot del chatbot": es el
 bot del sistema.
+
+### Ámbito de las notificaciones (sistema vs tenant)
+
+| Aviso | Bot correcto | Ámbito |
+|---|---|---|
+| Deploy terminado / fallido, error de la plataforma, reporte de problema | `volkerncrm_bot` | **Sistema** (global, solo desarrollador) |
+| Respuesta del chatbot, confirmación sí/no de acción destructiva | Bot del tenant | **Tenant** |
+| Cita agendada/cancelada, cotización aceptada, contrato firmado | Bot del tenant | **Tenant** |
+| WhatsApp no entregable, tarea de seguimiento, alerta de stock/VISION-LOCK | Bot del tenant | **Tenant** |
+| Cualquier aviso que mencione datos de un tenant (leads, gastos, facturas…) | Bot del tenant | **Tenant** |
+
+Regla: **un aviso que hable de datos de un tenant va por el bot de ese tenant**.
+`volkerncrm_bot` solo recibe lo que es del sistema/plataforma, sin datos de
+clientes.
 
 ## 2. Cómo resuelve el webhook a qué tenant pertenece el mensaje
 
@@ -31,7 +45,9 @@ bot del sistema.
 4. Si nada matchea, cae al `TELEGRAM_BOT_TOKEN` del entorno (bot del sistema).
 
 Por eso cada tenant conecta **su propio bot** en Configuración → Integraciones:
-los mensajes de sus usuarios se resuelven contra los datos de ese tenant.
+los mensajes de sus usuarios se resuelven contra los datos de ese tenant, y
+las respuestas y avisos salen por el `bot_token` de **ese** tenant (nunca por
+el bot del sistema).
 
 ## 3. Entrenamiento (cómo se agrega una capacidad nueva)
 
@@ -141,5 +157,6 @@ ssh -i ~/.ssh/id_buffy_volkern root@62.171.134.195 \
 ```
 
 Un intent correcto aparece como `Ruta determinista: <intent>` (sin LLM) y
-`skill=<intent> OK en <ms>`. La respuesta sale por el bot que tiene la
-conversación abierta (hoy `volkerncrm_bot` → chat `646107192`).
+`skill=<intent> OK en <ms>`. La respuesta sale por **el bot del tenant** que
+tiene la conversación abierta (el `bot_token` de su integración), no por
+`volkerncrm_bot`.
