@@ -74,6 +74,64 @@ ESTRUCTURA JSON REQUERIDA (Responde ÚNICAMENTE con este formato JSON):
 
 Responde ÚNICAMENTE con el objeto JSON válido.`;
 
+/**
+ * Extrae un objeto/array JSON válido del contenido devuelto por la IA,
+ * tolerando: bloques de código markdown (```json ... ```), texto antes o
+ * después del JSON, y basura alrededor. Devuelve null si no hay JSON válido.
+ *
+ * NUNCA devolver una plantilla hardcodeada: si la IA falla, mejor un error
+ * claro que una página inventada que ignore el prompt del usuario.
+ */
+export function extractJsonFromContent(content: string): any | null {
+  if (!content) return null;
+
+  let cleaned = content.trim();
+
+  // Quitar fences de markdown (```json, ``` o ``` con lenguaje) en su propia línea
+  cleaned = cleaned.replace(/^\s*```[a-zA-Z]*\s*$/gim, '').trim();
+  // Quitar fences pegados al inicio/final del contenido
+  cleaned = cleaned.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
+
+  // 1. Intento directo
+  try {
+    return JSON.parse(cleaned);
+  } catch {}
+
+  // 2. Extraer el primer bloque {…} o […] balanceado (respeta strings)
+  const firstOpen = cleaned.search(/[{\[]/);
+  if (firstOpen === -1) return null;
+
+  const openChar = cleaned[firstOpen];
+  const closeChar = openChar === '{' ? '}' : ']';
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+
+  for (let i = firstOpen; i < cleaned.length; i++) {
+    const ch = cleaned[i];
+    if (inString) {
+      if (escape) escape = false;
+      else if (ch === '\\') escape = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') { inString = true; continue; }
+    if (ch === openChar) depth++;
+    else if (ch === closeChar) {
+      depth--;
+      if (depth === 0) {
+        const candidate = cleaned.substring(firstOpen, i + 1);
+        try {
+          return JSON.parse(candidate);
+        } catch {
+          return null;
+        }
+      }
+    }
+  }
+  return null;
+}
+
 export async function POST(req: Request) {
   console.log('[MiniMax AI] Nueva petición de generación de página');
 
@@ -122,213 +180,41 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'La IA no devolvió contenido' }, { status: 500 });
     }
 
-    let projectData: any;
-    let parseError: Error | null = null;
-    
-    try {
-      projectData = JSON.parse(content);
-    } catch (e) {
-      parseError = e as Error;
-    }
-    
-    if (!projectData && parseError) {
-      console.warn('[MiniMax AI] JSON inválido, intentando reparar...', parseError.message);
-      let cleaned = content.trim();
-      cleaned = cleaned.replace(/```json\n?/i, '').replace(/```\n?$/i, '').trim();
-      if (!cleaned.startsWith('{') && !cleaned.startsWith('[')) {
-        const match = cleaned.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
-        if (match) cleaned = match[0];
-      }
-      
-      let fixed = cleaned;
-      let isValid = false;
-      
-      for (let i = fixed.length; i > 0; i--) {
-        try {
-          const substr = fixed.substring(0, i);
-          JSON.parse(substr);
-          fixed = substr;
-          isValid = true;
-          console.log('[MiniMax AI] ✅ JSON reparado usando prefijo válido');
-          break;
-        } catch {}
-      }
-      
-      if (!isValid) {
-        const openBraces = (fixed.match(/\{/g) || []).length;
-        const closeBraces = (fixed.match(/\}/g) || []).length;
-        const openBrackets = (fixed.match(/\[/g) || []).length;
-        const closeBrackets = (fixed.match(/\}/g) || []).length; // error tipográfico original
-        
-        for (let i = 0; i < openBraces - closeBraces; i++) fixed += '}';
-        for (let i = 0; i < openBrackets - closeBrackets; i++) fixed += ']';
-        
-        const lastCompleteProp = fixed.lastIndexOf(',');
-        if (lastCompleteProp > 0) {
-          const check = fixed.substring(0, lastCompleteProp);
-          try {
-            JSON.parse(check);
-            fixed = check;
-          } catch {}
-        }
-        
-        try {
-          projectData = JSON.parse(fixed);
-          console.log('[MiniMax AI] ✅ JSON reparado con estrategia de cierre');
-        } catch {}
+    // 1. Parseo directo + extracción robusta del JSON (tolera bloques de
+    //    código markdown y texto alrededor). NUNCA caer en plantillas
+    //    hardcodeadas que ignoren el prompt del usuario.
+    let projectData = extractJsonFromContent(content);
+
+    // 2. Si no se obtuvo un JSON válido, reintentar UNA vez con instrucción
+    //    reforzada de formato (la causa típica es el modelo devolviendo el
+    //    JSON envuelto en ``` o con texto extra).
+    if (!projectData || !projectData.pages) {
+      console.warn('[MiniMax AI] JSON inválido. Reintentando con instrucción reforzada...');
+      const reinforcedSystem = SYSTEM_PROMPT
+        + '\n\nINSTRUCCIÓN CRÍTICA DE FORMATO: Responde ÚNICAMENTE con el objeto JSON.'
+        + ' NO uses bloques de código markdown (sin ```json ni ```).'
+        + ' NO añadas texto, comentarios ni explicaciones antes o después del JSON.'
+        + '\n\nESTILO: ' + currentStyle.name + ' (' + currentStyle.primary + ')';
+      const retryMessages: OpenRouterMessage[] = [
+        { role: 'system', content: reinforcedSystem },
+        { role: 'user', content: `Genera landing page para: ${prompt}. Estilo: ${currentStyle.name}. Responde SOLO JSON.` }
+      ];
+      const retryResponse = await callWebCreatorWithFallback(retryMessages);
+      const retryContent = retryResponse?.choices?.[0]?.message?.content;
+      if (retryContent) {
+        console.log('[MiniMax AI] Reintento recibido, longitud:', retryContent.length);
+        projectData = extractJsonFromContent(retryContent);
       }
     }
 
-    // Si falló el parsing o no se obtuvo un JSON válido estructurado
-    if (!projectData || !projectData.pages) {
-      console.warn('[MiniMax AI] Generando landing page profesional automática');
-      const pageTitle = prompt.substring(0, 60) || 'Tu Negocio';
-      projectData = {
-        pages: [{
-          frames: [{
-            component: {
-              type: "wrapper",
-              components: [
-                {
-                  tagName: "div",
-                  classes: ["min-h-screen", "bg-slate-950", "text-white"],
-                  attributes: { style: "font-family: system-ui, -apple-system, sans-serif;" },
-                  components: [
-                    {
-                      tagName: "header",
-                      classes: ["py-6", "px-8", "flex", "justify-between", "items-center", "border-b", "border-slate-800", "bg-slate-900/50", "backdrop-blur-md"],
-                      components: [
-                        { tagName: "div", classes: ["text-2xl", "font-extrabold", "tracking-wider", "text-transparent", "bg-clip-text", "bg-gradient-to-r", "from-purple-400", "to-indigo-400"], content: pageTitle },
-                        { tagName: "button", classes: ["bg-purple-600", "hover:bg-purple-505", "text-white", "font-bold", "px-5", "py-2.5", "rounded-xl", "transition-all"], content: "Contáctanos" }
-                      ]
-                    },
-                    {
-                      tagName: "section",
-                      classes: ["py-24", "px-6", "text-center", "relative", "overflow-hidden", "bg-gradient-to-b", "from-slate-900", "to-slate-950"],
-                      components: [
-                        { tagName: "span", classes: ["inline-flex", "items-center", "gap-1.5", "bg-purple-500/10", "border", "border-purple-500/30", "text-purple-400", "text-xs", "font-semibold", "px-4", "py-1.5", "rounded-full", "mb-6"], content: "PROYECTO DE LUJO" },
-                        { tagName: "h1", classes: ["text-5xl", "md:text-6xl", "font-extrabold", "tracking-tight", "mb-6", "bg-clip-text", "text-transparent", "bg-gradient-to-r", "from-white", "via-slate-100", "to-slate-400"], content: pageTitle },
-                        { tagName: "p", classes: ["text-lg", "md:text-xl", "text-slate-400", "max-w-2xl", "mx-auto", "mb-10", "leading-relaxed"], content: "Un desarrollo inmobiliario exclusivo que redefine el lujo caribeño. Descubre un santuario privado rodeado de selva exótica y playas de arena blanca." },
-                        {
-                          tagName: "div",
-                          classes: ["flex", "flex-wrap", "justify-center", "gap-4"],
-                          components: [
-                            { tagName: "button", classes: ["bg-purple-600", "hover:bg-purple-500", "text-white", "font-bold", "px-8", "py-4", "rounded-xl", "shadow-lg", "shadow-purple-500/20", "transition-all"], content: "Registrar Interés" },
-                            { tagName: "button", classes: ["bg-slate-800", "hover:bg-slate-700", "text-slate-300", "font-semibold", "px-8", "py-4", "rounded-xl", "transition-all"], content: "Ver Galería" }
-                          ]
-                        }
-                      ]
-                    },
-                    {
-                      tagName: "section",
-                      classes: ["py-20", "px-6", "bg-slate-900"],
-                      components: [
-                        {
-                          tagName: "div",
-                          classes: ["max-w-6xl", "mx-auto"],
-                          components: [
-                            { tagName: "h2", classes: ["text-3xl", "font-bold", "text-center", "mb-4", "text-white"], content: "Amenidades Exclusivas" },
-                            { tagName: "p", classes: ["text-center", "text-slate-400", "mb-12"], content: "Diseñado para brindar el máximo confort y conexión natural." },
-                            {
-                              tagName: "div",
-                              classes: ["grid", "md:grid-cols-3", "gap-8"],
-                              components: [
-                                {
-                                  tagName: "div",
-                                  classes: ["bg-slate-955", "p-8", "rounded-2xl", "border", "border-slate-800"],
-                                  components: [
-                                    { tagName: "h3", classes: ["text-xl", "font-bold", "text-white", "mb-3"], content: "Infinity Pool" },
-                                    { tagName: "p", classes: ["text-slate-400", "leading-relaxed"], content: "Vistas panorámicas sobre el dosel de la selva maya." }
-                                  ]
-                                },
-                                {
-                                  tagName: "div",
-                                  classes: ["bg-slate-955", "p-8", "rounded-2xl", "border", "border-slate-800"],
-                                  components: [
-                                    { tagName: "h3", classes: ["text-xl", "font-bold", "text-white", "mb-3"], content: "Wellness & Spa" },
-                                    { tagName: "p", classes: ["text-slate-400", "leading-relaxed"], content: "Espacios de relajación profunda y terapias ancestrales." }
-                                  ]
-                                },
-                                {
-                                  tagName: "div",
-                                  classes: ["bg-slate-955", "p-8", "rounded-2xl", "border", "border-slate-800"],
-                                  components: [
-                                    { tagName: "h3", classes: ["text-xl", "font-bold", "text-white", "mb-3"], content: "Club de Playa" },
-                                    { tagName: "p", classes: ["text-slate-400", "leading-relaxed"], content: "Acceso VIP a las playas más cotizadas de Tulum." }
-                                  ]
-                                }
-                              ]
-                            }
-                          ]
-                        }
-                      ]
-                    },
-                    {
-                      tagName: "section",
-                      classes: ["py-20", "px-6", "bg-slate-950"],
-                      components: [
-                        {
-                          tagName: "div",
-                          classes: ["max-w-5xl", "mx-auto", "text-center"],
-                          components: [
-                            { tagName: "h2", classes: ["text-3xl", "font-bold", "mb-4"], content: "Ubicación" },
-                            { tagName: "p", classes: ["text-slate-400", "mb-8"], content: "Ubicación estratégica en Tulum." },
-                            {
-                              tagName: "div",
-                              classes: ["rounded-2xl", "overflow-hidden", "border", "border-slate-800", "shadow-2xl"],
-                              components: [
-                                {
-                                  tagName: "iframe",
-                                  attributes: {
-                                    src: "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d15024.96020584288!2d-87.47702815!3d20.2104392!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x8f4f68660e1d532b%3A0x6d3967341071286b!2sTulum%2C%20Q.R.!5e0!3m2!1ses-419!2smx!4v1678912345678!5m2!1ses-419!2smx",
-                                    width: "100%",
-                                    height: "400",
-                                    style: "border:0;"
-                                  }
-                                }
-                              ]
-                            }
-                          ]
-                        }
-                      ]
-                    },
-                    {
-                      tagName: "section",
-                      classes: ["py-20", "px-6", "bg-slate-900"],
-                      components: [
-                        {
-                          tagName: "div",
-                          classes: ["max-w-md", "mx-auto", "bg-slate-955", "p-8", "rounded-2xl", "border", "border-slate-800"],
-                          components: [
-                            { tagName: "h3", classes: ["text-2xl", "font-bold", "text-center", "mb-2"], content: "Solicitar Folleto" },
-                            { tagName: "p", classes: ["text-slate-400", "text-center", "mb-6", "text-sm"], content: "Recibe lista de precios y planos de distribución." },
-                            {
-                              tagName: "form",
-                              classes: ["flex", "flex-col", "gap-4"],
-                              components: [
-                                { tagName: "input", attributes: { type: "text", placeholder: "Nombre Completo", class: "w-full p-3 bg-slate-900 border border-slate-800 rounded-xl text-white outline-none focus:border-purple-500" } },
-                                { tagName: "input", attributes: { type: "email", placeholder: "Correo Electrónico", class: "w-full p-3 bg-slate-900 border border-slate-800 rounded-xl text-white outline-none focus:border-purple-500" } },
-                                { tagName: "button", classes: ["bg-purple-600", "hover:bg-purple-555", "text-white", "font-bold", "py-3", "rounded-xl", "transition-all"], content: "Recibir Planos" }
-                              ]
-                            }
-                          ]
-                        }
-                      ]
-                    },
-                    {
-                      tagName: "footer",
-                      classes: ["bg-slate-950", "border-t", "border-slate-800", "py-12", "px-6", "text-center", "text-slate-500"],
-                      components: [
-                        { tagName: "p", classes: ["text-sm"], content: `© ${new Date().getFullYear()} ${pageTitle}. Todos los derechos reservados.` }
-                      ]
-                    }
-                  ]
-                }
-              ]
-            }
-          }]
-        }]
-      };
+    // 3. Tras los reintentos, si seguimos sin JSON válido y estructurado,
+    //    devolver un error claro en lugar de contenido inventado.
+    if (!projectData || !projectData.pages || !projectData.pages[0]?.frames?.[0]?.component) {
+      console.error('[MiniMax AI] No se obtuvo JSON válido tras los reintentos');
+      return NextResponse.json(
+        { error: 'La IA no pudo generar la página con contenido válido. Inténtalo de nuevo en unos segundos.' },
+        { status: 502 }
+      );
     }
 
     // Inyectar overrides para Dark Mode (Elegante) si corresponde
