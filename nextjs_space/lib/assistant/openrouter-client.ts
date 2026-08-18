@@ -567,10 +567,18 @@ export async function callAssistantWithFallback(
     if (!(dotsError as any)?.circuitOpen) console.warn('[AI] Dots Studio 3 falló:', dotsError);
   }
 
-  // 3. Gemma 4 (31b → 26b) via OpenRouter — con atajo ante 429 del pool
-  //     compartido de Google (la 26b daría el mismo error y solo quemaría
-  //     el presupuesto del webhook con reintentos inútiles)
-  {
+  // En el camino caliente (timeoutMs ≤ 10s) se OMITEN los hops intermedios
+  // (Gemma y Nemotron): en producción fallan casi siempre (pool 429 de Google
+  // y timeouts de NVIDIA) y suman ~10s muertos antes de llegar a Gemini, que
+  // es el respaldo real y fiable del chatbot. La cadena caliente queda
+  // DeepSeek → Dots → Gemini. Los jobs en background (default 20s) conservan
+  // la cadena completa por resiliencia.
+  const isHotPath = typeof timeoutMs === 'number' && timeoutMs <= 10000;
+
+  // 3. Gemma 4 (31b → 26b) via OpenRouter — solo fuera del camino caliente
+  if (!isHotPath) {
+    // con atajo ante 429 del pool compartido de Google (la 26b daría el mismo
+    // error y solo quemaría el presupuesto del webhook con reintentos inútiles)
     const gemmaResponse = await withBreaker('google/gemma-4-chain', () => callGoogleGemmaChain(messages, hopTimeout)).catch((e) => {
       if (!e?.circuitOpen) console.warn('[AI] Gemma 4 falló:', e);
       return null;
@@ -581,15 +589,16 @@ export async function callAssistantWithFallback(
     }
   }
 
-  // 4. Nemotron 3 Ultra free (NVIDIA) via OpenRouter — otro proveedor no-Google
-  //     (inmune al pool 429) y de mayor calidad que Gemma dentro del tier free.
-  try {
-    console.log('[AI] Fallback a nvidia/nemotron-3-ultra-550b-a55b:free...');
-    const response = await withBreaker('nvidia/nemotron-3-ultra-550b-a55b:free', () => callNemotron3UltraFree(messages, hopTimeout));
-    console.log('[AI] ✅ Nemotron 3 Ultra respondió correctamente');
-    return response;
-  } catch (nemotronError) {
-    if (!(nemotronError as any)?.circuitOpen) console.warn('[AI] Nemotron 3 Ultra falló:', nemotronError);
+  // 4. Nemotron 3 Ultra free (NVIDIA) via OpenRouter — solo fuera del camino caliente
+  if (!isHotPath) {
+    try {
+      console.log('[AI] Fallback a nvidia/nemotron-3-ultra-550b-a55b:free...');
+      const response = await withBreaker('nvidia/nemotron-3-ultra-550b-a55b:free', () => callNemotron3UltraFree(messages, hopTimeout));
+      console.log('[AI] ✅ Nemotron 3 Ultra respondió correctamente');
+      return response;
+    } catch (nemotronError) {
+      if (!(nemotronError as any)?.circuitOpen) console.warn('[AI] Nemotron 3 Ultra falló:', nemotronError);
+    }
   }
 
   // 5. Fallback final: Google Gemini directo (GEMINI_MODEL, default
