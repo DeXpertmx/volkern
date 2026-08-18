@@ -3,6 +3,80 @@ const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_BASE_URL = 'https://api.deepseek.com/v1';
 
+// ─── Circuit breaker de la cadena de fallback ────────────────────────────────
+// DeepSeek devuelve 402 (saldo insuficiente) de forma determinista y Dots/
+// Nemotron se cuelgan hasta el timeout en el camino caliente del chatbot.
+// Sin breaker, cada consulta quema ~20s esperando fallos ya conocidos antes
+// de llegar a Gemini. El breaker recuerda qué modelos fallaron recientemente
+// y los salta durante un cooldown.
+interface BreakerState {
+  failures: number;
+  openedAt: number | null;
+  cooldownMs: number;
+}
+
+const breakerState = new Map<string, BreakerState>();
+const BREAKER_THRESHOLD = 2; // fallos consecutivos para abrir el circuito
+const BREAKER_COOLDOWN_MS = 5 * 60 * 1000; // 5 min para fallos transitorios (timeouts, 429)
+const BREAKER_COOLDOWN_402_MS = 30 * 60 * 1000; // 30 min para 402 (saldo insuficiente: no se cura solo)
+
+function isBreakerOpen(model: string): boolean {
+  const st = breakerState.get(model);
+  if (!st || st.openedAt === null) return false;
+  if (Date.now() - st.openedAt >= st.cooldownMs) {
+    // Cooldown expirado: cerrar el circuito y reintentar el modelo
+    breakerState.delete(model);
+    return false;
+  }
+  return true;
+}
+
+function markBreakerFailure(model: string, error: unknown) {
+  const st = breakerState.get(model) ?? { failures: 0, openedAt: null, cooldownMs: BREAKER_COOLDOWN_MS };
+  // Si ya está abierto, no alargar el cooldown con fallos repetidos
+  if (st.openedAt !== null) return;
+  const msg = error instanceof Error ? error.message : String(error);
+  const is402 = msg.includes('402') || msg.includes('Insufficient Balance');
+  st.failures += 1;
+  // El 402 es determinista (saldo): abre el circuito al primer fallo
+  if (is402 || st.failures >= BREAKER_THRESHOLD) {
+    st.openedAt = Date.now();
+    st.cooldownMs = is402 ? BREAKER_COOLDOWN_402_MS : BREAKER_COOLDOWN_MS;
+    console.warn(`[AI] ⛔ Circuito abierto para ${model} durante ${st.cooldownMs / 60000} min (${st.failures} fallo(s) consecutivo(s), último: ${msg.slice(0, 120)})`);
+  }
+  breakerState.set(model, st);
+}
+
+function markBreakerSuccess(model: string) {
+  breakerState.delete(model);
+}
+
+/**
+ * Ejecuta fn con circuit breaker: si el modelo está en cooldown por fallos
+ * recientes, se salta sin llamarlo (el error resultante avanza la cadena).
+ * Un acierto cierra el circuito y limpia el historial del modelo.
+ */
+export async function withBreaker<T>(model: string, fn: () => Promise<T>): Promise<T> {
+  if (isBreakerOpen(model)) {
+    const err = new Error(`circuito abierto (${model}) — saltado`);
+    (err as any).circuitOpen = true;
+    throw err;
+  }
+  try {
+    const result = await fn();
+    markBreakerSuccess(model);
+    return result;
+  } catch (err) {
+    markBreakerFailure(model, err);
+    throw err;
+  }
+}
+
+/** Solo para tests: limpia el estado del breaker. */
+export function _resetCircuitBreakerForTests() {
+  breakerState.clear();
+}
+
 export interface OpenRouterMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
@@ -302,33 +376,36 @@ async function callDeepSeekV4FlashDirect(
 export async function callWebCreatorWithFallback(
   messages: OpenRouterMessage[]
 ): Promise<OpenRouterResponse> {
-  // 1. DeepSeek V4 Flash directo
+  // 1. DeepSeek V4 Flash directo (con circuit breaker)
   try {
     console.log('[AI WebCreator] Intentando DeepSeek V4 Flash (API directa)...');
     // Generaciones largas (hasta 8K tokens): timeout amplio para no caer en
     // fallbacks espurios por latencia legítima.
-    const response = await callDeepSeekV4FlashDirect(messages, undefined, 45000);
+    const response = await withBreaker('deepseek-chat', () => callDeepSeekV4FlashDirect(messages, undefined, 45000));
     console.log('[AI WebCreator] ✅ DeepSeek V4 Flash respondió correctamente');
     return response;
   } catch (error) {
-    console.warn('[AI WebCreator] DeepSeek V4 Flash falló:', error);
+    if (!(error as any)?.circuitOpen) console.warn('[AI WebCreator] DeepSeek V4 Flash falló:', error);
   }
 
   // 2. Ling 3.0 Flash via OpenRouter — proveedor distinto a Google, inmune al
   //     pool rate-limit de Google AI Studio
   try {
     console.log('[AI WebCreator] Fallback a dots-studio/dots-3-note-preview:free...');
-    const response = await callDotsStudioFree(messages, 45000);
+    const response = await withBreaker('dots-studio/dots-3-note-preview:free', () => callDotsStudioFree(messages, 45000));
     console.log('[AI WebCreator] ✅ Ling 3.0 Flash respondió correctamente');
     return response;
   } catch (error) {
-    console.warn('[AI WebCreator] Ling 3.0 Flash falló:', error);
+    if (!(error as any)?.circuitOpen) console.warn('[AI WebCreator] Ling 3.0 Flash falló:', error);
   }
 
   // 3+4. Gemma 4 (31b → 26b) via OpenRouter — con atajo ante 429 del pool
   //       compartido de Google
   {
-    const gemmaResponse = await callGoogleGemmaChain(messages, 45000);
+    const gemmaResponse = await withBreaker('google/gemma-4-chain', () => callGoogleGemmaChain(messages, 45000)).catch((e) => {
+      if (!e?.circuitOpen) console.warn('[AI WebCreator] Gemma 4 falló:', e);
+      return null;
+    });
     if (gemmaResponse) {
       console.log('[AI WebCreator] ✅ Gemma 4 respondió correctamente');
       return gemmaResponse;
@@ -338,11 +415,11 @@ export async function callWebCreatorWithFallback(
   // 5. Nemotron 3 Ultra free (NVIDIA) via OpenRouter
   try {
     console.log('[AI WebCreator] Fallback a nvidia/nemotron-3-ultra-550b-a55b:free...');
-    const response = await callNemotron3UltraFree(messages, 45000);
+    const response = await withBreaker('nvidia/nemotron-3-ultra-550b-a55b:free', () => callNemotron3UltraFree(messages, 45000));
     console.log('[AI WebCreator] ✅ Nemotron 3 Ultra respondió correctamente');
     return response;
   } catch (error) {
-    console.warn('[AI WebCreator] Nemotron 3 Ultra falló:', error);
+    if (!(error as any)?.circuitOpen) console.warn('[AI WebCreator] Nemotron 3 Ultra falló:', error);
   }
 
   // 6. Fallback final: Google Gemini directo (GEMINI_MODEL)
@@ -450,15 +527,16 @@ export async function callAssistantWithFallback(
   //   para que TODA la cadena entre en el presupuesto de 25s del webhook.
   const hopTimeout = timeoutMs ?? 20000
 
-  // 1. DeepSeek V4 Flash directo
+  // 1. DeepSeek V4 Flash directo (con circuit breaker: el 402 abre el
+  //     circuito al primer fallo y se salta durante 30 min)
   if (DEEPSEEK_API_KEY) {
     try {
       console.log('[AI] Intentando DeepSeek V4 Flash (API directa)...');
-      const response = await callDeepSeekV4FlashDirect(messages, undefined, hopTimeout);
+      const response = await withBreaker('deepseek-chat', () => callDeepSeekV4FlashDirect(messages, undefined, hopTimeout));
       console.log('[AI] ✅ DeepSeek V4 Flash respondió correctamente');
       return response;
     } catch (deepseekError) {
-      console.warn('[AI] DeepSeek V4 Flash falló:', deepseekError);
+      if (!(deepseekError as any)?.circuitOpen) console.warn('[AI] DeepSeek V4 Flash falló:', deepseekError);
     }
   }
 
@@ -468,18 +546,21 @@ export async function callAssistantWithFallback(
   //     común), los Gemma desperdician segundos preciosos del presupuesto.
   try {
     console.log('[AI] Fallback a dots-studio/dots-3-note-preview:free...');
-    const response = await callDotsStudioFree(messages, hopTimeout);
+    const response = await withBreaker('dots-studio/dots-3-note-preview:free', () => callDotsStudioFree(messages, hopTimeout));
     console.log('[AI] ✅ Dots Studio 3 respondió correctamente');
     return response;
   } catch (dotsError) {
-    console.warn('[AI] Dots Studio 3 falló:', dotsError);
+    if (!(dotsError as any)?.circuitOpen) console.warn('[AI] Dots Studio 3 falló:', dotsError);
   }
 
   // 3. Gemma 4 (31b → 26b) via OpenRouter — con atajo ante 429 del pool
   //     compartido de Google (la 26b daría el mismo error y solo quemaría
   //     el presupuesto del webhook con reintentos inútiles)
   {
-    const gemmaResponse = await callGoogleGemmaChain(messages, hopTimeout);
+    const gemmaResponse = await withBreaker('google/gemma-4-chain', () => callGoogleGemmaChain(messages, hopTimeout)).catch((e) => {
+      if (!e?.circuitOpen) console.warn('[AI] Gemma 4 falló:', e);
+      return null;
+    });
     if (gemmaResponse) {
       console.log('[AI] ✅ Gemma 4 respondió correctamente');
       return gemmaResponse;
@@ -490,11 +571,11 @@ export async function callAssistantWithFallback(
   //     (inmune al pool 429) y de mayor calidad que Gemma dentro del tier free.
   try {
     console.log('[AI] Fallback a nvidia/nemotron-3-ultra-550b-a55b:free...');
-    const response = await callNemotron3UltraFree(messages, hopTimeout);
+    const response = await withBreaker('nvidia/nemotron-3-ultra-550b-a55b:free', () => callNemotron3UltraFree(messages, hopTimeout));
     console.log('[AI] ✅ Nemotron 3 Ultra respondió correctamente');
     return response;
   } catch (nemotronError) {
-    console.warn('[AI] Nemotron 3 Ultra falló:', nemotronError);
+    if (!(nemotronError as any)?.circuitOpen) console.warn('[AI] Nemotron 3 Ultra falló:', nemotronError);
   }
 
   // 5. Fallback final: Google Gemini directo (GEMINI_MODEL, default
@@ -529,11 +610,11 @@ export async function callAssistantWithToolLoop(
   tools: OpenRouterTool[],
   executeTool: (name: string, args: Record<string, any>) => Promise<string>
 ): Promise<OpenRouterResponse> {
-  // 1. Intentar DeepSeek V4 Flash con tools
+  // 1. Intentar DeepSeek V4 Flash con tools (con circuit breaker)
   if (DEEPSEEK_API_KEY) {
     try {
       console.log('[AI ToolLoop] Intentando DeepSeek V4 Flash con tools...');
-      const response = await callDeepSeekV4FlashDirect(messages, tools);
+      const response = await withBreaker('deepseek-chat', () => callDeepSeekV4FlashDirect(messages, tools));
       const choice = response.choices?.[0];
 
       // ¿El LLM decidió llamar una herramienta?
@@ -549,7 +630,7 @@ export async function callAssistantWithToolLoop(
         return response;
       }
     } catch (err) {
-      console.warn('[AI ToolLoop] DeepSeek con tools falló:', err);
+      if (!(err as any)?.circuitOpen) console.warn('[AI ToolLoop] DeepSeek con tools falló:', err);
     }
   }
 
@@ -637,32 +718,35 @@ export async function callOpenRouterWithFallback(
   temperature = 0.7,
   maxTokens = 500
 ): Promise<OpenRouterResponse> {
-  // 1. Modelo configurado via OpenRouter
+  // 1. Modelo configurado via OpenRouter (con circuit breaker)
   try {
     console.log(`[AI] Intentando ${model} via OpenRouter...`);
-    const response = await callOpenRouter(model, messages, temperature, maxTokens, 45000);
+    const response = await withBreaker(model, () => callOpenRouter(model, messages, temperature, maxTokens, 45000));
     console.log(`[AI] ✅ ${model} respondió correctamente`);
     return response;
   } catch (openRouterError) {
-    console.warn(`[AI] ${model} falló:`, openRouterError);
+    if (!(openRouterError as any)?.circuitOpen) console.warn(`[AI] ${model} falló:`, openRouterError);
   }
 
   // 2. Dots Studio 3 (free) via OpenRouter — proveedor distinto a Google
   if (model !== 'dots-studio/dots-3-note-preview:free') {
     try {
       console.log('[AI] Fallback a dots-studio/dots-3-note-preview:free...');
-      const response = await callDotsStudioFree(messages);
+      const response = await withBreaker('dots-studio/dots-3-note-preview:free', () => callDotsStudioFree(messages));
       console.log('[AI] ✅ Dots Studio 3 respondió correctamente');
       return response;
     } catch (dotsError) {
-      console.warn('[AI] Dots Studio 3 falló:', dotsError);
+      if (!(dotsError as any)?.circuitOpen) console.warn('[AI] Dots Studio 3 falló:', dotsError);
     }
   }
 
   // 3+4. Gemma 4 (31b → 26b) via OpenRouter — con atajo ante 429 del pool
   //       compartido de Google
   {
-    const gemmaResponse = await callGoogleGemmaChain(messages, 20000, model);
+    const gemmaResponse = await withBreaker('google/gemma-4-chain', () => callGoogleGemmaChain(messages, 20000, model)).catch((e) => {
+      if (!e?.circuitOpen) console.warn('[AI] Gemma 4 falló:', e);
+      return null;
+    });
     if (gemmaResponse) {
       console.log('[AI] ✅ Gemma 4 respondió correctamente');
       return gemmaResponse;
@@ -672,11 +756,11 @@ export async function callOpenRouterWithFallback(
   // 5. Nemotron 3 Ultra free (NVIDIA) via OpenRouter
   try {
     console.log('[AI] Fallback a nvidia/nemotron-3-ultra-550b-a55b:free...');
-    const response = await callNemotron3UltraFree(messages, 20000);
+    const response = await withBreaker('nvidia/nemotron-3-ultra-550b-a55b:free', () => callNemotron3UltraFree(messages, 20000));
     console.log('[AI] ✅ Nemotron 3 Ultra respondió correctamente');
     return response;
   } catch (nemotronError) {
-    console.warn('[AI] Nemotron 3 Ultra falló:', nemotronError);
+    if (!(nemotronError as any)?.circuitOpen) console.warn('[AI] Nemotron 3 Ultra falló:', nemotronError);
   }
 
   // 6. Fallback final: Google Gemini directo (GEMINI_MODEL)
