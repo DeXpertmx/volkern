@@ -356,4 +356,106 @@ describe('Condition Evaluator — evaluateCondition', () => {
       )).toBe(false);
     });
   });
+
+  describe('Campos con prefijo contact. (fix UI → evaluador)', () => {
+    it('contact.email resuelve a la propiedad email del lead', () => {
+      expect(evaluateCondition(
+        { field: 'contact.email', operator: 'igual', value: 'juan@example.com' },
+        makeContext()
+      )).toBe(true);
+    });
+
+    it('contact.source resuelve a la fuente del lead', () => {
+      expect(evaluateCondition(
+        { field: 'contact.source', operator: 'contiene', value: 'web' },
+        makeContext({ lead: { ...makeContext().lead, fuente: 'Formulario Web' } })
+      )).toBe(true);
+    });
+
+    it('contact.source coincide con el nombre del servicio/formulario de origen', () => {
+      const ctx = makeContext({ lead: { ...makeContext().lead, fuente: 'Formulario Web' } });
+      expect(evaluateCondition(
+        { field: 'contact.source', operator: 'igual', value: 'Formulario Web' },
+        ctx
+      )).toBe(true);
+      expect(evaluateCondition(
+        { field: 'contact.source', operator: 'igual', value: 'WhatsApp' },
+        ctx
+      )).toBe(false);
+    });
+
+    it('contact.tags funciona con operador UI exists / not_exists', () => {
+      const ctx = makeContext({ lead: { ...makeContext().lead, tags: 'vip' } });
+      expect(evaluateCondition({ field: 'contact.tags', operator: 'exists' }, ctx)).toBe(true);
+      expect(evaluateCondition({ field: 'contact.tags', operator: 'not_exists' }, ctx)).toBe(false);
+    });
+  });
+
+  describe('Alias de operadores de la UI (equals, contains, exists...)', () => {
+    it('equals → igual', () => {
+      expect(evaluateCondition(
+        { field: 'nombre', operator: 'equals', value: 'Juan Pérez' },
+        makeContext()
+      )).toBe(true);
+    });
+
+    it('contains → contiene (case-insensitive)', () => {
+      expect(evaluateCondition(
+        { field: 'nombre', operator: 'contains', value: 'juan' },
+        makeContext()
+      )).toBe(true);
+    });
+
+    it('exists → no_vacio', () => {
+      expect(evaluateCondition({ field: 'nombre', operator: 'exists' }, makeContext())).toBe(true);
+    });
+
+    it('not_exists → vacio', () => {
+      expect(evaluateCondition({ field: 'campoInexistente', operator: 'not_exists' }, makeContext())).toBe(true);
+    });
+
+    it('greater_than / less_than → numéricos', () => {
+      expect(evaluateCondition(
+        { field: 'puntuacion', operator: 'greater_than', value: '80' },
+        makeContext()
+      )).toBe(true);
+      expect(evaluateCondition(
+        { field: 'puntuacion', operator: 'less_than', value: '90' },
+        makeContext()
+      )).toBe(true);
+    });
+  });
+
+  describe('Campos de formulario (trigger formulario_enviado)', () => {
+    it('form.formName compara el nombre del formulario', () => {
+      const ctx = {
+        formName: 'Formulario de Contacto',
+        formId: 'wf-1',
+        form: { nombre: 'Ana', pais: 'México' },
+      } as any;
+      expect(evaluateCondition(
+        { field: 'form.formName', operator: 'equals', value: 'Formulario de Contacto' },
+        ctx
+      )).toBe(true);
+      expect(evaluateCondition(
+        { field: 'form.formName', operator: 'equals', value: 'Otro' },
+        ctx
+      )).toBe(false);
+    });
+
+    it('form.<campo> lee campos del payload del formulario', () => {
+      const ctx = {
+        formName: 'Lead Magneto',
+        form: { nombre: 'Ana', pais: 'México', interes: 'Plan Pro' },
+      } as any;
+      expect(evaluateCondition(
+        { field: 'form.pais', operator: 'equals', value: 'México' },
+        ctx
+      )).toBe(true);
+      expect(evaluateCondition(
+        { field: 'form.interes', operator: 'contains', value: 'Plan' },
+        ctx
+      )).toBe(true);
+    });
+  });
 });

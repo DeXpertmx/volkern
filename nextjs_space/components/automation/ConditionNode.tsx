@@ -38,25 +38,43 @@ export const ConditionNode: React.FC<NodeProps> = ({ id, data, selected }) => {
     updateNodeConfig('value', currentValue + variable)
   }
 
-  const fieldLabels: Record<string, string> = {
-    'contact.tags': 'Etiquetas (Tags)',
-    'contact.email': 'Email',
-    'contact.phone': 'Teléfono',
-    'contact.score': 'Puntuación (Score)',
-    'contact.source': 'Origen (Source)',
-    'contact.pipeline_stage': 'Etapa del Pipeline',
-    'appointment.status': 'Estado de Cita',
-    'email.opened': 'Email Abierto',
-    'email.clicked': 'Enlace Clicado',
+  const fieldGroups: Record<string, { label: string; items: { value: string; label: string }[] }> = {
+    contacto: {
+      label: 'Contacto / Lead',
+      items: [
+        { value: 'contact.tags', label: 'Etiquetas (Tags)' },
+        { value: 'contact.email', label: 'Email' },
+        { value: 'contact.phone', label: 'Teléfono' },
+        { value: 'contact.name', label: 'Nombre' },
+        { value: 'contact.company', label: 'Empresa' },
+        { value: 'contact.score', label: 'Puntuación (Score)' },
+        { value: 'contact.source', label: 'Origen (fuente del lead)' },
+        { value: 'contact.channel', label: 'Canal (WhatsApp, email...)' },
+        { value: 'contact.pipeline_stage', label: 'Etapa del Pipeline / Estado' },
+      ],
+    },
+    formulario: {
+      label: 'Formulario',
+      items: [
+        { value: 'form.formName', label: 'Nombre del Formulario' },
+        { value: 'form.formId', label: 'ID del Formulario' },
+      ],
+    },
   }
 
   const operatorLabels: Record<string, string> = {
     'equals': 'Es igual a',
+    'not_equals': 'No es igual a',
     'contains': 'Contiene',
-    'greater_than': 'Mayor que',
-    'less_than': 'Menor que',
+    'not_contains': 'No contiene',
+    'starts_with': 'Empieza con',
+    'ends_with': 'Termina con',
     'exists': 'Existe / Tiene valor',
     'not_exists': 'No existe / Vacío',
+    'includes': 'Incluye (tags)',
+    'not_includes': 'No incluye',
+    'greater_than': 'Mayor que (número)',
+    'less_than': 'Menor que (número)',
   }
 
   const requiresValue = !['exists', 'not_exists'].includes(data.config?.operator || '')
@@ -85,13 +103,14 @@ export const ConditionNode: React.FC<NodeProps> = ({ id, data, selected }) => {
                 <SelectValue placeholder="Seleccionar Campo..." />
               </SelectTrigger>
               <SelectContent>
-                <SelectGroup>
-                  <SelectLabel>Contacto</SelectLabel>
-                  <SelectItem value="contact.tags">Etiquetas</SelectItem>
-                  <SelectItem value="contact.email">Email</SelectItem>
-                  <SelectItem value="contact.phone">Teléfono</SelectItem>
-                  <SelectItem value="contact.score">Puntuación</SelectItem>
-                </SelectGroup>
+                {Object.entries(fieldGroups).map(([key, group]) => (
+                  <SelectGroup key={key}>
+                    <SelectLabel>{group.label}</SelectLabel>
+                    {group.items.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>
+                    ))}
+                  </SelectGroup>
+                ))}
               </SelectContent>
             </Select>
 
@@ -103,10 +122,9 @@ export const ConditionNode: React.FC<NodeProps> = ({ id, data, selected }) => {
                 <SelectValue placeholder="Condición..." />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="equals">Es igual a</SelectItem>
-                <SelectItem value="contains">Contiene</SelectItem>
-                <SelectItem value="exists">Tiene valor</SelectItem>
-                <SelectItem value="not_exists">Está vacío</SelectItem>
+                {Object.entries(operatorLabels).map(([key, label]) => (
+                  <SelectItem key={key} value={key}>{label}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
 
