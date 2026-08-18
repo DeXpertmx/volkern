@@ -314,6 +314,28 @@ export class AutomationEngine {
 // ─── Standalone Functions ───────────────────────────────────────────
 
 /**
+ * Filtra automatizaciones por formulario específico. Si una automatización
+ * con trigger 'formulario_enviado' configuró un formId concreto en su nodo
+ * trigger (data.config.formId), solo se ejecuta cuando el evento viene de ESE
+ * formulario. Sin formulario configurado → aplica a cualquier formulario.
+ * Expuesto para tests.
+ */
+export function filterAutomationsByForm(
+  automations: any[],
+  trigger: string,
+  contextFormId?: unknown,
+): any[] {
+  if (trigger !== 'formulario_enviado' || !contextFormId) return automations
+  return automations.filter((automation: any) => {
+    const flowData = automation.flowData as any
+    const triggerNode = (flowData?.nodes || []).find((n: any) => n.type === 'trigger')
+    const nodoFormId = triggerNode?.data?.config?.formId
+    if (!nodoFormId) return true
+    return String(nodoFormId) === String(contextFormId)
+  })
+}
+
+/**
  * Versión síncrona de triggerAutomation.
  * Busca automatizaciones activas para el trigger y las ejecuta.
  * Expuesta para uso interno del worker BullMQ.
@@ -364,10 +386,14 @@ export async function executeAutomationsSync(trigger: string, context: Execution
       }
     )
 
-    console.log(`📋 [Automatización] Ejecutando ${automations.length} automatizaciones para trigger "${trigger}"`)
+    // Filtrar por formulario específico (solo para trigger formulario_enviado)
+    const contextFormId = context.formId
+    const filtradas = filterAutomationsByForm(automations, trigger, contextFormId)
+
+    console.log(`📋 [Automatización] Ejecutando ${filtradas.length}/${automations.length} automatizaciones para trigger "${trigger}"`)
 
     // Ejecutar cada automatización
-    for (const automation of automations) {
+    for (const automation of filtradas) {
       await dbContext.run(
         { tenantId: context.tenantId!, client: tenantClient },
         async () => {
