@@ -10,6 +10,7 @@ import { IncomingCallPopup } from '@/components/dashboard/IncomingCallPopup'
 import { MorningBriefingModal } from '@/components/dashboard/MorningBriefingModal'
 import { usePathname } from 'next/navigation'
 import { VolkernGuide } from '@/components/guide/VolkernGuide'
+import ImpersonationBanner from '@/components/admin/ImpersonationBanner'
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -75,6 +76,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         isMessaging ? "ml-0" : (isCollapsed ? "md:ml-24" : "md:ml-72")
       )}>
         {!isMessaging && <DashboardHeader />}
+        <ImpersonationBanner />
         <div className="flex-1 overflow-y-auto relative scroll-smooth overflow-x-hidden">
           <MorningBriefingModal />
           <TrialBanner />

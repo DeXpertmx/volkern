@@ -221,6 +221,16 @@ describe('PLAN_LIMITS', () => {
     expect(trial.users).toBeLessThanOrEqual(2);
     expect(trial.automation_runs).toBe(0);
   });
+
+  it('PREMIUM (legacy) debe estar definido y permitir automatizaciones ilimitadas', () => {
+    // Regression: 'premium' existía como plan en BD (ej. DeXpert) pero no estaba
+    // en PLAN_LIMITS, así que todo caía al fallback 'esencial' silenciosamente.
+    const premium = PLAN_LIMITS[PLANS.PREMIUM];
+    expect(premium).toBeDefined();
+    expect(premium.automation_runs).toBe(-1);
+    expect(premium.automations_count).toBe(-1);
+    expect(premium.leads).toBe(-1);
+  });
 });
 
 describe('PLAN_PRICES', () => {

@@ -12,6 +12,9 @@ export const PLANS = {
   ACCOUNTING_SLOT: 'accounting-slot',
   PRO_ACCOUNTING: 'pro-accounting',
   BASICO: 'basico',
+  // Plan legacy de la era Vercel: varios tenants activos (ej. DeXpert) lo tienen
+  // como plan. Sin él, PLAN_LIMITS cae al fallback 'esencial' silenciosamente.
+  PREMIUM: 'premium',
 } as const
 
 export type PlanType = typeof PLANS[keyof typeof PLANS]
@@ -215,6 +218,7 @@ export const PLAN_MODULES: Record<string, CrmModule[]> = {
   [PLANS.INFINITY]: [...ALL_FEATURES_SET, 'compliance_pro'],
   [PLANS.SCALE]: ALL_FEATURES_SET,
   [PLANS.COMPLIANCE]: [...ALL_FEATURES_SET, 'compliance_pro'],
+  [PLANS.PREMIUM]: [...ALL_FEATURES_SET, 'compliance_pro'],
   [PLANS.BASICO]: [
     'leads', 'contactos', 'empresas', 'pipeline', 'tareas', 'analytics',
     'mensajes', 'citas', 'catalogo',
@@ -417,6 +421,28 @@ export const PLAN_LIMITS = {
     published_pages: 1,
     invoices: 20,
     contratos_sign: 10,
+  },
+  [PLANS.PREMIUM]: {
+    leads: -1,
+    users: 99,
+    emails_per_month: -1,
+    automation_runs: -1,
+    whatsapp_messages: -1,
+    sms_messages: -1,
+    courses: -1,
+    students: -1,
+    storage_gb: 250,
+    ai_image_generations: -1,
+    business_emails: -1,
+    business_domains: -1,
+    business_email_gb: 25,
+    automations_count: -1,
+    pages: -1,
+    catalogo_items: -1,
+    published_pages: -1,
+    invoices: -1,
+    contratos_sign: -1,
+    compliance_mode: true,
   },
   [PLANS.AGENCY_SLOT]: {
     leads: 5000,
