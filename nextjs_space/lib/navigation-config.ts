@@ -175,7 +175,6 @@ export const HUBS: HubConfig[] = [
     description: 'Central de mensajes, telefonía y chatwhot.',
     basePaths: [
       '/dashboard/telefonia',
-      '/dashboard/automatizaciones',
       '/dashboard/chatbot',
       '/dashboard/chatbot/analytics',
       '/dashboard/connect'
@@ -184,7 +183,6 @@ export const HUBS: HubConfig[] = [
       { name: 'Volkern Connect', href: '/dashboard/connect', icon: Activity, planModule: 'mensajes', description: 'Chat operativo y eventos de sistema' },
       { name: 'Mensajes', href: '/dashboard/mensajes', icon: MessageCircle, planModule: 'mensajes', description: 'Bandeja de entrada omnicanal' },
       { name: 'Telefonía', href: '/dashboard/telefonia', icon: Phone, planModule: 'telefonia', description: 'Central telefónica VoIP' },
-      { name: 'Automatizaciones', href: '/dashboard/automatizaciones', icon: Workflow, planModule: 'automatizaciones', description: 'Flujos de trabajo automáticos' },
       { name: 'Chatbot', href: '/dashboard/chatbot', icon: Bot, planModule: 'chatbot_whatsapp', description: 'Asistente inteligente' },
       { name: 'Analytics del Chatbot', href: '/dashboard/chatbot/analytics', icon: PieChart, planModule: 'chatbot_whatsapp', description: 'Métricas, patrones y sugerencias' },
       { name: 'Chat en vivo', href: '/dashboard/live-chat', icon: Headset, planModule: 'mensajes', description: 'Chat en tiempo real con visitantes' },
@@ -200,7 +198,8 @@ export const HUBS: HubConfig[] = [
       '/dashboard/campanas',
       '/dashboard/ads',
       '/dashboard/webcreator',
-      '/dashboard/social'
+      '/dashboard/social',
+      '/dashboard/automatizaciones'
     ],
     items: [
       { name: 'Discover', href: '/dashboard/discover', icon: Radar, planModule: 'ads', description: 'Inteligencia de mercado y señales de compra con AI Score' },
@@ -208,8 +207,9 @@ export const HUBS: HubConfig[] = [
       { name: 'ADS Intelligence', href: '/dashboard/ads', icon: TrendingUp, planModule: 'ads', description: 'Campañas de anuncios pagados con IA' },
       { name: 'Constructor Web', href: '/dashboard/webcreator', icon: Sparkles, planModule: 'cms', description: 'Diseño de landing pages' },
       { name: 'Hub Social', href: '/dashboard/social', icon: Share2, planModule: 'social_manager', description: 'Gestión de redes sociales' },
-      { name: 'Configuración', href: '/dashboard/social/settings', icon: Settings2, description: 'Conectar redes sociales y APIs' },
       { name: 'Formularios', href: '/dashboard/formularios', icon: FileText, planModule: 'formularios', description: 'Creador de formularios inteligentes' },
+      { name: 'Automatizaciones', href: '/dashboard/automatizaciones', icon: Workflow, planModule: 'automatizaciones', description: 'Flujos de trabajo automáticos' },
+      { name: 'Configuración', href: '/dashboard/social/settings', icon: Settings2, description: 'Conectar redes sociales y APIs' },
     ]
   },
   {

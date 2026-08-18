@@ -98,12 +98,16 @@ describe('HUBS', () => {
     expect(hub.name).toBe('Comunicaciones');
     expect(hub.items.some(i => i.name === 'Volkern Connect')).toBe(true);
     expect(hub.items.some(i => i.name === 'Chatbot')).toBe(true);
+    // Automatizaciones se movió al hub de Marketing
+    expect(hub.items.some(i => i.name === 'Automatizaciones')).toBe(false);
   });
 
   it('debe incluir el hub de Marketing', () => {
     const hub = HUBS.find(h => h.id === 'marketing')!;
     expect(hub.items.some(i => i.name === 'Campañas')).toBe(true);
     expect(hub.items.some(i => i.name === 'Constructor Web')).toBe(true);
+    expect(hub.items.some(i => i.name === 'Automatizaciones')).toBe(true);
+    expect(hub.basePaths).toContain('/dashboard/automatizaciones');
   });
 
   it('debe incluir el hub de Academia', () => {
