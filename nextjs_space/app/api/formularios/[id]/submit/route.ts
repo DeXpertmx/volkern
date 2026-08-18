@@ -1,5 +1,54 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { eventBus, EVENTS } from '@/lib/skills/event-bus';
+import type { FormSubmittedEvent } from '@/lib/types/events';
+
+// Emite el evento FORM_SUBMITTED (dispara automatizaciones con trigger
+// 'formulario_enviado'). No bloqueante: si el bus falla, el submit continúa.
+function emitFormSubmitted(
+  form: { id: string; tenantId: string; name: string },
+  submission: { id: string },
+  opts: { leadId?: string; email?: string; nombre?: string; telefono?: string; payload: Record<string, unknown> },
+): void {
+  try {
+    const eventPayload: FormSubmittedEvent = {
+      tenantId: form.tenantId,
+      timestamp: new Date(),
+      source: 'webhook',
+      formId: form.id,
+      formName: form.name || 'Formulario',
+      submissionId: submission.id,
+      leadId: opts.leadId,
+      email: opts.email,
+      nombre: opts.nombre,
+      telefono: opts.telefono,
+      payload: opts.payload,
+    };
+    eventBus.emitEvent(EVENTS.FORM_SUBMITTED, eventPayload);
+  } catch (err) {
+    console.warn('[Formularios Submit] No se pudo emitir evento FORM_SUBMITTED:', err);
+  }
+}
+
+// Notifica por Telegram al agente del tenant cuando el formulario genera un
+// lead nuevo. No bloqueante y con fallback silencioso.
+async function notifyNewLeadByTelegram(
+  form: { id: string; tenantId: string; name: string },
+  lead: { id: string; nombre: string; email: string },
+): Promise<void> {
+  try {
+    const [{ notifyByTelegram }, { createSystemContext }] = await Promise.all([
+      import('@/lib/skills/notification-layer'),
+      import('@/lib/skills/context'),
+    ]);
+    await notifyByTelegram(
+      `📥 *Nuevo lead por formulario*\n\n📋 *Formulario:* ${form.name}\n👤 *Nombre:* ${lead.nombre}\n📧 *Email:* ${lead.email}\n🆔 *Lead:* ${lead.id}`,
+      createSystemContext(form.tenantId),
+    ).catch((err: any) => console.error('[Formularios Submit] Error Telegram:', err));
+  } catch (err) {
+    console.warn('[Formularios Submit] Notificación Telegram no disponible:', err);
+  }
+}
 
 // Campos estándar del Lead: se mapean a su columna. Todo lo demás del
 // payload (campos personalizados del formulario) se conserva como notas,
@@ -95,6 +144,18 @@ export async function POST(
           data: { leadId: lead.id },
         });
 
+        // Evento para automatizaciones (trigger 'formulario_enviado')
+        emitFormSubmitted(form, submission, {
+          leadId: lead.id,
+          email: String(email),
+          nombre: String(nombre),
+          ...(telefono ? { telefono: String(telefono) } : {}),
+          payload,
+        });
+
+        // Notificar al agente por Telegram (no bloqueante)
+        notifyNewLeadByTelegram(form, { id: lead.id, nombre: String(nombre), email: String(email) });
+
         return NextResponse.json({ success: true, leadId: lead.id });
       } catch (leadError: any) {
         console.error('[Formularios Submit] Error creating lead:', leadError);
@@ -102,6 +163,9 @@ export async function POST(
         return NextResponse.json({ success: true, warning: 'Lead creation failed' });
       }
     }
+
+    // Formulario sin lead: aun así se emite el evento para automatizaciones
+    emitFormSubmitted(form, submission, { payload });
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

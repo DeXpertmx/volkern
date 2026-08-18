@@ -17,6 +17,7 @@ import type {
   BaseEventPayload,
   LeadCreatedEvent,
   LeadConvertedEvent,
+  FormSubmittedEvent,
   BookingCreatedEvent,
   TaskCreatedEvent,
   TaskCompletedEvent,
@@ -53,6 +54,9 @@ const EVENT_TO_TRIGGER_MAP: Record<string, string> = {
   [EVENTS.LEAD_CREATED]: 'nuevo_lead',
   [EVENTS.LEAD_UPDATED]: 'lead_actualizado',
   [EVENTS.LEAD_QUALIFIED]: 'lead_etiquetado',
+
+  // Formularios web
+  [EVENTS.FORM_SUBMITTED]: 'formulario_enviado',
   
   // Citas / Bookings
   [EVENTS.BOOKING_CREATED]: 'cita_agendada',
@@ -162,6 +166,21 @@ function eventToAutomationContext(event: EventType, payload: BaseEventPayload): 
         leadId: convertedPayload.leadId,
         contactId: convertedPayload.contactId,
         dealId: convertedPayload.dealId,
+      };
+    }
+
+    case EVENTS.FORM_SUBMITTED: {
+      const formPayload = payload as FormSubmittedEvent;
+      return {
+        ...baseContext,
+        formId: formPayload.formId,
+        formName: formPayload.formName,
+        submissionId: formPayload.submissionId,
+        leadId: formPayload.leadId,
+        leadEmail: formPayload.email,
+        leadNombre: formPayload.nombre,
+        leadTelefono: formPayload.telefono,
+        formPayload: formPayload.payload,
       };
     }
 
@@ -729,6 +748,9 @@ export function initializeAutomationListeners(): void {
   eventBus.onEvent(EVENTS.LEAD_UPDATED, (payload) => handleEvent(EVENTS.LEAD_UPDATED, payload));
   eventBus.onEvent(EVENTS.LEAD_QUALIFIED, (payload) => handleEvent(EVENTS.LEAD_QUALIFIED, payload));
   eventBus.onEvent(EVENTS.LEAD_CONVERTED, (payload) => handleEvent(EVENTS.LEAD_CONVERTED, payload));
+
+  // Formularios web
+  eventBus.onEvent(EVENTS.FORM_SUBMITTED, (payload) => handleEvent(EVENTS.FORM_SUBMITTED, payload));
 
   // Bookings / Citas
   eventBus.onEvent(EVENTS.BOOKING_CREATED, (payload) => handleEvent(EVENTS.BOOKING_CREATED, payload));

@@ -20,6 +20,9 @@ export const EVENTS = {
   LEAD_CONVERTED: 'lead_converted',
   LEAD_QUALIFIED: 'lead_qualified',
   
+  // Formularios web
+  FORM_SUBMITTED: 'form_submitted',
+  
   // Conversaciones
   CONVERSATION_CREATED: 'conversation_created',
   CONVERSATION_CLOSED: 'conversation_closed',
@@ -172,6 +175,18 @@ export interface LeadConvertedEvent extends BaseEventPayload {
   leadId: string;
   contactId: string;
   dealId?: string;
+}
+
+// Formularios web
+export interface FormSubmittedEvent extends BaseEventPayload {
+  formId: string;
+  formName: string;
+  submissionId: string;
+  leadId?: string;
+  email?: string;
+  nombre?: string;
+  telefono?: string;
+  payload: Record<string, unknown>;
 }
 
 // Conversaciones
@@ -649,6 +664,7 @@ export type EventPayloadMap = {
   [EVENTS.CONTACT_UPDATED]: ContactUpdatedEvent;
   [EVENTS.LEAD_CREATED]: LeadCreatedEvent;
   [EVENTS.LEAD_CONVERTED]: LeadConvertedEvent;
+  [EVENTS.FORM_SUBMITTED]: FormSubmittedEvent;
   [EVENTS.CONVERSATION_CREATED]: ConversationCreatedEvent;
   [EVENTS.MESSAGE_SENT]: MessageSentEvent;
   [EVENTS.MESSAGE_RECEIVED]: MessageReceivedEvent;

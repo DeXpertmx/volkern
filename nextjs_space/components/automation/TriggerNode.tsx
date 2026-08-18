@@ -37,6 +37,12 @@ export const TriggerNode: React.FC<NodeProps> = ({ id, data, selected }) => {
         { value: 'lead_sin_respuesta', label: 'Lead Sin Respuesta (24h)' },
       ]
     },
+    formularios: {
+      label: 'Formularios',
+      items: [
+        { value: 'formulario_enviado', label: 'Formulario Enviado' },
+      ]
+    },
     citas: {
       label: 'Citas y Calendario',
       items: [
