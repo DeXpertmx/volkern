@@ -185,3 +185,71 @@ describe('send_message — auto-registro del lead', () => {
     expect(result.ok).toBe(true);
   });
 });
+
+// ─── 3. Remitente: firma del usuario con booking activo ────────────────────
+
+describe('send_message — firma y link de calendario del remitente', () => {
+  it('firma con el usuario de booking activo (nombre + link real), no con el tenant', async () => {
+    mocks.findLeadByEmail.mockResolvedValue({
+      id: 'lead-existente',
+      nombre: 'Alejandra Velázquez',
+      email: 'alevvalverde@gmail.com',
+    });
+    // userId de Telegram es el id de la conversación, no un User real
+    mocks.userFindUnique.mockResolvedValue(null);
+    mocks.userFindFirst.mockResolvedValue({
+      name: 'Bruno Hess',
+      bookingEnabled: true,
+      bookingSlug: 'bruno-hess',
+      bookingTitle: 'Asesoría contable',
+    });
+
+    await (skills as any).send_message({
+      tenantId: TENANT,
+      email: 'alevvalverde@gmail.com',
+      mensaje: 'Gracias por la reunión',
+      userId: 'conv-id-no-real',
+    });
+
+    expect(mocks.sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subject: 'Mensaje de Bruno Hess',
+        text: expect.stringContaining('Bruno Hess'),
+      }),
+    );
+    const text = mocks.sendEmail.mock.calls[0][0].text as string;
+    expect(text).toContain('/booking/bruno-hess');
+    expect(text).toContain('Asesoría contable');
+    // El nombre del tenant se añade debajo de la persona (comportamiento correcto)
+    expect(text).toContain('Dimension Expert');
+  });
+
+  it('sin usuario con booking → cae a un admin del tenant (case-insensitive)', async () => {
+    mocks.findLeadByEmail.mockResolvedValue({
+      id: 'lead-existente',
+      nombre: 'Alejandra Velázquez',
+      email: 'alevvalverde@gmail.com',
+    });
+    mocks.userFindUnique.mockResolvedValue(null);
+    // Primer findFirst (booking activo) no encuentra nada; el segundo (admin) sí
+    mocks.userFindFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ name: 'DeXpert Admin', bookingEnabled: false, bookingSlug: null, bookingTitle: null });
+
+    await (skills as any).send_message({
+      tenantId: TENANT,
+      email: 'alevvalverde@gmail.com',
+      mensaje: 'Gracias por la reunión',
+    });
+
+    expect(mocks.sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subject: 'Mensaje de DeXpert Admin',
+        text: expect.stringContaining('DeXpert Admin'),
+      }),
+    );
+    // Sin booking activo, no debe añadir link de calendario
+    const text = mocks.sendEmail.mock.calls[0][0].text as string;
+    expect(text).not.toContain('/booking/');
+  });
+});
