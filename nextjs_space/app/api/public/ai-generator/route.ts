@@ -5,7 +5,11 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { callWebCreatorWithFallback, OpenRouterMessage } from '@/lib/assistant/openrouter-client';
 import { WEBCREATOR_SYSTEM_PROMPT } from '@/lib/assistant/webcreator-system-prompt';
-import { validateAndNormalizeWebCreatorProject } from '@/lib/assistant/webcreator-validator';
+import {
+  cleanWebCreatorPrompt,
+  unwrapWebCreatorProject,
+  validateAndNormalizeWebCreatorProject,
+} from '@/lib/assistant/webcreator-validator';
 
 const SYSTEM_PROMPT = WEBCREATOR_SYSTEM_PROMPT;
 
@@ -32,34 +36,36 @@ export function extractJsonFromContent(content: string): any | null {
     return JSON.parse(cleaned);
   } catch {}
 
-  // 2. Extraer el primer bloque {…} o […] balanceado (respeta strings)
-  const firstOpen = cleaned.search(/[{\[]/);
-  if (firstOpen === -1) return null;
+  // 2. Buscar bloques balanceados. No basta con tomar el primer {…}: algunos
+  // modelos anteponen texto con llaves o devuelven un primer candidato roto y
+  // después el JSON correcto.
+  for (let start = 0; start < cleaned.length; start++) {
+    if (cleaned[start] !== '{' && cleaned[start] !== '[') continue;
 
-  const openChar = cleaned[firstOpen];
-  const closeChar = openChar === '{' ? '}' : ']';
-  let depth = 0;
-  let inString = false;
-  let escape = false;
+    const stack: string[] = [];
+    let inString = false;
+    let escape = false;
 
-  for (let i = firstOpen; i < cleaned.length; i++) {
-    const ch = cleaned[i];
-    if (inString) {
-      if (escape) escape = false;
-      else if (ch === '\\') escape = true;
-      else if (ch === '"') inString = false;
-      continue;
-    }
-    if (ch === '"') { inString = true; continue; }
-    if (ch === openChar) depth++;
-    else if (ch === closeChar) {
-      depth--;
-      if (depth === 0) {
-        const candidate = cleaned.substring(firstOpen, i + 1);
-        try {
-          return JSON.parse(candidate);
-        } catch {
-          return null;
+    for (let i = start; i < cleaned.length; i++) {
+      const ch = cleaned[i];
+      if (inString) {
+        if (escape) escape = false;
+        else if (ch === '\\') escape = true;
+        else if (ch === '"') inString = false;
+        continue;
+      }
+      if (ch === '"') { inString = true; continue; }
+      if (ch === '{' || ch === '[') stack.push(ch);
+      else if (ch === '}' || ch === ']') {
+        const expected = ch === '}' ? '{' : '[';
+        if (stack[stack.length - 1] !== expected) break;
+        stack.pop();
+        if (stack.length === 0) {
+          try {
+            return JSON.parse(cleaned.substring(start, i + 1));
+          } catch {
+            break;
+          }
         }
       }
     }
@@ -79,9 +85,10 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { prompt, style } = body;
 
-    console.log('[MiniMax AI] Prompt recibido:', prompt, '| Estilo:', style);
+    const cleanedPrompt = cleanWebCreatorPrompt(String(prompt || ''));
+    console.log('[MiniMax AI] Prompt recibido:', String(prompt).length, 'caracteres; limpio:', cleanedPrompt.length, '| Estilo:', style);
 
-    if (!prompt) {
+    if (!cleanedPrompt) {
       return NextResponse.json({ error: 'Prompt requerido' }, { status: 400 });
     }
 
@@ -97,7 +104,7 @@ export async function POST(req: Request) {
 
     const messages: OpenRouterMessage[] = [
       { role: 'system', content: SYSTEM_PROMPT + '\n\nESTILO: ' + currentStyle.name + ' (' + currentStyle.primary + ')' },
-      { role: 'user', content: `Genera landing page para: ${prompt}. Estilo: ${currentStyle.name}. Responde SOLO JSON.` }
+      { role: 'user', content: `Genera landing page para: ${cleanedPrompt}. Estilo: ${currentStyle.name}. Responde SOLO JSON.` }
     ];
 
     const response = await callWebCreatorWithFallback(messages);
@@ -118,7 +125,7 @@ export async function POST(req: Request) {
     // 1. Parseo directo + extracción robusta del JSON (tolera bloques de
     //    código markdown y texto alrededor). NUNCA caer en plantillas
     //    hardcodeadas que ignoren el prompt del usuario.
-    let projectData = extractJsonFromContent(content);
+    let projectData = unwrapWebCreatorProject(extractJsonFromContent(content));
 
     // 2. Si no se obtuvo un JSON válido, reintentar UNA vez. La causa más
     //    común es la respuesta truncada por el tope de tokens del modelo
@@ -133,13 +140,13 @@ export async function POST(req: Request) {
         : 'Eres un diseñador de landing pages premium. Genera el JSON de la página pedida por el usuario. Responde ÚNICAMENTE con JSON válido, sin bloques markdown, sin comentarios ni explicaciones.';
       const retryMessages: OpenRouterMessage[] = [
         { role: 'system', content: compactSystem },
-        { role: 'user', content: `Genera la landing page para este brief: ${prompt}\n\nUsa bloques premium y componentes con clases Tailwind. Estilo: ${currentStyle.name}. Responde SOLO JSON (máximo ~12000 tokens, conciso).` }
+        { role: 'user', content: `Genera la landing page para este brief: ${cleanedPrompt}\n\nUsa bloques premium y componentes con clases Tailwind. Estilo: ${currentStyle.name}. Responde SOLO JSON (máximo ~12000 tokens, conciso).` }
       ];
       const retryResponse = await callWebCreatorWithFallback(retryMessages, 16384);
       const retryContent = retryResponse?.choices?.[0]?.message?.content;
       if (retryContent) {
         console.log('[MiniMax AI] Reintento recibido, longitud:', retryContent.length);
-        projectData = extractJsonFromContent(retryContent);
+        projectData = unwrapWebCreatorProject(extractJsonFromContent(retryContent));
       }
     }
 

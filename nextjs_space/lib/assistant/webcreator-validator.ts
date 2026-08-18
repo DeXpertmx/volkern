@@ -16,6 +16,41 @@ export interface WebCreatorValidationResult {
 
 const CURRENT_YEAR = new Date().getFullYear();
 
+/**
+ * Quita del brief los resultados que el usuario haya pegado después de pedir
+ * una revisión. Es habitual copiar "Esto es lo que obtuve:" junto con miles
+ * de caracteres de HTML; ese HTML no es una instrucción y consume el contexto
+ * del modelo hasta provocar JSON truncado o respuestas inconsistentes.
+ */
+export function cleanWebCreatorPrompt(prompt: string): string {
+  if (!prompt) return prompt;
+  const markers = [
+    /\n\s*Esto es lo que obtuve\s*:/i,
+    /\n\s*Resultado\s*:/i,
+    /\n\s*Resultado obtenido\s*:/i,
+  ];
+  let cleaned = prompt;
+  for (const marker of markers) {
+    const match = cleaned.match(marker);
+    if (match?.index !== undefined) cleaned = cleaned.slice(0, match.index);
+  }
+  // Protección adicional para HTML pegado sin encabezado.
+  const htmlIndex = cleaned.search(/<body(?:\s|>)/i);
+  if (htmlIndex > 0) cleaned = cleaned.slice(0, htmlIndex);
+  return cleaned.trim();
+}
+
+/** Acepta respuestas envueltas como { projectData: { pages: [...] } }. */
+export function unwrapWebCreatorProject(value: any): any {
+  if (!value || typeof value !== 'object') return value;
+  if (Array.isArray(value.pages)) return value;
+  for (const key of ['projectData', 'data', 'page', 'result']) {
+    const nested = value[key];
+    if (nested && typeof nested === 'object' && Array.isArray(nested.pages)) return nested;
+  }
+  return value;
+}
+
 /** Sustituye claims de urgencia/autoridad que el brief no puede verificar. */
 export function sanitizeGeneratedText(value: string): string {
   return value

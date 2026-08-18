@@ -54,4 +54,9 @@ describe('extractJsonFromContent', () => {
     const arr = [{ a: 1 }, { b: 2 }]
     expect(extractJsonFromContent(JSON.stringify(arr))).toEqual(arr)
   })
+
+  it('continúa buscando si encuentra primero un candidato roto', () => {
+    const content = 'texto { roto } respuesta real: ' + JSON.stringify(VALID)
+    expect(extractJsonFromContent(content)).toEqual(VALID)
+  })
 })

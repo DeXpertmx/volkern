@@ -1,10 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import {
+  cleanWebCreatorPrompt,
   sanitizeGeneratedText,
+  unwrapWebCreatorProject,
   validateAndNormalizeWebCreatorProject,
 } from '../lib/assistant/webcreator-validator';
 
 describe('webcreator-validator', () => {
+  it('quita HTML pegado después de Esto es lo que obtuve sin perder el brief', () => {
+    const prompt = 'Diseña una landing para Aguascalientes.\n\nEsto es lo que obtuve:\n<body><div>HTML anterior enorme</div></body>';
+    expect(cleanWebCreatorPrompt(prompt)).toBe('Diseña una landing para Aguascalientes.');
+  });
+
+  it('desenvuelve respuestas con projectData', () => {
+    const project = { pages: [{ frames: [] }] };
+    expect(unwrapWebCreatorProject({ projectData: project })).toEqual(project);
+  });
+
   it('corrige claims de urgencia o autoridad no verificados', () => {
     const result = sanitizeGeneratedText(
       'Lanzamiento oficial. Plazas iniciales limitadas. Modelo con éxito. © 2024'
