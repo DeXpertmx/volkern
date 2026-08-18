@@ -130,10 +130,13 @@ const sendMessageWrapper = async (input: {
   mensaje?: string;
   contenido?: string;
   canal?: string;
+  telefono?: string;
+  empresa?: string;
+  registrarContacto?: string;
   userId?: string;
   sessionId?: string;
 }) => {
-  const { tenantId, conversationId, email, nombre, canal, userId } = input;
+  const { tenantId, conversationId, email, nombre, canal, telefono, empresa, registrarContacto, userId } = input;
   const contenido = (input.mensaje || input.contenido || '').trim();
 
   if (!tenantId) throw new Error('tenantId es requerido');
@@ -178,10 +181,35 @@ const sendMessageWrapper = async (input: {
   }
 
   if (!lead && !contact) {
-    const ref = nombre ? `"${nombre}"` : emailLimpio ? `con el email ${emailLimpio}` : 'esa persona';
-    throw new Error(
-      `No encontré a ${ref} en tu CRM. Pásame su email real (por ejemplo: persona@empresa.com) o regístralo(a) primero.`
-    );
+    // Flujo de autoregistro confirmado por el usuario ("sí" + email real):
+    // crear el lead con los datos reales y continuar el envío. Nunca inventar.
+    if (registrarContacto === 'true') {
+      if (!emailLimpio) {
+        throw new Error(
+          'Para registrar a esta persona necesito su email real. No voy a inventar una dirección; responde con un correo válido.'
+        );
+      }
+      const nombreFinal = nombre && nombre.trim()
+        ? nombre.trim().replace(/^a\s+/i, '').trim()
+        : emailLimpio.split('@')[0].replace(/[._-]+/g, ' ').trim();
+      lead = await prisma.lead.create({
+        data: {
+          tenantId,
+          nombre: nombreFinal,
+          email: emailLimpio,
+          telefono: telefono || null,
+          empresa: empresa || null,
+          fuente: 'telegram',
+          notas: 'Lead registrado desde Telegram con confirmación explícita del usuario.',
+          metadataExterna: { origen: 'telegram', confirmado: true },
+        },
+      });
+    } else {
+      const ref = nombre ? `"${nombre}"` : emailLimpio ? `con el email ${emailLimpio}` : 'esa persona';
+      throw new Error(
+        `No encontré a ${ref} en tu CRM. Pásame su email real (por ejemplo: persona@empresa.com) o regístralo(a) primero.`
+      );
+    }
   }
 
   const destinatarioNombre = lead?.nombre || contact?.nombre || nombre || 'el contacto';

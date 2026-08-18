@@ -202,6 +202,18 @@ function mensajeParaClasificarCita(params: Record<string, any>): string {
 }
 
 /**
+ * Reconstruye la orden de envío tras completar los datos del contacto en el
+ * flujo de autoregistro, para que el clasificador vuelva a extraer
+ * email/nombre/mensaje y el wrapper reciba registrarContacto=true por contexto.
+ */
+function mensajeParaClasificarEnvio(params: Record<string, any>): string {
+  const destinatario = params.email || params.nombre || ''
+  const canal = params.canal ? ` por ${params.canal}` : ''
+  const contenido = params.mensaje || params.contenido || ''
+  return `Enviar mensaje a ${destinatario}${canal}${contenido ? `: ${contenido}` : ''}`
+}
+
+/**
  * ¿La persona indicada para agendar ya está en el CRM del tenant?
  * Espejo de la búsqueda del wrapper (lead → contacto, por nombre o email).
  */
@@ -230,6 +242,31 @@ async function personaExisteEnCrm(tenantId: string, params: Record<string, any>)
 function mensajeConfirmarRegistro(nombre: string): string {
   const nombreLimpio = nombre && nombre.trim().length > 0 ? nombre : 'esa persona'
   return `👤 *${nombreLimpio}* no está registrado(a) en tu CRM.\n¿Quieres registrarlo(a) como lead y agendar la cita? Responde *sí* o *no*.`
+}
+
+function mensajeConfirmarRegistroEnvio(nombre: string): string {
+  const nombreLimpio = nombre && nombre.trim().length > 0 ? nombre : 'esa persona'
+  return `👤 *${nombreLimpio}* no está registrado(a) en tu CRM.\n¿Quieres registrarlo(a) como lead y enviar el mensaje? Responde *sí* o *no*.`
+}
+
+function mensajeConfirmarRegistroPorIntent(intent: string, nombre: string): string {
+  return intent === 'enviar_mensaje'
+    ? mensajeConfirmarRegistroEnvio(nombre)
+    : mensajeConfirmarRegistro(nombre)
+}
+
+function mensajeParaClasificarPorIntent(intent: string, params: Record<string, any>): string {
+  return intent === 'enviar_mensaje'
+    ? mensajeParaClasificarEnvio(params)
+    : mensajeParaClasificarCita(params)
+}
+
+function mensajeRegistroCancelado(intent: string, nombre: string): string {
+  const nombreLimpio = nombre && nombre.trim().length > 0 ? nombre : 'esa persona'
+  if (intent === 'enviar_mensaje') {
+    return `❌ Entendido, no registré a *${nombreLimpio}* ni envié el mensaje.\nSi quieres enviar a otra persona, dímelo.`
+  }
+  return `❌ Entendido, no registré a *${nombreLimpio}* ni agendé la cita.\nSi quieres agendar con otra persona, dímelo.`
 }
 
 export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput> {
@@ -297,11 +334,15 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
     const recentMessages = await memory.getMessages(conv.id, DEFAULTS.MAX_HISTORY)
     let classificationMessage = message
 
-    // ═══ 0b. RESOLVER CONFIRMACIÓN DE CONTACTO (agendar_cita multi-turno) ═══
+    // ═══ 0b. RESOLVER CONFIRMACIÓN DE CONTACTO (multi-turno) ═══
     // El bot preguntó "¿registro a X como lead?" y el usuario responde sí/no.
     // Se resuelve ANTES de clasificar para que el siguiente turno ejecute el
     // skill con registrarContacto=true (o cancele el flujo).
-    if (context.pendingIntent === 'agendar_cita' && context.missingEntities?.includes('confirmar_registro')) {
+    // Aplica a agendar_cita y enviar_mensaje (ambos registran el contacto).
+    if (
+      (context.pendingIntent === 'agendar_cita' || context.pendingIntent === 'enviar_mensaje') &&
+      context.missingEntities?.includes('confirmar_registro')
+    ) {
       const nombrePendiente = String(context.collectedEntities?.nombre || context.collectedEntities?.email || '')
 
       if (esConfirmacionPositiva(message)) {
@@ -339,29 +380,32 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
           missingEntities: [],
           collectedEntities: collected,
         })
-        classificationMessage = mensajeParaClasificarCita(collected)
-        console.log('[ChatbotService] Contacto confirmado con email real: agendando cita')
+        classificationMessage = mensajeParaClasificarPorIntent(context.pendingIntent, collected)
+        console.log('[ChatbotService] Contacto confirmado con email real: continuando ejecución')
       } else if (esConfirmacionNegativa(message)) {
-        const finalMessage = `❌ Entendido, no registré a *${nombrePendiente || 'esa persona'}* ni agendé la cita.\nSi quieres agendar con otra persona, dímelo.`
+        const finalMessage = mensajeRegistroCancelado(context.pendingIntent, nombrePendiente)
         await memory.updateContext(conv.id, { pendingIntent: undefined, missingEntities: [], collectedEntities: {} })
         await memory.addMessage({
           conversationId: conv.id,
           content: finalMessage,
           direction: 'saliente',
           channel,
-          metadata: { source: 'chatbot', intent: 'agendar_cita', needsMoreInfo: false },
+          metadata: { source: 'chatbot', intent: context.pendingIntent, needsMoreInfo: false },
         })
         return { success: true, response: finalMessage }
       } else {
         // Respuesta ambigua → volver a preguntar (sin perder el estado pendiente)
-        return { success: true, response: mensajeConfirmarRegistro(nombrePendiente) }
+        return { success: true, response: mensajeConfirmarRegistroPorIntent(context.pendingIntent, nombrePendiente) }
       }
     }
 
     // ═══ 0c. RECIBIR DATOS REALES DEL CONTACTO ═══
     // Segundo paso después de que el usuario confirmó el registro: el email es
     // obligatorio porque el modelo Lead lo exige y no se permite inventarlo.
-    if (context.pendingIntent === 'agendar_cita' && context.missingEntities?.includes('datos_contacto')) {
+    if (
+      (context.pendingIntent === 'agendar_cita' || context.pendingIntent === 'enviar_mensaje') &&
+      context.missingEntities?.includes('datos_contacto')
+    ) {
       const nombreDatosPendientes = String(context.collectedEntities?.nombre || context.collectedEntities?.email || 'esta persona')
       const datosContacto = extraerDatosContacto(message)
       if (!datosContacto.email) {
@@ -387,8 +431,8 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
         missingEntities: [],
         collectedEntities: collected,
       })
-      classificationMessage = mensajeParaClasificarCita(collected)
-      console.log('[ChatbotService] Datos reales recibidos para el contacto: continuando agendado')
+      classificationMessage = mensajeParaClasificarPorIntent(context.pendingIntent, collected)
+      console.log('[ChatbotService] Datos reales recibidos para el contacto: continuando ejecución')
     }
 
     // ═══ 0d. RESOLVER CONFIRMACIÓN DE ACCIÓN DESTRUCTIVA (sí/no) ═══
@@ -669,7 +713,7 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
     if (
       isActionable &&
       !classification.needsMoreInfo &&
-      classification.intent === 'agendar_cita' &&
+      (classification.intent === 'agendar_cita' || classification.intent === 'enviar_mensaje') &&
       !yaConfirmadoRegistro
     ) {
       const yaRegistrado = await personaExisteEnCrm(tenantId, classification.extractedParams || {})
@@ -677,11 +721,11 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
         const nombrePendiente = String(
           classification.extractedParams?.nombre || classification.extractedParams?.email || ''
         )
-        const pregunta = mensajeConfirmarRegistro(nombrePendiente)
+        const pregunta = mensajeConfirmarRegistroPorIntent(classification.intent, nombrePendiente)
 
         // Guardar el intent pendiente para el siguiente turno (sí/no)
         await memory.updateContext(conv.id, {
-          pendingIntent: 'agendar_cita',
+          pendingIntent: classification.intent,
           missingEntities: ['confirmar_registro'],
           collectedEntities: { ...(classification.extractedParams || {}) },
         })
@@ -690,7 +734,7 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
           content: pregunta,
           direction: 'saliente',
           channel,
-          metadata: { source: 'chatbot', intent: 'agendar_cita', needsMoreInfo: true, missingEntity: 'confirmar_registro' },
+          metadata: { source: 'chatbot', intent: classification.intent, needsMoreInfo: true, missingEntity: 'confirmar_registro' },
         })
         console.log('[ChatbotService] Contacto no registrado — pidiendo confirmación para registrar')
         return { success: true, response: pregunta }
