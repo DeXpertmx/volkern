@@ -53,7 +53,7 @@ export class IntentClassifierAgent {
       const response = await callAssistantWithFallback([
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
-      ], 10000);
+      ], 5000);
       
       const content = response.choices[0].message.content;
       console.log(`[IntentClassifier] AI Response: "${content}"`);

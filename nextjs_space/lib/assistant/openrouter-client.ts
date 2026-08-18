@@ -536,8 +536,9 @@ export async function callAssistantWithFallback(
   // Timeout por hop de la cadena de fallback.
   // - Default 20s: preserve el comportamiento para jobs en background
   //   (summarizer, analyzer, etc.) que generan texto largo y antes no tenían timeout.
-  // - Camino caliente del chatbot (intent-classifier / fact-extractor) pasa 10s
+  // - Camino caliente del chatbot (intent-classifier / fact-extractor) pasa 5s
   //   para que TODA la cadena entre en el presupuesto de 25s del webhook.
+  //   Gemini (último recurso) conserva un mínimo de 10s por ser el más fiable.
   const hopTimeout = timeoutMs ?? 20000
 
   // 1. DeepSeek V4 Flash directo (con circuit breaker: el 402 abre el
