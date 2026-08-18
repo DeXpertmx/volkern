@@ -3,6 +3,17 @@ const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_BASE_URL = 'https://api.deepseek.com/v1';
 
+/**
+ * DeepSeek puede quedar sin saldo (402) durante días. En vez de esperar el
+ * fallo en cada consulta (o depender del circuit breaker que arranca en frío
+ * tras cada deploy), se puede desactivar por env: DEEPSEEK_DISABLED=1.
+ * Se evalúa en tiempo de llamada para poder cambiarlo sin rebuild.
+ */
+export function isDeepSeekEnabled(): boolean {
+  const disabled = process.env.DEEPSEEK_DISABLED === '1' || process.env.DEEPSEEK_DISABLED === 'true';
+  return !!DEEPSEEK_API_KEY && !disabled;
+}
+
 // ─── Circuit breaker de la cadena de fallback ────────────────────────────────
 // DeepSeek devuelve 402 (saldo insuficiente) de forma determinista y Dots/
 // Nemotron se cuelgan hasta el timeout en el camino caliente del chatbot.
@@ -376,16 +387,18 @@ async function callDeepSeekV4FlashDirect(
 export async function callWebCreatorWithFallback(
   messages: OpenRouterMessage[]
 ): Promise<OpenRouterResponse> {
-  // 1. DeepSeek V4 Flash directo (con circuit breaker)
-  try {
-    console.log('[AI WebCreator] Intentando DeepSeek V4 Flash (API directa)...');
-    // Generaciones largas (hasta 8K tokens): timeout amplio para no caer en
-    // fallbacks espurios por latencia legítima.
-    const response = await withBreaker('deepseek-chat', () => callDeepSeekV4FlashDirect(messages, undefined, 45000));
-    console.log('[AI WebCreator] ✅ DeepSeek V4 Flash respondió correctamente');
-    return response;
-  } catch (error) {
-    if (!(error as any)?.circuitOpen) console.warn('[AI WebCreator] DeepSeek V4 Flash falló:', error);
+  // 1. DeepSeek V4 Flash directo (con circuit breaker; desactivable por env)
+  if (isDeepSeekEnabled()) {
+    try {
+      console.log('[AI WebCreator] Intentando DeepSeek V4 Flash (API directa)...');
+      // Generaciones largas (hasta 8K tokens): timeout amplio para no caer en
+      // fallbacks espurios por latencia legítima.
+      const response = await withBreaker('deepseek-chat', () => callDeepSeekV4FlashDirect(messages, undefined, 45000));
+      console.log('[AI WebCreator] ✅ DeepSeek V4 Flash respondió correctamente');
+      return response;
+    } catch (error) {
+      if (!(error as any)?.circuitOpen) console.warn('[AI WebCreator] DeepSeek V4 Flash falló:', error);
+    }
   }
 
   // 2. Ling 3.0 Flash via OpenRouter — proveedor distinto a Google, inmune al
@@ -529,7 +542,7 @@ export async function callAssistantWithFallback(
 
   // 1. DeepSeek V4 Flash directo (con circuit breaker: el 402 abre el
   //     circuito al primer fallo y se salta durante 30 min)
-  if (DEEPSEEK_API_KEY) {
+  if (isDeepSeekEnabled()) {
     try {
       console.log('[AI] Intentando DeepSeek V4 Flash (API directa)...');
       const response = await withBreaker('deepseek-chat', () => callDeepSeekV4FlashDirect(messages, undefined, hopTimeout));
@@ -611,7 +624,7 @@ export async function callAssistantWithToolLoop(
   executeTool: (name: string, args: Record<string, any>) => Promise<string>
 ): Promise<OpenRouterResponse> {
   // 1. Intentar DeepSeek V4 Flash con tools (con circuit breaker)
-  if (DEEPSEEK_API_KEY) {
+  if (isDeepSeekEnabled()) {
     try {
       console.log('[AI ToolLoop] Intentando DeepSeek V4 Flash con tools...');
       const response = await withBreaker('deepseek-chat', () => callDeepSeekV4FlashDirect(messages, tools));
