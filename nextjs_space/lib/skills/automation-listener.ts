@@ -181,6 +181,10 @@ function eventToAutomationContext(event: EventType, payload: BaseEventPayload): 
         leadNombre: formPayload.nombre,
         leadTelefono: formPayload.telefono,
         formPayload: formPayload.payload,
+        // Expuesto también como `form` para que el evaluador de condiciones
+        // (resolveFieldValue con prefijo form.) pueda leer los campos del
+        // payload directamente.
+        form: formPayload.payload,
       };
     }
 
