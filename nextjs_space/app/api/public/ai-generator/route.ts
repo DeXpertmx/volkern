@@ -119,21 +119,22 @@ export async function POST(req: Request) {
     //    hardcodeadas que ignoren el prompt del usuario.
     let projectData = extractJsonFromContent(content);
 
-    // 2. Si no se obtuvo un JSON válido, reintentar UNA vez con instrucción
-    //    reforzada de formato (la causa típica es el modelo devolviendo el
-    //    JSON envuelto en ``` o con texto extra).
+    // 2. Si no se obtuvo un JSON válido, reintentar UNA vez. La causa más
+    //    común es la respuesta truncada por el tope de tokens del modelo
+    //    (finish_reason 'length'): una página completa supera 8K tokens. Para
+    //    el reintento se usa un prompt COMPACTO (no el system prompt gigante,
+    //    que consume presupuesto de salida) y se amplía max_tokens a 16K.
     if (!projectData || !projectData.pages) {
-      console.warn('[MiniMax AI] JSON inválido. Reintentando con instrucción reforzada...');
-      const reinforcedSystem = SYSTEM_PROMPT
-        + '\n\nINSTRUCCIÓN CRÍTICA DE FORMATO: Responde ÚNICAMENTE con el objeto JSON.'
-        + ' NO uses bloques de código markdown (sin ```json ni ```).'
-        + ' NO añadas texto, comentarios ni explicaciones antes o después del JSON.'
-        + '\n\nESTILO: ' + currentStyle.name + ' (' + currentStyle.primary + ')';
+      console.warn('[MiniMax AI] JSON inválido. Reintentando con prompt compacto y max_tokens ampliado...');
+      const finishedEarly = response.choices?.[0]?.finish_reason === 'length';
+      const compactSystem = finishedEarly
+        ? 'Eres un diseñador de landing pages premium. Genera el JSON de la página pedida por el usuario de forma CONCISA: cada sección con lo esencial, sin rellenar. Responde ÚNICAMENTE con JSON válido sin markdown ni texto extra.'
+        : 'Eres un diseñador de landing pages premium. Genera el JSON de la página pedida por el usuario. Responde ÚNICAMENTE con JSON válido, sin bloques markdown, sin comentarios ni explicaciones.';
       const retryMessages: OpenRouterMessage[] = [
-        { role: 'system', content: reinforcedSystem },
-        { role: 'user', content: `Genera landing page para: ${prompt}. Estilo: ${currentStyle.name}. Responde SOLO JSON.` }
+        { role: 'system', content: compactSystem },
+        { role: 'user', content: `Genera la landing page para este brief: ${prompt}\n\nUsa bloques premium y componentes con clases Tailwind. Estilo: ${currentStyle.name}. Responde SOLO JSON (máximo ~12000 tokens, conciso).` }
       ];
-      const retryResponse = await callWebCreatorWithFallback(retryMessages);
+      const retryResponse = await callWebCreatorWithFallback(retryMessages, 16384);
       const retryContent = retryResponse?.choices?.[0]?.message?.content;
       if (retryContent) {
         console.log('[MiniMax AI] Reintento recibido, longitud:', retryContent.length);

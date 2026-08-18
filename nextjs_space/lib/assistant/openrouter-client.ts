@@ -229,9 +229,10 @@ export async function callOpenRouter(model: string, messages: OpenRouterMessage[
  */
 async function callGemma4(
   messages: OpenRouterMessage[],
-  timeoutMs = 20000
+  timeoutMs = 20000,
+  maxTokens = 8192
 ): Promise<OpenRouterResponse> {
-  return callOpenRouter('google/gemma-4-31b-it:free', messages, 0.3, 8192, timeoutMs);
+  return callOpenRouter('google/gemma-4-31b-it:free', messages, 0.3, maxTokens, timeoutMs);
 }
 
 /**
@@ -241,9 +242,10 @@ async function callGemma4(
  */
 async function callGemma426b(
   messages: OpenRouterMessage[],
-  timeoutMs = 20000
+  timeoutMs = 20000,
+  maxTokens = 8192
 ): Promise<OpenRouterResponse> {
-  return callOpenRouter('google/gemma-4-26b-a4b-it:free', messages, 0.3, 8192, timeoutMs);
+  return callOpenRouter('google/gemma-4-26b-a4b-it:free', messages, 0.3, maxTokens, timeoutMs);
 }
 
 /**
@@ -256,9 +258,10 @@ async function callGemma426b(
  */
 async function callDotsStudioFree(
   messages: OpenRouterMessage[],
-  timeoutMs = 20000
+  timeoutMs = 20000,
+  maxTokens = 8192
 ): Promise<OpenRouterResponse> {
-  return callOpenRouter('dots-studio/dots-3-note-preview:free', messages, 0.3, 8192, timeoutMs);
+  return callOpenRouter('dots-studio/dots-3-note-preview:free', messages, 0.3, maxTokens, timeoutMs);
 }
 
 /**
@@ -268,9 +271,10 @@ async function callDotsStudioFree(
  */
 async function callNemotron3UltraFree(
   messages: OpenRouterMessage[],
-  timeoutMs = 20000
+  timeoutMs = 20000,
+  maxTokens = 8192
 ): Promise<OpenRouterResponse> {
-  return callOpenRouter('nvidia/nemotron-3-ultra-550b-a55b:free', messages, 0.3, 8192, timeoutMs);
+  return callOpenRouter('nvidia/nemotron-3-ultra-550b-a55b:free', messages, 0.3, maxTokens, timeoutMs);
 }
 
 /**
@@ -293,11 +297,12 @@ function isGoogleSharedPool429(error: unknown): boolean {
 async function callGoogleGemmaChain(
   messages: OpenRouterMessage[],
   timeoutMs = 20000,
-  skipModel?: string
+  skipModel?: string,
+  maxTokens = 8192
 ): Promise<OpenRouterResponse | null> {
   if (skipModel !== 'google/gemma-4-31b-it:free') {
     try {
-      const response = await callGemma4(messages, timeoutMs);
+      const response = await callGemma4(messages, timeoutMs, maxTokens);
       return response;
     } catch (error) {
       console.warn('[AI] Gemma 4 falló:', error);
@@ -307,7 +312,7 @@ async function callGoogleGemmaChain(
   }
   if (skipModel !== 'google/gemma-4-26b-a4b-it:free') {
     try {
-      const response = await callGemma426b(messages, timeoutMs);
+      const response = await callGemma426b(messages, timeoutMs, maxTokens);
       return response;
     } catch (error) {
       console.warn('[AI] Gemma 4 26b falló:', error);
@@ -323,7 +328,8 @@ async function callGoogleGemmaChain(
 async function callDeepSeekV4FlashDirect(
   messages: OpenRouterMessage[],
   tools?: OpenRouterTool[],
-  timeoutMs = 20000
+  timeoutMs = 20000,
+  maxTokens = 8192
 ): Promise<OpenRouterResponse> {
   if (!DEEPSEEK_API_KEY) {
     throw new Error('DEEPSEEK_API_KEY no configurada');
@@ -333,7 +339,7 @@ async function callDeepSeekV4FlashDirect(
     model: 'deepseek-chat',
     messages,
     temperature: 0.4,
-    max_tokens: 8192,
+    max_tokens: maxTokens,
     top_p: 0.9
   };
 
@@ -385,15 +391,16 @@ async function callDeepSeekV4FlashDirect(
  * 4. Google Gemini 2.5 Flash directo (respaldo final)
  */
 export async function callWebCreatorWithFallback(
-  messages: OpenRouterMessage[]
+  messages: OpenRouterMessage[],
+  maxTokens = 16384
 ): Promise<OpenRouterResponse> {
   // 1. DeepSeek V4 Flash directo (con circuit breaker; desactivable por env)
   if (isDeepSeekEnabled()) {
     try {
       console.log('[AI WebCreator] Intentando DeepSeek V4 Flash (API directa)...');
-      // Generaciones largas (hasta 8K tokens): timeout amplio para no caer en
+      // Generaciones largas (hasta 16K tokens): timeout amplio para no caer en
       // fallbacks espurios por latencia legítima.
-      const response = await withBreaker('deepseek-chat', () => callDeepSeekV4FlashDirect(messages, undefined, 45000));
+      const response = await withBreaker('deepseek-chat', () => callDeepSeekV4FlashDirect(messages, undefined, 60000, maxTokens));
       console.log('[AI WebCreator] ✅ DeepSeek V4 Flash respondió correctamente');
       return response;
     } catch (error) {
@@ -405,7 +412,7 @@ export async function callWebCreatorWithFallback(
   //     pool rate-limit de Google AI Studio
   try {
     console.log('[AI WebCreator] Fallback a dots-studio/dots-3-note-preview:free...');
-    const response = await withBreaker('dots-studio/dots-3-note-preview:free', () => callDotsStudioFree(messages, 45000));
+    const response = await withBreaker('dots-studio/dots-3-note-preview:free', () => callDotsStudioFree(messages, 60000, maxTokens));
     console.log('[AI WebCreator] ✅ Ling 3.0 Flash respondió correctamente');
     return response;
   } catch (error) {
@@ -415,7 +422,7 @@ export async function callWebCreatorWithFallback(
   // 3+4. Gemma 4 (31b → 26b) via OpenRouter — con atajo ante 429 del pool
   //       compartido de Google
   {
-    const gemmaResponse = await withBreaker('google/gemma-4-chain', () => callGoogleGemmaChain(messages, 45000)).catch((e) => {
+    const gemmaResponse = await withBreaker('google/gemma-4-chain', () => callGoogleGemmaChain(messages, 60000, undefined, maxTokens)).catch((e) => {
       if (!e?.circuitOpen) console.warn('[AI WebCreator] Gemma 4 falló:', e);
       return null;
     });
@@ -428,7 +435,7 @@ export async function callWebCreatorWithFallback(
   // 5. Nemotron 3 Ultra free (NVIDIA) via OpenRouter
   try {
     console.log('[AI WebCreator] Fallback a nvidia/nemotron-3-ultra-550b-a55b:free...');
-    const response = await withBreaker('nvidia/nemotron-3-ultra-550b-a55b:free', () => callNemotron3UltraFree(messages, 45000));
+    const response = await withBreaker('nvidia/nemotron-3-ultra-550b-a55b:free', () => callNemotron3UltraFree(messages, 60000, maxTokens));
     console.log('[AI WebCreator] ✅ Nemotron 3 Ultra respondió correctamente');
     return response;
   } catch (error) {
@@ -438,7 +445,7 @@ export async function callWebCreatorWithFallback(
   // 6. Fallback final: Google Gemini directo (GEMINI_MODEL)
   try {
     console.log(`[AI WebCreator] Fallback final a Google Gemini (${GEMINI_MODEL})...`);
-    const response = await callGemini25Flash(messages, 15000);
+    const response = await callGemini25Flash(messages, 30000, maxTokens);
     console.log('[AI WebCreator] ✅ Gemini respondió correctamente');
     return response;
   } catch (error) {
@@ -461,7 +468,8 @@ const GEMINI_MODEL = process.env.GOOGLE_GEMINI_MODEL || 'gemini-3.5-flash-lite';
  */
 async function callGemini25Flash(
   messages: OpenRouterMessage[],
-  timeoutMs = 90000
+  timeoutMs = 90000,
+  maxTokens = 8192
 ): Promise<OpenRouterResponse> {
   const GOOGLE_AI_KEY = process.env.GOOGLE_AI_KEY;
   const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GOOGLE_AI_KEY}`;
@@ -492,7 +500,7 @@ async function callGemini25Flash(
       contents: history,
       generationConfig: {
         temperature: 0.7,
-        maxOutputTokens: 8192,
+        maxOutputTokens: maxTokens,
         response_mime_type: 'application/json',
       }
     }),
