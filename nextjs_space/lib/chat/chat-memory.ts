@@ -208,10 +208,13 @@ export class ChatMemoryService {
           chatbotContext: {
             ...current,
             ...updates,
-            collectedEntities: {
-              ...(current.collectedEntities || {}),
-              ...(updates.collectedEntities || {}),
-            },
+            // collectedEntities se REEMPLAZA (no se fusiona): los turnos que
+            // terminan pasan `collectedEntities: {}` para limpiar el estado, y
+            // con merge ese `{}` no borraba nada → se filtraba el email/nombre
+            // de un turno anterior al siguiente (correo al destinatario equivocado).
+            collectedEntities: updates.collectedEntities !== undefined
+              ? updates.collectedEntities
+              : (current.collectedEntities || {}),
             facts: [
               ...(current.facts || []),
               ...(updates.facts || []),
