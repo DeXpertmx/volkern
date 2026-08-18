@@ -36,6 +36,7 @@ import { DelayNode } from '@/components/automation/DelayNode'
 import { NodeToolbar } from '@/components/automation/NodeToolbar'
 import { NodeConfigPanel } from '@/components/automation/NodeConfigPanel'
 import { TemplatesGallery } from '@/components/automation/TemplatesGallery'
+import { validateNode, validateAllNodes } from '@/lib/automation/validate-node'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -59,81 +60,8 @@ interface AutomationData {
   }
 }
 
-// Validación de nodos
-const validateNode = (node: Node): { isValid: boolean; message?: string } => {
-  const config = node.data.config || {}
-
-  switch (node.type) {
-    case 'action':
-      if (!config.actionType) {
-        return { isValid: false, message: 'Selecciona un tipo de acción' }
-      }
-
-      // Validar campos específicos por tipo de acción
-      if (config.actionType === 'enviar_email') {
-        if (!config.subject || !config.message) {
-          return { isValid: false, message: 'Completa asunto y mensaje' }
-        }
-      } else if (config.actionType === 'enviar_sms' || config.actionType === 'enviar_whatsapp') {
-        if (!config.message) {
-          return { isValid: false, message: 'Escribe el mensaje' }
-        }
-      } else if (config.actionType === 'enviar_telegram') {
-        if (!config.chatId || !config.message) {
-          return { isValid: false, message: 'Completa Chat ID y mensaje' }
-        }
-      } else if (config.actionType === 'cambiar_etapa_lead' || config.actionType === 'actualizar_lead') {
-        if (!config.newStatus) {
-          return { isValid: false, message: 'Selecciona el nuevo estado' }
-        }
-      } else if (config.actionType === 'asignar_tag') {
-        if (!config.tagName) {
-          return { isValid: false, message: 'Especifica el tag' }
-        }
-      } else if (config.actionType === 'crear_tarea') {
-        if (!config.taskTitle) {
-          return { isValid: false, message: 'Escribe el título de la tarea' }
-        }
-      }
-      break
-
-    case 'condition':
-      if (!config.field || !config.operator) {
-        return { isValid: false, message: 'Configura campo y operador' }
-      }
-      if (config.operator !== 'vacio' && config.operator !== 'no_vacio' && !config.value) {
-        return { isValid: false, message: 'Especifica el valor a comparar' }
-      }
-      break
-
-    case 'delay':
-      if (!config.duration || !config.unit) {
-        return { isValid: false, message: 'Configura duración y unidad' }
-      }
-      break
-  }
-
-  return { isValid: true }
-}
-
-// Validar todos los nodos
-const validateAllNodes = (nodes: Node[]): { isValid: boolean; invalidNodes: string[] } => {
-  const invalidNodes: string[] = []
-
-  nodes.forEach(node => {
-    if (node.type !== 'trigger') {
-      const validation = validateNode(node)
-      if (!validation.isValid) {
-        invalidNodes.push(node.id)
-      }
-    }
-  })
-
-  return {
-    isValid: invalidNodes.length === 0,
-    invalidNodes
-  }
-}
+// La validación de nodos vive en @/lib/automation/validate-node (compartida y testeable).
+// Los campos que comprueba deben coincidir con las claves que escriben los editores.
 
 export default function AutomationBuilderPage() {
   const params = useParams()
@@ -509,7 +437,7 @@ export default function AutomationBuilderPage() {
               {testing ? 'Probando...' : 'Probar'}
             </Button>
           )}
-          <Button onClick={handleSave} disabled={saving || hasInvalidNodes} size="sm">
+          <Button onClick={handleSave} disabled={saving} size="sm">
             <Save className="h-3.5 w-3.5 mr-1.5" />
             {saving ? 'Guardando...' : 'Guardar'}
           </Button>

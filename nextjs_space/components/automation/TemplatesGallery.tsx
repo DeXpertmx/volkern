@@ -42,7 +42,7 @@ const templates = [
         color: 'bg-blue-100 dark:bg-blue-950/50',
         nodes: [
             { id: 't1', type: 'trigger', position: { x: 400, y: 100 }, data: { trigger: 'nuevo_lead' } },
-            { id: 'a1', type: 'action', position: { x: 400, y: 250 }, data: { config: { actionType: 'asignar_tag', subject: 'Nuevo Ingreso' }, isInvalid: false } },
+            { id: 'a1', type: 'action', position: { x: 400, y: 250 }, data: { config: { actionType: 'asignar_tag', tag: 'Nuevo Ingreso' }, isInvalid: false } },
             { id: 'a2', type: 'action', position: { x: 400, y: 400 }, data: { config: { actionType: 'enviar_email', subject: '¡Bienvenido a {{business.name}}!', message: 'Hola {{contact.first_name}}, gracias por registrarte. Un asesor te contactará pronto.' }, isInvalid: false } }
         ],
         edges: [
