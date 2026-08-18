@@ -1,6 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 
+// Campos estándar del Lead: se mapean a su columna. Todo lo demás del
+// payload (campos personalizados del formulario) se conserva como notas,
+// con el nombre del formulario como contexto — nada se pierde.
+export const CAMPOS_ESTANDAR = new Set([
+  'email', 'Email', 'correo',
+  'nombre', 'name', 'Nombre',
+  'telefono', 'phone', 'Telefono',
+  'empresa', 'company', 'Empresa',
+  'notas', 'notes', 'Notas',
+]);
+
+// Construye las notas del lead: contexto del formulario + notas del
+// solicitante + campos personalizados que no tienen columna propia.
+export function buildLeadNotas(payload: Record<string, any>, formName: string, notas?: any): string {
+  const partes: string[] = [`Lead generado desde el formulario: ${formName}`];
+  if (notas) partes.push(`Notas del solicitante:\n${String(notas)}`);
+
+  const extra = Object.entries(payload)
+    .filter(([k]) => !CAMPOS_ESTANDAR.has(k))
+    .filter(([, v]) => v !== undefined && v !== null && v !== '');
+  if (extra.length > 0) {
+    partes.push('Datos adicionales del formulario:');
+    for (const [k, v] of extra) {
+      partes.push(`• ${k}: ${Array.isArray(v) ? v.join(', ') : String(v)}`);
+    }
+  }
+  return partes.join('\n\n');
+}
+
 // POST /api/formularios/[id]/submit — Submit público de un formulario
 export async function POST(
   req: NextRequest,
@@ -9,7 +38,7 @@ export async function POST(
   try {
     const form = await prisma.webForm.findUnique({
       where: { id: params.id },
-      select: { id: true, tenantId: true, config: true },
+      select: { id: true, tenantId: true, name: true, config: true },
     });
 
     if (!form) {
@@ -44,6 +73,8 @@ export async function POST(
     const empresa = payload.empresa || payload.company || payload.Empresa;
     const notas = payload.notas || payload.notes || payload.Notas;
 
+    const formName = form.name || (form.config as any)?.title || 'Formulario';
+
     if (email) {
       try {
         const lead = await prisma.lead.create({
@@ -53,9 +84,7 @@ export async function POST(
             email: String(email),
             ...(telefono ? { telefono: String(telefono) } : {}),
             ...(empresa ? { empresa: String(empresa) } : {}),
-            notas: notas
-              ? `Formulario web [${form.id}]:\n${String(notas)}`
-              : `Lead generado desde formulario web [${form.id}].\n\nDatos: ${JSON.stringify(payload, null, 2)}`,
+            notas: buildLeadNotas(payload, formName, notas),
             fuente: 'Formulario Web',
             estado: 'nuevo',
           },
