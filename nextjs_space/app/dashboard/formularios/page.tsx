@@ -262,6 +262,7 @@ export default function FormulariosPage() {
               submitUrl={`/api/formularios/${selectedForm.id}/submit`}
               className="rounded-xl"
               buttonColor={selectedForm.config?._buttonColor}
+              buttonTextColor={selectedForm.config?._buttonTextColor}
               backgroundColor={selectedForm.config?._backgroundColor}
             />
           )}
@@ -496,6 +497,7 @@ function FormEditor({ form, onBack, onFormUpdated }: { form: WebForm; onBack: ()
             submitUrl={`/api/formularios/${form.id}/submit`}
             className="rounded-xl"
             buttonColor={surveyJson._buttonColor}
+            buttonTextColor={surveyJson._buttonTextColor}
             backgroundColor={surveyJson._backgroundColor}
           />
         </div>
@@ -543,6 +545,22 @@ function FormEditor({ form, onBack, onFormUpdated }: { form: WebForm; onBack: ()
                   </div>
                 </div>
                 <div className="space-y-1">
+                  <Label className="text-xs">Color del texto del botón</Label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={surveyJson._buttonTextColor || '#ffffff'}
+                      onChange={(e) => setSurveyJson((prev: any) => ({ ...prev, _buttonTextColor: e.target.value }))}
+                      className="w-8 h-8 rounded cursor-pointer border-0 p-0"
+                    />
+                    <Input
+                      value={surveyJson._buttonTextColor || '#ffffff'}
+                      onChange={(e) => setSurveyJson((prev: any) => ({ ...prev, _buttonTextColor: e.target.value }))}
+                      className="h-8 text-xs rounded-lg flex-1 font-mono"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1">
                   <Label className="text-xs">Fondo del formulario</Label>
                   <div className="flex items-center gap-2">
                     <input
@@ -558,7 +576,7 @@ function FormEditor({ form, onBack, onFormUpdated }: { form: WebForm; onBack: ()
                     />
                   </div>
                 </div>
-                {('_buttonColor' in surveyJson || '_backgroundColor' in surveyJson) && (
+                {('_buttonColor' in surveyJson || '_buttonTextColor' in surveyJson || '_backgroundColor' in surveyJson) && (
                   <Button
                     size="sm"
                     variant="ghost"
@@ -566,6 +584,7 @@ function FormEditor({ form, onBack, onFormUpdated }: { form: WebForm; onBack: ()
                     onClick={() => setSurveyJson((prev: any) => {
                       const next = { ...prev };
                       delete next._buttonColor;
+                      delete next._buttonTextColor;
                       delete next._backgroundColor;
                       return next;
                     })}
