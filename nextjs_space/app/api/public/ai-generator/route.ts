@@ -5,6 +5,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { callWebCreatorWithFallback, OpenRouterMessage } from '@/lib/assistant/openrouter-client';
 import { WEBCREATOR_SYSTEM_PROMPT } from '@/lib/assistant/webcreator-system-prompt';
+import { validateAndNormalizeWebCreatorProject } from '@/lib/assistant/webcreator-validator';
 
 const SYSTEM_PROMPT = WEBCREATOR_SYSTEM_PROMPT;
 
@@ -150,6 +151,15 @@ export async function POST(req: Request) {
         { error: 'La IA no pudo generar la página con contenido válido. Inténtalo de nuevo en unos segundos.' },
         { status: 502 }
       );
+    }
+
+    // La IA no tiene la última palabra sobre reglas funcionales y de
+    // veracidad. Normalizar antes de devolver el proyecto al editor:
+    // formularios CRM, tags HTML válidos y claims prudentes.
+    const normalized = validateAndNormalizeWebCreatorProject(projectData);
+    projectData = normalized.projectData;
+    if (normalized.warnings.length > 0) {
+      console.warn('[MiniMax AI] Normalizaciones aplicadas:', normalized.warnings);
     }
 
     // Inyectar overrides para Dark Mode (Elegante) si corresponde
