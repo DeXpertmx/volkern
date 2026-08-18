@@ -4,17 +4,31 @@ import React, { useEffect, useState } from 'react';
 import { Model } from 'survey-core';
 import { Survey } from 'survey-react-ui';
 import 'survey-core/survey-core.min.css';
+// Registra el diccionario de español (botones, navegación, textos del sistema)
+// para que el formulario no quede a medias (ej. botones "Yes/No" en inglés).
+import 'survey-core/i18n/spanish';
 import { toast } from 'sonner';
 
 /**
  * Normaliza el JSON del formulario para las vistas externas (preview, embed,
- * página pública): si un campo tiene la etiqueta (title) vacía, SurveyJS por
- * defecto muestra el `name` (el key interno) como título. Para que el nombre
- * interno del campo NUNCA aparezca al cliente, se oculta el título y la
- * numeración de ese campo — solo se ve el placeholder.
+ * página pública):
+ *
+ * 1. Si un campo tiene la etiqueta (title) vacía, SurveyJS por defecto muestra
+ *    el `name` (el key interno) como título. Para que el nombre interno del
+ *    campo NUNCA aparezca al cliente, se oculta el título y la numeración de
+ *    ese campo — solo se ve el placeholder.
+ * 2. Los campos booleanos (Sí/No) usan por defecto "Yes"/"No" en inglés.
+ *    Como el sistema es en español, se fija "Sí"/"No" salvo que el autor
+ *    haya personalizado los labels (labelTrue/labelFalse) en el JSON.
  */
-export function hideEmptyTitles(json: Record<string, unknown>): Record<string, unknown> {
+export function normalizeSurveyJson(json: Record<string, unknown>): Record<string, unknown> {
   const clone = JSON.parse(JSON.stringify(json || {}));
+  // Si el texto del botón de envío está vacío, se elimina para que el
+  // diccionario de español aporte el default ("Completar") en vez de un
+  // botón sin texto.
+  if (typeof clone.completeText === 'string' && !clone.completeText.trim()) {
+    delete clone.completeText;
+  }
   const pages = Array.isArray(clone.pages) ? clone.pages : [clone];
   for (const page of pages) {
     const elements = Array.isArray(page?.elements) ? page.elements : [];
@@ -25,10 +39,18 @@ export function hideEmptyTitles(json: Record<string, unknown>): Record<string, u
         el.titleLocation = 'hidden';
         el.hideNumber = true;
       }
+      // Booleano Sí/No en español (respeta personalización explícita)
+      if (el?.type === 'boolean') {
+        if (!el.labelTrue) el.labelTrue = 'Sí';
+        if (!el.labelFalse) el.labelFalse = 'No';
+      }
     }
   }
   return clone;
 }
+
+// Alias de compatibilidad (los tests existentes lo importan)
+export const hideEmptyTitles = normalizeSurveyJson;
 
 type SurveyFormRendererProps = {
   /** SurveyJS JSON model definition */
@@ -59,7 +81,7 @@ export const SurveyFormRenderer: React.FC<SurveyFormRendererProps> = ({
   const [model, setModel] = useState<Model | null>(null);
 
   useEffect(() => {
-    const normalized = hideEmptyTitles(surveyJson);
+    const normalized = normalizeSurveyJson(surveyJson);
     const survey = new Model(normalized);
 
     // Locale

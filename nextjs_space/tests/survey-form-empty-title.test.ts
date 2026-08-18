@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hideEmptyTitles } from '@/components/public/SurveyFormRenderer';
+import { normalizeSurveyJson, hideEmptyTitles } from '@/components/public/SurveyFormRenderer';
 
 describe('hideEmptyTitles — etiqueta vacía no muestra el nombre interno del campo', () => {
   it('oculta el título de campos con title vacío (solo placeholder visible)', () => {
@@ -62,5 +62,44 @@ describe('hideEmptyTitles — etiqueta vacía no muestra el nombre interno del c
     } as any);
     // Formato plano: se trata como única página
     expect(planoSinPages.elements[0].titleLocation).toBe('hidden');
+  });
+});
+
+describe('normalizeSurveyJson — booleanos Sí/No en español', () => {
+  it('convierte los booleanos sin personalizar a Sí/No', () => {
+    const result = normalizeSurveyJson({
+      pages: [{ elements: [{ type: 'boolean', name: 'acepto' }] }],
+    } as any);
+    const el = result.pages[0].elements[0];
+    expect(el.labelTrue).toBe('Sí');
+    expect(el.labelFalse).toBe('No');
+  });
+
+  it('respeta labels personalizados del autor', () => {
+    const result = normalizeSurveyJson({
+      pages: [{ elements: [{ type: 'boolean', name: 'news', labelTrue: 'Yes', labelFalse: 'No' }] }],
+    } as any);
+    const el = result.pages[0].elements[0];
+    expect(el.labelTrue).toBe('Yes');
+    expect(el.labelFalse).toBe('No');
+  });
+
+  it('no toca campos que no son booleanos', () => {
+    const result = normalizeSurveyJson({
+      pages: [{ elements: [{ type: 'text', name: 'nombre' }] }],
+    } as any);
+    expect(result.pages[0].elements[0].labelTrue).toBeUndefined();
+  });
+});
+
+describe('normalizeSurveyJson — texto del botón de envío', () => {
+  it('elimina completeText vacío para que use el default en español', () => {
+    const result = normalizeSurveyJson({ completeText: '   ' } as any);
+    expect(result.completeText).toBeUndefined();
+  });
+
+  it('conserva completeText personalizado', () => {
+    const result = normalizeSurveyJson({ completeText: 'Enviar solicitud' } as any);
+    expect(result.completeText).toBe('Enviar solicitud');
   });
 });

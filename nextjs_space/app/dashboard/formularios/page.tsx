@@ -594,6 +594,15 @@ function FormEditor({ form, onBack, onFormUpdated }: { form: WebForm; onBack: ()
                 className="rounded-xl mt-1"
                 placeholder="Título que verán los usuarios"
               />
+
+              <Label className="text-sm mt-4 block">Texto del botón de envío</Label>
+              <p className="text-xs text-muted-foreground mb-2">El texto del botón que envía el formulario (por defecto: "Completar").</p>
+              <Input
+                value={surveyJson.completeText || ''}
+                onChange={(e) => setSurveyJson({ ...surveyJson, completeText: e.target.value })}
+                className="rounded-xl mt-1"
+                placeholder="Completar"
+              />
             </Card>
 
             {/* Fields */}
