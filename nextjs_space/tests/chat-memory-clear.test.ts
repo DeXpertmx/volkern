@@ -94,3 +94,62 @@ describe('ChatMemoryService.updateContext — collectedEntities se reemplaza, no
     expect(data.hubMetadata.chatbotContext.collectedEntities).toEqual({ email: 'persistente@x.com' });
   });
 });
+
+describe('ChatMemoryService — facts deduplicados y acotados', () => {
+  it('deduplica facts al fusionar (addFact pasa el array completo)', async () => {
+    mocks.findUnique.mockResolvedValue({
+      hubMetadata: {
+        chatbotContext: {
+          collectedEntities: {},
+          missingEntities: [],
+          facts: ['A', 'B', 'A', 'B'],
+        },
+      },
+    });
+    mocks.update.mockResolvedValue({});
+
+    const svc = new ChatMemoryService('tenant-1');
+    await svc.updateContext('conv-1', { facts: ['A', 'B', 'C'] });
+
+    const data = mocks.update.mock.calls[0][0].data;
+    expect(data.hubMetadata.chatbotContext.facts).toEqual(['A', 'B', 'C']);
+  });
+
+  it('acota facts a los 60 más recientes (sin crecer sin límite)', async () => {
+    const many = Array.from({ length: 80 }, (_, i) => `fact-${i}`);
+    mocks.findUnique.mockResolvedValue({
+      hubMetadata: {
+        chatbotContext: { collectedEntities: {}, missingEntities: [], facts: [] },
+      },
+    });
+    mocks.update.mockResolvedValue({});
+
+    const svc = new ChatMemoryService('tenant-1');
+    await svc.updateContext('conv-1', { facts: many });
+
+    const data = mocks.update.mock.calls[0][0].data;
+    expect(data.hubMetadata.chatbotContext.facts.length).toBe(60);
+    expect(data.hubMetadata.chatbotContext.facts[0]).toBe('fact-20');
+    expect(data.hubMetadata.chatbotContext.facts[59]).toBe('fact-79');
+  });
+
+  it('addFact repetido no duplica el mismo dato (flujo real getContext→updateContext)', async () => {
+    let persisted: any = {
+      hubMetadata: {
+        chatbotContext: { collectedEntities: {}, missingEntities: [], facts: [] },
+      },
+    };
+    mocks.findUnique.mockImplementation(async () => persisted);
+    mocks.update.mockImplementation(async ({ data }: any) => {
+      persisted = { hubMetadata: data.hubMetadata };
+    });
+
+    const svc = new ChatMemoryService('tenant-1');
+    for (let i = 0; i < 10; i++) {
+      await svc.addFact('conv-1', 'Contacto: Teléfono: +34 915 972 225');
+    }
+
+    const lastData = mocks.update.mock.calls[mocks.update.mock.calls.length - 1][0].data;
+    expect(lastData.hubMetadata.chatbotContext.facts).toEqual(['Contacto: Teléfono: +34 915 972 225']);
+  });
+});
