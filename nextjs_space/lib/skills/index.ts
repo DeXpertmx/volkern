@@ -243,7 +243,7 @@ const sendMessageWrapper = async (input: {
   if (channel === 'email') {
     // Resolver el remitente (quien dio la orden) para la firma y el link de su
     // calendario. En Telegram userId es el id de la conversación, no un User,
-    // así que se cae al primer admin del tenant.
+    // así que se cae a la resolución por booking/admin del tenant.
     let sender: any = null;
     if (userId) {
       sender = await prisma.user.findUnique({
@@ -251,9 +251,27 @@ const sendMessageWrapper = async (input: {
         select: { id: true, name: true, bookingEnabled: true, bookingSlug: true, bookingTitle: true },
       }).catch(() => null);
     }
+    // 1) Prioridad: el usuario con booking activo (el que comparte su
+    //    calendario) — es quien debe firmar cuando el chat no trae userId real.
     if (!sender) {
       sender = await prisma.user.findFirst({
-        where: { tenantId, role: { nombre: 'ADMIN' } },
+        where: { tenantId, bookingEnabled: true, bookingSlug: { not: null } },
+        select: { id: true, name: true, bookingEnabled: true, bookingSlug: true, bookingTitle: true },
+      });
+    }
+    // 2) Fallback: cualquier admin (el nombre del rol varía: Admin/admin/ADMIN,
+    //    por eso case-insensitive en vez de comparar literal 'ADMIN').
+    if (!sender) {
+      sender = await prisma.user.findFirst({
+        where: { tenantId, role: { nombre: { equals: 'admin', mode: 'insensitive' } } },
+        select: { id: true, name: true, bookingEnabled: true, bookingSlug: true, bookingTitle: true },
+      });
+    }
+    // 3) Último recurso: cualquier usuario del tenant (para no firmar con el
+    //    nombre genérico del tenant si existe al menos un usuario).
+    if (!sender) {
+      sender = await prisma.user.findFirst({
+        where: { tenantId },
         select: { id: true, name: true, bookingEnabled: true, bookingSlug: true, bookingTitle: true },
       });
     }
