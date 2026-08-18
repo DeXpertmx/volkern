@@ -481,6 +481,7 @@ export default function AutomationBuilderPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="nuevo_lead">Nuevo Lead</SelectItem>
+              <SelectItem value="formulario_enviado">Formulario Enviado</SelectItem>
               <SelectItem value="cita_agendada">Cita Agendada</SelectItem>
               <SelectItem value="cita_confirmada">Cita Confirmada</SelectItem>
               <SelectItem value="pago_recibido">Pago Recibido</SelectItem>

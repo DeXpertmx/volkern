@@ -7,6 +7,9 @@ export const VALID_TRIGGERS = {
   lead_actualizado: 'Lead Actualizado',
   lead_etiquetado: 'Lead Etiquetado',
   lead_sin_respuesta: 'Lead Sin Respuesta (24h)',
+
+  // Formularios web
+  formulario_enviado: 'Formulario Enviado',
   
   // Citas
   cita_agendada: 'Cita Agendada',
