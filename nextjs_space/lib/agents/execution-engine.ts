@@ -271,6 +271,9 @@ export const ExecutionEngine = {
         return `✏️ *Contacto actualizado:* ${nombre}${email}`;
       case 'convert_lead':
         return '🔄 *Lead convertido a contacto* correctamente.';
+      case 'send_message':
+        if (typeof data === 'string') return data;
+        return data?.message || '✅ Mensaje enviado correctamente.';
 
       // ─── Ventas: búsqueda y listados (muestran los datos reales) ───
       case 'find_lead_by_email': {

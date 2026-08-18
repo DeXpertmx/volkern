@@ -241,13 +241,14 @@ export const crmIntents: IntentSchema[] = [
   // ========== CONVERSACIONES & MENSAJES ==========
   {
     name: 'enviar_mensaje',
-    description: 'Enviar un mensaje a un lead o contacto',
-    requiredParams: ['email', 'mensaje'],
-    optionalParams: ['canal'],
+    description: 'Enviar un mensaje o email a un lead o contacto',
+    requiredParams: ['mensaje'],
+    optionalParams: ['email', 'nombre', 'canal'],
     examples: [
       'envía mensaje a juan@email.com: "Hola, ¿cómo estás?"',
       'notifica a María por WhatsApp: tu cita está confirmada',
-      'manda email a carlos@test.com con el presupuesto'
+      'manda email a carlos@test.com con el presupuesto',
+      'envía un email a María García agradeciendo la reunión'
     ],
     destructive: false
   },
