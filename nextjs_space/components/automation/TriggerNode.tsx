@@ -1,13 +1,31 @@
 
 'use client'
 
+import { useState, useEffect } from 'react'
 import { Handle, Position, NodeProps, useReactFlow } from 'reactflow'
 import { Card } from '@/components/ui/card'
-import { Zap } from 'lucide-react'
+import { Zap, FileText } from 'lucide-react'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select'
+
+// Formulario web del tenant (para el selector de formulario del trigger)
+type WebFormOption = {
+  id: string
+  name: string
+}
 
 export const TriggerNode: React.FC<NodeProps> = ({ id, data, selected }) => {
   const { setNodes } = useReactFlow()
+  const [forms, setForms] = useState<WebFormOption[]>([])
+
+  // Cargar formularios del tenant para el selector específico del trigger
+  useEffect(() => {
+    if (data.trigger === 'formulario_enviado') {
+      fetch('/api/formularios', { headers: { 'Accept': 'application/json' } })
+        .then((r) => r.ok ? r.json() : Promise.resolve({ forms: [] }))
+        .then((res) => setForms(res.forms || []))
+        .catch(() => setForms([]))
+    }
+  }, [data.trigger])
 
   const updateTrigger = (val: string) => {
     setNodes((nds) =>
@@ -18,6 +36,31 @@ export const TriggerNode: React.FC<NodeProps> = ({ id, data, selected }) => {
             data: {
               ...node.data,
               trigger: val,
+              // Al cambiar de trigger, limpiar la selección de formulario
+              config: {
+                ...(node.data.config || {}),
+                formId: undefined,
+              },
+            },
+          }
+        }
+        return node
+      })
+    )
+  }
+
+  const updateForm = (formId: string) => {
+    setNodes((nds) =>
+      nds.map((node) => {
+        if (node.id === id) {
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              config: {
+                ...(node.data.config || {}),
+                formId,
+              },
             },
           }
         }
@@ -126,6 +169,39 @@ export const TriggerNode: React.FC<NodeProps> = ({ id, data, selected }) => {
               )}
             </SelectContent>
           </Select>
+
+          {/* Selector de formulario específico para el trigger formulario_enviado */}
+          {data.trigger === 'formulario_enviado' && (
+            <div className="mt-2">
+              <div className="flex items-center gap-1 text-[10px] font-semibold text-blue-600 dark:text-blue-400 mb-1">
+                <FileText className="h-3 w-3" />
+                Formulario a automatizar
+              </div>
+              <Select
+                value={data.config?.formId || ''}
+                onValueChange={updateForm}
+              >
+                <SelectTrigger className="w-full h-8 text-xs bg-slate-50 dark:bg-slate-900 border-blue-200 dark:border-blue-900 border-dashed">
+                  <SelectValue placeholder="Selecciona un formulario..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {forms.length === 0 && (
+                    <SelectItem value="__none__" disabled>
+                      No hay formularios creados
+                    </SelectItem>
+                  )}
+                  {forms.map((f) => (
+                    <SelectItem key={f.id} value={f.id}>
+                      {f.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Solo se disparará cuando se envíe este formulario.
+              </p>
+            </div>
+          )}
         </div>
 
       </div>

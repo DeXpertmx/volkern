@@ -31,6 +31,11 @@ describe('VALID_TRIGGERS', () => {
     expect(VALID_TRIGGERS.pago_fallido).toBeDefined();
   });
 
+  it('debe tener el trigger de Formulario Enviado', () => {
+    expect(VALID_TRIGGERS.formulario_enviado).toBeDefined();
+    expect(VALID_TRIGGERS.formulario_enviado).toBe('Formulario Enviado');
+  });
+
   it('debe tener triggers de Externos/n8n', () => {
     expect(VALID_TRIGGERS.webhook_recibido).toBeDefined();
     expect(VALID_TRIGGERS.n8n_workflow_completado).toBeDefined();
@@ -66,7 +71,7 @@ describe('VALID_TRIGGERS', () => {
     expect(VALID_TRIGGERS.webhook_recibido).toBe('Webhook Recibido');
   });
 
-  it('debe tener al menos 15 triggers', () => {
-    expect(Object.keys(VALID_TRIGGERS).length).toBeGreaterThanOrEqual(15);
+  it('debe tener al menos 16 triggers', () => {
+    expect(Object.keys(VALID_TRIGGERS).length).toBeGreaterThanOrEqual(16);
   });
 });
