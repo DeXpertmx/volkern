@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeSurveyJson, hideEmptyTitles } from '@/components/public/SurveyFormRenderer';
+import { DEFAULT_THANK_YOU, buildThankYouHtml, getThankYouRedirectUrl, normalizeSurveyJson, hideEmptyTitles } from '@/components/public/SurveyFormRenderer';
 
 describe('hideEmptyTitles — etiqueta vacía no muestra el nombre interno del campo', () => {
   it('oculta el título de campos con title vacío (solo placeholder visible)', () => {
@@ -89,6 +89,58 @@ describe('normalizeSurveyJson — booleanos Sí/No en español', () => {
       pages: [{ elements: [{ type: 'text', name: 'nombre' }] }],
     } as any);
     expect(result.pages[0].elements[0].labelTrue).toBeUndefined();
+  });
+});
+
+describe('normalizeSurveyJson — página de agradecimiento', () => {
+  it('aplica una página general cuando no existe configuración', () => {
+    const result = normalizeSurveyJson({ pages: [{ elements: [] }] } as any);
+    expect(result.completedHtml).toContain(DEFAULT_THANK_YOU.title);
+    expect(result.completedHtml).toContain(DEFAULT_THANK_YOU.message);
+  });
+
+  it('usa la configuración personalizada del formulario', () => {
+    const result = normalizeSurveyJson({
+      thankYou: {
+        title: 'Solicitud recibida',
+        message: 'Te escribiremos mañana.',
+        buttonText: 'Volver',
+        buttonUrl: '/inicio',
+      },
+    } as any);
+    expect(result.completedHtml).toContain('Solicitud recibida');
+    expect(result.completedHtml).toContain('Te escribiremos mañana.');
+    expect(result.completedHtml).toContain('href="/inicio"');
+    expect(result.completedHtml).toContain('>Volver</a>');
+  });
+
+  it('no permite URLs peligrosas ni HTML sin escapar en la página', () => {
+    const html = buildThankYouHtml({
+      title: '<script>alert(1)</script>',
+      message: 'Texto <b>seguro</b>',
+      buttonText: 'Ir',
+      buttonUrl: 'javascript:alert(1)',
+    });
+    expect(html).toContain('&lt;script&gt;');
+    expect(html).toContain('Texto &lt;b&gt;seguro&lt;/b&gt;');
+    expect(html).not.toContain('javascript:');
+    expect(html).not.toContain('>Ir</a>');
+  });
+
+  it('respeta un completedHtml explícito definido por JSON', () => {
+    const result = normalizeSurveyJson({ completedHtml: '<p>Personalizado</p>' } as any);
+    expect(result.completedHtml).toBe('<p>Personalizado</p>');
+  });
+
+  it('acepta redirecciones externas http/https', () => {
+    expect(getThankYouRedirectUrl({ redirectUrl: 'https://ejemplo.com/gracias' })).toBe('https://ejemplo.com/gracias');
+    expect(getThankYouRedirectUrl({ redirectUrl: 'http://ejemplo.com' })).toBe('http://ejemplo.com');
+  });
+
+  it('rechaza javascript, URLs relativas y valores inválidos para redirección automática', () => {
+    expect(getThankYouRedirectUrl({ redirectUrl: 'javascript:alert(1)' })).toBe('');
+    expect(getThankYouRedirectUrl({ redirectUrl: '/gracias' })).toBe('');
+    expect(getThankYouRedirectUrl({ redirectUrl: 'no-es-url' })).toBe('');
   });
 });
 

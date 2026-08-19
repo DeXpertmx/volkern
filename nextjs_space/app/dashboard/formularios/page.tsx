@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiGet, apiPost, apiDelete, apiPatch } from '@/lib/api-client';
-import { SurveyFormRenderer } from '@/components/public/SurveyFormRenderer';
+import { DEFAULT_THANK_YOU, SurveyFormRenderer } from '@/components/public/SurveyFormRenderer';
 
 // ─── Types ──────────────────────────────────────────────
 type FieldType = 'text' | 'email' | 'comment' | 'dropdown' | 'checkbox' | 'radiogroup' | 'boolean' | 'date' | 'file' | 'rating' | 'scale';
@@ -73,6 +73,7 @@ const FIELD_TYPE_LABELS: Record<string, string> = {
 
 const DEFAULT_SURVEY_JSON = {
   title: 'Nuevo Formulario',
+  thankYou: { ...DEFAULT_THANK_YOU },
   pages: [{
     name: 'page1',
     elements: [
@@ -622,6 +623,91 @@ function FormEditor({ form, onBack, onFormUpdated }: { form: WebForm; onBack: ()
                 className="rounded-xl mt-1"
                 placeholder="Completar"
               />
+            </Card>
+
+            {/* Página de agradecimiento */}
+            <Card className="p-4 space-y-4">
+              <div>
+                <Label className="text-sm">Página de agradecimiento</Label>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Se muestra después de enviar el formulario. Si no la personalizas, se utilizará una página general de Volkern.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs">Título</Label>
+                <Input
+                  value={surveyJson.thankYou?.title ?? DEFAULT_THANK_YOU.title}
+                  onChange={(e) => setSurveyJson({
+                    ...surveyJson,
+                    thankYou: { ...DEFAULT_THANK_YOU, ...(surveyJson.thankYou || {}), title: e.target.value },
+                  })}
+                  className="rounded-xl"
+                  placeholder={DEFAULT_THANK_YOU.title}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs">Mensaje</Label>
+                <Textarea
+                  value={surveyJson.thankYou?.message ?? DEFAULT_THANK_YOU.message}
+                  onChange={(e) => setSurveyJson({
+                    ...surveyJson,
+                    thankYou: { ...DEFAULT_THANK_YOU, ...(surveyJson.thankYou || {}), message: e.target.value },
+                  })}
+                  className="rounded-xl min-h-[90px]"
+                  placeholder={DEFAULT_THANK_YOU.message}
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-xs">Texto del botón opcional</Label>
+                  <Input
+                    value={surveyJson.thankYou?.buttonText || ''}
+                    onChange={(e) => setSurveyJson({
+                      ...surveyJson,
+                      thankYou: { ...DEFAULT_THANK_YOU, ...(surveyJson.thankYou || {}), buttonText: e.target.value },
+                    })}
+                    className="rounded-xl"
+                    placeholder="Volver al inicio"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs">Enlace del botón opcional</Label>
+                  <Input
+                    value={surveyJson.thankYou?.buttonUrl || ''}
+                    onChange={(e) => setSurveyJson({
+                      ...surveyJson,
+                      thankYou: { ...DEFAULT_THANK_YOU, ...(surveyJson.thankYou || {}), buttonUrl: e.target.value },
+                    })}
+                    className="rounded-xl"
+                    placeholder="/ o https://..."
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs">Redirección automática externa (opcional)</Label>
+                <p className="text-xs text-muted-foreground">
+                  Después de guardar el registro, la persona será enviada automáticamente a esta URL segura (http/https).
+                </p>
+                <Input
+                  type="url"
+                  value={surveyJson.thankYou?.redirectUrl || ''}
+                  onChange={(e) => setSurveyJson({
+                    ...surveyJson,
+                    thankYou: { ...DEFAULT_THANK_YOU, ...(surveyJson.thankYou || {}), redirectUrl: e.target.value },
+                  })}
+                  className="rounded-xl"
+                  placeholder="https://ejemplo.com/gracias"
+                />
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="text-xs text-muted-foreground w-full"
+                onClick={() => setSurveyJson({ ...surveyJson, thankYou: { ...DEFAULT_THANK_YOU } })}
+              >
+                Usar página general de Volkern
+              </Button>
             </Card>
 
             {/* Fields */}

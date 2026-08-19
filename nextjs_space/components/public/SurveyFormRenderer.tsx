@@ -21,6 +21,66 @@ import { toast } from 'sonner';
  *    Como el sistema es en español, se fija "Sí"/"No" salvo que el autor
  *    haya personalizado los labels (labelTrue/labelFalse) en el JSON.
  */
+export const DEFAULT_THANK_YOU = {
+  title: '¡Gracias! Hemos recibido tus datos.',
+  message: 'Tu información se registró correctamente. Muy pronto recibirás información sobre los siguientes pasos.',
+  buttonText: '',
+  buttonUrl: '',
+  redirectUrl: '',
+};
+
+type ThankYouConfig = Partial<typeof DEFAULT_THANK_YOU>;
+
+function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function safeThankYouUrl(value: unknown): string {
+  const url = String(value ?? '').trim();
+  return url.startsWith('https://') || url.startsWith('http://') || url.startsWith('/') || url.startsWith('#')
+    ? url
+    : '';
+}
+
+/** Solo permite redirecciones absolutas HTTP(S) configuradas por el tenant. */
+export function getThankYouRedirectUrl(config?: ThankYouConfig): string {
+  const value = String(config?.redirectUrl ?? '').trim();
+  if (!value) return '';
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? value : '';
+  } catch {
+    return '';
+  }
+}
+
+/** Construye la pantalla de agradecimiento que SurveyJS muestra al completar. */
+export function buildThankYouHtml(config?: ThankYouConfig): string {
+  const values = { ...DEFAULT_THANK_YOU, ...(config || {}) };
+  const titleValue = String(values.title ?? '').trim();
+  const messageValue = String(values.message ?? '').trim();
+  const buttonTextValue = String(values.buttonText ?? '').trim();
+  const title = escapeHtml(titleValue || DEFAULT_THANK_YOU.title);
+  const message = escapeHtml(messageValue || DEFAULT_THANK_YOU.message).replace(/\n/g, '<br />');
+  const buttonText = escapeHtml(buttonTextValue);
+  const buttonUrl = safeThankYouUrl(values.buttonUrl);
+  const button = buttonText && buttonUrl
+    ? `<a href="${escapeHtml(buttonUrl)}" style="display:inline-block;margin-top:24px;padding:11px 20px;border-radius:10px;background:#2563eb;color:#fff;text-decoration:none;font-weight:600">${buttonText}</a>`
+    : '';
+
+  return `<div style="max-width:560px;margin:24px auto;padding:40px 24px;text-align:center;border-radius:16px;background:#f0fdf4;color:#166534">
+    <div style="font-size:42px;line-height:1;margin-bottom:16px">✓</div>
+    <h2 style="margin:0 0 12px;font-size:24px;color:#166534">${title}</h2>
+    <p style="margin:0;color:#15803d;line-height:1.6">${message}</p>
+    ${button}
+  </div>`;
+}
+
 export function normalizeSurveyJson(json: Record<string, unknown>): Record<string, unknown> {
   const clone = JSON.parse(JSON.stringify(json || {}));
   // Si el texto del botón de envío está vacío, se elimina para que el
@@ -29,6 +89,14 @@ export function normalizeSurveyJson(json: Record<string, unknown>): Record<strin
   if (typeof clone.completeText === 'string' && !clone.completeText.trim()) {
     delete clone.completeText;
   }
+
+  // Toda sumisión debe terminar en una pantalla de agradecimiento. Si el
+  // formulario no tiene configuración propia, se usa la pantalla general.
+  // `completedHtml` se respeta para no romper formularios editados por JSON.
+  if (!String(clone.completedHtml || '').trim()) {
+    clone.completedHtml = buildThankYouHtml(clone.thankYou as ThankYouConfig | undefined);
+  }
+
   const pages = Array.isArray(clone.pages) ? clone.pages : [clone];
   for (const page of pages) {
     const elements = Array.isArray(page?.elements) ? page.elements : [];
@@ -108,6 +176,12 @@ export const SurveyFormRenderer: React.FC<SurveyFormRendererProps> = ({
 
         toast.success('¡Formulario enviado con éxito!');
         onComplete?.();
+
+        const redirectUrl = getThankYouRedirectUrl(normalized.thankYou as ThankYouConfig | undefined);
+        if (redirectUrl) {
+          // Espera brevemente para que el usuario vea la confirmación antes de salir.
+          window.setTimeout(() => window.location.assign(redirectUrl), 700);
+        }
       } catch (error: any) {
         console.error('[SurveyFormRenderer] Submit error:', error);
         toast.error(error.message || 'Hubo un error al enviar el formulario. Intenta de nuevo.');
