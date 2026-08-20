@@ -2,26 +2,6 @@ import nodemailer from 'nodemailer';
 import { prisma } from '@/lib/db';
 import { getFromAddress, sendEmail as sendResendEmail } from './resend-email';
 
-function hasDefaultSmtpCredentials(): boolean {
-  return Boolean(process.env.AWS_SES_USER && process.env.AWS_SES_PASSWORD)
-}
-
-const FROM_ADDRESSES: Record<string, string> = {
-  admin: 'Volkern <noreply@volkern.app>',
-  demo: 'Volkern <noreply@volkern.app>',
-  default: process.env.EMAIL_FROM || 'Volkern <noreply@volkern.app>'
-};
-
-const defaultTransporter = nodemailer.createTransport({
-  host: `email-smtp.${process.env.AWS_SES_REGION || 'eu-north-1'}.amazonaws.com`,
-  port: 587,
-  secure: false,
-  auth: {
-    user: process.env.AWS_SES_USER,
-    pass: process.env.AWS_SES_PASSWORD,
-  },
-});
-
 interface Attachment {
   filename: string;
   content: Buffer;
@@ -138,7 +118,7 @@ export async function sendEmail({
     tenantSmtpConfigured = tenantTransport.enabled
 
     // El SMTP habilitado por el tenant tiene prioridad absoluta. No se debe
-    // cambiar silenciosamente a Resend ni al SMTP global si falla.
+    // cambiar silenciosamente a Resend si falla.
     if (tenantTransport.error) {
       return {
         success: false,
@@ -147,8 +127,8 @@ export async function sendEmail({
       }
     }
 
-    // Si no hay SMTP del tenant ni credenciales SMTP globales, usamos Resend.
-    if (!tenantTransport.transporter && !hasDefaultSmtpCredentials()) {
+    // Sin SMTP del tenant configurado, todos los envíos salen por Resend.
+    if (!tenantTransport.transporter) {
       const result = await sendResendEmail({
         to,
         subject,
@@ -160,7 +140,7 @@ export async function sendEmail({
       return { ...result, tenantSmtpConfigured }
     }
 
-    const transporter = tenantTransport.transporter || defaultTransporter
+    const transporter = tenantTransport.transporter
     const fromAddress = from || tenantTransport.fromAddress || getFromAddress(tenantSubdomain)
 
     const info = await transporter.sendMail({
@@ -172,11 +152,11 @@ export async function sendEmail({
       replyTo,
       attachments,
       headers: {
-        'X-SES-TENANT': tenantSubdomain || tenantId || 'default',
+        'X-VOLKERN-TENANT': tenantSubdomain || tenantId || 'default',
       },
     })
 
-    console.log(`[SES] Email enviado${tenantTransport.transporter ? ' (SMTP tenant)' : ''}:`, info.messageId)
+    console.log(`[Email] Email enviado (SMTP tenant):`, info.messageId)
 
     return {
       success: true,
@@ -185,7 +165,7 @@ export async function sendEmail({
       tenantSmtpConfigured,
     }
   } catch (error: any) {
-    console.error('[SES] Error enviando email:', error)
+    console.error('[Email] Error enviando email:', error)
     return {
       success: false,
       error: error.message,
@@ -210,7 +190,7 @@ export async function sendBulkEmail(emails: SendEmailParams[]) {
       })),
     }
   } catch (error: any) {
-    console.error('[SES] Error en envío masivo:', error)
+    console.error('[Email] Error en envío masivo:', error)
     return {
       success: false,
       error: error.message,

@@ -325,7 +325,7 @@ Skill ejecutado → EventBus → Listeners (Automations, Webhooks, Agents, n8n)
 
 | Canal | Estado | Proveedor |
 |---|---|---|
-| **Email** | ✅ Producción | Amazon SES (Nodemailer) |
+| **Email** | ✅ Producción | Resend (API) + SMTP del tenant |
 | **WhatsApp** | ✅ Producción | Evolution API |
 | **Telegram** | ✅ Producción | Bot API directo |
 | **In-App** | ✅ Producción | `InAppNotification` (DB) |
