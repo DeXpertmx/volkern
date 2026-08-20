@@ -6,47 +6,45 @@ import { withTenantAuth } from '@/lib/api-key-auth';
 
 /**
  * GET /api/team/members
- * Devuelve los miembros activos del tenant para asignación de leads, citas y tareas.
+ * Devuelve los miembros del equipo del tenant para asignación de leads, citas y tareas.
  * No requiere permiso de "equipo: ver" — cualquier usuario autenticado del tenant puede usar esto.
+ *
+ * Fuente primaria: los usuarios del tenant (User.tenantId) — el Equipo.
+ * La ficha de empleado (RRHH) es un enriquecimiento opcional: si el tenant tiene
+ * `erp_employees` la usamos para nombre/departamento/cargo; si no (tenant sin RRHH),
+ * el usuario aparece igualmente con sus propios datos.
  */
 export const GET = withTenantAuth(async (req, auth) => {
   try {
     const tenantId = auth.tenant!.id;
 
-    const employees = await prisma.employee.findMany({
+    const users = await prisma.user.findMany({
       where: {
         tenantId,
-        isActive: true,
+        estado: { not: 'inactivo' },
       },
-      select: {
-        id: true,
-        fullName: true,
-        email: true,
-        jobTitle: true,
-        department: true,
-        user: {
+      include: {
+        employee: {
           select: {
             id: true,
-            name: true,
+            fullName: true,
             email: true,
-            image: true,
-            estado: true,
+            jobTitle: true,
+            department: true,
           },
         },
       },
-      orderBy: { fullName: 'asc' },
+      orderBy: { name: 'asc' },
     });
 
-    const members = employees
-      .filter((emp) => emp.user && emp.user.estado !== 'inactivo')
-      .map((emp) => ({
-        id: emp.user!.id,
-        name: emp.fullName || emp.user!.name || emp.user!.email,
-        email: emp.email || emp.user!.email,
-        image: emp.user!.image,
-        jobTitle: emp.jobTitle,
-        department: emp.department,
-      }));
+    const members = users.map((u) => ({
+      id: u.id,
+      name: u.employee?.fullName || u.name || u.email,
+      email: u.employee?.email || u.email,
+      image: u.image,
+      jobTitle: u.employee?.jobTitle || null,
+      department: u.employee?.department || null,
+    }));
 
     return NextResponse.json({ members });
   } catch (error: any) {
