@@ -64,11 +64,23 @@ jobs seguros. Auditoría 2026-08-20:
 | 12 | Full sync ADS | cada 6h | ✅ activo (no-op sin conexión) |
 | 13 | **lead_sin_respuesta** (trigger automatizaciones) | cada 30 min | ✅ activo |
 
+### Recuperación Proactiva de Facturas (reescrita)
+
+Reactivada sin datos mock. Ahora solo procesa tenants con configuración explícita
+en `Tenant.configuracion.recuperacionProactiva` (`{ enabled: true, provider }`).
+Proveedores stubs: `verifactu` (Hacienda, requiere certificado), `nexus`
+(requiere API key). Sin configuración el cron es un no-op.
+
+> Para activar en un tenant, añadir en su configuración:
+> ```json
+> { "recuperacionProactiva": { "enabled": true, "provider": "verifactu" } }
+> ```
+
 ### Excluidos a propósito (NO se registran)
 
 | Job | Motivo |
 |---|---|
-| Recuperación Proactiva de Facturas | Creada facturas **mock** con `Math.random()` — eliminada (`runProactiveInvoiceRecovery` borrada) |
+| Ritual Dominical (Auditoría Fiscal) | `auditAllTenants()` escribe `GlobalAuditCloud` masivo por tenant; módulo fiscal no confirmado en uso |
 | Ritual Dominical (Auditoría Fiscal) | `auditAllTenants()` escribe `GlobalAuditCloud` masivo por tenant; módulo fiscal no confirmado en uso |
 | Churn rate semanal | Duplicado del MRR diario (ambos llamaban `recordMetrics()`) |
 

@@ -92,6 +92,28 @@ export function initCronJobs() {
   console.log('✅ [Scheduler] Límites de planes programados (10:00 AM daily)');
   console.log('✅ [Scheduler] Google Calendar webhook renewal programado (cada 12h)');
 
+  // 6. Recuperación Proactiva de Facturas — cada 4 horas
+  // Solo procesa tenants con Tenant.configuracion.recuperacionProactiva.enabled=true.
+  // Sin configuración es un no-op. Sin un proveedor real conectado, los adaptadores
+  // (verifactu, nexus) son stubs que devuelven [].
+  cron.schedule('0 */4 * * *', async () => {
+    console.log('[Cron] 📡 Recuperación proactiva de facturas...');
+    try {
+      const { InboundInvoiceService } = await import('../finance/inbound-invoice-service');
+      const results = await InboundInvoiceService.runProactiveRecovery();
+      const total = results.reduce((acc, r) => acc + r.processed, 0);
+      if (total > 0) {
+        console.log(`[Cron] ✅ Recuperación proactiva: ${total} facturas procesadas en ${results.length} tenant(s)`);
+      } else {
+        console.log('[Cron] ℹ️  Recuperación proactiva: sin tenants habilitados o sin facturas pendientes');
+      }
+    } catch (error: any) {
+      console.error('[Cron] ❌ Error en recuperación proactiva:', error.message);
+    }
+  });
+
+  console.log('✅ [Scheduler] Recuperación proactiva programada (cada 4h, tenants habilitados)');
+
   // 9. Analytics Cleanup — semanal, domingo a las 03:00 AM
   cron.schedule('0 3 * * 0', async () => {
     console.log('[Cron] 🧹 Limpiando eventos de analytics antiguos (>90 días)...');
