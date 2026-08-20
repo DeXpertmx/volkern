@@ -1,9 +1,9 @@
 # 22 · Tech Automations — Estado de los Triggers
 
 > **Decisión (2026-08-20):** se mantienen TODOS los triggers en el builder.
-> Este documento registra qué triggers tienen emisor real en producción y
-> cuáles están "muertos" (seleccionables pero sin nada que los dispare), para
-> no vender funciones inexistentes y saber qué cablear cuando toque.
+> Este documento registra qué triggers tienen emisor real en producción.
+> Los 3 de Academia quedaron cableados el 2026-08-20,
+> así que hoy TODOS los triggers del builder tienen emisor.
 
 ## Fuente de verdad
 
@@ -34,24 +34,17 @@
 | `evento_externo` | `/api/webhooks/n8n/callback`, `/api/webhooks/n8n/trigger` |
 | `email_abierto` | `/api/email-campanas/track/[recipientId]` |
 | `email_clicado` | `/api/email-campanas/track/[recipientId]/click` |
+| `estudiante_inscrito` | `/api/inscripciones` (POST) — vía `lib/academy/automation-events.ts` |
+| `estudiante_completa_curso` | Rutas de progreso (`/api/progreso`, `/api/progreso/[leccionId]`, `/api/inscripciones/[id]/progreso`) y `lib/academy/quiz-service.ts` al llegar al 100% |
+| `leccion_completada` | Las mismas rutas de progreso y `quiz-service.ts` al marcar una lección completada |
 
-## Triggers muertos ⚠️ (sin emisor — no se dispararán)
-
-| Trigger | Qué falta para cablearlo |
-|---|---|
-| `estudiante_inscrito` | El módulo Academia (LMS) no emite ningún evento de inscripción. Hay que emitir `triggerAutomation('estudiante_inscrito', ...)` en la inscripción de estudiantes. |
-| `estudiante_completa_curso` | No hay evento de finalización de curso. Emitir al completar un curso. |
-| `leccion_completada` | No hay evento de finalización de lección. Emitir al marcar una lección completada. |
-
-> Los 3 triggers de Academia dependen del módulo LMS (`app/academy`, `lib/academy-*`).
-> Cuando el módulo de Academia emita esos eventos, actualizar este documento.
+> Los 3 triggers de Academia se emiten a través del helper compartido
+> `lib/academy/automation-events.ts` (`emitEstudianteInscrito`,
+> `emitLeccionCompletada`, `emitCursoCompletado`). El `tenantId` se toma del
+> curso (`Curso.tenantId`); si el curso no tiene tenant, no se dispara.
 
 ## Notas
 
-- Los triggers muertos se mantienen en el builder por decisión del propietario
-  del producto (2026-08-20): se prefiere dejarlos visibles y documentar el
-  estado antes que quitarlos, para no romper automatizaciones que un tenant
-  pudiera haber configurado a la espera del emisor.
 - Verificación rápida de un trigger: buscar `triggerAutomation('<trigger>',` en
   `app/`, `lib/` y `scripts/`. Si solo aparece en `constants.ts` y en el
   builder, está muerto.

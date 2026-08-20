@@ -62,6 +62,22 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Disparar automatizaciones con trigger `estudiante_inscrito`
+    try {
+      const { emitEstudianteInscrito } = await import('@/lib/academy/automation-events');
+      await emitEstudianteInscrito({
+        tenantId: curso.tenantId,
+        inscripcionId: inscripcion.id,
+        estudianteId: inscripcion.estudianteId,
+        cursoId: inscripcion.cursoId,
+        estudiante: inscripcion.estudiante as any,
+        curso: inscripcion.curso as any,
+        inscripcion: inscripcion as any,
+      });
+    } catch (e) {
+      console.error('Error emitiendo trigger estudiante_inscrito:', e);
+    }
+
     return NextResponse.json(inscripcion, { status: 201 });
   } catch (error) {
     console.error('Error al crear inscripción:', error);

@@ -79,6 +79,7 @@ export async function POST(
       });
 
       // Si completó todas las lecciones, generar certificado
+      let cursoRecienCompletado = false;
       if (leccionesCompletadas === totalLecciones) {
         const certificadoExistente = await prisma.certificado.findFirst({
           where: {
@@ -97,7 +98,42 @@ export async function POST(
               pdfUrl: null,
             },
           });
+          cursoRecienCompletado = true;
         }
+      }
+
+      // Disparar automatizaciones del módulo Academia
+      try {
+        const { emitLeccionCompletada, emitCursoCompletado } = await import('@/lib/academy/automation-events');
+        const curso = await prisma.curso.findUnique({ where: { id: leccion.modulo.cursoId } });
+        const inscripcion = await prisma.inscripcion.findFirst({
+          where: { estudianteId: estudiante.id, cursoId: leccion.modulo.cursoId },
+        });
+
+        await emitLeccionCompletada({
+          tenantId: curso?.tenantId,
+          estudianteId: estudiante.id,
+          cursoId: leccion.modulo.cursoId,
+          leccionId,
+          inscripcionId: inscripcion?.id,
+          estudiante: estudiante as any,
+          curso: curso as any,
+          leccion: leccion as any,
+        });
+
+        if (cursoRecienCompletado) {
+          await emitCursoCompletado({
+            tenantId: curso?.tenantId,
+            estudianteId: estudiante.id,
+            cursoId: leccion.modulo.cursoId,
+            inscripcionId: inscripcion?.id,
+            estudiante: estudiante as any,
+            curso: curso as any,
+            inscripcion: inscripcion as any,
+          });
+        }
+      } catch (e) {
+        console.error('Error emitiendo triggers de Academia:', e);
       }
     }
 

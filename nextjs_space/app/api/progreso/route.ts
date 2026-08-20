@@ -112,6 +112,7 @@ export async function POST(request: NextRequest) {
       });
 
       // Si el progreso es 100%, generar certificado
+      let cursoRecienCompletado = false;
       if (progresoPorcentaje >= 100) {
         const certificadoExistente = await prisma.certificado.findUnique({
           where: {
@@ -132,7 +133,43 @@ export async function POST(request: NextRequest) {
               codigoUnico,
             },
           });
+          cursoRecienCompletado = true;
         }
+      }
+
+      // Disparar automatizaciones del módulo Academia
+      try {
+        const { emitLeccionCompletada, emitCursoCompletado } = await import('@/lib/academy/automation-events');
+        const estudiante = await prisma.estudiante.findUnique({ where: { id: estudianteId } });
+
+        if (completado) {
+          await emitLeccionCompletada({
+            tenantId: curso.tenantId,
+            estudianteId,
+            cursoId: curso.id,
+            leccionId,
+            estudiante: estudiante as any,
+            curso: curso as any,
+            leccion: leccion as any,
+          });
+        }
+
+        if (cursoRecienCompletado) {
+          const inscripcion = await prisma.inscripcion.findFirst({
+            where: { estudianteId, cursoId: curso.id },
+          });
+          await emitCursoCompletado({
+            tenantId: curso.tenantId,
+            estudianteId,
+            cursoId: curso.id,
+            inscripcionId: inscripcion?.id,
+            estudiante: estudiante as any,
+            curso: curso as any,
+            inscripcion: inscripcion as any,
+          });
+        }
+      } catch (e) {
+        console.error('Error emitiendo triggers de Academia:', e);
       }
     }
 
