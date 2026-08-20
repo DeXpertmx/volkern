@@ -27,8 +27,6 @@ import { sendEmail } from '@/lib/ses-email'
 describe('routing de correo por tenant', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    delete process.env.AWS_SES_USER
-    delete process.env.AWS_SES_PASSWORD
     resendMock.mockResolvedValue({ success: true, messageId: 'resend-1' })
     sendMailMock.mockResolvedValue({ messageId: 'smtp-1' })
   })
@@ -64,6 +62,26 @@ describe('routing de correo por tenant', () => {
 
   it('usa Resend únicamente cuando el tenant no tiene SMTP habilitado', async () => {
     process.env.RESEND_API_KEY = 're_test'
+    findManyMock.mockResolvedValue([
+      { clave: 'smtp_enabled', valor: 'false' },
+    ])
+
+    const result = await sendEmail({
+      to: 'cliente@destino.test',
+      subject: 'Aviso',
+      text: 'Contenido',
+      tenantId: 'tenant-1',
+    })
+
+    expect(result.success).toBe(true)
+    expect(resendMock).toHaveBeenCalledOnce()
+    expect(sendMailMock).not.toHaveBeenCalled()
+  })
+
+  it('no usa un SMTP global de AWS SES aunque existan credenciales en el entorno (SES eliminado)', async () => {
+    process.env.RESEND_API_KEY = 're_test'
+    process.env.AWS_SES_USER = 'smtp-user'
+    process.env.AWS_SES_PASSWORD = 'smtp-pass'
     findManyMock.mockResolvedValue([
       { clave: 'smtp_enabled', valor: 'false' },
     ])

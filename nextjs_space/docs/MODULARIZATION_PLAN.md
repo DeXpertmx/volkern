@@ -221,7 +221,7 @@ docker compose down -v  # Bajar + borrar volúmenes
 | Core | DATABASE_URL, NEXTAUTH_SECRET, CRON_SECRET |
 | Docker | POSTGRES_USER, ALLOW_DB_PUSH, SEED_ON_START |
 | AWS/S3 | AWS_REGION, AWS_ACCESS_KEY_ID, AWS_BUCKET_NAME |
-| AWS SES | AWS_SES_USER, AWS_SES_PASSWORD, EMAIL_FROM |
+| Resend | RESEND_API_KEY, EMAIL_FROM |
 | Seguridad | MASTER_KEY, FISCAL_ENCRYPTION_KEY, JWT secrets |
 | Stripe/n8n/Chatwoot | Webhooks, URLs, API keys |
 | Meta/Plaid/Nordigen | OAuth, banking integrations |

@@ -51,7 +51,7 @@ Un asistente IA **interno** (no orientado a clientes) embebido en el hub **Volke
 | Skills ejecutables | `lib/agents/skill-orchestrator.ts` (INTENT_TO_SKILL), `lib/agents/execution-engine.ts`, `lib/agents/skill-registry.ts` | ✅ |
 | Widget de prueba del chatbot | `components/chatbot/ChatTestWidget.tsx` + `/api/chatbot/test-message` | ✅ (usa `processMessage`) |
 | Mensajes internos | `lib/mcp/skills/internalMessageSkill.ts` → `InternalMessage`; intent `enviar_mensaje_interno` → `send_message` | ✅ |
-| Envío de emails | `lib/ses-email.ts` (SES + SMTP tenant), `lib/resend-email.ts`, `lib/skills/notification-layer.ts` | ✅ |
+| Envío de emails | `lib/ses-email.ts` (Resend + SMTP tenant), `lib/resend-email.ts`, `lib/skills/notification-layer.ts` | ✅ |
 | Seguridad por rol | `lib/agents/security-checkpoint.ts` (`enviar_mensaje_interno`: user/admin/owner/guest) | ✅ |
 | Acceso por módulos del plan | `lib/plans.ts` (`isModuleActive`, `CrmModule`) | ✅ (falta `insurance`) |
 | Landing Connect en navegación | `lib/navigation-config.ts` → `{ name: 'Volkern Connect', href: '/dashboard/connect', planModule: 'mensajes' }` | ✅ |

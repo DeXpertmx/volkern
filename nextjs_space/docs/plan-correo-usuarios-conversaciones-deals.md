@@ -12,7 +12,7 @@
 
 | Aspecto | Estado Actual |
 |---|---|
-| **Mailer base** | ✅ Nodemailer + Amazon SES configurado (`lib/ses-email.ts`) |
+| **Mailer base** | ✅ Nodemailer + Resend configurado (enrutador `lib/ses-email.ts` con SMTP del tenant) |
 | **Notificaciones** | ✅ Sistema unificado multicanal (`lib/skills/notification-layer.ts`) — email, WhatsApp, Telegram, in-app |
 | **Correos empresariales** | ✅ API NameCrane para crear dominios y cuentas en Mox (`lib/namecrane-smartermail.ts`) |
 | **Usuarios con correo corporativo** | ❌ No existe relación entre `User` y `BusinessEmailAccount` |

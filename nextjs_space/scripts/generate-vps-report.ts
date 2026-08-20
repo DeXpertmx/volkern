@@ -159,7 +159,7 @@ const HTML = `<!DOCTYPE html>
   <h3 style="text-align:center">Servicios Externos (API)</h3>
   <div class="layer">
     <div class="component">💳 Stripe</div>
-    <div class="component">📧 Amazon SES</div>
+    <div class="component">📧 Resend</div>
     <div class="component">☁️ S3 / Cloudflare R2</div>
     <div class="component">🧠 OpenRouter AI</div>
     <div class="component">📱 OneSignal</div>
@@ -177,7 +177,7 @@ const HTML = `<!DOCTYPE html>
 <tr><td>Base de datos</td><td>PostgreSQL</td><td>16</td><td>Almacenamiento principal</td></tr>
 <tr><td>Cache / Colas</td><td>Redis + BullMQ</td><td>7 / 5.74</td><td>Caché + trabajos asíncronos</td></tr>
 <tr><td>Almacenamiento</td><td>S3 / Cloudflare R2</td><td>—</td><td>Archivos, attachments, assets</td></tr>
-<tr><td>Email</td><td>Amazon SES (SMTP)</td><td>—</td><td>Correos transaccionales</td></tr>
+<tr><td>Email</td><td>Resend (API) + SMTP por tenant</td><td>—</td><td>Correos transaccionales</td></tr>
 <tr><td>Notificaciones</td><td>Apprise-API</td><td>latest</td><td>Telegram, Slack, Discord, SMS</td></tr>
 <tr><td>IA / LLM</td><td>OpenRouter</td><td>—</td><td>DeepSeek V4 + Gemini fallback</td></tr>
 <tr><td>IA (opcional)</td><td>OpenAI / Anthropic</td><td>—</td><td>GPT-4o, Claude (fallback models)</td></tr>
@@ -283,9 +283,8 @@ const HTML = `<!DOCTYPE html>
 <tr><td><code>AWS_BUCKET_NAME</code></td><td>Bucket name</td></tr>
 <tr><td><code>AWS_REGION</code></td><td>Región</td></tr>
 <tr><td><code>AWS_ENDPOINT_URL</code></td><td>Endpoint (R2)</td></tr>
-<tr><td rowspan="3"><strong>Email (SES)</strong></td><td><code>AWS_SES_USER</code></td><td>SMTP user</td></tr>
-<tr><td><code>AWS_SES_PASSWORD</code></td><td>SMTP password</td></tr>
-<tr><td><code>AWS_SES_REGION</code></td><td>Región SES</td></tr>
+<tr><td rowspan="2"><strong>Email</strong></td><td><code>RESEND_API_KEY</code></td><td>API Resend (transaccional)</td></tr>
+<tr><td><code>EMAIL_FROM</code></td><td>Remitente por defecto</td></tr>
 <tr><td rowspan="4"><strong>IA / LLM</strong></td><td><code>OPENROUTER_API_KEY</code></td><td>OpenRouter (principal)</td></tr>
 <tr><td><code>OPENAI_API_KEY</code></td><td>OpenAI (fallback)</td></tr>
 <tr><td><code>ANTHROPIC_API_KEY</code></td><td>Anthropic (fallback)</td></tr>
