@@ -111,6 +111,36 @@ export class QuizService {
       // Issue Certificate automatically
       const { CertificationService } = await import('./certification-service');
       await CertificationService.issueCertificate(estudianteId, cursoId);
+
+      // Disparar automatizaciones del módulo Academia (curso completado vía quiz final)
+      try {
+        const { emitLeccionCompletada, emitCursoCompletado } = await import('./automation-events');
+        const curso = leccion.modulo.curso;
+        const estudiante = await prisma.estudiante.findUnique({ where: { id: estudianteId } });
+
+        await emitLeccionCompletada({
+          tenantId: curso?.tenantId,
+          estudianteId,
+          cursoId,
+          leccionId: leccion.id,
+          inscripcionId: enrollment.id,
+          estudiante: estudiante as any,
+          curso: curso as any,
+          leccion: leccion as any,
+        });
+
+        await emitCursoCompletado({
+          tenantId: curso?.tenantId,
+          estudianteId,
+          cursoId,
+          inscripcionId: enrollment.id,
+          estudiante: estudiante as any,
+          curso: curso as any,
+          inscripcion: enrollment as any,
+        });
+      } catch (e) {
+        console.error('Error emitiendo triggers de Academia:', e);
+      }
     }
   }
 }

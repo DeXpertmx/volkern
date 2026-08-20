@@ -70,6 +70,9 @@ export async function POST(
         ? (leccionesCompletadas / inscripcion.totalLecciones) * 100
         : 0;
 
+    const cursoRecienCompletado =
+      progresoPorcentaje === 100 && !inscripcion.fechaCompletado;
+
     const inscripcionActualizada = await prisma.inscripcion.update({
       where: { id: params.id },
       data: {
@@ -84,6 +87,40 @@ export async function POST(
         estado: progresoPorcentaje === 100 ? 'completado' : inscripcion.estado,
       },
     });
+
+    // Disparar automatizaciones del módulo Academia
+    try {
+      const { emitLeccionCompletada, emitCursoCompletado } = await import('@/lib/academy/automation-events');
+      const curso = await prisma.curso.findUnique({ where: { id: inscripcion.cursoId } });
+      const leccion = await prisma.leccion.findUnique({ where: { id: leccionId } });
+
+      if (completado) {
+        await emitLeccionCompletada({
+          tenantId: curso?.tenantId,
+          estudianteId: inscripcion.estudianteId,
+          cursoId: inscripcion.cursoId,
+          leccionId,
+          inscripcionId: inscripcion.id,
+          estudiante: inscripcion.estudiante as any,
+          curso: curso as any,
+          leccion: leccion as any,
+        });
+      }
+
+      if (cursoRecienCompletado) {
+        await emitCursoCompletado({
+          tenantId: curso?.tenantId,
+          estudianteId: inscripcion.estudianteId,
+          cursoId: inscripcion.cursoId,
+          inscripcionId: inscripcion.id,
+          estudiante: inscripcion.estudiante as any,
+          curso: curso as any,
+          inscripcion: inscripcionActualizada as any,
+        });
+      }
+    } catch (e) {
+      console.error('Error emitiendo triggers de Academia:', e);
+    }
 
     return NextResponse.json({
       progreso,

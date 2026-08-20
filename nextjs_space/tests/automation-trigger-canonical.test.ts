@@ -25,6 +25,9 @@ const EMITTED_TRIGGERS = [
   'evento_externo',        // /api/webhooks/n8n/callback, /api/webhooks/n8n/trigger
   'email_abierto',         // /api/email-campanas/track/[recipientId]
   'email_clicado',         // /api/email-campanas/track/[recipientId]/click
+  'estudiante_inscrito',   // /api/inscripciones (POST) — módulo Academia
+  'estudiante_completa_curso', // rutas de progreso y quiz-service — módulo Academia
+  'leccion_completada',    // rutas de progreso y quiz-service — módulo Academia
 ] as const
 
 describe('Triggers canónicos emitidos por las rutas', () => {
