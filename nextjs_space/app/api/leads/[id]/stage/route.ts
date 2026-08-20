@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
+import { triggerAutomation } from '@/lib/automation-engine';
 
 // PATCH /api/leads/[id]/stage - Actualizar el estado/pipeline del lead
 export async function PATCH(
@@ -18,6 +19,15 @@ export async function PATCH(
         tiempoEnEstado: new Date() // Reset el tiempo en el stage
       }
     });
+
+    // Disparar la automatización de lead actualizado (el lead trae su tenantId)
+    if (lead?.tenantId) {
+      triggerAutomation('lead_actualizado', {
+        leadId: lead.id,
+        tenantId: lead.tenantId,
+        lead: lead as any,
+      } as any).catch(err => console.error('Error en Automación (lead_actualizado stage):', err));
+    }
 
     return NextResponse.json(lead);
   } catch (error) {

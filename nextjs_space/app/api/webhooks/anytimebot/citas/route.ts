@@ -277,7 +277,10 @@ export async function POST(request: NextRequest) {
 
         // Trigger automation for appointment rescheduled
         try {
-          await triggerAutomation('cita_reprogramada', {
+          // Nombre canónico (cita_reagendada) para que el builder pueda crear
+          // la automatización; antes emitía 'cita_reprogramada' que no estaba
+          // en VALID_TRIGGERS.
+          await triggerAutomation('cita_reagendada', {
             citaId: existingCita.id,
             leadId: lead.id,
             tenantId,
@@ -380,8 +383,10 @@ export async function POST(request: NextRequest) {
 
     // Trigger automation for appointment booked
     try {
+      // Nombre canónico (cita_agendada); antes emitía 'cita_creada' que no
+      // estaba en VALID_TRIGGERS del builder.
       await triggerAutomation(
-        'cita_creada',
+        'cita_agendada',
         {
           citaId: newCita.id,
           leadId: lead.id,

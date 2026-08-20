@@ -25,10 +25,11 @@ describe('replaceVariables', () => {
     expect(replaceVariables('Hola {nombre}', ctx)).toBe('Hola Juan');
   });
 
-  it('debe reemplazar {{nombre}} con lead.nombre (doble llave) — nota: {nombre} se procesa primero y rompe {{nombre}} parcialmente', () => {
+  it('debe reemplazar {{nombre}} con lead.nombre (doble llave) sin dejar restos', () => {
     const ctx = makeContext({ lead: { nombre: 'María' } });
-    // Comportamiento real: {nombre} se reemplaza primero, dejando '{María}' en vez de 'María'
-    expect(replaceVariables('Hola {{nombre}}', ctx)).toBe('Hola {María}');
+    // Las claves más largas ({{...}}) se reemplazan primero para que la llave
+    // simple no corrompa la doble ({nombre} → {María} dentro de {{nombre}}).
+    expect(replaceVariables('Hola {{nombre}}', ctx)).toBe('Hola María');
   });
 
   it('debe reemplazar {lead.nombre} con lead.nombre', () => {

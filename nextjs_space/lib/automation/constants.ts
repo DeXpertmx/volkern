@@ -7,6 +7,8 @@ export const VALID_TRIGGERS = {
   lead_actualizado: 'Lead Actualizado',
   lead_etiquetado: 'Lead Etiquetado',
   lead_sin_respuesta: 'Lead Sin Respuesta (24h)',
+  nota_creada: 'Nota Creada',
+  interaccion_creada: 'Interacción Registrada',
 
   // Formularios web
   formulario_enviado: 'Formulario Enviado',
@@ -15,6 +17,7 @@ export const VALID_TRIGGERS = {
   cita_agendada: 'Cita Agendada',
   cita_confirmada: 'Cita Confirmada',
   cita_cancelada: 'Cita Cancelada',
+  cita_reagendada: 'Cita Reagendada',
   
   // Academia (LMS)
   estudiante_inscrito: 'Estudiante Inscrito',
@@ -24,6 +27,10 @@ export const VALID_TRIGGERS = {
   // Pagos
   pago_recibido: 'Pago Recibido',
   pago_fallido: 'Pago Fallido',
+
+  // Email marketing (ya emitidos por las rutas de track de campañas)
+  email_abierto: 'Email Abierto',
+  email_clicado: 'Enlace Clicado',
   
   // Externos / n8n
   webhook_recibido: 'Webhook Recibido',

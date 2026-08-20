@@ -16,6 +16,11 @@ export class AutomationEngine {
   private context: ExecutionContext
   private nodes: Node[]
   private edges: Edge[]
+  // Guard de profundidad para dispatchAction: evita ciclos infinitos si una
+  // acción despacha otra que a su vez despacha la misma (p. ej. una acción
+  // que se auto-despacha por error de configuración).
+  private dispatchDepth = 0
+  private static readonly MAX_DISPATCH_DEPTH = 5
 
   constructor(automationId: string, context: ExecutionContext) {
     this.automationId = automationId
@@ -195,7 +200,27 @@ export class AutomationEngine {
       executionId: this.executionId,
       log: (nId, nType, status, msg) => this.log(nId, nType, status, msg),
       replaceVariables: (text) => replaceVariables(text, this.context),
-      dispatchAction: (cfg) => this.executeAction(node),
+      // dispatchAction ejecuta la acción indicada en cfg (actionType + config)
+      // como un nodo sintético. Antes re-ejecutaba el MISMO nodo ignorando cfg,
+      // lo que producía recursión infinita (p. ej. asignar_a_usuario despachaba
+      // enviar_notificacion pero volvía a ejecutarse a sí mismo).
+      dispatchAction: async (cfg) => {
+        if (this.dispatchDepth >= AutomationEngine.MAX_DISPATCH_DEPTH) {
+          await this.log(node.id, 'action', 'error', 'Máxima profundidad de dispatchAction alcanzada (posible ciclo)')
+          return false
+        }
+        this.dispatchDepth++
+        try {
+          const syntheticNode: Node = {
+            ...node,
+            id: `${node.id}__dispatch__${this.dispatchDepth}`,
+            data: { config: cfg },
+          }
+          return await this.executeAction(syntheticNode)
+        } finally {
+          this.dispatchDepth--
+        }
+      },
     }
 
     return await handler(config, actionContext)
