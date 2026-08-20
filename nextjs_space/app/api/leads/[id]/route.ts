@@ -5,6 +5,7 @@ import crypto from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { authenticateRequest } from '@/lib/api-key-auth'
+import { triggerAutomation } from '@/lib/automation-engine'
 
 // GET - Obtener un lead específico
 export async function GET(
@@ -168,6 +169,22 @@ async function updateLeadHandler(
       ipAddress: requestIp,
       userAgent
     });
+
+    // Disparar automatizaciones de actualización. Antes ninguna ruta del
+    // dashboard emitía 'lead_actualizado' ni 'lead_etiquetado', así que esos
+    // triggers del builder nunca se ejecutaban.
+    const automationContext = {
+      leadId: lead.id,
+      tenantId: auth.tenant!.id,
+      lead: lead as any,
+    }
+    triggerAutomation('lead_actualizado', automationContext as any)
+      .catch(err => console.error('Error en Automación (lead_actualizado):', err))
+
+    if (tags !== undefined && existingLead.tags !== tags) {
+      triggerAutomation('lead_etiquetado', automationContext as any)
+        .catch(err => console.error('Error en Automación (lead_etiquetado):', err))
+    }
 
     return NextResponse.json({
       success: true,

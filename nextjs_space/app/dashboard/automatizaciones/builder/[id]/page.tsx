@@ -432,11 +432,19 @@ export default function AutomationBuilderPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="nuevo_lead">Nuevo Lead</SelectItem>
+              <SelectItem value="lead_actualizado">Lead Actualizado</SelectItem>
+              <SelectItem value="lead_etiquetado">Lead Etiquetado</SelectItem>
               <SelectItem value="formulario_enviado">Formulario Enviado</SelectItem>
               <SelectItem value="cita_agendada">Cita Agendada</SelectItem>
               <SelectItem value="cita_confirmada">Cita Confirmada</SelectItem>
+              <SelectItem value="cita_cancelada">Cita Cancelada</SelectItem>
               <SelectItem value="pago_recibido">Pago Recibido</SelectItem>
+              <SelectItem value="pago_fallido">Pago Fallido</SelectItem>
               <SelectItem value="lead_sin_respuesta">Lead Sin Respuesta (24h)</SelectItem>
+              <SelectItem value="nota_creada">Nota Creada</SelectItem>
+              <SelectItem value="interaccion_creada">Interacción Registrada</SelectItem>
+              <SelectItem value="email_abierto">Email Abierto</SelectItem>
+              <SelectItem value="email_clicado">Enlace Clicado</SelectItem>
               <SelectItem value="estudiante_inscrito">Estudiante Inscrito</SelectItem>
               <SelectItem value="estudiante_completa_curso">Estudiante Completa Curso</SelectItem>
               <SelectItem value="leccion_completada">Lección Completada</SelectItem>

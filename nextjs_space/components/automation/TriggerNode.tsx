@@ -78,6 +78,8 @@ export const TriggerNode: React.FC<NodeProps> = ({ id, data, selected }) => {
         { value: 'lead_actualizado', label: 'Lead Actualizado' },
         { value: 'lead_etiquetado', label: 'Lead Etiquetado' },
         { value: 'lead_sin_respuesta', label: 'Lead Sin Respuesta (24h)' },
+        { value: 'nota_creada', label: 'Nota Creada' },
+        { value: 'interaccion_creada', label: 'Interacción Registrada' },
       ]
     },
     formularios: {
@@ -92,6 +94,14 @@ export const TriggerNode: React.FC<NodeProps> = ({ id, data, selected }) => {
         { value: 'cita_agendada', label: 'Cita Agendada' },
         { value: 'cita_confirmada', label: 'Cita Confirmada' },
         { value: 'cita_cancelada', label: 'Cita Cancelada' },
+        { value: 'cita_reagendada', label: 'Cita Reagendada' },
+      ]
+    },
+    marketing: {
+      label: 'Email Marketing',
+      items: [
+        { value: 'email_abierto', label: 'Email Abierto' },
+        { value: 'email_clicado', label: 'Enlace Clicado' },
       ]
     },
     lms: {

@@ -277,9 +277,15 @@ export const POST = withTenantAuth(async (request, auth) => {
     try {
       ScoringEngine.recalculateLeadScore(lead.id).catch(err => console.error('Error en Scoring:', err))
 
-      triggerAutomation('lead.created', {
-        ...lead,
-        tenantId: auth.tenant!.id
+      // Usar el nombre canónico del trigger ('nuevo_lead') y pasar el contexto
+      // con leadId + lead. Antes se disparaba 'lead.created' (que no coincide
+      // con ningún trigger del builder, por lo que las automatizaciones de
+      // "Nuevo Lead Creado" nunca se ejecutaban desde el dashboard) y el
+      // payload no incluía leadId, dejando a las acciones sin lead objetivo.
+      triggerAutomation('nuevo_lead', {
+        leadId: lead.id,
+        tenantId: auth.tenant!.id,
+        lead: lead as any,
       } as any).catch(err => console.error('Error en Automación:', err))
 
       if (!existingLead) {
