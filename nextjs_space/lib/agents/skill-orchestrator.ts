@@ -162,6 +162,13 @@ const INTENT_TO_SKILL: Record<string, string> = {
   'estrategia_ensamblaje': 'suggest_assembly_strategy',
   'firma_digital_hr': 'orchestrate_digital_signature',
 
+  // ─── Gobernanza RRHH y Ads (Vigésimo-segundo entrenamiento) ───
+  'autorizar_gastos': 'authorize_bulk_expenses',
+  'transferir_activo': 'orchestrate_asset_transfer',
+  'auditar_accesos': 'access_security_audit',
+  'kit_offboarding': 'generate_offboarding_security_kit',
+  'pausar_programacion': 'toggle_ad_schedule',
+
   // ─── Logística ───
   'estado_envio': 'get_shipment_status',
   'rastrear_pedido': 'track_order',
@@ -824,6 +831,13 @@ export const SkillOrchestratorAgent = {
         'detectar_cuellos_botella': 'produccion',
         'estrategia_ensamblaje': 'produccion',
 
+        // Gobernanza RRHH y Ads (bloque 22)
+        'autorizar_gastos': 'rrhh',
+        'transferir_activo': 'rrhh',
+        'auditar_accesos': 'rrhh',
+        'kit_offboarding': 'rrhh',
+        'pausar_programacion': 'ads',
+
         // Logística
         'estado_envio': 'logistica',
         'rastrear_pedido': 'logistica',
@@ -946,6 +960,11 @@ export const SkillOrchestratorAgent = {
       'firma_digital_hr': '👥 No tienes acceso al módulo de *RRHH*. Contacta al administrador.',
       'detectar_cuellos_botella': '🏭 No tienes acceso al módulo de *Producción*. Contacta al administrador.',
       'estrategia_ensamblaje': '🏭 No tienes acceso al módulo de *Producción*. Contacta al administrador.',
+      'autorizar_gastos': '👥 No tienes acceso al módulo de *RRHH*. Contacta al administrador.',
+      'transferir_activo': '👥 No tienes acceso al módulo de *RRHH*. Contacta al administrador.',
+      'auditar_accesos': '👥 No tienes acceso al módulo de *RRHH*. Contacta al administrador.',
+      'kit_offboarding': '👥 No tienes acceso al módulo de *RRHH*. Contacta al administrador.',
+      'pausar_programacion': '📣 No tienes acceso al módulo de *Ads*. Contacta al administrador para activarlo.',
       'predecir_fallo_activo': '🏭 No tienes acceso al módulo de *Producción*. Contacta al administrador.',
       'dashboard_mantenimiento': '🏭 No tienes acceso al módulo de *Producción*. Contacta al administrador.',
       'proyeccion_capacidad': '🏭 No tienes acceso al módulo de *Producción*. Contacta al administrador.',
