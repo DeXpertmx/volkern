@@ -270,6 +270,109 @@ export async function runProactiveInvoiceRecovery() {
 }
 
 /**
+ * Trigger programado `lead_sin_respuesta` — escanea leads sin actividad en
+ * las últimas 24h y dispara las automatizaciones que tengan ese trigger.
+ *
+ * Guard contra repetidos: se registra un AuditLog (accion `lead_sin_respuesta`,
+ * entidad `lead`, entidadId = lead.id) en cada disparo; si el lead ya tiene un
+ * log de este tipo en las últimas 24h, se omite (auditable y trazable).
+ */
+export async function runLeadSinRespuestaScan(hours = 24) {
+  const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000)
+  console.log(`[Cron] 📭 Escaneando leads sin respuesta en ${hours}h (corte ${cutoff.toISOString()})...`)
+
+  try {
+    const { triggerAutomation } = await import('../automation-engine')
+
+    // Leads con tenant, sin convertir, sin actividad desde el corte
+    const candidates = await prisma.lead.findMany({
+      where: {
+        tenantId: { not: null },
+        convertedToContactId: null,
+        fechaUltimaActividad: { lt: cutoff },
+      },
+      select: {
+        id: true,
+        tenantId: true,
+        nombre: true,
+        email: true,
+        fechaUltimaActividad: true,
+      },
+      take: 500,
+    })
+
+    let fired = 0
+    let skipped = 0
+
+    for (const lead of candidates) {
+      if (!lead.tenantId) continue
+
+      // Guard contra repetidos: ya disparado en las últimas `hours`h para este lead
+      const alreadyFired = await prisma.auditLog.findFirst({
+        where: {
+          tenantId: lead.tenantId,
+          accion: 'lead_sin_respuesta',
+          entidad: 'lead',
+          entidadId: lead.id,
+          fechaCreacion: { gte: cutoff },
+        },
+        select: { id: true },
+      })
+      if (alreadyFired) {
+        skipped++
+        continue
+      }
+
+      await triggerAutomation('lead_sin_respuesta', {
+        tenantId: lead.tenantId,
+        leadId: lead.id,
+        lead: {
+          id: lead.id,
+          nombre: lead.nombre,
+          email: lead.email,
+          fechaUltimaActividad: lead.fechaUltimaActividad?.toISOString(),
+        },
+        source: 'cron',
+      })
+
+      // Registrar el disparo (auditable) — también evita repetir en el siguiente ciclo
+      await prisma.auditLog.create({
+        data: {
+          tenantId: lead.tenantId,
+          accion: 'lead_sin_respuesta',
+          entidad: 'lead',
+          entidadId: lead.id,
+          descripcion: `Lead sin respuesta en ${hours}h disparado por cron (corte ${cutoff.toISOString()})`,
+          metadata: { trigger: 'lead_sin_respuesta', horas: hours, nombre: lead.nombre },
+        },
+      })
+      fired++
+    }
+
+    console.log(`[Cron] ✅ lead_sin_respuesta: ${fired} disparados, ${skipped} omitidos (ya cubiertos), ${candidates.length} candidatos`)
+    return { total: candidates.length, fired, skipped }
+  } catch (err: any) {
+    console.error('[Cron] ❌ Error fatal en scan lead_sin_respuesta:', err)
+    return { total: 0, fired: 0, skipped: 0, error: err?.message }
+  }
+}
+
+/**
+ * Registra SOLO el cron de `lead_sin_respuesta`. Se inicializa desde
+ * instrumentation.ts (runtime Node). No llama a initCronJobs() completo:
+ * varios jobs de ese scheduler son peligrosos en producción (p. ej. la
+ * recuperación proactiva crea facturas mock) y nunca se han activado.
+ */
+export function initLeadSinRespuestaCron() {
+  cron.schedule('*/30 * * * *', () => {
+    runLeadSinRespuestaScan(24).catch((e) =>
+      console.error('[Cron] lead_sin_respuesta job error:', e)
+    )
+  })
+  console.log('✅ [Scheduler] Cron lead_sin_respuesta programado (cada 30 min, leads inactivos 24h)')
+}
+
+/**
  * Lógica principal del Radar de Ghosting
  */
 export async function runGhostingRadar() {
