@@ -50,7 +50,7 @@ jobs seguros. Auditoría 2026-08-20:
 
 | # | Job | Horario | Estado |
 |---|---|---|---|
-| 1 | Morning Briefing (Telegram a usuarios activos) | 08:30 diario | ✅ activo |
+| 1 | Morning Briefing (Telegram, opt-in por usuario) | 08:30 diario | ✅ activo |
 | 2 | Métricas SaaS diarias (MRR) | 00:05 diario | ✅ activo |
 | 3 | Snapshot mensual de métricas | 1º de mes 02:00 | ✅ activo |
 | 4 | Alertas de límites de plan | 10:00 diario | ✅ activo |
@@ -71,6 +71,11 @@ jobs seguros. Auditoría 2026-08-20:
 | Recuperación Proactiva de Facturas | Creada facturas **mock** con `Math.random()` — eliminada (`runProactiveInvoiceRecovery` borrada) |
 | Ritual Dominical (Auditoría Fiscal) | `auditAllTenants()` escribe `GlobalAuditCloud` masivo por tenant; módulo fiscal no confirmado en uso |
 | Churn rate semanal | Duplicado del MRR diario (ambos llamaban `recordMetrics()`) |
+
+> **Morning Briefing (opt-in):** desde el commit del 2026-08-20 solo se envía a
+> usuarios con la preferencia activada en Perfil → Notificaciones → "Morning
+> Briefing" (guardada en `User.metadata.notifications.briefing`). Default
+> activado: si el campo no existe, el usuario lo recibe.
 
 ## Notas
 

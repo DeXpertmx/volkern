@@ -34,7 +34,8 @@ import {
   ChevronRight,
   FileWarning,
   X,
-  RefreshCw
+  RefreshCw,
+  Sun
 } from "lucide-react";
 import { QRCodeSVG } from 'qrcode.react';
 import { ComplaintForm } from "@/components/equality/ComplaintForm";
@@ -93,7 +94,8 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
     browser: true,
     email: true,
     calls: true,
-    leads: true
+    leads: true,
+    briefing: true
   });
 
   const [zadarma, setZadarma] = useState({
@@ -178,7 +180,14 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
         setUserData(data);
         setTelegramChatId(data.metadata?.telegram_chat_id || "");
         if (data.metadata?.notifications) {
-          setNotifications(data.metadata.notifications);
+          setNotifications({
+            browser: true,
+            email: true,
+            calls: true,
+            leads: true,
+            briefing: true,
+            ...data.metadata.notifications
+          });
         }
         setTimezone(data.timezone || 'America/Mexico_City');
         
@@ -985,6 +994,19 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
                        </div>
                     </div>
                     <Switch checked={notifications.leads} onCheckedChange={(val) => updateNotificationSetting('leads', val)} />
+                 </div>
+
+                 <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
+                    <div className="flex items-center gap-4">
+                       <div className="p-2 bg-white rounded-lg shadow-sm">
+                          <Sun className="h-5 w-5 text-amber-500" />
+                       </div>
+                       <div>
+                          <h4 className="font-bold text-slate-900 text-sm">Morning Briefing</h4>
+                          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">Resumen diario de prioridades por Telegram a las 08:30</p>
+                       </div>
+                    </div>
+                    <Switch checked={notifications.briefing} onCheckedChange={(val) => updateNotificationSetting('briefing', val)} />
                  </div>
                   <div className="pt-4 space-y-4">
                      <div className="flex flex-col gap-3">
