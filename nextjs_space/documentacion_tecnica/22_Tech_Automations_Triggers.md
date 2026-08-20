@@ -43,6 +43,35 @@
 > `emitLeccionCompletada`, `emitCursoCompletado`). El `tenantId` se toma del
 > curso (`Curso.tenantId`); si el curso no tiene tenant, no se dispara.
 
+## Tareas programadas (cron) activas en producción
+
+`initCronJobs()` (inicializado desde `instrumentation.ts`) registra SOLO los
+jobs seguros. Auditoría 2026-08-20:
+
+| # | Job | Horario | Estado |
+|---|---|---|---|
+| 1 | Morning Briefing (Telegram a usuarios activos) | 08:30 diario | ✅ activo |
+| 2 | Métricas SaaS diarias (MRR) | 00:05 diario | ✅ activo |
+| 3 | Snapshot mensual de métricas | 1º de mes 02:00 | ✅ activo |
+| 4 | Alertas de límites de plan | 10:00 diario | ✅ activo |
+| 5 | Renovación webhooks Google Calendar | cada 12h | ✅ activo |
+| 6 | Cleanup analytics (>90 días) | dom 03:00 | ✅ activo |
+| 7 | Polling IMAP | cada 5 min | ✅ activo (no-op sin config) |
+| 8 | Evaluación schedules ADS | cada 5 min | ✅ activo (no-op sin datos) |
+| 9 | Evaluación tests A/B | cada 30 min | ✅ activo (no-op sin tests) |
+| 10 | Watchdog presupuesto ADS | cada 30 min | ✅ activo (no-op sin reglas) |
+| 11 | Sync campañas ADS | cada 1h | ✅ activo (no-op sin conexión) |
+| 12 | Full sync ADS | cada 6h | ✅ activo (no-op sin conexión) |
+| 13 | **lead_sin_respuesta** (trigger automatizaciones) | cada 30 min | ✅ activo |
+
+### Excluidos a propósito (NO se registran)
+
+| Job | Motivo |
+|---|---|
+| Recuperación Proactiva de Facturas | Creada facturas **mock** con `Math.random()` — eliminada (`runProactiveInvoiceRecovery` borrada) |
+| Ritual Dominical (Auditoría Fiscal) | `auditAllTenants()` escribe `GlobalAuditCloud` masivo por tenant; módulo fiscal no confirmado en uso |
+| Churn rate semanal | Duplicado del MRR diario (ambos llamaban `recordMetrics()`) |
+
 ## Notas
 
 - Verificación rápida de un trigger: buscar `triggerAutomation('<trigger>',` en

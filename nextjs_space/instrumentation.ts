@@ -28,13 +28,21 @@ export async function register() {
       console.error('[Instrumentation] Error inicializando automation listeners:', error);
     }
 
-    // Cron del trigger `lead_sin_respuesta`: escanea cada 30 min los leads sin
-    // actividad en 24h y dispara las automatizaciones con ese trigger.
+    // Tareas programadas (node-cron). initCronJobs registra SOLO los jobs
+    // seguros para producción: Morning Briefing, métricas SaaS, límites de
+    // planes, renovación de webhooks de Google Calendar, analytics cleanup,
+    // IMAP polling, ADS (schedule/AB/watchdog/sync) y el cron del trigger
+    // `lead_sin_respuesta` (cada 30 min, leads inactivos 24h).
+    //
+    // ⚠️ Quedan EXCLUIDOS a propósito: la recuperación proactiva de facturas
+    // (creaba facturas mock con Math.random()) — eliminada —, el "Ritual
+    // Dominical" de auditoría fiscal (GlobalAuditCloud masivo) y el churn
+    // semanal (duplicado del MRR diario).
     try {
-      const { initLeadSinRespuestaCron } = await import('@/lib/cron/scheduler');
-      initLeadSinRespuestaCron();
+      const { initCronJobs } = await import('@/lib/cron/scheduler');
+      initCronJobs();
     } catch (error) {
-      console.error('[Instrumentation] Error inicializando cron lead_sin_respuesta:', error);
+      console.error('[Instrumentation] Error inicializando tareas programadas:', error);
     }
   }
 }

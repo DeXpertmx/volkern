@@ -21,22 +21,7 @@ export function initCronJobs() {
     console.log('[Cron] ✅ Morning Briefing enviado.');
   });
 
-  // 2. Radar de Ghosting - Ejecución diaria a las 09:30 AM
-  // Audita la integridad de todas las cadenas de facturación.
-  cron.schedule('59 23 * * 0', async () => {
-    console.log('[Cron] 🏗️ Iniciando Ritual Dominical: Auditoría Fiscal Global...');
-    const { FiscalAuditService } = await import('../fiscal/audit-service');
-    await FiscalAuditService.auditAllTenants();
-    console.log('[Cron] ✅ Ritual Dominical completado.');
-  });
-
-  // 3. Recuperación Proactiva de Facturas (Veri*factu) - Cada 4 horas
-  cron.schedule('0 */4 * * *', async () => {
-    console.log('[Cron] 📡 Iniciando Recuperación Proactiva de Facturas...');
-    await runProactiveInvoiceRecovery();
-  });
-
-  // 4. Daily MRR Calculation - Ejecución diaria a las 00:05 AM
+  // 2. Daily MRR Calculation - Ejecución diaria a las 00:05 AM
   cron.schedule('5 0 * * *', async () => {
     console.log('[Cron] 💰 Calculando métricas SaaS diarias (MRR)...');
     const { SaaSMetricsService } = await import('../saas-metrics');
@@ -44,15 +29,7 @@ export function initCronJobs() {
     console.log('✅ [Cron] Métricas SaaS diarias registradas.');
   });
 
-  // 5. Weekly Churn Calculation - Ejecución cada domingo a las 01:00 AM
-  cron.schedule('0 1 * * 0', async () => {
-    console.log('[Cron] 📉 Calculando churn rate semanal...');
-    const { SaaSMetricsService } = await import('../saas-metrics');
-    await SaaSMetricsService.recordMetrics();
-    console.log('✅ [Cron] Churn rate semanal calculado.');
-  });
-
-  // 6. Monthly Snapshot - Primer día de cada mes a las 02:00 AM
+  // 3. Monthly Snapshot - Primer día de cada mes a las 02:00 AM
   cron.schedule('0 2 1 * *', async () => {
     console.log('[Cron] 📊 Generando snapshot mensual de métricas...');
     const { SaaSMetricsService } = await import('../saas-metrics');
@@ -60,7 +37,7 @@ export function initCronJobs() {
     console.log('✅ [Cron] Snapshot mensual generado.');
   });
 
-  // 7. Limit Alerts - Ejecución diaria a las 10:00 AM
+  // 4. Limit Alerts - Ejecución diaria a las 10:00 AM
   cron.schedule('0 10 * * *', async () => {
     console.log('[Cron] 📊 Verificando límites de planes...');
     const { checkAndNotifyLimitAlerts } = await import('../subscription');
@@ -68,7 +45,7 @@ export function initCronJobs() {
     console.log(`[Cron] ✅ Límites verificados: ${result.checked} tenants, ${result.notified} notificaciones enviadas, ${result.alerts.length} alertas.`);
   });
 
-  // 8. Google Calendar Webhook Renewal - Cada 12 horas
+  // 5. Google Calendar Webhook Renewal - Cada 12 horas
   cron.schedule('0 */12 * * *', async () => {
     console.log('[Cron] 🔄 Iniciando renovación de canales webhook de Google Calendar...');
     try {
@@ -109,12 +86,10 @@ export function initCronJobs() {
     }
   });
 
-  console.log('✅ [Scheduler] Radar de Ghosting programado (09:00 AM daily)');
-  console.log('✅ [Scheduler] Ritual Dominical programado (Sun 23:59)');
-  console.log('✅ [Scheduler] Recuperación Proactiva programada (cada 4h)');
+  console.log('✅ [Scheduler] Morning Briefing programado (08:30 AM daily)');
   console.log('✅ [Scheduler] Métricas SaaS diarias programadas (00:05 AM)');
-  console.log('✅ [Scheduler] Churn rate semanal programado (Sun 01:00 AM)');
   console.log('✅ [Scheduler] Snapshot mensual programado (1st of month 02:00 AM)');
+  console.log('✅ [Scheduler] Límites de planes programados (10:00 AM daily)');
   console.log('✅ [Scheduler] Google Calendar webhook renewal programado (cada 12h)');
 
   // 9. Analytics Cleanup — semanal, domingo a las 03:00 AM
@@ -216,57 +191,9 @@ export function initCronJobs() {
   });
 
   console.log('✅ [Scheduler] ADS Full Sync programado (cada 6 horas)');
-}
 
-/**
- * Lógica de Recuperación Proactiva
- * Simula el polling a APIs externas (Nexus/Hacienda) para recolectar facturas recibidas.
- */
-export async function runProactiveInvoiceRecovery() {
-  try {
-    const tenants = await prisma.tenant.findMany({ select: { id: true, nombre: true } });
-    const { InboundInvoiceService } = await import('../finance/inbound-invoice-service');
-    
-    let totalProcessed = 0;
-
-    for (const tenant of tenants) {
-      // Simulación de detección de facturas externas
-      // En un escenario real, aquí llamaríamos a una API externa (ej. Nexus)
-      const mockExternalInvoices = [
-        { 
-          invoiceNumber: `EXT-${Date.now()}`, 
-          supplierId: 'automatic-provider', 
-          totalAmount: Math.random() * 500, 
-          currency: 'EUR',
-          issueDate: new Date().toISOString()
-        }
-      ];
-
-      for (const inv of mockExternalInvoices) {
-        // En esta simulación solo procesamos si existe un proveedor mock
-        // En prod, el adapter buscaría por CIF/NIF
-        try {
-          // Solo procesar si hay un proveedor configurado (o usar uno por defecto)
-          const supplier = await prisma.supplier.findFirst({ where: { tenantId: tenant.id } });
-          if (supplier) {
-            await InboundInvoiceService.processInboundInvoice(tenant.id, 'volkern_json', {
-              ...inv,
-              supplierId: supplier.id
-            });
-            totalProcessed++;
-          }
-        } catch (e) {
-          console.error(`[Cron] Error procesando factura para ${tenant.nombre}:`, e);
-        }
-      }
-    }
-
-    console.log(`[Cron] ✅ Recuperación proactiva completa. ${totalProcessed} facturas procesadas.`);
-    return { success: true, totalProcessed };
-  } catch (err) {
-    console.error('[Cron] ❌ Error fatal en Recuperación Proactiva:', err);
-    return { success: false, error: err };
-  }
+  // 16. Trigger lead_sin_respuesta — cada 30 minutos
+  initLeadSinRespuestaCron();
 }
 
 /**
