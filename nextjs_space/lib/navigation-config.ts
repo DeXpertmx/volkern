@@ -558,6 +558,7 @@ export const HUBS: HubConfig[] = [
       { name: 'Privacidad GDPR', href: '/dashboard/compliance/gdpr', icon: Lock, description: 'Exportar y anonimizar tus datos personales' },
       { name: 'Mi Suscripción', href: '/dashboard/configuracion/billing', icon: CreditCard, description: 'Suscripción y pagos' },
       { name: 'Uso y Límites', href: '/dashboard/configuracion/usage', icon: BarChart3, description: 'Consumo y límites del plan' },
+      { name: 'Tareas Programadas', href: '/dashboard/configuracion?section=cron', icon: Clock, description: 'Estado de los cron jobs del sistema' },
     ]
   }
 ]

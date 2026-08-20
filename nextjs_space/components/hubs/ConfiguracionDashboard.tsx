@@ -31,6 +31,7 @@ import HorariosMultiplesEditor from "@/components/HorariosMultiplesEditor";
 import FiscalConfigSection from "@/components/fiscal/FiscalConfigSection";
 import { TelephonyConfigSection } from "@/components/dashboard/TelephonyConfigSection";
 import { LeadAssignmentConfig } from "@/components/dashboard/LeadAssignmentConfig";
+import { CronStatusPanel } from "@/components/dashboard/CronStatusPanel";
 import { DocumentTemplatesList } from "@/components/dashboard/DocumentTemplatesList";
 import { LeadFieldsConfig } from "@/components/dashboard/LeadFieldsConfig";
 import { ImageUploader } from "@/components/ui/image-uploader";
@@ -791,6 +792,8 @@ export function ConfiguracionDashboard({ activeSection }: ConfiguracionDashboard
               <Button onClick={() => router.push("/dashboard/configuracion/billing")} className="rounded-full px-10">Ver Planes</Button>
             </div>
           )}
+
+          {activeSection === "cron" && <CronStatusPanel />}
         </motion.div>
       </AnimatePresence>
     </div>

@@ -1,6 +1,13 @@
 import cron from 'node-cron';
 import { skills } from '../skills';
 import { prisma } from '../db';
+import {
+  registerCronJob,
+  cronJobStarted,
+  cronJobCompleted,
+  cronJobFailed,
+  cronJobSkipped,
+} from './cron-status';
 
 /**
  * Orquestador de Tareas Programadas para Gemma 4 Proactivity
@@ -10,81 +17,69 @@ import { prisma } from '../db';
  * por un endpoint externo, pero en entornos persistentes usa node-cron.
  */
 
+/**
+ * Wrapper que instrumenta un job con métricas de estado para el panel.
+ * Registra inicio, duración y resultado (success/error/skipped).
+ */
+function runCronJob(id: string, label: string, schedule: string, fn: () => Promise<void>) {
+  registerCronJob(id, label, schedule)
+  return async () => {
+    const start = Date.now()
+    cronJobStarted(id)
+    try {
+      await fn()
+      const duration = Date.now() - start
+      cronJobCompleted(id, `OK (${duration}ms)`, duration)
+    } catch (err: any) {
+      const duration = Date.now() - start
+      cronJobFailed(id, err?.message || String(err), duration)
+    }
+  }
+}
+
 export function initCronJobs() {
   console.log('🚀 [Scheduler] Inicializando tareas programadas de Volkern CRM...');
 
-  // 1. Morning Briefing - Ejecución diaria a las 08:30 AM
-  cron.schedule('30 8 * * *', async () => {
-    console.log('[Cron] ☀️ Generando Morning Briefing...');
+  // 1. Morning Briefing
+  cron.schedule('30 8 * * *', runCronJob('morning-briefing', 'Morning Briefing', '30 8 * * *', async () => {
     const { MorningBriefingService } = await import('../sales/morning-briefing-service');
     await MorningBriefingService.sendGlobalBriefing();
-    console.log('[Cron] ✅ Morning Briefing enviado.');
-  });
+  }));
 
-  // 2. Daily MRR Calculation - Ejecución diaria a las 00:05 AM
-  cron.schedule('5 0 * * *', async () => {
-    console.log('[Cron] 💰 Calculando métricas SaaS diarias (MRR)...');
+  // 2. Daily MRR
+  cron.schedule('5 0 * * *', runCronJob('daily-mrr', 'Métricas SaaS diarias', '5 0 * * *', async () => {
     const { SaaSMetricsService } = await import('../saas-metrics');
     await SaaSMetricsService.recordMetrics();
-    console.log('✅ [Cron] Métricas SaaS diarias registradas.');
-  });
+  }));
 
-  // 3. Monthly Snapshot - Primer día de cada mes a las 02:00 AM
-  cron.schedule('0 2 1 * *', async () => {
-    console.log('[Cron] 📊 Generando snapshot mensual de métricas...');
+  // 3. Monthly Snapshot
+  cron.schedule('0 2 1 * *', runCronJob('monthly-snapshot', 'Snapshot mensual', '0 2 1 * *', async () => {
     const { SaaSMetricsService } = await import('../saas-metrics');
     await SaaSMetricsService.createSnapshot();
-    console.log('✅ [Cron] Snapshot mensual generado.');
-  });
+  }));
 
-  // 4. Limit Alerts - Ejecución diaria a las 10:00 AM
-  cron.schedule('0 10 * * *', async () => {
-    console.log('[Cron] 📊 Verificando límites de planes...');
+  // 4. Limit Alerts
+  cron.schedule('0 10 * * *', runCronJob('limit-alerts', 'Alertas de límites', '0 10 * * *', async () => {
     const { checkAndNotifyLimitAlerts } = await import('../subscription');
-    const result = await checkAndNotifyLimitAlerts();
-    console.log(`[Cron] ✅ Límites verificados: ${result.checked} tenants, ${result.notified} notificaciones enviadas, ${result.alerts.length} alertas.`);
-  });
+    await checkAndNotifyLimitAlerts();
+  }));
 
-  // 5. Google Calendar Webhook Renewal - Cada 12 horas
-  cron.schedule('0 */12 * * *', async () => {
-    console.log('[Cron] 🔄 Iniciando renovación de canales webhook de Google Calendar...');
-    try {
-      const { renewWebhookChannel } = await import('../google-calendar');
-      
-      const now = new Date();
-      const expirationThreshold = new Date(now.getTime() + 48 * 60 * 60 * 1000);
-
-      const integrationsToRenew = await prisma.googleCalendarIntegration.findMany({
-        where: {
-          activo: true,
-          channelId: { not: null },
-          channelExpiration: {
-            not: null,
-            lte: expirationThreshold,
-          },
-        },
-      });
-
-      console.log(`[Cron] 📊 Encontradas ${integrationsToRenew.length} integraciones para renovar`);
-
-      for (const integration of integrationsToRenew) {
-        try {
-          const horasRestantes = Math.round(
-            (integration.channelExpiration!.getTime() - now.getTime()) / (1000 * 60 * 60)
-          );
-          console.log(`[Cron] 🔄 Renovando canal para usuario ${integration.userId} (expira en ${horasRestantes}h)`);
-          await renewWebhookChannel(integration.userId);
-          console.log(`[Cron] ✅ Canal renovado para usuario ${integration.userId}`);
-        } catch (error: any) {
-          console.error(`[Cron] ❌ Error renovando canal para usuario ${integration.userId}:`, error.message);
-        }
-      }
-
-      console.log(`[Cron] ✅ Renovación de canales webhook completada`);
-    } catch (error: any) {
-      console.error('[Cron] ❌ Error en renovación de canales webhook:', error.message);
+  // 5. Google Calendar Webhook Renewal
+  cron.schedule('0 */12 * * *', runCronJob('calendar-renewal', 'Calendar Webhook Renewal', '0 */12 * * *', async () => {
+    const { renewWebhookChannel } = await import('../google-calendar');
+    const now = new Date();
+    const expirationThreshold = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+    const integrationsToRenew = await prisma.googleCalendarIntegration.findMany({
+      where: {
+        activo: true,
+        channelId: { not: null },
+        channelExpiration: { not: null, lte: expirationThreshold },
+      },
+    });
+    for (const integration of integrationsToRenew) {
+      await renewWebhookChannel(integration.userId);
     }
-  });
+  }));
 
   console.log('✅ [Scheduler] Morning Briefing programado (08:30 AM daily)');
   console.log('✅ [Scheduler] Métricas SaaS diarias programadas (00:05 AM)');
@@ -92,129 +87,58 @@ export function initCronJobs() {
   console.log('✅ [Scheduler] Límites de planes programados (10:00 AM daily)');
   console.log('✅ [Scheduler] Google Calendar webhook renewal programado (cada 12h)');
 
-  // 6. Recuperación Proactiva de Facturas — cada 4 horas
-  // Solo procesa tenants con Tenant.configuracion.recuperacionProactiva.enabled=true.
-  // Sin configuración es un no-op. Sin un proveedor real conectado, los adaptadores
-  // (verifactu, nexus) son stubs que devuelven [].
-  cron.schedule('0 */4 * * *', async () => {
-    console.log('[Cron] 📡 Recuperación proactiva de facturas...');
-    try {
-      const { InboundInvoiceService } = await import('../finance/inbound-invoice-service');
-      const results = await InboundInvoiceService.runProactiveRecovery();
-      const total = results.reduce((acc, r) => acc + r.processed, 0);
-      if (total > 0) {
-        console.log(`[Cron] ✅ Recuperación proactiva: ${total} facturas procesadas en ${results.length} tenant(s)`);
-      } else {
-        console.log('[Cron] ℹ️  Recuperación proactiva: sin tenants habilitados o sin facturas pendientes');
-      }
-    } catch (error: any) {
-      console.error('[Cron] ❌ Error en recuperación proactiva:', error.message);
+  // 6. Recuperación Proactiva de Facturas
+  cron.schedule('0 */4 * * *', runCronJob('invoice-recovery', 'Recuperación Proactiva Facturas', '0 */4 * * *', async () => {
+    const { InboundInvoiceService } = await import('../finance/inbound-invoice-service');
+    await InboundInvoiceService.runProactiveRecovery();
+  }));
+
+  // 7. Analytics Cleanup
+  cron.schedule('0 3 * * 0', runCronJob('analytics-cleanup', 'Cleanup Analytics', '0 3 * * 0', async () => {
+    const { cleanupOldEvents } = await import('../analytics/store');
+    await cleanupOldEvents(90);
+  }));
+
+  // 8. IMAP Email Polling
+  cron.schedule('*/5 * * * *', runCronJob('imap-polling', 'IMAP Polling', '*/5 * * * *', async () => {
+    const { pollAllTenants } = await import('../imap/imap-engine');
+    await pollAllTenants();
+  }));
+
+  // 9. Ad Schedule Evaluation
+  cron.schedule('*/5 * * * *', runCronJob('ad-schedules', 'Ad Schedule Evaluation', '*/5 * * * *', async () => {
+    const { evaluateSchedules } = await import('../ads/schedule-engine');
+    await evaluateSchedules();
+  }));
+
+  // 10. AB Test Auto-Evaluation
+  cron.schedule('*/30 * * * *', runCronJob('ab-tests', 'AB Test Evaluation', '*/30 * * * *', async () => {
+    const { evaluateActiveTests } = await import('../ads/ab-test-engine');
+    await evaluateActiveTests();
+  }));
+
+  // 11. Watchdog Budget
+  cron.schedule('*/30 * * * *', runCronJob('budget-watchdog', 'Watchdog Presupuesto', '*/30 * * * *', async () => {
+    const { BudgetWatchdog } = await import('../ads/budget-watchdog');
+    const tenants = await prisma.tenant.findMany({ where: { estado: 'activo' }, select: { id: true } });
+    for (const t of tenants) {
+      await BudgetWatchdog.evaluateAll(t.id);
     }
-  });
+  }));
 
-  console.log('✅ [Scheduler] Recuperación proactiva programada (cada 4h, tenants habilitados)');
+  // 12. ADS Sync Campaigns
+  cron.schedule('0 * * * *', runCronJob('ads-sync', 'ADS Sync Campañas', '0 * * * *', async () => {
+    const { runSyncCampaigns } = await import('../ads/cron/ads-jobs');
+    await runSyncCampaigns();
+  }));
 
-  // 9. Analytics Cleanup — semanal, domingo a las 03:00 AM
-  cron.schedule('0 3 * * 0', async () => {
-    console.log('[Cron] 🧹 Limpiando eventos de analytics antiguos (>90 días)...');
-    try {
-      const { cleanupOldEvents } = await import('../analytics/store');
-      const deleted = await cleanupOldEvents(90);
-      console.log(`[Cron] ✅ Analytics cleanup: ${deleted} eventos eliminados.`);
-    } catch (error: any) {
-      console.error('[Cron] ❌ Error en analytics cleanup:', error.message);
-    }
-  });
+  // 13. ADS Full Sync
+  cron.schedule('0 */6 * * *', runCronJob('ads-full-sync', 'ADS Full Sync', '0 */6 * * *', async () => {
+    const { runFullSync } = await import('../ads/cron/ads-jobs');
+    await runFullSync();
+  }));
 
-  console.log('✅ [Scheduler] Analytics cleanup programado (Sun 03:00 AM)');
-
-  // 10. IMAP Email Polling — cada 5 minutos
-  cron.schedule('*/5 * * * *', async () => {
-    console.log('[Cron] 📬 Polling IMAP para todos los tenants...');
-    try {
-      const { pollAllTenants } = await import('../imap/imap-engine');
-      await pollAllTenants();
-    } catch (error: any) {
-      console.error('[Cron] ❌ Error en IMAP polling:', error.message);
-    }
-  });
-
-  console.log('✅ [Scheduler] IMAP Polling programado (cada 5 min)');
-
-  // 11. Ad Schedule Evaluation — cada 5 minutos
-  cron.schedule('*/5 * * * *', async () => {
-    console.log('[Cron] ⏰ Evaluando schedules de campañas...');
-    try {
-      const { evaluateSchedules } = await import('../ads/schedule-engine');
-      await evaluateSchedules();
-    } catch (error: any) {
-      console.error('[Cron] ❌ Error en schedule evaluation:', error.message);
-    }
-  });
-
-  console.log('✅ [Scheduler] Ad Schedule Evaluation programado (cada 5 min)');
-
-  // 12. AB Test Auto-Evaluation — cada 30 minutos
-  cron.schedule('*/30 * * * *', async () => {
-    console.log('[Cron] 🧪 Evaluando tests A/B activos...');
-    try {
-      const { evaluateActiveTests } = await import('../ads/ab-test-engine');
-      await evaluateActiveTests();
-    } catch (error: any) {
-      console.error('[Cron] ❌ Error en AB test evaluation:', error.message);
-    }
-  });
-
-  console.log('✅ [Scheduler] AB Test Auto-Evaluation programado (cada 30 min)');
-
-  // 13. Watchdog Budget Evaluation — cada 30 minutos
-  cron.schedule('*/30 * * * *', async () => {
-    console.log('[Cron] 🐕 Evaluando reglas watchdog de presupuesto...');
-    try {
-      const { BudgetWatchdog } = await import('../ads/budget-watchdog');
-      const tenants = await prisma.tenant.findMany({
-        where: { estado: 'activo' },
-        select: { id: true },
-      });
-      for (const t of tenants) {
-        await BudgetWatchdog.evaluateAll(t.id).catch((err: any) =>
-          console.error(`[Cron] Error watchdog para tenant ${t.id}:`, err.message)
-        );
-      }
-    } catch (error: any) {
-      console.error('[Cron] ❌ Error en watchdog evaluation:', error.message);
-    }
-  });
-
-  console.log('✅ [Scheduler] Watchdog Evaluation programado (cada 30 min)');
-
-  // 14. ADS Sync Campaigns — cada 1 hora
-  cron.schedule('0 * * * *', async () => {
-    console.log('[Cron] 🔄 Sincronizando campañas ADS...');
-    try {
-      const { runSyncCampaigns } = await import('../ads/cron/ads-jobs');
-      await runSyncCampaigns();
-    } catch (error: any) {
-      console.error('[Cron] ❌ Error en ADS sync:', error.message);
-    }
-  });
-
-  console.log('✅ [Scheduler] ADS Sync programado (cada 1 hora)');
-
-  // 15. ADS Full Sync — cada 6 horas
-  cron.schedule('0 */6 * * *', async () => {
-    console.log('[Cron] 🔄 Sincronización completa ADS...');
-    try {
-      const { runFullSync } = await import('../ads/cron/ads-jobs');
-      await runFullSync();
-    } catch (error: any) {
-      console.error('[Cron] ❌ Error en ADS full sync:', error.message);
-    }
-  });
-
-  console.log('✅ [Scheduler] ADS Full Sync programado (cada 6 horas)');
-
-  // 16. Trigger lead_sin_respuesta — cada 30 minutos
+  // 14. Lead sin respuesta
   initLeadSinRespuestaCron();
 }
 
@@ -307,18 +231,12 @@ export async function runLeadSinRespuestaScan(hours = 24) {
 }
 
 /**
- * Registra SOLO el cron de `lead_sin_respuesta`. Se inicializa desde
- * instrumentation.ts (runtime Node). No llama a initCronJobs() completo:
- * varios jobs de ese scheduler son peligrosos en producción (p. ej. la
- * recuperación proactiva crea facturas mock) y nunca se han activado.
+ * Registra el cron de `lead_sin_respuesta`. Se llama desde initCronJobs().
  */
 export function initLeadSinRespuestaCron() {
-  cron.schedule('*/30 * * * *', () => {
-    runLeadSinRespuestaScan(24).catch((e) =>
-      console.error('[Cron] lead_sin_respuesta job error:', e)
-    )
-  })
-  console.log('✅ [Scheduler] Cron lead_sin_respuesta programado (cada 30 min, leads inactivos 24h)')
+  cron.schedule('*/30 * * * *', runCronJob('lead-sin-respuesta', 'Lead Sin Respuesta (24h)', '*/30 * * * *', async () => {
+    await runLeadSinRespuestaScan(24)
+  }))
 }
 
 /**
