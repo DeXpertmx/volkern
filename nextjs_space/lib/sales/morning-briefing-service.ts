@@ -93,11 +93,25 @@ RESPONDE EN ESTE FORMATO JSON:
    * Ejecuta el envío masivo del Morning Briefing (Cron)
    */
   static async sendGlobalBriefing() {
+    // Solo los usuarios con la preferencia de briefing activada. La preferencia
+    // se guarda en `metadata.notifications.briefing` (perfil → Notificaciones).
+    // Default: activado (no rompe el comportamiento existente); el usuario
+    // puede desactivarlo desde su perfil.
     const users = await prisma.user.findMany({
       where: { active: true, tenantId: { not: null } } as any
     });
 
-    for (const user of users) {
+    const optedIn = users.filter((u: any) => {
+      const notifications = (u.metadata as any)?.notifications;
+      if (notifications && typeof notifications === 'object') {
+        return notifications.briefing !== false;
+      }
+      return true;
+    });
+
+    console.log(`[Morning Briefing] ${optedIn.length}/${users.length} usuarios con briefing activado`);
+
+    for (const user of optedIn) {
       if (!user.tenantId) continue;
       
       try {
