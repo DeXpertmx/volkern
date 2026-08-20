@@ -34,7 +34,19 @@ export const GET = withTenantAuth(async (request, auth) => {
         }
 
         if (assignedToMe && auth.user?.id) {
-            where.asignadoA = auth.user.id;
+            // "Mis tareas" incluye las tareas asignadas a mí Y las sin asignar:
+            // las tareas creadas por automatizaciones no tienen dueño, pero deben
+            // ser visibles para el equipo (sobre todo en tenants de un solo usuario).
+            // Se usa AND para no interferir con el filtro de búsqueda (where.OR).
+            where.AND = [
+                ...(where.AND || []),
+                {
+                    OR: [
+                        { asignadoA: auth.user.id },
+                        { asignadoA: null },
+                    ],
+                },
+            ];
         }
 
         if (search) {

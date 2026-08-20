@@ -83,7 +83,8 @@ export function LeadsContent() {
     pais: '',
     fuente: '',
     canal: '',
-    notas: ''
+    notas: '',
+    tags: ''
   })
 
 
@@ -194,6 +195,7 @@ export function LeadsContent() {
           fuente: newLead.fuente || undefined,
           canal: newLead.canal || undefined,
           notas: newLead.notas || undefined,
+          tags: newLead.tags || undefined,
         })
       })
 
@@ -213,7 +215,8 @@ export function LeadsContent() {
           pais: '',
           fuente: '',
           canal: '',
-          notas: ''
+          notas: '',
+          tags: ''
         })
         // Refrescar lista
         setIsLoading(true)
@@ -493,6 +496,17 @@ export function LeadsContent() {
                   </div>
                 </div>
 
+                {/* Etiquetas */}
+                <div className="space-y-2 pt-4 border-t">
+                  <Label htmlFor="new-tags">Etiquetas</Label>
+                  <Input
+                    id="new-tags"
+                    value={newLead.tags}
+                    onChange={(e) => setNewLead({ ...newLead, tags: e.target.value })}
+                    placeholder="VIP, Neting, Seguimiento (separadas por coma)"
+                  />
+                </div>
+
                 {/* Notas */}
                 <div className="space-y-2 pt-4 border-t">
                   <Label htmlFor="new-notas">Notas</Label>
@@ -750,6 +764,7 @@ export function LeadsContent() {
                         <TableHead>Empresa / Ciudad</TableHead>
                         <TableHead>Estado</TableHead>
                         <TableHead>Score</TableHead>
+                        <TableHead>Etiquetas</TableHead>
                         <TableHead>Asignado a</TableHead>
                         <TableHead>Fecha</TableHead>
                         <TableHead>Citas</TableHead>
@@ -835,6 +850,24 @@ export function LeadsContent() {
                                 <Sparkles className="h-3 w-3 text-indigo-500" />
                               )}
                             </div>
+                          </TableCell>
+                          <TableCell>
+                            {lead.tags && String(lead.tags).trim() !== '' ? (
+                              <div className="flex flex-wrap gap-1 max-w-[180px]">
+                                {String(lead.tags).split(',').filter((t: string) => t.trim()).slice(0, 2).map((tag: string, idx: number) => (
+                                  <Badge key={idx} variant="secondary" className="text-[10px] font-medium px-1.5 py-0">
+                                    {tag.trim()}
+                                  </Badge>
+                                ))}
+                                {String(lead.tags).split(',').filter((t: string) => t.trim()).length > 2 && (
+                                  <span className="text-[10px] text-muted-foreground self-center">
+                                    +{String(lead.tags).split(',').filter((t: string) => t.trim()).length - 2}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
                           </TableCell>
                           <TableCell>
                             {lead.asignadoUsuario ? (

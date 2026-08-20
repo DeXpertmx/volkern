@@ -29,6 +29,7 @@ import {
 import { toast } from 'sonner';
 import { apiGet, apiPost, apiDelete, apiPatch } from '@/lib/api-client';
 import { DEFAULT_THANK_YOU, SurveyFormRenderer } from '@/components/public/SurveyFormRenderer';
+import { LEAD_STANDARD_FIELD_LABELS } from '@/lib/marketing/form-lead-mapping';
 
 // ─── Types ──────────────────────────────────────────────
 type FieldType = 'text' | 'email' | 'comment' | 'dropdown' | 'checkbox' | 'radiogroup' | 'boolean' | 'date' | 'file' | 'rating' | 'scale';
@@ -45,6 +46,14 @@ type FormField = {
   maxSize?: number;
   rateMin?: number;
   rateMax?: number;
+  mapping?: string;
+};
+
+type LeadFieldDefinition = {
+  fieldKey: string;
+  label: string;
+  type: string;
+  activo?: boolean;
 };
 
 type WebForm = {
@@ -90,6 +99,7 @@ const DEFAULT_SURVEY_JSON = {
 export default function FormulariosPage() {
   const router = useRouter();
   const [forms, setForms] = useState<WebForm[]>([]);
+  const [leadFieldDefinitions, setLeadFieldDefinitions] = useState<LeadFieldDefinition[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedForm, setSelectedForm] = useState<WebForm | null>(null);
   const [editing, setEditing] = useState(false);
@@ -102,6 +112,7 @@ export default function FormulariosPage() {
     try {
       const res = await apiGet('/api/formularios');
       setForms(res.forms || []);
+      setLeadFieldDefinitions(Array.isArray(res.leadFieldDefinitions) ? res.leadFieldDefinitions : []);
     } catch (e) {
       toast.error('Error al cargar formularios');
     } finally {
@@ -152,7 +163,7 @@ export default function FormulariosPage() {
 
   // ─── Editor View ──────────────────────────────────────
   if (editing && selectedForm) {
-    return <FormEditor form={selectedForm} onBack={() => { setEditing(false); setSelectedForm(null); fetchForms(); }} onFormUpdated={(updated) => { setSelectedForm(updated); setForms(prev => prev.map(f => f.id === updated.id ? { ...f, name: updated.name, config: updated.config } : f)); }} />;
+    return <FormEditor form={selectedForm} leadFieldDefinitions={leadFieldDefinitions} onBack={() => { setEditing(false); setSelectedForm(null); fetchForms(); }} onFormUpdated={(updated) => { setSelectedForm(updated); setForms(prev => prev.map(f => f.id === updated.id ? { ...f, name: updated.name, config: updated.config } : f)); }} />;
   }
 
   return (
@@ -331,7 +342,7 @@ export default function FormulariosPage() {
 }
 
 // ─── Form Editor Component ──────────────────────────────
-function FormEditor({ form, onBack, onFormUpdated }: { form: WebForm; onBack: () => void; onFormUpdated?: (updated: WebForm) => void }) {
+function FormEditor({ form, leadFieldDefinitions, onBack, onFormUpdated }: { form: WebForm; leadFieldDefinitions: LeadFieldDefinition[]; onBack: () => void; onFormUpdated?: (updated: WebForm) => void }) {
   const [name, setName] = useState(form.name);
   const [surveyJson, setSurveyJson] = useState<any>(
     form.config?.pages ? form.config : DEFAULT_SURVEY_JSON
@@ -411,8 +422,21 @@ function FormEditor({ form, onBack, onFormUpdated }: { form: WebForm; onBack: ()
       updatedJson.pages = [{ name: 'page1', elements: [] }];
     }
     const elements = [...updatedJson.pages[0].elements];
-    elements[index] = { ...elements[index], ...updates };
+    const previous = elements[index];
+    const next = { ...previous, ...updates };
+    elements[index] = next;
     updatedJson.pages[0].elements = elements;
+
+    const fieldMappings = { ...(updatedJson.fieldMappings || {}) };
+    if (updates.name && previous.name !== updates.name && fieldMappings[previous.name] !== undefined) {
+      fieldMappings[updates.name] = fieldMappings[previous.name];
+      delete fieldMappings[previous.name];
+    }
+    if (updates.mapping !== undefined) {
+      if (updates.mapping) fieldMappings[next.name] = updates.mapping;
+      else delete fieldMappings[next.name];
+    }
+    updatedJson.fieldMappings = fieldMappings;
     setSurveyJson(updatedJson);
   };
 
@@ -717,6 +741,7 @@ function FormEditor({ form, onBack, onFormUpdated }: { form: WebForm; onBack: ()
                 field={field}
                 index={index}
                 total={currentPage.elements.length}
+                leadFieldDefinitions={leadFieldDefinitions}
                 onUpdate={(updates) => handleUpdateField(index, updates)}
                 onRemove={() => handleRemoveField(index)}
                 onMove={(dir) => handleMoveField(index, dir)}
@@ -766,6 +791,7 @@ function FieldEditor({
   field,
   index,
   total,
+  leadFieldDefinitions,
   onUpdate,
   onRemove,
   onMove,
@@ -773,6 +799,7 @@ function FieldEditor({
   field: FormField;
   index: number;
   total: number;
+  leadFieldDefinitions: LeadFieldDefinition[];
   onUpdate: (updates: Partial<FormField>) => void;
   onRemove: () => void;
   onMove: (direction: 'up' | 'down') => void;
@@ -845,6 +872,34 @@ function FieldEditor({
             className="rounded-xl h-9 text-sm"
           />
         </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label className="text-xs">Guardar respuesta en el CRM</Label>
+        <select
+          value={field.mapping || ''}
+          onChange={(e) => onUpdate({ mapping: e.target.value })}
+          className="w-full h-9 px-3 rounded-xl border border-input bg-background text-sm"
+        >
+          <option value="">Automático (según el nombre del campo)</option>
+          {(Object.entries(LEAD_STANDARD_FIELD_LABELS) as [string, string][]).map(([key, label]) => (
+            <option key={`standard:${key}`} value={`standard:${key}`}>{label}</option>
+          ))}
+          {leadFieldDefinitions.length > 0 && (
+            <optgroup label="Campos personalizados del CRM">
+              {leadFieldDefinitions.filter((definition) => definition.activo !== false).map((definition) => (
+                <option key={`custom:${definition.fieldKey}`} value={`custom:${definition.fieldKey}`}>
+                  {definition.label} ({definition.fieldKey})
+                </option>
+              ))}
+            </optgroup>
+          )}
+          <option value="ignore">No guardar como campo del CRM (solo notas)</option>
+        </select>
+        <p className="text-xs text-muted-foreground">
+          Las respuestas sin destino explícito se conservarán en las notas del lead.
+          {leadFieldDefinitions.length === 0 && ' Crea primero campos personalizados en Leads.'}
+        </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

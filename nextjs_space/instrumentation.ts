@@ -15,5 +15,17 @@ export async function register() {
     } catch (error) {
       console.error('[Instrumentation] Error inicializando Gemma chatbot:', error);
     }
+
+    // Registrar los listeners EventBus → AutomationEngine (formulario_enviado,
+    // nuevo_lead, cita_agendada, etc.). El event bus es en memoria: si estos
+    // listeners no se registran en el mismo proceso que atiende los requests,
+    // los eventos se emiten pero ninguna automatización se dispara.
+    try {
+      const { initializeAutomationListeners } = await import('@/lib/skills/automation-listener');
+      initializeAutomationListeners();
+      console.log('[Instrumentation] Automation listeners inicializados (EventBus → AutomationEngine activo)');
+    } catch (error) {
+      console.error('[Instrumentation] Error inicializando automation listeners:', error);
+    }
   }
 }

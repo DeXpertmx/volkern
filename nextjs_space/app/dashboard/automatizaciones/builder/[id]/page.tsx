@@ -330,10 +330,20 @@ export default function AutomationBuilderPage() {
         edges,
       }
 
+      // El trigger real vive en el nodo trigger del canvas; sincronizarlo con
+      // la columna de BD evita que se quede con el valor inicial (p. ej.
+      // 'nuevo_lead') cuando el usuario cambia el disparador a
+      // 'formulario_enviado' y el motor no encuentra la automatización.
+      const triggerNode = nodes.find((n: any) => n.type === 'trigger')
+      const effectiveTrigger = triggerNode?.data?.trigger || trigger
+      if (effectiveTrigger !== trigger) {
+        setTrigger(effectiveTrigger)
+      }
+
       const body = {
         nombre,
         descripcion,
-        trigger,
+        trigger: effectiveTrigger,
         flowData,
       }
 

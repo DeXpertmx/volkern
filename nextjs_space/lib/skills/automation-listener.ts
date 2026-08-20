@@ -740,6 +740,24 @@ async function handleEvent(event: EventType, payload: BaseEventPayload): Promise
   }
 }
 
+// Guard idempotente: Next.js standalone puede instanciar este módulo en
+// varios bundles (instrumentation vs app). Sin el guard, cada llamada
+// añadiría un listener más y cada evento dispararía la automatización N veces.
+let automationListenersInitialized = false;
+
+/**
+ * Asegura que los listeners EventBus → AutomationEngine estén registrados en
+ * EL MISMO bundle que emite el evento. En Next.js standalone el listener
+ * registrado desde instrumentation.ts puede vivir en otra instancia del event
+ * bus (bundles separados) y nunca recibiría el evento. Los emisores deben
+ * llamar a esta función antes de emitir (mismo patrón que initGemmaChatbot).
+ * Idempotente: solo registra una vez por bundle.
+ */
+export function ensureAutomationListeners(): void {
+  if (automationListenersInitialized) return
+  initializeAutomationListeners()
+}
+
 /**
  * Registra todos los listeners
  * Llamar una vez al iniciar la aplicación
@@ -809,6 +827,7 @@ export function initializeAutomationListeners(): void {
   eventBus.onEvent(EVENTS.WORKFLOW_FAILED, (payload) => handleEvent(EVENTS.WORKFLOW_FAILED, payload));
 
   console.log('✅ [AutomationListener] Listeners inicializados:', Object.keys(EVENT_TO_TRIGGER_MAP).length, 'eventos conectados');
+  automationListenersInitialized = true;
 }
 
 /**

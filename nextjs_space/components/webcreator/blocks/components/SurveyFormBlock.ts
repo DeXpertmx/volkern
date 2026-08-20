@@ -1,6 +1,45 @@
 import { Editor } from "grapesjs";
 import { getIconSvg } from "../../icons/BlockIcons";
 
+export type SurveyFormOption = { id: string; name: string };
+
+export type SurveyFormDesign = {
+  buttonColor: string;
+  buttonTextColor: string;
+};
+
+/** Lee los colores guardados por el editor de Formularios con un fallback seguro. */
+export function getSurveyFormDesign(config: Record<string, unknown> | null | undefined): SurveyFormDesign {
+  const hexColor = (value: unknown, fallback: string) => {
+    const color = String(value ?? '').trim();
+    return /^#[0-9a-f]{3,8}$/i.test(color) ? color : fallback;
+  };
+
+  return {
+    buttonColor: hexColor(config?._buttonColor, '#6366f1'),
+    buttonTextColor: hexColor(config?._buttonTextColor, '#ffffff'),
+  };
+}
+
+/** Convierte los formularios del tenant en opciones para el trait del editor. */
+export function buildSurveyFormOptions(
+  forms: Array<{ id: string; name?: string | null }>,
+  currentId = '',
+): SurveyFormOption[] {
+  const options: SurveyFormOption[] = [
+    { id: '', name: 'Selecciona un formulario' },
+    ...forms
+      .filter((form) => form?.id)
+      .map((form) => ({ id: form.id, name: form.name?.trim() || `Formulario ${form.id}` })),
+  ];
+
+  if (currentId && !options.some((option) => option.id === currentId)) {
+    options.push({ id: currentId, name: `Formulario seleccionado (${currentId})` });
+  }
+
+  return options;
+}
+
 export const createSurveyFormBlock = (editor: Editor) => {
   const bm = editor.BlockManager;
 
@@ -22,10 +61,10 @@ export const createSurveyFormBlock = (editor: Editor) => {
       defaults: {
         traits: [
           {
-            type: 'text',
-            label: 'ID del Formulario',
+            type: 'select',
+            label: 'Formulario de Volkern',
             name: 'data-form-id',
-            placeholder: 'Pega el ID del formulario'
+            options: [{ id: '', name: 'Cargando formularios...' }],
           },
           {
             type: 'button',
@@ -65,8 +104,8 @@ export const createSurveyFormBlock = (editor: Editor) => {
                 <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M17 2v4"/><path d="M7 2v4"/><path d="M2 10h20"/></svg>
               </div>
               <h3 class="survey-placeholder-title">Formulario Inteligente</h3>
-              <p class="survey-placeholder-desc">Configura el <strong>ID del Formulario</strong> en el panel <strong>Propiedades (⚙️)</strong></p>
-              <div class="survey-placeholder-badge">📋 Crear formularios en el menú Formularios</div>
+              <p class="survey-placeholder-desc">Selecciona un formulario existente en el panel <strong>Propiedades (⚙️)</strong></p>
+              <div class="survey-placeholder-badge">📋 Gestiona tus formularios desde el menú Formularios</div>
               <div class="survey-placeholder-fields" data-v-fields>
                 <div class="survey-mock-field"></div>
                 <div class="survey-mock-field short"></div>
@@ -90,6 +129,17 @@ export const createSurveyFormBlock = (editor: Editor) => {
           const titleEl = el.querySelector('.survey-placeholder-title');
           const descEl = el.querySelector('.survey-placeholder-desc');
           const badgeEl = el.querySelector('.survey-placeholder-badge');
+          const mockButtonEl = el.querySelector('.survey-mock-btn');
+
+          const applyDesign = (config: Record<string, unknown> | null | undefined) => {
+            const hexColor = (value: unknown, fallback: string) => {
+              const color = String(value || '').trim();
+              return /^#[0-9a-f]{3,8}$/i.test(color) ? color : fallback;
+            };
+            if (!mockButtonEl) return;
+            mockButtonEl.style.setProperty('background', hexColor(config && config._buttonColor, '#6366f1'), 'important');
+            mockButtonEl.style.setProperty('color', hexColor(config && config._buttonTextColor, '#ffffff'), 'important');
+          };
 
           const isAlreadyRendered = el.getAttribute('data-rendered');
 
@@ -100,8 +150,9 @@ export const createSurveyFormBlock = (editor: Editor) => {
               if (placeholderEl) placeholderEl.style.display = '';
               if (errorEl) errorEl.style.display = 'none';
               if (titleEl) titleEl.innerText = 'Formulario Inteligente';
-              if (descEl) descEl.innerHTML = 'Configura el <strong>ID del Formulario</strong> en el panel <strong>Propiedades (⚙️)</strong>';
+              if (descEl) descEl.innerHTML = 'Selecciona un formulario existente en el panel <strong>Propiedades (⚙️)</strong>';
               if (badgeEl) badgeEl.style.display = '';
+              applyDesign({});
               return;
             }
 
@@ -112,8 +163,7 @@ export const createSurveyFormBlock = (editor: Editor) => {
 
             try {
               const res = await fetch('/api/formularios/' + formId, {
-                credentials: 'same-origin',
-                headers: { 'x-tenant-id': 'preview' }
+                credentials: 'include'
               });
               if (!res.ok) throw new Error('HTTP ' + res.status);
 
@@ -122,6 +172,7 @@ export const createSurveyFormBlock = (editor: Editor) => {
               if (!form?.config?.pages) throw new Error('Sin configuración');
 
               el.setAttribute('data-survey-json', JSON.stringify(form.config));
+              applyDesign(form.config);
 
               if (titleEl) titleEl.innerText = form.name || 'Formulario';
               if (descEl) descEl.innerText = 'Formulario configurado correctamente';
@@ -149,7 +200,7 @@ export const createSurveyFormBlock = (editor: Editor) => {
             } catch (e) {
               console.warn('[SurveyFormBlock] Error loading form:', e);
               if (titleEl) titleEl.innerText = 'Error al cargar';
-              if (descEl) descEl.innerText = 'Verifica que el ID del formulario sea correcto';
+              if (descEl) descEl.innerText = 'Verifica que el formulario seleccionado exista y tengas acceso';
               if (errorEl) errorEl.style.display = '';
             }
           };
@@ -180,6 +231,38 @@ export const createSurveyFormBlock = (editor: Editor) => {
       },
     },
   });
+
+  // Cargar los formularios del tenant en el selector del Trait Manager.
+  // Se ejecuta en el editor autenticado; la página pública solo recibe el ID
+  // seleccionado dentro del HTML guardado.
+  let formOptions: SurveyFormOption[] = [{ id: '', name: 'Cargando formularios...' }];
+
+  const applyFormOptions = (component: any, options: SurveyFormOption[]) => {
+    const trait = component?.getTrait?.('data-form-id');
+    if (trait) trait.set('options', options);
+  };
+
+  const applyFormOptionsToAll = (options: SurveyFormOption[]) => {
+    const components = editor.getWrapper()?.find?.('[data-form-id]') || [];
+    components.forEach((component: any) => applyFormOptions(component, options));
+  };
+
+  editor.on('component:add', (component: any) => {
+    if (component?.get?.('type') === 'volkern-survey-form') {
+      applyFormOptions(component, formOptions);
+    }
+  });
+  fetch('/api/formularios', { credentials: 'include' })
+    .then((response) => response.ok ? response.json() : Promise.reject(new Error(`HTTP ${response.status}`)))
+    .then((data) => {
+      formOptions = buildSurveyFormOptions(Array.isArray(data?.forms) ? data.forms : []);
+      applyFormOptionsToAll(formOptions);
+    })
+    .catch((error) => {
+      console.warn('[SurveyFormBlock] No se pudieron cargar los formularios:', error);
+      formOptions = [{ id: '', name: 'No se pudieron cargar' }];
+      applyFormOptionsToAll(formOptions);
+    });
 
   const styleEl = document.createElement('style');
   styleEl.textContent = `

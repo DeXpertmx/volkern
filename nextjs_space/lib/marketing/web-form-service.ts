@@ -1,4 +1,5 @@
 import { prisma } from '../db';
+import { resolveLeadMapping } from './form-lead-mapping';
 
 export class WebFormService {
   /**
@@ -29,16 +30,32 @@ export class WebFormService {
       }
     });
 
-    // 2. Mapear datos al Lead (usando el config del formulario)
-    const config = form.config as any;
-    const mapping = config.mapping || {};
-
+    // 2. Mapear datos al Lead usando el destino elegido en el formulario.
+    const mapped = resolveLeadMapping(
+      form.config as any,
+      payload,
+      await prisma.leadFieldDefinition.findMany({
+        where: { tenantId: form.tenantId, activo: true },
+        select: { fieldKey: true, activo: true, type: true },
+      }),
+    );
+    const standard = mapped.standard as Record<string, any>;
+    const unmapped = Object.fromEntries(mapped.unmapped);
     const leadData: any = {
       tenantId: form.tenantId,
-      nombre: payload[mapping.nombre || 'name'] || 'Lead Web',
-      email: payload[mapping.email || 'email'],
-      telefono: payload[mapping.telefono || 'phone'],
-      notas: `Origin: Web Form [${form.name}]\n\nPayload: ${JSON.stringify(payload, null, 2)}`,
+      nombre: standard.nombre || 'Lead Web',
+      email: standard.email,
+      telefono: standard.telefono,
+      empresa: standard.empresa,
+      cargo: standard.cargo,
+      ubicacion: standard.ubicacion,
+      direccion: standard.direccion,
+      ciudad: standard.ciudad,
+      codigoPostal: standard.codigoPostal,
+      pais: standard.pais,
+      linkedin: standard.linkedin,
+      notas: `Origin: Web Form [${form.name}]\\n\\n${standard.notas || ''}\\n\\nDatos adicionales: ${JSON.stringify(unmapped)}`,
+      metadataExterna: mapped.custom,
       origen: 'WEB_FORM',
       estado: 'nuevo',
     };

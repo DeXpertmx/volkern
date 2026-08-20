@@ -8,6 +8,14 @@ import 'survey-core/survey-core.min.css';
 // para que el formulario no quede a medias (ej. botones "Yes/No" en inglés).
 import 'survey-core/i18n/spanish';
 import { toast } from 'sonner';
+import {
+  DEFAULT_THANK_YOU,
+  buildThankYouHtml,
+  getThankYouRedirectUrl,
+} from '@/lib/marketing/form-thank-you';
+import type { ThankYouConfig } from '@/lib/marketing/form-thank-you';
+
+export { DEFAULT_THANK_YOU, buildThankYouHtml, getThankYouRedirectUrl } from '@/lib/marketing/form-thank-you';
 
 /**
  * Normaliza el JSON del formulario para las vistas externas (preview, embed,
@@ -21,66 +29,6 @@ import { toast } from 'sonner';
  *    Como el sistema es en español, se fija "Sí"/"No" salvo que el autor
  *    haya personalizado los labels (labelTrue/labelFalse) en el JSON.
  */
-export const DEFAULT_THANK_YOU = {
-  title: '¡Gracias! Hemos recibido tus datos.',
-  message: 'Tu información se registró correctamente. Muy pronto recibirás información sobre los siguientes pasos.',
-  buttonText: '',
-  buttonUrl: '',
-  redirectUrl: '',
-};
-
-type ThankYouConfig = Partial<typeof DEFAULT_THANK_YOU>;
-
-function escapeHtml(value: unknown): string {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/\"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
-
-function safeThankYouUrl(value: unknown): string {
-  const url = String(value ?? '').trim();
-  return url.startsWith('https://') || url.startsWith('http://') || url.startsWith('/') || url.startsWith('#')
-    ? url
-    : '';
-}
-
-/** Solo permite redirecciones absolutas HTTP(S) configuradas por el tenant. */
-export function getThankYouRedirectUrl(config?: ThankYouConfig): string {
-  const value = String(config?.redirectUrl ?? '').trim();
-  if (!value) return '';
-  try {
-    const parsed = new URL(value);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? value : '';
-  } catch {
-    return '';
-  }
-}
-
-/** Construye la pantalla de agradecimiento que SurveyJS muestra al completar. */
-export function buildThankYouHtml(config?: ThankYouConfig): string {
-  const values = { ...DEFAULT_THANK_YOU, ...(config || {}) };
-  const titleValue = String(values.title ?? '').trim();
-  const messageValue = String(values.message ?? '').trim();
-  const buttonTextValue = String(values.buttonText ?? '').trim();
-  const title = escapeHtml(titleValue || DEFAULT_THANK_YOU.title);
-  const message = escapeHtml(messageValue || DEFAULT_THANK_YOU.message).replace(/\n/g, '<br />');
-  const buttonText = escapeHtml(buttonTextValue);
-  const buttonUrl = safeThankYouUrl(values.buttonUrl);
-  const button = buttonText && buttonUrl
-    ? `<a href="${escapeHtml(buttonUrl)}" style="display:inline-block;margin-top:24px;padding:11px 20px;border-radius:10px;background:#2563eb;color:#fff;text-decoration:none;font-weight:600">${buttonText}</a>`
-    : '';
-
-  return `<div style="max-width:560px;margin:24px auto;padding:40px 24px;text-align:center;border-radius:16px;background:#f0fdf4;color:#166534">
-    <div style="font-size:42px;line-height:1;margin-bottom:16px">✓</div>
-    <h2 style="margin:0 0 12px;font-size:24px;color:#166534">${title}</h2>
-    <p style="margin:0;color:#15803d;line-height:1.6">${message}</p>
-    ${button}
-  </div>`;
-}
-
 export function normalizeSurveyJson(json: Record<string, unknown>): Record<string, unknown> {
   const clone = JSON.parse(JSON.stringify(json || {}));
   // Si el texto del botón de envío está vacío, se elimina para que el
@@ -120,6 +68,15 @@ export function normalizeSurveyJson(json: Record<string, unknown>): Record<strin
 // Alias de compatibilidad (los tests existentes lo importan)
 export const hideEmptyTitles = normalizeSurveyJson;
 
+export const DEFAULT_SURVEY_BUTTON_COLOR = 'hsl(var(--primary))';
+export const DEFAULT_SURVEY_BUTTON_TEXT_COLOR = 'hsl(var(--primary-foreground))';
+
+/** Solo admite colores hexadecimales guardados por el selector visual del formulario. */
+export function safeSurveyColor(value: unknown, fallback: string): string {
+  const color = String(value ?? '').trim();
+  return /^#[0-9a-f]{3,8}$/i.test(color) ? color : fallback;
+}
+
 type SurveyFormRendererProps = {
   /** SurveyJS JSON model definition */
   surveyJson: Record<string, unknown>;
@@ -149,24 +106,28 @@ export const SurveyFormRenderer: React.FC<SurveyFormRendererProps> = ({
   buttonTextColor,
   backgroundColor,
 }) => {
+  const configuredButtonColor = safeSurveyColor(
+    buttonColor || surveyJson._buttonColor,
+    DEFAULT_SURVEY_BUTTON_COLOR,
+  );
+  const configuredButtonTextColor = safeSurveyColor(
+    buttonTextColor || surveyJson._buttonTextColor,
+    DEFAULT_SURVEY_BUTTON_TEXT_COLOR,
+  );
   const [model, setModel] = useState<Model | null>(null);
 
   useEffect(() => {
     const normalized = normalizeSurveyJson(surveyJson);
     const survey = new Model(normalized);
 
-    // Locale
     survey.locale = 'es';
 
-    // Submit handler
     survey.onComplete.add(async (sender) => {
       try {
         const response = await fetch(submitUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            payload: sender.data,
-          }),
+          body: JSON.stringify({ payload: sender.data }),
         });
 
         if (!response.ok) {
@@ -207,10 +168,7 @@ export const SurveyFormRenderer: React.FC<SurveyFormRendererProps> = ({
   }
 
   return (
-    <div
-      style={{ height }}
-      className={`survey-form-container ${className}`}
-    >
+    <div style={{ height }} className={`survey-form-container ${className}`}>
       <style jsx global>{`
         .survey-form-container .sd-root-modern {
           background: transparent !important;
@@ -221,16 +179,15 @@ export const SurveyFormRenderer: React.FC<SurveyFormRendererProps> = ({
           ${backgroundColor ? `padding: 1.5rem !important;` : ''}
           ${backgroundColor ? `border-radius: 1rem !important;` : ''}
         }
-        .survey-form-container .sd-btn {
-          background-color: ${buttonColor || 'hsl(var(--primary))'} !important;
-          ${buttonTextColor ? `color: ${buttonTextColor} !important;` : ''}
+        .survey-form-container .sd-btn,
+        .survey-form-container .sd-btn--action {
+          background-color: ${configuredButtonColor} !important;
+          color: ${configuredButtonTextColor} !important;
           border-radius: 0.75rem !important;
           padding: 0.75rem 2rem !important;
           font-weight: 600 !important;
         }
-        .survey-form-container .sd-btn:hover {
-          opacity: 0.9 !important;
-        }
+        .survey-form-container .sd-btn:hover { opacity: 0.9 !important; }
         .survey-form-container .sd-input {
           background-color: hsl(var(--background)) !important;
           border-color: hsl(var(--border)) !important;
@@ -241,16 +198,12 @@ export const SurveyFormRenderer: React.FC<SurveyFormRendererProps> = ({
           border-color: hsl(var(--primary)) !important;
           box-shadow: 0 0 0 2px hsl(var(--primary) / 0.2) !important;
         }
-        .survey-form-container .sd-question__title {
-          color: hsl(var(--foreground)) !important;
-          font-weight: 500 !important;
-        }
-        .survey-form-container .sd-selectbase__item {
-          color: hsl(var(--foreground)) !important;
-        }
+        .survey-form-container .sd-question__title,
+        .survey-form-container .sd-selectbase__item,
         .survey-form-container .sd-completedpage {
           color: hsl(var(--foreground)) !important;
         }
+        .survey-form-container .sd-question__title { font-weight: 500 !important; }
       `}</style>
       <Survey model={model} />
     </div>
