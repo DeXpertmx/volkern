@@ -30,48 +30,58 @@ export const GET = withTenantAuth(async (req, auth) => {
       return NextResponse.json({ error: 'Sin permiso para ver el equipo' }, { status: 403 });
     }
 
-    // Obtenemos todos los empleados (Plantilla) asociados a este tenant.
-    const employees = await prisma.employee.findMany({
+    // El Equipo son los usuarios del tenant (User.tenantId). La ficha de empleado
+    // (RRHH) es un enriquecimiento opcional: los tenants sin RRHH siguen teniendo
+    // equipo completo con los datos del propio usuario.
+    const users = await prisma.user.findMany({
       where: {
         tenantId: tenantId,
       },
       include: {
-        user: {
-          include: {
-            role: {
-              select: {
-                id: true,
-                nombre: true,
-                descripcion: true,
-              },
-            },
-          }
+        role: {
+          select: {
+            id: true,
+            nombre: true,
+            descripcion: true,
+          },
+        },
+        employee: {
+          select: {
+            id: true,
+            employeeId: true,
+            department: true,
+            jobTitle: true,
+            fullName: true,
+            email: true,
+            mobilePhone: true,
+            isActive: true,
+          },
         },
       },
       orderBy: {
-        fullName: 'asc',
+        name: 'asc',
       },
     });
 
-    const staff = employees.map((emp) => ({
-      id: emp.user?.id || emp.id, // ID del usuario si tiene, si no del empleado
-      name: emp.fullName,
-      email: emp.email || emp.user?.email,
-      role: emp.user?.role ? {
-        id: emp.user.role.id,
-        nombre: emp.user.role.nombre,
+    const staff = users.map((user) => ({
+      id: user.id, // ID del usuario
+      name: user.employee?.fullName || user.name || user.email,
+      email: user.employee?.email || user.email,
+      role: user.role ? {
+        id: user.role.id,
+        nombre: user.role.nombre,
       } : { id: 'no-user', nombre: 'Sin acceso' },
-      employee: {
-        id: emp.id,
-        employeeId: emp.employeeId,
-        department: emp.department,
-        jobTitle: emp.jobTitle,
-      },
-      estado: emp.user?.estado || (emp.isActive ? 'activo' : 'inactivo'),
-      telefono: emp.mobilePhone || emp.user?.telefono,
-      timezone: emp.user?.timezone,
-      image: emp.user?.image,
-      createdAt: emp.createdAt,
+      employee: user.employee ? {
+        id: user.employee.id,
+        employeeId: user.employee.employeeId,
+        department: user.employee.department,
+        jobTitle: user.employee.jobTitle,
+      } : null,
+      estado: user.estado || (user.employee?.isActive ? 'activo' : 'inactivo'),
+      telefono: user.employee?.mobilePhone || user.telefono,
+      timezone: user.timezone,
+      image: user.image,
+      createdAt: user.createdAt,
     }));
 
     return NextResponse.json({ users: staff });
