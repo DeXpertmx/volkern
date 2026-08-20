@@ -221,8 +221,8 @@ describe('marketingIntents', () => {
     expect(Array.isArray(marketingIntents)).toBe(true);
   });
 
-  it('debe tener 13 intents (3 base + web creator + SEO + automatización + ADS schedules + A/B tests)', () => {
-    expect(marketingIntents.length).toBe(13);
+  it('debe tener 14 intents (3 base + web creator + SEO + automatización + ADS schedules + toggle programación + A/B tests)', () => {
+    expect(marketingIntents.length).toBe(14);
   });
 
   it('todos deben cumplir el schema', () => {

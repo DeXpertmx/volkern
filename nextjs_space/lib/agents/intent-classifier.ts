@@ -464,7 +464,13 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     // activos", "órdenes bloqueadas por faltantes", "plan de compras",
     // "secuenciación", "marcajes sospechosos", "nómina de X"
     const FACTORY_TRIGGER = /\b(?:n[oó]mina(?:s)?|asistencia|marcajes?|fichajes?|geo-?anomal[ií]as?|mantenimiento\s+predictivo|salud\s+de\s+los\s+activos|activo(?:s)?\s+industriales?|fallo\s+de\s+la\s+m[aá]quina|capacidad\s+de\s+la\s+planta|cuellos?\s+de\s+botella|saturaci[oó]n\s+de\s+las\s+l[ií]neas|readiness|faltantes?\s+de\s+material|plan\s+de\s+compras|aprovisionamiento|secuenciaci[oó]n|conflictos?\s+en\s+el\s+plan|margen\s+m[aá]s?\s+bajo|rentabilidad\s+de\s+producci[oó]n|margen\s+bajo)\b/i
-    if (!ACTION_VERB.test(message) && !ENTITY_TRIGGER.test(message) && !FILTER_ONLY.test(message) && !CITA_TRIGGER.test(message) && !FINANZA_TRIGGER.test(message) && !TAREA_TRIGGER.test(message) && !PROVEEDOR_TRIGGER.test(message) && !CATALOGO_TRIGGER.test(message) && !INVENTARIO_TRIGGER.test(message) && !INSURANCE_TRIGGER.test(message) && !FACTURA_TRIGGER.test(message) && !LOGISTICA_TRIGGER.test(message) && !RRHH_TRIGGER.test(message) && !MARKETING_TRIGGER.test(message) && !RE_TRIGGER.test(message) && !ERP_TRIGGER.test(message) && !AUDIT_OPS_TRIGGER.test(message) && !FACTORY_TRIGGER.test(message)) return null
+    // Entidades de gobernanza RRHH y control de programaciones (vigésimo
+    // segundo entrenamiento): autorización masiva de gastos, transferencia de
+    // activos, auditoría de accesos, kit de offboarding y toggle de
+    // programaciones de campaña. Permite controlar estas acciones desde
+    // Telegram sin depender del LLM.
+    const GOVERNANCE_TRIGGER = /\b(?:autoriza|autorizar|aprueba|aprobar|apruebame|autorizame|transfiere|transferir|traspasa|traspasar|devuelve|devolver|entrega|entregar|reasigna|reasignar|audita|auditar|offboarding|kill-?switch|kit\s+de\s+(?:seguridad|baja|offboarding)|protocolo\s+de\s+baja|baja\s+(?:de|del)\s+empleado|baja\s+de\s+personal|silos?\s+de\s+conocimiento|concentraci[oó]n\s+de\s+(?:permisos|poder)|watchdog\s+de\s+accesos|accesos?\s+cr[ií]ticos|super-?usuarios?)\b/i
+    if (!ACTION_VERB.test(message) && !ENTITY_TRIGGER.test(message) && !FILTER_ONLY.test(message) && !CITA_TRIGGER.test(message) && !FINANZA_TRIGGER.test(message) && !TAREA_TRIGGER.test(message) && !PROVEEDOR_TRIGGER.test(message) && !CATALOGO_TRIGGER.test(message) && !INVENTARIO_TRIGGER.test(message) && !INSURANCE_TRIGGER.test(message) && !FACTURA_TRIGGER.test(message) && !LOGISTICA_TRIGGER.test(message) && !RRHH_TRIGGER.test(message) && !MARKETING_TRIGGER.test(message) && !RE_TRIGGER.test(message) && !ERP_TRIGGER.test(message) && !AUDIT_OPS_TRIGGER.test(message) && !FACTORY_TRIGGER.test(message) && !GOVERNANCE_TRIGGER.test(message)) return null
 
     const extracted: Record<string, any> = {}
     const email = message.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,})/)
@@ -883,6 +889,22 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
       return { intent: 'sugerir_automatizacion', confidence: 0.85, extractedParams: extracted }
     }
 
+    // ═══ 0p-z. PAUSAR/REANUDAR PROGRAMACIÓN EXISTENTE (bloque 22): "pausa la
+    // programación de la campaña de verano", "reanuda el horario de la campaña
+    // de Meta", "desactiva la programación nocturna sin borrarla" — toggle del
+    // flag enabled de una programación ya creada (a diferencia de
+    // programar_campania, que crea una nueva con acción PAUSE/ACTIVATE).
+    // Se define ANTES que programar_campania para que la mención de
+    // "programación/horario" gane sobre "campaña". ═══
+    const TOGGLE_PROG_VERB = /\b(?:pausa|pausar|reanuda|reanudar|reactiva|reactivar|desactiva|desactivar|activa|activar|suspende|suspender|retoma|retomar)\b/i
+    const PROG_EXISTENTE_SIGNAL = /\b(?:programaci[oó]n|horario)\b/i
+    if (TOGGLE_PROG_VERB.test(message) && PROG_EXISTENTE_SIGNAL.test(message)) {
+      const programacion = this.extractProgramacionDe(message)
+      if (programacion) extracted.programacion = programacion
+      extracted.accion = /\b(?:pausa|pausar|desactiva|desactivar|suspende|suspender)\b/i.test(message) ? 'PAUSE' : 'ACTIVATE'
+      return { intent: 'pausar_programacion', confidence: 0.85, extractedParams: extracted }
+    }
+
     // ═══ 0p. PROGRAMAR CAMPAÑA ("programa mi campaña de Meta para horario
     // laboral", "pausa mi campaña de Google Ads los fines de semana") ═══
     const CAMPANIA_PROG_VERB = /\b(?:programa|programar|pausa|pausar|activa|activar|desactiva|desactivar)\b/i
@@ -1172,6 +1194,61 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     const ESTRATEGIA_VERB = /\b(?:estrategia|estrategias|optimiza|optimizar|optimizaci[oó]n|recomienda|recomend|sugiere|sugerir|mejora|mejorar|mejor)\b/i
     if (ENSAMBLAJE_SIGNAL.test(message) && ESTRATEGIA_VERB.test(message)) {
       return { intent: 'estrategia_ensamblaje', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 0z-4. AUTORIZAR GASTOS EN LOTE (bloque 22): "autoriza todos los
+    // gastos pendientes", "aprueba las solicitudes de gasto de los empleados"
+    // — autorización masiva con VISION-LOCK, no consulta de pendientes ═══
+    const AUTORIZAR_GASTOS_SIGNAL =
+      /\bautoriza\b|\bautorizar\b|\baprueba\b|\baprobar\b|\bapruebame\b|\bautorizame\b|\bdale\s+el\s+ok\b|\bda\s+el\s+ok\b/i.test(message) &&
+      /\bgastos?\b/i.test(message) &&
+      !/\bqu[eé]\s+gastos?\b|\bcu[aá]ntos\s+gastos?\b|\bpendientes?\s+de\s+(?:autoriz|aprobar)\b|\bpor\s+(?:autoriz|aprobar)\b/i.test(message)
+    if (AUTORIZAR_GASTOS_SIGNAL) {
+      return { intent: 'autorizar_gastos', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 0z-5. TRANSFERIR/DEVOLVER ACTIVO (bloque 22): "transfiere el
+    // portátil de María a Juan", "devuelve el activo del técnico", "traspasa
+    // la tablet de Pedro a Lucía" ═══
+    const TRANSFERIR_VERB = /\b(?:transfiere|transferir|traspasa|traspasar|devuelve|devolver|entrega|entregar|reasigna|reasignar|mueve\s+el\s+activo)\b/i
+    const ACTIVO_EMPLEADO_SIGNAL = /\b(?:activo|port[aá]til|portatil|laptop|tablet|herramienta|m[oó]vil|movil|impresora|monitor|equipo\s+de\s+trabajo)\b/i
+    if (TRANSFERIR_VERB.test(message) && ACTIVO_EMPLEADO_SIGNAL.test(message)) {
+      // Activo: lo que sigue a "el activo/el portátil/la tablet" ("transfiere
+      // el portátil de María" → "portátil").
+      const activo = this.extractNombreAfter(message, /\b(?:el\s+|la\s+|los\s+|las\s+|un\s+|una\s+)?(?:activo|port[aá]til|laptop|tablet|herramienta|m[oó]vil|impresora|monitor)\s+(?:de\s+|del\s+|de\s+la\s+|de\s+los\s+|de\s+las\s+|\s+)/i)
+      // Destino: "a Juan" / "al técnico" tras el activo.
+      const destinoMatch = message.match(/\b(?:a|al|para)\s+([A-ZÁÉÍÓÚÑÜ][a-záéíóúñü]+(?:\s+[A-ZÁÉÍÓÚÑÜ][a-záéíóúñü]+)?)/)
+      if (destinoMatch) extracted.destino = destinoMatch[1]
+      if (activo) extracted.activo = activo
+      else if (/\b(?:activo|port[aá]til|tablet|herramienta)\b/i.test(message)) {
+        // Fallback: "devuelve el activo" → el término genérico sirve de ref
+        const m = message.match(/\b(?:activo|port[aá]til|laptop|tablet|herramienta|m[oó]vil|impresora|monitor)\b/i)
+        if (m) extracted.activo = m[0]
+      }
+      return { intent: 'transferir_activo', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 0z-6. AUDITAR ACCESOS (bloque 22): "audita los accesos críticos",
+    // "detecta silos de conocimiento", "analiza la concentración de permisos",
+    // "revisa el watchdog de accesos" ═══
+    const AUDITAR_ACCESOS_SIGNAL =
+      /\b(?:accesos?\s+(?:cr[ií]ticos|digitales|del\s+sistema)|silos?\s+de\s+conocimiento|concentraci[oó]n\s+de\s+(?:permisos|poder)|super-?usuarios?|watchdog\s+de\s+accesos|accesos?\s+(?:cr[ií]ticos|de\s+riesgo))\b/i.test(message) ||
+      (/\b(?:audita|auditar|analiza|analizar|revisa|revisar|detecta|detectar)\b/i.test(message) && /\b(?:accesos?|permisos?|watchdog)\b/i.test(message))
+    if (AUDITAR_ACCESOS_SIGNAL && !/\b(?:integridad|fiscales?|financiera)\b/i.test(message)) {
+      const empleado = this.extractNombreAfter(message, /\b(?:de|del|empleado|colaborador)\s+(?=[A-ZÁÉÍÓÚÑÜ])/)
+      if (empleado && !/\b(?:equipo|personal|talento|la\s+empresa|todos?)\b/i.test(empleado)) extracted.empleado = empleado
+      return { intent: 'auditar_accesos', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 0z-7. KIT OFFBOARDING / KILL-SWITCH (bloque 22): "genera el kit de
+    // seguridad de baja de María", "kill-switch para Juan", "kit de
+    // offboarding de Carlos" ═══
+    const OFFBOARD_SIGNAL = /\b(?:offboarding|kill-?switch|kit\s+de\s+(?:seguridad|baja|offboarding)|protocolo\s+de\s+baja|baja\s+(?:de|del)\s+empleado|baja\s+de\s+personal)\b/i
+    if (OFFBOARD_SIGNAL.test(message)) {
+      const nombre = this.extractNombreAfter(message, /\b(?:de\s+(?:la\s+)?baja\s+de|offboarding\s+(?:de|para)|kill-?switch\s+(?:de|para)|kit\s+de\s+(?:seguridad\s+de\s+baja\s+de|offboarding\s+de|baja\s+de|seguridad\s+de\s+offboarding\s+de))\s+/i) ||
+        this.extractNombreAfter(message, /\b(?:de|para|del)\s+(?=[A-ZÁÉÍÓÚÑÜ])/)
+      if (nombre && !/\b(?:equipo|personal|talento|todos?|la\s+empresa)\b/i.test(nombre)) extracted.nombre = nombre
+      return { intent: 'kit_offboarding', confidence: 0.85, extractedParams: extracted }
     }
 
     // ═══ 0. CONVERTIR LEAD (antes que crear: "convierte… en contacto" también

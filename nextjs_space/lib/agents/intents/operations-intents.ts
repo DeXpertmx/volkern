@@ -71,6 +71,7 @@ import { realEstateIntents } from './real-estate-intents';
 import { insuranceIntents } from './insurance-intents';
 import { factoryIntents } from './factory-intents';
 import { hrAdvancedIntents } from './hr-advanced-intents';
+import { hrGovernanceIntents } from './hr-governance-intents';
 
 export const ALL_INTENTS: IntentSchema[] = [
   ...crmIntents,
@@ -83,5 +84,6 @@ export const ALL_INTENTS: IntentSchema[] = [
   ...insuranceIntents,
   ...factoryIntents,
   ...hrAdvancedIntents,
+  ...hrGovernanceIntents,
   ...operationsIntents,
 ];

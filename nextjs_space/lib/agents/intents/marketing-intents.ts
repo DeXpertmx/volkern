@@ -121,6 +121,19 @@ export const marketingIntents: IntentSchema[] = [
     ],
     destructive: true
   },
+  {
+    name: 'pausar_programacion',
+    description: 'Pausar o reanudar una programación existente de campaña sin borrarla (toggle enabled)',
+    requiredParams: ['programacion'],
+    optionalParams: ['accion'],
+    examples: [
+      'pausa la programación de la campaña de verano',
+      'reanuda el horario de la campaña de Meta',
+      'desactiva la programación nocturna sin borrarla',
+      'reactiva la programación de la campaña de Facebook'
+    ],
+    destructive: false
+  },
 
   // ========== ADS A/B TESTS ==========
   {

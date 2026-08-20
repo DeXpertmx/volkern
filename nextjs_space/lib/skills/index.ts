@@ -3161,6 +3161,116 @@ const orchestrateDigitalSignatureWrapper = async (input: {
   });
   return { ...result, empleadoNombre: resolved.empleadoNombre };
 };
+
+// ─── Gobernanza RRHH y control de programaciones (Vigésimo-segundo
+// entrenamiento Telegram) ──────────────────────────────────────────────────────
+// Wrappers: convierten los parámetros del chatbot (userId de chat, nombres de
+// empleado/activo/programación) a lo que exigen los skills core (ids reales).
+
+/** Wrapper autorizar_gastos: userId real del chat → autorización masiva. */
+const authorizeBulkExpensesWrapper = async (input: { tenantId: string; userId?: string }) => {
+  const userId = (await resolveRealUserId(input.tenantId, input.userId)) || 'SYSTEM';
+  return hrSkills.authorize_bulk_expenses({ tenantId: input.tenantId, userId });
+};
+
+/**
+ * Wrapper transferir_activo: resuelve el activo por nombre/serial y el
+ * empleado destino por nombre, luego orquesta la transferencia o devolución.
+ */
+const transferAssetWrapper = async (input: {
+  tenantId: string;
+  activo?: string;
+  assetId?: string;
+  destino?: string;
+  targetEmployeeId?: string;
+  accion?: string;
+  action?: string;
+  userId?: string;
+}) => {
+  const { tenantId } = input;
+
+  // 1. Resolver el activo por id, serial o nombre si solo llegó la referencia.
+  const resolveAssetId = async (): Promise<string> => {
+    if (input.assetId) return input.assetId;
+    const ref = input.activo;
+    if (!ref) throw new Error('Necesito saber qué activo quieres transferir o devolver (su nombre).');
+    const { prisma } = await import('@/lib/db');
+    const esCuid = /^c[a-z0-9]{20,}$/i.test(ref);
+    const asset = esCuid
+      ? await (prisma as any).erp_employee_assets.findUnique({ where: { id: ref, tenantId }, select: { id: true } })
+      : await (prisma as any).erp_employee_assets.findFirst({
+          where: {
+            tenantId,
+            OR: [
+              { serialNumber: { contains: ref, mode: 'insensitive' as const } },
+              { catalogo_items: { nombre: { contains: ref, mode: 'insensitive' as const } } },
+            ],
+          },
+          select: { id: true },
+        });
+    if (!asset) throw new Error(`No encontré ningún activo "${ref}" asignado en tu equipo.`);
+    return asset.id;
+  };
+  const assetId = await resolveAssetId();
+
+  // 2. Acción: devolución si el verbo lo pide, transferencia por defecto.
+  const action = String(input.action || input.accion || 'TRANSFER').toUpperCase() === 'RETURN' ? 'RETURN' : 'TRANSFER';
+
+  // 3. La transferencia requiere empleado destino (por nombre o id).
+  let targetEmployeeId = input.targetEmployeeId;
+  if (action === 'TRANSFER' && !targetEmployeeId) {
+    const destino = input.destino;
+    if (!destino) throw new Error('¿A qué empleado quieres transferirle el activo? Dame su nombre.');
+    const emp = await resolveEmployeeRef(tenantId, String(destino).replace(/^(?:al|a|el|la|para)\s+/i, ''));
+    targetEmployeeId = emp.id;
+  }
+
+  const userId = (await resolveRealUserId(tenantId, input.userId)) || 'SYSTEM';
+  const result = await hrSkills.orchestrate_asset_transfer({
+    tenantId,
+    assetId,
+    action,
+    targetEmployeeId,
+    userId,
+  });
+  return { ...result, message: result.text };
+};
+
+/** Wrapper auditar_accesos: opcional empleado por nombre → watchdog de accesos. */
+const accessAuditWrapper = async (input: { tenantId: string; empleado?: string; employeeId?: string }) => {
+  let employeeId = input.employeeId;
+  if (!employeeId && input.empleado) {
+    const emp = await resolveEmployeeRef(input.tenantId, input.empleado);
+    employeeId = emp.id;
+  }
+  const result = await hrSkills.access_security_audit({ tenantId: input.tenantId, employeeId });
+  return { ...result, message: result.text };
+};
+
+/** Wrapper kit_offboarding: empleado por nombre → roadmap de revocación. */
+const offboardingKitWrapper = async (input: { tenantId: string; nombre?: string; empleado?: string; employeeId?: string }) => {
+  const ref = input.employeeId || input.nombre || input.empleado;
+  if (!ref) throw new Error('Necesito saber de qué empleado generar el kit de seguridad (su nombre).');
+  const emp = await resolveEmployeeRef(input.tenantId, String(ref));
+  const result = await hrSkills.generate_offboarding_security_kit({ tenantId: input.tenantId, employeeId: emp.id });
+  return { ...result, message: result.text };
+};
+
+/** Wrapper pausar_programacion: programación por nombre → toggle enabled. */
+const toggleAdScheduleWrapper = async (input: {
+  tenantId: string;
+  programacion?: string;
+  scheduleId?: string;
+  accion?: string;
+  action?: string;
+}) => {
+  const scheduleId =
+    input.scheduleId || (input.programacion ? await resolveScheduleId(input.tenantId, input.programacion) : undefined)
+  if (!scheduleId) throw new Error('Necesito saber qué programación quieres pausar o reanudar.')
+  const enabled = !/PAUSE/i.test(String(input.action || input.accion || 'ACTIVATE').toUpperCase())
+  return adSkills.toggle_ad_schedule({ tenantId: input.tenantId, scheduleId, enabled });
+};
+
 const detectProjectDriftingWrapper = async (input: {
   tenantId: string;
   proyecto?: string;
@@ -3366,13 +3476,13 @@ export const skills = {
   talent_retention_risk: talentRetentionRiskWrapper,
   get_employee_confidential_data: hrSkills.get_employee_confidential_data,
   get_hr_daily_brief: hrSkills.get_hr_daily_brief,
-  authorize_bulk_expenses: hrSkills.authorize_bulk_expenses,
+  authorize_bulk_expenses: authorizeBulkExpensesWrapper,
   approve_vacation_voice: approveVacationWrapper,
-  orchestrate_asset_transfer: hrSkills.orchestrate_asset_transfer,
+  orchestrate_asset_transfer: transferAssetWrapper,
   mcp_access_watchdog: hrSkills.mcp_access_watchdog,
-  generate_offboarding_security_kit: hrSkills.generate_offboarding_security_kit,
+  generate_offboarding_security_kit: offboardingKitWrapper,
   confirm_digital_seal: hrSkills.confirm_digital_seal,
-  access_security_audit: hrSkills.access_security_audit,
+  access_security_audit: accessAuditWrapper,
 
   // Agentic Skills (Gemma 4 Optimized)
   audit_finance_integrity: auditSkills.audit_finance_integrity,
@@ -3439,7 +3549,7 @@ export const skills = {
   // ─── ADS Skills (wrappers: resuelven campaña/test/programación por nombre) ─
   create_ad_schedule: createAdScheduleWrapper,
   list_ad_schedules: listAdSchedulesWrapper,
-  toggle_ad_schedule: adSkills.toggle_ad_schedule,
+  toggle_ad_schedule: toggleAdScheduleWrapper,
   delete_ad_schedule: deleteAdScheduleWrapper,
   create_ab_test: createAbTestWrapper,
   start_ab_test: startAbTestWrapper,
