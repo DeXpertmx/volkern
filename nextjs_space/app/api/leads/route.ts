@@ -133,7 +133,8 @@ export const POST = withTenantAuth(async (request, auth) => {
       fuente,
       canal,
       etapa,
-      metadataExterna
+      metadataExterna,
+      tags
     } = data;
 
     // 1. Verificar límites de recursos (Usa globalPrisma internamente cuando es necesario)
@@ -180,6 +181,7 @@ export const POST = withTenantAuth(async (request, auth) => {
       if (canal) updateData.canal = canal
       if (etapa) updateData.estado = etapa
       if (metadataExterna) updateData.metadataExterna = metadataExterna
+      if (tags) updateData.tags = tags
       if (notas) {
         updateData.notas = notas
       }
@@ -225,6 +227,7 @@ export const POST = withTenantAuth(async (request, auth) => {
           fuente: fuente || null,
           canal: canal || null,
           estado: etapa || 'nuevo',
+          tags: tags || null,
           tenantId: auth.tenant!.id,
           metadataExterna: metadataExterna || {},
           tokenPublico: crypto.randomUUID(),

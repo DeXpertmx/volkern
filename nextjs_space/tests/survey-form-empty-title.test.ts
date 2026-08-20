@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { DEFAULT_THANK_YOU, buildThankYouHtml, getThankYouRedirectUrl, normalizeSurveyJson, hideEmptyTitles } from '@/components/public/SurveyFormRenderer';
+import { DEFAULT_THANK_YOU, DEFAULT_SURVEY_BUTTON_COLOR, DEFAULT_SURVEY_BUTTON_TEXT_COLOR, buildThankYouHtml, getThankYouRedirectUrl, normalizeSurveyJson, hideEmptyTitles, safeSurveyColor } from '@/components/public/SurveyFormRenderer';
 
 describe('hideEmptyTitles — etiqueta vacía no muestra el nombre interno del campo', () => {
   it('oculta el título de campos con title vacío (solo placeholder visible)', () => {
@@ -141,6 +141,18 @@ describe('normalizeSurveyJson — página de agradecimiento', () => {
     expect(getThankYouRedirectUrl({ redirectUrl: 'javascript:alert(1)' })).toBe('');
     expect(getThankYouRedirectUrl({ redirectUrl: '/gracias' })).toBe('');
     expect(getThankYouRedirectUrl({ redirectUrl: 'no-es-url' })).toBe('');
+  });
+});
+
+describe('colores del botón Survey', () => {
+  it('acepta colores hex guardados en el formulario', () => {
+    expect(safeSurveyColor('#0077b8', DEFAULT_SURVEY_BUTTON_COLOR)).toBe('#0077b8');
+    expect(safeSurveyColor('#fff', DEFAULT_SURVEY_BUTTON_TEXT_COLOR)).toBe('#fff');
+  });
+
+  it('rechaza valores que podrían romper el CSS', () => {
+    expect(safeSurveyColor('red; color: black', DEFAULT_SURVEY_BUTTON_COLOR)).toBe(DEFAULT_SURVEY_BUTTON_COLOR);
+    expect(safeSurveyColor('url(javascript:alert(1))', DEFAULT_SURVEY_BUTTON_COLOR)).toBe(DEFAULT_SURVEY_BUTTON_COLOR);
   });
 });
 

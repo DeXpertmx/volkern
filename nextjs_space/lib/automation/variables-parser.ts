@@ -14,6 +14,16 @@ export function replaceVariables(text: string, context: ExecutionContext): strin
 
   let processed = text
 
+  // Reemplaza primero las claves más largas ({{...}}) para que la variante de
+  // llave simple ({...}) no corrompa la doble ({{nombre}} → {Bruno Hess}).
+  const applyVars = (textValue: string, vars: Record<string, string>): string => {
+    const entries = Object.entries(vars).sort((a, b) => b[0].length - a[0].length)
+    for (const [key, value] of entries) {
+      textValue = textValue.split(key).join(value)
+    }
+    return textValue
+  }
+
   // Variables de lead
   if (lead) {
     const now = new Date()
@@ -24,6 +34,11 @@ export function replaceVariables(text: string, context: ExecutionContext): strin
       '{{nombre}}': lead.nombre || '',
       '{lead.nombre}': lead.nombre || '',
       '{{lead.nombre}}': lead.nombre || '',
+      // Alias usados en plantillas de email (formato CRM)
+      '{contact.first_name}': lead.nombre || '',
+      '{{contact.first_name}}': lead.nombre || '',
+      '{contact.firstName}': lead.nombre || '',
+      '{{contact.firstName}}': lead.nombre || '',
       '{email}': lead.email || '',
       '{{email}}': lead.email || '',
       '{lead.email}': lead.email || '',
@@ -42,9 +57,7 @@ export function replaceVariables(text: string, context: ExecutionContext): strin
       '{{fecha_hoy}}': fechaHoy,
     }
 
-    for (const [key, value] of Object.entries(vars)) {
-      processed = processed.split(key).join(value)
-    }
+    processed = applyVars(processed, vars)
   }
 
   // Variables de estudiante
@@ -64,9 +77,7 @@ export function replaceVariables(text: string, context: ExecutionContext): strin
       '{{estudiante.telefono}}': estudiante.telefono || '',
     }
 
-    for (const [key, value] of Object.entries(vars)) {
-      processed = processed.split(key).join(value)
-    }
+    processed = applyVars(processed, vars)
   }
 
   // Variables de curso
@@ -78,9 +89,7 @@ export function replaceVariables(text: string, context: ExecutionContext): strin
       '{{curso.descripcion}}': curso.descripcion || '',
     }
 
-    for (const [key, value] of Object.entries(vars)) {
-      processed = processed.split(key).join(value)
-    }
+    processed = applyVars(processed, vars)
   }
 
   // Variables de cita
@@ -92,9 +101,7 @@ export function replaceVariables(text: string, context: ExecutionContext): strin
       '{{cita.servicio}}': cita.servicio?.nombre || '',
     }
 
-    for (const [key, value] of Object.entries(vars)) {
-      processed = processed.split(key).join(value)
-    }
+    processed = applyVars(processed, vars)
   }
 
   return processed

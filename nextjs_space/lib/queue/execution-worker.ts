@@ -246,6 +246,17 @@ async function writeExecutionLog(entry: LogEntry): Promise<void> {
     await dbContext.run(
       { tenantId: entry.tenantId, client: tenantClient },
       async () => {
+        // AutomationExecutionLog tiene FK a AutomationExecution. Para jobs de
+        // automatización el motor crea su propia ejecución con un id distinto
+        // al del job; si no existe la ejecución con este id, no hay nada que
+        // auditar aquí (el log del motor es el registro real) y evitamos el
+        // ruido de violaciones de FK en los logs.
+        const exists = await tenantClient.automationExecution.findUnique({
+          where: { id: entry.executionId },
+          select: { id: true },
+        });
+        if (!exists) return;
+
         await tenantClient.automationExecutionLog.create({
           data: {
             executionId: entry.executionId,

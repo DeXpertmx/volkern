@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { validateLimit } from '@/lib/limits'
 import { withTenantAuth } from '@/lib/api-key-auth'
+import { getTriggerFromFlow } from '@/lib/automation/flow-trigger'
 
 // GET /api/automatizaciones - Obtener todas las automatizaciones del tenant
 export const GET = withTenantAuth(async (request, auth) => {
@@ -44,19 +45,25 @@ export const POST = withTenantAuth(async (request, auth) => {
     const body = await request.json()
     const { nombre, descripcion, trigger, flowData } = body
 
-    if (!nombre || !trigger) {
+    if (!nombre) {
       return NextResponse.json(
-        { error: 'Nombre y trigger son requeridos' },
+        { error: 'El nombre es requerido' },
         { status: 400 }
       )
     }
+
+    // La fuente de verdad del trigger es el nodo del canvas; nunca confiar en
+    // el valor que envía el cliente (puede traer un estado viejo y dejar la
+    // columna desincronizada, haciendo que la automatización nunca se ejecute).
+    const flowFinal = flowData || { nodes: [], edges: [] }
+    const triggerReal = getTriggerFromFlow(flowFinal, trigger)
 
     const automation = await prisma.automation.create({
       data: {
         nombre,
         descripcion,
-        trigger,
-        flowData: flowData || { nodes: [], edges: [] },
+        trigger: triggerReal,
+        flowData: flowFinal,
         activo: false,
         tenantId: tenantId
       }

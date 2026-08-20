@@ -336,6 +336,25 @@ export function filterAutomationsByForm(
 }
 
 /**
+ * Filtra automatizaciones por el trigger REAL definido en el nodo trigger del
+ * canvas (fuente de verdad). La columna `trigger` puede quedar desincronizada
+ * con el nodo (bug del builder que guardaba un estado viejo); derivar del nodo
+ * hace al motor inmune a ese desajuste. Si el nodo no define trigger, se usa la
+ * columna. Expuesto para tests.
+ */
+export function filterAutomationsByTrigger(
+  automations: any[],
+  trigger: string,
+): any[] {
+  return automations.filter((automation: any) => {
+    const flowData = automation.flowData as any
+    const triggerNode = (flowData?.nodes || []).find((n: any) => n.type === 'trigger')
+    const nodeTrigger = triggerNode?.data?.trigger
+    return nodeTrigger ? nodeTrigger === trigger : automation.trigger === trigger
+  })
+}
+
+/**
  * Versión síncrona de triggerAutomation.
  * Busca automatizaciones activas para el trigger y las ejecuta.
  * Expuesta para uso interno del worker BullMQ.
@@ -373,24 +392,30 @@ export async function executeAutomationsSync(trigger: string, context: Execution
     const { getTenantDb, dbContext } = await import('./db')
     const tenantClient = await getTenantDb(context.tenantId)
 
-    // Buscar automatizaciones activas con este trigger para el tenant específico
+    // Buscar automatizaciones activas del tenant. El filtro por trigger se
+    // hace DESPUÉS leyendo el nodo trigger del canvas (fuente de verdad): la
+    // columna trigger puede quedar desincronizada cuando el builder guarda con
+    // un estado viejo (p. ej. 'nuevo_lead' en la columna mientras el nodo dice
+    // 'formulario_enviado'), y confiar solo en ella haría que la automatización
+    // nunca se ejecutara. Si el nodo no tiene trigger, se usa la columna.
     const automations = await dbContext.run(
       { tenantId: context.tenantId, client: tenantClient },
       async () => {
         return tenantClient.automation.findMany({
           where: {
-            trigger,
             activo: true,
           },
         })
       }
     )
 
+    const automationsFinales = filterAutomationsByTrigger(automations, trigger)
+
     // Filtrar por formulario específico (solo para trigger formulario_enviado)
     const contextFormId = context.formId
-    const filtradas = filterAutomationsByForm(automations, trigger, contextFormId)
+    const filtradas = filterAutomationsByForm(automationsFinales, trigger, contextFormId)
 
-    console.log(`📋 [Automatización] Ejecutando ${filtradas.length}/${automations.length} automatizaciones para trigger "${trigger}"`)
+    console.log(`📋 [Automatización] Ejecutando ${filtradas.length}/${automationsFinales.length} automatizaciones para trigger "${trigger}"`)
 
     // Ejecutar cada automatización
     for (const automation of filtradas) {

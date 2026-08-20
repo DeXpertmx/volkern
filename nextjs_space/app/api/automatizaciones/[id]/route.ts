@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { withTenantAuth } from '@/lib/api-key-auth'
+import { getTriggerFromFlow } from '@/lib/automation/flow-trigger'
 
 // GET /api/automatizaciones/[id] - Obtener una automatización específica
 export const GET = withTenantAuth(async (request, auth, { params }) => {
@@ -49,12 +50,20 @@ export const PUT = withTenantAuth(async (request, auth, { params }) => {
         return NextResponse.json({ error: 'Automatización no encontrada' }, { status: 404 })
     }
 
+    // La fuente de verdad del trigger es el nodo del canvas. Si el body trae
+    // flowData, derivamos el trigger del nodo (ignorando el campo del cliente,
+    // que puede venir con un estado viejo y desincronizar la columna).
+    const flowFinal = flowData !== undefined ? flowData : (existing.flowData as any)
+    const triggerFinal = trigger !== undefined || flowData !== undefined
+      ? getTriggerFromFlow(flowFinal, trigger !== undefined ? trigger : (existing as any).trigger)
+      : (existing as any).trigger
+
     const automation = await prisma.automation.update({
       where: { id: params.id },
       data: {
         ...(nombre !== undefined && { nombre }),
         ...(descripcion !== undefined && { descripcion }),
-        ...(trigger !== undefined && { trigger }),
+        ...(triggerFinal !== undefined && { trigger: triggerFinal }),
         ...(flowData !== undefined && { flowData }),
         ...(activo !== undefined && { activo })
       }

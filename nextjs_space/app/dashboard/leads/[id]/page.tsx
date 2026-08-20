@@ -83,6 +83,7 @@ interface Lead {
   riskLevel?: number;
   fuente?: string | null;
   canal?: string | null;
+  tags?: string | null;
 }
 
 interface Cita {
@@ -99,6 +100,12 @@ interface Cita {
 
 function getPaisLabel(code: string): string {
   return PAISES.find(p => p.value === code)?.label || code
+}
+
+function isBooleanTrue(value: unknown): boolean {
+  if (value === true) return true;
+  if (typeof value === 'number') return value !== 0;
+  return ['true', '1', 'si', 'sí', 'yes', 'on'].includes(String(value ?? '').trim().toLowerCase());
 }
 
 export default function LeadDetailPage({
@@ -123,6 +130,7 @@ export default function LeadDetailPage({
     contextoProyecto: '',
     fuente: '',
     canal: '',
+    tags: '',
     metadataExterna: {} as any
   });
   const [fieldDefinitions, setFieldDefinitions] = useState<FieldDefinition[]>([]);
@@ -172,6 +180,7 @@ export default function LeadDetailPage({
         contextoProyecto: data.contextoProyecto || '',
         fuente: data.fuente || '',
         canal: data.canal || '',
+        tags: data.tags || '',
         metadataExterna: data.metadataExterna || {}
       });
     } catch (error) {
@@ -382,6 +391,7 @@ export default function LeadDetailPage({
                   contextoProyecto: lead.contextoProyecto || '',
                   fuente: lead.fuente || '',
                   canal: lead.canal || '',
+                  tags: lead.tags || '',
                   metadataExterna: lead.metadataExterna || {}
                 });
               }} variant="outline" size="sm">
@@ -538,6 +548,27 @@ export default function LeadDetailPage({
                   </div>
                 </div>
                 <div className="space-y-2">
+                  <Label htmlFor="tags">Etiquetas</Label>
+                  <Input
+                    id="tags"
+                    value={formData.tags}
+                    onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
+                    placeholder="VIP, Neting, Seguimiento (separadas por coma)"
+                  />
+                  {formData.tags.trim() !== '' && (
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {formData.tags.split(',').map((tag, idx) => {
+                        const t = tag.trim();
+                        return t ? (
+                          <Badge key={idx} variant="secondary" className="text-xs">
+                            {t}
+                          </Badge>
+                        ) : null;
+                      })}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="contextoProyecto">Contexto del Proyecto</Label>
                   <Textarea
                     id="contextoProyecto"
@@ -585,7 +616,7 @@ export default function LeadDetailPage({
                           ) : field.type === 'boolean' ? (
                             <div className="flex items-center space-x-2 pt-2">
                               <Switch 
-                                checked={formData.metadataExterna?.[field.fieldKey] === true || formData.metadataExterna?.[field.fieldKey] === 'true'}
+                                checked={isBooleanTrue(formData.metadataExterna?.[field.fieldKey])}
                                 onCheckedChange={(val: boolean) => setFormData({
                                   ...formData, 
                                   metadataExterna: { ...formData.metadataExterna, [field.fieldKey]: val }
@@ -711,6 +742,21 @@ export default function LeadDetailPage({
                     <p className="text-sm text-muted-foreground whitespace-pre-wrap">{lead.contextoProyecto}</p>
                   </div>
                 )}
+                {lead.tags && lead.tags.trim() !== '' && (
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground mb-2">Etiquetas</p>
+                    <div className="flex flex-wrap gap-2">
+                      {lead.tags.split(',').map((tag, idx) => {
+                        const t = tag.trim();
+                        return t ? (
+                          <Badge key={idx} variant="secondary" className="text-xs font-medium">
+                            {t}
+                          </Badge>
+                        ) : null;
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {/* Campos Personalizados en Visualización */}
                 {fieldDefinitions.length > 0 && (
@@ -721,8 +767,8 @@ export default function LeadDetailPage({
                         <div key={field.fieldKey}>
                           <p className="text-sm font-medium text-muted-foreground mb-1">{field.label}</p>
                           <p className="text-base font-semibold">
-                            {field.type === 'boolean' 
-                              ? (lead.metadataExterna?.[field.fieldKey] ? 'SÍ' : 'NO')
+                            {field.type === 'boolean'
+                              ? (isBooleanTrue(lead.metadataExterna?.[field.fieldKey]) ? 'SÍ' : 'NO')
                               : (lead.metadataExterna?.[field.fieldKey] || '—')}
                           </p>
                         </div>

@@ -191,21 +191,28 @@ export async function createDeal(config: any, ctx: ActionContext): Promise<boole
 }
 
 export async function createTask(config: any, ctx: ActionContext): Promise<boolean> {
-  const { titulo, descripcion, fechaVencimiento, prioridad, asignadoA } = config
+  const { titulo, descripcion, fechaVencimiento, prioridad, asignadoA, tipo } = config
   const leadId = ctx.state.leadId
   const tenantId = ctx.state.lead?.tenantId
   if (!tenantId) return false
 
+  // Task requiere `tipo` y `fechaVencimiento` (sin defaults en el modelo).
+  // El panel de tareas usa: llamada | email | reunion | seguimiento | otro.
+  // OJO: el modelo Task NO tiene columnas `estado` ni `prioridad` — usa
+  // `completada` (boolean, default false). Pasarlas lanzaba Unknown argument
+  // en Prisma y la tarea nunca se creaba.
   const taskData: any = {
     titulo: titulo || 'Tarea desde automatización',
     descripcion,
-    estado: 'pendiente',
-    prioridad: prioridad || 'media',
+    tipo: tipo || 'seguimiento',
+    completada: false,
     leadId,
     asignadoA,
     tenantId,
+    fechaVencimiento: fechaVencimiento
+      ? new Date(fechaVencimiento)
+      : new Date(Date.now() + 24 * 60 * 60 * 1000), // +24h por defecto
   }
-  if (fechaVencimiento) taskData.fechaVencimiento = new Date(fechaVencimiento)
   await prisma.task.create({ data: taskData })
   return true
 }

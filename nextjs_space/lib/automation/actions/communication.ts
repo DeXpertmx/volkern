@@ -21,7 +21,11 @@ export async function sendEmail(config: any, ctx: ActionContext, attempt = 1): P
       to: contacto.email,
       subject: processedSubject,
       html: processedMessage,
-      tenantSubdomain: ctx.state.tenantId,
+      // Pasar tenantId (no tenantSubdomain): ses-email resuelve el SMTP del
+      // tenant con este id y, si no hay SMTP, el remitente de Resend cae al
+      // dominio raíz verificado (noreply@volkern.app) en vez de construir un
+      // subdominio por tenant no verificado que Resend rechaza con 403.
+      tenantId: ctx.state.tenantId,
     })
     return true
   } catch (error) {

@@ -261,7 +261,7 @@ export default function TareasPage() {
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="me">Mis tareas</SelectItem>
+                                    <SelectItem value="me">Mis tareas + sin asignar</SelectItem>
                                     <SelectItem value="all">Todo el equipo</SelectItem>
                                 </SelectContent>
                             </Select>
@@ -341,10 +341,14 @@ export default function TareasPage() {
                                                     📅 {format(new Date(task.fechaVencimiento), "d 'de' MMMM, HH:mm", { locale: es })}
                                                 </div>
 
-                                                {task.asignadoUsuario && (
+                                                {task.asignadoUsuario ? (
                                                     <div className="flex items-center">
                                                         👤 {task.asignadoUsuario.name || task.asignadoUsuario.email}
                                                     </div>
+                                                ) : (
+                                                    <Badge variant="outline" className="border-amber-200 text-amber-700 bg-amber-50">
+                                                        Sin asignar
+                                                    </Badge>
                                                 )}
                                             </div>
 
