@@ -27,5 +27,14 @@ export async function register() {
     } catch (error) {
       console.error('[Instrumentation] Error inicializando automation listeners:', error);
     }
+
+    // Cron del trigger `lead_sin_respuesta`: escanea cada 30 min los leads sin
+    // actividad en 24h y dispara las automatizaciones con ese trigger.
+    try {
+      const { initLeadSinRespuestaCron } = await import('@/lib/cron/scheduler');
+      initLeadSinRespuestaCron();
+    } catch (error) {
+      console.error('[Instrumentation] Error inicializando cron lead_sin_respuesta:', error);
+    }
   }
 }
