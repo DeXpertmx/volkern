@@ -5,24 +5,46 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mocks = vi.hoisted(() => ({
   userFindFirst: vi.fn(),
   taskFindMany: vi.fn(),
+  taskFindFirst: vi.fn(),
+  taskCreate: vi.fn(),
+  taskUpdate: vi.fn(),
+  leadFindFirst: vi.fn(),
+  leadCreate: vi.fn(),
+  contactFindFirst: vi.fn(),
   expenseClaimsFindMany: vi.fn(),
   expenseClaimsFindUnique: vi.fn(),
   expenseClaimsUpdate: vi.fn(),
   expenseCreate: vi.fn(),
+  expenseFindFirst: vi.fn(),
+  supplierFindFirst: vi.fn(),
+  supplierFindUnique: vi.fn(),
+  tenantFindUnique: vi.fn(),
+  supplierCreate: vi.fn(),
   systemAlertCreate: vi.fn(),
   financialAuditCreate: vi.fn(),
+  noteCreate: vi.fn(),
 }));
 
 vi.mock('@/lib/db', () => ({
   prisma: {
     user: { findFirst: mocks.userFindFirst },
-    task: { findMany: mocks.taskFindMany },
+    task: {
+      findMany: mocks.taskFindMany,
+      findFirst: mocks.taskFindFirst,
+      create: mocks.taskCreate,
+      update: mocks.taskUpdate,
+    },
+    lead: { findFirst: mocks.leadFindFirst, create: mocks.leadCreate },
+    contact: { findFirst: mocks.contactFindFirst },
+    note: { create: mocks.noteCreate },
     erp_expense_claims: {
       findMany: mocks.expenseClaimsFindMany,
       findUnique: mocks.expenseClaimsFindUnique,
       update: mocks.expenseClaimsUpdate,
     },
-    expense: { create: mocks.expenseCreate },
+    expense: { create: mocks.expenseCreate, findFirst: mocks.expenseFindFirst },
+    supplier: { findFirst: mocks.supplierFindFirst, findUnique: mocks.supplierFindUnique, create: mocks.supplierCreate },
+    tenant: { findUnique: mocks.tenantFindUnique },
     systemAlert: { create: mocks.systemAlertCreate },
     financialAudit: { create: mocks.financialAuditCreate },
   },
@@ -30,12 +52,19 @@ vi.mock('@/lib/db', () => ({
 
 vi.mock('@/lib/skills/event-bus', () => ({
   eventBus: { emitEvent: vi.fn() },
-  EVENTS: {},
+  EVENTS: { TASK_CREATED: 'TASK_CREATED', LEAD_CREATED: 'LEAD_CREATED', TASK_COMPLETED: 'TASK_COMPLETED', NOTE_CREATED: 'NOTE_CREATED' },
 }));
 
 vi.mock('@/lib/security/integrity-service', () => ({
   generateIntegrityHash: vi.fn().mockResolvedValue('hash-abc'),
   verifyFinancialIntegrity: vi.fn().mockResolvedValue(true),
+}));
+
+vi.mock('@/lib/skills/finance-skills', () => ({
+  createExpense: vi.fn(async (input: any) => ({ id: 'exp-1', ...input })),
+  createSupplier: vi.fn(async (input: any) => ({ id: 'supp-new', ...input })),
+  registerExpenseVision: vi.fn(async () => ({})),
+  analyzeBurnRate: vi.fn(async () => ({})),
 }));
 
 const { skills } = await import('@/lib/skills');
@@ -50,6 +79,10 @@ beforeEach(() => {
     const where = args?.where || {};
     // Consulta por metadata.telegram_chat_id (vía OR) → usuario real del tenant
     if (where.metadata || (Array.isArray(where.OR) && where.OR.some((o: any) => o.metadata))) {
+      return Promise.resolve({ id: 'user-42' } as any);
+    }
+    // Validación del skill core (createLead valida asignadoA por id)
+    if (where.id === 'user-42') {
       return Promise.resolve({ id: 'user-42' } as any);
     }
     return Promise.resolve(null);
@@ -100,5 +133,64 @@ describe('Resolución de chat de Telegram al userId real (webhook)', () => {
 
     expect(mocks.expenseClaimsUpdate).toHaveBeenCalled();
     expect(result.details?.authorizedCount).toBe(1);
+  });
+
+  it('create_task asigna la tarea al userId real resuelto', async () => {
+    mocks.taskCreate.mockResolvedValue({ id: 't-new', titulo: 'Llamar a Juan' } as any);
+    mocks.leadFindFirst.mockResolvedValue({ id: 'lead-1' } as any);
+
+    await (skills as any).create_task({
+      tenantId: TENANT,
+      titulo: 'Llamar a Juan',
+      email: 'juan@test.com',
+      userId: 'telegram:123456',
+    });
+
+    const createCall = mocks.taskCreate.mock.calls[0][0];
+    // asignadoA debe ser el userId real (user-42), no el chat
+    expect(createCall.data.asignadoA).toBe('user-42');
+  });
+
+  it('complete_task completa con el userId real resuelto', async () => {
+    mocks.taskFindFirst.mockResolvedValue({ id: 't1', titulo: 'Llamar a Juan', completada: false } as any);
+    mocks.taskUpdate.mockResolvedValue({ id: 't1', completada: true } as any);
+
+    await (skills as any).complete_task({
+      tenantId: TENANT,
+      titulo: 'Llamar a Juan',
+      userId: 'telegram:123456',
+    });
+
+    expect(mocks.taskUpdate).toHaveBeenCalled();
+  });
+
+  it('create_lead registra el creador real y asigna el lead', async () => {
+    mocks.leadCreate.mockResolvedValue({ id: 'lead-new', nombre: 'Ana', email: 'ana@test.com' } as any);
+
+    await (skills as any).create_lead({
+      tenantId: TENANT,
+      nombre: 'Ana López',
+      email: 'ana@test.com',
+      userId: 'telegram:123456',
+    });
+
+    const createCall = mocks.leadCreate.mock.calls[0][0];
+    expect(createCall.data.asignadoA).toBe('user-42');
+  });
+
+  it('create_expense usa el userId real como creador', async () => {
+    mocks.supplierFindFirst.mockResolvedValue({ id: 'supp-1' } as any);
+
+    await (skills as any).create_expense({
+      tenantId: TENANT,
+      monto: 100,
+      concepto: 'Gasolina',
+      proveedor: 'Repsol',
+      userId: 'telegram:123456',
+    });
+
+    const { createExpense } = await import('@/lib/skills/finance-skills');
+    const createCall = (createExpense as any).mock.calls[0][0];
+    expect(createCall.createdById).toBe('user-42');
   });
 });
