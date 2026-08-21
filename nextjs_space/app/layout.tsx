@@ -52,6 +52,7 @@ export default function RootLayout({
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="application-name" content="Volkern" />
         <meta name="format-detection" content="telephone=no" />
+        <script src="/webmcp.js" defer />
       </head>
       <body className={`${inter.className} selection:bg-blue-500/30`}>
         <SessionProvider>
