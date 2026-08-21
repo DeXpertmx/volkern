@@ -208,6 +208,41 @@ export async function rescheduleTask(input: RescheduleTaskInput) {
 }
 
 /**
+ * Posponer el recordatorio de una tarea sin cambiar su fecha real de
+ * vencimiento. El campo `recordatorioPospuestoHasta` silencia el aviso
+ * (cron de vencidas) y saca la tarea de las listas de "vence hoy"/"vencidas"
+ * hasta la fecha dada; al expirar, vuelve a aparecer y a avisarse.
+ */
+export interface SnoozeTaskInput {
+  taskId: string;
+  tenantId: string;
+  hasta: Date;
+  userId?: string;
+  source?: 'api' | 'app' | 'automation' | 'mcp' | 'webhook';
+}
+
+export async function snoozeTask(input: SnoozeTaskInput) {
+  const { taskId, tenantId, hasta, source = 'webhook' } = input;
+
+  if (!taskId) throw new Error('taskId es requerido');
+  if (!tenantId) throw new Error('tenantId es requerido');
+  if (!hasta || isNaN(hasta.getTime())) throw new Error('hasta es requerida');
+
+  const task = await prisma.task.findFirst({
+    where: { id: taskId, tenantId },
+  });
+  if (!task) throw new Error('Tarea no encontrada');
+  if (task.completada) throw new Error('No puedo posponer el recordatorio de una tarea ya completada.');
+
+  const updated = await prisma.task.update({
+    where: { id: taskId },
+    data: { recordatorioPospuestoHasta: hasta },
+  });
+
+  return updated;
+}
+
+/**
  * Crear una nota
  */
 export async function createNote(input: CreateNoteInput) {
@@ -266,11 +301,17 @@ export async function getTasksByLead(leadId: string, tenantId: string) {
  * Obtener tareas pendientes de un usuario
  */
 export async function getPendingTasksByUser(userId: string, tenantId: string) {
+  const now = new Date();
   const tasks = await prisma.task.findMany({
     where: {
       tenantId,
       asignadoA: userId,
       completada: false,
+      // Excluir tareas cuyo recordatorio fue pospuesto (snooze activo)
+      OR: [
+        { recordatorioPospuestoHasta: null },
+        { recordatorioPospuestoHasta: { lte: now } },
+      ],
     },
     orderBy: { fechaVencimiento: 'asc' },
     include: {
@@ -288,11 +329,17 @@ export async function getPendingTasksByUser(userId: string, tenantId: string) {
  * priorizar. Excluye tareas sin fecha (nunca pueden estar vencidas).
  */
 export async function getOverdueTasksByUser(userId: string, tenantId: string) {
+  const now = new Date();
   const tasks = await prisma.task.findMany({
     where: {
       tenantId,
       asignadoA: userId,
       completada: false,
+      // Excluir tareas cuyo recordatorio fue pospuesto (snooze activo)
+      OR: [
+        { recordatorioPospuestoHasta: null },
+        { recordatorioPospuestoHasta: { lte: now } },
+      ],
     },
     orderBy: { fechaVencimiento: 'asc' },
     include: {
@@ -302,12 +349,12 @@ export async function getOverdueTasksByUser(userId: string, tenantId: string) {
     },
   });
 
-  const now = Date.now();
+  const nowMs = Date.now();
   return tasks
-    .filter((t: any) => t.fechaVencimiento && new Date(t.fechaVencimiento).getTime() < now)
+    .filter((t: any) => t.fechaVencimiento && new Date(t.fechaVencimiento).getTime() < nowMs)
     .map((t: any) => ({
       ...t,
-      diasVencida: Math.max(1, Math.floor((now - new Date(t.fechaVencimiento).getTime()) / 86400000)),
+      diasVencida: Math.max(1, Math.floor((nowMs - new Date(t.fechaVencimiento).getTime()) / 86400000)),
     }));
 }
 
@@ -357,6 +404,11 @@ export async function getTasksDueTodayByUser(userId: string, tenantId: string) {
       asignadoA: userId,
       completada: false,
       fechaVencimiento: { gte: new Date(start), lt: new Date(end) },
+      // Excluir tareas cuyo recordatorio fue pospuesto (snooze activo)
+      OR: [
+        { recordatorioPospuestoHasta: null },
+        { recordatorioPospuestoHasta: { lte: new Date() } },
+      ],
     },
     orderBy: { fechaVencimiento: 'asc' },
     include: {

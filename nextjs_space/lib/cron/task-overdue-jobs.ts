@@ -52,6 +52,11 @@ export async function runTaskOverdueScan(): Promise<{
         fechaVencimiento: { lt: now },
         asignadoA: { not: null },
         tenantId: { not: null },
+        // Excluir tareas cuyo recordatorio fue pospuesto (snooze activo)
+        OR: [
+          { recordatorioPospuestoHasta: null },
+          { recordatorioPospuestoHasta: { lte: now } },
+        ],
       },
       include: {
         asignadoUsuario: {
@@ -123,6 +128,7 @@ export async function runTaskOverdueScan(): Promise<{
               [
                 { text: '✅ Completar', callback_data: `task:complete:${task.id}` },
                 { text: '📅 Reprogramar', callback_data: `task:resched:${task.id}` },
+                { text: '⏰ Recordar más tarde', callback_data: `task:snooze:${task.id}` },
               ],
             ],
           },

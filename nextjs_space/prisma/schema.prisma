@@ -1795,6 +1795,7 @@ model Task {
   fechaVencimiento DateTime
   completada              Boolean   @default(false)
   avisoVencimientoEnviado Boolean   @default(false)
+  recordatorioPospuestoHasta DateTime?
   asignadoA               String?
   fechaCreacion           DateTime  @default(now())
   fechaCompletado         DateTime?
