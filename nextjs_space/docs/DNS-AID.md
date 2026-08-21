@@ -14,8 +14,13 @@ El scanner [isitagentready](https://isitagentready.com) valida el check
 
 ## Estado
 
-- ✅ Registros publicados (ver fechas en git log de este doc)
-- ✅ Scan `dnsAid = pass`
+- ⏳ **Registros pendientes de publicar** — no aparecen aún en los nameservers
+  autoritativos de Cloudflare (verificado el 2026-08-21). Ver
+  «Cómo publicar» abajo.
+- ❌ Scan `dnsAid` en fail: *"DNS for AI Discovery (DNS-AID) well-known
+  entrypoint records not found"*.
+- ⚠️ Nota: si el dashboard rechaza `alpn="a2a"` / `alpn="mcp"` (tokens no
+  registrados), usar los valores seguros: `alpn="h2"` sin token de protocolo.
 - ⚠️ DNSSEC: **no activado** en la zona. El draft lo marca SHOULD (no es
   obligatorio para el check). Para activarlo: Cloudflare → DNS → Settings →
   DNSSEC → Enable, y agregar la DS record en el registrador.
