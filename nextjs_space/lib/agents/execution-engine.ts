@@ -374,16 +374,23 @@ export const ExecutionEngine = {
         const items = Array.isArray(data) ? data : data?.items || [];
         const total = Array.isArray(items) ? items.length : 0;
         if (total === 0) return '✅ No tienes tareas pendientes.';
-        const lines = items.slice(0, 6).map((t: any) => {
+        const now = Date.now();
+        const lines = items.slice(0, 8).map((t: any) => {
           const titulo = this.escapeMarkdown(String(t?.titulo || ''));
+          const vencida = t?.fechaVencimiento && new Date(t.fechaVencimiento).getTime() < now;
+          const prefix = vencida ? '⚠️' : '•';
           const vence = t?.fechaVencimiento
-            ? ` · ${this.escapeMarkdown(new Date(t.fechaVencimiento).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }))}`
+            ? ` · ${this.escapeMarkdown(new Date(t.fechaVencimiento).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }))}${vencida ? ' *(vencida)*' : ''}`
             : '';
           const lead = t?.lead?.nombre ? ` — ${this.escapeMarkdown(String(t.lead.nombre))}` : '';
-          return `• ${titulo}${vence}${lead}`;
+          return `${prefix} ${titulo}${vence}${lead}`;
         });
-        const suffix = total > 6 ? `\n… y ${total - 6} más` : '';
-        return `📋 *Tareas pendientes (${total}):*\n${lines.join('\n')}${suffix}`;
+        const overdueCount = items.filter((t: any) => t?.fechaVencimiento && new Date(t.fechaVencimiento).getTime() < now).length;
+        const header = overdueCount > 0
+          ? `📋 *Tareas pendientes (${total}) — ${overdueCount} vencidas:*`
+          : `📋 *Tareas pendientes (${total}):*`;
+        const suffix = total > 8 ? `\n… y ${total - 8} más` : '';
+        return `${header}\n${lines.join('\n')}${suffix}`;
       }
       case 'create_note': {
         const contenido = data?.contenido ? `: "${this.escapeMarkdown(String(data.contenido))}"` : '';
