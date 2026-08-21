@@ -87,6 +87,29 @@ Los procesos internos (cron, n8n, GitHub Actions) usan \`Authorization: Bearer
 - Documentación: \`${baseUrl}/docs/developers\`
 - Health: \`${baseUrl}/api/health\`
 
+## Registro paso a paso para un agente
+
+1. **Identifica tu audiencia**: el agente opera en nombre de un usuario del
+   tenant (humano) que ya tiene cuenta en Volkern. No existe auto-registro
+   anónimo de agentes.
+2. **Crea la credencial**: el usuario inicia sesión y crea una API key
+   (\`POST /api/api-keys\`) o una Skill Key (\`POST /api/users/me/skill-key\`),
+   eligiendo los scopes que el agente necesitará.
+3. **Guarda la credencial**: se muestra una sola vez en la respuesta. Úsala
+   en el header \`x-api-key\` o como \`Authorization: Bearer <key>\`.
+4. **Opera**: el agente autentica cada request con la credencial; el servidor
+   valida formato, hash, expiración, scopes y tenant.
+5. **Revoca**: el usuario desactiva la key en \`/dashboard/developers\` cuando
+   el agente deje de usarse.
+
+Métodos de registro soportados (detalle en el AS metadata):
+
+| Método | Tipo | Cómo obtenerlo |
+|---|---|---|
+| API Key de tenant | \`api_key\` | \`POST /api/api-keys\` con sesión |
+| Skill Key de agente | \`api_key\` | \`POST /api/users/me/skill-key\` con sesión |
+| Sesión | \`session\` | \`/auth/login\` del tenant |
+
 ## Seguridad
 
 - Las claves solo se muestran una vez al crearlas; no existe endpoint para

@@ -73,13 +73,15 @@ describe('/.well-known/oauth-authorization-server (RFC 8414)', () => {
       expect(body.agent_auth.register_uri).toBe('https://volkern.app/dashboard/developers')
       expect(Array.isArray(body.agent_auth.register_methods)).toBe(true)
       expect(body.agent_auth.register_methods.length).toBeGreaterThanOrEqual(1)
-      // Al menos un método completo: nombre, credencial, transporte y endpoint
+      // Al menos un método completo en formato Auth.md: type + uri + description
       for (const m of body.agent_auth.register_methods) {
-        expect(m.name).toBeTruthy()
-        expect(m.credential).toBe('api_key')
-        expect(m.transport).toBe('https')
-        expect(m.endpoint).toContain('https://')
+        expect(m.type).toBeTruthy()
+        expect(m.uri).toContain('https://')
+        expect(m.description).toBeTruthy()
       }
+      expect(body.agent_auth.identity_types_supported).toContain('identity_assertion')
+      expect(body.agent_auth.events_supported).toContain('revocation')
+      expect(body.agent_auth.revocation_uri).toContain('https://')
     })
   })
 })
