@@ -79,6 +79,14 @@ export const openApiV1Document = {
       name: 'Proprietary',
     },
   },
+  'x-service-info': {
+    categories: ['commerce', 'invoicing', 'developer-tools'],
+    docs: {
+      homepage: 'https://volkern.app/',
+      apiReference: 'https://volkern.app/docs/developers',
+      llms: 'https://volkern.app/auth.md',
+    },
+  },
   servers: [
     {
       url: 'http://localhost:3000',
@@ -109,6 +117,59 @@ export const openApiV1Document = {
     },
   ],
   paths: {
+    '/api/public/paid-search': {
+      get: {
+        summary: 'Búsqueda pública de contenido',
+        description:
+          'Búsqueda de contenido público para agentes. Requiere un pago x402 exact en Base Sepolia y devuelve un desafío HTTP 402 cuando no se envía PAYMENT-SIGNATURE.',
+        tags: ['Agent commerce'],
+        operationId: 'paidPublicSearch',
+        parameters: [
+          {
+            name: 'q',
+            in: 'query',
+            required: true,
+            schema: { type: 'string', minLength: 1 },
+          },
+          {
+            name: 'limit',
+            in: 'query',
+            required: false,
+            schema: { type: 'integer', minimum: 1, maximum: 20, default: 5 },
+          },
+        ],
+        'x-payment-info': {
+          offers: [
+            {
+              protocol: 'x402',
+              intent: 'charge',
+              method: 'base-sepolia-usdc',
+              amount: '10000',
+              currency: 'USDC atomic units',
+              description: 'Acceso a una búsqueda pública.',
+            },
+          ],
+        },
+        responses: {
+          '200': {
+            description: 'Resultados de la búsqueda',
+            content: { 'application/json': { schema: { type: 'object' } } },
+          },
+          '402': {
+            description: 'Payment Required — incluye PAYMENT-REQUIRED con requisitos x402 codificados en Base64.',
+            headers: {
+              'PAYMENT-REQUIRED': {
+                schema: { type: 'string' },
+                description: 'Objeto PaymentRequired x402 v2 codificado en Base64.',
+              },
+            },
+          },
+          '503': {
+            description: 'x402 no configurado en el entorno.',
+          },
+        },
+      },
+    },
     '/v1/invoices': {
       post: {
         summary: 'Crear factura',
@@ -126,6 +187,17 @@ export const openApiV1Document = {
           'async (Recibirás webhook si configuraste uno).',
         tags: ['External API v1'],
         operationId: 'createInvoiceV1',
+        'x-payment-info': {
+          offers: [
+            {
+              intent: 'charge',
+              method: 'stripe',
+              amount: null,
+              currency: 'eur',
+              description: 'Importe dinámico según la factura solicitada.',
+            },
+          ],
+        },
         security: [{ bearerAuth: ['invoices:write'] }],
         parameters: [
           {
@@ -275,6 +347,9 @@ export const openApiV1Document = {
                 schema: { $ref: '#/components/schemas/ErrorResponse' },
               },
             },
+          },
+          '402': {
+            description: 'Payment Required',
           },
           '500': {
             description: 'Error interno del servidor',
