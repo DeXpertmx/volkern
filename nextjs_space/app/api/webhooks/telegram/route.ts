@@ -180,10 +180,20 @@ async function processAndReply(
 
     const replyText = result.response || 'Lo siento, no pude procesar tu mensaje.'
 
-    const replyMarkup =
+    let replyMarkup: Record<string, unknown> | undefined =
       result.quickReplies && result.quickReplies.length > 0
         ? buildQuickReplyMarkup(result.quickReplies)
         : undefined
+
+    // Botones inline de acciones de tareas: una fila por tarea con
+    // Completar / Reprogramar (tienen prioridad sobre los quick replies).
+    if (result.taskButtons?.length) {
+      const rows = result.taskButtons.slice(0, 8).map((t) => [
+        { text: '✅ Completar', callback_data: `task:complete:${t.taskId}` },
+        { text: '📅 Reprogramar', callback_data: `task:resched:${t.taskId}` },
+      ])
+      replyMarkup = { inline_keyboard: rows }
+    }
 
     await sendBotMessage(chatId, replyText, ctx.botToken, replyMarkup)
   } catch (error) {
@@ -624,7 +634,97 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ method: 'answerCallbackQuery', callback_query_id: callback_query.id })
       }
 
-      // 1c. Flujo watchdog: admin authorize / reject buy (no es chatbot)
+      // 1c. Acciones de tareas (task:) — completar/reprogramar con un toque
+      // callback_data: task:complete:<taskId> | task:resched:<taskId> |
+      //                task:date:<taskId>:<manana|d3|d7|d14|cancel>
+      if (data.startsWith('task:')) {
+        const parts = data.split(':')
+        const taskAction = parts[1]
+        const taskId = parts[2]
+        const token = parts[3]
+
+        const ctx = await findTelegramContext(chatId)
+        if (!ctx || !taskId) {
+          return NextResponse.json({ method: 'answerCallbackQuery', callback_query_id: callback_query.id, text: '❌ No autorizado', show_alert: true })
+        }
+
+        const task = await prisma.task.findFirst({
+          where: { id: taskId, tenantId: ctx.tenantId },
+          select: { id: true, titulo: true, completada: true },
+        })
+        if (!task) {
+          return NextResponse.json({ method: 'answerCallbackQuery', callback_query_id: callback_query.id, text: 'Tarea no encontrada', show_alert: true })
+        }
+        if (task.completada) {
+          return NextResponse.json({ method: 'answerCallbackQuery', callback_query_id: callback_query.id, text: 'Esta tarea ya está completada', show_alert: true })
+        }
+
+        if (taskAction === 'complete') {
+          try {
+            const { skills } = await import('@/lib/skills')
+            await skills.complete_task({ taskId, tenantId: ctx.tenantId, userId: `telegram:${chatId}` })
+            clearReplyMarkup(chatId, callback_query.message.message_id, ctx.botToken).catch(() => {})
+            return NextResponse.json({ method: 'answerCallbackQuery', callback_query_id: callback_query.id, text: `✅ Tarea completada: ${task.titulo}` })
+          } catch (err: any) {
+            return NextResponse.json({ method: 'answerCallbackQuery', callback_query_id: callback_query.id, text: `❌ No se pudo completar: ${err?.message || 'error'}`, show_alert: true })
+          }
+        }
+
+        if (taskAction === 'resched') {
+          const opts = [
+            { text: '🌅 Mañana', callback_data: `task:date:${taskId}:manana` },
+            { text: '➕ 3 días', callback_data: `task:date:${taskId}:d3` },
+            { text: '📅 7 días', callback_data: `task:date:${taskId}:d7` },
+            { text: '🗓️ 14 días', callback_data: `task:date:${taskId}:d14` },
+            { text: '↩️ Cancelar', callback_data: `task:date:${taskId}:cancel` },
+          ]
+          return NextResponse.json({
+            method: 'editMessageText',
+            chat_id: chatId,
+            message_id: callback_query.message.message_id,
+            text: `📅 ¿Para cuándo reprogramo «${task.titulo}»?`,
+            reply_markup: { inline_keyboard: [opts.slice(0, 2), opts.slice(2, 4), [opts[4]]] },
+          })
+        }
+
+        if (taskAction === 'date') {
+          if (token === 'cancel') {
+            return NextResponse.json({
+              method: 'editMessageText',
+              chat_id: chatId,
+              message_id: callback_query.message.message_id,
+              text: `↩️ Cancelado. «${task.titulo}» sigue pendiente.`,
+              reply_markup: { inline_keyboard: [] },
+            })
+          }
+          const daysMap: Record<string, number> = { manana: 1, d3: 3, d7: 7, d14: 14 }
+          const days = daysMap[token || '']
+          if (!days) {
+            return NextResponse.json({ method: 'answerCallbackQuery', callback_query_id: callback_query.id, text: 'Opción no válida', show_alert: true })
+          }
+          const fecha = new Date()
+          fecha.setDate(fecha.getDate() + days)
+          const iso = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`
+          try {
+            const { skills } = await import('@/lib/skills')
+            await skills.reschedule_task({ taskId, tenantId: ctx.tenantId, fecha: iso, userId: `telegram:${chatId}` })
+            const label = fecha.toLocaleDateString('es-MX', { day: 'numeric', month: 'long' })
+            return NextResponse.json({
+              method: 'editMessageText',
+              chat_id: chatId,
+              message_id: callback_query.message.message_id,
+              text: `📅 Tarea reprogramada: «${task.titulo}» → ${label}`,
+              reply_markup: { inline_keyboard: [] },
+            })
+          } catch (err: any) {
+            return NextResponse.json({ method: 'answerCallbackQuery', callback_query_id: callback_query.id, text: `❌ ${err?.message || 'No se pudo reprogramar'}`, show_alert: true })
+          }
+        }
+
+        return NextResponse.json({ method: 'answerCallbackQuery', callback_query_id: callback_query.id })
+      }
+
+      // 1d. Flujo watchdog: admin authorize / reject buy (no es chatbot)
       const [action, itemId, tenantId] = data.split(':')
 
       // Seguridad: verificar admin legítimo
