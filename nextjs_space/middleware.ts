@@ -85,6 +85,29 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  // ─── Markdown para IA Crawlers ────────────────────────────────────────
+  // Si un crawler de IA (GPTBot, ClaudeBot, PerplexityBot, Google-Extended,
+  // OAI-SearchBot...) pide una landing /p/{tenantSlug}/{pageSlug}, la
+  // reescribimos a /api/seo/markdown que sirve la versión Markdown limpia
+  // (los navegadores siguen recibiendo HTML normal).
+  if (pathname.startsWith('/p/')) {
+    const ua = request.headers.get('user-agent')
+    const { isAICrawler } = await import('@/lib/seo/ai-crawler-detect')
+    if (isAICrawler(ua)) {
+      const segments = pathname.split('/').filter(Boolean) // ['p', tenantSlug, pageSlug?]
+      const tenantSlug = segments[1]
+      const pageSlug = segments[2]
+      if (tenantSlug && pageSlug) {
+        const target = new URL('/api/seo/markdown', request.nextUrl.origin)
+        target.searchParams.set('tenantSlug', tenantSlug)
+        target.searchParams.set('pageSlug', pageSlug)
+        const res = NextResponse.rewrite(target)
+        res.headers.set('x-ai-markdown', '1')
+        return res
+      }
+    }
+  }
+
   // Generate requestId for tracing
   const requestId = `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
 
