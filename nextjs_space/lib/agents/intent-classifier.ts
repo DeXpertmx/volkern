@@ -1866,6 +1866,19 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
       return { intent: 'completar_tarea', confidence: 0.85, extractedParams: extracted }
     }
 
+    // ═══ 16b. REPROGRAMAR TAREA ("reprograma la tarea de llamar a Juan para
+    // el viernes", "mueve el pendiente de enviar documento a mañana",
+    // "pospone la tarea de revisar cotización al 20 de agosto") ═══
+    const REPROGRAMAR_TAREA = /\b(?:reprograma|reprogramar|reprograme|mueve|mover|pospone|posponer|aplaza|aplazar|reagenda|reagendar|adelanta|adelantar|retrasa|retrasar)\b/i
+    if (REPROGRAMAR_TAREA.test(message) && TAREA_ENTITY.test(msgNoEmails)) {
+      const titulo = this.extractTituloTareaDe(message) ||
+        this.extractNombreAfter(message, /(?:tarea|pendiente)\s+(?:de|del)\s+/i)
+      if (titulo) extracted.titulo = titulo
+      const fecha = this.extractFechaDe(message)
+      if (fecha) extracted.fecha = fecha
+      return { intent: 'reprogramar_tarea', confidence: 0.85, extractedParams: extracted }
+    }
+
     // ═══ 17. CREAR TAREA ("crea tarea: llamar a Juan Pérez", "nueva tarea
     // para María: revisar cotización", "agrega pendiente: enviar documento,
     // vence el viernes") ═══

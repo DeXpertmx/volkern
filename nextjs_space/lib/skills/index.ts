@@ -517,6 +517,118 @@ const completeTaskWrapper = async (input: {
   return taskSkills.completeTask({ taskId: task.id, tenantId, userId });
 };
 
+/**
+ * Wrapper reprogramar_tarea: resuelve la tarea pendiente por título (igual
+ * que complete_task) y aplica la nueva fecha de vencimiento. La fecha puede
+ * llegar como YYYY-MM-DD (el clasificador la normaliza) o como texto.
+ */
+const rescheduleTaskWrapper = async (input: {
+  tenantId: string;
+  titulo?: string;
+  email?: string;
+  nombre?: string;
+  fecha?: string;
+  date?: string;
+  taskId?: string;
+  userId?: string;
+}) => {
+  const { tenantId, titulo, email, nombre, taskId } = input;
+  const userId = (await resolveRealUserId(tenantId, input.userId)) || input.userId;
+  const fechaRaw = input.fecha || input.date;
+  if (!fechaRaw) throw new Error('Indica la nueva fecha de la tarea (por ejemplo: mañana, el viernes, 2026-08-25).');
+
+  // Normalizar fecha: YYYY-MM-DD / YYYY/MM/DD o fecha natural en español.
+  const parsedDate = parseFechaReprogramacion(fechaRaw, 'America/Mexico_City');
+  if (!parsedDate) {
+    throw new Error(`No entendí la fecha "${fechaRaw}". Dime algo como: mañana, el viernes, o 2026-08-25.`);
+  }
+
+  const { prisma } = await import('@/lib/db');
+  if (taskId) return taskSkills.rescheduleTask({ taskId, tenantId, fechaVencimiento: parsedDate, userId });
+  if (!titulo) throw new Error('Indica qué tarea quieres reprogramar (su título).');
+
+  let leadId: string | undefined;
+  let contactId: string | undefined;
+  if (email) {
+    const lead = await prisma.lead.findFirst({ where: { tenantId, email } });
+    if (lead) leadId = lead.id;
+    else {
+      const contact = await prisma.contact.findFirst({ where: { tenantId, email } });
+      if (contact) contactId = contact.id;
+    }
+  } else if (nombre) {
+    const lead = await prisma.lead.findFirst({ where: { tenantId, nombre: { contains: nombre, mode: 'insensitive' } } });
+    if (lead) leadId = lead.id;
+    else {
+      const contact = await prisma.contact.findFirst({ where: { tenantId, nombre: { contains: nombre, mode: 'insensitive' } } });
+      if (contact) contactId = contact.id;
+    }
+  }
+
+  const where: any = { tenantId, completada: false, titulo: { contains: titulo, mode: 'insensitive' } };
+  if (leadId) where.leadId = leadId;
+  if (contactId) where.contactId = contactId;
+
+  const task = await prisma.task.findFirst({ where, orderBy: { fechaVencimiento: 'asc' } });
+  if (!task) {
+    throw new Error(`No encontré ninguna tarea pendiente con el título "${titulo}"${email ? ` de ${email}` : ''}.`);
+  }
+  return taskSkills.rescheduleTask({ taskId: task.id, tenantId, fechaVencimiento: parsedDate, userId });
+};
+
+/**
+ * Interpreta una fecha en español/ISO a Date. Reutiliza la lógica del
+ * clasificador (mañana, hoy, día de la semana, DD/MM/YYYY, YYYY-MM-DD).
+ */
+function parseFechaReprogramacion(raw: string, timezone = 'America/Mexico_City'): Date | null {
+  const s = String(raw).trim();
+  if (!s) return null;
+  const months: Record<string, number> = {
+    enero: 0, febrero: 1, marzo: 2, abril: 3, mayo: 4, junio: 5,
+    julio: 6, agosto: 7, septiembre: 8, setiembre: 8, octubre: 9, noviembre: 10, diciembre: 11,
+  };
+  const days: Record<string, number> = {
+    domingo: 0, lunes: 1, martes: 2, miercoles: 3, miércoles: 3,
+    jueves: 4, viernes: 5, sabado: 6, sábado: 6,
+  };
+  const today = new Date();
+  const addDays = (d: Date, n: number) => { const t = new Date(d); t.setDate(t.getDate() + n); return t };
+
+  // ISO
+  const iso = s.match(/\b(\d{4})[-/](\d{1,2})[-/](\d{1,2})\b/);
+  if (iso) {
+    const d = new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+    if (!isNaN(d.getTime())) return d;
+  }
+  // DD/MM/YYYY o DD/MM
+  const dmy = s.match(/\b(\d{1,2})[\/-](\d{1,2})(?:[\/-](\d{2,4}))?\b/);
+  if (dmy && Number(dmy[1]) <= 31 && Number(dmy[2]) >= 1 && Number(dmy[2]) <= 12) {
+    let y = dmy[3] ? Number(dmy[3]) : today.getFullYear();
+    if (dmy[3] && y < 100) y += 2000;
+    const d = new Date(y, Number(dmy[2]) - 1, Number(dmy[1]));
+    if (!isNaN(d.getTime())) return d;
+  }
+  // Relativos
+  if (/\bpasado\s+ma[nñ]ana\b|\bma[nñ]ana\s+despu[eé]s\b/i.test(s)) return addDays(today, 2);
+  if (/\bma[nñ]ana\b/i.test(s) && !/(?:por|en|de)\s+la\s+ma[nñ]ana\b/i.test(s)) return addDays(today, 1);
+  if (/\bhoy\b/i.test(s)) return today;
+  // Día de la semana
+  for (const [name, dow] of Object.entries(days)) {
+    if (new RegExp(`\\b${name}\\b`, 'i').test(s)) {
+      let ahead = (dow - today.getDay() + 7) % 7;
+      if (ahead === 0) ahead = 7;
+      return addDays(today, ahead);
+    }
+  }
+  // "el 15 de agosto" / "15 de agosto"
+  const dm = s.match(/\b(\d{1,2})\s+de\s+([a-záéíóúñ]+)\b/i);
+  if (dm && months[dm[2].toLowerCase()] !== undefined) {
+    const d = new Date(today.getFullYear(), months[dm[2].toLowerCase()], Number(dm[1]));
+    if (!isNaN(d.getTime())) return d;
+  }
+  return null;
+}
+
 const getNotesByLeadWrapper = async (input: { leadId?: string; email?: string; nombre?: string; tenantId: string }) => {
   const { leadId, email, nombre, tenantId } = input;
   let resolvedId = leadId;
@@ -3423,6 +3535,7 @@ export const skills = {
   // Tareas
   create_task: createTaskWrapper,
   complete_task: completeTaskWrapper,
+  reschedule_task: rescheduleTaskWrapper,
   get_tasks_by_lead: getTasksByLeadWrapper,
   get_pending_tasks: getPendingTasksWrapper,
   
@@ -3643,6 +3756,7 @@ export function listSkills(): Array<{ name: SkillName; description: string; cate
     // Tareas
     { name: 'create_task', description: 'Crear una nueva tarea', category: 'tasks' },
     { name: 'complete_task', description: 'Marcar tarea como completada', category: 'tasks' },
+    { name: 'reschedule_task', description: 'Reprogramar la fecha de una tarea pendiente', category: 'tasks' },
     { name: 'get_tasks_by_lead', description: 'Obtener tareas de un lead', category: 'tasks' },
     { name: 'get_pending_tasks', description: 'Obtener tareas pendientes de un usuario', category: 'tasks' },
     // Notas
