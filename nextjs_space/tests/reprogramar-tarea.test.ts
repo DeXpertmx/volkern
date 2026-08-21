@@ -5,6 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mocks = vi.hoisted(() => ({
   userFindFirst: vi.fn(),
   taskFindFirst: vi.fn(),
+  taskFindMany: vi.fn(),
   taskUpdate: vi.fn(),
   leadFindFirst: vi.fn(),
   contactFindFirst: vi.fn(),
@@ -13,7 +14,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/db', () => ({
   prisma: {
     user: { findFirst: mocks.userFindFirst },
-    task: { findFirst: mocks.taskFindFirst, update: mocks.taskUpdate },
+    task: { findFirst: mocks.taskFindFirst, findMany: mocks.taskFindMany, update: mocks.taskUpdate },
     lead: { findFirst: mocks.leadFindFirst },
     contact: { findFirst: mocks.contactFindFirst },
   },
@@ -100,6 +101,51 @@ describe('reprogramar_tarea — ejecución', () => {
   });
 });
 
+describe('tareas_vencidas — clasificación', () => {
+  const c = new IntentClassifierAgent() as any;
+  const base = { userId: 'user-1', tenantId: TENANT };
+
+  it('detecta "qué tareas tengo vencidas" → tareas_vencidas', async () => {
+    const r = await c.classify({ ...base, message: 'qué tareas tengo vencidas' });
+    expect(r.intent).toBe('tareas_vencidas');
+  });
+
+  it('detecta "muéstrame mis tareas atrasadas" → tareas_vencidas', async () => {
+    const r = await c.classify({ ...base, message: 'muéstrame mis tareas atrasadas' });
+    expect(r.intent).toBe('tareas_vencidas');
+  });
+
+  it('"qué tareas tengo pendientes" sigue siendo mis_tareas (no vencidas)', async () => {
+    const r = await c.classify({ ...base, message: 'qué tareas tengo pendientes' });
+    expect(r.intent).toBe('mis_tareas');
+  });
+});
+
+describe('tareas_vencidas — ejecución', () => {
+  it('get_overdue_tasks filtra solo vencidas con días de retraso y userId real', async () => {
+    const now = Date.now();
+    mocks.taskFindMany.mockResolvedValue([
+      { id: 't1', titulo: 'Llamar a Juan', completada: false, asignadoA: 'user-42', fechaVencimiento: new Date(now - 3 * 86400000), descripcion: 'Confirmar presupuesto', lead: { nombre: 'Juan' } },
+      { id: 't2', titulo: 'Enviar propuesta', completada: false, asignadoA: 'user-42', fechaVencimiento: new Date(now + 86400000) }, // NO vencida
+    ] as any);
+
+    const result = await (skills as any).get_overdue_tasks({ tenantId: TENANT, userId: 'telegram:123456' });
+
+    expect(mocks.taskFindMany.mock.calls[0][0].where.asignadoA).toBe('user-42');
+    expect(result.length).toBe(1);
+    expect(result[0].titulo).toBe('Llamar a Juan');
+    expect(result[0].diasVencida).toBeGreaterThanOrEqual(1);
+  });
+
+  it('get_overdue_tasks sin vencidas devuelve lista vacía', async () => {
+    mocks.taskFindMany.mockResolvedValue([
+      { id: 't2', titulo: 'Enviar propuesta', completada: false, asignadoA: 'user-42', fechaVencimiento: new Date(Date.now() + 86400000) },
+    ] as any);
+    const result = await (skills as any).get_overdue_tasks({ tenantId: TENANT, userId: 'telegram:123456' });
+    expect(result.length).toBe(0);
+  });
+});
+
 describe('reprogramar_tarea — orquestador y formateador', () => {
   it('formatSkillResult de reschedule_task muestra título y fecha', () => {
     const msg = ExecutionEngine.formatSkillResult('reschedule_task', {
@@ -129,5 +175,20 @@ describe('reprogramar_tarea — orquestador y formateador', () => {
     ];
     const msg = ExecutionEngine.formatSkillResult('get_pending_tasks', items);
     expect(msg).not.toContain('completa <tarea>');
+  });
+
+  it('formatSkillResult de get_overdue_tasks lista vencidas con motivo y fecha', () => {
+    const msg = ExecutionEngine.formatSkillResult('get_overdue_tasks', [
+      { titulo: 'Llamar a Juan', fechaVencimiento: new Date(Date.now() - 2 * 86400000), diasVencida: 2, descripcion: 'Confirmar presupuesto', lead: { nombre: 'Juan' } },
+    ]);
+    expect(msg).toContain('Tareas vencidas (1)');
+    expect(msg).toContain('Llamar a Juan');
+    expect(msg).toContain('Confirmar presupuesto');
+    expect(msg).toContain('completa <tarea>');
+  });
+
+  it('formatSkillResult de get_overdue_tasks sin vencidas responde al día', () => {
+    const msg = ExecutionEngine.formatSkillResult('get_overdue_tasks', []);
+    expect(msg).toContain('No tienes tareas vencidas');
   });
 });
