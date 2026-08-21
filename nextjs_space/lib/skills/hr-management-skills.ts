@@ -285,12 +285,26 @@ export async function get_hr_daily_brief({ tenantId }: { tenantId: string }) {
 export async function authorize_bulk_expenses({ tenantId, userId }: { tenantId: string, userId: string }) {
   const result = await HRService.authorizeBulkExpenses(tenantId, userId);
   
-  let response = `Soberanía Ejecutada: He autorizado ${result.authorizedCount} gastos con VISION-LOCK verificado. `;
+  const cur = result.currency || 'EUR';
+  const fmt = (n: number) => Number(n || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  let response = `✅ He autorizado *${result.authorizedCount} gastos* por un total de *${fmt(result.totalAuthorized)} ${cur}* (VISION-LOCK verificado).`;
+
+  // Desglose por gasto autorizado (máx. 5 líneas para no saturar)
+  if (result.authorizedItems && result.authorizedItems.length > 0) {
+    const lines = result.authorizedItems.slice(0, 5).map((item: any) =>
+      `• ${item.employee || 'Sin empleado'}: ${fmt(item.amount)} ${item.currency || cur} — ${item.category || 'Gasto'}`
+    );
+    response += `\n\n_Desglose:_\n${lines.join('\n')}`;
+    if (result.authorizedItems.length > 5) {
+      response += `\n… y ${result.authorizedItems.length - 5} gastos más.`;
+    }
+  }
   
   if (result.doubtfulCount > 0) {
-    response += `Bruno, hay ${result.doubtfulCount} gastos dudosos sin coordenadas GPS que he dejado en revisión manual. ¿Quieres que te los describa o los dejamos en revisión?`;
+    response += `\n\n⚠️ Dejé *${result.doubtfulCount} gastos dudosos* sin coordenadas GPS en revisión manual (${fmt(result.totalDoubtful)} ${cur}).`;
   } else {
-    response += `Todos los gastos pendientes han sido procesados y vinculados al Integrity Graph.`;
+    response += `\n\nTodos los gastos pendientes han sido procesados y vinculados al Integrity Graph.`;
   }
 
   return {

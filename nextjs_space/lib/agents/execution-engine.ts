@@ -84,7 +84,14 @@ export const ExecutionEngine = {
               execute: async (params: any) => {
                 try {
                   const result = await volkernSkill(params);
-                  return { message: 'OK', data: result };
+                  // Propagar el mensaje real del skill (text/message) en vez del
+                  // placeholder 'OK', para que la respuesta nunca sea el genérico
+                  // "Operación completada" cuando el skill sí tiene algo que decir.
+                  const skillMsg =
+                    result?.message && result.message !== 'OK'
+                      ? result.message
+                      : result?.text;
+                  return { message: skillMsg || 'OK', data: result };
                 } catch (error: any) {
                   // Propagar el mensaje real del skill (ej. "Ya existe un contacto con el email X")
                   return { message: error.message || 'Error', error: error.message };
@@ -155,6 +162,9 @@ export const ExecutionEngine = {
           raw.includes('no fue posible') ||
           raw.includes('no es válido') ||
           raw.includes('no parece') ||
+          raw.includes('no tienes permisos') ||
+          raw.includes('no tienes acceso') ||
+          raw.includes('sin permisos') ||
           // Citas: pedir el email que falta (multi-turno) y desambiguar
           // cuando hay varias citas del mismo contacto.
           raw.includes('email_required') ||
