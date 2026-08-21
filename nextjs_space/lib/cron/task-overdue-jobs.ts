@@ -117,7 +117,16 @@ export async function runTaskOverdueScan(): Promise<{
           `📅 "reprograma ${task.titulo} para mañana"`,
         );
 
-        const sendResult = await sendTelegramMessage(chatId, lines.join('\n'), botToken);
+        const sendResult = await sendTelegramMessage(chatId, lines.join('\n'), botToken, {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: '✅ Completar', callback_data: `task:complete:${task.id}` },
+                { text: '📅 Reprogramar', callback_data: `task:resched:${task.id}` },
+              ],
+            ],
+          },
+        });
 
         if ((sendResult as any)?.success) {
           await prisma.task.update({

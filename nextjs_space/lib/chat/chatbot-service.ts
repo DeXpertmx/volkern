@@ -32,6 +32,8 @@ export interface ChatbotOutput {
   error?: string
   fueraHorario?: boolean
   quickReplies?: string[]
+  /** Acciones inline de tareas (Telegram): completar/reprogramar por tarea */
+  taskButtons?: { taskId: string; titulo: string }[]
 }
 
 const DEFAULTS = {
@@ -846,11 +848,25 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
           await memory.recordOfferedQuickReplies(conv.id, dedupedQuickReplies)
         }
 
+        // Botones inline de acciones de tareas (completar/reprogramar) cuando
+        // el skill devolvió una lista de tareas (vencidas, hoy, pendientes).
+        const taskButtons: { taskId: string; titulo: string }[] | undefined =
+          ['tareas_vencidas', 'tareas_hoy', 'mis_tareas'].includes(classification.intent) &&
+          Array.isArray(executionResult.data)
+            ? (executionResult.data as any[])
+                .filter((t) => t?.id)
+                .map((t) => ({
+                  taskId: String(t.id),
+                  titulo: String(t?.titulo || 'Tarea'),
+                }))
+            : undefined
+
         return {
           success: true,
           response: finalMessage,
           action,
           quickReplies: dedupedQuickReplies,
+          taskButtons,
         }
       }
 

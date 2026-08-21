@@ -7,18 +7,23 @@ export class TelegramService {
 
   /**
    * Envía un mensaje a un chat específico usando un bot token.
+   * `extra` puede incluir `reply_markup` (inline_keyboard, etc.).
    */
-  static async sendMessage(token: string, chatId: string, text: string) {
+  static async sendMessage(token: string, chatId: string, text: string, extra?: Record<string, unknown>) {
     try {
       const url = `${this.TELEGRAM_API}${token}/sendMessage`;
+      const payload: Record<string, unknown> = {
+        chat_id: chatId,
+        text: text,
+        parse_mode: 'HTML'
+      };
+      if (extra?.reply_markup) {
+        payload.reply_markup = extra.reply_markup;
+      }
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text: text,
-          parse_mode: 'HTML'
-        })
+        body: JSON.stringify(payload)
       });
 
       if (!response.ok) {
@@ -63,7 +68,7 @@ export async function sendTelegramMessage(
     console.error('[telegram] No token provided');
     return { success: false, error: 'No bot token' };
   }
-  return TelegramService.sendMessage(botToken, chatId, message);
+  return TelegramService.sendMessage(botToken, chatId, message, extra);
 }
 
 /**

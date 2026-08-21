@@ -44,7 +44,7 @@ describe('runTaskOverdueScan (aviso de tareas vencidas por Telegram)', () => {
     mocks.loadTelegramCredentials.mockResolvedValue({ bot_token: 'BOT:TOKEN', admin_chat_id: '999' })
   })
 
-  it('envía el aviso al chat del asignado con fecha original y motivo, y marca la tarea', async () => {
+  it('envía el aviso al chat del asignado con fecha, motivo y botones inline, y marca la tarea', async () => {
     mocks.taskFindMany.mockResolvedValue([vencida])
     mocks.sendTelegramMessage.mockResolvedValue({ success: true })
 
@@ -53,13 +53,17 @@ describe('runTaskOverdueScan (aviso de tareas vencidas por Telegram)', () => {
     expect(result).toEqual({ total: 1, notified: 1, skipped: 0, failed: 0 })
     // Enviado al chat del usuario asignado, con el token del tenant
     expect(mocks.sendTelegramMessage).toHaveBeenCalledTimes(1)
-    const [chatId, body, token] = mocks.sendTelegramMessage.mock.calls[0]
+    const [chatId, body, token, extra] = mocks.sendTelegramMessage.mock.calls[0]
     expect(chatId).toBe('123456789')
     expect(token).toBe('BOT:TOKEN')
     expect(body).toContain('Tarea vencida')
     expect(body).toContain('Llamar a Juan')
     expect(body).toContain('Confirmar presupuesto')
     expect(body).toContain('Vencía el')
+    // Botones inline completar/reprogramar
+    const keyboard = (extra as any).reply_markup.inline_keyboard
+    expect(keyboard[0][0].callback_data).toBe('task:complete:task-1')
+    expect(keyboard[0][1].callback_data).toBe('task:resched:task-1')
     // Guard contra repetidos
     expect(mocks.taskUpdate).toHaveBeenCalledWith({
       where: { id: 'task-1' },
