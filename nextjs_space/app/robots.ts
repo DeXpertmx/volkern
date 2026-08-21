@@ -7,14 +7,14 @@ export default function robots(): MetadataRoute.Robots {
     rules: [
       {
         userAgent: '*',
-        allow: ['/', '/p/', '/sitemap.xml'],
-        disallow: ['/dashboard', '/admin', '/api/', '/_next/', '/member/', '/academy/'],
+        allow: ['/', '/p/', '/sitemap.xml', '/api/public/'],
+        disallow: ['/dashboard', '/admin', '/api/!public', '/_next/', '/member/', '/academy/'],
       },
       // Los crawlers de IA pueden acceder a todo el contenido público (las
       // landings se les sirven en Markdown limpio por User-Agent).
       {
         userAgent: ['GPTBot', 'OAI-SearchBot', 'ChatGPT-User', 'ClaudeBot', 'Anthropic-ai', 'PerplexityBot', 'Google-Extended', 'Gemini-Crawler'],
-        allow: ['/', '/p/'],
+        allow: ['/', '/p/', '/api/public/'],
         disallow: ['/dashboard', '/admin', '/api/'],
       },
     ],
