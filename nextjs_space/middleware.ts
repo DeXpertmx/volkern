@@ -162,6 +162,13 @@ export async function middleware(request: NextRequest) {
     return withHeaders(NextResponse.next())
   }
 
+  // Allow .well-known paths (AI plugin discovery, API catalog, etc.) —
+  // ANTES de los redirects legacy para que /{slug}/{page} no capture
+  // /.well-known/api-catalog como un tenant con página.
+  if (pathname.startsWith('/.well-known/')) {
+    return withHeaders(NextResponse.next())
+  }
+
   // ─── Rutas legacy /[tenant]/... (modo subdominio revertido) ─────────
   // app/[tenant]/... era el mecanismo viejo de multi-tenant (slug del
   // tenant en el path), revertido a subdominios. La lógica pura vive en
@@ -172,11 +179,6 @@ export async function middleware(request: NextRequest) {
   if (legacy) {
     const dest = new URL(legacy.to, request.nextUrl.origin)
     return withHeaders(NextResponse.redirect(dest, 308))
-  }
-
-  // Allow .well-known paths (AI plugin discovery, etc.)
-  if (pathname.startsWith('/.well-known/')) {
-    return withHeaders(NextResponse.next())
   }
 
   // Check if it's an API route that requires no auth
