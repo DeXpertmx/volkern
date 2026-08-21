@@ -8,6 +8,10 @@
 #
 # También lee CLOUDFLARE_API_TOKEN / CLOUDFLARE_ZONE_ID desde el .env del repo
 # o del entorno. Es idempotente: si el registro ya existe, no lo duplica.
+#
+# Nota (2026-08-21): el schema de Cloudflare exige data.value como STRING en
+# formato wire ("alpn=\"h2\" port=443"), no como objeto JSON. Si se manda un
+# objeto, el API responde 9012 "Value for SVCB record is invalid".
 # =============================================================================
 set -euo pipefail
 
@@ -46,26 +50,26 @@ fi
 echo "✅ Zona: $ROOT_DOMAIN ($ZONE_ID)"
 
 # ── Registros ───────────────────────────────────────────────────────────────
-# Cada entrada: nombre | tipo | payload (data para SVCB/HTTPS, content para TXT)
+# Cada entrada: nombre | tipo | value (wire format para SVCB, content para TXT)
 declare -a RECORDS
 
 # Índice organizacional (use case 2 del draft) — el punto de entrada well-known
-RECORDS+=('_index._agents.'"$ROOT_DOMAIN"'|SVCB|{"priority":1,"target":"'"$TARGET"'","value":{"alpn":["h2","http/1.1"],"port":443,"ipv4hint":["'"$IPV4"'"],"mandatory":["alpn","port"]}}')
+RECORDS+=("_index._agents.$ROOT_DOMAIN|SVCB|alpn=\"h2,http/1.1\" port=443 ipv4hint=\"$IPV4\"")
 
 # Agente A2A (use case 1) — alpn a2a sobre HTTPS
-RECORDS+=('_a2a._agents.'"$ROOT_DOMAIN"'|SVCB|{"priority":1,"target":"'"$TARGET"'","value":{"alpn":["a2a","h2"],"port":443,"ipv4hint":["'"$IPV4"'"],"mandatory":["alpn","port"]}}')
+RECORDS+=("_a2a._agents.$ROOT_DOMAIN|SVCB|alpn=\"a2a,h2\" port=443 ipv4hint=\"$IPV4\"")
 
 # Agente MCP — alpn mcp sobre HTTPS (endpoint real /mcp)
-RECORDS+=('_mcp._agents.'"$ROOT_DOMAIN"'|SVCB|{"priority":1,"target":"'"$TARGET"'","value":{"alpn":["mcp","h2"],"port":443,"ipv4hint":["'"$IPV4"'"],"mandatory":["alpn","port"]}}')
+RECORDS+=("_mcp._agents.$ROOT_DOMAIN|SVCB|alpn=\"mcp,h2\" port=443 ipv4hint=\"$IPV4\"")
 
 # Fallback TXT del índice (Sección 4 del draft)
-RECORDS+=('_index._agents.'"$ROOT_DOMAIN"'|TXT|v=DNSAID1 index=/.well-known/agent-card.json')
+RECORDS+=("_index._agents.$ROOT_DOMAIN|TXT|v=DNSAID1 index=/.well-known/agent-card.json")
 
 created=0
 skipped=0
 
 for entry in "${RECORDS[@]}"; do
-  IFS='|' read -r name type payload <<< "$entry"
+  IFS='|' read -r name type value <<< "$entry"
 
   # ¿Ya existe? (lista por nombre y tipo)
   existing="$(curl -s -X GET "$API/zones/$ZONE_ID/dns_records?type=$type&name=$name" \
@@ -79,9 +83,9 @@ for entry in "${RECORDS[@]}"; do
   fi
 
   if [[ "$type" == "TXT" ]]; then
-    body="{\"type\":\"$type\",\"name\":\"$name\",\"content\":\"$payload\",\"ttl\":$TTL}"
+    body="{\"type\":\"$type\",\"name\":\"$name\",\"content\":\"$value\",\"ttl\":$TTL}"
   else
-    body="{\"type\":\"$type\",\"name\":\"$name\",\"data\":$payload,\"ttl\":$TTL}"
+    body="{\"type\":\"$type\",\"name\":\"$name\",\"data\":{\"priority\":1,\"target\":\"$TARGET\",\"value\":\"$value\"},\"ttl\":$TTL}"
   fi
 
   echo "➕ Creando $type $name …"
