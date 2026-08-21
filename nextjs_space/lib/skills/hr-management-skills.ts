@@ -288,6 +288,13 @@ export async function authorize_bulk_expenses({ tenantId, userId }: { tenantId: 
   const cur = result.currency || 'EUR';
   const fmt = (n: number) => Number(n || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+  if (result.authorizedCount === 0 && result.doubtfulCount === 0) {
+    return {
+      text: `No hay gastos pendientes de autorizar en este momento. ✅`,
+      details: result
+    };
+  }
+
   let response = `✅ He autorizado *${result.authorizedCount} gastos* por un total de *${fmt(result.totalAuthorized)} ${cur}* (VISION-LOCK verificado).`;
 
   // Desglose por gasto autorizado (máx. 5 líneas para no saturar)

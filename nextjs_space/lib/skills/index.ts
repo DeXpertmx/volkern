@@ -459,7 +459,11 @@ const getPendingTasksWrapper = async (input: { userId: string; tenantId: string;
     if (contact) return taskSkills.getTasksByLead(contact.id, tenantId);
     throw new Error(`No encontré ningún lead o contacto${email ? ` con el email ${email}` : ` con el nombre "${nombre}"`}.`);
   }
-  return taskSkills.getPendingTasksByUser(userId, tenantId);
+  // El webhook pasa el conversationId del chat ("telegram:123456"); lo
+  // resolvemos al userId real del usuario del tenant para que sus tareas
+  // (asignadoA) coincidan.
+  const realUserId = (await resolveRealUserId(tenantId, userId)) || userId;
+  return taskSkills.getPendingTasksByUser(realUserId, tenantId);
 };
 
 /**
@@ -1008,7 +1012,24 @@ async function resolveRealUserId(tenantId: string, userId?: string): Promise<str
     where: { id: userId, tenantId: null },
     select: { id: true },
   });
-  return platformUser?.id;
+  if (platformUser) return platformUser.id;
+  // 3. Chat de Telegram ("telegram:123456" o "123456"): el webhook pasa el
+  // conversationId del chat, no el userId real. Lo resolvemos por el
+  // metadata.telegram_chat_id del usuario del tenant (mismo vínculo que
+  // findTelegramAdmin usa para documentos).
+  const chatRef = userId.replace(/^telegram:/i, '').trim();
+  if (!chatRef) return undefined;
+  const telegramUser = await prisma.user.findFirst({
+    where: {
+      tenantId,
+      OR: [
+        { metadata: { path: ['telegram_chat_id'], equals: chatRef } },
+        { metadata: { path: ['telegram', 'chat_id'], equals: chatRef } },
+      ],
+    },
+    select: { id: true },
+  });
+  return telegramUser?.id;
 }
 
 const registerInteractionWrapper = async (input: { tenantId: string; email?: string; nombre?: string; tipo: any; contenido: string; resultado?: string; userId?: string }) => {
