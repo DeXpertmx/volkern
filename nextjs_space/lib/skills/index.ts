@@ -163,7 +163,8 @@ const sendMessageWrapper = async (input: {
   userId?: string;
   sessionId?: string;
 }) => {
-  const { tenantId, conversationId, email, nombre, canal, telefono, empresa, registrarContacto, userId } = input;
+  const { tenantId, conversationId, email, nombre, canal, telefono, empresa, registrarContacto } = input;
+  const userId = (await resolveRealUserId(tenantId, input.userId)) || input.userId;
   const contenido = (input.mensaje || input.contenido || '').trim();
 
   if (!tenantId) throw new Error('tenantId es requerido');
@@ -395,7 +396,8 @@ const sendMessageWrapper = async (input: {
  * nombre insensible a mayúsculas) y evita reconvertir leads ya convertidos.
  */
 const convertLeadWrapper = async (input: { email?: string; nombre?: string; tenantId: string; userId?: string }) => {
-  const { email, nombre, tenantId, userId } = input;
+  const { email, nombre, tenantId } = input;
+  const userId = (await resolveRealUserId(tenantId, input.userId)) || input.userId;
   if (!email && !nombre) throw new Error('Se requiere un email o nombre para identificar el lead a convertir.');
 
   const { prisma } = await import('@/lib/db');
@@ -479,7 +481,8 @@ const completeTaskWrapper = async (input: {
   taskId?: string;
   userId?: string;
 }) => {
-  const { tenantId, titulo, email, nombre, taskId, userId } = input;
+  const { tenantId, titulo, email, nombre, taskId } = input;
+  const userId = (await resolveRealUserId(tenantId, input.userId)) || input.userId;
   const { prisma } = await import('@/lib/db');
 
   if (taskId) return taskSkills.completeTask({ taskId, tenantId, userId });
@@ -535,8 +538,10 @@ const getDiagnosisByLeadWrapper = (input: { leadId: string; tenantId: string }) 
 const getBookingsByLeadWrapper = (input: { leadId: string; tenantId: string }) => 
   bookingSkills.getBookingsByLead(input.leadId, input.tenantId);
 
-const getUpcomingBookingsWrapper = (input: { tenantId: string; limit?: number; userId?: string; date?: string; timezone?: string }) => 
-  bookingSkills.getUpcomingBookings(input.tenantId, input.limit, input.userId, input.date, input.timezone);
+const getUpcomingBookingsWrapper = async (input: { tenantId: string; limit?: number; userId?: string; date?: string; timezone?: string }) => {
+  const userId = (await resolveRealUserId(input.tenantId, input.userId)) || input.userId;
+  return bookingSkills.getUpcomingBookings(input.tenantId, input.limit, userId, input.date, input.timezone);
+};
 
 const getDealWrapper = (input: { dealId: string; tenantId: string }) =>
   dealSkills.getDeal(input.dealId, input.tenantId);
@@ -764,13 +769,16 @@ const updateLeadWrapper = async (input: { tenantId: string; email?: string; nomb
   throw new Error(`No se encontró ningún contacto ni lead para actualizar.`);
 };
 
-const createLeadWrapper = async (input: { tenantId: string; nombre: string; email: string; telefono?: string; notas?: string; contexto?: string; empresa?: string; origen?: string; fuente?: string; cargo?: string }) => {
-  const { contexto, notas, origen, cargo, ...rest } = input;
+const createLeadWrapper = async (input: { tenantId: string; nombre: string; email: string; telefono?: string; notas?: string; contexto?: string; empresa?: string; origen?: string; fuente?: string; cargo?: string; userId?: string }) => {
+  const { contexto, notas, origen, cargo, userId, ...rest } = input;
+  const realUserId = await resolveRealUserId(input.tenantId, userId);
   return contactSkills.createLead({
     ...rest,
     fuente: origen || rest.fuente,
     cargo: cargo,
-    notas: contexto || notas
+    notas: contexto || notas,
+    userId: realUserId,
+    asignadoA: realUserId,
   });
 };
 
@@ -792,7 +800,8 @@ const createContactWrapper = async (input: {
   tags?: string;
   userId?: string;
 }) => {
-  const { tenantId, nombre, email, telefono, cargo, empresa, contexto, notas, linkedin, ubicacion, tags, userId } = input;
+  const { tenantId, nombre, email, telefono, cargo, empresa, contexto, notas, linkedin, ubicacion, tags } = input;
+  const userId = (await resolveRealUserId(tenantId, input.userId)) || input.userId;
 
   let companyId: string | undefined;
   if (empresa && empresa.trim()) {
@@ -847,7 +856,8 @@ const createCompanyWrapper = async (input: {
   tags?: string;
   userId?: string;
 }) => {
-  const { tenantId, nombre, email, telefono, contexto, notas, ubicacion, linkedin, tags, userId } = input;
+  const { tenantId, nombre, email, telefono, contexto, notas, ubicacion, linkedin, tags } = input;
+  const userId = (await resolveRealUserId(tenantId, input.userId)) || input.userId;
 
   // Idempotencia por nombre: si ya existe una empresa con ese nombre, no duplicar
   const { prisma } = await import('@/lib/db');
@@ -890,7 +900,8 @@ const createTaskWrapper = async (input: {
   timezone?: string;
   tipo?: string;
 }) => {
-  const { tenantId, email, nombre, leadId, contactId, titulo, descripcion, fechaVencimiento, userId, asignadoAId, timezone, tipo } = input;
+  const { tenantId, email, nombre, leadId, contactId, titulo, descripcion, fechaVencimiento, asignadoAId, timezone, tipo } = input;
+  const userId = (await resolveRealUserId(tenantId, input.userId)) || input.userId;
   
   let lead = null;
   let contact = null;
@@ -1116,7 +1127,8 @@ const createBookingWrapper = async (input: {
   registrarContacto?: string;
   userId?: string;
 }) => {
-  const { tenantId, email, telefono, nombre, fecha, hora, titulo, tipo, ubicacion, empresa, registrarContacto, userId } = input;
+  const { tenantId, email, telefono, nombre, fecha, hora, titulo, tipo, ubicacion, empresa, registrarContacto } = input;
+  const userId = (await resolveRealUserId(tenantId, input.userId)) || input.userId;
   const { prisma } = await import('@/lib/db');
 
   // ── Limpiar nombre: extraer solo el nombre real ──
@@ -1436,9 +1448,10 @@ const createBookingWrapper = async (input: {
 
 const createExpenseWrapper = async (input: any) => {
   const {
-    tenantId, userId, createdById, monto, amount, concepto, description,
+    tenantId, createdById, monto, amount, concepto, description,
     proveedor, categoria, category, fecha, date, supplierId: inputSupplierId,
   } = input;
+  const userId = (await resolveRealUserId(tenantId, input.userId)) || input.userId;
   const { prisma } = await import('@/lib/db');
   
   // Mapear params español → inglés
@@ -1622,6 +1635,7 @@ const adjustStockWrapper = async (input: {
   const cantidad = Number(input.cantidad ?? input.quantity);
   if (!Number.isFinite(cantidad) || cantidad <= 0) throw new Error('La cantidad debe ser un número mayor que 0.');
   const tipo = (input.tipo || input.type || 'IN').toUpperCase() as 'IN' | 'OUT' | 'TRANSFER';
+  const userId = (await resolveRealUserId(tenantId, input.userId)) || input.userId;
   return inventorySkills.adjustStock({
     tenantId,
     catalogoItemId: id,
@@ -1629,7 +1643,7 @@ const adjustStockWrapper = async (input: {
     quantity: cantidad,
     reason: input.reason || `Ajuste vía chatbot (${tipo})`,
     warehouseId: input.warehouseId || input.almacenId,
-    userId: input.userId,
+    userId,
     referenceId: input.referenceId,
     targetWarehouseId: input.targetWarehouseId,
     metadata: { ordenDesde: 'Chatbot', ...(input as any).metadata },
@@ -1667,12 +1681,13 @@ const processInventoryConsumptionWrapper = async (input: {
   const id = await resolveCatalogoItemId(tenantId, ref);
   const cantidad = Number(input.cantidad ?? input.quantity);
   if (!Number.isFinite(cantidad) || cantidad <= 0) throw new Error('La cantidad debe ser un número mayor que 0.');
+  const userId = (await resolveRealUserId(tenantId, input.userId)) || input.userId;
   return inventorySkills.processInventoryConsumption({
     tenantId,
     productId: id,
     quantity: cantidad,
     warehouseId: input.warehouseId || input.almacenId,
-    userId: input.userId,
+    userId,
   });
 };
 
@@ -1688,7 +1703,8 @@ const cancelBookingWrapper = async (input: {
   motivo?: string;
   userId?: string;
 }) => {
-  const { tenantId, bookingId, citaId, nombre, email, fecha, motivo, userId } = input;
+  const { tenantId, bookingId, citaId, nombre, email, fecha, motivo } = input;
+  const userId = (await resolveRealUserId(tenantId, input.userId)) || input.userId;
   const id = bookingId || citaId
 
   // Si hay ID directo, cancelar sin búsqueda
@@ -1855,6 +1871,7 @@ const createSiniestroWrapper = async (input: {
   }
   const polizaId = input.polizaId || (input.poliza ? await resolvePolizaId(input.tenantId, input.poliza) : undefined);
   if (!polizaId) throw new Error('Necesito saber contra qué póliza es el siniestro.');
+  const createdById = (await resolveRealUserId(input.tenantId, input.userId)) || input.userId;
 
   return siniestrosSkills.createSiniestro({
     tenantId: input.tenantId,
@@ -1868,7 +1885,7 @@ const createSiniestroWrapper = async (input: {
     moneda: input.moneda,
     estado: normalizeEstadoSiniestro(input.estado),
     notas: input.notas,
-    createdById: input.userId,
+    createdById,
   });
 };
 
@@ -2246,11 +2263,12 @@ const approveVacationWrapper = async (input: {
     input.vacationRequestId || input.solicitudId,
     input.nombre || input.empleado,
   )
+  const userId = (await resolveRealUserId(input.tenantId, input.userId)) || input.userId || 'SYSTEM'
   const result = await hrSkills.approve_vacation_voice({
     tenantId: input.tenantId,
     vacationRequestId: resolved.id,
     note: String(input.nota || input.note || ''),
-    userId: input.userId || 'SYSTEM',
+    userId,
   })
   return { ...result, empleadoNombre: resolved.empleadoNombre }
 }
@@ -2745,7 +2763,8 @@ const calculateFranchiseCommissionsWrapper = async (input: {
   }
   // Comision.userId es FK obligatoria a User: resolver un usuario real del
   // tenant si no llega userId (nunca 'SYSTEM', que no existe en la tabla User).
-  const commissionUserId = input.userId || (await prisma.user.findFirst({ where: { tenantId }, select: { id: true }, orderBy: { createdAt: 'asc' } }))?.id;
+  const commissionUserId = (await resolveRealUserId(tenantId, input.userId)) || input.userId ||
+    (await prisma.user.findFirst({ where: { tenantId }, select: { id: true }, orderBy: { createdAt: 'asc' } }))?.id;
   if (!commissionUserId) {
     throw new Error('No se pudo identificar el usuario para la comisión.');
   }
@@ -2886,12 +2905,13 @@ const registerQcInspectionWrapper = async (input: {
       select: { id: true },
     });
   }
+  const inspectorId = (await resolveRealUserId(tenantId, input.userId)) || input.userId || input.inspector || 'SYSTEM';
   return qualitySkills.register_qc_inspection({
     tenantId,
     pointId: point.id,
     status,
     measuredValue: input.lote ? `Lote ${input.lote}` : undefined,
-    inspectorId: input.userId || input.inspector || 'SYSTEM',
+    inspectorId,
   });
 };
 
