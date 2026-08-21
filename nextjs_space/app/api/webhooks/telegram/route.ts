@@ -12,6 +12,7 @@ import { createExpenseInboxDocument } from '@/lib/finance/expense-inbox'
 import { buildTelegramExpenseSummary, canDiscardTelegramExpenseStatus, canRestoreTelegramExpenseStatus, isTelegramCommand, parseTelegramInvoiceDate, parseTelegramNumber } from '@/lib/finance/telegram-expense'
 import { getDownloadUrl } from '@/lib/s3'
 import { callVision } from '@/app/api/erp/expenses/scan/route'
+import { buildTaskCalendarMarkup } from '@/lib/telegram/task-calendar'
 
 /**
  * Webhook directo de Telegram — pipeline unificado
@@ -635,9 +636,10 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ method: 'answerCallbackQuery', callback_query_id: callback_query.id })
       }
 
-      // 1c. Acciones de tareas (task:) — completar/reprogramar con un toque
+      // 1c. Acciones de tareas (task:) — completar/reprogramar/snooze con un toque
       // callback_data: task:complete:<taskId> | task:resched:<taskId> |
-      //                task:date:<taskId>:<manana|d3|d7|d14|cancel>
+      //                task:cal:<taskId>:<YYYY-MM> | task:date:<taskId>:<YYYY-MM-DD|cancel> |
+      //                task:snooze:<taskId> | task:snoozeDate:<taskId>:<manana|d3|d7|cancel>
       if (data.startsWith('task:')) {
         const parts = data.split(':')
         const taskAction = parts[1]
@@ -672,19 +674,37 @@ export async function POST(request: NextRequest) {
         }
 
         if (taskAction === 'resched') {
-          const opts = [
-            { text: '🌅 Mañana', callback_data: `task:date:${taskId}:manana` },
-            { text: '➕ 3 días', callback_data: `task:date:${taskId}:d3` },
-            { text: '📅 7 días', callback_data: `task:date:${taskId}:d7` },
-            { text: '🗓️ 14 días', callback_data: `task:date:${taskId}:d14` },
-            { text: '↩️ Cancelar', callback_data: `task:date:${taskId}:cancel` },
-          ]
+          const hoy = new Date()
           return NextResponse.json({
             method: 'editMessageText',
             chat_id: chatId,
             message_id: callback_query.message.message_id,
-            text: `📅 ¿Para cuándo reprogramo «${task.titulo}»?`,
-            reply_markup: { inline_keyboard: [opts.slice(0, 2), opts.slice(2, 4), [opts[4]]] },
+            text: `📅 Elige la nueva fecha para «${task.titulo}»:`,
+            reply_markup: {
+              inline_keyboard: buildTaskCalendarMarkup(taskId, hoy.getFullYear(), hoy.getMonth()),
+            },
+          })
+        }
+
+        // Navegación de mes del calendario: task:cal:<taskId>:<YYYY-MM>
+        if (taskAction === 'cal') {
+          const calMatch = /^(\d{4})-(\d{2})$/.exec(token || '')
+          if (!calMatch) {
+            return NextResponse.json({ method: 'answerCallbackQuery', callback_query_id: callback_query.id, text: 'Opción no válida', show_alert: true })
+          }
+          const year = Number(calMatch[1])
+          const month = Number(calMatch[2]) - 1
+          if (month < 0 || month > 11 || year < 2000 || year > 2100) {
+            return NextResponse.json({ method: 'answerCallbackQuery', callback_query_id: callback_query.id, text: 'Fecha fuera de rango', show_alert: true })
+          }
+          return NextResponse.json({
+            method: 'editMessageText',
+            chat_id: chatId,
+            message_id: callback_query.message.message_id,
+            text: `📅 Elige la nueva fecha para «${task.titulo}»:`,
+            reply_markup: {
+              inline_keyboard: buildTaskCalendarMarkup(taskId, year, month),
+            },
           })
         }
 
@@ -748,17 +768,25 @@ export async function POST(request: NextRequest) {
               reply_markup: { inline_keyboard: [] },
             })
           }
-          const daysMap: Record<string, number> = { manana: 1, d3: 3, d7: 7, d14: 14 }
-          const days = daysMap[token || '']
-          if (!days) {
-            return NextResponse.json({ method: 'answerCallbackQuery', callback_query_id: callback_query.id, text: 'Opción no válida', show_alert: true })
+          // Fecha ISO YYYY-MM-DD del calendario, o tokens antiguos por compatibilidad
+          let iso: string
+          const isoMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(token || '')
+          if (isoMatch) {
+            iso = token!
+          } else {
+            const daysMap: Record<string, number> = { manana: 1, d3: 3, d7: 7, d14: 14 }
+            const days = daysMap[token || '']
+            if (!days) {
+              return NextResponse.json({ method: 'answerCallbackQuery', callback_query_id: callback_query.id, text: 'Opción no válida', show_alert: true })
+            }
+            const fechaRel = new Date()
+            fechaRel.setDate(fechaRel.getDate() + days)
+            iso = `${fechaRel.getFullYear()}-${String(fechaRel.getMonth() + 1).padStart(2, '0')}-${String(fechaRel.getDate()).padStart(2, '0')}`
           }
-          const fecha = new Date()
-          fecha.setDate(fecha.getDate() + days)
-          const iso = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`
           try {
             const { skills } = await import('@/lib/skills')
             await skills.reschedule_task({ taskId, tenantId: ctx.tenantId, fecha: iso, userId: `telegram:${chatId}` })
+            const fecha = new Date(iso + 'T12:00:00Z')
             const label = fecha.toLocaleDateString('es-MX', { day: 'numeric', month: 'long' })
             return NextResponse.json({
               method: 'editMessageText',
