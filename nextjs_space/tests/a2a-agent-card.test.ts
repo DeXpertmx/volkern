@@ -66,6 +66,13 @@ describe('/.well-known/agent-card.json (A2A Agent Card)', () => {
       expect(ap2).toBeTruthy()
       expect(ap2.required).toBe(true)
       expect(ap2.params.roles).toContain('merchant')
+
+      const canonicalAp2 = body.capabilities.extensions.find(
+        (extension: { uri?: string }) => extension.uri === 'https://github.com/google-agentic-commerce/ap2/tree/v0.1'
+      )
+      expect(canonicalAp2).toBeTruthy()
+      expect(canonicalAp2.required).toBe(true)
+      expect(canonicalAp2.params.roles).toEqual(['merchant'])
     })
   })
 
