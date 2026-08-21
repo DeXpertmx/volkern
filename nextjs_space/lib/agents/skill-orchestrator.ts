@@ -75,6 +75,7 @@ const INTENT_TO_SKILL: Record<string, string> = {
   'completar_tarea': 'complete_task',
   'reprogramar_tarea': 'reschedule_task',
   'mis_tareas': 'get_pending_tasks',
+  'tareas_vencidas': 'get_overdue_tasks',
 
   // ─── CRM: Notas ───
   'crear_nota': 'create_note',
@@ -750,6 +751,7 @@ export const SkillOrchestratorAgent = {
         'completar_tarea': 'tareas',
         'reprogramar_tarea': 'tareas',
         'mis_tareas': 'tareas',
+        'tareas_vencidas': 'tareas',
 
         // CRM - Notas
         'crear_nota': 'tareas',

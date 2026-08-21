@@ -341,6 +341,18 @@ export const crmIntents: IntentSchema[] = [
     ],
     destructive: false
   },
+  {
+    name: 'tareas_vencidas',
+    description: 'Ver solo las tareas vencidas (fecha pasada sin completar)',
+    requiredParams: [],
+    optionalParams: ['email', 'nombre'],
+    examples: [
+      'qué tareas tengo vencidas',
+      'muéstrame mis tareas vencidas',
+      'lista de tareas atrasadas'
+    ],
+    destructive: false
+  },
 
   // ========== NOTAS ==========
   {

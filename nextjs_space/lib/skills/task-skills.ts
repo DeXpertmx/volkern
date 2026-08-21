@@ -283,6 +283,35 @@ export async function getPendingTasksByUser(userId: string, tenantId: string) {
 }
 
 /**
+ * Obtener únicamente las tareas VENCIDAS de un usuario (fecha de vencimiento
+ * anterior a ahora y sin completar), con la antigüedad del retraso para
+ * priorizar. Excluye tareas sin fecha (nunca pueden estar vencidas).
+ */
+export async function getOverdueTasksByUser(userId: string, tenantId: string) {
+  const tasks = await prisma.task.findMany({
+    where: {
+      tenantId,
+      asignadoA: userId,
+      completada: false,
+    },
+    orderBy: { fechaVencimiento: 'asc' },
+    include: {
+      lead: {
+        select: { nombre: true, email: true },
+      },
+    },
+  });
+
+  const now = Date.now();
+  return tasks
+    .filter((t: any) => t.fechaVencimiento && new Date(t.fechaVencimiento).getTime() < now)
+    .map((t: any) => ({
+      ...t,
+      diasVencida: Math.max(1, Math.floor((now - new Date(t.fechaVencimiento).getTime()) / 86400000)),
+    }));
+}
+
+/**
  * Obtener notas de un lead
  */
 export async function getNotesByLead(leadId: string) {

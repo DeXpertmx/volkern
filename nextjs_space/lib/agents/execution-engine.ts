@@ -380,6 +380,23 @@ export const ExecutionEngine = {
           : '';
         return `📅 *Tarea reprogramada:* ${t}${fecha ? ` → ${fecha}` : ''}`;
       }
+      case 'get_overdue_tasks': {
+        const items = Array.isArray(data) ? data : data?.items || [];
+        const total = Array.isArray(items) ? items.length : 0;
+        if (total === 0) return '✅ No tienes tareas vencidas. ¡Todo al día!';
+        const lines = items.slice(0, 8).map((t: any) => {
+          const titulo = this.escapeMarkdown(String(t?.titulo || ''));
+          const vence = t?.fechaVencimiento
+            ? ` · venció el ${this.escapeMarkdown(new Date(t.fechaVencimiento).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }))} (hace ${t?.diasVencida || 1} d)`
+            : '';
+          const motivo = t?.descripcion ? ` — ${this.escapeMarkdown(String(t.descripcion).slice(0, 60))}` : '';
+          const lead = t?.lead?.nombre ? ` [${this.escapeMarkdown(String(t.lead.nombre))}]` : '';
+          return `⚠️ ${titulo}${lead}${vence}${motivo}`;
+        });
+        const suffix = total > 8 ? `\n… y ${total - 8} más` : '';
+        const offer = `\n\n_¿Las gestionamos? Responde:_\n✅ \"completa <tarea>\" \n📅 \"reprograma <tarea> para mañana\"`;
+        return `🚨 *Tareas vencidas (${total}):*\n${lines.join('\n')}${suffix}${offer}`;
+      }
       case 'get_pending_tasks': {
         const items = Array.isArray(data) ? data : data?.items || [];
         const total = Array.isArray(items) ? items.length : 0;
