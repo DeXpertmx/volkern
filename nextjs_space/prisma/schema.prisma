@@ -1793,11 +1793,12 @@ model Task {
   titulo           String
   descripcion      String?
   fechaVencimiento DateTime
-  completada       Boolean   @default(false)
-  asignadoA        String?
-  fechaCreacion    DateTime  @default(now())
-  fechaCompletado  DateTime?
-  tenantId         String?
+  completada              Boolean   @default(false)
+  avisoVencimientoEnviado Boolean   @default(false)
+  asignadoA               String?
+  fechaCreacion           DateTime  @default(now())
+  fechaCompletado         DateTime?
+  tenantId                String?
   googleTaskId     String?
   googleTaskListId String?
   contactId        String?
