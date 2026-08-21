@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   userFindFirst: vi.fn(),
+  userFindUnique: vi.fn(),
   taskFindFirst: vi.fn(),
   taskFindMany: vi.fn(),
   taskUpdate: vi.fn(),
@@ -13,7 +14,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/db', () => ({
   prisma: {
-    user: { findFirst: mocks.userFindFirst },
+    user: { findFirst: mocks.userFindFirst, findUnique: mocks.userFindUnique },
     task: { findFirst: mocks.taskFindFirst, findMany: mocks.taskFindMany, update: mocks.taskUpdate },
     lead: { findFirst: mocks.leadFindFirst },
     contact: { findFirst: mocks.contactFindFirst },
@@ -143,6 +144,82 @@ describe('tareas_vencidas — ejecución', () => {
     ] as any);
     const result = await (skills as any).get_overdue_tasks({ tenantId: TENANT, userId: 'telegram:123456' });
     expect(result.length).toBe(0);
+  });
+});
+
+describe('tareas_hoy — clasificación', () => {
+  const c = new IntentClassifierAgent() as any;
+  const base = { userId: 'user-1', tenantId: TENANT };
+
+  it('detecta "qué tareas vencen hoy" → tareas_hoy', async () => {
+    const r = await c.classify({ ...base, message: 'qué tareas vencen hoy' });
+    expect(r.intent).toBe('tareas_hoy');
+  });
+
+  it('detecta "mis tareas de hoy" → tareas_hoy', async () => {
+    const r = await c.classify({ ...base, message: 'mis tareas de hoy' });
+    expect(r.intent).toBe('tareas_hoy');
+  });
+
+  it('detecta "qué tareas tengo para hoy" → tareas_hoy (no mis_tareas)', async () => {
+    const r = await c.classify({ ...base, message: 'qué tareas tengo para hoy' });
+    expect(r.intent).toBe('tareas_hoy');
+  });
+
+  it('"qué tareas tengo pendientes" sigue siendo mis_tareas (no hoy)', async () => {
+    const r = await c.classify({ ...base, message: 'qué tareas tengo pendientes' });
+    expect(r.intent).toBe('mis_tareas');
+  });
+
+  it('no colisiona con crear_tarea: "crea una tarea para hoy: llamar a Juan"', async () => {
+    const r = await c.classify({ ...base, message: 'crea una tarea para hoy: llamar a Juan' });
+    expect(r.intent).toBe('crear_tarea');
+  });
+});
+
+describe('tareas_hoy — ejecución', () => {
+  it('get_tasks_due_today filtra solo las que vencen en el día y resuelve userId real', async () => {
+    const now = Date.now();
+    mocks.userFindUnique.mockResolvedValue({ timezone: 'America/Mexico_City' } as any);
+    mocks.taskFindMany.mockResolvedValue([
+      { id: 't1', titulo: 'Enviar propuesta', completada: false, asignadoA: 'user-42', fechaVencimiento: new Date(now + 3 * 3600000), descripcion: 'Firmar contrato', lead: { nombre: 'Juan' } },
+      { id: 't2', titulo: 'Llamar a Juan', completada: false, asignadoA: 'user-42', fechaVencimiento: new Date(now + 20 * 3600000) },
+    ] as any);
+
+    const result = await (skills as any).get_tasks_due_today({ tenantId: TENANT, userId: 'telegram:123456' });
+
+    expect(mocks.taskFindMany.mock.calls[0][0].where.asignadoA).toBe('user-42');
+    // El filtro de fecha usa gte/lt (rango del día en la tz del usuario)
+    const where = mocks.taskFindMany.mock.calls[0][0].where;
+    expect(where.fechaVencimiento.gte).toBeInstanceOf(Date);
+    expect(where.fechaVencimiento.lt).toBeInstanceOf(Date);
+    expect(result.length).toBe(2);
+    expect(result[0].titulo).toBe('Enviar propuesta');
+  });
+
+  it('get_tasks_due_today sin tareas hoy devuelve lista vacía', async () => {
+    mocks.userFindUnique.mockResolvedValue({ timezone: 'America/Mexico_City' } as any);
+    mocks.taskFindMany.mockResolvedValue([]);
+    const result = await (skills as any).get_tasks_due_today({ tenantId: TENANT, userId: 'telegram:123456' });
+    expect(result.length).toBe(0);
+  });
+});
+
+describe('tareas_hoy — formateador', () => {
+  it('formatSkillResult de get_tasks_due_today lista con hora y motivo', () => {
+    const msg = ExecutionEngine.formatSkillResult('get_tasks_due_today', [
+      { titulo: 'Enviar propuesta', fechaVencimiento: new Date(Date.now() + 3 * 3600000), descripcion: 'Firmar contrato', lead: { nombre: 'Juan' } },
+    ]);
+    expect(msg).toContain('Tareas que vencen hoy (1)');
+    expect(msg).toContain('Enviar propuesta');
+    expect(msg).toContain('vence hoy a las');
+    expect(msg).toContain('Firmar contrato');
+    expect(msg).toContain('completa <tarea>');
+  });
+
+  it('formatSkillResult de get_tasks_due_today sin tareas responde al día', () => {
+    const msg = ExecutionEngine.formatSkillResult('get_tasks_due_today', []);
+    expect(msg).toContain('No tienes tareas que venzan hoy');
   });
 });
 

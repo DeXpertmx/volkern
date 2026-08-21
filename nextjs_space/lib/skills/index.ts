@@ -479,6 +479,16 @@ const getOverdueTasksWrapper = async (input: { userId: string; tenantId: string 
 };
 
 /**
+ * Wrapper tareas_hoy: tareas que vencen en el día calendario actual (zona
+ * horaria del usuario), sin completar.
+ */
+const getTasksDueTodayWrapper = async (input: { userId: string; tenantId: string }) => {
+  const { tenantId, userId } = input;
+  const realUserId = (await resolveRealUserId(tenantId, userId)) || userId;
+  return taskSkills.getTasksDueTodayByUser(realUserId, tenantId);
+};
+
+/**
  * Wrapper complete_task: el skill core exige taskId, pero el orquestador pasa
  * titulo/email desde el chatbot. Resuelve la tarea pendiente por título
  * (insensible a mayúsculas, opcionalmente filtrada por lead/contacto).
@@ -3549,6 +3559,7 @@ export const skills = {
   get_tasks_by_lead: getTasksByLeadWrapper,
   get_pending_tasks: getPendingTasksWrapper,
   get_overdue_tasks: getOverdueTasksWrapper,
+  get_tasks_due_today: getTasksDueTodayWrapper,
   
   // Notas
   create_note: createNoteWrapper,
@@ -3771,6 +3782,7 @@ export function listSkills(): Array<{ name: SkillName; description: string; cate
     { name: 'get_tasks_by_lead', description: 'Obtener tareas de un lead', category: 'tasks' },
     { name: 'get_pending_tasks', description: 'Obtener tareas pendientes de un usuario', category: 'tasks' },
     { name: 'get_overdue_tasks', description: 'Obtener solo las tareas vencidas de un usuario', category: 'tasks' },
+    { name: 'get_tasks_due_today', description: 'Obtener las tareas que vencen hoy de un usuario', category: 'tasks' },
     // Notas
     { name: 'create_note', description: 'Crear una nota en un lead', category: 'notes' },
     { name: 'get_notes_by_lead', description: 'Obtener notas de un lead', category: 'notes' },
