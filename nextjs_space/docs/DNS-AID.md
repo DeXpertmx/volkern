@@ -14,16 +14,41 @@ El scanner [isitagentready](https://isitagentready.com) valida el check
 
 ## Estado
 
-- ⏳ **Registros pendientes de publicar** — no aparecen aún en los nameservers
-  autoritativos de Cloudflare (verificado el 2026-08-21). Ver
-  «Cómo publicar» abajo.
-- ❌ Scan `dnsAid` en fail: *"DNS for AI Discovery (DNS-AID) well-known
-  entrypoint records not found"*.
-- ⚠️ Nota: si el dashboard rechaza `alpn="a2a"` / `alpn="mcp"` (tokens no
-  registrados), usar los valores seguros: `alpn="h2"` sin token de protocolo.
-- ⚠️ DNSSEC: **no activado** en la zona. El draft lo marca SHOULD (no es
-  obligatorio para el check). Para activarlo: Cloudflare → DNS → Settings →
-  DNSSEC → Enable, y agregar la DS record en el registrador.
+- ✅ **Registros SVCB + TXT publicados** (2026-08-21 vía API de Cloudflare) y
+  propagados: el scan los encuentra (`serviceRecordCount: 3`, todos
+  `validServiceMode: true`).
+- ❌ Scan `dnsAid` en fail solo por **DNSSEC**: *"records found, but DNSSEC
+  was not validated"*.
+- ⏳ **DNSSEC pendiente** — ver «Activar DNSSEC» abajo.
+
+## Activar DNSSEC
+
+El dominio `volkern.app` está registrado en **IONOS (1&1 Internet SE)**, no en
+Cloudflare Registrar, así que la DS record se añade manualmente en IONOS.
+
+1. **Cloudflare** → volkern.app → **DNS → Settings → DNSSEC → Enable**
+   (el token de API actual no tiene permiso `Zone:Settings:Edit`, así que se
+   hace en el dashboard). Cloudflare muestra la DS record (key tag, algorithm,
+   digest type y digest).
+2. **IONOS** → Dominios → volkern.app → DNS/Configuración → añadir la
+   **DS record** con los valores que muestra Cloudflare.
+3. Esperar propagación (minutos a horas) y volver a correr el scan.
+
+Nota: activar DNSSEC en Cloudflare sin la DS en el padre no rompe la
+resolución (sin DS, los resolvers tratan la zona como insecure); Cloudflare da
+~24 h para añadir la DS antes de revertir.
+
+## Formato del API (lección aprendida)
+
+El schema de Cloudflare exige `data.value` como **string** en formato wire,
+no como objeto JSON:
+
+```json
+{"type":"SVCB","name":"_index._agents.volkern.app","data":{"priority":1,"target":"volkern.app","value":"alpn=\"h2,http/1.1\" port=443 ipv4hint=\"62.171.134.195\""},"ttl":300}
+```
+
+Si se manda un objeto `{"alpn":[...],"port":443}`, el API responde 9012
+*"Value for SVCB record is invalid"*.
 
 ## Registros
 
