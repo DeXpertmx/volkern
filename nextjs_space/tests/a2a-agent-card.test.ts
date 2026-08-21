@@ -55,6 +55,20 @@ describe('/.well-known/agent-card.json (A2A Agent Card)', () => {
     })
   })
 
+  it('declara la extensión AP2 como merchant requerida', async () => {
+    await withoutEnv(async () => {
+      const { GET } = await import('@/app/.well-known/agent-card.json/route')
+      const body = await (await GET(new Request('https://volkern.app/.well-known/agent-card.json'))).json()
+      const ap2 = body.extensions?.find(
+        (extension: { uri?: string }) => extension.uri === 'https://github.com/google-agentic-commerce/AP2/tree/v0.1.0'
+      )
+
+      expect(ap2).toBeTruthy()
+      expect(ap2.required).toBe(true)
+      expect(ap2.params.roles).toContain('merchant')
+    })
+  })
+
   it('declara securitySchemes de API key con URL real del issuer', async () => {
     await withoutEnv(async () => {
       const { GET } = await import('@/app/.well-known/agent-card.json/route')
