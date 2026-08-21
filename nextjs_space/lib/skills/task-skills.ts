@@ -161,6 +161,53 @@ export async function completeTask(input: CompleteTaskInput) {
 }
 
 /**
+ * Reprogramar una tarea (nueva fecha de vencimiento)
+ */
+export interface RescheduleTaskInput {
+  taskId: string;
+  tenantId: string;
+  fechaVencimiento: Date;
+  userId?: string;
+  source?: 'api' | 'app' | 'automation' | 'mcp' | 'webhook';
+}
+
+export async function rescheduleTask(input: RescheduleTaskInput) {
+  const { taskId, tenantId, fechaVencimiento, userId, source = 'webhook' } = input;
+
+  if (!taskId) throw new Error('taskId es requerido');
+  if (!tenantId) throw new Error('tenantId es requerido');
+  if (!fechaVencimiento || isNaN(fechaVencimiento.getTime())) {
+    throw new Error('fechaVencimiento es requerida');
+  }
+
+  const task = await prisma.task.findFirst({
+    where: { id: taskId, tenantId },
+  });
+  if (!task) throw new Error('Tarea no encontrada');
+  if (task.completada) throw new Error('No puedo reprogramar una tarea ya completada.');
+
+  const updated = await prisma.task.update({
+    where: { id: taskId },
+    data: { fechaVencimiento },
+  });
+
+  const eventPayload: TaskCreatedEvent = {
+    tenantId,
+    userId,
+    timestamp: new Date(),
+    source,
+    taskId,
+    leadId: task.leadId ?? '',
+    titulo: task.titulo,
+    tipo: (task as any).tipo ?? 'recordatorio',
+    fechaVencimiento,
+  };
+  eventBus.emitEvent(EVENTS.TASK_CREATED, eventPayload);
+
+  return updated;
+}
+
+/**
  * Crear una nota
  */
 export async function createNote(input: CreateNoteInput) {

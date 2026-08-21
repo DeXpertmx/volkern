@@ -165,6 +165,9 @@ export const ExecutionEngine = {
           raw.includes('no tienes permisos') ||
           raw.includes('no tienes acceso') ||
           raw.includes('sin permisos') ||
+          // Pedir un dato que falta ("Indica la nueva fecha...", "Indica qué
+          // tarea...") → mostrar la instrucción, no enmascararla.
+          raw.includes('indica') ||
           // Citas: pedir el email que falta (multi-turno) y desambiguar
           // cuando hay varias citas del mismo contacto.
           raw.includes('email_required') ||
@@ -370,6 +373,13 @@ export const ExecutionEngine = {
         const t = this.escapeMarkdown(String(data?.titulo || data?.name || 'la tarea'));
         return `✅ *Tarea completada:* ${t}`;
       }
+      case 'reschedule_task': {
+        const t = this.escapeMarkdown(String(data?.titulo || data?.name || 'la tarea'));
+        const fecha = data?.fechaVencimiento
+          ? this.escapeMarkdown(new Date(data.fechaVencimiento).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' }))
+          : '';
+        return `📅 *Tarea reprogramada:* ${t}${fecha ? ` → ${fecha}` : ''}`;
+      }
       case 'get_pending_tasks': {
         const items = Array.isArray(data) ? data : data?.items || [];
         const total = Array.isArray(items) ? items.length : 0;
@@ -390,7 +400,11 @@ export const ExecutionEngine = {
           ? `📋 *Tareas pendientes (${total}) — ${overdueCount} vencidas:*`
           : `📋 *Tareas pendientes (${total}):*`;
         const suffix = total > 8 ? `\n… y ${total - 8} más` : '';
-        return `${header}\n${lines.join('\n')}${suffix}`;
+        // Ofrecer completar/reprogramar desde el mismo chat cuando hay vencidas.
+        const offer = overdueCount > 0
+          ? `\n\n_¿Quieres gestionarlas? Responde:_\n✅ \"completa <tarea>\" \n📅 \"reprograma <tarea> para mañana\"`
+          : '';
+        return `${header}\n${lines.join('\n')}${suffix}${offer}`;
       }
       case 'create_note': {
         const contenido = data?.contenido ? `: "${this.escapeMarkdown(String(data.contenido))}"` : '';

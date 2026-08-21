@@ -318,6 +318,18 @@ export const crmIntents: IntentSchema[] = [
     destructive: false
   },
   {
+    name: 'reprogramar_tarea',
+    description: 'Cambiar la fecha de vencimiento de una tarea pendiente',
+    requiredParams: ['titulo', 'fecha'],
+    optionalParams: ['email', 'nombre'],
+    examples: [
+      'reprograma la tarea de llamar a Juan para el viernes',
+      'mueve la tarea de enviar documento para mañana',
+      'pospone el pendiente de revisar cotización al 20 de agosto'
+    ],
+    destructive: false
+  },
+  {
     name: 'mis_tareas',
     description: 'Ver tareas pendientes o de un lead',
     requiredParams: [],
