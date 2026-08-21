@@ -47,6 +47,16 @@ export async function GET(req: Request) {
             roles: ['merchant'],
           },
         },
+        {
+          // URI canónica publicada por la especificación AP2 v0.1; se conserva
+          // junto a la URI v0.1.0 para interoperar con clientes de ambas revisiones.
+          uri: 'https://github.com/google-agentic-commerce/ap2/tree/v0.1',
+          description: 'URI canónica AP2 v0.1 para clientes que validan la revisión publicada.',
+          required: true,
+          params: {
+            roles: ['merchant'],
+          },
+        },
       ],
     },
     defaultInputModes: ['text/plain', 'text/markdown', 'application/json'],
