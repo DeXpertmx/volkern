@@ -186,11 +186,12 @@ async function processAndReply(
         : undefined
 
     // Botones inline de acciones de tareas: una fila por tarea con
-    // Completar / Reprogramar (tienen prioridad sobre los quick replies).
+    // Completar / Reprogramar / Recordar más tarde (prioridad sobre quick replies).
     if (result.taskButtons?.length) {
       const rows = result.taskButtons.slice(0, 8).map((t) => [
         { text: '✅ Completar', callback_data: `task:complete:${t.taskId}` },
         { text: '📅 Reprogramar', callback_data: `task:resched:${t.taskId}` },
+        { text: '⏰ Recordar más tarde', callback_data: `task:snooze:${t.taskId}` },
       ])
       replyMarkup = { inline_keyboard: rows }
     }
@@ -685,6 +686,56 @@ export async function POST(request: NextRequest) {
             text: `📅 ¿Para cuándo reprogramo «${task.titulo}»?`,
             reply_markup: { inline_keyboard: [opts.slice(0, 2), opts.slice(2, 4), [opts[4]]] },
           })
+        }
+
+        if (taskAction === 'snooze') {
+          const opts = [
+            { text: '🌅 Mañana', callback_data: `task:snoozeDate:${taskId}:manana` },
+            { text: '➕ 3 días', callback_data: `task:snoozeDate:${taskId}:d3` },
+            { text: '📅 7 días', callback_data: `task:snoozeDate:${taskId}:d7` },
+            { text: '↩️ Cancelar', callback_data: `task:snoozeDate:${taskId}:cancel` },
+          ]
+          return NextResponse.json({
+            method: 'editMessageText',
+            chat_id: chatId,
+            message_id: callback_query.message.message_id,
+            text: `⏰ ¿Hasta cuándo pospongo el recordatorio de «${task.titulo}»?`,
+            reply_markup: { inline_keyboard: [opts.slice(0, 2), opts.slice(2, 3), [opts[3]]] },
+          })
+        }
+
+        if (taskAction === 'snoozeDate') {
+          if (token === 'cancel') {
+            return NextResponse.json({
+              method: 'editMessageText',
+              chat_id: chatId,
+              message_id: callback_query.message.message_id,
+              text: `↩️ Cancelado. «${task.titulo}» seguirá avisándose.`,
+              reply_markup: { inline_keyboard: [] },
+            })
+          }
+          const daysMap: Record<string, number> = { manana: 1, d3: 3, d7: 7 }
+          const days = daysMap[token || '']
+          if (!days) {
+            return NextResponse.json({ method: 'answerCallbackQuery', callback_query_id: callback_query.id, text: 'Opción no válida', show_alert: true })
+          }
+          const fecha = new Date()
+          fecha.setDate(fecha.getDate() + days)
+          const iso = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`
+          try {
+            const { skills } = await import('@/lib/skills')
+            await skills.snooze_task({ taskId, tenantId: ctx.tenantId, hasta: iso, userId: `telegram:${chatId}` })
+            const label = fecha.toLocaleDateString('es-MX', { day: 'numeric', month: 'long' })
+            return NextResponse.json({
+              method: 'editMessageText',
+              chat_id: chatId,
+              message_id: callback_query.message.message_id,
+              text: `⏰ Recordatorio pospuesto: «${task.titulo}» no te avisaré hasta el ${label}. La fecha real de la tarea no cambia.`,
+              reply_markup: { inline_keyboard: [] },
+            })
+          } catch (err: any) {
+            return NextResponse.json({ method: 'answerCallbackQuery', callback_query_id: callback_query.id, text: `❌ ${err?.message || 'No se pudo posponer'}`, show_alert: true })
+          }
         }
 
         if (taskAction === 'date') {

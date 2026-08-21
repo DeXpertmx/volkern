@@ -597,6 +597,65 @@ const rescheduleTaskWrapper = async (input: {
 };
 
 /**
+ * Wrapper snooze_task: pospone el recordatorio de una tarea (la saca de las
+ * listas y del cron de vencidas) sin cambiar su fecha real. El botón del chat
+ * manda `taskId` + `hasta` (ISO). Si llega un título en vez de taskId, resuelve
+ * la tarea pendiente por título igual que complete_task/reschedule_task.
+ */
+const snoozeTaskWrapper = async (input: {
+  tenantId: string;
+  titulo?: string;
+  email?: string;
+  nombre?: string;
+  taskId?: string;
+  hasta?: string;
+  date?: string;
+  userId?: string;
+}) => {
+  const { tenantId, titulo, email, nombre, taskId } = input;
+  const userId = (await resolveRealUserId(tenantId, input.userId)) || input.userId;
+  const hastaRaw = input.hasta || input.date;
+  if (!hastaRaw) throw new Error('Indica hasta cuándo pospongo el recordatorio (por ejemplo: mañana, el viernes).');
+
+  const hasta = parseFechaReprogramacion(hastaRaw, 'America/Mexico_City');
+  if (!hasta) {
+    throw new Error(`No entendí la fecha "${hastaRaw}". Dime algo como: mañana, el viernes, o 2026-08-25.`);
+  }
+
+  const { prisma } = await import('@/lib/db');
+  if (taskId) return taskSkills.snoozeTask({ taskId, tenantId, hasta, userId });
+  if (!titulo) throw new Error('Indica qué tarea quieres posponer (su título).');
+
+  let leadId: string | undefined;
+  let contactId: string | undefined;
+  if (email) {
+    const lead = await prisma.lead.findFirst({ where: { tenantId, email } });
+    if (lead) leadId = lead.id;
+    else {
+      const contact = await prisma.contact.findFirst({ where: { tenantId, email } });
+      if (contact) contactId = contact.id;
+    }
+  } else if (nombre) {
+    const lead = await prisma.lead.findFirst({ where: { tenantId, nombre: { contains: nombre, mode: 'insensitive' } } });
+    if (lead) leadId = lead.id;
+    else {
+      const contact = await prisma.contact.findFirst({ where: { tenantId, nombre: { contains: nombre, mode: 'insensitive' } } });
+      if (contact) contactId = contact.id;
+    }
+  }
+
+  const where: any = { tenantId, completada: false, titulo: { contains: titulo, mode: 'insensitive' } };
+  if (leadId) where.leadId = leadId;
+  if (contactId) where.contactId = contactId;
+
+  const task = await prisma.task.findFirst({ where, orderBy: { fechaVencimiento: 'asc' } });
+  if (!task) {
+    throw new Error(`No encontré ninguna tarea pendiente con el título "${titulo}"${email ? ` de ${email}` : ''}.`);
+  }
+  return taskSkills.snoozeTask({ taskId: task.id, tenantId, hasta, userId });
+};
+
+/**
  * Interpreta una fecha en español/ISO a Date. Reutiliza la lógica del
  * clasificador (mañana, hoy, día de la semana, DD/MM/YYYY, YYYY-MM-DD).
  */
@@ -3556,6 +3615,7 @@ export const skills = {
   create_task: createTaskWrapper,
   complete_task: completeTaskWrapper,
   reschedule_task: rescheduleTaskWrapper,
+  snooze_task: snoozeTaskWrapper,
   get_tasks_by_lead: getTasksByLeadWrapper,
   get_pending_tasks: getPendingTasksWrapper,
   get_overdue_tasks: getOverdueTasksWrapper,
@@ -3779,6 +3839,7 @@ export function listSkills(): Array<{ name: SkillName; description: string; cate
     { name: 'create_task', description: 'Crear una nueva tarea', category: 'tasks' },
     { name: 'complete_task', description: 'Marcar tarea como completada', category: 'tasks' },
     { name: 'reschedule_task', description: 'Reprogramar la fecha de una tarea pendiente', category: 'tasks' },
+    { name: 'snooze_task', description: 'Posponer el recordatorio de una tarea sin cambiar su fecha', category: 'tasks' },
     { name: 'get_tasks_by_lead', description: 'Obtener tareas de un lead', category: 'tasks' },
     { name: 'get_pending_tasks', description: 'Obtener tareas pendientes de un usuario', category: 'tasks' },
     { name: 'get_overdue_tasks', description: 'Obtener solo las tareas vencidas de un usuario', category: 'tasks' },

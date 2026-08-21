@@ -102,6 +102,61 @@ describe('reprogramar_tarea — ejecución', () => {
   });
 });
 
+describe('snooze_task (recordar más tarde)', () => {
+  it('snooze_task por taskId pospone el recordatorio sin tocar la fecha real', async () => {
+    mocks.taskFindFirst.mockResolvedValue({ id: 't1', titulo: 'Llamar a Juan', completada: false } as any);
+    mocks.taskUpdate.mockResolvedValue({
+      id: 't1',
+      titulo: 'Llamar a Juan',
+      fechaVencimiento: new Date('2026-08-21T18:00:00Z'),
+      recordatorioPospuestoHasta: new Date('2026-08-22T00:00:00Z'),
+    } as any);
+
+    const result = await (skills as any).snooze_task({
+      tenantId: TENANT,
+      taskId: 't1',
+      hasta: '2026-08-22',
+      userId: 'telegram:123456',
+    });
+
+    const updateCall = mocks.taskUpdate.mock.calls[0][0];
+    expect(updateCall.data.recordatorioPospuestoHasta).toBeInstanceOf(Date);
+    expect(updateCall.data.fechaVencimiento).toBeUndefined(); // no toca la fecha real
+    expect(result.recordatorioPospuestoHasta).toBeInstanceOf(Date);
+  });
+
+  it('snooze_task resuelve por título y rechaza tarea ya completada', async () => {
+    mocks.taskFindFirst.mockResolvedValue({ id: 't1', titulo: 'Llamar a Juan', completada: true } as any);
+    await expect(
+      (skills as any).snooze_task({
+        tenantId: TENANT,
+        titulo: 'Llamar a Juan',
+        hasta: 'mañana',
+        userId: 'telegram:123456',
+      })
+    ).rejects.toThrow(/ya completada/);
+  });
+
+  it('las consultas de pendientes/vencidas/hoy excluyen tareas snoozeadas (OR con recordatorioPospuestoHasta)', async () => {
+    mocks.taskFindMany.mockResolvedValue([] as any);
+    await (skills as any).get_pending_tasks({ tenantId: TENANT, userId: 'telegram:123456' });
+    const pendingWhere = mocks.taskFindMany.mock.calls[0][0].where;
+    expect(pendingWhere.OR).toEqual([
+      { recordatorioPospuestoHasta: null },
+      { recordatorioPospuestoHasta: { lte: expect.any(Date) } },
+    ]);
+
+    await (skills as any).get_overdue_tasks({ tenantId: TENANT, userId: 'telegram:123456' });
+    const overdueWhere = mocks.taskFindMany.mock.calls[1][0].where;
+    expect(overdueWhere.OR).toBeDefined();
+
+    mocks.userFindUnique.mockResolvedValue({ timezone: 'America/Mexico_City' } as any);
+    await (skills as any).get_tasks_due_today({ tenantId: TENANT, userId: 'telegram:123456' });
+    const todayWhere = mocks.taskFindMany.mock.calls[2][0].where;
+    expect(todayWhere.OR).toBeDefined();
+  });
+});
+
 describe('tareas_vencidas — clasificación', () => {
   const c = new IntentClassifierAgent() as any;
   const base = { userId: 'user-1', tenantId: TENANT };

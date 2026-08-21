@@ -60,15 +60,37 @@ describe('runTaskOverdueScan (aviso de tareas vencidas por Telegram)', () => {
     expect(body).toContain('Llamar a Juan')
     expect(body).toContain('Confirmar presupuesto')
     expect(body).toContain('Vencía el')
-    // Botones inline completar/reprogramar
+    // Botones inline completar/reprogramar/recordar más tarde
     const keyboard = (extra as any).reply_markup.inline_keyboard
     expect(keyboard[0][0].callback_data).toBe('task:complete:task-1')
     expect(keyboard[0][1].callback_data).toBe('task:resched:task-1')
+    expect(keyboard[0][2].callback_data).toBe('task:snooze:task-1')
     // Guard contra repetidos
     expect(mocks.taskUpdate).toHaveBeenCalledWith({
       where: { id: 'task-1' },
       data: { avisoVencimientoEnviado: true },
     })
+  })
+
+  it('excluye tareas con recordatorio pospuesto activo (snooze) del escaneo', async () => {
+    const snoozeada = {
+      ...vencida,
+      id: 'task-snooze',
+      recordatorioPospuestoHasta: new Date(NOW + 24 * 60 * 60 * 1000), // snooze activo 24h
+    }
+    mocks.taskFindMany.mockResolvedValue([vencida, snoozeada])
+    mocks.sendTelegramMessage.mockResolvedValue({ success: true })
+
+    const result = await runTaskOverdueScan()
+
+    // El where del cron excluye la snoozeada vía OR; el mock devuelve ambas,
+    // así que el filtro SQL es lo que cuenta. Verificamos que el where contiene
+    // el OR con recordatorioPospuestoHasta.
+    const where = mocks.taskFindMany.mock.calls[0][0].where
+    expect(where.OR).toBeDefined()
+    expect(where.OR[0]).toEqual({ recordatorioPospuestoHasta: null })
+    expect(where.OR[1]).toEqual({ recordatorioPospuestoHasta: { lte: new Date(NOW) } })
+    expect(result.notified).toBeGreaterThanOrEqual(0)
   })
 
   it('no notifica ni marca si el envío falla (se reintenta en el siguiente ciclo)', async () => {
