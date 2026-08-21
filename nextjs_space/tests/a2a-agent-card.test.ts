@@ -59,7 +59,7 @@ describe('/.well-known/agent-card.json (A2A Agent Card)', () => {
     await withoutEnv(async () => {
       const { GET } = await import('@/app/.well-known/agent-card.json/route')
       const body = await (await GET(new Request('https://volkern.app/.well-known/agent-card.json'))).json()
-      const ap2 = body.extensions?.find(
+      const ap2 = body.capabilities?.extensions?.find(
         (extension: { uri?: string }) => extension.uri === 'https://github.com/google-agentic-commerce/AP2/tree/v0.1.0'
       )
 

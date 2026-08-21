@@ -38,17 +38,17 @@ export async function GET(req: Request) {
       pushNotifications: false,
       stateTransitionHistory: false,
       extendedAgentCard: false,
-    },
-    extensions: [
-      {
-        uri: 'https://github.com/google-agentic-commerce/AP2/tree/v0.1.0',
-        description: 'Volkern actúa como agente merchant para flujos de comercio iniciados por agentes.',
-        required: true,
-        params: {
-          roles: ['merchant'],
+      extensions: [
+        {
+          uri: 'https://github.com/google-agentic-commerce/AP2/tree/v0.1.0',
+          description: 'Volkern actúa como agente merchant para flujos de comercio iniciados por agentes.',
+          required: true,
+          params: {
+            roles: ['merchant'],
+          },
         },
-      },
-    ],
+      ],
+    },
     defaultInputModes: ['text/plain', 'text/markdown', 'application/json'],
     defaultOutputModes: ['text/plain', 'text/markdown', 'application/json'],
     skills: [
