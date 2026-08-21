@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic";
 import { NextResponse } from 'next/server';
+import { resolvePublicBaseUrl } from '@/lib/seo/public-base-url';
 
 /**
  * /.well-known/ai-plugin.json
@@ -8,9 +9,7 @@ import { NextResponse } from 'next/server';
  * Permite que la IA auto-descubra las capacidades del agente al visitar la URL raíz.
  */
 export async function GET(req: Request) {
-  const protocol = new URL(req.url).protocol.replace(':', '');
-  const host = new URL(req.url).host;
-  const baseUrl = `${protocol}://${host}`;
+  const baseUrl = resolvePublicBaseUrl(req);
 
   return NextResponse.json({
     schema_version: "v1",
