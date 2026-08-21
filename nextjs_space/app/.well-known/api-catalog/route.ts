@@ -76,6 +76,15 @@ export async function GET(req: Request) {
           },
         ],
       },
+      {
+        anchor: `${baseUrl}/mcp`,
+        'service-desc': [
+          {
+            href: `${baseUrl}/.well-known/mcp/server-card.json`,
+            type: 'application/json',
+          },
+        ],
+      },
     ],
   }
 
