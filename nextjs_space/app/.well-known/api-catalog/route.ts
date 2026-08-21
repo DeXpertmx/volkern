@@ -1,5 +1,6 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
+import { resolvePublicBaseUrl } from '@/lib/seo/public-base-url'
 
 /**
  * /.well-known/api-catalog — RFC 9727
@@ -16,9 +17,7 @@ import { NextResponse } from 'next/server'
  * Ver Apéndice A.1 de https://www.rfc-editor.org/rfc/rfc9727
  */
 export async function GET(req: Request) {
-  const protocol = new URL(req.url).protocol.replace(':', '')
-  const host = new URL(req.url).host
-  const baseUrl = `${protocol}://${host}`
+  const baseUrl = resolvePublicBaseUrl(req)
 
   const catalog = {
     linkset: [
