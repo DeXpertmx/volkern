@@ -24,33 +24,43 @@ export async function GET(req: Request) {
     code_challenge_methods_supported: [],
     service_documentation: `${baseUrl}/docs/developers`,
     authorization_response_iss_parameter_supported: false,
-    // Bloque de registro de agentes (ver /auth.md) — la emisión es
-    // administrativa: un usuario con sesión crea la API key del tenant.
+    // Bloque de registro de agentes (estándar Auth.md, ver /auth.md) — la
+    // emisión es administrativa: un usuario con sesión crea la API key del
+    // tenant. Cada método describe cómo el agente obtiene su credencial.
     agent_auth: {
       skill: `${baseUrl}/auth.md`,
       register_uri: `${baseUrl}/dashboard/developers`,
       register_methods: [
         {
-          name: 'API Key de tenant',
+          type: 'api_key',
+          uri: `${baseUrl}/api/api-keys`,
           description:
-            'Crea una API key con scopes granulares vía POST /api/api-keys o la consola de desarrolladores. La credencial se muestra una sola vez.',
-          credential: 'api_key',
-          transport: 'https',
-          endpoint: `${baseUrl}/api/api-keys`,
-          method: 'POST',
-          auth_required: 'session',
+            'Crea una API key con scopes granulares (POST /api/api-keys o consola de desarrolladores). La credencial se muestra una sola vez y se usa en el header x-api-key o como Bearer.',
         },
         {
-          name: 'Skill Key de agente',
+          type: 'api_key',
+          uri: `${baseUrl}/api/users/me/skill-key`,
           description:
-            'Crea una key con scope agent:skill para agentes de IA vía POST /api/users/me/skill-key. La credencial se muestra una sola vez.',
-          credential: 'api_key',
-          transport: 'https',
-          endpoint: `${baseUrl}/api/users/me/skill-key`,
-          method: 'POST',
-          auth_required: 'session',
+            'Crea una key con scope agent:skill para agentes de IA (POST /api/users/me/skill-key). La credencial se muestra una sola vez.',
+        },
+        {
+          type: 'session',
+          uri: `${baseUrl}/auth/login`,
+          description:
+            'Inicia sesión como usuario del tenant; el agente opera con la sesión autenticada del usuario.',
         },
       ],
+      // Identidades soportadas por el estándar Auth.md (opcional pero
+      // recomendado por el check). Volkern valida API keys emitidas por el
+      // tenant (identity_assertion tipo id-jag / api key), sin identidades
+      // anónimas.
+      identity_types_supported: ['identity_assertion'],
+      identity_assertion: {
+        assertion_types_supported: ['urn:ietf:params:oauth:token-type:id-jag'],
+        credential_types_supported: ['api_key'],
+      },
+      events_supported: ['revocation'],
+      revocation_uri: `${baseUrl}/api/api-keys`,
     },
   }
 
