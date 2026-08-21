@@ -366,31 +366,56 @@ export class HRService {
    */
   static async authorizeBulkExpenses(tenantId: string, authorizerId: string) {
     const pending = await prisma.erp_expense_claims.findMany({
-      where: { tenantId, status: 'PENDING' }
+      where: { tenantId, status: 'PENDING' },
+      include: { erp_employees: true }
     });
 
     const verified = pending.filter(e => e.visionLockData && (e.visionLockData as any).exif_verified);
     const doubtful = pending.filter(e => !e.visionLockData || !(e.visionLockData as any).exif_verified);
 
-    const authorizedIds = [];
+    const authorizedIds: string[] = [];
+    const authorizedItems = [];
     for (const claim of verified) {
       await this.authorizeExpense(claim.id, tenantId, authorizerId);
       authorizedIds.push(claim.id);
+      authorizedItems.push({
+        id: claim.id,
+        amount: claim.amount,
+        currency: claim.currency,
+        category: claim.category,
+        description: claim.description,
+        employee: (claim as any).erp_employees?.fullName || 'Sin empleado'
+      });
     }
+
+    const totalAuthorized = verified.reduce((acc, c) => acc + Number(c.amount || 0), 0);
+    const totalDoubtful = doubtful.reduce((acc, c) => acc + Number(c.amount || 0), 0);
+    const currency = verified[0]?.currency || doubtful[0]?.currency || 'EUR';
 
     // Registrar en auditoría con tag [VOICE_CMD]
     await prisma.systemAlert.create({
       data: {
         tenantId,
         level: 'INFO',
-        message: `[VOICE_CMD] Autorización masiva ejecutada. ${verified.length} gastos procesados por VISION-LOCK. ${doubtful.length} en revisión manual.`,
+        message: `[VOICE_CMD] Autorización masiva ejecutada. ${verified.length} gastos procesados por VISION-LOCK (${totalAuthorized.toFixed(2)} ${currency}). ${doubtful.length} en revisión manual (${totalDoubtful.toFixed(2)} ${currency}).`,
       } as any
     });
 
     return {
       authorizedCount: verified.length,
+      totalAuthorized,
+      currency,
+      authorizedItems,
       doubtfulCount: doubtful.length,
-      doubtfulItems: doubtful.map(d => ({ id: d.id, amount: d.amount, category: d.category, description: d.description }))
+      totalDoubtful,
+      doubtfulItems: doubtful.map(d => ({
+        id: d.id,
+        amount: d.amount,
+        currency: d.currency,
+        category: d.category,
+        description: d.description,
+        employee: (d as any).erp_employees?.fullName || 'Sin empleado'
+      }))
     };
   }
 }

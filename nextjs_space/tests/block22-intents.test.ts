@@ -284,6 +284,9 @@ describe('wrappers del bloque 22', () => {
     expect(result).toBeTruthy();
     expect(mocks.expenseClaimsFindMany).toHaveBeenCalled();
     expect((result as any).details?.authorizedCount).toBeGreaterThan(0);
+    // La respuesta debe incluir el detalle: número de gastos y monto total.
+    expect((result as any).text).toContain('He autorizado');
+    expect((result as any).details?.totalAuthorized).toBeGreaterThan(0);
   });
 
   it('orchestrate_asset_transfer resuelve el activo por nombre y transfiere', async () => {
