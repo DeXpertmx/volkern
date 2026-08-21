@@ -353,6 +353,18 @@ export const crmIntents: IntentSchema[] = [
     ],
     destructive: false
   },
+  {
+    name: 'tareas_hoy',
+    description: 'Ver solo las tareas que vencen hoy (fecha de vencimiento hoy, sin completar)',
+    requiredParams: [],
+    optionalParams: ['email', 'nombre'],
+    examples: [
+      'qué tareas vencen hoy',
+      'mis tareas de hoy',
+      'qué tareas tengo para hoy'
+    ],
+    destructive: false
+  },
 
   // ========== NOTAS ==========
   {

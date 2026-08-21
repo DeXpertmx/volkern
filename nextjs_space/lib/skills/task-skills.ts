@@ -312,6 +312,62 @@ export async function getOverdueTasksByUser(userId: string, tenantId: string) {
 }
 
 /**
+ * Instantes UTC de inicio y fin del día calendario actual en la zona
+ * horaria dada. Sonda al mediodía UTC para evitar cortes por DST.
+ */
+function tzDayRangeMs(tz: string, ref = new Date()): { start: number; end: number } {
+  const [y, m, d] = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(ref).split('-').map(Number);
+
+  const noonUtc = Date.UTC(y, m - 1, d, 12, 0, 0);
+  const hms = new Intl.DateTimeFormat('en-GB', {
+    timeZone: tz,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date(noonUtc));
+  const get = (t: string) => Number(hms.find((p) => p.type === t)?.value || '0');
+  const tzTimeMs = get('hour') * 3600000 + get('minute') * 60000 + get('second') * 1000;
+  const offsetMs = noonUtc - (Date.UTC(y, m - 1, d, 0, 0, 0) + tzTimeMs);
+  const start = Date.UTC(y, m - 1, d) - offsetMs;
+  return { start, end: start + 86400000 };
+}
+
+/**
+ * Obtener únicamente las tareas que VENCEN HOY de un usuario (fecha de
+ * vencimiento dentro del día calendario actual en su zona horaria, sin
+ * completar). Complementa a getOverdueTasksByUser.
+ */
+export async function getTasksDueTodayByUser(userId: string, tenantId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { timezone: true },
+  });
+  const tz = user?.timezone || 'America/Mexico_City';
+  const { start, end } = tzDayRangeMs(tz);
+
+  return prisma.task.findMany({
+    where: {
+      tenantId,
+      asignadoA: userId,
+      completada: false,
+      fechaVencimiento: { gte: new Date(start), lt: new Date(end) },
+    },
+    orderBy: { fechaVencimiento: 'asc' },
+    include: {
+      lead: {
+        select: { nombre: true, email: true },
+      },
+    },
+  });
+}
+
+/**
  * Obtener notas de un lead
  */
 export async function getNotesByLead(leadId: string) {

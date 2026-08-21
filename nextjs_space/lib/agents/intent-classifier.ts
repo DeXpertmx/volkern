@@ -1909,6 +1909,14 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
       return { intent: 'tareas_vencidas', confidence: 0.85, extractedParams: extracted }
     }
 
+    // ═══ 18b. TAREAS QUE VENCEN HOY ("qué tareas vencen hoy", "mis tareas
+    // de hoy", "qué tareas tengo para hoy") — antes de mis_tareas para que
+    // "hoy" no caiga en el listado general ═══
+    const TAREAS_HOY = /\b(?:vence[n]?\s+hoy|vienen?\s+hoy|caduca[n]?\s+hoy|tareas?\s+(?:de|para|del)\s+hoy|para\s+hoy|hoy\s+(?:tengo|tienes|hay)\s+tareas?)\b/i
+    if (TAREA_ENTITY.test(msgNoEmails) && TAREAS_HOY.test(message)) {
+      return { intent: 'tareas_hoy', confidence: 0.85, extractedParams: extracted }
+    }
+
     // ═══ 18. MIS TAREAS ("qué tareas tengo pendientes", "muéstrame mis
     // tareas", "tareas pendientes de juan@email.com") ═══
     const MIS_TAREAS = /\b(?:qu[eé]\s+(?:tareas|pendientes)\s+(?:tengo|hay|tienes|tenemos)|(?:mis|las|tus)\s+tareas|tareas\s+pendientes|lista\s+de\s+tareas)\b/i
