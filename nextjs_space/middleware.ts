@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { resolveLegacyRedirect } from '@/lib/legacy-redirects'
+import { applyDiscoveryLinks } from '@/lib/seo/discovery-links'
 import { getToken } from 'next-auth/jwt'
 import { checkEdgeRateLimit } from '@/lib/edge-rate-limiter'
 import {
@@ -131,12 +132,14 @@ export async function middleware(request: NextRequest) {
     return NextResponse.json({}, { headers: corsHeaders })
   }
 
-  // Helper: creates response with requestId + CORS headers
+  // Helper: creates response with requestId + CORS headers + Link de descubrimiento
   const withHeaders = (res: NextResponse) => {
     res.headers.set('x-request-id', requestId)
     for (const [key, val] of Object.entries(corsHeaders)) {
       res.headers.set(key, val)
     }
+    // Descubrimiento de agentes (RFC 8288/9727): Link headers en páginas HTML
+    applyDiscoveryLinks(res.headers, pathname, request.method)
     return res
   }
 
