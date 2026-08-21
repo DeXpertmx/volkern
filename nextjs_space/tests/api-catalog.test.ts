@@ -25,11 +25,13 @@ describe('/.well-known/api-catalog (RFC 9727)', () => {
     expect(Array.isArray(body.linkset)).toBe(true)
     expect(body.linkset.length).toBeGreaterThanOrEqual(1)
 
-    // Cada entrada tiene anchor y al menos service-desc
+    // Cada entrada tiene anchor y al menos una relación (service-desc o service-doc)
     for (const entry of body.linkset) {
       expect(typeof entry.anchor).toBe('string')
-      expect(Array.isArray(entry['service-desc'])).toBe(true)
-      expect(entry['service-desc'].length).toBeGreaterThanOrEqual(1)
+      const hasRelation =
+        (Array.isArray(entry['service-desc']) && entry['service-desc'].length > 0) ||
+        (Array.isArray(entry['service-doc']) && entry['service-doc'].length > 0)
+      expect(hasRelation).toBe(true)
     }
     })
   })

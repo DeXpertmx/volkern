@@ -67,6 +67,15 @@ export async function GET(req: Request) {
           },
         ],
       },
+      {
+        anchor: `${baseUrl}/.well-known/agent-skills`,
+        'service-doc': [
+          {
+            href: `${baseUrl}/.well-known/agent-skills/index.json`,
+            type: 'application/json',
+          },
+        ],
+      },
     ],
   }
 
