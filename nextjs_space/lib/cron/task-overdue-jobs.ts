@@ -66,19 +66,6 @@ export async function runTaskOverdueScan(): Promise<{
 
       const user = task.asignadoUsuario;
       const metadata = (user?.metadata as any) || {};
-      const chatId = metadata.telegram_chat_id || metadata?.telegram?.chat_id;
-
-      if (!chatId) {
-        // Sin Telegram configurado para el usuario: marcar para no reintentar
-        // para siempre (el aviso ya no puede llegar por este canal).
-        await prisma.task.update({
-          where: { id: task.id },
-          data: { avisoVencimientoEnviado: true },
-        });
-        skipped++;
-        console.log(`[Cron] ⏭ Tarea ${task.id} sin chat de Telegram para el asignado (${user?.name || task.asignadoA}) — omitida`);
-        continue;
-      }
 
       try {
         const creds = await loadTelegramCredentials(task.tenantId);
@@ -91,6 +78,26 @@ export async function runTaskOverdueScan(): Promise<{
           });
           skipped++;
           console.log(`[Cron] ⏭ Tarea ${task.id}: tenant sin bot de Telegram configurado — omitida`);
+          continue;
+        }
+
+        // Chat de destino: 1) chat del usuario asignado, 2) admin del tenant
+        // (fallback igual que el notification-layer). Si la tarea no tiene
+        // asignado, va al admin.
+        const chatId =
+          metadata.telegram_chat_id ||
+          metadata?.telegram?.chat_id ||
+          creds?.admin_chat_id;
+
+        if (!chatId) {
+          // Sin Telegram configurado ni para el asignado ni para el tenant:
+          // marcar para no reintentar para siempre (el aviso no puede llegar).
+          await prisma.task.update({
+            where: { id: task.id },
+            data: { avisoVencimientoEnviado: true },
+          });
+          skipped++;
+          console.log(`[Cron] ⏭ Tarea ${task.id} sin chat de Telegram (asignado: ${user?.name || task.asignadoA || 'sin asignar'}) — omitida`);
           continue;
         }
 

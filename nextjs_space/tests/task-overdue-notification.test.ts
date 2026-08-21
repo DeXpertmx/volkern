@@ -77,10 +77,37 @@ describe('runTaskOverdueScan (aviso de tareas vencidas por Telegram)', () => {
     expect(mocks.taskUpdate).not.toHaveBeenCalled()
   })
 
-  it('marca como omitida sin enviar cuando el usuario no tiene chat de Telegram', async () => {
+  it('cae al admin del tenant cuando el usuario asignado no tiene chat de Telegram', async () => {
     mocks.taskFindMany.mockResolvedValue([
       { ...vencida, asignadoUsuario: { id: 'user-42', name: 'Bruno', metadata: {} } },
     ])
+    mocks.sendTelegramMessage.mockResolvedValue({ success: true })
+
+    const result = await runTaskOverdueScan()
+
+    expect(result).toEqual({ total: 1, notified: 1, skipped: 0, failed: 0 })
+    const [chatId] = mocks.sendTelegramMessage.mock.calls[0]
+    expect(chatId).toBe('999') // admin_chat_id del tenant
+  })
+
+  it('notifica al admin cuando la tarea vencida no tiene asignado', async () => {
+    mocks.taskFindMany.mockResolvedValue([
+      { ...vencida, asignadoA: null, asignadoUsuario: null },
+    ])
+    mocks.sendTelegramMessage.mockResolvedValue({ success: true })
+
+    const result = await runTaskOverdueScan()
+
+    expect(result).toEqual({ total: 1, notified: 1, skipped: 0, failed: 0 })
+    const [chatId] = mocks.sendTelegramMessage.mock.calls[0]
+    expect(chatId).toBe('999')
+  })
+
+  it('marca como omitida sin enviar cuando no hay chat ni del asignado ni del tenant', async () => {
+    mocks.taskFindMany.mockResolvedValue([
+      { ...vencida, asignadoUsuario: { id: 'user-42', name: 'Bruno', metadata: {} } },
+    ])
+    mocks.loadTelegramCredentials.mockResolvedValue({ bot_token: 'BOT:TOKEN', admin_chat_id: null })
 
     const result = await runTaskOverdueScan()
 
