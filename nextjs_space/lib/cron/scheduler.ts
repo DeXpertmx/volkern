@@ -140,6 +140,19 @@ export function initCronJobs() {
 
   // 14. Lead sin respuesta
   initLeadSinRespuestaCron();
+
+  // 15. Tareas vencidas — aviso por Telegram al asignado
+  initTaskOverdueCron();
+}
+
+/**
+ * Registra el cron de tareas vencidas. Se llama desde initCronJobs().
+ */
+export function initTaskOverdueCron() {
+  cron.schedule('*/30 * * * *', runCronJob('task-overdue', 'Tareas Vencidas (Telegram)', '*/30 * * * *', async () => {
+    const { runTaskOverdueScan } = await import('./task-overdue-jobs');
+    await runTaskOverdueScan();
+  }))
 }
 
 /**
