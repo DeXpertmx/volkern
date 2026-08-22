@@ -862,9 +862,13 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
 
     // ═══ 0m. GENERAR BLOQUE WEB ("genera un bloque hero para la landing de mi
     // producto", "dame un bloque CTA para promocionar el servicio") ═══
+    // Exclusión bloque 23: "genera una landing para el lead/contacto X" es
+    // crear una página completa para una persona (generar_landing), no un
+    // bloque web suelto.
     const BLOQUE_ENTITY = /\b(?:bloque|secci[oó]n|landing)\b/i
     const WEB_VERB = /\b(?:genera|generar|crea|crear|dame\s+un\s+bloque|dame\s+una\s+secci[oó]n)\b/i
-    if (BLOQUE_ENTITY.test(message) && WEB_VERB.test(message)) {
+    const LANDING_PARA_PERSONA = /\blanding\b.*\b(?:para\s+el\s+lead|para\s+la\s+lead|para\s+el\s+contacto|para\s+el\s+cliente|para\s+un\s+(?:lead|contacto|cliente)|para\s+[A-ZÁÉÍÓÚÑÜ])\b/i
+    if (BLOQUE_ENTITY.test(message) && WEB_VERB.test(message) && !LANDING_PARA_PERSONA.test(message)) {
       const tipoBloque = this.extractTipoBloqueDe(message)
       if (tipoBloque) extracted.tipoBloque = tipoBloque
       const producto = this.extractProductoWebDe(message)
@@ -1249,6 +1253,88 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
         this.extractNombreAfter(message, /\b(?:de|para|del)\s+(?=[A-ZÁÉÍÓÚÑÜ])/)
       if (nombre && !/\b(?:equipo|personal|talento|todos?|la\s+empresa)\b/i.test(nombre)) extracted.nombre = nombre
       return { intent: 'kit_offboarding', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 0y-1. DETALLES DE NEGOCIO / DEAL (bloque 23): "dame los detalles del
+    // negocio de X", "cómo va la venta con X", "en qué etapa está el negocio"
+    // — ficha de UN deal concreto, no listado (mis_negocios) ═══
+    const DETALLES_DEAL_SIGNAL =
+      /\b(?:detalles?|ficha|fichas?\s+(?:completa|del|de\s+la)|c[oó]mo\s+va|en\s+qu[eé]\s+etapa|cu[aá]nto\s+vale|monto\s+del)\b/i.test(message) &&
+      /\b(?:negocio|negocios|deal|venta|oportunidad)\b/i.test(message)
+    if (DETALLES_DEAL_SIGNAL && !/\b(?:crea|crear|nuev[oa]|abre|actualiza|actualizar|modifica|cierra|cerrar|pasa\s+de|mueve)\b/i.test(message)) {
+      const email = message.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,})/)
+      if (email) extracted.email = email[1]
+      const nombre = this.extractNombreAfter(message, /\b(?:negocio|deal|venta|oportunidad)\s+(?:de|del|de\s+la|de\s+los|de\s+las|con)\s+/i) ||
+        this.extractNombreAfter(message, /\b(?:con|de)\s+(?=[A-ZÁÉÍÓÚÑÜ])/)
+      if (nombre && !/\b(?:la\s+oficina|el\s+negocio|todos?|la\s+empresa)\b/i.test(nombre)) extracted.nombre = nombre
+      return { intent: 'detalles_negocio', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 0y-2. DETALLES DE CONTACTO (bloque 23): "dame los detalles del
+    // contacto X", "ficha de juan@email.com", "qué datos tengo del contacto"
+    // — ficha de UN contacto, no listado (listar_contactos) ═══
+    const DETALLES_CONTACTO_SIGNAL =
+      /\b(?:detalles?|ficha|fichas?\s+(?:completa|del|de\s+la)|qu[eé]\s+datos|datos\s+del\s+contacto|informaci[oó]n\s+del\s+contacto)\b/i.test(message) &&
+      /\bcontacto\b/i.test(message)
+    if (DETALLES_CONTACTO_SIGNAL && !/\b(?:crea|crear|nuev[oa]|actualiza|actualizar|modifica|busca|listar|lista)\b/i.test(message)) {
+      const email = message.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,})/)
+      if (email) extracted.email = email[1]
+      const nombre = this.extractNombreAfter(message, /\bcontacto\s+(?:de|del|de\s+la|de\s+los|de\s+las)?\s*/i) ||
+        this.extractNombreAfter(message, /\b(?:de|del|del\s+contacto)\s+(?=[A-ZÁÉÍÓÚÑÜ])/)
+      if (nombre && !/\b(?:equipo|personal|todos?|la\s+empresa)\b/i.test(nombre)) extracted.nombre = nombre
+      return { intent: 'detalles_contacto', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 0y-3. DETALLES DE PRODUCTO / SERVICIO (bloque 23): "dame los
+    // detalles del producto X", "ficha del servicio de consultoría" — ficha
+    // de UN ítem del catálogo, no búsqueda (buscar_catalogo) ═══
+    const DETALLES_PRODUCTO_SIGNAL =
+      /\b(?:detalles?|ficha|fichas?\s+(?:completa|del|de\s+la|de\s+los|de\s+las)|informaci[oó]n\s+(?:completa|del|de\s+la))\b/i.test(message) &&
+      /\b(?:producto|productos|servicio|servicios|art[ií]culo|paquete|item|ítem)\b/i.test(message)
+    if (DETALLES_PRODUCTO_SIGNAL && !/\b(?:crea|crear|nuev[oa]|actualiza|actualizar|elimina|borra|busca)\b/i.test(message)) {
+      const nombre = this.extractNombreAfter(message, /\b(?:producto|servicio|art[ií]culo|paquete|item|ítem)\s+(?:de\s+|del\s+|de\s+la\s+|de\s+los\s+|de\s+las\s+)?/i)
+      if (nombre) extracted.nombre = nombre
+      return { intent: 'detalles_producto', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 0y-4. EXPORTAR CATÁLOGO (bloque 23): "exporta el catálogo en CSV",
+    // "exporta el catálogo completo en JSON" ═══
+    if (/\b(?:exporta|exportar|exporte|genera\s+el\s+archivo|dame\s+el\s+cat[aá]logo)\b/i.test(message) &&
+        /\b(?:cat[aá]logo|productos|servicios)\b/i.test(message)) {
+      const formato = message.match(/\b(csv|json|excel|xlsx)\b/i)
+      if (formato) extracted.formato = formato[1].toLowerCase() === 'excel' ? 'csv' : formato[1].toLowerCase()
+      const tipo = message.match(/\b(?:solo\s+los|solo\s+las|los|las)\s+(productos|servicios)\b/i)
+      if (tipo) extracted.tipo = tipo[1]
+      return { intent: 'exportar_catalogo', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 0y-5. SUGERIR RESPUESTA AL CLIENTE (bloque 23, Training Room):
+    // "sugiere una respuesta para el lead X", "qué le respondo a X" ═══
+    const SUGERIR_RESPUESTA_SIGNAL =
+      /\b(?:sugiere|sugerir|sugiere\s+una|dame\s+una|qu[eé]\s+le\s+(?:respondo|responder[íi]a|digo|contesto)|c[oó]mo\s+le\s+(?:respondo|contesto|digo))\b/i.test(message) &&
+      /\b(?:respuesta|responder|respondo|responda|contestar|contesto|mensaje\s+del\s+cliente|cliente)\b/i.test(message)
+    if (SUGERIR_RESPUESTA_SIGNAL && !/\b(?:enviar|env[ií]a|mandar|manda)\b/i.test(message)) {
+      const email = message.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,})/)
+      if (email) extracted.email = email[1]
+      const nombre = this.extractNombreAfter(message, /\b(?:lead|prospecto|cliente|contacto)\s+(?:de|del|de\s+la|de\s+los|de\s+las)?\s*/i) ||
+        this.extractNombreAfter(message, /\b(?:a|para)\s+(?=[A-ZÁÉÍÓÚÑÜ])/)
+      if (nombre && !/\b(?:todos?|la\s+empresa|el\s+cliente)\b/i.test(nombre)) extracted.nombre = nombre
+      return { intent: 'sugerir_respuesta', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 0y-6. GENERAR LANDING (bloque 23, Web Creator): "genera una landing
+    // para el lead X", "crea un borrador de página para X" ═══
+    const GENERAR_LANDING_SIGNAL =
+      /\b(?:genera|generar|crea|crear|haz|hacer|arma|armar)\s+(?:una\s+|un\s+|un\s+borrador\s+de\s+)?(?:landing|landing\s+page|p[aá]gina\s+de\s+aterrizaje|p[aá]gina\s+de\s+bienvenida|borrador\s+de\s+p[aá]gina)\b/i
+    if (GENERAR_LANDING_SIGNAL.test(message)) {
+      const email = message.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,})/)
+      if (email) extracted.email = email[1]
+      const nombre = this.extractNombreAfter(message, /\b(?:para\s+el\s+lead|para\s+la\s+lead|para\s+el\s+contacto|para\s+el\s+cliente|para|de)\s+/i) ||
+        this.extractNombreAfter(message, /\b(?:lead|prospecto|contacto|cliente)\s+(?:de|del|de\s+la|de\s+los|de\s+las)?\s*/i)
+      if (nombre && !/\b(?:mi\s+negocio|mi\s+empresa|todos?|la\s+empresa)\b/i.test(nombre)) extracted.nombre = nombre
+      const titulo = message.match(/\b(?:titulada|titulado)\s+["“']?([^"”']+?)["“']?\s*(?:para|de|$)/i)
+      if (titulo) extracted.titulo = titulo[1].trim()
+      return { intent: 'generar_landing', confidence: 0.85, extractedParams: extracted }
     }
 
     // ═══ 0. CONVERTIR LEAD (antes que crear: "convierte… en contacto" también
