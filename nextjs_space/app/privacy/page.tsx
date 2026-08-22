@@ -248,6 +248,7 @@ export default function PrivacyPolicyPage() {
                 <li><Link href="/terms" className="hover:text-white transition">Términos de Servicio</Link></li>
                 <li><Link href="/privacy" className="hover:text-white transition">Política de Privacidad</Link></li>
                 <li><Link href="/reembolsos" className="hover:text-white transition">Política de Reembolsos</Link></li>
+                <li><Link href="/security" className="hover:text-white transition">Política de Seguridad</Link></li>
                 <li><Link href="/verifactu" className="hover:text-white transition font-medium text-amber-400">Veri*Factu</Link></li>
               </ul>
             </div>
