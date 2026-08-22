@@ -117,6 +117,20 @@ describe('IntentClassifier — bloque 21 (RRHH/Producción avanzada)', () => {
     expect(r.intent).toBe('estrategia_ensamblaje');
   });
 
+  it('REG: retrasos críticos, estrategia de ensamblaje y venta con email van por la ruta determinista (sin LLM)', async () => {
+    // El guard global de detectIntentDeterministically devolvía null para estas
+    // frases (faltaban "líneas"/plural, "ensamblaje", "montaje" y "venta" en
+    // los triggers y la señal de ensamblaje no aceptaba la terminación -aje).
+    const det1 = classifier.detectIntentDeterministically('qué líneas tienen retrasos críticos');
+    expect(det1?.intent).toBe('detectar_cuellos_botella');
+    const det2 = classifier.detectIntentDeterministically('cuál es la mejor estrategia de ensamblaje');
+    expect(det2?.intent).toBe('estrategia_ensamblaje');
+    const det3 = classifier.detectIntentDeterministically('cómo optimizar la línea de montaje');
+    expect(det3?.intent).toBe('estrategia_ensamblaje');
+    const det4 = classifier.detectIntentDeterministically('cómo va la venta con maria@empresa.com');
+    expect(det4?.intent).toBe('detalles_negocio');
+  });
+
   it('detecta firma digital de vacaciones', async () => {
     const r = await classifier.classify({ ...base, message: 'firma digitalmente las vacaciones de María García' });
     expect(r.intent).toBe('firma_digital_hr');

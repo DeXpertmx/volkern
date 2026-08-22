@@ -414,8 +414,9 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     // sin verbo: "leads en estado X", "contactos tipo empresa".
     const ACTION_VERB = /\b(?:agrega|crea|registra|nuev[oa]|añade|alta|abre|busca|encuentra|consulta|localiza|lista|listame|mu[eé]strame|muestra|ver|ens[eé][ñn]ame|dame|convierte|convertir|pasa|transforma|mueve|actualiza|cambia|modifica|pon|ponle|anota|anotar|tuve|registro|agenda|agendar|programa|programar|reserva|reservar|aparta|apartar|cancela|cancelar|anula|anular|reagenda|reagendar|confirmar|analiza|analizar|revisa|revisar|completa|completar|termina|terminar|finaliza|finalizar|marca|marcar|cierra|cerrar|presenta|presentar|present[ée]|sugiere|sugerir|sugiero|sugiera|sugieran|respondo|responder[íi]a|contesto|contestar)\b/i
     const FILTER_ONLY = /\b(?:contactos?|leads?)\b.*\b(?:en\s+estado|por\s+estado|tipo|que\s+contengan|tags?)\b/i
-    // Entidades del pipeline sin verbo: "cómo va mi pipeline", "qué deals tengo"
-    const ENTITY_TRIGGER = /\b(?:pipeline|deals?|negocios?|oportunidad)\b/i
+    // Entidades del pipeline sin verbo: "cómo va mi pipeline", "qué deals tengo",
+    // "cómo va la venta con X" (bloque 23: detalles_negocio por email)
+    const ENTITY_TRIGGER = /\b(?:pipeline|deals?|negocios?|oportunidad|venta(?:s)?)\b/i
     // Entidades de citas sin verbo: "qué citas tengo", "reunión con X"
     const CITA_TRIGGER = /\b(?:citas?|reuni[oó]n|reuniones|videollamada)\b/i
     // Entidades de finanzas sin verbo: "gasto de 300€", "cómo vamos de gastos",
@@ -463,7 +464,7 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     // "readiness de la producción", "cuellos de botella", "salud de los
     // activos", "órdenes bloqueadas por faltantes", "plan de compras",
     // "secuenciación", "marcajes sospechosos", "nómina de X"
-    const FACTORY_TRIGGER = /\b(?:n[oó]mina(?:s)?|asistencia|marcajes?|fichajes?|geo-?anomal[ií]as?|mantenimiento\s+predictivo|salud\s+de\s+los\s+activos|activo(?:s)?\s+industriales?|fallo\s+de\s+la\s+m[aá]quina|capacidad\s+de\s+la\s+planta|cuellos?\s+de\s+botella|saturaci[oó]n\s+de\s+las\s+l[ií]neas|readiness|faltantes?\s+de\s+material|plan\s+de\s+compras|aprovisionamiento|secuenciaci[oó]n|conflictos?\s+en\s+el\s+plan|margen\s+m[aá]s?\s+bajo|rentabilidad\s+de\s+producci[oó]n|margen\s+bajo)\b/i
+    const FACTORY_TRIGGER = /\b(?:n[oó]mina(?:s)?|asistencia|marcajes?|fichajes?|geo-?anomal[ií]as?|mantenimiento\s+predictivo|salud\s+de\s+los\s+activos|activo(?:s)?\s+industriales?|fallo\s+de\s+la\s+m[aá]quina|capacidad\s+de\s+la\s+planta|cuellos?\s+de\s+botella|saturaci[oó]n\s+de\s+las\s+l[ií]neas|readiness|faltantes?\s+de\s+material|plan\s+de\s+compras|aprovisionamiento|secuenciaci[oó]n|conflictos?\s+en\s+el\s+plan|margen\s+m[aá]s?\s+bajo|rentabilidad\s+de\s+producci[oó]n|margen\s+bajo|retrasos?\s+cr[ií]ticos|estrangu|ensamblaj|montaje|armado|l[ií]nea(?:s)?\s+de\s+(?:producci[oó]n|montaje|ensamblaje)|estrategia\s+de\s+ensamblaje)\b/i
     // Entidades de gobernanza RRHH y control de programaciones (vigésimo
     // segundo entrenamiento): autorización masiva de gastos, transferencia de
     // activos, auditoría de accesos, kit de offboarding y toggle de
@@ -1113,7 +1114,7 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
       /\b(?:d[oó]nde|cu[aá]l)\s+(?:est[áa]|queda|se\s+ubica)\s+el\s+cuello\b/i.test(message) ||
       /\bqu[eé]\s+l[ií]neas?\s+se\s+est[aá]n\s+retrasando\b/i.test(message) ||
       /\bbloqueando\s+(?:la\s+)?producci[oó]n\b/i.test(message)
-    if (BOTTLENECK_SIGNAL && /\b(?:producci[oó]n|planta|l[ií]nea|montaje|fabri)\b/i.test(message)) {
+    if (BOTTLENECK_SIGNAL && /\b(?:producci[oó]n|planta|l[ií]nea(?:s)?|montaje|fabri)\b/i.test(message)) {
       return { intent: 'detectar_cuellos_botella', confidence: 0.85, extractedParams: extracted }
     }
 
@@ -1194,7 +1195,7 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
 
     // ═══ 0z-3. ESTRATEGIA DE ENSAMBLAJE ("mejor estrategia de ensamblaje",
     // "cómo optimizar la línea de montaje") ═══
-    const ENSAMBLAJE_SIGNAL = /\b(?:ensamblaj|montaje|armado|l[ií]nea\s+de\s+producci[oó]n)\b/i
+    const ENSAMBLAJE_SIGNAL = /\b(?:ensamblaj(?:e|es|aje|amientos)?|montaje|armado|l[ií]nea\s+de\s+(?:producci[oó]n|montaje|ensamblaje))\b/i
     const ESTRATEGIA_VERB = /\b(?:estrategia|estrategias|optimiza|optimizar|optimizaci[oó]n|recomienda|recomend|sugiere|sugerir|mejora|mejorar|mejor)\b/i
     if (ENSAMBLAJE_SIGNAL.test(message) && ESTRATEGIA_VERB.test(message)) {
       return { intent: 'estrategia_ensamblaje', confidence: 0.85, extractedParams: extracted }
