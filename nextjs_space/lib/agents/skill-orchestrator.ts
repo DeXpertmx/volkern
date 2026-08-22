@@ -172,6 +172,14 @@ const INTENT_TO_SKILL: Record<string, string> = {
   'kit_offboarding': 'generate_offboarding_security_kit',
   'pausar_programacion': 'toggle_ad_schedule',
 
+  // ─── Consultas avanzadas, Web Creator y Training (Vigésimo-tercer entrenamiento) ───
+  'detalles_negocio': 'get_deal_details',
+  'detalles_contacto': 'get_contact_details',
+  'detalles_producto': 'get_catalog_item_details',
+  'exportar_catalogo': 'export_catalog_chat',
+  'sugerir_respuesta': 'suggest_customer_response',
+  'generar_landing': 'generate_landing_draft_chat',
+
   // ─── Logística ───
   'estado_envio': 'get_shipment_status',
   'rastrear_pedido': 'track_order',
@@ -844,6 +852,14 @@ export const SkillOrchestratorAgent = {
         'kit_offboarding': 'rrhh',
         'pausar_programacion': 'ads',
 
+        // Consultas avanzadas, Web Creator y Training (bloque 23)
+        'detalles_negocio': 'pipeline',
+        'detalles_contacto': 'contactos',
+        'detalles_producto': 'catalogo',
+        'exportar_catalogo': 'catalogo',
+        'sugerir_respuesta': 'contactos',
+        'generar_landing': 'cms',
+
         // Logística
         'estado_envio': 'logistica',
         'rastrear_pedido': 'logistica',
@@ -971,6 +987,12 @@ export const SkillOrchestratorAgent = {
       'auditar_accesos': '👥 No tienes acceso al módulo de *RRHH*. Contacta al administrador.',
       'kit_offboarding': '👥 No tienes acceso al módulo de *RRHH*. Contacta al administrador.',
       'pausar_programacion': '📣 No tienes acceso al módulo de *Ads*. Contacta al administrador para activarlo.',
+      'detalles_negocio': '💼 No tienes acceso al módulo de *Pipeline*. Contacta al administrador para activarlo.',
+      'detalles_contacto': '👥 No tienes acceso al módulo de *Contactos*. Contacta al administrador para activarlo.',
+      'detalles_producto': '📦 No tienes acceso al módulo de *Catálogo*. Contacta al administrador para activarlo.',
+      'exportar_catalogo': '📦 No tienes acceso al módulo de *Catálogo*. Contacta al administrador para activarlo.',
+      'sugerir_respuesta': '👥 No tienes acceso al módulo de *Contactos*. Contacta al administrador para activarlo.',
+      'generar_landing': '🎨 No tienes acceso al módulo de *Web Creator*. Contacta al administrador para activarlo.',
       'predecir_fallo_activo': '🏭 No tienes acceso al módulo de *Producción*. Contacta al administrador.',
       'dashboard_mantenimiento': '🏭 No tienes acceso al módulo de *Producción*. Contacta al administrador.',
       'proyeccion_capacidad': '🏭 No tienes acceso al módulo de *Producción*. Contacta al administrador.',
@@ -1100,8 +1122,16 @@ Puedo ayudarte con:
       'detect_ghosting': 'Detectar leads inactivos',
       'generate_success_path': 'Generar ruta de éxito',
 
+      // Consultas avanzadas, Web Creator y Training
+      'get_deal_details': 'Ver ficha de negocio',
+      'get_contact_details': 'Ver ficha de contacto',
+      'suggest_customer_response': 'Sugerir respuesta al cliente',
+      'generate_landing_draft_chat': 'Generar borrador de landing',
+
       // Catálogo
       'export_catalog': 'Exportar catálogo',
+      'get_catalog_item_details': 'Ver ficha de producto/servicio',
+      'export_catalog_chat': 'Exportar catálogo',
       'consultar_precio': 'Buscar en catálogo',
       'buscar_producto': 'Buscar en catálogo',
       'buscar_catalogo': 'Buscar en catálogo',

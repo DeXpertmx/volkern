@@ -3576,6 +3576,271 @@ const generateSuccessPathWrapper = async (input: {
   return proactivitySkills.generateSuccessPath({ tenantId, leadId });
 };
 
+/**
+ * Wrapper detalles_negocio: el skill core exige dealId, pero el orquestador
+ * pasa email/nombre desde el chatbot. Resuelve el deal más reciente del
+ * lead/contacto (por email exacto o nombre insensible) y devuelve su ficha
+ * legible: etapa, monto, prioridad y cliente.
+ */
+const getDealDetailsWrapper = async (input: {
+  tenantId: string;
+  email?: string;
+  nombre?: string;
+  etapa?: string;
+  dealId?: string;
+}) => {
+  const { tenantId, email, nombre, etapa, dealId } = input;
+  if (dealId) return dealSkills.getDeal(dealId, tenantId);
+  if (!email && !nombre) {
+    throw new Error('Dime el email o el nombre del cliente para localizar su negocio.');
+  }
+
+  const { prisma } = await import('@/lib/db');
+  let leadId: string | undefined;
+  let contactId: string | undefined;
+
+  const findPerson = async (e?: string, n?: string) => {
+    if (e) {
+      const lead = await prisma.lead.findFirst({ where: { tenantId, email: e }, select: { id: true } });
+      if (lead) return { leadId: lead.id };
+      const contact = await prisma.contact.findFirst({ where: { tenantId, email: e }, select: { id: true } });
+      if (contact) return { contactId: contact.id };
+    }
+    if (n) {
+      const nombreLimpio = String(n).replace(/^(?:de|del|la|el|las|los)\s+/i, '').trim();
+      const lead = await prisma.lead.findFirst({
+        where: { tenantId, nombre: { contains: nombreLimpio, mode: 'insensitive' } },
+        select: { id: true },
+      });
+      if (lead) return { leadId: lead.id };
+      const contact = await prisma.contact.findFirst({
+        where: { tenantId, nombre: { contains: nombreLimpio, mode: 'insensitive' } },
+        select: { id: true },
+      });
+      if (contact) return { contactId: contact.id };
+    }
+    return null;
+  };
+
+  const resolved = await findPerson(email, nombre);
+  if (!resolved) {
+    throw new Error(`No encontré ningún lead o contacto${email ? ` con el email ${email}` : ''}${nombre ? ` con el nombre "${nombre}"` : ''} con negocio.`);
+  }
+
+  const where: any = { tenantId };
+  if (resolved.leadId) where.leadId = resolved.leadId;
+  else where.contactId = resolved.contactId;
+  if (etapa) where.etapa = etapa;
+
+  const deal = await prisma.deal.findFirst({ where, orderBy: { fechaCreacion: 'desc' } });
+  if (!deal) {
+    throw new Error(`No encontré ningún negocio abierto para ${email || nombre}.`);
+  }
+  return dealSkills.getDeal(deal.id, tenantId);
+};
+
+/**
+ * Wrapper detalles_contacto: el skill core exige contactId; el chatbot pasa
+ * email/nombre. Resuelve el contacto (por email exacto o nombre insensible)
+ * y devuelve la ficha legible con email, teléfono, cargo y empresa.
+ */
+const getContactDetailsWrapper = async (input: {
+  tenantId: string;
+  email?: string;
+  nombre?: string;
+  contactId?: string;
+}) => {
+  const { tenantId, email, nombre, contactId } = input;
+  if (contactId) return contactSkills.getContact({ contactId, tenantId });
+  if (!email && !nombre) {
+    throw new Error('Dime el email o el nombre del contacto para mostrarte su ficha.');
+  }
+
+  const { prisma } = await import('@/lib/db');
+  let contact = email
+    ? await prisma.contact.findFirst({ where: { tenantId, email } })
+    : null;
+  if (!contact && nombre) {
+    const nombreLimpio = String(nombre).replace(/^(?:de|del|la|el|las|los)\s+/i, '').trim();
+    contact = await prisma.contact.findFirst({
+      where: { tenantId, nombre: { contains: nombreLimpio, mode: 'insensitive' } },
+    });
+  }
+  if (!contact) {
+    throw new Error(`No encontré ningún contacto${email ? ` con el email ${email}` : ''}${nombre ? ` con el nombre "${nombre}"` : ''}.`);
+  }
+  return contactSkills.getContact({ contactId: contact.id, tenantId });
+};
+
+/**
+ * Wrapper detalles_producto: el skill core exige itemId; el chatbot pasa el
+ * nombre. Resuelve el ítem del catálogo por nombre (insensible) y devuelve
+ * su ficha con precio, impuesto y campos personalizados.
+ */
+const getCatalogItemDetailsWrapper = async (input: {
+  tenantId: string;
+  nombre?: string;
+  itemId?: string;
+}) => {
+  const { tenantId, nombre, itemId } = input;
+  if (itemId) return catalogSkills.getCatalogItem({ tenantId, itemId });
+  if (!nombre) throw new Error('Dime el nombre del producto o servicio para mostrarte su ficha.');
+
+  const { prisma } = await import('@/lib/db');
+  const nombreLimpio = String(nombre).replace(/^(?:de|del|la|el|las|los)\s+/i, '').trim();
+  const item = await prisma.catalogoItem.findFirst({
+    where: { tenantId, nombre: { contains: nombreLimpio, mode: 'insensitive' } },
+  });
+  if (!item) {
+    throw new Error(`No encontré ningún producto o servicio con el nombre "${nombre}" en el catálogo.`);
+  }
+  return catalogSkills.getCatalogItem({ tenantId, itemId: item.id });
+};
+
+/**
+ * Wrapper exportar_catalogo: delega en exportCatalog del core con el formato
+ * pedido (csv/json) y devuelve un resumen legible (cantidad de ítems y
+ * formato), no el dump completo que saturaría el chat.
+ */
+const exportCatalogWrapper = async (input: {
+  tenantId: string;
+  formato?: string;
+  tipo?: string;
+}) => {
+  const formato = (input.formato || 'json').toLowerCase() === 'csv' ? 'csv' : 'json';
+  const result = await catalogSkills.exportCatalog({
+    tenantId: input.tenantId,
+    format: formato as 'csv' | 'json',
+    tipo: input.tipo,
+    includeFieldDefinitions: true,
+    includeCustomFields: true,
+    includeMedia: false,
+    includePricing: true,
+    userId: undefined,
+    source: 'webhook',
+  });
+  const count = Array.isArray(result?.items) ? result.items.length : 0;
+  return {
+    ...result,
+    summary: `✅ Catálogo exportado en ${formato.toUpperCase()} con ${count} ítem(s). Usa el Web Creator o el módulo de Catálogo para descargar el archivo completo.`,
+  };
+};
+
+/**
+ * Wrapper sugerir_respuesta (Training Room): resuelve el lead por
+ * email/nombre y delega en generateCustomerResponse con el mensaje del
+ * agente (o uno neutro si no llegó). Devuelve la respuesta simulada del
+ * cliente, no un correo real.
+ */
+const suggestCustomerResponseWrapper = async (input: {
+  tenantId: string;
+  email?: string;
+  nombre?: string;
+  mensaje?: string;
+}) => {
+  const { tenantId, email, nombre } = input;
+  const agentMessage = (input.mensaje || '').trim() || 'Hola, quería contarte cómo podemos ayudarte.';
+  if (!email && !nombre) {
+    throw new Error('Dime el email o el nombre del cliente para simular su respuesta.');
+  }
+
+  const { prisma } = await import('@/lib/db');
+  let lead = email ? await prisma.lead.findFirst({ where: { tenantId, email } }) : null;
+  if (!lead && nombre) {
+    const nombreLimpio = String(nombre).replace(/^(?:de|del|la|el|las|los)\s+/i, '').trim();
+    lead = await prisma.lead.findFirst({
+      where: { tenantId, nombre: { contains: nombreLimpio, mode: 'insensitive' } },
+    });
+  }
+  if (!lead) {
+    throw new Error(`No encontré ningún lead${email ? ` con el email ${email}` : ''}${nombre ? ` con el nombre "${nombre}"` : ''} para la simulación.`);
+  }
+  return trainingSkills.generateCustomerResponse({
+    leadId: lead.id,
+    tenantId,
+    agentMessage,
+  });
+};
+
+/**
+ * Wrapper generar_landing (Web Creator): resuelve el lead por email/nombre,
+ * construye un contentJson mínimo de GrapesJS (hero con título + CTA) y
+ * delega en generateLandingDraft para crear el borrador de página listo
+ * para editar en el Web Creator.
+ */
+const generateLandingDraftWrapper = async (input: {
+  tenantId: string;
+  nombre: string;
+  email?: string;
+  titulo?: string;
+  userId?: string;
+}) => {
+  const { tenantId, nombre, email, userId } = input;
+  const nombreLimpio = String(nombre).replace(/^(?:de|del|la|el|las|los|para|para\s+el\s+lead|para\s+la\s+lead)\s+/i, '').trim();
+  const { prisma } = await import('@/lib/db');
+  let lead = email ? await prisma.lead.findFirst({ where: { tenantId, email } }) : null;
+  if (!lead) {
+    lead = await prisma.lead.findFirst({
+      where: { tenantId, nombre: { contains: nombreLimpio, mode: 'insensitive' } },
+    });
+  }
+  if (!lead) {
+    throw new Error(`No encontré ningún lead${email ? ` con el email ${email}` : ''} con el nombre "${nombre}" para la landing.`);
+  }
+
+  const titulo = (input.titulo || `Landing para ${lead.nombre || nombreLimpio}`).trim();
+  const slug = titulo
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+    .slice(0, 60) || 'landing';
+
+  // contentJson mínimo de GrapesJS: hero con título + subtítulo + CTA.
+  const contentJson = {
+    components: [
+      {
+        type: 'wrapper',
+        components: [
+          {
+            type: 'text',
+            components: [{ type: 'textnode', content: `<h1 style="text-align:center;font-size:48px;margin:120px 20px 20px;">${titulo}</h1>` }],
+          },
+          {
+            type: 'text',
+            components: [{
+              type: 'textnode',
+              content: `<p style="text-align:center;font-size:20px;color:#5a6478;">Hola ${lead.nombre}, queremos ayudarte. Déjanos tus datos y te contactamos.</p>`,
+            }],
+          },
+          {
+            type: 'link',
+            style: { 'text-align': 'center', display: 'block', margin: '40px auto' },
+            components: [{ type: 'textnode', content: 'Contactar' }],
+          },
+        ],
+      },
+    ],
+    styles: [],
+    assets: [],
+  };
+
+  const result = await webCreatorSkills.generateLandingDraft({
+    tenantId,
+    leadId: lead.id,
+    titulo,
+    slug,
+    contentJson,
+    userId,
+    descripcion: `Borrador generado por IA desde el chatbot para el lead ${lead.nombre}`,
+  });
+  return {
+    ...result,
+    summary: `✅ Borrador de landing "${titulo}" creado en el Web Creator. Ábrelo desde el editor para personalizarlo: ${result.url}`,
+  };
+};
+
 export const skills = {
   // Contactos
   create_contact: createContactWrapper,
@@ -3791,6 +4056,14 @@ export const skills = {
   start_ab_test: startAbTestWrapper,
   calculate_ab_test_significance: calculateAbTestSignificanceWrapper,
   declare_ab_test_winner: declareAbTestWinnerWrapper,
+
+  // ─── Consultas avanzadas, Web Creator y Training (Vigésimo-tercer entrenamiento) ─
+  get_deal_details: getDealDetailsWrapper,
+  get_contact_details: getContactDetailsWrapper,
+  get_catalog_item_details: getCatalogItemDetailsWrapper,
+  export_catalog_chat: exportCatalogWrapper,
+  suggest_customer_response: suggestCustomerResponseWrapper,
+  generate_landing_draft_chat: generateLandingDraftWrapper,
 } as const;
 
 export type SkillName = keyof typeof skills;
