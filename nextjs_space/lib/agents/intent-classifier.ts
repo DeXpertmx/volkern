@@ -412,7 +412,7 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     // mensajes de búsqueda/listado ("busca el lead…", "lista los contactos…")
     // nunca entrarían en la ruta determinista. También acepta frases de filtro
     // sin verbo: "leads en estado X", "contactos tipo empresa".
-    const ACTION_VERB = /\b(?:agrega|crea|registra|nuev[oa]|añade|alta|abre|busca|encuentra|consulta|localiza|lista|listame|mu[eé]strame|muestra|ver|ens[eé][ñn]ame|dame|convierte|convertir|pasa|transforma|mueve|actualiza|cambia|modifica|pon|ponle|anota|anotar|tuve|registro|agenda|agendar|programa|programar|reserva|reservar|aparta|apartar|cancela|cancelar|anula|anular|reagenda|reagendar|confirmar|analiza|analizar|revisa|revisar|completa|completar|termina|terminar|finaliza|finalizar|marca|marcar|cierra|cerrar|presenta|presentar|present[ée])\b/i
+    const ACTION_VERB = /\b(?:agrega|crea|registra|nuev[oa]|añade|alta|abre|busca|encuentra|consulta|localiza|lista|listame|mu[eé]strame|muestra|ver|ens[eé][ñn]ame|dame|convierte|convertir|pasa|transforma|mueve|actualiza|cambia|modifica|pon|ponle|anota|anotar|tuve|registro|agenda|agendar|programa|programar|reserva|reservar|aparta|apartar|cancela|cancelar|anula|anular|reagenda|reagendar|confirmar|analiza|analizar|revisa|revisar|completa|completar|termina|terminar|finaliza|finalizar|marca|marcar|cierra|cerrar|presenta|presentar|present[ée]|sugiere|sugerir|sugiero|sugiera|sugieran|respondo|responder[íi]a|contesto|contestar)\b/i
     const FILTER_ONLY = /\b(?:contactos?|leads?)\b.*\b(?:en\s+estado|por\s+estado|tipo|que\s+contengan|tags?)\b/i
     // Entidades del pipeline sin verbo: "cómo va mi pipeline", "qué deals tengo"
     const ENTITY_TRIGGER = /\b(?:pipeline|deals?|negocios?|oportunidad)\b/i

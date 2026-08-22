@@ -180,6 +180,16 @@ describe('IntentClassifier — bloque 23 (consultas avanzadas, Web Creator y Tra
     expect(r.extractedParams.nombre).toBeTruthy();
   });
 
+  it('sugerir_respuesta va por la ruta determinista (sin LLM)', async () => {
+    // Regresión: el guard global de detectIntentDeterministically devolvía null
+    // para "sugiere una respuesta…" porque "sugiere" no estaba en ACTION_VERB y
+    // no había trigger de Training — la frase caía al LLM. El determinista debe
+    // matchearla directamente.
+    const det = classifier.detectIntentDeterministically('sugiere una respuesta para el lead María García');
+    expect(det?.intent).toBe('sugerir_respuesta');
+    expect(det?.extractedParams?.nombre).toBe('María García');
+  });
+
   it('detecta generar landing para un lead', async () => {
     const r = await classifier.classify({ ...base, message: 'genera una landing para el lead María García' });
     expect(r.intent).toBe('generar_landing');
