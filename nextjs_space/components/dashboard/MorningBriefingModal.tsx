@@ -18,10 +18,13 @@ import {
   Zap, 
   ArrowRight,
   TrendingUp,
-  Brain
+  Brain,
+  ListTodo
 } from 'lucide-react';
 import { BriefingData } from '@/lib/sales/morning-briefing-service';
 import { useRouter } from 'next/navigation';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 export function MorningBriefingModal() {
   const [data, setData] = useState<BriefingData | null>(null);
@@ -43,6 +46,12 @@ export function MorningBriefingModal() {
       const res = await fetch('/api/sales/morning-briefing');
       if (res.ok) {
         const briefing = await res.json();
+        // Preferencia del perfil desactivada: no mostrar el modal hoy (misma
+        // semántica de una-vez-al-día, sin volver a consultar en cada navegación).
+        if (briefing.disabled) {
+          localStorage.setItem('last_morning_briefing', new Date().toDateString());
+          return;
+        }
         setData(briefing);
         setOpen(true);
         localStorage.setItem('last_morning_briefing', new Date().toDateString());
@@ -105,17 +114,95 @@ export function MorningBriefingModal() {
             </div>
           </div>
 
+          {/* Pendientes importantes */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-bold flex items-center gap-2 text-muted-foreground uppercase tracking-wider">
+              <ListTodo className="h-4 w-4" />
+              Pendientes importantes
+            </h3>
+            {data.tareasPendientes.length > 0 ? (
+              <div className="space-y-2">
+                {data.tareasPendientes.map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => {
+                      setOpen(false);
+                      router.push(t.leadId ? `/dashboard/leads/${t.leadId}` : '/dashboard/tareas');
+                    }}
+                    className="w-full text-left p-3 rounded-xl border bg-background/60 hover:border-primary/40 hover:shadow-sm transition-all group flex items-center justify-between gap-3"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-bold text-sm line-clamp-1 group-hover:text-primary transition-colors">
+                          {t.titulo}
+                        </h4>
+                        {t.vencida && (
+                          <Badge variant="destructive" className="shrink-0 animate-pulse">Vencida</Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+                        {t.leadNombre ? `Lead: ${t.leadNombre} · ` : ''}
+                        📅 {format(new Date(t.fechaVencimiento), "d 'de' MMMM, HH:mm", { locale: es })}
+                      </p>
+                    </div>
+                    <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:translate-x-1 transition-transform shrink-0" />
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-emerald-600 font-medium">Nada urgente pendiente. ✓</p>
+            )}
+          </div>
+
           {/* Radar de Riesgos y Novedades */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="p-4 rounded-xl border border-red-100 bg-red-50/50 space-y-2">
+            <div className="p-4 rounded-xl border border-red-100 bg-red-50/50 space-y-3">
               <div className="flex items-center gap-2 text-red-700 font-bold text-xs uppercase">
                 <AlertCircle className="h-4 w-4" />
                 Operación Rescate
               </div>
               {data.riskyDeals.length > 0 ? (
-                <p className="text-[11px] text-red-600">
-                  {data.riskyDeals.length} deals en riesgo. Gemma sugiere actuar ahora.
-                </p>
+                <>
+                  <div className="space-y-2">
+                    {data.riskyDeals.slice(0, 5).map((deal) => {
+                      const riskPct =
+                        typeof deal.risk === 'number' && deal.risk > 0 && deal.risk <= 1
+                          ? Math.round(deal.risk * 100)
+                          : Math.round(Number(deal.risk) || 0);
+                      return (
+                        <button
+                          key={deal.id}
+                          onClick={() => {
+                            setOpen(false);
+                            router.push(`/dashboard/pipeline/${deal.id}`);
+                          }}
+                          className="w-full text-left p-2.5 rounded-lg bg-white/70 border border-red-100 hover:border-red-300 hover:shadow-sm transition-all group"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <h4 className="font-bold text-xs text-red-800 group-hover:text-red-600 transition-colors line-clamp-1">
+                              {deal.titulo}
+                            </h4>
+                            {riskPct > 0 && (
+                              <span className="text-[10px] font-bold text-red-600 shrink-0">
+                                {riskPct}% riesgo
+                              </span>
+                            )}
+                          </div>
+                          {deal.rescueMessage && (
+                            <p className="text-[11px] text-red-600/90 mt-1 leading-snug line-clamp-2">
+                              {deal.rescueMessage}
+                            </p>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {data.riskyDeals.length > 5 && (
+                    <p className="text-[10px] text-red-500 font-medium">
+                      +{data.riskyDeals.length - 5} deals en riesgo más. Ve al pipeline para verlos todos.
+                    </p>
+                  )}
+                </>
               ) : (
                 <p className="text-[11px] text-emerald-600 font-medium">Todo bajo control.</p>
               )}
