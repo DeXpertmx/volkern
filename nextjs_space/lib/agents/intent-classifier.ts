@@ -412,7 +412,7 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     // mensajes de búsqueda/listado ("busca el lead…", "lista los contactos…")
     // nunca entrarían en la ruta determinista. También acepta frases de filtro
     // sin verbo: "leads en estado X", "contactos tipo empresa".
-    const ACTION_VERB = /\b(?:agrega|crea|registra|nuev[oa]|añade|alta|abre|busca|encuentra|consulta|localiza|lista|listame|mu[eé]strame|muestra|ver|ens[eé][ñn]ame|dame|convierte|convertir|pasa|transforma|mueve|actualiza|cambia|modifica|pon|ponle|anota|anotar|tuve|registro|agenda|agendar|programa|programar|reserva|reservar|aparta|apartar|cancela|cancelar|anula|anular|reagenda|reagendar|confirmar|analiza|analizar|revisa|revisar|completa|completar|termina|terminar|finaliza|finalizar|marca|marcar|cierra|cerrar|presenta|presentar|present[ée]|sugiere|sugerir|sugiero|sugiera|sugieran|respondo|responder[íi]a|contesto|contestar)\b/i
+    const ACTION_VERB = /\b(?:agrega|crea|registra|nuev[oa]|añade|alta|abre|busca|encuentra|consulta|localiza|lista|listame|mu[eé]strame|muestra|ver|ens[eé][ñn]ame|dame|convierte|convertir|pasa|transforma|mueve|actualiza|cambia|modifica|pon|ponle|anota|anotar|tuve|registro|agenda|agendar|programa|programar|reserva|reservar|aparta|apartar|cancela|cancelar|anula|anular|reagenda|reagendar|confirmar|analiza|analizar|revisa|revisar|completa|completar|termina|terminar|finaliza|finalizar|marca|marcar|cierra|cerrar|presenta|presentar|present[ée]|sugiere|sugerir|sugiero|sugiera|sugieran|respondo|responder[íi]a|contesto|contestar|pospone|posponer|reprograma|reprogramar|edita|editar|saca|sacar)\b/i
     const FILTER_ONLY = /\b(?:contactos?|leads?)\b.*\b(?:en\s+estado|por\s+estado|tipo|que\s+contengan|tags?)\b/i
     // Entidades del pipeline sin verbo: "cómo va mi pipeline", "qué deals tengo",
     // "cómo va la venta con X" (bloque 23: detalles_negocio por email)
@@ -425,8 +425,9 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     // declaraciones desde Telegram) — si no matchean ningún intent determinista
     // el clasificador cae al LLM igualmente.
     const FINANZA_TRIGGER = /\b(?:gastos?|egresos?|gast[ée]|burn\s*rate|salud\s+financiera|flujo\s+de\s+caja|proyecci[oó]n|pron[oó]stic(?:o|a|os)?|forecast|impuestos?|fiscal|provisi[oó]n|rentabilidad|ebitda|margen|financieramente|iva\b|retenciones?|modelo\s*\d{3}|modelos?\s+por\s+(?:presentar|declarar)|declaraci[oó]n\b|balance\b|comprobaci[oó]n\b|sumas\s+y\s+saldos|cuenta\s+de\s+resultados|resultado\s+del\s+ejercicio|gan[eé]|ganancias)\b/i
-    // Entidades de tareas/notas sin verbo: "qué tareas tengo", "ver notas de X"
-    const TAREA_TRIGGER = /\b(?:tareas?|pendientes?|notas?|to[- ]?do)\b/i
+    // Entidades de tareas/notas sin verbo: "qué tareas tengo", "ver notas de X",
+    // "pospone el recordatorio de X" (bloque 24: snooze_task)
+    const TAREA_TRIGGER = /\b(?:tareas?|pendientes?|notas?|to[- ]?do|recordatorios?)\b/i
     // Entidades de proveedores sin verbo: "lista de proveedores", "qué proveedores tengo"
     const PROVEEDOR_TRIGGER = /\bproveedor(?:es)?\b/i
     // Entidades de catálogo sin verbo: "qué productos hay", "precio de X", "cuánto cuesta X"
@@ -1483,7 +1484,7 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     // ═══ 7. ACTUALIZAR LEAD / CONTACTO ("actualiza el teléfono de X a 555-1234",
     // "ponle contexto a X: …") — después de los deals para no chocar con
     // "actualiza el monto del negocio…" ═══
-    const UPDATE_VERB = /\b(?:actualiza|cambia|modifica|ponle|pon|agrega\s+contexto|agregar\s+contexto|agrega\s+notas|ponle\s+notas|pon\s+contexto|pon\s+notas)\b/i
+    const UPDATE_VERB = /\b(?:actualiza|cambia|modifica|ponle|pon|agrega\s+contexto|agregar\s+contexto|agrega\s+notas|ponle\s+notas|pon\s+contexto|pon\s+notas|edita|editar)\b/i
     const UPDATE_TARGET = /\b(?:lead|contacto|contexto|notas?|tel[eé]fono|cargo|empresa|correo|nombre)\b/i
     if (UPDATE_VERB.test(message) && !DEAL_ENTITY.test(message) && UPDATE_TARGET.test(message)) {
       // Nombre: de la parte anterior a los dos puntos ("ponle contexto a
@@ -1508,6 +1509,17 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
         if (ctx.length >= 2) extracted.contexto = ctx.replace(/["'”]+\s*$/, '').trim()
       }
 
+      // Si el usuario dice explícitamente "contacto" (y no "lead") Y pide
+      // cambiar un campo estructurado (teléfono, cargo, empresa, correo,
+      // nombre…), es una edición de contacto → update_contact (no crear
+      // duplicados). Ediciones genéricas ("actualiza el contacto de X", "pon
+      // contexto al contacto X") se quedan en actualizar_lead (retrocompat).
+      const mencionaContacto = /\bcontacto\b/i.test(message)
+      const mencionaLead = /\blead\b/i.test(message)
+      const campoEstructurado = /\b(?:tel[eé]fono|celular|telefonic[oa]|cargo|empresa|linkedin|ciudad|ubicaci[oó]n|direcci[oó]n|correo|email|nombre|tags?)\b/i.test(message)
+      if (mencionaContacto && !mencionaLead && campoEstructurado) {
+        return { intent: 'update_contact', confidence: 0.85, extractedParams: extracted }
+      }
       return { intent: 'actualizar_lead', confidence: 0.85, extractedParams: extracted }
     }
 
@@ -1951,6 +1963,40 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
         this.extractNombreAfter(message, /(?:tarea|pendiente)\s+(?:de|del)\s+/i)
       if (titulo) extracted.titulo = titulo
       return { intent: 'completar_tarea', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 16b0. SNOOZE TAREA ("pospone el recordatorio de llamar a Juan hasta
+    // mañana", "recuérdamelo más tarde, la tarea de revisar cotización",
+    // "saca de la lista la tarea de enviar documento hasta el viernes") —
+    // antes que reprogramar_tarea: snooze pospone el recordatorio SIN cambiar
+    // la fecha real de la tarea ═══
+    // Verbo de snooze: "recuérdame… más tarde", "saca de la lista…",
+    // "pospone el recordatorio…", "snooze…". El sustantivo "recordatorio"
+    // suelto NO dispara ("cuando vence el recordatorio de X" es consulta),
+    // pero "pospone el recordatorio de X" SÍ es snooze aunque X no contenga
+    // la palabra tarea/pendiente.
+    const SNOOZE_VERBO = /\b(?:snooze|rec[ué]rdame|m[aá]s\s+tarde|saca\s+de\s+la\s+lista|sacar\s+de\s+la\s+lista)\b/i
+    const SNOOZE_POSPONE_RECORDATORIO = /\bpospon(?:e|er|go)?\b/i.test(message) && /\brecordatorio/i.test(message)
+    const hayTarea = TAREA_ENTITY.test(msgNoEmails) || /\brecordatorio/i.test(message)
+    if ((SNOOZE_VERBO.test(message) || SNOOZE_POSPONE_RECORDATORIO) && hayTarea && !/\bpara\s+(?:el|la|los)\s+(?:lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo|\d{1,2}\s+de)\b/i.test(message)) {
+      // Título: "pospone el recordatorio de llamar a Juan hasta mañana" →
+      // "llamar a Juan". extractNombreAfter exige mayúscula inicial (nombres
+      // propios) y los títulos de tarea van en minúscula, así que se corta
+      // el texto tras "recordatorio/tarea/pendiente de" hasta la fecha.
+      let titulo = this.extractTituloTareaDe(message)
+      if (!titulo) {
+        const kw = message.match(/\b(?:recordatorio|tarea|pendiente)\s+(?:de|del)\s+/i)
+        if (kw && kw.index !== undefined) {
+          let t = message.slice(kw.index + kw[0].length).trim()
+          t = t.split(/\s+(?:hasta|para|el\s+\d{1,2}|ma[nñ]ana|hoy|ayer|pasado\s+ma[nñ]ana|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo|vence|vencimiento|prioridad)/i)[0].trim()
+          t = t.replace(/["'”]+\s*$/, '').trim()
+          if (t.length >= 2) titulo = t
+        }
+      }
+      if (titulo) extracted.titulo = titulo
+      const hasta = this.extractFechaDe(message)
+      if (hasta) extracted.hasta = hasta
+      return { intent: 'snooze_task', confidence: 0.85, extractedParams: extracted }
     }
 
     // ═══ 16b. REPROGRAMAR TAREA ("reprograma la tarea de llamar a Juan para

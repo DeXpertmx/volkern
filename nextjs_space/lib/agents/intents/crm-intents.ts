@@ -105,6 +105,20 @@ export const crmIntents: IntentSchema[] = [
     destructive: false
   },
   {
+    name: 'update_contact',
+    description: 'Editar los datos de un contacto existente (teléfono, cargo, empresa, notas) sin crear duplicados',
+    requiredParams: [],
+    optionalParams: ['email', 'nombre', 'telefono', 'cargo', 'empresa', 'contexto', 'notas'],
+    examples: [
+      'edita el teléfono del contacto Laura Gómez a 555-0102',
+      'cambia el cargo de Pedro Sánchez a Director Comercial',
+      'actualiza el contacto Sofía Ruiz: ahora es de Ruiz Consulting',
+      'ponle notas al contacto Carlos Díaz: Prefiere contacto por WhatsApp',
+      'actualiza el teléfono del contacto juan@email.com a 555-4321'
+    ],
+    destructive: false
+  },
+  {
     name: 'convertir_lead',
     description: 'Convertir un lead en contacto formal',
     requiredParams: ['email'],
@@ -326,6 +340,19 @@ export const crmIntents: IntentSchema[] = [
       'reprograma la tarea de llamar a Juan para el viernes',
       'mueve la tarea de enviar documento para mañana',
       'pospone el pendiente de revisar cotización al 20 de agosto'
+    ],
+    destructive: false
+  },
+  {
+    name: 'snooze_task',
+    description: 'Posponer el recordatorio de una tarea pendiente (la saca temporalmente de las listas) sin cambiar su fecha real',
+    requiredParams: ['titulo'],
+    optionalParams: ['hasta', 'email', 'nombre'],
+    examples: [
+      'pospone el recordatorio de llamar a Juan hasta mañana',
+      'recuérdamelo más tarde, la tarea de revisar cotización',
+      'saca de la lista la tarea de enviar documento hasta el viernes',
+      'pospon el recordatorio de la tarea de llamar a María'
     ],
     destructive: false
   },

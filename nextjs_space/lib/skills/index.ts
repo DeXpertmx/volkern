@@ -1031,6 +1031,87 @@ const createContactWrapper = async (input: {
 };
 
 /**
+ * Wrapper update_contact: resuelve el contacto por nombre o email y aplica
+ * los cambios pedidos en el chat (teléfono, cargo, empresa, notas…).
+ * Reutiliza el mismo patrón de empresa→companyId que createContactWrapper.
+ */
+const updateContactWrapper = async (input: {
+  tenantId: string;
+  email?: string;
+  nombre?: string;
+  telefono?: string;
+  cargo?: string;
+  empresa?: string;
+  contexto?: string;
+  notas?: string;
+  linkedin?: string;
+  ubicacion?: string;
+  ciudad?: string;
+  tags?: string;
+  userId?: string;
+}) => {
+  const { tenantId, email, contexto, notas, userId, ...campos } = input;
+  const realUserId = (await resolveRealUserId(tenantId, userId)) || userId;
+  const { prisma } = await import('@/lib/db');
+  const nombre = campos.nombre;
+
+  // 1. Localizar el contacto por email o por nombre (parcial, case-insensitive)
+  let contacto: { id: string } | null = null;
+  if (email) {
+    contacto = await prisma.contact.findFirst({ where: { tenantId, email } });
+  } else if (nombre) {
+    contacto = await prisma.contact.findFirst({
+      where: { tenantId, nombre: { contains: nombre, mode: 'insensitive' } },
+    });
+  }
+  if (!contacto) {
+    const ref = email || nombre || 'sin identificar';
+    throw new Error(`No encontré ningún contacto con ${ref}. Revisa el nombre o el email.`);
+  }
+
+  // 2. Empresa → companyId (busca o crea, mismo patrón que createContactWrapper)
+  let companyId: string | undefined;
+  if (campos.empresa && campos.empresa.trim()) {
+    let company = await prisma.contact.findFirst({
+      where: { tenantId, tipo: 'company', nombre: { equals: campos.empresa.trim(), mode: 'insensitive' } },
+    });
+    if (!company) {
+      company = await prisma.contact.create({
+        data: {
+          tenantId,
+          nombre: campos.empresa.trim(),
+          email: `empresa-${campos.empresa.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()}-${Date.now()}@volkern.app`,
+          tipo: 'company',
+          notas: 'Empresa creada automáticamente desde el chatbot',
+        },
+      });
+    }
+    companyId = company.id;
+  }
+
+  // 3. Construir el payload con solo los campos que llegaron
+  const data: Record<string, unknown> = {};
+  if (campos.nombre !== undefined) data.nombre = campos.nombre;
+  if (campos.telefono !== undefined) data.telefono = campos.telefono;
+  if (campos.cargo !== undefined) data.cargo = campos.cargo;
+  if (campos.linkedin !== undefined) data.linkedin = campos.linkedin;
+  if (campos.ubicacion !== undefined) data.ubicacion = campos.ubicacion;
+  if (campos.ciudad !== undefined) data.ciudad = campos.ciudad;
+  if (campos.tags !== undefined) data.tags = campos.tags;
+  if (companyId !== undefined) data.companyId = companyId;
+  const finalNotas = contexto || notas;
+  if (finalNotas !== undefined) data.notas = finalNotas;
+
+  return contactSkills.updateContact({
+    contactId: contacto.id,
+    tenantId,
+    data: data as never,
+    userId: realUserId,
+    source: 'webhook',
+  });
+};
+
+/**
  * Wrapper create_company: crea una empresa (contacto tipo company).
  * Si no llega email, genera uno corporativo de respaldo (mismo patrón que la
  * conversión de leads en app/api/leads/[id]/convert/route.ts).
@@ -3992,7 +4073,7 @@ const generateLandingDraftWrapper = async (input: {
 export const skills = {
   // Contactos
   create_contact: createContactWrapper,
-  update_contact: contactSkills.updateContact,
+  update_contact: updateContactWrapper,
   get_contact: contactSkills.getContact,
   find_contact_by_email: findContactByEmailWrapper,
   list_contacts: contactSkills.listContacts,

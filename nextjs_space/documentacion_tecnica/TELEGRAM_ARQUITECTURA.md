@@ -51,7 +51,8 @@ el bot del sistema).
 
 ## 3. Entrenamiento (cómo se agrega una capacidad nueva)
 
-El entrenamiento se hace por **bloques** (hasta ahora: 21 bloques, 110 intents):
+El entrenamiento se hace por **bloques** (hasta ahora: 24 bloques, **138 intents**;
+ver recuento actualizado con `node scripts/audit-telegram-training.mjs`):
 
 1. **Inventario**: buscar skills en `lib/skills/` que existan pero no tengan
    intent (huérfanos).
