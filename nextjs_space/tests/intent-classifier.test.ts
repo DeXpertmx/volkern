@@ -1538,6 +1538,25 @@ describe('IntentClassifier — ruta determinista (sin LLM)', () => {
       message: 'lista el catálogo',
     });
     expect(result.intent).toBe('buscar_catalogo');
+    expect(result.extractedParams.query).toBeUndefined();
+  });
+
+  it('dame la lista de productos y servicios → buscar_catalogo sin query', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'dame la lista de productos y servicios',
+    });
+    expect(result.intent).toBe('buscar_catalogo');
+    expect(result.extractedParams.query).toBeUndefined();
+  });
+
+  it('lista de productos y servicios → buscar_catalogo sin query', async () => {
+    const result = await classifier.classify({
+      ...base,
+      message: 'lista de productos y servicios',
+    });
+    expect(result.intent).toBe('buscar_catalogo');
+    expect(result.extractedParams.query).toBeUndefined();
   });
 
   it('muéstrame los servicios disponibles → buscar_catalogo tipo servicio', async () => {

@@ -63,6 +63,9 @@ export interface SearchCatalogInput {
  */
 export interface BuscarCatalogoInput {
   tenantId: string;
+  /** Canal interno (Telegram/agent) puede consultar todos los ítems activos;
+   * los canales públicos respetan visibleInChatbot. */
+  source?: 'telegram' | 'agent' | 'public';
   /** Texto libre de búsqueda (usa búsqueda semántica con embeddings) */
   query?: string;
   /** Tipo de ítem: inmueble, servicio, producto, etc. */
@@ -374,6 +377,7 @@ export async function buscarCatalogo(input: BuscarCatalogoInput) {
     tenantId,
     query,
     tipo,
+    source = 'public',
     precioMin,
     precioMax,
     categoria,
@@ -401,7 +405,7 @@ export async function buscarCatalogo(input: BuscarCatalogoInput) {
     try {
       const semanticResults = await KnowledgeService.searchCatalogItems(tenantId, query);
       
-      if (semanticResults.length > 0) {
+      if (semanticResults.length > 0 && source === 'public') {
         // Enriquecer con datos completos de Prisma
         const ids = semanticResults.map(r => r.id);
         const fullItems = await prisma.catalogoItem.findMany({
@@ -435,7 +439,7 @@ export async function buscarCatalogo(input: BuscarCatalogoInput) {
     const where: any = {
       tenantId,
       activo: true,
-      visibleInChatbot: true,
+      ...(source === 'public' ? { visibleInChatbot: true } : {}),
     };
     if (tipo) where.tipo = tipo;
     if (categoria) where.categorias = { has: categoria };

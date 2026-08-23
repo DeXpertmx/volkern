@@ -94,6 +94,18 @@ export const erpIntents: IntentSchema[] = [
     ],
     destructive: false
   },
+  {
+    name: 'crear_cotizacion',
+    description: 'Crear un borrador de cotización desde un producto o servicio del catálogo, incluyendo periodos recurrentes',
+    requiredParams: ['producto', 'months'],
+    optionalParams: ['cantidad', 'email', 'nombre', 'clienteEmpresa', 'descuentoPorcentaje'],
+    examples: [
+      'haz una cotización de Volkern Insurance por 12 meses',
+      'cotiza el servicio de implementación durante 3 meses',
+      'prepara un presupuesto para Cafetera Pro por 2 unidades'
+    ],
+    destructive: false
+  },
 
   // ========== PRODUCCIÓN / CALIDAD ==========
   {

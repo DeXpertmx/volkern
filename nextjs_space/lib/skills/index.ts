@@ -3698,6 +3698,154 @@ const getCatalogItemDetailsWrapper = async (input: {
 };
 
 /**
+ * Crea un borrador de cotización desde un ítem del catálogo. Se usa desde
+ * Telegram: resuelve el producto por nombre, conserva precio/moneda/impuestos
+ * del catálogo y convierte un periodo recurrente en cantidad de meses. Nunca
+ * envía la cotización al cliente; queda en borrador para revisión.
+ */
+const createQuoteWrapper = async (input: {
+  tenantId: string;
+  producto?: string;
+  catalogoItemId?: string;
+  months?: number | string;
+  cantidad?: number | string;
+  email?: string;
+  nombre?: string;
+  clienteEmpresa?: string;
+  descuentoPorcentaje?: number | string;
+  userId?: string;
+}) => {
+  const { tenantId } = input;
+  const ref = String(input.catalogoItemId || input.producto || '').trim();
+  const months = Number(input.months || 0);
+  const cantidad = Number(input.cantidad || 1);
+  if (!ref) throw new Error('Indica qué producto o servicio quieres cotizar.');
+  if (!Number.isFinite(months) || months < 1 || months > 24) {
+    throw new Error('Indica el periodo de la cotización en meses (entre 1 y 24).');
+  }
+  if (!Number.isFinite(cantidad) || cantidad < 1) {
+    throw new Error('La cantidad debe ser mayor que cero.');
+  }
+
+  const { prisma } = await import('@/lib/db');
+  const exact = await prisma.catalogoItem.findFirst({
+    where: { tenantId, activo: true, nombre: { equals: ref, mode: 'insensitive' } },
+    include: { tasaImpuesto: true },
+  });
+  const item = exact || await prisma.catalogoItem.findFirst({
+    where: {
+      tenantId,
+      activo: true,
+      OR: [
+        { nombre: { contains: ref, mode: 'insensitive' } },
+        { sku: { contains: ref, mode: 'insensitive' } },
+      ],
+    },
+    include: { tasaImpuesto: true },
+  });
+  if (!item) throw new Error(`No encontré "${ref}" entre los productos y servicios activos del catálogo.`);
+
+  const pricing = (item.pricing || {}) as Record<string, any>;
+  const isRecurring = pricing.tipo === 'recurrente' || item.unidad === 'mes';
+  const quantity = isRecurring ? months * cantidad : cantidad;
+  const unitPrice = Number(item.precioBase) || 0;
+  const subtotal = Math.round(quantity * unitPrice * 100) / 100;
+  const descuentoPorcentaje = Math.min(100, Math.max(0, Number(input.descuentoPorcentaje || 0)));
+  const descuentoMonto = Math.round(subtotal * descuentoPorcentaje / 100 * 100) / 100;
+  const baseImponible = subtotal - descuentoMonto;
+  const porcentajeImpuesto = Number(item.tasaImpuesto?.porcentaje || 0);
+  const impuestos = Math.round(baseImponible * porcentajeImpuesto / 100 * 100) / 100;
+  const total = Math.round((baseImponible + impuestos) * 100) / 100;
+  const periodo = isRecurring ? `${months} ${months === 1 ? 'mes' : 'meses'}` : `${months} ${months === 1 ? 'mes' : 'meses'} de referencia`;
+
+  const lead = input.email
+    ? await prisma.lead.findFirst({ where: { tenantId, email: input.email }, select: { id: true, nombre: true, email: true, empresa: true, telefono: true } })
+    : input.nombre
+      ? await prisma.lead.findFirst({ where: { tenantId, nombre: { contains: input.nombre, mode: 'insensitive' } }, select: { id: true, nombre: true, email: true, empresa: true, telefono: true } })
+      : null;
+  const contact = !lead && input.email
+    ? await prisma.contact.findFirst({ where: { tenantId, email: input.email }, select: { id: true, nombre: true, email: true, telefono: true } })
+    : null;
+  const userId = await resolveRealUserId(tenantId, input.userId);
+  const year = new Date().getFullYear();
+  const last = await prisma.cotizacion.findFirst({
+    where: { tenantId, numero: { startsWith: `COT-${year}-` } },
+    orderBy: { numero: 'desc' },
+    select: { numero: true },
+  });
+  const next = last ? (Number(last.numero.split('-')[2]) || 0) + 1 : 1;
+  const numero = `COT-${year}-${String(next).padStart(4, '0')}`;
+  const tokenPublico = `${numero.replace(/[^a-zA-Z0-9]/g, '')}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const clienteNombre = lead?.nombre || contact?.nombre || input.nombre || null;
+  const clienteEmail = lead?.email || contact?.email || input.email || null;
+  const clienteTelefono = lead?.telefono || contact?.telefono || null;
+  const clienteEmpresa = lead?.empresa || input.clienteEmpresa || null;
+
+  const quote = await prisma.cotizacion.create({
+    data: {
+      tenantId,
+      leadId: lead?.id || null,
+      contactId: contact?.id || null,
+      creadoPorId: userId || null,
+      numero,
+      titulo: `Cotización de ${item.nombre} — ${periodo}`,
+      descripcion: isRecurring ? `Servicio recurrente durante ${periodo}.` : `Cotización de ${item.nombre}.`,
+      subtotal,
+      descuentoPorcentaje,
+      descuentoMonto,
+      impuestos,
+      total,
+      moneda: item.moneda || 'EUR',
+      validezDias: 30,
+      clienteNombre,
+      clienteEmail,
+      clienteEmpresa,
+      clienteTelefono,
+      tokenPublico,
+      fechaVencimiento: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      items: {
+        create: {
+          catalogoItemId: item.id,
+          concepto: item.nombre,
+          descripcion: `${item.descripcion || ''}${item.descripcion ? ' ' : ''}Periodo: ${periodo}.`,
+          cantidad: quantity,
+          precioUnitario: unitPrice,
+          descuento: 0,
+          subtotal,
+          porcentajeImpuesto,
+          montoImpuesto: impuestos,
+          impuestos,
+          total,
+          orden: 0,
+          categoria: item.categoriaFiscal,
+          sku: item.sku,
+          tasaImpuestoId: item.tasaImpuestoId,
+        },
+      },
+    },
+    include: { items: true },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      tenantId,
+      userId: userId || null,
+      accion: 'crear',
+      entidad: 'cotizacion',
+      entidadId: quote.id,
+      descripcion: `Cotización ${numero} creada desde Telegram para ${item.nombre} (${periodo})`,
+      cambiosDespues: { cotizacionId: quote.id, catalogoItemId: item.id, months, cantidad },
+    },
+  });
+
+  return {
+    success: true,
+    cotizacion: quote,
+    message: `✅ Borrador de cotización creado: ${numero}\n📦 ${item.nombre}\n📆 ${periodo}\n💰 ${total.toFixed(2)} ${item.moneda || 'EUR'}${clienteNombre ? `\n👤 Cliente: ${clienteNombre}` : '\n👤 Pendiente de asignar cliente'}\n📝 Quedó en Cotizaciones para revisión; no se ha enviado al cliente.`,
+  };
+};
+
+/**
  * Wrapper exportar_catalogo: delega en exportCatalog del core con el formato
  * pedido (csv/json) y devuelve un resumen legible (cantidad de ítems y
  * formato), no el dump completo que saturaría el chat.
@@ -3911,10 +4059,11 @@ export const skills = {
   
   // Catálogo
   export_catalog: catalogSkills.exportCatalog,
+  create_cotizacion: createQuoteWrapper,
   get_catalog_field_definitions: catalogSkills.getFieldDefinitions,
   get_catalog_item: catalogSkills.getCatalogItem,
   search_catalog: catalogSkills.searchCatalog,
-  buscar_catalogo: catalogSkills.buscarCatalogo,
+  buscar_catalogo: (input: Parameters<typeof catalogSkills.buscarCatalogo>[0]) => catalogSkills.buscarCatalogo({ ...input, source: input.source || 'telegram' }),
   
   // WebCreator AI
   generate_landing_draft: webCreatorSkills.generateLandingDraft,
@@ -4140,6 +4289,7 @@ export function listSkills(): Array<{ name: SkillName; description: string; cate
     { name: 'get_catalog_item', description: 'Obtener un ítem del catálogo por ID', category: 'catalog' },
     { name: 'search_catalog', description: 'Buscar en el catálogo con filtros', category: 'catalog' },
     { name: 'buscar_catalogo', description: 'Buscar en el catálogo con filtros dinámicos (precio, tipo, ciudad) para el chatbot', category: 'catalog' },
+    { name: 'create_cotizacion', description: 'Crear un borrador de cotización desde un producto o servicio del catálogo', category: 'catalog' },
     // AI
     { name: 'execute_chatbot_response', description: 'Procesar mensaje del chatbot y responder', category: 'ai' },
     // Advanced composite skills
