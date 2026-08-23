@@ -46,6 +46,7 @@ const INTENT_TO_SKILL: Record<string, string> = {
   // ─── CRM: Contactos & Leads ───
   'crear_lead': 'create_lead',
   'crear_contacto': 'create_contact',
+  'update_contact': 'update_contact',
   'crear_empresa': 'create_company',
   'buscar_lead': 'find_lead_by_email',
   'listar_contactos': 'list_contacts',
@@ -74,6 +75,7 @@ const INTENT_TO_SKILL: Record<string, string> = {
   'crear_tarea': 'create_task',
   'completar_tarea': 'complete_task',
   'reprogramar_tarea': 'reschedule_task',
+  'snooze_task': 'snooze_task',
   'mis_tareas': 'get_pending_tasks',
   'tareas_vencidas': 'get_overdue_tasks',
   'tareas_hoy': 'get_tasks_due_today',
@@ -735,6 +737,7 @@ export const SkillOrchestratorAgent = {
 
         // CRM - Contactos
         'crear_contacto': 'contactos',
+        'update_contact': 'contactos',
         'listar_contactos': 'contactos',
         'obtener_telefono': 'contactos',
 
@@ -760,6 +763,7 @@ export const SkillOrchestratorAgent = {
         'crear_tarea': 'tareas',
         'completar_tarea': 'tareas',
         'reprogramar_tarea': 'tareas',
+        'snooze_task': 'tareas',
         'mis_tareas': 'tareas',
         'tareas_vencidas': 'tareas',
         'tareas_hoy': 'tareas',
@@ -929,6 +933,7 @@ export const SkillOrchestratorAgent = {
       'actualizar_lead': '👥 No tienes acceso al módulo de *Leads*. Contacta al administrador para activarlo.',
       'convertir_lead': '👥 No tienes acceso al módulo de *Leads*. Contacta al administrador para activarlo.',
       'crear_contacto': '✅ No tienes acceso al módulo de *Contactos*. Contacta al administrador para activarlo.',
+      'update_contact': '✅ No tienes acceso al módulo de *Contactos*. Contacta al administrador para activarlo.',
       'listar_contactos': '✅ No tienes acceso al módulo de *Contactos*. Contacta al administrador para activarlo.',
       'crear_empresa': '🏢 No tienes acceso al módulo de *Empresas*. Contacta al administrador para activarlo.',
       'agendar_cita': '📅 No tienes acceso al módulo de *Citas*. Contacta al administrador para activarlo.',

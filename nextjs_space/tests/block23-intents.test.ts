@@ -223,8 +223,13 @@ describe('IntentClassifier — bloque 23 (consultas avanzadas, Web Creator y Tra
     expect(r.intent).toBe('listar_contactos');
   });
 
-  it('NO colisiona: "actualiza el contacto de Alejandra" sigue siendo actualizar_lead', async () => {
+  it('NO colisiona: editar un campo concreto de un contacto es update_contact (bloque 24)', async () => {
     const r = await classifier.classify({ ...base, message: 'actualiza el teléfono del contacto Alejandra a 555-1234' });
+    expect(r.intent).toBe('update_contact');
+  });
+
+  it('NO colisiona: "actualiza el contacto de Alejandra" (sin campo concreto) sigue siendo actualizar_lead', async () => {
+    const r = await classifier.classify({ ...base, message: 'actualiza el contacto de Alejandra' });
     expect(r.intent).toBe('actualizar_lead');
   });
 
