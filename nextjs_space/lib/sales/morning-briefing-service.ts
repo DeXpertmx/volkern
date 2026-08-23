@@ -8,6 +8,16 @@ export interface BriefingData {
   riskyDeals: { id: string; titulo: string; risk: number; rescueMessage: string }[];
   newDiamonds: { id: string; nombre: string; quality: number }[];
   motivationalQuote: string;
+  /** Tareas pendientes importantes (determinista, no pasa por Gemma):
+   *  vencidas primero y luego las más próximas, del usuario o sin asignar. */
+  tareasPendientes: {
+    id: string;
+    titulo: string;
+    leadId: string | null;
+    leadNombre: string | null;
+    fechaVencimiento: string;
+    vencida: boolean;
+  }[];
 }
 
 export class MorningBriefingService {
@@ -40,7 +50,42 @@ export class MorningBriefingService {
       take: 5
     });
 
-    // 3. Priorizar con Gemma
+    // 3. Tareas pendientes importantes (determinista: vencidas primero, luego
+    //    las más próximas). No pasan por Gemma para que el briefing siempre
+    //    muestre los pendientes reales aunque la IA falle.
+    const now = new Date();
+    const pendingTasks = await prisma.task.findMany({
+      where: {
+        tenantId,
+        AND: [{ OR: [{ asignadoA: userId }, { asignadoA: null }] }],
+        completada: false,
+        OR: [
+          { recordatorioPospuestoHasta: null },
+          { recordatorioPospuestoHasta: { lte: now } },
+        ],
+      },
+      orderBy: { fechaVencimiento: 'asc' },
+      take: 20,
+      include: { lead: { select: { id: true, nombre: true } } },
+    });
+    const nowMs = Date.now();
+    const tareasPendientes = (pendingTasks as any[])
+      .map((t) => ({
+        id: t.id,
+        titulo: t.titulo,
+        leadId: t.lead?.id ?? null,
+        leadNombre: t.lead?.nombre ?? null,
+        fechaVencimiento: new Date(t.fechaVencimiento).toISOString(),
+        vencida: Boolean(t.fechaVencimiento && new Date(t.fechaVencimiento).getTime() < nowMs),
+      }))
+      .sort(
+        (a, b) =>
+          Number(b.vencida) - Number(a.vencida) ||
+          new Date(a.fechaVencimiento).getTime() - new Date(b.fechaVencimiento).getTime(),
+      )
+      .slice(0, 6);
+
+    // 4. Priorizar con Gemma
     const systemPrompt = `Eres Gemma, el Asistente de Proactividad de Volkern CRM. Tu misión es generar un "Morning Briefing" para el comercial. Prioriza 3 deals por impacto y detecta riesgos. Responde SOLO en JSON válido.`;
 
     const userPrompt = `
@@ -82,7 +127,10 @@ RESPONDE EN ESTE FORMATO JSON:
     }
 
     try {
-      return JSON.parse(jsonStr);
+      return {
+        ...JSON.parse(jsonStr),
+        tareasPendientes,
+      };
     } catch (e) {
       console.error('Error parsing JSON from Gemma:', jsonStr);
       throw new Error('La respuesta de Gemma no es un JSON válido');

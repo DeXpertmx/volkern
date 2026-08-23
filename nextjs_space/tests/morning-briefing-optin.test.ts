@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   userFindMany: vi.fn(),
   dealFindMany: vi.fn(),
   leadFindMany: vi.fn(),
+  taskFindMany: vi.fn(),
   notifyByTelegram: vi.fn(),
 }))
 
@@ -12,6 +13,7 @@ vi.mock('@/lib/db', () => ({
     user: { findMany: mocks.userFindMany },
     deal: { findMany: mocks.dealFindMany },
     lead: { findMany: mocks.leadFindMany },
+    task: { findMany: mocks.taskFindMany },
   },
 }))
 
@@ -45,12 +47,75 @@ const userBase = {
   metadata: {},
 }
 
+describe('MorningBriefingService.generateBriefing — incluye tareas pendientes', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.dealFindMany.mockResolvedValue([])
+    mocks.leadFindMany.mockResolvedValue([])
+    mocks.taskFindMany.mockResolvedValue([])
+  })
+
+  it('devuelve tareasPendientes con las vencidas primero', async () => {
+    mocks.taskFindMany.mockResolvedValue([
+      {
+        id: 't-hoy',
+        titulo: 'Llamar a Juan',
+        fechaVencimiento: new Date(Date.now() + 3600e3),
+        recordatorioPospuestoHasta: null,
+        lead: { id: 'l1', nombre: 'Juan' },
+      },
+      {
+        id: 't-vencida',
+        titulo: 'Cerrar contrato',
+        fechaVencimiento: new Date(Date.now() - 86400e3),
+        recordatorioPospuestoHasta: null,
+        lead: { id: 'l2', nombre: 'Ana' },
+      },
+    ])
+
+    const briefing = await MorningBriefingService.generateBriefing('u1', 't1')
+
+    expect(briefing.tareasPendientes).toHaveLength(2)
+    expect(briefing.tareasPendientes[0].id).toBe('t-vencida')
+    expect(briefing.tareasPendientes[0].vencida).toBe(true)
+    expect(briefing.tareasPendientes[0].leadNombre).toBe('Ana')
+    expect(briefing.tareasPendientes[1].id).toBe('t-hoy')
+    expect(briefing.tareasPendientes[1].vencida).toBe(false)
+    expect(briefing.tareasPendientes[1].leadId).toBe('l1')
+  })
+
+  it('devuelve lista vacía si no hay tareas pendientes', async () => {
+    const briefing = await MorningBriefingService.generateBriefing('u1', 't1')
+
+    expect(briefing.tareasPendientes).toEqual([])
+  })
+
+  it('excluye en la consulta las tareas snoozeadas y las del usuario o sin asignar', async () => {
+    await MorningBriefingService.generateBriefing('u1', 't1')
+
+    expect(mocks.taskFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          tenantId: 't1',
+          completada: false,
+          AND: [{ OR: [{ asignadoA: 'u1' }, { asignadoA: null }] }],
+          OR: [
+            { recordatorioPospuestoHasta: null },
+            { recordatorioPospuestoHasta: { lte: expect.any(Date) } },
+          ],
+        }),
+      }),
+    )
+  })
+})
+
 describe('MorningBriefingService.sendGlobalBriefing — opt-in por usuario', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.userFindMany.mockResolvedValue([])
     mocks.dealFindMany.mockResolvedValue([])
     mocks.leadFindMany.mockResolvedValue([])
+    mocks.taskFindMany.mockResolvedValue([])
     mocks.notifyByTelegram.mockResolvedValue(true)
   })
 
