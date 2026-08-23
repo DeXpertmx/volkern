@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v2'
+const CACHE_VERSION = 'v3'
 const STATIC_CACHE = `volkern-static-${CACHE_VERSION}`
 const DYNAMIC_CACHE = `volkern-dynamic-${CACHE_VERSION}`
 

@@ -6,7 +6,7 @@
   "display": "standalone",
   "background_color": "#0f1d46",
   "theme_color": "#0f1d46",
-  "orientation": "portrait-primary",
+  "orientation": "any",
   "categories": ["business", "productivity", "calendar"],
   "lang": "es-MX",
   "scope": "/",
