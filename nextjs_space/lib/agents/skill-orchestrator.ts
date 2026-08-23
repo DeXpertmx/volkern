@@ -129,6 +129,7 @@ const INTENT_TO_SKILL: Record<string, string> = {
   'buscar_producto': 'buscar_catalogo',
   'buscar_catalogo': 'buscar_catalogo',
   'gestionar_catalogo': 'export_catalog',
+  'crear_cotizacion': 'create_cotizacion',
 
   // ─── ERP: Producción & Calidad ───
   'calcular_costo_produccion': 'calculate_production_cost',
@@ -780,6 +781,7 @@ export const SkillOrchestratorAgent = {
         'buscar_producto': 'catalogo',
         'buscar_catalogo': 'catalogo',
         'gestionar_catalogo': 'catalogo',
+        'crear_cotizacion': 'catalogo',
 
         // Finanzas - Facturación & Gastos
         'crear_factura': 'finanzas',
@@ -939,6 +941,7 @@ export const SkillOrchestratorAgent = {
       'buscar_producto': '📋 No tienes acceso al *Catálogo*. Contacta al administrador.',
       'buscar_catalogo': '📋 No tienes acceso al *Catálogo*. Contacta al administrador.',
       'gestionar_catalogo': '📋 No tienes acceso al *Catálogo*. Contacta al administrador.',
+      'crear_cotizacion': '📋 No tienes acceso al *Catálogo*. Contacta al administrador.',
       'crear_negocio': '📊 No tienes acceso al *Pipeline de Ventas*. Contacta al administrador.',
       'actualizar_negocio': '📊 No tienes acceso al *Pipeline de Ventas*. Contacta al administrador.',
       'mis_negocios': '📊 No tienes acceso al *Pipeline de Ventas*. Contacta al administrador.',
@@ -1136,6 +1139,7 @@ Puedo ayudarte con:
       'buscar_producto': 'Buscar en catálogo',
       'buscar_catalogo': 'Buscar en catálogo',
       'search_catalog': 'Buscar en catálogo',
+      'create_cotizacion': 'Crear borrador de cotización desde catálogo',
 
       // Facturación
       'create_invoice': 'Crear factura',

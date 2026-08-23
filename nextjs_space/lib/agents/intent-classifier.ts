@@ -430,7 +430,7 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     // Entidades de proveedores sin verbo: "lista de proveedores", "qué proveedores tengo"
     const PROVEEDOR_TRIGGER = /\bproveedor(?:es)?\b/i
     // Entidades de catálogo sin verbo: "qué productos hay", "precio de X", "cuánto cuesta X"
-    const CATALOGO_TRIGGER = /\b(?:cat[aá]logo|productos?|servicios?|art[ií]culos?|inmuebles?|propiedad(?:es)?|precios?|cu[aá]nto\s+cuesta|cu[aá]nto\s+vale|qu[eé]\s+precio|precio\s+de)\b/i
+    const CATALOGO_TRIGGER = /\b(?:cat[aá]logo|productos?|servicios?|art[ií]culos?|inmuebles?|propiedad(?:es)?|precios?|cotizaci[oó]n|cotizar|presupuesto|cu[aá]nto\s+cuesta|cu[aá]nto\s+vale|qu[eé]\s+precio|precio\s+de)\b/i
     // Entidades de inventario sin verbo: "stock bajo", "existencias", "entrada/salida de X unidades"
     const INVENTARIO_TRIGGER = /\b(?:inventario|stock|existencias|unidades|reorden|ruptura)\b/i
     // Entidades de seguros sin verbo: "qué pólizas vencen", "siniestros abiertos",
@@ -2077,7 +2077,24 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
       return { intent: 'consumir_inventario', confidence: 0.85, extractedParams: extracted }
     }
 
-    // ═══ 24. BUSCAR EN CATÁLOGO / CONSULTAR PRECIO ("busca cafeteras en el
+    // ═══ 24. CREAR COTIZACIÓN DESDE CATÁLOGO ("cotiza Volkern Insurance por
+    // 12 meses", "prepara un presupuesto de Implementación") ═══
+    const COTIZACION_ENTITY = /\b(?:cotizaci[oó]n|cotizar|cotiza|presupuesto)\b/i
+    const COTIZACION_VERB = /\b(?:haz|hacer|crea|crear|prepara|preparar|genera|generar|cotiza|cotizar|dame|necesito|quiero)\b/i
+    if (COTIZACION_ENTITY.test(message) && COTIZACION_VERB.test(message)) {
+      const producto = this.extractCotizacionProductoDe(message)
+      if (producto) extracted.producto = producto
+      const meses = this.extractMesesDe(message)
+      if (meses !== null) extracted.months = meses
+      const cantidad = this.extractCantidadStockDe(message)
+      if (cantidad !== null && /\b(?:unidades?|uds?|piezas?|paquetes?)\b/i.test(message)) extracted.cantidad = cantidad
+      if (email) extracted.email = email[1]
+      const cliente = this.extractNombreAfter(message, /\b(?:cliente|contacto)\s+/i)
+      if (cliente) extracted.nombre = cliente
+      return { intent: 'crear_cotizacion', confidence: 0.9, extractedParams: extracted }
+    }
+
+    // ═══ 25. BUSCAR EN CATÁLOGO / CONSULTAR PRECIO ("busca cafeteras en el
     // catálogo", "qué precio tiene X", "cuánto cuesta el paquete premium",
     // "busca propiedades en Madrid por menos de 300000") ═══
     const CATALOGO_ENTITY = /\b(?:cat[aá]logo|productos?|servicios?|art[ií]culos?|inmuebles?|propiedades?|apartamentos?|casas?|precios?)\b/i
@@ -2089,7 +2106,7 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     const NO_CITA = /\b(?:citas?|reuni[oó]n|videollamada)\b/i
     // Patrón de listado ("qué productos hay", "lista el catálogo") — se
     // declara aquí (rama 22) para poder excluirlo de la rama 21 de búsqueda.
-    const LISTAR_CATALOGO = /\b(?:lista|listame|mu[eé]strame|muestra|ver|ens[eé][ñn]ame)\s+(?:el\s+|los\s+|las\s+|todos\s+los\s+)?(?:cat[aá]logo|productos?|servicios?|art[ií]culos?|[íi]tems?)\b|qu[eé]\s+(?:productos|servicios|art[ií]culos)\s+(?:hay|tienes|tenemos|tiene|existen)\b/i
+    const LISTAR_CATALOGO = /\b(?:lista|listame|dame)\s+(?:la\s+|el\s+|los\s+|las\s+|una\s+)?(?:lista\s+de\s+|de\s+)?(?:cat[aá]logo|productos?(?:\s+y\s+servicios?)?|servicios?(?:\s+y\s+productos?)?|art[ií]culos?|[íi]tems?)\b|\b(?:mu[eé]strame|muestra|ver|ens[eé][ñn]ame)\s+(?:el\s+|los\s+|las\s+|todos?\s+los\s+|todos?\s+las\s+)?(?:cat[aá]logo|productos?(?:\s+y\s+servicios?)?|servicios?(?:\s+y\s+productos?)?|art[ií]culos?|[íi]tems?)\b|qu[eé]\s+(?:productos|servicios|art[ií]culos)\s+(?:hay|tienes|tenemos|tiene|existen)\b/i
     // "qué productos hay" / "lista el catálogo" son listados (rama 22), no
     // búsquedas con query — aquí solo búsqueda/con precio explícito.
     if ((CATALOGO_ENTITY.test(message) || PRECIO_QUERY.test(message)) && BUSCAR_CATALOGO_VERB.test(message) && !LISTAR_CATALOGO.test(message) && !NO_PRODUCCION.test(message) && !NO_CITA.test(message)) {
@@ -2105,7 +2122,7 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
       return { intent: 'buscar_catalogo', confidence: 0.85, extractedParams: extracted }
     }
 
-    // ═══ 25. LISTAR CATÁLOGO ("lista el catálogo", "qué productos hay",
+    // ═══ 26. LISTAR CATÁLOGO ("lista el catálogo", "qué productos hay",
     // "muéstrame los servicios disponibles") → buscar_catalogo sin query (el
     // skill lista el catálogo visible en el chatbot) ═══
     if (CATALOGO_ENTITY.test(message) && LISTAR_CATALOGO.test(message)) {
@@ -3075,6 +3092,21 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
    * tiene el paquete premium" → "el paquete premium"), cortando en filtros
    * (categoría, tipo, rango de precio, ciudad…).
    */
+  private extractCotizacionProductoDe(message: string): string | null {
+    const match = message.match(/\b(?:cotizaci[oó]n|cotiza(?:r)?|presupuesto)\s+(?:de|del|para|por)\s+(.+?)(?=\s+(?:por|para|durante|en)\s+\d+\s+(?:mes(?:es)?|unidades?|uds?|piezas?|paquetes?)\b|\s*$)/i)
+    if (match) {
+      const producto = match[1].trim().replace(/["'“”]+$/g, '').trim()
+      return producto.length >= 2 ? producto : null
+    }
+    const after = message.match(/\b(?:cotiza|cotizar|presupuesto)\s+(.+)$/i)
+    if (!after) return null
+    const producto = after[1]
+      .split(/\s+(?:por|para|durante|en)\s+\d+\s+(?:mes(?:es)?|unidades?|uds?|piezas?|paquetes?)\b/i)[0]
+      .replace(/["'“”]+$/g, '')
+      .trim()
+    return producto.length >= 2 ? producto : null
+  }
+
   private extractCatalogoQueryDe(message: string): string | null {
     let q = message
       // Verbo + entidad opcional: "busca X", "busca en el catálogo X",

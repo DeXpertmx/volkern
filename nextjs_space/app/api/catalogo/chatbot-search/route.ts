@@ -71,6 +71,7 @@ export async function POST(req: NextRequest) {
     const { skills } = await import('@/lib/skills');
     const result = await skills.buscar_catalogo({
       tenantId: auth.tenant!.id,
+      source: 'public',
       query: query || undefined,
       tipo: tipo || undefined,
       precioMin: precioMin !== undefined ? Number(precioMin) : undefined,

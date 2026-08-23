@@ -8,6 +8,9 @@ const mocks = vi.hoisted(() => ({
   contactFindFirst: vi.fn(),
   catalogoItemFindFirst: vi.fn(),
   catalogoItemFindMany: vi.fn(),
+  cotizacionCreate: vi.fn(),
+  cotizacionFindFirst: vi.fn(),
+  auditLogCreate: vi.fn(),
   catalogoFieldDefinitionFindMany: vi.fn(),
   leadFindFirst: vi.fn(),
   leadFindUnique: vi.fn(),
@@ -24,6 +27,8 @@ vi.mock('@/lib/db', () => ({
     deal: { findFirst: mocks.dealFindFirst, findMany: mocks.dealFindMany },
     contact: { findFirst: mocks.contactFindFirst },
     catalogoItem: { findFirst: mocks.catalogoItemFindFirst, findMany: mocks.catalogoItemFindMany },
+    cotizacion: { create: mocks.cotizacionCreate, findFirst: mocks.cotizacionFindFirst },
+    auditLog: { create: mocks.auditLogCreate },
     catalogoFieldDefinition: { findMany: mocks.catalogoFieldDefinitionFindMany },
     lead: { findFirst: mocks.leadFindFirst, findUnique: mocks.leadFindUnique, findMany: mocks.leadFindMany },
     tenant: { findUnique: mocks.tenantFindUnique },
@@ -121,6 +126,15 @@ beforeEach(() => {
     tasaImpuesto: { nombre: 'IVA', porcentaje: 21 },
   } as any);
   mocks.catalogoItemFindMany.mockResolvedValue([{ id: 'item-1', nombre: 'Cafetera Pro' }] as any);
+  mocks.cotizacionFindFirst.mockResolvedValue(null);
+  mocks.cotizacionCreate.mockResolvedValue({
+    id: 'quote-1',
+    numero: 'COT-2026-0001',
+    total: 3600,
+    moneda: 'EUR',
+    items: [{ concepto: 'Volkern Insurance', cantidad: 12 }],
+  } as any);
+  mocks.auditLogCreate.mockResolvedValue({ id: 'audit-1' } as any);
   mocks.catalogoFieldDefinitionFindMany.mockResolvedValue([] as any);
   mocks.leadFindUnique.mockResolvedValue({
     id: 'lead-1',
@@ -166,6 +180,14 @@ describe('IntentClassifier — bloque 23 (consultas avanzadas, Web Creator y Tra
     const r = await classifier.classify({ ...base, message: 'dame los detalles del producto Cafetera Pro' });
     expect(r.intent).toBe('detalles_producto');
     expect(r.extractedParams.nombre).toBeTruthy();
+  });
+
+  it('detecta crear cotización recurrente desde catálogo', async () => {
+    const r = await classifier.classify({ ...base, message: 'puedes hacer una cotización de Volkern Insurance por 12 meses' });
+    expect(r.intent).toBe('crear_cotizacion');
+    expect(r.extractedParams.producto).toBe('Volkern Insurance');
+    expect(r.extractedParams.months).toBe(12);
+    expect(r.needsMoreInfo).toBe(false);
   });
 
   it('detecta exportar catálogo en CSV', async () => {
@@ -261,6 +283,7 @@ describe('SkillOrchestrator — wiring del bloque 23', () => {
       ['detalles_contacto', { nombre: 'Laura Gómez' }, 'get_contact_details'],
       ['detalles_producto', { nombre: 'Cafetera Pro' }, 'get_catalog_item_details'],
       ['exportar_catalogo', { formato: 'csv' }, 'export_catalog_chat'],
+      ['crear_cotizacion', { producto: 'Volkern Insurance', months: '12' }, 'create_cotizacion'],
       ['sugerir_respuesta', { nombre: 'María García' }, 'suggest_customer_response'],
       ['generar_landing', { nombre: 'María García' }, 'generate_landing_draft_chat'],
     ];
@@ -317,6 +340,36 @@ describe('wrappers del bloque 23', () => {
     expect(result.email).toBe('laura@empresa.com');
   });
 
+  it('crear cotización calcula el periodo y deja un borrador', async () => {
+    mocks.catalogoItemFindFirst.mockResolvedValue({
+      id: 'insurance-1',
+      tenantId: TENANT,
+      nombre: 'Volkern Insurance',
+      descripcion: 'Plan Professional',
+      precioBase: 199,
+      moneda: 'EUR',
+      unidad: 'mes',
+      categoriaFiscal: 'general',
+      sku: null,
+      tasaImpuestoId: null,
+      tasaImpuesto: { porcentaje: 0 },
+      pricing: { tipo: 'recurrente' },
+    } as any);
+    const result = await (skills as any).create_cotizacion({
+      tenantId: TENANT,
+      producto: 'Volkern Insurance',
+      months: 12,
+      userId: 'user-1',
+    });
+    expect(result.message).toContain('COT-2026-0001');
+    expect(result.message).toContain('2388.00 EUR');
+    expect(mocks.cotizacionCreate).toHaveBeenCalled();
+    expect(mocks.auditLogCreate).toHaveBeenCalled();
+    const createArg = mocks.cotizacionCreate.mock.calls[0][0];
+    expect(createArg.data.items.create.cantidad).toBe(12);
+    expect(createArg.data.items.create.subtotal).toBe(2388);
+  });
+
   it('get_catalog_item_details resuelve el producto por nombre', async () => {
     const result = await (skills as any).get_catalog_item_details({
       tenantId: TENANT,
@@ -335,6 +388,28 @@ describe('wrappers del bloque 23', () => {
     expect(result).toBeTruthy();
     expect(mocks.catalogoItemFindMany).toHaveBeenCalled();
     expect(String(result.summary)).toContain('CSV');
+  });
+
+  it('buscar_catalogo desde Telegram incluye activos aunque no sean visibles públicamente', async () => {
+    mocks.catalogoItemFindMany.mockResolvedValue([{
+      id: 'service-1',
+      nombre: 'Volkern Insurance',
+      descripcion: 'Plan Professional',
+      tipo: 'servicio',
+      precioBase: 199,
+      moneda: 'EUR',
+      categorias: [],
+      etiquetas: [],
+      duracionMinutos: null,
+      modalidad: null,
+      customFieldValues: null,
+    }] as any);
+
+    const result = await (skills as any).buscar_catalogo({ tenantId: TENANT });
+    expect(result.total).toBe(1);
+    const where = mocks.catalogoItemFindMany.mock.calls.at(-1)?.[0]?.where;
+    expect(where).toMatchObject({ tenantId: TENANT, activo: true });
+    expect(where).not.toHaveProperty('visibleInChatbot');
   });
 
   it('suggest_customer_response resuelve el lead y simula la respuesta', async () => {
