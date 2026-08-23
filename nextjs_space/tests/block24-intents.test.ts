@@ -64,6 +64,18 @@ describe('Bloque 24 — snooze_task (posponer recordatorio)', () => {
     expect(r.extractedParams.hasta).toBeTruthy();
   });
 
+  it('clasifica "pospone el recordatorio de la tarea de llamar a Juan hasta mañana" y corta el título en la fecha', async () => {
+    const classifier = makeClassifier();
+    const r = await classifier.classify({
+      message: 'pospone el recordatorio de la tarea de llamar a Juan hasta mañana',
+      userId: 'user-1',
+      tenantId: TENANT,
+    });
+    expect(r.intent).toBe('snooze_task');
+    expect(r.extractedParams.titulo).toBe('llamar a Juan');
+    expect(r.extractedParams.hasta).toBeTruthy();
+  });
+
   it('clasifica "recuérdamelo más tarde, la tarea de revisar cotización"', async () => {
     const classifier = makeClassifier();
     const r = await classifier.classify({

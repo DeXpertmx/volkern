@@ -1980,10 +1980,14 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     const hayTarea = TAREA_ENTITY.test(msgNoEmails) || /\brecordatorio/i.test(message)
     if ((SNOOZE_VERBO.test(message) || SNOOZE_POSPONE_RECORDATORIO) && hayTarea && !/\bpara\s+(?:el|la|los)\s+(?:lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo|\d{1,2}\s+de)\b/i.test(message)) {
       // Título: "pospone el recordatorio de llamar a Juan hasta mañana" →
-      // "llamar a Juan". extractNombreAfter exige mayúscula inicial (nombres
-      // propios) y los títulos de tarea van en minúscula, así que se corta
-      // el texto tras "recordatorio/tarea/pendiente de" hasta la fecha.
+      // "llamar a Juan". extractTituloTareaDe no corta en "hasta"/fecha, así
+      // que se recorta SIEMPRE al primer marcador de fecha (hasta/para/hoy/
+      // mañana/día de la semana/vence…).
       let titulo = this.extractTituloTareaDe(message)
+      if (titulo) {
+        titulo = titulo.split(/\s+(?:hasta|para|el\s+\d{1,2}|ma[nñ]ana|hoy|ayer|pasado\s+ma[nñ]ana|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo|vence|vencimiento|prioridad)/i)[0].trim()
+        if (titulo.length < 2) titulo = null
+      }
       if (!titulo) {
         const kw = message.match(/\b(?:recordatorio|tarea|pendiente)\s+(?:de|del)\s+/i)
         if (kw && kw.index !== undefined) {
