@@ -168,6 +168,13 @@ RESPONDE EN ESTE FORMATO JSON:
         // Enviar a Telegram si tiene configurado
         const { notifyByTelegram } = await import('@/lib/skills/notification-layer');
         
+        const tareasBlock = briefing.tareasPendientes.length > 0
+          ? briefing.tareasPendientes.map(t => {
+              const fecha = new Date(t.fechaVencimiento).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+              return `${t.vencida ? '🔴' : '⏳'} *${t.titulo}*${t.leadNombre ? ` (${t.leadNombre})` : ''} — ${fecha}`;
+            }).join('\n')
+          : '✅ Nada urgente pendiente.';
+
         const message = `
 ☀️ *¡Buenos días, ${user.name}!*
 
@@ -178,6 +185,9 @@ ${briefing.topDeals.map(d => `• *${d.titulo}* (${d.valor}€) - ${d.reason}`).
 ${briefing.riskyDeals.length > 0 
   ? briefing.riskyDeals.map(d => `⚠️ *${d.titulo}* está en riesgo.`).join('\n') 
   : '✅ ¡Sin riesgos críticos hoy!'}
+
+📋 *Pendientes importantes:*
+${tareasBlock}
 
 ✨ *Mensaje del día:*
 _"${briefing.motivationalQuote}"_
