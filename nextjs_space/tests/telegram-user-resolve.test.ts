@@ -108,9 +108,12 @@ describe('Resolución de chat de Telegram al userId real (webhook)', () => {
     });
     expect(metadataCall).toBeTruthy();
 
-    // Y buscar las tareas asignadas al userId REAL, no al chat
+    // Y buscar las tareas del usuario REAL y las que están sin asignar,
+    // igual que Tareas Globales (no solo las asignadas al chat).
     const taskCall = mocks.taskFindMany.mock.calls[0][0];
-    expect(taskCall.where.asignadoA).toBe('user-42');
+    expect(taskCall.where.AND).toEqual([
+      { OR: [{ asignadoA: 'user-42' }, { asignadoA: null }] },
+    ]);
     expect(taskCall.where.completada).toBe(false);
 
     expect(Array.isArray(result)).toBe(true);

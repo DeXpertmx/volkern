@@ -305,7 +305,9 @@ export async function getPendingTasksByUser(userId: string, tenantId: string) {
   const tasks = await prisma.task.findMany({
     where: {
       tenantId,
-      asignadoA: userId,
+      // Igual que Tareas Globales: el usuario ve sus tareas y las que aún
+      // no tienen responsable, especialmente importante en tenants pequeños.
+      AND: [{ OR: [{ asignadoA: userId }, { asignadoA: null }] }],
       completada: false,
       // Excluir tareas cuyo recordatorio fue pospuesto (snooze activo)
       OR: [
@@ -333,7 +335,9 @@ export async function getOverdueTasksByUser(userId: string, tenantId: string) {
   const tasks = await prisma.task.findMany({
     where: {
       tenantId,
-      asignadoA: userId,
+      // Igual que Tareas Globales: el usuario ve sus tareas y las que aún
+      // no tienen responsable, especialmente importante en tenants pequeños.
+      AND: [{ OR: [{ asignadoA: userId }, { asignadoA: null }] }],
       completada: false,
       // Excluir tareas cuyo recordatorio fue pospuesto (snooze activo)
       OR: [
@@ -401,7 +405,9 @@ export async function getTasksDueTodayByUser(userId: string, tenantId: string) {
   return prisma.task.findMany({
     where: {
       tenantId,
-      asignadoA: userId,
+      // Igual que Tareas Globales: el usuario ve sus tareas y las que aún
+      // no tienen responsable, especialmente importante en tenants pequeños.
+      AND: [{ OR: [{ asignadoA: userId }, { asignadoA: null }] }],
       completada: false,
       fechaVencimiento: { gte: new Date(start), lt: new Date(end) },
       // Excluir tareas cuyo recordatorio fue pospuesto (snooze activo)

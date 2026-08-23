@@ -149,11 +149,17 @@ describe('snooze_task (recordar más tarde)', () => {
     await (skills as any).get_overdue_tasks({ tenantId: TENANT, userId: 'telegram:123456' });
     const overdueWhere = mocks.taskFindMany.mock.calls[1][0].where;
     expect(overdueWhere.OR).toBeDefined();
+    expect(overdueWhere.AND).toEqual([
+      { OR: [{ asignadoA: 'user-42' }, { asignadoA: null }] },
+    ]);
 
     mocks.userFindUnique.mockResolvedValue({ timezone: 'America/Mexico_City' } as any);
     await (skills as any).get_tasks_due_today({ tenantId: TENANT, userId: 'telegram:123456' });
     const todayWhere = mocks.taskFindMany.mock.calls[2][0].where;
     expect(todayWhere.OR).toBeDefined();
+    expect(todayWhere.AND).toEqual([
+      { OR: [{ asignadoA: 'user-42' }, { asignadoA: null }] },
+    ]);
   });
 });
 
@@ -187,7 +193,9 @@ describe('tareas_vencidas — ejecución', () => {
 
     const result = await (skills as any).get_overdue_tasks({ tenantId: TENANT, userId: 'telegram:123456' });
 
-    expect(mocks.taskFindMany.mock.calls[0][0].where.asignadoA).toBe('user-42');
+    expect(mocks.taskFindMany.mock.calls[0][0].where.AND).toEqual([
+      { OR: [{ asignadoA: 'user-42' }, { asignadoA: null }] },
+    ]);
     expect(result.length).toBe(1);
     expect(result[0].titulo).toBe('Llamar a Juan');
     expect(result[0].diasVencida).toBeGreaterThanOrEqual(1);
@@ -243,7 +251,9 @@ describe('tareas_hoy — ejecución', () => {
 
     const result = await (skills as any).get_tasks_due_today({ tenantId: TENANT, userId: 'telegram:123456' });
 
-    expect(mocks.taskFindMany.mock.calls[0][0].where.asignadoA).toBe('user-42');
+    expect(mocks.taskFindMany.mock.calls[0][0].where.AND).toEqual([
+      { OR: [{ asignadoA: 'user-42' }, { asignadoA: null }] },
+    ]);
     // El filtro de fecha usa gte/lt (rango del día en la tz del usuario)
     const where = mocks.taskFindMany.mock.calls[0][0].where;
     expect(where.fechaVencimiento.gte).toBeInstanceOf(Date);
