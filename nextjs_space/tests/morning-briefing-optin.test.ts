@@ -150,6 +150,26 @@ describe('MorningBriefingService.sendGlobalBriefing — opt-in por usuario', () 
     expect(mocks.notifyByTelegram).not.toHaveBeenCalled()
   })
 
+  it('incluye las tareas pendientes en el mensaje de Telegram', async () => {
+    mocks.userFindMany.mockResolvedValue([{ ...userBase, id: 'u-tareas', metadata: {} }])
+    mocks.taskFindMany.mockResolvedValue([
+      {
+        id: 't-1',
+        titulo: 'Confirmar cita',
+        fechaVencimiento: new Date(Date.now() - 86400e3),
+        recordatorioPospuestoHasta: null,
+        lead: { id: 'l1', nombre: 'Alejandra' },
+      },
+    ])
+
+    await MorningBriefingService.sendGlobalBriefing()
+
+    const sent = mocks.notifyByTelegram.mock.calls[0][0] as string
+    expect(sent).toContain('📋 *Pendientes importantes:*')
+    expect(sent).toContain('Confirmar cita')
+    expect(sent).toContain('Alejandra')
+  })
+
   it('sobrevive a errores individuales (un usuario falla, el resto sigue)', async () => {
     mocks.userFindMany.mockResolvedValue([
       { ...userBase, id: 'u-error', metadata: {} },
