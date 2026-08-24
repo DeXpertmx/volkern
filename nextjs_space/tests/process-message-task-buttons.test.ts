@@ -217,6 +217,50 @@ describe('processMessage → taskButtons para listados de tareas', () => {
     expect(result.taskButtons?.[1]).toEqual({ taskId: 'task-2', titulo: 'Revisar cotización' });
   });
 
+  it('crear_tarea devuelve taskButtons con la tarea recién creada', async () => {
+    mocks.classify.mockResolvedValue(classification('crear_tarea'));
+    mocks.createPlan.mockResolvedValue({
+      success: true,
+      plan: { steps: [{ action: 'create_task', params: { tenantId: TENANT } }] },
+    });
+    mocks.run.mockResolvedValue({
+      message: 'Tarea creada',
+      data: { id: 'task-nueva', titulo: 'Llamar a María', fechaVencimiento: new Date('2026-08-19T10:00:00Z') },
+    });
+
+    const result = await processMessage({
+      tenantId: TENANT,
+      message: 'crea una tarea de llamar a María para mañana',
+      channel: 'telegram',
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.taskButtons).toEqual([{ taskId: 'task-nueva', titulo: 'Llamar a María' }]);
+    // El webhook la renderiza como fila de 3 botones accionables
+    expect(buildWebhookRows(result.taskButtons!)[0].map((b) => b.callback_data)).toEqual([
+      'task:complete:task-nueva',
+      'task:resched:task-nueva',
+      'task:snooze:task-nueva',
+    ]);
+  });
+
+  it('crear_tarea sin tarea devuelta (sin id) no genera taskButtons', async () => {
+    mocks.classify.mockResolvedValue(classification('crear_tarea'));
+    mocks.createPlan.mockResolvedValue({
+      success: true,
+      plan: { steps: [{ action: 'create_task', params: { tenantId: TENANT } }] },
+    });
+    mocks.run.mockResolvedValue({ message: 'No se pudo crear', data: null });
+
+    const result = await processMessage({
+      tenantId: TENANT,
+      message: 'crea una tarea',
+      channel: 'telegram',
+    });
+
+    expect(result.taskButtons).toBeUndefined();
+  });
+
   it('cada entrada de taskButtons genera una fila de 3 botones con los callback_data correctos', async () => {
     setupMisTareas(TASKS);
 
