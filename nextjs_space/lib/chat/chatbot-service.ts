@@ -797,6 +797,10 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
           userId: input.userId || conv.id,
           tenantId,
           sessionId: conv.id,
+          // Canales como WhatsApp pasan el leadId de la conversación: se
+          // inyecta al skill para que la entidad creada (tarea, nota…) quede
+          // ligada al lead del chat.
+          leadId: input.leadId,
         })
 
         let finalMessage = executionResult.message

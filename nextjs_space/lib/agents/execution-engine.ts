@@ -26,6 +26,10 @@ export interface ExecutionInput {
   userId: string;
   tenantId: string;
   sessionId?: string;
+  /** Lead de la conversación (canales como WhatsApp pasan leadId): se inyecta
+   *  en safeParams para que los skills (create_task, create_note…) liguen la
+   *  entidad nueva al lead del chat, no solo al userId. */
+  leadId?: string;
 }
 
 export interface ExecutionOutput {
@@ -45,7 +49,7 @@ export const ExecutionEngine = {
    */
   async run(input: ExecutionInput): Promise<ExecutionOutput> {
     const startTime = Date.now();
-    const { plan, userId, tenantId, sessionId } = input;
+    const { plan, userId, tenantId, sessionId, leadId } = input;
 
     if (!plan.steps || plan.steps.length === 0) {
       return {
@@ -110,7 +114,8 @@ export const ExecutionEngine = {
           ...step.params,
           userId,
           tenantId,
-          sessionId
+          sessionId,
+          ...(leadId ? { leadId } : {})
         };
 
         // 4. Ejecutar con timeout
