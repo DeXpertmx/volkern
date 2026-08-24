@@ -1173,7 +1173,12 @@ const createTaskWrapper = async (input: {
   tipo?: string;
 }) => {
   const { tenantId, email, nombre, leadId, contactId, titulo, descripcion, fechaVencimiento, asignadoAId, timezone, tipo } = input;
-  const userId = (await resolveRealUserId(tenantId, input.userId)) || input.userId;
+  // Resuelve el userId REAL (id de User) para campos con FK. Los canales
+  // externos pasan identificadores que NO son User (telegram:<chat>, leadId,
+  // conv.id, sesión del widget): si no resuelven a un User real, `asignadoA`
+  // queda null (tarea sin asignar) en vez de violar Task_asignadoA_fkey.
+  const realUserId = await resolveRealUserId(tenantId, input.userId);
+  const userId = realUserId || input.userId;
   
   let lead = null;
   let contact = null;
@@ -1253,7 +1258,7 @@ const createTaskWrapper = async (input: {
       tipo: tipoFinal,
       descripcion,
       fechaVencimiento: fecha,
-      asignadoA: asignadoAId || userId,
+      asignadoA: asignadoAId || realUserId || null,
       completada: false,
     }
   });
