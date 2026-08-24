@@ -848,8 +848,10 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
           await memory.recordOfferedQuickReplies(conv.id, dedupedQuickReplies)
         }
 
-        // Botones inline de acciones de tareas (completar/reprogramar) cuando
-        // el skill devolvió una lista de tareas (vencidas, hoy, pendientes).
+        // Botones inline de acciones de tareas (completar/reprogramar/snooze):
+        //  · listados (vencidas, hoy, pendientes) → una fila por tarea;
+        //  · crear_tarea → una fila con la tarea recién creada, para actuar
+        //    sobre ella (completar/reprogramar/posponer) sin escribir.
         const taskButtons: { taskId: string; titulo: string }[] | undefined =
           ['tareas_vencidas', 'tareas_hoy', 'mis_tareas'].includes(classification.intent) &&
           Array.isArray(executionResult.data)
@@ -859,7 +861,12 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
                   taskId: String(t.id),
                   titulo: String(t?.titulo || 'Tarea'),
                 }))
-            : undefined
+            : classification.intent === 'crear_tarea' && (executionResult.data as any)?.id
+              ? [{
+                  taskId: String((executionResult.data as any).id),
+                  titulo: String((executionResult.data as any).titulo || 'Tarea'),
+                }]
+              : undefined
 
         return {
           success: true,
