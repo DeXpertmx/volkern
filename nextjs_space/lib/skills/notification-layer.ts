@@ -64,6 +64,7 @@ export interface NotificationContent {
     url?: string;
     action?: string;
   }>;
+  inlineKeyboard?: Array<Array<{ text: string; callback_data?: string; url?: string }>>; // inline_keyboard crudo de Telegram (callback_data)
 }
 
 export interface NotificationOptions {
@@ -387,9 +388,13 @@ export class NotificationService {
         throw new Error('Telegram chat ID required (not in recipient nor in tenant config)');
       }
 
-      // Convertir acciones a inline_keyboard de Telegram
+      // Convertir a inline_keyboard de Telegram. `inlineKeyboard` (botones con
+      // callback_data, p.ej. acciones de tarea) tiene prioridad sobre `actions`
+      // (botones de URL) porque son botones accionables por el usuario.
       let replyMarkup = undefined;
-      if (content.actions && content.actions.length > 0) {
+      if (content.inlineKeyboard && content.inlineKeyboard.length > 0) {
+        replyMarkup = { inline_keyboard: content.inlineKeyboard };
+      } else if (content.actions && content.actions.length > 0) {
         replyMarkup = {
           inline_keyboard: [
             content.actions.map(action => ({
@@ -744,15 +749,19 @@ export async function notifyByWhatsApp(
 }
 
 /**
- * Enviar notificación rápida por Telegram al admin del tenant
+ * Enviar notificación rápida por Telegram al admin del tenant.
+ * `inlineKeyboard` opcional: filas de botones inline con callback_data
+ * (p.ej. buildTaskButtonsMarkup(...).inline_keyboard) para mensajes outbound
+ * del cron que no pasan por el webhook.
  */
 export async function notifyByTelegram(
   message: string,
-  context: SkillContext
+  context: SkillContext,
+  inlineKeyboard?: NotificationContent['inlineKeyboard']
 ): Promise<NotificationResult> {
   return notificationService.send(
     { type: 'external' },
-    { body: message },
+    { body: message, inlineKeyboard },
     { channel: 'telegram' },
     context
   );

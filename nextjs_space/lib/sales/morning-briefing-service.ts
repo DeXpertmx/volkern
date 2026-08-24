@@ -2,6 +2,7 @@
 import { prisma } from '@/lib/db';
 import { callGemma, GemmaMessage } from '@/lib/ai/gemma-client';
 import { createSystemContext } from '@/lib/skills/context';
+import { buildTaskButtonsMarkup } from '@/lib/telegram/task-buttons';
 
 export interface BriefingData {
   topDeals: { id: string; titulo: string; valor: number; healthScore: number; reason: string }[];
@@ -167,6 +168,14 @@ RESPONDE EN ESTE FORMATO JSON:
         
         // Enviar a Telegram si tiene configurado
         const { notifyByTelegram } = await import('@/lib/skills/notification-layer');
+
+        // Botones inline de acción por cada tarea pendiente (completar /
+        // reprogramar / recordar más tarde), igual que en el listado del chat.
+        // El briefing sale del cron de forma outbound (no pasa por el webhook),
+        // así que los botones van en la propia llamada de envío.
+        const inlineKeyboard = briefing.tareasPendientes.length > 0
+          ? buildTaskButtonsMarkup(briefing.tareasPendientes.map((t) => ({ taskId: t.id, titulo: t.titulo }))).inline_keyboard
+          : undefined;
         
         const tareasBlock = briefing.tareasPendientes.length > 0
           ? briefing.tareasPendientes.map(t => {
@@ -193,7 +202,7 @@ ${tareasBlock}
 _"${briefing.motivationalQuote}"_
         `.trim();
 
-        await notifyByTelegram(message, createSystemContext(user.tenantId));
+        await notifyByTelegram(message, createSystemContext(user.tenantId), inlineKeyboard);
 
       } catch (error) {
         console.error(`Error enviando briefing a usuario ${user.id}:`, error);

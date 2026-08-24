@@ -20,6 +20,7 @@
 //      botones cuando no hay tareas).
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { buildTaskButtonsMarkup } from '@/lib/telegram/task-buttons';
 
 const TENANT = 'tenant-1';
 const CONV = 'conv-1';
@@ -143,13 +144,10 @@ function classification(intent: string, params: Record<string, string> = {}) {
   };
 }
 
-// Misma transformación que app/api/webhooks/telegram/route.ts:189-197.
+// Misma transformación que app/api/webhooks/telegram/route.ts:189-197,
+// ahora importada del helper compartido lib/telegram/task-buttons.ts.
 function buildWebhookRows(taskButtons: { taskId: string; titulo: string }[]) {
-  return taskButtons.slice(0, 8).map((t) => [
-    { text: '✅ Completar', callback_data: `task:complete:${t.taskId}` },
-    { text: '📅 Reprogramar', callback_data: `task:resched:${t.taskId}` },
-    { text: '⏰ Recordar más tarde', callback_data: `task:snooze:${t.taskId}` },
-  ]);
+  return buildTaskButtonsMarkup(taskButtons).inline_keyboard;
 }
 
 beforeEach(() => {
