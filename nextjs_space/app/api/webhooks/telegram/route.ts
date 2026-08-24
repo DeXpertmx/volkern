@@ -167,6 +167,10 @@ async function processAndReply(
       channel: 'telegram',
       contactName: senderName,
       contactPhone: chatId,
+      // userId en formato telegram:<chatId> para que los skills resuelvan el
+      // usuario real del tenant (metadata.telegram.chat_id) y `asignadoA` de
+      // tareas nuevas apunte a un User válido, no a un id de conversación.
+      userId: `telegram:${chatId}`,
     })
 
     const timeout = new Promise<never>((_, reject) =>
