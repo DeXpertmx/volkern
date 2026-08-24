@@ -170,6 +170,56 @@ describe('MorningBriefingService.sendGlobalBriefing — opt-in por usuario', () 
     expect(sent).toContain('Alejandra')
   })
 
+  it('incluye botones de acción (completar/reprogramar/snooze) por cada tarea pendiente', async () => {
+    mocks.userFindMany.mockResolvedValue([{ ...userBase, id: 'u-botones', metadata: {} }])
+    mocks.taskFindMany.mockResolvedValue([
+      {
+        id: 't-1',
+        titulo: 'Confirmar cita',
+        fechaVencimiento: new Date(Date.now() - 86400e3),
+        recordatorioPospuestoHasta: null,
+        lead: { id: 'l1', nombre: 'Alejandra' },
+      },
+      {
+        id: 't-2',
+        titulo: 'Enviar documento',
+        fechaVencimiento: new Date(Date.now() + 3600e3),
+        recordatorioPospuestoHasta: null,
+        lead: null,
+      },
+    ])
+
+    await MorningBriefingService.sendGlobalBriefing()
+
+    // El tercer argumento de notifyByTelegram es el inline_keyboard (outbound,
+    // no pasa por el webhook): una fila de 3 botones por tarea pendiente.
+    const inlineKeyboard = mocks.notifyByTelegram.mock.calls[0][2] as { text: string; callback_data: string }[][]
+    expect(inlineKeyboard).toHaveLength(2)
+    expect(inlineKeyboard[0].map((b) => b.callback_data)).toEqual([
+      'task:complete:t-1',
+      'task:resched:t-1',
+      'task:snooze:t-1',
+    ])
+    expect(inlineKeyboard[0].map((b) => b.text)).toEqual([
+      '✅ Completar',
+      '📅 Reprogramar',
+      '⏰ Recordar más tarde',
+    ])
+    expect(inlineKeyboard[1].map((b) => b.callback_data)).toEqual([
+      'task:complete:t-2',
+      'task:resched:t-2',
+      'task:snooze:t-2',
+    ])
+  })
+
+  it('no pasa botones cuando no hay tareas pendientes en el briefing', async () => {
+    mocks.userFindMany.mockResolvedValue([{ ...userBase, id: 'u-sin-tareas', metadata: {} }])
+
+    await MorningBriefingService.sendGlobalBriefing()
+
+    expect(mocks.notifyByTelegram.mock.calls[0][2]).toBeUndefined()
+  })
+
   it('sobrevive a errores individuales (un usuario falla, el resto sigue)', async () => {
     mocks.userFindMany.mockResolvedValue([
       { ...userBase, id: 'u-error', metadata: {} },

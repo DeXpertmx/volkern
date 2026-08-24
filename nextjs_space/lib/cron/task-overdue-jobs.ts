@@ -8,6 +8,7 @@
 
 import { prisma } from '@/lib/db';
 import { loadTelegramCredentials, sendTelegramMessage } from '@/lib/telegram';
+import { buildTaskButtonsMarkup } from '@/lib/telegram/task-buttons';
 
 function formatFecha(fecha: Date): string {
   return fecha.toLocaleDateString('es-MX', {
@@ -123,15 +124,7 @@ export async function runTaskOverdueScan(): Promise<{
         );
 
         const sendResult = await sendTelegramMessage(chatId, lines.join('\n'), botToken, {
-          reply_markup: {
-            inline_keyboard: [
-              [
-                { text: '✅ Completar', callback_data: `task:complete:${task.id}` },
-                { text: '📅 Reprogramar', callback_data: `task:resched:${task.id}` },
-                { text: '⏰ Recordar más tarde', callback_data: `task:snooze:${task.id}` },
-              ],
-            ],
-          },
+          reply_markup: buildTaskButtonsMarkup([{ taskId: task.id, titulo: task.titulo }]),
         });
 
         if ((sendResult as any)?.success) {

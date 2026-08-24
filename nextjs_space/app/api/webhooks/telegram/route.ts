@@ -13,6 +13,7 @@ import { buildTelegramExpenseSummary, canDiscardTelegramExpenseStatus, canRestor
 import { getDownloadUrl } from '@/lib/s3'
 import { callVision } from '@/app/api/erp/expenses/scan/route'
 import { buildTaskCalendarMarkup } from '@/lib/telegram/task-calendar'
+import { buildTaskButtonsMarkup } from '@/lib/telegram/task-buttons'
 
 /**
  * Webhook directo de Telegram — pipeline unificado
@@ -189,12 +190,7 @@ async function processAndReply(
     // Botones inline de acciones de tareas: una fila por tarea con
     // Completar / Reprogramar / Recordar más tarde (prioridad sobre quick replies).
     if (result.taskButtons?.length) {
-      const rows = result.taskButtons.slice(0, 8).map((t) => [
-        { text: '✅ Completar', callback_data: `task:complete:${t.taskId}` },
-        { text: '📅 Reprogramar', callback_data: `task:resched:${t.taskId}` },
-        { text: '⏰ Recordar más tarde', callback_data: `task:snooze:${t.taskId}` },
-      ])
-      replyMarkup = { inline_keyboard: rows }
+      replyMarkup = buildTaskButtonsMarkup(result.taskButtons)
     }
 
     await sendBotMessage(chatId, replyText, ctx.botToken, replyMarkup)
