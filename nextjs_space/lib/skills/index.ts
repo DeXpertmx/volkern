@@ -1728,7 +1728,10 @@ const createExpenseWrapper = async (input: any) => {
     tenantId, createdById, monto, amount, concepto, description,
     proveedor, categoria, category, fecha, date, supplierId: inputSupplierId,
   } = input;
-  const userId = (await resolveRealUserId(tenantId, input.userId)) || input.userId;
+  // Expense.createdById es FK OBLIGATORIA a User: solo se pasa el id REAL
+  // resuelto (nunca el crudo tipo telegram:<chat>/leadId/conv.id). Si no
+  // resuelve, el fallback de abajo usa el primer usuario del tenant.
+  const userId = await resolveRealUserId(tenantId, input.userId);
   const { prisma } = await import('@/lib/db');
   
   // Mapear params español → inglés
@@ -1912,7 +1915,10 @@ const adjustStockWrapper = async (input: {
   const cantidad = Number(input.cantidad ?? input.quantity);
   if (!Number.isFinite(cantidad) || cantidad <= 0) throw new Error('La cantidad debe ser un número mayor que 0.');
   const tipo = (input.tipo || input.type || 'IN').toUpperCase() as 'IN' | 'OUT' | 'TRANSFER';
-  const userId = (await resolveRealUserId(tenantId, input.userId)) || input.userId;
+  // StockMovement.userId es FK a User (nullable): solo el id REAL resuelto;
+  // si no resuelve, queda null (movimiento auditado igualmente) en vez de
+  // violar la FK con un id de chat/lead.
+  const userId = await resolveRealUserId(tenantId, input.userId);
   return inventorySkills.adjustStock({
     tenantId,
     catalogoItemId: id,
@@ -1958,7 +1964,8 @@ const processInventoryConsumptionWrapper = async (input: {
   const id = await resolveCatalogoItemId(tenantId, ref);
   const cantidad = Number(input.cantidad ?? input.quantity);
   if (!Number.isFinite(cantidad) || cantidad <= 0) throw new Error('La cantidad debe ser un número mayor que 0.');
-  const userId = (await resolveRealUserId(tenantId, input.userId)) || input.userId;
+  // Mismo criterio que adjustStock: userId solo si es un User real.
+  const userId = await resolveRealUserId(tenantId, input.userId);
   return inventorySkills.processInventoryConsumption({
     tenantId,
     productId: id,
@@ -2148,7 +2155,10 @@ const createSiniestroWrapper = async (input: {
   }
   const polizaId = input.polizaId || (input.poliza ? await resolvePolizaId(input.tenantId, input.poliza) : undefined);
   if (!polizaId) throw new Error('Necesito saber contra qué póliza es el siniestro.');
-  const createdById = (await resolveRealUserId(input.tenantId, input.userId)) || input.userId;
+  // Siniestro.createdById es FK OBLIGATORIA a User: solo se pasa el id REAL
+  // resuelto. Si no resuelve, el core (resolveCreator) usa el primer usuario
+  // del tenant o lanza error — nunca un id no-User (violaría la FK).
+  const createdById = await resolveRealUserId(input.tenantId, input.userId);
 
   return siniestrosSkills.createSiniestro({
     tenantId: input.tenantId,
@@ -3039,8 +3049,9 @@ const calculateFranchiseCommissionsWrapper = async (input: {
     throw new Error('No encontré ninguna operación (deal) vinculada a esa propiedad para calcular la comisión.')
   }
   // Comision.userId es FK obligatoria a User: resolver un usuario real del
-  // tenant si no llega userId (nunca 'SYSTEM', que no existe en la tabla User).
-  const commissionUserId = (await resolveRealUserId(tenantId, input.userId)) || input.userId ||
+  // tenant si no llega userId (nunca 'SYSTEM' ni el id crudo tipo
+  // telegram:<chat>/leadId, que no existen en la tabla User).
+  const commissionUserId = (await resolveRealUserId(tenantId, input.userId)) ||
     (await prisma.user.findFirst({ where: { tenantId }, select: { id: true }, orderBy: { createdAt: 'asc' } }))?.id;
   if (!commissionUserId) {
     throw new Error('No se pudo identificar el usuario para la comisión.');
