@@ -196,4 +196,31 @@ describe('Resolución de chat de Telegram al userId real (webhook)', () => {
     const createCall = (createExpense as any).mock.calls[0][0];
     expect(createCall.createdById).toBe('user-42');
   });
+
+  it('create_expense con userId NO resoluble cae al primer usuario del tenant (nunca un id no-User: Expense.createdById es FK obligatoria)', async () => {
+    mocks.supplierFindFirst.mockResolvedValue({ id: 'supp-1' } as any);
+    // Ningún usuario tiene ese chat vinculado; solo existe el primer usuario
+    // del tenant (fallback seguro del wrapper).
+    mocks.userFindFirst.mockImplementation((args: any) => {
+      const where = args?.where || {};
+      if (where.id || where.metadata || (Array.isArray(where.OR) && where.OR.some((o: any) => o.metadata))) {
+        return Promise.resolve(null);
+      }
+      // Consulta del fallback: primer usuario del tenant
+      return Promise.resolve({ id: 'user-first' } as any);
+    });
+
+    await (skills as any).create_expense({
+      tenantId: TENANT,
+      monto: 100,
+      concepto: 'Gasolina',
+      proveedor: 'Repsol',
+      userId: 'lead-1', // id que NO es User (WhatsApp pasa leadId)
+    });
+
+    const { createExpense } = await import('@/lib/skills/finance-skills');
+    const createCall = (createExpense as any).mock.calls[0][0];
+    // Antes del fix esto era 'lead-1' → violación de FK Expense.createdById
+    expect(createCall.createdById).toBe('user-first');
+  });
 });
