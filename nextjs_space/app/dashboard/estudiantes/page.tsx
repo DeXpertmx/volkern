@@ -228,6 +228,19 @@ export default function EstudiantesPage() {
       est.email.toLowerCase().includes(busqueda.toLowerCase())
   );
 
+  // Métricas reales derivadas de las inscripciones (no placeholders)
+  const progresoPromedio = estudiantes.length
+    ? Math.round(
+        estudiantes.reduce((acc, est) => {
+          const ins = (est as any).inscripciones || [];
+          const avg = ins.length
+            ? ins.reduce((a: number, i: any) => a + (i.progresoPorcentaje || 0), 0) / ins.length
+            : 0;
+          return acc + avg;
+        }, 0) / estudiantes.length
+      )
+    : 0;
+
   const verDetalle = (estudiante: Estudiante) => {
     setEstudianteSeleccionado(estudiante);
     setShowDetail(true);
@@ -453,13 +466,13 @@ export default function EstudiantesPage() {
         </Card>
         <Card className="border-none shadow-sm bg-gradient-to-br from-orange-500/10 to-transparent hover:shadow-md transition-shadow">
           <CardHeader className="pb-2">
-            <CardDescription className="text-xs uppercase font-bold tracking-wider">Engagement Promedio</CardDescription>
-            <CardTitle className="text-3xl font-black">74%</CardTitle>
+            <CardDescription className="text-xs uppercase font-bold tracking-wider">Progreso Promedio</CardDescription>
+            <CardTitle className="text-3xl font-black">{progresoPromedio}%</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center text-xs text-orange-600 font-medium">
               <Activity className="h-3 w-3 mr-1" />
-              Actividad en 30 días
+              Media de avance en los cursos
             </div>
           </CardContent>
         </Card>
@@ -707,18 +720,20 @@ export default function EstudiantesPage() {
                          <CardTitle className="text-lg font-bold flex items-center justify-between">
                             <Activity className="h-5 w-5 text-primary" />
                             Engagement
-                            <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-none">ALTO</Badge>
                          </CardTitle>
                        </CardHeader>
                        <CardContent className="pt-4 space-y-4">
                           <div className="flex items-end justify-between gap-1 h-20">
-                             {[40, 70, 45, 90, 65, 80, 50, 85].map((h, i) => (
-                               <div key={i} className="w-full bg-primary/20 rounded-t-md hover:bg-primary transition-colors cursor-help" style={{ height: `${h}%` }} title={`Actividad día ${i+1}`} />
-                             ))}
+                             <div className="w-full bg-primary/20 rounded-t-md" style={{ height: `${progresoPromedio}%` }} />
+                             <span className="text-3xl font-black text-primary">{progresoPromedio}%</span>
                           </div>
                           <div className="flex justify-between items-center text-[10px] font-bold text-muted-foreground uppercase pt-2">
-                            <span>Último Acceso:</span>
-                            <span className="text-primary">{estudianteSeleccionado?.ultimoAcceso ? new Date(estudianteSeleccionado.ultimoAcceso).toLocaleDateString() : 'Hace 2 horas'}</span>
+                            <span>Progreso promedio</span>
+                            <span className="text-primary">
+                              {estudianteSeleccionado?.ultimoAcceso
+                                ? `Último acceso: ${new Date(estudianteSeleccionado.ultimoAcceso).toLocaleDateString()}`
+                                : 'Sin actividad registrada'}
+                            </span>
                           </div>
                        </CardContent>
                     </Card>
@@ -740,105 +755,134 @@ export default function EstudiantesPage() {
                            <Shield className="h-6 w-6" />
                         </div>
                         <div>
-                           <p className="text-sm font-bold text-blue-900 leading-none">Seguridad</p>
-                           <p className="text-xs text-blue-700 mt-1">DPA Firmado el 12/03/24</p>
+                           <p className="text-sm font-bold text-blue-900 leading-none">Zona Horaria</p>
+                           <p className="text-xs text-blue-700 mt-1">{estudianteSeleccionado?.zonaHoraria || 'No configurada'}</p>
                         </div>
                      </div>
                   </div>
                 </TabsContent>
 
                 <TabsContent value="academic" className="space-y-6">
-                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <Card className="text-center p-6 border-none bg-primary/5">
-                        <p className="text-muted-foreground text-[10px] font-black uppercase">Cursando</p>
-                        <p className="text-4xl font-black mt-2">{estudianteSeleccionado?._count.inscripciones}</p>
-                        <p className="text-xs mt-1">Cursos activos</p>
-                      </Card>
-                      <Card className="text-center p-6 border-none bg-yellow-500/10">
-                        <p className="text-muted-foreground text-[10px] font-black uppercase">Completados</p>
-                        <p className="text-4xl font-black mt-2">2</p>
-                        <p className="text-xs mt-1">Progreso global 67%</p>
-                      </Card>
-                      <Card className="text-center p-6 border-none bg-green-500/10">
-                        <p className="text-muted-foreground text-[10px] font-black uppercase">Certificados</p>
-                        <p className="text-4xl font-black mt-2">{estudianteSeleccionado?._count.certificados}</p>
-                        <p className="text-xs mt-1">Verificados</p>
-                      </Card>
-                   </div>
+                   {(() => {
+                      const ins = (estudianteSeleccionado as any)?.inscripciones || [];
+                      const completados = ins.filter((i: any) =>
+                        (i.estado === 'completado') || (i.progresoPorcentaje || 0) === 100
+                      ).length;
+                      const promedioReal = ins.length
+                        ? Math.round(ins.reduce((a: number, i: any) => a + (i.progresoPorcentaje || 0), 0) / ins.length)
+                        : 0;
+                      return (
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                         <Card className="text-center p-6 border-none bg-primary/5">
+                           <p className="text-muted-foreground text-[10px] font-black uppercase">Cursando</p>
+                           <p className="text-4xl font-black mt-2">{ins.length}</p>
+                           <p className="text-xs mt-1">Cursos inscritos</p>
+                         </Card>
+                         <Card className="text-center p-6 border-none bg-yellow-500/10">
+                           <p className="text-muted-foreground text-[10px] font-black uppercase">Completados</p>
+                           <p className="text-4xl font-black mt-2">{completados}</p>
+                           <p className="text-xs mt-1">Progreso global {promedioReal}%</p>
+                         </Card>
+                         <Card className="text-center p-6 border-none bg-green-500/10">
+                           <p className="text-muted-foreground text-[10px] font-black uppercase">Certificados</p>
+                           <p className="text-4xl font-black mt-2">{estudianteSeleccionado?._count.certificados}</p>
+                           <p className="text-xs mt-1">Emitidos</p>
+                         </Card>
+                      </div>
+                      );
+                   })()}
                    
                    <div className="space-y-4 pt-4">
-                      <h4 className="font-bold text-sm uppercase tracking-widest text-muted-foreground px-1">Línea de tiempo académica</h4>
-                      {[1, 2].map((i) => (
-                        <div key={i} className="flex gap-4 p-4 rounded-xl border border-muted-foreground/10 hover:bg-muted/10 transition-colors">
-                           <div className="bg-primary/10 p-3 rounded-lg h-fit">
-                             <BookOpen className="h-5 w-5 text-primary" />
-                           </div>
-                           <div className="flex-1">
-                              <div className="flex justify-between">
-                                <p className="font-bold text-base">Maestría en Growth Marketing v3</p>
-                                <Badge variant="outline">89% COMPLETADO</Badge>
-                              </div>
-                              <p className="text-xs text-muted-foreground mt-1">Última lección: "Segmentación Avanzada con AI" - Ayer, 14:30</p>
-                              <div className="w-full h-2 bg-muted rounded-full overflow-hidden mt-3">
-                                <div className="h-full bg-gradient-to-r from-primary to-blue-400" style={{ width: '89%' }}></div>
-                              </div>
-                           </div>
-                        </div>
-                      ))}
+                      <h4 className="font-bold text-sm uppercase tracking-widest text-muted-foreground px-1">Cursos inscritos</h4>
+                      {(() => {
+                        const ins = (estudianteSeleccionado as any)?.inscripciones || [];
+                        if (ins.length === 0) {
+                          return (
+                            <p className="text-sm text-muted-foreground px-1">Sin cursos inscritos.</p>
+                          );
+                        }
+                        return ins.map((inscripcion: any) => {
+                          const prog = Math.min(100, Math.round(inscripcion.progresoPorcentaje || 0));
+                          return (
+                            <div key={inscripcion.id} className="flex gap-4 p-4 rounded-xl border border-muted-foreground/10 hover:bg-muted/10 transition-colors">
+                               <div className="bg-primary/10 p-3 rounded-lg h-fit">
+                                 <BookOpen className="h-5 w-5 text-primary" />
+                               </div>
+                               <div className="flex-1">
+                                  <div className="flex justify-between items-center gap-4">
+                                    <p className="font-bold text-base">{inscripcion.curso?.titulo || 'Curso'}</p>
+                                    <Badge variant="outline">{prog}% COMPLETADO</Badge>
+                                  </div>
+                                  <div className="w-full h-2 bg-muted rounded-full overflow-hidden mt-3">
+                                    <div className="h-full bg-gradient-to-r from-primary to-blue-400" style={{ width: `${prog}%` }}></div>
+                                  </div>
+                               </div>
+                            </div>
+                          );
+                        });
+                      })()}
                    </div>
                 </TabsContent>
 
                 <TabsContent value="tech" className="space-y-6">
-                   <Card className="bg-slate-900 border-none shadow-2xl">
-                      <CardHeader className="border-b border-slate-800">
-                        <CardTitle className="text-slate-200 text-sm font-mono flex items-center gap-2">
-                          <Activity className="h-4 w-4" />
-                          RAW_METADATA_EXPLORER
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="p-4 overflow-hidden">
-                         <div className="font-mono text-[11px] text-emerald-400/90 leading-relaxed whitespace-pre-wrap">
-{`{
-  "technical_id": "${estudianteSeleccionado?.id}",
-  "tenant_context": "V_FLUY_CRM",
-  "auth_provider": "google-oauth",
-  "device_fingerprint": ["CHROME_MAC_M3_0823", "SAFARI_IPHONE_17_01"],
-  "chatbot_interactions": {
-    "total_queries": 47,
-    "last_topic": "billing_issue",
-    "sentiment_average": 0.82
-  },
-  "white_label_config": {
-    "custom_domain": "student.dimensionexpert.ai",
-    "hide_volkern_footer": true
-  }
-}`}
+                   {(() => {
+                     const base = estudianteSeleccionado;
+                     const metaRaw = (base as any)?.metadataTecnica;
+                     const meta = metaRaw && typeof metaRaw === 'object' ? metaRaw : undefined;
+                     const log = JSON.stringify({
+                       technical_id: base?.id,
+                       created_at: base?.fechaCreacion,
+                       last_access: base?.ultimoAcceso || null,
+                       access_type: base?.tipoAcceso,
+                       country: base?.pais || null,
+                       timezone: base?.zonaHoraria || null,
+                       tags: base?.tags || [],
+                       gdpr_consent: !!base?.consentimientoGDPR,
+                       inscripciones: base?._count?.inscripciones || 0,
+                       certificados: base?._count?.certificados || 0,
+                       metadataTecnica: meta || null,
+                     }, null, 2);
+                     return (
+                       <>
+                         <Card className="bg-slate-900 border-none shadow-2xl">
+                           <CardHeader className="border-b border-slate-800">
+                             <CardTitle className="text-slate-200 text-sm font-mono flex items-center gap-2">
+                               <Activity className="h-4 w-4" />
+                               DATOS TÉCNICOS DEL REGISTRO
+                             </CardTitle>
+                           </CardHeader>
+                           <CardContent className="p-4 overflow-hidden">
+                             <pre className="font-mono text-[11px] text-emerald-400/90 leading-relaxed whitespace-pre-wrap">{log}</pre>
+                             <div className="mt-4 pt-4 border-t border-slate-800 flex justify-between items-center">
+                               <span className="text-[10px] text-slate-500 font-bold">Datos reales del registro · sin información de sesión/dispositivo sintética</span>
+                               <Button size="sm" variant="outline" className="h-7 text-[10px] border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700"
+                                 onClick={() => { navigator.clipboard?.writeText(log); }}>
+                                 Copiar Log JSON
+                               </Button>
+                             </div>
+                           </CardContent>
+                         </Card>
+                         <div className="grid grid-cols-2 gap-4">
+                           <div className="p-4 bg-muted/20 rounded-xl space-y-2">
+                             <div className="flex items-center gap-2 font-black text-[10px] uppercase text-muted-foreground">
+                               <Clock className="h-3 w-3" />
+                               Registrado
+                             </div>
+                             <p className="text-sm font-bold">{base?.fechaCreacion ? new Date(base.fechaCreacion).toLocaleString() : '—'}</p>
+                             <p className="text-xs text-muted-foreground italic">ID: {base?.id}</p>
+                           </div>
+                           <div className="p-4 bg-muted/20 rounded-xl space-y-2">
+                             <div className="flex items-center gap-2 font-black text-[10px] uppercase text-muted-foreground">
+                               <Activity className="h-3 w-3" />
+                               Último Acceso
+                             </div>
+                             <p className="text-sm font-bold">{base?.ultimoAcceso ? new Date(base.ultimoAcceso).toLocaleString() : 'Sin actividad'}</p>
+                             <p className="text-xs text-muted-foreground italic">Estado: {base?.tipoAcceso}</p>
+                           </div>
                          </div>
-                         <div className="mt-4 pt-4 border-t border-slate-800 flex justify-between items-center">
-                            <span className="text-[10px] text-slate-500 font-bold">⚠️ SOLO VISIBLE PARA ADMINISTRADORES DE SISTEMA</span>
-                            <Button size="sm" variant="outline" className="h-7 text-[10px] border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700">Copiar Log JSON</Button>
-                         </div>
-                      </CardContent>
-                   </Card>
-                   
-                   <div className="grid grid-cols-2 gap-4">
-                      <div className="p-4 bg-muted/20 rounded-xl space-y-2">
-                        <div className="flex items-center gap-2 font-black text-[10px] uppercase text-muted-foreground">
-                          <Smartphone className="h-3 w-3" />
-                          Dispositivo Principal
-                        </div>
-                        <p className="text-sm font-bold">MacBook Pro M3 (macOS Sequoia)</p>
-                        <p className="text-xs text-muted-foreground italic">IP: 187.132.XX.XX (Ciudad de México)</p>
-                      </div>
-                      <div className="p-4 bg-muted/20 rounded-xl space-y-2">
-                         <div className="flex items-center gap-2 font-black text-[10px] uppercase text-muted-foreground">
-                          <MessageSquare className="h-3 w-3" />
-                          Chatbot Personality
-                        </div>
-                        <p className="text-sm font-bold">Empática / Consultiva</p>
-                        <p className="text-xs text-muted-foreground italic">Basado en interacciones previas</p>
-                      </div>
-                   </div>
+                       </>
+                     );
+                   })()}
                 </TabsContent>
               </Tabs>
             </div>

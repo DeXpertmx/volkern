@@ -118,9 +118,24 @@ export async function createProjectTask(config: any, ctx: ActionContext): Promis
   const { getTenantDb } = await import('@/lib/db')
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
-  await (tenantClient as any).proyectoTarea.create({
+  const tarea = await (tenantClient as any).proyectoTarea.create({
     data: { tenantId: ctx.state.tenantId, proyectoId: projectId || ctx.state.projectId, titulo, descripcion, asignadoA, fechaVencimiento, prioridad: prioridad || 'media', estado: 'pendiente' },
   })
+
+  // Notificación informativa por Telegram (sin botones task:*: este modelo
+  // tenant no lo resuelve el webhook, que busca en prisma.task).
+  try {
+    const { notifyByTelegram } = await import('@/lib/skills/notification-layer')
+    const { createSystemContext } = await import('@/lib/skills/context')
+    const context = createSystemContext(ctx.state.tenantId || '')
+    await notifyByTelegram(
+      `📋 *Nueva tarea de proyecto*\n\n${tarea?.titulo || titulo || 'Tarea de proyecto'}\n\nCreada por automatización`,
+      context
+    )
+  } catch (e) {
+    console.error('[createProjectTask] No se pudo notificar por Telegram:', e)
+  }
+
   await ctx.log('create_project_task', 'action', 'success', `Tarea "${titulo}" creada en proyecto`)
   return true
 }
