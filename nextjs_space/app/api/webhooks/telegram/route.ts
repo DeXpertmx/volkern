@@ -14,6 +14,7 @@ import { getDownloadUrl } from '@/lib/s3'
 import { callVision } from '@/app/api/erp/expenses/scan/route'
 import { buildTaskCalendarMarkup } from '@/lib/telegram/task-calendar'
 import { buildTaskButtonsMarkup } from '@/lib/telegram/task-buttons'
+import { isChatRateLimited } from '@/lib/telegram/chat-rate-limit'
 
 /**
  * Webhook directo de Telegram — pipeline unificado
@@ -28,36 +29,16 @@ import { buildTaskButtonsMarkup } from '@/lib/telegram/task-buttons'
 // Timeout para la pipeline unificada (Telegram cierra el webhook a los 30s)
 const PIPELINE_TIMEOUT_MS = 25000
 
-// Ventana para rate-limit por chat (evita abuso si una integración queda expuesta)
-const RATE_LIMIT_WINDOW_MS = 1500
-
 // TTL anti-duplicado para update_id (Telegram puede reenviar el mismo webhook)
 const UPDATE_DEDUPE_TTL_MS = 30000
 
 // Umbral bajo para limpieza de caches in-memory en instancias warm
 const LRU_CLEANUP_THRESHOLD = 1000
 
-// ─── Rate-limit LRU simple (en memoria, por instancia serverless) ─────────
-const lastCallByChat = new Map<string, number>()
-
-function isRateLimited(chatId: string): boolean {
-  const now = Date.now()
-  const last = lastCallByChat.get(chatId)
-  if (last !== undefined && now - last < RATE_LIMIT_WINDOW_MS) {
-    return true
-  }
-  lastCallByChat.set(chatId, now)
-  if (lastCallByChat.size > LRU_CLEANUP_THRESHOLD) {
-    const cutoff = now - RATE_LIMIT_WINDOW_MS * 10
-    for (const [k, v] of lastCallByChat) {
-      if (v < cutoff) lastCallByChat.delete(k)
-    }
-  }
-  return false
-}
-
 // Respuesta 429 explícita: Telegram reintenta el webhook con backoff y el
 // mensaje no se pierde (antes se descartaba silenciosamente con { ok: true }).
+// El rate-limit en sí vive en lib/telegram/chat-rate-limit (Redis compartido
+// con fallback en memoria) — isChatRateLimited sustituye al Map local.
 function rateLimitedResponse(): NextResponse {
   return NextResponse.json(
     { ok: false, error: 'rate_limited', retry_after: 2 },
@@ -905,7 +886,9 @@ export async function POST(request: NextRequest) {
       // 429 con Retry-After para que Telegram reintente el mensaje (ya no se
       // descarta silenciosamente con { ok: true }). No se marca el update como
       // procesado en ese caso para que el reintento del mismo update_id pase.
-      if (isRateLimited(chatId)) {
+      // El rate-limit es compartido entre instancias (Redis) con fallback en
+      // memoria — isChatRateLimited sustituye al antiguo Map local.
+      if (await isChatRateLimited(chatId)) {
         return rateLimitedResponse()
       }
 
