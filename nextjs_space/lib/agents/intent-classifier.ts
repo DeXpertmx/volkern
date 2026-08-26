@@ -178,6 +178,14 @@ export class IntentClassifierAgent {
       return missing.filter((p: string) => p !== 'nombre');
     }
 
+    // calificar_lead: el lead puede identificarse por email O nombre (el
+    // wrapper prequalifyLeadWrapper resuelve el lead por cualquiera de los
+    // dos). Si el usuario dio el nombre ("precalifica a Juan Antonio
+    // Moreno…"), el parámetro está satisfecho y no se pide el email.
+    if (intent === 'calificar_lead' && extractedParams.nombre) {
+      return missing.filter((p: string) => p !== 'email');
+    }
+
     // Real estate: el usuario se refiere a la propiedad por id, nombre o zona
     // ("la casa del centro"); el parámetro 'propiedad' satisface el
     // requiredParams 'propiedadId' del schema.
@@ -1723,13 +1731,23 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     // sobre el lead antes de ejecutar la skill compuesta de calificación.
     // Se evalúa antes que ghosting porque ambas acciones pueden mencionar
     // leads, pero solo esta contiene el verbo explícito de calificación.
-    if (PREQUALIFY_TRIGGER.test(message) && /\b(?:lead|prospecto|cliente|contacto|@)\b/i.test(message)) {
+    // Acepta tanto la referencia explícita ("precalifica al lead Juan…") como
+    // el nombre directo tras el verbo ("precalifica a Juan Antonio Moreno: …")
+    // — antes, la forma con nombre real sin las palabras lead/cliente/contacto
+    // caía al LLM en producción (22s) pese a ser un caso determinista claro.
+    const PREQUALIFY_REF = /\b(?:lead|prospecto|cliente|contacto|@)\b/i
+    const PREQUALIFY_NAMED = /\b(?:precalifica|precalificar|prequalifica|prequalificar|califica|calificar)\s+(?:a|al)\s+[A-ZÁÉÍÓÚÑÜ]/
+    if (PREQUALIFY_TRIGGER.test(message) && (PREQUALIFY_REF.test(message) || PREQUALIFY_NAMED.test(message))) {
       const notaIdx = message.indexOf(':')
       if (notaIdx >= 0) {
         const nota = message.slice(notaIdx + 1).trim().replace(/[\"'”]+\s*$/, '').trim()
         if (nota.length >= 2) extracted.nota = nota
       }
-      const nombre = this.extractNombreAfter(message, /\b(?:lead|prospecto|cliente|contacto)\b/i)
+      // Nombre: recortar la nota ("precalifica a X: nota" → "X") para no
+      // arrastrar el contenido tras los dos puntos.
+      const beforeColon = message.split(/\s*:\s*/)[0]
+      let nombre = this.extractNombreAfter(beforeColon, /\b(?:lead|prospecto|cliente|contacto)\b/i)
+      if (!nombre) nombre = this.extractNombreAfter(beforeColon, /\b(?:precalifica|precalificar|prequalifica|prequalificar|califica|calificar)\s+(?:a|al)\s+/i)
       if (nombre) extracted.nombre = nombre
       return { intent: 'calificar_lead', confidence: 0.85, extractedParams: extracted }
     }
