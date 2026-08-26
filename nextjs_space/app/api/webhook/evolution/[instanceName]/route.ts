@@ -13,6 +13,23 @@ import {
   getProfileInfo,
   isMessageKeyRecentlySent
 } from '@/lib/evolution-instances';
+import { isChatRateLimited } from '@/lib/telegram/chat-rate-limit';
+
+// Respuesta 429 explícita: Evolution API reintenta el webhook con backoff
+// (WEBHOOK_RETRY_* configurado en el contenedor) y el mensaje no se pierde
+// (antes un exceso de mensajes del mismo chat se procesaba sin límite y los
+// errores se tragaban devolviendo 200).
+function rateLimitedResponse(instanceName: string) {
+  return NextResponse.json(
+    {
+      success: false,
+      error: 'rate_limited',
+      retry_after: 2,
+      instanceName,
+    },
+    { status: 429, headers: { 'Retry-After': '2' } }
+  );
+}
 
 /** Actualiza la fila de la instancia (usuario o negocio) según su tipo. */
 async function updateInstanceRow(
@@ -222,6 +239,17 @@ export async function POST(
           if (ownerPhone && cleanPhone === ownerPhone) {
             console.log('ℹ️ Self-chat (mensaje a uno mismo) ignorado para la bandeja:', cleanPhone);
             break;
+          }
+
+          // ⏱️ Rate-limit por chat (compartido entre instancias vía Redis): si
+          // el mismo remitente envía mensajes más rápido que la ventana, se
+          // responde 429 + Retry-After para que Evolution reintente el payload
+          // en vez de procesarlo sin límite. Se evalúa ANTES de tocar la BD
+          // (lead/conversación/mensaje) para que el reintento procese el
+          // mensaje completo y no quede estado a medias.
+          if (await isChatRateLimited(cleanPhone, 'evolution')) {
+            console.log('⏱️ Rate-limit: mensaje de', cleanPhone, 'rechazado con 429 (Evolution reintentará)');
+            return rateLimitedResponse(instanceName);
           }
 
           // En salientes el pushName es el del propietario, no del contacto
