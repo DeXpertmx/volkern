@@ -15,6 +15,21 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { processChatbotMessage } from '@/lib/chatbot-engine';
+import { isChatRateLimited } from '@/lib/telegram/chat-rate-limit';
+
+// Respuesta 429 explícita: Evolution API reintenta el webhook con backoff y el
+// mensaje no se pierde (mismo patrón que el webhook de Telegram).
+function rateLimitedResponse(instanceName: string) {
+  return NextResponse.json(
+    {
+      status: 'error',
+      error: 'rate_limited',
+      retry_after: 2,
+      instance: instanceName,
+    },
+    { status: 429, headers: { 'Retry-After': '2' } }
+  );
+}
 
 /**
  * GET /api/webhooks/evolution
@@ -183,6 +198,16 @@ export async function POST(request: NextRequest) {
     if (message.direction !== 'incoming') {
       console.log('🔄 Mensaje saliente ignorado');
       return NextResponse.json({ status: 'ignored_outgoing' });
+    }
+
+    // ⏱️ Rate-limit por chat (compartido entre instancias vía Redis): si el
+    // mismo remitente envía más rápido que la ventana, se responde 429 +
+    // Retry-After para que Evolution reintente el payload en vez de procesarlo
+    // sin límite. Se evalúa ANTES de crear/actualizar el lead.
+    const chatKey = message.from.replace(/[\s\-\()]/g, '');
+    if (await isChatRateLimited(chatKey, 'evolution')) {
+      console.log('⏱️ Rate-limit: mensaje de', message.from, 'rechazado con 429 (Evolution reintentará)');
+      return rateLimitedResponse(instanceName);
     }
 
     // ========== BUSCAR O CREAR LEAD EN EL TENANT CORRECTO ==========
