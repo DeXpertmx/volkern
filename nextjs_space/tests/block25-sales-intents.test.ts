@@ -103,6 +103,18 @@ describe('Bloque 25 — pipeline de ventas por Telegram', () => {
     expect(result.needsMoreInfo).toBe(false);
   });
 
+  it('precalifica por nombre directo sin email y conserva nota (fix webhook)', async () => {
+    const result = await classifier().classify({
+      ...BASE,
+      message: 'precalifica a Juan Antonio Moreno: interesado en ERP',
+    });
+
+    expect(result.intent).toBe('calificar_lead');
+    expect(result.extractedParams.nombre).toBe('Juan Antonio Moreno');
+    expect(result.extractedParams.nota).toContain('interesado en ERP');
+    expect(result.needsMoreInfo).toBe(false);
+  });
+
   it('detecta ghosting y extrae el umbral de inactividad', async () => {
     const result = await classifier().classify({
       ...BASE,
