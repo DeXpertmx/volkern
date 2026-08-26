@@ -8,15 +8,22 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 const mocks = vi.hoisted(() => ({
   isAdminRequest: vi.fn(),
   resetRateLimitMetrics: vi.fn(),
+  getRateLimitMetrics: vi.fn(),
   sendTelegramMessage: vi.fn(),
   prisma: {
-    user: { findUnique: vi.fn() },
+    user: { findUnique: vi.fn(), findMany: vi.fn() },
+    lead: { findFirst: vi.fn() },
+    contact: { findFirst: vi.fn() },
+    conversation: { findFirst: vi.fn() },
     auditLog: { create: vi.fn() },
   },
 }))
 
 vi.mock('@/lib/auth-helpers', () => ({ isAdminRequest: mocks.isAdminRequest }))
-vi.mock('@/lib/telegram/rate-limit-metrics', () => ({ resetRateLimitMetrics: mocks.resetRateLimitMetrics }))
+vi.mock('@/lib/telegram/rate-limit-metrics', () => ({
+  resetRateLimitMetrics: mocks.resetRateLimitMetrics,
+  getRateLimitMetrics: mocks.getRateLimitMetrics,
+}))
 vi.mock('@/lib/telegram', () => ({ sendTelegramMessage: mocks.sendTelegramMessage }))
 vi.mock('@/lib/db', () => ({ prisma: mocks.prisma }))
 // getServerSession se usa en el GET; para el POST solo pasa por isAdminRequest,
@@ -31,6 +38,19 @@ describe('POST /api/webhook-status: aviso de reinicio al desarrollador', () => {
     vi.clearAllMocks()
     mocks.resetRateLimitMetrics.mockResolvedValue({ reset: true })
     mocks.sendTelegramMessage.mockResolvedValue({ success: true })
+    // El resolver del último rechazo localiza a Bruno por metadata de /start
+    mocks.prisma.user.findMany.mockResolvedValue([])
+    mocks.prisma.lead.findFirst.mockResolvedValue(null)
+    mocks.prisma.conversation.findFirst.mockResolvedValue({ contactoNombre: 'Bruno Hess' })
+    // Métricas previas al reset: 3 telegram + 1 evolution, último rechazo de Bruno
+    mocks.getRateLimitMetrics.mockResolvedValue({
+      today: { telegram: 3, evolution: 1, total: 4 },
+      topChats: [],
+      byDay: [],
+      lastRejectedAt: '2026-08-26T18:15:00.000Z',
+      lastRejectedChannel: 'telegram',
+      lastRejectedChatId: '646107192',
+    })
   })
 
   afterEach(() => {
@@ -53,6 +73,10 @@ describe('POST /api/webhook-status: aviso de reinicio al desarrollador', () => {
     const body = await res.json()
     expect(res.status).toBe(200)
     expect(body.ok).toBe(true)
+    // La respuesta devuelve el snapshot de los borrados
+    expect(body.borrados.telegram).toBe(3)
+    expect(body.borrados.total).toBe(4)
+    expect(body.borrados.ultimoRechazo.name).toBe('Bruno Hess')
 
     // Se reinició una vez
     expect(mocks.resetRateLimitMetrics).toHaveBeenCalledTimes(1)
@@ -66,14 +90,26 @@ describe('POST /api/webhook-status: aviso de reinicio al desarrollador', () => {
     expect(audit.userId).toBe('u_bruno')
     expect(audit.tenantId).toBe('t_1')
     expect(audit.metadata.reiniciadoPor).toBe('Bruno Hess')
+    // Snapshot de lo borrado en el audit log
+    const borrados = audit.metadata.borrados
+    expect(borrados.telegram).toBe(3)
+    expect(borrados.evolution).toBe(1)
+    expect(borrados.total).toBe(4)
+    expect(borrados.ultimoRechazo.nombre).toBe('Bruno Hess')
+    expect(borrados.ultimoRechazo.chatId).toBe('646107192')
 
-    // El aviso llegó al chat del desarrollador con quién lo hizo
+    // El aviso llegó al chat del desarrollador con quién lo hizo, y el texto
+    // incluye los valores borrados y el último rechazo con nombre resuelto
     expect(mocks.sendTelegramMessage).toHaveBeenCalledTimes(1)
     const [chatId, text] = mocks.sendTelegramMessage.mock.calls[0]
     expect(chatId).toBe('646107192')
     expect(text).toContain('Bruno Hess')
     expect(text).toContain('bruno.hess@dimensionexpert.com')
     expect(text).toContain('u_bruno')
+    expect(text).toContain('3 Telegram')
+    expect(text).toContain('1 WhatsApp')
+    expect(text).toContain('4 total')
+    expect(text).toContain('Bruno Hess (telegram)')
   })
 
   it('cae al email en el aviso si el usuario no tiene nombre', async () => {

@@ -65,6 +65,18 @@ export async function POST(request: Request) {
     const ipAddress = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null
     const userAgent = request.headers.get('user-agent') || null
 
+    // Capturar las métricas ANTES de reiniciar, para reflejar en el aviso qué
+    // se estaba borrando (totales por canal y último rechazo).
+    let before = null
+    try {
+      before = await getRateLimitMetrics()
+    } catch (e) {
+      console.warn('[WebhookStatus] No se pudieron leer métricas previas:', (e as Error).message)
+    }
+    const lastBefore = before
+      ? await resolveLastRejected(before.lastRejectedChatId, before.lastRejectedChannel, before.lastRejectedAt)
+      : { chatId: null, name: null, channel: null as 'telegram' | 'evolution' | null, at: null }
+
     await resetRateLimitMetrics()
 
     // Nombre y tenant del usuario que reinició (para el aviso y la auditoría)
@@ -102,6 +114,20 @@ export async function POST(request: Request) {
             email: auth.email || null,
             action: 'reset_rate_limit_metrics',
             origen: ipAddress || null,
+            // Snapshot de lo que se borró (totales del día y último rechazo)
+            borrados: {
+              telegram: before?.today.telegram ?? 0,
+              evolution: before?.today.evolution ?? 0,
+              total: before?.today.total ?? 0,
+              ultimoRechazo: lastBefore.at
+                ? {
+                    chatId: lastBefore.chatId,
+                    nombre: lastBefore.name,
+                    canal: lastBefore.channel,
+                    fecha: lastBefore.at,
+                  }
+                : null,
+            },
           },
           ipAddress,
           userAgent,
@@ -115,6 +141,12 @@ export async function POST(request: Request) {
     try {
       const adminChat = process.env.TELEGRAM_ADMIN_CHAT_ID
       if (adminChat) {
+        const borrados = before
+          ? `${before.today.telegram} Telegram · ${before.today.evolution} WhatsApp · ${before.today.total} total`
+          : 'no disponibles'
+        const ultimoRechazo = lastBefore?.at
+          ? `${lastBefore.name || `ID ${lastBefore.chatId}`} (${lastBefore.channel || '?'})`
+          : 'ninguno'
         const text = [
           '🔄 Reinicio de métricas del webhook',
           '',
@@ -122,6 +154,9 @@ export async function POST(request: Request) {
           `Email: ${auth.email || '—'}`,
           `UserId: ${auth.userId}`,
           `Fecha: ${new Date().toISOString()}`,
+          '',
+          `Borrados: ${borrados}`,
+          `Último rechazo: ${ultimoRechazo}`,
           '',
           'Se reiniciaron los contadores 429 del día (por chat, totales y último rechazo).',
         ].join('\n')
@@ -136,7 +171,19 @@ export async function POST(request: Request) {
       console.error('[WebhookStatus] Error enviando aviso de reinicio al desarrollador:', error)
     }
 
-    return NextResponse.json({ ok: true, message: 'Métricas del día reiniciadas' })
+    return NextResponse.json({
+      ok: true,
+      message: 'Métricas del día reiniciadas',
+      // Snapshot de lo borrado, por si el cliente del panel quiere mostrarlo
+      borrados: before
+        ? {
+            telegram: before.today.telegram,
+            evolution: before.today.evolution,
+            total: before.today.total,
+            ultimoRechazo: lastBefore?.at ? lastBefore : null,
+          }
+        : null,
+    })
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
