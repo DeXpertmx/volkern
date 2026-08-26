@@ -14,6 +14,7 @@
  */
 
 import { initRedis } from '@/lib/core/redis'
+import { recordRateLimited } from './rate-limit-metrics'
 
 // Ventana por chat (misma semántica que el antiguo RATE_LIMIT_WINDOW_MS)
 const RATE_LIMIT_WINDOW_MS = 1500
@@ -57,14 +58,27 @@ export async function isChatRateLimited(
 ): Promise<boolean> {
   const key = `${namespace}:rl:${chatId}`
   const redis = await initRedis()
+  let limited = false
+  let redisOk = false
   if (redis) {
     try {
       const result = await redis.set(key, '1', 'PX', RATE_LIMIT_WINDOW_MS, 'NX')
       // null = la clave ya existía (mensaje anterior en la ventana) → limitado
-      return result === null
+      limited = result === null
+      redisOk = true
     } catch (error) {
       console.warn(`[${namespace === 'telegram' ? 'TelegramWebhook' : 'EvolutionWebhook'}] Redis rate-limit falló, usando fallback en memoria:`, (error as Error).message)
     }
   }
-  return isRateLimitedLocal(key)
+  // Fallback a memoria si Redis no está o falló (misma semántica que antes
+  // del cambio: el degradado nunca debe romper el webhook).
+  if (!redisOk) {
+    limited = isRateLimitedLocal(key)
+  }
+  // Registrar el rechazo en las métricas (fire-and-forget: si Redis de métricas
+  // falla, ya hay fallback interno; nunca debe romper el webhook).
+  if (limited) {
+    recordRateLimited(namespace, chatId).catch(() => {})
+  }
+  return limited
 }
