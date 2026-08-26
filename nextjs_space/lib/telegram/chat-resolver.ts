@@ -55,6 +55,17 @@ async function resolveTelegram(nameMap: Map<string, string>, chatId: string): Pr
   })
   if (lead?.nombre) return lead.nombre
 
+  // 3) Conversación real del canal: el contactoNombre que dejó el webhook
+  //    (p.ej. "Bruno Hess" en un chat que no está vinculado por /start ni a un lead)
+  const conv = await prisma.conversation.findFirst({
+    where: { canal: 'telegram', externalRef: `telegram:${chatId}` },
+    select: { contactoNombre: true },
+  })
+  const convName = conv?.contactoNombre?.trim()
+  if (convName && convName.toLowerCase() !== 'test' && convName.toLowerCase() !== 'tester') {
+    return convName
+  }
+
   return null
 }
 
@@ -77,6 +88,18 @@ async function resolveWhatsApp(chatId: string): Promise<string | null> {
   })
   const leadName = lead?.nombre?.trim()
   if (leadName) return leadName
+
+  // 3) Conversación real del canal (externalRef tipo evolution_1491868158,
+  //    sin el prefijo de país): el contactoNombre que dejó el webhook
+  const suffix = digits.slice(-10) // últimos 10 dígitos, tolera prefijos 52/521
+  const conv = await prisma.conversation.findFirst({
+    where: { canal: { contains: 'whats' }, externalRef: { contains: suffix } },
+    select: { contactoNombre: true },
+  })
+  const convName = conv?.contactoNombre?.trim()
+  if (convName && convName.toLowerCase() !== 'test' && convName.toLowerCase() !== 'tester') {
+    return convName
+  }
 
   return null
 }

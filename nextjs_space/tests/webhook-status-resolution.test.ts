@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
     user: { findMany: vi.fn() },
     lead: { findFirst: vi.fn() },
     contact: { findFirst: vi.fn() },
+    conversation: { findFirst: vi.fn() },
   },
 }))
 
@@ -59,6 +60,37 @@ describe('chat-resolver: resolver nombres reales', () => {
 
     const map = await resolveChatIdentities('evolution', ['5214499880003'])
     expect(map.get('5214499880003')!.name).toBe('Ana Torres')
+  })
+
+  it('resuelve un chat de Telegram a la Conversación real si no hay User ni Lead', async () => {
+    mocks.prisma.user.findMany.mockResolvedValue([])
+    mocks.prisma.lead.findFirst.mockResolvedValue(null)
+    mocks.prisma.conversation.findFirst.mockResolvedValue({ contactoNombre: 'Bruno Hess' })
+
+    const map = await resolveChatIdentities('telegram', ['646107195'])
+    expect(map.get('646107195')!.name).toBe('Bruno Hess')
+  })
+
+  it('no usa nombres de conversaciones de prueba (Test/Tester)', async () => {
+    mocks.prisma.user.findMany.mockResolvedValue([])
+    mocks.prisma.lead.findFirst.mockResolvedValue(null)
+    mocks.prisma.conversation.findFirst.mockResolvedValue({ contactoNombre: 'Tester' })
+
+    const map = await resolveChatIdentities('telegram', ['987654321'])
+    expect(map.get('987654321')!.name).toBe('987654321')
+    expect(map.get('987654321')!.kind).toBeNull()
+  })
+
+  it('resuelve un número de WhatsApp a la Conversación (externalRef sin prefijo de país)', async () => {
+    mocks.prisma.contact.findFirst.mockResolvedValue(null)
+    mocks.prisma.lead.findFirst.mockResolvedValue(null)
+    mocks.prisma.conversation.findFirst.mockResolvedValue({ contactoNombre: 'Museo De Arte Sacro' })
+
+    const map = await resolveChatIdentities('evolution', ['521491868158'])
+    expect(map.get('521491868158')!.name).toBe('Museo De Arte Sacro')
+    // El sufijo usado en la consulta son los últimos 10 dígitos (1491868158)
+    const where = mocks.prisma.conversation.findFirst.mock.calls[0][0]
+    expect(where.where.externalRef.contains).toBe('1491868158')
   })
 
   it('deja el id crudo si no encuentra nada o falla la consulta', async () => {
