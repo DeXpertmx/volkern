@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   systemAlertCreate: vi.fn(),
   financialAuditCreate: vi.fn(),
   noteCreate: vi.fn(),
+  catalogoItemFindMany: vi.fn(),
 }));
 
 vi.mock('@/lib/db', () => ({
@@ -37,6 +38,7 @@ vi.mock('@/lib/db', () => ({
     lead: { findFirst: mocks.leadFindFirst, create: mocks.leadCreate },
     contact: { findFirst: mocks.contactFindFirst },
     note: { create: mocks.noteCreate },
+    catalogoItem: { findMany: mocks.catalogoItemFindMany },
     erp_expense_claims: {
       findMany: mocks.expenseClaimsFindMany,
       findUnique: mocks.expenseClaimsFindUnique,
@@ -195,6 +197,29 @@ describe('Resolución de chat de Telegram al userId real (webhook)', () => {
     const { createExpense } = await import('@/lib/skills/finance-skills');
     const createCall = (createExpense as any).mock.calls[0][0];
     expect(createCall.createdById).toBe('user-42');
+  });
+
+  it('prequalify_lead crea la nota sin tenantId (regresión: note.create rompía con Unknown argument)', async () => {
+    // El wrapper resuelve el lead por email; el core prequalifyLead crea la
+    // nota con leadId + contenido + creadoPor + metadata.
+    mocks.leadFindFirst.mockResolvedValue({ id: 'lead-jose', nombre: 'José Acevedo' } as any);
+    mocks.noteCreate.mockResolvedValue({ id: 'note-1' } as any);
+    mocks.catalogoItemFindMany.mockResolvedValue([]);
+
+    await (skills as any).prequalify_lead({
+      tenantId: TENANT,
+      email: 'jose.acevedo@acevedoseguros.com.mx',
+      nota: 'interesado en el paquete premium',
+      userId: 'telegram:123456',
+    });
+
+    const createCall = mocks.noteCreate.mock.calls[0][0];
+    expect(createCall).toBeTruthy();
+    expect(createCall.data.leadId).toBe('lead-jose');
+    expect(createCall.data.contenido).toContain('interesado en el paquete premium');
+    // El modelo Note no tiene tenantId: pasarlo era la violación de Prisma
+    // que hacía fallar calificar_lead en producción.
+    expect(createCall.data).not.toHaveProperty('tenantId');
   });
 
   it('create_expense con userId NO resoluble cae al primer usuario del tenant (nunca un id no-User: Expense.createdById es FK obligatoria)', async () => {

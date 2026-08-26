@@ -214,9 +214,11 @@ export async function prequalifyLead(input: PrequalifyLeadInput) {
   const { tenantId, leadId, noteText, dealValue, catalogSearch, userId, source = 'app' } = input;
 
   // 1. Registrar Nota (Escucha Activa)
+  // El modelo Note no tiene tenantId (se relaciona por leadId/contactId);
+  // pasarlo rompía prisma.note.create con "Unknown argument `tenantId`" y
+  // el intent calificar_lead fallaba en producción pese a clasificar bien.
   const note = await prisma.note.create({
     data: {
-      tenantId,
       leadId,
       contenido: noteText,
       creadoPor: userId,
@@ -225,7 +227,7 @@ export async function prequalifyLead(input: PrequalifyLeadInput) {
         sentimiento: 'urgente',
         fechaProcesamiento: new Date().toISOString()
       }
-    } as any
+    }
   });
 
   // 2. Actualizar Valor del Negocio (Ventas)
