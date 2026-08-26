@@ -66,6 +66,20 @@ describe('Bloque 25 — pipeline de ventas por Telegram', () => {
     expect(result.needsMoreInfo).toBe(false);
   });
 
+  it('al actualizar NO toma el nombre del deal como título (regresión: "de jose…" no es el título)', async () => {
+    const result = await classifier().classify({
+      ...BASE,
+      message: 'mueve el deal de jose.acevedo@acevedoseguros.com.mx a etapa negociación y prioridad alta',
+    });
+
+    expect(result.intent).toBe('actualizar_negocio');
+    expect(result.extractedParams.etapa).toBe('negociación');
+    expect(result.extractedParams.prioridad).toBe('alta');
+    // El identificador "de jose.acevedo@…" NO debe convertirse en el título
+    // del deal (pisaba el título real en producción).
+    expect(result.extractedParams.titulo).toBeUndefined();
+  });
+
   it('lista el pipeline con filtro de etapa', async () => {
     const result = await classifier().classify({
       ...BASE,

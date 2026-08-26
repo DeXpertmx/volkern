@@ -1464,8 +1464,14 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
       if (monto) extracted.monto = monto
       const prioridad = this.extractPrioridadDe(message)
       if (prioridad) extracted.prioridad = prioridad
-      const titulo = this.extractTituloDe(message)
-      if (titulo) extracted.titulo = titulo
+      // Título SOLO si el usuario pide explícitamente renombrarlo. El
+      // identificador del deal ("mueve el deal DE jose.acevedo@… a etapa…")
+      // empieza con "de"; sin este guard, extractTituloDe captura el nombre
+      // como título y pisa el título real del deal.
+      if (/\b(?:t[ií]tulo|renombra|renombrar|cambia\s+el\s+nombre|nombra|nombralo)\b/i.test(message)) {
+        const titulo = this.extractTituloDe(message)
+        if (titulo) extracted.titulo = titulo
+      }
       return { intent: 'actualizar_negocio', confidence: 0.85, extractedParams: extracted }
     }
 
@@ -3421,7 +3427,10 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
       let t = match[1].trim()
       t = t.split(/\s*(?:,|;|\s+y\s+)/i)[0].trim()
       if (/^\d/.test(t)) continue // es un monto, no un título
-      if (t.length >= 2) return t
+      if (t.includes('@')) continue // es un email, no un título
+      // "de <Nombre>" identifica a la persona del deal, no el título
+      if (t.length <= 2) continue
+      return t
     }
     return null
   }
