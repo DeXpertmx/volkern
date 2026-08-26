@@ -55,7 +55,8 @@ describe('Alerta de abuso por rate-limit (429/hora)', () => {
   })
 
   it('alerta al superar el umbral con canal, chat, conteo y umbral', async () => {
-    mocks.initRedis.mockResolvedValue(redisWithHourCount(12) as any)
+    const redis = redisWithHourCount(12)
+    mocks.initRedis.mockResolvedValue(redis as any)
 
     await alertIfAbusive('evolution', '5214499880002')
 
@@ -66,6 +67,15 @@ describe('Alerta de abuso por rate-limit (429/hora)', () => {
     expect(text).toContain('5214499880002')
     expect(text).toContain('12')
     expect(text).toContain('10')
+    // Dedupe con EX en SEGUNDOS (2h): un PX haría expirar la clave en segundos
+    // y se perdería el dedupe dentro de la misma hora.
+    expect(redis.set).toHaveBeenCalledWith(
+      expect.stringContaining('webhook:429:alerted:evolution:5214499880002:'),
+      '1',
+      'EX',
+      7200,
+      'NX'
+    )
   })
 
   it('deduplica: solo UNA alerta por chat y hora', async () => {
