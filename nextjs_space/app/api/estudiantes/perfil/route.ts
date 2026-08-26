@@ -54,7 +54,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Estudiante no encontrado' }, { status: 404 });
     }
 
-    return NextResponse.json(estudiante);
+    const prefs =
+      typeof estudiante.preferenciasNotificacion === 'object' && estudiante.preferenciasNotificacion
+        ? (estudiante.preferenciasNotificacion as Record<string, unknown>)
+        : {};
+
+    return NextResponse.json({
+      ...estudiante,
+      notificarEmail: prefs.notificarEmail ?? true,
+      notificarWhatsApp: prefs.notificarWhatsApp ?? false,
+      notificarPush: prefs.notificarPush ?? true,
+      preferenciasNotificacion: prefs,
+    });
   } catch (error) {
     console.error('Error al obtener perfil del estudiante:', error);
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
@@ -78,11 +89,13 @@ export async function PUT(request: NextRequest) {
       apellidoMaterno,
       telefono,
       pais,
-      region,
-      zonaHoraria,
-      preferenciasNotificacion,
-      consentimientoGDPR
-    } = body;
+      region,        zonaHoraria,
+        notificarEmail,
+        notificarWhatsApp,
+        notificarPush,
+        preferenciasNotificacion,
+        consentimientoGDPR
+      } = body;
 
     const estudiante = await prisma.estudiante.findFirst({
       where: { email: session.user.email },
@@ -104,7 +117,16 @@ export async function PUT(request: NextRequest) {
         pais,
         region,
         zonaHoraria,
-        preferenciasNotificacion,
+        preferenciasNotificacion:
+          preferenciasNotificacion ||
+          (notificarEmail !== undefined || notificarWhatsApp !== undefined || notificarPush !== undefined
+            ? {
+                ...(typeof estudiante.preferenciasNotificacion === 'object' && estudiante.preferenciasNotificacion ? estudiante.preferenciasNotificacion : {}),
+                ...(notificarEmail !== undefined ? { notificarEmail } : {}),
+                ...(notificarWhatsApp !== undefined ? { notificarWhatsApp } : {}),
+                ...(notificarPush !== undefined ? { notificarPush } : {}),
+              }
+            : estudiante.preferenciasNotificacion),
         consentimientoGDPR,
         fechaConsentimiento: consentimientoGDPR ? new Date() : estudiante.fechaConsentimiento,
       },

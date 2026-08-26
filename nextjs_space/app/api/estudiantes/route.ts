@@ -4,6 +4,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import bcrypt from 'bcryptjs';
+import { randomBytes } from 'crypto';
 
 // GET /api/estudiantes - Obtener todos los estudiantes
 export async function GET(request: NextRequest) {
@@ -102,6 +104,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Generar la contraseña temporal de acceso al portal (portal /academy)
+    const passwordTemporal = randomBytes(6).toString('base64url').replace(/[-_]/g, '').slice(0, 9);
+    const hashedPassword = await bcrypt.hash(passwordTemporal, 12);
+    const emailLower = email.toLowerCase();
+
+    // Buscar o crear la cuenta de acceso (erp_academy_users) vinculada al tenant
+    let cuentaAcceso = await prisma.erp_academy_users.findFirst({
+      where: { tenantId: currentUser.tenantId, email: emailLower },
+    });
+
+    if (!cuentaAcceso) {
+      cuentaAcceso = await prisma.erp_academy_users.create({
+        data: {
+          tenantId: currentUser.tenantId,
+          email: emailLower,
+          passwordHash: hashedPassword,
+          firstName: primerNombre || nombre?.split(' ')[0],
+          lastName: apellidoPaterno || apellidoMaterno,
+          role: 'LEARNER',
+          status: 'ACTIVE',
+        } as any,
+      });
+    }
+
     const estudiante = await prisma.estudiante.create({
       data: {
         nombre,
@@ -121,10 +147,19 @@ export async function POST(request: NextRequest) {
         fechaConsentimiento: consentimientoGDPR ? new Date() : null,
         metadataTecnica,
         tenantId: currentUser.tenantId,
+        academyUserId: cuentaAcceso.id,
       },
     });
 
-    return NextResponse.json(estudiante, { status: 201 });
+    return NextResponse.json(
+      {
+        ...estudiante,
+        accesoCreado: !!cuentaAcceso,
+        tieneAcceso: true,
+        passwordTemporal: cuentaAcceso ? passwordTemporal : null,
+      },
+      { status: 201 }
+    );
   } catch (error: any) {
     console.error('Error detail al crear estudiante:', error);
     return NextResponse.json({ 

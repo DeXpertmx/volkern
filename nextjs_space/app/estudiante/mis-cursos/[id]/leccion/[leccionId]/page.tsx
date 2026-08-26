@@ -443,9 +443,12 @@ export default function ReproductorLeccionPage() {
 
          <Card className="border-none shadow-sm rounded-[2.5rem] p-6 bg-gradient-to-br from-indigo-600 to-indigo-800 text-white text-center">
             <h4 className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-2">Comunidad Académica</h4>
-            <p className="text-sm font-bold mb-4 leading-relaxed">¿Tienes dudas sobre esta lección?</p>
-            <Button size="sm" className="w-full bg-white text-indigo-700 hover:bg-slate-100 rounded-xl font-black text-[10px] uppercase shadow-lg">
-               Consultar en Discord
+            <p className="text-sm font-bold mb-4 leading-relaxed">¿Tienes dudas sobre esta lección?
+            </p>
+            <Button asChild size="sm" className="w-full bg-white text-indigo-700 hover:bg-slate-100 rounded-xl font-black text-[10px] uppercase shadow-lg">
+              <Link href={`/estudiante/mis-cursos/${params.id}`}>
+                Abrir Comunidad del Curso
+              </Link>
             </Button>
          </Card>
       </div>
