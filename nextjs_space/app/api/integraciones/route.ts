@@ -5,6 +5,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { logAuditAction } from '@/lib/permissions';
+import { notifyDeveloperSensitiveAction } from '@/lib/telegram/developer-notify';
 
 // GET - Obtener todas las integraciones del tenant
 export async function GET() {
@@ -119,6 +120,23 @@ export async function POST(request: Request) {
       integracion.id,
       `Usuario ${user.name} ${credenciales ? 'conectó' : 'actualizó'} la integración ${nombre}`
     );
+
+    // Aviso al desarrollador cuando se conectan/actualizan credenciales de una
+    // integración externa (se guardan secretos de Stripe/Square/GoCardless/etc.).
+    // No se reenvía el nombre del tenant si no se tiene; el detalle incluye el
+    // tipo y la acción para trazabilidad. Fire-and-forget: no rompe la respuesta.
+    if (credenciales) {
+      await notifyDeveloperSensitiveAction({
+        title: '🔌 Integración conectada/actualizada',
+        accion: `Conectada/actualizada integración ${tipo}`,
+        detalle: `Integración "${nombre}" (tipo ${tipo})`,
+        quien: user.name || user.email || user.id,
+        userId: user.id,
+        extra: `TenantId: ${user.tenantId}`,
+      }).catch((err) => {
+        console.error('[Integraciones] Error al notificar al desarrollador:', err);
+      });
+    }
 
     return NextResponse.json({
       success: true,
