@@ -119,10 +119,19 @@ export default function EstudiantesPage() {
       });
 
       if (response.ok) {
-        toast({
-          title: 'Estudiante creado',
-          description: 'El estudiante ha sido registrado exitosamente',
-        });
+        const creado = await response.json();
+        if (creado?.passwordTemporal) {
+          toast({
+            title: 'Estudiante creado con acceso',
+            description: `Contraseña temporal para el portal: ${creado.passwordTemporal}`,
+            duration: 15000,
+          });
+        } else {
+          toast({
+            title: 'Estudiante creado',
+            description: 'El estudiante ha sido registrado exitosamente',
+          });
+        }
         setShowDialog(false);
         resetForm();
         cargarEstudiantes();

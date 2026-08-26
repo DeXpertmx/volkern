@@ -532,31 +532,6 @@ export default function DetalleCursoEstudiantePage() {
              </Card>
            )}
 
-           {/* Resources Card */}
-           <Card className="border-none shadow-sm rounded-[2.5rem] p-8 bg-white">
-              <h4 className="font-black text-[10px] uppercase text-muted-foreground tracking-[0.2em] mb-6">RECURSOS EXCLUSIVOS</h4>
-              <div className="space-y-4">
-                 {[
-                   { name: 'Guía PDF de bienvenida', icon: FileText, size: '2.4 MB' },
-                   { name: 'Plantillas n8n Pro', icon: FileText, size: '156 KB' },
-                   { name: 'Acceso a Comunidad V.I.P', icon: MessageSquare, size: 'Discord' }
-                 ].map((res, i) => (
-                    <div key={i} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 group cursor-pointer hover:bg-white hover:shadow-lg transition-all">
-                       <div className="flex items-center gap-4">
-                          <div className="h-10 w-10 bg-white rounded-xl shadow-sm flex items-center justify-center">
-                             <res.icon className="h-5 w-5 text-primary" />
-                          </div>
-                          <div>
-                            <p className="text-xs font-black text-slate-900 leading-none mb-1 group-hover:text-primary transition-colors">{res.name}</p>
-                            <p className="text-[10px] font-bold text-muted-foreground uppercase">{res.size}</p>
-                          </div>
-                       </div>
-                       <Download className="h-4 w-4 text-slate-300 group-hover:text-primary" />
-                    </div>
-                 ))}
-              </div>
-           </Card>
-
            {/* Quick Stats */}
            <div className="grid grid-cols-2 gap-4">
               <div className="bg-emerald-600 rounded-[2rem] p-6 text-white text-center shadow-lg shadow-emerald-500/20">
@@ -564,8 +539,8 @@ export default function DetalleCursoEstudiantePage() {
                  <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-100">Lecciones completadas</p>
               </div>
               <div className="bg-indigo-600 rounded-[2rem] p-6 text-white text-center shadow-lg shadow-indigo-500/20">
-                 <p className="text-[2rem] font-black leading-none mb-1">05</p>
-                 <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-100">Días en racha</p>
+                 <p className="text-[2rem] font-black leading-none mb-1">{inscripcion.progreso}%</p>
+                 <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-100">Progreso del curso</p>
               </div>
            </div>
         </div>

@@ -2,8 +2,16 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { createHash } from 'crypto';
 import prisma from '@/lib/db';
+import { generateCertificatePdf } from '@/lib/academy/certificate-pdf';
 
+/**
+ * GET /api/certificados/[id]
+ * Obtiene (y crea si procede) el certificado del curso para el estudiante autenticado
+ * y devuelve el PDF real como application/pdf.
+ * id = id del curso.
+ */
 export async function GET(
   request: Request,
   { params }: { params: { id: string } }
@@ -16,7 +24,6 @@ export async function GET(
 
     const cursoId = params.id;
 
-    // Obtener el estudiante
     const estudiante = await prisma.estudiante.findFirst({
       where: { email: session.user.email },
     });
@@ -25,7 +32,6 @@ export async function GET(
       return NextResponse.json({ error: 'Estudiante no encontrado' }, { status: 404 });
     }
 
-    // Obtener el curso
     const curso = await prisma.curso.findUnique({
       where: { id: cursoId },
     });
@@ -36,65 +42,71 @@ export async function GET(
 
     // Verificar que el curso esté completado
     const totalLecciones = await prisma.leccion.count({
-      where: {
-        modulo: {
-          cursoId,
-        },
-      },
+      where: { modulo: { cursoId } },
     });
 
     const leccionesCompletadas = await prisma.progresoLeccion.count({
       where: {
         estudianteId: estudiante.id,
         completado: true,
-        leccion: {
-          modulo: {
-            cursoId,
-          },
-        },
+        leccion: { modulo: { cursoId } },
       },
     });
 
-    if (leccionesCompletadas < totalLecciones) {
+    if (totalLecciones > 0 && leccionesCompletadas < totalLecciones) {
       return NextResponse.json(
         { error: 'Debes completar todas las lecciones para obtener el certificado' },
         { status: 403 }
       );
     }
 
-    // Buscar o crear certificado
+    // Buscar o crear el certificado
     let certificado = await prisma.certificado.findFirst({
-      where: {
-        estudianteId: estudiante.id,
-        cursoId: cursoId,
-      },
+      where: { estudianteId: estudiante.id, cursoId },
     });
 
     if (!certificado) {
+      const codigoUnico = `VOLK-${curso.id.substring(0, 4).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`;
+      const integrityHash = createHash('sha256')
+        .update(`${estudiante.id}|${curso.id}|${new Date().toISOString()}|VOLKERN-MASTER-KEY`)
+        .digest('hex');
+
       certificado = await prisma.certificado.create({
         data: {
           estudianteId: estudiante.id,
-          cursoId: cursoId,
-          codigoUnico: `CERT-${Date.now()}-${estudiante.id.substring(0, 8)}`,
+          cursoId,
+          codigoUnico,
+          integrityHash,
           fechaEmision: new Date(),
-          pdfUrl: null,
+          pdfUrl: `/api/academy/certificate/render/${codigoUnico}`,
         },
       });
     }
 
-    // Generar datos del certificado
-    const certificadoData = {
-      id: certificado.id,
+    const tenant = estudiante.tenantId
+      ? await prisma.tenant.findUnique({ where: { id: estudiante.tenantId } })
+      : null;
+
+    const pdfBuffer = generateCertificatePdf({
       codigoUnico: certificado.codigoUnico,
+      integrityHash: certificado.integrityHash,
+      fechaEmision: certificado.fechaEmision,
       estudianteNombre: estudiante.nombre,
       cursoTitulo: curso.titulo,
-      fechaEmision: certificado.fechaEmision,
-      fechaCompletado: new Date(),
-      instructor: curso.instructorNombre || 'Volkern Academy',
-    };
+      cursoDescripcion: curso.descripcionLarga || curso.descripcion,
+      instructor: curso.instructorNombre,
+      tenantNombre: tenant?.nombre || tenant?.razonSocial,
+    });
 
-    // Por ahora, retornar los datos del certificado
-    return NextResponse.json(certificadoData);
+    const safeName = curso.titulo.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+
+    return new NextResponse(new Uint8Array(pdfBuffer), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="certificado-${safeName}.pdf"`,
+      },
+    });
   } catch (error) {
     console.error('Error al obtener certificado:', error);
     return NextResponse.json(
