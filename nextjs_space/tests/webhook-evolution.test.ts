@@ -16,7 +16,7 @@ vi.mock('@/lib/chatbot-engine', () => ({
   processChatbotMessage: vi.fn(),
 }));
 
-import { parseEvolutionMessage } from '@/app/api/webhooks/evolution/route';
+import { parseEvolutionMessage } from '@/lib/evolution/message-parser';
 
 describe('Evolution Webhook — parseEvolutionMessage', () => {
   // ============================================================

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildLeadNotas, CAMPOS_ESTANDAR } from '@/app/api/formularios/[id]/submit/route';
+import { buildLeadNotas, CAMPOS_ESTANDAR } from '@/lib/marketing/form-submit-helpers';
 
 describe('buildLeadNotas — campos no estándar del formulario van a las notas', () => {
   it('incluye el nombre del formulario como contexto', () => {

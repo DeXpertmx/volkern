@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { extractJsonFromContent } from '../app/api/public/ai-generator/route'
+import { extractJsonFromContent } from '../lib/assistant/json-extract'
 
 const VALID = { pages: [{ frames: [{ component: { type: 'wrapper', components: [] } }] }] }
 

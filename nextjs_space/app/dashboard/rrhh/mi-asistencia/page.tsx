@@ -32,7 +32,7 @@ export const metadata = {
 };
 
 // Versión actualmente vigente de la cláusula. Si cambia, los empleados deben re-firmar.
-export const CURRENT_NOTICE_VERSION = 'v1-2026-gps-only';
+const CURRENT_NOTICE_VERSION = 'v1-2026-gps-only';
 
 interface PageProps {
   searchParams?: { [key: string]: string | string[] | undefined };
