@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { stopWebhookChannel } from '@/lib/google-calendar';
+import { notifyDeveloperSensitiveAction } from '@/lib/telegram/developer-notify';
 
 /**
  * POST /api/integraciones/google-calendar/disconnect
@@ -64,6 +65,19 @@ export async function POST(request: NextRequest) {
     if (!deletedOAuth && !deletedIntegration) {
       console.log('ℹ️ No había integración de Google Calendar para tenant:', tenantId);
     }
+
+    // Aviso al desarrollador: se borraron credenciales OAuth de una integración
+    // externa (se revoca el canal webhook). Fire-and-forget, nunca rompe la respuesta.
+    await notifyDeveloperSensitiveAction({
+      title: '🔌 Integración desconectada',
+      accion: 'Desconectada integración google_calendar',
+      detalle: `Eliminados tokens OAuth (${deletedOAuth}) y credenciales (${deletedIntegration})`,
+      quien: (session.user as any).name || (session.user as any).email || userId,
+      userId,
+      extra: `TenantId: ${tenantId}`,
+    }).catch((err) => {
+      console.error('[GoogleCalendar] Error al notificar al desarrollador:', err);
+    });
 
     return NextResponse.json({
       success: true,
