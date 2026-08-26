@@ -67,7 +67,7 @@ describe('Rate-limit metrics: registro', () => {
     expect(metrics.topChats[0].count).toBe(2)
   })
 
-  it('el fallback en memoria registra lastRejectedAt y canal', async () => {
+  it('el fallback en memoria registra lastRejectedAt, canal y chatId', async () => {
     mocks.initRedis.mockResolvedValue(null)
 
     await recordRateLimited('evolution', '5214421234567')
@@ -75,6 +75,7 @@ describe('Rate-limit metrics: registro', () => {
     const metrics = await getRateLimitMetrics()
     expect(metrics.lastRejectedChannel).toBe('evolution')
     expect(metrics.lastRejectedAt).toBeTruthy()
+    expect(metrics.lastRejectedChatId).toBe('5214421234567')
   })
 
   it('si Redis lanza error, degrada a memoria sin romper', async () => {
@@ -108,9 +109,11 @@ describe('Rate-limit metrics: lectura desde Redis', () => {
       const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
       if (key === `webhook:429:total:telegram:${yesterday}`) return Promise.resolve('5')
       if (key === `webhook:429:total:evolution:${yesterday}`) return Promise.resolve('0')
-      // Último rechazo
+      // Último rechazo (con chatId)
       if (key === 'webhook:429:last') {
-        return Promise.resolve(JSON.stringify({ at: new Date().toISOString(), channel: 'telegram' }))
+        return Promise.resolve(
+          JSON.stringify({ at: new Date().toISOString(), channel: 'telegram', chatId: '646107192' })
+        )
       }
       return Promise.resolve(null)
     })
@@ -133,15 +136,16 @@ describe('Rate-limit metrics: lectura desde Redis', () => {
     // Histórico: 7 días, el más reciente primero (hoy)
     expect(metrics.byDay.length).toBe(7)
     expect(metrics.byDay[0].date).toBe(today)
-    // Último rechazo leído desde Redis
+    // Último rechazo leído desde Redis, con su chatId
     expect(metrics.lastRejectedChannel).toBe('telegram')
     expect(metrics.lastRejectedAt).toBeTruthy()
+    expect(metrics.lastRejectedChatId).toBe('646107192')
     // El scan itera por canal (telegram y evolution por separado)
     expect(scanMock).toHaveBeenCalledWith('0', 'MATCH', `webhook:429:telegram:*:${today}`, 'COUNT', 200)
     expect(scanMock).toHaveBeenCalledWith('0', 'MATCH', `webhook:429:evolution:*:${today}`, 'COUNT', 200)
   })
 
-  it('registra el último rechazo con canal en Redis', async () => {
+  it('registra el último rechazo con canal, timestamp y chatId en Redis', async () => {
     const multi = {
       incr: vi.fn().mockReturnThis(),
       expire: vi.fn().mockReturnThis(),
@@ -157,5 +161,6 @@ describe('Rate-limit metrics: lectura desde Redis', () => {
     const parsed = JSON.parse(setCall[1])
     expect(parsed.channel).toBe('evolution')
     expect(parsed.at).toBeTruthy()
+    expect(parsed.chatId).toBe('5214421234567')
   })
 })

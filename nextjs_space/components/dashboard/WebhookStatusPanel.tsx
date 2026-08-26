@@ -19,12 +19,20 @@ interface DayMetric {
   total: number
 }
 
+interface LastRejected {
+  chatId: string | null
+  name: string | null
+  channel: 'telegram' | 'evolution' | null
+  at: string | null
+}
+
 interface WebhookMetrics {
   today: { telegram: number; evolution: number; total: number }
   topChats: ChatMetric[]
   byDay: DayMetric[]
   lastRejectedAt: string | null
   lastRejectedChannel: 'telegram' | 'evolution' | null
+  lastRejected?: LastRejected | null
 }
 
 interface WebhookStatusResponse {
@@ -207,13 +215,29 @@ export function WebhookStatusPanel() {
             </div>
 
             {/* Último rechazo */}
-            {metrics.lastRejectedAt && (
-              <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono px-1">
-                <span>Último rechazo:</span>
-                <ChannelIcon channel={metrics.lastRejectedChannel} />
-                <span>{timeAgo(metrics.lastRejectedAt)}</span>
-              </div>
-            )}
+            {(() => {
+              const last = metrics.lastRejected
+              const at = last?.at ?? metrics.lastRejectedAt
+              const channel = last?.channel ?? metrics.lastRejectedChannel
+              const chatId = last?.chatId
+              if (!at) return null
+              const hasName = last?.name && last.name !== chatId
+              return (
+                <div className="flex items-center gap-2 text-[10px] px-1">
+                  <span className="text-slate-400 font-medium">Último rechazo:</span>
+                  <ChannelIcon channel={channel} />
+                  {chatId && (
+                    <span className="font-semibold text-slate-600">
+                      {hasName ? last!.name : `ID ${shortChat(chatId)}`}
+                    </span>
+                  )}
+                  {chatId && hasName && (
+                    <span className="text-slate-400 font-mono">{shortChat(chatId)}</span>
+                  )}
+                  <span className="text-slate-400 font-mono">· {timeAgo(at)}</span>
+                </div>
+              )
+            })()}
 
             {/* Top chats */}
             <div>
