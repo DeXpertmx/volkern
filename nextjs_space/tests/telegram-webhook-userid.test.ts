@@ -272,3 +272,44 @@ describe('createTaskWrapper (skills.create_task): resolución de asignadoA', () 
     expect(createCall.data.leadId).toBe('lead-1');
   });
 });
+
+// ─── 3. Rate-limit: 429 explícito en vez de descarte silencioso ───────────
+//
+// Regresión del fix: antes, el segundo mensaje del mismo chat dentro de la
+// ventana (1.5s) se descartaba silenciosamente con { ok: true } y el mensaje
+// se perdía. Ahora responde HTTP 429 + Retry-After para que Telegram reintente
+// el webhook y el mensaje no se pierda.
+//
+// El rate-limit se evalúa ANTES del anti-duplicado de update_id, así que el
+// update rechazado NO queda marcado como procesado y su reintento sí pasa.
+describe('Rate-limit del webhook: 429 explícito (sin descarte silencioso)', () => {
+  it('el primer mensaje del chat pasa (200) y llega al pipeline', async () => {
+    const res = await postMessage('hola', '646107199', 910000001);
+    expect(res.status).toBe(200);
+    expect(mocks.processMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('el segundo mensaje del MISMO chat en la ventana devuelve 429 con Retry-After y NO llega al pipeline', async () => {
+    // Se ejecuta inmediatamente después del test anterior → mismo chat dentro
+    // de la ventana de 1.5s del rate-limit.
+    const res = await postMessage('hola de nuevo', '646107199', 910000002);
+    expect(res.status).toBe(429);
+    expect(res.headers.get('Retry-After')).toBe('2');
+    // El mensaje no se procesa ni se marca como anti-duplicado
+    expect(mocks.processMessage).toHaveBeenCalledTimes(0);
+
+    // Reintento simulado de Telegram: el mismo update_id debe PASAR ahora
+    // (el 429 no lo marcó como procesado). Como el rate-limit de 1.5s ya
+    // expiró en la ventana de 2s de Retry-After, el reintento se procesa.
+    await new Promise((r) => setTimeout(r, 1600));
+    const retry = await postMessage('hola de nuevo', '646107199', 910000002);
+    expect(retry.status).toBe(200);
+    expect(mocks.processMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('un chat distinto no se ve afectado por el rate-limit de otro chat', async () => {
+    const res = await postMessage('hola otro chat', '646107200', 910000003);
+    expect(res.status).toBe(200);
+    expect(mocks.processMessage).toHaveBeenCalledTimes(1);
+  });
+});
