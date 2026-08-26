@@ -4,10 +4,11 @@ import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Radio, RefreshCw, ShieldAlert, MessageSquare, Smartphone } from 'lucide-react'
+import { Radio, RefreshCw, ShieldAlert, MessageSquare, Smartphone, RotateCcw } from 'lucide-react'
 
 interface ChatMetric {
   chatId: string
+  name?: string
   count: number
 }
 
@@ -28,6 +29,7 @@ interface WebhookMetrics {
 
 interface WebhookStatusResponse {
   metrics: WebhookMetrics
+  isAdmin?: boolean
   processUptime: number
   processPid: number
   timestamp: string
@@ -56,6 +58,20 @@ function shortChat(chatId: string): string {
   return `${chatId.slice(0, 10)}…${chatId.slice(-4)}`
 }
 
+function chatLabel(chat: ChatMetric): { title: string; subtitle: string } {
+  const raw = chat.chatId
+  const hasName = chat.name && chat.name !== raw
+  return {
+    title: hasName ? String(chat.name) : `ID ${shortChat(raw)}`,
+    subtitle: hasName ? shortChat(raw) : chatIdKind(raw),
+  }
+}
+
+function chatIdKind(chatId: string): string {
+  const isWhatsApp = /^\d{10,}$/.test(chatId) && chatId.startsWith('52')
+  return isWhatsApp ? 'WhatsApp' : 'Telegram'
+}
+
 function ChannelIcon({ channel }: { channel: 'telegram' | 'evolution' | null }) {
   if (channel === 'evolution') return <Smartphone className="h-3.5 w-3.5 text-emerald-500" />
   return <MessageSquare className="h-3.5 w-3.5 text-sky-500" />
@@ -65,6 +81,7 @@ export function WebhookStatusPanel() {
   const [data, setData] = useState<WebhookStatusResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [resetting, setResetting] = useState(false)
 
   const fetchStatus = async () => {
     try {
@@ -81,6 +98,23 @@ export function WebhookStatusPanel() {
       setError('Error de conexión')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const resetMetrics = async () => {
+    if (!confirm('¿Reiniciar las métricas de rate-limit de hoy? Esta acción no se puede deshacer.')) return
+    setResetting(true)
+    try {
+      const res = await fetch('/api/webhook-status', { method: 'POST' })
+      if (res.ok) {
+        await fetchStatus()
+      } else {
+        setError(`Reset: HTTP ${res.status}`)
+      }
+    } catch (e) {
+      setError('Error al reiniciar')
+    } finally {
+      setResetting(false)
     }
   }
 
@@ -108,15 +142,30 @@ export function WebhookStatusPanel() {
               </p>
             </div>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={fetchStatus}
-            disabled={loading}
-            className="h-8 w-8 p-0"
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          </Button>
+          <div className="flex items-center gap-1">
+            {data?.isAdmin && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={resetMetrics}
+                disabled={resetting || loading}
+                title="Reiniciar métricas del día (solo admin)"
+                className="h-8 px-2 text-rose-500 hover:text-rose-600 hover:bg-rose-50"
+              >
+                <RotateCcw className={`h-4 w-4 ${resetting ? 'animate-spin' : ''}`} />
+                <span className="text-[10px] font-semibold">Reset</span>
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={fetchStatus}
+              disabled={loading}
+              className="h-8 w-8 p-0"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
@@ -175,13 +224,16 @@ export function WebhookStatusPanel() {
                 <p className="text-xs text-slate-400 px-1">Sin rechazos hoy — todos los mensajes pasan sin límite.</p>
               ) : (
                 <div className="space-y-2">
-                  {metrics.topChats.map((chat) => (
+                  {metrics.topChats.map((chat) => {
+                    const label = chatLabel(chat)
+                    return (
                     <div
                       key={chat.chatId}
                       className="flex items-center gap-3 p-2.5 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors"
                     >
                       <div className="flex-1 min-w-0">
-                        <p className="font-mono text-xs text-slate-700 truncate">{shortChat(chat.chatId)}</p>
+                        <p className="text-xs font-semibold text-slate-700 truncate">{label.title}</p>
+                        <p className="text-[10px] text-slate-400 font-mono truncate">{label.subtitle}</p>
                         <div className="h-1.5 bg-slate-200 rounded-full mt-1.5 overflow-hidden">
                           <div
                             className="h-full bg-amber-400 rounded-full"
@@ -193,7 +245,8 @@ export function WebhookStatusPanel() {
                         {chat.count}× 429
                       </Badge>
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>

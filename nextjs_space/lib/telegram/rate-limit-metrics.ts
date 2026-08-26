@@ -307,6 +307,55 @@ function readFromMemory(): WebhookRateLimitMetrics {
   }
 }
 
+/**
+ * Reinicia las métricas de rate-limit del día actual: borra los contadores
+ * por chat, los totales por canal y el último rechazo, tanto en Redis como en
+ * el fallback en memoria. Solo el admin debe llamarlo (protegido en la API).
+ */
+export async function resetRateLimitMetrics(): Promise<{ reset: boolean }> {
+  const today = todayKey()
+  const channels: WebhookNamespace[] = ['telegram', 'evolution']
+
+  const redis = await initRedis()
+  if (redis) {
+    try {
+      const keysToDel: string[] = []
+      for (const ns of channels) {
+        let cursor = '0'
+        do {
+          const [next, keys] = await redis.scan(cursor, 'MATCH', `webhook:429:${ns}:*:${today}`, 'COUNT', 500)
+          cursor = next
+          keysToDel.push(...keys)
+          // también la clave total del día
+          const totalKey = `webhook:429:total:${ns}:${today}`
+          if (!keysToDel.includes(totalKey)) keysToDel.push(totalKey)
+        } while (cursor !== '0')
+      }
+      // Último rechazo
+      keysToDel.push('webhook:429:last')
+      if (keysToDel.length > 0) {
+        await redis.del(...keysToDel)
+      }
+    } catch (error) {
+      console.warn('[WebhookMetrics] Redis falló al reiniciar, usando fallback en memoria:', (error as Error).message)
+    }
+  }
+
+  // Fallback en memoria
+  for (const key of memByChat.keys()) {
+    if (key.endsWith(`:${today}`)) memByChat.delete(key)
+  }
+  for (const key of memByChannelDay.keys()) {
+    if (key.endsWith(`:${today}`)) memByChannelDay.delete(key)
+  }
+  for (const [key] of memByChannelDay) {
+    if (key.startsWith('telegram:') && key.endsWith(`:${today}`)) memByChannelDay.delete(key)
+    if (key.startsWith('evolution:') && key.endsWith(`:${today}`)) memByChannelDay.delete(key)
+  }
+
+  return { reset: true }
+}
+
 /** Limpieza del store en memoria (solo tests). */
 export function _clearMemoryMetrics() {
   memByChat.clear()
