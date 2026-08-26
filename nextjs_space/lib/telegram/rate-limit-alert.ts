@@ -119,7 +119,10 @@ export async function alertIfAbusive(
   let shouldSend = false
   if (redis) {
     try {
-      const created = await redis.set(alertedKey, '1', 'PX', ALERT_TTL_SECONDS, 'NX')
+      // 'EX' con segundos (ALERT_TTL_SECONDS): un 'PX' aquí interpretaría el
+      // valor como milisegundos y la clave expiraría en segundos, rompiendo el
+      // dedupe dentro de la misma hora.
+      const created = await redis.set(alertedKey, '1', 'EX', ALERT_TTL_SECONDS, 'NX')
       // null = la clave ya existía (otra instancia ya alertó esta hora)
       shouldSend = created !== null
     } catch (error) {
