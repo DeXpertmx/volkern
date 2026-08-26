@@ -417,6 +417,7 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     // Entidades del pipeline sin verbo: "cómo va mi pipeline", "qué deals tengo",
     // "cómo va la venta con X" (bloque 23: detalles_negocio por email)
     const ENTITY_TRIGGER = /\b(?:pipeline|deals?|negocios?|oportunidad|venta(?:s)?)\b/i
+    const PREQUALIFY_TRIGGER = /\b(?:precalifica|precalificar|prequalifica|prequalificar|califica|calificar)\b/i
     // Entidades de citas sin verbo: "qué citas tengo", "reunión con X"
     const CITA_TRIGGER = /\b(?:citas?|reuni[oó]n|reuniones|videollamada)\b/i
     // Entidades de finanzas sin verbo: "gasto de 300€", "cómo vamos de gastos",
@@ -472,7 +473,7 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     // programaciones de campaña. Permite controlar estas acciones desde
     // Telegram sin depender del LLM.
     const GOVERNANCE_TRIGGER = /\b(?:autoriza|autorizar|aprueba|aprobar|apruebame|autorizame|transfiere|transferir|traspasa|traspasar|devuelve|devolver|entrega|entregar|reasigna|reasignar|audita|auditar|offboarding|kill-?switch|kit\s+de\s+(?:seguridad|baja|offboarding)|protocolo\s+de\s+baja|baja\s+(?:de|del)\s+empleado|baja\s+de\s+personal|silos?\s+de\s+conocimiento|concentraci[oó]n\s+de\s+(?:permisos|poder)|watchdog\s+de\s+accesos|accesos?\s+cr[ií]ticos|super-?usuarios?)\b/i
-    if (!ACTION_VERB.test(message) && !ENTITY_TRIGGER.test(message) && !FILTER_ONLY.test(message) && !CITA_TRIGGER.test(message) && !FINANZA_TRIGGER.test(message) && !TAREA_TRIGGER.test(message) && !PROVEEDOR_TRIGGER.test(message) && !CATALOGO_TRIGGER.test(message) && !INVENTARIO_TRIGGER.test(message) && !INSURANCE_TRIGGER.test(message) && !FACTURA_TRIGGER.test(message) && !LOGISTICA_TRIGGER.test(message) && !RRHH_TRIGGER.test(message) && !MARKETING_TRIGGER.test(message) && !RE_TRIGGER.test(message) && !ERP_TRIGGER.test(message) && !AUDIT_OPS_TRIGGER.test(message) && !FACTORY_TRIGGER.test(message) && !GOVERNANCE_TRIGGER.test(message)) return null
+    if (!ACTION_VERB.test(message) && !ENTITY_TRIGGER.test(message) && !PREQUALIFY_TRIGGER.test(message) && !FILTER_ONLY.test(message) && !CITA_TRIGGER.test(message) && !FINANZA_TRIGGER.test(message) && !TAREA_TRIGGER.test(message) && !PROVEEDOR_TRIGGER.test(message) && !CATALOGO_TRIGGER.test(message) && !INVENTARIO_TRIGGER.test(message) && !INSURANCE_TRIGGER.test(message) && !FACTURA_TRIGGER.test(message) && !LOGISTICA_TRIGGER.test(message) && !RRHH_TRIGGER.test(message) && !MARKETING_TRIGGER.test(message) && !RE_TRIGGER.test(message) && !ERP_TRIGGER.test(message) && !AUDIT_OPS_TRIGGER.test(message) && !FACTORY_TRIGGER.test(message) && !GOVERNANCE_TRIGGER.test(message)) return null
 
     const extracted: Record<string, any> = {}
     const email = message.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,})/)
@@ -1712,7 +1713,22 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
       return { intent: 'desviaciones_proyecto', confidence: 0.85, extractedParams: extracted }
     }
 
-    // ═══ 11h. DETECTAR GHOSTING ("detecta leads fantasmas", "qué leads están
+    // ═══ 11h. PRECALIFICAR LEAD (Bloque 25): registra una nota comercial
+    // sobre el lead antes de ejecutar la skill compuesta de calificación.
+    // Se evalúa antes que ghosting porque ambas acciones pueden mencionar
+    // leads, pero solo esta contiene el verbo explícito de calificación.
+    if (PREQUALIFY_TRIGGER.test(message) && /\b(?:lead|prospecto|cliente|contacto|@)\b/i.test(message)) {
+      const notaIdx = message.indexOf(':')
+      if (notaIdx >= 0) {
+        const nota = message.slice(notaIdx + 1).trim().replace(/[\"'”]+\s*$/, '').trim()
+        if (nota.length >= 2) extracted.nota = nota
+      }
+      const nombre = this.extractNombreAfter(message, /\b(?:lead|prospecto|cliente|contacto)\b/i)
+      if (nombre) extracted.nombre = nombre
+      return { intent: 'calificar_lead', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 11i. DETECTAR GHOSTING ("detecta leads fantasmas", "qué leads están
     // inactivos en etapa negociación", "encuentra leads sin actividad en 7
     // días") ═══
     const GHOSTING_SIGNAL = /\b(?:ghosting|fantasmas?|dejaron\s+de\s+responder|no\s+han\s+respondido|sin\s+actividad|no\s+han\s+tenido\s+actividad|inactivos?\s+en\s+etapa|abandonados?)\b/i
@@ -3397,12 +3413,17 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
    * Extrae el título/servicio de "por el paquete empresarial" / "para el servicio X".
    */
   private extractTituloDe(message: string): string | null {
-    const m = message.match(/(?:por|para|del?)\s+(?:el|la|un|una)\s+([A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9][A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9'\- ]{2,40})/i)
-    if (!m) return null
-    let t = m[1].trim()
-    t = t.split(/\s*(?:,|;|\s+y\s+)/i)[0].trim()
-    if (/^\d/.test(t)) return null // es un monto, no un título
-    return t.length >= 2 ? t : null
+    // Puede haber varios "por/para": el primero puede ser el monto
+    // ("por 12500€ para implementación ERP"). Recorremos todos y tomamos
+    // el primer candidato textual que no sea una cantidad.
+    const matches = [...message.matchAll(/(?:por|para|del?)\s+(?:(?:el|la|un|una)\s+)?([A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9][A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9'\- ]{2,60})/gi)]
+    for (const match of matches) {
+      let t = match[1].trim()
+      t = t.split(/\s*(?:,|;|\s+y\s+)/i)[0].trim()
+      if (/^\d/.test(t)) continue // es un monto, no un título
+      if (t.length >= 2) return t
+    }
+    return null
   }
 
   /**
