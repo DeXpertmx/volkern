@@ -61,17 +61,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: auth.error || 'No autorizado' }, { status: auth.error?.includes('autentic') ? 401 : 403 })
     }
 
+    // Metadata de origen del request (para la auditoría)
+    const ipAddress = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null
+    const userAgent = request.headers.get('user-agent') || null
+
     await resetRateLimitMetrics()
 
-    // Nombre del usuario que reinició (para el aviso y la auditoría)
+    // Nombre y tenant del usuario que reinició (para el aviso y la auditoría)
     let resetByName: string | null = null
+    let resetTenantId: string | null = null
     if (auth.userId) {
       try {
         const resetBy = await prisma.user.findUnique({
           where: { id: auth.userId },
-          select: { name: true },
+          select: { name: true, tenantId: true },
         })
         resetByName = resetBy?.name ?? null
+        resetTenantId = resetBy?.tenantId ?? null
       } catch {
         // no romper el reset por un fallo de nombre
       }
@@ -79,6 +85,31 @@ export async function POST(request: Request) {
 
     const msg = `Métricas reiniciadas por ${resetByName || auth.email || auth.userId} (${auth.userId})`
     console.log(`[WebhookStatus] ${msg}`)
+
+    // Trazabilidad permanente: registrar el reinicio en el audit log (no rompe
+    // el flujo si falla la escritura, igual que el resto de la instrumentación).
+    try {
+      await prisma.auditLog.create({
+        data: {
+          userId: auth.userId ?? undefined,
+          tenantId: resetTenantId ?? undefined,
+          accion: 'webhook_metrics_reset',
+          entidad: 'webhook-metrics',
+          entidadId: 'rate-limit',
+          descripcion: `Reinicio de las métricas de rate-limit del día por ${resetByName || auth.email || auth.userId}`,
+          metadata: {
+            reiniciadoPor: resetByName || auth.email || auth.userId,
+            email: auth.email || null,
+            action: 'reset_rate_limit_metrics',
+            origen: ipAddress || null,
+          },
+          ipAddress,
+          userAgent,
+        },
+      })
+    } catch (error) {
+      console.error('[WebhookStatus] Error registrando el reinicio en audit log:', error)
+    }
 
     // Aviso al desarrollador por el bot del sistema (volkerncrm_bot)
     try {
