@@ -91,12 +91,15 @@ export async function recordRateLimited(
     try {
       const chatKey = `webhook:429:${namespace}:${chatId}:${date}`
       const totalKey = `webhook:429:total:${namespace}:${date}`
+      const lastKey = 'webhook:429:last'
       await redis
         .multi()
         .incr(chatKey)
         .expire(chatKey, METRICS_TTL_SECONDS)
         .incr(totalKey)
         .expire(totalKey, METRICS_TTL_SECONDS)
+        .set(lastKey, JSON.stringify({ at: lastAt, channel: namespace }))
+        .expire(lastKey, METRICS_TTL_SECONDS)
         .exec()
       return
     } catch (error) {
@@ -145,22 +148,25 @@ async function readFromRedis(redis: NonNullable<Awaited<ReturnType<typeof initRe
     todayCounts[ns] = val ? Number(val) : 0
   }
 
-  // Top chats de hoy: scan de las claves por chat del día
+  // Top chats de hoy: scan de las claves por chat del día, iterando por
+  // canal para no matchear las claves `total` (webhook:429:total:<ns>:<date>).
   const chatCounts = new Map<string, number>()
-  let cursor = '0'
-  do {
-    const [next, keys] = await redis.scan(cursor, 'MATCH', `webhook:429:*:*:${today}`, 'COUNT', 200)
-    cursor = next
-    for (const key of keys) {
-      const parts = key.split(':')
-      // webhook:429:<ns>:<chatId>:<date>
-      const chatId = parts[3]
-      const value = await redis.get(key)
-      if (chatId && value) {
-        chatCounts.set(chatId, (chatCounts.get(chatId) ?? 0) + Number(value))
+  for (const ns of channels) {
+    let cursor = '0'
+    do {
+      const [next, keys] = await redis.scan(cursor, 'MATCH', `webhook:429:${ns}:*:${today}`, 'COUNT', 200)
+      cursor = next
+      for (const key of keys) {
+        const parts = key.split(':')
+        // webhook:429:<ns>:<chatId>:<date>
+        const chatId = parts[3]
+        const value = await redis.get(key)
+        if (chatId && value) {
+          chatCounts.set(chatId, (chatCounts.get(chatId) ?? 0) + Number(value))
+        }
       }
-    }
-  } while (cursor !== '0')
+    } while (cursor !== '0')
+  }
 
   const topChats = Array.from(chatCounts.entries())
     .map(([chatId, count]) => ({ chatId, count }))
@@ -184,6 +190,22 @@ async function readFromRedis(redis: NonNullable<Awaited<ReturnType<typeof initRe
     })
   }
 
+  // Último rechazo registrado (cualquier canal)
+  let lastRejectedAt: string | null = null
+  let lastRejectedChannel: WebhookNamespace | null = null
+  try {
+    const lastRaw = await redis.get('webhook:429:last')
+    if (lastRaw) {
+      const parsed = JSON.parse(lastRaw)
+      if (parsed.at) lastRejectedAt = parsed.at
+      if (parsed.channel === 'telegram' || parsed.channel === 'evolution') {
+        lastRejectedChannel = parsed.channel
+      }
+    }
+  } catch {
+    // el último rechazo es informativo; no romper la lectura
+  }
+
   return {
     today: {
       telegram: todayCounts.telegram,
@@ -192,8 +214,8 @@ async function readFromRedis(redis: NonNullable<Awaited<ReturnType<typeof initRe
     },
     topChats,
     byDay,
-    lastRejectedAt: null,
-    lastRejectedChannel: null,
+    lastRejectedAt,
+    lastRejectedChannel,
   }
 }
 

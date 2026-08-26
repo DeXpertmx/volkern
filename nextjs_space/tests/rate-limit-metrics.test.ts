@@ -105,10 +105,17 @@ describe('Rate-limit metrics: lectura desde Redis', () => {
       const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
       if (key === `webhook:429:total:telegram:${yesterday}`) return Promise.resolve('5')
       if (key === `webhook:429:total:evolution:${yesterday}`) return Promise.resolve('0')
+      // Último rechazo
+      if (key === 'webhook:429:last') {
+        return Promise.resolve(JSON.stringify({ at: new Date().toISOString(), channel: 'telegram' }))
+      }
       return Promise.resolve(null)
     })
     const scanMock = vi.fn()
-      .mockResolvedValueOnce(['0', [`webhook:429:telegram:646107192:${today}`, `webhook:429:telegram:646107199:${today}`]])
+      .mockResolvedValueOnce(['0', [`webhook:429:telegram:646107192:${today}`]])
+      .mockResolvedValueOnce(['0', [`webhook:429:telegram:646107199:${today}`]])
+      .mockResolvedValueOnce(['0', []])
+      .mockResolvedValueOnce(['0', []])
 
     mocks.initRedis.mockResolvedValue({
       get: getMock,
@@ -120,11 +127,32 @@ describe('Rate-limit metrics: lectura desde Redis', () => {
     expect(metrics.today.telegram).toBe(3)
     expect(metrics.today.evolution).toBe(1)
     expect(metrics.today.total).toBe(4)
-    // Top chats: 2 chats del scan (cada clave se lee con get → null en este
-    // mock, por lo que no suman; solo se cuentan los totales)
-    expect(metrics.topChats).toBeDefined()
     // Histórico: 7 días, el más reciente primero (hoy)
     expect(metrics.byDay.length).toBe(7)
     expect(metrics.byDay[0].date).toBe(today)
+    // Último rechazo leído desde Redis
+    expect(metrics.lastRejectedChannel).toBe('telegram')
+    expect(metrics.lastRejectedAt).toBeTruthy()
+    // El scan itera por canal (telegram y evolution por separado)
+    expect(scanMock).toHaveBeenCalledWith('0', 'MATCH', `webhook:429:telegram:*:${today}`, 'COUNT', 200)
+    expect(scanMock).toHaveBeenCalledWith('0', 'MATCH', `webhook:429:evolution:*:${today}`, 'COUNT', 200)
+  })
+
+  it('registra el último rechazo con canal en Redis', async () => {
+    const multi = {
+      incr: vi.fn().mockReturnThis(),
+      expire: vi.fn().mockReturnThis(),
+      set: vi.fn().mockReturnThis(),
+      exec: vi.fn().mockResolvedValue([]),
+    }
+    mocks.initRedis.mockResolvedValue({ multi: vi.fn(() => multi) } as any)
+
+    await recordRateLimited('evolution', '5214421234567')
+
+    const setCall = multi.set.mock.calls[0]
+    expect(setCall[0]).toBe('webhook:429:last')
+    const parsed = JSON.parse(setCall[1])
+    expect(parsed.channel).toBe('evolution')
+    expect(parsed.at).toBeTruthy()
   })
 })
