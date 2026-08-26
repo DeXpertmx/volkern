@@ -15,6 +15,7 @@ vi.mock('@/lib/core/redis', () => ({ initRedis: mocks.initRedis }))
 vi.mock('@/lib/telegram', () => ({ sendTelegramMessage: mocks.sendTelegramMessage }))
 
 import { alertIfAbusive, _clearMemoryAlert } from '@/lib/telegram/rate-limit-alert'
+import { recordRateLimited } from '@/lib/telegram/rate-limit-metrics'
 
 /** Cliente Redis simulado: `multi().incr().expire().exec()` devuelve `count`. */
 function redisWithHourCount(count: number) {
@@ -127,5 +128,26 @@ describe('Alerta de abuso por rate-limit (429/hora)', () => {
 
     await expect(alertIfAbusive('telegram', '646107192')).resolves.toBeUndefined()
     expect(mocks.sendTelegramMessage).not.toHaveBeenCalled()
+  })
+
+  it('regresión: con Redis OK, recordRateLimited también dispara la alerta', async () => {
+    // Bug: el `return` temprano del try de Redis en recordRateLimited impedía
+    // llegar a alertIfAbusive cuando Redis estaba disponible (producción).
+    process.env.RATE_LIMIT_ALERT_THRESHOLD = '1'
+    const multi = {
+      incr: vi.fn().mockReturnThis(),
+      expire: vi.fn().mockReturnThis(),
+      set: vi.fn().mockReturnThis(),
+      exec: vi.fn().mockResolvedValue([[null, 1]]),
+    }
+    const redis = {
+      multi: vi.fn(() => multi),
+      set: vi.fn().mockResolvedValue('OK'),
+    }
+    mocks.initRedis.mockResolvedValue(redis as any)
+
+    await recordRateLimited('telegram', '646107192')
+
+    expect(mocks.sendTelegramMessage).toHaveBeenCalledTimes(1)
   })
 })

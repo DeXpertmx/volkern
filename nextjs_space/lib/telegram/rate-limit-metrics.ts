@@ -102,12 +102,32 @@ export async function recordRateLimited(
         .set(lastKey, JSON.stringify({ at: lastAt, channel: namespace }))
         .expire(lastKey, METRICS_TTL_SECONDS)
         .exec()
-      return
     } catch (error) {
       console.warn('[WebhookMetrics] Redis falló, usando fallback en memoria:', (error as Error).message)
+      recordMemory(namespace, chatId, date, lastAt)
     }
+  } else {
+    recordMemory(namespace, chatId, date, lastAt)
   }
 
+  // Alerta de abuso: si un chat supera el umbral de 429 en una hora, se avisa
+  // al desarrollador por Telegram. Debe ejecutarse SIEMPRE (con Redis y con el
+  // fallback en memoria). Se espera aquí dentro para que la promesa no quede
+  // huérfana (recordRateLimited ya es fire-and-forget desde isChatRateLimited,
+  // así que esto nunca bloquea la respuesta del webhook).
+  try {
+    await alertIfAbusive(namespace, chatId)
+  } catch (error) {
+    console.warn('[WebhookMetrics] Error en alerta de abuso:', error)
+  }
+}
+
+function recordMemory(
+  namespace: WebhookNamespace,
+  chatId: string,
+  date: string,
+  lastAt: string
+): void {
   const chatEntry = memByChat.get(`${namespace}:${chatId}:${date}`)
   memByChat.set(`${namespace}:${chatId}:${date}`, {
     count: (chatEntry?.count ?? 0) + 1,
@@ -117,13 +137,6 @@ export async function recordRateLimited(
   memByChannelDay.set(`${namespace}:${date}`, {
     count: (dayEntry?.count ?? 0) + 1,
     lastAt,
-  })
-
-  // Alerta de abuso (fire-and-forget): si un chat supera el umbral de 429 en
-  // una hora, se avisa al desarrollador por Telegram. Nunca debe romper el
-  // webhook, por eso se captura cualquier error.
-  alertIfAbusive(namespace, chatId).catch((error) => {
-    console.warn('[WebhookMetrics] Error en alerta de abuso:', error)
   })
 }
 
