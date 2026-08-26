@@ -6,6 +6,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
+import { sendEmail } from '@/lib/resend-email';
 
 // GET /api/estudiantes - Obtener todos los estudiantes
 export async function GET(request: NextRequest) {
@@ -151,12 +152,55 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Enviar email con la contraseña de acceso al portal solo cuando la cuenta es nueva
+    if (passwordTemporal) {
+      try {
+        const tenant = await prisma.tenant.findUnique({
+          where: { id: currentUser.tenantId },
+          select: { nombre: true, razonSocial: true, slug: true },
+        });
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://volkern.app';
+        const academiaUrl = `${appUrl}/academy/login`;
+        const tenantName = tenant?.nombre || tenant?.razonSocial || 'Volkern';
+
+        await sendEmail({
+          to: email,
+          subject: `🎓 Acceso a tu área de estudiante (${tenantName})`,
+          tenantSubdomain: tenant?.slug,
+          tenantName,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <div style="text-align: center; margin-bottom: 24px;">
+                <h1 style="color: #4F46E5; margin: 0; font-size: 24px;">🎓 ¡Bienvenido a la Academia!</h1>
+              </div>
+              <p style="font-size: 16px; color: #374151;">Hola <strong>${primerNombre || nombre?.split(' ')[0] || ''}</strong>,</p>
+              <p style="font-size: 15px; color: #374151;">Se ha creado tu acceso al portal de estudiante de <strong>${tenantName}</strong>.</p>
+              <div style="background: #F5F3FF; padding: 20px; border-radius: 12px; margin: 20px 0; border: 1px solid #EDE9FE;">
+                <p style="margin: 0 0 8px 0; color: #4F46E5; font-weight: bold;">Tus credenciales de acceso</p>
+                <p style="margin: 0; font-size: 15px; color: #374151;">Email: <strong>${email}</strong></p>
+                <p style="margin: 4px 0 0 0; font-size: 15px; color: #374151;">Contraseña temporal: <strong>${passwordTemporal}</strong></p>
+              </div>
+              <div style="text-align: center; margin: 28px 0;">
+                <a href="${academiaUrl}" style="display: inline-block; background: #4F46E5; color: white; padding: 14px 32px; border-radius: 10px; text-decoration: none; font-weight: bold; font-size: 15px;">
+                  Entrar a mi portal
+                </a>
+              </div>
+              <p style="color: #6B7280; font-size: 13px;">Te recomendamos cambiar tu contraseña al entrar. Si no esperabas este correo, ignóralo.</p>
+            </div>
+          `,
+        });
+      } catch (e) {
+        console.error('Error enviando email de acceso al estudiante:', e);
+      }
+    }
+
     return NextResponse.json(
       {
         ...estudiante,
         accesoCreado: !!cuentaAcceso,
         tieneAcceso: true,
         passwordTemporal: cuentaAcceso ? passwordTemporal : null,
+        accesoEnviadoPorEmail: !!passwordTemporal,
       },
       { status: 201 }
     );

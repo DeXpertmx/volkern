@@ -43,7 +43,7 @@ async function resolveTelegram(nameMap: Map<string, string>, chatId: string): Pr
     const flat = meta.telegram_chat_id
     const nested = meta.telegram?.chat_id
     if (String(flat) === chatId || String(nested) === chatId) {
-      nameMap.set(u.id, u.name)
+      nameMap.set(u.id, u.name ?? '')
       if (u.name) return u.name
     }
   }

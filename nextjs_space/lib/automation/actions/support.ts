@@ -84,7 +84,7 @@ export async function createTaskFromTicket(config: any, ctx: ActionContext): Pro
   const tenantClient = await getTenantDb(ctx.state.tenantId)
 
   const ticket = await (tenantClient as any).soporteTicket.findUnique({ where: { id: ticketId || ctx.state.ticketId } })
-  await (tenantClient as any).tarea.create({
+  const tarea = await (tenantClient as any).tarea.create({
     data: {
       tenantId: ctx.state.tenantId as any,
       titulo: titulo || `Tarea desde ticket: ${ticket?.titulo}`,
@@ -93,6 +93,21 @@ export async function createTaskFromTicket(config: any, ctx: ActionContext): Pro
       prioridad: ticket?.prioridad || 'media',
     } as any,
   })
+
+  // Notificación informativa por Telegram (sin botones task:*: este modelo
+  // tenant no lo resuelve el webhook, que busca en prisma.task).
+  try {
+    const { notifyByTelegram } = await import('@/lib/skills/notification-layer')
+    const { createSystemContext } = await import('@/lib/skills/context')
+    const context = createSystemContext(ctx.state.tenantId || '')
+    await notifyByTelegram(
+      `🎫 *Nueva tarea desde ticket*\n\n${tarea?.titulo || titulo || 'Tarea desde ticket'}\n\nDerivada del ticket ${ticketId || ctx.state.ticketId}`,
+      context
+    )
+  } catch (e) {
+    console.error('[createTaskFromTicket] No se pudo notificar por Telegram:', e)
+  }
+
   await ctx.log('create_task_from_ticket', 'action', 'success', 'Tarea creada desde ticket')
   return true
 }
