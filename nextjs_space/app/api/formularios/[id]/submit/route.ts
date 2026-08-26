@@ -9,6 +9,11 @@ import {
 } from '@/lib/marketing/form-thank-you';
 import type { ThankYouConfig } from '@/lib/marketing/form-thank-you';
 import { resolveLeadMapping } from '@/lib/marketing/form-lead-mapping';
+import {
+  CAMPOS_ESTANDAR,
+  buildLeadNotas,
+  parseSubmissionPayload,
+} from '@/lib/marketing/form-submit-helpers';
 
 // Emite el evento FORM_SUBMITTED (dispara automatizaciones con trigger
 // 'formulario_enviado'). No bloqueante: si el bus falla, el submit continúa.
@@ -61,64 +66,6 @@ async function notifyNewLeadByTelegram(
   } catch (err) {
     console.warn('[Formularios Submit] Notificación Telegram no disponible:', err);
   }
-}
-
-// Campos estándar del Lead: se mapean a su columna. Todo lo demás del
-// payload (campos personalizados del formulario) se conserva como notas,
-// con el nombre del formulario como contexto — nada se pierde.
-export const CAMPOS_ESTANDAR = new Set([
-  'email', 'Email', 'correo',
-  'nombre', 'name', 'Nombre',
-  'telefono', 'phone', 'Telefono',
-  'empresa', 'company', 'Empresa',
-  'notas', 'notes', 'Notas',
-]);
-
-// Construye las notas del lead: contexto del formulario + notas del
-// solicitante + campos personalizados que no tienen columna propia.
-export function buildLeadNotas(payload: Record<string, any>, formName: string, notas?: any): string {
-  const partes: string[] = [`Lead generado desde el formulario: ${formName}`];
-  if (notas) partes.push(`Notas del solicitante:\n${String(notas)}`);
-
-  const extra = Object.entries(payload)
-    .filter(([k]) => !CAMPOS_ESTANDAR.has(k))
-    .filter(([, v]) => v !== undefined && v !== null && v !== '');
-  if (extra.length > 0) {
-    partes.push('Datos adicionales del formulario:');
-    for (const [k, v] of extra) {
-      partes.push(`• ${k}: ${Array.isArray(v) ? v.join(', ') : String(v)}`);
-    }
-  }
-  return partes.join('\n\n');
-}
-
-/**
- * Lee envíos tanto del SurveyFormRenderer (JSON con `payload`) como de un
- * formulario HTML tradicional (urlencoded/multipart). Web Creator puede
- * publicar el segundo formato según el navegador y el markup generado.
- */
-export async function parseSubmissionPayload(req: Request): Promise<Record<string, any>> {
-  const contentType = req.headers.get('content-type') || '';
-
-  if (contentType.includes('multipart/form-data')) {
-    const formData = await req.formData();
-    return Object.fromEntries(
-      Array.from(formData.entries()).map(([key, value]) => [key, typeof value === 'string' ? value : value.name]),
-    );
-  }
-
-  const raw = await req.text();
-
-  if (contentType.includes('application/json') || raw.trim().startsWith('{')) {
-    try {
-      const parsed = JSON.parse(raw || '{}');
-      return parsed?.payload && typeof parsed.payload === 'object' ? parsed.payload : parsed;
-    } catch {
-      // Continuar con urlencoded para tolerar clientes que envían un content-type incorrecto.
-    }
-  }
-
-  return Object.fromEntries(new URLSearchParams(raw).entries());
 }
 
 function isJsonClient(req: Request): boolean {

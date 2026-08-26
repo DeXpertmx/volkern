@@ -5,7 +5,7 @@ import { prisma } from '@/lib/db'
 import { withTenantAuth } from '@/lib/api-key-auth'
 import { ComplianceGate } from '@/lib/compliance-gate'
 import { validateBody } from '@/lib/validation'
-import { CotizacionInputSchema, calculateCotizacionItems } from '@/app/api/cotizaciones/route'
+import { CotizacionInputSchema, calculateCotizacionItems } from '@/lib/cotizaciones/cotizacion-calculator'
 import { crearOrdenVentaDesdeCotizacion } from '@/lib/ordenes-venta/from-cotizacion'
 
 function getCotizacionId(context: any): string | undefined {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { checkIfEventProcessed, DUNNING_NOTIFICATION_DAYS } from '@/app/api/webhooks/stripe/route';
+import { checkIfEventProcessed, DUNNING_NOTIFICATION_DAYS } from '@/lib/stripe/webhook-helpers';
 
 // Mock stripe to prevent Stripe SDK initialization in test environment
 vi.mock('@/lib/stripe', () => ({
