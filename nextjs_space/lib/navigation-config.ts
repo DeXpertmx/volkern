@@ -559,6 +559,7 @@ export const HUBS: HubConfig[] = [
       { name: 'Mi Suscripción', href: '/dashboard/configuracion/billing', icon: CreditCard, description: 'Suscripción y pagos' },
       { name: 'Uso y Límites', href: '/dashboard/configuracion/usage', icon: BarChart3, description: 'Consumo y límites del plan' },
       { name: 'Tareas Programadas', href: '/dashboard/configuracion?section=cron', icon: Clock, description: 'Estado de los cron jobs del sistema' },
+      { name: 'Estado del Webhook', href: '/dashboard/configuracion?section=webhook', icon: Radio, description: 'Rechazos 429 del webhook por chat y día' },
     ]
   }
 ]

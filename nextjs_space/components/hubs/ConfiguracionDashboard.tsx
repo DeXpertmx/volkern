@@ -32,6 +32,7 @@ import FiscalConfigSection from "@/components/fiscal/FiscalConfigSection";
 import { TelephonyConfigSection } from "@/components/dashboard/TelephonyConfigSection";
 import { LeadAssignmentConfig } from "@/components/dashboard/LeadAssignmentConfig";
 import { CronStatusPanel } from "@/components/dashboard/CronStatusPanel";
+import { WebhookStatusPanel } from "@/components/dashboard/WebhookStatusPanel";
 import { DocumentTemplatesList } from "@/components/dashboard/DocumentTemplatesList";
 import { LeadFieldsConfig } from "@/components/dashboard/LeadFieldsConfig";
 import { ImageUploader } from "@/components/ui/image-uploader";
@@ -794,6 +795,7 @@ export function ConfiguracionDashboard({ activeSection }: ConfiguracionDashboard
           )}
 
           {activeSection === "cron" && <CronStatusPanel />}
+          {activeSection === "webhook" && <WebhookStatusPanel />}
         </motion.div>
       </AnimatePresence>
     </div>
