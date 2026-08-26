@@ -12,6 +12,7 @@
  */
 
 import { initRedis } from '@/lib/core/redis'
+import { alertIfAbusive } from './rate-limit-alert'
 
 // TTL de las claves de métricas (7 días: suficiente para el panel de últimos días)
 const METRICS_TTL_SECONDS = 7 * 24 * 3600
@@ -116,6 +117,13 @@ export async function recordRateLimited(
   memByChannelDay.set(`${namespace}:${date}`, {
     count: (dayEntry?.count ?? 0) + 1,
     lastAt,
+  })
+
+  // Alerta de abuso (fire-and-forget): si un chat supera el umbral de 429 en
+  // una hora, se avisa al desarrollador por Telegram. Nunca debe romper el
+  // webhook, por eso se captura cualquier error.
+  alertIfAbusive(namespace, chatId).catch((error) => {
+    console.warn('[WebhookMetrics] Error en alerta de abuso:', error)
   })
 }
 
