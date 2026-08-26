@@ -814,13 +814,18 @@ const createDealWrapper = async (input: {
     throw new Error('Se requiere un monto para crear el negocio (ej: por 5000€).');
   }
 
+  // Etapa canónica del pipeline del tenant: "propuesta" → "Propuesta"
+  // (el dashboard y el forecast matchean por nombre exacto).
+  const { etapa: etapaCanonica, probabilidad } = await dealSkills.resolveStageToCanonical(tenantId, etapa);
+
   return dealSkills.createDeal({
     tenantId,
     titulo: titulo || `Negocio - ${nombre || email}`,
     valor,
     leadId,
     contactId,
-    etapa,
+    etapa: etapaCanonica,
+    probabilidad,
     prioridad,
     source: 'webhook',
   });
@@ -871,7 +876,12 @@ const updateDealWrapper = async (input: {
   if (!deal) throw new Error(`No encontré ningún negocio abierto para ${email || nombre}.`);
 
   const data: any = {};
-  if (updates.etapa) data.etapa = updates.etapa;
+  if (updates.etapa) {
+    // Etapa canónica del pipeline del tenant (misma normalización que el create).
+    const { etapa: etapaCanonica, probabilidad } = await dealSkills.resolveStageToCanonical(tenantId, updates.etapa);
+    data.etapa = etapaCanonica || updates.etapa;
+    if (probabilidad !== undefined) data.probabilidad = probabilidad;
+  }
   if (updates.monto !== undefined && updates.monto !== '') {
     const valor = Number(updates.monto);
     if (!Number.isFinite(valor)) throw new Error('El monto no es un número válido.');

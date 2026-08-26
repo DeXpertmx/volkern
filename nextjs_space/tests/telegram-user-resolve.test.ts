@@ -24,6 +24,10 @@ const mocks = vi.hoisted(() => ({
   financialAuditCreate: vi.fn(),
   noteCreate: vi.fn(),
   catalogoItemFindMany: vi.fn(),
+  pipelineStageFindMany: vi.fn(),
+  dealFindFirst: vi.fn(),
+  dealCreate: vi.fn(),
+  dealUpdate: vi.fn(),
 }));
 
 vi.mock('@/lib/db', () => ({
@@ -39,6 +43,8 @@ vi.mock('@/lib/db', () => ({
     contact: { findFirst: mocks.contactFindFirst },
     note: { create: mocks.noteCreate },
     catalogoItem: { findMany: mocks.catalogoItemFindMany },
+    pipelineStage: { findMany: mocks.pipelineStageFindMany },
+    deal: { findFirst: mocks.dealFindFirst, create: mocks.dealCreate, update: mocks.dealUpdate },
     erp_expense_claims: {
       findMany: mocks.expenseClaimsFindMany,
       findUnique: mocks.expenseClaimsFindUnique,
@@ -197,6 +203,50 @@ describe('Resolución de chat de Telegram al userId real (webhook)', () => {
     const { createExpense } = await import('@/lib/skills/finance-skills');
     const createCall = (createExpense as any).mock.calls[0][0];
     expect(createCall.createdById).toBe('user-42');
+  });
+
+  it('create_deal normaliza la etapa al nombre canónico del pipelineStage del tenant', async () => {
+    mocks.leadFindFirst.mockResolvedValue({ id: 'lead-juan', nombre: 'Juan Antonio Moreno' } as any);
+    mocks.pipelineStageFindMany.mockResolvedValue([
+      { nombre: 'Calificación', probabilidad: 10 },
+      { nombre: 'Propuesta', probabilidad: 50 },
+      { nombre: 'Negociación', probabilidad: 75 },
+    ] as any);
+    mocks.dealCreate.mockResolvedValue({ id: 'deal-new' } as any);
+
+    await (skills as any).create_deal({
+      tenantId: TENANT,
+      email: 'juan.moreno@mymasesor.es',
+      titulo: 'Suscripción Volkern ERP',
+      monto: 2400,
+      etapa: 'propuesta', // lo que el clasificador extrae (minúscula)
+    });
+
+    const createCall = mocks.dealCreate.mock.calls[0][0];
+    // Debe guardarse el nombre EXACTO del pipelineStage, no "propuesta".
+    expect(createCall.data.etapa).toBe('Propuesta');
+    expect(createCall.data.probabilidad).toBe(50);
+  });
+
+  it('update_deal normaliza la etapa al nombre canónico (negociación → Negociación)', async () => {
+    mocks.leadFindFirst.mockResolvedValue({ id: 'lead-jose' } as any);
+    mocks.dealFindFirst.mockResolvedValue({ id: 'deal-jose', titulo: 'implementación ERP' } as any);
+    mocks.pipelineStageFindMany.mockResolvedValue([
+      { nombre: 'Calificación', probabilidad: 10 },
+      { nombre: 'Propuesta', probabilidad: 50 },
+      { nombre: 'Negociación', probabilidad: 75 },
+    ] as any);
+    mocks.dealUpdate.mockResolvedValue({ id: 'deal-jose' } as any);
+
+    await (skills as any).update_deal({
+      tenantId: TENANT,
+      email: 'jose.acevedo@acevedoseguros.com.mx',
+      etapa: 'negociación',
+    });
+
+    const updateCall = mocks.dealUpdate.mock.calls[0][0];
+    expect(updateCall.data.etapa).toBe('Negociación');
+    expect(updateCall.data.probabilidad).toBe(75);
   });
 
   it('prequalify_lead crea la nota sin tenantId (regresión: note.create rompía con Unknown argument)', async () => {
