@@ -48,6 +48,8 @@ export interface WebhookRateLimitMetrics {
   lastRejectedAt: string | null
   /** Canal del último registro */
   lastRejectedChannel: WebhookNamespace | null
+  /** ChatId del último registro (null si el registro antiguo no lo guardó) */
+  lastRejectedChatId: string | null
 }
 
 // ─── Fallback en memoria (una sola instancia, sin Redis) ─────────────────
@@ -99,7 +101,7 @@ export async function recordRateLimited(
         .expire(chatKey, METRICS_TTL_SECONDS)
         .incr(totalKey)
         .expire(totalKey, METRICS_TTL_SECONDS)
-        .set(lastKey, JSON.stringify({ at: lastAt, channel: namespace }))
+        .set(lastKey, JSON.stringify({ at: lastAt, channel: namespace, chatId }))
         .expire(lastKey, METRICS_TTL_SECONDS)
         .exec()
     } catch (error) {
@@ -214,6 +216,7 @@ async function readFromRedis(redis: NonNullable<Awaited<ReturnType<typeof initRe
   // Último rechazo registrado (cualquier canal)
   let lastRejectedAt: string | null = null
   let lastRejectedChannel: WebhookNamespace | null = null
+  let lastRejectedChatId: string | null = null
   try {
     const lastRaw = await redis.get('webhook:429:last')
     if (lastRaw) {
@@ -222,6 +225,7 @@ async function readFromRedis(redis: NonNullable<Awaited<ReturnType<typeof initRe
       if (parsed.channel === 'telegram' || parsed.channel === 'evolution') {
         lastRejectedChannel = parsed.channel
       }
+      if (parsed.chatId) lastRejectedChatId = String(parsed.chatId)
     }
   } catch {
     // el último rechazo es informativo; no romper la lectura
@@ -237,6 +241,7 @@ async function readFromRedis(redis: NonNullable<Awaited<ReturnType<typeof initRe
     byDay,
     lastRejectedAt,
     lastRejectedChannel,
+    lastRejectedChatId,
   }
 }
 
@@ -248,6 +253,7 @@ function readFromMemory(): WebhookRateLimitMetrics {
   const chatCounts = new Map<string, number>()
   let lastRejectedAt: string | null = null
   let lastRejectedChannel: WebhookNamespace | null = null
+  let lastRejectedChatId: string | null = null
 
   for (const [key, entry] of memByChat) {
     const [ns, chatId, date] = key.split(':')
@@ -257,6 +263,7 @@ function readFromMemory(): WebhookRateLimitMetrics {
     if (entry.lastAt > (lastRejectedAt ?? '')) {
       lastRejectedAt = entry.lastAt
       lastRejectedChannel = (ns as WebhookNamespace) || null
+      lastRejectedChatId = chatId || null
     }
   }
 
@@ -304,6 +311,7 @@ function readFromMemory(): WebhookRateLimitMetrics {
     byDay,
     lastRejectedAt,
     lastRejectedChannel,
+    lastRejectedChatId,
   }
 }
 

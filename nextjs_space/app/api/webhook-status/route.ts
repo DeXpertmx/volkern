@@ -24,11 +24,16 @@ export async function GET() {
 
     const metrics = await getRateLimitMetrics()
     const topChats = await resolveTopChats(metrics.topChats)
+    const lastRejected = await resolveLastRejected(
+      metrics.lastRejectedChatId,
+      metrics.lastRejectedChannel,
+      metrics.lastRejectedAt
+    )
     const roleName = (session.user as any)?.roleName as string | undefined
     const isAdmin = roleName === 'Superadmin' || roleName === 'Administrador' || roleName === 'Admin'
 
     return NextResponse.json({
-      metrics: { ...metrics, topChats },
+      metrics: { ...metrics, topChats, lastRejected },
       isAdmin,
       processUptime: Math.round(process.uptime()),
       processPid: process.pid,
@@ -61,13 +66,17 @@ export async function POST(request: Request) {
   }
 }
 
+function channelForChatId(chatId: string): 'telegram' | 'evolution' {
+  // Canal aproximado: ids largos que empiezan en 52 (código país México) = WhatsApp,
+  // el resto (chat id numérico de Telegram) = Telegram.
+  const isWhatsApp = /^\d{10,}$/.test(chatId) && chatId.startsWith('52')
+  return isWhatsApp ? 'evolution' : 'telegram'
+}
+
 async function resolveTopChats(topChats: { chatId: string; count: number }[]): Promise<{ chatId: string; count: number; name: string }[]> {
   const topById = new Map<string, string>()
   for (const chat of topChats) {
-    // Canal aproximado: ids largos que empiezan en 52 (código país México) = WhatsApp,
-    // el resto (chat id numérico de Telegram) = Telegram.
-    const isWhatsApp = /^\d{10,}$/.test(chat.chatId) && chat.chatId.startsWith('52')
-    const channel = isWhatsApp ? 'evolution' : 'telegram'
+    const channel = channelForChatId(chat.chatId)
     const identities = await resolveChatIdentities(channel, [chat.chatId])
     const name = identities.get(chat.chatId)?.name ?? chat.chatId
     topById.set(chat.chatId, name)
@@ -76,4 +85,25 @@ async function resolveTopChats(topChats: { chatId: string; count: number }[]): P
     ...chat,
     name: topById.get(chat.chatId) ?? chat.chatId,
   }))
+}
+
+/**
+ * Envuelve el último rechazo con el chatId y su nombre resuelto, para que el
+ * panel muestre quién fue (Bruno Hess, un lead, un contacto) y no solo la hora.
+ */
+async function resolveLastRejected(
+  chatId: string | null,
+  channel: 'telegram' | 'evolution' | null,
+  at: string | null
+): Promise<{ chatId: string | null; name: string | null; channel: 'telegram' | 'evolution' | null; at: string | null }> {
+  if (!chatId) {
+    return { chatId: null, name: null, channel, at }
+  }
+  const identities = await resolveChatIdentities(channel ?? channelForChatId(chatId), [chatId])
+  return {
+    chatId,
+    name: identities.get(chatId)?.name ?? null,
+    channel,
+    at,
+  }
 }
