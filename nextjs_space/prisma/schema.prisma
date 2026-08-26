@@ -1111,6 +1111,7 @@ model Estudiante {
   fechaActualizacion       DateTime           @updatedAt
   tenantId                 String?
   academyUserId            String?            @unique
+  hotmartUserId            String?           @unique
   certificados             Certificado[]
   comentarios              Comentario[]
   conversaciones           Conversation[]
@@ -1161,8 +1162,11 @@ model Curso {
   testimonios               Json?
   tipoAcceso                String        @default("immediate")
   tipoMonetizacion          String        @default("one_time")
-  urlSlug                   String?       @unique
-  catalogoItemId            String?
+  urlSlug                  String?       @unique
+  catalogoItemId           String?
+  hotmartProductId         String?
+  hotmartSubdomain         String?
+  proveedorContenido       String         @default("propio")
   comunidadActiva           Boolean       @default(false)
   gamificacionActiva        Boolean       @default(false)
   puntosPorLeccion          Int           @default(10)
@@ -1247,6 +1251,8 @@ model Inscripcion {
   estado               String     @default("activo")
   montoPagado          Float?
   stripePaymentId      String?
+  hotmartTransactionId String?
+  metodoPago           String?
   progresoPorcentaje   Float      @default(0)
   fechaUltimoAcceso    DateTime?
   certificadoGenerado  Boolean    @default(false)
