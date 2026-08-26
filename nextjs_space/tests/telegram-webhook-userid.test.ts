@@ -48,11 +48,18 @@ const mocks = vi.hoisted(() => {
     processMessage: vi.fn(),
     sendBotMessage: vi.fn(),
     eventBusEmit: vi.fn(),
+    initRedis: vi.fn(),
   };
 });
 
 // El route importa `prisma` como default; los skills como named export.
 vi.mock('@/lib/db', () => ({ prisma: mocks.prisma, default: mocks.prisma }));
+
+// Redis rate-limit compartido: por defecto simulamos Redis NO disponible
+// (initRedis → null) para que el webhook use el fallback en memoria, igual
+// que antes del fix. El test específico de Redis mockea este módulo con un
+// cliente simulado para verificar el SET NX compartido.
+vi.mock('@/lib/core/redis', () => ({ initRedis: mocks.initRedis }));
 
 vi.mock('@/lib/s3', () => ({ getDownloadUrl: vi.fn(), uploadFile: vi.fn() }));
 vi.mock('@/app/api/erp/expenses/scan/route', () => ({ callVision: vi.fn() }));
@@ -139,6 +146,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.processMessage.mockResolvedValue({ success: true, response: '✅ Listo' });
   mocks.sendBotMessage.mockResolvedValue({ ok: true });
+  // Default: Redis no disponible → el webhook usa el fallback en memoria.
+  mocks.initRedis.mockResolvedValue(null);
 });
 
 // ─── 1. Contrato webhook → pipeline ───────────────────────────────────────
@@ -311,5 +320,53 @@ describe('Rate-limit del webhook: 429 explícito (sin descarte silencioso)', () 
     const res = await postMessage('hola otro chat', '646107200', 910000003);
     expect(res.status).toBe(200);
     expect(mocks.processMessage).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ─── 4. Rate-limit compartido entre instancias (Redis) ────────────────────
+//
+// Regresión del fix: el rate-limit debe vivir en Redis (SET NX PX, atómico)
+// para que todas las réplicas/workers del webhook compartan el mismo límite,
+// en vez de un Map en memoria por proceso (que permitía duplicar el envío
+// de un mismo chat en instancias distintas).
+describe('Rate-limit compartido (Redis): SET NX por chat', () => {
+  it('usa Redis cuando está disponible (initRedis → cliente) y llama SET NX PX', async () => {
+    const setMock = vi.fn()
+      .mockResolvedValueOnce('OK')   // primer mensaje → clave creada → pasa
+      .mockResolvedValueOnce(null)   // segundo mensaje → clave existía → limitado
+      .mockResolvedValueOnce('OK');  // otro chat → pasa
+
+    mocks.initRedis.mockResolvedValue({ set: setMock });
+
+    await postMessage('hola redis', '646107301', 920000001);
+    const res2 = await postMessage('hola redis 2', '646107301', 920000002);
+    await postMessage('hola redis otro', '646107302', 920000003);
+
+    expect(res2.status).toBe(429);
+    expect(mocks.processMessage).toHaveBeenCalledTimes(2); // solo msg1 y msg3
+
+    // SET telegram:rl:<chatId> 1 PX 1500 NX — ventana compartida por chat
+    expect(setMock).toHaveBeenCalledWith('telegram:rl:646107301', '1', 'PX', 1500, 'NX');
+    expect(setMock).toHaveBeenCalledWith('telegram:rl:646107302', '1', 'PX', 1500, 'NX');
+  });
+
+  it('cae al fallback en memoria si Redis no está disponible', async () => {
+    mocks.initRedis.mockResolvedValue(null);
+
+    const res1 = await postMessage('hola local', '646107303', 920000004);
+    const res2 = await postMessage('hola local 2', '646107303', 920000005);
+
+    expect(res1.status).toBe(200);
+    expect(res2.status).toBe(429);
+  });
+
+  it('si Redis lanza error, degrada a memoria sin romper el webhook', async () => {
+    mocks.initRedis.mockResolvedValue({ set: vi.fn().mockRejectedValue(new Error('conn refused')) });
+
+    const res1 = await postMessage('hola degrade', '646107304', 920000006);
+    const res2 = await postMessage('hola degrade 2', '646107304', 920000007);
+
+    expect(res1.status).toBe(200);
+    expect(res2.status).toBe(429);
   });
 });
