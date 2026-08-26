@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/auth'
 import { getRateLimitMetrics, resetRateLimitMetrics } from '@/lib/telegram/rate-limit-metrics'
 import { resolveChatIdentities } from '@/lib/telegram/chat-resolver'
 import { isAdminRequest } from '@/lib/auth-helpers'
+import { prisma } from '@/lib/db'
+import { sendTelegramMessage } from '@/lib/telegram'
 
 export const dynamic = 'force-dynamic'
 
@@ -49,6 +51,8 @@ export async function GET() {
  *
  * Reinicia las métricas de rate-limit del día actual. Solo superadmins y
  * administradores (rota la métrica de "quién reinició" para auditoría).
+ * Tras reiniciar, se avisa al desarrollador por Telegram (bot del sistema)
+ * indicando quién lo hizo.
  */
 export async function POST(request: Request) {
   try {
@@ -59,7 +63,48 @@ export async function POST(request: Request) {
 
     await resetRateLimitMetrics()
 
-    console.log(`[WebhookStatus] Métricas reiniciadas por ${auth.email} (${auth.userId})`)
+    // Nombre del usuario que reinició (para el aviso y la auditoría)
+    let resetByName: string | null = null
+    if (auth.userId) {
+      try {
+        const resetBy = await prisma.user.findUnique({
+          where: { id: auth.userId },
+          select: { name: true },
+        })
+        resetByName = resetBy?.name ?? null
+      } catch {
+        // no romper el reset por un fallo de nombre
+      }
+    }
+
+    const msg = `Métricas reiniciadas por ${resetByName || auth.email || auth.userId} (${auth.userId})`
+    console.log(`[WebhookStatus] ${msg}`)
+
+    // Aviso al desarrollador por el bot del sistema (volkerncrm_bot)
+    try {
+      const adminChat = process.env.TELEGRAM_ADMIN_CHAT_ID
+      if (adminChat) {
+        const text = [
+          '🔄 Reinicio de métricas del webhook',
+          '',
+          `Quién: ${resetByName || auth.email || auth.userId}`,
+          `Email: ${auth.email || '—'}`,
+          `UserId: ${auth.userId}`,
+          `Fecha: ${new Date().toISOString()}`,
+          '',
+          'Se reiniciaron los contadores 429 del día (por chat, totales y último rechazo).',
+        ].join('\n')
+        const res = await sendTelegramMessage(adminChat, text)
+        if (!res.success) {
+          console.error('[WebhookStatus] Error enviando aviso de reinicio:', res.error)
+        }
+      } else {
+        console.warn('[WebhookStatus] TELEGRAM_ADMIN_CHAT_ID no configurado; no se envió el aviso de reinicio.')
+      }
+    } catch (error) {
+      console.error('[WebhookStatus] Error enviando aviso de reinicio al desarrollador:', error)
+    }
+
     return NextResponse.json({ ok: true, message: 'Métricas del día reiniciadas' })
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
