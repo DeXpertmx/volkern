@@ -9,6 +9,50 @@
 import { prisma } from '@/lib/db';
 import { eventBus, EVENTS } from './event-bus';
 
+// ============== NORMALIZACIÓN DE ETAPAS ==============
+
+/**
+ * Normaliza un texto para comparaciones case/accent-insensitive:
+ * "Negociación" → "negociacion".
+ */
+export function normalizeStageName(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
+/**
+ * Resuelve el nombre canónico de la etapa del pipeline del tenant a partir
+ * del valor que llega del clasificador/LLM ("propuesta", "negociación",
+ * "Calificación"…). Devuelve { etapa, probabilidad } con el nombre EXACTO
+ * del pipelineStage ("Propuesta", "Negociación"…) para que el dashboard y
+ * el forecast (pipeline-health-service) matcheen por nombre.
+ *
+ * Si no hay etapas configuradas o no hay match, devuelve la etapa original
+ * con probabilidad undefined (el core aplica su default).
+ */
+export async function resolveStageToCanonical(
+  tenantId: string,
+  etapa: string | undefined
+): Promise<{ etapa?: string; probabilidad?: number }> {
+  if (!etapa) return {};
+
+  const stages = await prisma.pipelineStage.findMany({
+    where: { tenantId },
+    select: { nombre: true, probabilidad: true },
+  });
+
+  if (stages.length === 0) return { etapa };
+
+  const target = normalizeStageName(etapa);
+  const match = stages.find((s) => normalizeStageName(s.nombre) === target);
+  if (!match) return { etapa };
+
+  return { etapa: match.nombre, probabilidad: match.probabilidad };
+}
+
 // ============== TIPOS ==============
 
 export interface CreateDealInput {
