@@ -56,6 +56,15 @@ function isRateLimited(chatId: string): boolean {
   return false
 }
 
+// Respuesta 429 explícita: Telegram reintenta el webhook con backoff y el
+// mensaje no se pierde (antes se descartaba silenciosamente con { ok: true }).
+function rateLimitedResponse(): NextResponse {
+  return NextResponse.json(
+    { ok: false, error: 'rate_limited', retry_after: 2 },
+    { status: 429, headers: { 'Retry-After': '2' } }
+  )
+}
+
 // ─── Anti-duplicado de update_id (TTL corto, protege contra retries) ─────
 const processedUpdateIds = new Map<string, number>()
 
@@ -871,8 +880,11 @@ export async function POST(request: NextRequest) {
     // 2. MENSAJES DIRECTOS
     // ════════════════════════════════════════════════════════════════════
 
-    // Anti-duplicado a nivel de update (Telegram puede reenviar el mismo webhook)
-    if (isUpdateProcessed(body.update_id)) {
+    // Anti-duplicado para updates que NO son mensajes directos (edited_message,
+    // channel_post…). Para mensajes directos se evalúa DESPUÉS del rate-limit
+    // (ver abajo) para que un 429 no marque el update como procesado y el
+    // reintento de Telegram con el mismo update_id sí pase.
+    if (!body.message && isUpdateProcessed(body.update_id)) {
       return NextResponse.json({ ok: true })
     }
 
@@ -889,13 +901,25 @@ export async function POST(request: NextRequest) {
         message.from.first_name + (message.from.last_name ? ` ${message.from.last_name}` : '')
       const messageText = message.text || ''
 
+      // Rate-limit por chat ANTES del anti-duplicado: si se excede, se responde
+      // 429 con Retry-After para que Telegram reintente el mensaje (ya no se
+      // descarta silenciosamente con { ok: true }). No se marca el update como
+      // procesado en ese caso para que el reintento del mismo update_id pase.
+      if (isRateLimited(chatId)) {
+        return rateLimitedResponse()
+      }
+
+      // Anti-duplicado a nivel de update (Telegram puede reenviar el mismo webhook)
+      if (isUpdateProcessed(body.update_id)) {
+        return NextResponse.json({ ok: true })
+      }
+
       // Documentos/imágenes recibidos del administrador → bandeja de gastos.
       // Se exige coincidencia exacta del admin_chat_id: el fallback global del
       // chatbot nunca puede introducir archivos en un tenant equivocado.
       if (message.document || message.photo) {
         const ctx = await findTelegramContext(chatId, true)
         if (!ctx) return NextResponse.json({ ok: true })
-        if (isRateLimited(chatId)) return NextResponse.json({ ok: true })
         try {
           const document = await ingestTelegramDocument(message, ctx, chatId)
           if (document) {
@@ -925,7 +949,6 @@ export async function POST(request: NextRequest) {
         const value = parts.slice(3).join(' ').trim()
         const ctx = await findTelegramContext(chatId, true)
         if (!ctx) return NextResponse.json({ ok: true })
-        if (isRateLimited(chatId)) return NextResponse.json({ ok: true })
         if (!documentId || !field || !value) {
           await sendBotMessage(chatId, 'Uso: /gasto_corregir ID_DOCUMENTO campo valor\nCampos: proveedor, nif, factura, fecha, vencimiento, total, base, iva, recargo, irpf, moneda, pago, operacion.', ctx.botToken)
         } else {
@@ -940,7 +963,6 @@ export async function POST(request: NextRequest) {
       if (isTelegramCommand(messageText, 'gastos_pendientes')) {
         const ctx = await findTelegramContext(chatId, true)
         if (!ctx) return NextResponse.json({ ok: true })
-        if (isRateLimited(chatId)) return NextResponse.json({ ok: true })
         const documents = await prisma.expenseInboxDocument.findMany({
           where: { tenantId: ctx.tenantId, status: { in: ['PENDING_REVIEW', 'REVIEW', 'ERROR'] } },
           orderBy: { createdAt: 'desc' },
@@ -968,7 +990,6 @@ export async function POST(request: NextRequest) {
       if (isTelegramCommand(messageText, 'gastos_descartados')) {
         const ctx = await findTelegramContext(chatId, true)
         if (!ctx) return NextResponse.json({ ok: true })
-        if (isRateLimited(chatId)) return NextResponse.json({ ok: true })
         const documents = await prisma.expenseInboxDocument.findMany({
           where: { tenantId: ctx.tenantId, status: 'DISCARDED' },
           orderBy: { updatedAt: 'desc' },
@@ -994,11 +1015,6 @@ export async function POST(request: NextRequest) {
       if (messageText.startsWith('/start')) {
         const parts = messageText.split(' ')
         const tenantIdParam = parts.length > 1 ? parts[1] : null
-
-        // Rate-limit por chat (mismo criterio que el flujo de mensajes)
-        if (isRateLimited(chatId)) {
-          return NextResponse.json({ ok: true })
-        }
 
         // ═══ VINCULACIÓN POR USUARIO (QR del perfil) ═══════════════════
         // Payload: u_<userId>_<token> → valida el token one-time y guarda
@@ -1137,11 +1153,6 @@ export async function POST(request: NextRequest) {
       const ctx = await findTelegramContext(chatId)
       if (!ctx) {
         console.warn(`[TelegramWebhook] No se encontró tenant para chat ${chatId}, ignorando mensaje`)
-        return NextResponse.json({ ok: true })
-      }
-
-      // Rate-limit por chat para evitar abuso si una integración queda expuesta
-      if (isRateLimited(chatId)) {
         return NextResponse.json({ ok: true })
       }
 
