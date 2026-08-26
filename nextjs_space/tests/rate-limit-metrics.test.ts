@@ -34,6 +34,7 @@ describe('Rate-limit metrics: registro', () => {
     const multi = {
       incr: vi.fn().mockReturnThis(),
       expire: vi.fn().mockReturnThis(),
+      set: vi.fn().mockReturnThis(),
       exec: vi.fn().mockResolvedValue([]),
     }
     mocks.initRedis.mockResolvedValue({ multi: vi.fn(() => multi) } as any)
@@ -44,7 +45,9 @@ describe('Rate-limit metrics: registro', () => {
     const today = new Date().toISOString().slice(0, 10)
     expect(multi.incr).toHaveBeenCalledWith(`webhook:429:telegram:646107192:${today}`)
     expect(multi.incr).toHaveBeenCalledWith(`webhook:429:total:telegram:${today}`)
-    expect(multi.expire).toHaveBeenCalledTimes(2)
+    // 3 expires de las métricas (chat, total, last) + 1 del contador horario de
+    // la alerta de abuso (recordRateLimited siempre la dispara, también con Redis)
+    expect(multi.expire).toHaveBeenCalledTimes(4)
   })
 
   it('si Redis no está disponible, usa el fallback en memoria', async () => {
