@@ -32,6 +32,10 @@ const mocks = vi.hoisted(() => ({
   createDeal: vi.fn(),
   updateDeal: vi.fn(),
   listDeals: vi.fn(),
+  prequalifyLead: vi.fn(),
+  dealFindFirst: vi.fn(),
+  noteCreate: vi.fn(),
+  catalogoItemFindMany: vi.fn(),
 }));
 
 const state = {
@@ -59,6 +63,9 @@ vi.mock('@/lib/db', () => ({
     user: { findUnique: mocks.userFindUnique, findFirst: mocks.userFindFirst },
     lead: { findFirst: mocks.leadFindFirst },
     contact: { findFirst: mocks.contactFindFirst },
+    deal: { findFirst: mocks.dealFindFirst },
+    note: { create: mocks.noteCreate },
+    catalogoItem: { findMany: mocks.catalogoItemFindMany },
     chatbotAuditLog: {
       create: mocks.chatbotAuditLogCreate,
       findMany: mocks.chatbotAuditLogFindMany,
@@ -74,6 +81,7 @@ vi.mock('@/lib/skills', () => ({
     create_deal: mocks.createDeal,
     update_deal: mocks.updateDeal,
     list_deals: mocks.listDeals,
+    prequalify_lead: mocks.prequalifyLead,
   },
 }));
 
@@ -152,6 +160,16 @@ beforeEach(() => {
   mocks.userFindFirst.mockResolvedValue({ name: 'Bruno Hess', bookingEnabled: true, bookingSlug: 'bruno-hess' });
   mocks.leadFindFirst.mockResolvedValue(null);
   mocks.contactFindFirst.mockResolvedValue(null);
+  mocks.dealFindFirst.mockResolvedValue(null);
+  mocks.prequalifyLead.mockResolvedValue({
+    success: true,
+    noteId: 'note-1',
+    dealUpdated: false,
+    catalogMatches: [],
+    summary: 'Nota registrada.',
+  });
+  mocks.noteCreate.mockResolvedValue({ id: 'note-1' });
+  mocks.catalogoItemFindMany.mockResolvedValue([]);
   mocks.chatbotAuditLogCreate.mockResolvedValue({ id: 'audit-block25' });
   mocks.chatbotAuditLogFindMany.mockResolvedValue([]);
   mocks.chatbotAuditLogCount.mockResolvedValue(0);
@@ -217,6 +235,37 @@ describe('Bloque 25 — respuestas de ventas que recibe Telegram', () => {
       email: 'ana@empresa.test',
       etapa: 'negociación',
       prioridad: 'alta',
+    }));
+  });
+
+  it('calificar lead: devuelve confirmación con la nota (la regresión del note.create está en telegram-user-resolve)', async () => {
+    // El lead real debe resolverse por email para precalificar.
+    mocks.leadFindFirst.mockImplementation(async ({ where }: any) => {
+      if (where?.email) return { id: 'lead-jose', nombre: 'José Acevedo' };
+      return null;
+    });
+    mocks.prequalifyLead.mockResolvedValue({
+      success: true,
+      noteId: 'note-1',
+      dealUpdated: false,
+      catalogMatches: [],
+      summary: 'Nota registrada.',
+    });
+
+    const result = await processMessage({
+      tenantId: TENANT,
+      conversationId: `${CONVERSATION}-calificar`,
+      channel: 'telegram',
+      userId: 'telegram:646107192',
+      message: 'precalifica a jose.acevedo@acevedoseguros.com.mx: interesado en el paquete premium',
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.response).toContain('precalificado');
+    expect(mocks.prequalifyLead).toHaveBeenCalledWith(expect.objectContaining({
+      tenantId: TENANT,
+      email: 'jose.acevedo@acevedoseguros.com.mx',
+      nota: 'interesado en el paquete premium',
     }));
   });
 
