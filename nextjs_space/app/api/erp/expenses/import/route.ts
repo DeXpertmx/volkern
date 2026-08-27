@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
 import { skills } from '@/lib/skills';
+import { parseNum } from '@/lib/import/parse-num';
 
 // ─── Utilidades de parseo ─────────────────────────────────────────────────
 
@@ -15,25 +16,6 @@ function normalizeHeader(raw: string): string {
     .toUpperCase()
     .replace(/\s+/g, ' ')
     .trim();
-}
-
-/** Parsea un número en formato español (1.234,56) o inglés (1234.56). */
-function parseNum(value: unknown): number | null {
-  if (value == null || value === '') return null;
-  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
-
-  let s = String(value).trim().replace(/\s/g, '');
-  if (!s) return null;
-
-  // Formato español con separador de miles y coma decimal: 1.234,56
-  if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(s)) {
-    s = s.replace(/\./g, '').replace(',', '.');
-  } else if (s.includes(',')) {
-    // Coma decimal con puntos de miles o sin ellos
-    s = s.replace(/\./g, '').replace(',', '.');
-  }
-  const n = parseFloat(s);
-  return Number.isFinite(n) ? n : null;
 }
 
 /** Convierte una fecha de Excel (serial) o string a Date. */
@@ -100,7 +82,7 @@ function rateKey(rate: number): string {
  */
 async function parseWorkbook(
   buffer: Buffer,
-  opts: { mapping?: Record<string, number | null>; noHeader?: boolean } = {},
+  opts: { mapping?: Record<string, number | null>; noHeader?: boolean; currency?: string | null } = {},
 ): Promise<{
   rows: ParsedRow[];
   headerErrors: string[];
@@ -186,11 +168,11 @@ async function parseWorkbook(
     const invoiceRaw = rawRow[colIndex['Nº FRA.'] ?? colIndex['FACTURA']] ?? null;
 
     const bases = rateCols
-      .map(({ index, rate }) => ({ rate, base: parseNum(rawRow[index]) ?? 0 }))
+      .map(({ index, rate }) => ({ rate, base: parseNum(rawRow[index], opts.currency) ?? 0 }))
       .filter((b) => b.base > 0);
 
-    const vatAmount = parseNum(rawRow[colIndex['IVA']]);
-    const total = parseNum(rawRow[colIndex['TOTAL'] ?? colIndex['IMPORTE']]);
+    const vatAmount = parseNum(rawRow[colIndex['IVA']], opts.currency);
+    const total = parseNum(rawRow[colIndex['TOTAL'] ?? colIndex['IMPORTE']], opts.currency);
 
     rows.push({
       row: r + 1,
@@ -262,6 +244,21 @@ export const POST = withTenantAuth(async (request, auth) => {
       return NextResponse.json({ error: 'Modo inválido (preview|commit)' }, { status: 400 });
     }
 
+    // Moneda del tenant para interpretar de forma determinista el formato numérico
+    // del fichero (EUR -> punto de miles y coma decimal; resto -> coma de miles).
+    // Tolerante a fallos: si el cliente Prisma no expone `tenant` (p. ej. en test
+    // con mocks parciales) se cae al valor por defecto null (auto-detección).
+    let currency: string | null = null;
+    try {
+      const tenantInfo = await prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { moneda: true },
+      });
+      currency = tenantInfo?.moneda || null;
+    } catch (e) {
+      currency = null;
+    }
+
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
     if (!file) {
@@ -303,6 +300,7 @@ export const POST = withTenantAuth(async (request, auth) => {
     const { rows, headerErrors, detectedColumns, autoMapping } = await parseWorkbook(buffer, {
       mapping,
       noHeader,
+      currency,
     });
 
     if (headerErrors.length > 0) {
