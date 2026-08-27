@@ -5185,7 +5185,7 @@ model erp_academy_sessions {
 }
 
 model erp_academy_users {
-  id                   String                 @id
+  id                   String                 @id @default(cuid())
   tenantId             String
   email                String                 @unique
   passwordHash         String
@@ -5195,7 +5195,7 @@ model erp_academy_users {
   status               String                 @default("ACTIVE")
   lastLoginAt          DateTime?
   createdAt            DateTime               @default(now())
-  updatedAt            DateTime
+  updatedAt            DateTime               @updatedAt
   Estudiante           Estudiante?
   erp_academy_sessions erp_academy_sessions[]
   Tenant               Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
