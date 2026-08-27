@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { getSessionTenantId, tenantWhere } from '@/lib/academy/tenant-guard';
 
 // GET /api/cursos - Obtener todos los cursos
 export async function GET(request: NextRequest) {
@@ -17,8 +18,12 @@ export async function GET(request: NextRequest) {
     const publicado = searchParams.get('publicado');
     const categoria = searchParams.get('categoria');
 
-    const where: any = {};
-    
+    // Aislamiento multi-tenant: cada tenant solo ve sus propios cursos.
+    // El superadmin (sin tenant) sigue viendo todos.
+    const tenantId = await getSessionTenantId(session.user.email);
+
+    const where: any = { ...tenantWhere(tenantId) };
+
     if (publicado) {
       where.publicado = publicado === 'true';
     }
@@ -124,8 +129,11 @@ export async function POST(request: NextRequest) {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/(^-|-$)/g, '');
 
+    const tenantId = await getSessionTenantId(session.user.email);
+
     const curso = await prisma.curso.create({
       data: {
+        tenantId: tenantId || null,
         titulo,
         subtitulo,
         descripcion,

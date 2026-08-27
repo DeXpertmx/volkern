@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { getSessionTenantId, tenantWhere } from '@/lib/academy/tenant-guard';
 
 // GET /api/estudiantes/[id] - Obtener un estudiante específico
 export async function GET(
@@ -16,8 +17,8 @@ export async function GET(
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
 
-    const estudiante = await prisma.estudiante.findUnique({
-      where: { id: params.id },
+    const estudiante = await prisma.estudiante.findFirst({
+      where: { id: params.id, ...tenantWhere(await getSessionTenantId(session.user?.email)) },
       include: {
         inscripciones: {
           include: {
@@ -69,6 +70,14 @@ export async function PUT(
     const session = await getServerSession(authOptions);
     if (!session) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
+
+    const existente = await prisma.estudiante.findFirst({
+      where: { id: params.id, ...tenantWhere(await getSessionTenantId(session.user?.email)) },
+      select: { id: true },
+    });
+    if (!existente) {
+      return NextResponse.json({ error: 'Estudiante no encontrado' }, { status: 404 });
     }
 
     const body = await request.json();
@@ -141,6 +150,14 @@ export async function DELETE(
     const session = await getServerSession(authOptions);
     if (!session) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
+
+    const existente = await prisma.estudiante.findFirst({
+      where: { id: params.id, ...tenantWhere(await getSessionTenantId(session.user?.email)) },
+      select: { id: true },
+    });
+    if (!existente) {
+      return NextResponse.json({ error: 'Estudiante no encontrado' }, { status: 404 });
     }
 
     await prisma.estudiante.delete({

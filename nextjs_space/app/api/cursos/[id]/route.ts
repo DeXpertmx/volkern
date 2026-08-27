@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { getSessionTenantId, tenantWhere } from '@/lib/academy/tenant-guard';
 
 // GET /api/cursos/[id] - Obtener un curso específico
 export async function GET(
@@ -16,8 +17,8 @@ export async function GET(
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
 
-    const curso = await prisma.curso.findUnique({
-      where: { id: params.id },
+    const curso = await prisma.curso.findFirst({
+      where: { id: params.id, ...tenantWhere(await getSessionTenantId(session.user.email)) },
       include: {
         modulos: {
           include: {
@@ -128,6 +129,14 @@ export async function PATCH(
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
 
+    const existente = await prisma.curso.findFirst({
+      where: { id: params.id, ...tenantWhere(await getSessionTenantId(session.user.email)) },
+      select: { id: true },
+    });
+    if (!existente) {
+      return NextResponse.json({ error: 'Curso no encontrado' }, { status: 404 });
+    }
+
     const body = await request.json();
     const cleanData = sanitizeCursoData(body);
     
@@ -162,6 +171,14 @@ export async function PUT(
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
 
+    const existente = await prisma.curso.findFirst({
+      where: { id: params.id, ...tenantWhere(await getSessionTenantId(session.user.email)) },
+      select: { id: true },
+    });
+    if (!existente) {
+      return NextResponse.json({ error: 'Curso no encontrado' }, { status: 404 });
+    }
+
     const body = await request.json();
     const cleanData = sanitizeCursoData(body);
 
@@ -189,6 +206,14 @@ export async function DELETE(
     const session = await getServerSession(authOptions);
     if (!session?.user) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
+
+    const existente = await prisma.curso.findFirst({
+      where: { id: params.id, ...tenantWhere(await getSessionTenantId(session.user.email)) },
+      select: { id: true },
+    });
+    if (!existente) {
+      return NextResponse.json({ error: 'Curso no encontrado' }, { status: 404 });
     }
 
     await prisma.curso.delete({
