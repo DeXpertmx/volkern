@@ -31,7 +31,8 @@ vi.mock('@/lib/skills/automation-listener', () => ({
   ensureAutomationListeners: vi.fn(),
 }));
 
-const { POST, parseSubmissionPayload } = await import('@/app/api/formularios/[id]/submit/route');
+const { POST } = await import('@/app/api/formularios/[id]/submit/route');
+const { parseSubmissionPayload } = await import('@/lib/marketing/form-submit-helpers');
 
 function makeRequest(payload: any): Request {
   return new Request('https://volkern.app/api/formularios/wf-1/submit', {
