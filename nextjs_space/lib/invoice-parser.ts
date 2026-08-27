@@ -1,4 +1,5 @@
 import type { OcrOverlay, OcrWord, VatRowTemplate } from '@/lib/finance/ocr-template'
+import { parseNum } from '@/lib/import/parse-num'
 
 export interface EmisorInfo {
   nombre: string | null
@@ -123,22 +124,15 @@ export function sanitizeSupplierName(raw: unknown): string | null {
 // español/inglés, arrays anidados en totales o a nivel raíz, y cuotas con
 // o sin símbolo de euro. Devuelve [] si no hay filas válidas.
 // Convierte un importe procedente del modelo a número, tolerando coma decimal
-// europea y símbolo de euro ("200,00 €" → 200, "1.234,56" → 1234.56).
+// europea y símbolo de euro ("200,00 €" → 200, "1.234,56" → 1234.56,
+// "1.234" → 1234). Reutiliza parseNum con auto-detección de formato EUR.
 function amountToNumber(value: unknown): number {
   if (typeof value === 'number') return value
   if (typeof value !== 'string') return NaN
-  let cleaned = value.replace(/[€\s]/g, '').trim()
+  const cleaned = value.replace(/[€\s$£]/g, '').trim()
   if (!cleaned) return NaN
-  // Coma como separador decimal (formato europeo)
-  if (cleaned.includes(',') && !cleaned.includes('.')) {
-    cleaned = cleaned.replace(',', '.')
-  } else if (cleaned.includes(',') && cleaned.includes('.')) {
-    // Último separador es la coma → decimal europeo con puntos de miles
-    cleaned = cleaned.lastIndexOf(',') > cleaned.lastIndexOf('.')
-      ? cleaned.replace(/\./g, '').replace(',', '.')
-      : cleaned.replace(/,/g, '')
-  }
-  return Number(cleaned)
+  const n = parseNum(cleaned)
+  return n == null ? NaN : n
 }
 
 export function normalizeVatBreakdown(breakdown: unknown): { tipo: number; base: number; cuota: number }[] {
@@ -439,24 +433,14 @@ export function applyVatRowTemplate(
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
 // Convierte un importe a número, tolerando separadores de miles/decimales europeos y US.
-// Ej: "1.600,00" => 1600.00 ; "1,200.00" => 1200.00 ; "1 696,00" => 1696.00 ; "1600" => 1600
+// Ej: "1.600,00" => 1600.00 ; "1,200.00" => 1200.00 ; "1 696,00" => 1696.00 ; "1600" => 1600 ;
+// "1.234" => 1234 (miles europeos, no decimal). Usa parseNum con auto-detección EUR.
 function toNum(s: string): number | null {
   if (!s) return null
-  // Quitar espacios y símbolo de euro
-  let cleaned = s.replace(/\s+/g, '').replace(/€/g, '')
+  const cleaned = s.replace(/[€$£]/g, '').trim()
   if (!cleaned) return null
-  // Detectar el separador decimal: el último punto o coma seguido de 1 o 2 dígitos
-  const m = cleaned.match(/^(.*[.,])(\d{1,2})$/)
-  if (m) {
-    const integerPart = m[1].replace(/[.,]/g, '')
-    const decimalPart = m[2]
-    const n = parseFloat(`${integerPart}.${decimalPart}`)
-    return isFinite(n) ? Math.round(n * 100) / 100 : null
-  }
-  // Sin parte decimal: eliminar separadores de miles
-  cleaned = cleaned.replace(/[.,]/g, '')
-  const n = parseFloat(cleaned)
-  return isFinite(n) ? Math.round(n * 100) / 100 : null
+  const n = parseNum(cleaned)
+  return n == null ? null : Math.round(n * 100) / 100
 }
 
 // Normaliza un NIF/CIF: elimina espacios y guiones, pasa a mayúsculas.
