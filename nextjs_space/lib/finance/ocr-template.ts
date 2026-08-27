@@ -1,3 +1,5 @@
+import { parseNum } from '@/lib/import/parse-num'
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Plantillas de lectura por proveedor (OCR human-in-the-loop).
 //
@@ -74,18 +76,14 @@ export interface OcrFieldDef {
 }
 
 // Convierte texto a número tolerando formatos europeos ("1.696,00", "14, 20").
+// Reutiliza parseNum con auto-detección EUR para el caso de miles sin decimales
+// ("1.234" => 1234, no 1.234).
 function toNum(s: string): number | null {
   if (!s) return null
-  let cleaned = s.replace(/\s+/g, '').replace(/€/g, '')
+  const cleaned = s.replace(/[€$£]/g, '').trim()
   if (!cleaned) return null
-  const m = cleaned.match(/^(.*[.,])(\d{1,2})$/)
-  if (m) {
-    const n = parseFloat(`${m[1].replace(/[.,]/g, '')}.${m[2]}`)
-    return isFinite(n) ? Math.round(n * 100) / 100 : null
-  }
-  cleaned = cleaned.replace(/[.,]/g, '')
-  const n = parseFloat(cleaned)
-  return isFinite(n) ? Math.round(n * 100) / 100 : null
+  const n = parseNum(cleaned)
+  return n == null ? null : Math.round(n * 100) / 100
 }
 
 function normDate(raw: string): string | null {
