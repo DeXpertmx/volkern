@@ -9,10 +9,10 @@ export async function GET(
   try {
     const { id } = params
 
-    const signature = await (prisma as any).digitalSignature.findUnique({
+    const signature = await (prisma as any).erp_digital_signatures.findUnique({
       where: { id },
       include: {
-        tenant: {
+        Tenant: {
           select: {
             nombre: true,
             razonSocial: true,
@@ -38,9 +38,9 @@ export async function GET(
       signatureHash: signature.signatureHash,
       createdAt: signature.createdAt,
       metadata: signature.metadata,
-      tenantName: signature.tenant.razonSocial || signature.tenant.nombre,
-      tenantNif: signature.tenant.nifCif,
-      tenantSlug: signature.tenant.slug
+      tenantName: signature.Tenant.razonSocial || signature.Tenant.nombre,
+      tenantNif: signature.Tenant.nifCif,
+      tenantSlug: signature.Tenant.slug
     })
   } catch (error) {
     console.error('[PublicVerify] Error:', error)

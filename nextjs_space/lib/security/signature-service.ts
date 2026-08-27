@@ -107,10 +107,11 @@ export class SignatureService {
     const tsa = await this.requestCertifiedTimestamp(params.documentHash);
     
     // 2. Upsert con Metadatos Forenses
-    return await (prisma as any).digitalSignature.upsert({
+    return await (prisma as any).erp_digital_signatures.upsert({
       where: { documentHash: params.documentHash },
       update: {}, 
       create: {
+        id: crypto.randomUUID(), // El modelo no tiene @default en id
         tenantId: params.tenantId,
         documentType: params.documentType,
         documentHash: params.documentHash,
