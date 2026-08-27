@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { getSessionTenantId, tenantWhere } from '@/lib/academy/tenant-guard';
 
 // POST /api/inscripciones - Crear una inscripción
 export async function POST(request: NextRequest) {
@@ -24,9 +25,11 @@ export async function POST(request: NextRequest) {
       stripeSubscriptionId,
     } = body;
 
-    // Get course to calculate total lessons
-    const curso = await prisma.curso.findUnique({
-      where: { id: cursoId },
+    const tenantId = await getSessionTenantId(session.user?.email);
+
+    // Get course to calculate total lessons (verificando que sea del tenant)
+    const curso = await prisma.curso.findFirst({
+      where: { id: cursoId, ...tenantWhere(tenantId) },
       include: {
         modulos: {
           include: {
@@ -38,6 +41,15 @@ export async function POST(request: NextRequest) {
 
     if (!curso) {
       return NextResponse.json({ error: 'Curso no encontrado' }, { status: 404 });
+    }
+
+    // Verificar que el estudiante pertenezca al tenant
+    const estudiante = await prisma.estudiante.findFirst({
+      where: { id: estudianteId, ...tenantWhere(tenantId) },
+      select: { id: true },
+    });
+    if (!estudiante) {
+      return NextResponse.json({ error: 'Estudiante no encontrado' }, { status: 404 });
     }
 
     const totalLecciones = curso.modulos.reduce(
