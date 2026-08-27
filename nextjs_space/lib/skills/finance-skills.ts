@@ -257,7 +257,17 @@ export async function createExpense(input: CreateExpenseInput) {
     });
 
     // Notificar a la contabilidad para que genere el asiento y los registros
-    // fiscales (IVA soportado → Modelo 303, retención IRPF → Modelo 111)
+    // fiscales (IVA soportado → Modelo 303, retención IRPF → Modelo 111).
+    // En Next.js standalone el listener registrado desde instrumentation.ts
+    // puede vivir en otra instancia del event bus (bundles separados) y nunca
+    // recibiría el evento; aseguramos el listener en ESTE bundle antes de
+    // emitir (mismo patrón que ensureAutomationListeners).
+    const { ensureAccountingListeners } = await import('@/lib/accounting/accounting-listener');
+    try {
+      ensureAccountingListeners();
+    } catch (e) {
+      skillsLogger.warn('[Finance] No se pudieron asegurar los listeners contables:', e);
+    }
     eventBus.emitEvent(EVENTS.EXPENSE_CREATED, {
       tenantId: input.tenantId,
       expenseId: updatedExpense.id,

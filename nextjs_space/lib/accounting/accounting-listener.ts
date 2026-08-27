@@ -2,10 +2,33 @@ import { eventBus, EVENTS } from '@/lib/skills/event-bus';
 import { AccountingEventMapper } from './event-mapper';
 import { skillsLogger } from '@/lib/skills/observability';
 
+// Guard idempotente: Next.js standalone puede instanciar este módulo en
+// varios bundles (instrumentation vs app). Sin el guard, cada llamada
+// añadiría un listener más y cada evento crearía N asientos.
+let accountingListenersInitialized = false;
+
+/**
+ * Asegura que los listeners EventBus → Contabilidad estén registrados en
+ * EL MISMO bundle que emite el evento. En Next.js standalone el listener
+ * registrado desde instrumentation.ts puede vivir en otra instancia del event
+ * bus (bundles separados) y nunca recibiría el evento. Los emisores deben
+ * llamar a esta función antes de emitir (mismo patrón que
+ * ensureAutomationListeners). Idempotente: solo registra una vez por bundle.
+ */
+export function ensureAccountingListeners(): void {
+  if (accountingListenersInitialized) return;
+  initializeAccountingListeners();
+}
+
 /**
  * Initializes the accounting event listeners.
  */
 export function initializeAccountingListeners() {
+  if (accountingListenersInitialized) {
+    console.log('🟡 [Accounting] Listeners ya inicializados, saltando...');
+    return;
+  }
+  accountingListenersInitialized = true;
   // 1. Listen for new invoices to create ledger entries
   eventBus.onEvent(EVENTS.INVOICE_CREATED, async (payload) => {
     try {
