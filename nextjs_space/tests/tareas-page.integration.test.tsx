@@ -158,7 +158,7 @@ describe('TareasPage integración', () => {
     render(<TareasPage />)
 
     await waitFor(() => {
-      expect(screen.getByText('Llamada seguimiento')).toBeDefined()
+      expect(screen.getByText('Seguimiento llamada')).toBeDefined()
     })
 
     expect(screen.getByText('Sin lead asociado')).toBeDefined()
@@ -246,8 +246,8 @@ describe('TareasPage integración', () => {
       expect(screen.getByText('Llamada seguimiento')).toBeDefined()
     })
 
-    // Verify the Select trigger shows "Mis tareas" (default when assignedToMe=true)
-    expect(screen.getByText('Mis tareas')).toBeDefined()
+    // Verify the Select trigger shows "Mis tareas + sin asignar" (default when assignedToMe=true)
+    expect(screen.getByText('Mis tareas + sin asignar')).toBeDefined()
 
     // Verify the initial API call includes assignedToMe=true
     const firstCall = mockApiFetch.mock.calls[0][0]

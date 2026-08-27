@@ -64,34 +64,49 @@ describe('replaceTemplateVariables', () => {
 });
 
 // ==================== getFromAddress ====================
-// El FROM es dinámico por tenant: `noreply@{subdomain}.volkern.app`.
+// El FROM usa SIEMPRE el dominio verificado en Resend (`noreply@volkern.app`)
+// con el nombre visible del tenant. Solo se usa un subdominio propio si está
+// declarado explícitamente en RESEND_VERIFIED_DOMAINS.
 describe('getFromAddress', () => {
-  it('debe usar el subdominio del tenant en el FROM para "admin"', () => {
-    const result = getFromAddress('admin');
-    expect(result).toContain('noreply@admin.volkern.app');
-    expect(result).toContain('Volkern');
+  const originalEnv = process.env.RESEND_VERIFIED_DOMAINS;
+  afterEach(() => {
+    if (originalEnv === undefined) delete process.env.RESEND_VERIFIED_DOMAINS;
+    else process.env.RESEND_VERIFIED_DOMAINS = originalEnv;
   });
 
-  it('debe usar el subdominio del tenant en el FROM para "demo"', () => {
+  it('debe usar el dominio raíz verificado para cualquier tenant sin subdominio declarado', () => {
+    delete process.env.RESEND_VERIFIED_DOMAINS;
+    const result = getFromAddress('admin');
+    expect(result).toContain('noreply@volkern.app');
+    expect(result).toContain('Volkern');
+    expect(result).not.toContain('admin.volkern.app');
+  });
+
+  it('debe usar el subdominio SOLO si está declarado en RESEND_VERIFIED_DOMAINS', () => {
+    process.env.RESEND_VERIFIED_DOMAINS = 'volkern.app,demo.volkern.app';
     const result = getFromAddress('demo');
     expect(result).toContain('noreply@demo.volkern.app');
   });
 
-  it('debe usar el subdominio para cualquier subdomain no definido', () => {
+  it('debe ignorar un subdomain no declarado aunque tenga datos del tenant', () => {
+    delete process.env.RESEND_VERIFIED_DOMAINS;
     const result = getFromAddress('unknown-subdomain');
-    expect(result).toContain('noreply@unknown-subdomain.volkern.app');
+    expect(result).toContain('noreply@volkern.app');
+    expect(result).not.toContain('unknown-subdomain.volkern.app');
   });
 
   it('debe devolver el dominio raíz para undefined', () => {
+    delete process.env.RESEND_VERIFIED_DOMAINS;
     const result = getFromAddress(undefined);
     expect(result).toContain('noreply@volkern.app');
     expect(typeof result).toBe('string');
   });
 
   it('debe incluir el nombre del tenant si se pasa', () => {
+    delete process.env.RESEND_VERIFIED_DOMAINS;
     const result = getFromAddress('dexpert', 'Dimension eXpert');
     expect(result).toContain('Dimension eXpert');
-    expect(result).toContain('noreply@dexpert.volkern.app');
+    expect(result).toContain('noreply@volkern.app');
   });
 
   it('todas las direcciones deben incluir "Volkern" o el nombre del tenant', () => {
