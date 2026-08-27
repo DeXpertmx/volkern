@@ -34,13 +34,15 @@ const nextConfig = {
       'date-fns',
     ],
     instrumentationHook: true,
-  },
 
-  // ═══ Server External Packages ═════════════════════════
-  // Excluir pino y thread-stream del bundling de Next.js
-  // para que los worker threads (pino/lib/worker.js) puedan
-  // resolverse correctamente desde node_modules
-  serverExternalPackages: ['pino', 'thread-stream'],
+    // ═══ Server Components External Packages ══════════════════
+    // Excluir pino y thread-stream del bundling de Next.js
+    // para que los worker threads (pino/lib/worker.js) puedan
+    // resolverse correctamente desde node_modules.
+    // (En Next 14 la clave válida es experimental.*; la top-level
+    //  serverExternalPackages no existe hasta versiones posteriores.)
+    serverComponentsExternalPackages: ['pino', 'thread-stream'],
+  },
 
   // ═══ Rewrites ═══════════════════════════════════════
   // Mapear rutas de documentación a archivos estáticos en public/
