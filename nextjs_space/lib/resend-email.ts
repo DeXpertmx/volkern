@@ -29,20 +29,34 @@ function loadCredentials(): ResendCredentials {
 // ─── Helpers de direcciones ────────────────────────────────
 
 /**
- * Obtiene la dirección FROM para un tenant basado en su subdominio.
- * Ejemplo: "DeXpert <noreply@dexpert.volkern.app>"
- * 
- * AHORA es dinámico: construye la dirección a partir del subdominio del tenant
- * en lugar de usar un mapeo estático.
+ * Obtiene la dirección FROM para un tenant.
+ * Ejemplo: "DeXpert <noreply@volkern.app>"
+ *
+ * El NOMBRE visible se personaliza con el tenant, pero el DOMINIO siempre
+ * es el dominio verificado en Resend. Resend valida dominios exactos:
+ * enviar desde noreply@{subdominio}.volkern.app falla con 403 mientras
+ * ese subdominio no esté verificado explícitamente en resend.com/domains.
+ *
+ * Para habilitar envíos desde un subdominio propio del tenant:
+ * 1. Verificar el dominio exacto en Resend (DNS DKIM/SPF).
+ * 2. Añadirlo a RESEND_VERIFIED_DOMAINS (separado por comas), p. ej.:
+ *    RESEND_VERIFIED_DOMAINS=volkern.app,dexpert.volkern.app
  */
+const VERIFIED_DOMAINS_ENV = () =>
+  (process.env.RESEND_VERIFIED_DOMAINS || '')
+    .split(',')
+    .map(d => d.trim().toLowerCase())
+    .filter(Boolean)
+
 export function getFromAddress(tenantSubdomain?: string, tenantName?: string): string {
-  if (tenantSubdomain && tenantName) {
-    return `${tenantName} <noreply@${tenantSubdomain}.${ROOT_EMAIL_DOMAIN}>`
+  const displayName = tenantName?.trim() || 'Volkern'
+
+  // Dominio por subdominio SOLO si el operador lo declaró verificado
+  if (tenantSubdomain && VERIFIED_DOMAINS_ENV().includes(`${tenantSubdomain}.${ROOT_EMAIL_DOMAIN}`)) {
+    return `${displayName} <noreply@${tenantSubdomain}.${ROOT_EMAIL_DOMAIN}>`
   }
-  if (tenantSubdomain) {
-    return `Volkern <noreply@${tenantSubdomain}.${ROOT_EMAIL_DOMAIN}>`
-  }
-  return 'Volkern <noreply@volkern.app>'
+
+  return `${displayName} <noreply@${ROOT_EMAIL_DOMAIN}>`
 }
 
 interface SendEmailParams {
