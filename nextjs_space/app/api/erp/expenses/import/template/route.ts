@@ -1,7 +1,6 @@
 export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
-import * as XLSX from 'xlsx';
 import { withTenantAuth } from '@/lib/api-key-auth';
 
 const HEADERS = [
@@ -35,6 +34,8 @@ function excelSerial(year: number, month: number, day: number): number {
  * y filas de ejemplo. Incluye una segunda hoja con instrucciones.
  */
 export const GET = withTenantAuth(async () => {
+  // Import diferido: xlsx pesa ~7M y solo se necesita al descargar la plantilla.
+  const XLSX = await import('xlsx');
   const ejemploRows = [
     [
       'SUMINISTROS GENERALES DEL SUR S.L.',

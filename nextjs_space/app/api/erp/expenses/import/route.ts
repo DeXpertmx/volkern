@@ -1,7 +1,6 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import * as XLSX from 'xlsx';
 import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
 import { skills } from '@/lib/skills';
@@ -99,15 +98,17 @@ function rateKey(rate: number): string {
  * ese mapeo en lugar de la detección automática por encabezado. Con
  * `noHeader=true` los datos empiezan en la fila 0 (sin fila de encabezado).
  */
-function parseWorkbook(
+async function parseWorkbook(
   buffer: Buffer,
   opts: { mapping?: Record<string, number | null>; noHeader?: boolean } = {},
-): {
+): Promise<{
   rows: ParsedRow[];
   headerErrors: string[];
   detectedColumns: string[];
   autoMapping: Record<string, number>;
-} {
+}> {
+  // Import diferido: xlsx pesa ~7M y solo se necesita al importar un fichero.
+  const XLSX = await import('xlsx');
   const empty = (headerErrors: string[] = []) => ({
     rows: [],
     headerErrors,
@@ -299,7 +300,7 @@ export const POST = withTenantAuth(async (request, auth) => {
     const noHeader = formData.get('noHeader') === 'true';
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const { rows, headerErrors, detectedColumns, autoMapping } = parseWorkbook(buffer, {
+    const { rows, headerErrors, detectedColumns, autoMapping } = await parseWorkbook(buffer, {
       mapping,
       noHeader,
     });

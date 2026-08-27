@@ -29,7 +29,7 @@ export async function detectFileFormat(
   template: SourceTemplate | null
   suggestedMapping: { sourceField: string; targetField: string }[]
 }> {
-  const { headers, rows } = parseFile(fileBuffer, mimeType)
+  const { headers, rows } = await parseFile(fileBuffer, mimeType)
   const template = detectSource(headers, ALL_TEMPLATES)
   const preview = rows.slice(0, 10)
 
@@ -59,7 +59,7 @@ export async function executeImport(
   errors: { row: number; field: string; message: string }[]
   logId: string
 }> {
-  const { headers, rows } = parseFile(fileBuffer, mimeType)
+  const { headers, rows } = await parseFile(fileBuffer, mimeType)
   const dataRows = rows.map((r, i) => ({ rowNumber: i + 1, data: r }))
 
   let result: { success: boolean; imported: number; failed: number; total: number; errors: { row: number; field: string; message: string }[] }

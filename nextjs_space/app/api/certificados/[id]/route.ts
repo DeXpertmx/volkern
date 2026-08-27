@@ -87,7 +87,7 @@ export async function GET(
       ? await prisma.tenant.findUnique({ where: { id: estudiante.tenantId } })
       : null;
 
-    const pdfBuffer = generateCertificatePdf({
+    const pdfBuffer = await generateCertificatePdf({
       codigoUnico: certificado.codigoUnico,
       integrityHash: certificado.integrityHash,
       fechaEmision: certificado.fechaEmision,

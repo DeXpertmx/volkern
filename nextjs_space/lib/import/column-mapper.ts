@@ -1,5 +1,4 @@
 import { ColumnDef, ColumnMap, SourceTemplate } from './import-types'
-import * as XLSX from 'xlsx'
 import { parse } from 'csv-parse/sync'
 
 export function normalize(val: string): string {
@@ -61,9 +60,11 @@ export function autoMapColumns(headers: string[], template: SourceTemplate): Col
   return maps
 }
 
-export function parseFile(fileBuffer: Buffer, mimeType: string): { headers: string[]; rows: Record<string, string>[] } {
+export async function parseFile(fileBuffer: Buffer, mimeType: string): Promise<{ headers: string[]; rows: Record<string, string>[] }> {
   if (mimeType.includes('spreadsheet') || mimeType.includes('excel') || fileBuffer.toString('utf8', 0, 4) !== '----') {
     try {
+      // Import diferido: xlsx pesa ~7M y solo se necesita al parsear un fichero.
+      const XLSX = await import('xlsx');
       const workbook = XLSX.read(fileBuffer, { type: 'buffer' })
       const sheet = workbook.Sheets[workbook.SheetNames[0]]
       const json = XLSX.utils.sheet_to_json<any>(sheet, { defval: '' })
