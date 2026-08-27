@@ -1,4 +1,3 @@
-import { jsPDF } from 'jspdf';
 import { SignatureService } from '../security/signature-service';
 import { prisma } from '../db';
 
@@ -84,6 +83,8 @@ export class PDFService {
     signatureId: string, 
     documentHash: string 
   }> {
+    // Import diferido: jspdf pesa ~29M y solo se necesita al generar el PDF.
+    const { jsPDF } = await import('jspdf');
     const doc = new jsPDF();
     const margin = 20;
 
@@ -328,6 +329,8 @@ export class PDFService {
     signatureId: string, 
     documentHash: string 
   }> {
+    // Import diferido: jspdf pesa ~29M y solo se necesita al generar el PDF.
+    const { jsPDF } = await import('jspdf');
     const doc = new jsPDF();
     const margin = 20;
     const { contractData } = ctx;

@@ -1,5 +1,3 @@
-import { jsPDF } from 'jspdf';
-
 /**
  * Genera el PDF de un certificado de la Academia.
  * Devuelve el Buffer listo para servir como application/pdf.
@@ -16,7 +14,9 @@ export interface CertificatePdfData {
   tenantNombre?: string | null;
 }
 
-export function generateCertificatePdf(data: CertificatePdfData): Buffer {
+export async function generateCertificatePdf(data: CertificatePdfData): Promise<Buffer> {
+  // Import diferido: jspdf pesa ~29M y solo se necesita al generar el PDF.
+  const { jsPDF } = await import('jspdf');
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const pageW = doc.internal.pageSize.getWidth(); // 297mm
   const pageH = doc.internal.pageSize.getHeight(); // 210mm

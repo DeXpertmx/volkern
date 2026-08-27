@@ -34,7 +34,7 @@ export async function GET(
       );
     }
 
-    const pdfBuffer = generateCertificatePdf({
+    const pdfBuffer = await generateCertificatePdf({
       codigoUnico: certificado.codigoUnico,
       integrityHash: certificado.integrityHash,
       fechaEmision: certificado.fechaEmision,
