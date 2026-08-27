@@ -773,7 +773,18 @@ export function LeadsContent() {
                     </TableHeader>
                     <TableBody>
                       {leads.map((lead: any) => (
-                        <TableRow key={lead.id} className="hover:bg-muted/50">
+                        <TableRow
+                          key={lead.id}
+                          className="hover:bg-muted/50 cursor-pointer"
+                          onClick={() => window.location.assign(`/dashboard/leads/${lead.id}`)}
+                          tabIndex={0}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault()
+                              window.location.assign(`/dashboard/leads/${lead.id}`)
+                            }
+                          }}
+                        >
                           <TableCell className="font-medium">
                             <div className="flex items-center gap-1.5">
                               {lead.nombre}
@@ -889,8 +900,8 @@ export function LeadsContent() {
                           </TableCell>
                           <TableCell>
                             <div className="flex space-x-2">
-                              <Link href={`/dashboard/leads/${lead.id}`}>
-                                <Button variant="ghost" size="sm" title="Ver ficha">
+                              <Link href={`/dashboard/leads/${lead.id}`} className="inline-flex" aria-label={`Ver ficha de ${lead.nombre}`} onClick={(event) => event.stopPropagation()}>
+                                <Button variant="outline" size="sm" title="Ver ficha" className="h-8 w-8 p-0 border-primary/40 text-primary hover:bg-primary/10">
                                   <Eye className="h-4 w-4" />
                                 </Button>
                               </Link>

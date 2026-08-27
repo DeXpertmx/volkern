@@ -213,7 +213,29 @@ export async function createTask(config: any, ctx: ActionContext): Promise<boole
       ? new Date(fechaVencimiento)
       : new Date(Date.now() + 24 * 60 * 60 * 1000), // +24h por defecto
   }
-  await prisma.task.create({ data: taskData })
+  const task = await prisma.task.create({ data: taskData })
+
+  // Notificar por Telegram con los 3 botones de acción (completar/reprogramar/
+  // snooze) para que la tarea creada por automatización no sea silenciosa.
+  // Solo aplica a tareas del modelo global `Task` (los callbacks task:* del
+  // webhook resuelven por `prisma.task`).
+  try {
+    const { notifyByTelegram } = await import('@/lib/skills/notification-layer')
+    const { buildTaskButtonsMarkup } = await import('@/lib/telegram/task-buttons')
+    const { createSystemContext } = await import('@/lib/skills/context')
+    const context = createSystemContext(tenantId)
+    const vence = task.fechaVencimiento
+      ? `\n📅 Vence: ${task.fechaVencimiento.toLocaleDateString('es-MX')}`
+      : ''
+    await notifyByTelegram(
+      `📋 *Nueva tarea creada por automatización*\n\n${task.titulo}${vence}\n\nTipo: ${task.tipo}`,
+      context,
+      buildTaskButtonsMarkup([{ taskId: task.id, titulo: task.titulo }]).inline_keyboard
+    )
+  } catch (e) {
+    console.error('[createTask] No se pudo notificar por Telegram:', e)
+  }
+
   return true
 }
 
