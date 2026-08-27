@@ -28,6 +28,20 @@ describe('parseNum determinista por moneda', () => {
       expect(parseNum('315', 'EUR')).toBe(315);
     });
 
+    it('NO rompe números reales de Excel con punto decimal (bug: 1234.56 → 123456)', () => {
+      // Cuando la celda de Excel es numérica (formato general), SheetJS entrega
+      // '1234.56'. El fix anterior hacía replace(/\\./g,'') y lo convertía en 123456.
+      expect(parseNum('1234.56', 'EUR')).toBe(1234.56);
+      expect(parseNum('1234.5', 'EUR')).toBe(1234.5);
+      expect(parseNum('999.99', 'EUR')).toBe(999.99);
+    });
+
+    it('respeta archivos en formato americano aunque el tenant sea EUR', () => {
+      expect(parseNum('1,234.56', 'EUR')).toBe(1234.56);
+      expect(parseNum('1,234', 'EUR')).toBe(1234);
+      expect(parseNum('240.39', 'EUR')).toBe(240.39);
+    });
+
     it('devuelve null en vacíos', () => {
       expect(parseNum('', 'EUR')).toBeNull();
       expect(parseNum(null, 'EUR')).toBeNull();
@@ -53,6 +67,16 @@ describe('parseNum determinista por moneda', () => {
     it('parsea enteros limpios', () => {
       expect(parseNum('315', 'USD')).toBe(315);
       expect(parseNum(1234.56, 'USD')).toBe(1234.56);
+    });
+
+    it('NO rompe números reales de Excel con punto decimal', () => {
+      expect(parseNum('1234.56', 'USD')).toBe(1234.56);
+      expect(parseNum('1234.56', 'MXN')).toBe(1234.56);
+    });
+
+    it('respeta archivos en formato europeo aunque el tenant no sea EUR', () => {
+      expect(parseNum('1.234,56', 'MXN')).toBe(1234.56);
+      expect(parseNum('240,39', 'USD')).toBe(240.39);
     });
   });
 
