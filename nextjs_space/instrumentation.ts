@@ -28,6 +28,20 @@ export async function register() {
       console.error('[Instrumentation] Error inicializando automation listeners:', error);
     }
 
+    // Registrar los listeners EventBus → Contabilidad (EXPENSE_CREATED →
+    // asiento + TaxRecords del Modelo 303/111, INVOICE_CREATED → asiento,
+    // PAYROLL_GENERATED → asiento + retención IRPF). Sin esto, los gastos se
+    // crean pero nunca se contabilizan y los modelos de impuestos quedan
+    // vacíos. El event bus es en memoria: debe registrarse en el mismo
+    // proceso que atiende los requests.
+    try {
+      const { initializeAccountingListeners } = await import('@/lib/accounting/accounting-listener');
+      initializeAccountingListeners();
+      console.log('[Instrumentation] Accounting listeners inicializados (EventBus → contabilidad activo)');
+    } catch (error) {
+      console.error('[Instrumentation] Error inicializando accounting listeners:', error);
+    }
+
     // Tareas programadas (node-cron). initCronJobs registra SOLO los jobs
     // seguros para producción: Morning Briefing, métricas SaaS, límites de
     // planes, renovación de webhooks de Google Calendar, analytics cleanup,
