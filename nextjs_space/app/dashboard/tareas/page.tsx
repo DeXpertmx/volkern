@@ -44,7 +44,7 @@ interface Task {
         id: string;
         nombre: string;
         empresa: string | null;
-    };
+    } | null;
     asignadoUsuario?: {
         id: string;
         name: string | null;
@@ -329,13 +329,17 @@ export default function TareasPage() {
                                             </div>
 
                                             <div className="flex flex-col sm:flex-row sm:items-center gap-x-4 gap-y-1 text-sm text-muted-foreground mt-2">
-                                                <Link
-                                                    href={`/dashboard/leads/${task.lead.id}`}
-                                                    className="flex items-center text-primary font-medium hover:underline"
-                                                >
-                                                    <ExternalLink className="h-3.5 w-3.5 mr-1" />
-                                                    Lead: {task.lead.nombre} {task.lead.empresa ? `(${task.lead.empresa})` : ''}
-                                                </Link>
+                                                {task.lead ? (
+                                                        <Link
+                                                            href={`/dashboard/leads/${task.lead.id}`}
+                                                            className="flex items-center text-primary font-medium hover:underline"
+                                                        >
+                                                            <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                                                            Lead: {task.lead.nombre} {task.lead.empresa ? `(${task.lead.empresa})` : ''}
+                                                        </Link>
+                                                    ) : (
+                                                        <span className="text-muted-foreground">Sin lead asociado</span>
+                                                    )}
 
                                                 <div className="flex items-center">
                                                     📅 {format(new Date(task.fechaVencimiento), "d 'de' MMMM, HH:mm", { locale: es })}

@@ -150,6 +150,20 @@ describe('TareasPage integración', () => {
     expect(vencidaBadges.length).toBeGreaterThanOrEqual(1)
   })
 
+  it('debe renderizar tareas sin lead asociado sin romper la pantalla', async () => {
+    mockApiFetch.mockResolvedValue(mockResponse([
+      makeTask({ id: 'orphan-task', lead: null }),
+    ]))
+
+    render(<TareasPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Llamada seguimiento')).toBeDefined()
+    })
+
+    expect(screen.getByText('Sin lead asociado')).toBeDefined()
+  })
+
   it('debe mostrar el lead asociado a cada tarea', async () => {
     render(<TareasPage />)
 

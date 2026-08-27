@@ -165,6 +165,19 @@ describe('LeadsContent integración', () => {
     })
   })
 
+  it('debe hacer clicable toda la fila para abrir la ficha del lead', async () => {
+    render(<LeadsContent />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Carlos López')).toBeDefined()
+    })
+
+    const row = screen.getByText('Carlos López').closest('tr')
+    expect(row).not.toBeNull()
+    expect(row?.className).toContain('cursor-pointer')
+    expect(row?.getAttribute('tabindex')).toBe('0')
+  })
+
   it('debe mostrar estado vacío cuando no hay leads', async () => {
     mockApiFetch.mockReset()
     mockApiFetch.mockResolvedValue(mockResponse([]))
