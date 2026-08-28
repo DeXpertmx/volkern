@@ -78,6 +78,15 @@ services:
         - "traefik.http.routers.volkern_erp_www.priority=100"
         - "traefik.http.routers.volkern_erp_www.entrypoints=websecure"
         - "traefik.http.routers.volkern_erp_www.tls.certresolver=letsencryptresolver"
+        # Tenant subdomains: el wildcard DNS *.volkern.app llega al mismo ERP.
+        # La app valida que el primer segmento exista como Tenant.subdomain.
+        # La prioridad queda por debajo de los hosts específicos anteriores.
+        # Sintaxis placeholder v2 (la regex cruda con $ rompe la interpolación del
+        # stack deploy y no matchea en el metarouter v2 de Traefik 2.11).
+        - "traefik.http.routers.volkern_erp_tenant.rule=HostRegexp(`{subdomain:[a-zA-Z0-9-]+}.volkern.app`)"
+        - "traefik.http.routers.volkern_erp_tenant.priority=10"
+        - "traefik.http.routers.volkern_erp_tenant.entrypoints=websecure"
+        - "traefik.http.routers.volkern_erp_tenant.tls=true"
         # Acceso de transición (se depreca cuando volkern.app esté estable)
         - "traefik.http.routers.volkern_erp_dim.rule=Host(`erp.dimension.expert`)"
         - "traefik.http.routers.volkern_erp_dim.priority=100"
