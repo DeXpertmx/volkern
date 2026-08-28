@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { sendNewLeadNotification } from '@/lib/email';
 import { triggerAutomation } from '@/lib/automation-engine';
+import { findDigitalCardByUrlUnica } from '@/lib/public-slug-lookup';
 
 /**
  * POST /api/tarjetas-digitales/connect
@@ -13,9 +14,8 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
         const { cardId, nombre, email, telefono, empresa, nota } = body;
 
-        // 1. Validar la tarjeta digital pública
-        const card = await prisma.digitalCard.findUnique({
-            where: { urlUnica: cardId },
+        // 1. Validar la tarjeta digital pública (scoping por tenant + fallback global)
+        const card = await findDigitalCardByUrlUnica(cardId, request.headers.get('x-tenant-subdomain'), {
             select: {
                 id: true,
                 tenantId: true,

@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getDownloadUrl } from '@/lib/s3';
+import { findDigitalCardByUrlUnica } from '@/lib/public-slug-lookup';
 
 /**
  * GET /api/tarjetas-digitales/public/[cardId]
@@ -14,8 +15,8 @@ export async function GET(
   try {
     const { cardId } = params;
 
-    const card = await prisma.digitalCard.findUnique({
-      where: { urlUnica: cardId },
+    // Scoping por tenant (subdominio) + fallback global para QRs ya impresos
+    const card = await findDigitalCardByUrlUnica(cardId, request.headers.get('x-tenant-subdomain'), {
       include: {
         user: {
           select: {
