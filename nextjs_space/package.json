@@ -7,6 +7,7 @@
     "start": "next start",
     "lint": "next lint",
     "lint:docs": "bash scripts/check-docs-no-cjk.sh",
+    "test:e2e:login": "node scripts/e2e-login-subdominio.mjs",
     "typecheck": "NODE_OPTIONS='--max-old-space-size=8192' npx tsc --noEmit --project tsconfig.check.json",
     "prebuild": "npm run openapi:generate",
     "prepare": "husky || true",
