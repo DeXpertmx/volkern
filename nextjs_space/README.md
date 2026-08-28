@@ -264,7 +264,7 @@ Volkern ERP → lib/tenant-resolver.ts → Tenant.subdomain
 - **Booking:** `https://{subdomain}.volkern.app/booking/{bookingSlug}`
 - **Tarjeta digital:** `https://{subdomain}.volkern.app/tarjeta/{urlUnica}` (el QR incluye su booking relativo)
 
-Las lookups públicos (`/api/public/users/[slug]`, `/api/tarjetas-digitales/public/[cardId]`) resuelven **global** por diseño: un QR repartido en el mundo físico debe funcionar desde cualquier host. Consecuencia: `bookingSlug` y `urlUnica` son `@unique` globales — dos tenants no pueden usar el mismo slug (namespace compartido, sin fuga de datos). El scoping por tenant (unique compuesto + filtro por subdominio con fallback global) está pendiente.
+Las lookups públicos (`/api/public/users/[slug]`, `/api/tarjetas-digitales/public/[cardId]`, `/api/tarjetas-digitales/connect`) resuelven **por tenant primero y con fallback global** (`lib/public-slug-lookup.ts`): si la request viene de `{subdomain}.volkern.app` buscan dentro de ese tenant y, si no encuentran, resuelven global para que los QRs ya impresos sigan funcionando. Consecuencia: `bookingSlug` y `urlUnica` son únicos POR TENANT (`@@unique([tenantId, slug])`, migración `20260828110000_tenant_scoped_slugs`) — dos tenants pueden usar el mismo slug sin conflicto y sin fuga de datos.
 
 ### 5. Alta de un tenant nuevo
 

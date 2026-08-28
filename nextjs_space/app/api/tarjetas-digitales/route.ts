@@ -5,6 +5,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { getDownloadUrl } from '@/lib/s3';
+import { isCardAliasAvailable } from '@/lib/public-slug-lookup';
 import QRCode from 'qrcode';
 
 /**
@@ -158,12 +159,11 @@ export async function POST(request: NextRequest) {
     const normalizedAlias = customUrl?.toLowerCase().trim().replace(/[^a-z0-9-]/g, '-');
 
     if (normalizedAlias && normalizedAlias !== urlUnica) {
-      // Verificar si el alias ya existe
-      const existingAlias = await prisma.digitalCard.findUnique({
-        where: { urlUnica: normalizedAlias }
-      });
+      // Verificar si el alias ya existe DENTRO del tenant (scoping por tenant:
+      // otro tenant puede usar el mismo alias sin conflicto)
+      const aliasAvailable = await isCardAliasAvailable(normalizedAlias, user.tenantId, user.id);
 
-      if (existingAlias) {
+      if (!aliasAvailable) {
         return NextResponse.json(
           { error: 'Este alias ya está en uso. Por favor elige otro.' },
           { status: 400 }

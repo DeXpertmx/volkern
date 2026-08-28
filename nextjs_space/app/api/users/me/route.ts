@@ -96,11 +96,13 @@ export const PATCH = withTenantAuth(async (req, auth) => {
     const body = await req.json();
     const { name, telefono, bookingSlug, bookingTitle, bookingBio, bookingEnabled, metadata, timezone } = body;
 
-    // Si se está cambiando el slug, verificar que sea único en la DB Global
+    // Si se está cambiando el slug, verificar que sea único DENTRO del tenant
+    // (scoping por tenant: otro tenant puede usar el mismo slug sin conflicto)
     if (bookingSlug) {
       const existingUser = await prisma.user.findFirst({
         where: {
           bookingSlug,
+          tenantId: currentUser.tenantId,
           NOT: { id: currentUser.id }
         }
       });

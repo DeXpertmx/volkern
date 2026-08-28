@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
+import { findBookingUserBySlug } from '@/lib/public-slug-lookup'
 
 
 export async function GET(
@@ -25,9 +26,9 @@ export async function GET(
             }
         };
 
-        // Intentar buscar por bookingSlug primero, luego por ID
-        let user = await prisma.user.findUnique({
-            where: { bookingSlug: params.slug },
+        // Buscar por bookingSlug con scoping por tenant (subdominio) y fallback
+        // global para QRs impresos antes del scoping; luego por ID de usuario
+        let user = await findBookingUserBySlug(params.slug, request.headers.get('x-tenant-subdomain'), {
             select: selectFields
         });
 

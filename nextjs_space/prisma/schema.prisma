@@ -57,7 +57,9 @@ model User {
   resetTokenExpiry        DateTime?
   bookingBio              String?
   bookingEnabled          Boolean                    @default(false)
-  bookingSlug             String?                    @unique
+  bookingSlug             String?
+  // Único POR TENANT (no global): dos tenants pueden usar el mismo slug de booking.
+  // Las lookups públicos filtran por el subdominio y hacen fallback global para QRs antiguos.
   bookingTitle            String?
   isTwoFactorEnabled      Boolean                    @default(false)
   twoFactorCode           String?
@@ -121,6 +123,7 @@ model User {
   @@index([roleId])
   @@index([email])
   @@index([estado])
+  @@unique([tenantId, bookingSlug])
 }
 
 model VerificationToken {
@@ -3239,7 +3242,7 @@ model DigitalCard {
   colorSecundario   String        @default("#1E40AF")
   logoUrl           String?
   fotoPerfilUrl     String?
-  urlUnica          String        @unique
+  urlUnica          String
   qrCodeData        String?
   totalVistas       Int           @default(0)
   totalCompartidos  Int           @default(0)
@@ -3266,6 +3269,7 @@ model DigitalCard {
   @@index([tenantId])
   @@index([urlUnica])
   @@index([activo])
+  @@unique([tenantId, urlUnica])
   @@map("digital_cards")
 }
 
