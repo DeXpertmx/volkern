@@ -47,7 +47,7 @@ Sistema completo de gestión inmobiliaria con:
 - **Base de Datos:** PostgreSQL + Prisma ORM
 - **Autenticación:** NextAuth.js + API Keys
 - **Pagos:** Stripe
-- **Emails:** Resend + AWS SES
+- **Emails:** Resend (AWS SES retirado)
 - **CMS:** @measured/puck (páginas editables)
 - **Gráficos:** Recharts + Chart.js
 - **Colas:** BullMQ + Redis
@@ -61,7 +61,7 @@ Sistema completo de gestión inmobiliaria con:
 
 ### Requisitos
 
-- Node.js 18+ (recomendado 20 LTS)
+- Node.js 20 LTS (requisito: `>=20.19.0 <21`, ver `.nvmrc` y `engines`)
 - PostgreSQL 15+
 - Redis 7+ (para colas)
 - Yarn
@@ -205,6 +205,75 @@ vercel deploy --prod --yes            # deploy manual a volkern.app
 
 📘 **Flujo detallado y troubleshooting:** [`docs/DEPLOY.md`](docs/DEPLOY.md)
 📘 Deploy self-hosted (VPS/Docker): [`docs/DEPLOY-GUIDE.md`](docs/DEPLOY-GUIDE.md)
+
+---
+
+## 🏢 Modelo Multi-Tenant por Subdominio
+
+Cada tenant accede con su propio subdominio — `https://{subdomain}.volkern.app` — sin cambios de DNS ni de proxy por cliente. La cadena completa:
+
+```text
+https://dexpert.volkern.app
+        ↓  DNS wildcard (Cloudflare)
+Cloudflare edge (TLS: Universal SSL *.volkern.app)
+        ↓  Full (strict)
+Traefik router volkern_erp_tenant (VPS 62.171.134.195)
+        ↓
+Volkern ERP → lib/tenant-resolver.ts → Tenant.subdomain
+```
+
+### 1. DNS (Cloudflare, zona `volkern.app`)
+
+| Registro | Valor | Proxy |
+|----------|-------|-------|
+| `A  *` | `62.171.134.195` | 🟠 Proxied |
+
+- El wildcard dirige **cualquier** subdominio al VPS; los registros específicos existentes (`www`, `admin`, `table`, `s3`…) tienen prioridad sobre `*`.
+- El certificado Universal SSL cubre `volkern.app` + `*.volkern.app` — no hace falta ACM ni Cloudflare for SaaS para subdominios propios.
+- Los tenants con dominio externo propio sí requerirían Cloudflare for SaaS (no implementado).
+
+### 2. Router Traefik (`deploy-vps/volkern-erp.yaml`)
+
+```yaml
+- "traefik.http.routers.volkern_erp_tenant.rule=HostRegexp(`{subdomain:[a-zA-Z0-9-]+}.volkern.app`)"
+- "traefik.http.routers.volkern_erp_tenant.priority=10"   # por debajo de volkern.app / www / erp.dimension.expert (100)
+- "traefik.http.routers.volkern_erp_tenant.entrypoints=websecure"
+- "traefik.http.routers.volkern_erp_tenant.tls=true"
+```
+
+> ⚠️ **Sintaxis obligatoria**: usa placeholders v2 (`{subdomain:...}`). Una regex cruda tipo `^.+\.volkern\.app$` (a) rompe `docker stack deploy` por interpolación del `$` y (b) no matchea en el metarouter v2 de Traefik 2.11.
+> ⚠️ **El router vive en las labels del servicio Swarm**: `deploy-app.sh` hace `docker service update --image` que **no aplica cambios de labels**. Tras editar el yaml hay que redesplegar el stack en el VPS (fuente de verdad: `/root/volkern-erp/volkern-erp.yaml`):
+> ```bash
+> cd /root/volkern-erp && docker stack deploy -c volkern-erp.yaml volkern-erp
+> ```
+
+### 3. Resolución del tenant en la app
+
+| Capa | Archivo | Función |
+|------|---------|---------|
+| Resolver | `lib/tenant-resolver.ts` | Extrae el primer segmento del host y busca `Tenant.subdomain` (fallback: cookie `x-tenant-subdomain`, header de API key) |
+| Subdominios reservados | `lib/tenant-middleware.ts` | `www`, `app`, `admin`, `auth`… no se tratan como tenants |
+| Cookie de sesión | `lib/auth.ts` | `AUTH_COOKIE_DOMAIN=.volkern.app` → la sesión sirve en apex y todos los subdominios (cookies JWE de next-auth v4) |
+| Validación cruzada | `lib/auth.ts authorize()` | Solo se puede iniciar sesión desde `{tenant}.volkern.app` con usuarios de ESE tenant; el mismatch se audita en `auditLog` como `LOGIN_FAILURE` |
+| Callback de redirect | `lib/auth.ts redirect()` | Solo acepta rutas relativas y orígenes `*.volkern.app` |
+
+> Nota: el redirect a login de usuarios sin sesión conserva el subdominio actual (derivado de `host`/`x-forwarded-host`, con fallback al apex canónico para hosts internos o desconocidos) — ver `middleware.ts`. Tras autenticarse, la sesión (dominio `.volkern.app`) sirve en todos los subdominios.
+
+### 4. URLs públicas por tenant
+
+- **Booking:** `https://{subdomain}.volkern.app/booking/{bookingSlug}`
+- **Tarjeta digital:** `https://{subdomain}.volkern.app/tarjeta/{urlUnica}` (el QR incluye su booking relativo)
+
+Las lookups públicos (`/api/public/users/[slug]`, `/api/tarjetas-digitales/public/[cardId]`) resuelven **global** por diseño: un QR repartido en el mundo físico debe funcionar desde cualquier host. Consecuencia: `bookingSlug` y `urlUnica` son `@unique` globales — dos tenants no pueden usar el mismo slug (namespace compartido, sin fuga de datos). El scoping por tenant (unique compuesto + filtro por subdominio con fallback global) está pendiente.
+
+### 5. Alta de un tenant nuevo
+
+No hay que tocar DNS ni Traefik: basta crear el tenant con su `subdomain` (slug) en la BD y el subdominio funciona automáticamente. Verificación rápida:
+
+```bash
+dig +short {subdomain}.volkern.app          # IPs de Cloudflare (proxied)
+curl -I https://{subdomain}.volkern.app      # 200/307/302 — nunca 404 "page not found" de Traefik
+```
 
 ---
 

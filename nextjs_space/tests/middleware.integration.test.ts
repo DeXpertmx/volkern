@@ -170,6 +170,31 @@ describe('middleware — auth en /dashboard', () => {
     expect(location.startsWith(`${BASE}/auth/login?callbackUrl=`)).toBe(true);
   });
 
+  it('sin sesión en subdominio de tenant: redirige al login del MISMO subdominio conservando callbackUrl', async () => {
+    const res = await middleware(makeRequest('/dashboard', { host: 'dexpert.volkern.app' }));
+
+    expect(res.status).toBe(307);
+    const location = res.headers.get('location')!;
+    expect(location.startsWith('https://dexpert.volkern.app/auth/login?callbackUrl=')).toBe(true);
+    expect(location).toContain('callbackUrl=%2Fdashboard');
+  });
+
+  it('sin sesión con Host header desconocido: cae al apex canónico (anti Host-header injection)', async () => {
+    const res = await middleware(makeRequest('/dashboard', { host: 'evil.example.com' }));
+
+    expect(res.status).toBe(307);
+    const location = res.headers.get('location')!;
+    expect(location.startsWith(`${BASE}/auth/login?callbackUrl=`)).toBe(true);
+  });
+
+  it('sin sesión con host interno (0.0.0.0): cae al apex canónico', async () => {
+    const res = await middleware(makeRequest('/dashboard', { host: '0.0.0.0:3000' }));
+
+    expect(res.status).toBe(307);
+    const location = res.headers.get('location')!;
+    expect(location.startsWith(`${BASE}/auth/login?callbackUrl=`)).toBe(true);
+  });
+
   it('con sesión: deja pasar a /dashboard', async () => {
     vi.mocked(getToken).mockResolvedValueOnce({ name: 'Test', email: 't@v.app' } as never);
 

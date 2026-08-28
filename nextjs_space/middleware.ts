@@ -321,9 +321,21 @@ export async function middleware(request: NextRequest) {
       cookieName: 'next-auth.session-token'
     })
     if (!token) {
-      // Usar la URL pública en vez de request.url: el standalone de Next.js
-      // reconstruye request.url con HOSTNAME=0.0.0.0 y mandaría al login 0.0.0.0:3000
-      const loginUrl = new URL('/auth/login', process.env.NEXTAUTH_URL || 'https://volkern.app')
+      // Redirect al login del MISMO host para conservar el subdominio del tenant
+      // (branding + validación cruzada de authorize() en lib/auth.ts).
+      // NO usar request.url: detrás de Traefik el standalone la reconstruye con
+      // HOSTNAME=0.0.0.0. Se deriva el origin de host/x-forwarded-*; si el host
+      // no es de confianza (interno o desconocido), se cae al apex canónico.
+      const fwdHost = (request.headers.get('x-forwarded-host') || request.headers.get('host') || '').trim()
+      const hostClean = fwdHost.replace(/:.*/, '').toLowerCase()
+      const TRUSTED = /(^|\.)volkern\.app$|(^|\.)volkern\.com$|(^|\.)dimension\.expert$/
+      const isLocal = hostClean === 'localhost' || hostClean === '127.0.0.1'
+      let loginOrigin = process.env.NEXTAUTH_URL || 'https://volkern.app'
+      if (fwdHost && hostClean !== '0.0.0.0' && (isLocal || TRUSTED.test(hostClean))) {
+        const proto = request.headers.get('x-forwarded-proto') || (isLocal ? 'http' : 'https')
+        loginOrigin = `${proto}://${fwdHost}`
+      }
+      const loginUrl = new URL('/auth/login', loginOrigin)
       loginUrl.searchParams.set('callbackUrl', pathname)
       return withHeaders(NextResponse.redirect(loginUrl))
     }
