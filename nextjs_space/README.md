@@ -275,6 +275,13 @@ dig +short {subdomain}.volkern.app          # IPs de Cloudflare (proxied)
 curl -I https://{subdomain}.volkern.app      # 200/307/302 — nunca 404 "page not found" de Traefik
 ```
 
+Además existe un E2E automatizado del flujo completo (crea usuario temporal, loguea por el subdominio, verifica dashboard y limpia):
+
+```bash
+npm run test:e2e:login                       # por defecto contra dexpert.volkern.app
+E2E_BASE_URL=https://otro.volkern.app E2E_TENANT=otro npm run test:e2e:login
+```
+
 ---
 
 ## 🔧 Comandos Útiles
