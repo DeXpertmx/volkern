@@ -4,8 +4,20 @@ import { PrismaAdapter } from '@next-auth/prisma-adapter'
 import { prisma } from '@/lib/db'
 import bcrypt from 'bcryptjs'
 import { TwoFactorService } from './security/two-factor'
+import { logger } from '@/lib/logger'
+import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'
+
+/**
+ * HMAC corto de un identificador (email) para correlacionar intentos de login
+ * en los logs SIN exponer PII (irreversible sin NEXTAUTH_SECRET). Solo para
+ * grep/correlación operativa, nunca para verificación.
+ */
+function hashIdentifier(value: string): string {
+  const key = process.env.NEXTAUTH_SECRET || 'volkern-auth-logs'
+  return crypto.createHmac('sha256', key).update(value.trim().toLowerCase()).digest('hex').slice(0, 12)
+}
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
@@ -47,7 +59,6 @@ export const authOptions: NextAuthOptions = {
         let requestSubdomain: string | null = null
         
         const cleanHost = hostname.replace(/:.*$/, '')
-        console.log(`[DEBUG-AUTH] Hostname: ${cleanHost}`);
         
         // Lógica de detección de subdominio mejorada
         if (cleanHost.includes('.volkern.app')) {
@@ -59,7 +70,6 @@ export const authOptions: NextAuthOptions = {
           requestSubdomain = cleanHost.split('.')[0]
         }
         
-        console.log(`[DEBUG-AUTH] Request Subdomain: ${requestSubdomain}`);
 
         // Buscamos el usuario incluyendo el tokenVersion para cierre global
         const user = await prisma.user.findUnique({
@@ -83,13 +93,15 @@ export const authOptions: NextAuthOptions = {
         })
 
         if (!user || !user.password) {
-          console.warn(`[DEBUG-AUTH] Usuario no encontrado: ${cleanEmail}`);
+          logger.warn(
+            { event: 'login_failed', reason: 'user_not_found', subdomain: requestSubdomain, emailHash: hashIdentifier(cleanEmail) },
+            'Login fallido: usuario no encontrado'
+          )
           // No podemos loguear a la tabla auditLog si no hay usuario ni tenantID claro, 
           // pero al menos lo dejamos en el log de Vercel
           return null
         }
 
-        console.log(`[DEBUG-AUTH] User Tenant Subdomain: ${user.tenant?.subdomain}`);
 
         // 🔴 VALIDACIÓN CRUZADA: Si hay subdominio en request, el usuario debe pertenecer a ese tenant
         // Los subdominios reservados (admin, www, app, api, auth, etc.) son portales multi-tenant
@@ -98,7 +110,10 @@ export const authOptions: NextAuthOptions = {
         const isReservedSubdomain = requestSubdomain ? RESERVED_SUBDOMAINS.has(requestSubdomain) : false;
 
         if (requestSubdomain && !isReservedSubdomain && user.tenant?.subdomain !== requestSubdomain) {
-          console.warn(`[DEBUG-AUTH] Mismatch: Request=${requestSubdomain}, UserTenant=${user.tenant?.subdomain}`);
+          logger.warn(
+            { event: 'login_subdomain_mismatch', requestSubdomain, userSubdomain: user.tenant?.subdomain, userId: user.id },
+            'Login fallido: mismatch de subdominio'
+          )
           await prisma.auditLog.create({
             data: {
               accion: 'LOGIN_FAILURE',
@@ -108,7 +123,7 @@ export const authOptions: NextAuthOptions = {
               tenantId: user.tenantId,
               userId: user.id
             }
-          }).catch(e => console.error('[DEBUG-AUTH] Error logging mismatch:', e))
+          }).catch(e => logger.error({ err: e, event: 'audit_write_failed', context: 'subdomain_mismatch' }, 'No se pudo registrar el fallo de login en auditLog'))
           return null
         }
 
@@ -117,9 +132,11 @@ export const authOptions: NextAuthOptions = {
           user.password
         )
         
-        console.log(`[DEBUG-AUTH] Password Valid: ${isPasswordValid}`);
-
         if (!isPasswordValid) {
+          logger.warn(
+            { event: 'login_failed', reason: 'invalid_password', userId: user.id, subdomain: requestSubdomain },
+            'Login fallido: contraseña inválida'
+          )
           await prisma.auditLog.create({
             data: {
               accion: 'LOGIN_FAILURE',
@@ -129,7 +146,7 @@ export const authOptions: NextAuthOptions = {
               tenantId: user.tenantId,
               userId: user.id
             }
-          }).catch(e => console.error('[DEBUG-AUTH] Error logging failure:', e))
+          }).catch(e => logger.error({ err: e, event: 'audit_write_failed', context: 'invalid_password' }, 'No se pudo registrar el fallo de login en auditLog'))
           return null
         }
 
@@ -160,7 +177,7 @@ export const authOptions: NextAuthOptions = {
             throw mfaError;
           }
           // Si hay un error de servicio, ignoramos por ahora para no bloquear el login si el esquema falla
-          console.error('[MFA] Error:', mfaError.message);
+          logger.error({ err: mfaError, event: 'mfa_check_error' }, 'Error verificando 2FA (se continúa para no bloquear el login si el esquema falla)')
         }
 
         return {
