@@ -5,7 +5,7 @@ import { withTenantAuth } from '@/lib/api-key-auth';
 
 export const GET = withTenantAuth(async (req, auth) => {
   try {
-    if (auth.user?.role?.nombre !== 'Superadmin' && auth.user?.role?.nombre !== 'Admin' && auth.user?.role?.nombre !== 'Administrador') {
+    if (auth.user?.role?.nombre !== 'Superadmin') {
       return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
     }
 

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/db'
-import { authOptions } from '@/lib/auth'
+import { isSuperadminRequest } from '@/lib/auth-helpers'
 import crypto from 'crypto'
 
 function generateCouponCode(): string {
@@ -29,31 +28,10 @@ function getDefaultModules(): string[] {
 
 export async function GET(request: NextRequest) {
   try {
-    let session
-    try {
-      session = await getServerSession(authOptions)
-    } catch (e) {
-      session = null
-    }
-    
-    // Debug: mostrar info de sesión
-    console.log('[COUPONS API] Session:', session ? 'exists' : 'null')
-    console.log('[COUPONS API] User:', session?.user)
-    
-    if (!session || !session.user) {
-      return NextResponse.json({ 
-        error: 'No autorizado', 
-        debug: 'No session or user' 
-      }, { status: 401 })
-    }
-    
-    // Aceptar cualquier usuario logueado para pruebas
-    const userId = (session.user as any)?.id
-    if (!userId) {
-      return NextResponse.json({ 
-        error: 'No autorizado', 
-        debug: 'No user ID' 
-      }, { status: 401 })
+    // Solo operadores Superadmin de la plataforma
+    const auth = await isSuperadminRequest()
+    if (!auth.ok) {
+      return NextResponse.json({ error: auth.error || 'No autorizado' }, { status: 403 })
     }
 
     const { searchParams } = new URL(request.url)
@@ -84,20 +62,10 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    let session
-    try {
-      session = await getServerSession(authOptions)
-    } catch (e) {
-      session = null
-    }
-    
-    if (!session || !session.user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    }
-    
-    const userId = (session.user as any)?.id
-    if (!userId) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    // Solo operadores Superadmin de la plataforma
+    const auth = await isSuperadminRequest()
+    if (!auth.ok) {
+      return NextResponse.json({ error: auth.error || 'No autorizado' }, { status: 403 })
     }
 
     const body = await request.json()
@@ -139,7 +107,7 @@ export async function POST(request: NextRequest) {
         limiteUsuarios,
         maxUses: maxUses || null,
         expiresAt: expiresAt ? new Date(expiresAt) : null,
-        createdBy: session.user.id
+        createdBy: auth.userId!
       }
     })
 
@@ -156,20 +124,10 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    let session
-    try {
-      session = await getServerSession(authOptions)
-    } catch (e) {
-      session = null
-    }
-    
-    if (!session || !session.user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    }
-    
-    const userId = (session.user as any)?.id
-    if (!userId) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    // Solo operadores Superadmin de la plataforma
+    const auth = await isSuperadminRequest()
+    if (!auth.ok) {
+      return NextResponse.json({ error: auth.error || 'No autorizado' }, { status: 403 })
     }
 
     const body = await request.json()
@@ -254,20 +212,10 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    let session
-    try {
-      session = await getServerSession(authOptions)
-    } catch (e) {
-      session = null
-    }
-    
-    if (!session || !session.user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    }
-    
-    const userId = (session.user as any)?.id
-    if (!userId) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    // Solo operadores Superadmin de la plataforma
+    const auth = await isSuperadminRequest()
+    if (!auth.ok) {
+      return NextResponse.json({ error: auth.error || 'No autorizado' }, { status: 403 })
     }
 
     const { searchParams } = new URL(request.url)

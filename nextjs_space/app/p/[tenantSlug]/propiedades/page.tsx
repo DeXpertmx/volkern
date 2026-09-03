@@ -2,6 +2,7 @@ import { Metadata } from 'next';
 import { globalPrisma } from '@/lib/db';
 import { notFound } from 'next/navigation';
 import { parseInmuebles } from '@/lib/real-estate/property-helpers';
+import { formatOperationLabel, operationBadgeColor, priceSuffix } from '@/lib/real-estate/operation-labels';
 import { resolveTenantBySlug } from '@/lib/real-estate/portal-utils';
 import { getEffectiveBranding } from '@/lib/branding';
 import HeroCarousel from './HeroCarousel';
@@ -219,6 +220,7 @@ export default async function PropertyListingPage({ params, searchParams }: Prop
               <option value="">Todas las ops.</option>
               <option value="venta">En Venta</option>
               <option value="alquiler">En Alquiler</option>
+              <option value="alquiler_temporada">Renta Vacacional</option>
               <option value="traspaso">Traspaso</option>
             </select>
 
@@ -244,21 +246,23 @@ export default async function PropertyListingPage({ params, searchParams }: Prop
             />
 
             <div className="flex items-center gap-1">
-              <input
-                type="number"
-                name="minPrecio"
-                placeholder="Mín €"
-                className="border rounded-lg px-3 py-2 text-sm w-24"
-                defaultValue={searchParams.minPrecio || ''}
-              />
-              <span className="text-gray-400">—</span>
-              <input
-                type="number"
-                name="maxPrecio"
-                placeholder="Máx €"
-                className="border rounded-lg px-3 py-2 text-sm w-24"
-                defaultValue={searchParams.maxPrecio || ''}
-              />
+            <input
+              type="text"
+              name="minPrecio"
+              inputMode="numeric"
+              placeholder="Mín"
+              className="border rounded-lg px-3 py-2 text-sm w-24"
+              defaultValue={searchParams.minPrecio || ''}
+            />
+            <span className="text-gray-400">—</span>
+            <input
+              type="text"
+              name="maxPrecio"
+              inputMode="numeric"
+              placeholder="Máx"
+              className="border rounded-lg px-3 py-2 text-sm w-24"
+              defaultValue={searchParams.maxPrecio || ''}
+            />
             </div>
 
             <button
@@ -355,15 +359,11 @@ export default async function PropertyListingPage({ params, searchParams }: Prop
                       <span
                         className="text-xs font-semibold px-2 py-1 rounded-md shadow-md"
                         style={{
-                          backgroundColor: property.operationType === 'venta'
-                            ? '#3b82f6'
-                            : property.operationType === 'alquiler'
-                            ? '#8b5cf6'
-                            : '#6b7280',
+                          backgroundColor: operationBadgeColor(property.operationType),
                           color: 'white',
                         }}
                       >
-                        {property.operationType === 'venta' ? 'Venta' : property.operationType === 'alquiler' ? 'Alquiler' : property.operationType || 'Propiedad'}
+                        {formatOperationLabel(property.operationType)}
                       </span>
                     </div>
 
@@ -374,7 +374,9 @@ export default async function PropertyListingPage({ params, searchParams }: Prop
                         style={{ backgroundColor: `${brandingColor}dd` }}
                       >
                         {property.precioBase.toLocaleString('es-ES')} {property.moneda}
-                        {property.operationType === 'alquiler' && <span className="text-xs font-normal opacity-80">/mes</span>}
+                        {priceSuffix(property.operationType) && (
+                          <span className="text-xs font-normal opacity-80">{priceSuffix(property.operationType)}</span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -443,7 +445,7 @@ export default async function PropertyListingPage({ params, searchParams }: Prop
 
                     {/* Bottom row: Price per m² */}
                     <div className="mt-auto pt-3 flex items-center justify-between">
-                      {pricePerM2 && (
+                      {pricePerM2 && property.operationType !== 'alquiler' && property.operationType !== 'alquiler_temporada' && (
                         <span className="text-xs text-gray-400">
                           {pricePerM2.toLocaleString('es-ES')} €/m²
                         </span>

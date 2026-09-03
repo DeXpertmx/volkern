@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import useEmblaCarousel from 'embla-carousel-react';
 import Autoplay from 'embla-carousel-autoplay';
 import type { InmuebleParsed } from '@/lib/real-estate/property-helpers';
+import { formatOperationLabel } from '@/lib/real-estate/operation-labels';
 
 interface Props {
   properties: InmuebleParsed[];
@@ -111,11 +112,7 @@ export default function HeroCarousel({
                         className="inline-block text-xs font-bold uppercase tracking-widest px-3 py-1.5 rounded-full mb-4 text-white"
                         style={{ backgroundColor: gradientFrom }}
                       >
-                        {property.operationType === 'venta'
-                          ? 'En Venta'
-                          : property.operationType === 'alquiler'
-                          ? 'En Alquiler'
-                          : property.operationType || 'Destacada'}
+                        {formatOperationLabel(property.operationType)}
                       </span>
 
                       {/* Title */}
@@ -152,6 +149,9 @@ export default function HeroCarousel({
                         <span className="text-white/70 text-lg font-medium">{property.moneda}</span>
                         {property.operationType === 'alquiler' && (
                           <span className="text-white/50 text-base">/mes</span>
+                        )}
+                        {property.operationType === 'alquiler_temporada' && (
+                          <span className="text-white/50 text-base">/noche</span>
                         )}
                       </div>
 
