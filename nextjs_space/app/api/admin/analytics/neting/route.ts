@@ -8,7 +8,7 @@ import { getEvents, getEventCounts, clearEvents } from '@/lib/analytics/store';
 /**
  * GET /api/admin/analytics/neting
  * Devuelve eventos y conteos de analytics para la landing de Neting.
- * Requiere sesión con rol Superadmin/Admin.
+ * Requiere sesión con rol Superadmin de la plataforma.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -29,13 +29,9 @@ export async function GET(req: NextRequest) {
     });
 
     const roleName = user?.role?.nombre;
-    if (
-      roleName !== 'Superadmin' &&
-      roleName !== 'Admin' &&
-      roleName !== 'Administrador'
-    ) {
+    if (roleName !== 'Superadmin') {
       return NextResponse.json(
-        { error: 'Acceso denegado: requiere rol de Superadmin o Admin' },
+        { error: 'Acceso denegado: requiere rol de Superadmin de la plataforma' },
         { status: 403 }
       );
     }
@@ -95,7 +91,7 @@ export async function GET(req: NextRequest) {
 /**
  * DELETE /api/admin/analytics/neting
  * Resetea el store en memoria de eventos de analytics.
- * Requiere sesión con rol Superadmin/Admin.
+ * Requiere sesión con rol Superadmin de la plataforma.
  */
 export async function DELETE(req: NextRequest) {
   try {
@@ -115,13 +111,9 @@ export async function DELETE(req: NextRequest) {
     });
 
     const roleName = user?.role?.nombre;
-    if (
-      roleName !== 'Superadmin' &&
-      roleName !== 'Admin' &&
-      roleName !== 'Administrador'
-    ) {
+    if (roleName !== 'Superadmin') {
       return NextResponse.json(
-        { error: 'Acceso denegado: requiere rol de Superadmin o Admin' },
+        { error: 'Acceso denegado: requiere rol de Superadmin de la plataforma' },
         { status: 403 }
       );
     }

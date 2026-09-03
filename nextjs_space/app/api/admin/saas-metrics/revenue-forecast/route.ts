@@ -2,8 +2,15 @@ import { NextResponse } from 'next/server';
 import { SaaSMetricsService } from '@/lib/saas-metrics';
 
 export const dynamic = "force-dynamic";
+import { isSuperadminRequest } from '@/lib/auth-helpers';
 
 export async function GET() {
+  // Solo operadores Superadmin de la plataforma
+  const auth = await isSuperadminRequest();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error || 'No autorizado' }, { status: 403 });
+  }
+
   try {
     const currentMRR = await SaaSMetricsService.calculateMRR();
     const now = new Date();

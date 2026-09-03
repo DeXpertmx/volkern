@@ -32,7 +32,7 @@ export async function GET() {
       metrics.lastRejectedAt
     )
     const roleName = (session.user as any)?.roleName as string | undefined
-    const isAdmin = roleName === 'Superadmin' || roleName === 'Administrador' || roleName === 'Admin'
+    const isAdmin = roleName === 'Superadmin'
 
     return NextResponse.json({
       metrics: { ...metrics, topChats, lastRejected },

@@ -8,9 +8,9 @@ import { upgradeOnboarding } from '@/lib/onboarding-service';
 // GET /api/admin/tenants - Listar todos los tenants con filtrado y paginación (Control Plane)
 export const GET = withTenantAuth(async (req, auth) => {
   try {
-    // 1. Verificar si el usuario es superadmin o admin
-    if (auth.user?.role?.nombre !== 'Superadmin' && auth.user?.role?.nombre !== 'Admin' && auth.user?.role?.nombre !== 'Administrador') {
-      return NextResponse.json({ error: 'Acceso denegado: requiere privilegios administrativos' }, { status: 403 });
+    // 1. Verificar si el usuario es superadmin de la plataforma (los roles 'Admin'/'Administrador' de tenant NO acceden)
+    if (auth.user?.role?.nombre !== 'Superadmin') {
+      return NextResponse.json({ error: 'Acceso denegado: requiere rol de Superadmin de la plataforma' }, { status: 403 });
     }
 
     const { searchParams } = new URL(req.url);

@@ -2,9 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { globalPrisma } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
+import { isSuperadminRequest } from '@/lib/auth-helpers';
 import { SaaSMetricsService } from '@/lib/saas-metrics';
 
 export async function GET(request: NextRequest) {
+  // Solo operadores Superadmin de la plataforma
+  const auth = await isSuperadminRequest();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error || 'No autorizado' }, { status: 403 });
+  }
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const periodDays = parseInt(searchParams.get('periodDays') || '30');
@@ -55,6 +62,12 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // Solo operadores Superadmin de la plataforma
+  const auth = await isSuperadminRequest();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error || 'No autorizado' }, { status: 403 });
+  }
+
   try {
     const body = await request.json();
     const { action, tenantId } = body;

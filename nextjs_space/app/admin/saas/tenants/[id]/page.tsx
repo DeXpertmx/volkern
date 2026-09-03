@@ -61,6 +61,7 @@ export default function TenantDetail() {
   const [togglingModule, setTogglingModule] = useState<string | null>(null);
 
   // Feature limits (max_pipelines, etc.)
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [featureLimits, setFeatureLimits] = useState<any>(null);
   const [loadingFeatures, setLoadingFeatures] = useState(false);
   const [showLimitDialog, setShowLimitDialog] = useState(false);
@@ -81,8 +82,19 @@ export default function TenantDetail() {
         const data = await res.json();
         setTenant(data);
       } else {
-        toast.error('Tenant no encontrado');
-        router.push('/admin/saas/tenants');
+        let message = 'Tenant no encontrado';
+        try {
+          const errData = await res.json();
+          if (errData?.error) message = errData.error;
+        } catch { /* respuesta sin JSON */ }
+        // 404 → el tenant no existe: volver al listado. Cualquier otro error
+        // (403, 500…) se muestra y el usuario se queda en la página.
+        if (res.status === 404) {
+          toast.error(message);
+          router.push('/admin/saas/tenants');
+        } else {
+          setLoadError(`${message} (${res.status})`);
+        }
       }
     } catch (error) {
       console.error('Error loading tenant:', error);
@@ -272,7 +284,14 @@ export default function TenantDetail() {
   }
 
   if (!tenant) {
-    return <div>Tenant no encontrado</div>;
+    return (
+      <div className="py-20 text-center">
+        <p className="text-sm font-bold text-rose-600">{loadError || 'Tenant no encontrado'}</p>
+        <Button variant="outline" size="sm" className="mt-4" onClick={() => router.push('/admin/saas/tenants')}>
+          Volver a la lista de tenants
+        </Button>
+      </div>
+    );
   }
 
   const getStatusBadge = (estado: string) => {
