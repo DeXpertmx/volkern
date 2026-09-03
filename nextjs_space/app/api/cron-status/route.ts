@@ -1,15 +1,16 @@
 import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import type { NextRequest } from 'next/server'
+import { isAdminRequest } from '@/lib/auth-helpers'
 import { getAllCronStatus } from '@/lib/cron/cron-status'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
+// Estado de los jobs cron de la plataforma: solo operadores Superadmin.
+export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    const auth = await isAdminRequest(request)
+    if (!auth.ok) {
+      return NextResponse.json({ error: auth.error }, { status: 401 })
     }
 
     const status = getAllCronStatus()
