@@ -33,7 +33,15 @@ export const dynamic = 'force-dynamic';
 const ALLOWED_SOURCES = ['EXPLICIT', 'USER_PROMPT', 'IMPORT_AUTO', 'FALLBACK'] as const;
 type MonedaInferenciaSource = typeof ALLOWED_SOURCES[number];
 
-export const GET = withTenantAuth(async (request: Request, _auth): Promise<Response> => {
+export const GET = withTenantAuth(async (request: Request, auth): Promise<Response> => {
+  // Solo operadores Superadmin de la plataforma (los roles 'Admin'/'Administrador' de tenant NO acceden)
+  if (auth.user?.role?.nombre !== 'Superadmin') {
+    return NextResponse.json(
+      { error: 'Acceso denegado: requiere rol de Superadmin de la plataforma' },
+      { status: 403 },
+    );
+  }
+
   try {
     const url = new URL(request.url);
     const source = (url.searchParams.get('source') ?? 'FALLBACK').toUpperCase();

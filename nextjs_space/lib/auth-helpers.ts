@@ -1,7 +1,13 @@
 /**
  * lib/auth-helpers.ts
- * Helper para verificar si una petición proviene de un Superadmin/Administrador
- * usando la sesión NextAuth. Usado por las rutas de auditoría y backoffice.
+ * Helper para verificar si una petición proviene de un operador Superadmin de la
+ * plataforma usando la sesión NextAuth. Usado por las rutas de auditoría y el
+ * backoffice global (/admin/*).
+ *
+ * IMPORTANTE: solo se acepta el rol 'Superadmin'. Antes también se aceptaban
+ * roles con nombre 'Admin'/'Administrador', pero esos roles los crean los
+ * propios tenants, así que cualquier usuario de tenant podía leer datos
+ * cross-tenant del control plane. Ahora es Superadmin exclusivo.
  */
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -12,9 +18,14 @@ export interface AdminAuthResult {
   error?: string;
   email?: string;
   userId?: string;
+  roleName?: string | null;
 }
 
-export async function isAdminRequest(request: Request): Promise<AdminAuthResult> {
+export async function isAdminRequest(_request: Request): Promise<AdminAuthResult> {
+  return isSuperadminRequest();
+}
+
+export async function isSuperadminRequest(): Promise<AdminAuthResult> {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -31,11 +42,11 @@ export async function isAdminRequest(request: Request): Promise<AdminAuthResult>
     }
 
     const roleName = user.role?.nombre;
-    if (roleName !== 'Superadmin' && roleName !== 'Administrador' && roleName !== 'Admin') {
-      return { ok: false, error: 'Acceso denegado: requiere rol de Superadmin o Administrador' };
+    if (roleName !== 'Superadmin') {
+      return { ok: false, error: 'Acceso denegado: requiere rol de Superadmin de la plataforma' };
     }
 
-    return { ok: true, email: user.email ?? undefined, userId: user.id };
+    return { ok: true, email: user.email ?? undefined, userId: user.id, roleName };
   } catch (error: any) {
     return { ok: false, error: `Error de autenticación: ${error.message}` };
   }

@@ -1,19 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/db'
 import { processDataDeletionRequest } from '@/lib/services/data-deletion'
-import { authOptions } from '@/lib/auth'
+import { isSuperadminRequest } from '@/lib/auth-helpers'
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    
-    if (!session || !session.user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    }
-
-    if (session.user.role !== 'admin' && session.user.role !== 'superadmin') {
-      return NextResponse.json({ error: 'Permisos insuficientes' }, { status: 403 })
+    // Solo operadores Superadmin de la plataforma
+    const auth = await isSuperadminRequest()
+    if (!auth.ok) {
+      return NextResponse.json({ error: auth.error || 'No autorizado' }, { status: 403 })
     }
 
     const { searchParams } = new URL(request.url)
@@ -39,14 +34,10 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    
-    if (!session || !session.user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    }
-
-    if (session.user.role !== 'admin' && session.user.role !== 'superadmin') {
-      return NextResponse.json({ error: 'Permisos insuficientes' }, { status: 403 })
+    // Solo operadores Superadmin de la plataforma
+    const auth = await isSuperadminRequest()
+    if (!auth.ok) {
+      return NextResponse.json({ error: auth.error || 'No autorizado' }, { status: 403 })
     }
 
     const body = await request.json()

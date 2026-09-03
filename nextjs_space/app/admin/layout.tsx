@@ -40,14 +40,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       return;
     }
 
-    // Check if user is superadmin
+    // Check if user is platform Superadmin
     fetch('/api/users/me')
       .then((res) => res.json())
       .then((data) => {
         const roleName = data.role?.nombre;
         if (data.email === 'demo@volkern.app') {
           router.replace('/dashboard');
-        } else if (roleName !== 'Superadmin' && roleName !== 'Admin' && roleName !== 'Administrador') {
+        } else if (roleName !== 'Superadmin') {
+          // Solo operadores Superadmin de la plataforma. Los roles 'Admin'/'Administrador'
+          // de tenant NO deben ver el backoffice global (datos cross-tenant).
           router.replace('/dashboard');
         } else {
           setIsAuthorized(true);

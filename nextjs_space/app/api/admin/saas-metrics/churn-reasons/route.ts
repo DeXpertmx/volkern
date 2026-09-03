@@ -2,8 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { globalPrisma } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
+import { isSuperadminRequest } from '@/lib/auth-helpers';
 
 export async function GET() {
+  // Solo operadores Superadmin de la plataforma
+  const auth = await isSuperadminRequest();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error || 'No autorizado' }, { status: 403 });
+  }
+
   try {
     const cancelllations = await globalPrisma.subscription.findMany({
       where: { estado: 'cancelada' },
