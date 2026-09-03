@@ -67,8 +67,12 @@ export default function PropertyDetailClient({
   const operationLabels: Record<string, string> = {
     venta: 'En Venta',
     alquiler: 'En Alquiler',
+    alquiler_temporada: 'Renta Vacacional',
     traspaso: 'Traspaso',
   };
+
+  const priceSuffixFor = (op: string | null | undefined): string =>
+    op === 'alquiler' ? '/mes' : op === 'alquiler_temporada' ? '/noche' : '';
 
   const statusLabels: Record<string, { label: string; color: string }> = {
     disponible: { label: 'Disponible', color: '#10b981' },
@@ -181,7 +185,10 @@ export default function PropertyDetailClient({
                     {formattedPrice} {property.moneda}
                   </span>
                   {property.operationType === 'alquiler' && (
-                    <span className="text-lg text-gray-500 font-normal">/mes</span>
+                    <span className="text-white/50 text-base">/mes</span>
+                  )}
+                  {property.operationType === 'alquiler_temporada' && (
+                    <span className="text-white/50 text-base">/noche</span>
                   )}
                 </div>
                 {property.propertyType && (

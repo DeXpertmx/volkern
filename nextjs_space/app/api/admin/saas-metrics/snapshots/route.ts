@@ -2,8 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { SaaSMetricsService } from '@/lib/saas-metrics';
 
 export const dynamic = 'force-dynamic';
+import { isSuperadminRequest } from '@/lib/auth-helpers';
 
 export async function GET(request: NextRequest) {
+  // Solo operadores Superadmin de la plataforma
+  const auth = await isSuperadminRequest();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error || 'No autorizado' }, { status: 403 });
+  }
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const limit = parseInt(searchParams.get('limit') || '30');
@@ -25,6 +32,12 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // Solo operadores Superadmin de la plataforma
+  const auth = await isSuperadminRequest();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error || 'No autorizado' }, { status: 403 });
+  }
+
   try {
     const body = await request.json();
     const { force } = body;

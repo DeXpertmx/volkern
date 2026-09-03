@@ -5,7 +5,7 @@ import { prisma } from '@/lib/db'
 import { uploadPublicFile } from '@/lib/s3'
 import { getPlanConfig } from '@/lib/plans'
 import { withTenantAuth } from '@/lib/api-key-auth'
-import { getEffectiveBranding } from '@/lib/branding'
+import { getEffectiveBranding, clearBrandingCache } from '@/lib/branding'
 
 /**
  * GET - Obtener configuración de whitelabel
@@ -209,6 +209,10 @@ export const PUT = withTenantAuth(async (request, auth) => {
         }
       }
     });
+
+    // Invalidar la caché de branding para que el cambio sea visible de inmediato
+    // (sin esto, el GET sigue sirviendo el valor anterior hasta 5 minutos)
+    clearBrandingCache();
 
     return NextResponse.json({ success: true, config: customConfig });
     
