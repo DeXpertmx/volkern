@@ -32,20 +32,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Usuario sin tenant' }, { status: 400 });
     }
 
-    // Obtener o crear configuración por defecto
-    let config = await prisma.chatbotConfig.findUnique({
+    // Lectura pura: si no existe config se devuelve null; el POST la crea
+    // (upsert) al primer guardado. Ya no se escribe dentro del GET.
+    const config = await prisma.chatbotConfig.findUnique({
       where: { tenantId: user.tenantId }
     });
-
-    if (!config) {
-      config = await prisma.chatbotConfig.create({
-        data: {
-          tenantId: user.tenantId,
-          activo: false,
-          nombreAsistente: 'Asistente Virtual',
-        }
-      });
-    }
 
     // Obtener servicios para mostrar en UI
     const servicios = await prisma.servicio.findMany({

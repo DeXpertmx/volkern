@@ -21,19 +21,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 });
     }
 
-    // Buscar o crear progreso de onboarding
-    let progress = await prisma.onboardingProgress.findUnique({
+    // Lectura pura: si no existe progreso se devuelve null; el POST lo crea
+    // (upsert) al primer guardado. Ya no se escribe dentro del GET.
+    const progress = await prisma.onboardingProgress.findUnique({
       where: { tenantId: user.tenantId },
     });
-
-    if (!progress) {
-      // Crear progreso inicial
-      progress = await prisma.onboardingProgress.create({
-        data: {
-          tenantId: user.tenantId,
-        },
-      });
-    }
 
     return NextResponse.json(progress);
   } catch (error) {
