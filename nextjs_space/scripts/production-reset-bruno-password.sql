@@ -1,5 +1,18 @@
 -- Reset de contraseña de bruno.hess@dimensionexpert.com en PRODUCCIÓN
--- Convención documentada: scripts/reset-bruno-password.ts → DimensionExpert2024!
+--
+-- ⚠️ NUNCA commitear hashes de contraseñas reales. El hash bcrypt se pasa
+-- en tiempo de ejecución con la variable psql `password_hash`:
+--
+--   psql ... -v password_hash='<hash bcrypt>' -f production-reset-bruno-password.sql
+--
+-- Generar el hash localmente (nunca pegar contraseñas en el repo):
+--   npx tsx -e "const b=require('bcryptjs'); b.hash('<PASSWORD>',10).then(h=>console.log(h))"
+\if :{?password_hash}
+\else
+  \echo 'ERROR: define la variable psql password_hash (-v password_hash=...) antes de ejecutar.'
+  \quit 1
+\endif
+
 BEGIN;
 DO $$
 DECLARE
@@ -12,9 +25,9 @@ BEGIN
 END $$;
 
 UPDATE "User"
-   SET password = '$2a$10$1O/OrPRA/vZmL5mMxiXKp.aTCjhK5NpVWxXBYBRdO5TNzv8lvYXjm',
+   SET password = :'password_hash',
        "updatedAt" = now()
  WHERE email = 'bruno.hess@dimensionexpert.com'
-   AND password IS DISTINCT FROM '$2a$10$1O/OrPRA/vZmL5mMxiXKp.aTCjhK5NpVWxXBYBRdO5TNzv8lvYXjm';
+   AND password IS DISTINCT FROM :'password_hash';
 
 COMMIT;

@@ -17,11 +17,17 @@
 --   3. Elimina el logo viejo de DeXpert del tenant dimension-expert.
 --   4. Asigna el subdominio marca "dimension-expert".
 --   5. Crea la cuenta del cliente en DeXpert Inmobiliaria:
---      direccion@dexpert.volkern.app / Dexpert123! (rol Admin de ese tenant).
+--      direccion@dexpert.volkern.app (rol Admin de ese tenant).
 --   6. Enlaza el logo real de Dimension eXpert (ya subido al bucket público).
 --
 -- Ejecutar EN el VPS, DENTRO de una transacción (rollback automático si falla):
---   docker exec -i <PG> psql -U volkern_erp -d volkern_erp -v ON_ERROR_STOP=1 < scripts/production-dimension-expert-setup.sql
+--   docker exec -i <PG> psql -U volkern_erp -d volkern_erp -v ON_ERROR_STOP=1 \
+--     -v password_hash='<hash bcrypt>' < scripts/production-dimension-expert-setup.sql
+--
+-- ⚠️ NUNCA commitear hashes de contraseñas reales. El hash bcrypt del password
+-- provisional del cliente se pasa con la variable psql `password_hash`. Generarlo
+-- localmente (nunca pegar contraseñas en el repo):
+--   npx tsx -e "const b=require('bcryptjs'); b.hash('<PASSWORD>',10).then(h=>console.log(h))"
 --
 -- ANTES: backup de User/Tenant/Role/Configuracion:
 --   docker exec <PG> pg_dump -U volkern_erp -d volkern_erp --no-owner --no-privileges \
@@ -30,6 +36,11 @@
 -- Re-ejecutar es seguro: cada paso detecta si ya se aplicó.
 -- ═══════════════════════════════════════════════════════════════════════
 \set ON_ERROR_STOP on
+\if :{?password_hash}
+\else
+  \echo 'ERROR: define la variable psql password_hash (-v password_hash=...) antes de ejecutar.'
+  \quit 1
+\endif
 BEGIN;
 
 -- ── 1) Migración de cuentas → dimension-expert ────────────────────────
@@ -73,7 +84,7 @@ UPDATE "Tenant" SET subdomain = 'dimension-expert', "fechaActualizacion" = now()
 -- ── 5) Cuenta Admin del cliente en DeXpert Inmobiliaria ────────────────
 INSERT INTO "User" (id, email, "updatedAt", name, password, estado, "tenantId", "roleId", "emailVerified")
 SELECT gen_random_uuid()::text, 'direccion@dexpert.volkern.app', now(), 'DeXpert Admin',
-       '$2a$10$eYzWCShJtSgSlL2fWGoyy.5jklSc/GcswQ4DHPUD7Xd0ctL/a4KPO', -- bcrypt('Dexpert123!')
+       :'password_hash', -- bcrypt(10) del password provisional (variable psql)
        'activo', 'cms92n0ii0001mf83yr9grk30', 'cms92n1m50005mf83uctrp5ol', now()
 WHERE NOT EXISTS (SELECT 1 FROM "User" WHERE email = 'direccion@dexpert.volkern.app');
 
