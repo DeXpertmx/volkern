@@ -190,6 +190,22 @@ describe('runReconciliation', () => {
     expect(mockUpdateStatus).toHaveBeenCalledWith(expect.objectContaining({ estado: 'error', error: true }));
   });
 
+  it('audita el fallo de fetch en HospitalitySyncLog (§30)', async () => {
+    mockFetch.mockResolvedValue({ ok: false, error: 'HTTP 500', httpStatus: 500, duracionMs: 10 });
+    await runReconciliation({ tenantId: 't1' });
+    expect(mockCreateSyncLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          tipo: 'reconciliacion',
+          operacion: 'reconciliacion',
+          estado: 'error',
+          httpStatus: 500,
+          errorMensaje: 'HTTP 500',
+        }),
+      })
+    );
+  });
+
   it('escribe un log de auditoría por propiedad con el resumen', async () => {
     mockFetch.mockResolvedValue({ ok: true, reservas: [FETCH_ITEM_BOOK] });
     await runReconciliation({ tenantId: 't1' });
