@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
 
     const where: any = {};
     if (tenantId) where.tenantId = tenantId;
-    if (tipo === 'inventory' || tipo === 'rates') where.tipo = tipo;
+    if (tipo && ['inventory', 'rates', 'reconciliacion'].includes(tipo)) where.tipo = tipo;
     if (estado === 'exito' || estado === 'error') where.estado = estado;
 
     const logs = await prisma.hospitalitySyncLog.findMany({
