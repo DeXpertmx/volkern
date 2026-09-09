@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CAMPAIGN_CHANNEL_IDS } from '@/lib/campaign-channels';
 
 // ─── Image Generation ────────────────────────────────────────
 
@@ -11,7 +12,9 @@ export const ImageGenerateSchema = z.object({
 
 // ─── Send Message ────────────────────────────────────────────
 
-const canalOptions = ['whatsapp', 'email', 'sms', 'telegram', 'facebook', 'instagram'] as const;
+// Los canales soportados viven en el catálogo compartido lib/campaign-channels.ts
+// (fuente única de verdad: UI de campañas + validación server + motor de envío).
+const canalOptions = CAMPAIGN_CHANNEL_IDS;
 const mediaTypeOptions = ['image', 'video', 'document'] as const;
 
 export const DestinatarioSchema = z.object({
