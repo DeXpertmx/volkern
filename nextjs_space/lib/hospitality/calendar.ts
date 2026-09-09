@@ -172,6 +172,25 @@ export function layoutReservations(
   return byUnit;
 }
 
+/**
+ * Rango de días del mes que contiene `ref` (lunes a domingo, 4-6 semanas).
+ * Devuelve el primer día visible y el número de días para la cuadrícula.
+ */
+export function buildMonthGrid(ref?: Date): { start: Date; end: Date; days: CalendarDay[] } {
+  const base = ref ? startOfDay(ref) : startOfDay(new Date());
+  const firstOfMonth = new Date(base.getFullYear(), base.getMonth(), 1);
+  const daysInMonth = new Date(base.getFullYear(), base.getMonth() + 1, 0).getDate();
+  // 0 = domingo; offset para que la semana empiece en lunes
+  const lead = (firstOfMonth.getDay() + 6) % 7;
+  const start = new Date(firstOfMonth);
+  start.setDate(1 - lead);
+  // Celdas: lead (relleno) + días del mes, redondeado a semanas completas
+  const totalCells = Math.ceil((lead + daysInMonth) / 7) * 7;
+  const end = new Date(start);
+  end.setDate(start.getDate() + totalCells - 1);
+  return { start, end, days: buildDays(start, end, ref) };
+}
+
 /** ISO local yyyy-MM-dd (sin desfase UTC). */
 export function toIsoDate(d: Date): string {
   const y = d.getFullYear();
@@ -232,4 +251,54 @@ export const RESERVATION_STATUS: Record<string, { label: string; dot: string }> 
 
 export function statusLabel(estado: string): string {
   return RESERVATION_STATUS[estado]?.label || estado;
+}
+
+/**
+ * Reservas que llegan o salen en una fecha concreta (para la vista Mes y
+ * el Operations Board). Excluye canceladas salvo que se pida incluirlas.
+ */
+export function arrivalsOn(reservations: CalendarReservation[], dayKey: string): CalendarReservation[] {
+  return reservations.filter(
+    (r) => r.estado !== 'cancelled' && toIsoDate(r.checkIn) === dayKey
+  );
+}
+
+export function departuresOn(reservations: CalendarReservation[], dayKey: string): CalendarReservation[] {
+  return reservations.filter(
+    (r) => r.estado !== 'cancelled' && toIsoDate(r.checkOut) === dayKey
+  );
+}
+
+/**
+ * Mini-bloques por día para la vista Mes: reservas que ocupan cada fecha.
+ * Se respeta la regla del plan (check-out no ocupa su día).
+ */
+export function reservationsOnDay(
+  reservations: CalendarReservation[],
+  dayKey: string
+): CalendarReservation[] {
+  const d = startOfDay(new Date(dayKey + 'T00:00:00'));
+  const next = new Date(d);
+  next.setDate(d.getDate() + 1);
+  return reservations
+    .filter((r) => r.estado !== 'cancelled')
+    .filter((r) => {
+      const inDay = startOfDay(r.checkIn);
+      const outDay = startOfDay(r.checkOut);
+      return inDay.getTime() <= d.getTime() && outDay.getTime() > d.getTime();
+    });
+}
+
+/**
+ * Agrupa reservas activas por día del rango (para la vista Mes).
+ * Clave: ISO yyyy-MM-dd → reservas que ocupan esa noche.
+ */
+export function occupancyByDay(
+  reservations: CalendarReservation[],
+  days: CalendarDay[]
+): Map<string, CalendarReservation[]> {
+  const map = new Map<string, CalendarReservation[]>();
+  for (const day of days) {
+    map.set(day.key, reservationsOnDay(reservations, day.key));
+  }  return map;
 }
