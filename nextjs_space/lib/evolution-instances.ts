@@ -51,6 +51,56 @@ export function isMessageKeyRecentlySent(keyId?: string | null): boolean {
 const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL || 'https://evo.abacus.ai';
 const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY || '';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Autenticación del webhook de Evolution
+//
+// Cada instancia recibe un token HMAC-SHA256 derivado de un secreto compartido
+// (EVOLUTION_WEBHOOK_SECRET; si no está definido, se deriva de la API key de
+// Evolution para no exigir configuración nueva). El token viaja como query
+// param en la URL del webhook: /api/webhook/evolution/<instancia>?token=...
+// El receiver lo valida con timingSafeEqual antes de procesar el evento.
+//
+// El webhook NO debe autenticarse con la API key de Evolution en el body:
+// Evolution no envía cabeceras personalizadas en los webhooks, así que el
+// token firmado en la URL es el mecanismo estándar y no expone la API key.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function getEvolutionWebhookSecret(): string {
+  const dedicated = process.env.EVOLUTION_WEBHOOK_SECRET;
+  if (dedicated) return dedicated;
+  if (EVOLUTION_API_KEY) return EVOLUTION_API_KEY;
+  // Sin secreto configurado: token no-secreto (solo útil en desarrollo local).
+  return 'dev-insecure-evolution-webhook-secret';
+}
+
+/** Token firmado HMAC-SHA256 para una instancia concreta. */
+export function getEvolutionWebhookToken(instanceName: string): string {
+  return crypto
+    .createHmac('sha256', getEvolutionWebhookSecret())
+    .update(`evolution-webhook:${instanceName}`)
+    .digest('hex');
+}
+
+/** URL del webhook de Evolution con el token firmado de la instancia. */
+export function buildEvolutionWebhookUrl(instanceName: string): string {
+  const base = process.env.NEXTAUTH_URL || 'https://volkern.app';
+  const token = getEvolutionWebhookToken(instanceName);
+  return `${base}/api/webhook/evolution/${encodeURIComponent(instanceName)}?token=${token}`;
+}
+
+/** Valida el token recibido contra el esperado (comparación en tiempo constante). */
+export function verifyEvolutionWebhookToken(
+  instanceName: string,
+  token: string | null | undefined,
+): boolean {
+  if (!token) return false;
+  const expected = getEvolutionWebhookToken(instanceName);
+  const a = Buffer.from(token);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+
 // Log de configuración para debugging
 console.log('🔧 Evolution API Configuration:', {
   url: EVOLUTION_API_URL,
@@ -82,8 +132,10 @@ function generateRandomDigits(): string {
 /**
  * Configurar webhooks para la instancia de Evolution API
  * Documentación: https://doc.evolution-api.com/v1/en/configuration/webhooks
+ *
+ * La URL debe incluir el token firmado (buildEvolutionWebhookUrl).
  */
-async function configureWebhooks(
+export async function configureWebhooks(
   instanceName: string,
   webhookUrl: string
 ): Promise<{ success: boolean; error?: string }> {
@@ -583,7 +635,7 @@ export async function ensureChatwootInboxForInstance(
           instanceName,
           phoneNumber: tenantPhone || tenantConfig.phoneNumber || '',
           apiUrl: EVOLUTION_API_URL,
-          webhookUrl: `${process.env.NEXTAUTH_URL || 'https://volkern.app'}/api/webhook/evolution/${instanceName}`,
+          webhookUrl: buildEvolutionWebhookUrl(instanceName),
         }
         await prisma.channel.update({
           where: { id: existingChannel.id },
@@ -654,7 +706,7 @@ export async function ensureChatwootInboxForInstance(
       console.warn('[Chatwoot] Webhook de cuenta ya existente o error:', webhookError)
     }
 
-    const webhookUrl = `${process.env.NEXTAUTH_URL || 'https://volkern.app'}/api/webhook/evolution/${instanceName}`
+    const webhookUrl = buildEvolutionWebhookUrl(instanceName)
     // Guardar el canal y la referencia del inbox. El secret del webhook de
     // Chatwoot va en el config del canal (NO en messagingHubConfig.webhookSecret,
     // que es exclusivo del flujo Telegram/nexus-sync y es UNIQUE).
@@ -829,7 +881,7 @@ export async function createTenantInstance(
     }
 
     const created = await response.json()
-    const webhookUrl = `${process.env.NEXTAUTH_URL || 'https://volkern.app'}/api/webhook/evolution/${cleanInstanceName}`
+    const webhookUrl = buildEvolutionWebhookUrl(cleanInstanceName)
     await configureWebhooks(cleanInstanceName, webhookUrl)
 
     let qrBase64 = created.base64 || created.qrcode?.base64 || created.qrCode?.base64 || ''
@@ -1120,7 +1172,7 @@ export async function createPlatformInstance(): Promise<{
     }
 
     const created = await response.json()
-    const webhookUrl = `${process.env.NEXTAUTH_URL || 'https://volkern.app'}/api/webhook/evolution/${cleanInstanceName}`
+    const webhookUrl = buildEvolutionWebhookUrl(cleanInstanceName)
     await configureWebhooks(cleanInstanceName, webhookUrl)
 
     let qrBase64 = created.base64 || created.qrcode?.base64 || created.qrCode?.base64 || ''

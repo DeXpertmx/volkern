@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/db';
+import { buildEvolutionWebhookUrl } from '@/lib/evolution-instances';
 
 const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL || 'https://api.dimension.expert';
 const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY || '';
@@ -222,7 +223,7 @@ export async function POST(request: NextRequest) {
     const webhookBaseUrl = process.env.NEXTAUTH_URL || 'https://volkern.app';
     results.tests.webhookUrl = {
       url: webhookBaseUrl,
-      testEndpoint: `${webhookBaseUrl}/api/webhook/evolution/test-instance`
+      testEndpoint: buildEvolutionWebhookUrl('test-instance')
     };
 
     return NextResponse.json({
