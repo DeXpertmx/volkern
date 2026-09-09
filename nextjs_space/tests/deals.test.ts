@@ -8,6 +8,9 @@ vi.mock('@/lib/db', () => ({
       findMany: vi.fn(),
       create: vi.fn(),
     },
+    pipeline: {
+      findFirst: vi.fn().mockResolvedValue(undefined),
+    },
     dealActivity: {
       create: vi.fn(),
     },

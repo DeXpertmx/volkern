@@ -258,8 +258,14 @@ export default function ContactoDetallePage() {
       const dealsRes = await fetch(`/api/deals?contactId=${contactId}`)
       const dealsData = await dealsRes.json()
       
-      if (dealsData.success) {
-        setDeals(dealsData.data || [])
+      if (dealsRes.ok) {
+        setDeals(Array.isArray(dealsData.deals)
+          ? dealsData.deals
+          : Array.isArray(dealsData.data)
+            ? dealsData.data
+            : [])
+      } else {
+        console.error('Error al cargar deals:', dealsData.error || dealsRes.status)
       }
     } catch (error) {
       console.error('Error al cargar datos:', error)
@@ -273,8 +279,21 @@ export default function ContactoDetallePage() {
     try {
       const res = await fetch('/api/pipeline/stages')
       const data = await res.json()
-      if (data.success) {
-        setStages(data.data)
+      if (res.ok) {
+        const loadedStages = Array.isArray(data.stages)
+          ? data.stages
+          : Array.isArray(data.data)
+            ? data.data
+            : []
+        setStages(loadedStages)
+        if (loadedStages.length > 0) {
+          const firstActiveStage = loadedStages.find((stage: any) => !stage.esEtapaFinal)
+          if (firstActiveStage && !loadedStages.some((stage: any) => stage.nombre === dealForm.etapa)) {
+            setDealForm(prev => ({ ...prev, etapa: firstActiveStage.nombre }))
+          }
+        }
+      } else {
+        console.error('Error al cargar stages:', data.error || res.status)
       }
     } catch (error) {
       console.error('Error al cargar stages:', error)
@@ -372,19 +391,20 @@ export default function ContactoDetallePage() {
 
       const data = await res.json()
 
-      if (data.success) {
+      if (res.ok) {
         toast.success('Deal creado exitosamente')
         setIsCreatingDeal(false)
         setDealForm({
           titulo: '',
           descripcion: '',
           valor: '',
-          etapa: 'Calificación',
+          etapa: stages.find((stage) => !stage.esEtapaFinal)?.nombre || 'calificacion',
           fechaEstimadaCierre: ''
         })
         fetchContactData() // Recargar datos
       } else {
-        toast.error(data.error || 'Error al crear deal')
+        const details = data.details ? Object.values(data.details).flat().join(' ') : ''
+        toast.error(details || data.error || 'Error al crear deal')
       }
     } catch (error) {
       console.error('Error al crear deal:', error)
@@ -1055,7 +1075,7 @@ export default function ContactoDetallePage() {
                           </SelectTrigger>
                           <SelectContent>
                             {stages
-                              .filter((s) => s.nombre !== 'Ganado' && s.nombre !== 'Perdido')
+                              .filter((s) => !s.esEtapaFinal)
                               .map((stage) => (
                                 <SelectItem key={stage.id} value={stage.nombre}>
                                   {stage.nombre} ({stage.probabilidad}%)
