@@ -1,13 +1,14 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════════
 # Cron VPS — Volkern ERP
-# Uso:  cron.sh <job>   (uptime-developers | cleanup-attendance)
+# Uso:  cron.sh <job>   (uptime-developers | cleanup-attendance | hospitality-reconcile)
 # Crontab:
 #   0 0 * * * bash /root/volkern-erp/cron.sh uptime-developers
 #   0 3 * * * bash /root/volkern-erp/cron.sh cleanup-attendance
+#   0 4 * * * bash /root/volkern-erp/cron.sh hospitality-reconcile
 # ═══════════════════════════════════════════════════════════
 set -uo pipefail
-JOB="${1:?uso: cron.sh <uptime-developers|cleanup-attendance>}"
+JOB="${1:?uso: cron.sh <uptime-developers|cleanup-attendance|hospitality-reconcile>}"
 LOG=/var/log/volkern-cron.log
 
 # Cargar CRON_SECRET y NEXT_PUBLIC_APP_URL del .env del stack
