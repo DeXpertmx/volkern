@@ -23,7 +23,8 @@ import {
   Sparkles,
   TrendingUp,
   BarChart3,
-  MessageCircle
+  MessageCircle,
+  BookOpen
 } from 'lucide-react';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -85,8 +86,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { name: 'Seguridad', href: '/admin/seguridad', icon: ShieldAlert },
     { name: 'Auditoría IA', href: '/admin/auditoria', icon: ShieldCheck },
     { name: 'Configuración', href: '/admin/settings', icon: Settings },
-    { name: 'Neting Analytics', href: '/admin/analytics/neting', icon: BarChart3 }
+    { name: 'Neting Analytics', href: '/admin/analytics/neting', icon: BarChart3 },
+    { name: 'API Docs', href: '/api/docs', icon: BookOpen, external: true }
   ];
+
+  const itemTarget = (item: { external?: boolean }) => item.external ? { target: '_blank', rel: 'noopener noreferrer' } : {};
 
   return (
     <div className="flex h-screen bg-[#F7FAFC]">
@@ -122,6 +126,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <Link
                 key={item.name}
                 href={item.href}
+                {...itemTarget(item)}
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all group relative overflow-hidden ${
                   isActive
                     ? 'bg-[#F8FAFC] text-[#1A365D]'

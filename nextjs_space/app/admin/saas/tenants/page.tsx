@@ -85,6 +85,9 @@ export default function TenantsManagement() {
   const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, totalPages: 0 });
   const [genesisResult, setGenesisResult] = useState<{genesisHash: string, masterKey: string} | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [tenantToDelete, setTenantToDelete] = useState<Tenant | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     loadTenants();
@@ -190,6 +193,34 @@ export default function TenantsManagement() {
       }
     } catch (error) {
       toast.error('Error de red al actualizar licencia');
+    }
+  };
+
+  const handleDeleteTenant = async () => {
+    if (!tenantToDelete || deleteConfirmation !== 'ELIMINAR') return;
+
+    try {
+      setDeleting(true);
+      const res = await fetch(`/api/admin/tenants/${tenantToDelete.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmation: 'ELIMINAR' }),
+      });
+
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(result.error || 'Error al eliminar el tenant');
+        return;
+      }
+
+      toast.success(`Tenant "${tenantToDelete.nombre}" eliminado`);
+      setTenantToDelete(null);
+      setDeleteConfirmation('');
+      await loadTenants();
+    } catch {
+      toast.error('Error de conexión al eliminar el tenant');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -404,6 +435,16 @@ export default function TenantsManagement() {
                               Reactivar
                             </DropdownMenuItem>
                           )}
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setTenantToDelete(tenant);
+                              setDeleteConfirmation('');
+                            }}
+                            className="text-[10px] font-bold uppercase tracking-widest p-3 text-red-600 focus:text-red-700"
+                          >
+                            <Trash2 size={14} className="mr-2" />
+                            Eliminar cuenta
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
@@ -541,6 +582,66 @@ export default function TenantsManagement() {
               )}
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmación destructiva de eliminación */}
+      <Dialog
+        open={Boolean(tenantToDelete)}
+        onOpenChange={(open) => {
+          if (!open && !deleting) {
+            setTenantToDelete(null);
+            setDeleteConfirmation('');
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-red-700">Eliminar cuenta de tenant</DialogTitle>
+            <DialogDescription>
+              Esta acción es permanente y eliminará el tenant, sus usuarios y sus datos asociados.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
+              Vas a eliminar: <strong>{tenantToDelete?.nombre}</strong>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="delete-confirmation">
+                Escribe <strong>ELIMINAR</strong> para confirmar
+              </Label>
+              <Input
+                id="delete-confirmation"
+                value={deleteConfirmation}
+                onChange={(event) => setDeleteConfirmation(event.target.value)}
+                placeholder="ELIMINAR"
+                autoComplete="off"
+                disabled={deleting}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setTenantToDelete(null);
+                setDeleteConfirmation('');
+              }}
+              disabled={deleting}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleDeleteTenant}
+              disabled={deleteConfirmation !== 'ELIMINAR' || deleting}
+            >
+              {deleting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
+              {deleting ? 'Eliminando...' : 'Eliminar cuenta'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

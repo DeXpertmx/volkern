@@ -64,10 +64,18 @@ describe('HUBS', () => {
     });
   });
 
-  it('todos los items tienen hrefs que empiezan con /dashboard/', () => {
+  it('todos los items tienen hrefs que empiezan con /dashboard/ (salvo enlaces de documentación externos)', () => {
     HUBS.forEach(hub => {
       hub.items.forEach(item => {
-        expect(item.href).toMatch(/^\/dashboard\//);
+        // Los enlaces a documentación interactiva (Swagger /api/docs, Partner /docs/developers)
+        // y cualquier item marcado external: true son intencionalmente fuera del dashboard.
+        const esEnlaceDocs =
+          item.external === true ||
+          item.href.startsWith('/api/') ||
+          item.href.startsWith('/docs/');
+        if (!esEnlaceDocs) {
+          expect(item.href).toMatch(/^\/dashboard\//);
+        }
       });
     });
   });
