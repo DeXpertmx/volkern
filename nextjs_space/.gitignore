@@ -2,6 +2,8 @@
 .env*.local
 tsconfig.tsbuildinfo
 .tsbuildinfo.check
+# backup local de la limpieza de tenants (contiene datos, no es código)
+.cleanup-backup-*.json
 coverage/
 .env*
 traccar-device-mapping.json
