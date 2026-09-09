@@ -49,6 +49,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import CanvaDesigner from '@/components/canva-designer';
 import { EmailEditor } from '@/components/email-editor';
+import { getCanalesDisponibles } from '@/lib/campaign-channels';
 
 interface CampaignMessage {
   canal: string;
@@ -60,14 +61,21 @@ interface CampaignMessage {
   porcentajeTrafico?: number;
 }
 
-const canalesDisponibles = [
-  { id: 'whatsapp', nombre: 'WhatsApp', icon: MessageSquare },
-  { id: 'email', nombre: 'Email', icon: Mail },
-  { id: 'sms', nombre: 'SMS', icon: MessageSquare },
-  { id: 'telegram', nombre: 'Telegram', icon: Send },
-  { id: 'facebook', nombre: 'Facebook', icon: MessageSquare },
-  { id: 'instagram', nombre: 'Instagram', icon: MessageSquare },
-];
+// Íconos de UI por canal (el catálogo vive en lib/campaign-channels.ts, sin
+// dependencias de React para poder usarse también en schemas del servidor).
+const canalIcons: Record<string, any> = {
+  whatsapp: MessageSquare,
+  email: Mail,
+  sms: MessageSquare,
+  telegram: Send,
+  facebook: MessageSquare,
+  instagram: MessageSquare,
+};
+
+const canalesDisponibles = getCanalesDisponibles().map((c) => ({
+  ...c,
+  icon: canalIcons[c.id],
+}));
 
 export default function NuevaCampanaPage() {
   const router = useRouter();
