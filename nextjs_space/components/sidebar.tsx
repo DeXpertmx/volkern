@@ -366,6 +366,8 @@ export function Sidebar() {
                       key={item.href}
                       href={item.href}
                       onClick={() => setIsMobileMenuOpen(false)}
+                      target={item.external ? '_blank' : undefined}
+                      rel={item.external ? 'noopener noreferrer' : undefined}
                       title={isCollapsed ? item.name : undefined}
                       className={cn(
                         "flex items-center rounded-xl transition-all duration-300 px-4 py-3 group",

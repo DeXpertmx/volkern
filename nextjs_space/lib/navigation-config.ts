@@ -81,6 +81,7 @@ export interface NavigationItem {
   description?: string
   requiredRegion?: 'MX' | 'ES' | 'CO' | 'US' // Regiones soportadas
   requiredAccountType?: 'AGENCY' | 'BUSINESS' | 'SUPERADMIN'
+  external?: boolean // Abrir el enlace en una pestaña nueva
 }
 
 export interface HubConfig {
@@ -551,6 +552,9 @@ export const HUBS: HubConfig[] = [
       { name: 'Inmobiliaria', href: '/dashboard/configuracion/real-estate', icon: Home, description: 'Configuración del portal de propiedades y comisiones' },
       { name: 'Equipo', href: '/dashboard/equipo', icon: UserCog, planModule: 'equipo', description: 'Gestión de usuarios' },
       { name: 'Integraciones', href: '/dashboard/integraciones', icon: Plug, planModule: 'integraciones', description: 'Conexión con apps externas' },
+      { name: 'API Docs', href: '/api/docs', icon: BookOpen, description: 'Documentación interactiva (Swagger)', external: true },
+      { name: 'API Partner', href: '/docs/developers', icon: Plug, description: 'Partner API v1 para integradores' },
+      { name: 'API Keys', href: '/dashboard/configuracion/api-keys', icon: Plug, description: 'Claves de acceso a la API' },
       { name: 'Módulos', href: '/dashboard/configuracion?section=modulos', icon: LayoutGrid, description: 'Activar/desactivar funciones' },
       { name: 'Historial de Configuración', href: '/dashboard/configuracion?section=historial', icon: History, description: 'Quién cambió cada ajuste y cuándo' },
       { name: 'Auditoría', href: '/dashboard/auditoria', icon: Activity, description: 'Historial completo de acciones en el sistema' },
