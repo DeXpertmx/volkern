@@ -431,6 +431,87 @@ export async function pushInventory(
   }
 }
 
+// ─── Fetch de reservas (plan maestro §14, contrato) ───────────────────────
+
+/**
+ * Payload de Fetch Reservations (contrato): POST /data/{pms}
+ * ```json
+ * { "type": "reservation", "hotelCode": "...", "startDate": "YYYY-MM-DD", "endDate": "YYYY-MM-DD" }
+ * ```
+ * Respuesta: array de reservas con el mismo shape que el webhook Book
+ * (action, bookingId, cmBookingId, checkin, checkout, guest, rooms...).
+ */
+export interface FetchReservationsResult {
+  ok: boolean;
+  /** Reservas devueltas por el proveedor (mismo shape que el webhook Book). */
+  reservas?: Array<Record<string, unknown>>;
+  httpStatus?: number;
+  message?: string;
+  respuestaExterna?: unknown;
+  error?: string;
+  duracionMs: number;
+}
+
+/**
+ * Fetch Reservations — POST /data/{pms} con `type: "reservation"`.
+ * Consulta las reservas recibidas vía OTAs para un hotel y rango de fechas.
+ * Se usa por la reconciliación (§14). NO hace retries ciegos.
+ */
+export async function fetchReservations(
+  hotelCode: string,
+  startDate: string,
+  endDate: string
+): Promise<FetchReservationsResult> {
+  const started = Date.now();
+  try {
+    const creds = await getConnectivityCredentials();
+    if (!creds) {
+      return { ok: false, error: 'Conectividad no configurada.', duracionMs: 0 };
+    }
+    const body = { type: 'reservation', hotelCode, startDate, endDate };
+    const { res, duracionMs } = await connectivityFetch(
+      `/data/${encodeURIComponent(creds.partnerId)}`,
+      body,
+      creds
+    );
+    const respuestaExterna = await readBody(res);
+
+    if (!res.ok) {
+      const message = (respuestaExterna as any)?.message || `HTTP ${res.status}`;
+      return {
+        ok: false,
+        httpStatus: res.status,
+        message,
+        respuestaExterna,
+        error: message,
+        duracionMs,
+      };
+    }
+
+    const reservas = Array.isArray(respuestaExterna)
+      ? (respuestaExterna as Array<Record<string, unknown>>)
+      : typeof respuestaExterna === 'object' && respuestaExterna !== null && Array.isArray((respuestaExterna as any).data)
+        ? ((respuestaExterna as any).data as Array<Record<string, unknown>>)
+        : null;
+
+    if (!reservas) {
+      return {
+        ok: false,
+        httpStatus: res.status,
+        message: 'La respuesta no contiene un array de reservas',
+        respuestaExterna,
+        error: 'La respuesta no contiene un array de reservas',
+        duracionMs,
+      };
+    }
+
+    return { ok: true, reservas, httpStatus: res.status, duracionMs };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Error de red';
+    return { ok: false, error: msg, duracionMs: Date.now() - started };
+  }
+}
+
 /**
  * Rate Push — POST /update-rates/{pms} (los rangos se expanden a tarifas
  * diarias por el proveedor). Verifica `success`; expone `message` en fallos.
