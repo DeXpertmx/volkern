@@ -8,6 +8,7 @@ import {
   enriquecerConGoogleCalendar,
   combinarMultipliers,
 } from '@/lib/insurance/seasonal-multiplier';
+import { persistSmartForecastLog } from '@/lib/insurance/forecast-persistence';
 
 /**
  * GET /api/insurance/portfolio/forecast/smart
@@ -136,30 +137,15 @@ export async function GET(request: NextRequest) {
     }
 
     // ─── 8. Persistir log de auditoría para análisis offline ──────
-    try {
-      await prisma.portfolioForecastLog.create({
-        data: {
-          tenantId: auth.tenant!.id,
-          mesProyectado: targetMonthStart,
-          proyectado: proyectadoAjustado,
-          slope: base.slope ?? 0,
-          intercepto: base.intercept ?? 0,
-          r2: base.r2 ?? 0,
-          ventanaMeses: 6,
-          // Trazabilidad: como aún no tenemos campo `metadata` en el log,
-          // empaquetamos los datos del smart forecast en un campo específico
-          // que NO pisará el `real`/`errorPct` cuando se haga backfill.
-          // El sourceVersion distinto permite distinguir las filas smart vs
-          // base en queries analíticas.
-          sourceVersion: 'v2-smart-seasonal',
-          backfilledEn: null,
-          alertaEnviadaAt: null,
-          alertaConversacionId: null,
-        },
-      }).catch(() => {});
-    } catch (err) {
-      console.warn('[forecast/smart] No se pudo persistir log de auditoría:', err);
-    }
+    // Helper idempotente (sourceVersion `v2-smart-seasonal`): fire-and-forget,
+    // no rompe la respuesta si falla.
+    await persistSmartForecastLog(auth.tenant!.id, {
+      mesProyectado: targetMonthStart,
+      proyectado: proyectadoAjustado,
+      slope: base.slope ?? 0,
+      intercepto: base.intercept ?? 0,
+      r2: base.r2 ?? 0,
+    });
 
     // Normalizamos el shape con defaults no-undefined para evitar Optional Chaining
     // en cascada en el payload (que ensucia la inferencia del tipo SmartPayload).
