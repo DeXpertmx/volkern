@@ -1,6 +1,8 @@
 import { Metadata } from 'next'
 import { prisma } from '@/lib/db'
 import { notFound } from 'next/navigation'
+import { getEffectiveBranding } from '@/lib/branding'
+import { getPublicUrl } from '@/lib/s3-public-url'
 import CotizacionPublicView from './CotizacionPublicView'
 
 interface Props {
@@ -54,6 +56,13 @@ export default async function CotizacionPublicPage({ params }: Props) {
     },
   })
 
+  // Marca efectiva del tenant (Identidad Visual > Slot > Agencia > Volkern) para el logo
+  const branding = await getEffectiveBranding(cotizacion.tenantId)
+  let logoUrl = branding.logoUrl || '/volkern-logo.png'
+  if (logoUrl && !logoUrl.startsWith('http') && !logoUrl.startsWith('/')) {
+    logoUrl = getPublicUrl(logoUrl)
+  }
+
   // Serializar fechas para el componente cliente
   const serializedCotizacion = {
     ...cotizacion,
@@ -74,5 +83,11 @@ export default async function CotizacionPublicPage({ params }: Props) {
     }
   }
 
-  return <CotizacionPublicView cotizacion={serializedCotizacion} />
+  return (
+    <CotizacionPublicView
+      cotizacion={serializedCotizacion}
+      logoUrl={logoUrl}
+      companyName={branding.companyName || cotizacion.tenant.nombre}
+    />
+  )
 }

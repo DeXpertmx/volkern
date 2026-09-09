@@ -77,7 +77,13 @@ interface Cotizacion {
   }
 }
 
-export default function CotizacionPublicView({ cotizacion }: { cotizacion: Cotizacion }) {
+interface Props {
+  cotizacion: Cotizacion
+  logoUrl: string
+  companyName: string
+}
+
+export default function CotizacionPublicView({ cotizacion, logoUrl, companyName }: Props) {
   const [accepting, setAccepting] = useState(false)
   const [showAcceptDialog, setShowAcceptDialog] = useState(false)
   const [downloadingPdf, setDownloadingPdf] = useState(false)
@@ -223,13 +229,22 @@ export default function CotizacionPublicView({ cotizacion }: { cotizacion: Cotiz
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white">
-        <div className="max-w-4xl mx-auto px-4 py-8">
+        <div className="max-w-4xl mx-auto px-4 py-6 sm:py-8">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div>
-              <h1 className="text-2xl font-bold">{cotizacion.tenant.nombre}</h1>
-              <p className="text-indigo-100">Cotización {cotizacion.numero}</p>
+            <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
+              {logoUrl && logoUrl !== '/volkern-logo.png' ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={logoUrl}
+                  alt={companyName}
+                  className="h-12 sm:h-14 w-auto max-w-[200px] sm:max-w-[240px] object-contain bg-white rounded-lg p-2"
+                />
+              ) : (
+                <h1 className="text-2xl font-bold">{companyName}</h1>
+              )}
+              <p className="text-indigo-100 text-sm sm:text-base">Cotización {cotizacion.numero}</p>
             </div>
-            <div className="flex gap-2 print:hidden">
+            <div className="flex flex-wrap gap-2 print:hidden">
               <Button variant="secondary" size="sm" onClick={downloadPdf} disabled={downloadingPdf}>
                 {downloadingPdf ? (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -248,7 +263,7 @@ export default function CotizacionPublicView({ cotizacion }: { cotizacion: Cotiz
       </div>
 
       {/* Content */}
-      <div className="max-w-4xl mx-auto px-4 py-8">
+      <div className="max-w-4xl mx-auto px-4 py-6 sm:py-8">
         {/* Estado banner */}
         {cotizacion.estado === 'aceptada' && (
           <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6 flex items-center gap-3">
@@ -324,7 +339,7 @@ export default function CotizacionPublicView({ cotizacion }: { cotizacion: Cotiz
                 {cotizacion.items.map((item) => (
                   <TableRow key={item.id}>
                     <TableCell>
-                      <div>
+                      <div className="break-words">
                         <p className="font-medium">{item.concepto}</p>
                         {item.descripcion && (
                           <p className="text-sm text-muted-foreground">{item.descripcion}</p>
@@ -332,8 +347,8 @@ export default function CotizacionPublicView({ cotizacion }: { cotizacion: Cotiz
                       </div>
                     </TableCell>
                     <TableCell className="text-center">{item.cantidad}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(item.precioUnitario)}</TableCell>
-                    <TableCell className="text-right font-medium">{formatCurrency(item.total)}</TableCell>
+                    <TableCell className="text-right whitespace-nowrap">{formatCurrency(item.precioUnitario)}</TableCell>
+                    <TableCell className="text-right font-medium whitespace-nowrap">{formatCurrency(item.total)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -368,7 +383,7 @@ export default function CotizacionPublicView({ cotizacion }: { cotizacion: Cotiz
                 </TableRow>
                 <TableRow className="text-lg font-bold">
                   <TableCell colSpan={3}>Total</TableCell>
-                  <TableCell className="text-right">{formatCurrency(cotizacion.total)}</TableCell>
+                  <TableCell className="text-right whitespace-nowrap">{formatCurrency(cotizacion.total)}</TableCell>
                 </TableRow>
               </TableFooter>
             </Table>
@@ -419,7 +434,7 @@ export default function CotizacionPublicView({ cotizacion }: { cotizacion: Cotiz
       {/* Footer */}
       <div className="border-t bg-white print:hidden">
         <div className="max-w-4xl mx-auto px-4 py-6 text-center text-sm text-muted-foreground">
-          <p>© {new Date().getFullYear()} {cotizacion.tenant.nombre} | Powered by Volkern CRM</p>
+          <p>© {new Date().getFullYear()} {companyName}</p>
         </div>
       </div>
 

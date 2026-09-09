@@ -1,5 +1,7 @@
 import { prisma } from '@/lib/db'
 import { notFound } from 'next/navigation'
+import { getEffectiveBranding } from '@/lib/branding'
+import { getPublicUrl } from '@/lib/s3-public-url'
 import ContratoPublicView from './ContratoPublicView'
 
 interface PageProps {
@@ -35,6 +37,13 @@ export default async function ContratoPublicPage({ params }: PageProps) {
     }
   })
 
+  // Marca efectiva del tenant (Identidad Visual > Slot > Agencia > Volkern) para el logo
+  const branding = await getEffectiveBranding(contrato.tenantId)
+  let logoUrl = branding.logoUrl || '/volkern-logo.png'
+  if (logoUrl && !logoUrl.startsWith('http') && !logoUrl.startsWith('/')) {
+    logoUrl = getPublicUrl(logoUrl)
+  }
+
   // Serialize dates for client component
   const serializedContrato = {
     ...contrato,
@@ -49,5 +58,5 @@ export default async function ContratoPublicPage({ params }: PageProps) {
     ultimaVista: contrato.ultimaVista?.toISOString() || null
   }
 
-  return <ContratoPublicView contrato={serializedContrato} />
+  return <ContratoPublicView contrato={serializedContrato} logoUrl={logoUrl} companyName={branding.companyName || contrato.tenant.nombre} />
 }

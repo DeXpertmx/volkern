@@ -67,7 +67,13 @@ interface Contrato {
   }
 }
 
-export default function ContratoPublicView({ contrato }: { contrato: Contrato }) {
+interface Props {
+  contrato: Contrato
+  logoUrl: string
+  companyName: string
+}
+
+export default function ContratoPublicView({ contrato, logoUrl, companyName }: Props) {
   const [signing, setSigning] = useState(false)
   const [showSignDialog, setShowSignDialog] = useState(false)
   const [signName, setSignName] = useState('')
@@ -138,13 +144,22 @@ export default function ContratoPublicView({ contrato }: { contrato: Contrato })
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white">
-        <div className="max-w-4xl mx-auto px-4 py-8">
+        <div className="max-w-4xl mx-auto px-4 py-6 sm:py-8">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div>
-              <h1 className="text-2xl font-bold">{contrato.tenant.nombre}</h1>
-              <p className="text-indigo-100">Contrato {contrato.numero}</p>
+            <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
+              {logoUrl && logoUrl !== '/volkern-logo.png' ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={logoUrl}
+                  alt={companyName}
+                  className="h-12 sm:h-14 w-auto max-w-[200px] sm:max-w-[240px] object-contain bg-white rounded-lg p-2"
+                />
+              ) : (
+                <h1 className="text-2xl font-bold">{companyName}</h1>
+              )}
+              <p className="text-indigo-100 text-sm sm:text-base">Contrato {contrato.numero}</p>
             </div>
-            <div className="flex gap-2 print:hidden">
+            <div className="flex flex-wrap gap-2 print:hidden">
               <Button variant="secondary" size="sm" onClick={downloadPdf} disabled={downloadingPdf}>
                 {downloadingPdf ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
                 {downloadingPdf ? 'Generando...' : 'PDF'}
@@ -158,7 +173,7 @@ export default function ContratoPublicView({ contrato }: { contrato: Contrato })
       </div>
 
       {/* Content */}
-      <div className="max-w-4xl mx-auto px-4 py-8">
+      <div className="max-w-4xl mx-auto px-4 py-6 sm:py-8">
         {/* Estado banner */}
         {contrato.estado === 'vigente' && (
           <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6 flex items-center gap-3">
@@ -234,11 +249,11 @@ export default function ContratoPublicView({ contrato }: { contrato: Contrato })
                 {contrato.items.map((item) => (
                   <TableRow key={item.id}>
                     <TableCell>
-                      <div className="font-medium">{item.concepto}</div>
+                      <div className="font-medium break-words">{item.concepto}</div>
                       {item.descripcion && <div className="text-xs text-muted-foreground">{item.descripcion}</div>}
                     </TableCell>
                     <TableCell className="text-center">{item.cantidad}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(item.precioUnitario)}</TableCell>
+                    <TableCell className="text-right whitespace-nowrap">{formatCurrency(item.precioUnitario)}</TableCell>
                     <TableCell className="text-right">{formatCurrency(item.cantidad * item.precioUnitario)}</TableCell>
                   </TableRow>
                 ))}
@@ -262,7 +277,7 @@ export default function ContratoPublicView({ contrato }: { contrato: Contrato })
                 )}
                 <TableRow className="bg-primary/5">
                   <TableCell colSpan={3} className="font-bold">Total</TableCell>
-                  <TableCell className="text-right font-bold text-lg">{formatCurrency(contrato.total)}</TableCell>
+                  <TableCell className="text-right font-bold text-lg whitespace-nowrap">{formatCurrency(contrato.total)}</TableCell>
                 </TableRow>
               </TableFooter>
             </Table>
@@ -303,7 +318,7 @@ export default function ContratoPublicView({ contrato }: { contrato: Contrato })
                 <div className={`mb-3 ${contrato.firmadoPorEmpresa ? 'text-green-600' : 'text-gray-400'}`}>
                   {contrato.firmadoPorEmpresa ? <CheckCircle className="h-10 w-10 mx-auto" /> : <Clock className="h-10 w-10 mx-auto" />}
                 </div>
-                <p className="font-medium">{contrato.tenant.nombre}</p>
+                <p className="font-medium">{companyName}</p>
                 {contrato.firmadoPorEmpresa ? (
                   <>
                     <p className="text-sm text-green-600 mt-1">{contrato.nombreFirmaEmpresa}</p>
