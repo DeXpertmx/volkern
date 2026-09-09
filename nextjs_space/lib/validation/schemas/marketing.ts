@@ -1,12 +1,13 @@
 import { z } from 'zod';
 import { CommonSchemas } from '../common';
+import { CAMPAIGN_CHANNEL_IDS } from '@/lib/campaign-channels';
 
 // ──────────────────────────────────────────────
 // Campaign — Mensajes (Campaign + CampaignMessage)
 // ──────────────────────────────────────────────
 
 export const CampaignMessageSchema = z.object({
-  canal: z.string().min(1, 'Canal requerido').max(50),
+  canal: z.enum(CAMPAIGN_CHANNEL_IDS, { message: 'Canal no soportado' }),
   asunto: z.string().max(500).optional().nullable(),
   contenido: z.string().min(1, 'Contenido requerido'),
   mediaUrl: z.string().url('URL inválida').optional().nullable(),
@@ -20,7 +21,7 @@ export const CampaignCreateSchema = z.object({
   nombre: z.string().min(1, 'Nombre requerido').max(255),
   descripcion: z.string().max(5000).optional().nullable(),
   tipo: z.string().max(50).optional().default('manual'),
-  canales: z.array(z.string()).optional().default([]),
+  canales: z.array(z.enum(CAMPAIGN_CHANNEL_IDS)).optional().default([]),
   targetType: z.string().max(50).optional().default('todos'),
   targetConfig: z.record(z.unknown()).optional().default({}),
   fechaProgramada: z.string().datetime().optional().nullable(),
@@ -33,7 +34,7 @@ export const CampaignUpdateSchema = z.object({
   nombre: z.string().min(1).max(255).optional(),
   descripcion: z.string().max(5000).optional().nullable(),
   tipo: z.string().max(50).optional(),
-  canales: z.array(z.string()).optional(),
+  canales: z.array(z.enum(CAMPAIGN_CHANNEL_IDS)).optional(),
   targetType: z.string().max(50).optional(),
   targetConfig: z.record(z.unknown()).optional(),
   fechaProgramada: z.string().datetime().optional().nullable(),
