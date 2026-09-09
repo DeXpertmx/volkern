@@ -49,22 +49,7 @@ export const GET = withTenantAuth(async (req, auth) => {
     if (leadId) where.leadId = leadId
     if (contactId) where.contactId = contactId
     if (catalogoItemId) where.catalogoItemId = catalogoItemId
-    if (pipelineId) {
-      // Los deals antiguos creados sin pipeline se asignan una sola vez al
-      // primer pipeline activo del tenant para no quedar ocultos del tablero.
-      const defaultPipeline = await prisma.pipeline.findFirst({
-        where: { tenantId, activo: true },
-        orderBy: { orden: 'asc' },
-        select: { id: true },
-      })
-      if (defaultPipeline) {
-        await prisma.deal.updateMany({
-          where: { tenantId, pipelineId: null },
-          data: { pipelineId: defaultPipeline.id },
-        })
-      }
-      where.pipelineId = pipelineId
-    }
+    if (pipelineId) where.pipelineId = pipelineId
     if (search) {
       where.OR = [
         { titulo: { contains: search, mode: 'insensitive' } },
@@ -148,6 +133,13 @@ export const POST = withTenantAuth(async (req, auth) => {
     const body = await req.json()
     const data = validateBody(DealCreateSchema, body);
     if (data instanceof NextResponse) return data;
+
+    // Cura de deals huérfanos (pipelineId NULL) al primer pipeline activo.
+    // Idempotente; se invoca solo en escrituras para no ensuciar el GET.
+    const { assignOrphanDealsToDefaultPipeline } = await import('@/lib/deals/orphan-deals');
+    await assignOrphanDealsToDefaultPipeline(tenantId).catch((e: any) =>
+      console.warn('⚠️ No se pudieron reasignar deals huérfanos:', e),
+    );
 
     const {
       leadId,
