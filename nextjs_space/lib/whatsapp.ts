@@ -15,14 +15,21 @@ interface WhatsAppCredentials {
 /**
  * Cargar credenciales desde la base de datos
  * @param tenantId ID del tenant (opcional si se usa con sesión)
+ * @param allowPlatformFallback Si el tenant no tiene WhatsApp propio
+ *   conectado, usar el número OFICIAL DE LA PLATAFORMA (si está conectado).
+ *   Solo debe activarse en rutas de NOTIFICACIÓN de la plataforma (avisos,
+ *   códigos de firma, alertas a usuarios/agentes) — nunca en el puente
+ *   conversacional (chatbot/campañas/bandeja), donde el remitente debe ser
+ *   siempre el número del negocio/agente.
  *
  * Prioridad:
  * 1. Instancia de WhatsApp del Negocio conectada desde Volkern
  *    (TenantWhatsAppInstance status=connected). Usa la API Key global del
  *    servidor (EVOLUTION_API_KEY/EVOLUTION_API_URL).
  * 2. Integración legacy de Evolution API (credenciales por tenant).
+ * 3. (Opcional) Instancia de la PLATAFORMA conectada desde el admin.
  */
-async function loadCredentialsFromDB(tenantId: string): Promise<WhatsAppCredentials> {
+async function loadCredentialsFromDB(tenantId: string, allowPlatformFallback = false): Promise<WhatsAppCredentials> {
   try {
     // 1. Instancia del WhatsApp del Negocio (conectada desde Configuración)
     const instance = await prisma.tenantWhatsAppInstance.findFirst({
@@ -70,21 +77,39 @@ async function loadCredentialsFromDB(tenantId: string): Promise<WhatsAppCredenti
       }
     })
 
-    if (!integration || !integration.credenciales) {
-      throw new Error('WhatsApp no está conectado. Conecta el número del negocio en Configuración → WhatsApp del Negocio.')
+    if (integration && integration.credenciales) {
+      const creds = integration.credenciales as any
+      if (creds.api_key && creds.instance_name) {
+        return {
+          api_key: creds.api_key,
+          instance_name: creds.instance_name,
+          api_url: creds.api_url || 'https://evo.abacus.ai'
+        }
+      }
     }
 
-    const creds = integration.credenciales as any
-
-    if (!creds.api_key || !creds.instance_name) {
-      throw new Error('La configuración de WhatsApp está incompleta.')
+    // 4. (Opcional) Número oficial de la PLATAFORMA: se usa cuando el tenant
+    //    NO tiene WhatsApp propio conectado, para que las notificaciones de la
+    //    plataforma (avisos, códigos de firma, alertas) no se pierdan.
+    if (allowPlatformFallback) {
+      const platformRow = await prisma.platformWhatsAppInstance
+        .findUnique({ where: { id: 'platform_whatsapp_main' } })
+        .catch(() => null)
+      if (platformRow?.instanceName && platformRow.status === 'connected') {
+        const apiKey = process.env.EVOLUTION_API_KEY
+        const apiUrl = process.env.EVOLUTION_API_URL || 'https://api.dimension.expert'
+        if (apiKey) {
+          console.log(`[WhatsApp] Tenant ${tenantId} sin WhatsApp propio: usando número oficial de la plataforma (${platformRow.instanceName})`)
+          return {
+            api_key: apiKey,
+            instance_name: platformRow.instanceName,
+            api_url: apiUrl,
+          }
+        }
+      }
     }
 
-    return {
-      api_key: creds.api_key,
-      instance_name: creds.instance_name,
-      api_url: creds.api_url || 'https://evo.abacus.ai'
-    }
+    throw new Error('WhatsApp no está conectado. Conecta el número del negocio en Configuración → WhatsApp del Negocio.')
   } catch (error) {
     console.error('❌ Error al cargar credenciales de Evolution API:', error)
     throw error
@@ -93,13 +118,15 @@ async function loadCredentialsFromDB(tenantId: string): Promise<WhatsAppCredenti
 
 /**
  * Enviar mensaje de texto por WhatsApp
+ * @param allowPlatformFallback Usar el número oficial de la plataforma cuando
+ *   el tenant no tenga WhatsApp propio conectado (solo rutas de notificación).
  */
-export async function sendWhatsAppMessage(to: string, message: string, tenantId: string) {
+export async function sendWhatsAppMessage(to: string, message: string, tenantId: string, allowPlatformFallback = false) {
   try {
     console.log('📤 [WhatsApp] Intentando enviar mensaje...')
     console.log('📤 [WhatsApp] Tenant ID:', tenantId)
     
-    const creds = await loadCredentialsFromDB(tenantId)
+    const creds = await loadCredentialsFromDB(tenantId, allowPlatformFallback)
     
     console.log('📤 [WhatsApp] Credenciales cargadas:')
     console.log('  - API URL:', creds.api_url)
@@ -174,10 +201,11 @@ export async function sendWhatsAppImage(
   to: string,
   imageUrl: string,
   caption: string | undefined,
-  tenantId: string
+  tenantId: string,
+  allowPlatformFallback = false
 ) {
   try {
-    const creds = await loadCredentialsFromDB(tenantId)
+    const creds = await loadCredentialsFromDB(tenantId, allowPlatformFallback)
     const cleanPhone = to.replace(/[^\d+]/g, '')
     
     const response = await fetch(`${creds.api_url}/message/sendMedia/${creds.instance_name}`, {
@@ -222,10 +250,11 @@ export async function sendWhatsAppDocument(
   documentUrl: string,
   filename: string,
   caption: string | undefined,
-  tenantId: string
+  tenantId: string,
+  allowPlatformFallback = false
 ) {
   try {
-    const creds = await loadCredentialsFromDB(tenantId)
+    const creds = await loadCredentialsFromDB(tenantId, allowPlatformFallback)
     const cleanPhone = to.replace(/[^\d+]/g, '')
     
     const response = await fetch(`${creds.api_url}/message/sendMedia/${creds.instance_name}`, {
@@ -272,14 +301,15 @@ export async function sendWhatsAppMessageWithMedia(
   message: string,
   mediaUrl: string,
   mediaType: 'image' | 'video' | 'document' = 'document',
-  tenantId: string
+  tenantId: string,
+  allowPlatformFallback = false
 ) {
   try {
     console.log('📤 [WhatsApp Media] Intentando enviar mensaje con media...')
     console.log('📤 [WhatsApp Media] Tenant ID:', tenantId)
     console.log('📤 [WhatsApp Media] Tipo de media:', mediaType)
     
-    const creds = await loadCredentialsFromDB(tenantId)
+    const creds = await loadCredentialsFromDB(tenantId, allowPlatformFallback)
     
     console.log('📤 [WhatsApp Media] Credenciales cargadas:')
     console.log('  - API URL:', creds.api_url)
