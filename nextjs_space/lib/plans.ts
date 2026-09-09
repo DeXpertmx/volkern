@@ -37,6 +37,7 @@ export type CrmModule =
   | 'social_manager'
   | 'rrhh' | 'finanzas' | 'finanzas_consolidado'
   | 'insurance'
+  | 'hospitality'
   | 'calidad' | 'produccion' | 'inventario' | 'proyectos'
   | 'taskforce' | 'activos' | 'conocimiento' | 'estrategia'
   | 'conciliacion' | 'logistica'
@@ -97,6 +98,7 @@ export const ALL_MODULES: ModuleDefinition[] = [
   { id: 'api_access', label: 'Acceso a la API', description: 'Tokens de API para desarrolladores', icon: '🔑', group: 'Integraciones' },
   { id: 'rrhh', label: 'RRHH', description: 'Gestión de talento y nóminas', icon: '👥', group: 'ERP' },
   { id: 'insurance', label: 'Seguros', description: 'Cartera de pólizas, renovaciones y aseguradoras', icon: '🛡️', group: 'ERP' },
+  { id: 'hospitality', label: 'Hospitality', description: 'Propiedades, unidades alojativas y reservas con canales de distribución', icon: '🏨', group: 'ERP' },
   { id: 'finanzas', label: 'Finanzas', description: 'Contabilidad, IVA, balances', icon: '💰', group: 'ERP' },
   { id: 'finanzas_consolidado', label: 'Consolidado Financiero', description: 'Vista multi-tenant financiera', icon: '📊', group: 'ERP' },
   { id: 'calidad', label: 'Calidad', description: 'Control de calidad industrial', icon: '✅', group: 'ERP' },

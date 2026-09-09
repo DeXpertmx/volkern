@@ -98,7 +98,18 @@ const GLOBAL_MODELS = [
   'academySession',
   'academyAuditLog',
   'globalAuditCloud',
-  'onboardingProgress'
+  'onboardingProgress',
+  // ─── Hospitality (Volkern Hospitality) ───────────────────────
+  // Propiedades, unidades, reservas y eventos viven en la BD global
+  // (control plane) con filtro por tenantId explícito, igual que
+  // auditLog/onboardingProgress. Así ningún tenant con dbUrl propia
+  // necesita las tablas en su esquema.
+  'hospitalityProperty',
+  'hospitalityUnit',
+  'connectivityMapping',
+  'hospitalityReservation',
+  'hospitalityWebhookEvent',
+  'connectivityProvider'
 ];
 
 // ── Tipos para el caché de clientes Prisma ──────────────────────────────────
