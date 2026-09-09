@@ -31,24 +31,30 @@ function rateLimitedResponse(instanceName: string) {
   );
 }
 
-/** Actualiza la fila de la instancia (usuario o negocio) según su tipo. */
+/** Actualiza la fila de la instancia (usuario, negocio o plataforma) según su tipo. */
 async function updateInstanceRow(
   inst: { id: string },
-  kind: 'user' | 'tenant',
+  kind: 'user' | 'tenant' | 'platform',
   data: any
 ) {
+  if (kind === 'platform') {
+    return prisma.platformWhatsAppInstance.update({ where: { id: inst.id }, data });
+  }
   if (kind === 'tenant') {
     return prisma.tenantWhatsAppInstance.update({ where: { id: inst.id }, data });
   }
   return prisma.userWhatsAppInstance.update({ where: { id: inst.id }, data });
 }
 
-/** Lee la fila de la instancia (usuario o negocio) según su tipo. */
+/** Lee la fila de la instancia (usuario, negocio o plataforma) según su tipo. */
 async function readInstanceRow(
   inst: { id: string },
-  kind: 'user' | 'tenant',
+  kind: 'user' | 'tenant' | 'platform',
   select: any
 ) {
+  if (kind === 'platform') {
+    return prisma.platformWhatsAppInstance.findUnique({ where: { id: inst.id }, select });
+  }
   if (kind === 'tenant') {
     return prisma.tenantWhatsAppInstance.findUnique({ where: { id: inst.id }, select });
   }
@@ -76,29 +82,96 @@ export async function POST(
     console.log('📄 Datos completos:', JSON.stringify(body, null, 2));
 
     // Buscar la instancia en la BD: primero la del usuario (Mi WhatsApp), luego
-    // la del negocio (tenant). Ambas comparten los campos usados más abajo.
+    // la del negocio (tenant) y finalmente la de la PLATAFORMA (número oficial
+    // de Volkern usado para notificaciones salientes).
     const userInstance = await prisma.userWhatsAppInstance.findFirst({
       where: { instanceName }
     });
     const tenantInstance = userInstance
       ? null
       : await prisma.tenantWhatsAppInstance.findUnique({ where: { instanceName } }).catch(() => null);
+    const platformInstance = userInstance || tenantInstance
+      ? null
+      : await prisma.platformWhatsAppInstance.findUnique({ where: { instanceName } }).catch(() => null);
 
-    const instance = userInstance || tenantInstance;
-    const kind: 'user' | 'tenant' = userInstance ? 'user' : 'tenant';
-
-    if (!instance) {
+    if (!userInstance && !tenantInstance && !platformInstance) {
       console.log('⚠️ Instancia no encontrada en BD:', instanceName);
       console.log('💡 Esto puede ser normal si la instancia fue eliminada');
       // Respondemos 200 para que Evolution no reintente
-      return NextResponse.json({ 
-        success: true, 
+      return NextResponse.json({
+        success: true,
         message: 'Instancia no encontrada en BD',
-        instanceName 
+        instanceName,
       });
     }
 
-    console.log(`✅ Instancia (${kind}) encontrada en BD:`, instance.id);
+
+    // ── INSTANCIA DE LA PLATAFORMA ──
+    // El número oficial de Volkern solo emite notificaciones salientes: sus
+    // eventos se procesan de forma independiente (estado/QR) sin tocar el
+    // puente de tenant (leads/conversaciones/Chatwoot).
+    if (platformInstance) {
+      console.log('📢 Webhook de instancia de PLATAFORMA:', platformInstance.instanceName);
+      if (event === 'QRCODE_UPDATED') {
+        let pQr: string | null = null;
+        if (body.data?.qrcode?.base64) pQr = body.data.qrcode.base64;
+        else if (body.data?.qrcode) pQr = body.data.qrcode;
+        else if (body.data?.base64) pQr = body.data.base64;
+        else if (body.data?.code) pQr = body.data.code;
+        if (pQr) {
+          await prisma.platformWhatsAppInstance.update({
+            where: { id: platformInstance.id },
+            data: { qrCode: pQr, qrCodeExpiry: new Date(Date.now() + 60000), status: 'connecting' },
+          });
+        }
+      } else if (event === 'CONNECTION_UPDATE') {
+        const pState = body.data?.state || body.data?.status || body.data?.connection;
+        let pStatus = 'disconnected';
+        if (pState === 'open' || pState === 'connected') {
+          pStatus = 'connected';
+          const profile = extractOwnerProfileFromConnection(body.data);
+          const pData: any = {
+            status: pStatus,
+            fechaConexion: new Date(),
+            qrCode: null,
+            qrCodeExpiry: null,
+          };
+          if (profile.phoneNumber) pData.phoneNumber = profile.phoneNumber;
+          if (profile.profileName) pData.profileName = profile.profileName;
+          if (profile.profilePicUrl) pData.profilePicUrl = profile.profilePicUrl;
+          await prisma.platformWhatsAppInstance.update({ where: { id: platformInstance.id }, data: pData });
+          console.log('✅ WhatsApp oficial de la plataforma conectado:', platformInstance.instanceName);
+        } else if (pState === 'connecting') {
+          pStatus = 'connecting';
+          await prisma.platformWhatsAppInstance.update({
+            where: { id: platformInstance.id },
+            data: { status: pStatus },
+          });
+        } else {
+          await prisma.platformWhatsAppInstance.update({
+            where: { id: platformInstance.id },
+            data: { status: 'disconnected' },
+          });
+        }
+      } else {
+        // MESSAGES_* en la instancia de plataforma: solo se contabiliza, no se
+        // sincroniza a ningún tenant (es un número emisor de la plataforma).
+        if (event === 'MESSAGES_UPSERT' || event === 'MESSAGES_UPDATE' || event === 'MESSAGES_SET') {
+          await prisma.platformWhatsAppInstance.update({
+            where: { id: platformInstance.id },
+            data: { totalMensajes: { increment: 1 }, ultimoMensaje: new Date() },
+          });
+        }
+      }
+      return NextResponse.json({ success: true, message: 'Webhook de plataforma procesado', event: body.event, instanceName });
+    }
+
+    if (userInstance || tenantInstance) {
+      const instance = (userInstance || tenantInstance) as NonNullable<typeof userInstance>;
+      const kind: 'user' | 'tenant' = userInstance ? 'user' : 'tenant';
+
+      console.log(`✅ Instancia (${kind}) encontrada en BD:`, instance.id);
+      // El resto del switch (puente user/tenant) continúa a continuación.
 
     // Procesar según el tipo de evento
     switch (event) {
@@ -170,6 +243,8 @@ export async function POST(
           }
 
           // Conectar el canal a Chatwoot con el número real del propietario
+          // (la instancia de la PLATAFORMA se procesa aparte, arriba: solo
+          // emite notificaciones y no crea inbox de tenant).
           console.log('🔗 Conectando instancia a Chatwoot...');
           const chatwootResult = await ensureChatwootInboxForInstance(instance.instanceName, kind);
           console.log('📦 Chatwoot inbox result:', chatwootResult);
@@ -473,6 +548,7 @@ export async function POST(
       event: body.event,
       instanceName 
     });
+    }
   } catch (error) {
     console.error('❌ Error al procesar webhook:', error);
     console.error('❌ Stack trace:', error instanceof Error ? error.stack : 'No stack trace');

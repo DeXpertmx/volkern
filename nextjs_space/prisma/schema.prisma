@@ -181,6 +181,25 @@ model UserWhatsAppInstance {
   @@index([status])
 }
 
+model PlatformWhatsAppInstance {
+  id            String    @id @default(cuid())
+  instanceName  String    @unique
+  phoneNumber   String?
+  status        String    @default("disconnected")
+  qrCode        String?
+  qrCodeExpiry  DateTime?
+  profileName   String?
+  profilePicUrl String?
+  totalMensajes Int       @default(0)
+  ultimoMensaje DateTime?
+  fechaConexion DateTime?
+  fechaCreacion DateTime  @default(now())
+  fechaEdicion  DateTime  @updatedAt
+
+  @@index([status])
+  @@map("platform_whatsapp_instances")
+}
+
 model WhatsAppDeliveryFailure {
   id                     String    @id @default(cuid())
   tenantId               String
