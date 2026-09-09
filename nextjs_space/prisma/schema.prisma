@@ -8000,3 +8000,23 @@ model Siniestro {
   @@index([aseguradoraId])
   @@map("insurance_siniestros")
 }
+
+model ConnectivityProvider {
+  id                    String    @id @default(cuid())
+  providerKey           String    @unique
+  nombreVisible         String
+  baseUrl               String
+  partnerIdEnc          String?
+  usernameEnc           String?
+  passwordEnc           String?
+  estado                String    @default("sin_configurar")
+  ultimaSincronizacion  DateTime?
+  ultimoEvento          DateTime?
+  contadorErrores       Int       @default(0)
+  configuracion         Json?
+  fechaCreacion         DateTime  @default(now())
+  fechaEdicion          DateTime  @updatedAt
+
+  @@index([estado])
+  @@map("connectivity_providers")
+}

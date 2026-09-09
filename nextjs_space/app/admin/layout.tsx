@@ -24,7 +24,8 @@ import {
   TrendingUp,
   BarChart3,
   MessageCircle,
-  BookOpen
+  BookOpen,
+  Plug
 } from 'lucide-react';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -81,6 +82,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { name: 'Revenue', href: '/admin/saas/revenue', icon: DollarSign },
     { name: 'Marketing', href: '/admin/marketing', icon: Sparkles },
     { name: 'WhatsApp', href: '/admin/whatsapp', icon: MessageCircle },
+    { name: 'Conectividad', href: '/admin/conectividad', icon: Plug },
     { name: 'Planes', href: '/admin/planes', icon: CreditCard },
     { name: 'Billing Global', href: '/admin/billing', icon: BarChart3 },
     { name: 'Seguridad', href: '/admin/seguridad', icon: ShieldAlert },
