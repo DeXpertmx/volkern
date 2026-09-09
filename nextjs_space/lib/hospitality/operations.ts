@@ -15,10 +15,17 @@
  *   - crear tarea de limpieza (HospitalityCleaningTask)
  *   - recalcular disponibilidad y empujar al exterior (dispatcher)
  *
+ * §18.3 → §17 (cierre del ciclo): al completar una tarea de limpieza,
+ *   - la tarea pasa a completed
+ *   - la unidad vuelve a available (o occupied si hay una reserva activa
+ *     que la ocupe hoy — prevención de overbooking §16)
+ *   - se empuja la disponibilidad al exterior (unidad_cambiada)
+ *
  * Reglas transversales:
  *   - Aislamiento por tenant: las consultas filtran por { id, tenantId }.
  *   - Los errores de sincronización NUNCA rompen el flujo principal.
  *   - Una tarea de limpieza duplicada (misma unidad + reserva) se evita.
+ *   - Completar una tarea ya completada es idempotente (no re-empuja).
  */
 
 import { prisma } from '@/lib/db';
@@ -157,4 +164,94 @@ export async function performCheckOperation(
     reservationId: updated.id,
     cleaningTaskId,
   };
+}
+
+export interface CompleteCleaningResult {
+  ok: boolean;
+  task?: any;
+  /** Estado final de la unidad tras cerrar el ciclo. */
+  unitEstado?: string;
+  error?: string;
+}
+
+/**
+ * Cierra el ciclo de limpieza (§18.3 → §17).
+ *
+ * Al completar una tarea de limpieza:
+ *   1. La tarea pasa a `completed`.
+ *   2. La unidad vuelve a `available`, salvo que exista una reserva activa
+ *      que la ocupe HOY (entonces `occupied` — no sobrevender, §16).
+ *   3. Se empuja la disponibilidad al exterior (`unidad_cambiada`).
+ *
+ * Idempotente: si la tarea ya está completada, devuelve ok sin re-empujar.
+ * Los errores de sincronización nunca rompen el cierre del ciclo.
+ */
+export async function completeCleaningTask(
+  tenantId: string,
+  taskId: string,
+  extraData?: { notas?: string; responsable?: string; prioridad?: string }
+): Promise<CompleteCleaningResult> {
+  const task = await prisma.hospitalityCleaningTask.findFirst({
+    where: { id: taskId, tenantId },
+    include: { unit: { select: { id: true, propertyId: true, estado: true } } },
+  });
+  if (!task) {
+    return { ok: false, error: 'Tarea no encontrada' };
+  }
+  if (task.estado === 'completed') {
+    return { ok: true, task, unitEstado: task.unit?.estado };
+  }
+
+  // 1. Marcar la tarea como completada (con datos extra si vienen).
+  const data: any = { estado: 'completed' };
+  if (extraData?.notas !== undefined) data.notas = extraData.notas;
+  if (extraData?.responsable !== undefined) data.responsable = extraData.responsable;
+  if (extraData?.prioridad !== undefined) data.prioridad = extraData.prioridad;
+
+  const updated = await prisma.hospitalityCleaningTask.update({
+    where: { id: task.id },
+    data,
+  });
+
+  // 2. Unidad → available (u occupied si hay reserva activa hoy).
+  let unitEstado: string | undefined;
+  if (task.unit) {
+    const today = new Date();
+    const startToday = new Date(today);
+    startToday.setHours(0, 0, 0, 0);
+    const endToday = new Date(startToday);
+    endToday.setDate(startToday.getDate() + 1);
+
+    const activeReservation = await prisma.hospitalityReservation.findFirst({
+      where: {
+        tenantId,
+        unitId: task.unit.id,
+        estado: { notIn: ['cancelled', 'checked_out', 'no_show'] },
+        checkIn: { lt: endToday },
+        checkOut: { gt: startToday },
+      },
+      select: { id: true },
+    });
+
+    unitEstado = activeReservation ? 'occupied' : 'available';
+    await prisma.hospitalityUnit
+      .update({
+        where: { id: task.unit.id },
+        data: { estado: unitEstado },
+      })
+      .catch((e) =>
+        console.error('[Hospitality] Error actualizando unidad tras limpieza:', e)
+      );
+  }
+
+  // 3. Push de disponibilidad (la unidad vuelve al inventario vendible).
+  try {
+    await dispatchConnectivityPush(tenantId, task.unit?.propertyId ?? null, 'unidad_cambiada', {
+      skipRates: true,
+    });
+  } catch (e) {
+    console.error('[Hospitality] Error en push tras limpiar unidad:', e);
+  }
+
+  return { ok: true, task: updated, unitEstado };
 }
