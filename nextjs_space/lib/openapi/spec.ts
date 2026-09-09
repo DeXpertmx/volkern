@@ -549,6 +549,7 @@ const VOLKERN_API_SPEC = {
     // ═══════════════════════════════════════════
     '/api/leads': {
       get: {
+        'x-required-scopes': ["leads:read"],
         tags: ['Leads'],
         summary: 'Listar leads',
         description: 'Devuelve la lista de leads del tenant autenticado, con filtros opcionales.',
@@ -583,6 +584,7 @@ const VOLKERN_API_SPEC = {
         },
       },
       post: {
+        'x-required-scopes': ["leads:write"],
         tags: ['Leads'],
         summary: 'Crear lead',
         description: 'Crea un nuevo lead en el tenant autenticado.',
@@ -608,6 +610,7 @@ const VOLKERN_API_SPEC = {
     // ═══════════════════════════════════════════
     '/api/contacts': {
       get: {
+        'x-required-scopes': ["contacts:read"],
         tags: ['Contacts'],
         summary: 'Listar contactos',
         description: 'Devuelve los contactos del tenant, con filtros por tipo, búsqueda y sinEmpresa.',
@@ -630,6 +633,7 @@ const VOLKERN_API_SPEC = {
         },
       },
       post: {
+        'x-required-scopes': ["contacts:write"],
         tags: ['Contacts'],
         summary: 'Crear contacto',
         description: 'Crea un nuevo contacto (persona o empresa) en el tenant.',
@@ -652,6 +656,7 @@ const VOLKERN_API_SPEC = {
     // ═══════════════════════════════════════════
     '/api/citas': {
       get: {
+        'x-required-scopes': ["citas:read"],
         tags: ['Citas'],
         summary: 'Listar citas',
         description: 'Devuelve las citas del tenant con filtros por estado, tipo, fecha o rango de fechas.',
@@ -676,6 +681,7 @@ const VOLKERN_API_SPEC = {
         },
       },
       post: {
+        'x-required-scopes': ["citas:write","citas:create"],
         tags: ['Citas'],
         summary: 'Crear cita',
         description:
@@ -712,6 +718,7 @@ const VOLKERN_API_SPEC = {
     // ═══════════════════════════════════════════
     '/api/deals': {
       get: {
+        'x-required-scopes': ["deals:read"],
         tags: ['Deals'],
         summary: 'Listar deals (pipeline)',
         description: 'Devuelve los deals del tenant con métricas agregadas (total, ponderado, por etapa, por estado).',
@@ -743,6 +750,7 @@ const VOLKERN_API_SPEC = {
         },
       },
       post: {
+        'x-required-scopes': ["deals:write"],
         tags: ['Deals'],
         summary: 'Crear deal',
         description: 'Crea un nuevo deal en el pipeline de ventas. Puede incluir creación inline de contacto.',
@@ -775,6 +783,7 @@ const VOLKERN_API_SPEC = {
     // ═══════════════════════════════════════════
     '/api/tasks': {
       get: {
+        'x-required-scopes': ["tasks:read"],
         tags: ['Tasks'],
         summary: 'Listar tareas',
         description: 'Devuelve las tareas del tenant con filtros por estado, prioridad y asignado.',
@@ -798,6 +807,7 @@ const VOLKERN_API_SPEC = {
         },
       },
       post: {
+        'x-required-scopes': ["tasks:create"],
         tags: ['Tasks'],
         summary: 'Crear tarea',
         description: 'Crea una nueva tarea, opcionalmente asociada a un lead, contacto o deal.',
@@ -818,6 +828,7 @@ const VOLKERN_API_SPEC = {
     // ═══════════════════════════════════════════
     '/api/ai': {
       post: {
+        'x-required-scopes': ["skills:execute"],
         tags: ['AI'],
         summary: 'Consultar IA generativa',
         description: 'Envía un prompt al modelo de IA (DeepSeek v4 con fallback a Gemini 2.5 Flash via OpenRouter).',
@@ -868,6 +879,7 @@ const VOLKERN_API_SPEC = {
     // ═══════════════════════════════════════════
     '/api/mcp': {
       post: {
+        'x-required-scopes': ["mcp:execute"],
         tags: ['MCP'],
         summary: 'Model Context Protocol (MCP)',
         description:
@@ -916,6 +928,7 @@ const VOLKERN_API_SPEC = {
     // ═══════════════════════════════════════════
     '/api/erp/projects': {
       get: {
+        'x-required-scopes': ["erp:read"],
         tags: ['ERP'],
         summary: 'Listar proyectos ERP',
         description: 'Devuelve los proyectos del módulo ERP con filtros por estado y búsqueda.',
@@ -936,6 +949,7 @@ const VOLKERN_API_SPEC = {
         },
       },
       post: {
+        'x-required-scopes': ["erp:write"],
         tags: ['ERP'],
         summary: 'Crear proyecto ERP',
         description: 'Crea un nuevo proyecto en el módulo ERP.',
@@ -969,6 +983,7 @@ const VOLKERN_API_SPEC = {
     // ═══════════════════════════════════════════
     '/api/marketing/ai/generate': {
       post: {
+        'x-required-scopes': ["marketing:read"],
         tags: ['Marketing'],
         summary: 'Generar contenido de marketing con IA',
         description: 'Genera copy de marketing optimizado para la plataforma especificada usando IA generativa.',
@@ -993,6 +1008,7 @@ const VOLKERN_API_SPEC = {
     // ═══════════════════════════════════════════
     '/api/users/me': {
       get: {
+        'x-required-scopes': ["config:read"],
         tags: ['Users'],
         summary: 'Obtener perfil del usuario autenticado',
         description: 'Devuelve la información del perfil del usuario que hizo la request.',
@@ -1006,6 +1022,7 @@ const VOLKERN_API_SPEC = {
         },
       },
       patch: {
+        'x-required-scopes': ["config:write"],
         tags: ['Users'],
         summary: 'Actualizar perfil del usuario',
         description: 'Actualiza campos del perfil del usuario autenticado.',
@@ -1057,6 +1074,7 @@ const VOLKERN_API_SPEC = {
     // ═══════════════════════════════════════════
     '/api/facturas': {
       get: {
+        'x-required-scopes': ["invoices:read"],
         tags: ['Facturas'],
         summary: 'Listar facturas',
         description: 'Devuelve las facturas del tenant con filtros por estado, cliente y fechas.',
@@ -1075,6 +1093,7 @@ const VOLKERN_API_SPEC = {
         },
       },
       post: {
+        'x-required-scopes': ["invoices:create"],
         tags: ['Facturas'],
         summary: 'Crear factura',
         description: 'Crea una nueva factura con líneas de ítem, impuestos y retenciones.',
@@ -1092,6 +1111,7 @@ const VOLKERN_API_SPEC = {
     },
     '/api/cotizaciones': {
       get: {
+        'x-required-scopes': ["quotes:read"],
         tags: ['Facturas'],
         summary: 'Listar cotizaciones',
         description: 'Devuelve las cotizaciones/presupuestos del tenant.',
@@ -1101,6 +1121,7 @@ const VOLKERN_API_SPEC = {
         },
       },
       post: {
+        'x-required-scopes': ["quotes:write"],
         tags: ['Facturas'],
         summary: 'Crear cotización',
         description: 'Crea una nueva cotización que puede convertirse en factura u orden de venta.',
@@ -1117,6 +1138,7 @@ const VOLKERN_API_SPEC = {
     },
     '/api/contratos': {
       get: {
+        'x-required-scopes': ["contratos:read"],
         tags: ['Facturas'],
         summary: 'Listar contratos',
         description: 'Devuelve los contratos/abonos del tenant.',
@@ -1126,6 +1148,7 @@ const VOLKERN_API_SPEC = {
         },
       },
       post: {
+        'x-required-scopes': ["contratos:write"],
         tags: ['Facturas'],
         summary: 'Crear contrato',
         description: 'Crea un nuevo contrato con pagos recurrentes periódicos.',
@@ -1187,6 +1210,7 @@ const VOLKERN_API_SPEC = {
     // ═══════════════════════════════════════════
     '/api/cursos': {
       get: {
+        'x-required-scopes': ["cms:read"],
         tags: ['Academy'],
         summary: 'Listar cursos',
         description: 'Devuelve los cursos disponibles en la academia.',
@@ -1196,6 +1220,7 @@ const VOLKERN_API_SPEC = {
         },
       },
       post: {
+        'x-required-scopes': ["cms:write"],
         tags: ['Academy'],
         summary: 'Crear curso',
         description: 'Crea un nuevo curso con módulos y lecciones.',
@@ -1921,6 +1946,7 @@ const VOLKERN_API_SPEC = {
     // ═══════════════════════════════════════════
     '/api/erp/sales/orders': {
       get: {
+        'x-required-scopes': ["erp:read"],
         tags: ['ERP'],
         summary: 'Listar órdenes de venta',
         description: 'Devuelve las órdenes de venta del módulo ERP.',
@@ -1930,6 +1956,7 @@ const VOLKERN_API_SPEC = {
         },
       },
       post: {
+        'x-required-scopes': ["erp:write"],
         tags: ['ERP'],
         summary: 'Crear orden de venta',
         description: 'Crea una nueva orden de venta en el ERP.',

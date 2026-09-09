@@ -179,6 +179,86 @@ export const AVAILABLE_SCOPES = [
   'employees:read',
   'payroll:run',          // POST /api/v1/partner/payroll/run → engine + Verifactu + AEAT submit
   'audit:read',           // GET /api/v1/partner/audit-log (RGPD Art. 30 — registro de accesos)
+
+  // ─── Módulos recientes (catálogo, seguros, contratos, ventas, configuración, etc.) ──
+  // Scopes que ya exigían endpoints de módulos recientes pero no estaban en el
+  // catálogo, por lo que una API key no podía concederlos. Añadirlos aquí NO rompe
+  // claves existentes (cada clave conserva su propia lista) y permite que un tenant
+  // otorgue acceso de integración a estos módulos.
+  //
+  // ⚠️ Se excluyen deliberadamente 'admin:read' y 'admin:write' (área de plataforma,
+  // exclusiva de operadores Superadmin): NO se conceden a claves de tenant.
+  //
+  // Catálogo de productos/servicios
+  'catalogo:read',
+  'catalogo:write',
+
+  // Módulo de seguros
+  'insurance:read',
+  'insurance:write',
+
+  // Contratos y firma
+  'contratos:read',
+  'contratos:write',
+  'contratos:delete',
+  'contracts:write',       // Alias histórico en inglés (POST /api/contratos/from-cotizacion)
+
+  // Cotizaciones y pedidos
+  'cotizaciones:read',
+  'cotizaciones:write',
+  'quotes:read',
+  'quotes:write',
+  'orders:read',
+  'orders:write',
+
+  // Facturación / envío de facturas por email
+  'invoices:send',
+
+  // Servicios y agenda
+  'services:read',
+  'services:write',
+  'servicios:read',
+  'servicios:write',
+  'chatbot:read',
+
+  // Configuración del tenant y suscripción
+  'config:read',
+  'config:write',
+  'settings:read',
+  'settings:write',
+  'configuracion:editar',
+  'subscriptions:read',
+  'subscriptions:write',
+
+  // Conocimiento, equipo, conversaciones y skills
+  'knowledge:read',
+  'knowledge:write',
+  'team:read',
+  'team:write',
+  'conversations:read',
+  'conversations:write',
+  'conversations:delete',
+  'skills:execute',
+  'skills:write',
+
+  // Aliases específicos de operación usados junto a los scopes principales
+  'leads:update',
+  'tasks:create',
+
+  // Análisis, páginas/CMS, ERP, marketing y publicidad (módulos del propio tenant)
+  'dashboard:read',
+  'conversion:read',
+  'marketing:read',
+  'sales:read',
+  'finanzas:read',
+  'cms:read',
+  'cms:write',
+  'erp:read',
+  'erp:write',
+  'ads:read',
+  'ads:write',
+  'ads:manage',
+  'ads:admin',
 ] as const;
 
 export type ApiKeyScope = typeof AVAILABLE_SCOPES[number];

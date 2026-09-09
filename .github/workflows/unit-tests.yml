@@ -92,6 +92,17 @@ jobs:
             fi
           done
 
+      - name: Run integration guards (scopes + webhook events + UI stubs)
+        # Guardias de integración, ejecutadas explícitamente (y antes de la suite
+        # completa) para que corran en cada push aunque algún día se filtre la
+        # invocación principal de vitest:
+        #   - api-key-scopes: todo scope exigido por un endpoint existe en AVAILABLE_SCOPES
+        #   - outgoing-webhook-events: todo evento saliente disparado/registrado existe
+        #     en getAvailableEvents() y el catálogo coincide con el union type WebhookEvent
+        #   - client-catalog-stubs: páginas 'use client' no pueden redeclarar catálogos
+        #     con stubs vacíos (getAvailableX = () => []) que oculten opciones de la UI
+        run: npx vitest run tests/api-key-scopes.test.ts tests/outgoing-webhook-events-guard.test.ts tests/client-catalog-stubs-guard.test.ts
+
       - name: Run unit tests
         run: npx vitest run
         env:
