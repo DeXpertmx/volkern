@@ -263,6 +263,21 @@ export const HUBS: HubConfig[] = [
     ]
   },
   {
+    id: 'hospitality',
+    name: 'Hospitality',
+    icon: Home,
+    href: '/dashboard/hospitality',
+    description: 'Propiedades, unidades alojativas y reservas con conexión a canales de distribución.',
+    requiredAccountType: 'BUSINESS',
+    requiredModule: 'hospitality',
+    basePaths: [
+      '/dashboard/hospitality'
+    ],
+    items: [
+      { name: 'Propiedades y Unidades', href: '/dashboard/hospitality', icon: Home, planModule: 'hospitality', description: 'Gestión de propiedades y unidades alojativas' },
+    ]
+  },
+  {
     id: 'rrhh',
     name: 'RRHH',
     icon: Users,
