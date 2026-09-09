@@ -1,8 +1,12 @@
 // ⚠️⚠️⚠️ NO EJECUTAR CONTRA PRODUCCIÓN SIN CONFIRMACIÓN EXPRESA — CONVENCIÓN OBSOLETA (2026-09-03)
 // --------------------------------------------------------------------------------------------
-// Este reset a "DimensionExpert2024!" se aplicó en producción el 2026-09-03, pero el propietario
+// Este reset se aplicó en producción el 2026-09-03, pero el propietario
 // (bruno.hess@dimensionexpert.com) cambió después su contraseña a una propia. Re-ejecutarlo contra
-// el VPS la sobrescribiría y lo dejaría fuera con la convención pública. Solo uso local/dev.
+// el VPS la sobrescribiría y lo dejaría fuera. Solo uso local/dev.
+//
+// ⚠️ NUNCA commitear contraseñas. La nueva contraseña temporal se lee de la
+// variable de entorno BRUNO_TEMP_PASSWORD (fallback dev: si no existe y NODE_ENV
+// no es production, se aborta igualmente para no inventar credenciales).
 // --------------------------------------------------------------------------------------------
 
 import { PrismaClient } from '@prisma/client'
@@ -34,8 +38,11 @@ async function resetBrunoPassword() {
     console.log(`   - Email: ${user.email}`)
     console.log(`   - Tenant: ${user.tenant?.nombre || 'N/A'}`)
 
-    // Nueva contraseña temporal
-    const newPassword = 'DimensionExpert2024!'
+    // Nueva contraseña temporal — desde entorno, nunca hardcodeada
+    const newPassword = process.env.BRUNO_TEMP_PASSWORD
+    if (!newPassword) {
+      throw new Error('BRUNO_TEMP_PASSWORD no está definida en el entorno. Define la variable antes de ejecutar.')
+    }
     const hashedPassword = await bcrypt.hash(newPassword, 10)
 
     // Actualizar contraseña
