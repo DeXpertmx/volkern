@@ -108,9 +108,24 @@ export function OnboardingChecklist() {
 
   const fetchProgress = async () => {
     try {
-      const res = await fetch('/api/onboarding');
+      let res = await fetch('/api/onboarding');
       if (res.ok) {
-        const data = await res.json();
+        let data = await res.json();
+
+        // Si el tenant aún no tiene progreso, crearlo explícitamente vía POST
+        // (el GET ya no escribe; la creación vive en el POST/upsert).
+        if (!data) {
+          await fetch('/api/onboarding', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+          });
+          res = await fetch('/api/onboarding');
+          if (res.ok) {
+            data = await res.json();
+          }
+        }
+
         setProgress(data);
 
         // Ocultar si está completado u omitido
