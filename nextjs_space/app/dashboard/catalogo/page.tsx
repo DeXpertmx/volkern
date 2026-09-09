@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/api-client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,7 +20,8 @@ import { MONEDAS_POR_PAIS } from '@/lib/fiscal-validation';
 import {
   Plus, Search, Package, Briefcase, Calendar, GraduationCap, Edit2, Trash2,
   Star, Clock, Euro, DollarSign, Tag, Filter, Loader2, Image as ImageIcon,
-  Video, FileText, X, Percent, Layers, Settings2, Upload, ShieldCheck, MessageCircle
+  Video, FileText, X, Percent, Layers, Settings2, Upload, Download, FileSpreadsheet,
+  ShieldCheck, MessageCircle
 } from 'lucide-react';
 import { ImageUploader } from '@/components/ui/image-uploader';
 
@@ -199,6 +200,8 @@ export default function CatalogoPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<CatalogoItem | null>(null);
   const [saving, setSaving] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
   const [activeTab, setActiveTab] = useState('basico');
   
   const [modules, setModules] = useState<string[]>([]);
@@ -349,6 +352,69 @@ export default function CatalogoPage() {
 
   const handleSearch = () => {
     fetchItems();
+  };
+
+  const handleExport = async (format: 'csv' | 'xlsx') => {
+    try {
+      const res = await apiFetch(`/api/catalogo/export?format=${format}`);
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({ error: 'No se pudo exportar el catálogo' }));
+        toast.error(error.error || 'No se pudo exportar el catálogo');
+        return;
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `catalogo_${new Date().toISOString().slice(0, 10)}.${format}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      toast.success(`Catálogo exportado en ${format.toUpperCase()}`);
+    } catch {
+      toast.error('Error de conexión al exportar el catálogo');
+    }
+  };
+
+  const handleImport = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    const extension = file.name.toLowerCase().split('.').pop();
+    if (!['csv', 'xls', 'xlsx'].includes(extension || '')) {
+      toast.error('Formato no válido. Usa CSV, XLS o XLSX');
+      return;
+    }
+
+    setImporting(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await apiFetch('/api/catalogo/import', {
+        method: 'POST',
+        body: formData,
+      }, 120000);
+      const result = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        toast.error(result.error || 'No se pudo importar el catálogo');
+        return;
+      }
+
+      await fetchItems();
+      if (result.failed > 0) {
+        toast.warning(`Importación parcial: ${result.imported} importados y ${result.failed} con errores`);
+      } else {
+        toast.success(`${result.imported} ítems importados correctamente`);
+      }
+    } catch {
+      toast.error('Error de conexión al importar el catálogo');
+    } finally {
+      setImporting(false);
+    }
   };
 
   const resetFormState = () => {
@@ -626,10 +692,31 @@ export default function CatalogoPage() {
             Gestiona tu catálogo centralizado con precios flexibles y campos personalizados
           </p>
         </div>
-        <Button onClick={handleNew}>
-          <Plus className="h-4 w-4 mr-2" />
-          Nuevo Ítem
-        </Button>
+        <div className="flex flex-wrap justify-end gap-2">
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".csv,.xls,.xlsx"
+            className="hidden"
+            onChange={handleImport}
+          />
+          <Button variant="outline" onClick={() => importInputRef.current?.click()} disabled={importing}>
+            {importing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
+            {importing ? 'Importando...' : 'Importar'}
+          </Button>
+          <Button variant="outline" onClick={() => handleExport('csv')}>
+            <Download className="h-4 w-4 mr-2" />
+            Exportar CSV
+          </Button>
+          <Button variant="outline" onClick={() => handleExport('xlsx')}>
+            <FileSpreadsheet className="h-4 w-4 mr-2" />
+            Exportar XLSX
+          </Button>
+          <Button onClick={handleNew}>
+            <Plus className="h-4 w-4 mr-2" />
+            Nuevo Ítem
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -746,7 +833,7 @@ export default function CatalogoPage() {
             </div>
           ) : items.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              No hay ítems en el catálogo. Crea el primero.
+              No hay ítems en el catálogo. Crea el primero o importa un archivo CSV/XLSX.
             </div>
           ) : (
             <Table>
