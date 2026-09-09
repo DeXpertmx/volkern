@@ -2260,7 +2260,8 @@ function NewDealForm({ stages, pipelineId, onSuccess }: { stages: Stage[]; pipel
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || 'Error al crear deal')
+        const details = data.details ? Object.values(data.details).flat().join(' ') : ''
+        throw new Error(details || data.error || 'Error al crear deal')
       }
 
       toast.success('Deal creado exitosamente')

@@ -1,6 +1,13 @@
 import { z } from 'zod';
 import { CommonSchemas } from '../common';
 
+// Los formularios web usan <input type="date">, que envía YYYY-MM-DD,
+// mientras que las integraciones pueden enviar una fecha ISO completa.
+const DealDateSchema = z.union([
+  z.string().datetime(),
+  z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato de fecha inválido (YYYY-MM-DD o ISO 8601)'),
+]);
+
 /**
  * Schema para crear un Deal
  */
@@ -15,7 +22,7 @@ export const DealCreateSchema = z.object({
   probabilidad: z.coerce.number().int().min(0).max(100).default(25),
   prioridad: z.enum(['baja', 'media', 'alta', 'urgente']).default('media'),
   estado: z.enum(['activo', 'ganado', 'perdido', 'pausado']).default('activo'),
-  fechaEstimadaCierre: z.string().datetime().optional().nullable(),
+  fechaEstimadaCierre: DealDateSchema.optional().nullable(),
   origen: z.string().max(255).optional().nullable(),
   tags: z.string().max(500).optional().nullable(),
   usuarioAsignadoId: CommonSchemas.id.optional().nullable(),
@@ -49,7 +56,7 @@ export const DealUpdateSchema = z.object({
   probabilidad: z.coerce.number().int().min(0).max(100).optional(),
   prioridad: z.enum(['baja', 'media', 'alta', 'urgente']).optional(),
   estado: z.enum(['activo', 'ganado', 'perdido', 'pausado']).optional(),
-  fechaEstimadaCierre: z.string().datetime().optional().nullable(),
+  fechaEstimadaCierre: DealDateSchema.optional().nullable(),
   fechaCierre: z.string().datetime().optional().nullable(),
   razonPerdida: z.string().max(2000).optional().nullable(),
   competidor: z.string().max(255).optional().nullable(),

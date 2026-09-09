@@ -49,8 +49,22 @@ export const GET = withTenantAuth(async (req, auth) => {
     if (leadId) where.leadId = leadId
     if (contactId) where.contactId = contactId
     if (catalogoItemId) where.catalogoItemId = catalogoItemId
-    if (pipelineId) where.pipelineId = pipelineId
-    
+    if (pipelineId) {
+      // Los deals antiguos creados sin pipeline se asignan una sola vez al
+      // primer pipeline activo del tenant para no quedar ocultos del tablero.
+      const defaultPipeline = await prisma.pipeline.findFirst({
+        where: { tenantId, activo: true },
+        orderBy: { orden: 'asc' },
+        select: { id: true },
+      })
+      if (defaultPipeline) {
+        await prisma.deal.updateMany({
+          where: { tenantId, pipelineId: null },
+          data: { pipelineId: defaultPipeline.id },
+        })
+      }
+      where.pipelineId = pipelineId
+    }
     if (search) {
       where.OR = [
         { titulo: { contains: search, mode: 'insensitive' } },
@@ -157,6 +171,27 @@ export const POST = withTenantAuth(async (req, auth) => {
     let finalContactId = contactId
     let companyId = null
 
+    // El formulario de Contactos no siempre envía pipelineId. En ese caso,
+    // asignar el deal al primer pipeline activo del mismo tenant para que
+    // también aparezca en el tablero de Pipeline.
+    let resolvedPipelineId = pipelineId || null
+    if (resolvedPipelineId) {
+      const pipeline = await prisma.pipeline.findFirst({
+        where: { id: resolvedPipelineId, tenantId, activo: true },
+        select: { id: true },
+      })
+      if (!pipeline) {
+        return NextResponse.json({ error: 'Pipeline no encontrado' }, { status: 404 })
+      }
+    } else {
+      const defaultPipeline = await prisma.pipeline.findFirst({
+        where: { tenantId, activo: true },
+        orderBy: { orden: 'asc' },
+        select: { id: true },
+      })
+      resolvedPipelineId = defaultPipeline?.id || null
+    }
+
     // Manejar el contacto en la DB aislada
     if (newContact) {
       const { nombre, email, telefono, tipo, cargo, ubicacion, linkedin, notas, tags: contactTags, companyId: newCompanyId } = newContact
@@ -232,7 +267,7 @@ export const POST = withTenantAuth(async (req, auth) => {
         fechaEstimadaCierre: fechaEstimadaCierre ? new Date(fechaEstimadaCierre) : null,
         origen,
         tags,
-        pipelineId: pipelineId || null,
+        pipelineId: resolvedPipelineId,
         catalogoItemId: catalogoItemId || null,
         fechaUltimaActividad: new Date(),
       },
