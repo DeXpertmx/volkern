@@ -369,7 +369,7 @@ automáticamente** leyedo la fila ganadora y aplicando el update. Lo mismo con
 | `GET  /api/v1/partner/payroll/{id}/receipts` | `payroll:read`     | ✅ 2     |
 | `GET  /api/v1/partner/payroll/{id}/aeat-status` | `payroll:read`  | ✅ 2     |
 | `POST /api/v1/partner/onboard/tenant`        | `partners:onboard` | ⏳ 3     |
-| `GET  /api/v1/partner/audit-log`             | `audit:read`       | ⏳ 3     |
+| `GET  /api/v1/partner/usage`                 | `audit:read`       | ✅ 1.5   |
 
 ---
 
